@@ -1,4 +1,6 @@
-# shumoku 🔧
+# shumoku
+
+shumoku -撞木 撞木は喚鐘を叩く時に使用する丁字形の棒です。その撞木を吊り下げる釘を撞木釘と言います。
 
 Modern network topology visualization library for Markdown
 
@@ -167,4 +169,4 @@ pnpm format
 
 ## License
 
-MIT © 2024 shumoku contributors
+MIT © 2026 Akitoshi Saeki
