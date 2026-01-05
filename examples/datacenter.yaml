@@ -1,0 +1,126 @@
+network:
+  name: "Data Center Network Architecture"
+  version: "1.0.0"
+  description: "High availability data center with redundant core switches"
+  
+  settings:
+    layout: bento
+    theme: modern
+    
+  modules:
+    - id: core
+      name: "Core Network"
+      devices: ["rtx3510-1", "rtx3510-2", "ex4400-vc"]
+      layout:
+        column: 0
+        row: 0
+        
+    - id: distribution
+      name: "Distribution Layer"
+      devices: ["dist-sw-01", "dist-sw-02"]
+      layout:
+        column: 0
+        row: 1
+        
+    - id: access
+      name: "Access Layer"
+      devices: ["access-sw-01", "access-sw-02", "access-sw-03", "access-sw-04"]
+      layout:
+        column: 0
+        row: 2
+        span:
+          columns: 2
+          rows: 1
+          
+  devices:
+    # Core routers
+    - id: rtx3510-1
+      name: "RTX3510-1"
+      type: router
+      role: core
+      metadata:
+        location: "Rack A1"
+        
+    - id: rtx3510-2
+      name: "RTX3510-2"
+      type: router
+      role: core
+      metadata:
+        location: "Rack A2"
+        
+    # Core switch
+    - id: ex4400-vc
+      name: "EX4400-VC"
+      type: l3-switch
+      role: core
+      metadata:
+        location: "Rack A3"
+        description: "Virtual Chassis"
+        
+    # Distribution switches
+    - id: dist-sw-01
+      name: "Dist-SW-01"
+      type: l3-switch
+      role: distribution
+      
+    - id: dist-sw-02
+      name: "Dist-SW-02"
+      type: l3-switch
+      role: distribution
+      
+    # Access switches
+    - id: access-sw-01
+      name: "Access-SW-01"
+      type: l2-switch
+      role: access
+      
+    - id: access-sw-02
+      name: "Access-SW-02"
+      type: l2-switch
+      role: access
+      
+    - id: access-sw-03
+      name: "Access-SW-03"
+      type: l2-switch
+      role: access
+      
+    - id: access-sw-04
+      name: "Access-SW-04"
+      type: l2-switch
+      role: access
+      
+  links:
+    # Core redundancy
+    - from: rtx3510-1
+      to: rtx3510-2
+      type: physical
+      bandwidth: "10G"
+      redundancy:
+        group: vrrp-1
+        role: primary
+        
+    # Core to distribution
+    - from: ex4400-vc
+      to: dist-sw-01
+      bandwidth: "40G"
+      
+    - from: ex4400-vc
+      to: dist-sw-02
+      bandwidth: "40G"
+      
+    # Distribution to access
+    - from: dist-sw-01
+      to: access-sw-01
+      bandwidth: "10G"
+      
+    - from: dist-sw-01
+      to: access-sw-02
+      bandwidth: "10G"
+      
+    - from: dist-sw-02
+      to: access-sw-03
+      bandwidth: "10G"
+      
+    - from: dist-sw-02
+      to: access-sw-04
+      bandwidth: "10G"

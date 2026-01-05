@@ -1,0 +1,220 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.header {
+  background: var(--shumoku-surface, #f8fafc);
+  padding: 2rem;
+  border-bottom: 1px solid var(--shumoku-grid, #e5e7eb);
+}
+
+.header h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--shumoku-text, #0f172a);
+}
+
+.header p {
+  color: var(--shumoku-text-secondary, #64748b);
+}
+
+.controls {
+  display: flex;
+  gap: 2rem;
+  padding: 1.5rem 2rem;
+  background: var(--shumoku-surface, #f8fafc);
+  border-bottom: 1px solid var(--shumoku-grid, #e5e7eb);
+  align-items: center;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-group label {
+  font-weight: 500;
+  color: var(--shumoku-text, #0f172a);
+}
+
+.control-group select {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--shumoku-grid, #e5e7eb);
+  border-radius: var(--shumoku-radius-md, 8px);
+  background: var(--shumoku-bg, #ffffff);
+  color: var(--shumoku-text, #0f172a);
+  font-size: 0.875rem;
+}
+
+.layout-button {
+  padding: 0.5rem 1.5rem;
+  background: var(--shumoku-primary, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: var(--shumoku-radius-md, 8px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.layout-button:hover {
+  background: var(--shumoku-primary-hover, #2563eb);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  padding: 2rem;
+  gap: 2rem;
+}
+
+.canvas-container {
+  flex: 1;
+  background: var(--shumoku-bg, #ffffff);
+  border: 1px solid var(--shumoku-grid, #e5e7eb);
+  border-radius: var(--shumoku-radius-lg, 12px);
+  overflow: hidden;
+  box-shadow: var(--shumoku-shadow-sm);
+}
+
+.placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--shumoku-text-secondary, #64748b);
+}
+
+.result {
+  width: 400px;
+  background: var(--shumoku-surface, #f8fafc);
+  border: 1px solid var(--shumoku-grid, #e5e7eb);
+  border-radius: var(--shumoku-radius-lg, 12px);
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+.result h3 {
+  margin-bottom: 1rem;
+  color: var(--shumoku-text, #0f172a);
+}
+
+.result pre {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--shumoku-text-secondary, #64748b);
+  font-family: var(--shumoku-font-mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] {
+  background: var(--shumoku-bg, #0f172a);
+}
+
+[data-theme="dark"] .controls {
+  background: var(--shumoku-surface, #1e293b);
+}
+
+[data-theme="dark"] .header {
+  background: var(--shumoku-surface, #1e293b);
+}
+
+/* YAML Editor styles */
+.editor-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-section h3 {
+  margin-bottom: 1rem;
+  color: var(--shumoku-text, #0f172a);
+}
+
+.yaml-editor {
+  flex: 1;
+  padding: 1rem;
+  border: 1px solid var(--shumoku-grid, #e5e7eb);
+  border-radius: var(--shumoku-radius-lg, 12px);
+  background: var(--shumoku-bg, #ffffff);
+  color: var(--shumoku-text, #0f172a);
+  font-family: var(--shumoku-font-mono, monospace);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  resize: none;
+}
+
+.yaml-editor:focus {
+  outline: none;
+  border-color: var(--shumoku-primary, #3b82f6);
+}
+
+[data-theme="dark"] .yaml-editor {
+  background: var(--shumoku-surface, #1e293b);
+  color: var(--shumoku-text, #f1f5f9);
+}
+
+.result-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.parse-button {
+  padding: 0.5rem 1.5rem;
+  background: var(--shumoku-success, #10b981);
+  color: white;
+  border: none;
+  border-radius: var(--shumoku-radius-md, 8px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.parse-button:hover {
+  background: var(--shumoku-success-hover, #059669);
+}
+
+.layout-button:disabled {
+  background: var(--shumoku-grid, #e5e7eb);
+  cursor: not-allowed;
+}
+
+/* Export buttons */
+.export-button {
+  padding: 0.5rem 1.5rem;
+  background: var(--shumoku-secondary, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: var(--shumoku-radius-md, 8px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-left: 0.5rem;
+}
+
+.export-button:hover {
+  background: var(--shumoku-secondary-hover, #7c3aed);
+}
+
+.export-button:disabled {
+  background: var(--shumoku-grid, #e5e7eb);
+  cursor: not-allowed;
+}
+
+.error {
+  padding: 1rem;
+  margin: 0 2rem;
+  background: var(--shumoku-danger-bg, #fee2e2);
+  color: var(--shumoku-danger, #dc2626);
+  border-radius: var(--shumoku-radius-md, 8px);
+  font-size: 0.875rem;
+}

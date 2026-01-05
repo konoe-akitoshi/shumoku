@@ -1,0 +1,25 @@
+# Simple network topology example
+network:
+  name: "Branch Office Network"
+  
+  devices:
+    - id: router
+      name: "Edge Router"
+      type: router
+      
+    - id: switch
+      name: "Office Switch"
+      type: l2-switch
+      
+    - id: ap
+      name: "WiFi AP"
+      type: access-point
+      
+  links:
+    - from: router
+      to: switch
+      bandwidth: "1G"
+      
+    - from: switch
+      to: ap
+      bandwidth: "1G"
