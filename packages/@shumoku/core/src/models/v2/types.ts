@@ -127,6 +127,12 @@ export interface LinkEndpoint {
   vlan_id?: number
 }
 
+/**
+ * Link bandwidth/speed type
+ * Controls line thickness for visual distinction
+ */
+export type LinkBandwidth = '1G' | '10G' | '25G' | '40G' | '100G'
+
 export interface Link {
   id?: string
 
@@ -154,6 +160,12 @@ export interface Link {
    * Arrow direction
    */
   arrow?: ArrowType
+
+  /**
+   * Bandwidth/speed - affects line thickness
+   * 1G: thin, 10G: normal, 25G: medium, 40G: thick, 100G: extra thick
+   */
+  bandwidth?: LinkBandwidth
 
   /**
    * Redundancy/clustering type - nodes connected with this will be placed on the same layer

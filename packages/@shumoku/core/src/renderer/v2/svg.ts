@@ -373,7 +373,7 @@ export class SVGRendererV2 {
     const arrow = link.arrow ?? this.getDefaultArrowType(link.redundancy)
 
     const stroke = link.style?.stroke || this.getRedundancyStroke(link.redundancy) || this.options.defaultLinkStroke
-    const strokeWidth = link.style?.strokeWidth || this.getLinkStrokeWidth(type)
+    const strokeWidth = link.style?.strokeWidth || this.getBandwidthStrokeWidth(link.bandwidth) || this.getLinkStrokeWidth(type)
     const dasharray = link.style?.strokeDasharray || this.getLinkDasharray(type)
     const markerEnd = arrow !== 'none' ? 'url(#arrow)' : ''
 
@@ -517,6 +517,21 @@ ${result}`
   }
 
   /**
+   * Get stroke width based on bandwidth
+   */
+  private getBandwidthStrokeWidth(bandwidth?: string): number | undefined {
+    if (!bandwidth) return undefined
+    switch (bandwidth) {
+      case '1G': return 1
+      case '10G': return 2
+      case '25G': return 3
+      case '40G': return 4
+      case '100G': return 5
+      default: return undefined
+    }
+  }
+
+  /**
    * Get default link type based on redundancy
    */
   private getDefaultLinkType(redundancy?: string): LinkType {
@@ -537,18 +552,9 @@ ${result}`
   /**
    * Get default arrow type based on redundancy
    */
-  private getDefaultArrowType(redundancy?: string): 'none' | 'forward' | 'back' | 'both' {
-    switch (redundancy) {
-      case 'ha':
-      case 'vc':
-      case 'vss':
-      case 'vpc':
-      case 'mlag':
-      case 'stack':
-        return 'none'
-      default:
-        return 'forward'
-    }
+  private getDefaultArrowType(_redundancy?: string): 'none' | 'forward' | 'back' | 'both' {
+    // Network diagrams typically show bidirectional connections, so no arrow by default
+    return 'none'
   }
 
   /**

@@ -228,7 +228,7 @@ nodes:
     parent: zone-west
 
 links:
-  # OCX to Routers
+  # OCX to Routers (10G WAN)
   - from:
       node: ocx1
       port: eth0
@@ -236,7 +236,7 @@ links:
       node: rt1
       port: lan2
       ip: 169.254.1.1/30
-    type: solid
+    bandwidth: 10G
 
   - from:
       node: ocx2
@@ -245,7 +245,7 @@ links:
       node: rt2
       port: lan2
       ip: 169.254.2.1/30
-    type: solid
+    bandwidth: 10G
 
   # VPN Tunnels
   - from:
@@ -256,7 +256,6 @@ links:
       port: tun1
       ip: 169.254.100.2/30
     label: "IPsec VPN"
-    type: dashed
 
   - from:
       node: vgw
@@ -266,7 +265,6 @@ links:
       port: tun1
       ip: 169.254.101.2/30
     label: "IPsec VPN"
-    type: dashed
 
   # HA Keepalive
   - from:
@@ -282,7 +280,7 @@ links:
     style:
       minLength: 300
 
-  # Router to Core
+  # Router to Core (10G)
   - from:
       node: rt1
       port: lan4
@@ -292,7 +290,7 @@ links:
       port: ge-0/0/0
       ip: 10.241.0.10/24
     label: "Active"
-    type: solid
+    bandwidth: 10G
 
   - from:
       node: rt2
@@ -303,9 +301,9 @@ links:
       port: ge-0/0/1
       ip: 10.241.0.10/24
     label: "Standby"
-    type: dashed
+    bandwidth: 10G
 
-  # Core to Venue Agg
+  # Core to Venue Agg (40G LACP)
   - from:
       node: ex-vc
       port: ae0
@@ -313,9 +311,9 @@ links:
       node: venue-agg
       port: ae0
     label: "LACP Trunk"
-    type: thick
+    bandwidth: 40G
 
-  # Venue Agg to Wings
+  # Venue Agg to Wings (1G)
   - from:
       node: venue-agg
       port: ge-0/0/48
@@ -325,7 +323,7 @@ links:
       port: Gi1/0/48
       vlan_id: 100
     label: "Trunk"
-    type: solid
+    bandwidth: 1G
 
   - from:
       node: venue-agg
@@ -336,9 +334,9 @@ links:
       port: Gi1/0/48
       vlan_id: 100
     label: "Trunk"
-    type: solid
+    bandwidth: 1G
 
-  # East Wing cascade
+  # East Wing cascade (1G)
   - from:
       node: sw02
       port: Gi1/0/24
@@ -346,7 +344,7 @@ links:
       node: sw08
       port: Gi1/0/48
     label: "Cascade"
-    type: solid
+    bandwidth: 1G
 
   - from:
       node: sw02
@@ -354,8 +352,7 @@ links:
     to:
       node: ap-foyer-01
       port: eth0
-    type: solid
-    arrow: none
+    bandwidth: 1G
 
   - from:
       node: sw08
@@ -363,10 +360,9 @@ links:
     to:
       node: ap-track-a
       port: eth0
-    type: solid
-    arrow: none
+    bandwidth: 1G
 
-  # West Wing cascade
+  # West Wing cascade (1G)
   - from:
       node: sw03
       port: Gi1/0/24
@@ -374,7 +370,7 @@ links:
       node: sw04
       port: Gi1/0/48
     label: "Cascade"
-    type: solid
+    bandwidth: 1G
 
   - from:
       node: sw03
@@ -383,7 +379,7 @@ links:
       node: sw05
       port: Gi1/0/48
     label: "Branch"
-    type: solid
+    bandwidth: 1G
 
   - from:
       node: sw04
@@ -392,7 +388,7 @@ links:
       node: sw06
       port: Gi1/0/48
     label: "Cascade"
-    type: solid
+    bandwidth: 1G
 
   - from:
       node: sw06
@@ -401,17 +397,16 @@ links:
       node: sw07
       port: Gi1/0/48
     label: "Cascade"
-    type: solid
+    bandwidth: 1G
 
-  # APs
+  # APs (1G)
   - from:
       node: sw03
       port: Gi1/0/1
     to:
       node: ap-spon-01
       port: eth0
-    type: solid
-    arrow: none
+    bandwidth: 1G
 
   - from:
       node: sw04
@@ -419,8 +414,7 @@ links:
     to:
       node: ap-spon-02
       port: eth0
-    type: solid
-    arrow: none
+    bandwidth: 1G
 
   - from:
       node: sw06
@@ -428,8 +422,7 @@ links:
     to:
       node: ap-track-b
       port: eth0
-    type: solid
-    arrow: none
+    bandwidth: 1G
 
   - from:
       node: sw07
@@ -437,8 +430,7 @@ links:
     to:
       node: ap-track-c
       port: eth0
-    type: solid
-    arrow: none
+    bandwidth: 1G
 `
 
 export const simpleTestV2 = `
@@ -486,13 +478,13 @@ links:
   - from: node1
     to: node2
     label: "10G"
-    type: solid
+    bandwidth: 10G
 
   - from: node2
     to: node3
-    type: solid
+    bandwidth: 1G
 
   - from: node2
     to: node4
-    type: solid
+    bandwidth: 1G
 `

@@ -86,6 +86,7 @@ interface YamlLink {
   label?: string | string[]
   type?: string
   arrow?: string
+  bandwidth?: string
   redundancy?: string
   style?: YamlLinkStyle
 }
@@ -245,6 +246,7 @@ export class YamlParserV2 {
       label: l.label,
       type: this.parseLinkType(l.type),
       arrow: this.parseArrowType(l.arrow),
+      bandwidth: this.parseBandwidth(l.bandwidth),
       redundancy: this.parseRedundancyType(l.redundancy),
       style: l.style ? {
         stroke: l.style.stroke,
@@ -289,6 +291,31 @@ export class YamlParserV2 {
     }
 
     return typeMap[redundancy.toLowerCase()]
+  }
+
+  private parseBandwidth(bandwidth?: string): '1G' | '10G' | '25G' | '40G' | '100G' | undefined {
+    if (!bandwidth) return undefined
+
+    const normalized = bandwidth.toUpperCase().replace(/\s/g, '')
+    const bandwidthMap: Record<string, '1G' | '10G' | '25G' | '40G' | '100G'> = {
+      '1G': '1G',
+      '1GBE': '1G',
+      '1GBIT': '1G',
+      '10G': '10G',
+      '10GBE': '10G',
+      '10GBIT': '10G',
+      '25G': '25G',
+      '25GBE': '25G',
+      '25GBIT': '25G',
+      '40G': '40G',
+      '40GBE': '40G',
+      '40GBIT': '40G',
+      '100G': '100G',
+      '100GBE': '100G',
+      '100GBIT': '100G',
+    }
+
+    return bandwidthMap[normalized]
   }
 
   private parseSubgraphs(yamlSubgraphs: YamlSubgraph[], warnings: ParseWarning[]): Subgraph[] {
