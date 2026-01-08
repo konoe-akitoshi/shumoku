@@ -315,7 +315,9 @@ export class HierarchicalLayoutV2 {
     const lines = Array.isArray(node.label) ? node.label.length : 1
     const baseHeight = 40
     const lineHeight = 16
-    return Math.max(this.options.nodeHeight, baseHeight + (lines - 1) * lineHeight)
+    // Add extra height for icon if device type is specified
+    const iconHeight = node.type ? 36 : 0
+    return Math.max(this.options.nodeHeight, baseHeight + (lines - 1) * lineHeight + iconHeight)
   }
 
   private extractLayoutResult(graph: NetworkGraphV2, elkGraph: ElkNode): LayoutResult {

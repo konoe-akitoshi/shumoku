@@ -14,6 +14,9 @@ export * from './layout'
 // Themes
 export * from './themes'
 
+// Icons
+export * from './icons'
+
 // Renderer
 export * from './renderer'
 

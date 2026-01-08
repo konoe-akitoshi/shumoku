@@ -13,6 +13,7 @@ import type {
   NodeShape,
   LinkType,
 } from '../../models/v2'
+import { getDeviceIcon } from '../../icons'
 
 // ============================================
 // Renderer Options
@@ -121,6 +122,7 @@ export class SVGRendererV2 {
   .node:hover rect, .node:hover circle, .node:hover polygon { filter: brightness(0.95); }
   .node-label { font-family: ${this.options.fontFamily}; font-size: 12px; fill: #1e293b; }
   .node-label-bold { font-weight: bold; }
+  .node-icon { color: #475569; }
   .subgraph-label { font-family: ${this.options.fontFamily}; font-size: 14px; font-weight: 600; fill: #374151; }
   .link-label { font-family: ${this.options.fontFamily}; font-size: 11px; fill: #64748b; }
   .endpoint-label { font-family: ${this.options.fontFamily}; font-size: 9px; fill: #94a3b8; }
@@ -172,10 +174,12 @@ export class SVGRendererV2 {
     const strokeDasharray = style.strokeDasharray || ''
 
     const shape = this.renderNodeShape(node.shape, x, y, w, h, fill, stroke, strokeWidth, strokeDasharray)
-    const label = this.renderNodeLabel(node, x, y, h)
+    const icon = this.renderNodeIcon(node, x, y, h)
+    const label = this.renderNodeLabel(node, x, y, h, !!icon)
 
     return `<g class="node" data-id="${id}" transform="translate(0,0)">
   ${shape}
+  ${icon}
   ${label}
 </g>`
   }
@@ -239,11 +243,28 @@ export class SVGRendererV2 {
     }
   }
 
-  private renderNodeLabel(node: Node, x: number, y: number, _h: number): string {
+  private renderNodeIcon(node: Node, x: number, y: number, h: number): string {
+    const iconPath = getDeviceIcon(node.type)
+    if (!iconPath) return ''
+
+    const iconSize = 40
+    const iconY = y - h / 2 + 12 // Position near top of node
+
+    return `<g class="node-icon" transform="translate(${x - iconSize / 2}, ${iconY})">
+      <svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="currentColor">
+        ${iconPath}
+      </svg>
+    </g>`
+  }
+
+  private renderNodeLabel(node: Node, x: number, y: number, _h: number, hasIcon: boolean): string {
     const labels = Array.isArray(node.label) ? node.label : [node.label]
     const lineHeight = 16
     const totalHeight = labels.length * lineHeight
-    const startY = y - totalHeight / 2 + lineHeight / 2 + 4
+
+    // Shift labels down if there's an icon
+    const iconOffset = hasIcon ? 28 : 0
+    const startY = y - totalHeight / 2 + lineHeight / 2 + 4 + iconOffset
 
     const lines = labels.map((line, i) => {
       // Parse simple HTML tags
