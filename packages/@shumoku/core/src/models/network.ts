@@ -6,8 +6,9 @@ import type { Device } from './device'
 import type { Port } from './port'
 import type { Link } from './link'
 import type { Module } from './module'
+import type { Location, LocationLink } from './location'
 
-export type LayoutType = 'hierarchical' | 'bento' | 'force' | 'manual'
+export type LayoutType = string // Allow any layout engine name for flexibility
 export type ThemeType = 'modern' | 'dark' | 'blueprint' | 'custom'
 
 export interface NetworkSettings {
@@ -123,18 +124,24 @@ export interface NetworkDefinitions {
   /**
    * Custom device types
    */
-  deviceTypes?: Record<string, {
-    icon?: string
-    defaultColor?: string
-    defaultShape?: string
-  }>
+  deviceTypes?: Record<
+    string,
+    {
+      icon?: string
+      defaultColor?: string
+      defaultShape?: string
+    }
+  >
 
   /**
    * Link types
    */
-  linkTypes?: Record<string, {
-    defaultStyle?: Record<string, unknown>
-  }>
+  linkTypes?: Record<
+    string,
+    {
+      defaultStyle?: Record<string, unknown>
+    }
+  >
 }
 
 export interface NetworkGraph {
@@ -172,6 +179,16 @@ export interface NetworkGraph {
    * Modules for grouping
    */
   modules?: Module[]
+
+  /**
+   * Locations for physical grouping (rooms, racks, etc.)
+   */
+  locations?: Location[]
+
+  /**
+   * Location links (trunk lines between locations)
+   */
+  locationLinks?: LocationLink[]
 
   /**
    * Global settings

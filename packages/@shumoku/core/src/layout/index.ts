@@ -4,6 +4,8 @@
 
 export * from './types'
 export { BaseLayoutEngine } from './base'
-export { BentoLayoutEngine } from './bento'
-export { HierarchicalLayoutEngine } from './hierarchical'
+export { LocationBasedLayout } from './location-based'
 export { DefaultLayoutEngineFactory, layoutEngineFactory } from './factory'
+
+// v2 layout engines
+export * as layoutV2 from './v2'

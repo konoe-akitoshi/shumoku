@@ -3,7 +3,7 @@
  */
 
 import type { NetworkGraph } from '../models'
-import type { LayoutResult } from '../layout'
+import type { LayoutResult, LayoutNode } from '../layout'
 import type { Theme } from '../themes'
 
 export interface SVGRendererOptions {
@@ -152,8 +152,36 @@ ${nodesGroup}
       const link = network.links.find((l) => l.id === id)
       if (!link) return
 
-      const sourceNode = layout.nodes.get(edge.source)
-      const targetNode = layout.nodes.get(edge.target)
+      // Handle both Map and array formats
+      let sourceNode: LayoutNode | undefined
+      let targetNode: LayoutNode | undefined
+
+      if (layout.nodes instanceof Map) {
+        sourceNode = layout.nodes.get(edge.source)
+        targetNode = layout.nodes.get(edge.target)
+      } else {
+        // Convert NodeLayout to LayoutNode format
+        const sourceNodeLayout = layout.nodes.find((n) => n.id === edge.source)
+        const targetNodeLayout = layout.nodes.find((n) => n.id === edge.target)
+
+        if (sourceNodeLayout) {
+          sourceNode = {
+            id: sourceNodeLayout.id,
+            position: { x: sourceNodeLayout.x, y: sourceNodeLayout.y },
+            size: { width: sourceNodeLayout.width, height: sourceNodeLayout.height },
+            data: network.devices.find((d) => d.id === sourceNodeLayout.id)!,
+          }
+        }
+
+        if (targetNodeLayout) {
+          targetNode = {
+            id: targetNodeLayout.id,
+            position: { x: targetNodeLayout.x, y: targetNodeLayout.y },
+            size: { width: targetNodeLayout.width, height: targetNodeLayout.height },
+            data: network.devices.find((d) => d.id === targetNodeLayout.id)!,
+          }
+        }
+      }
       if (!sourceNode || !targetNode) return
 
       // Determine line width based on bandwidth
@@ -211,52 +239,104 @@ ${nodesGroup}
   private renderNodes(network: NetworkGraph, layout: LayoutResult): string {
     let svg = '  <g id="nodes">\n'
 
-    layout.nodes.forEach((node, id) => {
-      const device = network.devices.find((d) => d.id === id)
-      if (!device) return
+    // Handle both Map and array formats
+    if (layout.nodes instanceof Map) {
+      layout.nodes.forEach((node, id) => {
+        const device = network.devices.find((d) => d.id === id)
+        if (!device) return
 
-      const { position, size } = node
-      const deviceColor = this.theme.colors.devices[device.type] || this.theme.colors.primary
+        const { position, size } = node
+        const deviceColor = this.theme.colors.devices[device.type] || this.theme.colors.primary
 
-      // Determine shape based on device type
-      const shape = this.getDeviceShape(device.type)
+        // Determine shape based on device type
+        const shape = this.getDeviceShape(device.type)
 
-      svg += `    <g id="node-${this.escapeXML(id)}">\n`
+        svg += `    <g id="node-${this.escapeXML(id)}">\n`
 
-      // Draw device shape
-      if (shape === 'rect') {
-        svg += `      <rect x="${position.x - size.width / 2}" y="${position.y - size.height / 2}" 
+        // Draw device shape
+        if (shape === 'rect') {
+          svg += `      <rect x="${position.x - size.width / 2}" y="${position.y - size.height / 2}" 
             width="${size.width}" height="${size.height}"
             fill="${deviceColor}" stroke="${this.theme.colors.grid}" 
             stroke-width="2" rx="${this.theme.dimensions.radius.small}" />\n`
-      } else if (shape === 'circle') {
-        const radius = Math.min(size.width, size.height) / 2
-        svg += `      <circle cx="${position.x}" cy="${position.y}" r="${radius}"
+        } else if (shape === 'circle') {
+          const radius = Math.min(size.width, size.height) / 2
+          svg += `      <circle cx="${position.x}" cy="${position.y}" r="${radius}"
             fill="${deviceColor}" stroke="${this.theme.colors.grid}" 
             stroke-width="2" />\n`
-      }
+        }
 
-      // Device name
-      svg += `      <text x="${position.x}" y="${position.y}" class="node-label">
+        // Device name
+        svg += `      <text x="${position.x}" y="${position.y}" class="node-label">
         ${this.escapeXML(device.name)}
       </text>\n`
 
-      // IP address
-      if (device.metadata?.ip) {
-        svg += `      <text x="${position.x}" y="${position.y + 20}" class="node-sublabel">
+        // IP address
+        if (device.metadata?.ip) {
+          svg += `      <text x="${position.x}" y="${position.y + 20}" class="node-sublabel">
         ${this.escapeXML(String(device.metadata.ip))}
       </text>\n`
-      }
+        }
 
-      // VLAN info
-      if (device.metadata?.vlan) {
-        svg += `      <text x="${position.x}" y="${position.y + 35}" class="node-sublabel">
+        // VLAN info
+        if (device.metadata?.vlan) {
+          svg += `      <text x="${position.x}" y="${position.y + 35}" class="node-sublabel">
         VLAN: ${this.escapeXML(String(device.metadata.vlan))}
       </text>\n`
-      }
+        }
 
-      svg += '    </g>\n'
-    })
+        svg += '    </g>\n'
+      })
+    } else {
+      // Handle array format
+      layout.nodes.forEach((node) => {
+        const device = network.devices.find((d) => d.id === node.id)
+        if (!device) return
+
+        const position = { x: node.x, y: node.y }
+        const size = { width: node.width, height: node.height }
+        const deviceColor = this.theme.colors.devices[device.type] || this.theme.colors.primary
+
+        // Determine shape based on device type
+        const shape = this.getDeviceShape(device.type)
+
+        svg += `    <g id="node-${this.escapeXML(node.id)}">\n`
+
+        // Draw device shape
+        if (shape === 'rect') {
+          svg += `      <rect x="${position.x - size.width / 2}" y="${position.y - size.height / 2}" 
+              width="${size.width}" height="${size.height}"
+              fill="${deviceColor}" stroke="${this.theme.colors.grid}" 
+              stroke-width="2" rx="${this.theme.dimensions.radius.small}" />\n`
+        } else if (shape === 'circle') {
+          const radius = Math.min(size.width, size.height) / 2
+          svg += `      <circle cx="${position.x}" cy="${position.y}" r="${radius}"
+              fill="${deviceColor}" stroke="${this.theme.colors.grid}" 
+              stroke-width="2" />\n`
+        }
+
+        // Device name
+        svg += `      <text x="${position.x}" y="${position.y}" class="node-label">
+          ${this.escapeXML(device.name)}
+        </text>\n`
+
+        // IP address
+        if (device.metadata?.ip) {
+          svg += `      <text x="${position.x}" y="${position.y + 20}" class="node-sublabel">
+          ${this.escapeXML(String(device.metadata.ip))}
+        </text>\n`
+        }
+
+        // VLAN info
+        if (device.metadata?.vlan) {
+          svg += `      <text x="${position.x}" y="${position.y + 35}" class="node-sublabel">
+          VLAN: ${this.escapeXML(String(device.metadata.vlan))}
+        </text>\n`
+        }
+
+        svg += '    </g>\n'
+      })
+    }
 
     svg += '  </g>\n'
     return svg

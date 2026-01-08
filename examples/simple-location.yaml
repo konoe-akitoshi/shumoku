@@ -1,0 +1,68 @@
+name: "Simple Location Test"
+version: "1.0.0"
+description: "Simple test for location-based layout"
+
+devices:
+  - id: sw1
+    name: "Switch 1"
+    type: l2-switch
+    metadata:
+      locationId: "room-a"
+      
+  - id: sw2
+    name: "Switch 2" 
+    type: l2-switch
+    metadata:
+      locationId: "room-a"
+      
+  - id: sw3
+    name: "Switch 3"
+    type: l2-switch
+    metadata:
+      locationId: "room-b"
+      
+  - id: server1
+    name: "Server 1"
+    type: server
+    metadata:
+      locationId: "room-b"
+
+locations:
+  - id: room-a
+    name: "Room A"
+    type: room
+    position:
+      x: 100
+      y: 100
+      width: 400
+      height: 300
+    style:
+      backgroundColor: "#e6f2ff"
+      borderColor: "#0066cc"
+      borderWidth: 2
+      
+  - id: room-b
+    name: "Room B"
+    type: room
+    position:
+      x: 600
+      y: 100
+      width: 400
+      height: 300
+    style:
+      backgroundColor: "#f0f8e6"
+      borderColor: "#339900"
+      borderWidth: 2
+
+links:
+  - from: sw1
+    to: sw2
+    bandwidth: "10G"
+    
+  - from: sw2
+    to: sw3
+    bandwidth: "10G"
+    
+  - from: sw3
+    to: server1
+    bandwidth: "10G"

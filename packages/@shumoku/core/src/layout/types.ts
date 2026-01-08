@@ -43,27 +43,61 @@ export interface LayoutModule {
   data: Module
 }
 
+export interface NodeLayout {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  metadata?: Record<string, unknown>
+}
+
+export interface LinkLayout {
+  id: string
+  source: { deviceId?: string; portId?: string }
+  target: { deviceId?: string; portId?: string }
+  points: Position[]
+  metadata?: Record<string, unknown>
+}
+
+export interface LayoutLocation {
+  id: string
+  name: string
+  bounds: Bounds
+  style?: {
+    backgroundColor?: string
+    borderColor?: string
+    borderWidth?: number
+    borderStyle?: string
+  }
+}
+
 export interface LayoutResult {
   /**
    * Positioned nodes
    */
-  nodes: Map<string, LayoutNode>
-  
+  nodes: Map<string, LayoutNode> | NodeLayout[]
+
   /**
    * Edge routing
    */
   edges: Map<string, LayoutEdge>
-  
+
   /**
    * Module boundaries
    */
   modules?: Map<string, LayoutModule>
-  
+
+  /**
+   * Location boundaries (calculated by layout engine)
+   */
+  locations?: Map<string, LayoutLocation>
+
   /**
    * Overall bounds
    */
   bounds: Bounds
-  
+
   /**
    * Layout metadata
    */
@@ -72,6 +106,16 @@ export interface LayoutResult {
     duration: number
     iterations?: number
   }
+
+  /**
+   * Alternative link representation for location-based layout
+   */
+  links?: LinkLayout[]
+
+  /**
+   * Warnings during layout
+   */
+  warnings?: string[]
 }
 
 export interface LayoutOptions {
@@ -79,41 +123,46 @@ export interface LayoutOptions {
    * Node spacing
    */
   nodeSpacing?: number
-  
+
   /**
    * Layer spacing (for hierarchical)
    */
   layerSpacing?: number
-  
+
   /**
    * Module padding
    */
   modulePadding?: number
-  
+
   /**
    * Edge routing
    */
   edgeRouting?: 'straight' | 'orthogonal' | 'curved'
-  
+
   /**
    * Animation support
    */
   animate?: boolean
-  
+
   /**
    * Respect manual positions
    */
   respectManualPositions?: boolean
-  
+
   /**
    * Random seed for deterministic layouts
    */
   seed?: number
-  
+
   /**
    * Custom constraints
    */
   constraints?: LayoutConstraint[]
+
+  /**
+   * Default node size
+   */
+  nodeSize?: number
 }
 
 export interface LayoutConstraint {
@@ -127,22 +176,22 @@ export interface LayoutEngine {
    * Engine name
    */
   name: string
-  
+
   /**
    * Engine version
    */
   version: string
-  
+
   /**
    * Compute layout
    */
   layout(graph: NetworkGraph, options?: LayoutOptions): LayoutResult | Promise<LayoutResult>
-  
+
   /**
    * Check if engine supports feature
    */
   supports(feature: string): boolean
-  
+
   /**
    * Get default options
    */
@@ -154,12 +203,12 @@ export interface LayoutEngineFactory {
    * Create layout engine instance
    */
   create(type: 'hierarchical' | 'bento' | 'force' | string): LayoutEngine
-  
+
   /**
    * Register custom engine
    */
   register(name: string, engine: LayoutEngine): void
-  
+
   /**
    * List available engines
    */

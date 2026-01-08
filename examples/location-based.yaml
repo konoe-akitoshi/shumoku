@@ -1,0 +1,283 @@
+network:
+  name: "Office Network with Physical Locations"
+  version: "1.0.0"
+  description: "Location-based network topology example with rooms and racks"
+  
+  settings:
+    theme: modern
+    
+  # Physical locations definition
+  locations:
+    # Building level
+    - id: building-hq
+      name: "Headquarters Building"
+      type: building
+      
+    # Floor level
+    - id: floor-3
+      name: "3rd Floor"
+      type: floor
+      parentId: building-hq
+      
+    # Room level
+    - id: server-room-a
+      name: "Server Room A"
+      type: room
+      parentId: floor-3
+      position:
+        x: 100
+        y: 100
+        width: 800
+        height: 600
+      style:
+        backgroundColor: "#f0f4f8"
+        borderColor: "#4a5568"
+        borderWidth: 2
+        borderStyle: solid
+        labelPosition: top
+      # Connectors define the connection points to other locations
+      connectors:
+        - id: trunk-to-room-b
+          label: "To Room B"
+          direction: right
+          position: 0.3
+          type: trunk
+        - id: trunk-to-room-c
+          label: "To Room C"  
+          direction: right
+          position: 0.7
+          type: trunk
+        - id: uplink-to-core
+          label: "Core Uplink"
+          direction: top
+          position: 0.5
+          type: uplink
+          
+    - id: server-room-b
+      name: "Server Room B"
+      type: room
+      parentId: floor-3
+      position:
+        x: 1000
+        y: 100
+        width: 600
+        height: 400
+      style:
+        backgroundColor: "#f0f4f8"
+        borderColor: "#4a5568"
+        borderWidth: 2
+        borderStyle: solid
+      connectors:
+        - id: trunk-from-room-a
+          label: "From Room A"
+          direction: left
+          position: 0.5
+          type: trunk
+          
+    - id: office-room-c
+      name: "Office Room C"  
+      type: room
+      parentId: floor-3
+      position:
+        x: 1000
+        y: 600
+        width: 600
+        height: 400
+      style:
+        backgroundColor: "#fffbf0"
+        borderColor: "#975a16"
+        borderWidth: 2
+        borderStyle: solid
+      connectors:
+        - id: trunk-from-room-a
+          label: "From Room A"
+          direction: left
+          position: 0.5
+          type: trunk
+
+    # Rack level within rooms
+    - id: rack-a1
+      name: "Rack A1"
+      type: rack
+      parentId: server-room-a
+      metadata:
+        units: 42
+        power: "20kW"
+      
+    - id: rack-a2
+      name: "Rack A2"
+      type: rack
+      parentId: server-room-a
+      metadata:
+        units: 42
+        power: "20kW"
+
+  # Inter-location links (trunk lines)
+  locationLinks:
+    - id: trunk-a-b
+      from:
+        locationId: server-room-a
+        connectorId: trunk-to-room-b
+      to:
+        locationId: server-room-b
+        connectorId: trunk-from-room-a
+      properties:
+        bandwidth: "100G"
+        mediaType: fiber
+        distance: "50m"
+      style:
+        color: "#2d3748"
+        strokeWidth: 4
+        strokeStyle: solid
+        
+    - id: trunk-a-c
+      from:
+        locationId: server-room-a
+        connectorId: trunk-to-room-c
+      to:
+        locationId: office-room-c
+        connectorId: trunk-from-room-a
+      properties:
+        bandwidth: "40G"
+        mediaType: fiber
+        distance: "30m"
+      style:
+        color: "#2d3748"
+        strokeWidth: 3
+        strokeStyle: solid
+
+  # Devices with location assignment
+  devices:
+    # Core switches in Server Room A
+    - id: core-sw-1
+      name: "Core-SW-1"
+      type: l3-switch
+      role: core
+      locationId: server-room-a  # Assigned to location
+      metadata:
+        model: "Cisco Catalyst 9500"
+        
+    - id: core-sw-2
+      name: "Core-SW-2"
+      type: l3-switch
+      role: core
+      locationId: server-room-a
+      metadata:
+        model: "Cisco Catalyst 9500"
+        
+    # Distribution switches in Server Room A
+    - id: dist-sw-1
+      name: "Dist-SW-1"
+      type: l3-switch
+      role: distribution
+      locationId: server-room-a
+      
+    - id: dist-sw-2
+      name: "Dist-SW-2"
+      type: l3-switch
+      role: distribution
+      locationId: server-room-a
+      
+    # Switches in Server Room B
+    - id: server-sw-b1
+      name: "Server-SW-B1"
+      type: l2-switch
+      role: access
+      locationId: server-room-b
+      
+    - id: server-sw-b2
+      name: "Server-SW-B2"
+      type: l2-switch
+      role: access
+      locationId: server-room-b
+      
+    # Access switches in Office Room C
+    - id: office-sw-c1
+      name: "Office-SW-C1"
+      type: l2-switch
+      role: access
+      locationId: office-room-c
+      
+    - id: office-sw-c2
+      name: "Office-SW-C2"
+      type: l2-switch
+      role: access
+      locationId: office-room-c
+      
+    - id: wifi-controller
+      name: "WiFi Controller"
+      type: server
+      role: access
+      locationId: office-room-c
+      metadata:
+        service: "Wireless LAN Controller"
+
+  # Links within locations
+  links:
+    # Core redundancy (within Server Room A)
+    - from: core-sw-1
+      to: core-sw-2
+      type: physical
+      bandwidth: "100G"
+      metadata:
+        redundancy: HSRP
+        
+    # Core to Distribution (within Server Room A)
+    - from: core-sw-1
+      to: dist-sw-1
+      bandwidth: "40G"
+      
+    - from: core-sw-1
+      to: dist-sw-2
+      bandwidth: "40G"
+      
+    - from: core-sw-2
+      to: dist-sw-1
+      bandwidth: "40G"
+      
+    - from: core-sw-2
+      to: dist-sw-2
+      bandwidth: "40G"
+      
+    # Cross-location links (these will be routed through connectors)
+    # Distribution to Server Room B
+    - from: dist-sw-1
+      to: server-sw-b1
+      bandwidth: "10G"
+      metadata:
+        description: "Cross-location link via fiber trunk"
+        
+    - from: dist-sw-2
+      to: server-sw-b2
+      bandwidth: "10G"
+      metadata:
+        description: "Cross-location link via fiber trunk"
+        
+    # Distribution to Office Room C
+    - from: dist-sw-1
+      to: office-sw-c1
+      bandwidth: "10G"
+      metadata:
+        description: "Cross-location link via fiber trunk"
+        
+    - from: dist-sw-2
+      to: office-sw-c2
+      bandwidth: "10G"
+      metadata:
+        description: "Cross-location link via fiber trunk"
+        
+    # Within Server Room B
+    - from: server-sw-b1
+      to: server-sw-b2
+      bandwidth: "10G"
+      metadata:
+        redundancy: "Stack"
+        
+    # Within Office Room C
+    - from: office-sw-c1
+      to: office-sw-c2
+      bandwidth: "10G"
+      
+    - from: office-sw-c1
+      to: wifi-controller
+      bandwidth: "1G"

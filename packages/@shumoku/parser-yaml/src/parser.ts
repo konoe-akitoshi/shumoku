@@ -12,13 +12,17 @@ import {
 } from '@shumoku/core/parser'
 import {
   type NetworkGraph,
+  type NetworkSettings,
   type Device,
   type Port,
   type Link,
   type Module,
+  type Location,
+  type LocationLink,
   DeviceType,
   LinkType,
   PortType,
+  PortMode,
 } from '@shumoku/core/models'
 
 interface YamlNetwork {
@@ -31,6 +35,8 @@ interface YamlNetwork {
     devices?: YamlDevice[]
     links?: YamlLinkInput[]
     connections?: YamlLinkInput[] // Alternative name for links
+    locations?: YamlLocation[]
+    locationLinks?: YamlLocationLink[]
     definitions?: Record<string, unknown>
     metadata?: Record<string, unknown>
   }
@@ -43,6 +49,8 @@ interface YamlNetwork {
   links?: YamlLinkInput[]
   connections?: YamlLinkInput[]
   modules?: YamlModule[]
+  locations?: YamlLocation[]
+  locationLinks?: YamlLocationLink[]
   definitions?: Record<string, unknown>
   metadata?: Record<string, unknown>
 }
@@ -52,6 +60,7 @@ interface YamlDevice {
   name: string
   type?: string
   role?: string
+  locationId?: string
   position?: {
     x?: number | 'auto'
     y?: number | 'auto'
@@ -97,6 +106,44 @@ interface YamlModule {
   style?: Record<string, unknown>
 }
 
+interface YamlLocationConnector {
+  id: string
+  label: string
+  direction: 'top' | 'bottom' | 'left' | 'right'
+  position?: number
+  type?: string
+}
+
+interface YamlLocation {
+  id: string
+  name: string
+  type: string
+  parentId?: string
+  position?: {
+    x: number
+    y: number
+    width?: number
+    height?: number
+  }
+  style?: Record<string, unknown>
+  connectors?: YamlLocationConnector[]
+  metadata?: Record<string, unknown>
+}
+
+interface YamlLocationLink {
+  id: string
+  from: {
+    locationId: string
+    connectorId: string
+  }
+  to: {
+    locationId: string
+    connectorId: string
+  }
+  properties?: Record<string, unknown>
+  style?: Record<string, unknown>
+}
+
 export class YamlParser extends BaseParser {
   name = 'yaml'
   version = '1.0.0'
@@ -126,6 +173,10 @@ export class YamlParser extends BaseParser {
         ports: [],
         links: [],
         modules: network.modules ? this.parseModules(network.modules, warnings) : undefined,
+        locations: network.locations ? this.parseLocations(network.locations, warnings) : undefined,
+        locationLinks: network.locationLinks
+          ? this.parseLocationLinks(network.locationLinks, warnings)
+          : undefined,
         settings: this.parseSettings(network.settings),
         definitions: network.definitions,
         metadata: network.metadata,
@@ -136,6 +187,19 @@ export class YamlParser extends BaseParser {
         const { devices, ports } = this.parseDevices(network.devices, warnings)
         graph.devices = devices
         graph.ports = ports
+
+        // Update location deviceIds based on device locationId metadata
+        if (graph.locations) {
+          for (const device of devices) {
+            const locationId = device.metadata?.locationId as string | undefined
+            if (locationId) {
+              const location = graph.locations.find((l) => l.id === locationId)
+              if (location) {
+                location.deviceIds.push(device.id)
+              }
+            }
+          }
+        }
       }
 
       // Parse links
@@ -252,6 +316,16 @@ export class YamlParser extends BaseParser {
       // Parse device type
       const deviceType = this.parseDeviceType(yamlDevice.type, warnings)
 
+      // locationId can be either a direct property or inside metadata
+      const locationId =
+        yamlDevice.locationId ?? (yamlDevice.metadata?.locationId as string | undefined)
+
+      // Build metadata, ensuring locationId is included if present
+      const metadata: Record<string, unknown> = { ...yamlDevice.metadata }
+      if (locationId) {
+        metadata.locationId = locationId
+      }
+
       const device: Device = {
         id: deviceId,
         name: yamlDevice.name || deviceId,
@@ -261,7 +335,7 @@ export class YamlParser extends BaseParser {
           x: yamlDevice.position.x ?? 'auto',
           y: yamlDevice.position.y ?? 'auto',
         },
-        metadata: yamlDevice.metadata,
+        metadata,
       }
 
       devices.push(device)
@@ -288,10 +362,9 @@ export class YamlParser extends BaseParser {
 
   private parseLinks(
     yamlLinks: YamlLinkInput[],
-    devices: Device[],
+    _devices: Device[],
     warnings: ParseWarning[],
   ): Link[] {
-    // const deviceMap = new Map(devices.map((d) => [d.id, d]))
     const links: Link[] = []
 
     yamlLinks.forEach((yamlLink, index) => {
@@ -348,16 +421,32 @@ export class YamlParser extends BaseParser {
     return links
   }
 
-  private parseModules(yamlModules: YamlModule[], warnings: ParseWarning[]): Module[] {
+  private parseModules(yamlModules: YamlModule[], _warnings: ParseWarning[]): Module[] {
     return yamlModules.map((yamlModule, index) => {
       const moduleId = yamlModule.id || yamlModule.name || this.generateId('module', index)
+
+      // Convert layout span to required format
+      const layout = yamlModule.layout
+        ? {
+            column: yamlModule.layout.column,
+            row: yamlModule.layout.row,
+            span:
+              yamlModule.layout.span?.columns !== undefined &&
+              yamlModule.layout.span?.rows !== undefined
+                ? {
+                    columns: yamlModule.layout.span.columns,
+                    rows: yamlModule.layout.span.rows,
+                  }
+                : undefined,
+          }
+        : undefined
 
       return {
         id: moduleId,
         name: yamlModule.name,
         devices: yamlModule.devices || [],
-        layout: yamlModule.layout,
-        style: yamlModule.style,
+        layout,
+        style: yamlModule.style as Module['style'],
       }
     })
   }
@@ -366,16 +455,16 @@ export class YamlParser extends BaseParser {
     if (!settings) return undefined
 
     return {
-      layout: settings.layout as NetworkGraph['settings']['layout'],
-      theme: settings.theme as NetworkGraph['settings']['theme'],
-      animation: settings.animation as NetworkGraph['settings']['animation'],
-      interaction: settings.interaction as NetworkGraph['settings']['interaction'],
-      performance: settings.performance as NetworkGraph['settings']['performance'],
-      grid: settings.grid as NetworkGraph['settings']['grid'],
+      layout: settings.layout as NetworkSettings['layout'],
+      theme: settings.theme as NetworkSettings['theme'],
+      animation: settings.animation as NetworkSettings['animation'],
+      interaction: settings.interaction as NetworkSettings['interaction'],
+      performance: settings.performance as NetworkSettings['performance'],
+      grid: settings.grid as NetworkSettings['grid'],
     }
   }
 
-  private parseDeviceType(type?: string, warnings?: ParseWarning[]): DeviceType {
+  private parseDeviceType(type?: string, _warnings?: ParseWarning[]): DeviceType {
     if (!type) return DeviceType.Unknown
 
     const typeMap: Record<string, DeviceType> = {
@@ -461,5 +550,88 @@ export class YamlParser extends BaseParser {
       deviceId: parts[0],
       portId: parts[1],
     }
+  }
+
+  private parseLocations(yamlLocations: YamlLocation[], warnings: ParseWarning[]): Location[] {
+    const locations: Location[] = []
+
+    for (const yamlLocation of yamlLocations) {
+      if (!yamlLocation.id) {
+        warnings.push({
+          code: 'INVALID_LOCATION',
+          message: `Location missing required id`,
+          severity: 'error',
+        })
+        continue
+      }
+
+      const deviceIds: string[] = []
+      const childLocationIds: string[] = []
+
+      // Process connectors
+      const connectors = yamlLocation.connectors?.map((c) => ({
+        id: c.id,
+        label: c.label,
+        direction: c.direction,
+        position: c.position,
+        type: c.type as 'uplink' | 'downlink' | 'peer' | 'trunk' | 'custom' | undefined,
+        style: undefined,
+        metadata: {},
+      }))
+
+      locations.push({
+        id: yamlLocation.id,
+        name: yamlLocation.name || yamlLocation.id,
+        type: (yamlLocation.type as any) || 'custom',
+        parentId: yamlLocation.parentId,
+        deviceIds,
+        childLocationIds,
+        connectors,
+        position: yamlLocation.position,
+        style: yamlLocation.style as any,
+        metadata: yamlLocation.metadata,
+      })
+    }
+
+    // Update child location IDs based on parentId relationships
+    for (const location of locations) {
+      if (location.parentId) {
+        const parent = locations.find((l) => l.id === location.parentId)
+        if (parent && parent.childLocationIds) {
+          parent.childLocationIds.push(location.id)
+        }
+      }
+    }
+
+    return locations
+  }
+
+  private parseLocationLinks(
+    yamlLocationLinks: YamlLocationLink[],
+    warnings: ParseWarning[],
+  ): LocationLink[] {
+    const locationLinks: LocationLink[] = []
+
+    for (const yamlLink of yamlLocationLinks) {
+      if (!yamlLink.id) {
+        warnings.push({
+          code: 'INVALID_LOCATION_LINK',
+          message: `Location link missing required id`,
+          severity: 'error',
+        })
+        continue
+      }
+
+      locationLinks.push({
+        id: yamlLink.id,
+        from: yamlLink.from,
+        to: yamlLink.to,
+        properties: yamlLink.properties,
+        style: yamlLink.style as any,
+        metadata: {},
+      })
+    }
+
+    return locationLinks
   }
 }

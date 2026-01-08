@@ -6,6 +6,8 @@ export * from './device'
 export * from './port'
 export * from './link'
 export * from './module'
+export * from './location'
 export * from './network'
 
-// Re-export commonly used types for convenience
+// v2 models (Mermaid-like)
+export * as v2 from './v2'
