@@ -51,9 +51,9 @@ const DEFAULT_OPTIONS: Required<HierarchicalLayoutOptions> = {
   direction: 'TB',
   nodeWidth: 180,
   nodeHeight: 60,
-  nodeSpacing: 100,     // Horizontal spacing between nodes
-  rankSpacing: 150,     // Vertical spacing between layers
-  subgraphPadding: 50,  // Padding inside subgraphs
+  nodeSpacing: 120,     // Horizontal spacing between nodes
+  rankSpacing: 180,     // Vertical spacing between layers
+  subgraphPadding: 60,  // Padding inside subgraphs
   subgraphLabelHeight: 28,
 }
 
@@ -70,15 +70,32 @@ export class HierarchicalLayoutV2 {
     this.elk = new ELK()
   }
 
+  /**
+   * Get effective options by merging graph settings with defaults
+   */
+  private getEffectiveOptions(graph: NetworkGraphV2): Required<HierarchicalLayoutOptions> {
+    const settings = graph.settings
+    return {
+      ...this.options,
+      direction: settings?.direction || this.options.direction,
+      nodeSpacing: settings?.nodeSpacing || this.options.nodeSpacing,
+      rankSpacing: settings?.rankSpacing || this.options.rankSpacing,
+      subgraphPadding: settings?.subgraphPadding || this.options.subgraphPadding,
+    }
+  }
+
   async layoutAsync(graph: NetworkGraphV2): Promise<LayoutResult> {
     const startTime = performance.now()
-    const direction = graph.settings?.direction || this.options.direction
+
+    // Merge graph settings with default options
+    const effectiveOptions = this.getEffectiveOptions(graph)
+    const direction = effectiveOptions.direction
 
     // Detect HA pairs first (before building ELK graph)
     const haPairs = this.detectHAPairs(graph)
 
     // Build ELK graph
-    const elkGraph = this.buildElkGraph(graph, direction)
+    const elkGraph = this.buildElkGraph(graph, direction, effectiveOptions)
 
     // Run ELK layout
     const layoutedGraph = await this.elk.layout(elkGraph)
@@ -88,6 +105,12 @@ export class HierarchicalLayoutV2 {
 
     // Post-process: adjust positions for HA pairs (same rank nodes)
     this.adjustHAPairPositions(result, haPairs, direction)
+
+    // Adjust node distances based on link minLength
+    this.adjustLinkDistances(result, graph, direction)
+
+    // Recalculate subgraph bounds after node adjustments
+    this.recalculateSubgraphBounds(result, graph)
 
     result.metadata = {
       algorithm: 'elk-layered',
@@ -101,8 +124,9 @@ export class HierarchicalLayoutV2 {
   layout(graph: NetworkGraphV2): LayoutResult {
     // For sync compatibility, we need to run layout synchronously
     // This is a simplified version - ideally use layoutAsync
-    const direction = graph.settings?.direction || this.options.direction
-    const elkGraph = this.buildElkGraph(graph, direction)
+    const effectiveOptions = this.getEffectiveOptions(graph)
+    const direction = effectiveOptions.direction
+    const elkGraph = this.buildElkGraph(graph, direction, effectiveOptions)
 
     // Run synchronous layout using elk's sync API
     let result: LayoutResult
@@ -121,7 +145,11 @@ export class HierarchicalLayoutV2 {
     return result
   }
 
-  private buildElkGraph(graph: NetworkGraphV2, direction: LayoutDirection): ElkNode {
+  private buildElkGraph(
+    graph: NetworkGraphV2,
+    direction: LayoutDirection,
+    options: Required<HierarchicalLayoutOptions>
+  ): ElkNode {
     const elkDirection = this.toElkDirection(direction)
 
     // Build subgraph map
@@ -156,7 +184,7 @@ export class HierarchicalLayoutV2 {
       const height = this.calculateNodeHeight(node)
       return {
         id: node.id,
-        width: this.options.nodeWidth,
+        width: options.nodeWidth,
         height,
         labels: [{ text: Array.isArray(node.label) ? node.label.join('\n') : node.label }],
       }
@@ -184,12 +212,19 @@ export class HierarchicalLayoutV2 {
           }
         }
 
+        // Use per-subgraph settings if specified, otherwise fall back to global
+        const sgPadding = subgraph.style?.padding ?? options.subgraphPadding
+        const sgNodeSpacing = subgraph.style?.nodeSpacing ?? options.nodeSpacing
+        const sgRankSpacing = subgraph.style?.rankSpacing ?? options.rankSpacing
+
         return {
           id: subgraph.id,
           labels: [{ text: subgraph.label }],
           children: childNodes,
           layoutOptions: {
-            'elk.padding': `[top=${this.options.subgraphPadding + this.options.subgraphLabelHeight},left=${this.options.subgraphPadding},bottom=${this.options.subgraphPadding},right=${this.options.subgraphPadding}]`,
+            'elk.padding': `[top=${sgPadding + options.subgraphLabelHeight},left=${sgPadding},bottom=${sgPadding},right=${sgPadding}]`,
+            'elk.spacing.nodeNode': String(sgNodeSpacing),
+            'elk.layered.spacing.nodeNodeBetweenLayers': String(sgRankSpacing),
           },
         }
       } else {
@@ -198,10 +233,10 @@ export class HierarchicalLayoutV2 {
         if (node) {
           return createElkNode_(node)
         }
-        const height = this.options.nodeHeight
+        const height = options.nodeHeight
         return {
           id: nodeId,
-          width: this.options.nodeWidth,
+          width: options.nodeWidth,
           height,
         }
       }
@@ -248,8 +283,8 @@ export class HierarchicalLayoutV2 {
     const rootLayoutOptions: LayoutOptions = {
       'elk.algorithm': 'layered',
       'elk.direction': elkDirection,
-      'elk.spacing.nodeNode': String(this.options.nodeSpacing),
-      'elk.layered.spacing.nodeNodeBetweenLayers': String(this.options.rankSpacing),
+      'elk.spacing.nodeNode': String(options.nodeSpacing),
+      'elk.layered.spacing.nodeNodeBetweenLayers': String(options.rankSpacing),
       'elk.spacing.edgeNode': '50',  // Space between edges and nodes
       'elk.spacing.edgeEdge': '20',  // Space between edges
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
@@ -542,8 +577,8 @@ export class HierarchicalLayoutV2 {
    * Detect redundancy pairs based on link.redundancy property
    * Returns array of [nodeA, nodeB] pairs that should be placed on the same layer
    */
-  private detectHAPairs(graph: NetworkGraphV2): [string, string][] {
-    const pairs: [string, string][] = []
+  private detectHAPairs(graph: NetworkGraphV2): { nodeA: string; nodeB: string; minLength?: number }[] {
+    const pairs: { nodeA: string; nodeB: string; minLength?: number }[] = []
     const processedPairs = new Set<string>()
 
     for (const link of graph.links) {
@@ -555,7 +590,11 @@ export class HierarchicalLayoutV2 {
       const pairKey = [fromId, toId].sort().join(':')
       if (processedPairs.has(pairKey)) continue
 
-      pairs.push([fromId, toId])
+      pairs.push({
+        nodeA: fromId,
+        nodeB: toId,
+        minLength: link.style?.minLength,
+      })
       processedPairs.add(pairKey)
     }
 
@@ -567,16 +606,19 @@ export class HierarchicalLayoutV2 {
    */
   private adjustHAPairPositions(
     result: LayoutResult,
-    haPairs: [string, string][],
+    haPairs: { nodeA: string; nodeB: string; minLength?: number }[],
     direction: LayoutDirection
   ): void {
     const adjustedNodes = new Set<string>()
 
-    for (const [nodeAId, nodeBId] of haPairs) {
-      const nodeA = result.nodes.get(nodeAId)
-      const nodeB = result.nodes.get(nodeBId)
+    for (const pair of haPairs) {
+      const nodeA = result.nodes.get(pair.nodeA)
+      const nodeB = result.nodes.get(pair.nodeB)
 
       if (!nodeA || !nodeB) continue
+
+      // Use minLength from link if specified, otherwise use default nodeSpacing
+      const spacing = pair.minLength ?? this.options.nodeSpacing
 
       // Calculate the Y offset (how much we're moving the nodes)
       const originalAY = nodeA.position.y
@@ -589,7 +631,6 @@ export class HierarchicalLayoutV2 {
         nodeB.position.y = avgY
 
         // Ensure they are side by side with proper spacing
-        const spacing = this.options.nodeSpacing
         const centerX = (nodeA.position.x + nodeB.position.x) / 2
         const halfSpacing = (nodeA.size.width + spacing) / 2
 
@@ -605,7 +646,7 @@ export class HierarchicalLayoutV2 {
         // Also adjust parallel uplink nodes (nodes that connect exclusively to one HA member)
         const offsetA = avgY - originalAY
         const offsetB = avgY - originalBY
-        this.adjustParallelNodes(result, nodeAId, nodeBId, offsetA, offsetB, 'y', adjustedNodes)
+        this.adjustParallelNodes(result, pair.nodeA, pair.nodeB, offsetA, offsetB, 'y', adjustedNodes)
       } else {
         // For left-right layout, align X coordinates (make vertical)
         const avgX = (nodeA.position.x + nodeB.position.x) / 2
@@ -613,7 +654,6 @@ export class HierarchicalLayoutV2 {
         nodeB.position.x = avgX
 
         // Ensure they are stacked with proper spacing
-        const spacing = this.options.nodeSpacing
         const centerY = (nodeA.position.y + nodeB.position.y) / 2
         const halfSpacing = (nodeA.size.height + spacing) / 2
 
@@ -626,12 +666,67 @@ export class HierarchicalLayoutV2 {
         }
       }
 
-      adjustedNodes.add(nodeAId)
-      adjustedNodes.add(nodeBId)
+      adjustedNodes.add(pair.nodeA)
+      adjustedNodes.add(pair.nodeB)
     }
 
     // Recalculate all edges (since we may have moved multiple nodes)
     this.recalculateAllEdges(result)
+  }
+
+  /**
+   * Adjust node distances based on link minLength property
+   */
+  private adjustLinkDistances(
+    result: LayoutResult,
+    graph: NetworkGraphV2,
+    direction: LayoutDirection
+  ): void {
+    const isVertical = direction === 'TB' || direction === 'BT'
+    let adjusted = false
+
+    for (const link of graph.links) {
+      const minLength = link.style?.minLength
+      if (!minLength) continue
+
+      // Skip HA links (already handled by adjustHAPairPositions)
+      if (link.redundancy) continue
+
+      const fromId = getNodeId(link.from)
+      const toId = getNodeId(link.to)
+      const fromNode = result.nodes.get(fromId)
+      const toNode = result.nodes.get(toId)
+
+      if (!fromNode || !toNode) continue
+
+      // Calculate current distance
+      const dx = toNode.position.x - fromNode.position.x
+      const dy = toNode.position.y - fromNode.position.y
+      const currentDist = Math.sqrt(dx * dx + dy * dy)
+
+      if (currentDist >= minLength) continue
+
+      // Need to increase distance
+      const scale = minLength / currentDist
+
+      if (isVertical) {
+        // For TB/BT layout, primarily adjust Y (move target node down/up)
+        const newDy = dy * scale
+        const deltaY = newDy - dy
+        toNode.position.y += deltaY
+      } else {
+        // For LR/RL layout, primarily adjust X
+        const newDx = dx * scale
+        const deltaX = newDx - dx
+        toNode.position.x += deltaX
+      }
+
+      adjusted = true
+    }
+
+    if (adjusted) {
+      this.recalculateAllEdges(result)
+    }
   }
 
   /**
@@ -835,6 +930,93 @@ export class HierarchicalLayoutV2 {
         )
       }
     })
+  }
+
+  /**
+   * Recalculate subgraph bounds to contain all child nodes after adjustments
+   */
+  private recalculateSubgraphBounds(result: LayoutResult, graph: NetworkGraphV2): void {
+    if (!graph.subgraphs) return
+
+    const padding = this.options.subgraphPadding
+    const labelHeight = this.options.subgraphLabelHeight
+
+    // Build node-to-subgraph mapping
+    const nodeToSubgraph = new Map<string, string>()
+    for (const node of graph.nodes) {
+      if (node.parent) {
+        nodeToSubgraph.set(node.id, node.parent)
+      }
+    }
+
+    // Recalculate bounds for each subgraph
+    result.subgraphs.forEach((layoutSubgraph, subgraphId) => {
+      const childNodes: LayoutNode[] = []
+
+      // Find all nodes that belong to this subgraph
+      result.nodes.forEach((layoutNode, nodeId) => {
+        if (nodeToSubgraph.get(nodeId) === subgraphId) {
+          childNodes.push(layoutNode)
+        }
+      })
+
+      if (childNodes.length === 0) return
+
+      // Calculate bounding box of all child nodes
+      let minX = Infinity, minY = Infinity
+      let maxX = -Infinity, maxY = -Infinity
+
+      for (const node of childNodes) {
+        const left = node.position.x - node.size.width / 2
+        const right = node.position.x + node.size.width / 2
+        const top = node.position.y - node.size.height / 2
+        const bottom = node.position.y + node.size.height / 2
+
+        minX = Math.min(minX, left)
+        minY = Math.min(minY, top)
+        maxX = Math.max(maxX, right)
+        maxY = Math.max(maxY, bottom)
+      }
+
+      // Apply padding
+      layoutSubgraph.bounds = {
+        x: minX - padding,
+        y: minY - padding - labelHeight,
+        width: (maxX - minX) + padding * 2,
+        height: (maxY - minY) + padding * 2 + labelHeight,
+      }
+    })
+
+    // Update overall bounds
+    let minX = Infinity, minY = Infinity
+    let maxX = -Infinity, maxY = -Infinity
+
+    result.nodes.forEach((node) => {
+      const left = node.position.x - node.size.width / 2
+      const right = node.position.x + node.size.width / 2
+      const top = node.position.y - node.size.height / 2
+      const bottom = node.position.y + node.size.height / 2
+
+      minX = Math.min(minX, left)
+      minY = Math.min(minY, top)
+      maxX = Math.max(maxX, right)
+      maxY = Math.max(maxY, bottom)
+    })
+
+    result.subgraphs.forEach((sg) => {
+      minX = Math.min(minX, sg.bounds.x)
+      minY = Math.min(minY, sg.bounds.y)
+      maxX = Math.max(maxX, sg.bounds.x + sg.bounds.width)
+      maxY = Math.max(maxY, sg.bounds.y + sg.bounds.height)
+    })
+
+    const margin = 40
+    result.bounds = {
+      x: minX - margin,
+      y: minY - margin,
+      width: (maxX - minX) + margin * 2,
+      height: (maxY - minY) + margin * 2,
+    }
   }
 
 }

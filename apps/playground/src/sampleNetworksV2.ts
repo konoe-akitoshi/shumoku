@@ -10,9 +10,6 @@ description: "Enterprise network with HA edge routers and venue access"
 settings:
   direction: TB
   theme: modern
-  nodeSpacing: 50
-  rankSpacing: 100
-  subgraphPadding: 40
 
 subgraphs:
   # Cloud Layer
@@ -358,6 +355,8 @@ links:
       ip: 10.57.0.2/30
     label: "Keepalive"
     redundancy: ha
+    style:
+      minLength: 300
 
   # Router to Core
   - from:

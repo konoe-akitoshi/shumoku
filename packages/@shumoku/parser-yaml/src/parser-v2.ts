@@ -61,6 +61,7 @@ interface YamlLinkStyle {
   strokeWidth?: number
   strokeDasharray?: string
   opacity?: number
+  minLength?: number
 }
 
 interface YamlLinkEndpoint {
@@ -89,6 +90,8 @@ interface YamlSubgraphStyle {
   labelPosition?: string
   labelFontSize?: number
   padding?: number
+  nodeSpacing?: number
+  rankSpacing?: number
 }
 
 interface YamlSubgraph {
@@ -228,6 +231,7 @@ export class YamlParserV2 {
         strokeWidth: l.style.strokeWidth,
         strokeDasharray: l.style.strokeDasharray,
         opacity: l.style.opacity,
+        minLength: l.style.minLength,
       } : undefined,
     }))
   }
@@ -292,6 +296,8 @@ export class YamlParserV2 {
           labelPosition: s.style.labelPosition as 'top' | 'bottom' | 'left' | 'right' | undefined,
           labelFontSize: s.style.labelFontSize,
           padding: s.style.padding,
+          nodeSpacing: s.style.nodeSpacing,
+          rankSpacing: s.style.rankSpacing,
         } : undefined,
       }
     })

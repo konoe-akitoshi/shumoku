@@ -91,6 +91,8 @@ export interface LinkStyle {
   strokeWidth?: number
   strokeDasharray?: string
   opacity?: number
+  /** Minimum length for this link (controls node spacing for HA pairs) */
+  minLength?: number
 }
 
 /**
@@ -168,7 +170,12 @@ export interface SubgraphStyle {
   strokeDasharray?: string
   labelPosition?: 'top' | 'bottom' | 'left' | 'right'
   labelFontSize?: number
+  /** Padding inside this subgraph (like CSS padding) */
   padding?: number
+  /** Horizontal spacing between nodes in this subgraph */
+  nodeSpacing?: number
+  /** Vertical spacing between layers in this subgraph */
+  rankSpacing?: number
 }
 
 export interface Subgraph {
