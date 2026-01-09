@@ -128,7 +128,7 @@ export class SVGRendererV2 {
   .subgraph-icon { opacity: 0.9; }
   .subgraph-label { font-family: ${this.options.fontFamily}; font-size: 14px; font-weight: 600; fill: #374151; }
   .link-label { font-family: ${this.options.fontFamily}; font-size: 11px; fill: #64748b; }
-  .endpoint-label { font-family: ${this.options.fontFamily}; font-size: 9px; fill: #94a3b8; }
+  .endpoint-label { font-family: ${this.options.fontFamily}; font-size: 9px; fill: #1e293b; }
 </style>`
   }
 
@@ -279,8 +279,23 @@ export class SVGRendererV2 {
           break
       }
 
-      parts.push(`<text class="port-label" x="${labelX}" y="${labelY}"
-        text-anchor="${textAnchor}" font-size="9" fill="#475569">${this.escapeXml(port.label)}</text>`)
+      // Port label with black background
+      const labelText = this.escapeXml(port.label)
+      const charWidth = 5.5
+      const labelWidth = labelText.length * charWidth + 4
+      const labelHeight = 12
+
+      // Calculate background rect position based on text anchor
+      let bgX = labelX - 2
+      if (textAnchor === 'middle') {
+        bgX = labelX - labelWidth / 2
+      } else if (textAnchor === 'end') {
+        bgX = labelX - labelWidth + 2
+      }
+      const bgY = labelY - labelHeight + 3
+
+      parts.push(`<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="#1e293b" />`)
+      parts.push(`<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="#ffffff">${labelText}</text>`)
     })
 
     return parts.join('\n  ')
@@ -588,31 +603,32 @@ export class SVGRendererV2 {
   }
 
   /**
-   * Render endpoint labels stacked vertically with background
+   * Render endpoint labels (IP) with white background
    */
   private renderEndpointLabels(lines: string[], x: number, y: number, anchor: string): string {
     if (lines.length === 0) return ''
 
-    const lineHeight = 12
-    const padding = 3
-    const charWidth = 5.5 // Approximate character width for 9px font
+    const lineHeight = 11
+    const paddingX = 2
+    const paddingY = 2
+    const charWidth = 4.8 // Approximate character width for 9px font
 
-    // Calculate max width
+    // Calculate dimensions
     const maxLen = Math.max(...lines.map(l => l.length))
-    const rectWidth = maxLen * charWidth + padding * 2
-    const rectHeight = lines.length * lineHeight + padding * 2
+    const rectWidth = maxLen * charWidth + paddingX * 2
+    const rectHeight = lines.length * lineHeight + paddingY * 2
 
     // Adjust rect position based on text anchor
-    let rectX = x - padding
+    let rectX = x - paddingX
     if (anchor === 'middle') {
       rectX = x - rectWidth / 2
     } else if (anchor === 'end') {
-      rectX = x - rectWidth + padding
+      rectX = x - rectWidth + paddingX
     }
 
-    const rectY = y - lineHeight + 2
+    const rectY = y - lineHeight + paddingY
 
-    let result = `\n<rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" rx="2" ry="2" fill="white" fill-opacity="0.85" />`
+    let result = `\n<rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" rx="2" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.5" />`
 
     lines.forEach((line, i) => {
       const textY = y + i * lineHeight
