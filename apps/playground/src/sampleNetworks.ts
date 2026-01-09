@@ -2,10 +2,10 @@
  * Sample network definitions
  */
 
-export const sreNextNetwork = `
-name: "SRE NEXT Network Diagram"
+export const enterpriseNetwork = `
+name: "Enterprise Network"
 version: "2.0.0"
-description: "Enterprise network with HA edge routers and venue access"
+description: "Enterprise network with HA edge routers and campus access"
 
 settings:
   theme: modern
@@ -13,7 +13,7 @@ settings:
 subgraphs:
   # Cloud Layer
   - id: cloud
-    label: "AWS Cloud (Services)"
+    label: "Cloud Services"
     vendor: aws
     service: vpc
     resource: virtual-private-cloud-vpc
@@ -24,41 +24,41 @@ subgraphs:
 
   # Edge Layer
   - id: edge
-    label: "Sakura DC Edge (RTX3510 HA)"
+    label: "Edge (HA Routers)"
     style:
       fill: "#fff5f5"
       stroke: "#d4a017"
       strokeWidth: 2
 
-  # Venue Layer
-  - id: venue
-    label: "Venue: SRE NEXT (TOC Ariake)"
+  # Campus Layer
+  - id: campus
+    label: "Campus"
     style:
       fill: "#fffbf0"
       stroke: "#d4a017"
 
-  # NOC (nested in venue) - Core equipment location
+  # NOC (nested in campus)
   - id: noc
-    label: "NOC (Network Operations Center)"
-    parent: venue
+    label: "NOC"
+    parent: campus
     style:
       fill: "#e6f7ff"
       stroke: "#0055a6"
       strokeWidth: 2
 
-  # East Wing (nested in venue)
-  - id: zone-east
-    label: "East Wing"
-    parent: venue
+  # Building A (nested in campus)
+  - id: building-a
+    label: "Building A"
+    parent: campus
     direction: TB
     style:
       fill: "#f0fdf4"
       stroke: "#22c55e"
 
-  # West Wing (nested in venue)
-  - id: zone-west
-    label: "West Wing (Daisy Chain)"
-    parent: venue
+  # Building B (nested in campus)
+  - id: building-b
+    label: "Building B"
+    parent: campus
     direction: TB
     style:
       fill: "#fef3c7"
@@ -66,14 +66,12 @@ subgraphs:
 
 nodes:
   # ========== Cloud Layer ==========
-  - id: aws-services
+  - id: cloud-services
     label:
-      - "<b>Shared Services VPC</b>"
+      - "<b>Services VPC</b>"
       - "CIDR: 172.16.0.0/16"
       - "---"
-      - "DNS: 172.16.0.53"
-      - "DHCP: 172.16.0.67"
-      - "Zabbix: 172.16.0.100"
+      - "DNS / DHCP / Monitoring"
     type: server
     vendor: aws
     service: ec2
@@ -82,7 +80,7 @@ nodes:
 
   - id: vgw
     label:
-      - "<b>AWS VGW</b>"
+      - "<b>VPN Gateway</b>"
       - "Peer: 169.254.x.x"
     type: vpn
     vendor: aws
@@ -91,173 +89,131 @@ nodes:
     parent: cloud
 
   # ========== Edge Layer ==========
-  - id: ocx1
+  - id: isp1
     label:
-      - "<b>OCX Line #1</b>"
+      - "<b>ISP Line #1</b>"
       - "(Primary)"
     type: internet
     parent: edge
 
-  - id: ocx2
+  - id: isp2
     label:
-      - "<b>OCX Line #2</b>"
+      - "<b>ISP Line #2</b>"
       - "(Secondary)"
     type: internet
     parent: edge
 
-  # rt1 and rt2 will be auto-detected as HA pair (connected via Keepalive link)
   - id: rt1
     label:
-      - "<b>RTX3510-1 (Master)</b>"
-      - "Mgmt: 10.241.0.21"
-      - "VRRP VIP: 10.57.0.1"
+      - "<b>Edge-RT-1 (Master)</b>"
+      - "Mgmt: 10.0.0.1"
+      - "VRRP VIP: 10.0.0.254"
     type: router
-    vendor: yamaha
-    model: rtx3510
     parent: edge
 
   - id: rt2
     label:
-      - "<b>RTX3510-2 (Backup)</b>"
-      - "Mgmt: 10.241.0.22"
-      - "VRRP VIP: 10.57.0.1"
+      - "<b>Edge-RT-2 (Backup)</b>"
+      - "Mgmt: 10.0.0.2"
+      - "VRRP VIP: 10.0.0.254"
     type: router
-    vendor: yamaha
-    model: rtx3510
     parent: edge
 
-  # ========== NOC (Core + Aggregation) ==========
-  - id: ex-vc
+  # ========== NOC ==========
+  - id: core-sw
     label:
-      - "<b>Core-SW (VC)</b>"
-      - "Mgmt: 10.241.0.10"
-      - "DHCP Relay / Inter-VLAN"
+      - "<b>Core-SW</b>"
+      - "Mgmt: 10.1.0.1"
+      - "Inter-VLAN Routing"
     type: l3-switch
     parent: noc
 
-  - id: venue-agg
+  - id: dist-sw
     label:
-      - "<b>Venue-Agg (EX4400)</b>"
-      - "Mgmt: 10.241.0.11"
-      - "Uplink: ae0 (10G)"
+      - "<b>Distribution-SW</b>"
+      - "Mgmt: 10.1.0.2"
+      - "Uplink: 40G"
     type: l3-switch
     parent: noc
 
-  # ========== East Wing ==========
-  - id: sw02
+  # ========== Building A ==========
+  - id: sw-a1
     label:
-      - "<b>sw02 (Foyer)</b>"
-      - "Mgmt: 10.241.0.12"
-      - "Model: C1000"
+      - "<b>SW-A1 (Floor 1)</b>"
+      - "Mgmt: 10.10.0.1"
     type: l2-switch
-    parent: zone-east
+    parent: building-a
 
-  - id: sw08
+  - id: sw-a2
     label:
-      - "<b>sw08 (Track A)</b>"
-      - "Mgmt: 10.241.0.18"
-      - "Model: C1000"
+      - "<b>SW-A2 (Floor 2)</b>"
+      - "Mgmt: 10.10.0.2"
     type: l2-switch
-    parent: zone-east
+    parent: building-a
 
-  - id: ap-foyer-01
-    label: "AP-Foyer-01"
+  - id: ap-a1
+    label: "AP-A1"
     type: access-point
     vendor: aruba
     model: ap500-series
-    parent: zone-east
+    parent: building-a
 
-  - id: ap-track-a
-    label: "AP-TrackA"
+  - id: ap-a2
+    label: "AP-A2"
     type: access-point
     vendor: aruba
     model: ap500-series
-    parent: zone-east
+    parent: building-a
 
-  # ========== West Wing ==========
-  - id: sw03
+  # ========== Building B ==========
+  - id: sw-b1
     label:
-      - "<b>sw03 (Sponsor)</b>"
-      - "Mgmt: 10.241.0.13"
+      - "<b>SW-B1 (Floor 1)</b>"
+      - "Mgmt: 10.20.0.1"
     type: l2-switch
-    parent: zone-west
+    parent: building-b
 
-  - id: sw04
+  - id: sw-b2
     label:
-      - "<b>sw04 (Sponsor)</b>"
-      - "Mgmt: 10.241.0.14"
+      - "<b>SW-B2 (Floor 2)</b>"
+      - "Mgmt: 10.20.0.2"
     type: l2-switch
-    parent: zone-west
+    parent: building-b
 
-  - id: sw05
-    label:
-      - "<b>sw05 (Sub)</b>"
-      - "Mgmt: 10.241.0.15"
-    type: l2-switch
-    parent: zone-west
-
-  - id: sw06
-    label:
-      - "<b>sw06 (Track B)</b>"
-      - "Mgmt: 10.241.0.16"
-    type: l2-switch
-    parent: zone-west
-
-  - id: sw07
-    label:
-      - "<b>sw07 (Track C)</b>"
-      - "Mgmt: 10.241.0.17"
-    type: l2-switch
-    parent: zone-west
-
-  - id: ap-spon-01
-    label: "AP-Spon-01"
+  - id: ap-b1
+    label: "AP-B1"
     type: access-point
     vendor: aruba
     model: ap500-series
-    parent: zone-west
+    parent: building-b
 
-  - id: ap-spon-02
-    label: "AP-Spon-02"
+  - id: ap-b2
+    label: "AP-B2"
     type: access-point
     vendor: aruba
     model: ap500-series
-    parent: zone-west
-
-  - id: ap-track-b
-    label: "AP-TrkB-01"
-    type: access-point
-    vendor: aruba
-    model: ap500-series
-    parent: zone-west
-
-  - id: ap-track-c
-    label: "AP-TrkC-01"
-    type: access-point
-    vendor: aruba
-    model: ap500-series
-    parent: zone-west
+    parent: building-b
 
 links:
-  # OCX to Routers (10G WAN)
+  # ISP to Routers
   - from:
-      node: ocx1
+      node: isp1
       port: eth0
-      ip: 169.254.1.2/30
+      ip: 203.0.113.2/30
     to:
       node: rt1
-      port: lan2
-      ip: 169.254.1.1/30
+      port: wan1
+      ip: 203.0.113.1/30
     bandwidth: 10G
 
   - from:
-      node: ocx2
+      node: isp2
       port: eth0
-      ip: 169.254.2.2/30
+      ip: 198.51.100.2/30
     to:
       node: rt2
-      port: lan2
-      ip: 169.254.2.1/30
+      port: wan1
+      ip: 198.51.100.1/30
     bandwidth: 10G
 
   # VPN Tunnels
@@ -284,259 +240,192 @@ links:
   # HA Keepalive
   - from:
       node: rt1
-      port: lan3
-      ip: 10.57.0.1/30
+      port: ha0
+      ip: 10.255.0.1/30
     to:
       node: rt2
-      port: lan3
-      ip: 10.57.0.2/30
+      port: ha0
+      ip: 10.255.0.2/30
     label: "Keepalive"
     redundancy: ha
     style:
       minLength: 300
 
-  # Router to Core (10G)
+  # Router to Core
   - from:
       node: rt1
-      port: lan4
-      ip: 10.241.0.1/24
+      port: lan1
+      ip: 10.0.1.1/24
     to:
-      node: ex-vc
-      port: ge-0/0/0
-      ip: 10.241.0.10/24
+      node: core-sw
+      port: eth1
+      ip: 10.0.1.10/24
     label: "Active"
     bandwidth: 10G
 
   - from:
       node: rt2
-      port: lan4
-      ip: 10.241.0.2/24
+      port: lan1
+      ip: 10.0.1.2/24
     to:
-      node: ex-vc
-      port: ge-0/0/1
-      ip: 10.241.0.11/24
+      node: core-sw
+      port: eth2
+      ip: 10.0.1.11/24
     label: "Standby"
     bandwidth: 10G
 
-  # Core to Venue Agg (40G LACP) - 3 parallel lines
+  # Core to Distribution
   - from:
-      node: ex-vc
+      node: core-sw
       port: ae0
-      ip: 10.241.1.1/30
+      ip: 10.0.2.1/30
     to:
-      node: venue-agg
+      node: dist-sw
       port: ae0
-      ip: 10.241.1.2/30
+      ip: 10.0.2.2/30
     label: "40G LACP"
     bandwidth: 40G
 
-  # Venue Agg to Wings (10G) - Trunk with multiple VLANs
+  # Distribution to Buildings
   - from:
-      node: venue-agg
-      port: ge-0/0/48
-      ip: 10.100.0.1/30
+      node: dist-sw
+      port: eth10
+      ip: 10.10.0.254/24
     to:
-      node: sw02
-      port: Gi1/0/48
-      ip: 10.100.0.2/30
+      node: sw-a1
+      port: uplink
+      ip: 10.10.0.1/24
     label: "Trunk"
-    vlans: [10, 20, 30, 100]
+    vlan: [10, 20, 100]
     bandwidth: 10G
 
   - from:
-      node: venue-agg
-      port: ge-0/0/47
-      ip: 10.100.1.1/30
+      node: dist-sw
+      port: eth20
+      ip: 10.20.0.254/24
     to:
-      node: sw03
-      port: Gi1/0/48
-      ip: 10.100.1.2/30
+      node: sw-b1
+      port: uplink
+      ip: 10.20.0.1/24
     label: "Trunk"
-    vlans: [10, 20, 30, 100]
+    vlan: [10, 30, 100]
     bandwidth: 10G
 
-  # East Wing cascade (10G)
+  # Building A cascade
   - from:
-      node: sw02
-      port: Gi1/0/24
-      ip: 10.100.2.1/30
+      node: sw-a1
+      port: eth24
+      ip: 10.10.1.1/30
     to:
-      node: sw08
-      port: Gi1/0/48
-      ip: 10.100.2.2/30
+      node: sw-a2
+      port: uplink
+      ip: 10.10.1.2/30
     label: "Cascade"
-    vlans: [10, 20]
+    vlan: [10, 20]
     bandwidth: 10G
 
   - from:
-      node: sw02
-      port: Gi1/0/1
-      ip: 10.100.3.1/30
+      node: sw-a1
+      port: eth1
     to:
-      node: ap-foyer-01
+      node: ap-a1
       port: eth0
-      ip: 10.100.3.2/30
     vlan: 20
     bandwidth: 1G
 
   - from:
-      node: sw08
-      port: Gi1/0/1
-      ip: 10.100.4.1/30
+      node: sw-a2
+      port: eth1
     to:
-      node: ap-track-a
+      node: ap-a2
       port: eth0
-      ip: 10.100.4.2/30
     vlan: 20
     bandwidth: 1G
 
-  # West Wing cascade (10G)
+  # Building B cascade
   - from:
-      node: sw03
-      port: Gi1/0/24
-      ip: 10.100.10.1/30
+      node: sw-b1
+      port: eth24
+      ip: 10.20.1.1/30
     to:
-      node: sw04
-      port: Gi1/0/48
-      ip: 10.100.10.2/30
+      node: sw-b2
+      port: uplink
+      ip: 10.20.1.2/30
     label: "Cascade"
-    vlans: [10, 30]
+    vlan: [10, 30]
     bandwidth: 10G
 
   - from:
-      node: sw03
-      port: Gi1/0/23
-      ip: 10.100.11.1/30
+      node: sw-b1
+      port: eth1
     to:
-      node: sw05
-      port: Gi1/0/48
-      ip: 10.100.11.2/30
-    label: "Branch"
-    vlans: [10, 30]
-    bandwidth: 10G
-
-  - from:
-      node: sw04
-      port: Gi1/0/24
-      ip: 10.100.12.1/30
-    to:
-      node: sw06
-      port: Gi1/0/48
-      ip: 10.100.12.2/30
-    label: "Cascade"
-    vlans: [10, 30]
-    bandwidth: 10G
-
-  - from:
-      node: sw06
-      port: Gi1/0/24
-      ip: 10.100.13.1/30
-    to:
-      node: sw07
-      port: Gi1/0/48
-      ip: 10.100.13.2/30
-    label: "Cascade"
-    vlans: [10, 30]
-    bandwidth: 10G
-
-  # APs (1G) - Access ports with single VLAN
-  - from:
-      node: sw03
-      port: Gi1/0/1
-      ip: 10.100.20.1/30
-    to:
-      node: ap-spon-01
+      node: ap-b1
       port: eth0
-      ip: 10.100.20.2/30
     vlan: 30
     bandwidth: 1G
 
   - from:
-      node: sw04
-      port: Gi1/0/1
-      ip: 10.100.21.1/30
+      node: sw-b2
+      port: eth1
     to:
-      node: ap-spon-02
+      node: ap-b2
       port: eth0
-      ip: 10.100.21.2/30
-    vlan: 30
-    bandwidth: 1G
-
-  - from:
-      node: sw06
-      port: Gi1/0/1
-      ip: 10.100.22.1/30
-    to:
-      node: ap-track-b
-      port: eth0
-      ip: 10.100.22.2/30
-    vlan: 30
-    bandwidth: 1G
-
-  - from:
-      node: sw07
-      port: Gi1/0/1
-      ip: 10.100.23.1/30
-    to:
-      node: ap-track-c
-      port: eth0
-      ip: 10.100.23.2/30
     vlan: 30
     bandwidth: 1G
 `
 
-export const simpleTest = `
-name: "Simple Test"
+export const simpleNetwork = `
+name: "Simple Network"
 version: "2.0.0"
 
 settings:
   direction: TB
 
 subgraphs:
-  - id: layer1
-    label: "Layer 1"
+  - id: core
+    label: "Core"
     style:
       fill: "#f0f4f8"
       stroke: "#4a5568"
 
-  - id: layer2
-    label: "Layer 2"
+  - id: servers
+    label: "Servers"
     style:
       fill: "#fff5f5"
       stroke: "#c53030"
 
 nodes:
-  - id: node1
-    label: "Router 1"
+  - id: router
+    label: "Router"
     type: router
-    parent: layer1
+    parent: core
 
-  - id: node2
-    label: "Switch 1"
+  - id: switch
+    label: "Switch"
     type: l2-switch
-    parent: layer1
+    parent: core
 
-  - id: node3
+  - id: server1
     label: "Server 1"
     type: server
-    parent: layer2
+    parent: servers
 
-  - id: node4
+  - id: server2
     label: "Server 2"
     type: server
-    parent: layer2
+    parent: servers
 
 links:
-  - from: node1
-    to: node2
+  - from: router
+    to: switch
     label: "10G"
     bandwidth: 10G
 
-  - from: node2
-    to: node3
+  - from: switch
+    to: server1
     bandwidth: 1G
 
-  - from: node2
-    to: node4
+  - from: switch
+    to: server2
     bandwidth: 1G
 `

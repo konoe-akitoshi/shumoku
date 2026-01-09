@@ -5,7 +5,7 @@
 
 import ELK, { type ElkNode, type ElkExtendedEdge, type LayoutOptions } from 'elkjs/lib/elk.bundled.js'
 import {
-  type NetworkGraphV2,
+  type NetworkGraph,
   type Node,
   type Subgraph,
   type LayoutResult,
@@ -38,7 +38,7 @@ function toEndpoint(endpoint: string | LinkEndpoint): LinkEndpoint {
  * @param haNodePairs - Set of "nodeA:nodeB" strings for HA pairs to exclude their ports
  */
 function collectNodePorts(
-  graph: NetworkGraphV2,
+  graph: NetworkGraph,
   haNodePairs?: Set<string>
 ): Map<string, Set<string>> {
   const nodePorts = new Map<string, Set<string>>()
@@ -115,7 +115,7 @@ export class HierarchicalLayout {
   /**
    * Get effective options by merging graph settings with defaults
    */
-  private getEffectiveOptions(graph: NetworkGraphV2): Required<HierarchicalLayoutOptions> {
+  private getEffectiveOptions(graph: NetworkGraph): Required<HierarchicalLayoutOptions> {
     const settings = graph.settings
 
     return {
@@ -127,7 +127,7 @@ export class HierarchicalLayout {
     }
   }
 
-  async layoutAsync(graph: NetworkGraphV2): Promise<LayoutResult> {
+  async layoutAsync(graph: NetworkGraph): Promise<LayoutResult> {
     const startTime = performance.now()
 
     // Merge graph settings with default options
@@ -168,7 +168,7 @@ export class HierarchicalLayout {
    * Build ELK graph with HA pairs merged into single virtual nodes
    */
   private buildElkGraphWithHAMerge(
-    graph: NetworkGraphV2,
+    graph: NetworkGraph,
     direction: LayoutDirection,
     options: Required<HierarchicalLayoutOptions>,
     haPairs: { nodeA: string; nodeB: string; minLength?: number }[]
@@ -505,7 +505,7 @@ export class HierarchicalLayout {
    * Extract layout result and expand HA virtual nodes back to original pairs
    */
   private extractLayoutResultWithHAExpand(
-    graph: NetworkGraphV2,
+    graph: NetworkGraph,
     elkGraph: ElkNode,
     haVirtualNodes: Map<string, { virtualId: string; nodeA: Node; nodeB: Node; gap: number; widthA: number; widthB: number; height: number }>,
     _options: Required<HierarchicalLayoutOptions>
@@ -816,7 +816,7 @@ export class HierarchicalLayout {
    * Reorder ports on each node based on connected node positions to minimize edge crossings
    */
   private reorderPortsByConnectedNodePositions(
-    graph: NetworkGraphV2,
+    graph: NetworkGraph,
     layoutNodes: Map<string, LayoutNode>
   ): void {
     // Build a map of port -> connected node position
@@ -907,7 +907,7 @@ export class HierarchicalLayout {
   }
 
   // Synchronous wrapper that runs async internally
-  layout(graph: NetworkGraphV2): LayoutResult {
+  layout(graph: NetworkGraph): LayoutResult {
     // For sync compatibility, we need to run layout synchronously
     // This is a simplified version - ideally use layoutAsync for full HA support
     const effectiveOptions = this.getEffectiveOptions(graph)
@@ -1063,7 +1063,7 @@ export class HierarchicalLayout {
     }
   }
 
-  private calculateFallbackLayout(graph: NetworkGraphV2, _direction: LayoutDirection): LayoutResult {
+  private calculateFallbackLayout(graph: NetworkGraph, _direction: LayoutDirection): LayoutResult {
     // Simple fallback layout when async isn't available
     const layoutNodes = new Map<string, LayoutNode>()
     const layoutSubgraphs = new Map<string, LayoutSubgraph>()
@@ -1165,7 +1165,7 @@ export class HierarchicalLayout {
    * Detect redundancy pairs based on link.redundancy property
    * Returns array of [nodeA, nodeB] pairs that should be placed on the same layer
    */
-  private detectHAPairs(graph: NetworkGraphV2): { nodeA: string; nodeB: string; minLength?: number }[] {
+  private detectHAPairs(graph: NetworkGraph): { nodeA: string; nodeB: string; minLength?: number }[] {
     const pairs: { nodeA: string; nodeB: string; minLength?: number }[] = []
     const processedPairs = new Set<string>()
 
@@ -1194,7 +1194,7 @@ export class HierarchicalLayout {
    */
   private adjustLinkDistances(
     result: LayoutResult,
-    graph: NetworkGraphV2,
+    graph: NetworkGraph,
     direction: LayoutDirection
   ): void {
     const isVertical = direction === 'TB' || direction === 'BT'
@@ -1404,7 +1404,7 @@ export class HierarchicalLayout {
   /**
    * Recalculate subgraph bounds to contain all child nodes after adjustments
    */
-  private recalculateSubgraphBounds(result: LayoutResult, graph: NetworkGraphV2): void {
+  private recalculateSubgraphBounds(result: LayoutResult, graph: NetworkGraph): void {
     if (!graph.subgraphs) return
 
     const padding = this.options.subgraphPadding

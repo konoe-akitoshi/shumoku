@@ -4,7 +4,7 @@
  */
 
 import type {
-  NetworkGraphV2,
+  NetworkGraph,
   LayoutResult,
   LayoutNode,
   LayoutLink,
@@ -57,7 +57,7 @@ export class SVGRenderer {
     this.options = { ...DEFAULT_OPTIONS, ...options }
   }
 
-  render(_graph: NetworkGraphV2, layout: LayoutResult): string {
+  render(_graph: NetworkGraph, layout: LayoutResult): string {
     const { bounds } = layout
 
     const parts: string[] = []
@@ -455,7 +455,7 @@ export class SVGRenderer {
     const type = link.type || this.getDefaultLinkType(link.redundancy)
     const arrow = link.arrow ?? this.getDefaultArrowType(link.redundancy)
 
-    const stroke = link.style?.stroke || this.getVlanStroke(link.vlans) || this.options.defaultLinkStroke
+    const stroke = link.style?.stroke || this.getVlanStroke(link.vlan) || this.options.defaultLinkStroke
     const dasharray = link.style?.strokeDasharray || this.getLinkDasharray(type)
     const markerEnd = arrow !== 'none' ? 'url(#arrow)' : ''
 
@@ -479,10 +479,10 @@ export class SVGRenderer {
     }
 
     // VLANs (link-level, applies to both endpoints)
-    if (link.vlans && link.vlans.length > 0) {
-      const vlanText = link.vlans.length === 1
-        ? `VLAN ${link.vlans[0]}`
-        : `VLAN ${link.vlans.join(', ')}`
+    if (link.vlan && link.vlan.length > 0) {
+      const vlanText = link.vlan.length === 1
+        ? `VLAN ${link.vlan[0]}`
+        : `VLAN ${link.vlan.join(', ')}`
       result += `\n<text x="${midPoint.x}" y="${midPoint.y + labelYOffset}" class="link-label" text-anchor="middle">${this.escapeXml(vlanText)}</text>`
     }
 
@@ -821,19 +821,19 @@ ${result}`
   /**
    * Get stroke color based on VLANs
    */
-  private getVlanStroke(vlans?: number[]): string | undefined {
-    if (!vlans || vlans.length === 0) {
+  private getVlanStroke(vlan?: number[]): string | undefined {
+    if (!vlan || vlan.length === 0) {
       return undefined
     }
 
-    if (vlans.length === 1) {
+    if (vlan.length === 1) {
       // Single VLAN: use color based on VLAN ID
-      const colorIndex = vlans[0] % SVGRenderer.VLAN_COLORS.length
+      const colorIndex = vlan[0] % SVGRenderer.VLAN_COLORS.length
       return SVGRenderer.VLAN_COLORS[colorIndex]
     }
 
     // Multiple VLANs (trunk): use a combined hash color
-    const hash = vlans.reduce((acc, v) => acc + v, 0)
+    const hash = vlan.reduce((acc, v) => acc + v, 0)
     const colorIndex = hash % SVGRenderer.VLAN_COLORS.length
     return SVGRenderer.VLAN_COLORS[colorIndex]
   }

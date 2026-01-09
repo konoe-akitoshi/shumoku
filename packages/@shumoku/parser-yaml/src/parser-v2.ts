@@ -4,7 +4,7 @@
 
 import yaml from 'js-yaml'
 import type {
-  NetworkGraphV2,
+  NetworkGraph,
   Node,
   Link,
   Subgraph,
@@ -92,8 +92,6 @@ interface YamlLink {
   redundancy?: string
   /** Single VLAN ID or array of VLANs for trunk */
   vlan?: number | number[]
-  /** Alias for vlan (array form) */
-  vlans?: number[]
   style?: YamlLinkStyle
 }
 
@@ -112,7 +110,6 @@ interface YamlSubgraphStyle {
 interface YamlSubgraph {
   id: string
   label: string
-  nodes?: string[]
   children?: string[]
   parent?: string
   direction?: string
@@ -168,7 +165,7 @@ export interface ParseWarning {
 }
 
 export interface ParseResult {
-  graph: NetworkGraphV2
+  graph: NetworkGraph
   warnings?: ParseWarning[]
 }
 
@@ -187,7 +184,7 @@ export class YamlParser {
         throw new Error('Invalid YAML: expected object')
       }
 
-      const graph: NetworkGraphV2 = {
+      const graph: NetworkGraph = {
         version: data.version || '2.0.0',
         name: data.name,
         description: data.description,
@@ -265,7 +262,7 @@ export class YamlParser {
       arrow: this.parseArrowType(l.arrow),
       bandwidth: this.parseBandwidth(l.bandwidth),
       redundancy: this.parseRedundancyType(l.redundancy),
-      vlans: this.parseVlans(l.vlan, l.vlans),
+      vlan: this.parseVlan(l.vlan),
       style: l.style ? {
         stroke: l.style.stroke,
         strokeWidth: l.style.strokeWidth,
@@ -276,16 +273,11 @@ export class YamlParser {
     }))
   }
 
-  private parseVlans(vlan?: number | number[], vlans?: number[]): number[] | undefined {
-    // vlans takes precedence
-    if (vlans && vlans.length > 0) {
-      return vlans
+  private parseVlan(vlan?: number | number[]): number[] | undefined {
+    if (vlan === undefined) {
+      return undefined
     }
-    // vlan can be single number or array
-    if (vlan !== undefined) {
-      return Array.isArray(vlan) ? vlan : [vlan]
-    }
-    return undefined
+    return Array.isArray(vlan) ? vlan : [vlan]
   }
 
   private parseLinkEndpoint(endpoint: string | YamlLinkEndpoint): string | { node: string; port?: string; ip?: string } {
@@ -360,7 +352,6 @@ export class YamlParser {
       return {
         id: s.id || `subgraph-${index}`,
         label: s.label || s.id || `Subgraph ${index}`,
-        nodes: s.nodes || [],
         children: s.children || [],
         parent: s.parent,
         direction: this.parseDirection(s.direction),
@@ -535,30 +526,16 @@ export class YamlParser {
   }
 
   /**
-   * Auto-assign nodes to subgraphs based on node.parent field
+   * Update children arrays for nested subgraphs based on subgraph.parent field
    */
-  private assignNodesToSubgraphs(graph: NetworkGraphV2): void {
+  private assignNodesToSubgraphs(graph: NetworkGraph): void {
     if (!graph.subgraphs) return
 
     const subgraphMap = new Map<string, Subgraph>(
       graph.subgraphs.map((s: Subgraph) => [s.id, s])
     )
 
-    for (const node of graph.nodes) {
-      if (node.parent) {
-        const subgraph = subgraphMap.get(node.parent)
-        if (subgraph) {
-          if (!subgraph.nodes) {
-            subgraph.nodes = []
-          }
-          if (!subgraph.nodes.includes(node.id)) {
-            subgraph.nodes.push(node.id)
-          }
-        }
-      }
-    }
-
-    // Also update children arrays for nested subgraphs
+    // Update children arrays for nested subgraphs
     for (const subgraph of graph.subgraphs) {
       if (subgraph.parent) {
         const parent = subgraphMap.get(subgraph.parent)

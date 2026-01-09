@@ -180,9 +180,8 @@ export interface Link {
   /**
    * VLANs carried on this link
    * Single VLAN for access ports, multiple for trunk ports
-   * Both endpoints must agree on the same VLANs
    */
-  vlans?: number[]
+  vlan?: number[]
 
   /**
    * Custom style
@@ -225,11 +224,6 @@ export interface Subgraph {
    * Display label
    */
   label: string
-
-  /**
-   * Direct child node IDs
-   */
-  nodes?: string[]
 
   /**
    * Child subgraph IDs
@@ -411,7 +405,7 @@ export interface GraphSettings {
   canvas?: CanvasSettings
 }
 
-export interface NetworkGraphV2 {
+export interface NetworkGraph {
   version: string
   name?: string
   description?: string

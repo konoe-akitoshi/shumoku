@@ -1,15 +1,15 @@
 import { useState } from 'react'
-import type { NetworkGraphV2, LayoutResult } from '@shumoku/core/models'
+import type { NetworkGraph, LayoutResult } from '@shumoku/core/models'
 import { HierarchicalLayout } from '@shumoku/core/layout'
 import { SVGRenderer } from '@shumoku/core/renderer'
 import { parser } from '@shumoku/parser-yaml'
 import NetworkSVG from './components/NetworkSVG'
-import { sreNextNetwork, simpleTest } from './sampleNetworks'
+import { enterpriseNetwork, simpleNetwork } from './sampleNetworks'
 import './App.css'
 
 function App() {
-  const [yamlContent, setYamlContent] = useState<string>(sreNextNetwork)
-  const [networkGraph, setNetworkGraph] = useState<NetworkGraphV2 | null>(null)
+  const [yamlContent, setYamlContent] = useState<string>(enterpriseNetwork)
+  const [networkGraph, setNetworkGraph] = useState<NetworkGraph | null>(null)
   const [layoutResult, setLayoutResult] = useState<LayoutResult | null>(null)
   const [svgContent, setSvgContent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -94,12 +94,12 @@ function App() {
           <label>Sample:</label>
           <select
             onChange={(e) => {
-              if (e.target.value === 'sre-next') setYamlContent(sreNextNetwork)
-              else if (e.target.value === 'simple') setYamlContent(simpleTest)
+              if (e.target.value === 'enterprise') setYamlContent(enterpriseNetwork)
+              else if (e.target.value === 'simple') setYamlContent(simpleNetwork)
             }}
           >
-            <option value="sre-next">SRE NEXT Network</option>
-            <option value="simple">Simple Test</option>
+            <option value="enterprise">Enterprise Network</option>
+            <option value="simple">Simple Network</option>
           </select>
         </div>
 

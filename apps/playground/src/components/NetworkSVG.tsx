@@ -4,10 +4,10 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { NetworkGraphV2, LayoutResult } from '@shumoku/core/models'
+import type { NetworkGraph, LayoutResult } from '@shumoku/core/models'
 
 interface NetworkSVGProps {
-  network: NetworkGraphV2 | null
+  network: NetworkGraph | null
   layout: LayoutResult | null
   svgContent: string | null
   onNodeClick?: (nodeId: string) => void
