@@ -59,13 +59,12 @@ export class SVGRendererV2 {
 
   render(_graph: NetworkGraphV2, layout: LayoutResult): string {
     const { bounds } = layout
-    const width = bounds.width
-    const height = bounds.height
 
     const parts: string[] = []
 
-    // SVG header
-    parts.push(this.renderHeader(width, height, bounds.x, bounds.y))
+    // SVG header using content bounds
+    const viewBox = `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`
+    parts.push(this.renderHeader(bounds.width, bounds.height, viewBox))
 
     // Defs (markers, gradients)
     parts.push(this.renderDefs())
@@ -94,9 +93,9 @@ export class SVGRendererV2 {
     return parts.join('\n')
   }
 
-  private renderHeader(width: number, height: number, x: number, y: number): string {
+  private renderHeader(width: number, height: number, viewBox: string): string {
     return `<svg xmlns="http://www.w3.org/2000/svg"
-  viewBox="${x} ${y} ${width} ${height}"
+  viewBox="${viewBox}"
   width="${width}"
   height="${height}"
   style="background: ${this.options.backgroundColor}">`

@@ -91,25 +91,39 @@ export const NetworkSVG: React.FC<NetworkSVGProps> = ({
 
   // Center the view initially
   useEffect(() => {
-    if (!layout || !containerRef.current) return
+    if (!layout || !containerRef.current || !svgContent) return
 
     const container = containerRef.current
-    const { bounds } = layout
     const containerWidth = container.clientWidth
     const containerHeight = container.clientHeight
 
-    // Calculate scale to fit
-    const scaleX = containerWidth / bounds.width
-    const scaleY = containerHeight / bounds.height
-    const fitScale = Math.min(scaleX, scaleY, 1) * 0.9
+    // Try to get SVG dimensions from the content
+    const svgMatch = svgContent.match(/width="(\d+(?:\.\d+)?)".*?height="(\d+(?:\.\d+)?)"/)
+    let svgWidth: number
+    let svgHeight: number
+
+    if (svgMatch) {
+      // Use actual SVG dimensions (includes canvas settings)
+      svgWidth = parseFloat(svgMatch[1])
+      svgHeight = parseFloat(svgMatch[2])
+    } else {
+      // Fallback to layout bounds
+      svgWidth = layout.bounds.width
+      svgHeight = layout.bounds.height
+    }
+
+    // Calculate scale to fit (allow scale up)
+    const scaleX = containerWidth / svgWidth
+    const scaleY = containerHeight / svgHeight
+    const fitScale = Math.min(scaleX, scaleY) * 0.9
 
     // Center
-    const centerX = (containerWidth - bounds.width * fitScale) / 2 - bounds.x * fitScale
-    const centerY = (containerHeight - bounds.height * fitScale) / 2 - bounds.y * fitScale
+    const centerX = (containerWidth - svgWidth * fitScale) / 2
+    const centerY = (containerHeight - svgHeight * fitScale) / 2
 
     setScale(fitScale)
     setTranslate({ x: centerX, y: centerY })
-  }, [layout])
+  }, [layout, svgContent])
 
   if (!svgContent) {
     return (

@@ -8,7 +8,6 @@ version: "2.0.0"
 description: "Enterprise network with HA edge routers and venue access"
 
 settings:
-  direction: TB
   theme: modern
 
 subgraphs:

@@ -75,6 +75,7 @@ export class HierarchicalLayoutV2 {
    */
   private getEffectiveOptions(graph: NetworkGraphV2): Required<HierarchicalLayoutOptions> {
     const settings = graph.settings
+
     return {
       ...this.options,
       direction: settings?.direction || this.options.direction,
@@ -111,6 +112,8 @@ export class HierarchicalLayoutV2 {
 
     // Recalculate subgraph bounds after node adjustments
     this.recalculateSubgraphBounds(result, graph)
+
+    // Note: Canvas scaling is handled by the SVG renderer, not here
 
     result.metadata = {
       algorithm: 'elk-layered',

@@ -10,6 +10,9 @@ type Node = v2.Node
 type Link = v2.Link
 type Subgraph = v2.Subgraph
 type GraphSettings = v2.GraphSettings
+type CanvasSettings = v2.CanvasSettings
+type PaperSize = v2.PaperSize
+type PaperOrientation = v2.PaperOrientation
 type NodeShape = v2.NodeShape
 type LinkType = v2.LinkType
 type ArrowType = v2.ArrowType
@@ -121,12 +124,23 @@ interface YamlSubgraph {
   resource?: string
 }
 
+interface YamlCanvasSettings {
+  preset?: string
+  orientation?: string
+  width?: number
+  height?: number
+  dpi?: number
+  fit?: boolean
+  padding?: number
+}
+
 interface YamlGraphSettings {
   direction?: string
   theme?: string
   nodeSpacing?: number
   rankSpacing?: number
   subgraphPadding?: number
+  canvas?: YamlCanvasSettings
 }
 
 interface YamlNetworkV2 {
@@ -363,7 +377,57 @@ export class YamlParserV2 {
       nodeSpacing: settings.nodeSpacing,
       rankSpacing: settings.rankSpacing,
       subgraphPadding: settings.subgraphPadding,
+      canvas: this.parseCanvasSettings(settings.canvas),
     }
+  }
+
+  private parseCanvasSettings(canvas?: YamlCanvasSettings): CanvasSettings | undefined {
+    if (!canvas) return undefined
+
+    const result: CanvasSettings = {}
+
+    // Parse preset (paper size)
+    if (canvas.preset) {
+      const preset = this.parsePaperSize(canvas.preset)
+      if (preset) {
+        result.preset = preset
+      }
+    }
+
+    // Parse orientation
+    if (canvas.orientation) {
+      const orientation = this.parsePaperOrientation(canvas.orientation)
+      if (orientation) {
+        result.orientation = orientation
+      }
+    }
+
+    // Parse custom dimensions
+    if (canvas.width !== undefined) result.width = canvas.width
+    if (canvas.height !== undefined) result.height = canvas.height
+    if (canvas.dpi !== undefined) result.dpi = canvas.dpi
+    if (canvas.fit !== undefined) result.fit = canvas.fit
+    if (canvas.padding !== undefined) result.padding = canvas.padding
+
+    return Object.keys(result).length > 0 ? result : undefined
+  }
+
+  private parsePaperSize(size?: string): PaperSize | undefined {
+    if (!size) return undefined
+    const normalized = size.toUpperCase()
+    const validSizes: PaperSize[] = ['A0', 'A1', 'A2', 'A3', 'A4', 'B0', 'B1', 'B2', 'B3', 'B4', 'letter', 'legal', 'tabloid']
+
+    // Handle case-insensitive matching
+    const found = validSizes.find(s => s.toUpperCase() === normalized)
+    return found
+  }
+
+  private parsePaperOrientation(orientation?: string): PaperOrientation | undefined {
+    if (!orientation) return undefined
+    const normalized = orientation.toLowerCase()
+    if (normalized === 'portrait' || normalized === 'p') return 'portrait'
+    if (normalized === 'landscape' || normalized === 'l') return 'landscape'
+    return undefined
   }
 
   private parseNodeShape(shape?: string): NodeShape {

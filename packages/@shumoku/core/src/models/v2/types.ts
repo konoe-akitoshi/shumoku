@@ -269,6 +269,107 @@ export interface Subgraph {
 }
 
 // ============================================
+// Canvas/Sheet Size Types
+// ============================================
+
+/**
+ * Standard paper size presets
+ */
+export type PaperSize =
+  | 'A0' | 'A1' | 'A2' | 'A3' | 'A4'
+  | 'B0' | 'B1' | 'B2' | 'B3' | 'B4'
+  | 'letter' | 'legal' | 'tabloid'
+
+/**
+ * Paper orientation
+ */
+export type PaperOrientation = 'portrait' | 'landscape'
+
+/**
+ * Paper size dimensions in mm
+ */
+export const PAPER_SIZES: Record<PaperSize, { width: number; height: number }> = {
+  'A0': { width: 841, height: 1189 },
+  'A1': { width: 594, height: 841 },
+  'A2': { width: 420, height: 594 },
+  'A3': { width: 297, height: 420 },
+  'A4': { width: 210, height: 297 },
+  'B0': { width: 1000, height: 1414 },
+  'B1': { width: 707, height: 1000 },
+  'B2': { width: 500, height: 707 },
+  'B3': { width: 353, height: 500 },
+  'B4': { width: 250, height: 353 },
+  'letter': { width: 216, height: 279 },
+  'legal': { width: 216, height: 356 },
+  'tabloid': { width: 279, height: 432 },
+}
+
+/**
+ * Canvas/sheet size settings
+ */
+export interface CanvasSettings {
+  /**
+   * Paper size preset (A0, A1, A2, A3, A4, etc.)
+   */
+  preset?: PaperSize
+
+  /**
+   * Paper orientation (portrait or landscape)
+   * Only used with preset
+   */
+  orientation?: PaperOrientation
+
+  /**
+   * Custom width in pixels
+   * Takes precedence over preset
+   */
+  width?: number
+
+  /**
+   * Custom height in pixels
+   * Takes precedence over preset
+   */
+  height?: number
+
+  /**
+   * DPI for print output (default: 96 for screen, 300 for print)
+   */
+  dpi?: number
+
+  /**
+   * Fit content to canvas with padding
+   * If true, scales content to fit within canvas
+   */
+  fit?: boolean
+
+  /**
+   * Padding around content when fit is true (in pixels)
+   */
+  padding?: number
+}
+
+/**
+ * Convert paper size to pixels at given DPI
+ */
+export function paperSizeToPixels(
+  size: PaperSize,
+  orientation: PaperOrientation = 'portrait',
+  dpi: number = 96
+): { width: number; height: number } {
+  const dimensions = PAPER_SIZES[size]
+  const mmToInch = 1 / 25.4
+
+  let width = Math.round(dimensions.width * mmToInch * dpi)
+  let height = Math.round(dimensions.height * mmToInch * dpi)
+
+  if (orientation === 'landscape') {
+    ;[width, height] = [height, width]
+  }
+
+  return { width, height }
+}
+
+// ============================================
 // Graph Types
 // ============================================
 
@@ -297,6 +398,11 @@ export interface GraphSettings {
    * Subgraph padding
    */
   subgraphPadding?: number
+
+  /**
+   * Canvas/sheet size settings
+   */
+  canvas?: CanvasSettings
 }
 
 export interface NetworkGraphV2 {

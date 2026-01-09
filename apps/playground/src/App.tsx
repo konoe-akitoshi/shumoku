@@ -40,12 +40,9 @@ function App() {
       console.log('Parsed network:', result.graph)
 
       // Layout (async with ELK.js)
-      const layout = new layoutV2.HierarchicalLayoutV2({
-        direction: result.graph.settings?.direction || 'TB',
-        nodeSpacing: result.graph.settings?.nodeSpacing || 50,
-        rankSpacing: result.graph.settings?.rankSpacing || 100,
-        subgraphPadding: result.graph.settings?.subgraphPadding || 40,
-      })
+      // Don't pass settings here - let the layout engine read from graph.settings
+      // This allows canvas-aware spacing adjustments
+      const layout = new layoutV2.HierarchicalLayoutV2()
       const layoutRes = await layout.layoutAsync(result.graph)
       setLayoutResult(layoutRes)
       console.log('Layout result:', layoutRes)
