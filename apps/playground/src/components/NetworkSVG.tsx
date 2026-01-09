@@ -1,10 +1,10 @@
 /**
- * Network SVG Renderer Component (v2)
- * Renders NetworkGraphV2 using SVG
+ * Network SVG Renderer Component
+ * Renders NetworkGraph using SVG
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { NetworkGraphV2, LayoutResult } from '@shumoku/core/models/v2'
+import type { NetworkGraphV2, LayoutResult } from '@shumoku/core/models'
 
 interface NetworkSVGProps {
   network: NetworkGraphV2 | null

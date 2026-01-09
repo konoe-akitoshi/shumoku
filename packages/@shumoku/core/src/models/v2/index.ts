@@ -1,5 +1,5 @@
 /**
- * Shumoku v2 Models
+ * Shumoku Models
  */
 
 export * from './types'

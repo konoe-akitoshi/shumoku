@@ -1,6 +1,6 @@
 /**
- * Shumoku v2 Layout Engines
+ * Shumoku Layout Engines
  */
 
-export { HierarchicalLayoutV2, hierarchicalLayoutV2 } from './hierarchical'
+export { HierarchicalLayout, hierarchicalLayout } from './hierarchical'
 export type { HierarchicalLayoutOptions } from './hierarchical'

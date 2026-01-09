@@ -1,5 +1,5 @@
 /**
- * Hierarchical Layout Engine v2
+ * Hierarchical Layout Engine
  * Uses ELK.js for advanced graph layout with proper edge routing
  */
 
@@ -17,7 +17,7 @@ import {
   type LayoutDirection,
   type LinkEndpoint,
   getNodeId,
-} from '../../models/v2'
+} from '../../models'
 
 // ============================================
 // Helper Functions
@@ -103,7 +103,7 @@ const DEFAULT_OPTIONS: Required<HierarchicalLayoutOptions> = {
 // Layout Engine
 // ============================================
 
-export class HierarchicalLayoutV2 {
+export class HierarchicalLayout {
   private options: Required<HierarchicalLayoutOptions>
   private elk: InstanceType<typeof ELK>
 
@@ -1490,5 +1490,5 @@ export class HierarchicalLayoutV2 {
 
 }
 
-// Default export
-export const hierarchicalLayoutV2 = new HierarchicalLayoutV2()
+// Default instance
+export const hierarchicalLayout = new HierarchicalLayout()

@@ -52,7 +52,7 @@ export const modernTheme: Theme = {
       [DeviceType.AccessPoint]: '#06b6d4',
       [DeviceType.Cloud]: '#3b82f6',
       [DeviceType.Internet]: '#6366f1',
-      [DeviceType.Unknown]: '#94a3b8',
+      [DeviceType.Generic]: '#94a3b8',
     },
     
     // Module colors

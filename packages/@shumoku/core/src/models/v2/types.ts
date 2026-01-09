@@ -1,6 +1,6 @@
 /**
- * Shumoku v2 Data Models
- * Mermaid-like network diagram support
+ * Shumoku Data Models
+ * Network diagram support with Mermaid-like syntax
  */
 
 // ============================================

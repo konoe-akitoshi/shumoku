@@ -56,7 +56,7 @@ export const darkTheme: Theme = {
       [DeviceType.AccessPoint]: '#22d3ee',
       [DeviceType.Cloud]: '#60a5fa',
       [DeviceType.Internet]: '#818cf8',
-      [DeviceType.Unknown]: '#64748b',
+      [DeviceType.Generic]: '#64748b',
     },
     
     // Module colors (adjusted for dark)

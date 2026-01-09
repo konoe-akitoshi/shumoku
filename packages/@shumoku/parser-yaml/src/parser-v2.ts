@@ -1,21 +1,21 @@
 /**
- * YAML parser v2 for Mermaid-like network diagrams
+ * YAML parser for network diagrams
  */
 
 import yaml from 'js-yaml'
-import { v2 } from '@shumoku/core/models'
-
-type NetworkGraphV2 = v2.NetworkGraphV2
-type Node = v2.Node
-type Link = v2.Link
-type Subgraph = v2.Subgraph
-type GraphSettings = v2.GraphSettings
-type CanvasSettings = v2.CanvasSettings
-type PaperSize = v2.PaperSize
-type PaperOrientation = v2.PaperOrientation
-type NodeShape = v2.NodeShape
-type LinkType = v2.LinkType
-type ArrowType = v2.ArrowType
+import type {
+  NetworkGraphV2,
+  Node,
+  Link,
+  Subgraph,
+  GraphSettings,
+  CanvasSettings,
+  PaperSize,
+  PaperOrientation,
+  NodeShape,
+  LinkType,
+  ArrowType,
+} from '@shumoku/core/models'
 
 // Re-define DeviceType enum locally (same as v2.DeviceType)
 enum DeviceType {
@@ -167,7 +167,7 @@ export interface ParseWarning {
   line?: number
 }
 
-export interface ParseResultV2 {
+export interface ParseResult {
   graph: NetworkGraphV2
   warnings?: ParseWarning[]
 }
@@ -176,8 +176,8 @@ export interface ParseResultV2 {
 // Parser Implementation
 // ============================================
 
-export class YamlParserV2 {
-  parse(input: string): ParseResultV2 {
+export class YamlParser {
+  parse(input: string): ParseResult {
     const warnings: ParseWarning[] = []
 
     try {
@@ -575,5 +575,5 @@ export class YamlParserV2 {
   }
 }
 
-// Default export
-export const parserV2 = new YamlParserV2()
+// Default instance
+export const parser = new YamlParser()

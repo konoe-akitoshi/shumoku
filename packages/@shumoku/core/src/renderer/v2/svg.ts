@@ -1,6 +1,6 @@
 /**
- * SVG Renderer v2
- * Renders NetworkGraphV2 to SVG
+ * SVG Renderer
+ * Renders NetworkGraph to SVG
  */
 
 import type {
@@ -12,7 +12,7 @@ import type {
   Node,
   NodeShape,
   LinkType,
-} from '../../models/v2'
+} from '../../models'
 import { getDeviceIcon, getVendorIconEntry, type IconThemeVariant } from '../../icons'
 
 // ============================================
@@ -50,7 +50,7 @@ const DEFAULT_OPTIONS: Required<SVGRendererOptions> = {
 // SVG Renderer
 // ============================================
 
-export class SVGRendererV2 {
+export class SVGRenderer {
   private options: Required<SVGRendererOptions>
 
   constructor(options?: SVGRendererOptions) {
@@ -828,14 +828,14 @@ ${result}`
 
     if (vlans.length === 1) {
       // Single VLAN: use color based on VLAN ID
-      const colorIndex = vlans[0] % SVGRendererV2.VLAN_COLORS.length
-      return SVGRendererV2.VLAN_COLORS[colorIndex]
+      const colorIndex = vlans[0] % SVGRenderer.VLAN_COLORS.length
+      return SVGRenderer.VLAN_COLORS[colorIndex]
     }
 
     // Multiple VLANs (trunk): use a combined hash color
     const hash = vlans.reduce((acc, v) => acc + v, 0)
-    const colorIndex = hash % SVGRendererV2.VLAN_COLORS.length
-    return SVGRendererV2.VLAN_COLORS[colorIndex]
+    const colorIndex = hash % SVGRenderer.VLAN_COLORS.length
+    return SVGRenderer.VLAN_COLORS[colorIndex]
   }
 
   private getLinkDasharray(type: LinkType): string {
@@ -905,5 +905,5 @@ ${result}`
   }
 }
 
-// Default export
-export const svgRendererV2 = new SVGRendererV2()
+// Default instance
+export const svgRenderer = new SVGRenderer()

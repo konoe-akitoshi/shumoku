@@ -1,14 +1,11 @@
 import { useState } from 'react'
-import { v2 as modelsV2 } from '@shumoku/core/models'
-import { layoutV2 } from '@shumoku/core/layout'
-import { rendererV2 } from '@shumoku/core/renderer'
-import { parserV2 } from '@shumoku/parser-yaml'
+import type { NetworkGraphV2, LayoutResult } from '@shumoku/core/models'
+import { HierarchicalLayout } from '@shumoku/core/layout'
+import { SVGRenderer } from '@shumoku/core/renderer'
+import { parser } from '@shumoku/parser-yaml'
 import NetworkSVG from './components/NetworkSVG'
-import { sreNextNetwork, simpleTestV2 } from './sampleNetworksV2'
+import { sreNextNetwork, simpleTest } from './sampleNetworks'
 import './App.css'
-
-type NetworkGraphV2 = modelsV2.NetworkGraphV2
-type LayoutResult = modelsV2.LayoutResult
 
 function App() {
   const [yamlContent, setYamlContent] = useState<string>(sreNextNetwork)
@@ -19,7 +16,7 @@ function App() {
 
   const handleParseAndRender = async () => {
     try {
-      const result = parserV2.parse(yamlContent)
+      const result = parser.parse(yamlContent)
 
       if (result.warnings && result.warnings.length > 0) {
         const errors = result.warnings.filter((w) => w.severity === 'error')
@@ -34,11 +31,11 @@ function App() {
 
       setNetworkGraph(result.graph)
 
-      const layout = new layoutV2.HierarchicalLayoutV2()
+      const layout = new HierarchicalLayout()
       const layoutRes = await layout.layoutAsync(result.graph)
       setLayoutResult(layoutRes)
 
-      const renderer = new rendererV2.SVGRendererV2({
+      const renderer = new SVGRenderer({
         backgroundColor: '#ffffff',
       })
       const svg = renderer.render(result.graph, layoutRes)
@@ -98,7 +95,7 @@ function App() {
           <select
             onChange={(e) => {
               if (e.target.value === 'sre-next') setYamlContent(sreNextNetwork)
-              else if (e.target.value === 'simple') setYamlContent(simpleTestV2)
+              else if (e.target.value === 'simple') setYamlContent(simpleTest)
             }}
           >
             <option value="sre-next">SRE NEXT Network</option>
