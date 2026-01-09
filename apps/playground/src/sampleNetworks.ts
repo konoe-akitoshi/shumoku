@@ -4,8 +4,7 @@
 
 export const enterpriseNetwork = `
 name: "Enterprise Network"
-version: "2.0.0"
-description: "Enterprise network with HA edge routers and campus access"
+description: "Enterprise network with HA routers, firewall, DMZ and campus"
 
 settings:
   theme: modern
@@ -29,6 +28,21 @@ subgraphs:
       fill: "#fff5f5"
       stroke: "#d4a017"
       strokeWidth: 2
+
+  # Security Layer
+  - id: security
+    label: "Security"
+    style:
+      fill: "#fef2f2"
+      stroke: "#dc2626"
+      strokeWidth: 2
+
+  # DMZ
+  - id: dmz
+    label: "DMZ"
+    style:
+      fill: "#fefce8"
+      stroke: "#ca8a04"
 
   # Campus Layer
   - id: campus
@@ -109,6 +123,8 @@ nodes:
       - "Mgmt: 10.0.0.1"
       - "VRRP VIP: 10.0.0.254"
     type: router
+    vendor: yamaha
+    model: rtx3510
     parent: edge
 
   - id: rt2
@@ -117,7 +133,46 @@ nodes:
       - "Mgmt: 10.0.0.2"
       - "VRRP VIP: 10.0.0.254"
     type: router
+    vendor: yamaha
+    model: rtx3510
     parent: edge
+
+  # ========== Security Layer ==========
+  - id: fw1
+    label:
+      - "<b>FW-1 (Active)</b>"
+      - "Mgmt: 10.0.100.1"
+    type: firewall
+    parent: security
+
+  - id: fw2
+    label:
+      - "<b>FW-2 (Standby)</b>"
+      - "Mgmt: 10.0.100.2"
+    type: firewall
+    parent: security
+
+  # ========== DMZ ==========
+  - id: dmz-sw
+    label:
+      - "<b>DMZ-SW</b>"
+      - "Mgmt: 10.100.0.1"
+    type: l2-switch
+    parent: dmz
+
+  - id: web-srv
+    label:
+      - "<b>Web Server</b>"
+      - "10.100.10.10"
+    type: server
+    parent: dmz
+
+  - id: mail-srv
+    label:
+      - "<b>Mail Server</b>"
+      - "10.100.10.20"
+    type: server
+    parent: dmz
 
   # ========== NOC ==========
   - id: core-sw
@@ -237,7 +292,7 @@ links:
       ip: 169.254.101.2/30
     label: "IPsec VPN"
 
-  # HA Keepalive
+  # Router HA Keepalive
   - from:
       node: rt1
       port: ha0
@@ -251,38 +306,103 @@ links:
     style:
       minLength: 300
 
-  # Router to Core
+  # Router to Firewall
   - from:
       node: rt1
       port: lan1
-      ip: 10.0.1.1/24
+      ip: 10.0.1.1/30
     to:
-      node: core-sw
-      port: eth1
-      ip: 10.0.1.10/24
-    label: "Active"
+      node: fw1
+      port: outside
+      ip: 10.0.1.2/30
     bandwidth: 10G
 
   - from:
       node: rt2
       port: lan1
-      ip: 10.0.1.2/24
+      ip: 10.0.1.5/30
+    to:
+      node: fw2
+      port: outside
+      ip: 10.0.1.6/30
+    bandwidth: 10G
+
+  # Firewall HA
+  - from:
+      node: fw1
+      port: ha
+    to:
+      node: fw2
+      port: ha
+    label: "HA Sync"
+    redundancy: ha
+    style:
+      minLength: 300
+
+  # Firewall to Core
+  - from:
+      node: fw1
+      port: inside
+      ip: 10.0.2.1/30
+    to:
+      node: core-sw
+      port: eth1
+      ip: 10.0.2.2/30
+    label: "Active"
+    bandwidth: 10G
+
+  - from:
+      node: fw2
+      port: inside
+      ip: 10.0.2.5/30
     to:
       node: core-sw
       port: eth2
-      ip: 10.0.1.11/24
+      ip: 10.0.2.6/30
     label: "Standby"
     bandwidth: 10G
+
+  # Firewall to DMZ
+  - from:
+      node: fw1
+      port: dmz
+      ip: 10.100.0.2/24
+    to:
+      node: dmz-sw
+      port: uplink
+      ip: 10.100.0.1/24
+    label: "DMZ"
+    vlan: 100
+    bandwidth: 10G
+
+  # DMZ servers
+  - from:
+      node: dmz-sw
+      port: eth1
+    to:
+      node: web-srv
+      port: eth0
+    vlan: 100
+    bandwidth: 1G
+
+  - from:
+      node: dmz-sw
+      port: eth2
+    to:
+      node: mail-srv
+      port: eth0
+    vlan: 100
+    bandwidth: 1G
 
   # Core to Distribution
   - from:
       node: core-sw
       port: ae0
-      ip: 10.0.2.1/30
+      ip: 10.0.3.1/30
     to:
       node: dist-sw
       port: ae0
-      ip: 10.0.2.2/30
+      ip: 10.0.3.2/30
     label: "40G LACP"
     bandwidth: 40G
 
@@ -296,7 +416,7 @@ links:
       port: uplink
       ip: 10.10.0.1/24
     label: "Trunk"
-    vlan: [10, 20, 100]
+    vlan: [10, 20]
     bandwidth: 10G
 
   - from:
@@ -308,7 +428,7 @@ links:
       port: uplink
       ip: 10.20.0.1/24
     label: "Trunk"
-    vlan: [10, 30, 100]
+    vlan: [10, 30]
     bandwidth: 10G
 
   # Building A cascade
@@ -376,7 +496,6 @@ links:
 
 export const simpleNetwork = `
 name: "Simple Network"
-version: "2.0.0"
 
 settings:
   direction: TB
