@@ -79,7 +79,7 @@ export class SVGRendererV2 {
 
     // Links
     layout.links.forEach((link) => {
-      parts.push(this.renderLink(link))
+      parts.push(this.renderLink(link, layout.nodes))
     })
 
     // Nodes
@@ -208,7 +208,7 @@ export class SVGRendererV2 {
   }
 
   private renderNode(layoutNode: LayoutNode): string {
-    const { id, position, size, node } = layoutNode
+    const { id, position, size, node, ports } = layoutNode
     const x = position.x
     const y = position.y
     const w = size.width
@@ -223,12 +223,67 @@ export class SVGRendererV2 {
     const shape = this.renderNodeShape(node.shape, x, y, w, h, fill, stroke, strokeWidth, strokeDasharray)
     const icon = this.renderNodeIcon(node, x, y, h)
     const label = this.renderNodeLabel(node, x, y, h, !!icon)
+    const portsRendered = this.renderPorts(x, y, ports)
 
     return `<g class="node" data-id="${id}" transform="translate(0,0)">
   ${shape}
   ${icon}
   ${label}
+  ${portsRendered}
 </g>`
+  }
+
+  /**
+   * Render ports on a node
+   */
+  private renderPorts(
+    nodeX: number,
+    nodeY: number,
+    ports?: Map<string, import('../../models/v2').LayoutPort>
+  ): string {
+    if (!ports || ports.size === 0) return ''
+
+    const parts: string[] = []
+
+    ports.forEach((port) => {
+      const px = nodeX + port.position.x
+      const py = nodeY + port.position.y
+      const pw = port.size.width
+      const ph = port.size.height
+
+      // Port box
+      parts.push(`<rect class="port" data-port="${port.id}"
+        x="${px - pw / 2}" y="${py - ph / 2}" width="${pw}" height="${ph}"
+        fill="#475569" stroke="#1e293b" stroke-width="1" rx="2" />`)
+
+      // Port label - position based on side
+      let labelX = px
+      let labelY = py
+      let textAnchor = 'middle'
+      const labelOffset = 12
+
+      switch (port.side) {
+        case 'top':
+          labelY = py - labelOffset
+          break
+        case 'bottom':
+          labelY = py + labelOffset + 4
+          break
+        case 'left':
+          labelX = px - labelOffset
+          textAnchor = 'end'
+          break
+        case 'right':
+          labelX = px + labelOffset
+          textAnchor = 'start'
+          break
+      }
+
+      parts.push(`<text class="port-label" x="${labelX}" y="${labelY}"
+        text-anchor="${textAnchor}" font-size="9" fill="#475569">${this.escapeXml(port.label)}</text>`)
+    })
+
+    return parts.join('\n  ')
   }
 
   private renderNodeShape(
@@ -377,7 +432,7 @@ export class SVGRendererV2 {
     return lines.join('\n  ')
   }
 
-  private renderLink(layoutLink: LayoutLink): string {
+  private renderLink(layoutLink: LayoutLink, nodes: Map<string, LayoutNode>): string {
     const { id, points, link, fromEndpoint, toEndpoint } = layoutLink
     const label = link.label
 
@@ -423,17 +478,25 @@ ${result}`
       result += `\n<text x="${midPoint.x}" y="${midPoint.y - 8}" class="link-label" text-anchor="middle">${this.escapeXml(labelText)}</text>`
     }
 
+    // Get node center positions for label placement
+    const fromNode = nodes.get(fromEndpoint.node)
+    const toNode = nodes.get(toEndpoint.node)
+    const fromNodeCenterX = fromNode ? fromNode.position.x : points[0].x
+    const toNodeCenterX = toNode ? toNode.position.x : points[points.length - 1].x
+
     // Endpoint labels (port/ip at both ends) - positioned along the line
     const fromLabels = this.formatEndpointLabels(fromEndpoint)
     const toLabels = this.formatEndpointLabels(toEndpoint)
 
     if (fromLabels.length > 0 && points.length > 1) {
-      const labelPos = this.getEndpointLabelPosition(points, 'start')
+      const portName = fromEndpoint.port || ''
+      const labelPos = this.getEndpointLabelPosition(points, 'start', fromNodeCenterX, portName)
       result += this.renderEndpointLabels(fromLabels, labelPos.x, labelPos.y, labelPos.anchor)
     }
 
     if (toLabels.length > 0 && points.length > 1) {
-      const labelPos = this.getEndpointLabelPosition(points, 'end')
+      const portName = toEndpoint.port || ''
+      const labelPos = this.getEndpointLabelPosition(points, 'end', toNodeCenterX, portName)
       result += this.renderEndpointLabels(toLabels, labelPos.x, labelPos.y, labelPos.anchor)
     }
 
@@ -442,48 +505,94 @@ ${result}`
 
   private formatEndpointLabels(endpoint: { node: string; port?: string; ip?: string; vlan_id?: number }): string[] {
     const parts: string[] = []
-    if (endpoint.port) parts.push(endpoint.port)
+    // Port is now rendered on the node itself, so don't include it here
     if (endpoint.ip) parts.push(endpoint.ip)
     if (endpoint.vlan_id !== undefined) parts.push(`VLAN${endpoint.vlan_id}`)
     return parts
   }
 
   /**
-   * Calculate position for endpoint label along the line
+   * Calculate position for endpoint label near the port (not along the line)
+   * This avoids label clustering at the center of links
+   * Labels are placed based on port position relative to node center
    */
   private getEndpointLabelPosition(
     points: { x: number; y: number }[],
-    which: 'start' | 'end'
+    which: 'start' | 'end',
+    nodeCenterX: number,
+    portName: string
   ): { x: number; y: number; anchor: string } {
-    // Position label at ~25% or ~75% along the line to avoid node overlap
-    const t = which === 'start' ? 0.15 : 0.85
+    // Get the endpoint position (port position)
+    const endpointIdx = which === 'start' ? 0 : points.length - 1
+    const endpoint = points[endpointIdx]
 
-    if (points.length === 4) {
-      // Bezier curve - calculate position at t
-      const mt = 1 - t
-      const x = mt * mt * mt * points[0].x +
-        3 * mt * mt * t * points[1].x +
-        3 * mt * t * t * points[2].x +
-        t * t * t * points[3].x
-      const y = mt * mt * mt * points[0].y +
-        3 * mt * mt * t * points[1].y +
-        3 * mt * t * t * points[2].y +
-        t * t * t * points[3].y
+    // Get the next/prev point to determine line direction
+    const nextIdx = which === 'start' ? 1 : points.length - 2
+    const nextPoint = points[nextIdx]
 
-      // Get tangent direction for text anchor
-      const dx = 3 * mt * mt * (points[1].x - points[0].x) +
-        6 * mt * t * (points[2].x - points[1].x) +
-        3 * t * t * (points[3].x - points[2].x)
+    // Calculate direction from endpoint toward the line
+    const dx = nextPoint.x - endpoint.x
+    const dy = nextPoint.y - endpoint.y
+    const len = Math.sqrt(dx * dx + dy * dy)
 
-      return { x, y: y - 6, anchor: dx > 0 ? 'start' : 'end' }
+    // Normalize direction
+    const nx = len > 0 ? dx / len : 0
+    const ny = len > 0 ? dy / len : 1
+
+    // Perpendicular direction (90 degrees rotated)
+    const perpX = -ny
+    const perpY = nx
+
+    const isVertical = Math.abs(dy) > Math.abs(dx)
+
+    // Hash port name as fallback
+    const portHash = this.hashString(portName)
+    const hashDirection = portHash % 2 === 0 ? 1 : -1
+
+    // Port position relative to node center determines label side
+    const portOffsetFromCenter = endpoint.x - nodeCenterX
+
+    let sideMultiplier: number
+
+    if (isVertical) {
+      if (Math.abs(portOffsetFromCenter) > 5) {
+        // Port is on one side of node - place label outward
+        sideMultiplier = portOffsetFromCenter > 0 ? 1 : -1
+      } else {
+        // Center port - use small hash-based offset to avoid overlap
+        sideMultiplier = hashDirection * 0.2
+      }
+    } else {
+      // Horizontal link: place label above/below based on which end
+      const isStart = which === 'start'
+      sideMultiplier = isStart ? -1 : 1
     }
 
-    // Straight line
-    const x = points[0].x + (points[1].x - points[0].x) * t
-    const y = points[0].y + (points[1].y - points[0].y) * t
-    const dx = points[1].x - points[0].x
+    const offsetDist = 30  // Distance along line direction
+    const perpDist = 20    // Perpendicular offset (fixed)
 
-    return { x, y: y - 6, anchor: dx > 0 ? 'start' : 'end' }
+    // Position: offset along line direction + fixed horizontal offset for vertical links
+    let x: number
+    let y: number
+
+    if (isVertical) {
+      // For vertical links, use fixed horizontal offset (simpler and consistent)
+      x = endpoint.x + perpDist * sideMultiplier
+      y = endpoint.y + ny * offsetDist
+    } else {
+      // For horizontal links, use perpendicular calculation
+      x = endpoint.x + nx * offsetDist + perpX * perpDist * sideMultiplier
+      y = endpoint.y + ny * offsetDist + perpY * perpDist * sideMultiplier
+    }
+
+    // Text anchor based on final position relative to endpoint
+    let anchor = 'middle'
+    const labelDx = x - endpoint.x
+    if (Math.abs(labelDx) > 8) {
+      anchor = labelDx > 0 ? 'start' : 'end'
+    }
+
+    return { x, y, anchor }
   }
 
   /**
@@ -641,6 +750,19 @@ ${result}`
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;')
+  }
+
+  /**
+   * Simple string hash for consistent but varied label placement
+   */
+  private hashString(str: string): number {
+    let hash = 0
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32-bit integer
+    }
+    return Math.abs(hash)
   }
 }
 
