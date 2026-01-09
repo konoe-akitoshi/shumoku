@@ -43,4 +43,4 @@ lerna-debug.log*
 # Misc
 *.pem
 .vercel
-.cache*.tsbuildinfo
+*.tsbuildinfo
