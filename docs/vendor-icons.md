@@ -9,6 +9,7 @@ Shumoku で使用可能なベンダー固有アイコンのリファレンス。
 ```yaml
 nodes:
   - id: router-1
+    type: router
     vendor: yamaha
     model: rtx3510
 ```
@@ -18,6 +19,7 @@ nodes:
 ```yaml
 nodes:
   - id: instance-1
+    type: server
     vendor: aws
     service: ec2
     resource: instances  # オプション
@@ -28,9 +30,15 @@ nodes:
 ```yaml
 nodes:
   - id: switch-1
+    type: l2-switch
     vendor: aruba
-    service: access-switch
+    model: access-switch
 ```
+
+**注**:
+- `type` はデフォルトアイコンのフォールバックと形状に影響します
+- `service` と `model` はどちらもアイコン検索に使用可能 (`service` が優先)
+- ハードウェアは `model`、クラウドは `service` を推奨
 
 ---
 
@@ -46,7 +54,7 @@ nodes:
 
 ### デバイス
 
-| service/model | 説明 |
+| model | 説明 |
 |---------------|------|
 | `access-switch` | アクセススイッチ |
 | `core-agg-leaf-switch` | コア/アグリ/リーフスイッチ |
@@ -65,7 +73,7 @@ nodes:
 
 ### 管理・機能
 
-| service/model | 説明 |
+| model | 説明 |
 |---------------|------|
 | `central-apis` | Central APIs |
 | `central-client-insights` | Central Client Insights |
@@ -84,7 +92,7 @@ nodes:
 
 ### 汎用
 
-| service/model | 説明 |
+| model | 説明 |
 |---------------|------|
 | `cloud` | クラウド |
 | `cloud-internet-circuit` | インターネット回線 |
@@ -98,7 +106,7 @@ nodes:
 
 ### クライアント
 
-| service/model | 説明 |
+| model | 説明 |
 |---------------|------|
 | `desktop` | デスクトップ |
 | `laptop` | ラップトップ |
@@ -112,7 +120,7 @@ nodes:
 
 ### IoT
 
-| service/model | 説明 |
+| model | 説明 |
 |---------------|------|
 | `iot-camera` | IoT カメラ |
 | `iot-io` | IoT I/O |
