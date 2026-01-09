@@ -1,172 +1,119 @@
-# shumoku
+# Shumoku
 
-shumoku -撞木 撞木は喚鐘を叩く時に使用する丁字形の棒です。その撞木を吊り下げる釘を撞木釘と言います。
+<img src="apps/playground/public/logo.svg" alt="Shumoku Logo" width="128" height="128">
 
-Modern network topology visualization library for Markdown
+**撞木** - 撞木は喚鐘を叩く時に使用する丁字形の棒です。その撞木を吊り下げる釘を撞木釘と言います。
 
-## Overview
+Modern network topology visualization library for TypeScript/JavaScript.
 
-shumoku is a powerful network diagram library designed specifically for network engineers and infrastructure teams. It allows you to create beautiful, interactive network topology diagrams directly in Markdown files.
+**[Playground](https://shumoku.pages.dev)** | **[Documentation](https://shumoku.pages.dev/docs/yaml-reference)**
 
-### Features
+## Features
 
-- 📝 **Markdown-native**: Embed diagrams directly in your documentation
-- 🎨 **Beautiful designs**: Modern Bento Grid-style layouts
-- 🚀 **High performance**: WebGL-based rendering for large networks
-- 🔌 **NetBox integration**: Auto-generate diagrams from your source of truth
-- 🤖 **Smart layouts**: AI-assisted automatic node placement
-- 📦 **Export options**: PNG, SVG, and more
-- ♿ **Accessible**: Full keyboard navigation and screen reader support
-
-## Current Status (v0.0.0)
-
-This is an early development version. The following components are implemented:
-
-### ✅ Implemented
-- **Core Library** (`@shumoku/core`)
-  - Network data models (Device, Port, Link, Module)
-  - Layout engines (Hierarchical, Bento Grid)
-  - Theme system (Modern/Light, Dark)
-  - Parser interface
-- **Basic Playground App**
-  - Layout engine testing
-  - Theme switching
-
-### 🚧 In Progress
-- YAML parser (`@shumoku/parser-yaml`)
-- Pixi.js renderer
-- React components (`@shumoku/react`)
-
-### 📋 Planned
-- Full visualization with Pixi.js
-- Markdown integration
-- NetBox API support
-- GitHub Actions
-- Export functionality
+- **YAML-based definitions** - Simple, readable network topology definitions
+- **Automatic layout** - Hierarchical layout powered by ELK.js
+- **Vendor icons** - Built-in icons for Yamaha, Aruba, AWS (500+ icons)
+- **SVG export** - High-quality vector output
+- **NetBox integration** - Auto-generate diagrams from NetBox
 
 ## Quick Start
 
-### Development Setup
+### Online Playground
+
+Try Shumoku without installation at [shumoku.pages.dev](https://shumoku.pages.dev)
+
+### Local Development
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/shumoku.git
+git clone https://github.com/konoe-akitoshi/shumoku.git
 cd shumoku
 
-# Install dependencies
-pnpm install
+# Install dependencies (requires Bun)
+bun install
 
-# Build core library
-pnpm build
+# Build all packages
+bun run build
 
 # Run playground
 cd apps/playground
-pnpm dev
+bun run dev
 ```
 
-### Example Usage (Current API)
+## Example
 
-```typescript
-import { 
-  DeviceType,
-  layoutEngineFactory,
-  type NetworkGraph 
-} from '@shumoku/core'
+```yaml
+name: "Simple Network"
 
-// Define your network
-const network: NetworkGraph = {
-  version: '1.0.0',
-  name: 'My Network',
-  devices: [
-    {
-      id: 'sw1',
-      name: 'Switch 1',
-      type: DeviceType.L3Switch,
-      role: 'core'
-    }
-  ],
-  links: [],
-  ports: []
-}
+settings:
+  direction: TB
+  theme: light
 
-// Generate layout
-const engine = layoutEngineFactory.create('hierarchical')
-const layout = await engine.layout(network)
+subgraphs:
+  - id: core
+    label: "Core Layer"
+
+nodes:
+  - id: rt-01
+    label: "Router 01"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: core
+
+  - id: sw-01
+    label: "Switch 01"
+    type: l3-switch
+    parent: core
+
+links:
+  - from:
+      node: rt-01
+      port: lan1
+    to:
+      node: sw-01
+      port: ge-0/0/0
+    bandwidth: 10G
 ```
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `@shumoku/core` | Core library (models, layout, renderer) |
+| `@shumoku/parser-yaml` | YAML parser for network definitions |
+| `@shumoku/netbox` | NetBox API integration |
 
 ## Architecture
 
 ```
 shumoku/
 ├── packages/
-│   ├── @shumoku/core         # Core library (models, layout, themes)
+│   ├── @shumoku/core         # Core library
 │   ├── @shumoku/parser-yaml  # YAML parser
-│   └── @shumoku/react        # React components (planned)
+│   └── @shumoku/netbox       # NetBox integration
 ├── apps/
-│   └── playground            # Demo application
-└── examples/                 # Example network definitions
+│   └── playground            # Demo & documentation site
+└── docs/                     # Documentation source
 ```
 
-## Network Definition Format
+## Documentation
 
-```yaml
-network:
-  name: "Data Center Network"
-  layout: bento
-  theme: modern
-  
-  modules:
-    - id: core
-      name: "Core Network"
-      devices: ["router1", "router2"]
-      
-  devices:
-    - id: router1
-      name: "Core Router 1"
-      type: router
-      role: core
-      
-    - id: router2
-      name: "Core Router 2"
-      type: router
-      role: core
-      
-  links:
-    - from: router1
-      to: router2
-      bandwidth: "40G"
-      type: physical
-```
-
-## Contributing
-
-This project is in early development. Contributions are welcome!
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- [YAML Reference](https://shumoku.pages.dev/docs/yaml-reference) - Full YAML syntax reference
+- [Vendor Icons](https://shumoku.pages.dev/docs/vendor-icons) - Available vendor icons
 
 ## Development
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Build all packages
-pnpm build
-
-# Run tests
-pnpm test
-
-# Run linting
-pnpm lint
-
-# Format code
-pnpm format
+bun install           # Install dependencies
+bun run build         # Build all packages
+bun run dev           # Run dev server
+bun run typecheck     # Type check
+bun run lint          # Lint
+bun run format        # Format with Biome
+bun run test          # Run tests
 ```
 
 ## License
 
-MIT © 2026 Akitoshi Saeki
+MIT
