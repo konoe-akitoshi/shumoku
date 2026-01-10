@@ -34,9 +34,7 @@ export default function PlaygroundPage() {
       const layoutRes = await layout.layoutAsync(result.graph)
       setLayoutResult(layoutRes)
 
-      const renderer = new SVGRenderer({
-        backgroundColor: '#ffffff',
-      })
+      const renderer = new SVGRenderer()
       const svg = renderer.render(result.graph, layoutRes)
       setSvgContent(svg)
       setError(null)

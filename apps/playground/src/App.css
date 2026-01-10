@@ -479,12 +479,15 @@
 
 .network-svg-content {
   position: absolute;
+  top: 0;
+  left: 0;
 }
 
 .network-svg-content svg {
   /* ベクター品質を維持 */
   shape-rendering: geometricPrecision;
   text-rendering: geometricPrecision;
+  display: block;
 }
 
 /* Zoom Controls */

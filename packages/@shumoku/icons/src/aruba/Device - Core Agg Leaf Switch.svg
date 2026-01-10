@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 26.3.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 500 500" style="enable-background:new 0 0 500 500;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#FFFFFF;}
+	.st1{fill:#FF8300;}
+	.st2{fill:#F78200;}
+	.st3{fill:#F7931E;}
+	.st4{fill:#5D5D5D;}
+	.st5{fill:#FFFFFF;stroke:#65656A;stroke-width:12;stroke-miterlimit:10;}
+	.st6{display:none;fill:#979797;stroke:#979797;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st7{fill:#979797;}
+	.st8{fill:#65656A;}
+	.st9{stroke:#009245;stroke-width:3;stroke-miterlimit:10;}
+	.st10{fill:#F58220;}
+	.st11{clip-path:url(#SVGID_00000003094027075324235230000002920574907174540197_);fill:#5E5E5E;}
+	.st12{clip-path:url(#SVGID_00000023972164515236582410000011690576583065008014_);fill:#FFFFFF;}
+	.st13{clip-path:url(#SVGID_00000088124253069398370360000001405028089520405397_);fill:#FFFFFF;}
+	.st14{clip-path:url(#SVGID_00000088124253069398370360000001405028089520405397_);fill:#FF8300;}
+	.st15{clip-path:url(#SVGID_00000135690778579105789150000007732757724507486083_);fill:#FFFFFF;}
+	.st16{clip-path:url(#SVGID_00000135690778579105789150000007732757724507486083_);fill:#ADE1F0;}
+	.st17{clip-path:url(#SVGID_00000165953744439075175090000002325294865456399802_);fill:#65656A;}
+	.st18{clip-path:url(#SVGID_00000165953744439075175090000002325294865456399802_);fill:#646569;}
+	.st19{clip-path:url(#SVGID_00000165953744439075175090000002325294865456399802_);fill:#D0D0D2;}
+	.st20{clip-path:url(#SVGID_00000067212824204727526240000010675910562970297761_);fill:#FFFFFF;}
+	.st21{clip-path:url(#SVGID_00000067212824204727526240000010675910562970297761_);fill:#646569;}
+	.st22{clip-path:url(#SVGID_00000067212824204727526240000010675910562970297761_);fill:#65656A;}
+	
+		.st23{clip-path:url(#SVGID_00000142177536908657153750000015529013994942561200_);fill:#FFFFFF;stroke:#000000;stroke-miterlimit:10;}
+	.st24{clip-path:url(#SVGID_00000142177536908657153750000015529013994942561200_);fill:#646569;}
+	.st25{clip-path:url(#SVGID_00000142177536908657153750000015529013994942561200_);fill:#65656A;}
+	
+		.st26{clip-path:url(#SVGID_00000142177536908657153750000015529013994942561200_);fill:none;stroke:#65656A;stroke-width:0.1925;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st27{clip-path:url(#SVGID_00000111899343890441229630000004148648344239553161_);fill:#FFFFFF;}
+	.st28{clip-path:url(#SVGID_00000111899343890441229630000004148648344239553161_);fill:#65656A;}
+	.st29{clip-path:url(#SVGID_00000111899343890441229630000004148648344239553161_);fill:#646569;}
+	.st30{clip-path:url(#SVGID_00000154385962796334418640000005173417179974526880_);fill:#FFFFFF;}
+	.st31{clip-path:url(#SVGID_00000154385962796334418640000005173417179974526880_);fill:#646569;}
+	.st32{clip-path:url(#SVGID_00000070114287516634685340000000775933430210249104_);fill:#FFFFFF;}
+	.st33{clip-path:url(#SVGID_00000070114287516634685340000000775933430210249104_);fill:#65656A;}
+	.st34{clip-path:url(#SVGID_00000070114287516634685340000000775933430210249104_);fill:#646569;}
+	.st35{fill:#646569;}
+	.st36{clip-path:url(#SVGID_00000152942817784353988670000003689063373839910016_);fill:#FFFFFF;}
+	.st37{clip-path:url(#SVGID_00000152942817784353988670000003689063373839910016_);fill:#65666A;}
+	
+		.st38{clip-path:url(#SVGID_00000152942817784353988670000003689063373839910016_);fill:none;stroke:#65666A;stroke-width:0.1748;stroke-miterlimit:10;}
+	.st39{clip-path:url(#SVGID_00000101078910474298196450000001355230893950144658_);fill:#FFFFFF;}
+	.st40{clip-path:url(#SVGID_00000101078910474298196450000001355230893950144658_);fill:#646569;}
+	.st41{fill:none;stroke:#65656A;stroke-width:3;stroke-miterlimit:10;}
+	.st42{fill:#EC8020;}
+	.st43{fill:#ED8020;}
+	.st44{fill:none;stroke:#65656A;stroke-width:3;stroke-linecap:round;stroke-miterlimit:10;}
+	.st45{fill:none;stroke:#646569;stroke-width:10;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st46{fill:none;stroke:#646569;stroke-width:10;stroke-miterlimit:10;}
+	.st47{fill:none;stroke:#646569;stroke-width:10;stroke-linecap:round;stroke-miterlimit:10;}
+	.st48{fill:none;stroke:#65656A;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10;}
+	.st49{fill:#FFFFFF;stroke:#65656A;stroke-width:8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st50{fill:none;stroke:#65656A;stroke-width:8;stroke-miterlimit:10;}
+</style>
+<g id="Function_-_Central_APIs">
+</g>
+<g id="Function_-_Central_Route_Orchestrator">
+</g>
+<g id="Function_-_Central_Tunnel_Orchestrator">
+</g>
+<g id="Function_-_Central_NetConductor">
+</g>
+<g id="Function_-_Central_Network_Management">
+</g>
+<g id="Function_-_Central_Network_Insights">
+</g>
+<g id="Function_-_Central_Client_Insights">
+</g>
+<g id="Function_-_ClearPass_Policy_Manager">
+</g>
+<g id="Function_-_UXI_APIs">
+</g>
+<g id="Function_-_UXI_Dashboard">
+</g>
+<g id="Function_-_Orchestrator_Global_Enterprise">
+</g>
+<g id="Function_-_Orchestrator">
+</g>
+<g id="Function_-_Pensando_Policy_and_Services_Manager">
+</g>
+<g id="Function_-_Fabric_Composer">
+</g>
+<g id="Generic_-_Virtual_Machine">
+</g>
+<g id="Generic_-_Server_Single">
+</g>
+<g id="Generic_-_Server_Multi">
+</g>
+<g id="Generic_-_Router">
+</g>
+<g id="Generic_-_Firewall">
+</g>
+<g id="Wi-Fi_Signal">
+</g>
+<g id="Generic_-_Cloud_Function_Container_Grey">
+</g>
+<g id="Generic_-_Cloud_Function_Container_White">
+</g>
+<g id="Generic_-_Cloud_Internet_Circuit">
+</g>
+<g id="Generic_-_Cloud_Private_Circuit">
+</g>
+<g id="Generic_-_Cloud">
+</g>
+<g id="Client_-_IOT_Sensor">
+</g>
+<g id="Client_-_IOT_IO">
+</g>
+<g id="Client_-_IOT_PLC">
+</g>
+<g id="Client_-_IOT_Patient_Monitor">
+</g>
+<g id="Client_-_IOT_Camera">
+</g>
+<g id="Client_-_IOT_Scanner">
+</g>
+<g id="IOT_-_TV_Cast">
+</g>
+<g id="Client_-_Printer">
+</g>
+<g id="Client_-_Game_Console">
+</g>
+<g id="Client_-_IP_Phone">
+</g>
+<g id="Client_-_Laptop">
+</g>
+<g id="Client_-_Desktop">
+</g>
+<g id="Client_-_Workstation">
+</g>
+<g id="Client_-_Tablet">
+</g>
+<g id="Client_-_Mobile_2">
+</g>
+<g id="Client_-_Mobile_1">
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Cloud">
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Virtual">
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Appliance">
+</g>
+<g id="Device_-_Core_Agg_Leaf_Switch">
+	<g>
+		<path id="Background_00000128480085181784736670000003537322437037245628_" class="st0" d="M75.7,31.9H429c21,0,38.1,17,38.1,38.1
+			v358.5c0,21-17,38.1-38.1,38.1H75.7c-21,0-38.1-17-38.1-38.1V69.9C37.6,48.9,54.7,31.9,75.7,31.9z"/>
+		<g>
+			<g>
+				<path class="st42" d="M204.4,113.3c-2.9,2.9-2.9,7.6,0,10.4c2.9,2.9,7.6,2.9,10.5,0L241.5,97l0,95.8c0,4.1,3.3,7.4,7.4,7.4
+					c2,0,3.9-0.8,5.2-2.2c1.3-1.3,2.2-3.2,2.2-5.2l0-95.8l26.2,26.2c2.9,2.9,7.6,2.9,10.5,0c2.9-2.9,2.9-7.6,0-10.5l-44-44
+					L204.4,113.3z"/>
+			</g>
+			<g>
+				<path class="st42" d="M293.5,391.7c2.9-2.9,2.9-7.6,0-10.4c-2.9-2.9-7.6-2.9-10.5,0L256.3,408l0-95.8c0-4.1-3.3-7.4-7.4-7.4
+					c-2,0-3.9,0.8-5.2,2.2c-1.3,1.3-2.2,3.2-2.2,5.2l0,95.8l-26.2-26.2c-2.9-2.9-7.6-2.9-10.5,0c-2.9,2.9-2.9,7.6,0,10.5l44,44
+					L293.5,391.7z"/>
+			</g>
+			<g>
+				<path class="st42" d="M117.6,294.4c2.9,2.9,7.6,2.9,10.4,0c2.9-2.9,2.9-7.6,0-10.5l-26.7-26.7l95.8,0c4.1,0,7.4-3.3,7.4-7.4
+					c0-2-0.8-3.9-2.2-5.2c-1.3-1.3-3.2-2.2-5.2-2.2l-95.8,0l26.2-26.2c2.9-2.9,2.9-7.6,0-10.5c-2.9-2.9-7.6-2.9-10.5,0l-44,44
+					L117.6,294.4z"/>
+			</g>
+			<g>
+				<path class="st42" d="M385.5,205.3c-2.9-2.9-7.6-2.9-10.4,0c-2.9,2.9-2.9,7.6,0,10.5l26.7,26.7l-95.8,0c-4.1,0-7.4,3.3-7.4,7.4
+					c0,2,0.8,3.9,2.2,5.2c1.3,1.3,3.2,2.2,5.2,2.2l95.8,0l-26.2,26.2c-2.9,2.9-2.9,7.6,0,10.5c2.9,2.9,7.6,2.9,10.5,0l44-44
+					L385.5,205.3z"/>
+			</g>
+			<g>
+				<g>
+					<path class="st42" d="M143.1,207c0,4.1,3.3,7.4,7.4,7.4c4.1,0,7.4-3.3,7.4-7.4l0-37.8l67.7,67.7c2.9,2.9,7.6,2.9,10.4,0
+						c1.4-1.4,2.2-3.3,2.2-5.2c0-1.9-0.7-4.4-2.2-5.8l-67.7-68.3h37.1c4.1,0,7.4-2.7,7.4-6.8c0-4.1-3.3-7.1-7.4-7.1l-62.3,0.1
+						L143.1,207z"/>
+				</g>
+				<g>
+					<path class="st42" d="M354.8,290.5c0-4.1-3.3-6.3-7.4-6.3c-4.1,0-7.4,3.9-7.4,7.9l0,38.1l-67.7-67.6c-2.9-2.9-7.6-2.8-10.4,0.1
+						c-1.4,1.5-2.2,3.4-2.2,5.3c0,1.9,0.7,3.7,2.2,5.2l67.7,67.7h-37.1c-4.1,0-7.4,1.2-7.4,5.3c0,4.1,3.3,5.2,7.4,5.2h62.3
+						L354.8,290.5z"/>
+				</g>
+			</g>
+			<g>
+				<g>
+					<path class="st42" d="M354.8,207c0,4.1-3.3,7.4-7.4,7.4c-4.1,0-7.4-3.3-7.4-7.4l0-37.8L272.3,237c-2.9,2.9-7.6,2.9-10.4,0
+						c-1.4-1.4-2.2-3.3-2.2-5.2c0-1.9,0.7-4.4,2.2-5.8l67.7-68.3h-37.1c-4.1,0-7.4-2.7-7.4-6.8c0-4.1,3.3-7.1,7.4-7.1l62.3,0.1
+						L354.8,207z"/>
+				</g>
+				<g>
+					<path class="st42" d="M143.1,290.5c0-4.1,3.3-6.3,7.4-6.3c4.1,0,7.4,3.9,7.4,7.9l0,38.1l67.7-67.6c2.9-2.9,7.5-2.8,10.4,0.1
+						c1.4,1.5,2.2,3.4,2.2,5.3c0,1.9-0.7,3.7-2.2,5.2l-67.7,67.7h37.1c4.1,0,7.4,1.2,7.4,5.3c0,4.1-3.3,5.2-7.4,5.2h-62.3
+						L143.1,290.5z"/>
+				</g>
+			</g>
+		</g>
+		<g>
+			<path class="st8" d="M413.7,477h-328c-32.5,0-57.9-24.6-57.9-55.9l0-340.6c0-31.7,26-57.4,58-57.5L414,23.3
+				c32.1,0,58.3,26.1,58.3,58.2v341.6C472.2,453.8,447.1,477,413.7,477z M85.7,38.7c-23.3,0-42.3,18.8-42.2,41.8l0,340.6
+				c0,22.9,18.2,40.2,42.2,40.2h328c21.3,0,42.9-13.1,42.9-38.2V81.5c0-23.4-19.1-42.5-42.6-42.5L85.7,38.7z"/>
+		</g>
+		<g>
+			<path class="st8" d="M277.1,244.9c0,15.7-12.7,28.4-28.4,28.4c-15.7,0-28.4-12.7-28.4-28.4c0-15.7,12.7-28.4,28.4-28.4
+				C264.4,216.5,277.1,229.2,277.1,244.9z"/>
+		</g>
+	</g>
+</g>
+<g id="Device_-_Access_Switch">
+</g>
+<g id="Device_-_Gateway_Headend">
+</g>
+<g id="Device_-_Gateway_Branch">
+</g>
+<g id="Device_-_Gateway_Campus">
+</g>
+<g id="Device_-_UXI_Sensor_New">
+</g>
+<g id="Device_-_UXI_Sensor">
+</g>
+<g id="Device_-_AP500_Series_Microbranch">
+</g>
+<g id="Device_-_AP600_Series">
+</g>
+<g id="Device_-_AP500_Series">
+</g>
+<g id="Device_-_Outdoor_AP">
+</g>
+</svg>

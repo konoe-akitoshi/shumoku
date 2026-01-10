@@ -159,10 +159,11 @@ export class SVGRenderer {
     return parts.join('\n')
   }
 
-  private renderHeader(_width: number, _height: number, viewBox: string): string {
-    // width/heightを指定しないことでベクター品質を維持
+  private renderHeader(width: number, height: number, viewBox: string): string {
     return `<svg xmlns="http://www.w3.org/2000/svg"
   viewBox="${viewBox}"
+  width="${width}"
+  height="${height}"
   style="background: ${this.themeColors.backgroundColor}">`
   }
 

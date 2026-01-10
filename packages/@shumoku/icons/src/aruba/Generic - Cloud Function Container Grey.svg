@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 26.3.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 500 500" style="enable-background:new 0 0 500 500;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#FFFFFF;}
+	.st1{fill:#FF8300;}
+	.st2{fill:#F78200;}
+	.st3{fill:#F7931E;}
+	.st4{fill:#5D5D5D;}
+	.st5{fill:#FFFFFF;stroke:#65656A;stroke-width:12;stroke-miterlimit:10;}
+	.st6{display:none;fill:#979797;stroke:#979797;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st7{fill:#979797;}
+	.st8{fill:#65656A;}
+	.st9{stroke:#009245;stroke-width:3;stroke-miterlimit:10;}
+	.st10{fill:#F58220;}
+	.st11{clip-path:url(#SVGID_00000038395158660911140080000000013873009096387003_);fill:#5E5E5E;}
+	.st12{clip-path:url(#SVGID_00000106846821662459563660000015619373863710547892_);fill:#FFFFFF;}
+	.st13{clip-path:url(#SVGID_00000043446381720731200330000014258681301440708004_);fill:#FFFFFF;}
+	.st14{clip-path:url(#SVGID_00000043446381720731200330000014258681301440708004_);fill:#FF8300;}
+	.st15{clip-path:url(#SVGID_00000047767502059549755950000017393369833165835950_);fill:#FFFFFF;}
+	.st16{clip-path:url(#SVGID_00000047767502059549755950000017393369833165835950_);fill:#ADE1F0;}
+	.st17{clip-path:url(#SVGID_00000005227870222695419230000003154640548964700034_);fill:#65656A;}
+	.st18{clip-path:url(#SVGID_00000005227870222695419230000003154640548964700034_);fill:#646569;}
+	.st19{clip-path:url(#SVGID_00000005227870222695419230000003154640548964700034_);fill:#D0D0D2;}
+	.st20{clip-path:url(#SVGID_00000076564400652999620390000016789894493102091147_);fill:#FFFFFF;}
+	.st21{clip-path:url(#SVGID_00000076564400652999620390000016789894493102091147_);fill:#646569;}
+	.st22{clip-path:url(#SVGID_00000076564400652999620390000016789894493102091147_);fill:#65656A;}
+	
+		.st23{clip-path:url(#SVGID_00000183244811082410050640000012114318270144342705_);fill:#FFFFFF;stroke:#000000;stroke-miterlimit:10;}
+	.st24{clip-path:url(#SVGID_00000183244811082410050640000012114318270144342705_);fill:#646569;}
+	.st25{clip-path:url(#SVGID_00000183244811082410050640000012114318270144342705_);fill:#65656A;}
+	
+		.st26{clip-path:url(#SVGID_00000183244811082410050640000012114318270144342705_);fill:none;stroke:#65656A;stroke-width:0.1925;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st27{clip-path:url(#SVGID_00000018212733932270091610000014960506626695183268_);fill:#FFFFFF;}
+	.st28{clip-path:url(#SVGID_00000018212733932270091610000014960506626695183268_);fill:#65656A;}
+	.st29{clip-path:url(#SVGID_00000018212733932270091610000014960506626695183268_);fill:#646569;}
+	.st30{clip-path:url(#SVGID_00000171714050857531368210000000724911919143839406_);fill:#FFFFFF;}
+	.st31{clip-path:url(#SVGID_00000171714050857531368210000000724911919143839406_);fill:#646569;}
+	.st32{clip-path:url(#SVGID_00000122716798667593506800000003497920089564860552_);fill:#FFFFFF;}
+	.st33{clip-path:url(#SVGID_00000122716798667593506800000003497920089564860552_);fill:#65656A;}
+	.st34{clip-path:url(#SVGID_00000122716798667593506800000003497920089564860552_);fill:#646569;}
+	.st35{fill:#646569;}
+	.st36{clip-path:url(#SVGID_00000133486877182852886840000001437806980195895431_);fill:#FFFFFF;}
+	.st37{clip-path:url(#SVGID_00000133486877182852886840000001437806980195895431_);fill:#65666A;}
+	
+		.st38{clip-path:url(#SVGID_00000133486877182852886840000001437806980195895431_);fill:none;stroke:#65666A;stroke-width:0.1748;stroke-miterlimit:10;}
+	.st39{clip-path:url(#SVGID_00000094577910108319609410000008307349746546773157_);fill:#FFFFFF;}
+	.st40{clip-path:url(#SVGID_00000094577910108319609410000008307349746546773157_);fill:#646569;}
+	.st41{fill:none;stroke:#65656A;stroke-width:3;stroke-miterlimit:10;}
+	.st42{fill:#EC8020;}
+	.st43{fill:#ED8020;}
+	.st44{fill:none;stroke:#65656A;stroke-width:3;stroke-linecap:round;stroke-miterlimit:10;}
+	.st45{fill:none;stroke:#646569;stroke-width:10;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st46{fill:none;stroke:#646569;stroke-width:10;stroke-miterlimit:10;}
+	.st47{fill:none;stroke:#646569;stroke-width:10;stroke-linecap:round;stroke-miterlimit:10;}
+	.st48{fill:none;stroke:#65656A;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10;}
+	.st49{fill:#FFFFFF;stroke:#65656A;stroke-width:8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st50{fill:none;stroke:#65656A;stroke-width:8;stroke-miterlimit:10;}
+</style>
+<g id="Function_-_Central_APIs">
+</g>
+<g id="Function_-_Central_Route_Orchestrator">
+</g>
+<g id="Function_-_Central_Tunnel_Orchestrator">
+</g>
+<g id="Function_-_Central_NetConductor">
+</g>
+<g id="Function_-_Central_Network_Management">
+</g>
+<g id="Function_-_Central_Network_Insights">
+</g>
+<g id="Function_-_Central_Client_Insights">
+</g>
+<g id="Function_-_ClearPass_Policy_Manager">
+</g>
+<g id="Function_-_UXI_APIs">
+</g>
+<g id="Function_-_UXI_Dashboard">
+</g>
+<g id="Function_-_Orchestrator_Global_Enterprise">
+</g>
+<g id="Function_-_Orchestrator">
+</g>
+<g id="Function_-_Pensando_Policy_and_Services_Manager">
+</g>
+<g id="Function_-_Fabric_Composer">
+</g>
+<g id="Generic_-_Virtual_Machine">
+</g>
+<g id="Generic_-_Server_Single">
+</g>
+<g id="Generic_-_Server_Multi">
+</g>
+<g id="Generic_-_Router">
+</g>
+<g id="Generic_-_Firewall">
+</g>
+<g id="Wi-Fi_Signal">
+</g>
+<g id="Generic_-_Cloud_Function_Container_Grey">
+	<g>
+		<defs>
+			<rect id="SVGID_1_" x="8.8" y="87.6" width="482.5" height="324.9"/>
+		</defs>
+		<clipPath id="SVGID_00000061467642999184508360000004183315646794403517_">
+			<use xlink:href="#SVGID_1_"  style="overflow:visible;"/>
+		</clipPath>
+		<path style="clip-path:url(#SVGID_00000061467642999184508360000004183315646794403517_);fill:#5E5E5E;" d="M128.3,391.7
+			c-50.5,0-50.5,0-50.5,0c-38.3-1.1-68.9-30.6-68.9-67.1c0-37.2,31.8-67.2,71.2-67.2c4.8,0,9.5,0.4,14.2,1.4
+			c1.5-43.2,38.9-77.9,84.9-77.9c7.8,0,15.2,1.2,22.5,3c15.8-41.4,57.7-71.1,106.9-71.1c63,0,114,48.3,114,107.8
+			c0,3.9-0.3,7.8-0.8,11.7c39.6,6.9,69.6,39.6,69.6,79.1c0,44.4-38,80.5-84.9,80.6c-25.8,0-25.8,0-25.8,0L128.3,391.7z"/>
+	</g>
+</g>
+<g id="Generic_-_Cloud_Function_Container_White">
+</g>
+<g id="Generic_-_Cloud_Internet_Circuit">
+</g>
+<g id="Generic_-_Cloud_Private_Circuit">
+</g>
+<g id="Generic_-_Cloud">
+</g>
+<g id="Client_-_IOT_Sensor">
+</g>
+<g id="Client_-_IOT_IO">
+</g>
+<g id="Client_-_IOT_PLC">
+</g>
+<g id="Client_-_IOT_Patient_Monitor">
+</g>
+<g id="Client_-_IOT_Camera">
+</g>
+<g id="Client_-_IOT_Scanner">
+</g>
+<g id="IOT_-_TV_Cast">
+</g>
+<g id="Client_-_Printer">
+</g>
+<g id="Client_-_Game_Console">
+</g>
+<g id="Client_-_IP_Phone">
+</g>
+<g id="Client_-_Laptop">
+</g>
+<g id="Client_-_Desktop">
+</g>
+<g id="Client_-_Workstation">
+</g>
+<g id="Client_-_Tablet">
+</g>
+<g id="Client_-_Mobile_2">
+</g>
+<g id="Client_-_Mobile_1">
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Cloud">
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Virtual">
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Appliance">
+</g>
+<g id="Device_-_Core_Agg_Leaf_Switch">
+</g>
+<g id="Device_-_Access_Switch">
+</g>
+<g id="Device_-_Gateway_Headend">
+</g>
+<g id="Device_-_Gateway_Branch">
+</g>
+<g id="Device_-_Gateway_Campus">
+</g>
+<g id="Device_-_UXI_Sensor_New">
+</g>
+<g id="Device_-_UXI_Sensor">
+</g>
+<g id="Device_-_AP500_Series_Microbranch">
+</g>
+<g id="Device_-_AP600_Series">
+</g>
+<g id="Device_-_AP500_Series">
+</g>
+<g id="Device_-_Outdoor_AP">
+</g>
+</svg>

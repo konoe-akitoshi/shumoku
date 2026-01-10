@@ -11,6 +11,7 @@
   "dependencies": {
     "@pixi/react": "^8.0.5",
     "@shumoku/core": "workspace:*",
+    "@shumoku/icons": "workspace:*",
     "@shumoku/parser-yaml": "workspace:*",
     "js-yaml": "^4.1.0",
     "pixi.js": "^8.5.2",

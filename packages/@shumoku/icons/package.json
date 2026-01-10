@@ -1,0 +1,41 @@
+{
+  "name": "@shumoku/icons",
+  "version": "0.1.0",
+  "description": "Vendor-specific icons for Shumoku network diagrams",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:icons": "bun src/build-icons.ts",
+    "build": "bun run build:icons && tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "@shumoku/core": "workspace:*"
+  },
+  "keywords": [
+    "network",
+    "diagram",
+    "icons",
+    "aws",
+    "aruba",
+    "yamaha"
+  ],
+  "license": "MIT"
+}

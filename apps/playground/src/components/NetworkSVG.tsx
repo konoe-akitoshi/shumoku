@@ -58,13 +58,27 @@ export const NetworkSVG: React.FC<NetworkSVGProps> = ({
 
   // 初期表示時にビューをリセット
   useEffect(() => {
-    if (svgContent && layout) {
-      // 少し遅延させてコンテナサイズが確定してから
-      requestAnimationFrame(() => {
-        resetView()
-      })
+    if (svgContent && layout && containerRef.current) {
+      const container = containerRef.current
+      const containerWidth = container.clientWidth
+      const containerHeight = container.clientHeight
+
+      const svgWidth = layout.bounds.width
+      const svgHeight = layout.bounds.height
+
+      if (svgWidth > 0 && svgHeight > 0) {
+        const scaleX = containerWidth / svgWidth
+        const scaleY = containerHeight / svgHeight
+        const fitScale = Math.min(scaleX, scaleY) * 0.8
+
+        const centerX = (containerWidth - svgWidth * fitScale) / 2
+        const centerY = (containerHeight - svgHeight * fitScale) / 2
+
+        setScale(fitScale)
+        setPosition({ x: centerX, y: centerY })
+      }
     }
-  }, [svgContent, layout, resetView])
+  }, [svgContent, layout])
 
   // ホイールズーム（スクロールアップで拡大、ダウンで縮小）
   const handleWheel = useCallback(

@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 26.3.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 500 500" style="enable-background:new 0 0 500 500;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#FFFFFF;}
+	.st1{fill:#FF8300;}
+	.st2{fill:#F78200;}
+	.st3{fill:#F7931E;}
+	.st4{fill:#5D5D5D;}
+	.st5{fill:#FFFFFF;stroke:#65656A;stroke-width:12;stroke-miterlimit:10;}
+	.st6{display:none;fill:#979797;stroke:#979797;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st7{fill:#979797;}
+	.st8{fill:#65656A;}
+	.st9{stroke:#009245;stroke-width:3;stroke-miterlimit:10;}
+	.st10{fill:#F58220;}
+	.st11{clip-path:url(#SVGID_00000125592514746414317040000001016339095348211631_);fill:#5E5E5E;}
+	.st12{clip-path:url(#SVGID_00000165215860739859280280000003383603943327029899_);fill:#FFFFFF;}
+	.st13{clip-path:url(#SVGID_00000095340021697796011820000004371921943189586060_);fill:#FFFFFF;}
+	.st14{clip-path:url(#SVGID_00000095340021697796011820000004371921943189586060_);fill:#FF8300;}
+	.st15{clip-path:url(#SVGID_00000168114094866308797820000010765479188660726704_);fill:#FFFFFF;}
+	.st16{clip-path:url(#SVGID_00000168114094866308797820000010765479188660726704_);fill:#ADE1F0;}
+	.st17{clip-path:url(#SVGID_00000016053311202783076460000005239692129876625070_);fill:#65656A;}
+	.st18{clip-path:url(#SVGID_00000016053311202783076460000005239692129876625070_);fill:#646569;}
+	.st19{clip-path:url(#SVGID_00000016053311202783076460000005239692129876625070_);fill:#D0D0D2;}
+	.st20{clip-path:url(#SVGID_00000105427079243662079110000011433762113165020584_);fill:#FFFFFF;}
+	.st21{clip-path:url(#SVGID_00000105427079243662079110000011433762113165020584_);fill:#646569;}
+	.st22{clip-path:url(#SVGID_00000105427079243662079110000011433762113165020584_);fill:#65656A;}
+	
+		.st23{clip-path:url(#SVGID_00000025404723828140855130000014432524548476029114_);fill:#FFFFFF;stroke:#000000;stroke-miterlimit:10;}
+	.st24{clip-path:url(#SVGID_00000025404723828140855130000014432524548476029114_);fill:#646569;}
+	.st25{clip-path:url(#SVGID_00000025404723828140855130000014432524548476029114_);fill:#65656A;}
+	
+		.st26{clip-path:url(#SVGID_00000025404723828140855130000014432524548476029114_);fill:none;stroke:#65656A;stroke-width:0.1925;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st27{clip-path:url(#SVGID_00000081616894624078533720000013978169978498421421_);fill:#FFFFFF;}
+	.st28{clip-path:url(#SVGID_00000081616894624078533720000013978169978498421421_);fill:#65656A;}
+	.st29{clip-path:url(#SVGID_00000081616894624078533720000013978169978498421421_);fill:#646569;}
+	.st30{clip-path:url(#SVGID_00000156558882263006141510000004618488429116051647_);fill:#FFFFFF;}
+	.st31{clip-path:url(#SVGID_00000156558882263006141510000004618488429116051647_);fill:#646569;}
+	.st32{clip-path:url(#SVGID_00000026867036309457405440000007754133948818862771_);fill:#FFFFFF;}
+	.st33{clip-path:url(#SVGID_00000026867036309457405440000007754133948818862771_);fill:#65656A;}
+	.st34{clip-path:url(#SVGID_00000026867036309457405440000007754133948818862771_);fill:#646569;}
+	.st35{fill:#646569;}
+	.st36{clip-path:url(#SVGID_00000120550428582213371280000009827775965759548310_);fill:#FFFFFF;}
+	.st37{clip-path:url(#SVGID_00000120550428582213371280000009827775965759548310_);fill:#65666A;}
+	
+		.st38{clip-path:url(#SVGID_00000120550428582213371280000009827775965759548310_);fill:none;stroke:#65666A;stroke-width:0.1748;stroke-miterlimit:10;}
+	.st39{clip-path:url(#SVGID_00000031176598494589750700000017835652867738541742_);fill:#FFFFFF;}
+	.st40{clip-path:url(#SVGID_00000031176598494589750700000017835652867738541742_);fill:#646569;}
+	.st41{fill:none;stroke:#65656A;stroke-width:3;stroke-miterlimit:10;}
+	.st42{fill:#EC8020;}
+	.st43{fill:#ED8020;}
+	.st44{fill:none;stroke:#65656A;stroke-width:3;stroke-linecap:round;stroke-miterlimit:10;}
+	.st45{fill:none;stroke:#646569;stroke-width:10;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st46{fill:none;stroke:#646569;stroke-width:10;stroke-miterlimit:10;}
+	.st47{fill:none;stroke:#646569;stroke-width:10;stroke-linecap:round;stroke-miterlimit:10;}
+	.st48{fill:none;stroke:#65656A;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10;}
+	.st49{fill:#FFFFFF;stroke:#65656A;stroke-width:8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st50{fill:none;stroke:#65656A;stroke-width:8;stroke-miterlimit:10;}
+</style>
+<g id="Function_-_Central_APIs">
+</g>
+<g id="Function_-_Central_Route_Orchestrator">
+</g>
+<g id="Function_-_Central_Tunnel_Orchestrator">
+</g>
+<g id="Function_-_Central_NetConductor">
+</g>
+<g id="Function_-_Central_Network_Management">
+</g>
+<g id="Function_-_Central_Network_Insights">
+</g>
+<g id="Function_-_Central_Client_Insights">
+</g>
+<g id="Function_-_ClearPass_Policy_Manager">
+</g>
+<g id="Function_-_UXI_APIs">
+</g>
+<g id="Function_-_UXI_Dashboard">
+</g>
+<g id="Function_-_Orchestrator_Global_Enterprise">
+</g>
+<g id="Function_-_Orchestrator">
+</g>
+<g id="Function_-_Pensando_Policy_and_Services_Manager">
+</g>
+<g id="Function_-_Fabric_Composer">
+</g>
+<g id="Generic_-_Virtual_Machine">
+</g>
+<g id="Generic_-_Server_Single">
+</g>
+<g id="Generic_-_Server_Multi">
+</g>
+<g id="Generic_-_Router">
+</g>
+<g id="Generic_-_Firewall">
+</g>
+<g id="Wi-Fi_Signal">
+</g>
+<g id="Generic_-_Cloud_Function_Container_Grey">
+</g>
+<g id="Generic_-_Cloud_Function_Container_White">
+</g>
+<g id="Generic_-_Cloud_Internet_Circuit">
+</g>
+<g id="Generic_-_Cloud_Private_Circuit">
+</g>
+<g id="Generic_-_Cloud">
+</g>
+<g id="Client_-_IOT_Sensor">
+</g>
+<g id="Client_-_IOT_IO">
+</g>
+<g id="Client_-_IOT_PLC">
+</g>
+<g id="Client_-_IOT_Patient_Monitor">
+</g>
+<g id="Client_-_IOT_Camera">
+</g>
+<g id="Client_-_IOT_Scanner">
+</g>
+<g id="IOT_-_TV_Cast">
+</g>
+<g id="Client_-_Printer">
+</g>
+<g id="Client_-_Game_Console">
+</g>
+<g id="Client_-_IP_Phone">
+</g>
+<g id="Client_-_Laptop">
+</g>
+<g id="Client_-_Desktop">
+</g>
+<g id="Client_-_Workstation">
+</g>
+<g id="Client_-_Tablet">
+</g>
+<g id="Client_-_Mobile_2">
+</g>
+<g id="Client_-_Mobile_1">
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Cloud">
+	<g>
+		<rect x="19.3" y="91.2" class="st0" width="461.8" height="317"/>
+		<path class="st35" d="M26.1,402.1c447.8,0,447.8,0,447.8,0c0-304.3,0-304.3,0-304.3c-447.8,0-447.8,0-447.8,0V402.1z M482.6,419.6
+			c-465.2,0-465.2,0-465.2,0c-4.6,0-8.7-4.1-8.7-8.7c0-321.7,0-321.7,0-321.7c0-4.6,4.1-8.7,8.7-8.7c465.2,0,465.2,0,465.2,0
+			c5,0,8.7,4.1,8.7,8.7c0,321.7,0,321.7,0,321.7C491.3,415.4,487.6,419.6,482.6,419.6z"/>
+		<path class="st35" d="M118.5,253.7c-30.6,0-55.3,23.8-55.3,52.7c0,28.4,23.8,51.3,54,52.2c253.9,0,253.9,0,253.9,0
+			c36.6,0,65.9-28,65.9-62.8c0-27.5-19.2-52.2-47.1-60c-3.7-0.9-6.4-4.6-6.4-8.7c0-1.8,0-1.8,0-1.8c0-46.3-39.3-84.3-87.8-84.3
+			c-34.8,0-66.3,19.7-80.5,49.5c-1.4,3.2-5.5,5.5-9.1,4.6c-37-6-70,17.9-75.9,51.8c-0.5,4.1-4.6,7.3-8.7,6.9
+			C120.3,253.7,119.4,253.7,118.5,253.7z M371,376L371,376c-254.3,0-254.3,0-254.3,0c-39.8-0.9-70.9-31.6-70.9-69.7
+			c0-37.6,30.6-67.8,69.1-69.7c10.1-37.1,46.2-63.2,87.4-59.6c18.3-32.5,54.4-53.6,93.3-53.6c56.7,0,102.9,43.5,105.2,97.6
+			c32,11.9,53.5,41.7,53.5,74.7C454.2,339.8,416.7,376,371,376z"/>
+		<path class="st1" d="M261.2,193.6c77.3,117.8,77.3,117.8,77.3,117.8c3.7,6-0.5,13.3-7.3,13.3c-154.1,0-154.1,0-154.1,0
+			c-6.9,0-11-7.3-7.3-13.3C247,193.6,247,193.6,247,193.6C250.2,188.6,258,188.6,261.2,193.6z"/>
+	</g>
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Virtual">
+</g>
+<g id="Device_-_EdgeConnect_Enterprise_Appliance">
+</g>
+<g id="Device_-_Core_Agg_Leaf_Switch">
+</g>
+<g id="Device_-_Access_Switch">
+</g>
+<g id="Device_-_Gateway_Headend">
+</g>
+<g id="Device_-_Gateway_Branch">
+</g>
+<g id="Device_-_Gateway_Campus">
+</g>
+<g id="Device_-_UXI_Sensor_New">
+</g>
+<g id="Device_-_UXI_Sensor">
+</g>
+<g id="Device_-_AP500_Series_Microbranch">
+</g>
+<g id="Device_-_AP600_Series">
+</g>
+<g id="Device_-_AP500_Series">
+</g>
+<g id="Device_-_Outdoor_AP">
+</g>
+</svg>
