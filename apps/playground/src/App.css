@@ -452,3 +452,94 @@
 .docs-content a:hover {
   text-decoration: underline;
 }
+
+/* Network SVG Viewer */
+.network-svg-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.network-svg-container {
+  flex: 1;
+  overflow: hidden;
+  background: #f8fafc;
+  position: relative;
+  user-select: none;
+}
+
+.network-svg-container.network-svg-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.network-svg-content {
+  position: absolute;
+}
+
+.network-svg-content svg {
+  /* ベクター品質を維持 */
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+}
+
+/* Zoom Controls */
+.zoom-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.zoom-controls button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 500;
+  color: #475569;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.zoom-controls button:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.zoom-controls button:active {
+  background: #e2e8f0;
+}
+
+.zoom-controls .reset-btn {
+  font-size: 16px;
+  margin-left: 4px;
+  border-left: 1px solid #e2e8f0;
+  padding-left: 8px;
+  border-radius: 0 4px 4px 0;
+}
+
+.zoom-controls .zoom-level {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  min-width: 48px;
+  text-align: center;
+}
