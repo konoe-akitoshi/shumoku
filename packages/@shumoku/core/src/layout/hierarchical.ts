@@ -963,6 +963,7 @@ export class HierarchicalLayout {
         const defaultIconSize = 40
         const iconPadding = 16
         const maxIconWidth = this.options.nodeWidth - iconPadding
+
         const vendorIcon = iconEntry.default
         const viewBox = iconEntry.viewBox || '0 0 48 48'
 

@@ -24,6 +24,7 @@
     "@shumoku/core": "workspace:*"
   },
   "devDependencies": {
+    "sharp": "^0.33.5",
     "typescript": "^5.8.3"
   },
   "peerDependencies": {

@@ -6,12 +6,16 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import sharp from 'sharp'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const ICONS_DIR = path.join(__dirname)
 const OUTPUT_FILE = path.join(__dirname, 'generated-icons.ts')
+
+// Max width for resized PNG icons (height scales proportionally)
+const MAX_ICON_WIDTH = 400
 
 // Vendor icons with theme variants
 interface IconEntry {
@@ -50,18 +54,31 @@ function extractSvgContent(svgContent: string): SvgExtractResult {
   return { content, viewBox }
 }
 
-function getPngDimensions(buffer: Buffer): { width: number; height: number } {
-  const width = buffer.readUInt32BE(16)
-  const height = buffer.readUInt32BE(20)
-  return { width, height }
-}
+async function convertPngToOptimizedImageTag(filePath: string): Promise<string> {
+  // Read and get original dimensions
+  const image = sharp(filePath)
+  const metadata = await image.metadata()
+  const origWidth = metadata.width || 100
+  const origHeight = metadata.height || 100
 
-function convertPngToImageTag(filePath: string): string {
-  const buffer = fs.readFileSync(filePath)
-  const base64 = buffer.toString('base64')
-  const { width, height } = getPngDimensions(buffer)
+  // Calculate new dimensions (max width 400, maintain aspect ratio)
+  let newWidth = origWidth
+  let newHeight = origHeight
+  if (origWidth > MAX_ICON_WIDTH) {
+    newWidth = MAX_ICON_WIDTH
+    newHeight = Math.round((origHeight / origWidth) * MAX_ICON_WIDTH)
+  }
 
-  const normalizedWidth = Math.round((width / height) * 48)
+  // Resize and compress
+  const optimizedBuffer = await image
+    .resize(newWidth, newHeight, { fit: 'inside' })
+    .png({ compressionLevel: 9, palette: true })
+    .toBuffer()
+
+  const base64 = optimizedBuffer.toString('base64')
+
+  // Normalize for viewBox (height = 48)
+  const normalizedWidth = Math.round((newWidth / newHeight) * 48)
   const normalizedHeight = 48
 
   return `<svg viewBox="0 0 ${normalizedWidth} ${normalizedHeight}" width="100%" height="100%"><image href="data:image/png;base64,${base64}" width="${normalizedWidth}" height="${normalizedHeight}" preserveAspectRatio="xMidYMid meet"/></svg>`
@@ -125,7 +142,7 @@ function normalizeArubaIconName(filename: string): string {
   return name.toLowerCase().replace(/\s+/g, '-')
 }
 
-function scanVendorIconFolder(folderPath: string, vendorName: string): Record<string, IconEntry> {
+async function scanVendorIconFolder(folderPath: string, vendorName: string): Promise<Record<string, IconEntry>> {
   const icons: Record<string, IconEntry> = {}
 
   if (!fs.existsSync(folderPath)) {
@@ -151,8 +168,12 @@ function scanVendorIconFolder(folderPath: string, vendorName: string): Record<st
       const iconName = vendorName === 'aruba'
         ? normalizeArubaIconName(file)
         : file.replace('.png', '').toLowerCase()
-      const imageContent = convertPngToImageTag(filePath)
-      icons[iconName] = { default: imageContent }
+      try {
+        const imageContent = await convertPngToOptimizedImageTag(filePath)
+        icons[iconName] = { default: imageContent }
+      } catch (err) {
+        console.warn(`  Warning: Failed to process ${file}: ${err}`)
+      }
     }
   }
 
@@ -320,7 +341,7 @@ function generateTypeScript(iconSets: VendorIconSet[]): string {
   return lines.join('\n')
 }
 
-function main() {
+async function main() {
   console.log('Building vendor icons...')
 
   const iconSets: VendorIconSet[] = []
@@ -340,7 +361,7 @@ function main() {
         console.log(`  Found ${Object.keys(icons).length} AWS icons`)
       }
     } else {
-      const icons = scanVendorIconFolder(folderPath, entry.name)
+      const icons = await scanVendorIconFolder(folderPath, entry.name)
       if (Object.keys(icons).length > 0) {
         iconSets.push({ name: entry.name, icons })
         console.log(`  Found ${Object.keys(icons).length} ${entry.name} icons`)
