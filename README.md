@@ -6,39 +6,65 @@
 
 Modern network topology visualization library for TypeScript/JavaScript.
 
-**[Playground](https://shumoku.pages.dev)** | **[Documentation](https://shumoku.pages.dev/docs/yaml-reference)**
+[![npm version](https://img.shields.io/npm/v/shumoku.svg)](https://www.npmjs.com/package/shumoku)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**[Playground](https://shumoku.packof.me/)** | **[Documentation](https://shumoku.packof.me/docs/yaml-reference)**
 
 ## Features
 
 - **YAML-based definitions** - Simple, readable network topology definitions
 - **Automatic layout** - Hierarchical layout powered by ELK.js
-- **Vendor icons** - Built-in icons for Yamaha, Aruba, AWS (500+ icons)
+- **Vendor icons** - Built-in icons for Yamaha, Aruba, AWS, Juniper (900+ icons)
 - **SVG export** - High-quality vector output
-- **NetBox integration** - Auto-generate diagrams from NetBox
+- **TypeScript** - Full type safety
+
+## Installation
+
+```bash
+# Basic installation
+npm install shumoku
+
+# With vendor icons (Yamaha, Aruba, AWS, Juniper)
+npm install shumoku @shumoku/icons
+```
 
 ## Quick Start
 
-### Online Playground
+```typescript
+import { YamlParser, HierarchicalLayoutEngine, SvgRenderer } from 'shumoku'
 
-Try Shumoku without installation at [shumoku.pages.dev](https://shumoku.pages.dev)
+const yaml = `
+name: "Simple Network"
 
-### Local Development
+nodes:
+  - id: router
+    label: "Core Router"
+    type: router
 
-```bash
-# Clone the repository
-git clone https://github.com/konoe-akitoshi/shumoku.git
-cd shumoku
+  - id: switch
+    label: "Main Switch"
+    type: l2-switch
 
-# Install dependencies (requires Bun)
-bun install
+links:
+  - from: { node: router }
+    to: { node: switch }
+    bandwidth: 10G
+`
 
-# Build all packages
-bun run build
+const parser = new YamlParser()
+const graph = parser.parse(yaml)
 
-# Run playground
-cd apps/playground
-bun run dev
+const engine = new HierarchicalLayoutEngine()
+const layout = await engine.layout(graph)
+
+const renderer = new SvgRenderer()
+const svg = renderer.render(layout)
 ```
+
+## Online Playground
+
+Try Shumoku without installation at [shumoku.packof.me](https://shumoku.packof.me/)
 
 ## Example
 
@@ -78,31 +104,36 @@ links:
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| `@shumoku/core` | Core library (models, layout, renderer) |
-| `@shumoku/parser-yaml` | YAML parser for network definitions |
-| `@shumoku/netbox` | NetBox API integration |
-
-## Architecture
-
-```
-shumoku/
-├── packages/
-│   ├── @shumoku/core         # Core library
-│   ├── @shumoku/parser-yaml  # YAML parser
-│   └── @shumoku/netbox       # NetBox integration
-├── apps/
-│   └── playground            # Demo & documentation site
-└── docs/                     # Documentation source
-```
+| Package | Description | npm |
+|---------|-------------|-----|
+| [`shumoku`](packages/shumoku) | Main package (all-in-one) | [![npm](https://img.shields.io/npm/v/shumoku.svg)](https://www.npmjs.com/package/shumoku) |
+| [`@shumoku/core`](packages/@shumoku/core) | Core library (models, layout, renderer) | [![npm](https://img.shields.io/npm/v/@shumoku/core.svg)](https://www.npmjs.com/package/@shumoku/core) |
+| [`@shumoku/parser-yaml`](packages/@shumoku/parser-yaml) | YAML parser | [![npm](https://img.shields.io/npm/v/@shumoku/parser-yaml.svg)](https://www.npmjs.com/package/@shumoku/parser-yaml) |
+| [`@shumoku/icons`](packages/@shumoku/icons) | Vendor icons (Yamaha, Aruba, AWS, Juniper) | [![npm](https://img.shields.io/npm/v/@shumoku/icons.svg)](https://www.npmjs.com/package/@shumoku/icons) |
 
 ## Documentation
 
-- [YAML Reference](https://shumoku.pages.dev/docs/yaml-reference) - Full YAML syntax reference
-- [Vendor Icons](https://shumoku.pages.dev/docs/vendor-icons) - Available vendor icons
+- [YAML Reference](https://shumoku.packof.me/docs/yaml-reference) - Full YAML syntax reference
+- [Vendor Icons](https://shumoku.packof.me/docs/vendor-icons) - Available vendor icons
 
 ## Development
+
+```bash
+# Clone the repository
+git clone https://github.com/konoe-akitoshi/shumoku.git
+cd shumoku
+
+# Install dependencies (requires Bun)
+bun install
+
+# Build all packages
+bun run build
+
+# Run playground
+cd apps/playground && bun run dev
+```
+
+### Commands
 
 ```bash
 bun install           # Install dependencies
