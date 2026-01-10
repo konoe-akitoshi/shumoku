@@ -15,6 +15,9 @@ build
 .next
 .turbo
 
+# Generated files
+**/generated-icons.ts
+
 # Environment variables
 .env
 .env.local

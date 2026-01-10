@@ -245,10 +245,10 @@ export class YamlParser {
           opacity: n.style.opacity,
         } : undefined,
         metadata: n.metadata,
-        vendor: n.vendor,
-        service: n.service,
-        model: n.model,
-        resource: n.resource,
+        vendor: n.vendor?.toLowerCase(),
+        service: n.service?.toLowerCase(),
+        model: n.model?.toLowerCase(),
+        resource: n.resource?.toLowerCase(),
       }
     })
   }
@@ -367,10 +367,10 @@ export class YamlParser {
           nodeSpacing: s.style.nodeSpacing,
           rankSpacing: s.style.rankSpacing,
         } : undefined,
-        vendor: s.vendor,
-        service: s.service,
-        model: s.model,
-        resource: s.resource,
+        vendor: s.vendor?.toLowerCase(),
+        service: s.service?.toLowerCase(),
+        model: s.model?.toLowerCase(),
+        resource: s.resource?.toLowerCase(),
       }
     })
   }
