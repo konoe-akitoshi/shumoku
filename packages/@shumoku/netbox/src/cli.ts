@@ -11,6 +11,7 @@ import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { HierarchicalLayout } from '@shumoku/core/layout'
 import { SVGRenderer } from '@shumoku/core/renderer'
+import '@shumoku/icons' // Register vendor icons
 import { NetBoxClient } from './client.js'
 import { convertToNetworkGraph, toYaml } from './converter.js'
 import type { ConverterOptions } from './types.js'
