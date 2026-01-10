@@ -7,6 +7,7 @@ import yamlReference from '../../../../docs/yaml-reference.md?raw'
 import apiReference from '../../../../docs/api-reference.md?raw'
 import examples from '../../../../docs/examples.md?raw'
 import vendorIcons from '../../../../docs/vendor-icons.md?raw'
+import netbox from '../../../../docs/netbox.md?raw'
 
 const docs: Record<string, { title: string; content: string }> = {
   'getting-started': {
@@ -28,6 +29,10 @@ const docs: Record<string, { title: string; content: string }> = {
   'vendor-icons': {
     title: 'Vendor Icons',
     content: vendorIcons,
+  },
+  'netbox': {
+    title: 'NetBox Integration',
+    content: netbox,
   },
 }
 
@@ -85,6 +90,16 @@ export default function DocsPage() {
                 onClick={() => setActiveDoc('vendor-icons')}
               >
                 Vendor Icons
+              </Link>
+            </li>
+            <li className="nav-section">インテグレーション</li>
+            <li>
+              <Link
+                to="/docs/netbox"
+                className={activeDoc === 'netbox' ? 'active' : ''}
+                onClick={() => setActiveDoc('netbox')}
+              >
+                NetBox
               </Link>
             </li>
             <li className="nav-section">サンプル</li>

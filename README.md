@@ -18,6 +18,7 @@ Modern network topology visualization library for TypeScript/JavaScript.
 - **Vendor icons** - Built-in icons for Yamaha, Aruba, AWS, Juniper (900+ icons)
 - **SVG export** - High-quality vector output
 - **TypeScript** - Full type safety
+- **NetBox integration** - Auto-generate diagrams from NetBox
 
 ## Installation
 
@@ -110,6 +111,7 @@ links:
 | [`@shumoku/core`](packages/@shumoku/core) | Core library (models, layout, renderer) | [![npm](https://img.shields.io/npm/v/@shumoku/core.svg)](https://www.npmjs.com/package/@shumoku/core) |
 | [`@shumoku/parser-yaml`](packages/@shumoku/parser-yaml) | YAML parser | [![npm](https://img.shields.io/npm/v/@shumoku/parser-yaml.svg)](https://www.npmjs.com/package/@shumoku/parser-yaml) |
 | [`@shumoku/icons`](packages/@shumoku/icons) | Vendor icons (Yamaha, Aruba, AWS, Juniper) | [![npm](https://img.shields.io/npm/v/@shumoku/icons.svg)](https://www.npmjs.com/package/@shumoku/icons) |
+| [`@shumoku/netbox`](packages/@shumoku/netbox) | NetBox API integration | [![npm](https://img.shields.io/npm/v/@shumoku/netbox.svg)](https://www.npmjs.com/package/@shumoku/netbox) |
 
 ## Documentation
 

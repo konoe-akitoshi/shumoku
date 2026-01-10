@@ -58,6 +58,11 @@ export default function HomePage() {
             <h3>テーマ対応</h3>
             <p>ライト/ダークテーマ、カスタムテーマ</p>
           </div>
+          <div className="feature-card">
+            <div className="feature-icon">🔌</div>
+            <h3>NetBox 連携</h3>
+            <p>NetBox から自動でダイアグラム生成</p>
+          </div>
         </div>
       </section>
 
@@ -156,6 +161,15 @@ links:
           >
             <h3>@shumoku/icons</h3>
             <p>ベンダーアイコン（900+）</p>
+          </a>
+          <a
+            href="https://www.npmjs.com/package/@shumoku/netbox"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="package-card"
+          >
+            <h3>@shumoku/netbox</h3>
+            <p>NetBox 連携</p>
           </a>
         </div>
       </section>
