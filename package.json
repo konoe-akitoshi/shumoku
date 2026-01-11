@@ -27,9 +27,7 @@
     "typecheck": "turbo run typecheck",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo run build --filter='./packages/*' && changeset publish",
-    "build:cf": "cd apps/docs && bun run build:cf",
-    "deploy:docs": "cd apps/docs && bun run deploy"
+    "release": "turbo run build --filter='./packages/*' && changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
