@@ -1,10 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import type { LayoutResult } from '@shumoku/core/models'
-import { HierarchicalLayout } from '@shumoku/core/layout'
-import { SVGRenderer } from '@shumoku/core/renderer'
-import { parser } from '@shumoku/parser-yaml'
+import type { LayoutResult } from 'shumoku'
+import { HierarchicalLayout, SVGRenderer, parser } from 'shumoku'
 import { enterpriseNetwork, simpleNetwork } from '@/lib/sampleNetworks'
 import { cn } from '@/lib/cn'
 

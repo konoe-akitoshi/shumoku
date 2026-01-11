@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { vendorIconSets } from '@shumoku/icons'
+import { vendorIconSets } from 'shumoku'
 import { cn } from '@/lib/cn'
 
 type VendorKey = 'yamaha' | 'aruba' | 'juniper' | 'aws'

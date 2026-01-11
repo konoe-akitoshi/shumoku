@@ -12,9 +12,7 @@
     "format": "biome format --write"
   },
   "dependencies": {
-    "@shumoku/core": "workspace:*",
-    "@shumoku/parser-yaml": "workspace:*",
-    "@shumoku/icons": "workspace:*",
+    "shumoku": "workspace:*",
     "fumadocs-core": "16.4.6",
     "fumadocs-mdx": "14.2.4",
     "fumadocs-ui": "16.4.6",

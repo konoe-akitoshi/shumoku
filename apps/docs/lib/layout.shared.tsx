@@ -25,7 +25,7 @@ export function baseOptions(): BaseLayoutProps {
       title: navTitle,
     },
     links: navLinks,
-    githubUrl: 'https://github.com/akitoshi/shumoku',
+    githubUrl: 'https://github.com/konoe-akitoshi/shumoku',
   };
 }
 
@@ -35,6 +35,6 @@ export function docsOptions(): BaseLayoutProps {
     nav: {
       title: navTitle,
     },
-    githubUrl: 'https://github.com/akitoshi/shumoku',
+    githubUrl: 'https://github.com/konoe-akitoshi/shumoku',
   };
 }
