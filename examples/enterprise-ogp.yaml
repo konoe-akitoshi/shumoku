@@ -1,0 +1,313 @@
+# Enterprise Network - OGP Compact + Realistic
+name: "Enterprise Network"
+description: "Compact OGP: Shared handoff segments + logical HA pairs + DC/DMZ/Campus"
+
+settings:
+  direction: TB
+  theme: light
+  legend: false
+  nodeSpacing: 40
+  rankSpacing: 50
+
+subgraphs:
+  - id: cloud
+    label: "AWS Cloud"
+    vendor: aws
+    service: vpc
+    resource: virtual-private-cloud-vpc
+    style:
+      fill: "#FFF8E1"
+      stroke: "#FF8F00"
+      strokeDasharray: "5,5"
+
+  - id: internet
+    label: "Internet / ISP"
+    style:
+      fill: "#F5F5F5"
+      stroke: "#9E9E9E"
+
+  - id: edge
+    label: "Edge"
+    style:
+      fill: "#FFF5F5"
+      stroke: "#D4A017"
+      strokeWidth: 2
+
+  - id: security
+    label: "Security"
+    style:
+      fill: "#FEF2F2"
+      stroke: "#DC2626"
+      strokeWidth: 2
+
+  - id: dmz
+    label: "DMZ (VLAN100)"
+    style:
+      fill: "#FEFCE8"
+      stroke: "#CA8A04"
+
+  - id: datacenter
+    label: "Data Center"
+    style:
+      fill: "#E3F2FD"
+      stroke: "#1565C0"
+      strokeWidth: 2
+
+  - id: campus
+    label: "Campus"
+    style:
+      fill: "#F0FDF4"
+      stroke: "#22C55E"
+
+nodes:
+  # ===== Cloud =====
+  - id: cloud-services
+    label:
+      - "<b>Services VPC</b>"
+      - "172.16.0.0/16"
+    vendor: aws
+    service: ec2
+    resource: instances
+    parent: cloud
+
+  - id: vgw
+    label:
+      - "<b>VPN Gateway</b>"
+    vendor: aws
+    service: vpc
+    resource: vpn-gateway
+    parent: cloud
+
+  # ===== Internet / ISP =====
+  - id: isp
+    label: "<b>AS64496</b>"
+    type: internet
+    parent: internet
+
+  # ISP 回線終端装置
+  - id: onu
+    label: "<b>ONU</b>"
+    type: l2-switch
+    parent: edge
+
+  # ===== Edge (logical HA) =====
+  - id: edge-rt-ha
+    label:
+      - "<b>Edge Routers (VRRP)</b>"
+      - "RT1/RT2 : RTX3510"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: edge
+
+  # ===== Security (logical HA) =====
+  - id: fw-ha
+    label:
+      - "<b>Firewall HA</b>"
+      - "FW1/FW2 : SRX4600"
+    type: firewall
+    vendor: juniper
+    model: srx4600-ac
+    parent: security
+
+  # ===== DMZ =====
+  - id: dmz-sw
+    label:
+      - "<b>DMZ-SW</b>"
+      - "SWX2310-28GT"
+    type: l2-switch
+    vendor: yamaha
+    model: swx2310_28gt
+    parent: dmz
+
+  - id: web-srv
+    label:
+      - "<b>Web</b>"
+      - "10.100.10.10"
+    type: server
+    parent: dmz
+
+  # ===== Data Center =====
+  - id: core-sw
+    label:
+      - "<b>Core-SW</b>"
+      - "QFX5120"
+    type: l3-switch
+    vendor: juniper
+    model: qfx5120-48y
+    parent: datacenter
+
+  # VMware cluster is compacted to a single node (still keeps "what exists")
+  - id: vsphere
+    label:
+      - "<b>vSphere Cluster</b>"
+      - "2x ESXi + VMs"
+    type: server
+    parent: datacenter
+
+  - id: vm-app-01
+    label:
+      - "<b>vm-app-01</b>"
+      - "10.1.20.1 (VLAN200)"
+    type: server
+    parent: datacenter
+
+  - id: vm-db-01
+    label:
+      - "<b>vm-db-01</b>"
+      - "10.1.20.10 (VLAN300)"
+    type: database
+    parent: datacenter
+
+  # ===== Campus =====
+  - id: dist-sw
+    label:
+      - "<b>Dist-SW</b>"
+      - "EX4400"
+    type: l3-switch
+    vendor: juniper
+    model: ex4400-48p
+    parent: campus
+
+  - id: ap-01
+    label:
+      - "<b>AP-01</b>"
+      - "Aruba 500 Series"
+    type: access-point
+    vendor: aruba
+    model: ap500-series
+    parent: campus
+
+links:
+  # VPN Tunnel (Cloud to Edge HA)
+  - from:
+      node: vgw
+      port: tun0
+      ip: 169.254.100.1/30
+    to:
+      node: edge-rt-ha
+      port: tun0
+      ip: 169.254.100.2/30
+    type: dashed
+    label: "IPsec VPN"
+    style:
+      stroke: "#FF8F00"
+
+  # ISP to handoff
+  - from:
+      node: isp
+      port: ge-0/0/x
+    to:
+      node: onu
+      port: uplink
+    bandwidth: 1G
+    label: "PPPoE"
+
+  # Handoff to Router HA (represents RT1/RT2 dual uplinks)
+  - from:
+      node: onu
+      port: ge-1/0/1-2
+    to:
+      node: edge-rt-ha
+      port: "wan1 (RT1/RT2)"
+    bandwidth: 1G
+    label: "2x 1G (RT1/RT2)"
+
+  # Router HA to Firewall HA (shared outside segment)
+  - from:
+      node: edge-rt-ha
+      port: outside
+      ip: 10.0.1.0/29
+    to:
+      node: fw-ha
+      port: outside
+      ip: 10.0.1.0/29
+    bandwidth: 10G
+    label: "Outside (shared segment)"
+
+  # Firewall HA to Core (shared inside segment)
+  - from:
+      node: fw-ha
+      port: inside
+      ip: 10.0.2.0/29
+    to:
+      node: core-sw
+      port: xe-0/0/0-1
+      ip: 10.0.2.0/29
+    bandwidth: 10G
+    label: "Inside (shared segment)"
+
+  # Firewall to DMZ (VLAN100)
+  - from:
+      node: fw-ha
+      port: dmz
+      ip: 10.100.0.254/24
+    to:
+      node: dmz-sw
+      port: uplink
+    vlan: [100]
+    bandwidth: 10G
+
+  - from:
+      node: dmz-sw
+      port: eth1
+    to:
+      node: web-srv
+      port: eth0
+    vlan: [100]
+    bandwidth: 1G
+
+  # Core to vSphere (trunk)
+  - from:
+      node: core-sw
+      port: ge-0/0/1-2
+    to:
+      node: vsphere
+      port: vmnic0-1
+    bandwidth: 10G
+    vlan: [200, 300]
+    label: "Trunk VLAN200/300"
+
+  # Show VMs as logical (virtual) relations without drawing ESXi boxes
+  - from:
+      node: vsphere
+      port: vSwitch0
+    to:
+      node: vm-app-01
+      port: eth0
+    type: dashed
+    vlan: [200]
+    style:
+      stroke: "#7B1FA2"
+
+  - from:
+      node: vsphere
+      port: vSwitch0
+    to:
+      node: vm-db-01
+      port: eth0
+    type: dashed
+    vlan: [300]
+    style:
+      stroke: "#7B1FA2"
+
+  # Core to Campus
+  - from:
+      node: core-sw
+      port: ae0
+      ip: 10.2.0.254/24
+    to:
+      node: dist-sw
+      port: ae0
+      ip: 10.2.0.1/24
+    label: "LACP 40G"
+    bandwidth: 40G
+
+  - from:
+      node: dist-sw
+      port: eth1
+    to:
+      node: ap-01
+      port: eth0
+    vlan: [10]
+    bandwidth: 1G

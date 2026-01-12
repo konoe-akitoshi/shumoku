@@ -58,7 +58,7 @@ nodes:
       - "10.0.1.1"
     type: l3-switch
     vendor: juniper
-    model: ex4400
+    model: ex4400-48p
     parent: site-tokyo-dc
     rank: 1
 

@@ -58,6 +58,22 @@ nodes:
     resource: instance
 ```
 
+### サブグラフでのアイコン
+
+サブグラフにもベンダーアイコンを設定できます。
+
+```yaml
+subgraphs:
+  - id: cloud
+    label: "AWS Cloud"
+    vendor: aws
+    service: vpc
+    resource: virtual-private-cloud-vpc
+    style:
+      fill: "#FFF8E1"
+      stroke: "#FF8F00"
+```
+
 ## アイコン一覧
 
 <VendorIcons />
