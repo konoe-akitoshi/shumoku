@@ -294,15 +294,27 @@ export class HierarchicalLayout {
       if (portInfo && portInfo.all.size > 0) {
         elkNode.ports = []
 
+        // Calculate port spacing based on label width
+        const portSpacing = this.calculatePortSpacing(portInfo.all)
+
+        // Helper to calculate port positions centered in the node
+        const calcPortPositions = (count: number, totalWidth: number): number[] => {
+          if (count === 0) return []
+          if (count === 1) return [totalWidth / 2]
+          const totalSpan = (count - 1) * portSpacing
+          const startX = (totalWidth - totalSpan) / 2
+          return Array.from({ length: count }, (_, i) => startX + i * portSpacing)
+        }
+
         // Top ports (incoming)
         const topPorts = Array.from(portInfo.top)
+        const topPositions = calcPortPositions(topPorts.length, width)
         topPorts.forEach((portName, i) => {
-          const portX = (width / (topPorts.length + 1)) * (i + 1)
           elkNode.ports!.push({
             id: `${node.id}:${portName}`,
             width: PORT_WIDTH,
             height: PORT_HEIGHT,
-            x: portX - PORT_WIDTH / 2,
+            x: topPositions[i] - PORT_WIDTH / 2,
             y: 0,
             labels: [{ text: portName }],
             layoutOptions: { 'elk.port.side': 'NORTH' },
@@ -311,13 +323,13 @@ export class HierarchicalLayout {
 
         // Bottom ports (outgoing)
         const bottomPorts = Array.from(portInfo.bottom)
+        const bottomPositions = calcPortPositions(bottomPorts.length, width)
         bottomPorts.forEach((portName, i) => {
-          const portX = (width / (bottomPorts.length + 1)) * (i + 1)
           elkNode.ports!.push({
             id: `${node.id}:${portName}`,
             width: PORT_WIDTH,
             height: PORT_HEIGHT,
-            x: portX - PORT_WIDTH / 2,
+            x: bottomPositions[i] - PORT_WIDTH / 2,
             y: height - PORT_HEIGHT,
             labels: [{ text: portName }],
             layoutOptions: { 'elk.port.side': 'SOUTH' },
@@ -326,14 +338,14 @@ export class HierarchicalLayout {
 
         // Left ports (HA)
         const leftPorts = Array.from(portInfo.left)
+        const leftPositions = calcPortPositions(leftPorts.length, height)
         leftPorts.forEach((portName, i) => {
-          const portY = (height / (leftPorts.length + 1)) * (i + 1)
           elkNode.ports!.push({
             id: `${node.id}:${portName}`,
             width: PORT_WIDTH,
             height: PORT_HEIGHT,
             x: 0,
-            y: portY - PORT_HEIGHT / 2,
+            y: leftPositions[i] - PORT_HEIGHT / 2,
             labels: [{ text: portName }],
             layoutOptions: { 'elk.port.side': 'WEST' },
           })
@@ -341,20 +353,23 @@ export class HierarchicalLayout {
 
         // Right ports (HA)
         const rightPorts = Array.from(portInfo.right)
+        const rightPositions = calcPortPositions(rightPorts.length, height)
         rightPorts.forEach((portName, i) => {
-          const portY = (height / (rightPorts.length + 1)) * (i + 1)
           elkNode.ports!.push({
             id: `${node.id}:${portName}`,
             width: PORT_WIDTH,
             height: PORT_HEIGHT,
             x: width - PORT_WIDTH,
-            y: portY - PORT_HEIGHT / 2,
+            y: rightPositions[i] - PORT_HEIGHT / 2,
             labels: [{ text: portName }],
             layoutOptions: { 'elk.port.side': 'EAST' },
           })
         })
 
-        elkNode.layoutOptions = { 'elk.portConstraints': 'FIXED_SIDE' }
+        elkNode.layoutOptions = {
+          'elk.portConstraints': 'FIXED_POS',
+          'elk.spacing.portPort': String(MIN_PORT_SPACING),
+        }
       }
 
       return elkNode
@@ -696,14 +711,23 @@ export class HierarchicalLayout {
             const relX = portCenterX - nodeCenterX
             const relY = portCenterY - nodeCenterY
 
-            // Determine side based on relative position
+            // Determine side based on which edge the port is closest to
+            // Use node boundaries, not relative distance from center
+            const distToTop = Math.abs(portCenterY - y)
+            const distToBottom = Math.abs(portCenterY - (y + nodeHeight))
+            const distToLeft = Math.abs(portCenterX - x)
+            const distToRight = Math.abs(portCenterX - (x + width))
+
+            const minDist = Math.min(distToTop, distToBottom, distToLeft, distToRight)
             let side: 'top' | 'bottom' | 'left' | 'right' = 'bottom'
-            const absRelX = Math.abs(relX)
-            const absRelY = Math.abs(relY)
-            if (absRelX > absRelY) {
-              side = relX < 0 ? 'left' : 'right'
+            if (minDist === distToTop) {
+              side = 'top'
+            } else if (minDist === distToBottom) {
+              side = 'bottom'
+            } else if (minDist === distToLeft) {
+              side = 'left'
             } else {
-              side = relY < 0 ? 'top' : 'bottom'
+              side = 'right'
             }
 
             const portName = elkPort.id.includes(':') ? elkPort.id.split(':').slice(1).join(':') : elkPort.id

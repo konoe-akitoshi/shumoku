@@ -17,7 +17,7 @@ export const NODE_VERTICAL_PADDING = 16
 export const NODE_HORIZONTAL_PADDING = 16
 
 /** Minimum spacing between ports in pixels (fallback when no labels) */
-export const MIN_PORT_SPACING = 32
+export const MIN_PORT_SPACING = 48
 
 /** Port label font size in pixels */
 export const PORT_LABEL_FONT_SIZE = 9
@@ -26,7 +26,7 @@ export const PORT_LABEL_FONT_SIZE = 9
 export const CHAR_WIDTH_RATIO = 0.55
 
 /** Padding around port label for spacing calculation */
-export const PORT_LABEL_PADDING = 8
+export const PORT_LABEL_PADDING = 16
 
 /** Maximum icon width as percentage of node width (0.0 - 1.0) */
 export const MAX_ICON_WIDTH_RATIO = 0.6
