@@ -55,6 +55,8 @@ interface NodePortInfo {
   all: Set<string>
   top: Set<string>
   bottom: Set<string>
+  left: Set<string>
+  right: Set<string>
 }
 
 // ============================================
@@ -69,30 +71,53 @@ function toEndpoint(endpoint: string | LinkEndpoint): LinkEndpoint {
 }
 
 /** Collect ports for each node from links */
-function collectNodePorts(graph: NetworkGraph): Map<string, NodePortInfo> {
+function collectNodePorts(
+  graph: NetworkGraph,
+  haPairSet: Set<string>
+): Map<string, NodePortInfo> {
   const nodePorts = new Map<string, NodePortInfo>()
 
   const getOrCreate = (nodeId: string): NodePortInfo => {
     if (!nodePorts.has(nodeId)) {
-      nodePorts.set(nodeId, { all: new Set(), top: new Set(), bottom: new Set() })
+      nodePorts.set(nodeId, { all: new Set(), top: new Set(), bottom: new Set(), left: new Set(), right: new Set() })
     }
     return nodePorts.get(nodeId)!
+  }
+
+  // Check if link is between HA pair nodes
+  const isHALink = (fromNode: string, toNode: string): boolean => {
+    const key = [fromNode, toNode].sort().join(':')
+    return haPairSet.has(key)
   }
 
   for (const link of graph.links) {
     const from = toEndpoint(link.from)
     const to = toEndpoint(link.to)
 
-    if (from.port) {
-      const info = getOrCreate(from.node)
-      info.all.add(from.port)
-      info.bottom.add(from.port) // Outgoing → bottom
-    }
+    if (link.redundancy && isHALink(from.node, to.node)) {
+      // HA links: create side ports (left/right)
+      const fromPortName = from.port || 'ha'
+      const toPortName = to.port || 'ha'
 
-    if (to.port) {
-      const info = getOrCreate(to.node)
-      info.all.add(to.port)
-      info.top.add(to.port) // Incoming → top
+      const fromInfo = getOrCreate(from.node)
+      fromInfo.all.add(fromPortName)
+      fromInfo.right.add(fromPortName)
+
+      const toInfo = getOrCreate(to.node)
+      toInfo.all.add(toPortName)
+      toInfo.left.add(toPortName)
+    } else {
+      // Normal links: ports on top/bottom
+      if (from.port) {
+        const info = getOrCreate(from.node)
+        info.all.add(from.port)
+        info.bottom.add(from.port)
+      }
+      if (to.port) {
+        const info = getOrCreate(to.node)
+        info.all.add(to.port)
+        info.top.add(to.port)
+      }
     }
   }
 
@@ -195,10 +220,18 @@ export class HierarchicalLayout {
   async layoutAsync(graph: NetworkGraph): Promise<LayoutResult> {
     const startTime = performance.now()
     const options = this.getEffectiveOptions(graph)
-    const nodePorts = collectNodePorts(graph)
+
+    // Detect HA pairs first (needed for port assignment)
+    const haPairs = this.detectHAPairs(graph)
+    const haPairSet = new Set<string>()
+    for (const pair of haPairs) {
+      haPairSet.add([pair.nodeA, pair.nodeB].sort().join(':'))
+    }
+
+    const nodePorts = collectNodePorts(graph, haPairSet)
 
     // Build ELK graph
-    const elkGraph = this.buildElkGraph(graph, options, nodePorts)
+    const elkGraph = this.buildElkGraph(graph, options, nodePorts, haPairs)
 
     // Run ELK layout
     const layoutedGraph = await this.elk.layout(elkGraph)
@@ -215,12 +248,13 @@ export class HierarchicalLayout {
   }
 
   /**
-   * Build ELK graph - simple version without HA merging
+   * Build ELK graph - uses container nodes for HA pairs
    */
   private buildElkGraph(
     graph: NetworkGraph,
     options: Required<HierarchicalLayoutOptions>,
-    nodePorts: Map<string, NodePortInfo>
+    nodePorts: Map<string, NodePortInfo>,
+    haPairs: { nodeA: string; nodeB: string }[]
   ): ElkNode {
     const elkDirection = this.toElkDirection(options.direction)
 
@@ -232,12 +266,14 @@ export class HierarchicalLayout {
       }
     }
 
-    // Detect HA pairs for constraints
-    const haPairs = this.detectHAPairs(graph)
-    const haPartitions = new Map<string, number>()
+    // Build HA container map: node ID -> container ID
+    const nodeToHAContainer = new Map<string, string>()
+    const haPairMap = new Map<string, { nodeA: string; nodeB: string }>()
     haPairs.forEach((pair, idx) => {
-      haPartitions.set(pair.nodeA, idx)
-      haPartitions.set(pair.nodeB, idx)
+      const containerId = `__ha_container_${idx}`
+      nodeToHAContainer.set(pair.nodeA, containerId)
+      nodeToHAContainer.set(pair.nodeB, containerId)
+      haPairMap.set(containerId, pair)
     })
 
     // Create ELK node
@@ -258,7 +294,7 @@ export class HierarchicalLayout {
       if (portInfo && portInfo.all.size > 0) {
         elkNode.ports = []
 
-        // Top ports (incoming) - at node top edge
+        // Top ports (incoming)
         const topPorts = Array.from(portInfo.top)
         topPorts.forEach((portName, i) => {
           const portX = (width / (topPorts.length + 1)) * (i + 1)
@@ -269,13 +305,11 @@ export class HierarchicalLayout {
             x: portX - PORT_WIDTH / 2,
             y: 0,
             labels: [{ text: portName }],
-            layoutOptions: {
-              'elk.port.side': 'NORTH',
-            },
+            layoutOptions: { 'elk.port.side': 'NORTH' },
           })
         })
 
-        // Bottom ports (outgoing) - at node bottom edge
+        // Bottom ports (outgoing)
         const bottomPorts = Array.from(portInfo.bottom)
         bottomPorts.forEach((portName, i) => {
           const portX = (width / (bottomPorts.length + 1)) * (i + 1)
@@ -286,44 +320,124 @@ export class HierarchicalLayout {
             x: portX - PORT_WIDTH / 2,
             y: height - PORT_HEIGHT,
             labels: [{ text: portName }],
-            layoutOptions: {
-              'elk.port.side': 'SOUTH',
-            },
+            layoutOptions: { 'elk.port.side': 'SOUTH' },
           })
         })
 
-        elkNode.layoutOptions = {
-          'elk.portConstraints': 'FIXED_SIDE',
-        }
-      }
+        // Left ports (HA)
+        const leftPorts = Array.from(portInfo.left)
+        leftPorts.forEach((portName, i) => {
+          const portY = (height / (leftPorts.length + 1)) * (i + 1)
+          elkNode.ports!.push({
+            id: `${node.id}:${portName}`,
+            width: PORT_WIDTH,
+            height: PORT_HEIGHT,
+            x: 0,
+            y: portY - PORT_HEIGHT / 2,
+            labels: [{ text: portName }],
+            layoutOptions: { 'elk.port.side': 'WEST' },
+          })
+        })
 
-      // HA constraint - keep pairs in same partition
-      const partition = haPartitions.get(node.id)
-      if (partition !== undefined) {
-        elkNode.layoutOptions = {
-          ...elkNode.layoutOptions,
-          'elk.partitioning.partition': String(partition),
-        }
+        // Right ports (HA)
+        const rightPorts = Array.from(portInfo.right)
+        rightPorts.forEach((portName, i) => {
+          const portY = (height / (rightPorts.length + 1)) * (i + 1)
+          elkNode.ports!.push({
+            id: `${node.id}:${portName}`,
+            width: PORT_WIDTH,
+            height: PORT_HEIGHT,
+            x: width - PORT_WIDTH,
+            y: portY - PORT_HEIGHT / 2,
+            labels: [{ text: portName }],
+            layoutOptions: { 'elk.port.side': 'EAST' },
+          })
+        })
+
+        elkNode.layoutOptions = { 'elk.portConstraints': 'FIXED_SIDE' }
       }
 
       return elkNode
     }
 
-    // Create ELK subgraph node recursively (edges added after edgesByContainer is built)
+    // Create HA container node
+    const createHAContainerNode = (containerId: string, pair: { nodeA: string; nodeB: string }): ElkNode | null => {
+      const nodeA = graph.nodes.find(n => n.id === pair.nodeA)
+      const nodeB = graph.nodes.find(n => n.id === pair.nodeB)
+      if (!nodeA || !nodeB) return null
+
+      const childA = createElkNode(nodeA)
+      const childB = createElkNode(nodeB)
+
+      // Find HA link
+      const haLink = graph.links.find(link => {
+        if (!link.redundancy) return false
+        const from = toEndpoint(link.from)
+        const to = toEndpoint(link.to)
+        const key = [from.node, to.node].sort().join(':')
+        const pairKey = [pair.nodeA, pair.nodeB].sort().join(':')
+        return key === pairKey
+      })
+
+      // Create internal HA edge
+      const haEdges: ElkExtendedEdge[] = []
+      if (haLink) {
+        const from = toEndpoint(haLink.from)
+        const to = toEndpoint(haLink.to)
+        const fromPortName = from.port || 'ha'
+        const toPortName = to.port || 'ha'
+        haEdges.push({
+          id: haLink.id || `ha-edge-${containerId}`,
+          sources: [`${from.node}:${fromPortName}`],
+          targets: [`${to.node}:${toPortName}`],
+        })
+      }
+
+      return {
+        id: containerId,
+        children: [childA, childB],
+        edges: haEdges,
+        layoutOptions: {
+          'elk.algorithm': 'layered',
+          'elk.direction': 'RIGHT',
+          'elk.spacing.nodeNode': '40',
+          'elk.padding': '[top=0,left=0,bottom=0,right=0]',
+          'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+          'elk.edgeRouting': 'POLYLINE',
+          'org.eclipse.elk.json.edgeCoords': 'ROOT',
+          'org.eclipse.elk.json.shapeCoords': 'ROOT',
+        },
+      }
+    }
+
+    // Track added HA containers
+    const addedHAContainers = new Set<string>()
+
+    // Create ELK subgraph node recursively
     const createSubgraphNode = (subgraph: Subgraph, edgesByContainer: Map<string, ElkExtendedEdge[]>): ElkNode => {
       const childNodes: ElkNode[] = []
 
-      // Add child subgraphs
       for (const childSg of subgraphMap.values()) {
         if (childSg.parent === subgraph.id) {
           childNodes.push(createSubgraphNode(childSg, edgesByContainer))
         }
       }
 
-      // Add nodes in this subgraph
       for (const node of graph.nodes) {
         if (node.parent === subgraph.id) {
-          childNodes.push(createElkNode(node))
+          const containerId = nodeToHAContainer.get(node.id)
+          if (containerId) {
+            if (!addedHAContainers.has(containerId)) {
+              addedHAContainers.add(containerId)
+              const pair = haPairMap.get(containerId)
+              if (pair) {
+                const containerNode = createHAContainerNode(containerId, pair)
+                if (containerNode) childNodes.push(containerNode)
+              }
+            }
+          } else {
+            childNodes.push(createElkNode(node))
+          }
         }
       }
 
@@ -341,21 +455,31 @@ export class HierarchicalLayout {
       }
     }
 
-    // Build root children (after edgesByContainer is populated)
+    // Build root children
     const buildRootChildren = (edgesByContainer: Map<string, ElkExtendedEdge[]>): ElkNode[] => {
       const children: ElkNode[] = []
 
-      // Add root-level subgraphs
       for (const sg of subgraphMap.values()) {
         if (!sg.parent || !subgraphMap.has(sg.parent)) {
           children.push(createSubgraphNode(sg, edgesByContainer))
         }
       }
 
-      // Add root-level nodes
       for (const node of graph.nodes) {
         if (!node.parent || !subgraphMap.has(node.parent)) {
-          children.push(createElkNode(node))
+          const containerId = nodeToHAContainer.get(node.id)
+          if (containerId) {
+            if (!addedHAContainers.has(containerId)) {
+              addedHAContainers.add(containerId)
+              const pair = haPairMap.get(containerId)
+              if (pair) {
+                const containerNode = createHAContainerNode(containerId, pair)
+                if (containerNode) children.push(containerNode)
+              }
+            }
+          } else {
+            children.push(createElkNode(node))
+          }
         }
       }
 
@@ -388,9 +512,20 @@ export class HierarchicalLayout {
       return undefined // root
     }
 
-    // Group edges by their LCA container
+    // Build HA pair set for quick lookup
+    const haPairSet = new Set<string>()
+    for (const pair of haPairs) {
+      haPairSet.add([pair.nodeA, pair.nodeB].sort().join(':'))
+    }
+
+    const isHALink = (fromNode: string, toNode: string): boolean => {
+      const key = [fromNode, toNode].sort().join(':')
+      return haPairSet.has(key)
+    }
+
+    // Group edges by their LCA container (skip HA links - they're in containers)
     const edgesByContainer = new Map<string, ElkExtendedEdge[]>()
-    edgesByContainer.set('root', []) // root edges
+    edgesByContainer.set('root', [])
 
     for (const sg of subgraphMap.values()) {
       edgesByContainer.set(sg.id, [])
@@ -399,6 +534,11 @@ export class HierarchicalLayout {
     graph.links.forEach((link, index) => {
       const from = toEndpoint(link.from)
       const to = toEndpoint(link.to)
+
+      // Skip HA links (they're inside HA containers)
+      if (link.redundancy && isHALink(from.node, to.node)) {
+        return
+      }
 
       const sourceId = from.port ? `${from.node}:${from.port}` : from.node
       const targetId = to.port ? `${to.node}:${to.port}` : to.node
@@ -426,7 +566,6 @@ export class HierarchicalLayout {
 
       // Find LCA and place edge in appropriate container
       const lca = findLCA(from.node, to.node)
-      // If LCA is one of the nodes themselves, use parent of LCA
       let container = lca
       if (container === from.node || container === to.node) {
         container = nodeParentMap.get(container)
@@ -454,9 +593,7 @@ export class HierarchicalLayout {
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-      // Enable partitioning for HA pairs
-      'elk.partitioning.activate': haPairs.length > 0 ? 'true' : 'false',
-      // Use ROOT coordinate system - all coordinates are absolute (no container-relative offsets needed)
+      // Use ROOT coordinate system
       'org.eclipse.elk.json.edgeCoords': 'ROOT',
       'org.eclipse.elk.json.shapeCoords': 'ROOT',
     }
@@ -521,6 +658,13 @@ export class HierarchicalLayout {
             processElkNode(child)
           }
         }
+      } else if (elkNode.id.startsWith('__ha_container_')) {
+        // HA container - process children
+        if (elkNode.children) {
+          for (const child of elkNode.children) {
+            processElkNode(child)
+          }
+        }
       } else if (nodeMap.has(elkNode.id)) {
         // Regular node
         const node = nodeMap.get(elkNode.id)!
@@ -535,10 +679,8 @@ export class HierarchicalLayout {
         }
 
         // Extract port positions from ELK
-        // With shapeCoords=ROOT, port coordinates are absolute
         if (elkNode.ports && elkNode.ports.length > 0) {
           layoutNode.ports = new Map()
-          // Node center (absolute)
           const nodeCenterX = x + width / 2
           const nodeCenterY = y + nodeHeight / 2
 
@@ -548,18 +690,20 @@ export class HierarchicalLayout {
             const portW = elkPort.width ?? PORT_WIDTH
             const portH = elkPort.height ?? PORT_HEIGHT
 
-            // Port center (absolute with shapeCoords=ROOT)
             const portCenterX = portX + portW / 2
             const portCenterY = portY + portH / 2
 
-            // Position relative to node center
             const relX = portCenterX - nodeCenterX
             const relY = portCenterY - nodeCenterY
 
-            // Determine side based on relative Y position
+            // Determine side based on relative position
             let side: 'top' | 'bottom' | 'left' | 'right' = 'bottom'
-            if (relY < 0) {
-              side = 'top'
+            const absRelX = Math.abs(relX)
+            const absRelY = Math.abs(relY)
+            if (absRelX > absRelY) {
+              side = relX < 0 ? 'left' : 'right'
+            } else {
+              side = relY < 0 ? 'top' : 'bottom'
             }
 
             const portName = elkPort.id.includes(':') ? elkPort.id.split(':').slice(1).join(':') : elkPort.id
@@ -594,6 +738,9 @@ export class HierarchicalLayout {
     // Track processed edges to prevent duplicates
     const processedEdgeIds = new Set<string>()
 
+    // Check if container is an HA container
+    const isHAContainer = (id: string) => id.startsWith('__ha_container_')
+
     // Process edges from a container
     // With edgeCoords=ROOT, all edge coordinates are absolute (no offset needed)
     const processEdgesInContainer = (container: ElkNode) => {
@@ -618,38 +765,54 @@ export class HierarchicalLayout {
 
           let points: Position[] = []
 
-          // Node boundary Y coordinates (our nodes use center-based position)
-          const fromBottomY = fromNode.position.y + fromNode.size.height / 2
-          const toTopY = toNode.position.y - toNode.size.height / 2
-
-          // Use ELK sections with bendPoints (coordinates are absolute with edgeCoords=ROOT)
-          if (elkEdge.sections && elkEdge.sections.length > 0) {
+          // HA edges inside HA containers: use ELK's edge routing directly
+          if (isHAContainer(container.id) && elkEdge.sections && elkEdge.sections.length > 0) {
             const section = elkEdge.sections[0]
-
-            // Start point: use ELK's X, snap Y to node bottom boundary
-            points.push({
-              x: section.startPoint.x,
-              y: fromBottomY,
-            })
-
-            // Add all bendPoints from ELK (absolute coordinates)
+            points.push({ x: section.startPoint.x, y: section.startPoint.y })
             if (section.bendPoints) {
               for (const bp of section.bendPoints) {
                 points.push({ x: bp.x, y: bp.y })
               }
             }
+            points.push({ x: section.endPoint.x, y: section.endPoint.y })
+          } else if (!isHAContainer(container.id)) {
+            // Normal vertical edges
+            const fromBottomY = fromNode.position.y + fromNode.size.height / 2
+            const toTopY = toNode.position.y - toNode.size.height / 2
 
-            // End point: use ELK's X, snap Y to node top boundary
-            points.push({
-              x: section.endPoint.x,
-              y: toTopY,
-            })
+            if (elkEdge.sections && elkEdge.sections.length > 0) {
+              const section = elkEdge.sections[0]
+
+              points.push({
+                x: section.startPoint.x,
+                y: fromBottomY,
+              })
+
+              if (section.bendPoints) {
+                for (const bp of section.bendPoints) {
+                  points.push({ x: bp.x, y: bp.y })
+                }
+              }
+
+              points.push({
+                x: section.endPoint.x,
+                y: toTopY,
+              })
+            } else {
+              points = this.generateOrthogonalPath(
+                { x: fromNode.position.x, y: fromBottomY },
+                { x: toNode.position.x, y: toTopY }
+              )
+            }
           } else {
-            // Fallback: generate orthogonal path from node boundaries
-            points = this.generateOrthogonalPath(
-              { x: fromNode.position.x, y: fromBottomY },
-              { x: toNode.position.x, y: toTopY }
-            )
+            // HA edge fallback: simple horizontal line
+            const leftNode = fromNode.position.x < toNode.position.x ? fromNode : toNode
+            const rightNode = fromNode.position.x < toNode.position.x ? toNode : fromNode
+            const y = (leftNode.position.y + rightNode.position.y) / 2
+            points = [
+              { x: leftNode.position.x + leftNode.size.width / 2, y },
+              { x: rightNode.position.x - rightNode.size.width / 2, y },
+            ]
           }
 
           layoutLinks.set(id, {
@@ -664,10 +827,10 @@ export class HierarchicalLayout {
         }
       }
 
-      // Recursively process child containers (subgraphs)
+      // Recursively process child containers (subgraphs and HA containers)
       if (container.children) {
         for (const child of container.children) {
-          if (subgraphMap.has(child.id)) {
+          if (subgraphMap.has(child.id) || child.id.startsWith('__ha_container_')) {
             processEdgesInContainer(child)
           }
         }
@@ -919,7 +1082,14 @@ export class HierarchicalLayout {
     const layoutNodes = new Map<string, LayoutNode>()
     const layoutSubgraphs = new Map<string, LayoutSubgraph>()
     const layoutLinks = new Map<string, LayoutLink>()
-    const nodePorts = collectNodePorts(graph)
+
+    // Detect HA pairs for port assignment
+    const haPairs = this.detectHAPairs(graph)
+    const haPairSet = new Set<string>()
+    for (const pair of haPairs) {
+      haPairSet.add([pair.nodeA, pair.nodeB].sort().join(':'))
+    }
+    const nodePorts = collectNodePorts(graph, haPairSet)
 
     let x = 100, y = 100, col = 0
     const maxCols = 4
