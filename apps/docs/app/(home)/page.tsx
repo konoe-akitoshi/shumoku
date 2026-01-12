@@ -12,118 +12,124 @@ export default function HomePage() {
   return (
     <main className="flex-1">
       {/* Hero Section */}
-      <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
+      <section className="relative h-[85vh] max-h-[900px] overflow-hidden">
         {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-emerald-50 via-white to-white dark:from-emerald-950/20 dark:via-neutral-950 dark:to-neutral-950" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(127,228,193,0.2),transparent_60%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(127,228,193,0.1),transparent_60%)]" />
+        <div className="absolute inset-0 bg-white dark:bg-neutral-950" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_80%_at_60%_-30%,rgba(127,228,193,0.3),transparent)] dark:bg-[radial-gradient(ellipse_100%_80%_at_60%_-30%,rgba(127,228,193,0.15),transparent)]" />
 
-        {/* Content */}
-        <div className="relative z-10 max-w-6xl mx-auto px-6 py-20 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-sm font-medium mb-8">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            900+ vendor icons
-          </div>
-
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
-            <span className="text-neutral-900 dark:text-white">Network diagrams,</span>
-            <br />
-            <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
-              as code.
-            </span>
-          </h1>
-
-          <p className="text-xl md:text-2xl text-neutral-600 dark:text-neutral-400 max-w-2xl mx-auto mb-10 font-light leading-relaxed">
-            YAML でネットワーク構成を定義し、<br className="hidden md:block" />
-            美しい SVG ダイアグラムを自動生成
-          </p>
-
-          <div className="flex flex-wrap gap-4 justify-center mb-12">
-            <Link
-              href="/playground"
-              className={cn(
-                'inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-lg',
-                'bg-[#1F2328] text-white dark:bg-[#7FE4C1] dark:text-[#1F2328]',
-                'hover:bg-[#2d3339] dark:hover:bg-[#6dd4b1] transition-all',
-                'shadow-lg shadow-neutral-900/20 dark:shadow-emerald-500/20'
-              )}
-            >
-              Playground
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </Link>
-            <Link
-              href="/docs"
-              className={cn(
-                'inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-lg',
-                'bg-white/80 dark:bg-neutral-800/80 backdrop-blur',
-                'border border-neutral-200 dark:border-neutral-700',
-                'text-neutral-700 dark:text-neutral-300',
-                'hover:bg-white dark:hover:bg-neutral-800 transition-all'
-              )}
-            >
-              Documentation
-            </Link>
-          </div>
-
-          {/* Install command */}
-          <div className={cn(
-            'inline-flex items-center gap-3 px-6 py-3 rounded-xl',
-            'bg-[#1F2328]',
-            'border border-neutral-700'
-          )}>
-            <span className="text-neutral-500 select-none">$</span>
-            <code className="font-mono text-neutral-100">npm install shumoku</code>
-            <button
-              className="text-neutral-500 hover:text-neutral-300 transition-colors"
-              title="Copy"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Diagram Preview Section */}
-      <section className="relative py-20 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className={cn(
-            'relative rounded-2xl overflow-hidden',
-            'bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800',
-            'border border-neutral-200 dark:border-neutral-700',
-            'shadow-2xl shadow-neutral-200/50 dark:shadow-black/50'
-          )}>
-            {/* Window header */}
-            <div className="flex items-center gap-2 px-4 py-3 bg-neutral-100 dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
-              <div className="flex gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-400" />
-                <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                <div className="w-3 h-3 rounded-full bg-green-400" />
-              </div>
-              <span className="text-sm text-neutral-500 dark:text-neutral-400 ml-2 font-mono">network-diagram.svg</span>
+        {/* Text content */}
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-20 lg:pt-24 lg:pl-16 xl:pl-24">
+          <div className="max-w-2xl lg:max-w-xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-medium mb-8 border border-emerald-500/20">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              900+ vendor icons
             </div>
 
-            {/* Placeholder for diagram */}
-            <div className="aspect-[16/9] flex items-center justify-center p-8">
-              <div className="text-center text-neutral-400 dark:text-neutral-500">
-                <svg className="w-24 h-24 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+            <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight mb-8">
+              <span className="text-neutral-900 dark:text-white">Network diagrams,</span>
+              <br />
+              <span className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 bg-clip-text text-transparent">
+                as code.
+              </span>
+            </h1>
+
+            <p className="text-xl text-neutral-600 dark:text-neutral-400 mb-10 leading-relaxed">
+              YAML でネットワーク構成を定義し、美しい SVG ダイアグラムを自動生成。
+              Git でバージョン管理、CI/CD に統合。
+            </p>
+
+            <div className="flex flex-wrap gap-3 mb-8">
+              <Link
+                href="/playground"
+                className={cn(
+                  'inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-base',
+                  'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900',
+                  'hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors',
+                  'shadow-lg'
+                )}
+              >
+                Playground
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
-                <p className="text-lg font-medium">Diagram Preview</p>
-                <p className="text-sm">[SVG placeholder]</p>
-              </div>
+              </Link>
+              <Link
+                href="/docs"
+                className={cn(
+                  'inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-base',
+                  'bg-neutral-100 dark:bg-neutral-800',
+                  'text-neutral-700 dark:text-neutral-300',
+                  'hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors'
+                )}
+              >
+                Documentation
+              </Link>
+            </div>
+
+            {/* Install command */}
+            <div className={cn(
+              'inline-flex items-center gap-3 px-4 py-2.5 rounded-lg',
+              'bg-neutral-900 dark:bg-neutral-800',
+              'border border-neutral-800 dark:border-neutral-700'
+            )}>
+              <span className="text-neutral-500 select-none font-mono text-sm">$</span>
+              <code className="font-mono text-sm text-neutral-200">npm install shumoku</code>
+              <button
+                className="text-neutral-500 hover:text-neutral-300 transition-colors"
+                title="Copy"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Diagram - Desktop: positioned lower on the right */}
+        <div className="absolute top-[40%] right-0 lg:right-[max(1rem,calc((100vw-80rem)/2))] hidden lg:block">
+          <div
+            className={cn(
+              'w-[600px] rounded-xl overflow-hidden',
+              'bg-white dark:bg-neutral-900',
+              'border border-neutral-200 dark:border-neutral-800',
+              'shadow-2xl'
+            )}
+          >
+            <img
+              src="/hero-diagram.svg"
+              alt="Network diagram example"
+              className="w-full h-auto"
+            />
+          </div>
+        </div>
+
+        {/* Diagram - Mobile: below text content */}
+        <div className="relative lg:hidden px-6 mt-12 pb-0">
+          <div
+            className={cn(
+              'w-full max-w-md mx-auto rounded-xl overflow-hidden',
+              'bg-white dark:bg-neutral-900',
+              'border border-neutral-200 dark:border-neutral-800',
+              'shadow-xl'
+            )}
+          >
+            <div className="h-[400px] overflow-hidden">
+              <img
+                src="/hero-diagram.svg"
+                alt="Network diagram example"
+                className="w-full h-auto object-top"
+              />
             </div>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="py-20 px-6 bg-neutral-50 dark:bg-neutral-900/50">
+      <section className="relative py-20 px-6 bg-neutral-50 dark:bg-neutral-900/50">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">
             Why Shumoku?
