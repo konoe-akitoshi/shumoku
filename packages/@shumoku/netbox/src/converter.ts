@@ -211,6 +211,7 @@ export function convertToNetworkGraph(
     settings: {
       direction: 'TB',
       theme: options.theme ?? 'light',
+      legend: options.legend,
     },
   }
 }
@@ -836,6 +837,31 @@ export function toYaml(graph: NetworkGraph): string {
     }
     if (graph.settings.theme) {
       lines.push(`  theme: ${graph.settings.theme}`)
+    }
+    if (graph.settings.legend) {
+      if (graph.settings.legend === true) {
+        lines.push('  legend: true')
+      } else if (typeof graph.settings.legend === 'object') {
+        lines.push('  legend:')
+        if (graph.settings.legend.enabled !== undefined) {
+          lines.push(`    enabled: ${graph.settings.legend.enabled}`)
+        }
+        if (graph.settings.legend.position) {
+          lines.push(`    position: ${graph.settings.legend.position}`)
+        }
+        if (graph.settings.legend.showDeviceTypes !== undefined) {
+          lines.push(`    showDeviceTypes: ${graph.settings.legend.showDeviceTypes}`)
+        }
+        if (graph.settings.legend.showBandwidth !== undefined) {
+          lines.push(`    showBandwidth: ${graph.settings.legend.showBandwidth}`)
+        }
+        if (graph.settings.legend.showCableTypes !== undefined) {
+          lines.push(`    showCableTypes: ${graph.settings.legend.showCableTypes}`)
+        }
+        if (graph.settings.legend.showVlans !== undefined) {
+          lines.push(`    showVlans: ${graph.settings.legend.showVlans}`)
+        }
+      }
     }
     lines.push('')
   }

@@ -5,6 +5,7 @@
 
 export { NetBoxClient, type QueryParams } from './client.js'
 export { convertToNetworkGraph, convertToNetworkGraphWithVMs, toYaml } from './converter.js'
+export type { LegendSettings } from '@shumoku/core/models'
 export type {
   // NetBox API types
   NetBoxTag,

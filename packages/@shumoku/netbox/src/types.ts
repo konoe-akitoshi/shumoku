@@ -3,7 +3,7 @@
  * Based on NetBox REST API responses
  */
 
-import type { LinkType, LinkBandwidth } from '@shumoku/core/models'
+import type { LinkType, LinkBandwidth, LegendSettings } from '@shumoku/core/models'
 
 // ============================================
 // NetBox API Response Types
@@ -627,6 +627,13 @@ export interface ConverterOptions {
    * Group VMs by cluster into subgraphs
    */
   groupVMsByCluster?: boolean
+
+  /**
+   * Show legend in the diagram
+   * - true: Show legend with default settings
+   * - LegendSettings: Customize legend position and content
+   */
+  legend?: boolean | LegendSettings
 }
 
 // ============================================

@@ -226,6 +226,9 @@ interface ConverterOptions {
 
   // VMをクラスタでグループ化
   groupVMsByCluster?: boolean
+
+  // 凡例を表示
+  legend?: boolean | LegendSettings
 }
 ```
 
@@ -241,6 +244,24 @@ const graph = convertToNetworkGraph(
     colorByCableType: true,
     colorByStatus: true,
     showPorts: true,
+    legend: true,  // 凡例を表示
+  }
+)
+
+// 凡例をカスタマイズ
+const graph = convertToNetworkGraph(
+  deviceResp,
+  interfaceResp,
+  cableResp,
+  {
+    legend: {
+      enabled: true,
+      position: 'bottom-right',  // 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+      showDeviceTypes: true,
+      showBandwidth: true,
+      showCableTypes: true,
+      showVlans: false,
+    }
   }
 )
 ```
@@ -307,6 +328,36 @@ const graph = convertToNetworkGraph(
 | `location` | ロケーションでグループ化 |
 | `prefix` | IP プレフィックス（/16）でグループ化 |
 | `none` | グループ化しない |
+
+### 凡例（Legend）
+
+`legend` オプションでダイアグラムに凡例を表示できます。
+
+```typescript
+// シンプルに有効化
+{ legend: true }
+
+// カスタマイズ
+{
+  legend: {
+    enabled: true,
+    position: 'top-right',     // 表示位置
+    showDeviceTypes: true,     // デバイスタイプを表示
+    showBandwidth: true,       // 帯域幅を表示
+    showCableTypes: true,      // ケーブルタイプを表示
+    showVlans: false,          // VLAN を表示
+  }
+}
+```
+
+| 設定 | 説明 | デフォルト |
+|------|------|-----------|
+| `enabled` | 凡例を表示 | `true` |
+| `position` | 表示位置（`top-left`, `top-right`, `bottom-left`, `bottom-right`） | `top-right` |
+| `showDeviceTypes` | デバイスタイプアイコンを表示 | `true` |
+| `showBandwidth` | 帯域幅インジケーターを表示 | `true` |
+| `showCableTypes` | ケーブルタイプの色を表示 | `true` |
+| `showVlans` | VLAN の色を表示 | `false` |
 
 ## NetBox のセットアップ
 
