@@ -1,5 +1,4 @@
 name: "Sakura SRE NEXT Integrated Network"
-version: "2.0.0"
 description: "Complete enterprise network from AWS/ISP to access points across multiple sites"
 
 devices:
@@ -665,7 +664,11 @@ links:
       protocol: "Console"
 
 settings:
-  layout: hierarchical
-  theme: modern
+  direction: TB
+  theme: light
   nodeSpacing: 300
-  layerSpacing: 500
+  rankSpacing: 500
+  legend:
+    enabled: true
+    position: bottom-right
+    showBandwidth: true

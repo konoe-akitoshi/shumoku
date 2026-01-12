@@ -1,126 +1,220 @@
-network:
-  name: "Data Center Network Architecture"
-  version: "1.0.0"
-  description: "High availability data center with redundant core switches"
-  
-  settings:
-    layout: bento
-    theme: modern
-    
-  modules:
-    - id: core
-      name: "Core Network"
-      devices: ["rtx3510-1", "rtx3510-2", "ex4400-vc"]
-      layout:
-        column: 0
-        row: 0
-        
-    - id: distribution
-      name: "Distribution Layer"
-      devices: ["dist-sw-01", "dist-sw-02"]
-      layout:
-        column: 0
-        row: 1
-        
-    - id: access
-      name: "Access Layer"
-      devices: ["access-sw-01", "access-sw-02", "access-sw-03", "access-sw-04"]
-      layout:
-        column: 0
-        row: 2
-        span:
-          columns: 2
-          rows: 1
-          
-  devices:
-    # Core routers
-    - id: rtx3510-1
-      name: "RTX3510-1"
-      type: router
-      role: core
-      metadata:
-        location: "Rack A1"
-        
-    - id: rtx3510-2
-      name: "RTX3510-2"
-      type: router
-      role: core
-      metadata:
-        location: "Rack A2"
-        
-    # Core switch
-    - id: ex4400-vc
-      name: "EX4400-VC"
-      type: l3-switch
-      role: core
-      metadata:
-        location: "Rack A3"
-        description: "Virtual Chassis"
-        
-    # Distribution switches
-    - id: dist-sw-01
-      name: "Dist-SW-01"
-      type: l3-switch
-      role: distribution
-      
-    - id: dist-sw-02
-      name: "Dist-SW-02"
-      type: l3-switch
-      role: distribution
-      
-    # Access switches
-    - id: access-sw-01
-      name: "Access-SW-01"
-      type: l2-switch
-      role: access
-      
-    - id: access-sw-02
-      name: "Access-SW-02"
-      type: l2-switch
-      role: access
-      
-    - id: access-sw-03
-      name: "Access-SW-03"
-      type: l2-switch
-      role: access
-      
-    - id: access-sw-04
-      name: "Access-SW-04"
-      type: l2-switch
-      role: access
-      
-  links:
-    # Core redundancy
-    - from: rtx3510-1
-      to: rtx3510-2
-      type: physical
-      bandwidth: "10G"
-      redundancy:
-        group: vrrp-1
-        role: primary
-        
-    # Core to distribution
-    - from: ex4400-vc
-      to: dist-sw-01
-      bandwidth: "40G"
-      
-    - from: ex4400-vc
-      to: dist-sw-02
-      bandwidth: "40G"
-      
-    # Distribution to access
-    - from: dist-sw-01
-      to: access-sw-01
-      bandwidth: "10G"
-      
-    - from: dist-sw-01
-      to: access-sw-02
-      bandwidth: "10G"
-      
-    - from: dist-sw-02
-      to: access-sw-03
-      bandwidth: "10G"
-      
-    - from: dist-sw-02
-      to: access-sw-04
-      bandwidth: "10G"
+# Data Center Network Architecture
+# Demonstrates bandwidth visualization, VLAN coloring, and cable types
+name: "Data Center Network Architecture"
+description: "High availability data center with redundant core switches"
+
+settings:
+  direction: TB
+  theme: light
+  legend: true
+
+subgraphs:
+  - id: core
+    label: "Core Network"
+    style:
+      fill: "#E3F2FD"
+      stroke: "#1565C0"
+      strokeWidth: 2
+
+  - id: distribution
+    label: "Distribution Layer"
+    style:
+      fill: "#E8F5E9"
+      stroke: "#2E7D32"
+      strokeWidth: 2
+
+  - id: access
+    label: "Access Layer"
+    style:
+      fill: "#FFF3E0"
+      stroke: "#E65100"
+      strokeWidth: 2
+
+nodes:
+  # Core routers (HA pair)
+  - id: rtx3510-1
+    label:
+      - "<b>RTX3510-1</b>"
+      - "10.0.0.1"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: core
+    rank: 0
+
+  - id: rtx3510-2
+    label:
+      - "<b>RTX3510-2</b>"
+      - "10.0.0.2"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: core
+    rank: 0
+
+  # Core switch (Virtual Chassis)
+  - id: ex4400-vc
+    label:
+      - "<b>EX4400-VC</b>"
+      - "10.0.1.1"
+    type: l3-switch
+    vendor: juniper
+    model: ex4400
+    parent: core
+    rank: 1
+
+  # Distribution switches
+  - id: dist-sw-01
+    label:
+      - "<b>Dist-SW-01</b>"
+      - "10.0.2.1"
+    type: l3-switch
+    parent: distribution
+    rank: 2
+
+  - id: dist-sw-02
+    label:
+      - "<b>Dist-SW-02</b>"
+      - "10.0.2.2"
+    type: l3-switch
+    parent: distribution
+    rank: 2
+
+  # Access switches
+  - id: access-sw-01
+    label:
+      - "<b>Access-SW-01</b>"
+      - "10.0.3.1"
+    type: l2-switch
+    parent: access
+    rank: 3
+
+  - id: access-sw-02
+    label:
+      - "<b>Access-SW-02</b>"
+      - "10.0.3.2"
+    type: l2-switch
+    parent: access
+    rank: 3
+
+  - id: access-sw-03
+    label:
+      - "<b>Access-SW-03</b>"
+      - "10.0.3.3"
+    type: l2-switch
+    parent: access
+    rank: 3
+
+  - id: access-sw-04
+    label:
+      - "<b>Access-SW-04</b>"
+      - "10.0.3.4"
+    type: l2-switch
+    parent: access
+    rank: 3
+
+links:
+  # Core redundancy (100G fiber - SMF)
+  - from:
+      node: rtx3510-1
+      port: xe-0/0/0
+    to:
+      node: rtx3510-2
+      port: xe-0/0/0
+    bandwidth: 100G
+    redundancy: ha
+    style:
+      stroke: "#eab308"  # Yellow for SMF
+
+  # Core to VC (40G fiber - OM4)
+  - from:
+      node: rtx3510-1
+      port: xe-0/0/1
+    to:
+      node: ex4400-vc
+      port: et-0/0/48
+    bandwidth: 40G
+    vlan: [100, 200, 300, 400]
+    style:
+      stroke: "#06b6d4"  # Cyan for OM4
+
+  - from:
+      node: rtx3510-2
+      port: xe-0/0/1
+    to:
+      node: ex4400-vc
+      port: et-0/0/49
+    bandwidth: 40G
+    vlan: [100, 200, 300, 400]
+    style:
+      stroke: "#06b6d4"
+
+  # Core to distribution (25G DAC - dashed)
+  - from:
+      node: ex4400-vc
+      port: xe-0/0/0
+    to:
+      node: dist-sw-01
+      port: xe-0/0/0
+    bandwidth: 25G
+    type: dashed
+    vlan: [100, 200]
+    style:
+      stroke: "#f97316"  # Orange for DAC
+
+  - from:
+      node: ex4400-vc
+      port: xe-0/0/1
+    to:
+      node: dist-sw-02
+      port: xe-0/0/0
+    bandwidth: 25G
+    type: dashed
+    vlan: [300, 400]
+    style:
+      stroke: "#f97316"
+
+  # Distribution to access (10G copper - Cat6a)
+  - from:
+      node: dist-sw-01
+      port: ge-0/0/1
+    to:
+      node: access-sw-01
+      port: ge-0/0/0
+    bandwidth: 10G
+    vlan: [100]
+    style:
+      stroke: "#8b5cf6"  # Purple for Cat6a
+
+  - from:
+      node: dist-sw-01
+      port: ge-0/0/2
+    to:
+      node: access-sw-02
+      port: ge-0/0/0
+    bandwidth: 10G
+    vlan: [200]
+    style:
+      stroke: "#8b5cf6"
+
+  - from:
+      node: dist-sw-02
+      port: ge-0/0/1
+    to:
+      node: access-sw-03
+      port: ge-0/0/0
+    bandwidth: 10G
+    vlan: [300]
+    style:
+      stroke: "#8b5cf6"
+
+  - from:
+      node: dist-sw-02
+      port: ge-0/0/2
+    to:
+      node: access-sw-04
+      port: ge-0/0/0
+    bandwidth: 10G
+    vlan: [400]
+    style:
+      stroke: "#8b5cf6"

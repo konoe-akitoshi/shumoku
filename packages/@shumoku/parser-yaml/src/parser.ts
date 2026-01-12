@@ -142,6 +142,14 @@ interface YamlGraphSettings {
   rankSpacing?: number
   subgraphPadding?: number
   canvas?: YamlCanvasSettings
+  legend?: boolean | {
+    enabled?: boolean
+    position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+    showDeviceTypes?: boolean
+    showBandwidth?: boolean
+    showCableTypes?: boolean
+    showVlans?: boolean
+  }
 }
 
 interface YamlNetworkV2 {
@@ -385,6 +393,7 @@ export class YamlParser {
       rankSpacing: settings.rankSpacing,
       subgraphPadding: settings.subgraphPadding,
       canvas: this.parseCanvasSettings(settings.canvas),
+      legend: settings.legend,
     }
   }
 

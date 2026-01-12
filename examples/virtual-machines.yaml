@@ -1,0 +1,247 @@
+# Virtual Machines Example
+# Demonstrates VM visualization with clusters (includeVMs, groupVMsByCluster options)
+name: "Virtual Infrastructure"
+description: "Shows virtual machines alongside physical infrastructure"
+
+settings:
+  direction: TB
+  theme: light
+  legend: true
+
+subgraphs:
+  # Physical infrastructure
+  - id: physical
+    label: "Physical Infrastructure"
+    style:
+      fill: "#E3F2FD"
+      stroke: "#1565C0"
+      strokeWidth: 2
+
+  # VM Cluster (dashed border for virtualization)
+  - id: cluster-vmware-prod
+    label: "VMware Production Cluster"
+    style:
+      fill: "#F3E5F5"
+      stroke: "#7B1FA2"
+      strokeWidth: 2
+      strokeDasharray: "4,2"
+
+  - id: cluster-vmware-dev
+    label: "VMware Development Cluster"
+    style:
+      fill: "#FFF8E1"
+      stroke: "#F9A825"
+      strokeWidth: 2
+      strokeDasharray: "4,2"
+
+nodes:
+  # Physical switches
+  - id: core-sw-01
+    label:
+      - "<b>core-sw-01</b>"
+      - "10.0.1.1"
+    type: l3-switch
+    vendor: juniper
+    model: ex4400
+    parent: physical
+    rank: 0
+
+  # Physical ESXi hosts
+  - id: esxi-01
+    label:
+      - "<b>esxi-01</b>"
+      - "10.0.10.1"
+    type: server
+    parent: physical
+    rank: 1
+
+  - id: esxi-02
+    label:
+      - "<b>esxi-02</b>"
+      - "10.0.10.2"
+    type: server
+    parent: physical
+    rank: 1
+
+  - id: esxi-03
+    label:
+      - "<b>esxi-03</b>"
+      - "10.0.10.3"
+    type: server
+    parent: physical
+    rank: 1
+
+  # Production VMs (dashed border to distinguish from physical)
+  - id: vm-web-01
+    label:
+      - "<b>vm-web-01</b>"
+      - "10.0.20.1"
+      - "4vCPU / 8GB"
+    type: server
+    parent: cluster-vmware-prod
+    rank: 2
+    style:
+      strokeDasharray: "4,4"
+      opacity: 0.9
+
+  - id: vm-web-02
+    label:
+      - "<b>vm-web-02</b>"
+      - "10.0.20.2"
+      - "4vCPU / 8GB"
+    type: server
+    parent: cluster-vmware-prod
+    rank: 2
+    style:
+      strokeDasharray: "4,4"
+      opacity: 0.9
+
+  - id: vm-db-01
+    label:
+      - "<b>vm-db-01</b>"
+      - "10.0.20.10"
+      - "8vCPU / 32GB"
+    type: database
+    parent: cluster-vmware-prod
+    rank: 2
+    style:
+      strokeDasharray: "4,4"
+      opacity: 0.9
+
+  - id: vm-app-01
+    label:
+      - "<b>vm-app-01</b>"
+      - "10.0.20.20"
+      - "4vCPU / 16GB"
+    type: server
+    parent: cluster-vmware-prod
+    rank: 2
+    style:
+      strokeDasharray: "4,4"
+      opacity: 0.9
+
+  # Development VMs
+  - id: vm-dev-01
+    label:
+      - "<b>vm-dev-01</b>"
+      - "10.0.30.1"
+      - "2vCPU / 4GB"
+    type: server
+    parent: cluster-vmware-dev
+    rank: 2
+    style:
+      strokeDasharray: "4,4"
+      opacity: 0.9
+      fill: "#FEF3C7"
+      stroke: "#F59E0B"
+
+  - id: vm-test-01
+    label:
+      - "<b>vm-test-01</b>"
+      - "10.0.30.2"
+      - "2vCPU / 4GB"
+    type: server
+    parent: cluster-vmware-dev
+    rank: 2
+    style:
+      strokeDasharray: "4,4"
+      opacity: 0.9
+      fill: "#FEF3C7"
+      stroke: "#F59E0B"
+
+links:
+  # Physical switch to ESXi hosts
+  - from:
+      node: core-sw-01
+      port: ge-0/0/1
+    to:
+      node: esxi-01
+      port: vmnic0
+    bandwidth: 10G
+    vlan: [100, 200, 300]
+
+  - from:
+      node: core-sw-01
+      port: ge-0/0/2
+    to:
+      node: esxi-02
+      port: vmnic0
+    bandwidth: 10G
+    vlan: [100, 200, 300]
+
+  - from:
+      node: core-sw-01
+      port: ge-0/0/3
+    to:
+      node: esxi-03
+      port: vmnic0
+    bandwidth: 10G
+    vlan: [100, 200, 300]
+
+  # ESXi to Production VMs (virtual connections)
+  - from:
+      node: esxi-01
+      port: vSwitch0
+    to:
+      node: vm-web-01
+      port: eth0
+    type: dashed
+    vlan: [200]
+    style:
+      stroke: "#7B1FA2"
+
+  - from:
+      node: esxi-01
+      port: vSwitch0
+    to:
+      node: vm-db-01
+      port: eth0
+    type: dashed
+    vlan: [200]
+    style:
+      stroke: "#7B1FA2"
+
+  - from:
+      node: esxi-02
+      port: vSwitch0
+    to:
+      node: vm-web-02
+      port: eth0
+    type: dashed
+    vlan: [200]
+    style:
+      stroke: "#7B1FA2"
+
+  - from:
+      node: esxi-02
+      port: vSwitch0
+    to:
+      node: vm-app-01
+      port: eth0
+    type: dashed
+    vlan: [200]
+    style:
+      stroke: "#7B1FA2"
+
+  # ESXi to Dev VMs
+  - from:
+      node: esxi-03
+      port: vSwitch0
+    to:
+      node: vm-dev-01
+      port: eth0
+    type: dashed
+    vlan: [300]
+    style:
+      stroke: "#F9A825"
+
+  - from:
+      node: esxi-03
+      port: vSwitch0
+    to:
+      node: vm-test-01
+      port: eth0
+    type: dashed
+    vlan: [300]
+    style:
+      stroke: "#F9A825"

@@ -378,6 +378,38 @@ export function paperSizeToPixels(
  */
 export type ThemeType = 'light' | 'dark'
 
+export interface LegendSettings {
+  /**
+   * Show legend in the diagram
+   */
+  enabled?: boolean
+
+  /**
+   * Legend position
+   */
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+
+  /**
+   * Show device type icons
+   */
+  showDeviceTypes?: boolean
+
+  /**
+   * Show bandwidth indicators
+   */
+  showBandwidth?: boolean
+
+  /**
+   * Show cable/link types
+   */
+  showCableTypes?: boolean
+
+  /**
+   * Show VLAN colors
+   */
+  showVlans?: boolean
+}
+
 export interface GraphSettings {
   /**
    * Default layout direction
@@ -408,6 +440,11 @@ export interface GraphSettings {
    * Canvas/sheet size settings
    */
   canvas?: CanvasSettings
+
+  /**
+   * Legend configuration
+   */
+  legend?: boolean | LegendSettings
 }
 
 export interface NetworkGraph {

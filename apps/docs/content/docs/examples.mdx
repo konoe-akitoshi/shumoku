@@ -5,6 +5,202 @@ description: 様々なネットワーク構成のサンプル
 
 様々なネットワーク構成のサンプルです。
 
+## Full Featured Example
+
+すべての機能を使用した包括的なサンプル。帯域幅、VLAN、ケーブルタイプ、デバイスステータス、凡例を含みます。
+
+```yaml
+name: "Full Featured Network"
+description: "Comprehensive example showcasing all Shumoku features"
+
+settings:
+  direction: TB
+  theme: light
+  legend: true  # 凡例を表示
+
+subgraphs:
+  # サイトベースのグループ
+  - id: site-datacenter
+    label: "Tokyo Data Center"
+    style:
+      fill: "#E3F2FD"
+      stroke: "#1565C0"
+      strokeWidth: 2
+
+  # ネストしたサブグラフ（VMクラスタ）
+  - id: cluster-vmware
+    label: "VMware Cluster"
+    parent: site-datacenter
+    style:
+      fill: "#F3E5F5"
+      stroke: "#7B1FA2"
+      strokeDasharray: "4,2"
+
+  - id: site-office
+    label: "Head Office"
+    style:
+      fill: "#FFF3E0"
+      stroke: "#E65100"
+
+nodes:
+  # コアルーター（HAペア）
+  - id: core-rt-01
+    label:
+      - "<b>core-rt-01</b>"
+      - "10.0.0.1"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: site-datacenter
+    rank: 0
+
+  - id: core-rt-02
+    label:
+      - "<b>core-rt-02</b>"
+      - "10.0.0.2"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: site-datacenter
+    rank: 0
+
+  # コアスイッチ
+  - id: core-sw-01
+    label:
+      - "<b>core-sw-01</b>"
+      - "10.0.1.1"
+    type: l3-switch
+    vendor: juniper
+    model: qfx5120
+    parent: site-datacenter
+    rank: 1
+
+  # 物理サーバー
+  - id: esxi-01
+    label:
+      - "<b>esxi-01</b>"
+      - "10.0.10.1"
+    type: server
+    parent: cluster-vmware
+    rank: 2
+
+  # 仮想マシン（破線ボーダー）
+  - id: vm-web-01
+    label:
+      - "<b>vm-web-01</b>"
+      - "10.0.20.10"
+    type: server
+    parent: cluster-vmware
+    rank: 3
+    style:
+      strokeDasharray: "4,4"
+      opacity: 0.9
+
+  # 計画中デバイス（Plannedステータス）
+  - id: new-sw-01
+    label:
+      - "<b>new-sw-01</b>"
+      - "(Planned Q2)"
+    type: l2-switch
+    parent: site-datacenter
+    rank: 2
+    style:
+      stroke: "#9CA3AF"
+      strokeDasharray: "5,5"
+      opacity: 0.7
+
+  # オフィス機器
+  - id: office-rt-01
+    label:
+      - "<b>office-rt-01</b>"
+      - "10.2.0.1"
+    type: router
+    parent: site-office
+
+  - id: office-ap-01
+    label: "<b>office-ap-01</b>"
+    type: access-point
+    vendor: aruba
+    model: ap-505
+    parent: site-office
+
+links:
+  # HAリンク - 100G SMF（黄色）
+  - from:
+      node: core-rt-01
+      port: xe-0/0/0
+      ip: 10.255.0.1/30
+    to:
+      node: core-rt-02
+      port: xe-0/0/0
+      ip: 10.255.0.2/30
+    bandwidth: 100G
+    redundancy: ha
+    label: "HA Keepalive"
+    style:
+      stroke: "#eab308"
+
+  # コア→スイッチ - 40G OM4（シアン）
+  - from:
+      node: core-rt-01
+      port: xe-0/0/1
+    to:
+      node: core-sw-01
+      port: xe-0/0/0
+    bandwidth: 40G
+    vlan: [100, 200, 300]
+    style:
+      stroke: "#06b6d4"
+
+  # スイッチ→サーバー - 25G Cat6a（紫）
+  - from:
+      node: core-sw-01
+      port: ge-0/0/1
+    to:
+      node: esxi-01
+      port: vmnic0
+    bandwidth: 25G
+    vlan: [200]
+    style:
+      stroke: "#8b5cf6"
+
+  # VM接続（論理リンク、破線）
+  - from:
+      node: esxi-01
+      port: vSwitch0
+    to:
+      node: vm-web-01
+      port: eth0
+    bandwidth: 10G
+    vlan: [200]
+    type: dashed
+    label: "vSwitch"
+
+  # VPNトンネル（破線）
+  - from:
+      node: core-rt-02
+      port: tun0
+    to:
+      node: office-rt-01
+      port: tun0
+    type: dashed
+    label: "IPsec VPN"
+    style:
+      stroke: "#6b7280"
+
+  # オフィス内 - 1G
+  - from:
+      node: office-rt-01
+      port: ge-0/0/1
+    to:
+      node: office-ap-01
+      port: eth0
+    bandwidth: 1G
+    vlan: [20]
+```
+
+---
+
 ## Simple Network
 
 基本的な 3 層ネットワーク構成。

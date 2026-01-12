@@ -1,0 +1,243 @@
+# Prefix/Subnet Subgraph Example
+# Demonstrates grouping devices by IP subnet (groupBy: 'prefix' option)
+name: "Network by Subnet"
+description: "Devices grouped by IP prefix/subnet"
+
+settings:
+  direction: TB
+  theme: light
+  legend: true
+
+subgraphs:
+  # Management Network (10.0.x.x)
+  - id: prefix-10-0-0-0-16
+    label: "Subnet: 10.0.x.x"
+    style:
+      fill: "#DBEAFE"
+      stroke: "#2563EB"
+      strokeWidth: 2
+
+  # Server Network (10.1.x.x)
+  - id: prefix-10-1-0-0-16
+    label: "Subnet: 10.1.x.x"
+    style:
+      fill: "#D1FAE5"
+      stroke: "#059669"
+      strokeWidth: 2
+
+  # User Network (10.2.x.x)
+  - id: prefix-10-2-0-0-16
+    label: "Subnet: 10.2.x.x"
+    style:
+      fill: "#FEF3C7"
+      stroke: "#D97706"
+      strokeWidth: 2
+
+  # DMZ Network (192.168.x.x)
+  - id: prefix-192-168-0-0-16
+    label: "Subnet: 192.168.x.x"
+    style:
+      fill: "#FCE7F3"
+      stroke: "#DB2777"
+      strokeWidth: 2
+
+nodes:
+  # Core router (management)
+  - id: core-rt-01
+    label:
+      - "<b>core-rt-01</b>"
+      - "10.0.0.1"
+    type: router
+    parent: prefix-10-0-0-0-16
+    rank: 0
+
+  # Management devices
+  - id: mgmt-sw-01
+    label:
+      - "<b>mgmt-sw-01</b>"
+      - "10.0.1.1"
+    type: l3-switch
+    parent: prefix-10-0-0-0-16
+    rank: 1
+
+  - id: mgmt-srv-01
+    label:
+      - "<b>mgmt-srv-01</b>"
+      - "10.0.2.1"
+      - "(Monitoring)"
+    type: server
+    parent: prefix-10-0-0-0-16
+    rank: 2
+
+  # Server network devices
+  - id: srv-sw-01
+    label:
+      - "<b>srv-sw-01</b>"
+      - "10.1.0.1"
+    type: l3-switch
+    parent: prefix-10-1-0-0-16
+    rank: 1
+
+  - id: web-srv-01
+    label:
+      - "<b>web-srv-01</b>"
+      - "10.1.1.1"
+    type: server
+    parent: prefix-10-1-0-0-16
+    rank: 2
+
+  - id: db-srv-01
+    label:
+      - "<b>db-srv-01</b>"
+      - "10.1.2.1"
+    type: database
+    parent: prefix-10-1-0-0-16
+    rank: 2
+
+  - id: app-srv-01
+    label:
+      - "<b>app-srv-01</b>"
+      - "10.1.3.1"
+    type: server
+    parent: prefix-10-1-0-0-16
+    rank: 2
+
+  # User network devices
+  - id: user-sw-01
+    label:
+      - "<b>user-sw-01</b>"
+      - "10.2.0.1"
+    type: l2-switch
+    parent: prefix-10-2-0-0-16
+    rank: 1
+
+  - id: user-sw-02
+    label:
+      - "<b>user-sw-02</b>"
+      - "10.2.0.2"
+    type: l2-switch
+    parent: prefix-10-2-0-0-16
+    rank: 1
+
+  - id: ap-01
+    label:
+      - "<b>ap-01</b>"
+      - "10.2.1.1"
+    type: access-point
+    parent: prefix-10-2-0-0-16
+    rank: 2
+
+  # DMZ devices
+  - id: fw-01
+    label:
+      - "<b>fw-01</b>"
+      - "192.168.0.1"
+    type: firewall
+    parent: prefix-192-168-0-0-16
+    rank: 0
+
+  - id: dmz-srv-01
+    label:
+      - "<b>dmz-srv-01</b>"
+      - "192.168.1.1"
+      - "(Public Web)"
+    type: server
+    parent: prefix-192-168-0-0-16
+    rank: 1
+
+links:
+  # Core to all segments
+  - from:
+      node: core-rt-01
+      port: ge0/0
+    to:
+      node: mgmt-sw-01
+      port: ge0/0
+    bandwidth: 10G
+    vlan: [100]
+
+  - from:
+      node: core-rt-01
+      port: ge0/1
+    to:
+      node: srv-sw-01
+      port: ge0/0
+    bandwidth: 10G
+    vlan: [200]
+
+  - from:
+      node: core-rt-01
+      port: ge0/2
+    to:
+      node: user-sw-01
+      port: ge0/0
+    bandwidth: 10G
+    vlan: [300]
+
+  - from:
+      node: core-rt-01
+      port: ge0/3
+    to:
+      node: fw-01
+      port: eth0
+    bandwidth: 10G
+
+  # Management segment
+  - from:
+      node: mgmt-sw-01
+      port: ge0/1
+    to:
+      node: mgmt-srv-01
+      port: eth0
+    bandwidth: 1G
+
+  # Server segment
+  - from:
+      node: srv-sw-01
+      port: ge0/1
+    to:
+      node: web-srv-01
+      port: eth0
+    bandwidth: 10G
+
+  - from:
+      node: srv-sw-01
+      port: ge0/2
+    to:
+      node: db-srv-01
+      port: eth0
+    bandwidth: 10G
+
+  - from:
+      node: srv-sw-01
+      port: ge0/3
+    to:
+      node: app-srv-01
+      port: eth0
+    bandwidth: 10G
+
+  # User segment
+  - from:
+      node: user-sw-01
+      port: ge0/1
+    to:
+      node: user-sw-02
+      port: ge0/0
+    bandwidth: 10G
+
+  - from:
+      node: user-sw-02
+      port: ge0/1
+    to:
+      node: ap-01
+      port: eth0
+    bandwidth: 1G
+
+  # DMZ segment
+  - from:
+      node: fw-01
+      port: eth1
+    to:
+      node: dmz-srv-01
+      port: eth0
+    bandwidth: 1G

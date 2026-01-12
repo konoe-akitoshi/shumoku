@@ -32,6 +32,7 @@ links:
 settings:
   direction: TB          # レイアウト方向
   theme: light           # テーマ
+  legend: true           # 凡例を表示
   nodeSpacing: 50        # ノード間隔
   rankSpacing: 100       # 階層間隔
   subgraphPadding: 20    # サブグラフ内余白
@@ -58,6 +59,30 @@ settings:
 |----|------|
 | `light` | ライトテーマ |
 | `dark` | ダークテーマ |
+
+### legend (凡例)
+凡例を表示します。帯域幅、デバイスタイプ、ケーブルタイプなどの視覚要素を説明します。
+
+```yaml
+# シンプル（デフォルト位置: 右上）
+legend: true
+
+# 詳細設定
+legend:
+  enabled: true
+  position: top-right      # 位置
+  showDeviceTypes: true    # デバイスタイプを表示
+  showBandwidth: true      # 帯域幅を表示
+  showCableTypes: true     # ケーブルタイプを表示
+  showVlans: true          # VLANを表示
+```
+
+| position | 説明 |
+|----------|------|
+| `top-left` | 左上 |
+| `top-right` | 右上（デフォルト） |
+| `bottom-left` | 左下 |
+| `bottom-right` | 右下 |
 
 ### canvas.preset (用紙サイズ)
 `A0`, `A1`, `A2`, `A3`, `A4`, `B0`, `B1`, `B2`, `B3`, `B4`, `letter`, `legal`, `tabloid`
@@ -201,14 +226,16 @@ links:
 | `back` | `<-` | 逆方向 |
 | `both` | `<->` | 双方向 |
 
-### bandwidth (帯域)
-| 値 | エイリアス |
-|----|-----------|
-| `1G` | `1GbE`, `1Gbit` |
-| `10G` | `10GbE`, `10Gbit` |
-| `25G` | `25GbE`, `25Gbit` |
-| `40G` | `40GbE`, `40Gbit` |
-| `100G` | `100GbE`, `100Gbit` |
+### bandwidth (帯域幅)
+回線の帯域幅を指定します。線の太さ（本数）で視覚的に表現されます。
+
+| 値 | エイリアス | 視覚化 |
+|----|-----------|--------|
+| `1G` | `1GbE`, `1Gbit` | 1本線 |
+| `10G` | `10GbE`, `10Gbit` | 2本線 |
+| `25G` | `25GbE`, `25Gbit` | 3本線 |
+| `40G` | `40GbE`, `40Gbit` | 4本線 |
+| `100G` | `100GbE`, `100Gbit` | 5本線 |
 
 ### redundancy (冗長化タイプ)
 | 値 | エイリアス | 説明 |
@@ -221,11 +248,18 @@ links:
 | `stack` | `stacking`, `irf` | スタック |
 
 ### vlan
-単一または複数:
+リンクに関連付けられた VLAN を指定します。VLAN ID に基づいて色分けされます。
+
 ```yaml
+# 単一 VLAN
 vlan: 10
+
+# 複数 VLAN（トランク）
 vlan: [10, 20, 30]
 ```
+
+- 単一 VLAN: VLAN ID に基づいた色で表示
+- 複数 VLAN: トランクリンクとして表示、ラベルに VLAN 一覧を表示
 
 ---
 

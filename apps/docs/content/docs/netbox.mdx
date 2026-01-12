@@ -158,17 +158,135 @@ client.getCables(): Promise<NetBoxCable[]>
 client.getSites(): Promise<NetBoxSite[]>
 ```
 
-### convertToShumoku
+### convertToNetworkGraph
+
+NetBox データを Shumoku NetworkGraph に変換します。
 
 ```typescript
-interface ConvertOptions {
-  devices: NetBoxDevice[]
-  cables: NetBoxCable[]
-  sites?: NetBoxSite[]
-}
+import { convertToNetworkGraph } from '@shumoku/netbox'
 
-convertToShumoku(options: ConvertOptions): NetworkGraph
+const graph = convertToNetworkGraph(
+  deviceResponse,
+  interfaceResponse,
+  cableResponse,
+  options
+)
 ```
+
+#### ConverterOptions
+
+```typescript
+interface ConverterOptions {
+  // カスタムタグマッピング（デフォルトとマージ）
+  tagMapping?: Record<string, TagMapping>
+
+  // テーマ
+  theme?: 'light' | 'dark'
+
+  // ポート名をリンクに表示
+  showPorts?: boolean  // default: true
+
+  // VLAN 情報をリンクに表示
+  showVlans?: boolean
+
+  // ケーブルタイプで色分け
+  colorByCableType?: boolean  // default: true
+
+  // デバイスのグループ化方法
+  groupBy?: 'tag' | 'site' | 'location' | 'prefix' | 'none'
+
+  // デバイスロールをタイプ推測に使用
+  useRoleForType?: boolean  // default: true
+
+  // ステータスで色分け
+  colorByStatus?: boolean
+
+  // 仮想マシンを含める
+  includeVMs?: boolean
+
+  // VMをクラスタでグループ化
+  groupVMsByCluster?: boolean
+}
+```
+
+#### 使用例
+
+```typescript
+const graph = convertToNetworkGraph(
+  deviceResp,
+  interfaceResp,
+  cableResp,
+  {
+    groupBy: 'site',
+    colorByCableType: true,
+    colorByStatus: true,
+    showPorts: true,
+  }
+)
+```
+
+## 視覚化機能
+
+### 帯域幅の可視化
+
+インターフェースの `speed` フィールドから帯域幅を自動検出し、線の太さで表現します。
+
+| NetBox speed (kbps) | Shumoku bandwidth | 視覚化 |
+|---------------------|-------------------|--------|
+| 1,000,000 | 1G | 1本線 |
+| 10,000,000 | 10G | 2本線 |
+| 25,000,000 | 25G | 3本線 |
+| 40,000,000 | 40G | 4本線 |
+| 100,000,000+ | 100G | 5本線 |
+
+### VLAN の可視化
+
+インターフェースの `tagged_vlans` と `untagged_vlan` から VLAN 情報を収集し、リンクに設定します。
+
+- 両端インターフェースの VLAN を統合
+- VLAN ID に基づいた色分け
+- トランクリンクの識別
+
+### ケーブルタイプによる色分け
+
+`colorByCableType: true` で、ケーブル種別に応じた色と線種を適用します。
+
+| ケーブルタイプ | 色 | 線種 |
+|---------------|-----|------|
+| SMF (シングルモード) | 黄色 | 実線 |
+| MMF-OM3 | 緑 | 実線 |
+| MMF-OM4 | シアン | 実線 |
+| Cat6 | 青 | 実線 |
+| Cat6a | 紫 | 実線 |
+| DAC (パッシブ) | オレンジ | 破線 |
+| DAC (アクティブ) | 赤 | 破線 |
+| AOC | ピンク | 破線 |
+
+### デバイスステータスの可視化
+
+`colorByStatus: true` で、デバイスの状態に応じたスタイルを適用します。
+
+| ステータス | スタイル |
+|-----------|---------|
+| active | デフォルト |
+| planned | 破線ボーダー、グレー、半透明 |
+| staged | 黄色背景 |
+| failed | 赤背景 |
+| offline | グレー、半透明 |
+| inventory | 青背景、破線 |
+| decommissioning | オレンジ背景、破線 |
+
+### グループ化オプション
+
+`groupBy` でデバイスのグループ化方法を指定します。
+
+| 値 | 説明 |
+|----|------|
+| `tag` | NetBox タグでグループ化（デフォルト） |
+| `site` | サイトでグループ化 |
+| `location` | ロケーションでグループ化 |
+| `prefix` | IP プレフィックス（/16）でグループ化 |
+| `none` | グループ化しない |
 
 ## NetBox のセットアップ
 

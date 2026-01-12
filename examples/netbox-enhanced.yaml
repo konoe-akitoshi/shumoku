@@ -1,0 +1,234 @@
+# NetBox Enhanced Example
+# Showcases new features: bandwidth visualization, VLAN coloring, cable types, legend
+name: "NetBox Enhanced Network"
+description: "Example showcasing bandwidth, VLAN, and cable type visualization"
+
+settings:
+  direction: TB
+  theme: light
+  legend: true  # Enable legend
+
+subgraphs:
+  - id: site-tokyo-dc
+    label: "Tokyo DC"
+    style:
+      fill: "#E3F2FD"
+      stroke: "#1565C0"
+      strokeWidth: 2
+
+  - id: site-osaka-dc
+    label: "Osaka DC"
+    style:
+      fill: "#E8F5E9"
+      stroke: "#2E7D32"
+      strokeWidth: 2
+
+  - id: site-office
+    label: "Head Office"
+    style:
+      fill: "#FFF3E0"
+      stroke: "#E65100"
+      strokeWidth: 2
+
+nodes:
+  # Tokyo DC - Core
+  - id: core-rt-01
+    label:
+      - "<b>core-rt-01</b>"
+      - "10.0.0.1"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: site-tokyo-dc
+    rank: 0
+
+  - id: core-rt-02
+    label:
+      - "<b>core-rt-02</b>"
+      - "10.0.0.2"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: site-tokyo-dc
+    rank: 0
+
+  - id: core-sw-01
+    label:
+      - "<b>core-sw-01</b>"
+      - "10.0.1.1"
+    type: l3-switch
+    vendor: juniper
+    model: ex4400
+    parent: site-tokyo-dc
+    rank: 1
+
+  # Tokyo DC - Access
+  - id: access-sw-01
+    label:
+      - "<b>access-sw-01</b>"
+      - "10.0.2.1"
+    type: l2-switch
+    parent: site-tokyo-dc
+    rank: 2
+
+  - id: access-sw-02
+    label:
+      - "<b>access-sw-02</b>"
+      - "10.0.2.2"
+    type: l2-switch
+    parent: site-tokyo-dc
+    rank: 2
+
+  # Osaka DC
+  - id: osaka-rt-01
+    label:
+      - "<b>osaka-rt-01</b>"
+      - "10.1.0.1"
+    type: router
+    vendor: yamaha
+    model: rtx1300
+    parent: site-osaka-dc
+    rank: 0
+
+  - id: osaka-sw-01
+    label:
+      - "<b>osaka-sw-01</b>"
+      - "10.1.1.1"
+    type: l3-switch
+    parent: site-osaka-dc
+    rank: 1
+
+  # Office
+  - id: office-rt-01
+    label:
+      - "<b>office-rt-01</b>"
+      - "10.2.0.1"
+    type: router
+    parent: site-office
+    rank: 0
+
+  - id: office-sw-01
+    label:
+      - "<b>office-sw-01</b>"
+      - "10.2.1.1"
+    type: l2-switch
+    parent: site-office
+    rank: 1
+
+  - id: office-ap-01
+    label:
+      - "<b>office-ap-01</b>"
+    type: access-point
+    vendor: aruba
+    parent: site-office
+    rank: 2
+
+links:
+  # Core HA pair - 100G fiber
+  - from:
+      node: core-rt-01
+      port: xe-0/0/0
+    to:
+      node: core-rt-02
+      port: xe-0/0/0
+    bandwidth: 100G
+    redundancy: ha
+    style:
+      stroke: "#10b981"  # Green for fiber
+
+  # Core to distribution - 40G fiber
+  - from:
+      node: core-rt-01
+      port: xe-0/0/1
+    to:
+      node: core-sw-01
+      port: xe-0/0/0
+    bandwidth: 40G
+    vlan: [100, 200, 300]
+    style:
+      stroke: "#06b6d4"  # Cyan for OM4
+
+  - from:
+      node: core-rt-02
+      port: xe-0/0/1
+    to:
+      node: core-sw-01
+      port: xe-0/0/1
+    bandwidth: 40G
+    vlan: [100, 200, 300]
+    style:
+      stroke: "#06b6d4"
+
+  # Distribution to access - 10G
+  - from:
+      node: core-sw-01
+      port: ge-0/0/1
+    to:
+      node: access-sw-01
+      port: ge-0/0/0
+    bandwidth: 10G
+    vlan: [100, 200]
+    style:
+      stroke: "#3b82f6"  # Blue for Cat6
+
+  - from:
+      node: core-sw-01
+      port: ge-0/0/2
+    to:
+      node: access-sw-02
+      port: ge-0/0/0
+    bandwidth: 10G
+    vlan: [100, 300]
+    style:
+      stroke: "#3b82f6"
+
+  # DC interconnect - 10G DAC (dashed)
+  - from:
+      node: core-rt-01
+      port: xe-0/0/2
+    to:
+      node: osaka-rt-01
+      port: ge-0/0/0
+    bandwidth: 10G
+    type: dashed
+    style:
+      stroke: "#f97316"  # Orange for DAC
+
+  # Osaka internal - 1G
+  - from:
+      node: osaka-rt-01
+      port: ge-0/0/1
+    to:
+      node: osaka-sw-01
+      port: ge-0/0/0
+    bandwidth: 1G
+    vlan: [100]
+
+  # Office VPN (dashed for tunnel)
+  - from:
+      node: core-rt-02
+      port: tun0
+    to:
+      node: office-rt-01
+      port: tun0
+    type: dashed
+    label: "IPsec VPN"
+
+  # Office internal - 1G
+  - from:
+      node: office-rt-01
+      port: ge-0/0/1
+    to:
+      node: office-sw-01
+      port: ge-0/0/0
+    bandwidth: 1G
+    vlan: [10, 20]
+
+  - from:
+      node: office-sw-01
+      port: ge-0/0/10
+    to:
+      node: office-ap-01
+      port: eth0
+    bandwidth: 1G
+    vlan: [20]

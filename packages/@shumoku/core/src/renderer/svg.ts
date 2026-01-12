@@ -14,6 +14,8 @@ import type {
   NodeShape,
   LinkType,
   ThemeType,
+  LegendSettings,
+  LinkBandwidth,
 } from '../models/index.js'
 import { getDeviceIcon, getVendorIconEntry, type IconThemeVariant } from '../icons/index.js'
 
@@ -126,11 +128,30 @@ export class SVGRenderer {
     this.themeColors = this.getThemeColors(theme)
     this.iconTheme = this.getIconTheme(theme)
 
+    // Calculate legend dimensions if enabled
+    const legendSettings = this.getLegendSettings(graph.settings?.legend)
+    let legendWidth = 0
+    let legendHeight = 0
+    if (legendSettings.enabled) {
+      const legendDims = this.calculateLegendDimensions(graph, legendSettings)
+      legendWidth = legendDims.width
+      legendHeight = legendDims.height
+    }
+
+    // Expand bounds to include legend with padding
+    const legendPadding = 20
+    const expandedBounds = {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width + (legendSettings.enabled && legendWidth > 0 ? legendPadding : 0),
+      height: bounds.height + (legendSettings.enabled && legendHeight > 0 ? legendPadding : 0),
+    }
+
     const parts: string[] = []
 
-    // SVG header using content bounds
-    const viewBox = `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`
-    parts.push(this.renderHeader(bounds.width, bounds.height, viewBox))
+    // SVG header using expanded bounds
+    const viewBox = `${expandedBounds.x} ${expandedBounds.y} ${expandedBounds.width} ${expandedBounds.height}`
+    parts.push(this.renderHeader(expandedBounds.width, expandedBounds.height, viewBox))
 
     // Defs (markers, gradients)
     parts.push(this.renderDefs())
@@ -153,10 +174,173 @@ export class SVGRenderer {
       parts.push(this.renderNode(node))
     })
 
+    // Legend (if enabled) - use already calculated legendSettings
+    if (legendSettings.enabled && legendWidth > 0) {
+      parts.push(this.renderLegend(graph, layout, legendSettings))
+    }
+
     // Close SVG
     parts.push('</svg>')
 
     return parts.join('\n')
+  }
+
+  /**
+   * Calculate legend dimensions without rendering
+   */
+  private calculateLegendDimensions(graph: NetworkGraph, settings: LegendSettings): { width: number; height: number } {
+    const lineHeight = 20
+    const padding = 12
+    const iconWidth = 30
+    const maxLabelWidth = 100
+
+    // Count items
+    let itemCount = 0
+
+    if (settings.showBandwidth) {
+      const usedBandwidths = new Set<LinkBandwidth>()
+      graph.links.forEach(link => {
+        if (link.bandwidth) usedBandwidths.add(link.bandwidth)
+      })
+      itemCount += usedBandwidths.size
+    }
+
+    if (itemCount === 0) {
+      return { width: 0, height: 0 }
+    }
+
+    const width = iconWidth + maxLabelWidth + padding * 2
+    const height = itemCount * lineHeight + padding * 2 + 20 // +20 for title
+
+    return { width, height }
+  }
+
+  /**
+   * Parse legend settings from various input formats
+   */
+  private getLegendSettings(legend?: boolean | LegendSettings): LegendSettings & { enabled: boolean } {
+    if (legend === true) {
+      return {
+        enabled: true,
+        position: 'top-right',
+        showDeviceTypes: true,
+        showBandwidth: true,
+        showCableTypes: true,
+        showVlans: false,
+      }
+    }
+
+    if (legend && typeof legend === 'object') {
+      return {
+        enabled: legend.enabled !== false,
+        position: legend.position ?? 'top-right',
+        showDeviceTypes: legend.showDeviceTypes ?? true,
+        showBandwidth: legend.showBandwidth ?? true,
+        showCableTypes: legend.showCableTypes ?? true,
+        showVlans: legend.showVlans ?? false,
+      }
+    }
+
+    return { enabled: false, position: 'top-right' }
+  }
+
+  /**
+   * Render legend showing visual elements used in the diagram
+   */
+  private renderLegend(graph: NetworkGraph, layout: LayoutResult, settings: LegendSettings): string {
+    const items: { icon: string; label: string }[] = []
+    const lineHeight = 20
+    const padding = 12
+    const iconWidth = 30
+    const maxLabelWidth = 100
+
+    // Collect used bandwidths
+    const usedBandwidths = new Set<LinkBandwidth>()
+    graph.links.forEach(link => {
+      if (link.bandwidth) usedBandwidths.add(link.bandwidth)
+    })
+
+    // Collect used device types
+    const usedDeviceTypes = new Set<string>()
+    graph.nodes.forEach(node => {
+      if (node.type) usedDeviceTypes.add(node.type)
+    })
+
+    // Build legend items
+    if (settings.showBandwidth && usedBandwidths.size > 0) {
+      const sortedBandwidths: LinkBandwidth[] = ['1G', '10G', '25G', '40G', '100G'].filter(
+        b => usedBandwidths.has(b as LinkBandwidth)
+      ) as LinkBandwidth[]
+
+      for (const bw of sortedBandwidths) {
+        const config = this.getBandwidthConfig(bw)
+        items.push({
+          icon: this.renderBandwidthLegendIcon(config.lineCount),
+          label: bw,
+        })
+      }
+    }
+
+    if (items.length === 0) return ''
+
+    // Calculate legend dimensions
+    const legendWidth = iconWidth + maxLabelWidth + padding * 2
+    const legendHeight = items.length * lineHeight + padding * 2 + 20 // +20 for title
+
+    // Position based on settings
+    const { bounds } = layout
+    let legendX = bounds.x + bounds.width - legendWidth - 10
+    let legendY = bounds.y + bounds.height - legendHeight - 10
+
+    switch (settings.position) {
+      case 'top-left':
+        legendX = bounds.x + 10
+        legendY = bounds.y + 10
+        break
+      case 'top-right':
+        legendX = bounds.x + bounds.width - legendWidth - 10
+        legendY = bounds.y + 10
+        break
+      case 'bottom-left':
+        legendX = bounds.x + 10
+        legendY = bounds.y + bounds.height - legendHeight - 10
+        break
+    }
+
+    // Render legend box
+    let svg = `<g class="legend" transform="translate(${legendX}, ${legendY})">
+  <rect x="0" y="0" width="${legendWidth}" height="${legendHeight}" rx="4"
+    fill="${this.themeColors.backgroundColor}" stroke="${this.themeColors.subgraphStroke}" stroke-width="1" opacity="0.95" />
+  <text x="${padding}" y="${padding + 12}" class="subgraph-label" font-size="11">Legend</text>`
+
+    // Render items
+    items.forEach((item, index) => {
+      const y = padding + 28 + index * lineHeight
+      svg += `\n  <g transform="translate(${padding}, ${y})">`
+      svg += `\n    ${item.icon}`
+      svg += `\n    <text x="${iconWidth + 4}" y="4" class="node-label" font-size="10">${this.escapeXml(item.label)}</text>`
+      svg += `\n  </g>`
+    })
+
+    svg += '\n</g>'
+    return svg
+  }
+
+  /**
+   * Render bandwidth indicator for legend
+   */
+  private renderBandwidthLegendIcon(lineCount: number): string {
+    const lineSpacing = 3
+    const lineWidth = 24
+    const strokeWidth = 1.5
+    const offsets = this.calculateLineOffsets(lineCount, lineSpacing)
+
+    const lines = offsets.map(offset => {
+      const y = offset
+      return `<line x1="0" y1="${y}" x2="${lineWidth}" y2="${y}" stroke="${this.themeColors.defaultLinkStroke}" stroke-width="${strokeWidth}" />`
+    })
+
+    return `<g transform="translate(0, 0)">${lines.join('')}</g>`
   }
 
   private renderHeader(width: number, height: number, viewBox: string): string {

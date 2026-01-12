@@ -7,6 +7,10 @@ import type {
   NetBoxDeviceResponse,
   NetBoxInterfaceResponse,
   NetBoxCableResponse,
+  NetBoxVirtualMachineResponse,
+  NetBoxVMInterfaceResponse,
+  NetBoxPrefixResponse,
+  NetBoxIPAddressResponse,
 } from './types.js'
 
 export class NetBoxClient {
@@ -39,10 +43,31 @@ export class NetBoxClient {
   }
 
   /**
+   * Make GET request to NetBox DCIM API
+   */
+  private async getDcim<T>(endpoint: string): Promise<T> {
+    return this.get<T>(`dcim/${endpoint}`)
+  }
+
+  /**
+   * Make GET request to NetBox Virtualization API
+   */
+  private async getVirtualization<T>(endpoint: string): Promise<T> {
+    return this.get<T>(`virtualization/${endpoint}`)
+  }
+
+  /**
+   * Make GET request to NetBox IPAM API
+   */
+  private async getIpam<T>(endpoint: string): Promise<T> {
+    return this.get<T>(`ipam/${endpoint}`)
+  }
+
+  /**
    * Make GET request to NetBox API
    */
-  private async get<T>(endpoint: string): Promise<T> {
-    const url = `${this.baseUrl}/api/dcim/${endpoint}/?limit=0`
+  private async get<T>(path: string): Promise<T> {
+    const url = `${this.baseUrl}/api/${path}/?limit=0`
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), this.timeout)
@@ -71,21 +96,49 @@ export class NetBoxClient {
    * Fetch all devices
    */
   async fetchDevices(): Promise<NetBoxDeviceResponse> {
-    return this.get<NetBoxDeviceResponse>('devices')
+    return this.getDcim<NetBoxDeviceResponse>('devices')
   }
 
   /**
    * Fetch all interfaces
    */
   async fetchInterfaces(): Promise<NetBoxInterfaceResponse> {
-    return this.get<NetBoxInterfaceResponse>('interfaces')
+    return this.getDcim<NetBoxInterfaceResponse>('interfaces')
   }
 
   /**
    * Fetch all cables
    */
   async fetchCables(): Promise<NetBoxCableResponse> {
-    return this.get<NetBoxCableResponse>('cables')
+    return this.getDcim<NetBoxCableResponse>('cables')
+  }
+
+  /**
+   * Fetch all virtual machines
+   */
+  async fetchVirtualMachines(): Promise<NetBoxVirtualMachineResponse> {
+    return this.getVirtualization<NetBoxVirtualMachineResponse>('virtual-machines')
+  }
+
+  /**
+   * Fetch all VM interfaces
+   */
+  async fetchVMInterfaces(): Promise<NetBoxVMInterfaceResponse> {
+    return this.getVirtualization<NetBoxVMInterfaceResponse>('interfaces')
+  }
+
+  /**
+   * Fetch all IP prefixes
+   */
+  async fetchPrefixes(): Promise<NetBoxPrefixResponse> {
+    return this.getIpam<NetBoxPrefixResponse>('prefixes')
+  }
+
+  /**
+   * Fetch all IP addresses
+   */
+  async fetchIPAddresses(): Promise<NetBoxIPAddressResponse> {
+    return this.getIpam<NetBoxIPAddressResponse>('ip-addresses')
   }
 
   /**
@@ -103,5 +156,26 @@ export class NetBoxClient {
     ])
 
     return { devices, interfaces, cables }
+  }
+
+  /**
+   * Fetch all data including virtual machines
+   */
+  async fetchAllWithVMs(): Promise<{
+    devices: NetBoxDeviceResponse
+    interfaces: NetBoxInterfaceResponse
+    cables: NetBoxCableResponse
+    virtualMachines: NetBoxVirtualMachineResponse
+    vmInterfaces: NetBoxVMInterfaceResponse
+  }> {
+    const [devices, interfaces, cables, virtualMachines, vmInterfaces] = await Promise.all([
+      this.fetchDevices(),
+      this.fetchInterfaces(),
+      this.fetchCables(),
+      this.fetchVirtualMachines(),
+      this.fetchVMInterfaces(),
+    ])
+
+    return { devices, interfaces, cables, virtualMachines, vmInterfaces }
   }
 }

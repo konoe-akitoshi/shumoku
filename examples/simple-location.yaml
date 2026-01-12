@@ -1,5 +1,4 @@
 name: "Simple Location Test"
-version: "1.0.0"
 description: "Simple test for location-based layout"
 
 devices:

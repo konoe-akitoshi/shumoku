@@ -1,0 +1,178 @@
+# Device Status Example
+# Demonstrates device status-based coloring (colorByStatus option in NetBox converter)
+name: "Device Status Visualization"
+description: "Shows devices with different operational statuses"
+
+settings:
+  direction: TB
+  theme: light
+  legend: true
+
+subgraphs:
+  - id: production
+    label: "Production Environment"
+    style:
+      fill: "#E8F5E9"
+      stroke: "#2E7D32"
+      strokeWidth: 2
+
+  - id: staging
+    label: "Staging Environment"
+    style:
+      fill: "#FFF3E0"
+      stroke: "#E65100"
+      strokeWidth: 2
+
+  - id: decommissioned
+    label: "Decommissioned"
+    style:
+      fill: "#ECEFF1"
+      stroke: "#546E7A"
+      strokeWidth: 2
+
+nodes:
+  # Active devices - default styling (no special style)
+  - id: core-sw-01
+    label:
+      - "<b>core-sw-01</b>"
+      - "10.0.1.1"
+      - "(Active)"
+    type: l3-switch
+    vendor: juniper
+    model: ex4400
+    parent: production
+    rank: 0
+
+  - id: core-sw-02
+    label:
+      - "<b>core-sw-02</b>"
+      - "10.0.1.2"
+      - "(Active)"
+    type: l3-switch
+    vendor: juniper
+    model: ex4400
+    parent: production
+    rank: 0
+
+  # Planned device - dashed border, light gray, reduced opacity
+  - id: new-fw-01
+    label:
+      - "<b>new-fw-01</b>"
+      - "(Planned)"
+    type: firewall
+    parent: staging
+    rank: 1
+    style:
+      stroke: "#9CA3AF"
+      strokeDasharray: "5,5"
+      opacity: 0.7
+
+  # Staged device - yellow tint
+  - id: staged-sw-01
+    label:
+      - "<b>staged-sw-01</b>"
+      - "10.0.2.1"
+      - "(Staged)"
+    type: l2-switch
+    parent: staging
+    rank: 1
+    style:
+      fill: "#FEF3C7"
+      stroke: "#F59E0B"
+
+  # Failed device - red tint
+  - id: failed-sw-01
+    label:
+      - "<b>failed-sw-01</b>"
+      - "(Failed)"
+    type: l2-switch
+    parent: production
+    rank: 2
+    style:
+      fill: "#FEE2E2"
+      stroke: "#EF4444"
+
+  # Offline device - gray, reduced opacity
+  - id: offline-srv-01
+    label:
+      - "<b>offline-srv-01</b>"
+      - "(Offline)"
+    type: server
+    parent: production
+    rank: 2
+    style:
+      fill: "#F3F4F6"
+      stroke: "#6B7280"
+      opacity: 0.5
+
+  # Inventory device - blue tint, dashed border
+  - id: inventory-sw-01
+    label:
+      - "<b>inventory-sw-01</b>"
+      - "(Inventory)"
+    type: l2-switch
+    parent: staging
+    rank: 2
+    style:
+      fill: "#DBEAFE"
+      stroke: "#3B82F6"
+      strokeDasharray: "3,3"
+      opacity: 0.8
+
+  # Decommissioning device - orange tint, dashed border, reduced opacity
+  - id: old-sw-01
+    label:
+      - "<b>old-sw-01</b>"
+      - "(Decommissioning)"
+    type: l2-switch
+    parent: decommissioned
+    rank: 3
+    style:
+      fill: "#FFEDD5"
+      stroke: "#F97316"
+      strokeDasharray: "8,4"
+      opacity: 0.6
+
+links:
+  # Core redundancy
+  - from:
+      node: core-sw-01
+      port: xe-0/0/0
+    to:
+      node: core-sw-02
+      port: xe-0/0/0
+    bandwidth: 40G
+    redundancy: ha
+
+  # Core to staged
+  - from:
+      node: core-sw-01
+      port: ge-0/0/1
+    to:
+      node: staged-sw-01
+      port: ge-0/0/0
+    bandwidth: 10G
+    type: dashed
+
+  # Core to failed (showing connectivity issue)
+  - from:
+      node: core-sw-02
+      port: ge-0/0/1
+    to:
+      node: failed-sw-01
+      port: ge-0/0/0
+    bandwidth: 10G
+    style:
+      stroke: "#EF4444"
+
+  # Failed to offline server
+  - from:
+      node: failed-sw-01
+      port: ge-0/0/2
+    to:
+      node: offline-srv-01
+      port: eth0
+    bandwidth: 1G
+    style:
+      stroke: "#6B7280"
+      strokeDasharray: "5,5"
