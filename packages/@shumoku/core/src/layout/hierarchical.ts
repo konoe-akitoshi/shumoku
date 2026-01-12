@@ -24,6 +24,13 @@ import {
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   NODE_VERTICAL_PADDING,
+  NODE_HORIZONTAL_PADDING,
+  MIN_PORT_SPACING,
+  PORT_LABEL_FONT_SIZE,
+  CHAR_WIDTH_RATIO,
+  PORT_LABEL_PADDING,
+  ESTIMATED_CHAR_WIDTH,
+  MAX_ICON_WIDTH_RATIO,
 } from '../constants.js'
 
 // ============================================
@@ -41,37 +48,58 @@ function toEndpoint(endpoint: string | LinkEndpoint): LinkEndpoint {
 }
 
 /**
- * Collect all ports for each node from links
- * @param haNodePairs - Set of "nodeA:nodeB" strings for HA pairs to exclude their ports
+ * Port distribution info for a node
+ */
+interface NodePortInfo {
+  all: Set<string>           // All port names
+  top: Set<string>           // Incoming ports (link target) - typically on top
+  bottom: Set<string>        // Outgoing ports (link source) - typically on bottom
+  side: Set<string>          // HA internal link ports - on left/right sides
+}
+
+/**
+ * Collect all ports for each node from links, categorized by direction
+ * @param haNodePairs - Set of "nodeA:nodeB" strings for HA pairs
  */
 function collectNodePorts(
   graph: NetworkGraph,
   haNodePairs?: Set<string>
-): Map<string, Set<string>> {
-  const nodePorts = new Map<string, Set<string>>()
+): Map<string, NodePortInfo> {
+  const nodePorts = new Map<string, NodePortInfo>()
+
+  const getOrCreate = (nodeId: string): NodePortInfo => {
+    if (!nodePorts.has(nodeId)) {
+      nodePorts.set(nodeId, { all: new Set(), top: new Set(), bottom: new Set(), side: new Set() })
+    }
+    return nodePorts.get(nodeId)!
+  }
 
   for (const link of graph.links) {
     const fromEndpoint = toEndpoint(link.from)
     const toEndpoint_ = toEndpoint(link.to)
 
-    // Skip ports for HA links - they will be handled separately
+    // Check if this is an HA internal link
     const pairKey = `${fromEndpoint.node}:${toEndpoint_.node}`
-    if (haNodePairs?.has(pairKey)) {
-      continue
-    }
+    const isHALink = haNodePairs?.has(pairKey)
 
     if (fromEndpoint.port) {
-      if (!nodePorts.has(fromEndpoint.node)) {
-        nodePorts.set(fromEndpoint.node, new Set())
+      const info = getOrCreate(fromEndpoint.node)
+      info.all.add(fromEndpoint.port)
+      if (isHALink) {
+        info.side.add(fromEndpoint.port)  // HA link → side port
+      } else {
+        info.bottom.add(fromEndpoint.port)  // Outgoing → bottom
       }
-      nodePorts.get(fromEndpoint.node)!.add(fromEndpoint.port)
     }
 
     if (toEndpoint_.port) {
-      if (!nodePorts.has(toEndpoint_.node)) {
-        nodePorts.set(toEndpoint_.node, new Set())
+      const info = getOrCreate(toEndpoint_.node)
+      info.all.add(toEndpoint_.port)
+      if (isHALink) {
+        info.side.add(toEndpoint_.port)  // HA link → side port
+      } else {
+        info.top.add(toEndpoint_.port)  // Incoming → top
       }
-      nodePorts.get(toEndpoint_.node)!.add(toEndpoint_.port)
     }
   }
 
@@ -145,7 +173,7 @@ export class HierarchicalLayout {
     const haPairs = this.detectHAPairs(graph)
 
     // Build ELK graph with HA pairs merged into virtual nodes
-    const { elkGraph, haVirtualNodes } = this.buildElkGraphWithHAMerge(
+    const { elkGraph, haVirtualNodes, nodePorts } = this.buildElkGraphWithHAMerge(
       graph, direction, effectiveOptions, haPairs
     )
 
@@ -154,7 +182,7 @@ export class HierarchicalLayout {
 
     // Extract results and expand HA virtual nodes back to original pairs
     const result = this.extractLayoutResultWithHAExpand(
-      graph, layoutedGraph, haVirtualNodes, effectiveOptions
+      graph, layoutedGraph, haVirtualNodes, nodePorts, effectiveOptions
     )
 
     // Adjust node distances based on link minLength (for non-HA links)
@@ -179,15 +207,19 @@ export class HierarchicalLayout {
     direction: LayoutDirection,
     options: Required<HierarchicalLayoutOptions>,
     haPairs: { nodeA: string; nodeB: string; minLength?: number }[]
-  ): { elkGraph: ElkNode; haVirtualNodes: Map<string, { virtualId: string; nodeA: Node; nodeB: Node; gap: number; widthA: number; widthB: number; height: number }> } {
+  ): { elkGraph: ElkNode; haVirtualNodes: Map<string, { virtualId: string; nodeA: Node; nodeB: Node; gap: number; widthA: number; widthB: number; height: number }>; nodePorts: Map<string, NodePortInfo> } {
     const elkDirection = this.toElkDirection(direction)
     const haVirtualNodes = new Map<string, { virtualId: string; nodeA: Node; nodeB: Node; gap: number; widthA: number; widthB: number; height: number }>()
 
     // Build set of nodes in HA pairs
     const nodesInHAPairs = new Set<string>()
+    // Build set of HA pair keys for port categorization
+    const haNodePairs = new Set<string>()
     for (const pair of haPairs) {
       nodesInHAPairs.add(pair.nodeA)
       nodesInHAPairs.add(pair.nodeB)
+      haNodePairs.add(`${pair.nodeA}:${pair.nodeB}`)
+      haNodePairs.add(`${pair.nodeB}:${pair.nodeA}`)  // Both directions
     }
 
     // Build node map for quick lookup
@@ -195,6 +227,9 @@ export class HierarchicalLayout {
     for (const node of graph.nodes) {
       nodeMap.set(node.id, node)
     }
+
+    // Collect all ports for each node from links, categorized by direction
+    const nodePorts = collectNodePorts(graph, haNodePairs)
 
     // Create virtual nodes for HA pairs
     const gap = 40 // Gap between HA pair nodes
@@ -205,10 +240,12 @@ export class HierarchicalLayout {
       if (!nodeA || !nodeB) continue
 
       const virtualId = `__ha_virtual_${i}`
-      const widthA = options.nodeWidth
-      const widthB = options.nodeWidth
-      const heightA = this.calculateNodeHeight(nodeA)
-      const heightB = this.calculateNodeHeight(nodeB)
+      const portsA = nodePorts.get(nodeA.id)
+      const portsB = nodePorts.get(nodeB.id)
+      const widthA = this.calculateNodeWidth(nodeA, portsA)
+      const widthB = this.calculateNodeWidth(nodeB, portsB)
+      const heightA = this.calculateNodeHeight(nodeA, portsA?.all.size || 0)
+      const heightB = this.calculateNodeHeight(nodeB, portsB?.all.size || 0)
 
       haVirtualNodes.set(virtualId, {
         virtualId,
@@ -227,9 +264,6 @@ export class HierarchicalLayout {
       edgeRedirect.set(info.nodeA.id, { virtualId, side: 'A' })
       edgeRedirect.set(info.nodeB.id, { virtualId, side: 'B' })
     }
-
-    // Collect all ports for each node from links
-    const nodePorts = collectNodePorts(graph)
 
     // Build subgraph map
     const subgraphMap = new Map<string, Subgraph>()
@@ -260,18 +294,20 @@ export class HierarchicalLayout {
 
     // Create ELK node for regular nodes
     const createElkNode_ = (node: Node): ElkNode => {
-      const height = this.calculateNodeHeight(node)
+      const portInfo = nodePorts.get(node.id)
+      const portCount = portInfo?.all.size || 0
+      const height = this.calculateNodeHeight(node, portCount)
+      const width = this.calculateNodeWidth(node, portInfo)
       const elkNode: ElkNode = {
         id: node.id,
-        width: options.nodeWidth,
+        width,
         height,
         labels: [{ text: Array.isArray(node.label) ? node.label.join('\n') : node.label }],
       }
 
       // Add ports if this node has any
-      const ports = nodePorts.get(node.id)
-      if (ports && ports.size > 0) {
-        elkNode.ports = Array.from(ports).map(portName => ({
+      if (portInfo && portInfo.all.size > 0) {
+        elkNode.ports = Array.from(portInfo.all).map(portName => ({
           id: `${node.id}:${portName}`,
           width: PORT_WIDTH,
           height: PORT_HEIGHT,
@@ -291,7 +327,7 @@ export class HierarchicalLayout {
       // Add all ports from nodeA (with prefix to identify them)
       const portsA = nodePorts.get(info.nodeA.id)
       if (portsA) {
-        for (const portName of portsA) {
+        for (const portName of portsA.all) {
           ports.push({
             id: `${info.virtualId}:A:${portName}`,
             width: PORT_WIDTH,
@@ -304,7 +340,7 @@ export class HierarchicalLayout {
       // Add all ports from nodeB (with prefix to identify them)
       const portsB = nodePorts.get(info.nodeB.id)
       if (portsB) {
-        for (const portName of portsB) {
+        for (const portName of portsB.all) {
           ports.push({
             id: `${info.virtualId}:B:${portName}`,
             width: PORT_WIDTH,
@@ -505,6 +541,7 @@ export class HierarchicalLayout {
         layoutOptions: rootLayoutOptions,
       },
       haVirtualNodes,
+      nodePorts,
     }
   }
 
@@ -515,6 +552,7 @@ export class HierarchicalLayout {
     graph: NetworkGraph,
     elkGraph: ElkNode,
     haVirtualNodes: Map<string, { virtualId: string; nodeA: Node; nodeB: Node; gap: number; widthA: number; widthB: number; height: number }>,
+    nodePorts: Map<string, NodePortInfo>,
     _options: Required<HierarchicalLayoutOptions>
   ): LayoutResult {
     const layoutNodes = new Map<string, LayoutNode>()
@@ -541,8 +579,10 @@ export class HierarchicalLayout {
       if (haInfo) {
         // Expand virtual node back to original pair
         // Position nodeA on the left, nodeB on the right
-        const heightA = this.calculateNodeHeight(haInfo.nodeA)
-        const heightB = this.calculateNodeHeight(haInfo.nodeB)
+        const portCountA = nodePorts.get(haInfo.nodeA.id)?.all.size || 0
+        const portCountB = nodePorts.get(haInfo.nodeB.id)?.all.size || 0
+        const heightA = this.calculateNodeHeight(haInfo.nodeA, portCountA)
+        const heightB = this.calculateNodeHeight(haInfo.nodeB, portCountB)
 
         const nodeAX = x + haInfo.widthA / 2
         const nodeBX = x + haInfo.widthA + haInfo.gap + haInfo.widthB / 2
@@ -632,17 +672,17 @@ export class HierarchicalLayout {
             let relY: number
 
             if (side === 'top' || side === 'bottom') {
-              // Horizontal distribution along top/bottom edge
-              const portSpacing = nodeWidth / (portsList.length + 1)
-              relX = portSpacing * (i + 1) - nodeWidth / 2
+              // Horizontal distribution: each port gets equal slot, centered in slot
+              const slotWidth = nodeWidth / portsList.length
+              relX = slotWidth * (i + 0.5) - nodeWidth / 2
               // Place port completely outside the node
               relY = side === 'top'
                 ? -nodeHeight / 2 - p.portH / 2  // Above the node
                 : nodeHeight / 2 + p.portH / 2   // Below the node
             } else {
-              // Vertical distribution along left/right edge
-              const portSpacing = nodeHeight / (portsList.length + 1)
-              relY = portSpacing * (i + 1) - nodeHeight / 2
+              // Vertical distribution: each port gets equal slot, centered in slot
+              const slotHeight = nodeHeight / portsList.length
+              relY = slotHeight * (i + 0.5) - nodeHeight / 2
               // Place port completely outside the node
               relX = side === 'left'
                 ? -nodeWidth / 2 - p.portW / 2   // Left of the node
@@ -708,7 +748,8 @@ export class HierarchicalLayout {
         const node = graph.nodes.find(n => n.id === elkNode.id)
         if (node) {
           // Recalculate height to match renderer (ELK may modify node sizes)
-          const nodeHeight = this.calculateNodeHeight(node)
+          const portCount = nodePorts.get(node.id)?.all.size || 0
+          const nodeHeight = this.calculateNodeHeight(node, portCount)
           const layoutNode: LayoutNode = {
             id: elkNode.id,
             position: { x: x + width / 2, y: y + nodeHeight / 2 },
@@ -887,13 +928,14 @@ export class HierarchicalLayout {
         })
 
         // Redistribute port positions along the edge (ports placed OUTSIDE the node)
+        // Each port gets an equal slot, positioned at center of slot (creates half-margin at edges)
         const nodeWidth = layoutNode.size.width
         const nodeHeight = layoutNode.size.height
 
         if (side === 'top' || side === 'bottom') {
-          const portSpacing = nodeWidth / (ports.length + 1)
+          const slotWidth = nodeWidth / ports.length
           ports.forEach((p, i) => {
-            const relX = portSpacing * (i + 1) - nodeWidth / 2
+            const relX = slotWidth * (i + 0.5) - nodeWidth / 2
             // Place port completely outside the node edge
             const relY = side === 'top'
               ? -nodeHeight / 2 - p.port.size.height / 2  // Above the node
@@ -901,9 +943,9 @@ export class HierarchicalLayout {
             p.port.position = { x: relX, y: relY }
           })
         } else {
-          const portSpacing = nodeHeight / (ports.length + 1)
+          const slotHeight = nodeHeight / ports.length
           ports.forEach((p, i) => {
-            const relY = portSpacing * (i + 1) - nodeHeight / 2
+            const relY = slotHeight * (i + 0.5) - nodeHeight / 2
             // Place port completely outside the node edge
             const relX = side === 'left'
               ? -nodeWidth / 2 - p.port.size.width / 2   // Left of the node
@@ -924,7 +966,7 @@ export class HierarchicalLayout {
     const haPairs = this.detectHAPairs(graph)
 
     // Build ELK graph with HA merge (same as async)
-    const { elkGraph, haVirtualNodes } = this.buildElkGraphWithHAMerge(
+    const { elkGraph, haVirtualNodes, nodePorts } = this.buildElkGraphWithHAMerge(
       graph, direction, effectiveOptions, haPairs
     )
 
@@ -938,7 +980,7 @@ export class HierarchicalLayout {
     this.elk.layout(elkGraph).then((layoutedGraph: ElkNode) => {
       // This will be available for next render
       Object.assign(result, this.extractLayoutResultWithHAExpand(
-        graph, layoutedGraph, haVirtualNodes, effectiveOptions
+        graph, layoutedGraph, haVirtualNodes, nodePorts, effectiveOptions
       ))
     }).catch(() => {
       // Keep fallback layout
@@ -957,9 +999,18 @@ export class HierarchicalLayout {
     }
   }
 
-  private calculateNodeHeight(node: Node): number {
+  private calculateNodeHeight(node: Node, portCount: number = 0): number {
     const lines = Array.isArray(node.label) ? node.label.length : 1
     const labelHeight = lines * LABEL_LINE_HEIGHT
+
+    // Calculate base node width (from label and ports) to determine max icon width
+    const labels = Array.isArray(node.label) ? node.label : [node.label]
+    const maxLabelLength = Math.max(...labels.map(l => l.length))
+    const labelWidth = maxLabelLength * ESTIMATED_CHAR_WIDTH
+    const portWidth = portCount > 0 ? (portCount + 1) * MIN_PORT_SPACING : 0
+    const baseContentWidth = Math.max(labelWidth, portWidth)
+    const baseNodeWidth = Math.max(this.options.nodeWidth, baseContentWidth + NODE_HORIZONTAL_PADDING)
+    const maxIconWidth = Math.round(baseNodeWidth * MAX_ICON_WIDTH_RATIO)
 
     // Calculate actual icon height based on vendor icon or default
     let iconHeight = 0
@@ -967,9 +1018,6 @@ export class HierarchicalLayout {
     if (node.vendor && iconKey) {
       const iconEntry = getVendorIconEntry(node.vendor, iconKey, node.resource)
       if (iconEntry) {
-        const iconPadding = 16
-        const maxIconWidth = this.options.nodeWidth - iconPadding
-
         const vendorIcon = iconEntry.default
         const viewBox = iconEntry.viewBox || '0 0 48 48'
 
@@ -980,11 +1028,12 @@ export class HierarchicalLayout {
             const vbWidth = parseInt(viewBoxMatch[1])
             const vbHeight = parseInt(viewBoxMatch[2])
             const aspectRatio = vbWidth / vbHeight
-            let calcHeight = DEFAULT_ICON_SIZE
-            if (Math.round(DEFAULT_ICON_SIZE * aspectRatio) > maxIconWidth) {
-              calcHeight = Math.round(maxIconWidth / aspectRatio)
+            let iconWidth = Math.round(DEFAULT_ICON_SIZE * aspectRatio)
+            iconHeight = DEFAULT_ICON_SIZE
+            if (iconWidth > maxIconWidth) {
+              iconWidth = maxIconWidth
+              iconHeight = Math.round(maxIconWidth / aspectRatio)
             }
-            iconHeight = calcHeight
           } else {
             iconHeight = DEFAULT_ICON_SIZE
           }
@@ -995,11 +1044,12 @@ export class HierarchicalLayout {
             const vbWidth = parseInt(vbMatch[3])
             const vbHeight = parseInt(vbMatch[4])
             const aspectRatio = vbWidth / vbHeight
-            let calcHeight = DEFAULT_ICON_SIZE
-            if (Math.round(DEFAULT_ICON_SIZE * aspectRatio) > maxIconWidth) {
-              calcHeight = Math.round(maxIconWidth / aspectRatio)
+            let iconWidth = Math.round(DEFAULT_ICON_SIZE * aspectRatio)
+            iconHeight = DEFAULT_ICON_SIZE
+            if (iconWidth > maxIconWidth) {
+              iconWidth = maxIconWidth
+              iconHeight = Math.round(maxIconWidth / aspectRatio)
             }
-            iconHeight = calcHeight
           } else {
             iconHeight = DEFAULT_ICON_SIZE
           }
@@ -1016,6 +1066,93 @@ export class HierarchicalLayout {
     const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0
     const contentHeight = iconHeight + gap + labelHeight
     return Math.max(this.options.nodeHeight, contentHeight + NODE_VERTICAL_PADDING)
+  }
+
+  /**
+   * Calculate port spacing based on actual port labels and font size
+   * Returns spacing that accommodates the longest port label
+   */
+  private calculatePortSpacing(portNames: Set<string> | undefined): number {
+    if (!portNames || portNames.size === 0) return MIN_PORT_SPACING
+
+    // Find the longest port label
+    let maxLabelLength = 0
+    for (const name of portNames) {
+      maxLabelLength = Math.max(maxLabelLength, name.length)
+    }
+
+    // Calculate label width based on font size
+    // charWidth = fontSize * charWidthRatio
+    const charWidth = PORT_LABEL_FONT_SIZE * CHAR_WIDTH_RATIO
+    const maxLabelWidth = maxLabelLength * charWidth
+
+    // Add padding around the label
+    const spacingFromLabel = maxLabelWidth + PORT_LABEL_PADDING
+    return Math.max(MIN_PORT_SPACING, spacingFromLabel)
+  }
+
+  /**
+   * Calculate dynamic node width based on icon, label, and port distribution
+   */
+  private calculateNodeWidth(node: Node, portInfo: NodePortInfo | undefined): number {
+    // 1. Calculate label width (estimate from longest line)
+    const labels = Array.isArray(node.label) ? node.label : [node.label]
+    const maxLabelLength = Math.max(...labels.map(l => l.length))
+    const labelWidth = maxLabelLength * ESTIMATED_CHAR_WIDTH
+
+    // 2. Calculate width required for ports based on actual top/bottom distribution
+    // Use max of top/bottom port counts (not total count)
+    const topCount = portInfo?.top.size || 0
+    const bottomCount = portInfo?.bottom.size || 0
+    const maxPortsPerSide = Math.max(topCount, bottomCount)
+
+    const portSpacing = this.calculatePortSpacing(portInfo?.all)
+    const edgeMargin = Math.round(MIN_PORT_SPACING / 2)  // Fixed small edge margin (16px)
+    const portWidth = maxPortsPerSide > 0 ? (maxPortsPerSide - 1) * portSpacing + edgeMargin * 2 : 0
+
+    // 3. Calculate base node width
+    // - For icon/label: add horizontal padding
+    // - For ports: already has edge margins built in
+    const paddedContentWidth = Math.max(labelWidth, 0) + NODE_HORIZONTAL_PADDING
+    const baseNodeWidth = Math.max(this.options.nodeWidth, paddedContentWidth, portWidth)
+
+    // 4. Calculate icon width with max limit (60% of base node width)
+    const maxIconWidth = Math.round(baseNodeWidth * MAX_ICON_WIDTH_RATIO)
+    let iconWidth = DEFAULT_ICON_SIZE  // default for square icons
+    const iconKey = node.service || node.model
+    if (node.vendor && iconKey) {
+      const iconEntry = getVendorIconEntry(node.vendor, iconKey, node.resource)
+      if (iconEntry) {
+        const vendorIcon = iconEntry.default
+        const viewBox = iconEntry.viewBox || '0 0 48 48'
+
+        // Check for PNG-based icons with embedded viewBox
+        if (vendorIcon.startsWith('<svg')) {
+          const viewBoxMatch = vendorIcon.match(/viewBox="0 0 (\d+) (\d+)"/)
+          if (viewBoxMatch) {
+            const vbWidth = parseInt(viewBoxMatch[1])
+            const vbHeight = parseInt(viewBoxMatch[2])
+            const aspectRatio = vbWidth / vbHeight
+            iconWidth = Math.min(Math.round(DEFAULT_ICON_SIZE * aspectRatio), maxIconWidth)
+          }
+        } else {
+          // Parse viewBox for aspect ratio
+          const vbMatch = viewBox.match(/(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/)
+          if (vbMatch) {
+            const vbWidth = parseInt(vbMatch[3])
+            const vbHeight = parseInt(vbMatch[4])
+            const aspectRatio = vbWidth / vbHeight
+            iconWidth = Math.min(Math.round(DEFAULT_ICON_SIZE * aspectRatio), maxIconWidth)
+          }
+        }
+      }
+    }
+
+    // 5. Return maximum of all requirements
+    // - Icon and label need padding
+    // - Ports already have edge margins
+    const paddedIconLabelWidth = Math.max(iconWidth, labelWidth) + NODE_HORIZONTAL_PADDING
+    return Math.max(this.options.nodeWidth, paddedIconLabelWidth, portWidth)
   }
 
   /**
@@ -1129,20 +1266,26 @@ export class HierarchicalLayout {
     const layoutSubgraphs = new Map<string, LayoutSubgraph>()
     const layoutLinks = new Map<string, LayoutLink>()
 
+    // Pre-calculate node ports for width calculation
+    const nodePorts = collectNodePorts(graph)
+
     // Simple grid layout for nodes
     let x = 100
     let y = 100
     const rowHeight = this.options.nodeHeight + this.options.rankSpacing
-    const colWidth = this.options.nodeWidth + this.options.nodeSpacing
     let col = 0
     const maxCols = 4
 
     for (const node of graph.nodes) {
-      const height = this.calculateNodeHeight(node)
+      const portInfo = nodePorts.get(node.id)
+      const portCount = portInfo?.all.size || 0
+      const height = this.calculateNodeHeight(node, portCount)
+      const width = this.calculateNodeWidth(node, portInfo)
+      const colWidth = width + this.options.nodeSpacing
       layoutNodes.set(node.id, {
         id: node.id,
-        position: { x: x + this.options.nodeWidth / 2, y: y + height / 2 },
-        size: { width: this.options.nodeWidth, height },
+        position: { x: x + width / 2, y: y + height / 2 },
+        size: { width, height },
         node,
       })
 

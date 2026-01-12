@@ -22,6 +22,7 @@ import {
   DEFAULT_ICON_SIZE,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
+  MAX_ICON_WIDTH_RATIO,
 } from '../constants.js'
 
 // ============================================
@@ -617,8 +618,8 @@ export class SVGRenderer {
    * Calculate icon dimensions for a node
    */
   private calculateIconInfo(node: Node, w: number): { width: number; height: number; svg: string } | null {
-    const iconPadding = 16
-    const maxIconWidth = w - iconPadding
+    // Cap icon width at MAX_ICON_WIDTH_RATIO of node width to leave room for ports
+    const maxIconWidth = Math.round(w * MAX_ICON_WIDTH_RATIO)
 
     // Try vendor-specific icon first (service for cloud, model for hardware)
     const iconKey = node.service || node.model
