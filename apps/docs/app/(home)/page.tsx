@@ -12,15 +12,29 @@ export default function HomePage() {
   return (
     <main className="flex-1">
       {/* Hero Section */}
-      <section className="relative h-[85vh] max-h-[900px] overflow-hidden">
+      <section className="relative min-h-[85vh] lg:h-[85vh] lg:max-h-[900px] overflow-hidden">
         {/* Background */}
         <div className="absolute inset-0 bg-white dark:bg-neutral-950" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_80%_at_60%_-30%,rgba(127,228,193,0.3),transparent)] dark:bg-[radial-gradient(ellipse_100%_80%_at_60%_-30%,rgba(127,228,193,0.15),transparent)]" />
 
-        {/* Text content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-20 lg:pt-24 lg:pl-16 xl:pl-24">
-          <div className="max-w-2xl lg:max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-medium mb-8 border border-emerald-500/20">
+        {/* Content container with frame */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 lg:pt-24">
+          {/* Decorative frame lines - Desktop only */}
+          <div className="absolute inset-0 hidden lg:block pointer-events-none">
+            {/* Left vertical line */}
+            <div
+              className="absolute left-4 top-0 bottom-0 w-px bg-gradient-to-b from-neutral-300 via-neutral-300 to-transparent dark:from-neutral-700 dark:via-neutral-700"
+            />
+            {/* Top horizontal line */}
+            <div
+              className="absolute left-4 right-0 top-0 h-px bg-gradient-to-r from-neutral-300 via-neutral-200 to-transparent dark:from-neutral-700 dark:via-neutral-800"
+            />
+          </div>
+
+          {/* Text content */}
+          <div className="lg:pl-8 lg:pt-8">
+            <div className="max-w-2xl lg:max-w-xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-medium mb-4 sm:mb-8 border border-emerald-500/20">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -28,7 +42,7 @@ export default function HomePage() {
               900+ vendor icons
             </div>
 
-            <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight mb-8">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-4 sm:mb-8">
               <span className="text-neutral-900 dark:text-white">Network diagrams,</span>
               <br />
               <span className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 bg-clip-text text-transparent">
@@ -36,12 +50,12 @@ export default function HomePage() {
               </span>
             </h1>
 
-            <p className="text-xl text-neutral-600 dark:text-neutral-400 mb-10 leading-relaxed">
+            <p className="text-base sm:text-lg lg:text-xl text-neutral-600 dark:text-neutral-400 mb-6 sm:mb-10 leading-relaxed">
               YAML でネットワーク構成を定義し、美しい SVG ダイアグラムを自動生成。
               Git でバージョン管理、CI/CD に統合。
             </p>
 
-            <div className="flex flex-wrap gap-3 mb-8">
+            <div className="flex flex-wrap gap-3 mb-6 sm:mb-8">
               <Link
                 href="/playground"
                 className={cn(
@@ -88,12 +102,19 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        </div>
 
-        {/* Diagram - Desktop: positioned lower on the right */}
-        <div className="absolute top-[40%] right-0 lg:right-[max(1rem,calc((100vw-80rem)/2))] hidden lg:block">
+        {/* Diagram - Desktop: positioned behind text for layered effect */}
+        <div
+          className="absolute top-[12%] right-0 lg:right-[max(0rem,calc((100vw-84rem)/2))] hidden lg:block"
+          style={{
+            maskImage: 'linear-gradient(to right, transparent 0%, black 35%)',
+            WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 35%)',
+          }}
+        >
           <div
             className={cn(
-              'w-[600px] rounded-xl overflow-hidden',
+              'w-[720px] rounded-xl overflow-hidden',
               'bg-white dark:bg-neutral-900',
               'border border-neutral-200 dark:border-neutral-800',
               'shadow-2xl'
@@ -108,7 +129,7 @@ export default function HomePage() {
         </div>
 
         {/* Diagram - Mobile: below text content */}
-        <div className="relative lg:hidden px-6 mt-12 pb-0">
+        <div className="relative lg:hidden px-4 sm:px-6 mt-8 sm:mt-12 pb-8 sm:pb-12">
           <div
             className={cn(
               'w-full max-w-md mx-auto rounded-xl overflow-hidden',
@@ -117,7 +138,7 @@ export default function HomePage() {
               'shadow-xl'
             )}
           >
-            <div className="h-[400px] overflow-hidden">
+            <div className="h-[280px] sm:h-[350px] overflow-hidden">
               <img
                 src="/hero-diagram.svg"
                 alt="Network diagram example"
@@ -129,16 +150,16 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="relative py-20 px-6 bg-neutral-50 dark:bg-neutral-900/50">
+      <section className="relative py-12 sm:py-16 lg:py-20 px-4 sm:px-6 bg-neutral-50 dark:bg-neutral-900/50">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-3 sm:mb-4">
             Why Shumoku?
           </h2>
-          <p className="text-lg text-neutral-600 dark:text-neutral-400 text-center mb-16 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-neutral-600 dark:text-neutral-400 text-center mb-8 sm:mb-12 lg:mb-16 max-w-2xl mx-auto">
             ネットワークエンジニアのためのモダンなダイアグラムツール
           </p>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {[
               {
                 title: 'YAML で定義',
@@ -218,19 +239,19 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-6">
+      <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
             Ready to get started?
           </h2>
-          <p className="text-lg text-neutral-600 dark:text-neutral-400 mb-10">
+          <p className="text-base sm:text-lg text-neutral-600 dark:text-neutral-400 mb-6 sm:mb-10">
             Playground で試すか、ドキュメントを読んでみてください
           </p>
-          <div className="flex flex-wrap gap-4 justify-center">
+          <div className="flex flex-wrap gap-3 sm:gap-4 justify-center">
             <Link
               href="/playground"
               className={cn(
-                'inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold',
+                'inline-flex items-center gap-2 px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-semibold',
                 'bg-[#7FE4C1] text-[#1F2328]',
                 'hover:bg-[#6dd4b1] transition-colors'
               )}
@@ -242,7 +263,7 @@ export default function HomePage() {
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                'inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold',
+                'inline-flex items-center gap-2 px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-semibold',
                 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300',
                 'border border-neutral-200 dark:border-neutral-700',
                 'hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors'
