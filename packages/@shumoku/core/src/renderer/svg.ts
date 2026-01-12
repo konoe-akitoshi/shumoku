@@ -18,6 +18,11 @@ import type {
   LinkBandwidth,
 } from '../models/index.js'
 import { getDeviceIcon, getVendorIconEntry, type IconThemeVariant } from '../icons/index.js'
+import {
+  DEFAULT_ICON_SIZE,
+  ICON_LABEL_GAP,
+  LABEL_LINE_HEIGHT,
+} from '../constants.js'
 
 // ============================================
 // Theme Colors
@@ -471,14 +476,12 @@ export class SVGRenderer {
     const strokeDasharray = style.strokeDasharray || ''
 
     const shape = this.renderNodeShape(node.shape, x, y, w, h, fill, stroke, strokeWidth, strokeDasharray)
-    const iconResult = this.renderNodeIcon(node, x, y, w, h)
-    const label = this.renderNodeLabel(node, x, y, h, iconResult.height)
+    const content = this.renderNodeContent(node, x, y, w)
     const portsRendered = this.renderPorts(x, y, ports)
 
     return `<g class="node" data-id="${id}" transform="translate(0,0)">
   ${shape}
-  ${iconResult.svg}
-  ${label}
+  ${content}
   ${portsRendered}
 </g>`
   }
@@ -614,7 +617,6 @@ export class SVGRenderer {
    * Calculate icon dimensions for a node
    */
   private calculateIconInfo(node: Node, w: number): { width: number; height: number; svg: string } | null {
-    const defaultIconSize = 40
     const iconPadding = 16
     const maxIconWidth = w - iconPadding
 
@@ -633,8 +635,8 @@ export class SVGRenderer {
             const vbWidth = parseInt(viewBoxMatch[1])
             const vbHeight = parseInt(viewBoxMatch[2])
             const aspectRatio = vbWidth / vbHeight
-            let iconWidth = Math.round(defaultIconSize * aspectRatio)
-            let iconHeight = defaultIconSize
+            let iconWidth = Math.round(DEFAULT_ICON_SIZE * aspectRatio)
+            let iconHeight = DEFAULT_ICON_SIZE
             if (iconWidth > maxIconWidth) {
               iconWidth = maxIconWidth
               iconHeight = Math.round(maxIconWidth / aspectRatio)
@@ -654,8 +656,8 @@ export class SVGRenderer {
           const vbWidth = parseInt(vbMatch[3])
           const vbHeight = parseInt(vbMatch[4])
           const aspectRatio = vbWidth / vbHeight
-          let iconWidth = Math.abs(aspectRatio - 1) < 0.01 ? defaultIconSize : Math.round(defaultIconSize * aspectRatio)
-          let iconHeight = defaultIconSize
+          let iconWidth = Math.abs(aspectRatio - 1) < 0.01 ? DEFAULT_ICON_SIZE : Math.round(DEFAULT_ICON_SIZE * aspectRatio)
+          let iconHeight = DEFAULT_ICON_SIZE
           if (iconWidth > maxIconWidth) {
             iconWidth = maxIconWidth
             iconHeight = Math.round(maxIconWidth / aspectRatio)
@@ -669,9 +671,9 @@ export class SVGRenderer {
 
         // Fallback: use viewBox directly
         return {
-          width: defaultIconSize,
-          height: defaultIconSize,
-          svg: `<svg width="${defaultIconSize}" height="${defaultIconSize}" viewBox="${viewBox}">${vendorIcon}</svg>`,
+          width: DEFAULT_ICON_SIZE,
+          height: DEFAULT_ICON_SIZE,
+          svg: `<svg width="${DEFAULT_ICON_SIZE}" height="${DEFAULT_ICON_SIZE}" viewBox="${viewBox}">${vendorIcon}</svg>`,
         }
       }
     }
@@ -681,42 +683,48 @@ export class SVGRenderer {
     if (!iconPath) return null
 
     return {
-      width: defaultIconSize,
-      height: defaultIconSize,
-      svg: `<svg width="${defaultIconSize}" height="${defaultIconSize}" viewBox="0 0 24 24" fill="currentColor">${iconPath}</svg>`,
+      width: DEFAULT_ICON_SIZE,
+      height: DEFAULT_ICON_SIZE,
+      svg: `<svg width="${DEFAULT_ICON_SIZE}" height="${DEFAULT_ICON_SIZE}" viewBox="0 0 24 24" fill="currentColor">${iconPath}</svg>`,
     }
   }
 
-  private renderNodeIcon(node: Node, x: number, y: number, w: number, h: number): { svg: string; height: number } {
+  /**
+   * Render node content (icon + label) with dynamic vertical centering
+   */
+  private renderNodeContent(node: Node, x: number, y: number, w: number): string {
     const iconInfo = this.calculateIconInfo(node, w)
-    if (!iconInfo) return { svg: '', height: 0 }
-
-    const iconY = y - h / 2 + 12 // Position near top of node
-    const svg = `<g class="node-icon" transform="translate(${x - iconInfo.width / 2}, ${iconY})">
-      ${iconInfo.svg}
-    </g>`
-    return { svg, height: iconInfo.height }
-  }
-
-  private renderNodeLabel(node: Node, x: number, y: number, _h: number, iconHeight: number): string {
     const labels = Array.isArray(node.label) ? node.label : [node.label]
-    const lineHeight = 16
-    const totalHeight = labels.length * lineHeight
+    const labelHeight = labels.length * LABEL_LINE_HEIGHT
 
-    // Shift labels down based on actual icon height (with small padding)
-    const iconOffset = iconHeight > 0 ? iconHeight - 8 : 0
-    const startY = y - totalHeight / 2 + lineHeight / 2 + 4 + iconOffset
+    // Calculate total content height
+    const iconHeight = iconInfo?.height || 0
+    const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0
+    const totalContentHeight = iconHeight + gap + labelHeight
 
-    const lines = labels.map((line, i) => {
-      // Parse simple HTML tags
+    // Center the content block vertically in the node
+    const contentTop = y - totalContentHeight / 2
+
+    const parts: string[] = []
+
+    // Render icon at top of content block
+    if (iconInfo) {
+      const iconY = contentTop
+      parts.push(`<g class="node-icon" transform="translate(${x - iconInfo.width / 2}, ${iconY})">
+      ${iconInfo.svg}
+    </g>`)
+    }
+
+    // Render labels below icon
+    const labelStartY = contentTop + iconHeight + gap + LABEL_LINE_HEIGHT * 0.7  // 0.7 for text baseline adjustment
+    labels.forEach((line, i) => {
       const isBold = line.includes('<b>') || line.includes('<strong>')
       const cleanLine = line.replace(/<\/?b>|<\/?strong>|<br\s*\/?>/gi, '')
       const className = isBold ? 'node-label node-label-bold' : 'node-label'
-
-      return `<text x="${x}" y="${startY + i * lineHeight}" class="${className}" text-anchor="middle">${this.escapeXml(cleanLine)}</text>`
+      parts.push(`<text x="${x}" y="${labelStartY + i * LABEL_LINE_HEIGHT}" class="${className}" text-anchor="middle">${this.escapeXml(cleanLine)}</text>`)
     })
 
-    return lines.join('\n  ')
+    return parts.join('\n  ')
   }
 
   private renderLink(layoutLink: LayoutLink, nodes: Map<string, LayoutNode>): string {

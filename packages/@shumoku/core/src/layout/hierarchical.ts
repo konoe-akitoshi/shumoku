@@ -18,7 +18,13 @@ import {
   type LinkEndpoint,
   getNodeId,
 } from '../models/index.js'
-import { getVendorIconEntry } from '../icons/index.js'
+import { getVendorIconEntry, getDeviceIcon } from '../icons/index.js'
+import {
+  DEFAULT_ICON_SIZE,
+  ICON_LABEL_GAP,
+  LABEL_LINE_HEIGHT,
+  NODE_VERTICAL_PADDING,
+} from '../constants.js'
 
 // ============================================
 // Helper Functions
@@ -701,10 +707,12 @@ export class HierarchicalLayout {
         // This is a regular node
         const node = graph.nodes.find(n => n.id === elkNode.id)
         if (node) {
+          // Recalculate height to match renderer (ELK may modify node sizes)
+          const nodeHeight = this.calculateNodeHeight(node)
           const layoutNode: LayoutNode = {
             id: elkNode.id,
-            position: { x: x + width / 2, y: y + height / 2 },
-            size: { width, height },
+            position: { x: x + width / 2, y: y + nodeHeight / 2 },
+            size: { width, height: nodeHeight },
             node,
           }
 
@@ -721,7 +729,7 @@ export class HierarchicalLayout {
               // Determine which side based on ELK position
               let side: 'top' | 'bottom' | 'left' | 'right' = 'bottom'
               if (portY <= portH) side = 'top'
-              else if (portY >= height - portH * 2) side = 'bottom'
+              else if (portY >= nodeHeight - portH * 2) side = 'bottom'
               else if (portX <= portW) side = 'left'
               else if (portX >= width - portW * 2) side = 'right'
 
@@ -734,16 +742,16 @@ export class HierarchicalLayout {
               let relY: number
               if (side === 'top') {
                 relX = portX - width / 2 + portW / 2
-                relY = -height / 2 - portH / 2
+                relY = -nodeHeight / 2 - portH / 2
               } else if (side === 'bottom') {
                 relX = portX - width / 2 + portW / 2
-                relY = height / 2 + portH / 2
+                relY = nodeHeight / 2 + portH / 2
               } else if (side === 'left') {
                 relX = -width / 2 - portW / 2
-                relY = portY - height / 2 + portH / 2
+                relY = portY - nodeHeight / 2 + portH / 2
               } else {
                 relX = width / 2 + portW / 2
-                relY = portY - height / 2 + portH / 2
+                relY = portY - nodeHeight / 2 + portH / 2
               }
 
               layoutNode.ports.set(elkPort.id, {
@@ -951,8 +959,7 @@ export class HierarchicalLayout {
 
   private calculateNodeHeight(node: Node): number {
     const lines = Array.isArray(node.label) ? node.label.length : 1
-    const baseHeight = 40
-    const lineHeight = 16
+    const labelHeight = lines * LABEL_LINE_HEIGHT
 
     // Calculate actual icon height based on vendor icon or default
     let iconHeight = 0
@@ -960,7 +967,6 @@ export class HierarchicalLayout {
     if (node.vendor && iconKey) {
       const iconEntry = getVendorIconEntry(node.vendor, iconKey, node.resource)
       if (iconEntry) {
-        const defaultIconSize = 40
         const iconPadding = 16
         const maxIconWidth = this.options.nodeWidth - iconPadding
 
@@ -974,13 +980,13 @@ export class HierarchicalLayout {
             const vbWidth = parseInt(viewBoxMatch[1])
             const vbHeight = parseInt(viewBoxMatch[2])
             const aspectRatio = vbWidth / vbHeight
-            let calcHeight = defaultIconSize
-            if (Math.round(defaultIconSize * aspectRatio) > maxIconWidth) {
+            let calcHeight = DEFAULT_ICON_SIZE
+            if (Math.round(DEFAULT_ICON_SIZE * aspectRatio) > maxIconWidth) {
               calcHeight = Math.round(maxIconWidth / aspectRatio)
             }
             iconHeight = calcHeight
           } else {
-            iconHeight = defaultIconSize
+            iconHeight = DEFAULT_ICON_SIZE
           }
         } else {
           // Parse viewBox for aspect ratio
@@ -989,22 +995,27 @@ export class HierarchicalLayout {
             const vbWidth = parseInt(vbMatch[3])
             const vbHeight = parseInt(vbMatch[4])
             const aspectRatio = vbWidth / vbHeight
-            let calcHeight = defaultIconSize
-            if (Math.round(defaultIconSize * aspectRatio) > maxIconWidth) {
+            let calcHeight = DEFAULT_ICON_SIZE
+            if (Math.round(DEFAULT_ICON_SIZE * aspectRatio) > maxIconWidth) {
               calcHeight = Math.round(maxIconWidth / aspectRatio)
             }
             iconHeight = calcHeight
           } else {
-            iconHeight = defaultIconSize
+            iconHeight = DEFAULT_ICON_SIZE
           }
         }
       }
-    } else if (node.type) {
-      // Default device type icon (fixed size)
-      iconHeight = 36
     }
 
-    return Math.max(this.options.nodeHeight, baseHeight + (lines - 1) * lineHeight + iconHeight)
+    // Fall back to default device type icon if no vendor icon was found
+    if (iconHeight === 0 && node.type && getDeviceIcon(node.type)) {
+      iconHeight = DEFAULT_ICON_SIZE
+    }
+
+    // Match renderer's calculation: iconHeight + gap + labelHeight + padding
+    const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0
+    const contentHeight = iconHeight + gap + labelHeight
+    return Math.max(this.options.nodeHeight, contentHeight + NODE_VERTICAL_PADDING)
   }
 
   /**

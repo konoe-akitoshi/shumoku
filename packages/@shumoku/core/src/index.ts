@@ -17,5 +17,8 @@ export * from './icons/index.js'
 // Renderer
 export * from './renderer/index.js'
 
+// Constants
+export * from './constants.js'
+
 // Version
 export const version = '0.0.0'
