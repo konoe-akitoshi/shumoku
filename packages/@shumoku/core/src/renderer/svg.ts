@@ -844,10 +844,6 @@ export class SVGRenderer {
     const nx = len > 0 ? dx / len : 0
     const ny = len > 0 ? dy / len : 1
 
-    // Perpendicular direction (90 degrees rotated)
-    const perpX = -ny
-    const perpY = nx
-
     const isVertical = Math.abs(dy) > Math.abs(dx)
 
     // Hash port name as fallback
@@ -880,21 +876,29 @@ export class SVGRenderer {
     let x: number
     let y: number
 
+    let anchor: string
+
     if (isVertical) {
       // For vertical links, use fixed horizontal offset (simpler and consistent)
       x = endpoint.x + perpDist * sideMultiplier
       y = endpoint.y + ny * offsetDist
-    } else {
-      // For horizontal links, use perpendicular calculation
-      x = endpoint.x + nx * offsetDist + perpX * perpDist * sideMultiplier
-      y = endpoint.y + ny * offsetDist + perpY * perpDist * sideMultiplier
-    }
 
-    // Text anchor based on final position relative to endpoint
-    let anchor = 'middle'
-    const labelDx = x - endpoint.x
-    if (Math.abs(labelDx) > 8) {
-      anchor = labelDx > 0 ? 'start' : 'end'
+      // Text anchor based on final position relative to endpoint
+      anchor = 'middle'
+      const labelDx = x - endpoint.x
+      if (Math.abs(labelDx) > 8) {
+        anchor = labelDx > 0 ? 'start' : 'end'
+      }
+    } else {
+      // For horizontal links, position label near the port (not toward center)
+      // Keep x near the endpoint, offset y below the line
+      x = endpoint.x
+      y = endpoint.y + perpDist  // Always below the line
+
+      // Text anchor: extend toward the center of the link
+      // Start endpoint extends right (start), end endpoint extends left (end)
+      // Check direction: if nextPoint is to the left, we're on the right side
+      anchor = nx < 0 ? 'end' : 'start'
     }
 
     return { x, y, anchor }
@@ -1019,11 +1023,53 @@ ${result}`
   }
 
   /**
-   * Generate SVG path string from points (always polyline for orthogonal routing)
+   * Generate SVG path string from points with rounded corners
    */
-  private generatePath(points: { x: number; y: number }[]): string {
+  private generatePath(points: { x: number; y: number }[], cornerRadius: number = 8): string {
     if (points.length < 2) return ''
-    return `M ${points[0].x} ${points[0].y} ` + points.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ')
+    if (points.length === 2) {
+      return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`
+    }
+
+    const parts: string[] = [`M ${points[0].x} ${points[0].y}`]
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const prev = points[i - 1]
+      const curr = points[i]
+      const next = points[i + 1]
+
+      // Calculate distances to prev and next points
+      const distPrev = Math.hypot(curr.x - prev.x, curr.y - prev.y)
+      const distNext = Math.hypot(next.x - curr.x, next.y - curr.y)
+
+      // Limit radius to half the shortest segment
+      const maxRadius = Math.min(distPrev, distNext) / 2
+      const radius = Math.min(cornerRadius, maxRadius)
+
+      if (radius < 1) {
+        // Too small for rounding, just use straight line
+        parts.push(`L ${curr.x} ${curr.y}`)
+        continue
+      }
+
+      // Calculate direction vectors
+      const dirPrev = { x: (curr.x - prev.x) / distPrev, y: (curr.y - prev.y) / distPrev }
+      const dirNext = { x: (next.x - curr.x) / distNext, y: (next.y - curr.y) / distNext }
+
+      // Points where curve starts and ends
+      const startCurve = { x: curr.x - dirPrev.x * radius, y: curr.y - dirPrev.y * radius }
+      const endCurve = { x: curr.x + dirNext.x * radius, y: curr.y + dirNext.y * radius }
+
+      // Line to start of curve, then quadratic bezier through corner
+      parts.push(`L ${startCurve.x} ${startCurve.y}`)
+      parts.push(`Q ${curr.x} ${curr.y} ${endCurve.x} ${endCurve.y}`)
+    }
+
+    // Line to final point
+    const last = points[points.length - 1]
+    parts.push(`L ${last.x} ${last.y}`)
+
+    return parts.join(' ')
   }
 
   /**
@@ -1041,27 +1087,59 @@ ${result}`
   }
 
   /**
-   * Offset points perpendicular to the line direction
+   * Offset points perpendicular to line direction, handling each segment properly
+   * For orthogonal paths, this maintains parallel lines through bends
    */
   private offsetPoints(points: { x: number; y: number }[], offset: number): { x: number; y: number }[] {
     if (points.length < 2) return points
 
-    // Calculate perpendicular direction from first to last point
-    const dx = points[points.length - 1].x - points[0].x
-    const dy = points[points.length - 1].y - points[0].y
+    const result: { x: number; y: number }[] = []
+
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i]
+
+      if (i === 0) {
+        // First point: use direction to next point
+        const next = points[i + 1]
+        const perp = this.getPerpendicular(p, next)
+        result.push({ x: p.x + perp.x * offset, y: p.y + perp.y * offset })
+      } else if (i === points.length - 1) {
+        // Last point: use direction from previous point
+        const prev = points[i - 1]
+        const perp = this.getPerpendicular(prev, p)
+        result.push({ x: p.x + perp.x * offset, y: p.y + perp.y * offset })
+      } else {
+        // Middle point (bend): offset based on incoming segment direction
+        const prev = points[i - 1]
+        const perp = this.getPerpendicular(prev, p)
+        result.push({ x: p.x + perp.x * offset, y: p.y + perp.y * offset })
+
+        // Also add a point for the outgoing segment if direction changes
+        const next = points[i + 1]
+        const perpNext = this.getPerpendicular(p, next)
+
+        // Check if direction changed (bend point)
+        if (Math.abs(perp.x - perpNext.x) > 0.01 || Math.abs(perp.y - perpNext.y) > 0.01) {
+          result.push({ x: p.x + perpNext.x * offset, y: p.y + perpNext.y * offset })
+        }
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * Get perpendicular unit vector for a line segment
+   */
+  private getPerpendicular(from: { x: number; y: number }, to: { x: number; y: number }): { x: number; y: number } {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
     const len = Math.sqrt(dx * dx + dy * dy)
 
-    if (len === 0) return points
+    if (len === 0) return { x: 0, y: 0 }
 
-    // Perpendicular unit vector
-    const perpX = -dy / len
-    const perpY = dx / len
-
-    // Offset all points
-    return points.map(p => ({
-      x: p.x + perpX * offset,
-      y: p.y + perpY * offset,
-    }))
+    // Perpendicular unit vector (rotate 90 degrees)
+    return { x: -dy / len, y: dx / len }
   }
 
   /**
