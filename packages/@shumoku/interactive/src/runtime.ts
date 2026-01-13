@@ -106,6 +106,13 @@ function getHighlightContainer(): HTMLDivElement {
 function updateHighlightPosition(): void {
   if (!currentHighlight || !currentMiniSvg) return
 
+  // Check if element is still in DOM (React may have replaced it)
+  if (!document.contains(currentHighlight)) {
+    // Element was removed, clear highlight
+    highlightElement(null)
+    return
+  }
+
   const svg = currentHighlight.closest('svg') as SVGSVGElement | null
   if (!svg) return
 
@@ -299,16 +306,28 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
     }
   }
 
-  // Position update handler using requestAnimationFrame
-  let rafPending = false
+  // Position update handler for scroll/resize events
   const handlePositionUpdate = () => {
-    if (rafPending) return
-    rafPending = true
-    requestAnimationFrame(() => {
-      updateHighlightPosition()
-      rafPending = false
-    })
+    updateHighlightPosition()
   }
+
+  // Track viewBox changes for pan/zoom
+  let rafId: number | null = null
+  let lastViewBox = ''
+  const trackViewBox = () => {
+    if (currentHighlight) {
+      const svg = currentHighlight.closest('svg')
+      if (svg) {
+        const viewBox = svg.getAttribute('viewBox') || ''
+        if (viewBox !== lastViewBox) {
+          lastViewBox = viewBox
+          updateHighlightPosition()
+        }
+      }
+    }
+    rafId = requestAnimationFrame(trackViewBox)
+  }
+  rafId = requestAnimationFrame(trackViewBox)
 
   // Add event listeners
   target.addEventListener('mousemove', handleMouseMove)
@@ -329,6 +348,7 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
       window.removeEventListener('scroll', handlePositionUpdate, true)
       window.removeEventListener('resize', handlePositionUpdate)
       window.removeEventListener('wheel', handlePositionUpdate)
+      if (rafId !== null) cancelAnimationFrame(rafId)
       highlightElement(null)
       if (tooltip) {
         tooltip.remove()
