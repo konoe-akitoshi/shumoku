@@ -30,8 +30,7 @@ export function getIIFE(): string {
 
 export interface RenderOptions extends HTMLRendererOptions {}
 
-const DEFAULT_OPTIONS: Required<RenderOptions> = {
-  title: 'Network Diagram',
+const DEFAULT_OPTIONS = {
   branding: true,
   toolbar: true,
 }
@@ -47,9 +46,9 @@ export function render(
   const opts = { ...DEFAULT_OPTIONS, ...options }
   const svgRenderer = new SVGRenderer({ renderMode: 'interactive' })
   const svg = svgRenderer.render(graph, layout)
-  const title = opts.title || graph.name || 'Network Diagram'
+  const title = options?.title || graph.name || 'Network Diagram'
 
-  return generateHtml(svg, title, opts)
+  return generateHtml(svg, title, opts as Required<RenderOptions>)
 }
 
 function generateHtml(
