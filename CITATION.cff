@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Shumoku"
+abstract: "Modern network topology visualization library for Markdown"
+authors:
+  - family-names: Saeki
+    given-names: Akitoshi
+repository-code: "https://github.com/konoe-akitoshi/shumoku"
+url: "https://shumoku.packof.me/"
+version: "0.2.0"
+date-released: "2026-01-12"
+license: MIT
+keywords:
+  - network
+  - topology
+  - visualization
+  - diagram
+  - markdown
