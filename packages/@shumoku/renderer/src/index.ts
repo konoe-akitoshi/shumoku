@@ -2,9 +2,9 @@
  * @shumoku/renderer - SVG and HTML renderers for network diagrams
  */
 
+import * as html from './html/index.js'
 // Namespace exports
 import * as svg from './svg.js'
-import * as html from './html/index.js'
 
 export { svg, html }
 

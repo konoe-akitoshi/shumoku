@@ -7,9 +7,9 @@ import type { LayoutResult, NetworkGraph } from '@shumoku/core'
 import { SVGRenderer } from '../svg.js'
 import type { HTMLRendererOptions } from '../types.js'
 
+export type { InteractiveInstance, InteractiveOptions } from '../types.js'
 // Re-export runtime for direct usage
 export { initInteractive } from './runtime.js'
-export type { InteractiveInstance, InteractiveOptions } from '../types.js'
 
 // IIFE content - will be set by consumer
 let INTERACTIVE_IIFE = ''
@@ -38,11 +38,7 @@ const DEFAULT_OPTIONS = {
 /**
  * Render a complete standalone HTML page from NetworkGraph
  */
-export function render(
-  graph: NetworkGraph,
-  layout: LayoutResult,
-  options?: RenderOptions,
-): string {
+export function render(graph: NetworkGraph, layout: LayoutResult, options?: RenderOptions): string {
   const opts = { ...DEFAULT_OPTIONS, ...options }
   const svgRenderer = new SVGRenderer({ renderMode: 'interactive' })
   const svg = svgRenderer.render(graph, layout)
@@ -51,11 +47,7 @@ export function render(
   return generateHtml(svg, title, opts as Required<RenderOptions>)
 }
 
-function generateHtml(
-  svg: string,
-  title: string,
-  options: Required<RenderOptions>,
-): string {
+function generateHtml(svg: string, title: string, options: Required<RenderOptions>): string {
   const brandingHtml = options.branding
     ? `<a class="branding" href="https://shumoku.packof.me" target="_blank" rel="noopener">
       <svg class="branding-icon" viewBox="0 0 1024 1024" fill="none"><rect x="64" y="64" width="896" height="896" rx="200" fill="#7FE4C1"/><g transform="translate(90,40) scale(1.25)"><path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z"/></g></svg>

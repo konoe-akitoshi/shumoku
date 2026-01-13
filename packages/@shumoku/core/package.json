@@ -41,10 +41,6 @@
       "types": "./dist/layout/index.d.ts",
       "import": "./dist/layout/index.js"
     },
-    "./renderer": {
-      "types": "./dist/renderer/index.d.ts",
-      "import": "./dist/renderer/index.js"
-    },
     "./themes": {
       "types": "./dist/themes/index.d.ts",
       "import": "./dist/themes/index.js"

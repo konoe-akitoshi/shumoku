@@ -256,7 +256,7 @@ function parseViewBox(svg: SVGSVGElement): ViewBox | null {
   const vb = svg.getAttribute('viewBox')
   if (!vb) return null
   const parts = vb.split(/\s+|,/).map(Number)
-  if (parts.length !== 4 || parts.some(isNaN)) return null
+  if (parts.length !== 4 || parts.some(Number.isNaN)) return null
   return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
 }
 
@@ -265,13 +265,12 @@ function setViewBox(svg: SVGSVGElement, vb: ViewBox): void {
 }
 
 export function initInteractive(options: InteractiveOptions): InteractiveInstance {
-  const target = typeof options.target === 'string'
-    ? document.querySelector(options.target)
-    : options.target
+  const target =
+    typeof options.target === 'string' ? document.querySelector(options.target) : options.target
 
   if (!target) throw new Error('Target not found')
 
-  const svg = target.closest('svg') || target.querySelector('svg') || target as SVGSVGElement
+  const svg = target.closest('svg') || target.querySelector('svg') || (target as SVGSVGElement)
   if (!(svg instanceof SVGSVGElement)) throw new Error('SVG element not found')
 
   // Inject highlight styles
