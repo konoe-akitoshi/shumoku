@@ -224,17 +224,27 @@ export function InteractivePreview({ svgContent, className }: InteractivePreview
     setIsDragging(false)
   }, [])
 
-  // Build the final SVG with viewBox
-  const renderedSvg = useMemo(() => {
-    if (!svgData || viewBox.width === 0) return null
+  // Build the initial SVG (only when svgContent changes)
+  const initialSvg = useMemo(() => {
+    if (!svgData) return null
 
-    const viewBoxStr = `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`
-    // Insert viewBox into SVG
+    // Insert placeholder viewBox into SVG
     return svgData.svgElement.replace(
       '<svg',
-      `<svg viewBox="${viewBoxStr}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet"`,
+      '<svg viewBox="0 0 0 0" width="100%" height="100%" preserveAspectRatio="xMidYMid meet"',
     )
-  }, [svgData, viewBox])
+  }, [svgData])
+
+  // Update viewBox attribute directly on SVG element (without re-rendering DOM)
+  useEffect(() => {
+    if (!containerRef.current || viewBox.width === 0) return
+
+    const svgElement = containerRef.current.querySelector('svg')
+    if (!svgElement) return
+
+    const viewBoxStr = `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`
+    svgElement.setAttribute('viewBox', viewBoxStr)
+  }, [viewBox])
 
   // Initialize interactive after SVG is rendered
   useEffect(() => {
@@ -245,7 +255,7 @@ export function InteractivePreview({ svgContent, className }: InteractivePreview
     }
 
     // Initialize after SVG is rendered
-    if (!renderedSvg || !containerRef.current) return
+    if (!initialSvg || !containerRef.current) return
 
     const svgElement = containerRef.current.querySelector('svg')
     if (!svgElement) return
@@ -266,7 +276,7 @@ export function InteractivePreview({ svgContent, className }: InteractivePreview
         interactiveRef.current = null
       }
     }
-  }, [renderedSvg])
+  }, [initialSvg])
 
   return (
     <div className={cn('relative flex flex-col', className)}>
@@ -387,10 +397,10 @@ export function InteractivePreview({ svgContent, className }: InteractivePreview
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
       >
-        {renderedSvg ? (
+        {initialSvg ? (
           <div
             className="h-full w-full select-none [&>svg]:h-full [&>svg]:w-full"
-            dangerouslySetInnerHTML={{ __html: renderedSvg }}
+            dangerouslySetInnerHTML={{ __html: initialSvg }}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-neutral-400 dark:text-neutral-500">

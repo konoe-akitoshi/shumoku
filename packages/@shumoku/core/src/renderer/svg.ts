@@ -532,7 +532,7 @@ export class SVGRenderer {
     const bg = this.renderNodeBackground(layoutNode)
     const fg = this.renderNodeForeground(layoutNode)
 
-    return `<g class="node" data-id="${id}"${dataAttrs}>
+    return `<g class="node" data-id="${id}"${dataAttrs} cursor="pointer">
 ${bg}
 ${fg}
 </g>`
@@ -691,7 +691,7 @@ ${fg}
       )
 
       // Wrap in a group with data attributes
-      groups.push(`<g class="port" data-port="${port.id}"${portDeviceAttr}>
+      groups.push(`<g class="port" data-port="${port.id}"${portDeviceAttr} cursor="pointer">
   ${parts.join('\n  ')}
 </g>`)
     }
@@ -1223,7 +1223,7 @@ ${linePath}`
     return `<g class="link-lines">
 ${lines.join('\n')}
 <path class="link-hit-area" d="${basePath}"
-  fill="none" stroke="${stroke}" stroke-width="${hitWidth}" opacity="0" />
+  fill="none" stroke="${stroke}" stroke-width="${hitWidth}" opacity="0" cursor="pointer" />
 </g>`
   }
 
