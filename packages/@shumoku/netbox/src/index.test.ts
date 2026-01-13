@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
-  NetBoxClient,
-  convertToNetworkGraph,
-  toYaml,
   CABLE_COLORS,
   CABLE_STYLES,
+  convertSpeedToBandwidth,
+  convertToNetworkGraph,
   DEFAULT_TAG_MAPPING,
   DEVICE_STATUS_STYLES,
-  ROLE_TO_TYPE,
-  convertSpeedToBandwidth,
   getVlanColor,
+  NetBoxClient,
+  ROLE_TO_TYPE,
+  toYaml,
 } from './index.js'
-import type { NetBoxDeviceResponse, NetBoxInterfaceResponse, NetBoxCableResponse } from './types.js'
+import type { NetBoxCableResponse, NetBoxDeviceResponse, NetBoxInterfaceResponse } from './types.js'
 
 describe('@shumoku/netbox', () => {
   describe('exports', () => {

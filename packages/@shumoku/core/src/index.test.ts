@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  HierarchicalLayout,
-  SVGRenderer,
-  modernTheme,
-  darkTheme,
-  version,
-} from './index.js'
+import { darkTheme, HierarchicalLayout, modernTheme, SVGRenderer, version } from './index.js'
 import type { NetworkGraph } from './models/index.js'
 
 describe('@shumoku/core', () => {
