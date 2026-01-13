@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { LayoutResult, NetworkGraph } from 'shumoku'
 import { HierarchicalLayout, parser, svg } from 'shumoku'
 import { html } from '@shumoku/renderer'
@@ -17,10 +17,23 @@ export default function PlaygroundClient() {
   const [svgContent, setSvgContent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isRendering, setIsRendering] = useState(false)
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false)
+  const downloadMenuRef = useRef<HTMLDivElement>(null)
 
   // Store graph and layout for Open Viewer
   const graphRef = useRef<NetworkGraph | null>(null)
   const layoutRef = useRef<LayoutResult | null>(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleParseAndRender = async () => {
     setIsRendering(true)
@@ -56,15 +69,30 @@ export default function PlaygroundClient() {
     }
   }
 
-  const handleExportSVG = () => {
-    if (!svgContent) return
-    const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `network-diagram-${new Date().toISOString().slice(0, 10)}.svg`
-    a.click()
-    URL.revokeObjectURL(url)
+  const handleDownload = (format: 'svg' | 'html') => {
+    if (!graphRef.current || !layoutRef.current) return
+    const date = new Date().toISOString().slice(0, 10)
+
+    if (format === 'svg') {
+      const svgOutput = svg.render(graphRef.current, layoutRef.current)
+      const blob = new Blob([svgOutput], { type: 'image/svg+xml;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `network-diagram-${date}.svg`
+      a.click()
+      URL.revokeObjectURL(url)
+    } else {
+      const htmlOutput = html.render(graphRef.current, layoutRef.current)
+      const blob = new Blob([htmlOutput], { type: 'text/html;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `network-diagram-${date}.html`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+    setShowDownloadMenu(false)
   }
 
   const handleOpenViewer = () => {
@@ -130,18 +158,54 @@ export default function PlaygroundClient() {
             Open Viewer
           </button>
 
-          <button
-            onClick={handleExportSVG}
-            disabled={!svgContent}
-            className={cn(
-              'rounded px-4 py-2 text-sm font-medium',
-              'border border-neutral-300 dark:border-neutral-600',
-              'bg-white dark:bg-neutral-800',
-              'hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50',
+          <div className="relative" ref={downloadMenuRef}>
+            <button
+              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+              disabled={!svgContent}
+              className={cn(
+                'flex items-center gap-1 rounded px-4 py-2 text-sm font-medium',
+                'border border-neutral-300 dark:border-neutral-600',
+                'bg-white dark:bg-neutral-800',
+                'hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50',
+              )}
+            >
+              Download
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                <path d="M3 5l3 3 3-3" />
+              </svg>
+            </button>
+            {showDownloadMenu && (
+              <div
+                className={cn(
+                  'absolute right-0 top-full z-10 mt-1 w-40',
+                  'rounded border border-neutral-200 dark:border-neutral-600',
+                  'bg-white dark:bg-neutral-800',
+                  'shadow-lg',
+                )}
+              >
+                <button
+                  onClick={() => handleDownload('svg')}
+                  className={cn(
+                    'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                    'hover:bg-neutral-100 dark:hover:bg-neutral-700',
+                  )}
+                >
+                  <span className="text-neutral-500">.svg</span>
+                  <span>Pure SVG</span>
+                </button>
+                <button
+                  onClick={() => handleDownload('html')}
+                  className={cn(
+                    'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                    'hover:bg-neutral-100 dark:hover:bg-neutral-700',
+                  )}
+                >
+                  <span className="text-neutral-500">.html</span>
+                  <span>Interactive</span>
+                </button>
+              </div>
             )}
-          >
-            Download
-          </button>
+          </div>
         </div>
       </div>
 
