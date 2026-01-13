@@ -36,7 +36,28 @@ npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_TOKEN
 
 # Output to file
 npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_TOKEN -o network.yaml
+
+# Generate SVG with legend
+npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_TOKEN --legend -o network.svg
 ```
+
+### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `-u, --url <url>` | NetBox API URL (or set `NETBOX_URL` env var) |
+| `-t, --token <token>` | API token (or set `NETBOX_TOKEN` env var) |
+| `-o, --output <file>` | Output file (default: topology.yaml) |
+| `--theme <theme>` | Theme: light or dark (default: light) |
+| `-s, --site <slug>` | Filter by site slug |
+| `-r, --role <slug>` | Filter by device role slug |
+| `--status <status>` | Filter by status |
+| `--tag <slug>` | Filter by tag slug |
+| `-g, --group-by <type>` | Group by: tag, site, location, prefix, none |
+| `--no-ports` | Don't include port names in links |
+| `--no-colors` | Don't color links by cable type |
+| `--color-by-status` | Color devices by their status |
+| `--legend` | Show legend in the diagram (SVG only) |
 
 ## API
 

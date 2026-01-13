@@ -32,6 +32,14 @@ npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN --
 | `--output, -o` | 出力ファイル（省略時は標準出力） |
 | `--site, -s` | サイトでフィルタリング |
 | `--role, -r` | デバイスロールでフィルタリング |
+| `--theme` | テーマ: light または dark |
+| `--status` | ステータスでフィルタリング |
+| `--tag` | タグでフィルタリング |
+| `--group-by, -g` | グループ化: tag, site, location, prefix, none |
+| `--no-ports` | ポート名を非表示 |
+| `--no-colors` | ケーブル種別による色分けを無効化 |
+| `--color-by-status` | デバイスをステータスで色分け |
+| `--legend` | 凡例を表示（SVG出力時のみ） |
 
 ## ライブラリとしての使用
 

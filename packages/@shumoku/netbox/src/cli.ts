@@ -30,6 +30,7 @@ interface CliOptions {
   noPorts?: boolean
   noColors?: boolean
   colorByStatus?: boolean
+  legend?: boolean
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -83,6 +84,9 @@ function parseArgs(args: string[]): CliOptions {
       case '--color-by-status':
         options.colorByStatus = true
         break
+      case '--legend':
+        options.legend = true
+        break
       case '--help':
       case '-h':
         printHelp()
@@ -120,6 +124,7 @@ Display Options:
   --no-ports            Don't include port names in links
   --no-colors           Don't color links by cable type
   --color-by-status     Color devices by their status
+  --legend              Show legend in the diagram (SVG output only)
 
 Other:
   -h, --help            Show this help message
@@ -193,6 +198,7 @@ async function main(): Promise<void> {
       groupBy: options.groupBy ?? 'tag',
       colorByCableType: !options.noColors,
       colorByStatus: options.colorByStatus,
+      legend: options.legend,
     }
 
     const graph = convertToNetworkGraph(
