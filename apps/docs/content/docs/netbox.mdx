@@ -34,16 +34,56 @@ NetBox からネットワーク構成を取得し、Shumoku ダイアグラム�
 
 コマンドラインから NetBox データを Shumoku YAML に変換できます。
 
-```bash
-# 基本的な使い方
-npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
+<Tabs items={['npx', 'yarn', 'pnpm', 'bun']}>
+  <Tab value="npx">
+    ```bash
+    # 基本的な使い方
+    npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
 
-# ファイルに出力
-npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN -o network.yaml
+    # ファイルに出力
+    npx netbox-to-shumoku -o network.yaml
 
-# サイトでフィルタリング
-npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN --site tokyo-dc
-```
+    # サイトでフィルタリング
+    npx netbox-to-shumoku --site tokyo-dc
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    # 基本的な使い方
+    yarn dlx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
+
+    # ファイルに出力
+    yarn dlx netbox-to-shumoku -o network.yaml
+
+    # サイトでフィルタリング
+    yarn dlx netbox-to-shumoku --site tokyo-dc
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    # 基本的な使い方
+    pnpm dlx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
+
+    # ファイルに出力
+    pnpm dlx netbox-to-shumoku -o network.yaml
+
+    # サイトでフィルタリング
+    pnpm dlx netbox-to-shumoku --site tokyo-dc
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    # 基本的な使い方
+    bunx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
+
+    # ファイルに出力
+    bunx netbox-to-shumoku -o network.yaml
+
+    # サイトでフィルタリング
+    bunx netbox-to-shumoku --site tokyo-dc
+    ```
+  </Tab>
+</Tabs>
 
 ### CLI オプション
 
