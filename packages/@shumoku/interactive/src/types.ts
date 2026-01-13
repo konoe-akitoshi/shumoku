@@ -12,6 +12,12 @@ export interface InteractiveOptions {
   modal?: { enabled?: boolean }
   /** Tooltip configuration */
   tooltip?: { enabled?: boolean }
+  /** Pan/Zoom configuration */
+  panZoom?: {
+    enabled?: boolean
+    minScale?: number
+    maxScale?: number
+  }
 }
 
 /**
@@ -28,4 +34,8 @@ export interface InteractiveInstance {
   showLinkTooltip: (linkId: string, x: number, y: number) => void
   /** Hide tooltip */
   hideTooltip: () => void
+  /** Reset view to fit content */
+  resetView: () => void
+  /** Get current scale */
+  getScale: () => number
 }

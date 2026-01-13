@@ -1,5 +1,5 @@
 /**
- * Interactive Runtime - Hover tooltip with touch support
+ * Interactive Runtime - Hover tooltip with touch support and pan/zoom
  */
 
 import type { InteractiveInstance, InteractiveOptions } from './types.js'
@@ -244,6 +244,26 @@ function getTooltipInfo(el: Element): TooltipInfo | null {
   return null
 }
 
+// ViewBox utilities
+interface ViewBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+function parseViewBox(svg: SVGSVGElement): ViewBox | null {
+  const vb = svg.getAttribute('viewBox')
+  if (!vb) return null
+  const parts = vb.split(/\s+|,/).map(Number)
+  if (parts.length !== 4 || parts.some(isNaN)) return null
+  return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
+}
+
+function setViewBox(svg: SVGSVGElement, vb: ViewBox): void {
+  svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.width} ${vb.height}`)
+}
+
 export function initInteractive(options: InteractiveOptions): InteractiveInstance {
   const target = typeof options.target === 'string'
     ? document.querySelector(options.target)
@@ -251,14 +271,56 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
 
   if (!target) throw new Error('Target not found')
 
+  const svg = target.closest('svg') || target.querySelector('svg') || target as SVGSVGElement
+  if (!(svg instanceof SVGSVGElement)) throw new Error('SVG element not found')
+
   // Inject highlight styles
   injectHighlightStyles()
+
+  // Pan/Zoom settings
+  const panZoomEnabled = options.panZoom?.enabled ?? true
+  const minScale = options.panZoom?.minScale ?? 0.1
+  const maxScale = options.panZoom?.maxScale ?? 10
+  const ZOOM_FACTOR = 1.2
+
+  // Store original viewBox for reset and scale calculation
+  let originalViewBox: ViewBox | null = null
+  const initViewBox = () => {
+    originalViewBox = parseViewBox(svg)
+    if (!originalViewBox) {
+      // Fallback: use SVG bounding box
+      const bbox = svg.getBBox()
+      originalViewBox = { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height }
+      setViewBox(svg, originalViewBox)
+    }
+  }
+  initViewBox()
+
+  // Calculate current scale
+  const getScale = (): number => {
+    if (!originalViewBox) return 1
+    const current = parseViewBox(svg)
+    if (!current) return 1
+    return originalViewBox.width / current.width
+  }
 
   // Track if we're currently showing a touch tooltip
   let touchTooltipActive = false
 
+  // Pan state
+  let isPanning = false
+  let panStartX = 0
+  let panStartY = 0
+  let panStartViewBox: ViewBox | null = null
+
+  // Pinch state
+  let initialPinchDistance = 0
+  let pinchStartViewBox: ViewBox | null = null
+  let pinchCenter: { x: number; y: number } | null = null
+
   // Mouse move handler (desktop hover)
   const handleMouseMove = (e: Event) => {
+    if (isPanning) return
     if (isTouchDevice) return // Skip on touch devices
 
     const me = e as MouseEvent
@@ -275,18 +337,212 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
   // Mouse leave handler
   const handleMouseLeave = () => {
     if (isTouchDevice) return
+    if (isPanning) return
     hideTooltip()
     highlightElement(null)
   }
 
-  // Touch start handler - detect touch device
-  const handleTouchStart = () => {
-    isTouchDevice = true
+  // Mouse down - start pan
+  const handleMouseDown = (e: Event) => {
+    if (!panZoomEnabled) return
+    const me = e as MouseEvent
+    if (me.button !== 0) return // Left button only
+
+    // Don't start pan if clicking on interactive element
+    const info = getTooltipInfo(me.target as Element)
+    if (info) return
+
+    isPanning = true
+    panStartX = me.clientX
+    panStartY = me.clientY
+    panStartViewBox = parseViewBox(svg)
+    svg.style.cursor = 'grabbing'
+    e.preventDefault()
   }
 
-  // Touch/click handler for mobile
+  // Mouse move - pan
+  const handlePan = (e: Event) => {
+    if (!isPanning || !panStartViewBox) return
+    const me = e as MouseEvent
+
+    const rect = svg.getBoundingClientRect()
+    const dx = me.clientX - panStartX
+    const dy = me.clientY - panStartY
+
+    // Convert screen delta to viewBox delta
+    const scaleX = panStartViewBox.width / rect.width
+    const scaleY = panStartViewBox.height / rect.height
+
+    setViewBox(svg, {
+      x: panStartViewBox.x - dx * scaleX,
+      y: panStartViewBox.y - dy * scaleY,
+      width: panStartViewBox.width,
+      height: panStartViewBox.height,
+    })
+  }
+
+  // Mouse up - end pan
+  const handleMouseUp = () => {
+    if (isPanning) {
+      isPanning = false
+      panStartViewBox = null
+      svg.style.cursor = ''
+    }
+  }
+
+  // Wheel zoom
+  const handleWheel = (e: Event) => {
+    if (!panZoomEnabled) return
+    const we = e as WheelEvent
+    we.preventDefault()
+
+    const vb = parseViewBox(svg)
+    if (!vb || !originalViewBox) return
+
+    const rect = svg.getBoundingClientRect()
+    const mouseXRatio = (we.clientX - rect.left) / rect.width
+    const mouseYRatio = (we.clientY - rect.top) / rect.height
+
+    const mouseX = vb.x + vb.width * mouseXRatio
+    const mouseY = vb.y + vb.height * mouseYRatio
+
+    const zoomFactor = we.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR
+    const newWidth = vb.width * zoomFactor
+    const newHeight = vb.height * zoomFactor
+
+    // Check scale limits
+    const newScale = originalViewBox.width / newWidth
+    if (newScale < minScale || newScale > maxScale) return
+
+    setViewBox(svg, {
+      x: mouseX - newWidth * mouseXRatio,
+      y: mouseY - newHeight * mouseYRatio,
+      width: newWidth,
+      height: newHeight,
+    })
+  }
+
+  // Touch start handler
+  const handleTouchStart = (e: Event) => {
+    isTouchDevice = true
+    const te = e as TouchEvent
+
+    if (te.touches.length === 1 && panZoomEnabled) {
+      // Single touch - check if on interactive element first
+      const touch = te.touches[0]
+      const targetEl = document.elementFromPoint(touch.clientX, touch.clientY)
+      const info = targetEl ? getTooltipInfo(targetEl) : null
+
+      if (!info) {
+        // Start pan
+        isPanning = true
+        panStartX = touch.clientX
+        panStartY = touch.clientY
+        panStartViewBox = parseViewBox(svg)
+      }
+    } else if (te.touches.length === 2 && panZoomEnabled) {
+      // Two touches - start pinch
+      isPanning = false
+      const t1 = te.touches[0]
+      const t2 = te.touches[1]
+      initialPinchDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
+      pinchStartViewBox = parseViewBox(svg)
+
+      // Calculate pinch center in viewBox coordinates
+      const rect = svg.getBoundingClientRect()
+      const centerX = (t1.clientX + t2.clientX) / 2
+      const centerY = (t1.clientY + t2.clientY) / 2
+      const vb = pinchStartViewBox
+      if (vb) {
+        const xRatio = (centerX - rect.left) / rect.width
+        const yRatio = (centerY - rect.top) / rect.height
+        pinchCenter = {
+          x: vb.x + vb.width * xRatio,
+          y: vb.y + vb.height * yRatio,
+        }
+      }
+    }
+  }
+
+  // Touch move handler
+  const handleTouchMove = (e: Event) => {
+    const te = e as TouchEvent
+
+    if (te.touches.length === 1 && isPanning && panStartViewBox) {
+      // Pan
+      const touch = te.touches[0]
+      const rect = svg.getBoundingClientRect()
+      const dx = touch.clientX - panStartX
+      const dy = touch.clientY - panStartY
+
+      const scaleX = panStartViewBox.width / rect.width
+      const scaleY = panStartViewBox.height / rect.height
+
+      setViewBox(svg, {
+        x: panStartViewBox.x - dx * scaleX,
+        y: panStartViewBox.y - dy * scaleY,
+        width: panStartViewBox.width,
+        height: panStartViewBox.height,
+      })
+
+      te.preventDefault()
+    } else if (te.touches.length === 2 && pinchStartViewBox && pinchCenter && originalViewBox) {
+      // Pinch zoom
+      const t1 = te.touches[0]
+      const t2 = te.touches[1]
+      const distance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
+      const scale = distance / initialPinchDistance
+
+      const newWidth = pinchStartViewBox.width / scale
+      const newHeight = pinchStartViewBox.height / scale
+
+      // Check scale limits
+      const newScale = originalViewBox.width / newWidth
+      if (newScale < minScale || newScale > maxScale) return
+
+      // Zoom towards pinch center
+      const rect = svg.getBoundingClientRect()
+      const centerX = (t1.clientX + t2.clientX) / 2
+      const centerY = (t1.clientY + t2.clientY) / 2
+      const xRatio = (centerX - rect.left) / rect.width
+      const yRatio = (centerY - rect.top) / rect.height
+
+      setViewBox(svg, {
+        x: pinchCenter.x - newWidth * xRatio,
+        y: pinchCenter.y - newHeight * yRatio,
+        width: newWidth,
+        height: newHeight,
+      })
+
+      te.preventDefault()
+    }
+  }
+
+  // Touch end handler
+  const handleTouchEnd = (e: Event) => {
+    const te = e as TouchEvent
+
+    if (te.touches.length === 0) {
+      isPanning = false
+      panStartViewBox = null
+      pinchStartViewBox = null
+      pinchCenter = null
+    } else if (te.touches.length === 1) {
+      // Switched from pinch to pan
+      pinchStartViewBox = null
+      pinchCenter = null
+      isPanning = true
+      const touch = te.touches[0]
+      panStartX = touch.clientX
+      panStartY = touch.clientY
+      panStartViewBox = parseViewBox(svg)
+    }
+  }
+
+  // Touch/click handler for mobile tooltip
   const handleTap = (e: Event) => {
     if (!isTouchDevice) return
+    if (isPanning) return
 
     const me = e as MouseEvent
     const targetEl = e.target as Element
@@ -316,38 +572,60 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
   let lastViewBox = ''
   const trackViewBox = () => {
     if (currentHighlight) {
-      const svg = currentHighlight.closest('svg')
-      if (svg) {
-        const viewBox = svg.getAttribute('viewBox') || ''
-        if (viewBox !== lastViewBox) {
-          lastViewBox = viewBox
-          updateHighlightPosition()
-        }
+      const viewBox = svg.getAttribute('viewBox') || ''
+      if (viewBox !== lastViewBox) {
+        lastViewBox = viewBox
+        updateHighlightPosition()
       }
     }
     rafId = requestAnimationFrame(trackViewBox)
   }
   rafId = requestAnimationFrame(trackViewBox)
 
+  // Reset view
+  const resetView = () => {
+    if (originalViewBox) {
+      setViewBox(svg, originalViewBox)
+    }
+  }
+
+  // Set touch-action to prevent browser gestures
+  if (panZoomEnabled) {
+    svg.style.touchAction = 'none'
+  }
+
   // Add event listeners
-  target.addEventListener('mousemove', handleMouseMove)
-  target.addEventListener('mouseleave', handleMouseLeave)
-  target.addEventListener('touchstart', handleTouchStart, { passive: true })
-  target.addEventListener('click', handleTap)
-  // Listen for zoom/scroll to update highlight position
+  svg.addEventListener('mousemove', handleMouseMove)
+  svg.addEventListener('mouseleave', handleMouseLeave)
+  svg.addEventListener('mousedown', handleMouseDown)
+  svg.addEventListener('click', handleTap)
+  svg.addEventListener('wheel', handleWheel, { passive: false })
+  svg.addEventListener('touchstart', handleTouchStart, { passive: true })
+  svg.addEventListener('touchmove', handleTouchMove, { passive: false })
+  svg.addEventListener('touchend', handleTouchEnd)
+
+  // Global mouse events for pan
+  document.addEventListener('mousemove', handlePan)
+  document.addEventListener('mouseup', handleMouseUp)
+
+  // Listen for scroll/resize to update highlight position
   window.addEventListener('scroll', handlePositionUpdate, true)
   window.addEventListener('resize', handlePositionUpdate)
-  window.addEventListener('wheel', handlePositionUpdate, { passive: true })
 
   return {
     destroy: () => {
-      target.removeEventListener('mousemove', handleMouseMove)
-      target.removeEventListener('mouseleave', handleMouseLeave)
-      target.removeEventListener('touchstart', handleTouchStart)
-      target.removeEventListener('click', handleTap)
+      svg.removeEventListener('mousemove', handleMouseMove)
+      svg.removeEventListener('mouseleave', handleMouseLeave)
+      svg.removeEventListener('mousedown', handleMouseDown)
+      svg.removeEventListener('click', handleTap)
+      svg.removeEventListener('wheel', handleWheel)
+      svg.removeEventListener('touchstart', handleTouchStart)
+      svg.removeEventListener('touchmove', handleTouchMove)
+      svg.removeEventListener('touchend', handleTouchEnd)
+      document.removeEventListener('mousemove', handlePan)
+      document.removeEventListener('mouseup', handleMouseUp)
       window.removeEventListener('scroll', handlePositionUpdate, true)
       window.removeEventListener('resize', handlePositionUpdate)
-      window.removeEventListener('wheel', handlePositionUpdate)
       if (rafId !== null) cancelAnimationFrame(rafId)
       highlightElement(null)
       if (tooltip) {
@@ -371,5 +649,7 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
       highlightElement(null)
       touchTooltipActive = false
     },
+    resetView,
+    getScale,
   }
 }
