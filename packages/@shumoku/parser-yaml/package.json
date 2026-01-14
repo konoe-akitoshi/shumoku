@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/parser-yaml",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "YAML parser for shumoku network topology definitions",
   "license": "MIT",
   "author": "konoe-akitoshi",
