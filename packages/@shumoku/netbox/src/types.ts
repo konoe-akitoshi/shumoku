@@ -53,6 +53,10 @@ export interface NetBoxDevice {
     name: string
     slug: string
   }
+  rack?: {
+    id: number
+    name: string
+  }
 }
 
 export interface NetBoxDeviceResponse {

@@ -5,7 +5,17 @@
 
 export type { LegendSettings } from '@shumoku/core/models'
 export { NetBoxClient, type QueryParams } from './client.js'
-export { convertToNetworkGraph, convertToNetworkGraphWithVMs, toYaml } from './converter.js'
+export type {
+  CrossLocationLink,
+  HierarchicalConverterOptions,
+  HierarchicalOutput,
+} from './converter.js'
+export {
+  convertToHierarchicalYaml,
+  convertToNetworkGraph,
+  convertToNetworkGraphWithVMs,
+  toYaml,
+} from './converter.js'
 export type {
   CableStyle,
   ConnectionData,

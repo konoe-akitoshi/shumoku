@@ -8,8 +8,98 @@ import type {
   LinkEndpoint,
   NetworkGraph,
   Node,
+  Pin,
   Subgraph,
 } from '@shumoku/core/models'
+
+// ============================================
+// Hierarchical Output Types
+// ============================================
+
+/**
+ * Options for hierarchical output generation
+ */
+export interface HierarchicalConverterOptions extends ConverterOptions {
+  /**
+   * Enable hierarchical output (multiple files)
+   */
+  hierarchical?: boolean
+
+  /**
+   * Hierarchy depth level
+   * - 'site': Group by site (top level)
+   * - 'location': Group by location (more granular)
+   * - 'rack': Group by rack (most granular)
+   */
+  hierarchyDepth?: 'site' | 'location' | 'rack'
+
+  /**
+   * Base path for file references in output YAML
+   * Default: './'
+   */
+  fileBasePath?: string
+}
+
+/**
+ * Cross-location link representing a cable between devices in different locations
+ */
+export interface CrossLocationLink {
+  /**
+   * Source location ID
+   */
+  fromLocation: string
+
+  /**
+   * Source device name
+   */
+  fromDevice: string
+
+  /**
+   * Source port name
+   */
+  fromPort: string
+
+  /**
+   * Target location ID
+   */
+  toLocation: string
+
+  /**
+   * Target device name
+   */
+  toDevice: string
+
+  /**
+   * Target port name
+   */
+  toPort: string
+
+  /**
+   * Original cable data
+   */
+  cable: ConnectionData
+}
+
+/**
+ * Result of hierarchical conversion
+ */
+export interface HierarchicalOutput {
+  /**
+   * Main YAML content (overview with location subgraphs)
+   */
+  main: string
+
+  /**
+   * Map of location ID to YAML content
+   */
+  files: Map<string, string>
+
+  /**
+   * Detected cross-location links
+   */
+  crossLinks: CrossLocationLink[]
+}
+
 import type {
   ConnectionData,
   ConverterOptions,
@@ -961,6 +1051,418 @@ export function toYaml(graph: NetworkGraph): string {
     if (link.style?.stroke) {
       lines.push('    style:')
       lines.push(`      stroke: "${link.style.stroke}"`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+// ============================================
+// Hierarchical Output Generation
+// ============================================
+
+/**
+ * Convert NetBox data to hierarchical YAML output
+ * Generates multiple files: main.yaml + per-location files
+ */
+export function convertToHierarchicalYaml(
+  deviceResp: NetBoxDeviceResponse,
+  interfaceResp: NetBoxInterfaceResponse,
+  cableResp: NetBoxCableResponse,
+  options: HierarchicalConverterOptions = {},
+): HierarchicalOutput {
+  const hierarchyDepth = options.hierarchyDepth ?? 'location'
+  const fileBasePath = options.fileBasePath ?? './'
+
+  // 1. Build device info map with location data
+  const deviceInfoMap = new Map<
+    string,
+    {
+      name: string
+      site?: string
+      location?: string
+      rack?: string
+      tags: NetBoxTag[]
+      model?: string
+      manufacturer?: string
+      ip?: string
+      role?: string
+      status?: DeviceStatusValue
+    }
+  >()
+
+  for (const device of deviceResp.results) {
+    deviceInfoMap.set(device.name, {
+      name: device.name,
+      site: device.site?.slug,
+      location: device.location?.slug,
+      rack: device.rack?.name,
+      tags: device.tags,
+      model: device.device_type?.model,
+      manufacturer: device.device_type?.manufacturer?.name,
+      ip: device.primary_ip4?.address?.split('/')[0] ?? device.primary_ip6?.address?.split('/')[0],
+      role: device.role?.slug,
+      status: device.status?.value,
+    })
+  }
+
+  // 2. Build port info maps
+  const portVlanMap = new Map<string, Map<string, number[]>>()
+  const portSpeedMap = new Map<string, Map<string, number | null>>()
+  for (const iface of interfaceResp.results) {
+    const devName = iface.device.name
+    if (!portVlanMap.has(devName)) {
+      portVlanMap.set(devName, new Map())
+    }
+    if (!portSpeedMap.has(devName)) {
+      portSpeedMap.set(devName, new Map())
+    }
+
+    const vlans = new Set<number>()
+    if (iface.untagged_vlan?.vid) vlans.add(iface.untagged_vlan.vid)
+    for (const tv of iface.tagged_vlans) vlans.add(tv.vid)
+
+    portVlanMap.get(devName)!.set(iface.name, Array.from(vlans))
+    portSpeedMap.get(devName)!.set(iface.name, iface.speed)
+  }
+
+  // 3. Get location key based on hierarchy depth
+  const getLocationKey = (deviceName: string): string => {
+    const info = deviceInfoMap.get(deviceName)
+    if (!info) return 'unknown'
+
+    switch (hierarchyDepth) {
+      case 'site':
+        return info.site ?? 'unknown'
+      case 'location':
+        return info.location ?? info.site ?? 'unknown'
+      case 'rack':
+        return info.rack ?? info.location ?? info.site ?? 'unknown'
+      default:
+        return info.location ?? 'unknown'
+    }
+  }
+
+  // 4. Group devices by location
+  const locationDevices = new Map<string, Set<string>>()
+  for (const [deviceName] of deviceInfoMap) {
+    const loc = getLocationKey(deviceName)
+    if (!locationDevices.has(loc)) {
+      locationDevices.set(loc, new Set())
+    }
+    locationDevices.get(loc)!.add(deviceName)
+  }
+
+  // 5. Analyze cables to find cross-location links
+  const crossLinks: CrossLocationLink[] = []
+  const internalConnections = new Map<string, ConnectionData[]>() // location -> connections
+
+  for (const cable of cableResp.results) {
+    if (cable.a_terminations.length === 0 || cable.b_terminations.length === 0) continue
+
+    const termA = cable.a_terminations[0].object
+    const termB = cable.b_terminations[0].object
+    const nameA = termA.device.name
+    const nameB = termB.device.name
+    const locA = getLocationKey(nameA)
+    const locB = getLocationKey(nameB)
+
+    const vlansA = portVlanMap.get(nameA)?.get(termA.name) ?? []
+    const vlansB = portVlanMap.get(nameB)?.get(termB.name) ?? []
+    const speedA = portSpeedMap.get(nameA)?.get(termA.name) ?? null
+    const speedB = portSpeedMap.get(nameB)?.get(termB.name) ?? null
+
+    const conn: ConnectionData = {
+      srcDev: nameA,
+      srcPort: termA.name,
+      srcLevel: 0,
+      dstDev: nameB,
+      dstPort: termB.name,
+      dstLevel: 0,
+      dstTag: '',
+      cableType: cable.type,
+      cableColor: cable.color ? `#${cable.color}` : undefined,
+      cableLabel: cable.label,
+      cableLength:
+        cable.length && cable.length_unit ? `${cable.length}${cable.length_unit.value}` : undefined,
+      speed: speedA ?? speedB,
+      vlans: [...new Set([...vlansA, ...vlansB])],
+    }
+
+    if (locA !== locB) {
+      // Cross-location cable - becomes a pin
+      crossLinks.push({
+        fromLocation: locA,
+        fromDevice: nameA,
+        fromPort: termA.name,
+        toLocation: locB,
+        toDevice: nameB,
+        toPort: termB.name,
+        cable: conn,
+      })
+    } else {
+      // Internal connection within location
+      if (!internalConnections.has(locA)) {
+        internalConnections.set(locA, [])
+      }
+      internalConnections.get(locA)!.push(conn)
+    }
+  }
+
+  // 6. Generate pins for each location from cross-location links
+  const locationPins = new Map<string, Pin[]>()
+
+  for (const crossLink of crossLinks) {
+    // Add pin to source location
+    if (!locationPins.has(crossLink.fromLocation)) {
+      locationPins.set(crossLink.fromLocation, [])
+    }
+    const fromPinId = `${crossLink.toLocation}-link`
+    const existingFromPin = locationPins
+      .get(crossLink.fromLocation)!
+      .find((p) => p.id === fromPinId)
+    if (!existingFromPin) {
+      locationPins.get(crossLink.fromLocation)!.push({
+        id: fromPinId,
+        label: `To ${formatLocationLabel(crossLink.toLocation)}`,
+        device: crossLink.fromDevice,
+        port: crossLink.fromPort,
+        direction: 'out',
+      })
+    }
+
+    // Add pin to target location
+    if (!locationPins.has(crossLink.toLocation)) {
+      locationPins.set(crossLink.toLocation, [])
+    }
+    const toPinId = `${crossLink.fromLocation}-link`
+    const existingToPin = locationPins.get(crossLink.toLocation)!.find((p) => p.id === toPinId)
+    if (!existingToPin) {
+      locationPins.get(crossLink.toLocation)!.push({
+        id: toPinId,
+        label: `From ${formatLocationLabel(crossLink.fromLocation)}`,
+        device: crossLink.toDevice,
+        port: crossLink.toPort,
+        direction: 'in',
+      })
+    }
+  }
+
+  // 7. Generate per-location YAML files
+  const files = new Map<string, string>()
+
+  for (const [locationId, deviceNames] of locationDevices) {
+    const locationGraph = buildLocationGraph(
+      locationId,
+      deviceNames,
+      deviceInfoMap,
+      internalConnections.get(locationId) ?? [],
+      locationPins.get(locationId) ?? [],
+      options,
+    )
+    files.set(locationId, toYaml(locationGraph))
+  }
+
+  // 8. Generate main YAML with location subgraphs
+  const mainYaml = generateMainYaml(
+    locationDevices,
+    locationPins,
+    crossLinks,
+    fileBasePath,
+    options,
+  )
+
+  return {
+    main: mainYaml,
+    files,
+    crossLinks,
+  }
+}
+
+/**
+ * Format location slug to human-readable label
+ */
+function formatLocationLabel(slug: string): string {
+  return slug
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+/**
+ * Build NetworkGraph for a single location
+ */
+function buildLocationGraph(
+  locationId: string,
+  deviceNames: Set<string>,
+  deviceInfoMap: Map<
+    string,
+    {
+      name: string
+      site?: string
+      location?: string
+      rack?: string
+      tags: NetBoxTag[]
+      model?: string
+      manufacturer?: string
+      ip?: string
+      role?: string
+      status?: DeviceStatusValue
+    }
+  >,
+  connections: ConnectionData[],
+  pins: Pin[],
+  options: HierarchicalConverterOptions,
+): NetworkGraph {
+  const useRoleForType = options.useRoleForType ?? true
+  const colorByStatus = options.colorByStatus ?? false
+  const tagMapping = { ...DEFAULT_TAG_MAPPING, ...options.tagMapping }
+
+  const nodes: Node[] = []
+
+  for (const deviceName of deviceNames) {
+    const info = deviceInfoMap.get(deviceName)
+    if (!info) continue
+
+    const primaryTag = resolvePrimaryTag(info.tags)
+    const tagConfig = tagMapping[primaryTag]
+
+    let deviceType = tagConfig?.type
+    if (!deviceType && useRoleForType && info.role) {
+      deviceType = ROLE_TO_TYPE[info.role]
+    }
+    deviceType = deviceType ?? 'generic'
+
+    const labelLines: string[] = [`<b>${info.name}</b>`]
+    if (info.ip) {
+      labelLines.push(info.ip)
+    }
+
+    const node: Node = {
+      id: info.name,
+      label: labelLines,
+      shape: 'rounded',
+      type: deviceType as DeviceType,
+      rank: tagConfig?.level,
+      model: info.model?.toLowerCase(),
+      vendor: info.manufacturer?.toLowerCase(),
+    }
+
+    if (colorByStatus && info.status) {
+      const statusStyle = DEVICE_STATUS_STYLES[info.status]
+      if (statusStyle && Object.keys(statusStyle).length > 0) {
+        node.style = {
+          ...(statusStyle.fill && { fill: statusStyle.fill }),
+          ...(statusStyle.stroke && { stroke: statusStyle.stroke }),
+          ...(statusStyle.strokeDasharray && { strokeDasharray: statusStyle.strokeDasharray }),
+          ...(statusStyle.opacity && { opacity: statusStyle.opacity }),
+        }
+      }
+    }
+
+    nodes.push(node)
+  }
+
+  const links = buildLinks(connections, options.showPorts ?? true, options.colorByCableType ?? true)
+
+  return {
+    version: '1.0.0',
+    name: formatLocationLabel(locationId),
+    description: `Network topology for ${formatLocationLabel(locationId)}`,
+    nodes,
+    links,
+    pins: pins.length > 0 ? pins : undefined,
+    settings: {
+      direction: 'TB',
+      theme: options.theme ?? 'light',
+    },
+  }
+}
+
+/**
+ * Generate main YAML with location subgraphs and cross-location links
+ */
+function generateMainYaml(
+  locationDevices: Map<string, Set<string>>,
+  locationPins: Map<string, Pin[]>,
+  crossLinks: CrossLocationLink[],
+  fileBasePath: string,
+  options: HierarchicalConverterOptions,
+): string {
+  const lines: string[] = []
+
+  lines.push(`name: "Network Overview"`)
+  lines.push(`description: "Hierarchical network topology"`)
+  lines.push('')
+
+  // Settings
+  lines.push('settings:')
+  lines.push(`  direction: TB`)
+  if (options.theme) {
+    lines.push(`  theme: ${options.theme}`)
+  }
+  lines.push('')
+
+  // Location subgraphs with file references
+  lines.push('subgraphs:')
+  let styleIndex = 0
+  for (const [locationId, _devices] of locationDevices) {
+    const style = SITE_LOCATION_STYLES[styleIndex % SITE_LOCATION_STYLES.length]
+    styleIndex++
+
+    lines.push(`  - id: ${locationId}`)
+    lines.push(`    label: "${formatLocationLabel(locationId)}"`)
+    lines.push(`    file: "${fileBasePath}${locationId}.yaml"`)
+
+    // Add pins for this location
+    const pins = locationPins.get(locationId)
+    if (pins && pins.length > 0) {
+      lines.push('    pins:')
+      for (const pin of pins) {
+        lines.push(`      - id: ${pin.id}`)
+        if (pin.label) lines.push(`        label: "${pin.label}"`)
+        if (pin.direction) lines.push(`        direction: ${pin.direction}`)
+      }
+    }
+
+    lines.push('    style:')
+    lines.push(`      fill: "${style.fill}"`)
+    lines.push(`      stroke: "${style.stroke}"`)
+    lines.push(`      strokeWidth: 2`)
+  }
+  lines.push('')
+
+  // Cross-location links using pin notation
+  if (crossLinks.length > 0) {
+    lines.push('links:')
+
+    // Group cross-links by location pair to avoid duplicates
+    const linkPairs = new Map<string, CrossLocationLink>()
+    for (const crossLink of crossLinks) {
+      const key = [crossLink.fromLocation, crossLink.toLocation].sort().join('|')
+      if (!linkPairs.has(key)) {
+        linkPairs.set(key, crossLink)
+      }
+    }
+
+    for (const [, crossLink] of linkPairs) {
+      lines.push('  - from:')
+      lines.push(`      node: ${crossLink.fromLocation}`)
+      lines.push(`      pin: ${crossLink.toLocation}-link`)
+      lines.push('    to:')
+      lines.push(`      node: ${crossLink.toLocation}`)
+      lines.push(`      pin: ${crossLink.fromLocation}-link`)
+
+      // Add bandwidth if available
+      const bandwidth = convertSpeedToBandwidth(crossLink.cable.speed)
+      if (bandwidth) {
+        lines.push(`    bandwidth: ${bandwidth}`)
+      }
+
+      // Add label if present
+      if (crossLink.cable.cableLabel) {
+        lines.push(`    label: "${crossLink.cable.cableLabel}"`)
+      }
     }
   }
 
