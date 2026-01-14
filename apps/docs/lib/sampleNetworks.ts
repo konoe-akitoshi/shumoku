@@ -560,3 +560,240 @@ links:
     to: server2
     bandwidth: 1G
 `
+
+export const hierarchicalNetwork = `
+name: "Hierarchical Network"
+description: "Multi-location network with hierarchical structure"
+
+settings:
+  theme: light
+
+subgraphs:
+  # Main locations as hierarchical subgraphs
+  - id: headquarters
+    label: "Headquarters"
+    style:
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+      strokeWidth: 2
+    pins:
+      - id: wan-uplink
+        label: "WAN Uplink"
+        direction: out
+      - id: branch-link
+        label: "Branch Link"
+        direction: out
+
+  - id: branch-office
+    label: "Branch Office"
+    style:
+      fill: "#e8f5e9"
+      stroke: "#2e7d32"
+      strokeWidth: 2
+    pins:
+      - id: hq-link
+        label: "HQ Link"
+        direction: in
+
+  - id: datacenter
+    label: "Data Center"
+    style:
+      fill: "#fff3e0"
+      stroke: "#e65100"
+      strokeWidth: 2
+    pins:
+      - id: mgmt-link
+        label: "Management"
+        direction: in
+
+nodes:
+  # ========== Headquarters ==========
+  - id: hq-router
+    label:
+      - "<b>HQ-Router</b>"
+      - "10.0.0.1"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: headquarters
+
+  - id: hq-fw
+    label:
+      - "<b>HQ-Firewall</b>"
+      - "10.0.0.2"
+    type: firewall
+    parent: headquarters
+
+  - id: hq-core-sw
+    label:
+      - "<b>HQ-Core-SW</b>"
+      - "10.0.1.1"
+    type: l3-switch
+    vendor: juniper
+    model: EX4400-48T
+    parent: headquarters
+
+  - id: hq-server
+    label:
+      - "<b>App Server</b>"
+      - "10.0.10.10"
+    type: server
+    parent: headquarters
+
+  # ========== Branch Office ==========
+  - id: branch-router
+    label:
+      - "<b>Branch-Router</b>"
+      - "10.1.0.1"
+    type: router
+    vendor: yamaha
+    model: rtx1300
+    parent: branch-office
+
+  - id: branch-sw
+    label:
+      - "<b>Branch-SW</b>"
+      - "10.1.1.1"
+    type: l2-switch
+    parent: branch-office
+
+  - id: branch-ap
+    label: "Branch-AP"
+    type: access-point
+    vendor: aruba
+    model: ap500-series
+    parent: branch-office
+
+  # ========== Data Center ==========
+  - id: dc-router
+    label:
+      - "<b>DC-Router</b>"
+      - "10.2.0.1"
+    type: router
+    parent: datacenter
+
+  - id: dc-fw
+    label:
+      - "<b>DC-Firewall</b>"
+      - "10.2.0.2"
+    type: firewall
+    parent: datacenter
+
+  - id: dc-core-sw
+    label:
+      - "<b>DC-Core-SW</b>"
+      - "10.2.1.1"
+    type: l3-switch
+    parent: datacenter
+
+  - id: db-server
+    label:
+      - "<b>Database</b>"
+      - "10.2.10.10"
+    type: database
+    parent: datacenter
+
+  - id: web-server
+    label:
+      - "<b>Web Server</b>"
+      - "10.2.10.20"
+    type: server
+    parent: datacenter
+
+links:
+  # ===== HQ Internal =====
+  - from:
+      node: hq-router
+      port: wan1
+    to:
+      node: hq-fw
+      port: outside
+    bandwidth: 10G
+
+  - from:
+      node: hq-fw
+      port: inside
+    to:
+      node: hq-core-sw
+      port: uplink
+    bandwidth: 10G
+
+  - from:
+      node: hq-core-sw
+      port: eth1
+    to:
+      node: hq-server
+      port: eth0
+    bandwidth: 1G
+
+  # ===== Branch Internal =====
+  - from:
+      node: branch-router
+      port: lan1
+    to:
+      node: branch-sw
+      port: uplink
+    bandwidth: 1G
+
+  - from:
+      node: branch-sw
+      port: eth1
+    to:
+      node: branch-ap
+      port: eth0
+    bandwidth: 1G
+
+  # ===== DC Internal =====
+  - from:
+      node: dc-router
+      port: lan1
+    to:
+      node: dc-fw
+      port: outside
+    bandwidth: 10G
+
+  - from:
+      node: dc-fw
+      port: inside
+    to:
+      node: dc-core-sw
+      port: uplink
+    bandwidth: 10G
+
+  - from:
+      node: dc-core-sw
+      port: eth1
+    to:
+      node: db-server
+      port: eth0
+    bandwidth: 10G
+
+  - from:
+      node: dc-core-sw
+      port: eth2
+    to:
+      node: web-server
+      port: eth0
+    bandwidth: 10G
+
+  # ===== Cross-location Links (via pins) =====
+  # HQ to Branch WAN
+  - from:
+      node: hq-router
+      port: wan2
+    to:
+      node: branch-router
+      port: wan1
+    label: "Site-to-Site VPN"
+    type: dashed
+
+  # HQ to DC
+  - from:
+      node: hq-fw
+      port: dmz
+    to:
+      node: dc-router
+      port: wan1
+    label: "DC Link (100G)"
+    bandwidth: 100G
+`

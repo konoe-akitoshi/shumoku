@@ -515,7 +515,11 @@ export class SVGRenderer {
       }
     }
 
-    return `<g class="subgraph" data-id="${sg.id}">
+    // Hierarchical navigation attributes
+    const hasSheet = subgraph.file || (subgraph.pins && subgraph.pins.length > 0)
+    const sheetAttrs = hasSheet ? ` data-has-sheet="true" data-sheet-id="${sg.id}"` : ''
+
+    return `<g class="subgraph" data-id="${sg.id}"${sheetAttrs}>
   <rect x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}"
     rx="${rx}" ry="${rx}"
     fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { LayoutResult, NetworkGraph } from 'shumoku'
 import { HierarchicalLayout, parser, svg } from 'shumoku'
 import { cn } from '@/lib/cn'
-import { enterpriseNetwork, simpleNetwork } from '@/lib/sampleNetworks'
+import { enterpriseNetwork, hierarchicalNetwork, simpleNetwork } from '@/lib/sampleNetworks'
 import { InteractivePreview } from './InteractivePreview'
 
 // Set IIFE once at module load
@@ -196,10 +196,12 @@ export default function PlaygroundClient() {
             onChange={(e) => {
               if (e.target.value === 'enterprise') setYamlContent(enterpriseNetwork)
               else if (e.target.value === 'simple') setYamlContent(simpleNetwork)
+              else if (e.target.value === 'hierarchical') setYamlContent(hierarchicalNetwork)
             }}
           >
             <option value="enterprise">Enterprise Network</option>
             <option value="simple">Simple Network</option>
+            <option value="hierarchical">Hierarchical Network</option>
           </select>
 
           <button
