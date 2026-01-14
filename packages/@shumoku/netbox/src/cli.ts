@@ -5,12 +5,14 @@
  * Usage:
  *   netbox-to-shumoku --url $NETBOX_URL --token $NETBOX_TOKEN --output topology.yaml
  *   netbox-to-shumoku --output topology.svg
+ *   netbox-to-shumoku --output topology.html
  */
 
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { HierarchicalLayout } from '@shumoku/core/layout'
-import { svg } from '@shumoku/renderer'
+import { html, svg } from '@shumoku/renderer'
+import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
 import '@shumoku/icons' // Register vendor icons
 import type { QueryParams } from './client.js'
 import { NetBoxClient } from './client.js'
@@ -99,7 +101,7 @@ function parseArgs(args: string[]): CliOptions {
 
 function printHelp(): void {
   console.log(`
-netbox-to-shumoku - Convert NetBox topology to Shumoku YAML/SVG
+netbox-to-shumoku - Convert NetBox topology to Shumoku YAML/SVG/HTML
 
 Usage:
   netbox-to-shumoku [options]
@@ -110,7 +112,8 @@ Connection Options:
 
 Output Options:
   -o, --output <file>   Output file (default: topology.yaml)
-                        Use .svg extension for direct SVG output
+                        Use .svg for static SVG output
+                        Use .html for interactive HTML output
   --theme <theme>       Theme: light or dark (default: light)
 
 Filtering Options:
@@ -124,7 +127,7 @@ Display Options:
   --no-ports            Don't include port names in links
   --no-colors           Don't color links by cable type
   --color-by-status     Color devices by their status
-  --legend              Show legend in the diagram (SVG output only)
+  --legend              Show legend in the diagram (SVG/HTML output)
 
 Other:
   -h, --help            Show this help message
@@ -137,6 +140,9 @@ Examples:
 
   # Filter by site and group by location
   netbox-to-shumoku --site tokyo-dc --group-by location -o tokyo.svg
+
+  # Generate interactive HTML with tooltips and pan/zoom
+  netbox-to-shumoku --output topology.html
 
   # Show device status colors
   netbox-to-shumoku --color-by-status --output topology.svg
@@ -210,19 +216,32 @@ async function main(): Promise<void> {
 
     // Determine output format
     const outputPath = resolve(process.cwd(), options.output)
-    const isSvg = options.output.toLowerCase().endsWith('.svg')
+    const outputLower = options.output.toLowerCase()
+    const isSvg = outputLower.endsWith('.svg')
+    const isHtml = outputLower.endsWith('.html') || outputLower.endsWith('.htm')
 
-    if (isSvg) {
-      // Generate SVG
+    if (isSvg || isHtml) {
+      // Generate SVG or HTML (both need layout)
       console.log('Generating layout...')
       const layout = new HierarchicalLayout()
       const layoutResult = await layout.layoutAsync(graph)
 
-      console.log('Rendering SVG...')
-      const svgOutput = svg.render(graph, layoutResult)
+      if (isHtml) {
+        // Generate interactive HTML
+        console.log('Rendering HTML...')
+        html.setIIFE(INTERACTIVE_IIFE)
+        const htmlOutput = html.render(graph, layoutResult)
 
-      writeFileSync(outputPath, svgOutput, 'utf-8')
-      console.log(`SVG written to: ${outputPath}`)
+        writeFileSync(outputPath, htmlOutput, 'utf-8')
+        console.log(`HTML written to: ${outputPath}`)
+      } else {
+        // Generate SVG
+        console.log('Rendering SVG...')
+        const svgOutput = svg.render(graph, layoutResult)
+
+        writeFileSync(outputPath, svgOutput, 'utf-8')
+        console.log(`SVG written to: ${outputPath}`)
+      }
     } else {
       // Generate YAML
       const yaml = toYaml(graph)

@@ -40,11 +40,14 @@ NetBox からネットワーク構成を取得し、Shumoku ダイアグラム�
     # 基本的な使い方
     npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
 
-    # ファイルに出力
+    # YAML出力
     npx netbox-to-shumoku -o network.yaml
 
+    # インタラクティブHTML出力
+    npx netbox-to-shumoku -o network.html
+
     # サイトでフィルタリング
-    npx netbox-to-shumoku --site tokyo-dc
+    npx netbox-to-shumoku --site tokyo-dc -o tokyo.svg
     ```
   </Tab>
   <Tab value="yarn">
@@ -52,11 +55,14 @@ NetBox からネットワーク構成を取得し、Shumoku ダイアグラム�
     # 基本的な使い方
     yarn dlx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
 
-    # ファイルに出力
+    # YAML出力
     yarn dlx netbox-to-shumoku -o network.yaml
 
+    # インタラクティブHTML出力
+    yarn dlx netbox-to-shumoku -o network.html
+
     # サイトでフィルタリング
-    yarn dlx netbox-to-shumoku --site tokyo-dc
+    yarn dlx netbox-to-shumoku --site tokyo-dc -o tokyo.svg
     ```
   </Tab>
   <Tab value="pnpm">
@@ -64,11 +70,14 @@ NetBox からネットワーク構成を取得し、Shumoku ダイアグラム�
     # 基本的な使い方
     pnpm dlx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
 
-    # ファイルに出力
+    # YAML出力
     pnpm dlx netbox-to-shumoku -o network.yaml
 
+    # インタラクティブHTML出力
+    pnpm dlx netbox-to-shumoku -o network.html
+
     # サイトでフィルタリング
-    pnpm dlx netbox-to-shumoku --site tokyo-dc
+    pnpm dlx netbox-to-shumoku --site tokyo-dc -o tokyo.svg
     ```
   </Tab>
   <Tab value="bun">
@@ -76,11 +85,14 @@ NetBox からネットワーク構成を取得し、Shumoku ダイアグラム�
     # 基本的な使い方
     bunx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
 
-    # ファイルに出力
+    # YAML出力
     bunx netbox-to-shumoku -o network.yaml
 
+    # インタラクティブHTML出力
+    bunx netbox-to-shumoku -o network.html
+
     # サイトでフィルタリング
-    bunx netbox-to-shumoku --site tokyo-dc
+    bunx netbox-to-shumoku --site tokyo-dc -o tokyo.svg
     ```
   </Tab>
 </Tabs>
@@ -96,8 +108,15 @@ NetBox からネットワーク構成を取得し、Shumoku ダイアグラム�
 **出力オプション:**
 | オプション | 説明 |
 |-----------|------|
-| `--output, -o` | 出力ファイル（.yaml または .svg、デフォルト: topology.yaml） |
+| `--output, -o` | 出力ファイル（.yaml, .svg, .html、デフォルト: topology.yaml） |
 | `--theme` | テーマ: light または dark |
+
+**出力形式:**
+| 拡張子 | 説明 |
+|--------|------|
+| `.yaml` | YAML定義ファイル（他のツールで利用可能） |
+| `.svg` | 静的SVG画像 |
+| `.html` | インタラクティブHTML（ツールチップ、パン/ズーム対応） |
 
 **フィルタリングオプション:**
 | オプション | 説明 |
@@ -114,7 +133,7 @@ NetBox からネットワーク構成を取得し、Shumoku ダイアグラム�
 | `--no-ports` | ポート名をリンクに表示しない |
 | `--no-colors` | ケーブルタイプによる色分けをしない |
 | `--color-by-status` | デバイスをステータスで色分け |
-| `--legend` | 凡例を表示（SVG 出力時のみ） |
+| `--legend` | 凡例を表示（SVG/HTML 出力時） |
 
 ## ライブラリとしての使用
 

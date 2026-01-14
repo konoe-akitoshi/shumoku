@@ -32,7 +32,10 @@
     },
     "./style.css": "./dist/style.css",
     "./iife": "./dist/shumoku-interactive.iife.js",
-    "./iife-string": "./dist/iife-string.js"
+    "./iife-string": {
+      "types": "./dist/iife-string.d.ts",
+      "import": "./dist/iife-string.js"
+    }
   },
   "files": [
     "dist",
