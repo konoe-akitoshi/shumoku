@@ -1,10 +1,10 @@
 'use client'
 
+import { html } from '@shumoku/renderer'
+import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
 import { useEffect, useRef, useState } from 'react'
 import type { LayoutResult, NetworkGraph } from 'shumoku'
 import { HierarchicalLayout, parser, svg } from 'shumoku'
-import { html } from '@shumoku/renderer'
-import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
 import { cn } from '@/lib/cn'
 import { enterpriseNetwork, simpleNetwork } from '@/lib/sampleNetworks'
 import { InteractivePreview } from './InteractivePreview'

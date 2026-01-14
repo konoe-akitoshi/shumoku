@@ -116,7 +116,13 @@ export function InteractivePreview({ svgContent, className }: InteractivePreview
     // Mouse drag pan
     const handleMouseDown = (e: MouseEvent) => {
       if (e.button === 0) {
-        dragRef.current = { active: true, x: e.clientX, y: e.clientY, vx: vbRef.current.x, vy: vbRef.current.y }
+        dragRef.current = {
+          active: true,
+          x: e.clientX,
+          y: e.clientY,
+          vx: vbRef.current.x,
+          vy: vbRef.current.y,
+        }
         container.style.cursor = 'grabbing'
       }
     }
@@ -127,7 +133,11 @@ export function InteractivePreview({ svgContent, className }: InteractivePreview
       const vb = vbRef.current
       const sx = vb.w / container.clientWidth
       const sy = vb.h / container.clientHeight
-      vbRef.current = { ...vb, x: drag.vx - (e.clientX - drag.x) * sx, y: drag.vy - (e.clientY - drag.y) * sy }
+      vbRef.current = {
+        ...vb,
+        x: drag.vx - (e.clientX - drag.x) * sx,
+        y: drag.vy - (e.clientY - drag.y) * sy,
+      }
       updateViewBox()
     }
 
