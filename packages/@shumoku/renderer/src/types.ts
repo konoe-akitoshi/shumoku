@@ -110,6 +110,8 @@ export interface InteractiveInstance {
   resetView: () => void
   /** Get current scale */
   getScale: () => number
+  /** Navigate to a sheet (hierarchical diagrams) */
+  navigateToSheet?: (sheetId: string) => void
 }
 
 /**

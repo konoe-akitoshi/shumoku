@@ -243,6 +243,31 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
   }
 
   // ============================================
+  // Hierarchical Navigation
+  // ============================================
+
+  const handleSubgraphClick = (e: MouseEvent) => {
+    const target = e.target as Element
+    const subgraph = target.closest('.subgraph[data-has-sheet]')
+    if (subgraph) {
+      const sheetId = subgraph.getAttribute('data-sheet-id')
+      if (sheetId) {
+        e.preventDefault()
+        e.stopPropagation()
+        dispatchNavigateEvent(sheetId)
+      }
+    }
+  }
+
+  const dispatchNavigateEvent = (sheetId: string) => {
+    const event = new CustomEvent('shumoku:navigate', {
+      detail: { sheetId },
+      bubbles: true,
+    })
+    document.dispatchEvent(event)
+  }
+
+  // ============================================
   // Tap for tooltip (touch devices)
   // ============================================
 
@@ -274,6 +299,18 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
     if (Math.hypot(dx, dy) < 10 && dt < 300) {
       const targetEl = document.elementFromPoint(touch.clientX, touch.clientY)
       if (targetEl) {
+        // Check for hierarchical navigation first
+        const subgraph = targetEl.closest('.subgraph[data-has-sheet]')
+        if (subgraph) {
+          const sheetId = subgraph.getAttribute('data-sheet-id')
+          if (sheetId) {
+            dispatchNavigateEvent(sheetId)
+            tapStart = null
+            return
+          }
+        }
+
+        // Otherwise show tooltip
         const info = getTooltipInfo(targetEl)
         if (info) {
           showTooltip(info.text, touch.clientX, touch.clientY)
@@ -333,6 +370,9 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
   svg.addEventListener('mouseleave', handleMouseLeave)
   svg.addEventListener('wheel', handleWheel, { passive: false })
 
+  // Hierarchical navigation: click on subgraph with sheet reference
+  svg.addEventListener('click', handleSubgraphClick)
+
   // Listen for scroll/resize to update highlight position
   window.addEventListener('scroll', handlePositionUpdate, true)
   window.addEventListener('resize', handlePositionUpdate)
@@ -351,6 +391,7 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
       document.removeEventListener('mouseup', handleMouseUp)
       svg.removeEventListener('mouseleave', handleMouseLeave)
       svg.removeEventListener('wheel', handleWheel)
+      svg.removeEventListener('click', handleSubgraphClick)
       window.removeEventListener('scroll', handlePositionUpdate, true)
       window.removeEventListener('resize', handlePositionUpdate)
       destroyTooltip()
@@ -366,5 +407,6 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
     },
     resetView,
     getScale,
+    navigateToSheet: dispatchNavigateEvent,
   }
 }
