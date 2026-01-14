@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/icons",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Vendor-specific icons for Shumoku network diagrams",
   "author": "konoe-akitoshi",
   "repository": {
@@ -31,14 +31,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@shumoku/core": "^0.2.0"
+    "@shumoku/core": "^0.2.3"
   },
   "devDependencies": {
     "sharp": "^0.34.5",
     "typescript": "^5.8.3"
   },
   "peerDependencies": {
-    "@shumoku/core": "^0.2.0"
+    "@shumoku/core": "^0.2.3"
   },
   "keywords": [
     "network",

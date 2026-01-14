@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/core",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Core library for shumoku network topology visualization",
   "license": "MIT",
   "author": "konoe-akitoshi",
