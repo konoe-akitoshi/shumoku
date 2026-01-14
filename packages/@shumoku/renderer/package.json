@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/renderer",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "SVG and HTML renderers for Shumoku network diagrams",
   "license": "MIT",
   "author": "konoe-akitoshi",
@@ -52,7 +52,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@shumoku/core": "workspace:*"
+    "@shumoku/core": "^0.2.4"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
