@@ -3,13 +3,21 @@
  * Resolves file references and builds a complete hierarchical graph
  */
 
-import type { HierarchicalNetworkGraph, NetworkGraph, Node, Link } from '@shumoku/core/models'
+import type { HierarchicalNetworkGraph, NetworkGraph, Node, Link, Subgraph } from '@shumoku/core/models'
 import { type ParseResult, type ParseWarning, YamlParser } from './parser.js'
+
+// ============================================
+// Constants
+// ============================================
 
 /** Prefix for virtual export connector nodes */
 const EXPORT_NODE_PREFIX = '__export_'
 /** Prefix for virtual export connector links */
 const EXPORT_LINK_PREFIX = '__export_link_'
+
+// ============================================
+// Type Guards
+// ============================================
 
 /**
  * Check if a node is a virtual export connector
@@ -25,25 +33,17 @@ export function isExportLink(linkId: string | undefined): boolean {
   return linkId?.startsWith(EXPORT_LINK_PREFIX) ?? false
 }
 
-/**
- * @deprecated Boundary edges are no longer used. ELK handles cross-hierarchy routing directly.
- */
-export function isBoundaryEdge(_linkId: string | undefined): boolean {
-  return false
-}
+// ============================================
+// Interfaces
+// ============================================
 
 /**
  * File resolver interface for loading external YAML files
  */
 export interface FileResolver {
-  /**
-   * Read file contents by path
-   */
+  /** Read file contents by path */
   read(path: string): Promise<string>
-
-  /**
-   * Resolve relative path from base path
-   */
+  /** Resolve relative path from base path */
   resolve(basePath: string, relativePath: string): string
 }
 
@@ -51,14 +51,9 @@ export interface FileResolver {
  * Result of hierarchical parsing
  */
 export interface HierarchicalParseResult extends ParseResult {
-  /**
-   * The resolved hierarchical graph
-   */
+  /** The resolved hierarchical graph */
   graph: HierarchicalNetworkGraph
-
-  /**
-   * Map of sheet ID to their resolved NetworkGraph
-   */
+  /** Map of sheet ID to their resolved NetworkGraph */
   sheets: Map<string, NetworkGraph>
 }
 
@@ -78,6 +73,23 @@ interface CrossSubgraphLink {
 }
 
 /**
+ * Export point for generating export connectors
+ */
+interface ExportPoint {
+  subgraphId: string
+  device: string
+  port?: string
+  destSubgraphLabel: string
+  destDevice: string
+  destPort?: string
+  isSource: boolean
+}
+
+// ============================================
+// HierarchicalParser Class
+// ============================================
+
+/**
  * Hierarchical parser that resolves file references
  */
 export class HierarchicalParser {
@@ -92,12 +104,11 @@ export class HierarchicalParser {
 
   /**
    * Parse YAML with file reference resolution
-   * @param input - YAML content
-   * @param basePath - Base path for resolving relative file references
    */
   async parse(input: string, basePath: string): Promise<HierarchicalParseResult> {
     const warnings: ParseWarning[] = []
     const sheets = new Map<string, NetworkGraph>()
+    const deviceToSubgraph = new Map<string, string>()
 
     // Parse the main file
     const result = this.parser.parse(input)
@@ -109,124 +120,168 @@ export class HierarchicalParser {
     graph.sheets = sheets
     graph.breadcrumb = ['root']
 
-    // Build device → subgraph map as we load child files
-    const deviceToSubgraph = new Map<string, string>()
-
-    // Resolve file references in subgraphs
+    // Process subgraphs with file references
     if (graph.subgraphs) {
       for (const subgraph of graph.subgraphs) {
         if (subgraph.file) {
-          try {
-            const filePath = this.resolver.resolve(basePath, subgraph.file)
-
-            // Check for circular references
-            if (this.loadedFiles.has(filePath)) {
-              warnings.push({
-                code: 'CIRCULAR_REFERENCE',
-                message: `Circular file reference detected: ${filePath}`,
-                severity: 'error',
-              })
-              continue
-            }
-
-            this.loadedFiles.add(filePath)
-
-            // Load and parse the child file
-            const fileContent = await this.resolver.read(filePath)
-            const childResult = await this.parseChild(fileContent, filePath, subgraph.id)
-
-            if (childResult.warnings) {
-              warnings.push(...childResult.warnings)
-            }
-
-            // Store the child graph for sheet navigation (clone to avoid mutation)
-            const childGraphClone = JSON.parse(JSON.stringify(childResult.graph))
-            sheets.set(subgraph.id, childGraphClone)
-
-            // Merge child sheets with prefixed paths
-            for (const [id, sheet] of childResult.sheets) {
-              sheets.set(`${subgraph.id}/${id}`, sheet)
-            }
-
-            // Merge child nodes and track device → subgraph mapping
-            for (const childNode of childResult.graph.nodes) {
-              // Skip virtual export connector nodes
-              if (isExportNode(childNode.id)) continue
-
-              // Track which subgraph this device belongs to
-              deviceToSubgraph.set(childNode.id, subgraph.id)
-
-              // Set parent reference
-              const mergedNode = { ...childNode }
-              if (!childNode.parent) {
-                mergedNode.parent = subgraph.id
-              } else {
-                mergedNode.parent = `${subgraph.id}/${childNode.parent}`
-              }
-              graph.nodes.push(mergedNode)
-            }
-
-            // Merge child subgraphs with prefixed IDs
-            if (childResult.graph.subgraphs) {
-              for (const childSg of childResult.graph.subgraphs) {
-                const mergedSg = { ...childSg }
-                mergedSg.id = `${subgraph.id}/${childSg.id}`
-                if (!childSg.parent) {
-                  mergedSg.parent = subgraph.id
-                } else {
-                  mergedSg.parent = `${subgraph.id}/${childSg.parent}`
-                }
-                if (!graph.subgraphs) graph.subgraphs = []
-                graph.subgraphs.push(mergedSg)
-              }
-            }
-
-            // Merge child links (skip virtual export links)
-            for (const childLink of childResult.graph.links) {
-              if (isExportLink(childLink.id)) continue
-
-              const mergedLink = { ...childLink }
-              mergedLink.from = this.cloneEndpoint(childLink.from)
-              mergedLink.to = this.cloneEndpoint(childLink.to)
-              if (childLink.id) {
-                mergedLink.id = `${subgraph.id}/${childLink.id}`
-              }
-              graph.links.push(mergedLink)
-            }
-          } catch (error) {
-            warnings.push({
-              code: 'FILE_LOAD_ERROR',
-              message: `Failed to load ${subgraph.file}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-              severity: 'error',
-            })
-          }
+          const fileWarnings = await this.processSubgraphFile(
+            subgraph,
+            basePath,
+            graph,
+            sheets,
+            deviceToSubgraph,
+          )
+          warnings.push(...fileWarnings)
         }
       }
     }
 
-    // Build subgraph label map
-    const subgraphLabels = new Map<string, string>()
-    if (graph.subgraphs) {
-      for (const sg of graph.subgraphs) {
-        subgraphLabels.set(sg.id, sg.label)
-      }
-    }
-
-    // Detect cross-subgraph links and generate export connectors
-    const crossLinks = this.detectCrossSubgraphLinks(
-      graph.links,
-      deviceToSubgraph,
-      subgraphLabels,
-    )
-
-    // Generate export connectors in child sheets
-    this.generateExportConnectorsForCrossLinks(crossLinks, sheets)
+    // Build subgraph label map and generate export connectors
+    const subgraphLabels = this.buildSubgraphLabelMap(graph.subgraphs)
+    const crossLinks = this.detectCrossSubgraphLinks(graph.links, deviceToSubgraph, subgraphLabels)
+    this.generateExportConnectors(crossLinks, sheets)
 
     return {
       graph,
       sheets,
       warnings: warnings.length > 0 ? warnings : undefined,
     }
+  }
+
+  /**
+   * Process a subgraph with file reference
+   */
+  private async processSubgraphFile(
+    subgraph: Subgraph,
+    basePath: string,
+    graph: HierarchicalNetworkGraph,
+    sheets: Map<string, NetworkGraph>,
+    deviceToSubgraph: Map<string, string>,
+  ): Promise<ParseWarning[]> {
+    const warnings: ParseWarning[] = []
+
+    try {
+      const filePath = this.resolver.resolve(basePath, subgraph.file!)
+
+      // Check for circular references
+      if (this.loadedFiles.has(filePath)) {
+        warnings.push({
+          code: 'CIRCULAR_REFERENCE',
+          message: `Circular file reference detected: ${filePath}`,
+          severity: 'error',
+        })
+        return warnings
+      }
+
+      this.loadedFiles.add(filePath)
+
+      // Load and parse the child file
+      const fileContent = await this.resolver.read(filePath)
+      const childResult = await this.parseChild(fileContent, filePath, subgraph.id)
+
+      if (childResult.warnings) {
+        warnings.push(...childResult.warnings)
+      }
+
+      // Store the child graph for sheet navigation
+      sheets.set(subgraph.id, structuredClone(childResult.graph))
+
+      // Merge child sheets with prefixed paths
+      for (const [id, sheet] of childResult.sheets) {
+        sheets.set(`${subgraph.id}/${id}`, sheet)
+      }
+
+      // Merge child content into parent graph
+      this.mergeChildNodes(childResult.graph.nodes, subgraph.id, graph, deviceToSubgraph)
+      this.mergeChildSubgraphs(childResult.graph.subgraphs, subgraph.id, graph)
+      this.mergeChildLinks(childResult.graph.links, subgraph.id, graph)
+    } catch (error) {
+      warnings.push({
+        code: 'FILE_LOAD_ERROR',
+        message: `Failed to load ${subgraph.file}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        severity: 'error',
+      })
+    }
+
+    return warnings
+  }
+
+  /**
+   * Merge child nodes into parent graph
+   */
+  private mergeChildNodes(
+    childNodes: Node[],
+    subgraphId: string,
+    graph: HierarchicalNetworkGraph,
+    deviceToSubgraph: Map<string, string>,
+  ): void {
+    for (const childNode of childNodes) {
+      // Skip virtual export connector nodes
+      if (isExportNode(childNode.id)) continue
+
+      // Track which subgraph this device belongs to
+      deviceToSubgraph.set(childNode.id, subgraphId)
+
+      // Set parent reference
+      graph.nodes.push({
+        ...childNode,
+        parent: childNode.parent ? `${subgraphId}/${childNode.parent}` : subgraphId,
+      })
+    }
+  }
+
+  /**
+   * Merge child subgraphs into parent graph
+   */
+  private mergeChildSubgraphs(
+    childSubgraphs: Subgraph[] | undefined,
+    subgraphId: string,
+    graph: HierarchicalNetworkGraph,
+  ): void {
+    if (!childSubgraphs) return
+
+    for (const childSg of childSubgraphs) {
+      graph.subgraphs ??= []
+      graph.subgraphs.push({
+        ...childSg,
+        id: `${subgraphId}/${childSg.id}`,
+        parent: childSg.parent ? `${subgraphId}/${childSg.parent}` : subgraphId,
+      })
+    }
+  }
+
+  /**
+   * Merge child links into parent graph
+   */
+  private mergeChildLinks(
+    childLinks: Link[],
+    subgraphId: string,
+    graph: HierarchicalNetworkGraph,
+  ): void {
+    for (const childLink of childLinks) {
+      // Skip virtual export connector links
+      if (isExportLink(childLink.id)) continue
+
+      graph.links.push({
+        ...childLink,
+        id: childLink.id ? `${subgraphId}/${childLink.id}` : undefined,
+        from: this.cloneEndpoint(childLink.from),
+        to: this.cloneEndpoint(childLink.to),
+      })
+    }
+  }
+
+  /**
+   * Build a map of subgraph ID to label
+   */
+  private buildSubgraphLabelMap(subgraphs: Subgraph[] | undefined): Map<string, string> {
+    const map = new Map<string, string>()
+    if (subgraphs) {
+      for (const sg of subgraphs) {
+        map.set(sg.id, sg.label)
+      }
+    }
+    return map
   }
 
   /**
@@ -266,26 +321,29 @@ export class HierarchicalParser {
   }
 
   /**
-   * Generate export connector nodes/links in child sheets for cross-subgraph links
+   * Generate export connector nodes/links in child sheets
    */
-  private generateExportConnectorsForCrossLinks(
+  private generateExportConnectors(
     crossLinks: CrossSubgraphLink[],
     sheets: Map<string, NetworkGraph>,
   ): void {
-    // Group cross-links by subgraph and device:port
-    // Map: "subgraphId:device:port" → { destSubgraphLabel, destDevice, destPort, isSource }
-    const exportPoints = new Map<
-      string,
-      {
-        subgraphId: string
-        device: string
-        port?: string
-        destSubgraphLabel: string
-        destDevice: string
-        destPort?: string
-        isSource: boolean
-      }
-    >()
+    const exportPoints = this.collectExportPoints(crossLinks)
+
+    for (const [key, exportPoint] of exportPoints) {
+      const sheetGraph = sheets.get(exportPoint.subgraphId)
+      if (!sheetGraph) continue
+
+      const exportId = key.replace(/:/g, '_')
+      this.addExportConnectorNode(sheetGraph, exportId, exportPoint)
+      this.addExportConnectorLink(sheetGraph, exportId, exportPoint)
+    }
+  }
+
+  /**
+   * Collect export points from cross-subgraph links
+   */
+  private collectExportPoints(crossLinks: CrossSubgraphLink[]): Map<string, ExportPoint> {
+    const exportPoints = new Map<string, ExportPoint>()
 
     for (const crossLink of crossLinks) {
       // Source side (from)
@@ -317,53 +375,57 @@ export class HierarchicalParser {
       }
     }
 
-    // Generate export connectors for each export point
-    for (const [key, exportPoint] of exportPoints) {
-      const sheetGraph = sheets.get(exportPoint.subgraphId)
-      if (!sheetGraph) continue
+    return exportPoints
+  }
 
-      // Create unique ID for this export connector
-      const exportId = key.replace(/:/g, '_')
+  /**
+   * Add export connector node to sheet
+   */
+  private addExportConnectorNode(
+    sheetGraph: NetworkGraph,
+    exportId: string,
+    exportPoint: ExportPoint,
+  ): void {
+    sheetGraph.nodes.push({
+      id: `${EXPORT_NODE_PREFIX}${exportId}`,
+      label: exportPoint.destSubgraphLabel,
+      shape: 'stadium',
+      type: 'connector' as Node['type'],
+      metadata: {
+        _isExport: true,
+        _destSubgraph: exportPoint.destSubgraphLabel,
+        _destDevice: exportPoint.destDevice,
+        _destPort: exportPoint.destPort,
+        _isSource: exportPoint.isSource,
+      },
+    })
+  }
 
-      // Create export connector node
-      const exportNodeId = `${EXPORT_NODE_PREFIX}${exportId}`
-      const exportNode: Node = {
-        id: exportNodeId,
-        label: exportPoint.destSubgraphLabel, // Show destination subgraph name
-        shape: 'stadium',
-        type: 'connector' as any,
-        metadata: {
-          _isExport: true,
-          _destSubgraph: exportPoint.destSubgraphLabel,
-          _destDevice: exportPoint.destDevice,
-          _destPort: exportPoint.destPort,
-          _isSource: exportPoint.isSource,
-        },
-      }
-      sheetGraph.nodes.push(exportNode)
+  /**
+   * Add export connector link to sheet
+   */
+  private addExportConnectorLink(
+    sheetGraph: NetworkGraph,
+    exportId: string,
+    exportPoint: ExportPoint,
+  ): void {
+    const exportNodeId = `${EXPORT_NODE_PREFIX}${exportId}`
+    const deviceEndpoint = exportPoint.port
+      ? { node: exportPoint.device, port: exportPoint.port }
+      : exportPoint.device
 
-      // Create export connector link
-      const exportLinkId = `${EXPORT_LINK_PREFIX}${exportId}`
-      const deviceEndpoint = exportPoint.port
-        ? { node: exportPoint.device, port: exportPoint.port }
-        : exportPoint.device
-
-      const exportLink: Link = {
-        id: exportLinkId,
-        // Source: device → export connector (outgoing)
-        // Destination: export connector → device (incoming)
-        from: exportPoint.isSource ? deviceEndpoint : exportNodeId,
-        to: exportPoint.isSource ? exportNodeId : deviceEndpoint,
-        type: 'dashed',
-        arrow: 'forward',
-        metadata: {
-          _destSubgraphLabel: exportPoint.destSubgraphLabel,
-          _destDevice: exportPoint.destDevice,
-          _destPort: exportPoint.destPort,
-        },
-      }
-      sheetGraph.links.push(exportLink)
-    }
+    sheetGraph.links.push({
+      id: `${EXPORT_LINK_PREFIX}${exportId}`,
+      from: exportPoint.isSource ? deviceEndpoint : exportNodeId,
+      to: exportPoint.isSource ? exportNodeId : deviceEndpoint,
+      type: 'dashed',
+      arrow: 'forward',
+      metadata: {
+        _destSubgraphLabel: exportPoint.destSubgraphLabel,
+        _destDevice: exportPoint.destDevice,
+        _destPort: exportPoint.destPort,
+      },
+    })
   }
 
   /**
@@ -372,10 +434,7 @@ export class HierarchicalParser {
   private cloneEndpoint(
     endpoint: string | { node: string; port?: string; ip?: string },
   ): string | { node: string; port?: string; ip?: string } {
-    if (typeof endpoint === 'string') {
-      return endpoint
-    }
-    return { ...endpoint }
+    return typeof endpoint === 'string' ? endpoint : { ...endpoint }
   }
 
   /**
@@ -390,7 +449,6 @@ export class HierarchicalParser {
     childParser.loadedFiles = this.loadedFiles
 
     const result = await childParser.parse(input, basePath)
-
     result.graph.parentSheet = parentId
     result.graph.breadcrumb = ['root', parentId]
 
@@ -405,6 +463,10 @@ export class HierarchicalParser {
   }
 }
 
+// ============================================
+// File Resolver Implementations
+// ============================================
+
 /**
  * Node.js file resolver implementation
  */
@@ -417,8 +479,7 @@ export function createNodeFileResolver(): FileResolver {
 
     resolve(basePath: string, relativePath: string): string {
       const path = require('node:path')
-      const dir = path.dirname(basePath)
-      return path.resolve(dir, relativePath)
+      return path.resolve(path.dirname(basePath), relativePath)
     },
   }
 }
