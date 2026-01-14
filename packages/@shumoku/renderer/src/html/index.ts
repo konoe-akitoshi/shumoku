@@ -3,11 +3,20 @@
  * Generates standalone interactive HTML pages from NetworkGraph
  */
 
-import type { LayoutResult, NetworkGraph } from '@shumoku/core'
+import type { HierarchicalNetworkGraph, LayoutResult, NetworkGraph } from '@shumoku/core'
 import { SVGRenderer } from '../svg.js'
 import type { HTMLRendererOptions } from '../types.js'
+import {
+  generateNavigationToolbar,
+  getNavigationScript,
+  getNavigationStyles,
+  type NavigationState,
+  type SheetInfo,
+} from './navigation.js'
 
 export type { InteractiveInstance, InteractiveOptions } from '../types.js'
+// Re-export navigation types
+export type { NavigationState, SheetInfo } from './navigation.js'
 // Re-export runtime for direct usage
 export { initInteractive } from './runtime.js'
 
@@ -28,11 +37,27 @@ export function getIIFE(): string {
   return INTERACTIVE_IIFE
 }
 
-export interface RenderOptions extends HTMLRendererOptions {}
+export interface RenderOptions extends HTMLRendererOptions {
+  /**
+   * Enable hierarchical navigation UI
+   */
+  hierarchical?: boolean
+
+  /**
+   * Current sheet ID for hierarchical rendering
+   */
+  currentSheet?: string
+
+  /**
+   * Navigation state for hierarchical diagrams
+   */
+  navigation?: NavigationState
+}
 
 const DEFAULT_OPTIONS = {
   branding: true,
   toolbar: true,
+  hierarchical: false,
 }
 
 /**
@@ -44,7 +69,74 @@ export function render(graph: NetworkGraph, layout: LayoutResult, options?: Rend
   const svg = svgRenderer.render(graph, layout)
   const title = options?.title || graph.name || 'Network Diagram'
 
-  return generateHtml(svg, title, opts as Required<RenderOptions>)
+  // Build navigation state if hierarchical
+  let navigation: NavigationState | undefined = options?.navigation
+  if (!navigation && opts.hierarchical && isHierarchicalGraph(graph)) {
+    navigation = buildNavigationState(graph as HierarchicalNetworkGraph, opts.currentSheet)
+  }
+
+  return generateHtml(svg, title, { ...opts, navigation } as Required<RenderOptions>)
+}
+
+/**
+ * Check if graph is a hierarchical graph
+ */
+function isHierarchicalGraph(graph: NetworkGraph): graph is HierarchicalNetworkGraph {
+  return 'sheets' in graph || 'breadcrumb' in graph
+}
+
+/**
+ * Build navigation state from hierarchical graph
+ */
+function buildNavigationState(
+  graph: HierarchicalNetworkGraph,
+  currentSheet?: string,
+): NavigationState {
+  const sheets = new Map<string, SheetInfo>()
+
+  // Add root
+  sheets.set('root', {
+    id: 'root',
+    label: graph.name || 'Overview',
+  })
+
+  // Add sheets from subgraphs
+  if (graph.subgraphs) {
+    for (const subgraph of graph.subgraphs) {
+      if (subgraph.file) {
+        sheets.set(subgraph.id, {
+          id: subgraph.id,
+          label: subgraph.label,
+          parentId: 'root',
+        })
+      }
+    }
+  }
+
+  // Add nested sheets
+  if (graph.sheets) {
+    for (const [id, sheet] of graph.sheets) {
+      if (!sheets.has(id)) {
+        sheets.set(id, {
+          id,
+          label: sheet.name || id,
+          parentId: graph.parentSheet,
+        })
+      }
+    }
+  }
+
+  // Build breadcrumb
+  const breadcrumb = graph.breadcrumb || ['root']
+  if (currentSheet && !breadcrumb.includes(currentSheet)) {
+    breadcrumb.push(currentSheet)
+  }
+
+  return {
+    currentSheet,
+    breadcrumb,
+    sheets,
+  }
 }
 
 function generateHtml(svg: string, title: string, options: Required<RenderOptions>): string {
@@ -68,6 +160,22 @@ function generateHtml(svg: string, title: string, options: Required<RenderOption
   </div>`
     : ''
 
+  // Navigation toolbar for hierarchical diagrams
+  const navToolbarHtml =
+    options.hierarchical && options.navigation ? generateNavigationToolbar(options.navigation) : ''
+
+  // Navigation styles
+  const navStyles = options.hierarchical ? getNavigationStyles() : ''
+
+  // Navigation scripts
+  const navScript = options.hierarchical ? getNavigationScript() : ''
+
+  // Calculate container height based on toolbar presence
+  const headerHeight = options.toolbar ? 45 : 0
+  const navHeight = options.hierarchical && options.navigation ? 60 : 0
+  const totalHeaderHeight = headerHeight + navHeight
+  const containerHeight = totalHeaderHeight > 0 ? `calc(100vh - ${totalHeaderHeight}px)` : '100vh'
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -83,7 +191,7 @@ function generateHtml(svg: string, title: string, options: Required<RenderOption
     .toolbar button { padding: 6px; border: none; background: none; cursor: pointer; border-radius: 4px; color: #666; }
     .toolbar button:hover { background: #f0f0f0; }
     .zoom-text { min-width: 50px; text-align: center; font-size: 13px; color: #666; }
-    .container { position: relative; width: 100%; height: ${options.toolbar ? 'calc(100vh - 45px)' : '100vh'}; overflow: hidden; cursor: grab; background: repeating-conic-gradient(#f8f8f8 0% 25%, transparent 0% 50%) 50% / 20px 20px; }
+    .container { position: relative; width: 100%; height: ${containerHeight}; overflow: hidden; cursor: grab; background: repeating-conic-gradient(#f8f8f8 0% 25%, transparent 0% 50%) 50% / 20px 20px; }
     .container.dragging { cursor: grabbing; }
     .container > svg { width: 100%; height: 100%; }
     .branding { position: absolute; bottom: 16px; right: 16px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 13px; font-family: system-ui, sans-serif; color: #555; text-decoration: none; transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 100; }
@@ -94,10 +202,15 @@ function generateHtml(svg: string, title: string, options: Required<RenderOption
     .node:hover rect, .node:hover circle, .node:hover polygon { filter: brightness(0.95); }
     .port { cursor: pointer; }
     .link-hit-area { cursor: pointer; }
+    /* Subgraph click for hierarchical navigation */
+    .subgraph[data-has-sheet] { cursor: pointer; }
+    .subgraph[data-has-sheet]:hover > rect { filter: brightness(0.95); }
+    ${navStyles}
   </style>
 </head>
 <body>
   ${toolbarHtml}
+  ${navToolbarHtml}
   <div class="container" id="container">
     ${svg}
     ${brandingHtml}
@@ -320,6 +433,7 @@ function generateHtml(svg: string, title: string, options: Required<RenderOption
       init();
     })();
   </script>
+  <script>${navScript}</script>
 </body>
 </html>`
 }
