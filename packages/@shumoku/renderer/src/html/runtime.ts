@@ -4,14 +4,14 @@
  */
 
 import type { InteractiveInstance, InteractiveOptions } from '../types.js'
-import { showTooltip, hideTooltip, destroyTooltip, getTooltipInfo } from './tooltip.js'
 import {
-  highlightElement,
-  updateHighlightPosition,
   destroySpotlight,
   getCurrentHighlight,
+  highlightElement,
+  updateHighlightPosition,
 } from './spotlight.js'
-import { parseViewBox, setViewBox, cloneViewBox, type ViewBox } from './viewbox.js'
+import { destroyTooltip, getTooltipInfo, hideTooltip, showTooltip } from './tooltip.js'
+import { cloneViewBox, parseViewBox, setViewBox, type ViewBox } from './viewbox.js'
 
 const ZOOM_FACTOR = 1.2
 
