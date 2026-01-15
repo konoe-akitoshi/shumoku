@@ -21,8 +21,8 @@ bun run test          # Run tests across packages
 
 ### Package-specific
 ```bash
-# Run playground dev server
-cd apps/playground && bun run dev
+# Run docs dev server (includes playground)
+cd apps/docs && bun run dev
 
 # Run tests for core package only
 cd packages/@shumoku/core && bun run test
@@ -34,43 +34,56 @@ cd packages/@shumoku/core && bun run dev
 ## Architecture
 
 ### Monorepo Structure
-- `packages/@shumoku/core` - Core library (models, layout engines, themes, renderer interfaces)
+- `packages/@shumoku/core` - Core library (models, layout engines, themes, fixtures)
 - `packages/@shumoku/parser-yaml` - YAML parser for network definitions
-- `apps/playground` - Vite + React demo application
+- `packages/@shumoku/renderer` - SVG/HTML renderers with interactive features
+- `packages/@shumoku/icons` - Vendor icon sets (AWS, Juniper, Yamaha, Aruba)
+- `packages/@shumoku/netbox` - NetBox API integration and CLI
+- `packages/shumoku` - Main wrapper package (re-exports all packages)
+- `apps/docs` - Documentation site with playground (Next.js)
 
 ### Core Library (`@shumoku/core`)
 
 **Models** (`src/models/`): Data structures for network topology
-- `Device` - Network devices (routers, switches, firewalls) with `DeviceType`, `DeviceRole`, `DeviceStatus` enums
-- `Port` - Device interfaces with `PortType`, `PortMode`
-- `Link` - Connections between devices with `LinkType`
-- `Module` - Logical groupings for layout
-- `Location` - Physical groupings (rooms, racks) with connectors
+- `Node` - Network devices with type, vendor, model
+- `Link` - Connections between nodes with bandwidth, VLAN
+- `Subgraph` - Logical groupings with nested structure
 - `NetworkGraph` - Root container for the entire network definition
 
 **Layout Engines** (`src/layout/`): Automatic positioning algorithms
-- `LayoutEngine` interface defines `layout(graph, options) => LayoutResult`
-- `layoutEngineFactory` creates engines by name ('hierarchical', 'bento', 'location-based')
-- Engines produce `LayoutResult` with `nodes`, `edges`, `bounds`
+- `HierarchicalLayout` - Dagre-based hierarchical layout
+- Produces `LayoutResult` with positioned nodes, links, subgraphs
 
 **Themes** (`src/themes/`): Visual styling
 - `modernTheme`, `darkTheme` presets
 - `createTheme()`, `mergeTheme()` utilities
 
-**Renderer** (`src/renderer/`): Output generation
-- SVG renderer for diagram output
+**Fixtures** (`src/fixtures/`): Sample data for testing
+- `sampleNetwork` - Multi-file hierarchical network example
 
 ### YAML Parser (`@shumoku/parser-yaml`)
 
 Converts YAML network definitions to `NetworkGraph`. Supports:
-- Nested or flat structure (`network:` wrapper optional)
-- Array-style links: `[source, target, bandwidth?]`
+- Nested or flat structure
+- Multi-file hierarchical parsing with `file:` references
 - Device:port notation: `"router1:eth0"`
 - Type aliases: `switch` -> `l2-switch`, `fw` -> `firewall`
 
+### Renderer (`@shumoku/renderer`)
+
+- `svg.render()` - Pure SVG output
+- `html.render()` - Interactive HTML with pan/zoom, tooltips
+- `html.renderHierarchical()` - Multi-sheet navigation for hierarchical networks
+
+### NetBox (`@shumoku/netbox`)
+
+- CLI tool: `npx @shumoku/netbox`
+- Converts NetBox API data to NetworkGraph
+- Supports grouping by tag, site, location, or prefix
+
 ### Data Flow
 ```
-YAML input → YamlParser.parse() → NetworkGraph → LayoutEngine.layout() → LayoutResult → Renderer → SVG/Canvas
+YAML input → YamlParser.parse() → NetworkGraph → HierarchicalLayout.layout() → LayoutResult → svg/html.render() → Output
 ```
 
 ## Code Style
@@ -85,16 +98,27 @@ YAML input → YamlParser.parse() → NetworkGraph → LayoutEngine.layout() →
 ```typescript
 // Creating a network programmatically
 const graph: NetworkGraph = {
-  version: '1.0.0',
-  devices: Device[],
-  ports: Port[],
+  name: 'My Network',
+  nodes: Node[],
   links: Link[],
-  modules?: Module[],
-  locations?: Location[],
+  subgraphs?: Subgraph[],
   settings?: NetworkSettings
 }
 
 // Using layout engine
-const engine = layoutEngineFactory.create('location-based')
-const result: LayoutResult = await engine.layout(graph, options)
+const layout = new HierarchicalLayout()
+const result: LayoutResult = await layout.layout(graph)
+
+// Rendering
+const svgOutput = svg.render(graph, result)
+const htmlOutput = html.render(graph, result)
+```
+
+## Testing
+
+Tests use the shared `sampleNetwork` fixture from `@shumoku/core`:
+
+```typescript
+import { sampleNetwork } from '@shumoku/core'
+// Multi-file sample: main.yaml, cloud.yaml, perimeter.yaml, dmz.yaml, campus.yaml
 ```
