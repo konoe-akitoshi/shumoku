@@ -1,0 +1,312 @@
+---
+title: JSON スキーマ
+description: NetworkGraph JSON フォーマットの仕様
+---
+
+Shumoku は NetworkGraph JSON 形式でネットワーク定義を扱います。この形式は YAML 定義と同等の表現力を持ち、プログラムからの生成や他システムとの統合に適しています。
+
+## 基本構造
+
+```json
+{
+  "version": "1.0.0",
+  "name": "Network Name",
+  "description": "Optional description",
+  "nodes": [],
+  "links": [],
+  "subgraphs": [],
+  "settings": {}
+}
+```
+
+## nodes
+
+ネットワーク上のデバイス（ルーター、スイッチ、サーバーなど）を定義します。
+
+```json
+{
+  "nodes": [
+    {
+      "id": "router1",
+      "label": "Core Router",
+      "type": "router",
+      "vendor": "yamaha",
+      "model": "rtx3510",
+      "parent": "dc1"
+    },
+    {
+      "id": "switch1",
+      "label": ["Main Switch", "(Floor 1)"],
+      "type": "l2-switch"
+    }
+  ]
+}
+```
+
+### Node フィールド
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `id` | string | ✓ | 一意識別子 |
+| `label` | string \| string[] | ✓ | 表示ラベル（配列で複数行） |
+| `type` | string | | デバイスタイプ |
+| `vendor` | string | | ベンダー名（アイコン用） |
+| `model` | string | | 機器モデル名 |
+| `service` | string | | サービス名（AWS等） |
+| `resource` | string | | リソースタイプ |
+| `parent` | string | | 所属する subgraph の ID |
+| `rank` | number \| string | | レイヤー指定（同じ値で水平配置） |
+| `shape` | string | | 形状（rect, rounded, circle 等） |
+| `style` | object | | カスタムスタイル |
+| `metadata` | object | | 任意のメタデータ |
+
+### デバイスタイプ一覧
+
+| type | 説明 |
+|------|------|
+| `router` | ルーター |
+| `l2-switch` | L2 スイッチ |
+| `l3-switch` | L3 スイッチ |
+| `firewall` | ファイアウォール |
+| `load-balancer` | ロードバランサー |
+| `server` | サーバー |
+| `access-point` | アクセスポイント |
+| `cloud` | クラウド |
+| `internet` | インターネット |
+| `vpn` | VPN |
+| `database` | データベース |
+| `generic` | 汎用 |
+
+---
+
+## links
+
+デバイス間の接続を定義します。
+
+```json
+{
+  "links": [
+    {
+      "from": { "node": "router1", "port": "ge-0/0/0" },
+      "to": { "node": "switch1", "port": "eth1" },
+      "bandwidth": "10G",
+      "vlan": [100, 200]
+    },
+    {
+      "from": "server1",
+      "to": "switch1",
+      "label": "Management"
+    }
+  ]
+}
+```
+
+### Link フィールド
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `id` | string | | 一意識別子 |
+| `from` | string \| object | ✓ | 接続元（ノードID または `{node, port, ip}` |
+| `to` | string \| object | ✓ | 接続先 |
+| `label` | string \| string[] | | リンクラベル |
+| `bandwidth` | string | | 帯域幅（1G, 10G, 25G, 40G, 100G） |
+| `vlan` | number[] | | VLAN ID の配列 |
+| `type` | string | | 線種（solid, dashed, thick, double） |
+| `arrow` | string | | 矢印（none, forward, back, both） |
+| `redundancy` | string | | 冗長化タイプ（ha, vc, vss, vpc, mlag, stack） |
+| `style` | object | | カスタムスタイル |
+| `metadata` | object | | 任意のメタデータ |
+
+### エンドポイント形式
+
+```json
+// シンプル形式
+"from": "router1"
+
+// 詳細形式
+"from": {
+  "node": "router1",
+  "port": "ge-0/0/0",
+  "ip": "10.0.0.1/30"
+}
+```
+
+---
+
+## subgraphs
+
+デバイスをグループ化するサブグラフを定義します。
+
+```json
+{
+  "subgraphs": [
+    {
+      "id": "dc1",
+      "label": "Data Center 1",
+      "vendor": "aws",
+      "service": "vpc"
+    },
+    {
+      "id": "rack1",
+      "label": "Rack A",
+      "parent": "dc1"
+    }
+  ]
+}
+```
+
+### Subgraph フィールド
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `id` | string | ✓ | 一意識別子 |
+| `label` | string | ✓ | 表示ラベル |
+| `parent` | string | | 親サブグラフ ID（ネスト時） |
+| `children` | string[] | | 子サブグラフ ID の配列 |
+| `direction` | string | | レイアウト方向（TB, BT, LR, RL） |
+| `vendor` | string | | ベンダー名（アイコン用） |
+| `service` | string | | サービス名 |
+| `file` | string | | 外部ファイル参照（階層型） |
+| `pins` | object[] | | 境界接続ポイント |
+| `style` | object | | カスタムスタイル |
+
+---
+
+## settings
+
+グローバル設定を定義します。
+
+```json
+{
+  "settings": {
+    "direction": "TB",
+    "theme": "light",
+    "nodeSpacing": 50,
+    "rankSpacing": 100,
+    "legend": {
+      "enabled": true,
+      "position": "top-right"
+    }
+  }
+}
+```
+
+### Settings フィールド
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `direction` | string | レイアウト方向（TB, BT, LR, RL） |
+| `theme` | string | テーマ（light, dark） |
+| `nodeSpacing` | number | ノード間隔 |
+| `rankSpacing` | number | レイヤー間隔 |
+| `subgraphPadding` | number | サブグラフ内余白 |
+| `legend` | boolean \| object | 凡例設定 |
+| `canvas` | object | キャンバスサイズ設定 |
+
+---
+
+## 完全な例
+
+```json
+{
+  "version": "1.0.0",
+  "name": "Office Network",
+  "nodes": [
+    {
+      "id": "inet",
+      "label": "Internet",
+      "type": "internet"
+    },
+    {
+      "id": "fw1",
+      "label": "Firewall",
+      "type": "firewall",
+      "vendor": "juniper",
+      "model": "srx300",
+      "parent": "perimeter"
+    },
+    {
+      "id": "core-sw",
+      "label": "Core Switch",
+      "type": "l3-switch",
+      "parent": "core"
+    },
+    {
+      "id": "srv1",
+      "label": "Web Server",
+      "type": "server",
+      "parent": "servers"
+    }
+  ],
+  "links": [
+    {
+      "from": "inet",
+      "to": { "node": "fw1", "port": "ge-0/0/0" }
+    },
+    {
+      "from": { "node": "fw1", "port": "ge-0/0/1" },
+      "to": { "node": "core-sw", "port": "ge-0/0/0" },
+      "bandwidth": "10G"
+    },
+    {
+      "from": { "node": "core-sw", "port": "ge-0/0/1" },
+      "to": { "node": "srv1", "port": "eth0" },
+      "bandwidth": "1G",
+      "vlan": [100]
+    }
+  ],
+  "subgraphs": [
+    { "id": "perimeter", "label": "Perimeter" },
+    { "id": "core", "label": "Core" },
+    { "id": "servers", "label": "Server Room" }
+  ],
+  "settings": {
+    "direction": "TB",
+    "theme": "light"
+  }
+}
+```
+
+---
+
+## マージの例
+
+複数のデータソースからの JSON をマージするスクリプト例：
+
+```javascript
+// merge-data.js
+import { readFileSync, writeFileSync } from 'fs'
+
+// NetBox からエクスポートした JSON
+const netbox = JSON.parse(readFileSync('netbox.json', 'utf-8'))
+
+// 独自 API からの追加データ
+const custom = JSON.parse(readFileSync('custom.json', 'utf-8'))
+
+// ノードをマージ（ID 重複チェック付き）
+const existingIds = new Set(netbox.nodes.map(n => n.id))
+for (const node of custom.nodes) {
+  if (!existingIds.has(node.id)) {
+    netbox.nodes.push(node)
+  }
+}
+
+// リンクを追加
+netbox.links.push(...custom.links)
+
+// サブグラフを追加
+if (custom.subgraphs) {
+  netbox.subgraphs = netbox.subgraphs || []
+  netbox.subgraphs.push(...custom.subgraphs)
+}
+
+// 出力
+writeFileSync('merged.json', JSON.stringify(netbox, null, 2))
+```
+
+実行：
+
+```bash
+node merge-data.js
+npx shumoku render merged.json -o diagram.html
+```

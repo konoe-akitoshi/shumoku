@@ -1,9 +1,11 @@
 {
   "pages": [
-    "---Introduction---",
+    "---Getting Started---",
     "index",
+    "cli",
     "---Reference---",
     "yaml-reference",
+    "json-reference",
     "api-reference",
     "---Resources---",
     "vendor-icons",

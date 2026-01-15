@@ -1,0 +1,246 @@
+---
+title: NetBox 統合
+description: NetBox からネットワーク構成を取得し、Shumoku ダイアグラムを自動生成
+---
+
+NetBox からネットワーク構成を取得し、Shumoku ダイアグラムを自動生成します。
+
+## インストール
+
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']}>
+  <Tab value="npm">
+    ```bash
+    npm install @shumoku/netbox
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @shumoku/netbox
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @shumoku/netbox
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @shumoku/netbox
+    ```
+  </Tab>
+</Tabs>
+
+## クイックスタート
+
+### CLI で使う
+
+```bash
+# 環境変数で認証
+export NETBOX_URL=https://netbox.example.com
+export NETBOX_TOKEN=YOUR_API_TOKEN
+
+# インタラクティブ HTML 出力
+npx netbox-to-shumoku -f html -o network.html
+
+# SVG 出力
+npx netbox-to-shumoku -o network.svg
+
+# JSON エクスポート（他ツールとの統合用）
+npx netbox-to-shumoku -f json -o netbox.json
+```
+
+### ライブラリとして使う
+
+```typescript
+import { NetBoxClient, convertToNetworkGraph } from '@shumoku/netbox'
+import { HierarchicalLayout, svg } from '@shumoku/core'
+
+const client = new NetBoxClient({
+  url: 'https://netbox.example.com',
+  token: 'your-api-token'
+})
+
+const devices = await client.fetchDevices()
+const interfaces = await client.fetchInterfaces()
+const cables = await client.fetchCables()
+
+const graph = convertToNetworkGraph(devices, interfaces, cables)
+
+const layout = new HierarchicalLayout()
+const result = await layout.layoutAsync(graph)
+
+const svgOutput = svg.render(graph, result)
+```
+
+---
+
+## CLI オプション
+
+### 接続オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--url, -u` | NetBox の URL（必須、または `NETBOX_URL` 環境変数） |
+| `--token, -t` | API トークン（必須、または `NETBOX_TOKEN` 環境変数） |
+
+### 出力オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--format, -f` | 出力形式: yaml, json, svg, html（デフォルト: 拡張子から自動判定） |
+| `--output, -o` | 出力ファイル名（デフォルト: topology） |
+| `--theme` | テーマ: light または dark |
+
+### 出力形式
+
+| 形式 | 説明 |
+|------|------|
+| `yaml` | YAML 定義ファイル（他のツールで利用可能） |
+| `json` | NetworkGraph JSON（他の API と統合可能） |
+| `svg` | 静的 SVG 画像 |
+| `html` | インタラクティブ HTML（ツールチップ、パン/ズーム対応） |
+
+### フィルタリングオプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--site, -s` | サイト slug でフィルタリング |
+| `--role, -r` | デバイスロール slug でフィルタリング |
+| `--status` | ステータスでフィルタリング（active, planned, staged, failed, offline） |
+| `--tag` | タグ slug でフィルタリング |
+
+### 表示オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--group-by, -g` | グループ化方法: tag, site, location, prefix, none |
+| `--no-ports` | ポート名をリンクに表示しない |
+| `--no-colors` | ケーブルタイプによる色分けをしない |
+| `--color-by-status` | デバイスをステータスで色分け |
+| `--legend` | 凡例を表示（SVG/HTML 出力時） |
+
+---
+
+## NetBox のセットアップ
+
+### API トークンの取得
+
+1. NetBox にログイン
+2. 右上のユーザーメニュー → **API Tokens**
+3. **Add a token** をクリック
+4. 必要な権限を設定してトークンを作成
+
+### 必要な権限
+
+読み取り専用の場合、以下の権限が必要です：
+
+- `dcim.view_device`
+- `dcim.view_cable`
+- `dcim.view_site`
+- `dcim.view_interface`
+
+---
+
+## データマッピング
+
+NetBox のデータは以下のように Shumoku に変換されます：
+
+| NetBox | Shumoku |
+|--------|---------|
+| Device | Node |
+| Cable | Link |
+| Site | Subgraph |
+| Interface | Port |
+| Device Role | type の推測に使用 |
+
+### デバイスタイプの自動推測
+
+NetBox の `device_role` から Shumoku の `type` を自動推測します：
+
+| NetBox Device Role | Shumoku Type |
+|-------------------|--------------|
+| `router`, `core-router` | `router` |
+| `switch`, `access-switch` | `l2-switch` |
+| `l3-switch`, `distribution-switch` | `l3-switch` |
+| `firewall` | `firewall` |
+| `server`, `compute` | `server` |
+| `access-point`, `wireless` | `access-point` |
+| `load-balancer` | `load-balancer` |
+
+---
+
+## GitHub Actions でのデプロイ
+
+GitHub Actions を使って NetBox から自動生成した HTML を GitHub Pages にデプロイできます。
+
+```yaml
+# .github/workflows/network-diagram.yml
+name: Update Network Diagram
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 毎日 AM 9:00 (JST)
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Generate diagram
+        run: |
+          npx netbox-to-shumoku \
+            -u ${{ secrets.NETBOX_URL }} \
+            -t ${{ secrets.NETBOX_TOKEN }} \
+            -f html -o index
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - uses: actions/deploy-pages@v4
+```
+
+**設定:**
+1. Settings → Secrets に `NETBOX_URL` と `NETBOX_TOKEN` を追加
+2. Settings → Pages → Source を "GitHub Actions" に設定
+
+---
+
+## トラブルシューティング
+
+### 接続エラー
+
+```
+Error: Failed to connect to NetBox
+```
+
+- URL が正しいか確認
+- API トークンが有効か確認
+- ネットワーク接続を確認
+
+### 権限エラー
+
+```
+Error: 403 Forbidden
+```
+
+- API トークンの権限を確認
+- 必要な権限が付与されているか確認
+
+### デバイスが表示されない
+
+- デバイスのステータスが `active` か確認
+- フィルタ条件を確認
+- NetBox でデバイスが正しく登録されているか確認
+
+---
+
+## 次のステップ
+
+- [視覚化機能](/docs/netbox/visualization) - 帯域幅、VLAN、ケーブルタイプの可視化
+- [API リファレンス](/docs/netbox/api) - ライブラリとしての詳細な使い方

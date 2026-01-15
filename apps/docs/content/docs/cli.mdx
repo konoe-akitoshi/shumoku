@@ -1,0 +1,106 @@
+---
+title: CLI リファレンス
+description: Shumoku コマンドラインツールの使い方
+---
+
+Shumoku は2つの CLI ツールを提供しています。
+
+## shumoku render
+
+NetworkGraph JSON をダイアグラムにレンダリングします。
+
+```bash
+# インストール
+npm install @shumoku/renderer
+
+# 使い方
+npx shumoku render <input.json> [options]
+```
+
+### オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `-f, --format <type>` | 出力形式: svg, html（デフォルト: 拡張子から自動判定） |
+| `-o, --output <file>` | 出力ファイル名（デフォルト: output.svg） |
+| `--theme <theme>` | テーマ: light または dark |
+| `-h, --help` | ヘルプを表示 |
+| `-v, --version` | バージョンを表示 |
+
+### 使用例
+
+```bash
+# JSON から SVG を生成
+npx shumoku render topology.json -o diagram.svg
+
+# JSON からインタラクティブ HTML を生成
+npx shumoku render topology.json -f html -o diagram.html
+
+# stdin から読み込み
+cat topology.json | npx shumoku render - -o diagram.svg
+```
+
+### 入力形式
+
+入力ファイルは [NetworkGraph JSON](/docs/json-reference) 形式である必要があります。
+
+---
+
+## netbox-to-shumoku
+
+NetBox から直接ダイアグラムを生成します。詳細は [NetBox 統合](/docs/netbox) を参照してください。
+
+```bash
+# インストール
+npm install @shumoku/netbox
+
+# 使い方
+npx netbox-to-shumoku [options]
+```
+
+### 主要オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `-u, --url <url>` | NetBox の URL（または `NETBOX_URL` 環境変数） |
+| `-t, --token <token>` | API トークン（または `NETBOX_TOKEN` 環境変数） |
+| `-f, --format <type>` | 出力形式: yaml, json, svg, html |
+| `-o, --output <file>` | 出力ファイル名 |
+
+### 使用例
+
+```bash
+# 環境変数で認証
+export NETBOX_URL=https://netbox.example.com
+export NETBOX_TOKEN=YOUR_API_TOKEN
+
+# SVG 出力
+npx netbox-to-shumoku -o network.svg
+
+# インタラクティブ HTML 出力
+npx netbox-to-shumoku -f html -o network.html
+
+# JSON エクスポート（他ツールとの統合用）
+npx netbox-to-shumoku -f json -o netbox.json
+```
+
+詳細なオプションは [NetBox CLI オプション](/docs/netbox#cli-オプション) を参照してください。
+
+---
+
+## 統合ワークフロー
+
+NetBox と独自 API のデータを統合してダイアグラムを生成する例：
+
+```bash
+# Step 1: NetBox から JSON エクスポート
+npx netbox-to-shumoku -f json -o netbox.json
+
+# Step 2: 独自スクリプトでデータをマージ
+node merge-data.js netbox.json custom-api.json > merged.json
+
+# Step 3: マージした JSON からダイアグラム生成
+npx shumoku render merged.json -o diagram.html
+```
+
+マージスクリプトの例は [JSON スキーマ](/docs/json-reference#マージの例) を参照してください。
