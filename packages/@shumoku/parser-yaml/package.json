@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/parser-yaml",
-  "version": "0.2.4",
+  "version": "0.2.13",
   "description": "YAML parser for shumoku network topology definitions",
   "license": "MIT",
   "author": "konoe-akitoshi",
@@ -42,7 +42,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@shumoku/core": "^0.2.3",
+    "@shumoku/core": "^0.2.13",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

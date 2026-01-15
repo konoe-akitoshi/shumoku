@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/netbox",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "description": "NetBox API client and Shumoku converter",
   "license": "MIT",
   "author": "konoe-akitoshi",
@@ -45,7 +45,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@shumoku/core": "^0.2.4",
+    "@shumoku/core": "^0.2.13",
     "@shumoku/icons": "^0.2.3",
     "@shumoku/renderer": "^0.2.6"
   },
