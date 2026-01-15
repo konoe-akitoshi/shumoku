@@ -86,6 +86,13 @@ Converts YAML network definitions to `NetworkGraph`. Supports:
 YAML input → YamlParser.parse() → NetworkGraph → HierarchicalLayout.layout() → LayoutResult → svg/html.render() → Output
 ```
 
+## Versioning
+
+- 0.x の間は基本 **patch** を使う
+- **minor** は大きな新機能追加・新しい公開API追加時のみ
+- **major** は 1.0.0 リリース時または破壊的変更時
+- 迷ったら patch
+
 ## Code Style
 
 - Biome for formatting and linting
