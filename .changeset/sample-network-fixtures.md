@@ -1,5 +1,5 @@
 ---
-"@shumoku/core": minor
+"@shumoku/core": patch
 "@shumoku/parser-yaml": patch
 "@shumoku/netbox": patch
 "shumoku": patch
