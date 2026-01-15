@@ -8,6 +8,8 @@ import * as svg from './svg.js'
 
 export { svg, html }
 
+// Re-export SheetData for hierarchical rendering
+export type { SheetData } from './html/index.js'
 // Types
 export type {
   DataAttributeOptions,
@@ -20,6 +22,3 @@ export type {
   PortInfo,
   RenderMode,
 } from './types.js'
-
-// Re-export SheetData for hierarchical rendering
-export type { SheetData } from './html/index.js'

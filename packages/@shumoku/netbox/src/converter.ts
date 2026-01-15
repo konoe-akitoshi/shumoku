@@ -461,15 +461,15 @@ function buildSubgraphsByTag(
     const style = SUBGRAPH_STYLES[level] ?? { fill: '#F5F5F5', stroke: '#9E9E9E' }
 
     subgraphs.push({
-      id: `subgraph-${tag}`,
+      id: tag,
       label,
       style: { fill: style.fill, stroke: style.stroke, strokeWidth: 2 },
     })
   }
 
   return subgraphs.sort((a, b) => {
-    const tagA = a.id.replace('subgraph-', '')
-    const tagB = b.id.replace('subgraph-', '')
+    const tagA = a.id
+    const tagB = b.id
     return (mapping[tagA]?.level ?? 99) - (mapping[tagB]?.level ?? 99)
   })
 }
@@ -477,7 +477,6 @@ function buildSubgraphsByTag(
 function buildSubgraphsBySite(devices: Map<string, DeviceData>): Subgraph[] {
   return buildGroupedSubgraphs(
     groupDevicesBy(devices, (d) => d.site ?? 'unknown'),
-    'site',
     GROUPING_STYLES,
   )
 }
@@ -485,7 +484,6 @@ function buildSubgraphsBySite(devices: Map<string, DeviceData>): Subgraph[] {
 function buildSubgraphsByLocation(devices: Map<string, DeviceData>): Subgraph[] {
   return buildGroupedSubgraphs(
     groupDevicesBy(devices, (d) => d.location ?? d.site ?? 'unknown'),
-    'location',
     GROUPING_STYLES,
   )
 }
@@ -513,7 +511,7 @@ function buildSubgraphsByPrefix(devices: Map<string, DeviceData>): Subgraph[] {
       prefix === 'unknown' ? 'Unknown Network' : `Subnet: ${prefix.replace('.0.0/16', '.x.x')}`
 
     subgraphs.push({
-      id: `prefix-${prefix.replace(/[./]/g, '-')}`,
+      id: prefix.replace(/[./]/g, '-'),
       label,
       style: { fill: style.fill, stroke: style.stroke, strokeWidth: 2 },
     })
@@ -537,7 +535,6 @@ function groupDevicesBy(
 
 function buildGroupedSubgraphs(
   grouped: Map<string, DeviceData[]>,
-  prefix: string,
   styles: typeof GROUPING_STYLES,
 ): Subgraph[] {
   const subgraphs: Subgraph[] = []
@@ -548,7 +545,7 @@ function buildGroupedSubgraphs(
 
     const style = styles[styleIndex++ % styles.length]
     subgraphs.push({
-      id: `${prefix}-${key}`,
+      id: key,
       label: formatLocationLabel(key),
       style: { fill: style.fill, stroke: style.stroke, strokeWidth: 2 },
     })
@@ -626,16 +623,16 @@ function applyStatusStyle(node: Node, status: DeviceStatusValue): void {
 function getNodeParent(device: DeviceData, groupBy: GroupBy): string | undefined {
   switch (groupBy) {
     case 'tag':
-      return `subgraph-${device.primaryTag}`
+      return device.primaryTag
     case 'site':
-      return device.site ? `site-${device.site}` : undefined
+      return device.site
     case 'location': {
       const loc = device.location ?? device.site
-      return loc ? `location-${loc}` : undefined
+      return loc
     }
     case 'prefix': {
       const prefix = getNetworkPrefix(device.ip)
-      return prefix ? `prefix-${prefix.replace(/[./]/g, '-')}` : undefined
+      return prefix ? prefix.replace(/[./]/g, '-') : undefined
     }
     default:
       return undefined
@@ -851,7 +848,10 @@ export function toYaml(graph: NetworkGraph): string {
   return lines.join('\n')
 }
 
-function serializeLegendSettings(lines: string[], legend: boolean | LegendSettings | undefined): void {
+function serializeLegendSettings(
+  lines: string[],
+  legend: boolean | LegendSettings | undefined,
+): void {
   if (legend === true) {
     lines.push('  legend: true')
   } else if (typeof legend === 'object') {
@@ -980,9 +980,7 @@ export function convertToHierarchicalYaml(
   return { main: mainYaml, files, crossLinks }
 }
 
-function buildHierarchicalDeviceInfoMap(
-  deviceResp: NetBoxDeviceResponse,
-): Map<string, DeviceInfo> {
+function buildHierarchicalDeviceInfoMap(deviceResp: NetBoxDeviceResponse): Map<string, DeviceInfo> {
   const map = new Map<string, DeviceInfo>()
 
   for (const device of deviceResp.results) {

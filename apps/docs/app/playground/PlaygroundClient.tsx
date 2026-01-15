@@ -1,7 +1,7 @@
 'use client'
 
-import { html } from '@shumoku/renderer'
 import type { SheetData } from '@shumoku/renderer'
+import { html } from '@shumoku/renderer'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
 import { useEffect, useRef, useState } from 'react'
 import type { LayoutResult, NetworkGraph } from 'shumoku'
@@ -10,15 +10,10 @@ import {
   HierarchicalLayout,
   HierarchicalParser,
   parser,
+  sampleNetwork,
   svg,
 } from 'shumoku'
 import { cn } from '@/lib/cn'
-import {
-  enterpriseNetwork,
-  hierarchicalMultiFile,
-  hierarchicalNetwork,
-  simpleNetwork,
-} from '@/lib/sampleNetworks'
 import { InteractivePreview } from './InteractivePreview'
 
 // Set IIFE once at module load
@@ -191,7 +186,7 @@ function FileTabs({
 }
 
 export default function PlaygroundClient() {
-  const [files, setFiles] = useState<EditorFile[]>(enterpriseNetwork)
+  const [files, setFiles] = useState<EditorFile[]>(sampleNetwork)
   const [activeFile, setActiveFile] = useState('main.yaml')
   const [svgContent, setSvgContent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -394,20 +389,9 @@ export default function PlaygroundClient() {
     win.document.close()
   }
 
-  const loadSample = (sample: string) => {
-    if (sample === 'enterprise') {
-      setFiles(enterpriseNetwork)
-      setActiveFile('main.yaml')
-    } else if (sample === 'simple') {
-      setFiles([{ name: 'main.yaml', content: simpleNetwork }])
-      setActiveFile('main.yaml')
-    } else if (sample === 'hierarchical') {
-      setFiles([{ name: 'main.yaml', content: hierarchicalNetwork }])
-      setActiveFile('main.yaml')
-    } else if (sample === 'hierarchical-multi') {
-      setFiles(hierarchicalMultiFile)
-      setActiveFile('main.yaml')
-    }
+  const resetSample = () => {
+    setFiles([...sampleNetwork])
+    setActiveFile('main.yaml')
     setSvgContent(null)
     setError(null)
   }
@@ -424,20 +408,17 @@ export default function PlaygroundClient() {
       >
         <h1 className="text-xl font-semibold">Playground</h1>
         <div className="flex items-center gap-3">
-          <select
+          <button
+            onClick={resetSample}
             className={cn(
               'rounded px-3 py-2 text-sm',
               'border border-neutral-300 dark:border-neutral-600',
               'bg-white dark:bg-neutral-800',
-              'focus:outline-none focus:ring-2 focus:ring-blue-500',
+              'hover:bg-neutral-100 dark:hover:bg-neutral-700',
             )}
-            onChange={(e) => loadSample(e.target.value)}
           >
-            <option value="enterprise">Enterprise Network</option>
-            <option value="simple">Simple Network</option>
-            <option value="hierarchical">Hierarchical (Single File)</option>
-            <option value="hierarchical-multi">Hierarchical (Multi-File)</option>
-          </select>
+            Reset
+          </button>
 
           <button
             onClick={handleParseAndRender}

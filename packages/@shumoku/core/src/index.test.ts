@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { sampleNetwork } from './fixtures/index.js'
 import { darkTheme, HierarchicalLayout, modernTheme, version } from './index.js'
 import type { NetworkGraph } from './models/index.js'
 
@@ -61,6 +62,28 @@ describe('@shumoku/core', () => {
       expect(darkTheme.name).toBeDefined()
       expect(darkTheme.colors).toBeDefined()
       expect(darkTheme.colors.background).toBeDefined()
+    })
+  })
+
+  describe('fixtures', () => {
+    it('should export sampleNetwork', () => {
+      expect(sampleNetwork).toBeDefined()
+      expect(Array.isArray(sampleNetwork)).toBe(true)
+      expect(sampleNetwork.length).toBeGreaterThan(0)
+    })
+
+    it('should have main.yaml as first file', () => {
+      expect(sampleNetwork[0].name).toBe('main.yaml')
+      expect(sampleNetwork[0].content).toContain('Sample Network')
+    })
+
+    it('should have all required files', () => {
+      const fileNames = sampleNetwork.map((f) => f.name)
+      expect(fileNames).toContain('main.yaml')
+      expect(fileNames).toContain('cloud.yaml')
+      expect(fileNames).toContain('perimeter.yaml')
+      expect(fileNames).toContain('dmz.yaml')
+      expect(fileNames).toContain('campus.yaml')
     })
   })
 })

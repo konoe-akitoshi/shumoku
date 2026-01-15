@@ -145,7 +145,10 @@ export function renderHierarchical(
     sheets: sheetInfos,
   }
 
-  return generateHierarchicalHtml(sheetSvgs, title, { ...opts, navigation } as Required<RenderOptions>)
+  return generateHierarchicalHtml(sheetSvgs, title, {
+    ...opts,
+    navigation,
+  } as Required<RenderOptions>)
 }
 
 /**

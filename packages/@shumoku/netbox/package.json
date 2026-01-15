@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/netbox",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "NetBox API client and Shumoku converter",
   "license": "MIT",
   "author": "konoe-akitoshi",

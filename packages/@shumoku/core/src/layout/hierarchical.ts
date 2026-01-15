@@ -859,20 +859,28 @@ export class HierarchicalLayout {
 
           // Get position and size for from/to (either node or subgraph)
           // LayoutSubgraph uses bounds {x, y, width, height}, convert to position/size format
-          const fromLayout = fromNode || (fromSubgraph ? {
-            position: {
-              x: fromSubgraph.bounds.x + fromSubgraph.bounds.width / 2,
-              y: fromSubgraph.bounds.y + fromSubgraph.bounds.height / 2,
-            },
-            size: { width: fromSubgraph.bounds.width, height: fromSubgraph.bounds.height },
-          } : null)
-          const toLayout = toNode || (toSubgraph ? {
-            position: {
-              x: toSubgraph.bounds.x + toSubgraph.bounds.width / 2,
-              y: toSubgraph.bounds.y + toSubgraph.bounds.height / 2,
-            },
-            size: { width: toSubgraph.bounds.width, height: toSubgraph.bounds.height },
-          } : null)
+          const fromLayout =
+            fromNode ||
+            (fromSubgraph
+              ? {
+                  position: {
+                    x: fromSubgraph.bounds.x + fromSubgraph.bounds.width / 2,
+                    y: fromSubgraph.bounds.y + fromSubgraph.bounds.height / 2,
+                  },
+                  size: { width: fromSubgraph.bounds.width, height: fromSubgraph.bounds.height },
+                }
+              : null)
+          const toLayout =
+            toNode ||
+            (toSubgraph
+              ? {
+                  position: {
+                    x: toSubgraph.bounds.x + toSubgraph.bounds.width / 2,
+                    y: toSubgraph.bounds.y + toSubgraph.bounds.height / 2,
+                  },
+                  size: { width: toSubgraph.bounds.width, height: toSubgraph.bounds.height },
+                }
+              : null)
 
           if (!fromLayout || !toLayout) continue
 

@@ -81,8 +81,8 @@ export function getTooltipInfo(el: Element): TooltipInfo | null {
 
   const linkGroup = el.closest('.link-group[data-link-id]')
   if (linkGroup) {
-    let from = linkGroup.getAttribute('data-link-from') || ''
-    let to = linkGroup.getAttribute('data-link-to') || ''
+    const from = linkGroup.getAttribute('data-link-from') || ''
+    const to = linkGroup.getAttribute('data-link-to') || ''
     const bw = linkGroup.getAttribute('data-link-bandwidth')
     const vlan = linkGroup.getAttribute('data-link-vlan')
     const jsonAttr = linkGroup.getAttribute('data-link-json')

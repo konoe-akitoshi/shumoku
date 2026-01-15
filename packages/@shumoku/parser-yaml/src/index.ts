@@ -8,8 +8,8 @@ export {
   createMemoryFileResolver,
   createNodeFileResolver,
   HierarchicalParser,
-  isExportNode,
   isExportLink,
+  isExportNode,
 } from './hierarchical.js'
 export type { ParseResult, ParseWarning } from './parser.js'
 export { parser, YamlParser } from './parser.js'

@@ -1,5 +1,6 @@
+import { sampleNetwork } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { parser, YamlParser } from './index.js'
+import { createMemoryFileResolver, HierarchicalParser, parser, YamlParser } from './index.js'
 
 describe('@shumoku/parser-yaml', () => {
   describe('exports', () => {
@@ -93,6 +94,74 @@ subgraphs:
       const result = parser.parse(yaml)
       expect(result.warnings).toBeDefined()
       expect(result.warnings!.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('HierarchicalParser with sampleNetwork fixture', () => {
+    it('should parse sample network main file', () => {
+      const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
+      expect(mainFile).toBeDefined()
+
+      const result = parser.parse(mainFile!.content)
+      expect(result.graph).toBeDefined()
+      expect(result.graph.name).toBe('Sample Network')
+      expect(result.graph.subgraphs).toBeDefined()
+      expect(result.graph.subgraphs!.length).toBeGreaterThan(0)
+    })
+
+    it('should parse all sample network files', () => {
+      for (const file of sampleNetwork) {
+        const result = parser.parse(file.content)
+        expect(result.graph).toBeDefined()
+        const errors = result.warnings?.filter((w) => w.severity === 'error') ?? []
+        expect(errors).toHaveLength(0)
+      }
+    })
+
+    it('should parse sample network hierarchically', async () => {
+      const fileMap = new Map<string, string>()
+      for (const f of sampleNetwork) {
+        // Map with multiple path formats for compatibility
+        fileMap.set(f.name, f.content)
+        fileMap.set(`./${f.name}`, f.content)
+        fileMap.set(`/${f.name}`, f.content)
+      }
+
+      const resolver = createMemoryFileResolver(fileMap, '/')
+      const hierarchicalParser = new HierarchicalParser(resolver)
+      const result = await hierarchicalParser.parse(sampleNetwork[0].content, '/main.yaml')
+
+      expect(result.graph).toBeDefined()
+      expect(result.graph.name).toBe('Sample Network')
+      expect(result.sheets).toBeDefined()
+
+      // Sheets are created when file references are resolved
+      // The hierarchical parser should have parsed the subgraph files
+      const subgraphIds = ['cloud', 'perimeter', 'dmz', 'campus']
+      for (const id of subgraphIds) {
+        const subgraph = result.graph.subgraphs?.find((s) => s.id === id)
+        expect(subgraph).toBeDefined()
+      }
+    })
+
+    it('should resolve cross-file links correctly', async () => {
+      const fileMap = new Map<string, string>()
+      for (const f of sampleNetwork) {
+        fileMap.set(f.name, f.content)
+        fileMap.set(`./${f.name}`, f.content)
+      }
+
+      const resolver = createMemoryFileResolver(fileMap, '/')
+      const hierarchicalParser = new HierarchicalParser(resolver)
+      const result = await hierarchicalParser.parse(sampleNetwork[0].content, '/main.yaml')
+
+      // Main graph should have cross-subgraph links
+      const crossLinks = result.graph.links.filter(
+        (link) =>
+          (link.from.node === 'vgw' && link.to.node === 'rt1') ||
+          (link.from.node === 'fw1' && link.to.node === 'dmz-sw'),
+      )
+      expect(crossLinks.length).toBeGreaterThan(0)
     })
   })
 })

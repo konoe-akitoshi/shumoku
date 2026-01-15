@@ -3,7 +3,13 @@
  * Resolves file references and builds a complete hierarchical graph
  */
 
-import type { HierarchicalNetworkGraph, NetworkGraph, Node, Link, Subgraph } from '@shumoku/core/models'
+import type {
+  HierarchicalNetworkGraph,
+  Link,
+  NetworkGraph,
+  Node,
+  Subgraph,
+} from '@shumoku/core/models'
 import { type ParseResult, type ParseWarning, YamlParser } from './parser.js'
 
 // ============================================

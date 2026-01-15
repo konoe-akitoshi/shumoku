@@ -6,17 +6,16 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import type { NetworkGraph } from '@shumoku/core'
+import { buildHierarchicalSheets } from '@shumoku/core'
 import { HierarchicalLayout } from '@shumoku/core/layout'
 import { html, svg } from '@shumoku/renderer'
-import type { SheetData } from '@shumoku/renderer'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
 import '@shumoku/icons' // Register vendor icons
+import pkg from '../package.json' with { type: 'json' }
 import type { QueryParams } from './client.js'
 import { NetBoxClient } from './client.js'
 import { convertToNetworkGraph, toYaml } from './converter.js'
 import type { ConverterOptions, GroupBy } from './types.js'
-import pkg from '../package.json' with { type: 'json' }
 
 const VERSION = pkg.version
 
@@ -152,8 +151,15 @@ async function main(): Promise<void> {
     // Determine format: explicit --format takes priority, then infer from extension
     const outputBase = opts.output!
     const extMatch = outputBase.toLowerCase().match(/\.(yaml|yml|svg|html|htm)$/)
-    const format: OutputFormat = (opts.format as OutputFormat)
-      ?? (extMatch ? (extMatch[1] === 'yml' ? 'yaml' : extMatch[1] === 'htm' ? 'html' : extMatch[1] as OutputFormat) : 'yaml')
+    const format: OutputFormat =
+      (opts.format as OutputFormat) ??
+      (extMatch
+        ? extMatch[1] === 'yml'
+          ? 'yaml'
+          : extMatch[1] === 'htm'
+            ? 'html'
+            : (extMatch[1] as OutputFormat)
+        : 'yaml')
 
     // Build output path with extension if not present
     const hasExt = /\.(yaml|yml|svg|html|htm)$/i.test(outputBase)
@@ -171,116 +177,8 @@ async function main(): Promise<void> {
         console.log('Rendering HTML...')
         html.setIIFE(INTERACTIVE_IIFE)
 
-        // Build hierarchical sheets for subgraph navigation
-        const sheets = new Map<string, SheetData>()
-
-        // Mark subgraphs as clickable and create child sheets
-        if (graph.subgraphs && graph.subgraphs.length > 0) {
-          for (const sg of graph.subgraphs) {
-            // Mark as clickable by setting file property
-            sg.file = sg.id
-
-            // Create child graph with only nodes in this subgraph
-            const childNodes = graph.nodes.filter((n) => n.parent === sg.id)
-            const childNodeIds = new Set(childNodes.map((n) => n.id))
-
-            // Internal links (both endpoints in subgraph)
-            const childLinks = graph.links.filter(
-              (l) =>
-                childNodeIds.has(typeof l.from === 'string' ? l.from : l.from.node) &&
-                childNodeIds.has(typeof l.to === 'string' ? l.to : l.to.node),
-            )
-
-            // Find boundary connections and create export connector nodes/links
-            const exportNodes: NetworkGraph['nodes'] = []
-            const exportLinks: NetworkGraph['links'] = []
-            let exportIndex = 0
-
-            for (const link of graph.links) {
-              const fromNode = typeof link.from === 'string' ? link.from : link.from.node
-              const toNode = typeof link.to === 'string' ? link.to : link.to.node
-              const fromPort = typeof link.from === 'object' ? link.from.port : undefined
-              const toPort = typeof link.to === 'object' ? link.to.port : undefined
-
-              const fromInside = childNodeIds.has(fromNode)
-              const toInside = childNodeIds.has(toNode)
-
-              if (fromInside && !toInside) {
-                // Outgoing connection - internal device connects to external
-                const exportId = `${sg.id}-export-${exportIndex++}`
-                const destSubgraph = graph.subgraphs?.find((s) =>
-                  graph.nodes.some((n) => n.id === toNode && n.parent === s.id),
-                )
-                exportNodes.push({
-                  id: `__export_${exportId}`,
-                  label: destSubgraph?.label || toNode,
-                  shape: 'stadium',
-                  metadata: {
-                    _isExport: true,
-                    _destDevice: toNode,
-                    _destPort: toPort,
-                  },
-                })
-                exportLinks.push({
-                  id: `__export_link_${exportId}`,
-                  from: fromPort ? { node: fromNode, port: fromPort } : fromNode,
-                  to: `__export_${exportId}`,
-                  type: 'dashed',
-                  arrow: 'forward',
-                  metadata: {
-                    _destDevice: toNode,
-                    _destPort: toPort,
-                  },
-                })
-              } else if (!fromInside && toInside) {
-                // Incoming connection - external device connects to internal
-                const exportId = `${sg.id}-export-${exportIndex++}`
-                const destSubgraph = graph.subgraphs?.find((s) =>
-                  graph.nodes.some((n) => n.id === fromNode && n.parent === s.id),
-                )
-                exportNodes.push({
-                  id: `__export_${exportId}`,
-                  label: destSubgraph?.label || fromNode,
-                  shape: 'stadium',
-                  metadata: {
-                    _isExport: true,
-                    _destDevice: fromNode,
-                    _destPort: fromPort,
-                  },
-                })
-                exportLinks.push({
-                  id: `__export_link_${exportId}`,
-                  from: `__export_${exportId}`,
-                  to: toPort ? { node: toNode, port: toPort } : toNode,
-                  type: 'dashed',
-                  arrow: 'forward',
-                  metadata: {
-                    _destDevice: fromNode,
-                    _destPort: fromPort,
-                  },
-                })
-              }
-            }
-
-            const childGraph: NetworkGraph = {
-              ...graph,
-              name: sg.label,
-              nodes: [
-                ...childNodes.map((n) => ({ ...n, parent: undefined })),
-                ...exportNodes,
-              ],
-              links: [...childLinks, ...exportLinks],
-              subgraphs: undefined,
-            }
-
-            // Layout child sheet
-            const childLayout = await layout.layoutAsync(childGraph)
-            sheets.set(sg.id, { graph: childGraph, layout: childLayout })
-          }
-        }
-
-        // Add root sheet
-        sheets.set('root', { graph, layout: layoutResult })
+        // Build hierarchical sheets (includes export connectors for boundary connections)
+        const sheets = await buildHierarchicalSheets(graph, layoutResult, layout)
 
         // Use hierarchical rendering if we have subgraphs
         if (sheets.size > 1) {
