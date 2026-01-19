@@ -82,7 +82,7 @@ function DiagramPreview() {
 
 export function HeroSection() {
   return (
-    <section className="relative min-h-[85vh] lg:h-[85vh] lg:max-h-[900px] overflow-hidden">
+    <section className="relative min-h-[85vh] lg:min-h-[85vh] lg:max-h-none overflow-x-hidden">
       <div className="absolute inset-0 bg-white dark:bg-neutral-950 pointer-events-none" />
       <div className={cn('absolute inset-0 pointer-events-none', backgrounds.hero)} />
 
