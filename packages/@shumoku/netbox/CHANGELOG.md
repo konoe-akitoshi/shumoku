@@ -1,5 +1,13 @@
 # @shumoku/netbox
 
+## 0.2.24
+
+### Patch Changes
+
+- ad2afe4: Add PNG export as separate entry point (`@shumoku/renderer/png`) to avoid bundling Node-only resvg in browser builds
+- Updated dependencies [ad2afe4]
+  - @shumoku/renderer@0.2.24
+
 ## 0.2.23
 
 ### Patch Changes
