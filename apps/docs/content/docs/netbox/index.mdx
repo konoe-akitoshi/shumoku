@@ -119,6 +119,14 @@ const svgOutput = svg.render(graph, result)
 | `--color-by-status` | デバイスをステータスで色分け |
 | `--legend` | 凡例を表示（SVG/HTML 出力時） |
 
+### その他のオプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--debug, -d` | デバッグ出力を表示（API リクエスト/レスポンス） |
+| `--help, -h` | ヘルプを表示 |
+| `--version, -v` | バージョンを表示 |
+
 ---
 
 ## NetBox のセットアップ
@@ -212,6 +220,19 @@ jobs:
 ---
 
 ## トラブルシューティング
+
+問題が発生した場合は、`--debug` オプションを使用して API リクエスト/レスポンスの詳細を確認できます：
+
+```bash
+npx netbox-to-shumoku --debug -o network.html
+```
+
+デバッグ出力例：
+```
+[DEBUG] Request: GET https://netbox.example.com/api/dcim/devices/?limit=0
+[DEBUG] Response: 200 OK (234ms)
+[DEBUG] Response data: 15 items
+```
 
 ### 接続エラー
 

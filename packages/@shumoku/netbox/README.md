@@ -62,6 +62,7 @@ npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_TOKEN -f jso
 | `--no-colors` | Don't color links by cable type |
 | `--color-by-status` | Color devices by their status |
 | `--legend` | Show legend in the diagram (SVG only) |
+| `-d, --debug` | Show debug output (API requests/responses) |
 
 ### Integration Workflow
 
@@ -85,7 +86,8 @@ npx shumoku render merged.json -o diagram.html
 ```typescript
 const client = new NetBoxClient({
   url: string,      // NetBox URL
-  token: string     // API token
+  token: string,    // API token
+  debug?: boolean   // Enable debug output (default: false)
 })
 
 // Methods

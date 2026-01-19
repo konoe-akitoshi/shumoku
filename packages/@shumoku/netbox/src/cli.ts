@@ -47,6 +47,7 @@ Display:
   --legend              Show legend (SVG/HTML)
 
 Other:
+  -d, --debug           Show debug output (API requests/responses)
   -h, --help            Show help
   -v, --version         Show version
 
@@ -76,6 +77,7 @@ function cli() {
       'no-colors': { type: 'boolean', default: false },
       'color-by-status': { type: 'boolean', default: false },
       legend: { type: 'boolean', default: false },
+      debug: { type: 'boolean', short: 'd', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
     },
@@ -109,7 +111,7 @@ async function main(): Promise<void> {
 
   try {
     console.log('Connecting to NetBox...')
-    const client = new NetBoxClient({ url, token })
+    const client = new NetBoxClient({ url, token, debug: opts.debug })
 
     // Build filters
     const queryParams: QueryParams = {}

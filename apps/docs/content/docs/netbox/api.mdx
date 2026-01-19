@@ -15,8 +15,19 @@ NetBox API と通信するクライアントクラスです。
 import { NetBoxClient } from '@shumoku/netbox'
 
 const client = new NetBoxClient({
-  url: string,      // NetBox の URL
-  token: string     // API トークン
+  url: string,       // NetBox の URL
+  token: string,     // API トークン
+  debug?: boolean    // デバッグ出力を有効化（デフォルト: false）
+})
+```
+
+`debug: true` を指定すると、API リクエスト/レスポンスの詳細がコンソールに出力されます：
+
+```typescript
+const client = new NetBoxClient({
+  url: 'https://netbox.example.com',
+  token: 'your-api-token',
+  debug: true  // API 通信のログを出力
 })
 ```
 

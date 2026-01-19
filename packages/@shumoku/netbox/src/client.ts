@@ -35,12 +35,25 @@ export class NetBoxClient {
   private baseUrl: string
   private token: string
   private timeout: number
+  private debug: boolean
 
   constructor(options: NetBoxClientOptions) {
     // Remove trailing slash from URL
     this.baseUrl = options.url.replace(/\/$/, '')
     this.token = options.token
     this.timeout = options.timeout ?? 30000
+    this.debug = options.debug ?? false
+  }
+
+  /**
+   * Log debug information
+   */
+  private log(message: string, data?: unknown): void {
+    if (!this.debug) return
+    console.log(`[DEBUG] ${message}`)
+    if (data !== undefined) {
+      console.log(JSON.stringify(data, null, 2))
+    }
   }
 
   /**
@@ -105,10 +118,16 @@ export class NetBoxClient {
     const queryString = this.buildQueryString(params)
     const url = `${this.baseUrl}/api/${path}/?${queryString}`
 
+    this.log(`Request: GET ${url}`)
+    if (params && Object.keys(params).length > 0) {
+      this.log('Query params:', params)
+    }
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), this.timeout)
 
     try {
+      const startTime = Date.now()
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -117,12 +136,22 @@ export class NetBoxClient {
         },
         signal: controller.signal,
       })
+      const elapsed = Date.now() - startTime
+
+      this.log(`Response: ${response.status} ${response.statusText} (${elapsed}ms)`)
 
       if (!response.ok) {
+        const errorBody = await response.text()
+        this.log('Error response body:', errorBody)
         throw new Error(`NetBox API request failed: ${response.status} ${response.statusText}`)
       }
 
-      return (await response.json()) as T
+      const data = (await response.json()) as T
+      if (this.debug && typeof data === 'object' && data !== null && 'count' in data) {
+        this.log(`Response data: ${(data as { count: number }).count} items`)
+      }
+
+      return data
     } finally {
       clearTimeout(timeoutId)
     }
