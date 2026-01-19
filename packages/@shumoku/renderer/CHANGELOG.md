@@ -1,5 +1,14 @@
 # @shumoku/renderer
 
+## 0.2.16
+
+### Patch Changes
+
+- 6f5e4fc: fix(cli): register vendor icons in shumoku render command
+
+  The CLI now imports `@shumoku/icons` to auto-register vendor icons,
+  fixing the issue where icons were not displayed in generated diagrams.
+
 ## 0.2.15
 
 ### Patch Changes
