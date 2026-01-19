@@ -80,15 +80,20 @@ interface CrossSubgraphLink {
 
 /**
  * Export point for generating export connectors
+ * Multiple connections to the same destination are grouped into one export point
  */
 interface ExportPoint {
   subgraphId: string
-  device: string
-  port?: string
+  destSubgraphId: string
   destSubgraphLabel: string
-  destDevice: string
-  destPort?: string
   isSource: boolean
+  /** All device connections for this export point */
+  connections: Array<{
+    device: string
+    port?: string
+    destDevice: string
+    destPort?: string
+  }>
 }
 
 // ============================================
@@ -347,38 +352,47 @@ export class HierarchicalParser {
 
   /**
    * Collect export points from cross-subgraph links
+   * Groups multiple connections to the same destination into one export point
    */
   private collectExportPoints(crossLinks: CrossSubgraphLink[]): Map<string, ExportPoint> {
     const exportPoints = new Map<string, ExportPoint>()
 
     for (const crossLink of crossLinks) {
-      // Source side (from)
-      const fromKey = `${crossLink.fromSubgraph}:${crossLink.fromDevice}:${crossLink.fromPort || ''}`
+      // Source side (from) - grouped by destination subgraph
+      const fromKey = `${crossLink.fromSubgraph}:to:${crossLink.toSubgraph}`
       if (!exportPoints.has(fromKey)) {
         exportPoints.set(fromKey, {
           subgraphId: crossLink.fromSubgraph,
-          device: crossLink.fromDevice,
-          port: crossLink.fromPort,
+          destSubgraphId: crossLink.toSubgraph,
           destSubgraphLabel: crossLink.toSubgraphLabel,
-          destDevice: crossLink.toDevice,
-          destPort: crossLink.toPort,
           isSource: true,
+          connections: [],
         })
       }
+      exportPoints.get(fromKey)!.connections.push({
+        device: crossLink.fromDevice,
+        port: crossLink.fromPort,
+        destDevice: crossLink.toDevice,
+        destPort: crossLink.toPort,
+      })
 
-      // Destination side (to)
-      const toKey = `${crossLink.toSubgraph}:${crossLink.toDevice}:${crossLink.toPort || ''}`
+      // Destination side (to) - grouped by source subgraph
+      const toKey = `${crossLink.toSubgraph}:from:${crossLink.fromSubgraph}`
       if (!exportPoints.has(toKey)) {
         exportPoints.set(toKey, {
           subgraphId: crossLink.toSubgraph,
-          device: crossLink.toDevice,
-          port: crossLink.toPort,
+          destSubgraphId: crossLink.fromSubgraph,
           destSubgraphLabel: crossLink.fromSubgraphLabel,
-          destDevice: crossLink.fromDevice,
-          destPort: crossLink.fromPort,
           isSource: false,
+          connections: [],
         })
       }
+      exportPoints.get(toKey)!.connections.push({
+        device: crossLink.toDevice,
+        port: crossLink.toPort,
+        destDevice: crossLink.fromDevice,
+        destPort: crossLink.fromPort,
+      })
     }
 
     return exportPoints
@@ -400,15 +414,15 @@ export class HierarchicalParser {
       metadata: {
         _isExport: true,
         _destSubgraph: exportPoint.destSubgraphLabel,
-        _destDevice: exportPoint.destDevice,
-        _destPort: exportPoint.destPort,
+        _destSubgraphId: exportPoint.destSubgraphId,
         _isSource: exportPoint.isSource,
+        _connectionCount: exportPoint.connections.length,
       },
     })
   }
 
   /**
-   * Add export connector link to sheet
+   * Add export connector links to sheet (one link per connection)
    */
   private addExportConnectorLink(
     sheetGraph: NetworkGraph,
@@ -416,22 +430,25 @@ export class HierarchicalParser {
     exportPoint: ExportPoint,
   ): void {
     const exportNodeId = `${EXPORT_NODE_PREFIX}${exportId}`
-    const deviceEndpoint = exportPoint.port
-      ? { node: exportPoint.device, port: exportPoint.port }
-      : exportPoint.device
 
-    sheetGraph.links.push({
-      id: `${EXPORT_LINK_PREFIX}${exportId}`,
-      from: exportPoint.isSource ? deviceEndpoint : exportNodeId,
-      to: exportPoint.isSource ? exportNodeId : deviceEndpoint,
-      type: 'dashed',
-      arrow: 'forward',
-      metadata: {
-        _destSubgraphLabel: exportPoint.destSubgraphLabel,
-        _destDevice: exportPoint.destDevice,
-        _destPort: exportPoint.destPort,
-      },
-    })
+    for (let i = 0; i < exportPoint.connections.length; i++) {
+      const conn = exportPoint.connections[i]
+      const deviceEndpoint = conn.port ? { node: conn.device, port: conn.port } : conn.device
+      const linkId = `${EXPORT_LINK_PREFIX}${exportId}_${i}`
+
+      sheetGraph.links.push({
+        id: linkId,
+        from: exportPoint.isSource ? deviceEndpoint : exportNodeId,
+        to: exportPoint.isSource ? exportNodeId : deviceEndpoint,
+        type: 'dashed',
+        arrow: 'forward',
+        metadata: {
+          _destSubgraphLabel: exportPoint.destSubgraphLabel,
+          _destDevice: conn.destDevice,
+          _destPort: conn.destPort,
+        },
+      })
+    }
   }
 
   /**
