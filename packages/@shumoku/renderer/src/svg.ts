@@ -1319,25 +1319,25 @@ ${fg}
   private renderEndpointLabels(lines: string[], x: number, y: number, anchor: string): string {
     if (lines.length === 0) return ''
 
-    const lineHeight = 11
-    const paddingX = 2
-    const paddingY = 2
-    const charWidth = 4.8 // Approximate character width for 9px font
+    const lineHeight = 12
+    const charWidth = 5.5
+    const paddingX = 4
 
     // Calculate dimensions
     const maxLen = Math.max(...lines.map((l) => l.length))
-    const rectWidth = maxLen * charWidth + paddingX * 2
-    const rectHeight = lines.length * lineHeight + paddingY * 2
+    const rectWidth = maxLen * charWidth + paddingX
+    const rectHeight = lines.length * lineHeight
 
     // Adjust rect position based on text anchor
-    let rectX = x - paddingX
+    let rectX = x - paddingX / 2
     if (anchor === 'middle') {
       rectX = x - rectWidth / 2
     } else if (anchor === 'end') {
-      rectX = x - rectWidth + paddingX
+      rectX = x - rectWidth + paddingX / 2
     }
 
-    const rectY = y - lineHeight + paddingY
+    // Simple offset approach (same as port labels)
+    const rectY = y - lineHeight + 3
 
     let result = `\n<rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" rx="2" fill="${this.themeColors.endpointLabelBg}" stroke="${this.themeColors.endpointLabelStroke}" stroke-width="0.5" />`
 
