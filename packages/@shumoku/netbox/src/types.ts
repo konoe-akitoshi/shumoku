@@ -123,7 +123,8 @@ export interface NetBoxTermination {
   object: {
     name: string
     device: {
-      name: string
+      id: number
+      name: string | null
     }
   }
 }

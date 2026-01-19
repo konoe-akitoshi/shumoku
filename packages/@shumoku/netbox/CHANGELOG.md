@@ -1,5 +1,11 @@
 # @shumoku/netbox
 
+## 0.2.22
+
+### Patch Changes
+
+- Handle cable terminations with null device names by using fallback name (noname-{id})
+
 ## 0.2.21
 
 ### Patch Changes

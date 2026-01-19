@@ -301,8 +301,8 @@ function buildDevicesAndConnections(
     // Skip if termination is not a device interface (e.g., circuit, console port, power port)
     if (!termA.device || !termB.device) continue
 
-    const nameA = termA.device.name
-    const nameB = termB.device.name
+    const nameA = termA.device.name ?? `noname-${termA.device.id}`
+    const nameB = termB.device.name ?? `noname-${termB.device.id}`
     const tagA = deviceTagMap.get(nameA) ?? 'other'
     const tagB = deviceTagMap.get(nameB) ?? 'other'
 
@@ -1044,8 +1044,8 @@ function analyzeCables(
     // Skip if termination is not a device interface (e.g., circuit, console port, power port)
     if (!termA.device || !termB.device) continue
 
-    const nameA = termA.device.name
-    const nameB = termB.device.name
+    const nameA = termA.device.name ?? `noname-${termA.device.id}`
+    const nameB = termB.device.name ?? `noname-${termB.device.id}`
     const locA = getLocationKey(nameA)
     const locB = getLocationKey(nameB)
 
