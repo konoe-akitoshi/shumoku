@@ -50,6 +50,7 @@ npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_TOKEN -f jso
 |--------|-------------|
 | `-u, --url <url>` | NetBox API URL (or set `NETBOX_URL` env var) |
 | `-t, --token <token>` | API token (or set `NETBOX_TOKEN` env var) |
+| `-k, --insecure` | Skip TLS certificate verification (for self-signed certs) |
 | `-f, --format <type>` | Output format: yaml, json, svg, html (default: auto from extension) |
 | `-o, --output <file>` | Output file (default: topology.yaml) |
 | `--theme <theme>` | Theme: light or dark (default: light) |

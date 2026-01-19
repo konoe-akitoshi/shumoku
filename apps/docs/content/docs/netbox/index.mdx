@@ -82,6 +82,7 @@ const svgOutput = svg.render(graph, result)
 |-----------|------|
 | `--url, -u` | NetBox の URL（必須、または `NETBOX_URL` 環境変数） |
 | `--token, -t` | API トークン（必須、または `NETBOX_TOKEN` 環境変数） |
+| `--insecure, -k` | TLS 証明書の検証をスキップ（自己署名証明書用） |
 
 ### 出力オプション
 
@@ -243,6 +244,20 @@ Error: Failed to connect to NetBox
 - URL が正しいか確認
 - API トークンが有効か確認
 - ネットワーク接続を確認
+
+### 自己署名証明書エラー
+
+```
+Error: fetch failed
+```
+
+自己署名証明書を使用している場合は `--insecure` オプションを使用：
+
+```bash
+npx netbox-to-shumoku --insecure --url https://localhost:1080 ...
+```
+
+**注意:** このオプションは TLS 証明書の検証をスキップするため、開発環境でのみ使用してください。
 
 ### 権限エラー
 

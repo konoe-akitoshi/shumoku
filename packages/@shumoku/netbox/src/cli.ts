@@ -27,6 +27,7 @@ Usage: netbox-to-shumoku [options]
 Connection:
   -u, --url <url>       NetBox API URL (or NETBOX_URL env)
   -t, --token <token>   API token (or NETBOX_TOKEN env)
+  -k, --insecure        Skip TLS certificate verification (for self-signed certs)
 
 Output:
   -f, --format <type>   Output format: yaml|json|svg|html (default: auto from extension)
@@ -65,6 +66,7 @@ function cli() {
     options: {
       url: { type: 'string', short: 'u' },
       token: { type: 'string', short: 't' },
+      insecure: { type: 'boolean', short: 'k', default: false },
       format: { type: 'string', short: 'f' },
       output: { type: 'string', short: 'o', default: 'topology' },
       theme: { type: 'string' },
@@ -107,6 +109,12 @@ async function main(): Promise<void> {
     console.error('Error: NetBox URL and token required.')
     console.error('Use --url/--token or set NETBOX_URL/NETBOX_TOKEN env vars.')
     process.exit(1)
+  }
+
+  // Handle insecure mode
+  if (opts.insecure) {
+    console.warn('Warning: TLS certificate verification disabled')
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
   }
 
   try {
