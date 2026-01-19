@@ -296,6 +296,10 @@ function buildDevicesAndConnections(
 
     const termA = cable.a_terminations[0].object
     const termB = cable.b_terminations[0].object
+
+    // Skip if termination is not a device interface (e.g., circuit, console port, power port)
+    if (!termA.device || !termB.device) continue
+
     const nameA = termA.device.name
     const nameB = termB.device.name
     const tagA = deviceTagMap.get(nameA) ?? 'other'
@@ -1034,6 +1038,10 @@ function analyzeCables(
 
     const termA = cable.a_terminations[0].object
     const termB = cable.b_terminations[0].object
+
+    // Skip if termination is not a device interface (e.g., circuit, console port, power port)
+    if (!termA.device || !termB.device) continue
+
     const nameA = termA.device.name
     const nameB = termB.device.name
     const locA = getLocationKey(nameA)

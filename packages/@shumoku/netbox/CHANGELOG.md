@@ -1,5 +1,11 @@
 # @shumoku/netbox
 
+## 0.2.20
+
+### Patch Changes
+
+- Fix error when cables terminate to non-device objects (circuits, console ports, power ports)
+
 ## 0.2.19
 
 ### Patch Changes
