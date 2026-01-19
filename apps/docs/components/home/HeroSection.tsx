@@ -68,13 +68,15 @@ function InstallCommand() {
 
 function DiagramPreview() {
   return (
-    <div className="relative order-last lg:order-none -mt-2 sm:-mt-6 lg:mt-0">
-      <div className="relative mx-auto max-w-md sm:max-w-lg lg:max-w-none h-[68vw] sm:h-[60vw] lg:h-auto rounded-t-2xl lg:rounded-2xl rounded-b-none overflow-hidden bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70 shadow-2xl">
+    <div className="relative flex-1 mt-8 sm:mt-10 lg:mt-0">
+      <div className="absolute inset-0 rounded-2xl overflow-hidden bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70">
         <img
           src="/hero-diagram.svg"
           alt="Network diagram example"
-          className="w-full h-full object-cover object-top lg:h-auto lg:object-contain"
+          className="w-full h-full object-cover object-top"
         />
+        {/* 下部グラデーション */}
+        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-white dark:from-neutral-900 to-transparent pointer-events-none" />
       </div>
     </div>
   )
@@ -82,22 +84,25 @@ function DiagramPreview() {
 
 export function HeroSection() {
   return (
-    <section className="relative min-h-[85vh] lg:min-h-[85vh] lg:max-h-none overflow-x-hidden">
+    <section className="relative">
       <div className="absolute inset-0 bg-white dark:bg-neutral-950 pointer-events-none" />
       <div className={cn('absolute inset-0 pointer-events-none', backgrounds.hero)} />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12 lg:pt-24">
-        <div className="grid gap-6 lg:grid-cols-[1.05fr_1fr] lg:items-start lg:gap-14">
-          <div className="order-first lg:order-none lg:pl-8 lg:pt-6">
-            <div className="mx-auto max-w-md sm:max-w-lg lg:max-w-2xl lg:mx-0">
-              <StatusBadge />
-              <HeroTitle />
-              <HeroDescription />
-              <CTAButtons />
-              <InstallCommand />
-            </div>
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24">
+        <div className="grid lg:grid-cols-2 lg:items-stretch gap-12 lg:gap-16">
+          {/* 左: テキストコンテンツ */}
+          <div className="max-w-xl">
+            <StatusBadge />
+            <HeroTitle />
+            <HeroDescription />
+            <CTAButtons />
+            <InstallCommand />
           </div>
-          <DiagramPreview />
+
+          {/* 右: ダイアグラム */}
+          <div className="flex flex-col">
+            <DiagramPreview />
+          </div>
         </div>
       </div>
     </section>
