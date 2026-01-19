@@ -1,0 +1,234 @@
+---
+title: グループで整理する
+description: サブグラフを使ってデバイスを論理的にグループ化
+---
+
+サブグラフを使うと、デバイスをサイト、レイヤー、ラックなどの論理単位でグループ化できます。
+
+## 基本的なサブグラフ
+
+```yaml
+subgraphs:
+  - id: datacenter
+    label: "Data Center"
+
+nodes:
+  - id: server-1
+    label: "Server 1"
+    type: server
+    parent: datacenter    # このサブグラフに所属
+```
+
+`parent` でノードの所属先を指定します。
+
+## レイヤー構成の例
+
+典型的な3層ネットワーク構成：
+
+```yaml
+name: "3-Tier Network"
+
+subgraphs:
+  - id: core
+    label: "Core Layer"
+  - id: distribution
+    label: "Distribution Layer"
+  - id: access
+    label: "Access Layer"
+
+nodes:
+  - id: core-rt
+    label: "Core Router"
+    type: router
+    parent: core
+
+  - id: dist-sw-1
+    label: "Dist SW 1"
+    type: l3-switch
+    parent: distribution
+
+  - id: dist-sw-2
+    label: "Dist SW 2"
+    type: l3-switch
+    parent: distribution
+
+  - id: access-sw-1
+    label: "Access SW 1"
+    type: switch
+    parent: access
+
+  - id: access-sw-2
+    label: "Access SW 2"
+    type: switch
+    parent: access
+
+links:
+  - from: core-rt
+    to: dist-sw-1
+    bandwidth: 10G
+  - from: core-rt
+    to: dist-sw-2
+    bandwidth: 10G
+  - from: dist-sw-1
+    to: access-sw-1
+    bandwidth: 1G
+  - from: dist-sw-2
+    to: access-sw-2
+    bandwidth: 1G
+```
+
+## ネストしたサブグラフ
+
+サブグラフは入れ子にできます：
+
+```yaml
+subgraphs:
+  - id: datacenter
+    label: "Data Center"
+
+  - id: rack-a
+    label: "Rack A"
+    parent: datacenter    # datacenter の中に配置
+
+  - id: rack-b
+    label: "Rack B"
+    parent: datacenter
+
+nodes:
+  - id: server-1
+    parent: rack-a
+  - id: server-2
+    parent: rack-b
+```
+
+## サブグラフのスタイル
+
+背景色や枠線をカスタマイズ：
+
+```yaml
+subgraphs:
+  - id: dmz
+    label: "DMZ"
+    style:
+      fill: "#fff5f5"           # 背景色
+      stroke: "#d4a017"         # 枠線色
+      strokeWidth: 2            # 枠線の太さ
+      strokeDasharray: "5 5"    # 破線
+
+  - id: internal
+    label: "Internal"
+    style:
+      fill: "#f0fff0"
+      stroke: "#228b22"
+```
+
+### ラベルの位置
+
+```yaml
+subgraphs:
+  - id: site-a
+    label: "Site A"
+    style:
+      labelPosition: top    # top, bottom, left, right
+```
+
+## サブグラフ内のレイアウト
+
+サブグラフごとにレイアウト方向を変更できます：
+
+```yaml
+subgraphs:
+  - id: servers
+    label: "Server Farm"
+    direction: LR    # 左から右に配置（デフォルトは TB）
+```
+
+## クラウドアイコン付きサブグラフ
+
+AWS VPC などをサブグラフで表現：
+
+```yaml
+subgraphs:
+  - id: vpc
+    label: "Production VPC"
+    vendor: aws
+    service: vpc
+    style:
+      fill: "#f5f5f5"
+```
+
+## rank で水平配置を制御
+
+同じ `rank` 値を持つノードは水平に並びます：
+
+```yaml
+nodes:
+  - id: sw-1
+    label: "Switch 1"
+    parent: access
+    rank: 1
+
+  - id: sw-2
+    label: "Switch 2"
+    parent: access
+    rank: 1           # sw-1 と同じ行に配置
+
+  - id: sw-3
+    label: "Switch 3"
+    parent: access
+    rank: 1           # 同上
+```
+
+## マルチサイト構成
+
+複数拠点がある場合：
+
+```yaml
+name: "Multi-Site Network"
+
+subgraphs:
+  - id: tokyo
+    label: "Tokyo DC"
+    style:
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+
+  - id: osaka
+    label: "Osaka DC"
+    style:
+      fill: "#e8f5e9"
+      stroke: "#2e7d32"
+
+nodes:
+  - id: tokyo-rt
+    label: "Tokyo Router"
+    type: router
+    parent: tokyo
+
+  - id: osaka-rt
+    label: "Osaka Router"
+    type: router
+    parent: osaka
+
+links:
+  # サイト間リンク
+  - from: tokyo-rt
+    to: osaka-rt
+    type: dashed
+    label: "WAN Link"
+```
+
+<Callout type="info">
+より大規模なマルチサイト構成には[マルチファイル構成](/docs/multi-file)が便利です。
+</Callout>
+
+## Next Steps
+
+<Cards>
+  <Card title="スタイルとテーマ" href="/docs/styling-themes">
+    色やテーマのカスタマイズ
+  </Card>
+  <Card title="マルチファイル構成" href="/docs/multi-file">
+    大規模ネットワークを複数ファイルで管理
+  </Card>
+</Cards>

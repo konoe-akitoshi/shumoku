@@ -1,0 +1,242 @@
+---
+title: 基本的な図の作成
+description: ノード、リンク、ラベルの基本的な使い方
+---
+
+ネットワーク図の基本要素であるノード（デバイス）とリンク（接続）の定義方法を説明します。
+
+## ノード（Nodes）
+
+ノードはルーター、スイッチ、サーバーなどのネットワークデバイスを表します。
+
+```yaml
+nodes:
+  - id: router-1          # 必須: 一意の識別子
+    label: "Core Router"  # 必須: 表示名
+    type: router          # デバイスタイプ
+```
+
+### デバイスタイプ
+
+| type | エイリアス | 説明 |
+|------|-----------|------|
+| `router` | - | ルーター |
+| `l3-switch` | - | L3 スイッチ |
+| `l2-switch` | `switch` | L2 スイッチ |
+| `firewall` | `fw` | ファイアウォール |
+| `load-balancer` | `lb` | ロードバランサー |
+| `server` | - | サーバー |
+| `access-point` | `ap` | アクセスポイント |
+| `cloud` | - | クラウド |
+| `internet` | - | インターネット |
+| `vpn` | - | VPN |
+| `database` | `db` | データベース |
+| `generic` | - | 汎用 |
+
+### 複数行ラベル
+
+```yaml
+nodes:
+  - id: router-1
+    label:
+      - "<b>RT-01</b>"      # 太字
+      - "192.168.1.1"       # IP アドレス
+      - "---"               # 区切り線
+      - "Tokyo DC"          # 追加情報
+```
+
+### ノードの形状
+
+```yaml
+nodes:
+  - id: db-1
+    label: "Database"
+    type: database
+    shape: cylinder    # 形状を指定
+```
+
+| shape | エイリアス | 説明 |
+|-------|-----------|------|
+| `rounded` | `round` | 角丸四角形（デフォルト） |
+| `rect` | `rectangle` | 四角形 |
+| `circle` | - | 円 |
+| `diamond` | `rhombus` | ひし形 |
+| `hexagon` | - | 六角形 |
+| `cylinder` | `database` | 円柱 |
+| `stadium` | `pill` | スタジアム形 |
+| `trapezoid` | - | 台形 |
+
+---
+
+## リンク（Links）
+
+リンクはデバイス間の接続を表します。
+
+```yaml
+links:
+  # シンプル形式
+  - from: router-1
+    to: switch-1
+
+  # ポート指定
+  - from:
+      node: router-1
+      port: eth0
+    to:
+      node: switch-1
+      port: ge-0/0/0
+```
+
+### 帯域幅
+
+帯域幅を指定すると、線の太さで視覚的に表現されます。
+
+```yaml
+links:
+  - from: router-1
+    to: switch-1
+    bandwidth: 10G
+```
+
+| bandwidth | エイリアス | 視覚化 |
+|-----------|-----------|--------|
+| `1G` | `1GbE`, `1Gbit` | 1本線 |
+| `10G` | `10GbE`, `10Gbit` | 2本線 |
+| `25G` | `25GbE`, `25Gbit` | 3本線 |
+| `40G` | `40GbE`, `40Gbit` | 4本線 |
+| `100G` | `100GbE`, `100Gbit` | 5本線 |
+
+### VLAN
+
+```yaml
+links:
+  - from: switch-1
+    to: switch-2
+    vlan: 100           # 単一 VLAN
+
+  - from: switch-1
+    to: switch-3
+    vlan: [10, 20, 30]  # トランク（複数 VLAN）
+```
+
+### リンクタイプ
+
+```yaml
+links:
+  - from: router-1
+    to: router-2
+    type: dashed        # 破線（VPN など）
+```
+
+| type | エイリアス | 説明 |
+|------|-----------|------|
+| `solid` | - | 実線（デフォルト） |
+| `dashed` | `dotted` | 破線 |
+| `thick` | - | 太線 |
+| `double` | - | 二重線 |
+| `invisible` | `hidden` | 非表示 |
+
+### 矢印
+
+```yaml
+links:
+  - from: client
+    to: server
+    arrow: forward      # 順方向の矢印
+```
+
+| arrow | エイリアス | 説明 |
+|-------|-----------|------|
+| `none` | - | 矢印なし（デフォルト） |
+| `forward` | `->` | 順方向 |
+| `back` | `<-` | 逆方向 |
+| `both` | `<->` | 双方向 |
+
+### 冗長化タイプ
+
+HA ペアやスタック構成を表現できます。
+
+```yaml
+links:
+  - from: router-1
+    to: router-2
+    redundancy: ha      # HA ペア
+```
+
+| redundancy | エイリアス | 説明 |
+|------------|-----------|------|
+| `ha` | `vrrp`, `hsrp`, `glbp`, `keepalive` | HA ペア |
+| `vc` | `virtual-chassis` | Virtual Chassis |
+| `vss` | - | VSS |
+| `vpc` | - | vPC |
+| `mlag` | `mclag` | MLAG |
+| `stack` | `stacking`, `irf` | スタック |
+
+---
+
+## 完全な例
+
+```yaml
+name: "Office Network"
+
+nodes:
+  - id: inet
+    label: "Internet"
+    type: internet
+
+  - id: router
+    label:
+      - "<b>Edge Router</b>"
+      - "203.0.113.1"
+    type: router
+
+  - id: fw
+    label: "Firewall"
+    type: firewall
+
+  - id: sw-core
+    label: "Core Switch"
+    type: l3-switch
+
+  - id: srv-web
+    label: "Web Server"
+    type: server
+
+  - id: srv-db
+    label: "Database"
+    type: database
+    shape: cylinder
+
+links:
+  - from: inet
+    to: router
+
+  - from: router
+    to: fw
+    bandwidth: 1G
+
+  - from: fw
+    to: sw-core
+    bandwidth: 10G
+
+  - from: sw-core
+    to: srv-web
+    bandwidth: 1G
+    vlan: 100
+
+  - from: sw-core
+    to: srv-db
+    bandwidth: 10G
+    vlan: 200
+```
+
+## Next Steps
+
+<Cards>
+  <Card title="グループで整理" href="/docs/organizing-groups">
+    サブグラフでデバイスをグループ化
+  </Card>
+  <Card title="ベンダーアイコン" href="/docs/vendor-icons">
+    Yamaha, AWS などのアイコンを使う
+  </Card>
+</Cards>

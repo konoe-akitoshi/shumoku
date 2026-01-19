@@ -1,0 +1,249 @@
+---
+title: スタイルとテーマ
+description: ノード、リンク、サブグラフの見た目をカスタマイズ
+---
+
+ノード、リンク、サブグラフの見た目をカスタマイズする方法を説明します。
+
+## テーマ
+
+組み込みテーマは `light`（デフォルト）と `dark` があります。
+
+```yaml
+settings:
+  theme: dark
+```
+
+### CLI でテーマを指定
+
+```bash
+npx shumoku render network.yaml --theme dark -o diagram.svg
+```
+
+## ノードスタイル
+
+個別のノードにスタイルを適用：
+
+```yaml
+nodes:
+  - id: router-1
+    label: "Router"
+    type: router
+    style:
+      fill: "#e3f2fd"           # 背景色
+      stroke: "#1565c0"         # 枠線色
+      strokeWidth: 2            # 枠線の太さ
+      strokeDasharray: "5 5"    # 破線（計画中機器など）
+      textColor: "#333333"      # テキスト色
+      fontSize: 12              # フォントサイズ
+      fontWeight: bold          # フォントウェイト
+      opacity: 0.8              # 透明度
+```
+
+### 計画中デバイスの表現
+
+```yaml
+nodes:
+  - id: new-switch
+    label:
+      - "new-sw-01"
+      - "(Planned Q2)"
+    type: switch
+    style:
+      stroke: "#9CA3AF"
+      strokeDasharray: "5 5"
+      opacity: 0.7
+```
+
+### 仮想マシンの表現
+
+```yaml
+nodes:
+  - id: vm-web
+    label: "VM-Web"
+    type: server
+    style:
+      strokeDasharray: "4 4"    # 破線で仮想を表現
+      opacity: 0.9
+```
+
+## リンクスタイル
+
+```yaml
+links:
+  - from: router-1
+    to: switch-1
+    style:
+      stroke: "#2196F3"         # 線の色
+      strokeWidth: 2            # 線の太さ
+      strokeDasharray: "5 5"    # 破線
+      opacity: 0.8              # 透明度
+      minLength: 100            # 最小長さ（HA ペアの間隔調整に便利）
+```
+
+### ケーブルタイプ別の色分け例
+
+```yaml
+links:
+  # SMF（シングルモードファイバー）- 黄色
+  - from: router-1
+    to: router-2
+    bandwidth: 100G
+    style:
+      stroke: "#eab308"
+
+  # OM4（マルチモードファイバー）- シアン
+  - from: switch-1
+    to: switch-2
+    bandwidth: 40G
+    style:
+      stroke: "#06b6d4"
+
+  # Cat6a - 紫
+  - from: switch-1
+    to: server-1
+    bandwidth: 10G
+    style:
+      stroke: "#8b5cf6"
+```
+
+## サブグラフスタイル
+
+```yaml
+subgraphs:
+  - id: dmz
+    label: "DMZ"
+    style:
+      fill: "#fff5f5"           # 背景色
+      stroke: "#d4a017"         # 枠線色
+      strokeWidth: 2            # 枠線の太さ
+      strokeDasharray: "5 5"    # 破線
+      labelPosition: top        # ラベル位置
+      labelFontSize: 14         # ラベルフォントサイズ
+      padding: 20               # 内側の余白
+      nodeSpacing: 50           # ノード間隔
+      rankSpacing: 100          # 階層間隔
+```
+
+### ラベル位置
+
+| labelPosition | 説明 |
+|---------------|------|
+| `top` | 上部（デフォルト） |
+| `bottom` | 下部 |
+| `left` | 左側 |
+| `right` | 右側 |
+
+## グローバル設定
+
+`settings` でダイアグラム全体の設定を行います：
+
+```yaml
+settings:
+  direction: TB           # レイアウト方向
+  theme: light            # テーマ
+  nodeSpacing: 50         # ノード間隔
+  rankSpacing: 100        # 階層間隔
+  subgraphPadding: 20     # サブグラフ内余白
+```
+
+### レイアウト方向
+
+| direction | エイリアス | 説明 |
+|-----------|-----------|------|
+| `TB` | `top-bottom` | 上から下（デフォルト） |
+| `BT` | `bottom-top` | 下から上 |
+| `LR` | `left-right` | 左から右 |
+| `RL` | `right-left` | 右から左 |
+
+## 凡例（Legend）
+
+凡例を表示して、帯域幅やデバイスタイプを説明できます：
+
+```yaml
+settings:
+  legend: true    # シンプルに有効化
+```
+
+詳細設定：
+
+```yaml
+settings:
+  legend:
+    enabled: true
+    position: top-right       # 位置
+    showDeviceTypes: true     # デバイスタイプを表示
+    showBandwidth: true       # 帯域幅を表示
+    showCableTypes: true      # ケーブルタイプを表示
+    showVlans: true           # VLAN を表示
+```
+
+| position | 説明 |
+|----------|------|
+| `top-left` | 左上 |
+| `top-right` | 右上（デフォルト） |
+| `bottom-left` | 左下 |
+| `bottom-right` | 右下 |
+
+## Canvas 設定（印刷・出力サイズ）
+
+出力サイズを制御：
+
+```yaml
+settings:
+  canvas:
+    preset: A4              # 用紙サイズプリセット
+    orientation: landscape  # 横向き
+    dpi: 150                # DPI（印刷用）
+    fit: true               # コンテンツをフィット
+    padding: 20             # 余白
+```
+
+### プリセット
+
+`A0`, `A1`, `A2`, `A3`, `A4`, `B0`, `B1`, `B2`, `B3`, `B4`, `letter`, `legal`, `tabloid`
+
+### カスタムサイズ
+
+```yaml
+settings:
+  canvas:
+    width: 1920
+    height: 1080
+```
+
+## カスタムテーマ（TypeScript）
+
+TypeScript から使う場合、テーマを完全にカスタマイズできます：
+
+```typescript
+import { createTheme, mergeTheme, darkTheme } from 'shumoku'
+
+// 新しいテーマを作成
+const customTheme = createTheme({
+  background: '#1a1a2e',
+  node: {
+    fill: '#16213e',
+    stroke: '#0f3460',
+    text: '#e94560'
+  }
+})
+
+// 既存テーマをベースに一部変更
+const myDarkTheme = mergeTheme(darkTheme, {
+  node: {
+    fill: '#2d2d2d'
+  }
+})
+```
+
+## Next Steps
+
+<Cards>
+  <Card title="ベンダーアイコン" href="/docs/vendor-icons">
+    Yamaha, AWS などのアイコンを使う
+  </Card>
+  <Card title="インタラクティブ機能" href="/docs/interactive-features">
+    HTML 出力のパン/ズーム、ツールチップ
+  </Card>
+</Cards>

@@ -2,15 +2,23 @@
   "pages": [
     "---Getting Started---",
     "index",
-    "cli",
+    "---Guides---",
+    "basic-diagram",
+    "organizing-groups",
+    "styling-themes",
+    "vendor-icons",
+    "multi-file",
+    "interactive-features",
     "---Reference---",
     "yaml-reference",
     "json-reference",
-    "api-reference",
-    "---Resources---",
-    "vendor-icons",
+    "cli",
+    "---Examples---",
     "examples",
     "---Integrations---",
-    "netbox"
+    "netbox",
+    "custom-integration",
+    "---About---",
+    "about"
   ]
 }

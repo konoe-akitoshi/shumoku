@@ -1,9 +1,16 @@
 ---
 title: Getting Started
-description: Shumoku を使ってネットワーク図を作成する方法
+description: Shumoku のインストールと最初のネットワーク図を作成
 ---
 
-Shumoku を使ってネットワーク図を作成する方法を説明します。
+## Shumoku とは
+
+Shumoku は **Markdown でネットワーク構成図を作成**するためのライブラリです。
+
+- YAML でネットワークを定義 → SVG/HTML/PNG を生成
+- 900 以上のベンダーアイコン（Yamaha, Aruba, AWS, Juniper）
+- インタラクティブな HTML 出力（パン/ズーム、ツールチップ）
+- NetBox や独自 API との連携
 
 ## Installation
 
@@ -30,101 +37,73 @@ Shumoku を使ってネットワーク図を作成する方法を説明します
   </Tab>
 </Tabs>
 
-900+ のベンダーアイコン（Yamaha, Aruba, AWS, Juniper）が含まれています。
-
-### NetBox 連携（オプション）
-
-<Tabs items={['npm', 'yarn', 'pnpm', 'bun']}>
-  <Tab value="npm">
-    ```bash
-    npm install @shumoku/netbox
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn add @shumoku/netbox
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm add @shumoku/netbox
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bun add @shumoku/netbox
-    ```
-  </Tab>
-</Tabs>
-
-## Basic Usage
+## Quick Start
 
 ### 1. YAML でネットワークを定義
 
-```yaml
+```yaml title="network.yaml"
 name: "My Network"
 
 nodes:
   - id: router
     label: "Core Router"
     type: router
-    vendor: yamaha
-    model: rtx3510
 
   - id: switch
     label: "Main Switch"
-    type: l2-switch
+    type: switch
 
   - id: server
     label: "Web Server"
     type: server
 
 links:
-  - from: { node: router }
-    to: { node: switch }
+  - from: router
+    to: switch
     bandwidth: 10G
 
-  - from: { node: switch }
-    to: { node: server }
+  - from: switch
+    to: server
     bandwidth: 1G
 ```
 
-### 2. TypeScript/JavaScript で SVG を生成
+### 2. CLI でレンダリング
 
-```typescript
-import { YamlParser, HierarchicalLayoutEngine, SvgRenderer } from 'shumoku'
+```bash
+# SVG 出力
+npx shumoku render network.yaml -o diagram.svg
 
-// YAML をパース
-const parser = new YamlParser()
-const graph = parser.parse(yamlString)
+# インタラクティブ HTML 出力
+npx shumoku render network.yaml -f html -o diagram.html
 
-// レイアウト計算
-const engine = new HierarchicalLayoutEngine()
-const layout = await engine.layout(graph)
-
-// SVG 生成
-const renderer = new SvgRenderer()
-const svg = renderer.render(layout)
-
-// DOM に追加
-document.getElementById('diagram').innerHTML = svg
+# PNG 出力
+npx shumoku render network.yaml -f png -o diagram.png
 ```
 
-ベンダーアイコンは `shumoku` をインポートした時点で自動的に登録されます。
+### 3. ベンダーアイコンを使う
+
+```yaml
+nodes:
+  - id: router
+    label: "RTX3510"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+```
 
 ## Next Steps
 
 <Cards>
-  <Card title="YAML Reference" href="/docs/yaml-reference">
-    完全な YAML 記法リファレンス
+  <Card title="基本的な図の作成" href="/docs/basic-diagram">
+    ノード、リンク、ラベルの基本
   </Card>
-  <Card title="API Reference" href="/docs/api-reference">
-    TypeScript API リファレンス
+  <Card title="グループで整理" href="/docs/organizing-groups">
+    サブグラフでデバイスをグループ化
   </Card>
-  <Card title="Examples" href="/docs/examples">
-    サンプルネットワーク集
+  <Card title="スタイルとテーマ" href="/docs/styling-themes">
+    見た目のカスタマイズ
   </Card>
-  <Card title="NetBox" href="/docs/netbox">
-    NetBox 連携
+  <Card title="Playground" href="/playground">
+    ブラウザで試す
   </Card>
 </Cards>

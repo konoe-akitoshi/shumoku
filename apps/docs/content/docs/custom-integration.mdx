@@ -1,0 +1,263 @@
+---
+title: カスタム連携
+description: 独自 API や他システムからネットワーク図を生成する
+---
+
+Shumoku は JSON 形式を中間フォーマットとして使用しており、NetBox 以外のシステムからもネットワーク図を生成できます。
+
+## ワークフロー
+
+```
+独自 API / CMDB / 監視システム
+         ↓
+    JSON を生成
+         ↓
+    Shumoku でレンダリング
+         ↓
+    SVG / HTML / PNG
+```
+
+## 基本的な流れ
+
+### 1. データソースから情報を取得
+
+```typescript
+// 例: 独自 API からデバイス情報を取得
+const devices = await fetch('https://api.example.com/devices').then(r => r.json())
+const connections = await fetch('https://api.example.com/connections').then(r => r.json())
+```
+
+### 2. Shumoku 形式の JSON に変換
+
+```typescript
+const networkGraph = {
+  version: '1.0.0',
+  name: 'Network from Custom API',
+  nodes: devices.map(d => ({
+    id: d.hostname,
+    label: d.displayName,
+    type: mapDeviceType(d.category),  // 独自カテゴリを Shumoku タイプに変換
+    vendor: d.manufacturer,
+    model: d.model,
+    parent: d.location,
+    metadata: {
+      serial: d.serialNumber,
+      firmware: d.firmwareVersion
+    }
+  })),
+  links: connections.map(c => ({
+    from: { node: c.sourceDevice, port: c.sourcePort },
+    to: { node: c.targetDevice, port: c.targetPort },
+    bandwidth: c.speed,
+    vlan: c.vlans
+  })),
+  subgraphs: locations.map(l => ({
+    id: l.name,
+    label: l.displayName
+  }))
+}
+```
+
+### 3. レンダリング
+
+```typescript
+import { HierarchicalLayoutEngine, SvgRenderer } from 'shumoku'
+
+const engine = new HierarchicalLayoutEngine()
+const layout = await engine.layout(networkGraph)
+
+const renderer = new SvgRenderer()
+const svg = renderer.render(layout)
+```
+
+## CLI でのワークフロー
+
+```bash
+# 1. 独自スクリプトで JSON を生成
+node generate-from-api.js > network.json
+
+# 2. Shumoku でレンダリング
+npx shumoku render network.json -o diagram.html
+```
+
+## NetBox データとのマージ
+
+NetBox のデータに独自情報を追加する例：
+
+```javascript
+// merge-data.js
+import { readFileSync, writeFileSync } from 'fs'
+
+// NetBox からエクスポートした JSON
+const netbox = JSON.parse(readFileSync('netbox.json', 'utf-8'))
+
+// 監視システムからのステータス情報
+const monitoring = JSON.parse(readFileSync('monitoring.json', 'utf-8'))
+
+// ステータス情報をノードに追加
+for (const node of netbox.nodes) {
+  const status = monitoring.devices[node.id]
+  if (status) {
+    node.metadata = {
+      ...node.metadata,
+      cpuUsage: status.cpu,
+      memoryUsage: status.memory,
+      lastSeen: status.lastSeen
+    }
+    // ダウンしているデバイスはスタイルを変更
+    if (status.state === 'down') {
+      node.style = {
+        stroke: '#ef4444',
+        strokeWidth: 3
+      }
+    }
+  }
+}
+
+// クラウドリソースを追加
+const cloud = JSON.parse(readFileSync('aws-inventory.json', 'utf-8'))
+netbox.nodes.push(...cloud.instances.map(i => ({
+  id: i.instanceId,
+  label: i.name,
+  vendor: 'aws',
+  service: 'ec2',
+  resource: 'instance',
+  parent: 'aws-vpc'
+})))
+
+netbox.subgraphs.push({
+  id: 'aws-vpc',
+  label: 'AWS VPC',
+  vendor: 'aws',
+  service: 'vpc'
+})
+
+writeFileSync('merged.json', JSON.stringify(netbox, null, 2))
+```
+
+```bash
+# マージして図を生成
+node merge-data.js
+npx shumoku render merged.json -f html -o diagram.html
+```
+
+## JSON スキーマ
+
+詳細な JSON 形式は [JSON スキーマ](/docs/json-reference) を参照してください。
+
+## 連携例
+
+### CMDB
+
+```typescript
+// ServiceNow や他の CMDB からデバイス情報を取得
+const cmdbData = await cmdbClient.query('cmdb_ci_netgear')
+
+const nodes = cmdbData.map(ci => ({
+  id: ci.sys_id,
+  label: ci.name,
+  type: mapCmdbClass(ci.sys_class_name),
+  metadata: {
+    location: ci.location,
+    supportGroup: ci.support_group
+  }
+}))
+```
+
+### 監視システム
+
+```typescript
+// Zabbix, PRTG, Datadog などから
+const hostGroups = await monitoringClient.getHostGroups()
+
+const subgraphs = hostGroups.map(g => ({
+  id: g.id,
+  label: g.name
+}))
+
+const nodes = await Promise.all(
+  hostGroups.flatMap(async g => {
+    const hosts = await monitoringClient.getHosts(g.id)
+    return hosts.map(h => ({
+      id: h.id,
+      label: h.name,
+      parent: g.id,
+      style: h.status === 'up' ? {} : { stroke: 'red' }
+    }))
+  })
+)
+```
+
+### クラウド API
+
+```typescript
+// AWS SDK
+import { EC2Client, DescribeInstancesCommand } from '@aws-sdk/client-ec2'
+
+const ec2 = new EC2Client({ region: 'ap-northeast-1' })
+const { Reservations } = await ec2.send(new DescribeInstancesCommand({}))
+
+const nodes = Reservations.flatMap(r =>
+  r.Instances.map(i => ({
+    id: i.InstanceId,
+    label: i.Tags?.find(t => t.Key === 'Name')?.Value || i.InstanceId,
+    vendor: 'aws',
+    service: 'ec2',
+    resource: 'instance',
+    parent: i.VpcId
+  }))
+)
+```
+
+## GitHub Actions での自動更新
+
+複数ソースからデータを集めて定期的に図を更新：
+
+```yaml
+name: Update Network Diagram
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # 毎時
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch from NetBox
+        run: |
+          npx netbox-to-shumoku \
+            -u ${{ secrets.NETBOX_URL }} \
+            -t ${{ secrets.NETBOX_TOKEN }} \
+            -f json -o netbox.json
+
+      - name: Fetch from monitoring
+        run: node scripts/fetch-monitoring.js > monitoring.json
+
+      - name: Merge and render
+        run: |
+          node scripts/merge-data.js
+          npx shumoku render merged.json -f html -o docs/network.html
+
+      - name: Commit changes
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add docs/network.html
+          git commit -m "Update network diagram" || exit 0
+          git push
+```
+
+## Next Steps
+
+<Cards>
+  <Card title="JSON スキーマ" href="/docs/json-reference">
+    詳細な JSON 形式
+  </Card>
+  <Card title="NetBox 連携" href="/docs/netbox">
+    NetBox との連携
+  </Card>
+</Cards>

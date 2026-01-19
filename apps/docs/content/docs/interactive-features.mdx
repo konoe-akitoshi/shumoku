@@ -1,0 +1,167 @@
+---
+title: インタラクティブ機能
+description: HTML 出力のパン/ズーム、ツールチップ、タッチ操作
+---
+
+HTML 形式で出力すると、インタラクティブな機能が利用できます。
+
+## HTML 出力
+
+```bash
+npx shumoku render network.yaml -f html -o diagram.html
+```
+
+## パン & ズーム
+
+| 操作 | アクション |
+|------|-----------|
+| **マウスホイール** | ズームイン/アウト |
+| **ドラッグ** | パン（移動） |
+| **ダブルクリック** | ビューをリセット |
+
+### タッチデバイス
+
+| 操作 | アクション |
+|------|-----------|
+| **ピンチ** | ズームイン/アウト |
+| **1本指ドラッグ** | パン（移動） |
+| **ダブルタップ** | ビューをリセット |
+
+## ツールチップ
+
+リンクにホバーすると、詳細情報がツールチップで表示されます：
+
+- ポート名
+- IP アドレス
+- 帯域幅
+- VLAN
+
+## デバイスモーダル
+
+ノードをクリックすると、デバイスの詳細情報がモーダルで表示されます：
+
+- デバイス名
+- タイプ
+- ベンダー/モデル
+- メタデータ
+
+## ツールバー
+
+HTML 出力にはズームコントロールのツールバーが含まれます：
+
+- **+** ズームイン
+- **-** ズームアウト
+- **リセット** ビューをフィット
+
+### ツールバーを非表示にする
+
+TypeScript から使う場合：
+
+```typescript
+import { html } from 'shumoku'
+
+const output = html.render(graph, layout, {
+  toolbar: false
+})
+```
+
+## 階層ナビゲーション
+
+[マルチファイル構成](/docs/multi-file)を使用している場合：
+
+- **サブグラフをクリック** → 詳細シートに移動
+- **戻るボタン** → 親シートに戻る
+- **ブレッドクラム** → 任意の階層に移動
+
+## ブランディング
+
+デフォルトでは右下に「Powered by Shumoku」リンクが表示されます。
+
+非表示にする場合：
+
+```typescript
+const output = html.render(graph, layout, {
+  branding: false
+})
+```
+
+## SVG の data 属性
+
+SVG 要素には data 属性が付与されており、JavaScript で操作できます：
+
+```html
+<!-- ノード -->
+<g class="device"
+   data-device-id="router-1"
+   data-device-type="router"
+   data-device-vendor="yamaha"
+   data-device-model="rtx3510">
+
+<!-- リンク -->
+<g class="link"
+   data-link-id="link-1"
+   data-link-bandwidth="10G"
+   data-link-vlan="100,200">
+```
+
+### data 属性の制御
+
+```typescript
+import { svg } from 'shumoku'
+
+const output = svg.render(graph, layout, {
+  renderMode: 'interactive',
+  dataAttributes: {
+    device: true,      // デバイス情報
+    link: true,        // リンク情報
+    metadata: true     // メタデータを JSON で出力
+  }
+})
+```
+
+## JavaScript API
+
+HTML に埋め込む場合、JavaScript から操作できます：
+
+```typescript
+import { html } from 'shumoku'
+
+const output = html.render(graph, layout)
+document.getElementById('container').innerHTML = output
+
+// インタラクティブインスタンスを取得
+const instance = window.shumokuInstance
+
+// プログラムから操作
+instance.showDeviceModal('router-1')    // デバイスモーダルを表示
+instance.hideModal()                     // モーダルを閉じる
+instance.showLinkTooltip('link-1', x, y) // ツールチップを表示
+instance.hideTooltip()                   // ツールチップを閉じる
+instance.resetView()                     // ビューをリセット
+instance.getScale()                      // 現在のズームレベル
+instance.navigateToSheet('sheet-id')     // シートを移動（階層構成時）
+instance.destroy()                       // イベントリスナーをクリーンアップ
+```
+
+## 出力形式の比較
+
+| 機能 | SVG | HTML | PNG |
+|------|-----|------|-----|
+| パン/ズーム | ❌ | ✅ | ❌ |
+| ツールチップ | ❌ | ✅ | ❌ |
+| タッチ操作 | ❌ | ✅ | ❌ |
+| 階層ナビゲーション | ❌ | ✅ | ❌ |
+| ファイルサイズ | 小 | 中 | 大 |
+| 編集可能 | ✅ | ❌ | ❌ |
+| ドキュメント埋め込み | ✅ | iframe | ✅ |
+
+## Next Steps
+
+<Cards>
+  <Card title="CLI リファレンス" href="/docs/cli">
+    出力オプションの詳細
+  </Card>
+  <Card title="Examples" href="/docs/examples">
+    サンプルネットワーク集
+  </Card>
+</Cards>

@@ -1,79 +1,226 @@
 ---
-title: Vendor Icons
-description: Shumoku で使用可能なベンダーアイコン一覧
+title: ベンダーアイコン
+description: Yamaha, AWS, Juniper などのベンダーアイコンを使う
 ---
 
-## インストール
+Shumoku には 900 以上のベンダーアイコンが含まれています。
 
-<Tabs items={['npm', 'yarn', 'pnpm', 'bun']}>
-  <Tab value="npm">
-    ```bash
-    npm install @shumoku/icons
-    ```
-  </Tab>
-  <Tab value="yarn">
-    ```bash
-    yarn add @shumoku/icons
-    ```
-  </Tab>
-  <Tab value="pnpm">
-    ```bash
-    pnpm add @shumoku/icons
-    ```
-  </Tab>
-  <Tab value="bun">
-    ```bash
-    bun add @shumoku/icons
-    ```
-  </Tab>
-</Tabs>
+| ベンダー | アイコン数 | 用途 |
+|---------|----------|------|
+| Yamaha | 103 | ルーター、スイッチ、AP、VoIP |
+| Aruba | 55 | スイッチ、AP、コントローラー |
+| AWS | 477 | クラウドサービス全般 |
+| Juniper | 343 | ルーター、スイッチ、FW |
+
+## 自動登録
+
+`shumoku` パッケージを使う場合、アイコンは自動的に登録されます。
 
 ```typescript
-import { registerAllIcons } from '@shumoku/icons'
-
-// アイコンを登録
-registerAllIcons()
+import { YamlParser } from 'shumoku'  // これだけで OK
 ```
 
-## 使用方法
+<Callout type="info">
+`@shumoku/icons` を個別にインストールする必要はありません。`shumoku` に含まれています。
+</Callout>
 
-### ハードウェアベンダー (Yamaha, Juniper 等)
+## ハードウェアベンダー
+
+Yamaha、Juniper などのネットワーク機器：
 
 ```yaml
 nodes:
   - id: router-1
+    label: "RTX3510"
     type: router
-    vendor: yamaha
-    model: rtx3510
+    vendor: yamaha       # ベンダー名
+    model: rtx3510       # モデル名
 ```
 
-### クラウドベンダー (AWS 等)
+### Yamaha
+
+```yaml
+# ルーター
+- { vendor: yamaha, model: rtx3510 }
+- { vendor: yamaha, model: rtx1300 }
+- { vendor: yamaha, model: rtx1220 }
+- { vendor: yamaha, model: rtx830 }
+
+# スイッチ
+- { vendor: yamaha, model: swx3220-16mt }
+- { vendor: yamaha, model: swx2320-16mt }
+
+# ファイアウォール
+- { vendor: yamaha, model: fwx120 }
+
+# アクセスポイント
+- { vendor: yamaha, model: wlx413 }
+- { vendor: yamaha, model: wlx313 }
+
+# VoIP
+- { vendor: yamaha, model: nvr510 }
+- { vendor: yamaha, model: nvr700w }
+```
+
+### Juniper
+
+```yaml
+# ルーター
+- { vendor: juniper, model: mx480 }
+- { vendor: juniper, model: mx204 }
+
+# スイッチ
+- { vendor: juniper, model: qfx5120-48y }
+- { vendor: juniper, model: ex4400-48p }
+- { vendor: juniper, model: ex4100-24mp }
+
+# ファイアウォール
+- { vendor: juniper, model: srx4600 }
+- { vendor: juniper, model: srx300 }
+```
+
+### Aruba
+
+```yaml
+# スイッチ
+- { vendor: aruba, model: cx6300 }
+- { vendor: aruba, model: cx6200 }
+
+# アクセスポイント
+- { vendor: aruba, model: ap-505 }
+- { vendor: aruba, model: ap-535 }
+- { vendor: aruba, model: ap500-series }
+```
+
+## クラウドベンダー
+
+AWS などのクラウドサービス：
 
 ```yaml
 nodes:
   - id: instance-1
-    type: server
-    vendor: aws
-    service: ec2
-    resource: instance
+    label: "Web Server"
+    vendor: aws          # ベンダー名
+    service: ec2         # サービス名
+    resource: instance   # リソースタイプ
 ```
 
-### サブグラフでのアイコン
+### AWS
 
-サブグラフにもベンダーアイコンを設定できます。
+```yaml
+# Compute
+- { vendor: aws, service: ec2, resource: instance }
+- { vendor: aws, service: ec2, resource: auto-scaling }
+- { vendor: aws, service: lambda, resource: lambda-function }
+
+# Networking
+- { vendor: aws, service: vpc, resource: internet-gateway }
+- { vendor: aws, service: vpc, resource: nat-gateway }
+- { vendor: aws, service: vpc, resource: virtual-private-cloud-vpc }
+- { vendor: aws, service: elb, resource: application-load-balancer }
+- { vendor: aws, service: elb, resource: network-load-balancer }
+
+# Database
+- { vendor: aws, service: rds, resource: instance }
+- { vendor: aws, service: dynamodb, resource: table }
+- { vendor: aws, service: elasticache, resource: cache-node }
+
+# Storage
+- { vendor: aws, service: s3, resource: bucket }
+- { vendor: aws, service: efs, resource: file-system }
+
+# Security
+- { vendor: aws, service: iam, resource: role }
+- { vendor: aws, service: waf, resource: waf }
+```
+
+## サブグラフでのアイコン
+
+サブグラフにもベンダーアイコンを設定できます。VPC やリージョンの表現に便利です。
 
 ```yaml
 subgraphs:
-  - id: cloud
-    label: "AWS Cloud"
+  - id: vpc
+    label: "Production VPC"
     vendor: aws
     service: vpc
     resource: virtual-private-cloud-vpc
     style:
       fill: "#FFF8E1"
       stroke: "#FF8F00"
+
+  - id: public-subnet
+    label: "Public Subnet"
+    parent: vpc
+    vendor: aws
+    service: vpc
+    resource: public-subnet
+```
+
+## 完全な例
+
+```yaml
+name: "Hybrid Network"
+
+subgraphs:
+  - id: aws
+    label: "AWS Tokyo"
+    vendor: aws
+    service: vpc
+    style:
+      fill: "#fff8e1"
+
+  - id: onprem
+    label: "On-Premises"
+    style:
+      fill: "#e3f2fd"
+
+nodes:
+  # AWS
+  - id: alb
+    label: "ALB"
+    vendor: aws
+    service: elb
+    resource: application-load-balancer
+    parent: aws
+
+  - id: ec2-1
+    label: "Web Server"
+    vendor: aws
+    service: ec2
+    resource: instance
+    parent: aws
+
+  # On-Premises
+  - id: router
+    label: "RTX3510"
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: onprem
+
+  - id: switch
+    label: "SWX3220"
+    type: l3-switch
+    vendor: yamaha
+    model: swx3220-16mt
+    parent: onprem
+
+links:
+  - from: alb
+    to: ec2-1
+  - from: router
+    to: switch
+    bandwidth: 10G
+  # VPN接続
+  - from: router
+    to: alb
+    type: dashed
+    label: "Site-to-Site VPN"
 ```
 
 ## アイコン一覧
+
+以下で全アイコンを確認できます：
 
 <VendorIcons />

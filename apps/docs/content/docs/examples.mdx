@@ -3,214 +3,19 @@ title: Examples
 description: 様々なネットワーク構成のサンプル
 ---
 
-様々なネットワーク構成のサンプルです。
+コピー&ペーストして使えるサンプル集です。
 
-## Full Featured Example
+## シンプルな構成
 
-すべての機能を使用した包括的なサンプル。帯域幅、VLAN、ケーブルタイプ、デバイスステータス、凡例を含みます。
+### 3層ネットワーク
 
-```yaml
-name: "Full Featured Network"
-description: "Comprehensive example showcasing all Shumoku features"
-
-settings:
-  direction: TB
-  theme: light
-  legend: true  # 凡例を表示
-
-subgraphs:
-  # サイトベースのグループ
-  - id: site-datacenter
-    label: "Tokyo Data Center"
-    style:
-      fill: "#E3F2FD"
-      stroke: "#1565C0"
-      strokeWidth: 2
-
-  # ネストしたサブグラフ（VMクラスタ）
-  - id: cluster-vmware
-    label: "VMware Cluster"
-    parent: site-datacenter
-    style:
-      fill: "#F3E5F5"
-      stroke: "#7B1FA2"
-      strokeDasharray: "4,2"
-
-  - id: site-office
-    label: "Head Office"
-    style:
-      fill: "#FFF3E0"
-      stroke: "#E65100"
-
-nodes:
-  # コアルーター（HAペア）
-  - id: core-rt-01
-    label:
-      - "<b>core-rt-01</b>"
-      - "10.0.0.1"
-    type: router
-    vendor: yamaha
-    model: rtx3510
-    parent: site-datacenter
-    rank: 0
-
-  - id: core-rt-02
-    label:
-      - "<b>core-rt-02</b>"
-      - "10.0.0.2"
-    type: router
-    vendor: yamaha
-    model: rtx3510
-    parent: site-datacenter
-    rank: 0
-
-  # コアスイッチ
-  - id: core-sw-01
-    label:
-      - "<b>core-sw-01</b>"
-      - "10.0.1.1"
-    type: l3-switch
-    vendor: juniper
-    model: qfx5120
-    parent: site-datacenter
-    rank: 1
-
-  # 物理サーバー
-  - id: esxi-01
-    label:
-      - "<b>esxi-01</b>"
-      - "10.0.10.1"
-    type: server
-    parent: cluster-vmware
-    rank: 2
-
-  # 仮想マシン（破線ボーダー）
-  - id: vm-web-01
-    label:
-      - "<b>vm-web-01</b>"
-      - "10.0.20.10"
-    type: server
-    parent: cluster-vmware
-    rank: 3
-    style:
-      strokeDasharray: "4,4"
-      opacity: 0.9
-
-  # 計画中デバイス（Plannedステータス）
-  - id: new-sw-01
-    label:
-      - "<b>new-sw-01</b>"
-      - "(Planned Q2)"
-    type: l2-switch
-    parent: site-datacenter
-    rank: 2
-    style:
-      stroke: "#9CA3AF"
-      strokeDasharray: "5,5"
-      opacity: 0.7
-
-  # オフィス機器
-  - id: office-rt-01
-    label:
-      - "<b>office-rt-01</b>"
-      - "10.2.0.1"
-    type: router
-    parent: site-office
-
-  - id: office-ap-01
-    label: "<b>office-ap-01</b>"
-    type: access-point
-    vendor: aruba
-    model: ap-505
-    parent: site-office
-
-links:
-  # HAリンク - 100G SMF（黄色）
-  - from:
-      node: core-rt-01
-      port: xe-0/0/0
-      ip: 10.255.0.1/30
-    to:
-      node: core-rt-02
-      port: xe-0/0/0
-      ip: 10.255.0.2/30
-    bandwidth: 100G
-    redundancy: ha
-    label: "HA Keepalive"
-    style:
-      stroke: "#eab308"
-
-  # コア→スイッチ - 40G OM4（シアン）
-  - from:
-      node: core-rt-01
-      port: xe-0/0/1
-    to:
-      node: core-sw-01
-      port: xe-0/0/0
-    bandwidth: 40G
-    vlan: [100, 200, 300]
-    style:
-      stroke: "#06b6d4"
-
-  # スイッチ→サーバー - 25G Cat6a（紫）
-  - from:
-      node: core-sw-01
-      port: ge-0/0/1
-    to:
-      node: esxi-01
-      port: vmnic0
-    bandwidth: 25G
-    vlan: [200]
-    style:
-      stroke: "#8b5cf6"
-
-  # VM接続（論理リンク、破線）
-  - from:
-      node: esxi-01
-      port: vSwitch0
-    to:
-      node: vm-web-01
-      port: eth0
-    bandwidth: 10G
-    vlan: [200]
-    type: dashed
-    label: "vSwitch"
-
-  # VPNトンネル（破線）
-  - from:
-      node: core-rt-02
-      port: tun0
-    to:
-      node: office-rt-01
-      port: tun0
-    type: dashed
-    label: "IPsec VPN"
-    style:
-      stroke: "#6b7280"
-
-  # オフィス内 - 1G
-  - from:
-      node: office-rt-01
-      port: ge-0/0/1
-    to:
-      node: office-ap-01
-      port: eth0
-    bandwidth: 1G
-    vlan: [20]
-```
-
----
-
-## Simple Network
-
-基本的な 3 層ネットワーク構成。
+Core / Distribution / Access の基本構成。
 
 ```yaml
 name: "Simple Network"
 
 settings:
   direction: TB
-  theme: light
 
 subgraphs:
   - id: core
@@ -238,33 +43,37 @@ nodes:
 
   - id: access-sw-1
     label: "Access SW 1"
-    type: l2-switch
+    type: switch
     parent: access
 
   - id: access-sw-2
     label: "Access SW 2"
-    type: l2-switch
+    type: switch
     parent: access
 
 links:
-  - from: { node: core-rt }
-    to: { node: dist-sw-1 }
+  - from: core-rt
+    to: dist-sw-1
     bandwidth: 10G
 
-  - from: { node: core-rt }
-    to: { node: dist-sw-2 }
+  - from: core-rt
+    to: dist-sw-2
     bandwidth: 10G
 
-  - from: { node: dist-sw-1 }
-    to: { node: access-sw-1 }
+  - from: dist-sw-1
+    to: access-sw-1
     bandwidth: 1G
 
-  - from: { node: dist-sw-2 }
-    to: { node: access-sw-2 }
+  - from: dist-sw-2
+    to: access-sw-2
     bandwidth: 1G
 ```
 
-## Data Center Network
+---
+
+## データセンター構成
+
+### Spine-Leaf
 
 データセンターのスパイン・リーフ構成。
 
@@ -303,11 +112,6 @@ nodes:
     type: l3-switch
     parent: leaf
 
-  - id: leaf-3
-    label: "Leaf 3"
-    type: l3-switch
-    parent: leaf
-
   - id: srv-1
     label: "Server 1"
     type: server
@@ -318,52 +122,35 @@ nodes:
     type: server
     parent: servers
 
-  - id: srv-3
-    label: "Server 3"
-    type: server
-    parent: servers
-
 links:
-  # Spine to Leaf (full mesh)
-  - from: { node: spine-1 }
-    to: { node: leaf-1 }
+  # Full mesh: Spine to Leaf
+  - from: spine-1
+    to: leaf-1
     bandwidth: 100G
-
-  - from: { node: spine-1 }
-    to: { node: leaf-2 }
+  - from: spine-1
+    to: leaf-2
     bandwidth: 100G
-
-  - from: { node: spine-1 }
-    to: { node: leaf-3 }
+  - from: spine-2
+    to: leaf-1
     bandwidth: 100G
-
-  - from: { node: spine-2 }
-    to: { node: leaf-1 }
-    bandwidth: 100G
-
-  - from: { node: spine-2 }
-    to: { node: leaf-2 }
-    bandwidth: 100G
-
-  - from: { node: spine-2 }
-    to: { node: leaf-3 }
+  - from: spine-2
+    to: leaf-2
     bandwidth: 100G
 
   # Leaf to Servers
-  - from: { node: leaf-1 }
-    to: { node: srv-1 }
+  - from: leaf-1
+    to: srv-1
     bandwidth: 25G
-
-  - from: { node: leaf-2 }
-    to: { node: srv-2 }
-    bandwidth: 25G
-
-  - from: { node: leaf-3 }
-    to: { node: srv-3 }
+  - from: leaf-2
+    to: srv-2
     bandwidth: 25G
 ```
 
-## Enterprise Network with Yamaha
+---
+
+## ベンダー機器
+
+### Yamaha 企業ネットワーク
 
 Yamaha 機器を使用した企業ネットワーク。
 
@@ -372,7 +159,6 @@ name: "Enterprise Network"
 
 settings:
   direction: TB
-  theme: light
 
 subgraphs:
   - id: wan
@@ -397,7 +183,7 @@ nodes:
 
   - id: firewall
     label: "FWX120"
-    type: firewall
+    type: fw
     vendor: yamaha
     model: fwx120
     parent: dmz
@@ -411,7 +197,7 @@ nodes:
 
   - id: ap
     label: "WLX413"
-    type: access-point
+    type: ap
     vendor: yamaha
     model: wlx413
     parent: lan
@@ -422,30 +208,79 @@ nodes:
     parent: lan
 
 links:
-  - from: { node: internet }
-    to: { node: router }
+  - from: internet
+    to: router
     label: "PPPoE"
 
-  - from: { node: router }
-    to: { node: firewall }
+  - from: router
+    to: firewall
     bandwidth: 1G
 
-  - from: { node: firewall }
-    to: { node: core-sw }
+  - from: firewall
+    to: core-sw
     bandwidth: 10G
 
-  - from: { node: core-sw }
-    to: { node: ap }
+  - from: core-sw
+    to: ap
     bandwidth: 2.5G
 
-  - from: { node: core-sw }
-    to: { node: server }
+  - from: core-sw
+    to: server
     bandwidth: 10G
 ```
 
-## AWS Architecture
+### Juniper ネットワーク
 
-AWS クラウドアーキテクチャ。
+```yaml
+name: "Juniper Network"
+
+settings:
+  direction: LR
+
+nodes:
+  - id: mx
+    label: "MX480"
+    type: router
+    vendor: juniper
+    model: mx480
+
+  - id: srx
+    label: "SRX4600"
+    type: fw
+    vendor: juniper
+    model: srx4600
+
+  - id: qfx-1
+    label: "QFX5120"
+    type: l3-switch
+    vendor: juniper
+    model: qfx5120-48y
+
+  - id: ex-1
+    label: "EX4400"
+    type: switch
+    vendor: juniper
+    model: ex4400-48p
+
+links:
+  - from: mx
+    to: srx
+    bandwidth: 100G
+
+  - from: srx
+    to: qfx-1
+    bandwidth: 100G
+
+  - from: qfx-1
+    to: ex-1
+    bandwidth: 10G
+```
+
+---
+
+## クラウド構成
+
+### AWS VPC
 
 ```yaml
 name: "AWS Architecture"
@@ -456,10 +291,14 @@ settings:
 subgraphs:
   - id: vpc
     label: "VPC"
+    vendor: aws
+    service: vpc
   - id: public
     label: "Public Subnet"
+    parent: vpc
   - id: private
     label: "Private Subnet"
+    parent: vpc
 
 nodes:
   - id: igw
@@ -505,223 +344,204 @@ nodes:
     parent: private
 
 links:
-  - from: { node: igw }
-    to: { node: alb }
+  - from: igw
+    to: alb
 
-  - from: { node: alb }
-    to: { node: ec2-1 }
+  - from: alb
+    to: ec2-1
 
-  - from: { node: alb }
-    to: { node: ec2-2 }
+  - from: alb
+    to: ec2-2
 
-  - from: { node: ec2-1 }
-    to: { node: rds }
+  - from: ec2-1
+    to: rds
 
-  - from: { node: ec2-2 }
-    to: { node: rds }
+  - from: ec2-2
+    to: rds
 
-  - from: { node: ec2-1 }
-    to: { node: nat }
+  - from: ec2-1
+    to: nat
 
-  - from: { node: ec2-2 }
-    to: { node: nat }
+  - from: ec2-2
+    to: nat
 ```
 
-## Juniper Network
+---
 
-Juniper 機器を使用したネットワーク。
+## 高度な構成
 
-```yaml
-name: "Juniper Network"
+### フル機能サンプル
 
-settings:
-  direction: LR
-
-nodes:
-  - id: mx
-    label: "MX480"
-    type: router
-    vendor: juniper
-    model: mx480
-
-  - id: qfx-1
-    label: "QFX5120"
-    type: l3-switch
-    vendor: juniper
-    model: qfx5120-48y
-
-  - id: qfx-2
-    label: "QFX5120"
-    type: l3-switch
-    vendor: juniper
-    model: qfx5120-48y
-
-  - id: ex-1
-    label: "EX4400"
-    type: l2-switch
-    vendor: juniper
-    model: ex4400-48p
-
-  - id: ex-2
-    label: "EX4400"
-    type: l2-switch
-    vendor: juniper
-    model: ex4400-48p
-
-  - id: srx
-    label: "SRX4600"
-    type: firewall
-    vendor: juniper
-    model: srx4600
-
-links:
-  - from: { node: mx }
-    to: { node: srx }
-    bandwidth: 100G
-
-  - from: { node: srx }
-    to: { node: qfx-1 }
-    bandwidth: 100G
-
-  - from: { node: srx }
-    to: { node: qfx-2 }
-    bandwidth: 100G
-
-  - from: { node: qfx-1 }
-    to: { node: ex-1 }
-    bandwidth: 10G
-
-  - from: { node: qfx-2 }
-    to: { node: ex-2 }
-    bandwidth: 10G
-```
-
-## Hierarchical Multi-Site Network
-
-複数拠点を持つ企業ネットワーク。マルチファイル構成で各拠点を分離管理できます。
-
-### main.yaml（親ファイル）
+帯域幅、VLAN、HA、凡例などすべての機能を使用した例。
 
 ```yaml
-name: "Multi-Site Network"
-description: "Network with multiple sites using file references"
+name: "Full Featured Network"
+description: "Comprehensive example showcasing all Shumoku features"
 
 settings:
+  direction: TB
   theme: light
+  legend: true
 
 subgraphs:
-  - id: headquarters
-    label: "Headquarters"
-    file: "./headquarters.yaml"
+  - id: site-datacenter
+    label: "Tokyo Data Center"
     style:
-      fill: "#e3f2fd"
-      stroke: "#1565c0"
-      strokeWidth: 2
+      fill: "#E3F2FD"
+      stroke: "#1565C0"
 
-  - id: branch
-    label: "Branch Office"
-    file: "./branch.yaml"
+  - id: cluster-vmware
+    label: "VMware Cluster"
+    parent: site-datacenter
     style:
-      fill: "#e8f5e9"
-      stroke: "#2e7d32"
-      strokeWidth: 2
+      fill: "#F3E5F5"
+      stroke: "#7B1FA2"
+      strokeDasharray: "4,2"
 
-links:
-  # サブグラフを跨ぐリンク - デバイスを直接参照
-  - from:
-      node: hq-router
-      port: wan1
-    to:
-      node: branch-router
-      port: wan1
-    label: "Site-to-Site VPN"
-    type: dashed
-```
-
-### headquarters.yaml（本社）
-
-```yaml
-name: "Headquarters Network"
+  - id: site-office
+    label: "Head Office"
+    style:
+      fill: "#FFF3E0"
+      stroke: "#E65100"
 
 nodes:
-  - id: hq-router
+  # HA ペア
+  - id: core-rt-01
     label:
-      - "<b>HQ-Router</b>"
+      - "<b>core-rt-01</b>"
       - "10.0.0.1"
     type: router
     vendor: yamaha
     model: rtx3510
+    parent: site-datacenter
+    rank: 0
 
-  - id: hq-fw
+  - id: core-rt-02
     label:
-      - "<b>HQ-Firewall</b>"
+      - "<b>core-rt-02</b>"
       - "10.0.0.2"
-    type: firewall
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    parent: site-datacenter
+    rank: 0
 
-  - id: hq-switch
+  # コアスイッチ
+  - id: core-sw-01
     label:
-      - "<b>HQ-Core-SW</b>"
+      - "<b>core-sw-01</b>"
       - "10.0.1.1"
     type: l3-switch
     vendor: juniper
-    model: EX4400-48T
+    model: qfx5120
+    parent: site-datacenter
+    rank: 1
 
-  - id: hq-server
+  # 物理サーバー
+  - id: esxi-01
     label:
-      - "<b>App Server</b>"
-      - "10.0.10.10"
+      - "<b>esxi-01</b>"
+      - "10.0.10.1"
     type: server
+    parent: cluster-vmware
 
-links:
-  - from: { node: hq-router, port: lan1 }
-    to: { node: hq-fw, port: outside }
-    bandwidth: 10G
-
-  - from: { node: hq-fw, port: inside }
-    to: { node: hq-switch, port: uplink }
-    bandwidth: 10G
-
-  - from: { node: hq-switch, port: eth1 }
-    to: { node: hq-server, port: eth0 }
-    bandwidth: 1G
-```
-
-### branch.yaml（支店）
-
-```yaml
-name: "Branch Office Network"
-
-nodes:
-  - id: branch-router
+  # 仮想マシン
+  - id: vm-web-01
     label:
-      - "<b>Branch-Router</b>"
-      - "10.1.0.1"
+      - "<b>vm-web-01</b>"
+      - "10.0.20.10"
+    type: server
+    parent: cluster-vmware
+    style:
+      strokeDasharray: "4,4"
+      opacity: 0.9
+
+  # 計画中デバイス
+  - id: new-sw-01
+    label:
+      - "<b>new-sw-01</b>"
+      - "(Planned Q2)"
+    type: switch
+    parent: site-datacenter
+    style:
+      stroke: "#9CA3AF"
+      strokeDasharray: "5,5"
+      opacity: 0.7
+
+  # オフィス機器
+  - id: office-rt-01
+    label:
+      - "<b>office-rt-01</b>"
+      - "10.2.0.1"
     type: router
-    vendor: yamaha
-    model: rtx1300
+    parent: site-office
 
-  - id: branch-switch
-    label:
-      - "<b>Branch-SW</b>"
-      - "10.1.1.1"
-    type: l2-switch
-
-  - id: branch-ap
-    label: "Branch-AP"
-    type: access-point
+  - id: office-ap-01
+    label: "<b>office-ap-01</b>"
+    type: ap
     vendor: aruba
-    model: ap500-series
+    model: ap-505
+    parent: site-office
 
 links:
-  - from: { node: branch-router, port: lan1 }
-    to: { node: branch-switch, port: uplink }
-    bandwidth: 1G
+  # HA リンク
+  - from:
+      node: core-rt-01
+      port: xe-0/0/0
+    to:
+      node: core-rt-02
+      port: xe-0/0/0
+    bandwidth: 100G
+    redundancy: ha
+    label: "HA Keepalive"
+    style:
+      stroke: "#eab308"
 
-  - from: { node: branch-switch, port: eth1 }
-    to: { node: branch-ap, port: eth0 }
+  # コア→スイッチ
+  - from:
+      node: core-rt-01
+      port: xe-0/0/1
+    to:
+      node: core-sw-01
+      port: xe-0/0/0
+    bandwidth: 40G
+    vlan: [100, 200, 300]
+
+  # スイッチ→サーバー
+  - from:
+      node: core-sw-01
+      port: ge-0/0/1
+    to:
+      node: esxi-01
+      port: vmnic0
+    bandwidth: 25G
+    vlan: [200]
+
+  # VM 接続（論理リンク）
+  - from: esxi-01
+    to: vm-web-01
+    bandwidth: 10G
+    type: dashed
+    label: "vSwitch"
+
+  # VPN トンネル
+  - from:
+      node: core-rt-02
+      port: tun0
+    to:
+      node: office-rt-01
+      port: tun0
+    type: dashed
+    label: "IPsec VPN"
+
+  # オフィス内
+  - from: office-rt-01
+    to: office-ap-01
     bandwidth: 1G
 ```
 
-<Callout type="info">
-サブグラフをクリックすると詳細シートに移動できます。子シートでは、他のサブグラフへの接続点が「エクスポートコネクタ」として表示されます。
-</Callout>
+---
+
+## マルチファイル構成
+
+複数拠点を別ファイルで管理する例は [マルチファイル構成](/docs/multi-file) を参照してください。

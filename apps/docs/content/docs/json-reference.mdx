@@ -3,7 +3,27 @@ title: JSON スキーマ
 description: NetworkGraph JSON フォーマットの仕様
 ---
 
-Shumoku は NetworkGraph JSON 形式でネットワーク定義を扱います。この形式は YAML 定義と同等の表現力を持ち、プログラムからの生成や他システムとの統合に適しています。
+## JSON 形式の用途
+
+Shumoku の JSON 形式は **中間フォーマット** として設計されています。
+
+```
+独自 API / NetBox / CMDB / 監視システム
+                ↓
+         JSON を生成
+                ↓
+         Shumoku でレンダリング
+```
+
+**主な用途：**
+
+- **プログラムからの生成** — 独自スクリプトや API からネットワーク図を動的に生成
+- **システム連携** — NetBox 以外の CMDB、監視システム、クラウド API からのデータ統合
+- **データマージ** — 複数ソースからの情報を統合して1つの図を作成
+
+<Callout type="info">
+手動で書く場合は [YAML 形式](/docs/yaml-reference) の方が簡潔です。JSON は自動生成やシステム連携に向いています。
+</Callout>
 
 ## 基本構造
 

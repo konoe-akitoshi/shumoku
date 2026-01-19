@@ -3,17 +3,11 @@ title: CLI リファレンス
 description: Shumoku コマンドラインツールの使い方
 ---
 
-Shumoku は2つの CLI ツールを提供しています。
-
 ## shumoku render
 
-YAML または JSON ファイルからダイアグラムをレンダリングします。
+YAML/JSON ファイルからダイアグラムをレンダリングします。
 
 ```bash
-# インストール
-npm install @shumoku/renderer
-
-# 使い方
 npx shumoku render <input> [options]
 ```
 
@@ -21,57 +15,124 @@ npx shumoku render <input> [options]
 
 | オプション | 説明 |
 |-----------|------|
-| `-f, --format <type>` | 出力形式: svg, html（デフォルト: 拡張子から自動判定） |
-| `-o, --output <file>` | 出力ファイル名（デフォルト: output.svg） |
-| `--theme <theme>` | テーマ: light または dark |
+| `-f, --format <type>` | 出力形式: `svg`, `html`, `png`（デフォルト: 拡張子から自動判定） |
+| `-o, --output <file>` | 出力ファイル名（デフォルト: `output.svg`） |
+| `--theme <theme>` | テーマ: `light` または `dark` |
 | `-h, --help` | ヘルプを表示 |
 | `-v, --version` | バージョンを表示 |
 
 ### 使用例
 
 ```bash
-# YAML から SVG を生成
+# SVG 出力
 npx shumoku render network.yaml -o diagram.svg
 
-# YAML からインタラクティブ HTML を生成
+# インタラクティブ HTML 出力
 npx shumoku render network.yaml -f html -o diagram.html
+
+# PNG 出力
+npx shumoku render network.yaml -f png -o diagram.png
+
+# ダークテーマ
+npx shumoku render network.yaml --theme dark -o diagram.svg
 
 # JSON から生成
 npx shumoku render topology.json -o diagram.svg
 
-# stdin から読み込み（YAML として解釈）
+# stdin から読み込み
 cat network.yaml | npx shumoku render - -o diagram.svg
 ```
 
 ### 入力形式
 
 拡張子で自動判定されます：
-- `.yaml`, `.yml` → [YAML 形式](/docs/yaml-reference)
-- `.json` → [JSON 形式](/docs/json-reference)
-- stdin (`-`) → YAML として解釈
+
+| 拡張子 | 形式 |
+|--------|------|
+| `.yaml`, `.yml` | YAML |
+| `.json` | JSON |
+| `-` (stdin) | YAML として解釈 |
+
+### 出力形式
+
+| 形式 | 説明 | 用途 |
+|------|------|------|
+| `svg` | ベクター画像 | ドキュメント埋め込み、編集 |
+| `html` | インタラクティブ HTML | ブラウザで閲覧、パン/ズーム |
+| `png` | ラスター画像 | プレゼン、画像として共有 |
+
+#### PNG オプション
+
+PNG 出力時の追加オプション：
+
+```bash
+# 高解像度出力（デフォルト: scale=2）
+npx shumoku render network.yaml -f png -o diagram.png
+```
+
+TypeScript からの場合：
+
+```typescript
+import { png } from '@shumoku/renderer'
+
+const output = await png.render(graph, layout, {
+  scale: 3,              // 解像度スケール
+  loadSystemFonts: true  // システムフォントを使用
+})
+```
 
 ---
 
 ## netbox-to-shumoku
 
-NetBox から直接ダイアグラムを生成します。詳細は [NetBox 統合](/docs/netbox) を参照してください。
+NetBox からダイアグラムを生成します。
 
 ```bash
-# インストール
-npm install @shumoku/netbox
-
-# 使い方
 npx netbox-to-shumoku [options]
 ```
 
-### 主要オプション
+### 接続オプション
 
 | オプション | 説明 |
 |-----------|------|
 | `-u, --url <url>` | NetBox の URL（または `NETBOX_URL` 環境変数） |
 | `-t, --token <token>` | API トークン（または `NETBOX_TOKEN` 環境変数） |
-| `-f, --format <type>` | 出力形式: yaml, json, svg, html |
+| `-k, --insecure` | TLS 証明書の検証をスキップ |
+
+### 出力オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `-f, --format <type>` | 出力形式: `yaml`, `json`, `svg`, `html`, `png` |
 | `-o, --output <file>` | 出力ファイル名 |
+| `--theme <theme>` | テーマ: `light` または `dark` |
+
+### フィルタリングオプション
+
+| オプション | 説明 |
+|-----------|------|
+| `-s, --site <slug>` | サイト slug でフィルタリング |
+| `-r, --role <slug>` | デバイスロール slug でフィルタリング |
+| `--status <status>` | ステータス（active, planned, staged, failed, offline） |
+| `--tag <slug>` | タグ slug でフィルタリング |
+
+### 表示オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `-g, --group-by <method>` | グループ化: `tag`, `site`, `location`, `prefix`, `none` |
+| `--no-ports` | ポート名を非表示 |
+| `--no-colors` | ケーブルタイプの色分けを無効化 |
+| `--color-by-status` | デバイスをステータスで色分け |
+| `--legend` | 凡例を表示 |
+
+### その他
+
+| オプション | 説明 |
+|-----------|------|
+| `-d, --debug` | デバッグ出力（API リクエスト/レスポンス） |
+| `-h, --help` | ヘルプを表示 |
+| `-v, --version` | バージョンを表示 |
 
 ### 使用例
 
@@ -80,33 +141,39 @@ npx netbox-to-shumoku [options]
 export NETBOX_URL=https://netbox.example.com
 export NETBOX_TOKEN=YOUR_API_TOKEN
 
-# SVG 出力
-npx netbox-to-shumoku -o network.svg
-
-# インタラクティブ HTML 出力
+# HTML 出力
 npx netbox-to-shumoku -f html -o network.html
+
+# 特定サイトのみ
+npx netbox-to-shumoku -s tokyo-dc -o tokyo.svg
+
+# サイトでグループ化
+npx netbox-to-shumoku -g site -f html -o network.html
 
 # JSON エクスポート（他ツールとの統合用）
 npx netbox-to-shumoku -f json -o netbox.json
+
+# デバッグモード
+npx netbox-to-shumoku --debug -o network.html
 ```
 
-詳細なオプションは [NetBox CLI オプション](/docs/netbox#cli-オプション) を参照してください。
+詳細は [NetBox 統合](/docs/netbox) を参照してください。
 
 ---
 
 ## 統合ワークフロー
 
-NetBox と独自 API のデータを統合してダイアグラムを生成する例：
+複数のデータソースを統合：
 
 ```bash
-# Step 1: NetBox から JSON エクスポート
+# 1. NetBox から JSON エクスポート
 npx netbox-to-shumoku -f json -o netbox.json
 
-# Step 2: 独自スクリプトでデータをマージ
-node merge-data.js netbox.json custom-api.json > merged.json
+# 2. 独自スクリプトでデータをマージ
+node merge-data.js netbox.json custom.json > merged.json
 
-# Step 3: マージした JSON からダイアグラム生成
-npx shumoku render merged.json -o diagram.html
+# 3. マージした JSON からダイアグラム生成
+npx shumoku render merged.json -f html -o diagram.html
 ```
 
-マージスクリプトの例は [JSON スキーマ](/docs/json-reference#マージの例) を参照してください。
+詳細は [カスタム連携](/docs/custom-integration) を参照してください。

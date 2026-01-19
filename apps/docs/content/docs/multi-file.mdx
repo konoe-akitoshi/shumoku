@@ -1,0 +1,226 @@
+---
+title: マルチファイル構成
+description: 大規模ネットワークを複数ファイルで管理する
+---
+
+複数のサイトや拠点を持つ大規模ネットワークを、ファイルを分割して管理できます。サブグラフをクリックすると詳細シートに移動でき、階層的なナビゲーションが可能です。
+
+## 基本構造
+
+親ファイルでサブグラフに `file` を指定すると、その内容を外部ファイルから読み込みます。
+
+```yaml title="main.yaml"
+name: "Multi-Site Network"
+
+subgraphs:
+  - id: headquarters
+    label: "Headquarters"
+    file: "./headquarters.yaml"    # 外部ファイル参照
+    style:
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+
+  - id: branch
+    label: "Branch Office"
+    file: "./branch.yaml"
+    style:
+      fill: "#e8f5e9"
+      stroke: "#2e7d32"
+
+links:
+  # サブグラフ間のリンク
+  - from:
+      node: hq-router        # headquarters.yaml 内のデバイス
+      port: wan1
+    to:
+      node: branch-router    # branch.yaml 内のデバイス
+      port: wan1
+    label: "Site-to-Site VPN"
+    type: dashed
+```
+
+```yaml title="headquarters.yaml"
+name: "Headquarters Network"
+
+nodes:
+  - id: hq-router
+    label:
+      - "<b>HQ-Router</b>"
+      - "10.0.0.1"
+    type: router
+
+  - id: hq-switch
+    label: "HQ-Switch"
+    type: l3-switch
+
+links:
+  - from: { node: hq-router, port: lan1 }
+    to: { node: hq-switch, port: uplink }
+    bandwidth: 10G
+```
+
+```yaml title="branch.yaml"
+name: "Branch Office"
+
+nodes:
+  - id: branch-router
+    label:
+      - "<b>Branch-Router</b>"
+      - "10.1.0.1"
+    type: router
+
+  - id: branch-switch
+    label: "Branch-Switch"
+    type: switch
+
+links:
+  - from: { node: branch-router, port: lan1 }
+    to: { node: branch-switch, port: uplink }
+    bandwidth: 1G
+```
+
+## レンダリング
+
+```bash
+# メインファイルを指定するだけで、参照ファイルも自動で読み込まれます
+npx shumoku render main.yaml -f html -o network.html
+```
+
+## シートナビゲーション
+
+HTML 出力では：
+
+- **サブグラフをクリック** → 詳細シートに移動
+- **戻るボタン** → 親シートに戻る
+- **エクスポートコネクタ** → 他サブグラフへの接続点を表示
+
+<Callout type="info">
+エクスポートコネクタは、サブグラフ境界を越えるリンクの接続点を示します。これにより、各シートで外部との接続関係が明確になります。
+</Callout>
+
+## クロスサブグラフリンク
+
+異なるファイルに定義されたデバイス間のリンクは、親ファイルで定義します：
+
+```yaml title="main.yaml"
+links:
+  # tokyo.yaml の tokyo-router と osaka.yaml の osaka-router を接続
+  - from:
+      node: tokyo-router
+      port: wan1
+    to:
+      node: osaka-router
+      port: wan1
+    label: "WAN Link"
+    bandwidth: 10G
+```
+
+パーサーが自動的にどのサブグラフに属するか検出します。
+
+## 3階層以上のネスト
+
+サブグラフはさらにネストできます：
+
+```yaml title="main.yaml"
+subgraphs:
+  - id: japan
+    label: "Japan Region"
+    file: "./japan.yaml"
+```
+
+```yaml title="japan.yaml"
+subgraphs:
+  - id: tokyo
+    label: "Tokyo DC"
+    file: "./tokyo.yaml"
+
+  - id: osaka
+    label: "Osaka DC"
+    file: "./osaka.yaml"
+
+links:
+  - from: { node: tokyo-router }
+    to: { node: osaka-router }
+```
+
+## ユースケース
+
+### 拠点ごとにファイルを分ける
+
+```
+network/
+├── main.yaml           # 全体構成
+├── tokyo-dc.yaml       # 東京DC
+├── osaka-dc.yaml       # 大阪DC
+└── aws-vpc.yaml        # AWS 環境
+```
+
+### チームで分担管理
+
+- ネットワークチーム → コアネットワーク定義
+- インフラチーム → サーバー/DC 定義
+- クラウドチーム → クラウド環境定義
+
+### Git でバージョン管理
+
+```bash
+# 変更があったファイルだけ差分確認
+git diff osaka-dc.yaml
+```
+
+## 完全な例
+
+```yaml title="main.yaml"
+name: "Enterprise Network"
+description: "マルチサイト企業ネットワーク"
+
+settings:
+  theme: light
+
+subgraphs:
+  - id: cloud
+    label: "AWS Cloud"
+    file: "./cloud.yaml"
+    vendor: aws
+    style:
+      fill: "#fff8e1"
+      stroke: "#ff8f00"
+
+  - id: datacenter
+    label: "Data Center"
+    file: "./datacenter.yaml"
+    style:
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+
+  - id: office
+    label: "Head Office"
+    file: "./office.yaml"
+    style:
+      fill: "#e8f5e9"
+      stroke: "#2e7d32"
+
+links:
+  # Cloud to DC
+  - from: { node: aws-tgw, port: vpn }
+    to: { node: dc-router, port: wan1 }
+    type: dashed
+    label: "Site-to-Site VPN"
+
+  # DC to Office
+  - from: { node: dc-router, port: wan2 }
+    to: { node: office-router, port: wan1 }
+    bandwidth: 1G
+    label: "MPLS"
+```
+
+## Next Steps
+
+<Cards>
+  <Card title="インタラクティブ機能" href="/docs/interactive-features">
+    HTML 出力のナビゲーション詳細
+  </Card>
+  <Card title="Examples" href="/docs/examples">
+    マルチファイルのサンプル
+  </Card>
+</Cards>
