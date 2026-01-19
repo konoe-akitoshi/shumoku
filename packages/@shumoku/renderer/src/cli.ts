@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Shumoku CLI - Render NetworkGraph YAML/JSON to SVG/HTML
+ * Shumoku CLI - Render NetworkGraph YAML/JSON to SVG/HTML/PNG
  */
 
 // Import @shumoku/icons to auto-register vendor icons
@@ -9,6 +9,7 @@ import '@shumoku/icons'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, extname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { Resvg } from '@resvg/resvg-js'
 import type { NetworkGraph } from '@shumoku/core'
 import { buildHierarchicalSheets, HierarchicalLayout } from '@shumoku/core'
 import { parser } from '@shumoku/parser-yaml'
@@ -20,7 +21,7 @@ import * as svg from './svg.js'
 const VERSION = pkg.version
 
 const HELP = `
-shumoku v${VERSION} - Render NetworkGraph YAML/JSON to SVG/HTML
+shumoku v${VERSION} - Render NetworkGraph YAML/JSON to SVG/HTML/PNG
 
 Usage: shumoku render [options] <input>
 
@@ -29,9 +30,10 @@ Input:
                       Format auto-detected from extension (.yaml, .yml, .json)
 
 Output:
-  -f, --format <type> Output format: svg|html (default: auto from extension)
+  -f, --format <type> Output format: svg|html|png (default: auto from extension)
   -o, --output <file> Output file (default: output.svg)
   --theme <theme>     Theme: light|dark (default: light)
+  --scale <number>    PNG scale factor (default: 2)
 
 Other:
   -h, --help          Show help
@@ -40,11 +42,12 @@ Other:
 Examples:
   shumoku render network.yaml -o diagram.svg
   shumoku render network.yaml -f html -o diagram.html
+  shumoku render network.yaml -f png -o diagram.png
   shumoku render topology.json -o diagram.svg
   cat network.yaml | shumoku render - -o diagram.svg
 `
 
-type OutputFormat = 'svg' | 'html'
+type OutputFormat = 'svg' | 'html' | 'png'
 
 function cli() {
   const args = process.argv.slice(2)
@@ -60,6 +63,7 @@ function cli() {
       format: { type: 'string', short: 'f' },
       output: { type: 'string', short: 'o', default: 'output' },
       theme: { type: 'string' },
+      scale: { type: 'string', default: '2' },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
     },
@@ -138,13 +142,17 @@ async function main(): Promise<void> {
 
     // Determine format
     const outputBase = values.output!
-    const extMatch = outputBase.toLowerCase().match(/\.(svg|html|htm)$/)
+    const extMatch = outputBase.toLowerCase().match(/\.(svg|html|htm|png)$/)
     const format: OutputFormat =
       (values.format as OutputFormat) ??
-      (extMatch ? (extMatch[1] === 'htm' ? 'html' : (extMatch[1] as OutputFormat)) : 'svg')
+      (extMatch
+        ? extMatch[1] === 'htm'
+          ? 'html'
+          : (extMatch[1] as OutputFormat)
+        : 'svg')
 
     // Build output path
-    const hasExt = /\.(svg|html|htm)$/i.test(outputBase)
+    const hasExt = /\.(svg|html|htm|png)$/i.test(outputBase)
     const outputPath = resolve(process.cwd(), hasExt ? outputBase : `${outputBase}.${format}`)
 
     // Ensure output directory exists
@@ -167,6 +175,18 @@ async function main(): Promise<void> {
       } else {
         writeFileSync(outputPath, html.render(graph, layoutResult), 'utf-8')
       }
+    } else if (format === 'png') {
+      console.log('Rendering PNG...')
+      const svgString = svg.render(graph, layoutResult)
+      const scale = Number.parseFloat(values.scale!) || 2
+      const resvg = new Resvg(svgString, {
+        fitTo: { mode: 'zoom', value: scale },
+        font: {
+          loadSystemFonts: true,
+        },
+      })
+      const pngData = resvg.render()
+      writeFileSync(outputPath, pngData.asPng())
     } else {
       console.log('Rendering SVG...')
       writeFileSync(outputPath, svg.render(graph, layoutResult), 'utf-8')

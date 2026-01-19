@@ -56,6 +56,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@shumoku/core": "^0.2.4",
     "@shumoku/icons": "^0.2.4",
     "@shumoku/parser-yaml": "^0.2.15"

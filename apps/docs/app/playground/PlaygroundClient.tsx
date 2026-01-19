@@ -30,10 +30,12 @@ function FormatDropdown({
   label,
   disabled,
   onSelect,
+  formats = ['svg', 'html'],
 }: {
   label: string
   disabled: boolean
-  onSelect: (format: 'svg' | 'html') => void
+  onSelect: (format: 'svg' | 'html' | 'png') => void
+  formats?: Array<'svg' | 'html' | 'png'>
 }) {
   const [show, setShow] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -74,32 +76,51 @@ function FormatDropdown({
             'shadow-lg',
           )}
         >
-          <button
-            onClick={() => {
-              onSelect('svg')
-              setShow(false)
-            }}
-            className={cn(
-              'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
-              'hover:bg-neutral-100 dark:hover:bg-neutral-700',
-            )}
-          >
-            <span className="text-neutral-500">.svg</span>
-            <span>Pure SVG</span>
-          </button>
-          <button
-            onClick={() => {
-              onSelect('html')
-              setShow(false)
-            }}
-            className={cn(
-              'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
-              'hover:bg-neutral-100 dark:hover:bg-neutral-700',
-            )}
-          >
-            <span className="text-neutral-500">.html</span>
-            <span>Interactive</span>
-          </button>
+          {formats.includes('svg') && (
+            <button
+              onClick={() => {
+                onSelect('svg')
+                setShow(false)
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                'hover:bg-neutral-100 dark:hover:bg-neutral-700',
+              )}
+            >
+              <span className="text-neutral-500">.svg</span>
+              <span>Pure SVG</span>
+            </button>
+          )}
+          {formats.includes('html') && (
+            <button
+              onClick={() => {
+                onSelect('html')
+                setShow(false)
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                'hover:bg-neutral-100 dark:hover:bg-neutral-700',
+              )}
+            >
+              <span className="text-neutral-500">.html</span>
+              <span>Interactive</span>
+            </button>
+          )}
+          {formats.includes('png') && (
+            <button
+              onClick={() => {
+                onSelect('png')
+                setShow(false)
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                'hover:bg-neutral-100 dark:hover:bg-neutral-700',
+              )}
+            >
+              <span className="text-neutral-500">.png</span>
+              <span>Image</span>
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -337,57 +358,89 @@ export default function PlaygroundClient() {
     return sheetDataMap
   }
 
-  const handleDownload = async (format: 'svg' | 'html') => {
-    if (!graphRef.current || !layoutRef.current) return
-    const date = new Date().toISOString().slice(0, 10)
-    const name = graphRef.current.name?.replace(/\s+/g, '-').toLowerCase() || 'network-diagram'
+  const generateContent = async (format: 'svg' | 'html'): Promise<string | null> => {
+    if (!graphRef.current || !layoutRef.current) return null
 
-    let content: string
     if (format === 'svg') {
-      content = svg.render(graphRef.current, layoutRef.current)
-    } else {
-      // Check if we have hierarchical sheets
-      const sheetDataMap = await buildHierarchicalSheets()
-      if (sheetDataMap && sheetDataMap.size > 1) {
-        content = html.renderHierarchical(sheetDataMap)
-      } else {
-        content = html.render(graphRef.current, layoutRef.current)
-      }
+      return svg.render(graphRef.current, layoutRef.current)
     }
+    // HTML: check for hierarchical sheets
+    const sheetDataMap = await buildHierarchicalSheets()
+    if (sheetDataMap && sheetDataMap.size > 1) {
+      return html.renderHierarchical(sheetDataMap)
+    }
+    return html.render(graphRef.current, layoutRef.current)
+  }
 
-    const blob = new Blob([content], {
-      type: format === 'svg' ? 'image/svg+xml;charset=utf-8' : 'text/html;charset=utf-8',
-    })
+  const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${name}-${date}.${format}`
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  const handleOpen = async (format: 'svg' | 'html') => {
+  const handleExport = async (format: 'svg' | 'html' | 'png', action: 'download' | 'open') => {
     if (!graphRef.current || !layoutRef.current) return
-    const win = window.open('', '_blank')
-    if (!win) return
+    const date = new Date().toISOString().slice(0, 10)
+    const name = graphRef.current.name?.replace(/\s+/g, '-').toLowerCase() || 'network-diagram'
+    const title = graphRef.current.name || 'Network Diagram'
 
-    if (format === 'svg') {
-      const svgOutput = svg.render(graphRef.current, layoutRef.current)
-      const title = graphRef.current.name || 'Network Diagram'
-      win.document.write(
-        `<!DOCTYPE html><html><head><title>${title}</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f5f5}</style></head><body>${svgOutput}</body></html>`,
-      )
-    } else {
-      // Check if we have hierarchical sheets
-      const sheetDataMap = await buildHierarchicalSheets()
-      if (sheetDataMap && sheetDataMap.size > 1) {
-        win.document.write(html.renderHierarchical(sheetDataMap))
-      } else {
-        win.document.write(html.render(graphRef.current, layoutRef.current))
+    if (format === 'png') {
+      const svgString = await generateContent('svg')
+      if (!svgString) return
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+      const url = URL.createObjectURL(svgBlob)
+      const img = new Image()
+      img.onload = () => {
+        const scale = 2
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width * scale
+        canvas.height = img.height * scale
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.fillStyle = '#f5f5f5'
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        }
+        URL.revokeObjectURL(url)
+        canvas.toBlob((blob) => {
+          if (!blob) return
+          if (action === 'download') {
+            downloadBlob(blob, `${name}-${date}.png`)
+          } else {
+            const pngUrl = URL.createObjectURL(blob)
+            window.open(pngUrl, '_blank')
+          }
+        }, 'image/png')
       }
+      img.src = url
+      return
     }
-    win.document.close()
+
+    const content = await generateContent(format)
+    if (!content) return
+
+    if (action === 'download') {
+      const mimeType = format === 'svg' ? 'image/svg+xml;charset=utf-8' : 'text/html;charset=utf-8'
+      downloadBlob(new Blob([content], { type: mimeType }), `${name}-${date}.${format}`)
+    } else {
+      const win = window.open('', '_blank')
+      if (!win) return
+      if (format === 'svg') {
+        win.document.write(
+          `<!DOCTYPE html><html><head><title>${title}</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f5f5}</style></head><body>${content}</body></html>`,
+        )
+      } else {
+        win.document.write(content)
+      }
+      win.document.close()
+    }
   }
+
+  const handleDownload = (format: 'svg' | 'html' | 'png') => handleExport(format, 'download')
+  const handleOpen = (format: 'svg' | 'html' | 'png') => handleExport(format, 'open')
 
   const resetSample = () => {
     setFiles([...sampleNetwork])
@@ -432,8 +485,18 @@ export default function PlaygroundClient() {
             {isRendering ? 'Rendering...' : 'Render'}
           </button>
 
-          <FormatDropdown label="Open" disabled={!svgContent} onSelect={handleOpen} />
-          <FormatDropdown label="Download" disabled={!svgContent} onSelect={handleDownload} />
+          <FormatDropdown
+            label="Open"
+            disabled={!svgContent}
+            onSelect={handleOpen}
+            formats={['svg', 'html', 'png']}
+          />
+          <FormatDropdown
+            label="Download"
+            disabled={!svgContent}
+            onSelect={handleDownload}
+            formats={['svg', 'html', 'png']}
+          />
         </div>
       </div>
 
