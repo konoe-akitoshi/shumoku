@@ -39,6 +39,10 @@
     "./iife-string": {
       "types": "./dist/iife-string.d.ts",
       "import": "./dist/iife-string.js"
+    },
+    "./png": {
+      "types": "./dist/png.d.ts",
+      "import": "./dist/png.js"
     }
   },
   "files": [
