@@ -1,5 +1,11 @@
 # @shumoku/netbox
 
+## 0.2.18
+
+### Patch Changes
+
+- 1fc64a5: Add --debug option to show API requests/responses for troubleshooting
+
 ## 0.2.14
 
 ### Patch Changes
