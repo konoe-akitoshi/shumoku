@@ -1,10 +1,10 @@
 /**
- * @shumoku/renderer - SVG and HTML renderers for network diagrams
- * Browser entry point (PNG throws error)
+ * @shumoku/renderer - SVG, HTML, and PNG renderers for network diagrams
+ * Node.js entry point (includes PNG support)
  */
 
 import * as html from './html/index.js'
-import * as png from './png.browser.js'
+import * as png from './png.js'
 import * as svg from './svg.js'
 
 export { svg, html, png }

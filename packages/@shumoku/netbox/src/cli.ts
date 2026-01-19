@@ -8,8 +8,7 @@ import { dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { buildHierarchicalSheets } from '@shumoku/core'
 import { HierarchicalLayout } from '@shumoku/core/layout'
-import { html, svg } from '@shumoku/renderer'
-import { renderToPng } from '@shumoku/renderer/png'
+import { html, png, svg } from '@shumoku/renderer'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
 import '@shumoku/icons' // Register vendor icons
 import pkg from '../package.json' with { type: 'json' }
@@ -200,8 +199,7 @@ async function main(): Promise<void> {
         }
       } else if (format === 'png') {
         console.log('Rendering PNG...')
-        const svgString = svg.render(graph, layoutResult)
-        writeFileSync(outputPath, renderToPng(svgString))
+        writeFileSync(outputPath, png.render(graph, layoutResult))
       } else {
         console.log('Rendering SVG...')
         writeFileSync(outputPath, svg.render(graph, layoutResult), 'utf-8')
