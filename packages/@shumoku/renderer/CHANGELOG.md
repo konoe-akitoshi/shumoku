@@ -1,5 +1,13 @@
 # @shumoku/renderer
 
+## 0.2.23
+
+### Patch Changes
+
+- 0e715f4: Modernize design system with improved colors, typography, and zone styling. Fix endpoint label background sizing.
+- Updated dependencies [0e715f4]
+  - @shumoku/core@0.2.23
+
 ## 0.2.17
 
 ### Patch Changes
