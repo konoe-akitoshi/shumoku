@@ -67,6 +67,8 @@ interface YamlNode {
   model?: string
   /** Resource type within the service (e.g., 'instance', 'nat-gateway') */
   resource?: string
+  /** Custom icon URL (overrides vendor/type icons) */
+  icon?: string
 }
 
 interface YamlLinkStyle {
@@ -137,6 +139,8 @@ interface YamlSubgraph {
   model?: string
   /** Resource type within the service (e.g., 'instance', 'nat-gateway') */
   resource?: string
+  /** Custom icon URL (overrides vendor/type icons) */
+  icon?: string
   /** File reference for external sheet definition (KiCad-style hierarchy) */
   file?: string
   /** Pins for boundary connections (hierarchical sheets) */
@@ -282,6 +286,7 @@ export class YamlParser {
         service: n.service?.toLowerCase(),
         model: n.model?.toLowerCase(),
         resource: n.resource?.toLowerCase(),
+        icon: n.icon,
       }
     })
   }
@@ -439,6 +444,7 @@ export class YamlParser {
         service: s.service?.toLowerCase(),
         model: s.model?.toLowerCase(),
         resource: s.resource?.toLowerCase(),
+        icon: s.icon,
         file: s.file,
         pins: s.pins ? this.parsePins(s.pins, warnings) : undefined,
       }
