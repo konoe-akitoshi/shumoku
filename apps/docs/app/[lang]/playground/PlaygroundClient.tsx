@@ -390,6 +390,43 @@ export default function PlaygroundClient() {
     URL.revokeObjectURL(url)
   }
 
+  /**
+   * Embed external images in SVG as base64 data URLs
+   * Required for Canvas rendering which cannot load cross-origin images
+   */
+  const embedExternalImages = async (svgString: string): Promise<string> => {
+    const imageUrlRegex = /<image\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>/g
+    const matches = [...svgString.matchAll(imageUrlRegex)]
+    if (matches.length === 0) return svgString
+
+    const uniqueUrls = [...new Set(matches.map((m) => m[1]))]
+    const urlToBase64 = new Map<string, string>()
+
+    await Promise.all(
+      uniqueUrls.map(async (url) => {
+        try {
+          const response = await fetch(url)
+          if (!response.ok) return
+          const blob = await response.blob()
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
+          urlToBase64.set(url, base64)
+        } catch {
+          // Ignore fetch errors
+        }
+      }),
+    )
+
+    let result = svgString
+    for (const [url, base64] of urlToBase64) {
+      result = result.replaceAll(`href="${url}"`, `href="${base64}"`)
+    }
+    return result
+  }
+
   const handleExport = async (format: 'svg' | 'html' | 'png', action: 'download' | 'open') => {
     if (!graphRef.current || !layoutRef.current) return
     const date = new Date().toISOString().slice(0, 10)
@@ -397,8 +434,10 @@ export default function PlaygroundClient() {
     const title = graphRef.current.name || 'Network Diagram'
 
     if (format === 'png') {
-      const svgString = await generateContent('svg')
+      let svgString = await generateContent('svg')
       if (!svgString) return
+      // Embed external images as base64 for Canvas rendering
+      svgString = await embedExternalImages(svgString)
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
       const url = URL.createObjectURL(svgBlob)
       const img = new Image()

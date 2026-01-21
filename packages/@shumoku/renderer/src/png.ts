@@ -6,6 +6,7 @@
 import type { LayoutResult, NetworkGraph } from '@shumoku/core'
 import { Resvg } from '@resvg/resvg-js'
 import {
+  fetchCDNIcon,
   getCDNIconUrl,
   hasCDNIcons,
   resolveAllIconDimensions,
@@ -23,6 +24,39 @@ export interface PngOptions {
   cdnConfig?: CDNConfig
   /** Pre-resolved icon dimensions (skips fetching if provided) */
   iconDimensions?: Map<string, IconDimensions>
+}
+
+/**
+ * Embed external images in SVG by replacing URLs with base64 data URLs
+ * This is required for resvg which cannot fetch external resources
+ */
+async function embedExternalImages(svgString: string, timeout = 3000): Promise<string> {
+  // Find all image href attributes with http(s) URLs
+  const imageUrlRegex = /<image\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>/g
+  const matches = [...svgString.matchAll(imageUrlRegex)]
+
+  if (matches.length === 0) return svgString
+
+  // Fetch all unique URLs in parallel
+  const uniqueUrls = [...new Set(matches.map((m) => m[1]))]
+  const urlToBase64 = new Map<string, string>()
+
+  await Promise.all(
+    uniqueUrls.map(async (url) => {
+      const base64 = await fetchCDNIcon(url, timeout)
+      if (base64) {
+        urlToBase64.set(url, base64)
+      }
+    }),
+  )
+
+  // Replace URLs with base64 data URLs
+  let result = svgString
+  for (const [url, base64] of urlToBase64) {
+    result = result.replaceAll(`href="${url}"`, `href="${base64}"`)
+  }
+
+  return result
 }
 
 /**
@@ -81,7 +115,11 @@ export async function render(
     }
   }
 
-  const svgString = svg.render(graph, layout, { iconDimensions })
+  let svgString = svg.render(graph, layout, { iconDimensions })
+
+  // Embed external images as base64 (resvg cannot fetch external URLs)
+  svgString = await embedExternalImages(svgString, options.cdnConfig?.timeout)
+
   const resvg = new Resvg(svgString, {
     fitTo: { mode: 'zoom', value: scale },
     font: { loadSystemFonts },
