@@ -1,33 +1,14 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { vendorIconSets } from 'shumoku'
 import { cn } from '@/lib/cn'
-
-type VendorKey = 'yamaha' | 'aruba' | 'juniper' | 'aws'
-
-const vendorNames: Record<VendorKey, string> = {
-  yamaha: 'Yamaha',
-  aruba: 'Aruba',
-  juniper: 'Juniper',
-  aws: 'AWS',
-}
-
-const vendorOrder: VendorKey[] = ['yamaha', 'aruba', 'juniper', 'aws']
-
-function IconPreview({ svg, viewBox }: { svg: string; viewBox?: string }) {
-  const needsWrapper = !svg.trim().startsWith('<svg')
-  const content = needsWrapper
-    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox || '0 0 100 100'}">${svg}</svg>`
-    : svg
-
-  return (
-    <span
-      className="inline-block h-12 w-12 [&>svg]:h-full [&>svg]:w-full"
-      dangerouslySetInnerHTML={{ __html: content }}
-    />
-  )
-}
+import {
+  type VendorKey,
+  getIconUrl,
+  vendorConfig,
+  vendorIcons,
+  vendorOrder,
+} from '@/lib/vendor-icons-data'
 
 export function VendorIcons() {
   const [search, setSearch] = useState('')
@@ -36,8 +17,7 @@ export function VendorIcons() {
   const iconCounts = useMemo(() => {
     const counts: Record<string, number> = { all: 0 }
     for (const vendor of vendorOrder) {
-      const icons = vendorIconSets[vendor]
-      const count = icons ? Object.keys(icons).length : 0
+      const count = vendorIcons[vendor].length
       counts[vendor] = count
       counts.all += count
     }
@@ -45,22 +25,19 @@ export function VendorIcons() {
   }, [])
 
   const filteredVendors = useMemo(() => {
-    const results: { vendor: VendorKey; icons: { id: string; svg: string; viewBox?: string }[] }[] =
-      []
+    const results: { vendor: VendorKey; icons: { id: string; url: string }[] }[] = []
 
     for (const vendor of vendorOrder) {
       if (selectedVendor !== 'all' && selectedVendor !== vendor) continue
 
-      const icons = vendorIconSets[vendor]
-      if (!icons) continue
+      const icons = vendorIcons[vendor]
+      const filteredIcons: { id: string; url: string }[] = []
 
-      const filteredIcons: { id: string; svg: string; viewBox?: string }[] = []
-      for (const [id, entry] of Object.entries(icons)) {
+      for (const id of icons) {
         if (search && !id.toLowerCase().includes(search.toLowerCase())) continue
         filteredIcons.push({
           id,
-          svg: entry.default,
-          viewBox: entry.viewBox,
+          url: getIconUrl(vendor, id),
         })
       }
 
@@ -83,12 +60,12 @@ export function VendorIcons() {
         )}
       >
         <p className="text-lg">
-          <strong>{iconCounts.all}</strong> 個のベンダーアイコンが利用可能
+          <strong>{iconCounts.all}</strong> vendor icons available
         </p>
         <div className="mt-2 flex gap-4 text-sm text-neutral-600 dark:text-neutral-400">
           {vendorOrder.map((vendor) => (
             <span key={vendor}>
-              {vendorNames[vendor]}: {iconCounts[vendor]}
+              {vendorConfig[vendor].name}: {iconCounts[vendor]}
             </span>
           ))}
         </div>
@@ -111,6 +88,7 @@ export function VendorIcons() {
         />
         <div className="flex flex-wrap gap-2">
           <button
+            type="button"
             className={cn(
               'rounded px-3 py-1.5 text-sm transition-colors',
               selectedVendor === 'all'
@@ -123,6 +101,7 @@ export function VendorIcons() {
           </button>
           {vendorOrder.map((vendor) => (
             <button
+              type="button"
               key={vendor}
               className={cn(
                 'rounded px-3 py-1.5 text-sm transition-colors',
@@ -132,7 +111,7 @@ export function VendorIcons() {
               )}
               onClick={() => setSelectedVendor(vendor)}
             >
-              {vendorNames[vendor]} ({iconCounts[vendor]})
+              {vendorConfig[vendor].name} ({iconCounts[vendor]})
             </button>
           ))}
         </div>
@@ -142,7 +121,7 @@ export function VendorIcons() {
       {filteredVendors.map(({ vendor, icons }) => (
         <section key={vendor} className="mb-8">
           <h3 className="mb-4 text-xl font-semibold">
-            {vendorNames[vendor]} ({icons.length})
+            {vendorConfig[vendor].name} ({icons.length})
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
@@ -158,7 +137,7 @@ export function VendorIcons() {
                 </tr>
               </thead>
               <tbody>
-                {icons.map(({ id, svg, viewBox }) => (
+                {icons.map(({ id, url }) => (
                   <tr key={id} className="border-b border-neutral-200 dark:border-neutral-700">
                     <td className="px-4 py-2">
                       <code
@@ -171,7 +150,12 @@ export function VendorIcons() {
                       </code>
                     </td>
                     <td className="px-4 py-2">
-                      <IconPreview svg={svg} viewBox={viewBox} />
+                      <img
+                        src={url}
+                        alt={id}
+                        className="h-12 w-12 object-contain"
+                        loading="lazy"
+                      />
                     </td>
                   </tr>
                 ))}

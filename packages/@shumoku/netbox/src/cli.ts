@@ -10,7 +10,6 @@ import { buildHierarchicalSheets } from '@shumoku/core'
 import { HierarchicalLayout } from '@shumoku/core/layout'
 import { html, png, svg } from '@shumoku/renderer'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
-import '@shumoku/icons' // Register vendor icons
 import pkg from '../package.json' with { type: 'json' }
 import type { QueryParams } from './client.js'
 import { NetBoxClient } from './client.js'

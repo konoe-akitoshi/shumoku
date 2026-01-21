@@ -14,7 +14,7 @@
     },
     "apps/docs": {
       "name": "@shumoku/docs",
-      "version": "0.2.23",
+      "version": "0.2.25",
       "dependencies": {
         "@shumoku/renderer": "workspace:*",
         "fumadocs-core": "16.4.6",
@@ -76,15 +76,13 @@
     },
     "packages/@shumoku/netbox": {
       "name": "@shumoku/netbox",
-      "version": "0.2.23",
+      "version": "0.2.25",
       "bin": {
         "netbox-to-shumoku": "./dist/cli.js",
       },
       "dependencies": {
-        "@resvg/resvg-js": "^2.6.2",
         "@shumoku/core": "^0.2.23",
-        "@shumoku/icons": "^0.2.3",
-        "@shumoku/renderer": "^0.2.23",
+        "@shumoku/renderer": "^0.2.25",
       },
       "devDependencies": {
         "@types/node": "^25.0.7",
@@ -108,14 +106,13 @@
     },
     "packages/@shumoku/renderer": {
       "name": "@shumoku/renderer",
-      "version": "0.2.23",
+      "version": "0.2.25",
       "bin": {
         "shumoku": "./dist/cli.js",
       },
       "dependencies": {
         "@resvg/resvg-js": "^2.6.2",
         "@shumoku/core": "^0.2.23",
-        "@shumoku/icons": "^0.2.4",
         "@shumoku/parser-yaml": "^0.2.15",
       },
       "devDependencies": {
@@ -130,7 +127,6 @@
       "version": "0.2.6",
       "dependencies": {
         "@shumoku/core": "^0.2.13",
-        "@shumoku/icons": "^0.2.3",
         "@shumoku/parser-yaml": "^0.2.13",
         "@shumoku/renderer": "^0.2.3",
       },

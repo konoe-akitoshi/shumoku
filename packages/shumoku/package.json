@@ -56,7 +56,6 @@
   },
   "dependencies": {
     "@shumoku/core": "^0.2.13",
-    "@shumoku/icons": "^0.2.3",
     "@shumoku/parser-yaml": "^0.2.13",
     "@shumoku/renderer": "^0.2.3"
   },
