@@ -22,7 +22,6 @@ import {
   getDeviceIcon,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
-  MAX_ICON_WIDTH_RATIO,
 } from '@shumoku/core'
 
 import {
@@ -1008,8 +1007,8 @@ ${fg}
     node: Node,
     w: number,
   ): { width: number; height: number; svg: string } | null {
-    // Cap icon width at MAX_ICON_WIDTH_RATIO of node width to leave room for ports
-    const maxIconWidth = Math.round(w * MAX_ICON_WIDTH_RATIO)
+    // Use full node width as max; layout engine already calculated appropriate size
+    const maxIconWidth = w
 
     // User-specified icon URL takes highest priority
     if (node.icon) {
