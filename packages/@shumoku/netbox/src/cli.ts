@@ -6,9 +6,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { buildHierarchicalSheets } from '@shumoku/core'
-import { HierarchicalLayout } from '@shumoku/core/layout'
-import { html, png, svg } from '@shumoku/renderer'
+import {
+  html,
+  prepareRender,
+  renderHtmlHierarchical,
+  renderPng,
+  renderSvg,
+} from '@shumoku/renderer'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
 import pkg from '../package.json' with { type: 'json' }
 import type { QueryParams } from './client.js'
@@ -179,29 +183,22 @@ async function main(): Promise<void> {
     mkdirSync(dirname(outputPath), { recursive: true })
 
     if (format === 'svg' || format === 'html' || format === 'png') {
-      console.log('Generating layout...')
-      const layout = new HierarchicalLayout()
-      const layoutResult = await layout.layoutAsync(graph)
+      console.log('Preparing render (resolving icons, computing layout)...')
+      const prepared = await prepareRender(graph)
 
       if (format === 'html') {
         console.log('Rendering HTML...')
         html.setIIFE(INTERACTIVE_IIFE)
 
-        // Build hierarchical sheets (includes export connectors for boundary connections)
-        const sheets = await buildHierarchicalSheets(graph, layoutResult, layout)
-
         // Use hierarchical rendering if we have subgraphs
-        if (sheets.size > 1) {
-          writeFileSync(outputPath, html.renderHierarchical(sheets), 'utf-8')
-        } else {
-          writeFileSync(outputPath, html.render(graph, layoutResult), 'utf-8')
-        }
+        const content = await renderHtmlHierarchical(prepared)
+        writeFileSync(outputPath, content, 'utf-8')
       } else if (format === 'png') {
         console.log('Rendering PNG...')
-        writeFileSync(outputPath, await png.render(graph, layoutResult))
+        writeFileSync(outputPath, await renderPng(prepared))
       } else {
         console.log('Rendering SVG...')
-        writeFileSync(outputPath, await svg.renderAsync(graph, layoutResult), 'utf-8')
+        writeFileSync(outputPath, await renderSvg(prepared), 'utf-8')
       }
     } else if (format === 'json') {
       console.log('Exporting NetworkGraph JSON...')

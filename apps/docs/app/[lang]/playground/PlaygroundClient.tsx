@@ -1,18 +1,17 @@
 'use client'
 
-import type { ResolvedIconDimensions, SheetData } from '@shumoku/renderer'
-import { html, resolveIconDimensionsForGraph, svg as svgRenderer } from '@shumoku/renderer'
+import type { PreparedRender, SheetData } from '@shumoku/renderer'
+import {
+  html,
+  prepareRender,
+  renderHtml,
+  renderHtmlHierarchical,
+  renderSvg,
+} from '@shumoku/renderer'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
 import { useEffect, useRef, useState } from 'react'
-import type { LayoutResult, NetworkGraph } from 'shumoku'
-import {
-  createMemoryFileResolver,
-  HierarchicalLayout,
-  HierarchicalParser,
-  parser,
-  sampleNetwork,
-  svg,
-} from 'shumoku'
+import type { NetworkGraph } from 'shumoku'
+import { createMemoryFileResolver, HierarchicalParser, parser, sampleNetwork } from 'shumoku'
 import { cn } from '@/lib/cn'
 import { InteractivePreview } from './InteractivePreview'
 
@@ -213,9 +212,8 @@ export default function PlaygroundClient() {
   const [error, setError] = useState<string | null>(null)
   const [isRendering, setIsRendering] = useState(false)
 
-  // Store graph and layout for export
-  const graphRef = useRef<NetworkGraph | null>(null)
-  const layoutRef = useRef<LayoutResult | null>(null)
+  // Store prepared render data for export
+  const preparedRef = useRef<PreparedRender | null>(null)
   const sheetsRef = useRef<Map<string, NetworkGraph> | null>(null)
 
   const activeFileContent = files.find((f) => f.name === activeFile)?.content || ''
@@ -280,8 +278,7 @@ export default function PlaygroundClient() {
           const errors = result.warnings.filter((w) => w.severity === 'error')
           if (errors.length > 0) {
             setError(`Parse errors: ${errors.map((e) => e.message).join(', ')}`)
-            graphRef.current = null
-            layoutRef.current = null
+            preparedRef.current = null
             sheetsRef.current = null
             setSvgContent(null)
             setIsRendering(false)
@@ -299,8 +296,7 @@ export default function PlaygroundClient() {
           const errors = result.warnings.filter((w) => w.severity === 'error')
           if (errors.length > 0) {
             setError(`Parse errors: ${errors.map((e) => e.message).join(', ')}`)
-            graphRef.current = null
-            layoutRef.current = null
+            preparedRef.current = null
             sheetsRef.current = null
             setSvgContent(null)
             setIsRendering(false)
@@ -312,23 +308,11 @@ export default function PlaygroundClient() {
         sheetsRef.current = null
       }
 
-      // Resolve icon dimensions before layout
-      const iconUrls = svgRenderer.collectIconUrls(graph)
-      const iconDims = iconUrls.length > 0 ? await resolveIconDimensionsForGraph(iconUrls) : null
+      // Use unified pipeline for icon resolution and layout
+      const prepared = await prepareRender(graph)
+      preparedRef.current = prepared
 
-      // Layout with icon dimensions for proper node sizing
-      const layout = new HierarchicalLayout({
-        iconDimensions: iconDims?.byKey,
-      })
-      const layoutRes = await layout.layoutAsync(graph)
-
-      // Store for Open Viewer
-      graphRef.current = graph
-      layoutRef.current = layoutRes
-
-      const svgOutput = await svg.renderAsync(graph, layoutRes, {
-        iconDimensions: iconDims?.byUrl,
-      })
+      const svgOutput = await renderSvg(prepared)
       setSvgContent(svgOutput)
       setError(null)
     } catch (e) {
@@ -338,47 +322,39 @@ export default function PlaygroundClient() {
     }
   }
 
-  const buildHierarchicalSheets = async (): Promise<Map<string, SheetData> | null> => {
-    if (!graphRef.current || !layoutRef.current || !sheetsRef.current) return null
-    if (sheetsRef.current.size === 0) return null
-
-    const layout = new HierarchicalLayout()
-    const sheetDataMap = new Map<string, SheetData>()
-
-    // Add root sheet
-    sheetDataMap.set('root', {
-      graph: graphRef.current,
-      layout: layoutRef.current,
-    })
-
-    // Layout and add each child sheet
-    for (const [sheetId, sheetGraph] of sheetsRef.current) {
-      try {
-        const sheetLayout = await layout.layoutAsync(sheetGraph)
-        sheetDataMap.set(sheetId, {
-          graph: sheetGraph,
-          layout: sheetLayout,
-        })
-      } catch (e) {
-        console.error(`Failed to layout sheet ${sheetId}:`, e)
-      }
-    }
-
-    return sheetDataMap
-  }
-
   const generateContent = async (format: 'svg' | 'html'): Promise<string | null> => {
-    if (!graphRef.current || !layoutRef.current) return null
+    if (!preparedRef.current) return null
 
     if (format === 'svg') {
-      return svg.renderAsync(graphRef.current, layoutRef.current)
+      return renderSvg(preparedRef.current)
     }
-    // HTML: check for hierarchical sheets
-    const sheetDataMap = await buildHierarchicalSheets()
-    if (sheetDataMap && sheetDataMap.size > 1) {
-      return html.renderHierarchical(sheetDataMap)
+
+    // HTML: build sheets from parsed hierarchical data if available
+    if (sheetsRef.current && sheetsRef.current.size > 0) {
+      const sheetDataMap = new Map<string, SheetData>()
+
+      // Add root sheet
+      sheetDataMap.set('root', {
+        graph: preparedRef.current.graph,
+        layout: preparedRef.current.layout,
+      })
+
+      // Layout and add each child sheet
+      for (const [sheetId, sheetGraph] of sheetsRef.current) {
+        const sheetPrepared = await prepareRender(sheetGraph, {
+          iconDimensions: preparedRef.current.iconDimensions ?? undefined,
+        })
+        sheetDataMap.set(sheetId, {
+          graph: sheetPrepared.graph,
+          layout: sheetPrepared.layout,
+        })
+      }
+
+      return renderHtmlHierarchical(preparedRef.current, { sheets: sheetDataMap })
     }
-    return html.render(graphRef.current, layoutRef.current)
+
+    // Simple HTML rendering for non-hierarchical graphs
+    return renderHtml(preparedRef.current)
   }
 
   const downloadBlob = (blob: Blob, filename: string) => {
@@ -428,10 +404,11 @@ export default function PlaygroundClient() {
   }
 
   const handleExport = async (format: 'svg' | 'html' | 'png', action: 'download' | 'open') => {
-    if (!graphRef.current || !layoutRef.current) return
+    if (!preparedRef.current) return
     const date = new Date().toISOString().slice(0, 10)
-    const name = graphRef.current.name?.replace(/\s+/g, '-').toLowerCase() || 'network-diagram'
-    const title = graphRef.current.name || 'Network Diagram'
+    const name =
+      preparedRef.current.graph.name?.replace(/\s+/g, '-').toLowerCase() || 'network-diagram'
+    const title = preparedRef.current.graph.name || 'Network Diagram'
 
     if (format === 'png') {
       let svgString = await generateContent('svg')

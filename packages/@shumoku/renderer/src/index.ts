@@ -9,6 +9,26 @@ import * as svg from './svg.js'
 
 export { svg, html, png }
 
+// Unified render pipeline (PNG throws in browser, use Canvas API instead)
+export {
+  prepareRender,
+  renderGraphToHtml,
+  renderGraphToHtmlHierarchical,
+  renderGraphToPng,
+  renderGraphToSvg,
+  renderHtml,
+  renderHtmlHierarchical,
+  renderPng,
+  renderSvg,
+} from './pipeline.browser.js'
+export type {
+  HTMLRenderOptions,
+  PNGRenderOptions,
+  PreparedRender,
+  PrepareOptions,
+  SVGRenderOptions,
+} from './pipeline.browser.js'
+
 // CDN icon utilities
 export {
   clearIconCache,

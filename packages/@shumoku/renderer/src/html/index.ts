@@ -52,6 +52,11 @@ export interface RenderOptions extends HTMLRendererOptions {
    * Navigation state for hierarchical diagrams
    */
   navigation?: NavigationState
+
+  /**
+   * Pre-resolved icon dimensions for proper aspect ratio rendering
+   */
+  iconDimensions?: Map<string, { width: number; height: number }>
 }
 
 const DEFAULT_OPTIONS = {
@@ -71,7 +76,10 @@ export function render(graph: NetworkGraph, layout: LayoutResult, options?: Rend
     opts.hierarchical = hasHierarchicalContent(graph)
   }
 
-  const svgRenderer = new SVGRenderer({ renderMode: 'interactive' })
+  const svgRenderer = new SVGRenderer({
+    renderMode: 'interactive',
+    iconDimensions: options?.iconDimensions,
+  })
   const svg = svgRenderer.render(graph, layout)
   const title = options?.title || graph.name || 'Network Diagram'
 
@@ -110,7 +118,11 @@ export function renderHierarchical(
     if (sheetId === 'root') continue // Skip root for now
 
     // Render child sheet
-    const svgRenderer = new SVGRenderer({ renderMode: 'interactive', sheetId })
+    const svgRenderer = new SVGRenderer({
+      renderMode: 'interactive',
+      sheetId,
+      iconDimensions: options?.iconDimensions,
+    })
     const svg = svgRenderer.render(data.graph, data.layout)
     sheetSvgs.set(sheetId, svg)
     sheetInfos.set(sheetId, {
@@ -125,6 +137,7 @@ export function renderHierarchical(
     const rootRenderer = new SVGRenderer({
       renderMode: 'interactive',
       sheetId: 'root',
+      iconDimensions: options?.iconDimensions,
     })
     const rootSvg = rootRenderer.render(rootSheet.graph, rootSheet.layout)
     sheetSvgs.set('root', rootSvg)

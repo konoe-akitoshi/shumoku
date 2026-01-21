@@ -9,6 +9,26 @@ import * as svg from './svg.js'
 
 export { svg, html, png }
 
+// Unified render pipeline (with PNG support)
+export {
+  prepareRender,
+  renderGraphToHtml,
+  renderGraphToHtmlHierarchical,
+  renderGraphToPng,
+  renderGraphToSvg,
+  renderHtml,
+  renderHtmlHierarchical,
+  renderPng,
+  renderSvg,
+} from './pipeline.node.js'
+export type {
+  HTMLRenderOptions,
+  PNGRenderOptions,
+  PreparedRender,
+  PrepareOptions,
+  SVGRenderOptions,
+} from './pipeline.node.js'
+
 // CDN icon utilities
 export {
   clearIconCache,
