@@ -1096,7 +1096,7 @@ export class HierarchicalLayout {
 
     // Use pre-resolved CDN icon dimensions
     const dimensionKey = `${node.vendor.toLowerCase()}/${iconKey.toLowerCase().replace(/\//g, '-')}`
-    const cdnDims = this.options.iconDimensions.get(dimensionKey)
+    const cdnDims = this.options.iconDimensions?.get(dimensionKey)
     if (cdnDims) {
       return cdnDims.width / cdnDims.height
     }

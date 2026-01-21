@@ -6,7 +6,7 @@
 import ELKApi from 'elkjs/lib/elk-api.js'
 import Worker from 'web-worker'
 import { createRequire } from 'node:module'
-import { HierarchicalLayout, type NetworkGraph, type LayoutResult, type HierarchicalLayoutOptions } from '@shumoku/core'
+import { HierarchicalLayout, type NetworkGraph, type LayoutResult, type HierarchicalLayoutOptions, type IconDimensions } from '@shumoku/core'
 
 // Get the path to elk-worker.min.js
 const require = createRequire(import.meta.url)
@@ -26,27 +26,33 @@ function createBunElk() {
  * Creates a HierarchicalLayout with a Bun-compatible ELK instance
  */
 export class BunHierarchicalLayout {
-  private layoutInstance: HierarchicalLayout
+  private options: Omit<HierarchicalLayoutOptions, 'elk'>
 
   constructor(options?: Omit<HierarchicalLayoutOptions, 'elk'>) {
-    // Create HierarchicalLayout with Bun-compatible ELK
-    this.layoutInstance = new HierarchicalLayout({
-      ...options,
-      elk: createBunElk(),
-    })
+    this.options = options ?? {}
   }
 
   /**
    * Compute layout (wrapper for HierarchicalLayout.layout)
    */
-  layout(graph: NetworkGraph): LayoutResult {
-    return this.layoutInstance.layout(graph)
+  layout(graph: NetworkGraph, iconDimensions?: Map<string, IconDimensions>): LayoutResult {
+    const layoutInstance = new HierarchicalLayout({
+      ...this.options,
+      iconDimensions,
+      elk: createBunElk(),
+    })
+    return layoutInstance.layout(graph)
   }
 
   /**
    * Compute layout asynchronously (wrapper for HierarchicalLayout.layoutAsync)
    */
-  layoutAsync(graph: NetworkGraph): Promise<LayoutResult> {
-    return this.layoutInstance.layoutAsync(graph)
+  layoutAsync(graph: NetworkGraph, iconDimensions?: Map<string, IconDimensions>): Promise<LayoutResult> {
+    const layoutInstance = new HierarchicalLayout({
+      ...this.options,
+      iconDimensions,
+      elk: createBunElk(),
+    })
+    return layoutInstance.layoutAsync(graph)
   }
 }

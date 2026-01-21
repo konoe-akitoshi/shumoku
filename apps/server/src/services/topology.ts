@@ -4,10 +4,11 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import type { LayoutResult, NetworkGraph } from '@shumoku/core'
+import type { LayoutResult, NetworkGraph, IconDimensions } from '@shumoku/core'
 import { sampleNetwork } from '@shumoku/core'
 import { BunHierarchicalLayout } from '../layout.js'
 import { YamlParser, HierarchicalParser, createMemoryFileResolver } from '@shumoku/parser-yaml'
+import { resolveIconDimensionsForGraph, collectIconUrls } from '@shumoku/renderer'
 import { getDatabase, generateId, timestamp } from '../db/index.js'
 import type { Topology, TopologyInput, MetricsData, ZabbixMapping } from '../types.js'
 
@@ -34,6 +35,14 @@ function rowToTopology(row: TopologyRow): Topology {
 }
 
 /**
+ * Resolved icon dimensions for rendering
+ */
+export interface ResolvedIconDimensions {
+  byUrl: Map<string, IconDimensions>
+  byKey: Map<string, IconDimensions>
+}
+
+/**
  * Parsed topology with layout and metrics ready for rendering
  */
 export interface ParsedTopology {
@@ -41,6 +50,7 @@ export interface ParsedTopology {
   name: string
   graph: NetworkGraph
   layout: LayoutResult
+  iconDimensions: ResolvedIconDimensions
   metrics: MetricsData
   dataSourceId?: string
   mapping?: ZabbixMapping
@@ -220,7 +230,22 @@ export class TopologyService {
     // Use hierarchical parsing for sample network
     const allowFileRefs = this.isSampleNetwork(topology.yamlContent)
     const graph = await this.parseYaml(topology.yamlContent, allowFileRefs)
-    const layoutResult = await this.layout.layoutAsync(graph)
+
+    // Resolve icon dimensions from CDN for proper sizing
+    let iconDimensions: ResolvedIconDimensions = { byUrl: new Map(), byKey: new Map() }
+    const iconUrls = collectIconUrls(graph)
+    if (iconUrls.length > 0) {
+      try {
+        iconDimensions = await resolveIconDimensionsForGraph(iconUrls)
+      } catch (err) {
+        console.warn('Failed to resolve icon dimensions:', err)
+        // Continue with empty dimensions - will use defaults
+      }
+    }
+
+    // Compute layout with icon dimensions for proper node sizing
+    // Use byKey (vendor/model format) for layout engine
+    const layoutResult = await this.layout.layoutAsync(graph, iconDimensions.byKey)
     const metrics = this.createEmptyMetrics(graph)
 
     let mapping: ZabbixMapping | undefined
@@ -237,6 +262,7 @@ export class TopologyService {
       name: topology.name,
       graph,
       layout: layoutResult,
+      iconDimensions,
       metrics,
       dataSourceId: topology.dataSourceId,
       mapping,

@@ -49,6 +49,8 @@ export {
 } from './pipeline.node.js'
 // Re-export initInteractive for manual initialization
 export { initInteractive } from './html/index.js'
+// Re-export collectIconUrls for server-side icon dimension resolution
+export { collectIconUrls } from './svg.js'
 // Types
 export type {
   DataAttributeOptions,

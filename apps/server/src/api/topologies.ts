@@ -65,11 +65,9 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Use renderEmbeddable for full interactive output
-      // Provide empty icon dimensions (icons will use default sizes)
-      const emptyIconDimensions = { byUrl: new Map(), byKey: new Map() }
+      // Use renderEmbeddable for full interactive output with resolved icon dimensions
       const output = renderEmbeddable(
-        { graph: parsed.graph, layout: parsed.layout, iconDimensions: emptyIconDimensions },
+        { graph: parsed.graph, layout: parsed.layout, iconDimensions: parsed.iconDimensions },
         { hierarchical: true, toolbar: false },
       )
 
