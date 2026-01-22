@@ -2,18 +2,20 @@
   import { onMount } from 'svelte'
   import { dataSources, dataSourcesList, dataSourcesLoading, dataSourcesError } from '$lib/stores'
   import type { DataSource, ConnectionTestResult } from '$lib/types'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { Button } from '$lib/components/ui/button'
 
-  let showCreateModal = false
-  let testingId: string | null = null
-  let testResult: ConnectionTestResult | null = null
+  let showCreateModal = $state(false)
+  let testingId = $state<string | null>(null)
+  let testResult = $state<ConnectionTestResult | null>(null)
 
   // Form state
-  let formName = ''
-  let formUrl = ''
-  let formToken = ''
-  let formPollInterval = 30000
-  let formError = ''
-  let formSubmitting = false
+  let formName = $state('')
+  let formUrl = $state('')
+  let formToken = $state('')
+  let formPollInterval = $state(30000)
+  let formError = $state('')
+  let formSubmitting = $state(false)
 
   onMount(() => {
     dataSources.load()
@@ -26,10 +28,6 @@
     formPollInterval = 30000
     formError = ''
     showCreateModal = true
-  }
-
-  function closeCreateModal() {
-    showCreateModal = false
   }
 
   async function handleCreate() {
@@ -48,7 +46,7 @@
         token: formToken.trim() || undefined,
         pollInterval: formPollInterval,
       })
-      closeCreateModal()
+      showCreateModal = false
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to create data source'
     } finally {
@@ -87,19 +85,15 @@
 </svelte:head>
 
 <div class="p-6">
-  <!-- Header -->
-  <div class="flex items-center justify-between mb-6">
-    <div>
-      <h1 class="text-2xl font-semibold text-theme-text-emphasis">Data Sources</h1>
-      <p class="text-theme-text-muted mt-1">Manage your Zabbix and other data source connections</p>
-    </div>
-    <button class="btn btn-primary" onclick={openCreateModal}>
-      <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <!-- Actions -->
+  <div class="flex items-center justify-end mb-6">
+    <Button onclick={openCreateModal}>
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19"/>
         <line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
       Add Data Source
-    </button>
+    </Button>
   </div>
 
   {#if $dataSourcesLoading}
@@ -108,8 +102,8 @@
     </div>
   {:else if $dataSourcesError}
     <div class="card p-6 text-center">
-      <p class="text-danger">{$dataSourcesError}</p>
-      <button class="btn btn-secondary mt-4" onclick={() => dataSources.load()}>Retry</button>
+      <p class="text-destructive">{$dataSourcesError}</p>
+      <Button variant="outline" class="mt-4" onclick={() => dataSources.load()}>Retry</Button>
     </div>
   {:else if $dataSourcesList.length === 0}
     <div class="card p-12 text-center">
@@ -120,7 +114,7 @@
       </svg>
       <h3 class="text-lg font-medium text-theme-text-emphasis mb-2">No data sources</h3>
       <p class="text-theme-text-muted mb-4">Add a Zabbix server to start collecting metrics</p>
-      <button class="btn btn-primary" onclick={openCreateModal}>Add Data Source</button>
+      <Button onclick={openCreateModal}>Add Data Source</Button>
     </div>
   {:else}
     <!-- Data Sources Table -->
@@ -160,8 +154,9 @@
               </td>
               <td class="text-right">
                 <div class="flex items-center justify-end gap-2">
-                  <button
-                    class="btn btn-secondary py-1 px-2 text-xs"
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onclick={() => handleTest(ds.id)}
                     disabled={testingId === ds.id}
                   >
@@ -169,9 +164,9 @@
                       <span class="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1"></span>
                     {/if}
                     Test
-                  </button>
-                  <a href="/datasources/{ds.id}" class="btn btn-secondary py-1 px-2 text-xs">Edit</a>
-                  <button class="btn btn-danger py-1 px-2 text-xs" onclick={() => handleDelete(ds)}>Delete</button>
+                  </Button>
+                  <Button variant="outline" size="sm" onclick={() => window.location.href = `/datasources/${ds.id}`}>Edit</Button>
+                  <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}>Delete</Button>
                 </div>
               </td>
             </tr>
@@ -183,83 +178,74 @@
 </div>
 
 <!-- Create Modal -->
-{#if showCreateModal}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" onclick={closeCreateModal}>
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="bg-theme-bg-elevated border border-theme-border rounded-xl w-full max-w-md m-4" onclick={(e) => e.stopPropagation()}>
-      <div class="flex items-center justify-between p-4 border-b border-theme-border">
-        <h2 class="text-lg font-semibold text-theme-text-emphasis">Add Data Source</h2>
-        <button class="text-theme-text-muted hover:text-theme-text" onclick={closeCreateModal} aria-label="Close">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
+<Dialog.Root bind:open={showCreateModal}>
+  <Dialog.Content class="sm:max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Add Data Source</Dialog.Title>
+      <Dialog.Description>Connect to a Zabbix server to collect metrics.</Dialog.Description>
+    </Dialog.Header>
+
+    <form class="space-y-4" onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
+      {#if formError}
+        <div class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+          {formError}
+        </div>
+      {/if}
+
+      <div>
+        <label for="name" class="label">Name</label>
+        <input
+          type="text"
+          id="name"
+          class="input"
+          placeholder="My Zabbix Server"
+          bind:value={formName}
+        />
       </div>
 
-      <form class="p-4 space-y-4" onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
-        {#if formError}
-          <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
-            {formError}
-          </div>
+      <div>
+        <label for="url" class="label">URL</label>
+        <input
+          type="url"
+          id="url"
+          class="input"
+          placeholder="https://zabbix.example.com"
+          bind:value={formUrl}
+        />
+      </div>
+
+      <div>
+        <label for="token" class="label">API Token</label>
+        <input
+          type="password"
+          id="token"
+          class="input"
+          placeholder="Enter API token"
+          bind:value={formToken}
+        />
+        <p class="text-xs text-muted-foreground mt-1">Optional. Required for authenticated access.</p>
+      </div>
+
+      <div>
+        <label for="pollInterval" class="label">Poll Interval</label>
+        <select id="pollInterval" class="input" bind:value={formPollInterval}>
+          <option value={5000}>5 seconds</option>
+          <option value={10000}>10 seconds</option>
+          <option value={30000}>30 seconds</option>
+          <option value={60000}>1 minute</option>
+          <option value={300000}>5 minutes</option>
+        </select>
+      </div>
+    </form>
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => showCreateModal = false}>Cancel</Button>
+      <Button onclick={handleCreate} disabled={formSubmitting}>
+        {#if formSubmitting}
+          <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
         {/if}
-
-        <div>
-          <label for="name" class="label">Name</label>
-          <input
-            type="text"
-            id="name"
-            class="input"
-            placeholder="My Zabbix Server"
-            bind:value={formName}
-          />
-        </div>
-
-        <div>
-          <label for="url" class="label">URL</label>
-          <input
-            type="url"
-            id="url"
-            class="input"
-            placeholder="https://zabbix.example.com"
-            bind:value={formUrl}
-          />
-        </div>
-
-        <div>
-          <label for="token" class="label">API Token</label>
-          <input
-            type="password"
-            id="token"
-            class="input"
-            placeholder="Enter API token"
-            bind:value={formToken}
-          />
-          <p class="text-xs text-theme-text-muted mt-1">Optional. Required for authenticated access.</p>
-        </div>
-
-        <div>
-          <label for="pollInterval" class="label">Poll Interval</label>
-          <select id="pollInterval" class="input" bind:value={formPollInterval}>
-            <option value={5000}>5 seconds</option>
-            <option value={10000}>10 seconds</option>
-            <option value={30000}>30 seconds</option>
-            <option value={60000}>1 minute</option>
-            <option value={300000}>5 minutes</option>
-          </select>
-        </div>
-
-        <div class="flex justify-end gap-2 pt-4 border-t border-theme-border">
-          <button type="button" class="btn btn-secondary" onclick={closeCreateModal}>Cancel</button>
-          <button type="submit" class="btn btn-primary" disabled={formSubmitting}>
-            {#if formSubmitting}
-              <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
-            {/if}
-            Create
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-{/if}
+        Create
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
