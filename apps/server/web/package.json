@@ -10,15 +10,16 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "devDependencies": {
+    "@skeletonlabs/skeleton": "^4.11.0",
+    "@skeletonlabs/skeleton-svelte": "^4.11.0",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.15.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^22.10.7",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
     "svelte": "^5.17.3",
     "svelte-check": "^4.1.4",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"
   },

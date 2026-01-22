@@ -167,12 +167,12 @@ links:
 <!-- Create Modal -->
 {#if showCreateModal}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" onclick={closeCreateModal}>
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onclick={closeCreateModal}>
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="bg-theme-bg-elevated border border-theme-border rounded-xl w-full max-w-2xl m-4 max-h-[90vh] flex flex-col" onclick={(e) => e.stopPropagation()}>
+    <div class="bg-theme-bg-elevated border border-theme-border rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col" onclick={(e) => e.stopPropagation()}>
       <div class="flex items-center justify-between p-4 border-b border-theme-border">
         <h2 class="text-lg font-semibold text-theme-text-emphasis">Add Topology</h2>
-        <button class="text-theme-text-muted hover:text-theme-text" onclick={closeCreateModal} aria-label="Close">
+        <button class="text-theme-text-muted hover:text-theme-text" onclick={closeCreateModal}>
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
