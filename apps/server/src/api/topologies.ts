@@ -6,7 +6,9 @@
 import { Hono } from 'hono'
 import { TopologyService } from '../services/topology.js'
 import type { TopologyInput, ZabbixMapping } from '../types.js'
-import { renderEmbeddable } from '@shumoku/renderer'
+import { renderEmbeddable, type EmbeddableRenderOutput } from '@shumoku/renderer'
+import { buildHierarchicalSheets } from '@shumoku/core'
+import { BunHierarchicalLayout } from '../layout.js'
 
 export function createTopologiesApi(): Hono {
   const app = new Hono()
@@ -57,6 +59,7 @@ export function createTopologiesApi(): Hono {
   })
 
   // Render topology as embeddable output (SVG + CSS + metadata)
+  // Supports hierarchical topologies with multiple sheets
   app.get('/:id/render', async (c) => {
     const id = c.req.param('id')
     try {
@@ -65,20 +68,74 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Use renderEmbeddable for full interactive output with resolved icon dimensions
+      // Check if topology has hierarchical content
+      const hasSubgraphs = parsed.graph.subgraphs && parsed.graph.subgraphs.length > 0
+
+      if (hasSubgraphs) {
+        // Build hierarchical sheets
+        const layoutEngine = new BunHierarchicalLayout({ iconDimensions: parsed.iconDimensions.byKey })
+        const sheets = await buildHierarchicalSheets(parsed.graph, parsed.layout, layoutEngine)
+
+        // Render each sheet
+        const renderedSheets: Record<string, {
+          svg: string
+          css: string
+          viewBox: EmbeddableRenderOutput['viewBox']
+          label: string
+          parentId: string | null
+        }> = {}
+
+        for (const [sheetId, sheetData] of sheets) {
+          const output = renderEmbeddable(
+            { graph: sheetData.graph, layout: sheetData.layout, iconDimensions: parsed.iconDimensions },
+            { hierarchical: true, toolbar: false },
+          )
+
+          // Find parent for breadcrumb navigation
+          let parentId: string | null = null
+          let label = sheetData.graph.name || sheetId
+
+          if (sheetId !== 'root') {
+            parentId = 'root' // All child sheets have root as parent for now
+            const subgraph = parsed.graph.subgraphs?.find(sg => sg.id === sheetId)
+            if (subgraph) {
+              label = subgraph.label || sheetId
+            }
+          }
+
+          renderedSheets[sheetId] = {
+            svg: output.svg,
+            css: output.css,
+            viewBox: output.viewBox,
+            label,
+            parentId,
+          }
+        }
+
+        return c.json({
+          id: parsed.id,
+          name: parsed.name,
+          hierarchical: true,
+          sheets: renderedSheets,
+          rootSheetId: 'root',
+          nodeCount: parsed.graph.nodes.length,
+          edgeCount: parsed.graph.links.length,
+        })
+      }
+
+      // Non-hierarchical: return single sheet
       const output = renderEmbeddable(
         { graph: parsed.graph, layout: parsed.layout, iconDimensions: parsed.iconDimensions },
-        { hierarchical: true, toolbar: false },
+        { hierarchical: false, toolbar: false },
       )
 
       return c.json({
         id: parsed.id,
         name: parsed.name,
+        hierarchical: false,
         svg: output.svg,
         css: output.css,
         viewBox: output.viewBox,
-        hierarchical: output.hierarchical,
-        // Include stats
         nodeCount: parsed.graph.nodes.length,
         edgeCount: parsed.graph.links.length,
       })

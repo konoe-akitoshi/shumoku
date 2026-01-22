@@ -61,8 +61,9 @@ export function isExportLink(linkId: string): boolean {
  * Build hierarchical sheets from a root graph
  *
  * Creates child sheets for each subgraph with:
- * - Filtered nodes (only those belonging to the subgraph)
- * - Internal links (both endpoints in subgraph)
+ * - Filtered nodes (only those belonging to the subgraph and descendants)
+ * - Internal links (both endpoints in subgraph/descendants)
+ * - Nested subgraph definitions
  * - Export connector nodes/links for boundary connections
  *
  * @param graph - Root network graph with subgraphs
@@ -84,13 +85,19 @@ export async function buildHierarchicalSheets(
     return sheets
   }
 
-  // Mark subgraphs as clickable
-  for (const sg of graph.subgraphs) {
+  // Find top-level subgraphs (those without a parent or with parent not in subgraphs)
+  const allSubgraphIds = new Set(graph.subgraphs.map((sg) => sg.id))
+  const topLevelSubgraphs = graph.subgraphs.filter(
+    (sg) => !sg.parent || !allSubgraphIds.has(sg.parent),
+  )
+
+  // Mark top-level subgraphs as clickable
+  for (const sg of topLevelSubgraphs) {
     sg.file = sg.id
   }
 
-  // Build child sheets
-  for (const sg of graph.subgraphs) {
+  // Build child sheets for top-level subgraphs only
+  for (const sg of topLevelSubgraphs) {
     const childSheet = await buildChildSheet(graph, sg, layoutEngine)
     sheets.set(sg.id, childSheet)
   }
@@ -107,11 +114,23 @@ async function buildChildSheet(
   subgraph: Subgraph,
   layoutEngine: LayoutEngine,
 ): Promise<SheetData> {
-  // Get nodes belonging to this subgraph
-  const childNodes = rootGraph.nodes.filter((n) => n.parent === subgraph.id)
+  // Get nodes belonging to this subgraph or any descendant
+  // A node belongs if its parent is this subgraph or starts with `subgraph.id/`
+  const childNodes = rootGraph.nodes.filter((n) => {
+    if (!n.parent) return false
+    return n.parent === subgraph.id || n.parent.startsWith(`${subgraph.id}/`)
+  })
   const childNodeIds = new Set(childNodes.map((n) => n.id))
 
-  // Get internal links (both endpoints in subgraph)
+  // Get nested subgraphs (direct children of this subgraph)
+  const nestedSubgraphs = rootGraph.subgraphs?.filter((sg) => {
+    // A subgraph is nested if its id starts with `subgraph.id/` but not deeper
+    if (!sg.id.startsWith(`${subgraph.id}/`)) return false
+    const suffix = sg.id.slice(subgraph.id.length + 1)
+    return !suffix.includes('/') // Only direct children, not grandchildren
+  })
+
+  // Get internal links (both endpoints in subgraph or descendants)
   const childLinks = rootGraph.links.filter((l) => {
     const fromNode = typeof l.from === 'string' ? l.from : l.from.node
     const toNode = typeof l.to === 'string' ? l.to : l.to.node
@@ -125,13 +144,34 @@ async function buildChildSheet(
     childNodeIds,
   )
 
+  // Transform node parents: remove the subgraph prefix for nested structures
+  // e.g., `perimeter/edge` -> `edge`
+  const transformedNodes = childNodes.map((n) => {
+    let newParent = n.parent
+    if (newParent && newParent.startsWith(`${subgraph.id}/`)) {
+      newParent = newParent.slice(subgraph.id.length + 1)
+    } else if (newParent === subgraph.id) {
+      newParent = undefined
+    }
+    return { ...n, parent: newParent }
+  })
+
+  // Transform nested subgraph IDs: remove the parent prefix
+  const transformedSubgraphs = nestedSubgraphs?.map((sg) => ({
+    ...sg,
+    id: sg.id.slice(subgraph.id.length + 1),
+    parent: sg.parent?.startsWith(`${subgraph.id}/`)
+      ? sg.parent.slice(subgraph.id.length + 1)
+      : undefined,
+  }))
+
   // Build child graph
   const childGraph: NetworkGraph = {
     ...rootGraph,
     name: subgraph.label,
-    nodes: [...childNodes.map((n) => ({ ...n, parent: undefined })), ...exportNodes],
+    nodes: [...transformedNodes, ...exportNodes],
     links: [...childLinks, ...exportLinks],
-    subgraphs: undefined,
+    subgraphs: transformedSubgraphs && transformedSubgraphs.length > 0 ? transformedSubgraphs : undefined,
   }
 
   // Layout child sheet

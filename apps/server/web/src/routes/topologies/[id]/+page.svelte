@@ -63,7 +63,7 @@
       </div>
     {:else if topology}
       <div class="absolute inset-0">
-        <InteractiveSvgDiagram {topologyId} />
+        <InteractiveSvgDiagram {topologyId} onToggleSettings={toggleSettings} {settingsOpen} />
       </div>
 
       <!-- Connection status indicator -->
@@ -76,18 +76,6 @@
           <span class="text-theme-text-muted">Offline</span>
         {/if}
       </div>
-
-      <!-- Settings toggle button -->
-      <button
-        onclick={toggleSettings}
-        class="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-theme-bg-elevated/90 backdrop-blur border border-theme-border rounded-lg text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-elevated transition-colors z-10 {settingsOpen ? 'bg-theme-bg-elevated text-theme-text' : ''}"
-        title="Toggle Settings"
-      >
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      </button>
     {/if}
   </div>
 

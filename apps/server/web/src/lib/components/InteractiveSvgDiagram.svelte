@@ -12,8 +12,19 @@
 
   // Props
   export let topologyId: string
+  export let onToggleSettings: (() => void) | undefined = undefined
+  export let settingsOpen = false
 
-  let svgContent = ''
+  // Sheet types for hierarchical navigation
+  interface SheetInfo {
+    svg: string
+    css: string
+    viewBox: { x: number; y: number; width: number; height: number }
+    label: string
+    parentId: string | null
+  }
+
+  // State
   let container: HTMLDivElement
   let styleElement: HTMLStyleElement | null = null
   let svgWrapper: HTMLDivElement
@@ -22,6 +33,33 @@
   let loading = true
   let error = ''
   let scale = 1
+
+  // Hierarchical navigation state
+  let isHierarchical = false
+  let sheets: Record<string, SheetInfo> = {}
+  let currentSheetId = 'root'
+  let navigationStack: string[] = [] // Stack for breadcrumb (excluding current)
+
+  // Get current sheet content
+  $: currentSheet = sheets[currentSheetId]
+  $: svgContent = currentSheet?.svg || ''
+
+  // Build breadcrumb from navigation stack + current
+  // Explicitly reference reactive variables to ensure updates
+  $: breadcrumb = (() => {
+    const result: Array<{ id: string; label: string }> = []
+    for (const sheetId of navigationStack) {
+      const sheet = sheets[sheetId]
+      if (sheet) {
+        result.push({ id: sheetId, label: sheet.label })
+      }
+    }
+    // Reference currentSheet and currentSheetId for reactivity
+    if (currentSheet && currentSheetId) {
+      result.push({ id: currentSheetId, label: currentSheet.label })
+    }
+    return result
+  })()
 
   // Tooltip state
   let tooltipVisible = false
@@ -63,7 +101,7 @@
   }
 
   // Fetch rendered content from API
-  async function loadContent(skipFitToView = false) {
+  async function loadContent() {
     loading = true
     error = ''
     try {
@@ -72,43 +110,110 @@
         throw new Error(`Failed to load topology: ${res.status}`)
       }
       const data = await res.json()
-      svgContent = data.svg
 
-      // Inject CSS
-      if (data.css) {
-        injectCSS(data.css)
+      if (data.hierarchical && data.sheets) {
+        // Hierarchical topology with multiple sheets
+        isHierarchical = true
+        sheets = data.sheets
+        currentSheetId = data.rootSheetId || 'root'
+        navigationStack = []
+
+        // Inject CSS from root sheet (they should all have the same CSS)
+        const rootSheet = sheets[currentSheetId]
+        if (rootSheet?.css) {
+          injectCSS(rootSheet.css)
+        }
+      } else {
+        // Non-hierarchical: single sheet
+        isHierarchical = false
+        sheets = {
+          root: {
+            svg: data.svg,
+            css: data.css,
+            viewBox: data.viewBox,
+            label: data.name || 'Root',
+            parentId: null,
+          },
+        }
+        currentSheetId = 'root'
+        navigationStack = []
+
+        if (data.css) {
+          injectCSS(data.css)
+        }
       }
 
       loading = false
       await tick()
-
-      // Get the SVG element
-      svgElement = svgWrapper?.querySelector('svg') || null
-
-      if (svgElement) {
-        // Initialize panzoom
-        initPanZoom(skipFitToView)
-        // Setup interactivity
-        setupInteractivity()
-      }
+      initializeCurrentSheet()
     } catch (e) {
       error = e instanceof Error ? e.message : 'Unknown error'
       loading = false
     }
   }
 
+  // Initialize current sheet (SVG element and panzoom)
+  async function initializeCurrentSheet() {
+    await tick()
+
+    // Get the SVG element
+    svgElement = svgWrapper?.querySelector('svg') || null
+
+    if (svgElement) {
+      // Dispose old panzoom if exists
+      if (panzoomInstance) {
+        panzoomInstance.dispose()
+        panzoomInstance = null
+      }
+
+      // Initialize panzoom
+      initPanZoom()
+      // Setup interactivity
+      setupInteractivity()
+      // Clear original styles cache when switching sheets
+      originalLinkStyles.clear()
+    }
+  }
+
+  // Navigate to a child sheet
+  async function navigateToSheet(sheetId: string) {
+    if (!sheets[sheetId]) return
+
+    // Push current sheet to stack
+    navigationStack = [...navigationStack, currentSheetId]
+    currentSheetId = sheetId
+
+    await initializeCurrentSheet()
+  }
+
+  // Navigate back via breadcrumb
+  async function navigateToBreadcrumb(targetId: string) {
+    const targetIndex = navigationStack.findIndex((id) => id === targetId)
+
+    if (targetIndex === -1 && targetId === currentSheetId) {
+      // Already at target
+      return
+    }
+
+    if (targetIndex !== -1) {
+      // Navigate to item in stack
+      currentSheetId = targetId
+      navigationStack = navigationStack.slice(0, targetIndex)
+    }
+
+    await initializeCurrentSheet()
+  }
+
   // Initialize panzoom
-  function initPanZoom(skipFitToView = false) {
-    if (!svgWrapper || panzoomInstance) return
+  function initPanZoom() {
+    if (!svgWrapper) return
 
     panzoomInstance = panzoom(svgWrapper, {
       maxZoom: 10,
       minZoom: 0.1,
       smoothScroll: false,
       zoomDoubleClickSpeed: 1,
-      // Don't use bounds - it causes zoom restrictions
       bounds: false,
-      // Use transform origin at center for more intuitive zooming
       transformOrigin: { x: 0.5, y: 0.5 },
     })
 
@@ -117,14 +222,11 @@
     })
 
     panzoomInstance.on('pan', () => {
-      // Update scale display on pan too
       scale = panzoomInstance?.getTransform().scale ?? 1
     })
 
-    // Initial fit to view (skip when restoring transform)
-    if (!skipFitToView) {
-      fitToView()
-    }
+    // Initial fit to view
+    fitToView()
   }
 
   // Fit SVG to container
@@ -132,23 +234,18 @@
     if (!svgElement || !container || !panzoomInstance) return
 
     const containerRect = container.getBoundingClientRect()
-
-    // Get viewBox dimensions from SVG
     const viewBox = svgElement.viewBox.baseVal
     if (!viewBox || viewBox.width === 0) return
 
     const svgWidth = viewBox.width
     const svgHeight = viewBox.height
 
-    // Calculate scale to fit with padding
     const scaleX = containerRect.width / svgWidth
     const scaleY = containerRect.height / svgHeight
     const newScale = Math.min(scaleX, scaleY) * 0.85
 
-    // Reset transform first
     panzoomInstance.zoomAbs(0, 0, newScale)
 
-    // Center the SVG
     const scaledWidth = svgWidth * newScale
     const scaledHeight = svgHeight * newScale
     const offsetX = (containerRect.width - scaledWidth) / 2 - viewBox.x * newScale
@@ -158,7 +255,6 @@
     scale = newScale
   }
 
-  // Reset view to 100% zoom at origin
   function resetView() {
     if (!panzoomInstance) return
     panzoomInstance.zoomAbs(0, 0, 1)
@@ -166,7 +262,6 @@
     scale = 1
   }
 
-  // Zoom controls
   function zoomIn() {
     if (!panzoomInstance || !container) return
     const cx = container.clientWidth / 2
@@ -191,16 +286,13 @@
       const nodeEl = node as SVGGElement
       const nodeId = nodeEl.getAttribute('data-id') || ''
 
-      // Hover events
       nodeEl.addEventListener('mouseenter', (e) => handleNodeHover(nodeId, e))
       nodeEl.addEventListener('mouseleave', () => handleNodeLeave())
       nodeEl.addEventListener('click', () => handleNodeClick(nodeId))
-
-      // Make cursor pointer
       nodeEl.style.cursor = 'pointer'
     })
 
-    // Subgraph hover/click
+    // Subgraph hover/click for hierarchical navigation
     const subgraphs = svgElement.querySelectorAll('g.subgraph')
     subgraphs.forEach((sg) => {
       const sgEl = sg as SVGGElement
@@ -210,8 +302,12 @@
       sgEl.addEventListener('mouseenter', (e) => handleSubgraphHover(sgId, e))
       sgEl.addEventListener('mouseleave', () => handleSubgraphLeave())
 
-      if (hasFile) {
-        sgEl.addEventListener('click', () => handleSubgraphClick(sgId))
+      // Enable click navigation if this subgraph has a corresponding sheet
+      if (hasFile || sheets[sgId]) {
+        sgEl.addEventListener('click', (e) => {
+          e.stopPropagation()
+          handleSubgraphClick(sgId)
+        })
         sgEl.style.cursor = 'pointer'
       }
     })
@@ -247,7 +343,6 @@
 
   function handleNodeClick(nodeId: string) {
     selectedNodeId = selectedNodeId === nodeId ? null : nodeId
-    console.log('Node clicked:', nodeId)
   }
 
   // Subgraph handlers
@@ -262,8 +357,10 @@
   }
 
   function handleSubgraphClick(sgId: string) {
-    console.log('Subgraph clicked (drill-down):', sgId)
-    // TODO: Implement drill-down navigation
+    // Navigate to child sheet if it exists
+    if (sheets[sgId]) {
+      navigateToSheet(sgId)
+    }
   }
 
   // Link handlers
@@ -282,11 +379,7 @@
     if (!svgElement) return
     const node = svgElement.querySelector(`g.node[data-id="${nodeId}"]`)
     if (node) {
-      if (highlight) {
-        node.classList.add('highlighted')
-      } else {
-        node.classList.remove('highlighted')
-      }
+      node.classList.toggle('highlighted', highlight)
     }
   }
 
@@ -299,11 +392,7 @@
       const to = linkEl.getAttribute('data-to') || ''
 
       if (from === nodeId || to === nodeId) {
-        if (highlight) {
-          linkEl.classList.add('connected')
-        } else {
-          linkEl.classList.remove('connected')
-        }
+        linkEl.classList.toggle('connected', highlight)
       }
     })
   }
@@ -357,10 +446,10 @@
     if (!sg) return
 
     const label = sg.getAttribute('data-label') || sgId
-    const hasFile = sg.getAttribute('data-has-file') === 'true'
+    const canNavigate = sheets[sgId] !== undefined
 
     let content = `<strong>${label}</strong>`
-    if (hasFile) content += `<br><span class="action">Click to drill down</span>`
+    if (canNavigate) content += `<br><span class="action">Click to drill down</span>`
 
     showTooltip(content, event)
   }
@@ -377,7 +466,6 @@
     let content = `<strong>${from} → ${to}</strong>`
     if (bandwidth) content += `<br><span class="muted">Bandwidth: ${bandwidth}</span>`
 
-    // Add metrics if available
     const metrics = $metricsData?.links?.[linkId]
     if (metrics) {
       if (metrics.utilization !== undefined) {
@@ -404,7 +492,6 @@
   // Store original link styles for restoration
   const originalLinkStyles = new Map<string, Map<SVGPathElement, { stroke: string; strokeDasharray: string }>>()
 
-  // Save original styles for all link paths
   function saveOriginalLinkStyles() {
     if (!svgElement) return
 
@@ -424,8 +511,6 @@
     })
   }
 
-  // Apply metrics directly to original link paths
-  // Respects display settings for traffic flow and node status
   function applyMetrics(
     metrics: typeof $metricsData,
     applyTrafficFlow: boolean,
@@ -433,14 +518,11 @@
   ) {
     if (!svgElement || !metrics) return
 
-    // Save original styles on first call
     if (originalLinkStyles.size === 0) {
       saveOriginalLinkStyles()
     }
 
-    // Update link colors based on utilization (only if showTrafficFlow is enabled)
     if (applyTrafficFlow && metrics.links) {
-      // Split lines into two groups: half for in, half for out (bidirectional)
       for (const [linkId, linkMetrics] of Object.entries(metrics.links)) {
         const linkGroup = svgElement.querySelector(`g.link-group[data-link-id="${linkId}"]`)
         if (!linkGroup) continue
@@ -452,20 +534,16 @@
         const outUtil = linkMetrics.outUtilization ?? linkMetrics.utilization ?? 0
 
         if (linkMetrics.status === 'down') {
-          // Down state - red with dashed pattern, no animation
           paths.forEach((path) => {
             path.setAttribute('stroke', '#ef4444')
             path.style.strokeDasharray = '8 4'
             path.style.animation = ''
           })
         } else {
-          // Split paths into two groups for bidirectional animation
-          // First half: in direction, Second half: out direction
           const midPoint = Math.ceil(paths.length / 2)
 
           paths.forEach((path, index) => {
             const isInGroup = index < midPoint
-            // Each group uses its own utilization for color and speed
             const util = isInGroup ? inUtil : outUtil
             const color = getUtilizationColor(util)
             const animName = isInGroup ? 'shumoku-edge-flow-in' : 'shumoku-edge-flow-out'
@@ -473,7 +551,7 @@
             path.setAttribute('stroke', color)
 
             if (util > 0) {
-              path.style.strokeDasharray = '16 8'  // Larger dash for better visibility
+              path.style.strokeDasharray = '16 8'
               const duration = Math.max(0.5, 2.5 - (util / 100) * 2)
               path.style.animation = `${animName} ${duration.toFixed(2)}s linear infinite`
             } else {
@@ -485,7 +563,6 @@
       }
     }
 
-    // Update node status indicators (only if showNodeStatus is enabled)
     if (applyNodeStatus && metrics.nodes) {
       for (const [nodeId, nodeMetrics] of Object.entries(metrics.nodes)) {
         const nodeGroup = svgElement.querySelector(`g.node[data-id="${nodeId}"]`)
@@ -508,12 +585,10 @@
     }
   }
 
-  // Reset link styles when metrics disabled
   function resetLinkStyles() {
     if (!svgElement) return
 
-    // Restore original styles
-    for (const [linkId, pathStyles] of originalLinkStyles) {
+    for (const [, pathStyles] of originalLinkStyles) {
       for (const [path, styles] of pathStyles) {
         path.setAttribute('stroke', styles.stroke)
         path.style.strokeDasharray = styles.strokeDasharray
@@ -522,7 +597,6 @@
     }
   }
 
-  // Reset node styles when metrics disabled
   function resetNodeStyles() {
     if (!svgElement) return
 
@@ -537,10 +611,8 @@
     })
   }
 
-  // Track previous liveUpdates state for reactive connection management
   let prevLiveUpdates = $liveUpdatesEnabled
 
-  // Watch for liveUpdates toggle - manages WebSocket connection
   $: if (topologyId && prevLiveUpdates !== $liveUpdatesEnabled) {
     prevLiveUpdates = $liveUpdatesEnabled
     if ($liveUpdatesEnabled) {
@@ -553,12 +625,10 @@
     }
   }
 
-  // Apply metrics when data changes (respects individual display settings)
   $: if ($liveUpdatesEnabled && $metricsData && svgElement) {
     applyMetrics($metricsData, $showTrafficFlow, $showNodeStatus)
   }
 
-  // Watch for display setting changes to reset/apply visualizations
   $: if (svgElement && $metricsData) {
     if (!$showTrafficFlow) {
       resetLinkStyles()
@@ -620,6 +690,22 @@
       <span>{error}</span>
     </div>
   {:else}
+    <!-- Breadcrumb navigation (top-right, only when not at root) -->
+    {#if isHierarchical && currentSheetId !== 'root'}
+      <div class="breadcrumb">
+        <button
+          class="breadcrumb-back"
+          on:click={() => navigateToBreadcrumb(navigationStack[navigationStack.length - 1] || 'root')}
+          title="Go back"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="breadcrumb-current">{currentSheet?.label}</span>
+      </div>
+    {/if}
+
     <div class="svg-wrapper" bind:this={svgWrapper}>
       {@html svgContent}
     </div>
@@ -667,6 +753,14 @@
           <path d="M3 3v5h5"/>
         </svg>
       </button>
+      {#if onToggleSettings}
+        <button on:click={onToggleSettings} title="Settings" class:active={settingsOpen}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+      {/if}
     </div>
   </div>
 
@@ -721,6 +815,58 @@
     display: block;
   }
 
+  /* Breadcrumb navigation (top-right, compact) */
+  .breadcrumb {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    font-size: 12px;
+  }
+
+  .breadcrumb-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 2px;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .breadcrumb-back:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  .breadcrumb-back svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .breadcrumb-current {
+    color: var(--color-text);
+    font-weight: 500;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* Interactive highlight styles */
   .svg-wrapper :global(g.node.highlighted .node-bg rect),
   .svg-wrapper :global(g.node:hover .node-bg rect) {
@@ -737,6 +883,17 @@
 
   .svg-wrapper :global(g.subgraph.highlighted > rect) {
     stroke: #60a5fa !important;
+    stroke-width: 2px !important;
+  }
+
+  /* Clickable subgraph indicator */
+  .svg-wrapper :global(g.subgraph[data-has-file="true"]) {
+    cursor: pointer;
+  }
+
+  .svg-wrapper :global(g.subgraph[data-has-file="true"]:hover > rect) {
+    filter: brightness(1.05);
+    stroke: var(--color-primary) !important;
     stroke-width: 2px !important;
   }
 
@@ -849,6 +1006,11 @@
   .control-group button:hover {
     background: var(--color-bg);
     color: var(--color-text);
+  }
+
+  .control-group button.active {
+    background: var(--color-bg);
+    color: var(--color-primary);
   }
 
   .control-group button svg {
