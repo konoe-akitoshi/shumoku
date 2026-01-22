@@ -28,3 +28,11 @@ export {
   type EdgeMetrics,
   type MetricsData,
 } from './metrics'
+
+export {
+  displaySettings,
+  liveUpdatesEnabled,
+  showTrafficFlow,
+  showNodeStatus,
+  type DisplaySettings,
+} from './displaySettings'

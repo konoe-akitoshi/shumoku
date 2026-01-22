@@ -293,6 +293,52 @@ body {
   color: var(--color-info);
 }
 
+/* Toggle switch */
+.toggle {
+  appearance: none;
+  width: 2.5rem;
+  height: 1.25rem;
+  background-color: var(--color-bg-canvas);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.toggle::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 0.875rem;
+  height: 0.875rem;
+  background-color: var(--color-text-muted);
+  border-radius: 9999px;
+  transition: all 0.2s;
+}
+
+.toggle:checked {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.toggle:checked::before {
+  left: calc(100% - 1rem);
+  background-color: var(--color-text-emphasis);
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-primary);
+}
+
 /* Theme color utilities */
 .bg-theme-bg { background-color: var(--color-bg); }
 .bg-theme-bg-elevated { background-color: var(--color-bg-elevated); }

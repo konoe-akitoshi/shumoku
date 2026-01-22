@@ -42,6 +42,7 @@
     topologies: 'Topologies',
     datasources: 'Data Sources',
     settings: 'Settings',
+    edit: 'Edit',
   }
 
   $: breadcrumbs = generateBreadcrumbs($page.url.pathname)

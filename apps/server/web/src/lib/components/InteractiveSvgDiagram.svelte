@@ -2,11 +2,16 @@
   import { onMount, onDestroy, tick } from 'svelte'
   import panzoom from 'panzoom'
   import type { PanZoom } from 'panzoom'
-  import { metricsStore, metricsData } from '$lib/stores'
+  import {
+    metricsStore,
+    metricsData,
+    liveUpdatesEnabled,
+    showTrafficFlow,
+    showNodeStatus,
+  } from '$lib/stores'
 
   // Props
   export let topologyId: string
-  export let enableMetrics = true
 
   let svgContent = ''
   let container: HTMLDivElement
@@ -420,7 +425,12 @@
   }
 
   // Apply metrics directly to original link paths
-  function applyMetrics(metrics: typeof $metricsData) {
+  // Respects display settings for traffic flow and node status
+  function applyMetrics(
+    metrics: typeof $metricsData,
+    applyTrafficFlow: boolean,
+    applyNodeStatus: boolean
+  ) {
     if (!svgElement || !metrics) return
 
     // Save original styles on first call
@@ -428,9 +438,9 @@
       saveOriginalLinkStyles()
     }
 
-    // Update link colors based on utilization
-    // Split lines into two groups: half for in, half for out (bidirectional)
-    if (metrics.links) {
+    // Update link colors based on utilization (only if showTrafficFlow is enabled)
+    if (applyTrafficFlow && metrics.links) {
+      // Split lines into two groups: half for in, half for out (bidirectional)
       for (const [linkId, linkMetrics] of Object.entries(metrics.links)) {
         const linkGroup = svgElement.querySelector(`g.link-group[data-link-id="${linkId}"]`)
         if (!linkGroup) continue
@@ -475,8 +485,8 @@
       }
     }
 
-    // Update node status indicators
-    if (metrics.nodes) {
+    // Update node status indicators (only if showNodeStatus is enabled)
+    if (applyNodeStatus && metrics.nodes) {
       for (const [nodeId, nodeMetrics] of Object.entries(metrics.nodes)) {
         const nodeGroup = svgElement.querySelector(`g.node[data-id="${nodeId}"]`)
         if (!nodeGroup) continue
@@ -527,13 +537,13 @@
     })
   }
 
-  // Track previous enableMetrics state
-  let prevEnableMetrics = enableMetrics
+  // Track previous liveUpdates state for reactive connection management
+  let prevLiveUpdates = $liveUpdatesEnabled
 
-  // Watch for metrics toggle
-  $: if (topologyId && prevEnableMetrics !== enableMetrics) {
-    prevEnableMetrics = enableMetrics
-    if (enableMetrics) {
+  // Watch for liveUpdates toggle - manages WebSocket connection
+  $: if (topologyId && prevLiveUpdates !== $liveUpdatesEnabled) {
+    prevLiveUpdates = $liveUpdatesEnabled
+    if ($liveUpdatesEnabled) {
       metricsStore.connect()
       metricsStore.subscribeToTopology(topologyId)
     } else {
@@ -543,15 +553,32 @@
     }
   }
 
-  // Apply metrics when data changes
-  $: if (enableMetrics && $metricsData && svgElement) {
-    applyMetrics($metricsData)
+  // Apply metrics when data changes (respects individual display settings)
+  $: if ($liveUpdatesEnabled && $metricsData && svgElement) {
+    applyMetrics($metricsData, $showTrafficFlow, $showNodeStatus)
+  }
+
+  // Watch for display setting changes to reset/apply visualizations
+  $: if (svgElement && $metricsData) {
+    if (!$showTrafficFlow) {
+      resetLinkStyles()
+    } else if ($liveUpdatesEnabled) {
+      applyMetrics($metricsData, $showTrafficFlow, $showNodeStatus)
+    }
+  }
+
+  $: if (svgElement && $metricsData) {
+    if (!$showNodeStatus) {
+      resetNodeStyles()
+    } else if ($liveUpdatesEnabled) {
+      applyMetrics($metricsData, $showTrafficFlow, $showNodeStatus)
+    }
   }
 
   onMount(async () => {
     await loadContent()
 
-    if (enableMetrics && topologyId) {
+    if ($liveUpdatesEnabled && topologyId) {
       metricsStore.connect()
       metricsStore.subscribeToTopology(topologyId)
     }
@@ -643,28 +670,30 @@
     </div>
   </div>
 
-  <!-- Legend -->
-  <div class="legend">
-    <div class="legend-title">Utilization</div>
-    <div class="legend-items">
-      <div class="legend-item">
-        <span class="legend-color" style="background: #22c55e"></span>
-        <span>0-25%</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-color" style="background: #eab308"></span>
-        <span>25-50%</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-color" style="background: #f97316"></span>
-        <span>50-75%</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-color" style="background: #ef4444"></span>
-        <span>75%+</span>
+  <!-- Legend (only shown when traffic flow visualization is enabled) -->
+  {#if $liveUpdatesEnabled && $showTrafficFlow}
+    <div class="legend">
+      <div class="legend-title">Utilization</div>
+      <div class="legend-items">
+        <div class="legend-item">
+          <span class="legend-color" style="background: #22c55e"></span>
+          <span>0-25%</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color" style="background: #eab308"></span>
+          <span>25-50%</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color" style="background: #f97316"></span>
+          <span>50-75%</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color" style="background: #ef4444"></span>
+          <span>75%+</span>
+        </div>
       </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <style>

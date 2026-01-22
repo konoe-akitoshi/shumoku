@@ -60,16 +60,6 @@ links:
     }
   }
 
-  async function handleDelete(topo: Topology) {
-    if (!confirm(`Delete topology "${topo.name}"?`)) {
-      return
-    }
-    try {
-      await topologies.delete(topo.id)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to delete')
-    }
-  }
 </script>
 
 <svelte:head>
@@ -126,16 +116,16 @@ links:
                   <line x1="12" y1="8" x2="19" y2="16"/>
                 </svg>
               </div>
-              <button
-                class="text-theme-text-muted hover:text-danger"
-                onclick={() => handleDelete(topo)}
-                title="Delete"
+              <a
+                href="/topologies/{topo.id}/settings"
+                class="text-theme-text-muted hover:text-theme-text"
+                title="Settings"
               >
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
-              </button>
+              </a>
             </div>
 
             <h3 class="font-medium text-theme-text-emphasis mb-1">{topo.name}</h3>
@@ -144,7 +134,7 @@ links:
             </p>
 
             <div class="flex items-center gap-2">
-              <a href="/topologies/{topo.id}" class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center">
+              <a href="/topologies/{topo.id}" class="btn btn-primary py-1 px-3 text-xs flex-1 text-center">
                 View
               </a>
               <a href="/topologies/{topo.id}/edit" class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center">
