@@ -1,19 +1,20 @@
 /**
  * Data Source Service
- * Manages Zabbix and other data source connections
+ * Manages data source connections using plugin architecture
  */
 
 import type { Database } from 'bun:sqlite'
 import { getDatabase, generateId, timestamp } from '../db/index.js'
 import type { DataSource, DataSourceInput, DataSourceType } from '../types.js'
+import { pluginRegistry, hasHostsCapability, hasAutoMappingCapability } from '../plugins/index.js'
+import type { ConnectionResult, Host, HostItem, MappingHint } from '../plugins/types.js'
+import type { NetworkGraph } from '@shumoku/core'
 
 interface DataSourceRow {
   id: string
   name: string
   type: string
-  url: string
-  token: string | null
-  poll_interval: number
+  config_json: string
   created_at: number
   updated_at: number
 }
@@ -23,9 +24,7 @@ function rowToDataSource(row: DataSourceRow): DataSource {
     id: row.id,
     name: row.name,
     type: row.type as DataSourceType,
-    url: row.url,
-    token: row.token ?? undefined,
-    pollInterval: row.poll_interval,
+    configJson: row.config_json,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -42,15 +41,30 @@ export class DataSourceService {
    * Get all data sources
    */
   list(): DataSource[] {
-    const rows = this.db.query('SELECT * FROM data_sources ORDER BY created_at DESC').all() as DataSourceRow[]
+    const rows = this.db
+      .query('SELECT * FROM data_sources ORDER BY created_at DESC')
+      .all() as DataSourceRow[]
     return rows.map(rowToDataSource)
+  }
+
+  /**
+   * Get data sources by capability
+   */
+  listByCapability(capability: 'topology' | 'metrics'): DataSource[] {
+    const all = this.list()
+    return all.filter((ds) => {
+      const pluginInfo = pluginRegistry.getInfo(ds.type)
+      return pluginInfo?.capabilities.includes(capability)
+    })
   }
 
   /**
    * Get a single data source by ID
    */
   get(id: string): DataSource | null {
-    const row = this.db.query('SELECT * FROM data_sources WHERE id = ?').get(id) as DataSourceRow | undefined
+    const row = this.db.query('SELECT * FROM data_sources WHERE id = ?').get(id) as
+      | DataSourceRow
+      | undefined
     return row ? rowToDataSource(row) : null
   }
 
@@ -58,7 +72,9 @@ export class DataSourceService {
    * Get a data source by name
    */
   getByName(name: string): DataSource | null {
-    const row = this.db.query('SELECT * FROM data_sources WHERE name = ?').get(name) as DataSourceRow | undefined
+    const row = this.db.query('SELECT * FROM data_sources WHERE name = ?').get(name) as
+      | DataSourceRow
+      | undefined
     return row ? rowToDataSource(row) : null
   }
 
@@ -66,17 +82,20 @@ export class DataSourceService {
    * Create a new data source
    */
   async create(input: DataSourceInput): Promise<DataSource> {
+    // Validate plugin type exists
+    if (!pluginRegistry.has(input.type)) {
+      throw new Error(`Unknown data source type: ${input.type}`)
+    }
+
     const id = await generateId()
     const now = timestamp()
 
     this.db
       .query(
-        `
-      INSERT INTO data_sources (id, name, type, url, token, poll_interval, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `,
+        `INSERT INTO data_sources (id, name, type, config_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, input.name, input.type || 'zabbix', input.url, input.token || null, input.pollInterval || 30000, now, now)
+      .run(id, input.name, input.type, input.configJson, now, now)
 
     return this.get(id)!
   }
@@ -98,20 +117,15 @@ export class DataSourceService {
       values.push(input.name)
     }
     if (input.type !== undefined) {
+      if (!pluginRegistry.has(input.type)) {
+        throw new Error(`Unknown data source type: ${input.type}`)
+      }
       updates.push('type = ?')
       values.push(input.type)
     }
-    if (input.url !== undefined) {
-      updates.push('url = ?')
-      values.push(input.url)
-    }
-    if (input.token !== undefined) {
-      updates.push('token = ?')
-      values.push(input.token || null)
-    }
-    if (input.pollInterval !== undefined) {
-      updates.push('poll_interval = ?')
-      values.push(input.pollInterval)
+    if (input.configJson !== undefined) {
+      updates.push('config_json = ?')
+      values.push(input.configJson)
     }
 
     if (updates.length === 0) {
@@ -122,6 +136,9 @@ export class DataSourceService {
     values.push(timestamp())
     values.push(id)
 
+    // Clear cached plugin instance on update
+    pluginRegistry.removeInstance(id)
+
     this.db.query(`UPDATE data_sources SET ${updates.join(', ')} WHERE id = ?`).run(...values)
 
     return this.get(id)
@@ -131,67 +148,85 @@ export class DataSourceService {
    * Delete a data source
    */
   delete(id: string): boolean {
+    // Clear cached plugin instance
+    pluginRegistry.removeInstance(id)
+
     const result = this.db.query('DELETE FROM data_sources WHERE id = ?').run(id)
     return result.changes > 0
   }
 
   /**
-   * Test connection to a data source
+   * Get a plugin instance for a data source
    */
-  async testConnection(id: string): Promise<{ success: boolean; message: string; version?: string }> {
+  getPlugin(id: string) {
     const dataSource = this.get(id)
     if (!dataSource) {
-      return { success: false, message: 'Data source not found' }
+      return null
     }
 
-    if (dataSource.type === 'zabbix') {
-      return this.testZabbixConnection(dataSource)
-    }
-
-    return { success: false, message: `Unknown data source type: ${dataSource.type}` }
+    const config = JSON.parse(dataSource.configJson)
+    return pluginRegistry.getInstance(id, dataSource.type, config)
   }
 
   /**
-   * Test Zabbix API connection
+   * Test connection to a data source
    */
-  private async testZabbixConnection(
-    dataSource: DataSource,
-  ): Promise<{ success: boolean; message: string; version?: string }> {
-    try {
-      const apiUrl = `${dataSource.url}/api_jsonrpc.php`
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json-rpc',
-          ...(dataSource.token ? { Authorization: `Bearer ${dataSource.token}` } : {}),
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'apiinfo.version',
-          params: [],
-          id: 1,
-        }),
-      })
-
-      if (!response.ok) {
-        return { success: false, message: `HTTP error: ${response.status} ${response.statusText}` }
-      }
-
-      const result = (await response.json()) as { result?: string; error?: { message: string; data: string } }
-
-      if (result.error) {
-        return { success: false, message: `API error: ${result.error.message || result.error.data}` }
-      }
-
-      return {
-        success: true,
-        message: 'Connection successful',
-        version: result.result,
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return { success: false, message: `Connection failed: ${message}` }
+  async testConnection(id: string): Promise<ConnectionResult> {
+    const plugin = this.getPlugin(id)
+    if (!plugin) {
+      return { success: false, message: 'Data source not found' }
     }
+
+    return plugin.testConnection()
+  }
+
+  /**
+   * Get hosts from a data source (if supported)
+   */
+  async getHosts(id: string): Promise<Host[]> {
+    const plugin = this.getPlugin(id)
+    if (!plugin || !hasHostsCapability(plugin)) {
+      return []
+    }
+
+    return plugin.getHosts()
+  }
+
+  /**
+   * Get host items from a data source (if supported)
+   */
+  async getHostItems(id: string, hostId: string): Promise<HostItem[]> {
+    const plugin = this.getPlugin(id)
+    if (!plugin || !hasHostsCapability(plugin)) {
+      return []
+    }
+
+    return plugin.getHostItems?.(hostId) || []
+  }
+
+  /**
+   * Get auto-mapping hints for a graph (if supported)
+   */
+  async getMappingHints(id: string, graph: NetworkGraph): Promise<MappingHint[]> {
+    const plugin = this.getPlugin(id)
+    if (!plugin || !hasAutoMappingCapability(plugin)) {
+      return []
+    }
+
+    return plugin.getMappingHints(graph)
+  }
+
+  /**
+   * Get plugin info for a type
+   */
+  getPluginInfo(type: string) {
+    return pluginRegistry.getInfo(type)
+  }
+
+  /**
+   * Get all registered plugin types
+   */
+  getRegisteredTypes() {
+    return pluginRegistry.getRegisteredTypes()
   }
 }

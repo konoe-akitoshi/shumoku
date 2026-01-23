@@ -4,32 +4,37 @@
 
 import type { MetricsData } from './stores/metrics'
 
-export type DataSourceType = 'zabbix'
+export type DataSourceType = 'zabbix' | 'netbox' | 'prometheus'
+
+export type DataSourceCapability = 'topology' | 'metrics' | 'hosts' | 'auto-mapping'
+
+export interface DataSourcePluginInfo {
+  type: string
+  displayName: string
+  capabilities: readonly DataSourceCapability[]
+}
 
 export interface DataSource {
   id: string
   name: string
   type: DataSourceType
-  url: string
-  token?: string
-  pollInterval: number
+  configJson: string // Plugin-specific configuration as JSON
   createdAt: number
   updatedAt: number
 }
 
 export interface DataSourceInput {
   name: string
-  type?: DataSourceType
-  url: string
-  token?: string
-  pollInterval?: number
+  type: DataSourceType
+  configJson: string
 }
 
 export interface Topology {
   id: string
   name: string
   contentJson: string // Multi-file JSON: {"files": [{name, content}, ...]}
-  dataSourceId?: string
+  topologySourceId?: string // Data source for structure (e.g., NetBox)
+  metricsSourceId?: string // Data source for metrics (e.g., Zabbix)
   mappingJson?: string
   createdAt: number
   updatedAt: number
@@ -38,8 +43,34 @@ export interface Topology {
 export interface TopologyInput {
   name: string
   contentJson: string // Multi-file JSON: {"files": [{name, content}, ...]}
-  dataSourceId?: string
+  topologySourceId?: string
+  metricsSourceId?: string
   mappingJson?: string
+}
+
+// Host and item types for mapping UI
+export interface Host {
+  id: string
+  name: string
+  displayName?: string
+  status?: 'up' | 'down' | 'unknown'
+  ip?: string
+}
+
+export interface HostItem {
+  id: string
+  hostId: string
+  name: string
+  key: string
+  lastValue?: string
+  unit?: string
+}
+
+export interface MappingHint {
+  nodeId: string
+  suggestedHostId?: string
+  suggestedHostName?: string
+  confidence: number // 0-1
 }
 
 /**

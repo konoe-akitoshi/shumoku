@@ -1,33 +1,33 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { api } from '$lib/api'
-  import TopologySettings from '$lib/components/TopologySettings.svelte'
-  import type { Topology } from '$lib/types'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
+import { onMount } from 'svelte'
+import { page } from '$app/stores'
+import { api } from '$lib/api'
+import TopologySettings from '$lib/components/TopologySettings.svelte'
+import type { Topology } from '$lib/types'
+import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
 
-  let topology: Topology | null = null
-  let renderData: { nodeCount: number; edgeCount: number } | null = null
-  let loading = true
-  let error = ''
+let topology = $state<Topology | null>(null)
+let renderData = $state<{ nodeCount: number; edgeCount: number } | null>(null)
+let loading = $state(true)
+let error = $state('')
 
-  // Get ID from route params
-  $: topologyId = $page.params.id!
+// Get ID from route params
+let topologyId = $derived($page.params.id!)
 
-  onMount(async () => {
-    try {
-      const [topoData, renderResponse] = await Promise.all([
-        api.topologies.get(topologyId),
-        fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
-      ])
-      topology = topoData
-      renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load topology'
-    } finally {
-      loading = false
-    }
-  })
+onMount(async () => {
+  try {
+    const [topoData, renderResponse] = await Promise.all([
+      api.topologies.get(topologyId),
+      fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
+    ])
+    topology = topoData
+    renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to load topology'
+  } finally {
+    loading = false
+  }
+})
 </script>
 
 <svelte:head>

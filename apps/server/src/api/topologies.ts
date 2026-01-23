@@ -5,6 +5,7 @@
 
 import { Hono } from 'hono'
 import { TopologyService } from '../services/topology.js'
+import { DataSourceService } from '../services/datasource.js'
 import type { TopologyInput, ZabbixMapping } from '../types.js'
 import { renderEmbeddable, type EmbeddableRenderOutput } from '@shumoku/renderer'
 import { buildHierarchicalSheets } from '@shumoku/core'
@@ -13,6 +14,7 @@ import { BunHierarchicalLayout } from '../layout.js'
 export function createTopologiesApi(): Hono {
   const app = new Hono()
   const service = new TopologyService()
+  const dataSourceService = new DataSourceService()
 
   // List all topologies
   app.get('/', (c) => {
@@ -49,7 +51,8 @@ export function createTopologiesApi(): Hono {
           bounds: parsed.layout.bounds,
         },
         metrics: parsed.metrics,
-        dataSourceId: parsed.dataSourceId,
+        topologySourceId: parsed.topologySourceId,
+        metricsSourceId: parsed.metricsSourceId,
         mapping: parsed.mapping,
       })
     } catch (err) {
@@ -73,21 +76,30 @@ export function createTopologiesApi(): Hono {
 
       if (hasSubgraphs) {
         // Build hierarchical sheets
-        const layoutEngine = new BunHierarchicalLayout({ iconDimensions: parsed.iconDimensions.byKey })
+        const layoutEngine = new BunHierarchicalLayout({
+          iconDimensions: parsed.iconDimensions.byKey,
+        })
         const sheets = await buildHierarchicalSheets(parsed.graph, parsed.layout, layoutEngine)
 
         // Render each sheet
-        const renderedSheets: Record<string, {
-          svg: string
-          css: string
-          viewBox: EmbeddableRenderOutput['viewBox']
-          label: string
-          parentId: string | null
-        }> = {}
+        const renderedSheets: Record<
+          string,
+          {
+            svg: string
+            css: string
+            viewBox: EmbeddableRenderOutput['viewBox']
+            label: string
+            parentId: string | null
+          }
+        > = {}
 
         for (const [sheetId, sheetData] of sheets) {
           const output = renderEmbeddable(
-            { graph: sheetData.graph, layout: sheetData.layout, iconDimensions: parsed.iconDimensions },
+            {
+              graph: sheetData.graph,
+              layout: sheetData.layout,
+              iconDimensions: parsed.iconDimensions,
+            },
             { hierarchical: true, toolbar: false },
           )
 
@@ -97,7 +109,7 @@ export function createTopologiesApi(): Hono {
 
           if (sheetId !== 'root') {
             parentId = 'root' // All child sheets have root as parent for now
-            const subgraph = parsed.graph.subgraphs?.find(sg => sg.id === sheetId)
+            const subgraph = parsed.graph.subgraphs?.find((sg) => sg.id === sheetId)
             if (subgraph) {
               label = subgraph.label || sheetId
             }
@@ -170,7 +182,8 @@ export function createTopologiesApi(): Hono {
         })),
         subgraphs: parsed.graph.subgraphs || [],
         metrics: parsed.metrics,
-        dataSourceId: parsed.dataSourceId,
+        topologySourceId: parsed.topologySourceId,
+        metricsSourceId: parsed.metricsSourceId,
         mapping: parsed.mapping,
       })
     } catch (err) {
@@ -234,6 +247,27 @@ export function createTopologiesApi(): Hono {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)
+    }
+  })
+
+  // Get auto-mapping hints for a topology
+  app.get('/:id/mapping-hints', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const parsed = await service.getParsed(id)
+      if (!parsed) {
+        return c.json({ error: 'Topology not found' }, 404)
+      }
+
+      if (!parsed.metricsSourceId) {
+        return c.json({ error: 'No metrics source configured' }, 400)
+      }
+
+      const hints = await dataSourceService.getMappingHints(parsed.metricsSourceId, parsed.graph)
+      return c.json(hints)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
     }
   })
 

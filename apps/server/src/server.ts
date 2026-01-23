@@ -16,6 +16,7 @@ import { MockMetricsProvider } from './mock-metrics.js'
 import { initDatabase, closeDatabase } from './db/index.js'
 import { createApiRouter } from './api/index.js'
 import { TopologyService } from './services/topology.js'
+import { registerBuiltinPlugins } from './plugins/index.js'
 
 export class Server {
   private app: Hono
@@ -89,9 +90,7 @@ export class Server {
         return c.text('Not found', 404)
       })
     } else {
-      throw new Error(
-        '[Server] Web UI not found. Run "bun run build" in apps/server/web first.',
-      )
+      throw new Error('[Server] Web UI not found. Run "bun run build" in apps/server/web first.')
     }
   }
 
@@ -135,7 +134,9 @@ export class Server {
           break
 
         case 'setInterval':
-          console.log(`[WebSocket] Client requested interval: ${message.interval}ms (ignored - using server poll interval)`)
+          console.log(
+            `[WebSocket] Client requested interval: ${message.interval}ms (ignored - using server poll interval)`,
+          )
           break
 
         case 'filter':
@@ -292,6 +293,9 @@ export class Server {
   }
 
   async initialize(): Promise<void> {
+    // Register built-in plugins before database access
+    registerBuiltinPlugins()
+
     initDatabase(this.config.server.dataDir)
     this.setupApiRoutes()
     this.setupStaticFileServing()
@@ -300,7 +304,9 @@ export class Server {
     await this.topologyService.initializeSample()
 
     await this.topologyManager.loadAll()
-    console.log(`[Server] Loaded ${this.topologyManager.listTopologies().length} file-based topologies`)
+    console.log(
+      `[Server] Loaded ${this.topologyManager.listTopologies().length} file-based topologies`,
+    )
     console.log(`[Server] Database has ${this.topologyService.list().length} topologies`)
   }
 

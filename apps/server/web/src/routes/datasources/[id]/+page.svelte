@@ -1,97 +1,126 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
-  import type { DataSource, ConnectionTestResult } from '$lib/types'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-  import XCircle from 'phosphor-svelte/lib/XCircle'
+import { onMount } from 'svelte'
+import { page } from '$app/stores'
+import { goto } from '$app/navigation'
+import { api } from '$lib/api'
+import type { DataSource, DataSourceType, ConnectionTestResult } from '$lib/types'
+import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
+import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
+import XCircle from 'phosphor-svelte/lib/XCircle'
 
-  // Get ID from route params (always defined for this route)
-  $: id = $page.params.id!
+// Get ID from route params (always defined for this route)
+let id = $derived($page.params.id!)
 
-  let dataSource: DataSource | null = null
-  let loading = true
-  let error = ''
-  let saving = false
-  let testResult: ConnectionTestResult | null = null
-  let testing = false
+let dataSource = $state<DataSource | null>(null)
+let loading = $state(true)
+let error = $state('')
+let saving = $state(false)
+let testResult = $state<ConnectionTestResult | null>(null)
+let testing = $state(false)
 
-  // Form state
-  let formName = ''
-  let formUrl = ''
-  let formToken = ''
-  let formPollInterval = 30000
+// Form state
+let formName = $state('')
+let formUrl = $state('')
+let formToken = $state('')
+let formPollInterval = $state(30000)
+let hasExistingToken = $state(false)
 
-  onMount(async () => {
-    try {
-      dataSource = await api.dataSources.get(id)
-      formName = dataSource.name
-      formUrl = dataSource.url
-      formToken = '' // Don't show existing token
-      formPollInterval = dataSource.pollInterval
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load data source'
-    } finally {
-      loading = false
+function parseConfig(configJson: string): { url?: string; token?: string; pollInterval?: number } {
+  try {
+    return JSON.parse(configJson)
+  } catch {
+    return {}
+  }
+}
+
+function getConfigFromForm(type: DataSourceType, existingConfig?: { token?: string }): string {
+  if (type === 'zabbix') {
+    const config: Record<string, unknown> = {
+      url: formUrl.trim(),
+      pollInterval: formPollInterval,
     }
-  })
-
-  async function handleSave() {
-    if (!formName.trim() || !formUrl.trim()) {
-      error = 'Name and URL are required'
-      return
+    // Only update token if a new one was entered, otherwise keep existing
+    if (formToken.trim()) {
+      config.token = formToken.trim()
+    } else if (existingConfig?.token) {
+      config.token = existingConfig.token
     }
+    return JSON.stringify(config)
+  }
+  // Add other types as needed
+  return '{}'
+}
 
-    saving = true
-    error = ''
+onMount(async () => {
+  try {
+    dataSource = await api.dataSources.get(id)
+    formName = dataSource.name
+    const config = parseConfig(dataSource.configJson)
+    formUrl = config.url || ''
+    formToken = '' // Don't show existing token
+    formPollInterval = config.pollInterval || 30000
+    hasExistingToken = !!config.token
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to load data source'
+  } finally {
+    loading = false
+  }
+})
 
-    try {
-      const updates: Record<string, unknown> = {
-        name: formName.trim(),
-        url: formUrl.trim(),
-        pollInterval: formPollInterval,
-      }
-
-      // Only update token if a new one was entered
-      if (formToken.trim()) {
-        updates.token = formToken.trim()
-      }
-
-      dataSource = await api.dataSources.update(id, updates)
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to save'
-    } finally {
-      saving = false
-    }
+async function handleSave() {
+  if (!formName.trim() || !formUrl.trim()) {
+    error = 'Name and URL are required'
+    return
   }
 
-  async function handleTest() {
-    testing = true
-    testResult = null
-    try {
-      testResult = await api.dataSources.test(id)
-    } catch (e) {
-      testResult = {
-        success: false,
-        message: e instanceof Error ? e.message : 'Test failed',
-      }
-    }
-    testing = false
-  }
+  saving = true
+  error = ''
 
-  async function handleDelete() {
-    if (!confirm(`Delete data source "${dataSource?.name}"?`)) {
-      return
+  try {
+    // Get existing config to preserve token if not changed
+    const existingConfig = dataSource ? parseConfig(dataSource.configJson) : undefined
+
+    const updates = {
+      name: formName.trim(),
+      configJson: getConfigFromForm(dataSource!.type, existingConfig),
     }
-    try {
-      await api.dataSources.delete(id)
-      goto('/datasources')
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to delete'
+
+    dataSource = await api.dataSources.update(id, updates)
+    // Update hasExistingToken state
+    const newConfig = parseConfig(dataSource.configJson)
+    hasExistingToken = !!newConfig.token
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to save'
+  } finally {
+    saving = false
+  }
+}
+
+async function handleTest() {
+  testing = true
+  testResult = null
+  try {
+    testResult = await api.dataSources.test(id)
+  } catch (e) {
+    testResult = {
+      success: false,
+      message: e instanceof Error ? e.message : 'Test failed',
     }
   }
+  testing = false
+}
+
+async function handleDelete() {
+  if (!confirm(`Delete data source "${dataSource?.name}"?`)) {
+    return
+  }
+  try {
+    await api.dataSources.delete(id)
+    goto('/datasources')
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to delete'
+  }
+}
 </script>
 
 <svelte:head>
@@ -154,7 +183,7 @@
                 bind:value={formToken}
               />
               <p class="text-xs text-theme-text-muted mt-1">
-                {dataSource.token ? 'Token is set. Enter a new value to update.' : 'No token set.'}
+                {hasExistingToken ? 'Token is set. Enter a new value to update.' : 'No token set.'}
               </p>
             </div>
 

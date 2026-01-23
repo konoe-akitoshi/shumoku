@@ -53,7 +53,8 @@ interface TopologyRow {
   id: string
   name: string
   content_json: string
-  data_source_id: string | null
+  topology_source_id: string | null
+  metrics_source_id: string | null
   mapping_json: string | null
   created_at: number
   updated_at: number
@@ -64,7 +65,8 @@ function rowToTopology(row: TopologyRow): Topology {
     id: row.id,
     name: row.name,
     contentJson: row.content_json,
-    dataSourceId: row.data_source_id ?? undefined,
+    topologySourceId: row.topology_source_id ?? undefined,
+    metricsSourceId: row.metrics_source_id ?? undefined,
     mappingJson: row.mapping_json ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -89,7 +91,8 @@ export interface ParsedTopology {
   layout: LayoutResult
   iconDimensions: ResolvedIconDimensions
   metrics: MetricsData
-  dataSourceId?: string
+  topologySourceId?: string
+  metricsSourceId?: string
   mapping?: ZabbixMapping
 }
 
@@ -115,7 +118,9 @@ export class TopologyService {
    * Get a single topology by ID
    */
   get(id: string): Topology | null {
-    const row = this.db.query('SELECT * FROM topologies WHERE id = ?').get(id) as TopologyRow | undefined
+    const row = this.db.query('SELECT * FROM topologies WHERE id = ?').get(id) as
+      | TopologyRow
+      | undefined
     return row ? rowToTopology(row) : null
   }
 
@@ -123,7 +128,9 @@ export class TopologyService {
    * Get a topology by name
    */
   getByName(name: string): Topology | null {
-    const row = this.db.query('SELECT * FROM topologies WHERE name = ?').get(name) as TopologyRow | undefined
+    const row = this.db.query('SELECT * FROM topologies WHERE name = ?').get(name) as
+      | TopologyRow
+      | undefined
     return row ? rowToTopology(row) : null
   }
 
@@ -139,12 +146,19 @@ export class TopologyService {
 
     this.db
       .prepare(
-        `
-      INSERT INTO topologies (id, name, content_json, data_source_id, mapping_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `,
+        `INSERT INTO topologies (id, name, content_json, topology_source_id, metrics_source_id, mapping_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, input.name, input.contentJson, input.dataSourceId || null, input.mappingJson || null, now, now)
+      .run(
+        id,
+        input.name,
+        input.contentJson,
+        input.topologySourceId || null,
+        input.metricsSourceId || null,
+        input.mappingJson || null,
+        now,
+        now,
+      )
 
     // Clear cache to force re-parse
     this.cache.delete(id)
@@ -177,9 +191,13 @@ export class TopologyService {
       updates.push('content_json = ?')
       values.push(input.contentJson)
     }
-    if (input.dataSourceId !== undefined) {
-      updates.push('data_source_id = ?')
-      values.push(input.dataSourceId || null)
+    if (input.topologySourceId !== undefined) {
+      updates.push('topology_source_id = ?')
+      values.push(input.topologySourceId || null)
+    }
+    if (input.metricsSourceId !== undefined) {
+      updates.push('metrics_source_id = ?')
+      values.push(input.metricsSourceId || null)
     }
     if (input.mappingJson !== undefined) {
       updates.push('mapping_json = ?')
@@ -212,7 +230,9 @@ export class TopologyService {
     }
 
     const mappingJson = JSON.stringify(mapping)
-    this.db.query('UPDATE topologies SET mapping_json = ?, updated_at = ? WHERE id = ?').run(mappingJson, timestamp(), id)
+    this.db
+      .query('UPDATE topologies SET mapping_json = ?, updated_at = ? WHERE id = ?')
+      .run(mappingJson, timestamp(), id)
 
     // Clear cache to force re-parse
     this.cache.delete(id)
@@ -299,7 +319,8 @@ export class TopologyService {
       layout: layoutResult,
       iconDimensions,
       metrics,
-      dataSourceId: topology.dataSourceId,
+      topologySourceId: topology.topologySourceId,
+      metricsSourceId: topology.metricsSourceId,
       mapping,
     }
   }
@@ -421,12 +442,10 @@ export class TopologyService {
 
     this.db
       .prepare(
-        `
-      INSERT INTO topologies (id, name, content_json, data_source_id, mapping_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `,
+        `INSERT INTO topologies (id, name, content_json, topology_source_id, metrics_source_id, mapping_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, 'Sample Network', contentJson, null, null, now, now)
+      .run(id, 'Sample Network', contentJson, null, null, null, now, now)
 
     console.log('[TopologyService] Sample network created with', files.length, 'files')
   }

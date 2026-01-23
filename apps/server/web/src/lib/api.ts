@@ -52,9 +52,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json()
 }
 
+import type { DataSourceCapability, DataSourcePluginInfo, Host, HostItem } from './types'
+
 // Data Sources API
 export const dataSources = {
   list: () => request<DataSource[]>('/datasources'),
+
+  listByCapability: (capability: DataSourceCapability) =>
+    request<DataSource[]>(`/datasources/by-capability/${capability}`),
+
+  getPluginTypes: () => request<DataSourcePluginInfo[]>('/datasources/types'),
 
   get: (id: string) => request<DataSource>(`/datasources/${id}`),
 
@@ -79,6 +86,11 @@ export const dataSources = {
     request<ConnectionTestResult>(`/datasources/${id}/test`, {
       method: 'POST',
     }),
+
+  getHosts: (id: string) => request<Host[]>(`/datasources/${id}/hosts`),
+
+  getHostItems: (id: string, hostId: string) =>
+    request<HostItem[]>(`/datasources/${id}/hosts/${hostId}/items`),
 }
 
 // Topologies API
