@@ -8,11 +8,13 @@ export * from './types.js'
 export * from './registry.js'
 export { ZabbixPlugin } from './zabbix.js'
 export { NetBoxPlugin } from './netbox.js'
+export { PrometheusPlugin } from './prometheus.js'
 
 // Register built-in plugins
 import { pluginRegistry } from './registry.js'
 import { ZabbixPlugin } from './zabbix.js'
 import { NetBoxPlugin } from './netbox.js'
+import { PrometheusPlugin } from './prometheus.js'
 
 export function registerBuiltinPlugins(): void {
   // Zabbix - metrics, hosts, auto-mapping
@@ -29,12 +31,12 @@ export function registerBuiltinPlugins(): void {
     return plugin
   })
 
-  // TODO: Prometheus - metrics
-  // pluginRegistry.register('prometheus', 'Prometheus', ['metrics'], (config) => {
-  //   const plugin = new PrometheusPlugin()
-  //   plugin.initialize(config)
-  //   return plugin
-  // })
+  // Prometheus - metrics, hosts
+  pluginRegistry.register('prometheus', 'Prometheus', ['metrics', 'hosts'], (config) => {
+    const plugin = new PrometheusPlugin()
+    plugin.initialize(config)
+    return plugin
+  })
 
   console.log('[Plugins] Built-in plugins registered')
 }

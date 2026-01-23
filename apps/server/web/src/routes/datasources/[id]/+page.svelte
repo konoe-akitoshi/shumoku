@@ -195,19 +195,21 @@ async function handleDelete() {
               <input type="url" id="url" class="input" bind:value={formUrl} />
             </div>
 
-            <div>
-              <label for="token" class="label">API Token</label>
-              <input
-                type="password"
-                id="token"
-                class="input"
-                placeholder="Enter new token to update"
-                bind:value={formToken}
-              />
-              <p class="text-xs text-theme-text-muted mt-1">
-                {hasExistingToken ? 'Token is set. Enter a new value to update.' : 'No token set.'}
-              </p>
-            </div>
+            {#if dataSource.type === 'zabbix' || dataSource.type === 'netbox'}
+              <div>
+                <label for="token" class="label">API Token</label>
+                <input
+                  type="password"
+                  id="token"
+                  class="input"
+                  placeholder="Enter new token to update"
+                  bind:value={formToken}
+                />
+                <p class="text-xs text-theme-text-muted mt-1">
+                  {hasExistingToken ? 'Token is set. Enter a new value to update.' : 'No token set.'}
+                </p>
+              </div>
+            {/if}
 
             {#if dataSource.type === 'zabbix'}
               <div>
@@ -289,7 +291,7 @@ async function handleDelete() {
                 </div>
                 <p class="text-sm text-theme-text-muted">{testResult.message}</p>
                 {#if testResult.version}
-                  <p class="text-xs text-theme-text-muted mt-1">Zabbix version: {testResult.version}</p>
+                  <p class="text-xs text-theme-text-muted mt-1">Version: {testResult.version}</p>
                 {/if}
               </div>
             {/if}

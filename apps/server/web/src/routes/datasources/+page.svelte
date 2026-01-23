@@ -31,6 +31,7 @@ let formToken = $state('')
 let formPollInterval = $state(30000)
 let formSiteFilter = $state('')
 let formTagFilter = $state('')
+let formPrometheusPreset = $state<'snmp' | 'node_exporter'>('snmp')
 let formError = $state('')
 let formSubmitting = $state(false)
 
@@ -73,6 +74,7 @@ function selectPlugin(plugin: DataSourcePluginInfo) {
   formPollInterval = 30000
   formSiteFilter = ''
   formTagFilter = ''
+  formPrometheusPreset = 'snmp'
 }
 
 function getConfigFromForm(): string {
@@ -95,10 +97,16 @@ function getConfigFromForm(): string {
     })
   }
 
+  if (selectedPlugin.type === 'prometheus') {
+    return JSON.stringify({
+      url: formUrl.trim(),
+      preset: formPrometheusPreset,
+    })
+  }
+
   // Generic config for other types
   return JSON.stringify({
     url: formUrl.trim(),
-    token: formToken.trim() || undefined,
   })
 }
 
@@ -346,6 +354,8 @@ function formatLastChecked(timestamp?: number): string {
                       <ChartLine size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {:else if plugin.type === 'netbox'}
                       <Cube size={24} class="text-theme-text-muted group-hover:text-primary" />
+                    {:else if plugin.type === 'prometheus'}
+                      <ChartLine size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {:else}
                       <Database size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {/if}
@@ -401,19 +411,38 @@ function formatLastChecked(timestamp?: number): string {
           />
         </div>
 
-        <div>
-          <label for="token" class="label">API Token</label>
-          <input
-            type="password"
-            id="token"
-            class="input"
-            placeholder="Enter API token"
-            bind:value={formToken}
-          />
-          {#if selectedPlugin.type === 'zabbix'}
-            <p class="text-xs text-muted-foreground mt-1">Required for API access (Zabbix 5.4+)</p>
-          {/if}
-        </div>
+        {#if selectedPlugin.type === 'zabbix' || selectedPlugin.type === 'netbox'}
+          <div>
+            <label for="token" class="label">API Token</label>
+            <input
+              type="password"
+              id="token"
+              class="input"
+              placeholder="Enter API token"
+              bind:value={formToken}
+            />
+            {#if selectedPlugin.type === 'zabbix'}
+              <p class="text-xs text-muted-foreground mt-1">Required for API access (Zabbix 5.4+)</p>
+            {/if}
+          </div>
+        {/if}
+
+        {#if selectedPlugin.type === 'prometheus'}
+          <div>
+            <label for="preset" class="label">Exporter Type</label>
+            <select id="preset" class="input" bind:value={formPrometheusPreset}>
+              <option value="snmp">SNMP Exporter</option>
+              <option value="node_exporter">Node Exporter</option>
+            </select>
+            <p class="text-xs text-muted-foreground mt-1">
+              {#if formPrometheusPreset === 'snmp'}
+                Uses ifHCInOctets/ifHCOutOctets metrics with ifName label
+              {:else}
+                Uses node_network_receive/transmit_bytes_total metrics with device label
+              {/if}
+            </p>
+          </div>
+        {/if}
 
         {#if selectedPlugin.type === 'zabbix'}
           <div>
