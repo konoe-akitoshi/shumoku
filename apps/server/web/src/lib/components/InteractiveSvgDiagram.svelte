@@ -1,3 +1,24 @@
+<script lang="ts" module>
+// Event types for node selection (exported from module context)
+export interface NodeInfo {
+  id: string
+  label: string
+  type?: string
+  vendor?: string
+  model?: string
+}
+
+export interface NodeSelectEvent {
+  node: NodeInfo
+  connectedLinks: Array<{
+    id: string
+    from: string
+    to: string
+    bandwidth?: string
+  }>
+}
+</script>
+
 <script lang="ts">
 import { onMount, onDestroy, tick } from 'svelte'
 import panzoom from 'panzoom'
@@ -20,6 +41,7 @@ import GearSix from 'phosphor-svelte/lib/GearSix'
 export let topologyId: string
 export let onToggleSettings: (() => void) | undefined = undefined
 export let settingsOpen = false
+export let onNodeSelect: ((event: NodeSelectEvent) => void) | undefined = undefined
 
 // Sheet types for hierarchical navigation
 interface SheetInfo {
@@ -348,7 +370,44 @@ function handleNodeLeave() {
 }
 
 function handleNodeClick(nodeId: string) {
+  // Toggle selection state for visual feedback
   selectedNodeId = selectedNodeId === nodeId ? null : nodeId
+
+  // Always call the callback when clicking a node (for modal)
+  if (svgElement && onNodeSelect) {
+    const nodeEl = svgElement.querySelector(`g.node[data-id="${nodeId}"]`)
+    if (nodeEl) {
+      // Get label from text element inside the node, or fall back to node id
+      const labelEl = nodeEl.querySelector('text.node-label, text')
+      const label = labelEl?.textContent?.trim() || nodeId
+
+      const nodeInfo: NodeInfo = {
+        id: nodeId,
+        label,
+        type: nodeEl.getAttribute('data-device-type') || undefined,
+        vendor: nodeEl.getAttribute('data-device-vendor') || undefined,
+        model: nodeEl.getAttribute('data-device-model') || undefined,
+      }
+
+      // Find connected links
+      const connectedLinks: NodeSelectEvent['connectedLinks'] = []
+      const linkGroups = svgElement.querySelectorAll('g.link-group')
+      linkGroups.forEach((link) => {
+        const from = link.getAttribute('data-from') || ''
+        const to = link.getAttribute('data-to') || ''
+        if (from === nodeId || to === nodeId) {
+          connectedLinks.push({
+            id: link.getAttribute('data-link-id') || '',
+            from,
+            to,
+            bandwidth: link.getAttribute('data-bandwidth') || undefined,
+          })
+        }
+      })
+
+      onNodeSelect({ node: nodeInfo, connectedLinks })
+    }
+  }
 }
 
 // Subgraph handlers
@@ -433,10 +492,12 @@ function showNodeTooltip(nodeId: string, event: MouseEvent) {
   const node = svgElement.querySelector(`g.node[data-id="${nodeId}"]`)
   if (!node) return
 
-  const label = node.getAttribute('data-label') || nodeId
-  const type = node.getAttribute('data-type') || ''
-  const vendor = node.getAttribute('data-vendor') || ''
-  const model = node.getAttribute('data-model') || ''
+  // Get label from text element inside the node, or fall back to node id
+  const labelEl = node.querySelector('text.node-label, text')
+  const label = labelEl?.textContent?.trim() || nodeId
+  const type = node.getAttribute('data-device-type') || ''
+  const vendor = node.getAttribute('data-device-vendor') || ''
+  const model = node.getAttribute('data-device-model') || ''
 
   let content = `<strong>${label}</strong>`
   if (type) content += `<br><span class="muted">Type: ${type}</span>`

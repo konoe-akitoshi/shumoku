@@ -47,7 +47,7 @@ function graphToYaml(graph: Record<string, unknown>): string {
 
   lines.push('')
   lines.push('nodes:')
-  const nodes = graph.nodes as Array<Record<string, unknown>> || []
+  const nodes = (graph.nodes as Array<Record<string, unknown>>) || []
   for (const node of nodes) {
     lines.push(`  - id: ${node.id}`)
     if (node.label) lines.push(`    label: ${node.label}`)
@@ -59,7 +59,7 @@ function graphToYaml(graph: Record<string, unknown>): string {
 
   lines.push('')
   lines.push('links:')
-  const links = graph.links as Array<Record<string, unknown>> || []
+  const links = (graph.links as Array<Record<string, unknown>>) || []
   for (const link of links) {
     const from = link.from as string | { node: string; port?: string }
     const to = link.to as string | { node: string; port?: string }

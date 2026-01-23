@@ -151,9 +151,7 @@ async function copyWebhookUrl(source: TopologyDataSource) {
 }
 
 function getSourcesByPurpose(purpose: 'topology' | 'metrics') {
-  return editableSources
-    .map((s, index) => ({ ...s, index }))
-    .filter((s) => s.purpose === purpose)
+  return editableSources.map((s, index) => ({ ...s, index })).filter((s) => s.purpose === purpose)
 }
 </script>
 

@@ -255,7 +255,9 @@ export class TopologySourcesService {
     values.push(timestamp())
     values.push(id)
 
-    this.db.query(`UPDATE topology_data_sources SET ${updateParts.join(', ')} WHERE id = ?`).run(...values)
+    this.db
+      .query(`UPDATE topology_data_sources SET ${updateParts.join(', ')} WHERE id = ?`)
+      .run(...values)
 
     return this.get(id)
   }

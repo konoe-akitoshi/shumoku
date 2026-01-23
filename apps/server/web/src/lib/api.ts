@@ -125,6 +125,20 @@ export const topologies = {
       body: JSON.stringify(mapping),
     }),
 
+  updateNodeMapping: (
+    topologyId: string,
+    nodeId: string,
+    mapping: { hostId?: string; hostName?: string },
+  ) =>
+    request<{
+      success: boolean
+      topology: Topology
+      nodeMapping: { hostId?: string; hostName?: string } | null
+    }>(`/topologies/${topologyId}/mapping/nodes/${nodeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(mapping),
+    }),
+
   syncFromSource: (id: string) =>
     request<{ success: boolean; topology: Topology; nodeCount: number; linkCount: number }>(
       `/topologies/${id}/sync-from-source`,
@@ -155,7 +169,11 @@ export const topologies = {
         body: JSON.stringify(input),
       }),
 
-    update: (topologyId: string, sourceId: string, updates: { syncMode?: SyncMode; priority?: number }) =>
+    update: (
+      topologyId: string,
+      sourceId: string,
+      updates: { syncMode?: SyncMode; priority?: number },
+    ) =>
       request<TopologyDataSource>(`/topologies/${topologyId}/sources/${sourceId}`, {
         method: 'PUT',
         body: JSON.stringify(updates),

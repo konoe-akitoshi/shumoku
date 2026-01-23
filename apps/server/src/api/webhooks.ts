@@ -65,7 +65,9 @@ webhooksApi.post('/topology/:secret', async (c) => {
     return c.json({ error: 'Webhook mode not enabled for this source' }, 400)
   }
 
-  console.log(`[Webhook] Received update for topology ${source.topologyId} from source ${source.dataSourceId}`)
+  console.log(
+    `[Webhook] Received update for topology ${source.topologyId} from source ${source.dataSourceId}`,
+  )
 
   // Parse the webhook body (NetBox sends JSON with event details)
   let body: unknown
@@ -96,7 +98,9 @@ webhooksApi.post('/topology/:secret', async (c) => {
     // Update last synced timestamp
     getTopologySourcesService().updateLastSynced(source.id)
 
-    console.log(`[Webhook] Topology ${source.topologyId} updated: ${graph.nodes?.length ?? 0} nodes, ${graph.links?.length ?? 0} links`)
+    console.log(
+      `[Webhook] Topology ${source.topologyId} updated: ${graph.nodes?.length ?? 0} nodes, ${graph.links?.length ?? 0} links`,
+    )
 
     // Broadcast update to connected WebSocket clients
     if (broadcastTopologyUpdate) {

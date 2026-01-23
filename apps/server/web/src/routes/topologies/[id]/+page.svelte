@@ -5,8 +5,10 @@ import { goto } from '$app/navigation'
 import { api } from '$lib/api'
 import { metricsConnected } from '$lib/stores'
 import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
+import type { NodeSelectEvent } from '$lib/components/InteractiveSvgDiagram.svelte'
 import TopologySettings from '$lib/components/TopologySettings.svelte'
-import type { Topology } from '$lib/types'
+import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
+import type { Topology, ZabbixMapping, TopologyDataSource } from '$lib/types'
 import X from 'phosphor-svelte/lib/X'
 
 let topology: Topology | null = null
@@ -17,17 +19,39 @@ let error = ''
 // Settings panel state
 let settingsOpen = false
 
+// Node mapping modal state
+let mappingModalOpen = false
+let selectedNodeData: NodeSelectEvent | null = null
+let currentMapping: ZabbixMapping | null = null
+let metricsSourceId: string | undefined = undefined
+
 // Get ID from route params
 $: topologyId = $page.params.id!
 
 onMount(async () => {
   try {
-    const [topoData, renderResponse] = await Promise.all([
+    const [topoData, renderResponse, sources] = await Promise.all([
       api.topologies.get(topologyId),
       fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
+      api.topologies.sources.list(topologyId),
     ])
     topology = topoData
     renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
+
+    // Parse mapping from topology
+    if (topoData.mappingJson) {
+      try {
+        currentMapping = JSON.parse(topoData.mappingJson) as ZabbixMapping
+      } catch {
+        currentMapping = { nodes: {}, links: {} }
+      }
+    } else {
+      currentMapping = { nodes: {}, links: {} }
+    }
+
+    // Find metrics source
+    const metricsSource = sources.find((s: TopologyDataSource) => s.purpose === 'metrics')
+    metricsSourceId = metricsSource?.dataSourceId
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to load topology'
   } finally {
@@ -41,6 +65,24 @@ function toggleSettings() {
 
 function handleDeleted() {
   goto('/topologies')
+}
+
+function handleNodeSelect(event: NodeSelectEvent) {
+  selectedNodeData = event
+  mappingModalOpen = true
+}
+
+function handleMappingSaved(nodeId: string, mapping: { hostId?: string; hostName?: string }) {
+  // Update local mapping state
+  if (currentMapping) {
+    if (mapping.hostId) {
+      currentMapping.nodes[nodeId] = mapping
+    } else {
+      delete currentMapping.nodes[nodeId]
+    }
+    // Force reactivity
+    currentMapping = { ...currentMapping }
+  }
 }
 </script>
 
@@ -64,7 +106,7 @@ function handleDeleted() {
       </div>
     {:else if topology}
       <div class="absolute inset-0">
-        <InteractiveSvgDiagram {topologyId} onToggleSettings={toggleSettings} {settingsOpen} />
+        <InteractiveSvgDiagram {topologyId} onToggleSettings={toggleSettings} {settingsOpen} onNodeSelect={handleNodeSelect} />
       </div>
 
       <!-- Connection status indicator -->
@@ -102,3 +144,15 @@ function handleDeleted() {
     </div>
   {/if}
 </div>
+
+<!-- Node Mapping Modal -->
+{#if topology}
+  <NodeMappingModal
+    bind:open={mappingModalOpen}
+    {topologyId}
+    {metricsSourceId}
+    nodeData={selectedNodeData}
+    {currentMapping}
+    onSaved={handleMappingSaved}
+  />
+{/if}

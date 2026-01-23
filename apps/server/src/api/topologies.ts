@@ -250,6 +250,56 @@ export function createTopologiesApi(): Hono {
     }
   })
 
+  // Update single node mapping (PATCH)
+  app.patch('/:id/mapping/nodes/:nodeId', async (c) => {
+    const id = c.req.param('id')
+    const nodeId = c.req.param('nodeId')
+    try {
+      const nodeMapping = (await c.req.json()) as { hostId?: string; hostName?: string }
+      const topology = service.get(id)
+      if (!topology) {
+        return c.json({ error: 'Topology not found' }, 404)
+      }
+
+      // Get existing mapping or create new one
+      let mapping: ZabbixMapping = { nodes: {}, links: {} }
+      if (topology.mappingJson) {
+        try {
+          mapping = JSON.parse(topology.mappingJson) as ZabbixMapping
+        } catch {
+          // Invalid JSON, start fresh
+        }
+      }
+
+      // Ensure nodes object exists
+      if (!mapping.nodes) {
+        mapping.nodes = {}
+      }
+
+      // Update the specific node mapping
+      if (nodeMapping.hostId || nodeMapping.hostName) {
+        mapping.nodes[nodeId] = {
+          hostId: nodeMapping.hostId,
+          hostName: nodeMapping.hostName,
+        }
+      } else {
+        // Remove mapping if empty
+        delete mapping.nodes[nodeId]
+      }
+
+      // Save updated mapping
+      const updated = service.updateMapping(id, mapping)
+      return c.json({
+        success: true,
+        topology: updated,
+        nodeMapping: mapping.nodes[nodeId] || null,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
   // Sync topology from its topology source (e.g., NetBox)
   app.post('/:id/sync-from-source', async (c) => {
     const id = c.req.param('id')
@@ -273,7 +323,13 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Failed to fetch topology from source' }, 500)
       }
 
-      console.log('[sync-from-source] Got graph:', graph.nodes.length, 'nodes,', graph.links.length, 'links')
+      console.log(
+        '[sync-from-source] Got graph:',
+        graph.nodes.length,
+        'nodes,',
+        graph.links.length,
+        'links',
+      )
 
       // Update the topology content
       const updated = await service.update(id, {

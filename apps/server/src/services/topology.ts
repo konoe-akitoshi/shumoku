@@ -434,6 +434,12 @@ export class TopologyService {
       )
       .run(id, 'Sample Network', contentJson, null, null, null, now, now)
 
-    console.log('[TopologyService] Sample network created:', graph.nodes.length, 'nodes,', graph.links.length, 'links')
+    console.log(
+      '[TopologyService] Sample network created:',
+      graph.nodes.length,
+      'nodes,',
+      graph.links.length,
+      'links',
+    )
   }
 }
