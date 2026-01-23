@@ -393,14 +393,17 @@ function handleNodeClick(nodeId: string) {
       const connectedLinks: NodeSelectEvent['connectedLinks'] = []
       const linkGroups = svgElement.querySelectorAll('g.link-group')
       linkGroups.forEach((link) => {
-        const from = link.getAttribute('data-from') || ''
-        const to = link.getAttribute('data-to') || ''
+        const fromRaw = link.getAttribute('data-link-from') || ''
+        const toRaw = link.getAttribute('data-link-to') || ''
+        // Extract node ID from "node:port" format
+        const from = fromRaw.split(':')[0]
+        const to = toRaw.split(':')[0]
         if (from === nodeId || to === nodeId) {
           connectedLinks.push({
             id: link.getAttribute('data-link-id') || '',
             from,
             to,
-            bandwidth: link.getAttribute('data-bandwidth') || undefined,
+            bandwidth: link.getAttribute('data-link-bandwidth') || undefined,
           })
         }
       })
