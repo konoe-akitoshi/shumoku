@@ -58,7 +58,10 @@ export function convertToCytoscapeElements(data: ParsedTopologyResponse): Cytosc
 
       // Icon for subgraph (e.g., AWS VPC icon)
       if (subgraph.vendor && subgraph.service && subgraph.resource) {
-        nodeData.iconUrl = getCDNIconUrl(subgraph.vendor, `${subgraph.service}/${subgraph.resource}`)
+        nodeData.iconUrl = getCDNIconUrl(
+          subgraph.vendor,
+          `${subgraph.service}/${subgraph.resource}`,
+        )
       }
 
       nodes.push({ data: nodeData })
@@ -168,8 +171,8 @@ function formatLabel(label: string | string[]): string {
   if (Array.isArray(label)) {
     // Remove HTML tags and join with newlines
     return label
-      .map(line => line.replace(/<[^>]+>/g, '').trim())
-      .filter(line => line && line !== '---')
+      .map((line) => line.replace(/<[^>]+>/g, '').trim())
+      .filter((line) => line && line !== '---')
       .join('\n')
   }
   return label
@@ -183,7 +186,7 @@ export function applyMetricsToCytoscape(
   metrics: {
     nodes?: Record<string, { status: string }>
     links?: Record<string, { status: string; utilization?: number }>
-  }
+  },
 ): void {
   // Apply node status
   if (metrics.nodes) {

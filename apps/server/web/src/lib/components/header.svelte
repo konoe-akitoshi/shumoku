@@ -1,73 +1,73 @@
 <script lang="ts">
-  import { page } from '$app/stores'
-  import { browser } from '$app/environment'
-  import CaretRight from 'phosphor-svelte/lib/CaretRight'
-  import Moon from 'phosphor-svelte/lib/Moon'
-  import Sun from 'phosphor-svelte/lib/Sun'
+import { page } from '$app/stores'
+import { browser } from '$app/environment'
+import CaretRight from 'phosphor-svelte/lib/CaretRight'
+import Moon from 'phosphor-svelte/lib/Moon'
+import Sun from 'phosphor-svelte/lib/Sun'
 
-  // Theme state
-  let theme = 'light'
+// Theme state
+let theme = 'light'
 
-  // Initialize theme from localStorage
-  $: if (browser) {
-    const localSettings = localStorage.getItem('shumoku-settings')
-    if (localSettings) {
-      const parsed = JSON.parse(localSettings)
-      theme = parsed.theme || 'light'
-    }
+// Initialize theme from localStorage
+$: if (browser) {
+  const localSettings = localStorage.getItem('shumoku-settings')
+  if (localSettings) {
+    const parsed = JSON.parse(localSettings)
+    theme = parsed.theme || 'light'
+  }
+}
+
+function toggleTheme() {
+  theme = theme === 'light' ? 'dark' : 'light'
+
+  // Save to localStorage
+  const localSettings = localStorage.getItem('shumoku-settings')
+  const parsed = localSettings ? JSON.parse(localSettings) : {}
+  parsed.theme = theme
+  localStorage.setItem('shumoku-settings', JSON.stringify(parsed))
+
+  // Apply theme
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+}
+
+// Generate breadcrumbs from current path
+interface Breadcrumb {
+  label: string
+  href: string
+}
+
+const routeLabels: Record<string, string> = {
+  '': 'Home',
+  topologies: 'Topologies',
+  datasources: 'Data Sources',
+  settings: 'Settings',
+  edit: 'Edit',
+}
+
+$: breadcrumbs = generateBreadcrumbs($page.url.pathname)
+
+function generateBreadcrumbs(pathname: string): Breadcrumb[] {
+  const parts = pathname.split('/').filter(Boolean)
+
+  if (parts.length === 0) {
+    return [{ label: 'Home', href: '/' }]
   }
 
-  function toggleTheme() {
-    theme = theme === 'light' ? 'dark' : 'light'
+  const crumbs: Breadcrumb[] = [{ label: 'Home', href: '/' }]
 
-    // Save to localStorage
-    const localSettings = localStorage.getItem('shumoku-settings')
-    const parsed = localSettings ? JSON.parse(localSettings) : {}
-    parsed.theme = theme
-    localStorage.setItem('shumoku-settings', JSON.stringify(parsed))
-
-    // Apply theme
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+  let currentPath = ''
+  for (const part of parts) {
+    currentPath += `/${part}`
+    const label = routeLabels[part] || decodeURIComponent(part)
+    crumbs.push({ label, href: currentPath })
   }
 
-  // Generate breadcrumbs from current path
-  interface Breadcrumb {
-    label: string
-    href: string
-  }
-
-  const routeLabels: Record<string, string> = {
-    '': 'Home',
-    topologies: 'Topologies',
-    datasources: 'Data Sources',
-    settings: 'Settings',
-    edit: 'Edit',
-  }
-
-  $: breadcrumbs = generateBreadcrumbs($page.url.pathname)
-
-  function generateBreadcrumbs(pathname: string): Breadcrumb[] {
-    const parts = pathname.split('/').filter(Boolean)
-
-    if (parts.length === 0) {
-      return [{ label: 'Home', href: '/' }]
-    }
-
-    const crumbs: Breadcrumb[] = [{ label: 'Home', href: '/' }]
-
-    let currentPath = ''
-    for (const part of parts) {
-      currentPath += `/${part}`
-      const label = routeLabels[part] || decodeURIComponent(part)
-      crumbs.push({ label, href: currentPath })
-    }
-
-    return crumbs
-  }
+  return crumbs
+}
 </script>
 
 <header class="h-14 border-b border-theme-border bg-theme-bg-elevated flex items-center px-4 gap-4">

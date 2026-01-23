@@ -38,7 +38,10 @@ export class ZabbixClient {
       throw new Error(`Zabbix API request failed: ${response.status} ${response.statusText}`)
     }
 
-    const result = (await response.json()) as { result?: T; error?: { message: string; data: string } }
+    const result = (await response.json()) as {
+      result?: T
+      error?: { message: string; data: string }
+    }
 
     if (result.error) {
       throw new Error(`Zabbix API error: ${result.error.message} - ${result.error.data}`)

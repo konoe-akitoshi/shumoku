@@ -6,7 +6,13 @@
 import ELKApi from 'elkjs/lib/elk-api.js'
 import Worker from 'web-worker'
 import { createRequire } from 'node:module'
-import { HierarchicalLayout, type NetworkGraph, type LayoutResult, type HierarchicalLayoutOptions, type IconDimensions } from '@shumoku/core'
+import {
+  HierarchicalLayout,
+  type NetworkGraph,
+  type LayoutResult,
+  type HierarchicalLayoutOptions,
+  type IconDimensions,
+} from '@shumoku/core'
 
 // Get the path to elk-worker.min.js
 const require = createRequire(import.meta.url)
@@ -47,7 +53,10 @@ export class BunHierarchicalLayout {
   /**
    * Compute layout asynchronously (wrapper for HierarchicalLayout.layoutAsync)
    */
-  layoutAsync(graph: NetworkGraph, iconDimensions?: Map<string, IconDimensions>): Promise<LayoutResult> {
+  layoutAsync(
+    graph: NetworkGraph,
+    iconDimensions?: Map<string, IconDimensions>,
+  ): Promise<LayoutResult> {
     const layoutInstance = new HierarchicalLayout({
       ...this.options,
       iconDimensions,

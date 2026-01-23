@@ -139,7 +139,10 @@ export class ZabbixPoller {
   /**
    * Start periodic polling for a list of instances
    */
-  start(instances: TopologyInstance[], onUpdate: (name: string, metrics: MetricsData) => void): void {
+  start(
+    instances: TopologyInstance[],
+    onUpdate: (name: string, metrics: MetricsData) => void,
+  ): void {
     if (this.pollInterval) {
       this.stop()
     }

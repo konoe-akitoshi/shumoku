@@ -1,30 +1,30 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { api } from '$lib/api'
-  import type { Topology, DataSource } from '$lib/types'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import Database from 'phosphor-svelte/lib/Database'
-  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
-  import CaretRight from 'phosphor-svelte/lib/CaretRight'
+import { onMount } from 'svelte'
+import { api } from '$lib/api'
+import type { Topology, DataSource } from '$lib/types'
+import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+import Database from 'phosphor-svelte/lib/Database'
+import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
+import Plus from 'phosphor-svelte/lib/Plus'
+import GearSix from 'phosphor-svelte/lib/GearSix'
+import CaretRight from 'phosphor-svelte/lib/CaretRight'
 
-  let topologies: Topology[] = []
-  let dataSources: DataSource[] = []
-  let loading = true
-  let error = ''
+let topologies: Topology[] = []
+let dataSources: DataSource[] = []
+let loading = true
+let error = ''
 
-  onMount(async () => {
-    try {
-      const [topoRes, dsRes] = await Promise.all([api.topologies.list(), api.dataSources.list()])
-      topologies = topoRes
-      dataSources = dsRes
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load data'
-    } finally {
-      loading = false
-    }
-  })
+onMount(async () => {
+  try {
+    const [topoRes, dsRes] = await Promise.all([api.topologies.list(), api.dataSources.list()])
+    topologies = topoRes
+    dataSources = dsRes
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to load data'
+  } finally {
+    loading = false
+  }
+})
 </script>
 
 <svelte:head>

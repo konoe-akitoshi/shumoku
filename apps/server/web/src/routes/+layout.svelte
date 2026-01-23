@@ -1,67 +1,67 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { browser } from '$app/environment'
-  import '../app.css'
-  import { page } from '$app/stores'
-  import Header from '$lib/components/header.svelte'
-  import House from 'phosphor-svelte/lib/House'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import Database from 'phosphor-svelte/lib/Database'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
-  import CaretDoubleLeft from 'phosphor-svelte/lib/CaretDoubleLeft'
-  import CaretDoubleRight from 'phosphor-svelte/lib/CaretDoubleRight'
+import { onMount } from 'svelte'
+import { browser } from '$app/environment'
+import '../app.css'
+import { page } from '$app/stores'
+import Header from '$lib/components/header.svelte'
+import House from 'phosphor-svelte/lib/House'
+import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+import Database from 'phosphor-svelte/lib/Database'
+import GearSix from 'phosphor-svelte/lib/GearSix'
+import CaretDoubleLeft from 'phosphor-svelte/lib/CaretDoubleLeft'
+import CaretDoubleRight from 'phosphor-svelte/lib/CaretDoubleRight'
 
-  interface NavItem {
-    href: string
-    label: string
-    icon: 'home' | 'topology' | 'database' | 'settings'
-  }
+interface NavItem {
+  href: string
+  label: string
+  icon: 'home' | 'topology' | 'database' | 'settings'
+}
 
-  const navItems: NavItem[] = [
-    { href: '/', label: 'Home', icon: 'home' },
-    { href: '/topologies', label: 'Topologies', icon: 'topology' },
-    { href: '/datasources', label: 'Data Sources', icon: 'database' },
-    { href: '/settings', label: 'Settings', icon: 'settings' },
-  ]
+const navItems: NavItem[] = [
+  { href: '/', label: 'Home', icon: 'home' },
+  { href: '/topologies', label: 'Topologies', icon: 'topology' },
+  { href: '/datasources', label: 'Data Sources', icon: 'database' },
+  { href: '/settings', label: 'Settings', icon: 'settings' },
+]
 
-  function isActive(href: string, pathname: string): boolean {
-    if (href === '/') return pathname === '/'
-    return pathname.startsWith(href)
-  }
+function isActive(href: string, pathname: string): boolean {
+  if (href === '/') return pathname === '/'
+  return pathname.startsWith(href)
+}
 
-  // Sidebar collapsed state
-  let sidebarCollapsed = false
+// Sidebar collapsed state
+let sidebarCollapsed = false
 
-  // Apply saved theme and sidebar state on mount
-  onMount(() => {
-    if (browser) {
-      const localSettings = localStorage.getItem('shumoku-settings')
-      let theme = 'light'
-      if (localSettings) {
-        const parsed = JSON.parse(localSettings)
-        theme = parsed.theme || 'light'
-        sidebarCollapsed = parsed.sidebarCollapsed || false
-      }
-
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
+// Apply saved theme and sidebar state on mount
+onMount(() => {
+  if (browser) {
+    const localSettings = localStorage.getItem('shumoku-settings')
+    let theme = 'light'
+    if (localSettings) {
+      const parsed = JSON.parse(localSettings)
+      theme = parsed.theme || 'light'
+      sidebarCollapsed = parsed.sidebarCollapsed || false
     }
-  })
 
-  function toggleSidebar() {
-    sidebarCollapsed = !sidebarCollapsed
-
-    // Save to localStorage
-    if (browser) {
-      const localSettings = localStorage.getItem('shumoku-settings')
-      const parsed = localSettings ? JSON.parse(localSettings) : {}
-      parsed.sidebarCollapsed = sidebarCollapsed
-      localStorage.setItem('shumoku-settings', JSON.stringify(parsed))
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
     }
   }
+})
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed
+
+  // Save to localStorage
+  if (browser) {
+    const localSettings = localStorage.getItem('shumoku-settings')
+    const parsed = localSettings ? JSON.parse(localSettings) : {}
+    parsed.sidebarCollapsed = sidebarCollapsed
+    localStorage.setItem('shumoku-settings', JSON.stringify(parsed))
+  }
+}
 </script>
 
 <div class="flex h-screen">

@@ -29,7 +29,9 @@ export function createSettingsApi(): Hono {
   app.get('/:key', (c) => {
     const key = c.req.param('key')
     const db = getDatabase()
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as SettingRow | undefined
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as
+      | SettingRow
+      | undefined
     if (!row) {
       return c.json({ error: 'Setting not found' }, 404)
     }

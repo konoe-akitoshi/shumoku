@@ -229,7 +229,9 @@ export class HierarchicalLayout {
     }
   }
 
-  private getEffectiveOptions(graph: NetworkGraph): Omit<Required<HierarchicalLayoutOptions>, 'elk'> {
+  private getEffectiveOptions(
+    graph: NetworkGraph,
+  ): Omit<Required<HierarchicalLayoutOptions>, 'elk'> {
     const settings = graph.settings
     const dynamicSpacing = this.calculateDynamicSpacing(graph)
 

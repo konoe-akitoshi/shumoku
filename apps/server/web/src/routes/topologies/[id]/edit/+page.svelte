@@ -1,139 +1,136 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
-  import type { Topology, DataSource, TopologyFile } from '$lib/types'
-  import { parseMultiFileContent, serializeMultiFileContent } from '$lib/types'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import X from 'phosphor-svelte/lib/X'
+import { onMount } from 'svelte'
+import { page } from '$app/stores'
+import { goto } from '$app/navigation'
+import { api } from '$lib/api'
+import type { Topology, DataSource, TopologyFile } from '$lib/types'
+import { parseMultiFileContent, serializeMultiFileContent } from '$lib/types'
+import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
+import Plus from 'phosphor-svelte/lib/Plus'
+import X from 'phosphor-svelte/lib/X'
 
-  // Get ID from route params (always defined for this route)
-  $: id = $page.params.id!
+// Get ID from route params (always defined for this route)
+$: id = $page.params.id!
 
-  let topology: Topology | null = null
-  let dataSources: DataSource[] = []
-  let loading = true
-  let error = ''
-  let saving = false
+let topology: Topology | null = null
+let dataSources: DataSource[] = []
+let loading = true
+let error = ''
+let saving = false
 
-  // Form state
-  let formName = ''
-  let formDataSourceId = ''
+// Form state
+let formName = ''
+let formDataSourceId = ''
 
-  // Multi-file state
-  let files: TopologyFile[] = []
-  let activeFileIndex = 0
+// Multi-file state
+let files: TopologyFile[] = []
+let activeFileIndex = 0
 
-  onMount(async () => {
-    try {
-      const [topoData, dsData] = await Promise.all([
-        api.topologies.get(id),
-        api.dataSources.list(),
-      ])
-      topology = topoData
-      dataSources = dsData
-      formName = topology.name
-      formDataSourceId = topology.dataSourceId || ''
+onMount(async () => {
+  try {
+    const [topoData, dsData] = await Promise.all([api.topologies.get(id), api.dataSources.list()])
+    topology = topoData
+    dataSources = dsData
+    formName = topology.name
+    formDataSourceId = topology.dataSourceId || ''
 
-      // Parse multi-file content
-      files = parseMultiFileContent(topology.contentJson)
-      activeFileIndex = 0
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load topology'
-    } finally {
-      loading = false
-    }
-  })
-
-  function selectFile(index: number) {
-    activeFileIndex = index
+    // Parse multi-file content
+    files = parseMultiFileContent(topology.contentJson)
+    activeFileIndex = 0
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to load topology'
+  } finally {
+    loading = false
   }
+})
 
-  function addFile() {
-    const baseName = 'new-file'
-    let name = `${baseName}.yaml`
-    let counter = 1
-    while (files.some(f => f.name === name)) {
-      name = `${baseName}-${counter}.yaml`
-      counter++
-    }
-    files = [...files, { name, content: `# ${name}\n` }]
+function selectFile(index: number) {
+  activeFileIndex = index
+}
+
+function addFile() {
+  const baseName = 'new-file'
+  let name = `${baseName}.yaml`
+  let counter = 1
+  while (files.some((f) => f.name === name)) {
+    name = `${baseName}-${counter}.yaml`
+    counter++
+  }
+  files = [...files, { name, content: `# ${name}\n` }]
+  activeFileIndex = files.length - 1
+}
+
+function removeFile(index: number) {
+  if (files.length <= 1) {
+    alert('Cannot delete the last file')
+    return
+  }
+  if (files[index].name === 'main.yaml') {
+    alert('Cannot delete main.yaml')
+    return
+  }
+  if (!confirm(`Delete "${files[index].name}"?`)) {
+    return
+  }
+  files = files.filter((_, i) => i !== index)
+  if (activeFileIndex >= files.length) {
     activeFileIndex = files.length - 1
   }
+}
 
-  function removeFile(index: number) {
-    if (files.length <= 1) {
-      alert('Cannot delete the last file')
+function renameFile(index: number) {
+  const file = files[index]
+  if (file.name === 'main.yaml') {
+    alert('Cannot rename main.yaml')
+    return
+  }
+  const newName = prompt('New file name:', file.name)
+  if (newName && newName !== file.name) {
+    if (!newName.endsWith('.yaml') && !newName.endsWith('.yml')) {
+      alert('File name must end with .yaml or .yml')
       return
     }
-    if (files[index].name === 'main.yaml') {
-      alert('Cannot delete main.yaml')
+    if (files.some((f) => f.name === newName)) {
+      alert('A file with this name already exists')
       return
     }
-    if (!confirm(`Delete "${files[index].name}"?`)) {
-      return
-    }
-    files = files.filter((_, i) => i !== index)
-    if (activeFileIndex >= files.length) {
-      activeFileIndex = files.length - 1
-    }
+    files = files.map((f, i) => (i === index ? { ...f, name: newName } : f))
+  }
+}
+
+function updateFileContent(content: string) {
+  files = files.map((f, i) => (i === activeFileIndex ? { ...f, content } : f))
+}
+
+async function handleSave() {
+  if (!formName.trim()) {
+    error = 'Name is required'
+    return
   }
 
-  function renameFile(index: number) {
-    const file = files[index]
-    if (file.name === 'main.yaml') {
-      alert('Cannot rename main.yaml')
-      return
-    }
-    const newName = prompt('New file name:', file.name)
-    if (newName && newName !== file.name) {
-      if (!newName.endsWith('.yaml') && !newName.endsWith('.yml')) {
-        alert('File name must end with .yaml or .yml')
-        return
-      }
-      if (files.some(f => f.name === newName)) {
-        alert('A file with this name already exists')
-        return
-      }
-      files = files.map((f, i) => i === index ? { ...f, name: newName } : f)
-    }
+  // Validate main.yaml exists
+  if (!files.some((f) => f.name === 'main.yaml')) {
+    error = 'main.yaml is required'
+    return
   }
 
-  function updateFileContent(content: string) {
-    files = files.map((f, i) => i === activeFileIndex ? { ...f, content } : f)
+  saving = true
+  error = ''
+
+  try {
+    const contentJson = serializeMultiFileContent(files)
+    await api.topologies.update(id, {
+      name: formName.trim(),
+      contentJson,
+      dataSourceId: formDataSourceId || undefined,
+    })
+    goto(`/topologies/${id}`)
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to save'
+  } finally {
+    saving = false
   }
-
-  async function handleSave() {
-    if (!formName.trim()) {
-      error = 'Name is required'
-      return
-    }
-
-    // Validate main.yaml exists
-    if (!files.some(f => f.name === 'main.yaml')) {
-      error = 'main.yaml is required'
-      return
-    }
-
-    saving = true
-    error = ''
-
-    try {
-      const contentJson = serializeMultiFileContent(files)
-      await api.topologies.update(id, {
-        name: formName.trim(),
-        contentJson,
-        dataSourceId: formDataSourceId || undefined,
-      })
-      goto(`/topologies/${id}`)
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to save'
-    } finally {
-      saving = false
-    }
-  }
+}
 </script>
 
 <svelte:head>

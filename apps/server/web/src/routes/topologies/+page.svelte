@@ -1,22 +1,22 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { topologies, topologiesList, topologiesLoading, topologiesError } from '$lib/stores'
-  import { serializeMultiFileContent } from '$lib/types'
-  import * as Dialog from '$lib/components/ui/dialog'
-  import { Button } from '$lib/components/ui/button'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
+import { onMount } from 'svelte'
+import { topologies, topologiesList, topologiesLoading, topologiesError } from '$lib/stores'
+import { serializeMultiFileContent } from '$lib/types'
+import * as Dialog from '$lib/components/ui/dialog'
+import { Button } from '$lib/components/ui/button'
+import Plus from 'phosphor-svelte/lib/Plus'
+import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+import GearSix from 'phosphor-svelte/lib/GearSix'
 
-  let showCreateModal = $state(false)
+let showCreateModal = $state(false)
 
-  // Form state
-  let formName = $state('')
-  let formYaml = $state('')
-  let formError = $state('')
-  let formSubmitting = $state(false)
+// Form state
+let formName = $state('')
+let formYaml = $state('')
+let formError = $state('')
+let formSubmitting = $state(false)
 
-  const sampleYaml = `name: My Network
+const sampleYaml = `name: My Network
 nodes:
   - id: router1
     label: Core Router
@@ -30,41 +30,40 @@ links:
     bandwidth: 1G
 `
 
-  onMount(() => {
-    topologies.load()
-  })
+onMount(() => {
+  topologies.load()
+})
 
-  function openCreateModal() {
-    formName = ''
-    formYaml = sampleYaml
-    formError = ''
-    showCreateModal = true
+function openCreateModal() {
+  formName = ''
+  formYaml = sampleYaml
+  formError = ''
+  showCreateModal = true
+}
+
+async function handleCreate() {
+  if (!formName.trim() || !formYaml.trim()) {
+    formError = 'Name and YAML content are required'
+    return
   }
 
-  async function handleCreate() {
-    if (!formName.trim() || !formYaml.trim()) {
-      formError = 'Name and YAML content are required'
-      return
-    }
+  formSubmitting = true
+  formError = ''
 
-    formSubmitting = true
-    formError = ''
-
-    try {
-      // Convert single YAML to multi-file JSON format
-      const contentJson = serializeMultiFileContent([{ name: 'main.yaml', content: formYaml }])
-      await topologies.create({
-        name: formName.trim(),
-        contentJson,
-      })
-      showCreateModal = false
-    } catch (e) {
-      formError = e instanceof Error ? e.message : 'Failed to create topology'
-    } finally {
-      formSubmitting = false
-    }
+  try {
+    // Convert single YAML to multi-file JSON format
+    const contentJson = serializeMultiFileContent([{ name: 'main.yaml', content: formYaml }])
+    await topologies.create({
+      name: formName.trim(),
+      contentJson,
+    })
+    showCreateModal = false
+  } catch (e) {
+    formError = e instanceof Error ? e.message : 'Failed to create topology'
+  } finally {
+    formSubmitting = false
   }
-
+}
 </script>
 
 <svelte:head>

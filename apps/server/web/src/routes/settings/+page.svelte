@@ -1,61 +1,61 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { api } from '$lib/api'
-  import GithubLogo from 'phosphor-svelte/lib/GithubLogo'
-  import FileText from 'phosphor-svelte/lib/FileText'
+import { onMount } from 'svelte'
+import { api } from '$lib/api'
+import GithubLogo from 'phosphor-svelte/lib/GithubLogo'
+import FileText from 'phosphor-svelte/lib/FileText'
 
-  let settings: Record<string, string> = {}
-  let loading = true
-  let error = ''
-  let saving = false
+let settings: Record<string, string> = {}
+let loading = true
+let error = ''
+let saving = false
 
-  // Local settings (stored in localStorage)
-  // Default to light mode since SVG renderer doesn't fully support dark mode yet
-  let theme = 'light'
-  let updateInterval = '30000'
+// Local settings (stored in localStorage)
+// Default to light mode since SVG renderer doesn't fully support dark mode yet
+let theme = 'light'
+let updateInterval = '30000'
 
-  onMount(async () => {
-    // Load local settings
-    const localSettings = localStorage.getItem('shumoku-settings')
-    if (localSettings) {
-      const parsed = JSON.parse(localSettings)
-      theme = parsed.theme || 'light'
-      updateInterval = String(parsed.updateInterval || 30000)
-    }
-
-    // Load server settings
-    try {
-      settings = await api.settings.get()
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load settings'
-    } finally {
-      loading = false
-    }
-  })
-
-  function saveLocalSettings() {
-    const localSettings = {
-      theme,
-      updateInterval: Number.parseInt(updateInterval, 10),
-    }
-    localStorage.setItem('shumoku-settings', JSON.stringify(localSettings))
-
-    // Apply theme
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+onMount(async () => {
+  // Load local settings
+  const localSettings = localStorage.getItem('shumoku-settings')
+  if (localSettings) {
+    const parsed = JSON.parse(localSettings)
+    theme = parsed.theme || 'light'
+    updateInterval = String(parsed.updateInterval || 30000)
   }
 
-  async function handleHealthCheck() {
-    try {
-      const result = await api.health.check()
-      alert(`Server is ${result.status} (timestamp: ${new Date(result.timestamp).toLocaleString()})`)
-    } catch (e) {
-      alert(`Health check failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
-    }
+  // Load server settings
+  try {
+    settings = await api.settings.get()
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to load settings'
+  } finally {
+    loading = false
   }
+})
+
+function saveLocalSettings() {
+  const localSettings = {
+    theme,
+    updateInterval: Number.parseInt(updateInterval, 10),
+  }
+  localStorage.setItem('shumoku-settings', JSON.stringify(localSettings))
+
+  // Apply theme
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+}
+
+async function handleHealthCheck() {
+  try {
+    const result = await api.health.check()
+    alert(`Server is ${result.status} (timestamp: ${new Date(result.timestamp).toLocaleString()})`)
+  } catch (e) {
+    alert(`Health check failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+  }
+}
 </script>
 
 <svelte:head>

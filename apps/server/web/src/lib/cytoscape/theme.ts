@@ -23,12 +23,12 @@ export const deviceColors: Record<string, string> = {
 
 // Utilization color scale (weathermap style)
 export const utilizationColors = [
-  { max: 0, color: '#64748b' },   // Gray - no traffic
-  { max: 1, color: '#22c55e' },   // Green - minimal
-  { max: 25, color: '#84cc16' },  // Light green
-  { max: 50, color: '#eab308' },  // Yellow
-  { max: 75, color: '#f97316' },  // Orange
-  { max: 90, color: '#ef4444' },  // Red
+  { max: 0, color: '#64748b' }, // Gray - no traffic
+  { max: 1, color: '#22c55e' }, // Green - minimal
+  { max: 25, color: '#84cc16' }, // Light green
+  { max: 50, color: '#eab308' }, // Yellow
+  { max: 75, color: '#f97316' }, // Orange
+  { max: 90, color: '#ef4444' }, // Red
   { max: 100, color: '#dc2626' }, // Dark red
 ]
 
@@ -58,18 +58,18 @@ export function createDarkStylesheet(): Stylesheet[] {
         'background-color': '#1e293b',
         'border-width': 2,
         'border-color': '#64748b',
-        'label': 'data(label)',
+        label: 'data(label)',
         'text-valign': 'bottom',
         'text-halign': 'center',
         'text-margin-y': 8,
         'font-size': 11,
         'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        'color': '#e2e8f0',
+        color: '#e2e8f0',
         'text-outline-color': '#0f172a',
         'text-outline-width': 2,
-        'width': 60,
-        'height': 40,
-        'shape': 'round-rectangle',
+        width: 60,
+        height: 40,
+        shape: 'round-rectangle',
         'transition-property': 'border-color, border-width, background-color, opacity',
         'transition-duration': 200,
       },
@@ -93,14 +93,14 @@ export function createDarkStylesheet(): Stylesheet[] {
         'border-width': 2,
         'border-color': '#475569',
         'border-style': 'solid',
-        'padding': 24,
+        padding: 24,
         'text-valign': 'top',
         'text-halign': 'center',
         'text-margin-y': -8,
         'font-size': 13,
         'font-weight': 600,
-        'color': '#94a3b8',
-        'shape': 'round-rectangle',
+        color: '#94a3b8',
+        shape: 'round-rectangle',
       },
     },
 
@@ -123,13 +123,13 @@ export function createDarkStylesheet(): Stylesheet[] {
     {
       selector: 'edge',
       style: {
-        'width': 2,
+        width: 2,
         'line-color': '#64748b',
         'target-arrow-color': '#64748b',
         'curve-style': 'bezier',
-        'label': 'data(label)',
+        label: 'data(label)',
         'font-size': 9,
-        'color': '#94a3b8',
+        color: '#94a3b8',
         'text-outline-color': '#0f172a',
         'text-outline-width': 2,
         'text-rotation': 'autorotate',
@@ -167,8 +167,8 @@ export function createDarkStylesheet(): Stylesheet[] {
         'background-image-opacity': 1,
         'background-color': '#1e293b',
         'border-width': 0,
-        'width': 48,
-        'height': 48,
+        width: 48,
+        height: 48,
       },
     },
 
@@ -202,7 +202,7 @@ export function createDarkStylesheet(): Stylesheet[] {
     {
       selector: 'edge:selected',
       style: {
-        'width': 4,
+        width: 4,
         'line-color': '#60a5fa',
         'target-arrow-color': '#60a5fa',
       },
@@ -220,7 +220,7 @@ export function createDarkStylesheet(): Stylesheet[] {
       selector: 'edge.highlighted',
       style: {
         'line-color': '#fbbf24',
-        'width': 3,
+        width: 3,
       },
     },
 
@@ -228,7 +228,7 @@ export function createDarkStylesheet(): Stylesheet[] {
     {
       selector: '.faded',
       style: {
-        'opacity': 0.25,
+        opacity: 0.25,
       },
     },
 
@@ -260,12 +260,12 @@ export function createDarkStylesheet(): Stylesheet[] {
     {
       selector: 'node[isExport="true"]',
       style: {
-        'shape': 'ellipse',
+        shape: 'ellipse',
         'background-color': '#374151',
         'border-color': '#60a5fa',
         'border-style': 'dashed',
-        'width': 80,
-        'height': 30,
+        width: 80,
+        height: 30,
         'font-size': 10,
         'text-valign': 'center',
         'text-margin-y': 0,

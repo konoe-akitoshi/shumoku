@@ -1,47 +1,47 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
-  import { metricsConnected } from '$lib/stores'
-  import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
-  import TopologySettings from '$lib/components/TopologySettings.svelte'
-  import type { Topology } from '$lib/types'
-  import X from 'phosphor-svelte/lib/X'
+import { onMount } from 'svelte'
+import { page } from '$app/stores'
+import { goto } from '$app/navigation'
+import { api } from '$lib/api'
+import { metricsConnected } from '$lib/stores'
+import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
+import TopologySettings from '$lib/components/TopologySettings.svelte'
+import type { Topology } from '$lib/types'
+import X from 'phosphor-svelte/lib/X'
 
-  let topology: Topology | null = null
-  let renderData: { nodeCount: number; edgeCount: number } | null = null
-  let loading = true
-  let error = ''
+let topology: Topology | null = null
+let renderData: { nodeCount: number; edgeCount: number } | null = null
+let loading = true
+let error = ''
 
-  // Settings panel state
-  let settingsOpen = false
+// Settings panel state
+let settingsOpen = false
 
-  // Get ID from route params
-  $: topologyId = $page.params.id!
+// Get ID from route params
+$: topologyId = $page.params.id!
 
-  onMount(async () => {
-    try {
-      const [topoData, renderResponse] = await Promise.all([
-        api.topologies.get(topologyId),
-        fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
-      ])
-      topology = topoData
-      renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load topology'
-    } finally {
-      loading = false
-    }
-  })
-
-  function toggleSettings() {
-    settingsOpen = !settingsOpen
+onMount(async () => {
+  try {
+    const [topoData, renderResponse] = await Promise.all([
+      api.topologies.get(topologyId),
+      fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
+    ])
+    topology = topoData
+    renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Failed to load topology'
+  } finally {
+    loading = false
   }
+})
 
-  function handleDeleted() {
-    goto('/topologies')
-  }
+function toggleSettings() {
+  settingsOpen = !settingsOpen
+}
+
+function handleDeleted() {
+  goto('/topologies')
+}
 </script>
 
 <svelte:head>

@@ -14,7 +14,10 @@ export interface HtmlGeneratorOptions {
 /**
  * Generate a complete HTML page with metrics support
  */
-export function generateMetricsHtml(instance: TopologyInstance, options: HtmlGeneratorOptions): string {
+export function generateMetricsHtml(
+  instance: TopologyInstance,
+  options: HtmlGeneratorOptions,
+): string {
   const { graph, layout } = instance
   const svgContent = svgRenderer.render(graph, layout, { renderMode: 'interactive' })
   const title = graph.name || instance.name

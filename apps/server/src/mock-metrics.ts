@@ -32,8 +32,10 @@ export class MockMetricsProvider {
       const status = Math.random() > 0.05 ? 'up' : 'down'
       nodes[node.id] = {
         status,
-        cpu: status === 'up' ? this.generateSmoothValue(`node:${node.id}:cpu`, 5, 80, 5) : undefined,
-        memory: status === 'up' ? this.generateSmoothValue(`node:${node.id}:mem`, 20, 90, 3) : undefined,
+        cpu:
+          status === 'up' ? this.generateSmoothValue(`node:${node.id}:cpu`, 5, 80, 5) : undefined,
+        memory:
+          status === 'up' ? this.generateSmoothValue(`node:${node.id}:mem`, 20, 90, 3) : undefined,
         lastSeen: status === 'up' ? Date.now() : Date.now() - 60000,
       }
     }

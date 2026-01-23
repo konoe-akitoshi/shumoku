@@ -1,327 +1,329 @@
 <script lang="ts">
-  import { onMount, onDestroy, createEventDispatcher } from 'svelte'
-  import cytoscape from 'cytoscape'
-  import type { Core, EventObject, NodeSingular, EdgeSingular } from 'cytoscape'
-  import { metricsStore, metricsData } from '$lib/stores'
-  import { createDarkStylesheet, getUtilizationColor, statusColors } from '$lib/cytoscape/theme'
-  import { convertToCytoscapeElements } from '$lib/cytoscape/converter'
-  import type { ParsedTopologyResponse } from '$lib/types'
+import { onMount, onDestroy, createEventDispatcher } from 'svelte'
+import cytoscape from 'cytoscape'
+import type { Core, EventObject, NodeSingular, EdgeSingular } from 'cytoscape'
+import { metricsStore, metricsData } from '$lib/stores'
+import { createDarkStylesheet, getUtilizationColor, statusColors } from '$lib/cytoscape/theme'
+import { convertToCytoscapeElements } from '$lib/cytoscape/converter'
+import type { ParsedTopologyResponse } from '$lib/types'
 
-  // Props
-  export let topologyId: string
-  export let enableMetrics = true
+// Props
+export let topologyId: string
+export let enableMetrics = true
 
-  const dispatch = createEventDispatcher<{
-    nodeClick: { nodeId: string; nodeData: Record<string, unknown> }
-    subgraphClick: { subgraphId: string; file?: string }
-  }>()
+const dispatch = createEventDispatcher<{
+  nodeClick: { nodeId: string; nodeData: Record<string, unknown> }
+  subgraphClick: { subgraphId: string; file?: string }
+}>()
 
-  // Cytoscape instance
-  let cy: Core | null = null
-  let container: HTMLDivElement
+// Cytoscape instance
+let cy: Core | null = null
+let container: HTMLDivElement
 
-  // State
-  let loading = true
-  let error = ''
-  let currentSheet = 'root'
-  let breadcrumb: { id: string; label: string }[] = [{ id: 'root', label: 'Root' }]
-  let scale = 1
-  let hoveredNode: string | null = null
-  let selectedNode: string | null = null
+// State
+let loading = true
+let error = ''
+let currentSheet = 'root'
+let breadcrumb: { id: string; label: string }[] = [{ id: 'root', label: 'Root' }]
+let scale = 1
+let hoveredNode: string | null = null
+let selectedNode: string | null = null
 
-  // Tooltip state
-  let tooltipVisible = false
-  let tooltipContent = ''
-  let tooltipX = 0
-  let tooltipY = 0
+// Tooltip state
+let tooltipVisible = false
+let tooltipContent = ''
+let tooltipX = 0
+let tooltipY = 0
 
-  // Highlight neighbors on hover
-  function highlightNeighbors(node: NodeSingular) {
-    const neighborhood = node.closedNeighborhood()
+// Highlight neighbors on hover
+function highlightNeighbors(node: NodeSingular) {
+  const neighborhood = node.closedNeighborhood()
 
-    cy?.elements().addClass('faded')
-    neighborhood.removeClass('faded').addClass('highlighted')
+  cy?.elements().addClass('faded')
+  neighborhood.removeClass('faded').addClass('highlighted')
+}
+
+function clearHighlight() {
+  cy?.elements().removeClass('faded').removeClass('highlighted')
+}
+
+// Show tooltip
+function showTooltip(node: NodeSingular, event: EventObject) {
+  const data = node.data()
+  const pos = event.renderedPosition || { x: 0, y: 0 }
+
+  let content = `<strong>${data.label || data.id}</strong>`
+
+  if (data.type) {
+    content += `<br><span class="text-xs text-gray-400">Type: ${data.type}</span>`
+  }
+  if (data.status) {
+    const statusColor =
+      statusColors[data.status as keyof typeof statusColors] || statusColors.unknown
+    content += `<br><span class="text-xs" style="color: ${statusColor}">Status: ${data.status}</span>`
+  }
+  if (data.sourcePort || data.targetPort) {
+    content += `<br><span class="text-xs text-gray-400">Ports: ${data.sourcePort || '?'} → ${data.targetPort || '?'}</span>`
   }
 
-  function clearHighlight() {
-    cy?.elements().removeClass('faded').removeClass('highlighted')
+  tooltipContent = content
+  tooltipX = pos.x + 15
+  tooltipY = pos.y + 15
+  tooltipVisible = true
+}
+
+function hideTooltip() {
+  tooltipVisible = false
+}
+
+// Edge tooltip
+function showEdgeTooltip(edge: EdgeSingular, event: EventObject) {
+  const data = edge.data()
+  const pos = event.renderedPosition || { x: 0, y: 0 }
+
+  let content = `<strong>${data.label || data.id}</strong>`
+
+  if (data.utilization !== undefined) {
+    const color = getUtilizationColor(data.utilization)
+    content += `<br><span class="text-xs" style="color: ${color}">Utilization: ${data.utilization.toFixed(1)}%</span>`
+  }
+  if (data.vlan) {
+    content += `<br><span class="text-xs text-gray-400">VLAN: ${data.vlan}</span>`
+  }
+  if (data.status) {
+    const statusColor =
+      statusColors[data.status as keyof typeof statusColors] || statusColors.unknown
+    content += `<br><span class="text-xs" style="color: ${statusColor}">Status: ${data.status}</span>`
   }
 
-  // Show tooltip
-  function showTooltip(node: NodeSingular, event: EventObject) {
-    const data = node.data()
-    const pos = event.renderedPosition || { x: 0, y: 0 }
+  tooltipContent = content
+  tooltipX = pos.x + 15
+  tooltipY = pos.y + 15
+  tooltipVisible = true
+}
 
-    let content = `<strong>${data.label || data.id}</strong>`
+// Handle node click
+function handleNodeClick(node: NodeSingular) {
+  const data = node.data()
 
-    if (data.type) {
-      content += `<br><span class="text-xs text-gray-400">Type: ${data.type}</span>`
-    }
-    if (data.status) {
-      const statusColor = statusColors[data.status as keyof typeof statusColors] || statusColors.unknown
-      content += `<br><span class="text-xs" style="color: ${statusColor}">Status: ${data.status}</span>`
-    }
-    if (data.sourcePort || data.targetPort) {
-      content += `<br><span class="text-xs text-gray-400">Ports: ${data.sourcePort || '?'} → ${data.targetPort || '?'}</span>`
-    }
-
-    tooltipContent = content
-    tooltipX = pos.x + 15
-    tooltipY = pos.y + 15
-    tooltipVisible = true
+  // If it's a subgraph with a file, drill down
+  if (data.hasFile === 'true' && data.file) {
+    dispatch('subgraphClick', { subgraphId: data.id, file: data.file })
+    // For now, just log - actual navigation would require API changes
+    console.log('Drill down to:', data.id, data.file)
   }
 
-  function hideTooltip() {
-    tooltipVisible = false
+  // If it's an export connector, could navigate to destination
+  if (data.isExport === 'true' && data.destSubgraphId) {
+    console.log('Navigate to:', data.destSubgraphId)
   }
 
-  // Edge tooltip
-  function showEdgeTooltip(edge: EdgeSingular, event: EventObject) {
-    const data = edge.data()
-    const pos = event.renderedPosition || { x: 0, y: 0 }
+  selectedNode = data.id
+  dispatch('nodeClick', { nodeId: data.id, nodeData: data })
+}
 
-    let content = `<strong>${data.label || data.id}</strong>`
+// Fit view
+function fitView() {
+  cy?.fit(undefined, 50)
+  scale = cy?.zoom() || 1
+}
 
-    if (data.utilization !== undefined) {
-      const color = getUtilizationColor(data.utilization)
-      content += `<br><span class="text-xs" style="color: ${color}">Utilization: ${data.utilization.toFixed(1)}%</span>`
-    }
-    if (data.vlan) {
-      content += `<br><span class="text-xs text-gray-400">VLAN: ${data.vlan}</span>`
-    }
-    if (data.status) {
-      const statusColor = statusColors[data.status as keyof typeof statusColors] || statusColors.unknown
-      content += `<br><span class="text-xs" style="color: ${statusColor}">Status: ${data.status}</span>`
-    }
+// Reset view
+function resetView() {
+  cy?.fit(undefined, 50)
+  cy?.center()
+  scale = 1
+}
 
-    tooltipContent = content
-    tooltipX = pos.x + 15
-    tooltipY = pos.y + 15
-    tooltipVisible = true
-  }
+// Zoom controls
+function zoomIn() {
+  const currentZoom = cy?.zoom() || 1
+  cy?.zoom(currentZoom * 1.2)
+  scale = cy?.zoom() || 1
+}
 
-  // Handle node click
-  function handleNodeClick(node: NodeSingular) {
-    const data = node.data()
+function zoomOut() {
+  const currentZoom = cy?.zoom() || 1
+  cy?.zoom(currentZoom / 1.2)
+  scale = cy?.zoom() || 1
+}
 
-    // If it's a subgraph with a file, drill down
-    if (data.hasFile === 'true' && data.file) {
-      dispatch('subgraphClick', { subgraphId: data.id, file: data.file })
-      // For now, just log - actual navigation would require API changes
-      console.log('Drill down to:', data.id, data.file)
-    }
+// Load topology data
+async function loadTopology() {
+  loading = true
+  error = ''
 
-    // If it's an export connector, could navigate to destination
-    if (data.isExport === 'true' && data.destSubgraphId) {
-      console.log('Navigate to:', data.destSubgraphId)
-    }
-
-    selectedNode = data.id
-    dispatch('nodeClick', { nodeId: data.id, nodeData: data })
-  }
-
-  // Fit view
-  function fitView() {
-    cy?.fit(undefined, 50)
-    scale = cy?.zoom() || 1
-  }
-
-  // Reset view
-  function resetView() {
-    cy?.fit(undefined, 50)
-    cy?.center()
-    scale = 1
-  }
-
-  // Zoom controls
-  function zoomIn() {
-    const currentZoom = cy?.zoom() || 1
-    cy?.zoom(currentZoom * 1.2)
-    scale = cy?.zoom() || 1
-  }
-
-  function zoomOut() {
-    const currentZoom = cy?.zoom() || 1
-    cy?.zoom(currentZoom / 1.2)
-    scale = cy?.zoom() || 1
-  }
-
-  // Load topology data
-  async function loadTopology() {
-    loading = true
-    error = ''
-
-    try {
-      const response = await fetch(`/api/topologies/${topologyId}/parsed`)
-      if (!response.ok) {
-        throw new Error(`Failed to load topology: ${response.status}`)
-      }
-
-      const data: ParsedTopologyResponse = await response.json()
-
-      // Convert to Cytoscape elements
-      const elements = convertToCytoscapeElements(data)
-
-      // Initialize or update Cytoscape
-      if (cy) {
-        cy.elements().remove()
-        cy.add(elements.nodes)
-        cy.add(elements.edges)
-      } else {
-        cy = cytoscape({
-          container,
-          elements: [...elements.nodes, ...elements.edges],
-          style: createDarkStylesheet(),
-          layout: { name: 'preset' }, // Use positions from layout
-          minZoom: 0.1,
-          maxZoom: 4,
-          wheelSensitivity: 0.3,
-          boxSelectionEnabled: true,
-          selectionType: 'single',
-        })
-
-        // Event handlers
-        cy.on('mouseover', 'node', (e) => {
-          const node = e.target as NodeSingular
-          hoveredNode = node.id()
-          highlightNeighbors(node)
-          showTooltip(node, e)
-        })
-
-        cy.on('mouseout', 'node', () => {
-          hoveredNode = null
-          clearHighlight()
-          hideTooltip()
-        })
-
-        cy.on('mouseover', 'edge', (e) => {
-          const edge = e.target as EdgeSingular
-          edge.addClass('highlighted')
-          showEdgeTooltip(edge, e)
-        })
-
-        cy.on('mouseout', 'edge', (e) => {
-          const edge = e.target as EdgeSingular
-          edge.removeClass('highlighted')
-          hideTooltip()
-        })
-
-        cy.on('tap', 'node', (e) => {
-          const node = e.target as NodeSingular
-          handleNodeClick(node)
-        })
-
-        cy.on('tap', 'node:parent', (e) => {
-          const node = e.target as NodeSingular
-          handleNodeClick(node)
-        })
-
-        cy.on('zoom', () => {
-          scale = cy?.zoom() || 1
-        })
-
-        // Background click to deselect
-        cy.on('tap', (e) => {
-          if (e.target === cy) {
-            selectedNode = null
-          }
-        })
-      }
-
-      // Fit to view
-      setTimeout(() => {
-        fitView()
-      }, 100)
-
-      loading = false
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Unknown error'
-      loading = false
-    }
-  }
-
-  // Apply metrics from WebSocket
-  function applyMetrics(metrics: typeof $metricsData) {
-    if (!cy || !metrics) return
-
-    // Apply node status
-    if (metrics.nodes) {
-      for (const [nodeId, nodeMetrics] of Object.entries(metrics.nodes)) {
-        const node = cy.getElementById(nodeId)
-        if (node.length) {
-          node.data('status', nodeMetrics.status)
-        }
-      }
+  try {
+    const response = await fetch(`/api/topologies/${topologyId}/parsed`)
+    if (!response.ok) {
+      throw new Error(`Failed to load topology: ${response.status}`)
     }
 
-    // Apply link status and utilization with animation
-    if (metrics.links) {
-      for (const [linkId, linkMetrics] of Object.entries(metrics.links)) {
-        const edge = cy.getElementById(linkId)
-        if (edge.length) {
-          edge.data('status', linkMetrics.status)
+    const data: ParsedTopologyResponse = await response.json()
 
-          if (linkMetrics.utilization !== undefined) {
-            edge.data('utilization', linkMetrics.utilization)
-            const color = getUtilizationColor(linkMetrics.utilization)
+    // Convert to Cytoscape elements
+    const elements = convertToCytoscapeElements(data)
 
-            // Animate color change
-            edge.animate({
-              style: {
-                'line-color': color,
-                'target-arrow-color': color,
-                'width': linkMetrics.utilization > 75 ? 4 : linkMetrics.utilization > 50 ? 3 : 2,
-              },
-              duration: 300,
-              easing: 'ease-out',
-            })
-          }
-        }
-      }
-    }
-  }
-
-  // Watch for metrics toggle
-  let prevEnableMetrics = enableMetrics
-  $: if (topologyId && prevEnableMetrics !== enableMetrics) {
-    prevEnableMetrics = enableMetrics
-    if (enableMetrics) {
-      metricsStore.connect()
-      metricsStore.subscribeToTopology(topologyId)
+    // Initialize or update Cytoscape
+    if (cy) {
+      cy.elements().remove()
+      cy.add(elements.nodes)
+      cy.add(elements.edges)
     } else {
-      metricsStore.disconnect()
-      // Reset edge styles
-      cy?.edges().animate({
-        style: {
-          'line-color': '#64748b',
-          'target-arrow-color': '#64748b',
-          'width': 2,
-        },
-        duration: 300,
+      cy = cytoscape({
+        container,
+        elements: [...elements.nodes, ...elements.edges],
+        style: createDarkStylesheet(),
+        layout: { name: 'preset' }, // Use positions from layout
+        minZoom: 0.1,
+        maxZoom: 4,
+        wheelSensitivity: 0.3,
+        boxSelectionEnabled: true,
+        selectionType: 'single',
+      })
+
+      // Event handlers
+      cy.on('mouseover', 'node', (e) => {
+        const node = e.target as NodeSingular
+        hoveredNode = node.id()
+        highlightNeighbors(node)
+        showTooltip(node, e)
+      })
+
+      cy.on('mouseout', 'node', () => {
+        hoveredNode = null
+        clearHighlight()
+        hideTooltip()
+      })
+
+      cy.on('mouseover', 'edge', (e) => {
+        const edge = e.target as EdgeSingular
+        edge.addClass('highlighted')
+        showEdgeTooltip(edge, e)
+      })
+
+      cy.on('mouseout', 'edge', (e) => {
+        const edge = e.target as EdgeSingular
+        edge.removeClass('highlighted')
+        hideTooltip()
+      })
+
+      cy.on('tap', 'node', (e) => {
+        const node = e.target as NodeSingular
+        handleNodeClick(node)
+      })
+
+      cy.on('tap', 'node:parent', (e) => {
+        const node = e.target as NodeSingular
+        handleNodeClick(node)
+      })
+
+      cy.on('zoom', () => {
+        scale = cy?.zoom() || 1
+      })
+
+      // Background click to deselect
+      cy.on('tap', (e) => {
+        if (e.target === cy) {
+          selectedNode = null
+        }
       })
     }
+
+    // Fit to view
+    setTimeout(() => {
+      fitView()
+    }, 100)
+
+    loading = false
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Unknown error'
+    loading = false
   }
+}
 
-  // Apply metrics when data changes
-  $: if (enableMetrics && $metricsData && cy) {
-    applyMetrics($metricsData)
-  }
+// Apply metrics from WebSocket
+function applyMetrics(metrics: typeof $metricsData) {
+  if (!cy || !metrics) return
 
-  onMount(async () => {
-    await loadTopology()
-
-    // Initial metrics connection
-    if (enableMetrics && topologyId) {
-      metricsStore.connect()
-      metricsStore.subscribeToTopology(topologyId)
+  // Apply node status
+  if (metrics.nodes) {
+    for (const [nodeId, nodeMetrics] of Object.entries(metrics.nodes)) {
+      const node = cy.getElementById(nodeId)
+      if (node.length) {
+        node.data('status', nodeMetrics.status)
+      }
     }
-  })
+  }
 
-  onDestroy(() => {
+  // Apply link status and utilization with animation
+  if (metrics.links) {
+    for (const [linkId, linkMetrics] of Object.entries(metrics.links)) {
+      const edge = cy.getElementById(linkId)
+      if (edge.length) {
+        edge.data('status', linkMetrics.status)
+
+        if (linkMetrics.utilization !== undefined) {
+          edge.data('utilization', linkMetrics.utilization)
+          const color = getUtilizationColor(linkMetrics.utilization)
+
+          // Animate color change
+          edge.animate({
+            style: {
+              'line-color': color,
+              'target-arrow-color': color,
+              width: linkMetrics.utilization > 75 ? 4 : linkMetrics.utilization > 50 ? 3 : 2,
+            },
+            duration: 300,
+            easing: 'ease-out',
+          })
+        }
+      }
+    }
+  }
+}
+
+// Watch for metrics toggle
+let prevEnableMetrics = enableMetrics
+$: if (topologyId && prevEnableMetrics !== enableMetrics) {
+  prevEnableMetrics = enableMetrics
+  if (enableMetrics) {
+    metricsStore.connect()
+    metricsStore.subscribeToTopology(topologyId)
+  } else {
     metricsStore.disconnect()
-    cy?.destroy()
-    cy = null
-  })
+    // Reset edge styles
+    cy?.edges().animate({
+      style: {
+        'line-color': '#64748b',
+        'target-arrow-color': '#64748b',
+        width: 2,
+      },
+      duration: 300,
+    })
+  }
+}
+
+// Apply metrics when data changes
+$: if (enableMetrics && $metricsData && cy) {
+  applyMetrics($metricsData)
+}
+
+onMount(async () => {
+  await loadTopology()
+
+  // Initial metrics connection
+  if (enableMetrics && topologyId) {
+    metricsStore.connect()
+    metricsStore.subscribeToTopology(topologyId)
+  }
+})
+
+onDestroy(() => {
+  metricsStore.disconnect()
+  cy?.destroy()
+  cy = null
+})
 </script>
 
 <div class="cytoscape-container">

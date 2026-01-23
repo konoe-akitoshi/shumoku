@@ -171,7 +171,8 @@ async function buildChildSheet(
     name: subgraph.label,
     nodes: [...transformedNodes, ...exportNodes],
     links: [...childLinks, ...exportLinks],
-    subgraphs: transformedSubgraphs && transformedSubgraphs.length > 0 ? transformedSubgraphs : undefined,
+    subgraphs:
+      transformedSubgraphs && transformedSubgraphs.length > 0 ? transformedSubgraphs : undefined,
   }
 
   // Layout child sheet

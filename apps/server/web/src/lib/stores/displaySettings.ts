@@ -55,7 +55,7 @@ function createDisplaySettingsStore() {
     subscribe,
 
     setLiveUpdates(enabled: boolean) {
-      update(s => {
+      update((s) => {
         const newSettings = { ...s, liveUpdates: enabled }
         saveSettings(newSettings)
         return newSettings
@@ -63,7 +63,7 @@ function createDisplaySettingsStore() {
     },
 
     setShowTrafficFlow(enabled: boolean) {
-      update(s => {
+      update((s) => {
         const newSettings = { ...s, showTrafficFlow: enabled }
         saveSettings(newSettings)
         return newSettings
@@ -71,7 +71,7 @@ function createDisplaySettingsStore() {
     },
 
     setShowNodeStatus(enabled: boolean) {
-      update(s => {
+      update((s) => {
         const newSettings = { ...s, showNodeStatus: enabled }
         saveSettings(newSettings)
         return newSettings
@@ -88,6 +88,6 @@ function createDisplaySettingsStore() {
 export const displaySettings = createDisplaySettingsStore()
 
 // Derived stores for individual settings
-export const liveUpdatesEnabled = derived(displaySettings, $s => $s.liveUpdates)
-export const showTrafficFlow = derived(displaySettings, $s => $s.showTrafficFlow)
-export const showNodeStatus = derived(displaySettings, $s => $s.showNodeStatus)
+export const liveUpdatesEnabled = derived(displaySettings, ($s) => $s.liveUpdates)
+export const showTrafficFlow = derived(displaySettings, ($s) => $s.showTrafficFlow)
+export const showNodeStatus = derived(displaySettings, ($s) => $s.showNodeStatus)
