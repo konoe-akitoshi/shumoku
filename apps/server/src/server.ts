@@ -16,14 +16,19 @@ import { MockMetricsProvider } from './mock-metrics.js'
 import { initDatabase, closeDatabase } from './db/index.js'
 import { createApiRouter } from './api/index.js'
 import { TopologyService } from './services/topology.js'
-import { registerBuiltinPlugins } from './plugins/index.js'
+import { TopologySourcesService } from './services/topology-sources.js'
+import { DataSourceService } from './services/datasource.js'
+import { registerBuiltinPlugins, pluginRegistry, hasMetricsCapability } from './plugins/index.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
+import type { ZabbixMapping } from './types.js'
 
 export class Server {
   private app: Hono
   private config: Config
   private topologyManager: TopologyManager
   private topologyService: TopologyService | null = null
+  private topologySourcesService: TopologySourcesService | null = null
+  private dataSourceService: DataSourceService | null = null
   private metricsProvider: MockMetricsProvider
   private clients: Map<ServerWebSocket<ClientState>, ClientState> = new Map()
   private pollInterval: ReturnType<typeof setInterval> | null = null
@@ -276,13 +281,55 @@ export class Server {
   }
 
   private async updateDbTopologyMetrics(): Promise<void> {
-    if (!this.topologyService) return
+    if (!this.topologyService || !this.topologySourcesService || !this.dataSourceService) return
 
     const topologies = this.topologyService.list()
     for (const topology of topologies) {
       const parsed = await this.topologyService.getParsed(topology.id)
-      if (parsed) {
-        const metrics = this.metricsProvider.generateMetrics(parsed.graph)
+      if (!parsed) continue
+
+      let metrics: MetricsData | null = null
+
+      // Try to get metrics from configured data source
+      const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
+      if (metricsSources.length > 0) {
+        const source = metricsSources[0] // Use first metrics source
+        const dataSource = this.dataSourceService.get(source.dataSourceId)
+
+        if (dataSource) {
+          try {
+            // Get or create plugin instance
+            const config = JSON.parse(dataSource.configJson)
+            const plugin = pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
+
+            if (hasMetricsCapability(plugin)) {
+              // Parse mapping from topology
+              let mapping: ZabbixMapping = { nodes: {}, links: {} }
+              if (topology.mappingJson) {
+                try {
+                  mapping = JSON.parse(topology.mappingJson)
+                } catch {
+                  // Invalid mapping JSON, use empty
+                }
+              }
+
+              // Poll real metrics
+              metrics = await plugin.pollMetrics(mapping)
+              console.log(
+                `[Server] Polled real metrics for topology "${topology.name}" from ${dataSource.type}`,
+              )
+            }
+          } catch (err) {
+            console.error(
+              `[Server] Failed to poll metrics for topology "${topology.name}":`,
+              err instanceof Error ? err.message : err,
+            )
+          }
+        }
+      }
+
+      // Only update if we got real metrics (no mock fallback)
+      if (metrics) {
         this.dbTopologyMetrics.set(topology.id, metrics)
         this.topologyService.updateMetrics(topology.id, metrics)
       }
@@ -302,6 +349,8 @@ export class Server {
     this.setupStaticFileServing()
 
     this.topologyService = new TopologyService()
+    this.topologySourcesService = new TopologySourcesService()
+    this.dataSourceService = new DataSourceService()
     await this.topologyService.initializeSample()
 
     await this.topologyManager.loadAll()
