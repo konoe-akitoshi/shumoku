@@ -6,14 +6,14 @@
 
 /* Tailwind theme extensions */
 @theme {
-  /* Shumoku brand colors */
-  --color-primary: #7FE4C1;
-  --color-primary-dark: #5fd3a8;
-  --color-primary-light: #a5edd4;
-  --color-success: #73BF69;
-  --color-warning: #FADE2A;
-  --color-danger: #FF5E5E;
-  --color-info: #6E9FFF;
+  /* Shumoku brand colors - optimized for accessibility */
+  --color-primary: #10b981;
+  --color-primary-dark: #059669;
+  --color-primary-light: #34d399;
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
 
   /* Font families */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -53,7 +53,7 @@
   --color-bg-elevated: #ffffff;
   --color-bg-canvas: #e2e8f0;
   --color-text: #334155;
-  --color-text-muted: #64748b;
+  --color-text-muted: #475569;
   --color-text-emphasis: #0f172a;
 
   /* shadcn-svelte variables */
@@ -67,46 +67,46 @@
   --secondary: #e2e8f0;
   --secondary-foreground: #0f172a;
   --muted: #e2e8f0;
-  --muted-foreground: #64748b;
+  --muted-foreground: #475569;
   --accent: #e2e8f0;
   --accent-foreground: #0f172a;
-  --destructive: #FF5E5E;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --border: #cbd5e1;
-  --input: #cbd5e1;
-  --ring: #7FE4C1;
+  --border: #94a3b8;
+  --input: #94a3b8;
+  --ring: #10b981;
   --radius: 0.5rem;
 }
 
 /* Dark mode colors */
 .dark {
   /* Shumoku theme variables */
-  --color-bg: #111217;
-  --color-bg-elevated: #181b1f;
-  --color-bg-canvas: #0b0c0e;
-  --color-text: #ccccdc;
-  --color-text-muted: #8e8e9a;
-  --color-text-emphasis: #ffffff;
+  --color-bg: #0f1115;
+  --color-bg-elevated: #1a1d23;
+  --color-bg-canvas: #141619;
+  --color-text: #d1d5db;
+  --color-text-muted: #9ca3af;
+  --color-text-emphasis: #f9fafb;
 
   /* shadcn-svelte variables */
-  --background: #111217;
-  --foreground: #ffffff;
-  --card: #181b1f;
-  --card-foreground: #ffffff;
-  --popover: #181b1f;
-  --popover-foreground: #ffffff;
+  --background: #0f1115;
+  --foreground: #f9fafb;
+  --card: #1a1d23;
+  --card-foreground: #f9fafb;
+  --popover: #1a1d23;
+  --popover-foreground: #f9fafb;
   --primary-foreground: #0f172a;
-  --secondary: #2c2f36;
-  --secondary-foreground: #ffffff;
-  --muted: #2c2f36;
-  --muted-foreground: #8e8e9a;
-  --accent: #2c2f36;
-  --accent-foreground: #ffffff;
-  --destructive: #FF5E5E;
+  --secondary: #2d3139;
+  --secondary-foreground: #f9fafb;
+  --muted: #2d3139;
+  --muted-foreground: #9ca3af;
+  --accent: #2d3139;
+  --accent-foreground: #f9fafb;
+  --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #2c2f36;
-  --input: #2c2f36;
-  --ring: #7FE4C1;
+  --border: #3d4451;
+  --input: #3d4451;
+  --ring: #34d399;
 }
 
 /* Base styles */
@@ -226,6 +226,7 @@ body {
   background-color: var(--color-bg-elevated);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
+  overflow: hidden;
 }
 
 .card-header {

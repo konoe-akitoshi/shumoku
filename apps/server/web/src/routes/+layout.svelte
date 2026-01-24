@@ -71,9 +71,10 @@ function toggleSidebar() {
       ? 'w-16'
       : 'w-64'}"
   >
-    <div class="h-14 flex items-center justify-between px-3 border-b border-theme-border overflow-hidden">
-      <div class="flex items-center gap-2 min-w-0">
-        {#if !sidebarCollapsed}
+    <!-- Header: Logo & Toggle -->
+    <div class="h-14 flex items-center justify-between px-3 border-b border-theme-border">
+      {#if !sidebarCollapsed}
+        <div class="flex items-center gap-2 min-w-0">
           <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
             <svg viewBox="0 0 1024 1024" class="w-4 h-4" fill="none">
               <g transform="translate(90,40) scale(1.25)">
@@ -82,11 +83,13 @@ function toggleSidebar() {
             </svg>
           </div>
           <span class="text-lg font-semibold text-theme-text-emphasis whitespace-nowrap">Shumoku</span>
-        {/if}
-      </div>
+        </div>
+      {/if}
       <button
         onclick={toggleSidebar}
-        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg-elevated transition-colors text-theme-text-muted hover:text-theme-text flex-shrink-0"
+        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg-elevated transition-colors text-theme-text-muted hover:text-theme-text {sidebarCollapsed
+          ? 'mx-auto'
+          : 'flex-shrink-0'}"
         aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {#if sidebarCollapsed}
@@ -97,30 +100,28 @@ function toggleSidebar() {
       </button>
     </div>
 
-    <div class="flex-1 p-3">
+    <!-- Navigation Items -->
+    <div class="flex-1 py-3 px-2">
       <div class="space-y-1">
         {#each navItems as item}
           <a
             href={item.href}
-            class="flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors {isActive(
-              item.href,
-              $page.url.pathname
-            )
+            class="flex items-center h-10 text-sm rounded-lg transition-colors {sidebarCollapsed
+              ? 'justify-center w-10 mx-auto'
+              : 'gap-3 px-3'} {isActive(item.href, $page.url.pathname)
               ? 'bg-primary/10 text-primary'
               : 'text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text'}"
             title={sidebarCollapsed ? item.label : undefined}
           >
-            <span class="flex-shrink-0">
-              {#if item.icon === 'home'}
-                <House size={20} />
-              {:else if item.icon === 'topology'}
-                <TreeStructure size={20} />
-              {:else if item.icon === 'database'}
-                <Database size={20} />
-              {:else if item.icon === 'settings'}
-                <GearSix size={20} />
-              {/if}
-            </span>
+            {#if item.icon === 'home'}
+              <House size={20} />
+            {:else if item.icon === 'topology'}
+              <TreeStructure size={20} />
+            {:else if item.icon === 'database'}
+              <Database size={20} />
+            {:else if item.icon === 'settings'}
+              <GearSix size={20} />
+            {/if}
             {#if !sidebarCollapsed}
               <span class="whitespace-nowrap">{item.label}</span>
             {/if}
@@ -129,12 +130,11 @@ function toggleSidebar() {
       </div>
     </div>
 
-    <div class="p-3 border-t border-theme-border">
-      {#if sidebarCollapsed}
-        <div class="text-xs text-theme-text-muted text-center">v0.1</div>
-      {:else}
-        <div class="text-xs text-theme-text-muted px-3">v0.1.0</div>
-      {/if}
+    <!-- Footer: Version -->
+    <div class="py-3 px-2 border-t border-theme-border">
+      <div class="text-xs text-theme-text-muted {sidebarCollapsed ? 'text-center' : 'px-3'}">
+        {sidebarCollapsed ? 'v0.1' : 'v0.1.0'}
+      </div>
     </div>
   </nav>
 
