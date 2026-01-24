@@ -96,6 +96,36 @@ let tooltipContent = ''
 let tooltipX = 0
 let tooltipY = 0
 
+// Hovered element state for dynamic tooltip
+let hoveredType: 'node' | 'link' | 'subgraph' | null = null
+let hoveredLinkId: string | null = null
+let hoveredLinkInfo: { from: string; to: string; bandwidth: string } | null = null
+let hoveredNodeInfo: { id: string; label: string; type: string; vendor: string; model: string } | null = null
+let hoveredSubgraphInfo: { id: string; label: string; canNavigate: boolean } | null = null
+
+// Dynamic tooltip content - recalculates when metricsData changes
+$: if (tooltipVisible && hoveredType === 'link' && hoveredLinkId && hoveredLinkInfo) {
+  let content = `<strong>${hoveredLinkInfo.from} → ${hoveredLinkInfo.to}</strong>`
+  if (hoveredLinkInfo.bandwidth) {
+    content += `<br><span class="muted">Bandwidth: ${hoveredLinkInfo.bandwidth}</span>`
+  }
+
+  const metrics = $metricsData?.links?.[hoveredLinkId]
+  if (metrics) {
+    if (metrics.inBps !== undefined || metrics.outBps !== undefined) {
+      const inTraffic = formatTraffic(metrics.inBps || 0)
+      const outTraffic = formatTraffic(metrics.outBps || 0)
+      content += `<br><span class="muted">In:</span> ${inTraffic} <span class="muted">Out:</span> ${outTraffic}`
+    }
+    if (metrics.utilization !== undefined && metrics.utilization > 0) {
+      const color = getUtilizationColor(metrics.utilization)
+      content += `<br><span style="color: ${color}">Utilization: ${metrics.utilization.toFixed(1)}%</span>`
+    }
+    content += `<br><span class="muted">Status: ${metrics.status}</span>`
+  }
+  tooltipContent = content
+}
+
 // Currently hovered/selected elements
 let hoveredNodeId: string | null = null
 let selectedNodeId: string | null = null
@@ -316,6 +346,7 @@ function setupInteractivity() {
     const nodeId = nodeEl.getAttribute('data-id') || ''
 
     nodeEl.addEventListener('mouseenter', (e) => handleNodeHover(nodeId, e))
+    nodeEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
     nodeEl.addEventListener('mouseleave', () => handleNodeLeave())
     nodeEl.addEventListener('click', () => handleNodeClick(nodeId))
     nodeEl.style.cursor = 'pointer'
@@ -329,6 +360,7 @@ function setupInteractivity() {
     const hasFile = sgEl.getAttribute('data-has-file') === 'true'
 
     sgEl.addEventListener('mouseenter', (e) => handleSubgraphHover(sgId, e))
+    sgEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
     sgEl.addEventListener('mouseleave', () => handleSubgraphLeave())
 
     // Enable click navigation if this subgraph has a corresponding sheet
@@ -348,9 +380,18 @@ function setupInteractivity() {
     const linkId = linkEl.getAttribute('data-link-id') || ''
 
     linkEl.addEventListener('mouseenter', (e) => handleLinkHover(linkId, e))
+    linkEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
     linkEl.addEventListener('mouseleave', () => handleLinkLeave())
     linkEl.style.cursor = 'pointer'
   })
+}
+
+// Update tooltip position on mouse move
+function updateTooltipPosition(event: MouseEvent) {
+  if (tooltipVisible) {
+    tooltipX = event.clientX + 12
+    tooltipY = event.clientY + 12
+  }
 }
 
 // Node hover handlers
@@ -490,25 +531,34 @@ function highlightLink(linkId: string | null, highlight: boolean) {
   })
 }
 
-// Tooltip functions
+// Tooltip functions - set hovered state for dynamic content
 function showNodeTooltip(nodeId: string, event: MouseEvent) {
   if (!svgElement) return
   const node = svgElement.querySelector(`g.node[data-id="${nodeId}"]`)
   if (!node) return
 
-  // Get label from text element inside the node, or fall back to node id
   const labelEl = node.querySelector('text.node-label, text')
   const label = labelEl?.textContent?.trim() || nodeId
   const type = node.getAttribute('data-device-type') || ''
   const vendor = node.getAttribute('data-device-vendor') || ''
   const model = node.getAttribute('data-device-model') || ''
 
+  hoveredType = 'node'
+  hoveredNodeInfo = { id: nodeId, label, type, vendor, model }
+  hoveredLinkId = null
+  hoveredLinkInfo = null
+  hoveredSubgraphInfo = null
+
+  // Build content for nodes (static, no metrics)
   let content = `<strong>${label}</strong>`
   if (type) content += `<br><span class="muted">Type: ${type}</span>`
   if (vendor) content += `<br><span class="muted">Vendor: ${vendor}</span>`
   if (model) content += `<br><span class="muted">Model: ${model}</span>`
+  tooltipContent = content
 
-  showTooltip(content, event)
+  tooltipX = event.clientX + 12
+  tooltipY = event.clientY + 12
+  tooltipVisible = true
 }
 
 function showSubgraphTooltip(sgId: string, event: MouseEvent) {
@@ -519,10 +569,20 @@ function showSubgraphTooltip(sgId: string, event: MouseEvent) {
   const label = sg.getAttribute('data-label') || sgId
   const canNavigate = sheets[sgId] !== undefined
 
+  hoveredType = 'subgraph'
+  hoveredSubgraphInfo = { id: sgId, label, canNavigate }
+  hoveredLinkId = null
+  hoveredLinkInfo = null
+  hoveredNodeInfo = null
+
+  // Build content for subgraphs (static)
   let content = `<strong>${label}</strong>`
   if (canNavigate) content += `<br><span class="action">Click to drill down</span>`
+  tooltipContent = content
 
-  showTooltip(content, event)
+  tooltipX = event.clientX + 12
+  tooltipY = event.clientY + 12
+  tooltipVisible = true
 }
 
 function showLinkTooltip(linkId: string, event: MouseEvent) {
@@ -534,30 +594,31 @@ function showLinkTooltip(linkId: string, event: MouseEvent) {
   const to = link.getAttribute('data-to') || ''
   const bandwidth = link.getAttribute('data-bandwidth') || ''
 
+  hoveredType = 'link'
+  hoveredLinkId = linkId
+  hoveredLinkInfo = { from, to, bandwidth }
+  hoveredNodeInfo = null
+  hoveredSubgraphInfo = null
+
+  // Initial content - will be updated reactively by $: statement
   let content = `<strong>${from} → ${to}</strong>`
   if (bandwidth) content += `<br><span class="muted">Bandwidth: ${bandwidth}</span>`
 
   const metrics = $metricsData?.links?.[linkId]
   if (metrics) {
-    // Show actual traffic values
     if (metrics.inBps !== undefined || metrics.outBps !== undefined) {
       const inTraffic = formatTraffic(metrics.inBps || 0)
       const outTraffic = formatTraffic(metrics.outBps || 0)
       content += `<br><span class="muted">In:</span> ${inTraffic} <span class="muted">Out:</span> ${outTraffic}`
     }
-    // Show utilization with color if available
     if (metrics.utilization !== undefined && metrics.utilization > 0) {
       const color = getUtilizationColor(metrics.utilization)
       content += `<br><span style="color: ${color}">Utilization: ${metrics.utilization.toFixed(1)}%</span>`
     }
     content += `<br><span class="muted">Status: ${metrics.status}</span>`
   }
-
-  showTooltip(content, event)
-}
-
-function showTooltip(content: string, event: MouseEvent) {
   tooltipContent = content
+
   tooltipX = event.clientX + 12
   tooltipY = event.clientY + 12
   tooltipVisible = true
@@ -565,6 +626,11 @@ function showTooltip(content: string, event: MouseEvent) {
 
 function hideTooltip() {
   tooltipVisible = false
+  hoveredType = null
+  hoveredLinkId = null
+  hoveredLinkInfo = null
+  hoveredNodeInfo = null
+  hoveredSubgraphInfo = null
 }
 
 // Store original link styles for restoration

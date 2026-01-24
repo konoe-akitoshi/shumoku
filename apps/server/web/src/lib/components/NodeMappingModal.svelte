@@ -3,6 +3,7 @@ import { api } from '$lib/api'
 import * as Dialog from '$lib/components/ui/dialog'
 import { Button } from '$lib/components/ui/button'
 import { metricsData, mappingStore, mappingHosts } from '$lib/stores'
+import { formatTraffic } from '$lib/utils/format'
 import type { ZabbixMapping, DiscoveredMetric } from '$lib/types'
 import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
 import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
@@ -98,11 +99,14 @@ let netboxDeviceUrl = $derived(
 // Get current metrics for this node
 let nodeMetrics = $derived(nodeData ? $metricsData?.nodes?.[nodeData.node.id] : null)
 
-// Get metrics for connected links
-let linkMetricsMap = $derived(
-  nodeData?.connectedLinks.reduce(
+// Get metrics for connected links - explicitly access $metricsData outside reduce for reactivity
+let linkMetricsMap = $derived.by(() => {
+  const allLinkMetrics = $metricsData?.links
+  if (!nodeData?.connectedLinks || !allLinkMetrics) return {}
+
+  return nodeData.connectedLinks.reduce(
     (acc, link) => {
-      const metrics = $metricsData?.links?.[link.id]
+      const metrics = allLinkMetrics[link.id]
       if (metrics) {
         acc[link.id] = metrics
       }
@@ -110,10 +114,17 @@ let linkMetricsMap = $derived(
     },
     {} as Record<
       string,
-      { status: string; utilization?: number; inUtilization?: number; outUtilization?: number }
+      {
+        status: string
+        utilization?: number
+        inUtilization?: number
+        outUtilization?: number
+        inBps?: number
+        outBps?: number
+      }
     >,
-  ) || {},
-)
+  )
+})
 
 // Reset state when modal opens
 $effect(() => {
@@ -340,26 +351,30 @@ function stripHtmlTags(text: string | undefined): string {
                         <span class="text-xs text-muted-foreground">{link.bandwidth}</span>
                       {/if}
                     </div>
-                    {#if metrics?.utilization !== undefined}
-                      <div class="flex items-center gap-2 text-xs">
-                        <div class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            class="h-full rounded-full transition-all {metrics.utilization > 80
-                              ? 'bg-destructive'
-                              : metrics.utilization > 50
-                                ? 'bg-warning'
-                                : 'bg-success'}"
-                            style="width: {Math.min(metrics.utilization, 100)}%"
-                          ></div>
-                        </div>
-                        <span class="text-muted-foreground w-12 text-right">
-                          {formatUtilization(metrics.utilization)}
-                        </span>
+                    {#if metrics?.inBps !== undefined || metrics?.outBps !== undefined}
+                      <!-- Show actual traffic values -->
+                      <div class="flex gap-4 text-xs">
+                        <span class="text-muted-foreground">In:</span>
+                        <span class="font-medium">{formatTraffic(metrics.inBps ?? 0)}</span>
+                        <span class="text-muted-foreground">Out:</span>
+                        <span class="font-medium">{formatTraffic(metrics.outBps ?? 0)}</span>
                       </div>
-                      {#if metrics.inUtilization !== undefined || metrics.outUtilization !== undefined}
-                        <div class="flex gap-4 text-xs text-muted-foreground">
-                          <span>In: {formatUtilization(metrics.inUtilization)}</span>
-                          <span>Out: {formatUtilization(metrics.outUtilization)}</span>
+                      <!-- Utilization bar if available -->
+                      {#if metrics.utilization !== undefined && metrics.utilization > 0}
+                        <div class="flex items-center gap-2 text-xs">
+                          <div class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              class="h-full rounded-full transition-all {metrics.utilization > 80
+                                ? 'bg-destructive'
+                                : metrics.utilization > 50
+                                  ? 'bg-warning'
+                                  : 'bg-success'}"
+                              style="width: {Math.min(metrics.utilization, 100)}%"
+                            ></div>
+                          </div>
+                          <span class="text-muted-foreground w-12 text-right">
+                            {formatUtilization(metrics.utilization)}
+                          </span>
                         </div>
                       {/if}
                     {:else}
