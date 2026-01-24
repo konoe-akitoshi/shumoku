@@ -5,6 +5,9 @@
 
 import type { Stylesheet } from 'cytoscape'
 
+// Re-export formatTraffic from shared utils
+export { formatTraffic } from '$lib/utils/format'
+
 // Device type colors (matching @shumoku/core dark theme)
 export const deviceColors: Record<string, string> = {
   router: '#60a5fa',

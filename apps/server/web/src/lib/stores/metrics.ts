@@ -18,6 +18,8 @@ export interface EdgeMetrics {
   utilization?: number // Legacy: max of in/out
   inUtilization?: number // Incoming direction (0-100)
   outUtilization?: number // Outgoing direction (0-100)
+  inBps?: number // Incoming traffic in bits per second
+  outBps?: number // Outgoing traffic in bits per second
 }
 
 export interface MetricsData {

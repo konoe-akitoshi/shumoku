@@ -3,7 +3,7 @@ import { onMount, onDestroy, createEventDispatcher } from 'svelte'
 import cytoscape from 'cytoscape'
 import type { Core, EventObject, NodeSingular, EdgeSingular } from 'cytoscape'
 import { metricsStore, metricsData } from '$lib/stores'
-import { createDarkStylesheet, getUtilizationColor, statusColors } from '$lib/cytoscape/theme'
+import { createDarkStylesheet, getUtilizationColor, formatTraffic, statusColors } from '$lib/cytoscape/theme'
 import { convertToCytoscapeElements } from '$lib/cytoscape/converter'
 import type { ParsedTopologyResponse } from '$lib/types'
 
@@ -83,7 +83,14 @@ function showEdgeTooltip(edge: EdgeSingular, event: EventObject) {
 
   let content = `<strong>${data.label || data.id}</strong>`
 
-  if (data.utilization !== undefined) {
+  // Show actual traffic values
+  if (data.inBps !== undefined || data.outBps !== undefined) {
+    const inTraffic = formatTraffic(data.inBps || 0)
+    const outTraffic = formatTraffic(data.outBps || 0)
+    content += `<br><span class="text-xs text-gray-400">In:</span> ${inTraffic} <span class="text-xs text-gray-400">Out:</span> ${outTraffic}`
+  }
+  // Show utilization with color if > 0
+  if (data.utilization !== undefined && data.utilization > 0) {
     const color = getUtilizationColor(data.utilization)
     content += `<br><span class="text-xs" style="color: ${color}">Utilization: ${data.utilization.toFixed(1)}%</span>`
   }
@@ -262,6 +269,10 @@ function applyMetrics(metrics: typeof $metricsData) {
       const edge = cy.getElementById(linkId)
       if (edge.length) {
         edge.data('status', linkMetrics.status)
+
+        // Set traffic values for tooltip
+        if (linkMetrics.inBps !== undefined) edge.data('inBps', linkMetrics.inBps)
+        if (linkMetrics.outBps !== undefined) edge.data('outBps', linkMetrics.outBps)
 
         if (linkMetrics.utilization !== undefined) {
           edge.data('utilization', linkMetrics.utilization)

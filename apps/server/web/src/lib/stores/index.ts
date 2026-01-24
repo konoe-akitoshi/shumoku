@@ -44,4 +44,6 @@ export {
   nodeMapping,
   linkMapping,
   mappingHosts,
+  hostInterfaces,
+  hostInterfacesLoading,
 } from './mapping'

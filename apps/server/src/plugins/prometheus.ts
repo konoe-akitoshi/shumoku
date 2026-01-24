@@ -163,7 +163,14 @@ export class PrometheusPlugin implements DataSourcePlugin, MetricsCapable, Hosts
 
     // Poll link metrics (interface traffic)
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
-      const instance = (linkMapping as { instance?: string }).instance
+      // Get instance either directly or via monitoredNodeId -> node mapping
+      let instance = (linkMapping as { instance?: string }).instance
+      const monitoredNodeId = (linkMapping as { monitoredNodeId?: string }).monitoredNodeId
+      if (!instance && monitoredNodeId && mapping.nodes?.[monitoredNodeId]) {
+        // Resolve instance from node mapping (hostId is the Prometheus instance)
+        instance = mapping.nodes[monitoredNodeId].hostId
+      }
+
       const interfaceName =
         (linkMapping as { interface?: string }).interface || linkMapping.interface
 

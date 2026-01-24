@@ -30,6 +30,7 @@ import {
   showTrafficFlow,
   showNodeStatus,
 } from '$lib/stores'
+import { formatTraffic } from '$lib/utils/format'
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
 import MagnifyingGlassPlus from 'phosphor-svelte/lib/MagnifyingGlassPlus'
 import MagnifyingGlassMinus from 'phosphor-svelte/lib/MagnifyingGlassMinus'
@@ -538,7 +539,14 @@ function showLinkTooltip(linkId: string, event: MouseEvent) {
 
   const metrics = $metricsData?.links?.[linkId]
   if (metrics) {
-    if (metrics.utilization !== undefined) {
+    // Show actual traffic values
+    if (metrics.inBps !== undefined || metrics.outBps !== undefined) {
+      const inTraffic = formatTraffic(metrics.inBps || 0)
+      const outTraffic = formatTraffic(metrics.outBps || 0)
+      content += `<br><span class="muted">In:</span> ${inTraffic} <span class="muted">Out:</span> ${outTraffic}`
+    }
+    // Show utilization with color if available
+    if (metrics.utilization !== undefined && metrics.utilization > 0) {
       const color = getUtilizationColor(metrics.utilization)
       content += `<br><span style="color: ${color}">Utilization: ${metrics.utilization.toFixed(1)}%</span>`
     }
@@ -605,6 +613,11 @@ function applyMetrics(
 
       const inUtil = linkMetrics.inUtilization ?? linkMetrics.utilization ?? 0
       const outUtil = linkMetrics.outUtilization ?? linkMetrics.utilization ?? 0
+      // Use actual traffic values to determine if there's traffic
+      const inBps = linkMetrics.inBps ?? 0
+      const outBps = linkMetrics.outBps ?? 0
+      const hasInTraffic = inBps > 0
+      const hasOutTraffic = outBps > 0
 
       if (linkMetrics.status === 'down') {
         paths.forEach((path) => {
@@ -618,14 +631,19 @@ function applyMetrics(
         paths.forEach((path, index) => {
           const isInGroup = index < midPoint
           const util = isInGroup ? inUtil : outUtil
+          const hasTraffic = isInGroup ? hasInTraffic : hasOutTraffic
+          const bps = isInGroup ? inBps : outBps
           const color = getUtilizationColor(util)
           const animName = isInGroup ? 'shumoku-edge-flow-in' : 'shumoku-edge-flow-out'
 
           path.setAttribute('stroke', color)
 
-          if (util > 0) {
+          if (hasTraffic) {
             path.style.strokeDasharray = '16 8'
-            const duration = Math.max(0.5, 2.5 - (util / 100) * 2)
+            // Animation speed based on traffic: faster = more traffic
+            // Use log scale for better visual differentiation
+            const speedFactor = Math.min(1, Math.log10(bps + 1) / 9) // 0-1 based on bps (up to 1Gbps)
+            const duration = Math.max(0.3, 2 - speedFactor * 1.5)
             path.style.animation = `${animName} ${duration.toFixed(2)}s linear infinite`
           } else {
             path.style.strokeDasharray = ''

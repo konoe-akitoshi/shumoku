@@ -15,7 +15,8 @@ import { generateMetricsHtml } from './html-generator.js'
 import { MockMetricsProvider } from './mock-metrics.js'
 import { initDatabase, closeDatabase } from './db/index.js'
 import { createApiRouter } from './api/index.js'
-import { TopologyService } from './services/topology.js'
+import { getTopologyService } from './api/topologies.js'
+import type { TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { DataSourceService } from './services/datasource.js'
 import { registerBuiltinPlugins, pluginRegistry, hasMetricsCapability } from './plugins/index.js'
@@ -348,7 +349,7 @@ export class Server {
     this.setupApiRoutes()
     this.setupStaticFileServing()
 
-    this.topologyService = new TopologyService()
+    this.topologyService = getTopologyService()
     this.topologySourcesService = new TopologySourcesService()
     this.dataSourceService = new DataSourceService()
     await this.topologyService.initializeSample()

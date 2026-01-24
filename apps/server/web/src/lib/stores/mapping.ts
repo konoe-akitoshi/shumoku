@@ -5,12 +5,15 @@
 
 import { writable, derived, get } from 'svelte/store'
 import { api } from '$lib/api'
-import type { ZabbixMapping, Host } from '$lib/types'
+import type { ZabbixMapping, Host, HostItem } from '$lib/types'
 
 interface MappingState {
   topologyId: string | null
   mapping: ZabbixMapping
   hosts: Host[]
+  // Interfaces per host (hostId -> interfaces)
+  hostInterfaces: Record<string, HostItem[]>
+  hostInterfacesLoading: Record<string, boolean>
   loading: boolean
   hostsLoading: boolean
   error: string | null
@@ -21,6 +24,8 @@ const initialState: MappingState = {
   topologyId: null,
   mapping: { nodes: {}, links: {} },
   hosts: [],
+  hostInterfaces: {},
+  hostInterfacesLoading: {},
   loading: false,
   hostsLoading: false,
   error: null,
@@ -125,16 +130,74 @@ function createMappingStore() {
     /**
      * Update a single link mapping
      */
-    updateLink: (linkId: string, linkMapping: { interface?: string; capacity?: number } | null) => {
+    updateLink: (
+      linkId: string,
+      linkMapping: {
+        monitoredNodeId?: string
+        interface?: string
+        capacity?: number
+      } | null,
+    ) => {
       update((s) => {
         const links = { ...s.mapping.links }
-        if (linkMapping && (linkMapping.interface || linkMapping.capacity)) {
+        if (
+          linkMapping &&
+          (linkMapping.monitoredNodeId || linkMapping.interface || linkMapping.capacity)
+        ) {
           links[linkId] = { ...links[linkId], ...linkMapping }
         } else {
           delete links[linkId]
         }
         return { ...s, mapping: { ...s.mapping, links } }
       })
+    },
+
+    /**
+     * Load interfaces for a specific host
+     */
+    loadHostInterfaces: async (hostId: string) => {
+      const current = get({ subscribe })
+      if (!current.metricsSourceId) return
+
+      // Skip if already loaded or loading
+      if (current.hostInterfaces[hostId] || current.hostInterfacesLoading[hostId]) {
+        return
+      }
+
+      update((s) => ({
+        ...s,
+        hostInterfacesLoading: { ...s.hostInterfacesLoading, [hostId]: true },
+      }))
+
+      try {
+        const items = await api.dataSources.getHostItems(current.metricsSourceId, hostId)
+        // Filter to unique interface names (remove :in/:out suffix)
+        const interfaceNames = new Set<string>()
+        const interfaces: HostItem[] = []
+        for (const item of items) {
+          // Extract interface name from item name (e.g., "ge-0/0/1 - Inbound" -> "ge-0/0/1")
+          const match = item.name.match(/^(.+?)\s*-\s*(Inbound|Outbound)$/i)
+          const ifName = match ? match[1].trim() : item.name
+          if (!interfaceNames.has(ifName)) {
+            interfaceNames.add(ifName)
+            interfaces.push({
+              ...item,
+              id: ifName,
+              name: ifName,
+            })
+          }
+        }
+        update((s) => ({
+          ...s,
+          hostInterfaces: { ...s.hostInterfaces, [hostId]: interfaces },
+          hostInterfacesLoading: { ...s.hostInterfacesLoading, [hostId]: false },
+        }))
+      } catch {
+        update((s) => ({
+          ...s,
+          hostInterfacesLoading: { ...s.hostInterfacesLoading, [hostId]: false },
+        }))
+      }
     },
 
     /**
@@ -266,3 +329,5 @@ export const mappingError = derived(mappingStore, ($s) => $s.error)
 export const nodeMapping = derived(mappingStore, ($s) => $s.mapping.nodes)
 export const linkMapping = derived(mappingStore, ($s) => $s.mapping.links)
 export const mappingHosts = derived(mappingStore, ($s) => $s.hosts)
+export const hostInterfaces = derived(mappingStore, ($s) => $s.hostInterfaces)
+export const hostInterfacesLoading = derived(mappingStore, ($s) => $s.hostInterfacesLoading)

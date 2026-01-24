@@ -11,10 +11,28 @@ import { renderEmbeddable, type EmbeddableRenderOutput } from '@shumoku/renderer
 import { buildHierarchicalSheets } from '@shumoku/core'
 import { BunHierarchicalLayout } from '../layout.js'
 
+// Singleton instances for shared state
+let _topologyService: TopologyService | null = null
+let _dataSourceService: DataSourceService | null = null
+
+export function getTopologyService(): TopologyService {
+  if (!_topologyService) {
+    _topologyService = new TopologyService()
+  }
+  return _topologyService
+}
+
+function getDataSourceService(): DataSourceService {
+  if (!_dataSourceService) {
+    _dataSourceService = new DataSourceService()
+  }
+  return _dataSourceService
+}
+
 export function createTopologiesApi(): Hono {
   const app = new Hono()
-  const service = new TopologyService()
-  const dataSourceService = new DataSourceService()
+  const service = getTopologyService()
+  const dataSourceService = getDataSourceService()
 
   // List all topologies
   app.get('/', (c) => {
@@ -177,8 +195,13 @@ export function createTopologiesApi(): Hono {
         })),
         edges: parsed.graph.links.map((l, i) => ({
           id: l.id || `link-${i}`,
-          from: typeof l.from === 'string' ? l.from : l.from.node,
-          to: typeof l.to === 'string' ? l.to : l.to.node,
+          from:
+            typeof l.from === 'string'
+              ? { nodeId: l.from }
+              : { nodeId: l.from.node, port: l.from.port },
+          to:
+            typeof l.to === 'string' ? { nodeId: l.to } : { nodeId: l.to.node, port: l.to.port },
+          bandwidth: l.bandwidth,
         })),
         subgraphs: parsed.graph.subgraphs || [],
         metrics: parsed.metrics,

@@ -237,8 +237,10 @@ export interface ZabbixMapping {
     {
       in?: string
       out?: string
-      interface?: string
       capacity?: number
+      // Simplified link mapping: single monitored interface
+      monitoredNodeId?: string // Which node (from/to) is being monitored
+      interface?: string // Interface name on the monitored node
     }
   >
 }

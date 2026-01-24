@@ -10,8 +10,24 @@ import {
   nodeMapping,
   linkMapping,
   mappingHosts,
+  hostInterfaces,
+  hostInterfacesLoading,
 } from '$lib/stores'
 import type { ParsedTopologyResponse } from '$lib/types'
+
+// Edge endpoint with node and optional port
+interface EdgeEndpoint {
+  nodeId: string
+  port?: string
+}
+
+// Edge data from API
+interface EdgeData {
+  id: string
+  from: EdgeEndpoint
+  to: EdgeEndpoint
+  bandwidth?: string
+}
 import { api } from '$lib/api'
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
 import FloppyDisk from 'phosphor-svelte/lib/FloppyDisk'
@@ -20,6 +36,7 @@ import Lightning from 'phosphor-svelte/lib/Lightning'
 import Trash from 'phosphor-svelte/lib/Trash'
 import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
 import Warning from 'phosphor-svelte/lib/Warning'
+import ArrowRight from 'phosphor-svelte/lib/ArrowRight'
 
 let parsedTopology = $state<ParsedTopologyResponse | null>(null)
 let topologyName = $state('')
@@ -41,6 +58,9 @@ afterNavigate(() => {
   loadData(true)
 })
 
+// Store edges with full endpoint info
+let edges = $state<EdgeData[]>([])
+
 async function loadData(forceReload = false) {
   try {
     // Load mapping data via store
@@ -49,6 +69,7 @@ async function loadData(forceReload = false) {
     // Load parsed topology for node/link list
     const contextData = await api.topologies.getContext(topologyId)
     topologyName = contextData.name
+    edges = contextData.edges
     parsedTopology = {
       id: contextData.id,
       name: contextData.name,
@@ -71,9 +92,122 @@ async function loadData(forceReload = false) {
       dataSourceId: contextData.dataSourceId,
       mapping: contextData.mapping,
     }
+
+    // Pre-load interfaces for all mapped hosts used in links
+    loadInterfacesForMappedNodes()
   } catch (e) {
     localError = e instanceof Error ? e.message : 'Failed to load topology'
   }
+}
+
+// Load interfaces for all nodes that are mapped and used in links
+function loadInterfacesForMappedNodes() {
+  const hostIds = new Set<string>()
+  for (const edge of edges) {
+    const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
+    const toHostId = $nodeMapping[edge.to.nodeId]?.hostId
+    if (fromHostId) hostIds.add(fromHostId)
+    if (toHostId) hostIds.add(toHostId)
+  }
+  for (const hostId of hostIds) {
+    mappingStore.loadHostInterfaces(hostId)
+  }
+}
+
+// Auto-map link interfaces based on port names from topology
+// Prioritizes the side that has interfaces available (network device side)
+function handleAutoMapLinks() {
+  let matched = 0
+  for (const edge of edges) {
+    const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
+    const toHostId = $nodeMapping[edge.to.nodeId]?.hostId
+
+    const fromInterfaces = fromHostId ? $hostInterfaces[fromHostId] || [] : []
+    const toInterfaces = toHostId ? $hostInterfaces[toHostId] || [] : []
+    const currentMapping = $linkMapping[edge.id] || {}
+
+    // Skip if already mapped
+    if (currentMapping.interface) continue
+
+    // Try to find which side has interfaces (network device)
+    // Priority: side with matching port name > side with any interfaces
+    let monitoredNodeId: string | null = null
+    let matchedInterface: string | null = null
+
+    // Check "from" side first
+    if (fromHostId && fromInterfaces.length > 0 && edge.from.port) {
+      const match = findMatchingInterface(edge.from.port, fromInterfaces)
+      if (match) {
+        monitoredNodeId = edge.from.nodeId
+        matchedInterface = match
+      }
+    }
+
+    // If no match on "from", try "to" side
+    if (!matchedInterface && toHostId && toInterfaces.length > 0 && edge.to.port) {
+      const match = findMatchingInterface(edge.to.port, toInterfaces)
+      if (match) {
+        monitoredNodeId = edge.to.nodeId
+        matchedInterface = match
+      }
+    }
+
+    // Fallback: pick the side that has interfaces even without port match
+    if (!matchedInterface) {
+      if (fromHostId && fromInterfaces.length > 0) {
+        monitoredNodeId = edge.from.nodeId
+      } else if (toHostId && toInterfaces.length > 0) {
+        monitoredNodeId = edge.to.nodeId
+      }
+    }
+
+    if (monitoredNodeId && matchedInterface) {
+      mappingStore.updateLink(edge.id, {
+        ...currentMapping,
+        monitoredNodeId,
+        interface: matchedInterface,
+      })
+      matched++
+    } else if (monitoredNodeId && !currentMapping.monitoredNodeId) {
+      // At least set the monitored node even without interface match
+      mappingStore.updateLink(edge.id, {
+        ...currentMapping,
+        monitoredNodeId,
+      })
+    }
+  }
+  return matched
+}
+
+// Find matching interface by port name (handles variations like "ge-0/0/1" vs "ge-0/0/1.0")
+function findMatchingInterface(portName: string, interfaces: Array<{ name: string }>): string | null {
+  const normalized = portName.toLowerCase().replace(/[:\s]/g, '')
+
+  // Exact match first
+  for (const iface of interfaces) {
+    if (iface.name.toLowerCase() === portName.toLowerCase()) {
+      return iface.name
+    }
+  }
+
+  // Partial match (interface name contains port name or vice versa)
+  for (const iface of interfaces) {
+    const ifNorm = iface.name.toLowerCase().replace(/[:\s]/g, '')
+    if (ifNorm.includes(normalized) || normalized.includes(ifNorm)) {
+      return iface.name
+    }
+  }
+
+  // Match base name (without .0 suffix)
+  const basePort = normalized.split('.')[0]
+  for (const iface of interfaces) {
+    const baseIf = iface.name.toLowerCase().split('.')[0]
+    if (baseIf === basePort) {
+      return iface.name
+    }
+  }
+
+  return null
 }
 
 async function handleSave() {
@@ -95,19 +229,50 @@ function handleNodeMappingChange(nodeId: string, hostId: string) {
     nodeId,
     hostId ? { hostId, hostName: host?.name || host?.displayName } : {},
   )
+  // Load interfaces for the new host
+  if (hostId) {
+    mappingStore.loadHostInterfaces(hostId)
+  }
 }
 
 function handleLinkCapacityChange(linkId: string, capacity: number | undefined) {
+  const existing = $linkMapping[linkId] || {}
   if (capacity !== undefined) {
-    mappingStore.updateLink(linkId, { ...$linkMapping[linkId], capacity })
+    mappingStore.updateLink(linkId, { ...existing, capacity })
   } else {
-    const existing = $linkMapping[linkId]
-    if (existing?.interface) {
-      mappingStore.updateLink(linkId, { interface: existing.interface })
+    const { capacity: _, ...rest } = existing
+    if (Object.keys(rest).length > 0) {
+      mappingStore.updateLink(linkId, rest)
     } else {
       mappingStore.updateLink(linkId, null)
     }
   }
+}
+
+function handleMonitoredNodeChange(linkId: string, nodeId: string) {
+  const existing = $linkMapping[linkId] || {}
+  if (nodeId) {
+    mappingStore.updateLink(linkId, { ...existing, monitoredNodeId: nodeId, interface: undefined })
+    // Load interfaces for the selected node
+    const hostId = $nodeMapping[nodeId]?.hostId
+    if (hostId) {
+      mappingStore.loadHostInterfaces(hostId)
+    }
+  } else {
+    mappingStore.updateLink(linkId, { ...existing, monitoredNodeId: undefined, interface: undefined })
+  }
+}
+
+function handleLinkInterfaceChange(linkId: string, interfaceName: string) {
+  const existing = $linkMapping[linkId] || {}
+  mappingStore.updateLink(linkId, { ...existing, interface: interfaceName || undefined })
+}
+
+// Get node label by ID
+function getNodeLabelById(nodeId: string): string {
+  const node = parsedTopology?.graph.nodes.find((n) => n.id === nodeId)
+  if (!node) return nodeId
+  return getNodeLabel(node)
 }
 
 function handleAutoMap() {
@@ -153,6 +318,15 @@ let mappedCount = $derived(
   parsedTopology?.graph.nodes.filter((n) => $nodeMapping[n.id]?.hostId).length || 0,
 )
 let totalNodes = $derived(parsedTopology?.graph.nodes.length || 0)
+
+// Count mapped links (interface set)
+let mappedLinksCount = $derived(
+  edges.filter((e) => {
+    const m = $linkMapping[e.id]
+    return m?.monitoredNodeId && m?.interface
+  }).length,
+)
+let totalLinks = $derived(edges.length)
 </script>
 
 <svelte:head>
@@ -184,7 +358,10 @@ let totalNodes = $derived(parsedTopology?.graph.nodes.length || 0)
         <p class="text-sm text-theme-text-muted truncate">
           {topologyName}
           {#if totalNodes > 0}
-            <span class="ml-2">• {mappedCount}/{totalNodes} nodes mapped</span>
+            <span class="ml-2">• {mappedCount}/{totalNodes} nodes</span>
+          {/if}
+          {#if totalLinks > 0}
+            <span class="ml-2">• {mappedLinksCount}/{totalLinks} links</span>
           {/if}
         </p>
       </div>
@@ -299,39 +476,138 @@ let totalNodes = $derived(parsedTopology?.graph.nodes.length || 0)
       <!-- Link Mapping -->
       <div class="card">
         <div class="card-header">
-          <h2 class="font-medium text-theme-text-emphasis">Link Capacity</h2>
-          <p class="text-xs text-theme-text-muted mt-1">Set link capacity for utilization calculation</p>
+          <div class="flex items-center justify-between gap-4 mb-1">
+            <h2 class="font-medium text-theme-text-emphasis">Link Mapping</h2>
+            <Button variant="outline" size="sm" onclick={() => {
+              const matched = handleAutoMapLinks()
+              if (matched > 0) {
+                autoMapResult = { matched, total: edges.length }
+                setTimeout(() => { autoMapResult = null }, 5000)
+              }
+            }}>
+              <Lightning size={14} class="mr-1" />
+              Auto-map Interfaces
+            </Button>
+          </div>
+          <p class="text-xs text-theme-text-muted">Select the monitored device and interface for each link</p>
         </div>
         <div class="divide-y divide-theme-border">
-          {#if parsedTopology.graph.links.length === 0}
+          {#if edges.length === 0}
             <div class="p-4 text-center text-theme-text-muted">
               No links in topology
             </div>
           {:else}
-            {#each parsedTopology.graph.links as link}
-              <div class="p-4 flex items-center gap-4">
-                <div class="flex-1 min-w-0">
-                  <p class="font-medium text-theme-text-emphasis truncate">
-                    {typeof link.from === 'string' ? link.from : (link.from?.node ?? 'Unknown')}
-                    →
-                    {typeof link.to === 'string' ? link.to : (link.to?.node ?? 'Unknown')}
+            {#each edges as edge}
+              {@const linkId = edge.id}
+              {@const fromNodeId = edge.from.nodeId}
+              {@const toNodeId = edge.to.nodeId}
+              {@const fromPort = edge.from.port}
+              {@const toPort = edge.to.port}
+              {@const fromHostId = $nodeMapping[fromNodeId]?.hostId}
+              {@const toHostId = $nodeMapping[toNodeId]?.hostId}
+              {@const currentMapping = $linkMapping[linkId] || {}}
+              {@const monitoredNodeId = currentMapping.monitoredNodeId}
+              {@const monitoredHostId = monitoredNodeId === fromNodeId ? fromHostId : monitoredNodeId === toNodeId ? toHostId : undefined}
+              {@const interfaces = monitoredHostId ? $hostInterfaces[monitoredHostId] || [] : []}
+              {@const interfacesLoading = monitoredHostId ? $hostInterfacesLoading[monitoredHostId] : false}
+              {@const hasAnyMappedNode = !!fromHostId || !!toHostId}
+              {@const fromHasInterfaces = fromHostId && ($hostInterfaces[fromHostId]?.length || 0) > 0}
+              {@const toHasInterfaces = toHostId && ($hostInterfaces[toHostId]?.length || 0) > 0}
+              <div class="p-4 space-y-3">
+                <!-- Link header -->
+                <div class="flex items-center justify-between gap-4">
+                  <div class="flex-1 min-w-0">
+                    <p class="font-medium text-theme-text-emphasis truncate flex items-center gap-2">
+                      {#if currentMapping.monitoredNodeId && currentMapping.interface}
+                        <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+                      {:else if currentMapping.monitoredNodeId}
+                        <span class="w-2 h-2 rounded-full bg-warning flex-shrink-0"></span>
+                      {:else}
+                        <span class="w-2 h-2 rounded-full bg-theme-text-muted flex-shrink-0"></span>
+                      {/if}
+                      {getNodeLabelById(fromNodeId)}
+                      {#if fromPort}
+                        <span class="text-xs text-theme-text-muted">({fromPort})</span>
+                      {/if}
+                      <ArrowRight size={14} class="text-theme-text-muted flex-shrink-0" />
+                      {getNodeLabelById(toNodeId)}
+                      {#if toPort}
+                        <span class="text-xs text-theme-text-muted">({toPort})</span>
+                      {/if}
+                    </p>
+                    <p class="text-xs text-theme-text-muted">{edge.bandwidth || 'No bandwidth specified'}</p>
+                  </div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <input
+                      type="number"
+                      class="input"
+                      style="width: 5rem;"
+                      placeholder="Mbps"
+                      value={currentMapping.capacity || ''}
+                      oninput={(e) => {
+                        const value = e.currentTarget.value ? parseInt(e.currentTarget.value) : undefined
+                        handleLinkCapacityChange(linkId, value)
+                      }}
+                    />
+                    <span class="text-xs text-theme-text-muted">Mbps</span>
+                  </div>
+                </div>
+
+                <!-- Interface mapping: single monitored node + interface -->
+                {#if hasAnyMappedNode}
+                  <div class="flex items-center gap-3 text-sm">
+                    <!-- Monitored node selector -->
+                    <div class="flex-shrink-0">
+                      <label class="text-xs text-theme-text-muted mb-1 block">Monitor from</label>
+                      <select
+                        class="input"
+                        style="width: 10rem;"
+                        value={monitoredNodeId || ''}
+                        onchange={(e) => handleMonitoredNodeChange(linkId, e.currentTarget.value)}
+                      >
+                        <option value="">Select device</option>
+                        {#if fromHostId}
+                          <option value={fromNodeId}>
+                            {getNodeLabelById(fromNodeId)}{fromHasInterfaces ? '' : ' (no interfaces)'}
+                          </option>
+                        {/if}
+                        {#if toHostId}
+                          <option value={toNodeId}>
+                            {getNodeLabelById(toNodeId)}{toHasInterfaces ? '' : ' (no interfaces)'}
+                          </option>
+                        {/if}
+                      </select>
+                    </div>
+
+                    <!-- Interface selector -->
+                    <div class="flex-1 min-w-0">
+                      <label class="text-xs text-theme-text-muted mb-1 block">Interface</label>
+                      {#if !monitoredNodeId}
+                        <div class="input text-theme-text-muted" style="width: 100%;">Select device first</div>
+                      {:else if interfacesLoading}
+                        <div class="input text-theme-text-muted" style="width: 100%;">Loading...</div>
+                      {:else if interfaces.length === 0}
+                        <div class="input text-theme-text-muted" style="width: 100%;">No interfaces found</div>
+                      {:else}
+                        <select
+                          class="input"
+                          style="width: 100%;"
+                          value={currentMapping.interface || ''}
+                          onchange={(e) => handleLinkInterfaceChange(linkId, e.currentTarget.value)}
+                        >
+                          <option value="">Select interface</option>
+                          {#each interfaces as iface}
+                            <option value={iface.name}>{iface.name}</option>
+                          {/each}
+                        </select>
+                      {/if}
+                    </div>
+                  </div>
+                {:else}
+                  <p class="text-xs text-theme-text-muted italic">
+                    Map at least one node to enable interface selection
                   </p>
-                  <p class="text-xs text-theme-text-muted">{link.bandwidth || 'No bandwidth specified'}</p>
-                </div>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  <input
-                    type="number"
-                    class="input"
-                    style="width: 6rem;"
-                    placeholder="Mbps"
-                    value={$linkMapping[link.id || '']?.capacity || ''}
-                    oninput={(e) => {
-                      const value = e.currentTarget.value ? parseInt(e.currentTarget.value) : undefined
-                      handleLinkCapacityChange(link.id || '', value)
-                    }}
-                  />
-                  <span class="text-xs text-theme-text-muted">Mbps</span>
-                </div>
+                {/if}
               </div>
             {/each}
           {/if}
