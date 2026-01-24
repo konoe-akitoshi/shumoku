@@ -7,15 +7,16 @@
 
 import type { MetricsData, ZabbixMapping } from '../types.js'
 import type {
-  DataSourcePlugin,
-  DataSourceCapability,
-  MetricsCapable,
-  HostsCapable,
   ConnectionResult,
+  DataSourceCapability,
+  DataSourcePlugin,
+  DiscoveredMetric,
   Host,
   HostItem,
-  PrometheusPluginConfig,
+  HostsCapable,
+  MetricsCapable,
   PrometheusCustomMetrics,
+  PrometheusPluginConfig,
 } from './types.js'
 
 /**
@@ -292,6 +293,84 @@ export class PrometheusPlugin implements DataSourcePlugin, MetricsCapable, Hosts
     )
   }
 
+  async discoverMetrics(hostId: string): Promise<DiscoveredMetric[]> {
+    if (!this.config) {
+      throw new Error('Plugin not initialized')
+    }
+
+    const hostLabel = this.config.hostLabel || 'instance'
+    const metrics: DiscoveredMetric[] = []
+
+    try {
+      // Get all series for this host
+      let selector = `{${hostLabel}="${hostId}"}`
+      if (this.config.jobFilter) {
+        selector = `{${hostLabel}="${hostId}",job="${this.config.jobFilter}"}`
+      }
+
+      const seriesUrl = `/api/v1/series?match[]=${encodeURIComponent(selector)}`
+      const seriesData = await this.apiRequest<Array<Record<string, string>>>(seriesUrl)
+
+      // Get unique metric names
+      const metricNames = new Set<string>()
+      for (const series of seriesData) {
+        if (series.__name__) {
+          metricNames.add(series.__name__)
+        }
+      }
+
+      // Fetch metadata for all metrics (HELP, TYPE)
+      const metadataMap: Record<string, { type: string; help: string }> = {}
+      try {
+        const metadataUrl = '/api/v1/metadata'
+        const metadataResponse =
+          await this.apiRequest<Record<string, Array<{ type: string; help: string }>>>(metadataUrl)
+        for (const [name, entries] of Object.entries(metadataResponse)) {
+          if (entries.length > 0) {
+            metadataMap[name] = entries[0]
+          }
+        }
+      } catch {
+        // Metadata endpoint might not be available
+      }
+
+      // Query current values for each metric
+      for (const metricName of metricNames) {
+        try {
+          let query = `${metricName}{${hostLabel}="${hostId}"}`
+          if (this.config.jobFilter) {
+            query = `${metricName}{${hostLabel}="${hostId}",job="${this.config.jobFilter}"}`
+          }
+
+          const result = await this.instantQuery(query)
+
+          for (const series of result.result) {
+            const labels = { ...series.metric }
+            delete labels.__name__
+
+            metrics.push({
+              name: metricName,
+              labels,
+              value: parseFloat(series.value[1]) || 0,
+              help: metadataMap[metricName]?.help,
+              type: metadataMap[metricName]?.type,
+            })
+          }
+        } catch {
+          // Skip metrics that fail to query
+        }
+      }
+
+      // Sort by metric name
+      metrics.sort((a, b) => a.name.localeCompare(b.name))
+
+      return metrics
+    } catch (err) {
+      console.error('[PrometheusPlugin] Failed to discover metrics:', err)
+      return []
+    }
+  }
+
   // ============================================
   // Internal Methods
   // ============================================
@@ -314,7 +393,7 @@ export class PrometheusPlugin implements DataSourcePlugin, MetricsCapable, Hosts
       const credentials = btoa(
         `${this.config.basicAuth.username}:${this.config.basicAuth.password}`,
       )
-      headers['Authorization'] = `Basic ${credentials}`
+      headers.Authorization = `Basic ${credentials}`
     }
 
     return fetch(url, {

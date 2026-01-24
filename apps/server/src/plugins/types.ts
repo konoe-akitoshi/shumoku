@@ -48,6 +48,22 @@ export interface HostItem {
   unit?: string
 }
 
+/**
+ * A metric discovered from a data source for a specific host
+ */
+export interface DiscoveredMetric {
+  /** Metric name (e.g., "ifHCInOctets", "node_cpu_seconds_total") */
+  name: string
+  /** Labels associated with this metric */
+  labels: Record<string, string>
+  /** Current value */
+  value: number
+  /** Human-readable description (from HELP) */
+  help?: string
+  /** Metric type (counter, gauge, histogram, summary) */
+  type?: string
+}
+
 export interface MappingHint {
   nodeId: string
   suggestedHostId?: string
@@ -136,6 +152,11 @@ export interface HostsCapable {
    * Search hosts by name
    */
   searchHosts?(query: string): Promise<Host[]>
+
+  /**
+   * Discover all available metrics for a host
+   */
+  discoverMetrics?(hostId: string): Promise<DiscoveredMetric[]>
 }
 
 /**

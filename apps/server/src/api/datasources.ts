@@ -186,5 +186,18 @@ export function createDataSourcesApi(): Hono {
     }
   })
 
+  // Discover all metrics for a specific host
+  app.get('/:id/hosts/:hostId/metrics', async (c) => {
+    const id = c.req.param('id')
+    const hostId = c.req.param('hostId')
+    try {
+      const metrics = await service.discoverMetrics(id, hostId)
+      return c.json(metrics)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
   return app
 }

@@ -79,6 +79,22 @@ export interface MappingHint {
 }
 
 /**
+ * A metric discovered from a data source for a specific host
+ */
+export interface DiscoveredMetric {
+  /** Metric name (e.g., "ifHCInOctets", "node_cpu_seconds_total") */
+  name: string
+  /** Labels associated with this metric */
+  labels: Record<string, string>
+  /** Current value */
+  value: number
+  /** Human-readable description (from HELP) */
+  help?: string
+  /** Metric type (counter, gauge, histogram, summary) */
+  type?: string
+}
+
+/**
  * Single file in a multi-file topology
  */
 export interface TopologyFile {

@@ -55,7 +55,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json()
 }
 
-import type { DataSourceCapability, DataSourcePluginInfo, Host, HostItem } from './types'
+import type {
+  DataSourceCapability,
+  DataSourcePluginInfo,
+  Host,
+  HostItem,
+  DiscoveredMetric,
+} from './types'
 
 // Data Sources API
 export const dataSources = {
@@ -94,6 +100,9 @@ export const dataSources = {
 
   getHostItems: (id: string, hostId: string) =>
     request<HostItem[]>(`/datasources/${id}/hosts/${hostId}/items`),
+
+  discoverMetrics: (id: string, hostId: string) =>
+    request<DiscoveredMetric[]>(`/datasources/${id}/hosts/${hostId}/metrics`),
 }
 
 // Topologies API

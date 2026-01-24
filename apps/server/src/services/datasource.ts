@@ -4,16 +4,22 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import { getDatabase, generateId, timestamp } from '../db/index.js'
-import type { DataSource, DataSourceInput, DataSourceType, DataSourceStatus } from '../types.js'
-import {
-  pluginRegistry,
-  hasTopologyCapability,
-  hasHostsCapability,
-  hasAutoMappingCapability,
-} from '../plugins/index.js'
-import type { ConnectionResult, Host, HostItem, MappingHint } from '../plugins/types.js'
 import type { NetworkGraph } from '@shumoku/core'
+import { generateId, getDatabase, timestamp } from '../db/index.js'
+import {
+  hasAutoMappingCapability,
+  hasHostsCapability,
+  hasTopologyCapability,
+  pluginRegistry,
+} from '../plugins/index.js'
+import type {
+  ConnectionResult,
+  DiscoveredMetric,
+  Host,
+  HostItem,
+  MappingHint,
+} from '../plugins/types.js'
+import type { DataSource, DataSourceInput, DataSourceStatus, DataSourceType } from '../types.js'
 
 interface DataSourceRow {
   id: string
@@ -215,6 +221,18 @@ export class DataSourceService {
     }
 
     return plugin.getHostItems?.(hostId) || []
+  }
+
+  /**
+   * Discover all metrics for a host from a data source (if supported)
+   */
+  async discoverMetrics(id: string, hostId: string): Promise<DiscoveredMetric[]> {
+    const plugin = this.getPlugin(id)
+    if (!plugin || !hasHostsCapability(plugin)) {
+      return []
+    }
+
+    return plugin.discoverMetrics?.(hostId) || []
   }
 
   /**

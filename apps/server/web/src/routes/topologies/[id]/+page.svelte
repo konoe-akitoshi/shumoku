@@ -3,12 +3,12 @@ import { onMount } from 'svelte'
 import { page } from '$app/stores'
 import { goto } from '$app/navigation'
 import { api } from '$lib/api'
-import { metricsConnected } from '$lib/stores'
+import { metricsConnected, mappingStore, nodeMapping } from '$lib/stores'
 import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
 import type { NodeSelectEvent } from '$lib/components/InteractiveSvgDiagram.svelte'
 import TopologySettings from '$lib/components/TopologySettings.svelte'
 import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
-import type { Topology, ZabbixMapping, TopologyDataSource } from '$lib/types'
+import type { Topology, TopologyDataSource } from '$lib/types'
 import X from 'phosphor-svelte/lib/X'
 
 let topology: Topology | null = null
@@ -22,12 +22,14 @@ let settingsOpen = false
 // Node mapping modal state
 let mappingModalOpen = false
 let selectedNodeData: NodeSelectEvent | null = null
-let currentMapping: ZabbixMapping | null = null
-let metricsSourceId: string | undefined = undefined
 let netboxBaseUrl: string | undefined = undefined
 
 // Get ID from route params
 $: topologyId = $page.params.id!
+
+// Get mapping from store
+$: metricsSourceId = $mappingStore.metricsSourceId ?? undefined
+$: currentMapping = $mappingStore.mapping
 
 onMount(async () => {
   try {
@@ -35,24 +37,11 @@ onMount(async () => {
       api.topologies.get(topologyId),
       fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
       api.topologies.sources.list(topologyId),
+      // Load mapping via shared store
+      mappingStore.load(topologyId),
     ])
     topology = topoData
     renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
-
-    // Parse mapping from topology
-    if (topoData.mappingJson) {
-      try {
-        currentMapping = JSON.parse(topoData.mappingJson) as ZabbixMapping
-      } catch {
-        currentMapping = { nodes: {}, links: {} }
-      }
-    } else {
-      currentMapping = { nodes: {}, links: {} }
-    }
-
-    // Find metrics source
-    const metricsSource = sources.find((s: TopologyDataSource) => s.purpose === 'metrics')
-    metricsSourceId = metricsSource?.dataSourceId
 
     // Find NetBox topology source for device links
     const netboxSource = sources.find(
@@ -86,17 +75,8 @@ function handleNodeSelect(event: NodeSelectEvent) {
   mappingModalOpen = true
 }
 
-function handleMappingSaved(nodeId: string, mapping: { hostId?: string; hostName?: string }) {
-  // Update local mapping state
-  if (currentMapping) {
-    if (mapping.hostId) {
-      currentMapping.nodes[nodeId] = mapping
-    } else {
-      delete currentMapping.nodes[nodeId]
-    }
-    // Force reactivity
-    currentMapping = { ...currentMapping }
-  }
+function handleMappingSaved(_nodeId: string, _mapping: { hostId?: string; hostName?: string }) {
+  // Mapping is now handled by the shared store, no need to update local state
 }
 </script>
 

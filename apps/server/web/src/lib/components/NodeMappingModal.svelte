@@ -2,8 +2,8 @@
 import { api } from '$lib/api'
 import * as Dialog from '$lib/components/ui/dialog'
 import { Button } from '$lib/components/ui/button'
-import { metricsData } from '$lib/stores'
-import type { Host, ZabbixMapping } from '$lib/types'
+import { metricsData, mappingStore, mappingHosts } from '$lib/stores'
+import type { ZabbixMapping, DiscoveredMetric } from '$lib/types'
 import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
 import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
 import Link from 'phosphor-svelte/lib/Link'
@@ -14,6 +14,9 @@ import GearSix from 'phosphor-svelte/lib/GearSix'
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
 import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
 import Cube from 'phosphor-svelte/lib/Cube'
+import ChartLine from 'phosphor-svelte/lib/ChartLine'
+import CaretDown from 'phosphor-svelte/lib/CaretDown'
+import CaretRight from 'phosphor-svelte/lib/CaretRight'
 
 interface Props {
   open: boolean
@@ -39,12 +42,20 @@ let {
 let mode = $state<'status' | 'mapping'>('status')
 
 // State for mapping mode
-let hosts = $state<Host[]>([])
-let loadingHosts = $state(false)
-let hostError = $state('')
 let selectedHostId = $state('')
 let saving = $state(false)
 let searchQuery = $state('')
+
+// Use hosts from shared store
+let hosts = $derived($mappingHosts)
+let loadingHosts = $derived($mappingStore.hostsLoading)
+
+// State for metrics discovery
+let discoveredMetrics = $state<DiscoveredMetric[]>([])
+let loadingMetrics = $state(false)
+let metricsError = $state('')
+let metricsExpanded = $state(false)
+let metricsSearchQuery = $state('')
 
 // Computed
 let filteredHosts = $derived(
@@ -60,6 +71,22 @@ let filteredHosts = $derived(
 
 let currentNodeMapping = $derived(nodeData && currentMapping?.nodes?.[nodeData.node.id])
 let hasMetricsSource = $derived(!!metricsSourceId)
+
+// Filter discovered metrics by search query
+let filteredMetrics = $derived(
+  metricsSearchQuery
+    ? discoveredMetrics.filter(
+        (m) =>
+          m.name.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||
+          (m.help && m.help.toLowerCase().includes(metricsSearchQuery.toLowerCase())) ||
+          Object.entries(m.labels).some(
+            ([k, v]) =>
+              k.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||
+              v.toLowerCase().includes(metricsSearchQuery.toLowerCase()),
+          ),
+      )
+    : discoveredMetrics,
+)
 
 // NetBox device URL (search by name since we don't have device ID)
 let netboxDeviceUrl = $derived(
@@ -88,19 +115,17 @@ let linkMetricsMap = $derived(
   ) || {},
 )
 
-// Reset mode when modal opens
+// Reset state when modal opens
 $effect(() => {
   if (open) {
     mode = 'status'
+    metricsExpanded = false
+    discoveredMetrics = []
+    metricsSearchQuery = ''
   }
 })
 
-// Load hosts when entering mapping mode
-$effect(() => {
-  if (mode === 'mapping' && metricsSourceId && hosts.length === 0) {
-    loadHosts()
-  }
-})
+// Hosts are loaded via shared store, no need to load separately
 
 // Set initial selected host when entering mapping mode
 $effect(() => {
@@ -110,18 +135,40 @@ $effect(() => {
   }
 })
 
-async function loadHosts() {
-  if (!metricsSourceId) return
+// Hosts are loaded via shared store
 
-  loadingHosts = true
-  hostError = ''
+async function loadDiscoveredMetrics() {
+  if (!metricsSourceId || !currentNodeMapping?.hostId) return
+
+  loadingMetrics = true
+  metricsError = ''
   try {
-    hosts = await api.dataSources.getHosts(metricsSourceId)
+    discoveredMetrics = await api.dataSources.discoverMetrics(
+      metricsSourceId,
+      currentNodeMapping.hostId,
+    )
   } catch (e) {
-    hostError = e instanceof Error ? e.message : 'Failed to load hosts'
+    metricsError = e instanceof Error ? e.message : 'Failed to load metrics'
   } finally {
-    loadingHosts = false
+    loadingMetrics = false
   }
+}
+
+function handleMetricsToggle() {
+  metricsExpanded = !metricsExpanded
+  if (metricsExpanded && discoveredMetrics.length === 0 && !loadingMetrics) {
+    loadDiscoveredMetrics()
+  }
+}
+
+function formatMetricValue(value: number): string {
+  if (value === 0) return '0'
+  if (Math.abs(value) >= 1e12) return `${(value / 1e12).toFixed(2)}T`
+  if (Math.abs(value) >= 1e9) return `${(value / 1e9).toFixed(2)}G`
+  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(2)}M`
+  if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(2)}K`
+  if (Number.isInteger(value)) return value.toString()
+  return value.toFixed(2)
 }
 
 async function handleSave() {
@@ -132,7 +179,8 @@ async function handleSave() {
     const selectedHost = hosts.find((h) => h.id === selectedHostId)
     const mapping = selectedHostId ? { hostId: selectedHostId, hostName: selectedHost?.name } : {}
 
-    await api.topologies.updateNodeMapping(topologyId, nodeData.node.id, mapping)
+    // Update via shared store (which handles API call)
+    await mappingStore.updateNode(nodeData.node.id, mapping)
 
     if (onSaved) {
       onSaved(nodeData.node.id, mapping)
@@ -181,6 +229,11 @@ function getStatusBgColor(status: string | undefined): string {
       return 'bg-muted-foreground'
   }
 }
+
+function stripHtmlTags(text: string | undefined): string {
+  if (!text) return ''
+  return text.replace(/<[^>]*>/g, '')
+}
 </script>
 
 <Dialog.Root {open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
@@ -196,7 +249,7 @@ function getStatusBgColor(status: string | undefined): string {
             <ArrowLeft size={16} />
           </button>
         {/if}
-        {nodeData?.node.label || 'Node'}
+        {stripHtmlTags(nodeData?.node.label) || 'Node'}
       </Dialog.Title>
     </Dialog.Header>
 
@@ -320,6 +373,109 @@ function getStatusBgColor(status: string | undefined): string {
             <div class="text-sm text-muted-foreground text-center py-4">No connected links</div>
           {/if}
 
+          <!-- Discovered Metrics Section (expandable) -->
+          {#if hasMetricsSource && currentNodeMapping?.hostId}
+            <div class="space-y-2">
+              <button
+                class="flex items-center gap-2 text-sm font-medium w-full hover:text-primary transition-colors"
+                onclick={handleMetricsToggle}
+              >
+                {#if metricsExpanded}
+                  <CaretDown size={14} />
+                {:else}
+                  <CaretRight size={14} />
+                {/if}
+                <ChartLine size={14} />
+                <span>All Metrics</span>
+                {#if discoveredMetrics.length > 0}
+                  <span class="text-xs text-muted-foreground">({discoveredMetrics.length})</span>
+                {/if}
+              </button>
+
+              {#if metricsExpanded}
+                <div class="border rounded-lg">
+                  {#if loadingMetrics}
+                    <div class="flex items-center justify-center py-8">
+                      <div
+                        class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                      ></div>
+                      <span class="ml-2 text-sm text-muted-foreground">Loading metrics...</span>
+                    </div>
+                  {:else if metricsError}
+                    <div class="p-3 text-sm">
+                      <p class="text-destructive">{metricsError}</p>
+                      <button
+                        class="text-xs text-primary hover:underline mt-1"
+                        onclick={loadDiscoveredMetrics}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  {:else if discoveredMetrics.length === 0}
+                    <div class="p-3 text-sm text-muted-foreground text-center">
+                      No metrics found
+                    </div>
+                  {:else}
+                    <!-- Search -->
+                    <div class="p-2 border-b">
+                      <div class="relative">
+                        <MagnifyingGlass
+                          size={14}
+                          class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Search metrics..."
+                          class="w-full pl-7 pr-2 py-1 text-xs bg-background border rounded focus:outline-none focus:ring-1 focus:ring-ring"
+                          bind:value={metricsSearchQuery}
+                        />
+                      </div>
+                    </div>
+
+                    <!-- Metrics List -->
+                    <div class="max-h-64 overflow-y-auto divide-y">
+                      {#each filteredMetrics as metric}
+                        <div class="p-2 hover:bg-muted/30 text-xs space-y-1">
+                          <div class="flex items-start justify-between gap-2">
+                            <div class="font-mono font-medium text-foreground break-all">
+                              {metric.name}
+                            </div>
+                            <div class="font-mono text-right flex-shrink-0 tabular-nums">
+                              {formatMetricValue(metric.value)}
+                            </div>
+                          </div>
+                          {#if metric.help}
+                            <div class="text-muted-foreground">{metric.help}</div>
+                          {/if}
+                          {#if Object.keys(metric.labels).length > 0}
+                            <div class="flex flex-wrap gap-1">
+                              {#each Object.entries(metric.labels) as [key, value]}
+                                <span class="bg-muted px-1.5 py-0.5 rounded text-[10px]">
+                                  {key}=<span class="text-muted-foreground">{value}</span>
+                                </span>
+                              {/each}
+                            </div>
+                          {/if}
+                          {#if metric.type}
+                            <div class="text-muted-foreground">
+                              Type: <span class="text-foreground">{metric.type}</span>
+                            </div>
+                          {/if}
+                        </div>
+                      {/each}
+                    </div>
+
+                    {#if metricsSearchQuery && filteredMetrics.length === 0}
+                      <div class="p-3 text-sm text-muted-foreground text-center">
+                        No metrics match your search
+                      </div>
+                    {/if}
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
           <!-- No metrics source warning -->
           {#if !hasMetricsSource}
             <div
@@ -393,19 +549,6 @@ function getStatusBgColor(status: string | undefined): string {
                   class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"
                 ></div>
                 <span class="ml-2 text-sm text-muted-foreground">Loading hosts...</span>
-              </div>
-            {:else if hostError}
-              <div
-                class="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm"
-              >
-                <Warning size={16} class="text-destructive mt-0.5 flex-shrink-0" />
-                <div>
-                  <p class="font-medium text-destructive">Failed to load hosts</p>
-                  <p class="text-xs text-muted-foreground">{hostError}</p>
-                  <button class="text-xs text-primary hover:underline mt-1" onclick={loadHosts}>
-                    Retry
-                  </button>
-                </div>
               </div>
             {:else}
               <!-- Search -->
