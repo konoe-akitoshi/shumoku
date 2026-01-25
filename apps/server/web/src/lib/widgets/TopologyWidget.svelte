@@ -1,8 +1,9 @@
 <script lang="ts">
-import { onMount } from 'svelte'
+import { onMount, onDestroy } from 'svelte'
 import { api } from '$lib/api'
 import type { Topology } from '$lib/types'
 import { dashboardStore, dashboardEditMode } from '$lib/stores/dashboards'
+import { widgetEvents, type WidgetEvent } from '$lib/stores/widgetEvents'
 import WidgetWrapper from './WidgetWrapper.svelte'
 import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
 import Spinner from 'phosphor-svelte/lib/Spinner'
@@ -37,6 +38,12 @@ let showSelector = $state(false)
 let isHierarchical = $state(false)
 let sheets: SheetInfo[] = $state([])
 let renderCache: Record<string, string> = {}
+
+// Highlight support for widget events
+let highlightedNodeId = $state<string | null>(null)
+let highlightTimeout: ReturnType<typeof setTimeout> | null = null
+let containerElement = $state<HTMLDivElement | null>(null)
+let unsubscribeEvents: (() => void) | null = null
 
 async function loadTopologies() {
   try {
@@ -108,9 +115,122 @@ function selectSheet(sheetId: string) {
   }
 }
 
+function handleWidgetEvent(event: WidgetEvent) {
+  // Only handle events for this topology
+  if (event.payload.topologyId !== config.topologyId) return
+
+  const nodeId = event.payload.nodeId
+
+  switch (event.type) {
+    case 'zoom-to-node':
+    case 'highlight-node':
+      highlightNode(nodeId, event.payload.duration || 3000)
+      scrollToNode(nodeId)
+      break
+    case 'select-node':
+      highlightNode(nodeId)
+      scrollToNode(nodeId)
+      break
+    case 'clear-highlight':
+      clearHighlight()
+      break
+  }
+}
+
+function highlightNode(nodeId: string, duration?: number) {
+  // Clear any existing highlight
+  clearHighlight()
+
+  highlightedNodeId = nodeId
+
+  // Apply highlight style to the node element
+  if (containerElement) {
+    const nodeElement = containerElement.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null
+    if (nodeElement) {
+      nodeElement.classList.add('node-highlighted')
+    }
+  }
+
+  // Auto-clear after duration
+  if (duration) {
+    highlightTimeout = setTimeout(() => {
+      clearHighlight()
+    }, duration)
+  }
+}
+
+function clearHighlight() {
+  if (highlightTimeout) {
+    clearTimeout(highlightTimeout)
+    highlightTimeout = null
+  }
+
+  if (highlightedNodeId && containerElement) {
+    const nodeElement = containerElement.querySelector(`[data-node-id="${highlightedNodeId}"]`) as HTMLElement | null
+    if (nodeElement) {
+      nodeElement.classList.remove('node-highlighted')
+    }
+  }
+
+  highlightedNodeId = null
+}
+
+function scrollToNode(nodeId: string) {
+  if (!containerElement) return
+
+  // Find the node element in the SVG
+  const nodeElement = containerElement.querySelector(`[data-node-id="${nodeId}"]`) as SVGGElement | null
+  if (!nodeElement) return
+
+  // Get the bounding box of the node
+  const bbox = nodeElement.getBBox?.()
+  if (!bbox) return
+
+  // Find the SVG element
+  const svg = containerElement.querySelector('svg')
+  if (!svg) return
+
+  // Get current viewBox
+  const viewBox = svg.viewBox.baseVal
+  if (!viewBox) return
+
+  // Calculate the center of the node
+  const nodeCenterX = bbox.x + bbox.width / 2
+  const nodeCenterY = bbox.y + bbox.height / 2
+
+  // Calculate new viewBox to center on the node with some padding
+  const padding = 100
+  const newWidth = Math.max(bbox.width + padding * 2, viewBox.width / 2)
+  const newHeight = Math.max(bbox.height + padding * 2, viewBox.height / 2)
+
+  const newViewBox = `${nodeCenterX - newWidth / 2} ${nodeCenterY - newHeight / 2} ${newWidth} ${newHeight}`
+
+  // Animate the viewBox change
+  svg.style.transition = 'all 0.3s ease-out'
+  svg.setAttribute('viewBox', newViewBox)
+
+  // Reset viewBox after a delay
+  setTimeout(() => {
+    svg.style.transition = 'all 0.5s ease-in-out'
+    svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`)
+  }, 2000)
+}
+
 onMount(() => {
   loadTopologies()
   loadTopology()
+
+  // Subscribe to widget events
+  unsubscribeEvents = widgetEvents.on(handleWidgetEvent)
+})
+
+onDestroy(() => {
+  if (unsubscribeEvents) {
+    unsubscribeEvents()
+  }
+  if (highlightTimeout) {
+    clearTimeout(highlightTimeout)
+  }
 })
 
 // Watch for topology ID changes
@@ -214,7 +334,7 @@ let editMode = $derived($dashboardEditMode)
         </button>
       </div>
     {:else if svgContent}
-      <div class="h-full w-full overflow-hidden topology-container relative group">
+      <div class="h-full w-full overflow-hidden topology-container relative group" bind:this={containerElement}>
         {@html svgContent}
         {#if !editMode && config.topologyId}
           <a
@@ -240,5 +360,27 @@ let editMode = $derived($dashboardEditMode)
     height: 100%;
     max-width: 100%;
     max-height: 100%;
+  }
+
+  /* Node highlight animation */
+  .topology-container :global(.node-highlighted) {
+    animation: node-pulse 0.5s ease-in-out infinite alternate;
+  }
+
+  .topology-container :global(.node-highlighted rect),
+  .topology-container :global(.node-highlighted circle),
+  .topology-container :global(.node-highlighted path) {
+    stroke: #f59e0b !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.6));
+  }
+
+  @keyframes node-pulse {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0.7;
+    }
   }
 </style>

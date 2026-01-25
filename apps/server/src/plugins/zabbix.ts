@@ -12,19 +12,28 @@ import type {
   MetricsCapable,
   HostsCapable,
   AutoMappingCapable,
+  AlertsCapable,
   ConnectionResult,
   Host,
   HostItem,
   MappingHint,
   ZabbixPluginConfig,
+  Alert,
+  AlertQueryOptions,
+  AlertSeverity,
 } from './types.js'
 
 export class ZabbixPlugin
-  implements DataSourcePlugin, MetricsCapable, HostsCapable, AutoMappingCapable
+  implements DataSourcePlugin, MetricsCapable, HostsCapable, AutoMappingCapable, AlertsCapable
 {
   readonly type = 'zabbix'
   readonly displayName = 'Zabbix'
-  readonly capabilities: readonly DataSourceCapability[] = ['metrics', 'hosts', 'auto-mapping']
+  readonly capabilities: readonly DataSourceCapability[] = [
+    'metrics',
+    'hosts',
+    'auto-mapping',
+    'alerts',
+  ]
 
   private config: ZabbixPluginConfig | null = null
   private requestId = 0
@@ -231,6 +240,113 @@ export class ZabbixPlugin
     }
 
     return hints
+  }
+
+  // ============================================
+  // AlertsCapable Implementation
+  // ============================================
+
+  async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
+    // Zabbix severity mapping (Zabbix uses 0-5, we need to filter and map)
+    const severityFilter = this.getSeverityFilter(options?.minSeverity)
+
+    const timeFrom = Math.floor((Date.now() - (options?.timeRange || 3600) * 1000) / 1000)
+
+    interface ZabbixProblem {
+      eventid: string
+      objectid: string
+      name: string
+      severity: string
+      clock: string
+      r_clock: string
+      hosts?: Array<{ hostid: string; host: string; name: string }>
+    }
+
+    const params: Record<string, unknown> = {
+      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'r_clock'],
+      selectHosts: ['hostid', 'host', 'name'],
+      recent: true,
+      time_from: timeFrom,
+      sortfield: ['clock'],
+      sortorder: 'DESC',
+    }
+
+    // Filter by severity
+    if (severityFilter.length > 0) {
+      params.severities = severityFilter
+    }
+
+    // Filter by host IDs
+    if (options?.hostIds && options.hostIds.length > 0) {
+      params.hostids = options.hostIds
+    }
+
+    const problems = await this.apiRequest<ZabbixProblem[]>('problem.get', params)
+
+    const alerts: Alert[] = problems.map((p) => ({
+      id: p.eventid,
+      severity: this.mapZabbixSeverity(p.severity),
+      title: p.name,
+      host: p.hosts?.[0]?.host,
+      hostId: p.hosts?.[0]?.hostid,
+      startTime: Number.parseInt(p.clock) * 1000,
+      endTime: p.r_clock && p.r_clock !== '0' ? Number.parseInt(p.r_clock) * 1000 : undefined,
+      status: p.r_clock && p.r_clock !== '0' ? 'resolved' : 'active',
+      source: 'zabbix' as const,
+      url: this.config
+        ? `${this.config.url.replace(/\/$/, '')}/tr_events.php?triggerid=${p.objectid}&eventid=${p.eventid}`
+        : undefined,
+    }))
+
+    // Filter active only if requested
+    if (options?.activeOnly) {
+      return alerts.filter((a) => a.status === 'active')
+    }
+
+    return alerts
+  }
+
+  private mapZabbixSeverity(severity: string): AlertSeverity {
+    const severityMap: Record<string, AlertSeverity> = {
+      '0': 'information', // Not classified
+      '1': 'information', // Information
+      '2': 'warning', // Warning
+      '3': 'average', // Average
+      '4': 'high', // High
+      '5': 'disaster', // Disaster
+    }
+    return severityMap[severity] || 'information'
+  }
+
+  private getSeverityFilter(minSeverity?: AlertSeverity): number[] {
+    if (!minSeverity) return []
+
+    const severityOrder: AlertSeverity[] = [
+      'information',
+      'warning',
+      'average',
+      'high',
+      'disaster',
+    ]
+
+    // Map our severity to Zabbix numeric values
+    const severityToZabbix: Record<AlertSeverity, number[]> = {
+      information: [0, 1],
+      warning: [2],
+      average: [3],
+      high: [4],
+      disaster: [5],
+      ok: [],
+    }
+
+    const minIndex = severityOrder.indexOf(minSeverity)
+    if (minIndex === -1) return []
+
+    const result: number[] = []
+    for (let i = minIndex; i < severityOrder.length; i++) {
+      result.push(...severityToZabbix[severityOrder[i]])
+    }
+    return result
   }
 
   // ============================================

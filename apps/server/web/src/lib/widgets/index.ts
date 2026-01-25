@@ -12,6 +12,7 @@ import MetricsWidget from './MetricsWidget.svelte'
 import HealthWidget from './HealthWidget.svelte'
 import DataSourceWidget from './DataSourceWidget.svelte'
 import DeviceStatusWidget from './DeviceStatusWidget.svelte'
+import AlertWidget from './AlertWidget.svelte'
 
 // Import registry
 import { registerWidget } from './registry'
@@ -153,6 +154,47 @@ const builtinWidgets: WidgetDefinition[] = [
     ],
     component: DeviceStatusWidget,
   },
+  {
+    type: 'alerts',
+    displayName: 'Alerts',
+    icon: 'Warning',
+    description: 'Display alerts from monitoring system',
+    defaultSize: { w: 4, h: 4 },
+    minSize: { w: 2, h: 2 },
+    configSchema: [
+      {
+        name: 'topologyId',
+        label: 'Topology',
+        type: 'topology-select',
+        required: true,
+      },
+      {
+        name: 'title',
+        label: 'Title',
+        type: 'string',
+        default: 'Alerts',
+      },
+      {
+        name: 'maxItems',
+        label: 'Max Items',
+        type: 'number',
+        default: 10,
+      },
+      {
+        name: 'autoRefresh',
+        label: 'Auto Refresh (seconds)',
+        type: 'number',
+        default: 30,
+      },
+      {
+        name: 'showResolved',
+        label: 'Show Resolved',
+        type: 'boolean',
+        default: false,
+      },
+    ],
+    component: AlertWidget,
+  },
 ]
 
 // Register all built-in widgets
@@ -169,4 +211,5 @@ export {
   HealthWidget,
   DataSourceWidget,
   DeviceStatusWidget,
+  AlertWidget,
 }

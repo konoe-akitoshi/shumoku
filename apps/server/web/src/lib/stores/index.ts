@@ -47,3 +47,12 @@ export {
   hostInterfaces,
   hostInterfacesLoading,
 } from './mapping'
+
+export {
+  widgetEvents,
+  emitZoomToNode,
+  emitHighlightNode,
+  emitSelectNode,
+  type WidgetEvent,
+  type WidgetEventType,
+} from './widgetEvents'

@@ -7,7 +7,7 @@ import type { MetricsData } from './stores/metrics'
 export type DataSourceType = 'zabbix' | 'netbox' | 'prometheus'
 export type DataSourceStatus = 'connected' | 'disconnected' | 'unknown'
 
-export type DataSourceCapability = 'topology' | 'metrics' | 'hosts' | 'auto-mapping'
+export type DataSourceCapability = 'topology' | 'metrics' | 'hosts' | 'auto-mapping' | 'alerts'
 
 export interface DataSourcePluginInfo {
   type: string
@@ -446,4 +446,42 @@ export interface ParsedTopologyResponse {
   metrics: MetricsData
   dataSourceId?: string
   mapping?: ZabbixMapping
+}
+
+// ============================================
+// Alert Types
+// ============================================
+
+export type AlertSeverity = 'disaster' | 'high' | 'average' | 'warning' | 'information' | 'ok'
+export type AlertStatus = 'active' | 'resolved'
+
+export interface Alert {
+  id: string
+  severity: AlertSeverity
+  title: string
+  description?: string
+  host?: string
+  hostId?: string
+  nodeId?: string
+  startTime: number
+  endTime?: number
+  status: AlertStatus
+  source: 'zabbix' | 'prometheus'
+  url?: string
+}
+
+export interface AlertQueryOptions {
+  timeRange?: number
+  minSeverity?: AlertSeverity
+  activeOnly?: boolean
+  hostIds?: string[]
+}
+
+// Alert widget config
+export interface AlertWidgetConfig {
+  topologyId: string
+  title?: string
+  maxItems?: number
+  showResolved?: boolean
+  autoRefresh?: number // seconds
 }

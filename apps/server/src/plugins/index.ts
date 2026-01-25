@@ -17,12 +17,17 @@ import { NetBoxPlugin } from './netbox.js'
 import { PrometheusPlugin } from './prometheus.js'
 
 export function registerBuiltinPlugins(): void {
-  // Zabbix - metrics, hosts, auto-mapping
-  pluginRegistry.register('zabbix', 'Zabbix', ['metrics', 'hosts', 'auto-mapping'], (config) => {
-    const plugin = new ZabbixPlugin()
-    plugin.initialize(config)
-    return plugin
-  })
+  // Zabbix - metrics, hosts, auto-mapping, alerts
+  pluginRegistry.register(
+    'zabbix',
+    'Zabbix',
+    ['metrics', 'hosts', 'auto-mapping', 'alerts'],
+    (config) => {
+      const plugin = new ZabbixPlugin()
+      plugin.initialize(config)
+      return plugin
+    },
+  )
 
   // NetBox - topology, hosts
   pluginRegistry.register('netbox', 'NetBox', ['topology', 'hosts'], (config) => {
@@ -31,8 +36,8 @@ export function registerBuiltinPlugins(): void {
     return plugin
   })
 
-  // Prometheus - metrics, hosts
-  pluginRegistry.register('prometheus', 'Prometheus', ['metrics', 'hosts'], (config) => {
+  // Prometheus - metrics, hosts, alerts
+  pluginRegistry.register('prometheus', 'Prometheus', ['metrics', 'hosts', 'alerts'], (config) => {
     const plugin = new PrometheusPlugin()
     plugin.initialize(config)
     return plugin

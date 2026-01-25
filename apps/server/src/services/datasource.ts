@@ -10,6 +10,7 @@ import {
   hasAutoMappingCapability,
   hasHostsCapability,
   hasTopologyCapability,
+  hasAlertsCapability,
   pluginRegistry,
 } from '../plugins/index.js'
 import type {
@@ -18,6 +19,8 @@ import type {
   Host,
   HostItem,
   MappingHint,
+  Alert,
+  AlertQueryOptions,
 } from '../plugins/types.js'
 import type { DataSource, DataSourceInput, DataSourceStatus, DataSourceType } from '../types.js'
 
@@ -257,6 +260,26 @@ export class DataSourceService {
     }
 
     return plugin.getMappingHints(graph)
+  }
+
+  /**
+   * Get alerts from a data source (if supported)
+   */
+  async getAlerts(id: string, options?: AlertQueryOptions): Promise<Alert[]> {
+    const plugin = this.getPlugin(id)
+    if (!plugin || !hasAlertsCapability(plugin)) {
+      return []
+    }
+
+    return plugin.getAlerts(options)
+  }
+
+  /**
+   * Check if a data source supports alerts
+   */
+  hasAlertsCapability(id: string): boolean {
+    const plugin = this.getPlugin(id)
+    return plugin !== null && hasAlertsCapability(plugin)
   }
 
   /**

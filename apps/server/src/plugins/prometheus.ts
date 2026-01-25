@@ -15,8 +15,12 @@ import type {
   HostItem,
   HostsCapable,
   MetricsCapable,
+  AlertsCapable,
   PrometheusCustomMetrics,
   PrometheusPluginConfig,
+  Alert,
+  AlertQueryOptions,
+  AlertSeverity,
 } from './types.js'
 
 /**
@@ -64,10 +68,10 @@ interface PrometheusBuildInfo {
   goVersion: string
 }
 
-export class PrometheusPlugin implements DataSourcePlugin, MetricsCapable, HostsCapable {
+export class PrometheusPlugin implements DataSourcePlugin, MetricsCapable, HostsCapable, AlertsCapable {
   readonly type = 'prometheus'
   readonly displayName = 'Prometheus'
-  readonly capabilities: readonly DataSourceCapability[] = ['metrics', 'hosts']
+  readonly capabilities: readonly DataSourceCapability[] = ['metrics', 'hosts', 'alerts']
 
   private config: PrometheusPluginConfig | null = null
   private metrics: PrometheusCustomMetrics | null = null
@@ -376,6 +380,148 @@ export class PrometheusPlugin implements DataSourcePlugin, MetricsCapable, Hosts
       console.error('[PrometheusPlugin] Failed to discover metrics:', err)
       return []
     }
+  }
+
+  // ============================================
+  // AlertsCapable Implementation
+  // ============================================
+
+  async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
+    if (!this.config) {
+      throw new Error('Plugin not initialized')
+    }
+
+    // Alertmanager API
+    // Try to use alertmanagerUrl from config, or derive from Prometheus URL
+    const alertmanagerUrl = this.getAlertmanagerUrl()
+
+    try {
+      const response = await this.fetchAlertmanager(alertmanagerUrl, '/api/v2/alerts')
+      if (!response.ok) {
+        console.error('[PrometheusPlugin] Alertmanager API error:', response.status)
+        return []
+      }
+
+      interface AlertmanagerAlert {
+        fingerprint: string
+        labels: Record<string, string>
+        annotations?: Record<string, string>
+        startsAt: string
+        endsAt?: string
+        status: { state: 'active' | 'suppressed' | 'unprocessed' }
+        generatorURL?: string
+      }
+
+      const alertmanagerAlerts = (await response.json()) as AlertmanagerAlert[]
+
+      const now = Date.now()
+      const timeRangeMs = (options?.timeRange || 3600) * 1000
+
+      const alerts: Alert[] = alertmanagerAlerts
+        .filter((a) => {
+          // Filter by time range
+          const startTime = new Date(a.startsAt).getTime()
+          if (now - startTime > timeRangeMs) return false
+
+          // Filter by active only
+          if (options?.activeOnly && a.status.state !== 'active') return false
+
+          return true
+        })
+        .map((a) => {
+          const severity = this.mapAlertmanagerSeverity(a.labels.severity)
+          return {
+            id: a.fingerprint,
+            severity,
+            title: a.labels.alertname || 'Unknown Alert',
+            description: a.annotations?.description || a.annotations?.summary,
+            host: a.labels.instance || a.labels.host,
+            startTime: new Date(a.startsAt).getTime(),
+            endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
+            status: a.status.state === 'active' ? 'active' : 'resolved',
+            source: 'prometheus' as const,
+            url: a.generatorURL,
+          } satisfies Alert
+        })
+
+      // Filter by minimum severity
+      if (options?.minSeverity) {
+        const minSeverityOrder = this.getSeverityOrder(options.minSeverity)
+        return alerts.filter((a) => this.getSeverityOrder(a.severity) >= minSeverityOrder)
+      }
+
+      return alerts
+    } catch (err) {
+      console.error('[PrometheusPlugin] Failed to fetch alerts:', err)
+      return []
+    }
+  }
+
+  private getAlertmanagerUrl(): string {
+    if (!this.config) {
+      throw new Error('Plugin not initialized')
+    }
+
+    // If alertmanagerUrl is configured, use it
+    if (this.config.alertmanagerUrl) {
+      return this.config.alertmanagerUrl.replace(/\/$/, '')
+    }
+
+    // Otherwise, try to derive from Prometheus URL (common pattern: replace 9090 with 9093)
+    const prometheusUrl = this.config.url.replace(/\/$/, '')
+    return prometheusUrl.replace(':9090', ':9093')
+  }
+
+  private async fetchAlertmanager(baseUrl: string, path: string): Promise<Response> {
+    const url = baseUrl + path
+    const headers: Record<string, string> = {}
+
+    // Use same auth as Prometheus if configured
+    if (this.config?.basicAuth) {
+      const credentials = btoa(
+        `${this.config.basicAuth.username}:${this.config.basicAuth.password}`,
+      )
+      headers.Authorization = `Basic ${credentials}`
+    }
+
+    return fetch(url, { headers })
+  }
+
+  private mapAlertmanagerSeverity(severity?: string): AlertSeverity {
+    if (!severity) return 'information'
+
+    const severityLower = severity.toLowerCase()
+    const severityMap: Record<string, AlertSeverity> = {
+      critical: 'disaster',
+      disaster: 'disaster',
+      high: 'high',
+      major: 'high',
+      error: 'high',
+      average: 'average',
+      medium: 'average',
+      warning: 'warning',
+      warn: 'warning',
+      minor: 'warning',
+      low: 'information',
+      info: 'information',
+      information: 'information',
+      none: 'ok',
+      ok: 'ok',
+    }
+
+    return severityMap[severityLower] || 'information'
+  }
+
+  private getSeverityOrder(severity: AlertSeverity): number {
+    const order: Record<AlertSeverity, number> = {
+      ok: 0,
+      information: 1,
+      warning: 2,
+      average: 3,
+      high: 4,
+      disaster: 5,
+    }
+    return order[severity] ?? 1
   }
 
   // ============================================

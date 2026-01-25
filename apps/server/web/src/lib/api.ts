@@ -16,6 +16,8 @@ import type {
   TopologyDataSource,
   TopologyDataSourceInput,
   SyncMode,
+  Alert,
+  AlertQueryOptions,
 } from './types'
 
 const BASE_URL = '/api'
@@ -167,6 +169,23 @@ export const topologies = {
   getContext: (id: string, theme?: 'light' | 'dark') => {
     const params = theme ? `?theme=${theme}` : ''
     return request<TopologyContext>(`/topologies/${id}/context${params}`)
+  },
+
+  // Get alerts for a topology
+  getAlerts: (id: string, options?: AlertQueryOptions) => {
+    const params = new URLSearchParams()
+    if (options?.timeRange) {
+      params.set('timeRange', options.timeRange.toString())
+    }
+    if (options?.activeOnly) {
+      params.set('activeOnly', 'true')
+    }
+    if (options?.minSeverity) {
+      params.set('minSeverity', options.minSeverity)
+    }
+    const queryString = params.toString()
+    const url = `/topologies/${id}/alerts${queryString ? `?${queryString}` : ''}`
+    return request<Alert[]>(url)
   },
 
   // Topology Data Sources (many-to-many)

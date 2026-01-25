@@ -20,6 +20,7 @@ export type DataSourceCapability =
   | 'metrics' // Can provide MetricsData
   | 'hosts' // Can list hosts (for mapping UI)
   | 'auto-mapping' // Can suggest mappings automatically
+  | 'alerts' // Can provide alerts from monitoring system
 
 // ============================================
 // Common Types
@@ -170,6 +171,74 @@ export interface AutoMappingCapable {
 }
 
 // ============================================
+// Alerts Types
+// ============================================
+
+/**
+ * Alert severity levels
+ */
+export type AlertSeverity = 'disaster' | 'high' | 'average' | 'warning' | 'information' | 'ok'
+
+/**
+ * Alert status
+ */
+export type AlertStatus = 'active' | 'resolved'
+
+/**
+ * Alert from a monitoring system
+ */
+export interface Alert {
+  /** Unique identifier */
+  id: string
+  /** Alert severity */
+  severity: AlertSeverity
+  /** Alert title/name */
+  title: string
+  /** Detailed description */
+  description?: string
+  /** Host name (for node mapping) */
+  host?: string
+  /** Host ID in the data source */
+  hostId?: string
+  /** Mapped node ID (if mapping exists) */
+  nodeId?: string
+  /** When the alert started (Unix timestamp in ms) */
+  startTime: number
+  /** When the alert was resolved (Unix timestamp in ms) */
+  endTime?: number
+  /** Current alert status */
+  status: AlertStatus
+  /** Source system */
+  source: 'zabbix' | 'prometheus'
+  /** URL to the alert details in the source system */
+  url?: string
+}
+
+/**
+ * Options for querying alerts
+ */
+export interface AlertQueryOptions {
+  /** Time range in seconds (default: 3600 = 1 hour) */
+  timeRange?: number
+  /** Minimum severity to include */
+  minSeverity?: AlertSeverity
+  /** Only return active alerts */
+  activeOnly?: boolean
+  /** Filter by specific host IDs */
+  hostIds?: string[]
+}
+
+/**
+ * Plugin can provide alerts
+ */
+export interface AlertsCapable {
+  /**
+   * Get alerts from the monitoring system
+   */
+  getAlerts(options?: AlertQueryOptions): Promise<Alert[]>
+}
+
+// ============================================
 // Type Guards
 // ============================================
 
@@ -195,6 +264,12 @@ export function hasAutoMappingCapability(
   plugin: DataSourcePlugin,
 ): plugin is DataSourcePlugin & AutoMappingCapable {
   return plugin.capabilities.includes('auto-mapping')
+}
+
+export function hasAlertsCapability(
+  plugin: DataSourcePlugin,
+): plugin is DataSourcePlugin & AlertsCapable {
+  return plugin.capabilities.includes('alerts')
 }
 
 // ============================================
@@ -254,6 +329,9 @@ export interface PrometheusPluginConfig {
 
   /** Additional label to filter hosts (e.g., "job") */
   jobFilter?: string
+
+  /** Alertmanager URL (optional, derived from url if not specified) */
+  alertmanagerUrl?: string
 }
 
 /**

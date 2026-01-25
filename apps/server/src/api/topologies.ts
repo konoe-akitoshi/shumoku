@@ -7,6 +7,7 @@ import { Hono } from 'hono'
 import { TopologyService } from '../services/topology.js'
 import { DataSourceService } from '../services/datasource.js'
 import type { TopologyInput, ZabbixMapping } from '../types.js'
+import type { AlertQueryOptions } from '../plugins/types.js'
 import { renderEmbeddable, type EmbeddableRenderOutput } from '@shumoku/renderer'
 import { buildHierarchicalSheets } from '@shumoku/core'
 import { BunHierarchicalLayout } from '../layout.js'
@@ -388,6 +389,73 @@ export function createTopologiesApi(): Hono {
 
       const hints = await dataSourceService.getMappingHints(parsed.metricsSourceId, parsed.graph)
       return c.json(hints)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
+  // Get alerts for a topology
+  app.get('/:id/alerts', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const parsed = await service.getParsed(id)
+      if (!parsed) {
+        return c.json({ error: 'Topology not found' }, 404)
+      }
+
+      if (!parsed.metricsSourceId) {
+        return c.json({ error: 'No metrics source configured for this topology' }, 400)
+      }
+
+      // Check if the data source supports alerts
+      if (!dataSourceService.hasAlertsCapability(parsed.metricsSourceId)) {
+        return c.json({ error: 'Data source does not support alerts' }, 400)
+      }
+
+      // Parse query options
+      const options: AlertQueryOptions = {}
+      const timeRange = c.req.query('timeRange')
+      if (timeRange) {
+        options.timeRange = Number.parseInt(timeRange, 10)
+      }
+      const activeOnly = c.req.query('activeOnly')
+      if (activeOnly === 'true') {
+        options.activeOnly = true
+      }
+      const minSeverity = c.req.query('minSeverity')
+      if (minSeverity) {
+        options.minSeverity = minSeverity as AlertQueryOptions['minSeverity']
+      }
+
+      // Fetch alerts
+      const alerts = await dataSourceService.getAlerts(parsed.metricsSourceId, options)
+
+      // Map hostId to nodeId using topology mapping
+      const mapping = parsed.mapping
+      if (mapping?.nodes) {
+        for (const alert of alerts) {
+          if (alert.hostId) {
+            // Find nodeId by hostId in mapping
+            const nodeEntry = Object.entries(mapping.nodes).find(
+              ([, m]) => m.hostId === alert.hostId,
+            )
+            if (nodeEntry) {
+              alert.nodeId = nodeEntry[0]
+            }
+          } else if (alert.host) {
+            // Try to match by host name
+            const nodeEntry = Object.entries(mapping.nodes).find(
+              ([, m]) => m.hostName === alert.host || m.hostId === alert.host,
+            )
+            if (nodeEntry) {
+              alert.nodeId = nodeEntry[0]
+            }
+          }
+        }
+      }
+
+      return c.json(alerts)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
