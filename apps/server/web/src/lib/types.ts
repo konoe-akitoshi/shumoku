@@ -183,6 +183,82 @@ export interface ApiError {
   error: string
 }
 
+// ============================================
+// Dashboard Types
+// ============================================
+
+export interface Dashboard {
+  id: string
+  name: string
+  layoutJson: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface DashboardInput {
+  name: string
+  layoutJson?: string
+}
+
+// Dashboard layout configuration
+export interface DashboardLayout {
+  columns: number
+  rowHeight: number
+  margin: number
+  widgets: WidgetInstance[]
+}
+
+// Widget instance in a dashboard
+export interface WidgetInstance {
+  id: string
+  type: string
+  config: Record<string, unknown>
+  position: WidgetPosition
+}
+
+export interface WidgetPosition {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+// Widget definition for registry
+export interface WidgetDefinition {
+  type: string
+  displayName: string
+  icon: string
+  defaultSize: { w: number; h: number }
+  minSize?: { w: number; h: number }
+  configSchema?: Record<string, unknown>
+}
+
+// Topology widget config
+export interface TopologyWidgetConfig {
+  topologyId: string
+  sheetId?: string
+  showMetrics: boolean
+  showLabels: boolean
+  interactive: boolean
+}
+
+// Metrics widget config
+export interface MetricsWidgetConfig {
+  dataSourceId?: string
+  metricType: 'gauge' | 'status'
+  title: string
+}
+
+// Health widget config
+export interface HealthWidgetConfig {
+  title: string
+}
+
+// DataSource widget config
+export interface DataSourceWidgetConfig {
+  title: string
+}
+
 // Render Context types
 export interface Position {
   x: number

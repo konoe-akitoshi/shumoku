@@ -42,6 +42,7 @@ interface Breadcrumb {
 
 const routeLabels: Record<string, string> = {
   '': 'Home',
+  dashboards: 'Dashboards',
   topologies: 'Topologies',
   datasources: 'Data Sources',
   settings: 'Settings',

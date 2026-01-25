@@ -4,6 +4,8 @@
  */
 
 import type {
+  Dashboard,
+  DashboardInput,
   DataSource,
   DataSourceInput,
   Topology,
@@ -226,6 +228,30 @@ export const settings = {
     }),
 }
 
+// Dashboards API
+export const dashboards = {
+  list: () => request<Dashboard[]>('/dashboards'),
+
+  get: (id: string) => request<Dashboard>(`/dashboards/${id}`),
+
+  create: (input: DashboardInput) =>
+    request<Dashboard>('/dashboards', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  update: (id: string, input: Partial<DashboardInput>) =>
+    request<Dashboard>(`/dashboards/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+
+  delete: (id: string) =>
+    request<{ success: boolean }>(`/dashboards/${id}`, {
+      method: 'DELETE',
+    }),
+}
+
 // Health check
 export const health = {
   check: () => request<{ status: string; timestamp: number }>('/health'),
@@ -233,6 +259,7 @@ export const health = {
 
 // Combined API export
 export const api = {
+  dashboards,
   dataSources,
   topologies,
   settings,
