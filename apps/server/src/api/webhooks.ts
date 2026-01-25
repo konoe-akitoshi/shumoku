@@ -5,12 +5,11 @@
 
 import { Hono } from 'hono'
 import { TopologySourcesService } from '../services/topology-sources.js'
-import { TopologyService } from '../services/topology.js'
 import { DataSourceService } from '../services/datasource.js'
+import { getTopologyService } from './topologies.js'
 
 // Lazy initialization to avoid database access at module load time
 let _topologySourcesService: TopologySourcesService | null = null
-let _topologyService: TopologyService | null = null
 let _dataSourceService: DataSourceService | null = null
 
 function getTopologySourcesService() {
@@ -18,13 +17,6 @@ function getTopologySourcesService() {
     _topologySourcesService = new TopologySourcesService()
   }
   return _topologySourcesService
-}
-
-function getTopologyService() {
-  if (!_topologyService) {
-    _topologyService = new TopologyService()
-  }
-  return _topologyService
 }
 
 function getDataSourceService() {
@@ -89,7 +81,7 @@ webhooksApi.post('/topology/:secret', async (c) => {
 
     // Update topology content
     const contentJson = JSON.stringify(graph)
-    const updated = getTopologyService().update(source.topologyId, { contentJson })
+    const updated = await getTopologyService().update(source.topologyId, { contentJson })
     if (!updated) {
       console.log('[Webhook] Failed to update topology')
       return c.json({ error: 'Failed to update topology' }, 500)
