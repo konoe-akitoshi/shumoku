@@ -19,17 +19,23 @@ const require = createRequire(import.meta.url)
 const elkWorkerPath = require.resolve('elkjs/lib/elk-worker.min.js')
 
 /**
- * Create a Bun-compatible ELK instance using web-worker
+ * Singleton ELK instance to avoid creating new Workers on every layout call
+ * Workers are expensive resources and should be reused
  */
-function createBunElk() {
-  return new ELKApi({
-    workerFactory: () => new Worker(elkWorkerPath) as never,
-  })
+let elkInstance: ReturnType<typeof ELKApi> | null = null
+
+function getElkInstance() {
+  if (!elkInstance) {
+    elkInstance = new ELKApi({
+      workerFactory: () => new Worker(elkWorkerPath) as never,
+    })
+  }
+  return elkInstance
 }
 
 /**
  * Bun-compatible HierarchicalLayout wrapper
- * Creates a HierarchicalLayout with a Bun-compatible ELK instance
+ * Creates a HierarchicalLayout with a Bun-compatible ELK instance (singleton)
  */
 export class BunHierarchicalLayout {
   private options: Omit<HierarchicalLayoutOptions, 'elk'>
@@ -45,7 +51,7 @@ export class BunHierarchicalLayout {
     const layoutInstance = new HierarchicalLayout({
       ...this.options,
       iconDimensions,
-      elk: createBunElk(),
+      elk: getElkInstance(),
     })
     return layoutInstance.layout(graph)
   }
@@ -60,7 +66,7 @@ export class BunHierarchicalLayout {
     const layoutInstance = new HierarchicalLayout({
       ...this.options,
       iconDimensions,
-      elk: createBunElk(),
+      elk: getElkInstance(),
     })
     return layoutInstance.layoutAsync(graph)
   }

@@ -11,6 +11,7 @@ import TopologyWidget from './TopologyWidget.svelte'
 import MetricsWidget from './MetricsWidget.svelte'
 import HealthWidget from './HealthWidget.svelte'
 import DataSourceWidget from './DataSourceWidget.svelte'
+import DeviceStatusWidget from './DeviceStatusWidget.svelte'
 
 // Import registry
 import { registerWidget } from './registry'
@@ -129,6 +130,29 @@ const builtinWidgets: WidgetDefinition[] = [
     ],
     component: DataSourceWidget,
   },
+  {
+    type: 'device-status',
+    displayName: 'Device Status',
+    icon: 'Cpu',
+    description: 'Lighthouse-style status by device type',
+    defaultSize: { w: 4, h: 3 },
+    minSize: { w: 2, h: 2 },
+    configSchema: [
+      {
+        name: 'topologyId',
+        label: 'Topology',
+        type: 'topology-select',
+        required: true,
+      },
+      {
+        name: 'title',
+        label: 'Title',
+        type: 'string',
+        default: 'Device Status',
+      },
+    ],
+    component: DeviceStatusWidget,
+  },
 ]
 
 // Register all built-in widgets
@@ -144,4 +168,5 @@ export {
   MetricsWidget,
   HealthWidget,
   DataSourceWidget,
+  DeviceStatusWidget,
 }

@@ -24,6 +24,7 @@ import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
 import ChartLine from 'phosphor-svelte/lib/ChartLine'
 import Heart from 'phosphor-svelte/lib/Heart'
 import Database from 'phosphor-svelte/lib/Database'
+import Cpu from 'phosphor-svelte/lib/Cpu'
 import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
 
 let id = $derived($page.params.id)
@@ -255,6 +256,7 @@ function getWidgetIcon(type: string) {
     'metrics-gauge': ChartLine,
     'health-status': Heart,
     'datasource-status': Database,
+    'device-status': Cpu,
   }
   return icons[type] || SquaresFour
 }
