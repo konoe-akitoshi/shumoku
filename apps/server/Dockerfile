@@ -36,10 +36,20 @@ RUN bun run esbuild.config.js
 # ============================================
 FROM oven/bun:1-slim
 
+# Metadata
+LABEL org.opencontainers.image.title="Shumoku"
+LABEL org.opencontainers.image.description="Network topology visualization server"
+LABEL org.opencontainers.image.source="https://github.com/konoe-akitoshi/shumoku"
+
 WORKDIR /app
 
 # Install curl for health check
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd --gid 1000 shumoku \
+    && useradd --uid 1000 --gid shumoku --shell /bin/sh --create-home shumoku
 
 # Copy bundled server
 COPY --from=builder /app/apps/server/dist/bundle.js ./server.js
@@ -47,13 +57,16 @@ COPY --from=builder /app/apps/server/dist/bundle.js ./server.js
 # Copy web UI build
 COPY --from=builder /app/apps/server/web/build ./web/build
 
-# Create data directory
-RUN mkdir -p /data
+# Create data directory with correct ownership
+RUN mkdir -p /data && chown -R shumoku:shumoku /data /app
 
 # Environment
 ENV DATA_DIR=/data
 ENV PORT=3000
 ENV HOST=0.0.0.0
+
+# Switch to non-root user
+USER shumoku
 
 EXPOSE 3000
 

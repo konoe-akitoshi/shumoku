@@ -1,6 +1,6 @@
 [Unit]
 Description=Shumoku Network Topology Visualization Server
-Documentation=https://github.com/your-org/shumoku
+Documentation=https://github.com/konoe-akitoshi/shumoku
 After=network.target
 
 [Service]

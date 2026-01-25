@@ -226,7 +226,7 @@ Data is persisted in Docker volume `shumoku-data`.
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/shumoku.git /opt/shumoku
+git clone https://github.com/konoe-akitoshi/shumoku.git /opt/shumoku
 cd /opt/shumoku/apps/server
 
 # Setup (install dependencies and build)

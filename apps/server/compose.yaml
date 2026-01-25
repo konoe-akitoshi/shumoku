@@ -3,6 +3,7 @@
 
 services:
   shumoku:
+    container_name: shumoku
     build:
       context: ../..
       dockerfile: apps/server/Dockerfile
@@ -15,12 +16,31 @@ services:
       - HOST=0.0.0.0
       - DATA_DIR=/data
     restart: unless-stopped
+
+    # Process management
+    init: true
+    stop_grace_period: 10s
+
+    # Health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s
+
+    # Logging (prevent unbounded log growth)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   shumoku-data:
