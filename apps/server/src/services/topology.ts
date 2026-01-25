@@ -393,14 +393,20 @@ export class TopologyService {
   /**
    * Initialize with sample topology if database is empty
    * Parses YAML sample network and stores as NetworkGraph JSON
+   * Only runs when DEMO_MODE environment variable is set to 'true'
    */
   async initializeSample(): Promise<void> {
+    // Skip sample creation unless DEMO_MODE is enabled
+    if (process.env.DEMO_MODE !== 'true') {
+      return
+    }
+
     const existing = this.list()
     if (existing.length > 0) {
       return
     }
 
-    console.log('[TopologyService] No topologies found, creating sample network')
+    console.log('[TopologyService] Demo mode: creating sample network')
 
     // Build file map from sample network
     const fileMap = new Map<string, string>()

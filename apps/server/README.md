@@ -18,6 +18,9 @@ Real-time network topology visualization server with Zabbix integration for Shum
 ```bash
 cd apps/server
 docker compose up -d
+
+# With sample network for demo
+DEMO_MODE=true docker compose up -d
 ```
 
 ### Option 2: Local (Bun)
@@ -30,6 +33,9 @@ make setup
 
 # Start server
 make dev
+
+# With sample network for demo
+DEMO_MODE=true make dev
 ```
 
 Open http://localhost:3000 to access the Web UI.
@@ -173,6 +179,7 @@ links:
 | `HOST` | Bind address | 0.0.0.0 |
 | `DATA_DIR` | Data directory for SQLite | /data |
 | `SHUMOKU_PORT` | External port (Docker Compose) | 3000 |
+| `DEMO_MODE` | Load sample network on empty DB (`true`/`false`) | `false` |
 
 ## Architecture
 

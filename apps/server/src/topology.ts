@@ -54,9 +54,9 @@ export class TopologyManager {
       }
     }
 
-    // If no topologies configured, load sample network for demo
-    if (this.topologies.size === 0) {
-      console.log('[Topology] No topologies configured, loading sample network')
+    // If no topologies configured and DEMO_MODE is enabled, load sample network
+    if (this.topologies.size === 0 && process.env.DEMO_MODE === 'true') {
+      console.log('[Topology] Demo mode: loading sample network')
       await this.loadSampleNetwork()
     }
   }
