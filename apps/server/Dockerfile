@@ -47,9 +47,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd --gid 1000 shumoku \
-    && useradd --uid 1000 --gid shumoku --shell /bin/sh --create-home shumoku
+# Create non-root user (use existing group if GID 1000 exists)
+RUN getent group 1000 || groupadd --gid 1000 shumoku \
+    && (getent passwd 1000 || useradd --uid 1000 --gid 1000 --shell /bin/sh --create-home shumoku)
 
 # Copy bundled server
 COPY --from=builder /app/apps/server/dist/bundle.js ./server.js
@@ -58,7 +58,7 @@ COPY --from=builder /app/apps/server/dist/bundle.js ./server.js
 COPY --from=builder /app/apps/server/web/build ./web/build
 
 # Create data directory with correct ownership
-RUN mkdir -p /data && chown -R shumoku:shumoku /data /app
+RUN mkdir -p /data && chown -R 1000:1000 /data /app
 
 # Environment
 ENV DATA_DIR=/data
@@ -66,7 +66,7 @@ ENV PORT=3000
 ENV HOST=0.0.0.0
 
 # Switch to non-root user
-USER shumoku
+USER 1000
 
 EXPOSE 3000
 
