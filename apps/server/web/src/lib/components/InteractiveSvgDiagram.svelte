@@ -69,6 +69,11 @@ let sheets: Record<string, SheetInfo> = {}
 let currentSheetId = 'root'
 let navigationStack: string[] = [] // Stack for breadcrumb (excluding current)
 
+// Zoom navigation state
+let isZoomNavigating = false
+let zoomCheckTimeout: ReturnType<typeof setTimeout> | null = null
+let initialFitScale = 1 // Scale when first fitted to view
+
 // Get current sheet content
 $: currentSheet = sheets[currentSheetId]
 $: svgContent = currentSheet?.svg || ''
@@ -263,9 +268,162 @@ async function navigateToBreadcrumb(targetId: string) {
   await initializeCurrentSheet()
 }
 
+// Zoom navigation helpers
+interface SubgraphBounds {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+function getSubgraphsWithBounds(): SubgraphBounds[] {
+  if (!svgElement) return []
+
+  const result: SubgraphBounds[] = []
+  const subgraphs = svgElement.querySelectorAll('g.subgraph[data-has-sheet="true"]')
+
+  subgraphs.forEach((sg) => {
+    const boundsAttr = sg.getAttribute('data-bounds')
+    const id = sg.getAttribute('data-sheet-id') || sg.getAttribute('data-id')
+    if (boundsAttr && id && sheets[id]) {
+      try {
+        const bounds = JSON.parse(boundsAttr)
+        result.push({
+          id,
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+        })
+      } catch {
+        // Invalid JSON, skip
+      }
+    }
+  })
+
+  return result
+}
+
+function getVisibleViewBox(): { x: number; y: number; width: number; height: number } | null {
+  if (!svgElement || !container || !panzoomInstance) return null
+
+  const transform = panzoomInstance.getTransform()
+  const viewBox = svgElement.viewBox.baseVal
+  if (!viewBox || viewBox.width === 0) return null
+
+  const containerRect = container.getBoundingClientRect()
+
+  // Calculate what part of the SVG is visible
+  // transform.x/y are the offsets, transform.scale is the zoom level
+  const visibleWidth = containerRect.width / transform.scale
+  const visibleHeight = containerRect.height / transform.scale
+  const visibleX = viewBox.x - transform.x / transform.scale
+  const visibleY = viewBox.y - transform.y / transform.scale
+
+  return {
+    x: visibleX,
+    y: visibleY,
+    width: visibleWidth,
+    height: visibleHeight,
+  }
+}
+
+function findZoomTarget(mouseX: number, mouseY: number): SubgraphBounds | null {
+  if (!svgElement || !container || !panzoomInstance) return null
+
+  const subgraphs = getSubgraphsWithBounds()
+  if (subgraphs.length === 0) return null
+
+  // Convert mouse position to SVG coordinates
+  const transform = panzoomInstance.getTransform()
+  const containerRect = container.getBoundingClientRect()
+  const viewBox = svgElement.viewBox.baseVal
+
+  const svgX = viewBox.x + (mouseX - containerRect.left - transform.x) / transform.scale
+  const svgY = viewBox.y + (mouseY - containerRect.top - transform.y) / transform.scale
+
+  // Find subgraph containing the mouse position
+  for (const sg of subgraphs) {
+    if (
+      svgX >= sg.x &&
+      svgX <= sg.x + sg.width &&
+      svgY >= sg.y &&
+      svgY <= sg.y + sg.height
+    ) {
+      return sg
+    }
+  }
+
+  return null
+}
+
+function shouldTriggerZoomIn(bounds: SubgraphBounds): boolean {
+  const visible = getVisibleViewBox()
+  if (!visible) return false
+
+  // Calculate how much of the visible area the bounds cover
+  const visibleArea = visible.width * visible.height
+  const boundsArea = bounds.width * bounds.height
+  const areaRatio = visibleArea / boundsArea
+
+  // Trigger when viewBox is at most 2x the bounds area
+  if (areaRatio > 2.0) return false
+
+  // Check if center of visible area is close to bounds center
+  const visibleCenterX = visible.x + visible.width / 2
+  const visibleCenterY = visible.y + visible.height / 2
+  const boundsCenterX = bounds.x + bounds.width / 2
+  const boundsCenterY = bounds.y + bounds.height / 2
+
+  const centerDist = Math.hypot(visibleCenterX - boundsCenterX, visibleCenterY - boundsCenterY)
+  const maxDist = Math.hypot(bounds.width, bounds.height) * 0.7
+
+  return centerDist <= maxDist
+}
+
+function shouldTriggerZoomOut(): boolean {
+  // Only trigger zoom-out navigation when not at root
+  if (currentSheetId === 'root') return false
+
+  // Check if zoomed out significantly from initial fit
+  if (scale > initialFitScale * 0.4) return false
+
+  return true
+}
+
+function checkZoomNavigation(mouseX: number, mouseY: number, zoomingIn: boolean) {
+  if (isZoomNavigating || !isHierarchical) return
+
+  if (zoomingIn) {
+    // Check for zoom-in to child sheet
+    const target = findZoomTarget(mouseX, mouseY)
+    if (target && shouldTriggerZoomIn(target)) {
+      isZoomNavigating = true
+      navigateToSheet(target.id).then(() => {
+        // Reset navigation lock after a short delay
+        setTimeout(() => {
+          isZoomNavigating = false
+        }, 500)
+      })
+    }
+  } else {
+    // Check for zoom-out to parent sheet
+    if (shouldTriggerZoomOut()) {
+      isZoomNavigating = true
+      const parentId = navigationStack[navigationStack.length - 1] || 'root'
+      navigateToBreadcrumb(parentId).then(() => {
+        setTimeout(() => {
+          isZoomNavigating = false
+        }, 500)
+      })
+    }
+  }
+}
+
 // Initialize panzoom
 function initPanZoom() {
-  if (!svgWrapper) return
+  if (!svgWrapper || !container) return
 
   panzoomInstance = panzoom(svgWrapper, {
     maxZoom: 10,
@@ -283,6 +441,29 @@ function initPanZoom() {
   panzoomInstance.on('pan', () => {
     scale = panzoomInstance?.getTransform().scale ?? 1
   })
+
+  // Add wheel listener for zoom navigation (debounced)
+  let lastWheelEvent: { x: number; y: number; zoomingIn: boolean } | null = null
+
+  container.addEventListener('wheel', (e) => {
+    if (!isHierarchical || isZoomNavigating) return
+
+    const zoomingIn = e.deltaY < 0
+    lastWheelEvent = { x: e.clientX, y: e.clientY, zoomingIn }
+
+    // Clear previous timeout
+    if (zoomCheckTimeout) {
+      clearTimeout(zoomCheckTimeout)
+    }
+
+    // Check navigation after wheel events settle (150ms debounce)
+    zoomCheckTimeout = setTimeout(() => {
+      if (lastWheelEvent) {
+        checkZoomNavigation(lastWheelEvent.x, lastWheelEvent.y, lastWheelEvent.zoomingIn)
+        lastWheelEvent = null
+      }
+    }, 150)
+  }, { passive: true })
 
   // Initial fit to view
   fitToView()
@@ -312,6 +493,7 @@ function fitToView() {
 
   panzoomInstance.moveTo(offsetX, offsetY)
   scale = newScale
+  initialFitScale = newScale // Store for zoom-out detection
 }
 
 function resetView() {
@@ -357,16 +539,18 @@ function setupInteractivity() {
   subgraphs.forEach((sg) => {
     const sgEl = sg as SVGGElement
     const sgId = sgEl.getAttribute('data-id') || ''
-    const hasFile = sgEl.getAttribute('data-has-file') === 'true'
+    const hasSheet = sgEl.getAttribute('data-has-sheet') === 'true'
 
     sgEl.addEventListener('mouseenter', (e) => handleSubgraphHover(sgId, e))
     sgEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
     sgEl.addEventListener('mouseleave', () => handleSubgraphLeave())
 
-    // Enable click navigation if this subgraph has a corresponding sheet
-    if (hasFile || sheets[sgId]) {
-      sgEl.addEventListener('click', (e) => {
+    // Enable double-click navigation if this subgraph has a corresponding sheet
+    // Single-click is reserved for future modal/details display
+    if (hasSheet || sheets[sgId]) {
+      sgEl.addEventListener('dblclick', (e) => {
         e.stopPropagation()
+        e.preventDefault()
         handleSubgraphClick(sgId)
       })
       sgEl.style.cursor = 'pointer'
@@ -577,7 +761,7 @@ function showSubgraphTooltip(sgId: string, event: MouseEvent) {
 
   // Build content for subgraphs (static)
   let content = `<strong>${label}</strong>`
-  if (canNavigate) content += `<br><span class="action">Click to drill down</span>`
+  if (canNavigate) content += `<br><span class="action">Double-click to drill down</span>`
   tooltipContent = content
 
   tooltipX = event.clientX + 12
@@ -1021,11 +1205,11 @@ onDestroy(() => {
   }
 
   /* Clickable subgraph indicator */
-  .svg-wrapper :global(g.subgraph[data-has-file="true"]) {
+  .svg-wrapper :global(g.subgraph[data-has-sheet="true"]) {
     cursor: pointer;
   }
 
-  .svg-wrapper :global(g.subgraph[data-has-file="true"]:hover > rect) {
+  .svg-wrapper :global(g.subgraph[data-has-sheet="true"]:hover > rect) {
     filter: brightness(1.05);
     stroke: var(--color-primary) !important;
     stroke-width: 2px !important;
