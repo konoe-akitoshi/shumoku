@@ -30,6 +30,8 @@ interface TopologyDataSourceRow {
   ds_name?: string
   ds_type?: string
   ds_config_json?: string
+  ds_status?: string
+  ds_fail_count?: number
   ds_created_at?: number
   ds_updated_at?: number
 }
@@ -55,6 +57,8 @@ function rowToTopologyDataSource(row: TopologyDataSourceRow): TopologyDataSource
       name: row.ds_name!,
       type: row.ds_type as DataSource['type'],
       configJson: row.ds_config_json!,
+      status: (row.ds_status as DataSource['status']) || 'unknown',
+      failCount: row.ds_fail_count || 0,
       createdAt: row.ds_created_at!,
       updatedAt: row.ds_updated_at!,
     }
@@ -82,6 +86,8 @@ export class TopologySourcesService {
           ds.name as ds_name,
           ds.type as ds_type,
           ds.config_json as ds_config_json,
+          ds.status as ds_status,
+          ds.fail_count as ds_fail_count,
           ds.created_at as ds_created_at,
           ds.updated_at as ds_updated_at
         FROM topology_data_sources tds
@@ -105,6 +111,8 @@ export class TopologySourcesService {
           ds.name as ds_name,
           ds.type as ds_type,
           ds.config_json as ds_config_json,
+          ds.status as ds_status,
+          ds.fail_count as ds_fail_count,
           ds.created_at as ds_created_at,
           ds.updated_at as ds_updated_at
         FROM topology_data_sources tds
@@ -128,6 +136,8 @@ export class TopologySourcesService {
           ds.name as ds_name,
           ds.type as ds_type,
           ds.config_json as ds_config_json,
+          ds.status as ds_status,
+          ds.fail_count as ds_fail_count,
           ds.created_at as ds_created_at,
           ds.updated_at as ds_updated_at
         FROM topology_data_sources tds
@@ -154,6 +164,8 @@ export class TopologySourcesService {
           ds.name as ds_name,
           ds.type as ds_type,
           ds.config_json as ds_config_json,
+          ds.status as ds_status,
+          ds.fail_count as ds_fail_count,
           ds.created_at as ds_created_at,
           ds.updated_at as ds_updated_at
         FROM topology_data_sources tds
@@ -176,6 +188,8 @@ export class TopologySourcesService {
           ds.name as ds_name,
           ds.type as ds_type,
           ds.config_json as ds_config_json,
+          ds.status as ds_status,
+          ds.fail_count as ds_fail_count,
           ds.created_at as ds_created_at,
           ds.updated_at as ds_updated_at
         FROM topology_data_sources tds

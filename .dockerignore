@@ -15,7 +15,6 @@ apps/server/web/build/
 
 # Packages not needed for server
 packages/@shumoku/icons/
-packages/@shumoku/netbox/
 packages/shumoku/
 apps/docs/
 

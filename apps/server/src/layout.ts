@@ -22,7 +22,7 @@ const elkWorkerPath = require.resolve('elkjs/lib/elk-worker.min.js')
  * Singleton ELK instance to avoid creating new Workers on every layout call
  * Workers are expensive resources and should be reused
  */
-let elkInstance: ReturnType<typeof ELKApi> | null = null
+let elkInstance: InstanceType<typeof ELKApi> | null = null
 
 function getElkInstance() {
   if (!elkInstance) {

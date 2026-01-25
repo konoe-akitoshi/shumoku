@@ -11,33 +11,47 @@ Real-time network topology visualization server with Zabbix integration for Shum
 - **Docker Ready**: Single container deployment with SQLite persistence
 - **Interactive Diagrams**: Pan, zoom, and explore network topologies
 
-## Quick Start (Docker)
+## Quick Start
+
+### Option 1: Docker (Recommended)
+
+```bash
+cd apps/server
+docker compose up -d
+```
+
+### Option 2: Local (Bun)
 
 ```bash
 cd apps/server
 
-# Build and start
-docker compose up -d
+# Setup (first time only)
+make setup
 
-# Or with custom port
-SHUMOKU_PORT=8080 docker compose up -d
+# Start server
+make dev
 ```
 
 Open http://localhost:3000 to access the Web UI.
 
-## Development
+## Available Commands
 
 ```bash
-# From repository root
-bun install
-bun run build
-
-# Start development server
-cd apps/server
-bun run dev
+make setup      # Initial setup (install deps & build)
+make dev        # Start development server
+make start      # Start production server
+make docker     # Start with Docker Compose
+make help       # Show all commands
 ```
 
-Open http://localhost:3000 to view the application.
+## Development
+
+For development with hot reload:
+
+```bash
+make dev        # Start server (watches for changes)
+make dev-web    # Start web UI dev server (separate terminal)
+```
 
 ## Data Persistence
 
@@ -189,6 +203,120 @@ links:
 │  └──────────────┘  └──────────────┘                        │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Deployment
+
+### Option 1: Docker (Recommended)
+
+```bash
+cd apps/server
+docker compose up -d
+```
+
+Data is persisted in Docker volume `shumoku-data`.
+
+### Option 2: Systemd (Linux)
+
+#### Prerequisites
+
+- [Bun](https://bun.sh) runtime installed
+- Git
+
+#### Installation
+
+```bash
+# Clone repository
+git clone https://github.com/your-org/shumoku.git /opt/shumoku
+cd /opt/shumoku/apps/server
+
+# Setup (install dependencies and build)
+make setup
+
+# Create data directory
+sudo mkdir -p /var/lib/shumoku
+sudo chown shumoku:shumoku /var/lib/shumoku
+
+# Install systemd service
+sudo cp scripts/shumoku.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable shumoku
+sudo systemctl start shumoku
+```
+
+#### Service Management
+
+```bash
+# Status
+sudo systemctl status shumoku
+
+# Logs
+sudo journalctl -u shumoku -f
+
+# Restart
+sudo systemctl restart shumoku
+
+# Stop
+sudo systemctl stop shumoku
+```
+
+#### Update
+
+```bash
+cd /opt/shumoku
+git pull
+cd apps/server
+make setup
+sudo systemctl restart shumoku
+```
+
+### Option 3: Manual
+
+```bash
+cd apps/server
+
+# Setup (first time)
+make setup
+
+# Start (foreground)
+make start
+
+# Or with custom settings
+DATA_DIR=/path/to/data PORT=8080 bun dist/index.js
+```
+
+### Reverse Proxy (nginx)
+
+```nginx
+server {
+    listen 80;
+    server_name shumoku.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Backup & Restore
+
+```bash
+# Backup (Docker)
+docker compose cp shumoku:/data/shumoku.db ./backup.db
+
+# Backup (Systemd)
+cp /var/lib/shumoku/shumoku.db ./backup.db
+
+# Restore
+cp ./backup.db /var/lib/shumoku/shumoku.db
+sudo systemctl restart shumoku
+```
+
+---
 
 ## Docker Compose
 

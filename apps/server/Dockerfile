@@ -12,6 +12,7 @@ COPY package.json bun.lock turbo.json tsconfig.base.json ./
 COPY packages/@shumoku/core/ ./packages/@shumoku/core/
 COPY packages/@shumoku/parser-yaml/ ./packages/@shumoku/parser-yaml/
 COPY packages/@shumoku/renderer/ ./packages/@shumoku/renderer/
+COPY packages/@shumoku/netbox/ ./packages/@shumoku/netbox/
 COPY apps/server/ ./apps/server/
 
 # Install dependencies with cache mount

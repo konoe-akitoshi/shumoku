@@ -11,6 +11,7 @@ await esbuild.build({
   target: 'esnext',
   format: 'esm',
   outfile: 'dist/bundle.js',
+  external: ['bun:sqlite', 'bun'],
   // Use browser entry point for renderer (avoids resvg native module)
   alias: {
     '@shumoku/renderer': path.resolve(__dirname, '../../packages/@shumoku/renderer/dist/index.js'),
@@ -18,16 +19,6 @@ await esbuild.build({
       __dirname,
       '../../packages/@shumoku/renderer/dist/iife-string.js',
     ),
-  },
-  banner: {
-    js: `
-import { createRequire } from 'module';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-const require = createRequire(import.meta.url);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-`,
   },
 })
 

@@ -4,7 +4,8 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "composite": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["bun"]
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"]

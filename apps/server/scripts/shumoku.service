@@ -1,0 +1,29 @@
+[Unit]
+Description=Shumoku Network Topology Visualization Server
+Documentation=https://github.com/your-org/shumoku
+After=network.target
+
+[Service]
+Type=simple
+User=shumoku
+Group=shumoku
+WorkingDirectory=/opt/shumoku/apps/server
+ExecStart=/usr/bin/bun dist/index.js
+Restart=always
+RestartSec=5
+
+# Environment
+Environment=NODE_ENV=production
+Environment=DATA_DIR=/var/lib/shumoku
+Environment=PORT=3000
+Environment=HOST=0.0.0.0
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/shumoku
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
