@@ -19,6 +19,9 @@ Real-time network topology visualization server with Zabbix integration for Shum
 cd apps/server
 docker compose up -d
 
+# Use port 80 (for production)
+SHUMOKU_PORT=80 docker compose up -d
+
 # With sample network for demo
 DEMO_MODE=true docker compose up -d
 ```
