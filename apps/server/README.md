@@ -58,15 +58,12 @@ make help       # Show all commands
 For development with hot reload:
 
 ```bash
-# From monorepo root (recommended)
-bun run dev:server    # Start API server + Web UI dev server
-
-# Or separately
-cd apps/server && bun run dev    # API server (port 8080)
-cd apps/web && bun run dev       # Web UI dev server (port 5173)
+cd apps/server
+bun run dev    # Start API + Web UI together
 ```
 
 Access http://localhost:5173 for development (HMR enabled).
+API is proxied to http://localhost:8080.
 
 ## Data Persistence
 

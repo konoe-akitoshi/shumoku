@@ -16,11 +16,25 @@ const DEFAULT_WEATHERMAP_CONFIG: WeathermapConfig = {
   ],
 }
 
+/**
+ * Get default data directory path
+ * - Docker: uses DATA_DIR environment variable
+ * - Local: resolves to apps/server/data from this file's location
+ */
+const getDefaultDataDir = (): string => {
+  if (process.env.DATA_DIR) {
+    return process.env.DATA_DIR
+  }
+  // api/src/config.ts → apps/server/data
+  const serverDir = path.resolve(import.meta.dir, '..', '..')
+  return path.join(serverDir, 'data')
+}
+
 const DEFAULT_CONFIG: Config = {
   server: {
     port: 8080,
     host: '0.0.0.0',
-    dataDir: './data',
+    dataDir: getDefaultDataDir(),
   },
   topologies: [],
   weathermap: DEFAULT_WEATHERMAP_CONFIG,

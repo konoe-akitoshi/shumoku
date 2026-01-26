@@ -24,11 +24,9 @@ bun run build
 
 ### 開発サーバーの起動
 
-**推奨: monorepo ルートから（1コマンド）**
-
 ```bash
-# API + Web UIを同時起動
-bun run dev:server
+cd apps/server
+bun run dev    # API + Web UI を同時起動
 ```
 
 - **http://localhost:5173** にアクセス（Web開発サーバー、HMR有効）
@@ -37,19 +35,19 @@ bun run dev:server
 **個別に起動する場合**
 
 ```bash
-# ターミナル1: APIサーバー（ファイル変更で自動再起動）
-cd apps/server
+# ターミナル1: APIサーバーのみ
+cd apps/server/api
 bun run dev
 
-# ターミナル2: Web開発サーバー（HMRで即時反映）
-cd apps/web
+# ターミナル2: Web UIのみ
+cd apps/server/web
 bun run dev
 ```
 
 **APIのみ開発時**
 
 ```bash
-cd apps/server
+cd apps/server/api
 bun run dev
 ```
 

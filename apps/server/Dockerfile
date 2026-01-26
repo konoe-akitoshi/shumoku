@@ -22,19 +22,16 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # Build all packages (turborepo handles dependency order)
 RUN bun run build
 
-# Copy web package
-COPY apps/web/ ./apps/web/
-
-# Build server (tsc)
-WORKDIR /app/apps/server
+# Build API server (tsc)
+WORKDIR /app/apps/server/api
 RUN bun run build
 
 # Build web UI
-WORKDIR /app/apps/web
-RUN bun install && bun run build
+WORKDIR /app/apps/server/web
+RUN bun run build
 
 # Bundle server into single file
-WORKDIR /app/apps/server
+WORKDIR /app/apps/server/api
 RUN bun run esbuild.config.js
 
 # ============================================
@@ -58,10 +55,10 @@ RUN getent group 1000 || groupadd --gid 1000 shumoku \
     && (getent passwd 1000 || useradd --uid 1000 --gid 1000 --shell /bin/sh --create-home shumoku)
 
 # Copy bundled server
-COPY --from=builder /app/apps/server/dist/bundle.js ./server.js
+COPY --from=builder /app/apps/server/api/dist/bundle.js ./server.js
 
 # Copy web UI build
-COPY --from=builder /app/apps/web/build ./web/build
+COPY --from=builder /app/apps/server/web/build ./web/build
 
 # Create data directory with correct ownership
 RUN mkdir -p /data && chown -R 1000:1000 /data /app

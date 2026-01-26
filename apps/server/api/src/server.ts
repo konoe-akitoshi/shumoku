@@ -103,16 +103,16 @@ export class Server {
         return c.text('Not found', 404)
       })
     } else {
-      throw new Error('[Server] Web UI not found. Run "bun run build" in apps/web first.')
+      throw new Error('[Server] Web UI not found. Run "bun run build" in apps/server/web first.')
     }
   }
 
   private getWebBuildPath(): string | null {
     const possiblePaths = [
-      // Relative to apps/server (when running from apps/server)
+      // Relative to apps/server/api (when running from api/)
       path.join(process.cwd(), '..', 'web', 'build'),
       // Relative to monorepo root (when running from root)
-      path.join(process.cwd(), 'apps', 'web', 'build'),
+      path.join(process.cwd(), 'apps', 'server', 'web', 'build'),
       // Docker/production path
       '/app/web/build',
     ]
