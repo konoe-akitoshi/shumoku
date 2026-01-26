@@ -4,13 +4,16 @@
   "private": true,
   "description": "Real-time network topology visualization server with Zabbix integration",
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,green \"cd api && bun run dev\" \"cd web && bun run dev\"",
+    "dev": "concurrently -k -n api,web -c blue,green \"bun run dev:api\" \"bun run dev:web\"",
+    "dev:api": "cd api && NODE_ENV=development bun --watch src/index.ts",
+    "dev:web": "wait-on http://localhost:8080/api/health && cd web && bunx --bun vite dev",
     "build": "cd api && bun run build && cd ../web && bun run build",
     "start": "cd api && bun run start",
     "typecheck": "cd api && bun run typecheck && cd ../web && bun run check",
     "lint": "cd api && bun run lint"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "wait-on": "^9.0.3"
   }
 }
