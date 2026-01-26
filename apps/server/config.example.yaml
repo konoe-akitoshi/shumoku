@@ -4,6 +4,7 @@
 server:
   port: 3000
   host: 0.0.0.0
+  dataDir: ./data  # Database and topology files location
 
 # Zabbix integration (optional)
 # Uncomment and configure to enable real metrics from Zabbix

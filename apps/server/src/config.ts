@@ -20,7 +20,7 @@ const DEFAULT_CONFIG: Config = {
   server: {
     port: 3000,
     host: '0.0.0.0',
-    dataDir: '/data',
+    dataDir: './data',
   },
   topologies: [],
   weathermap: DEFAULT_WEATHERMAP_CONFIG,
