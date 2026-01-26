@@ -4,6 +4,30 @@
 
 import type { DeviceType } from '../models/index.js'
 
+/**
+ * Surface token colors for subgraph rendering
+ * Each token provides fill, stroke, and text colors
+ */
+export interface SurfaceColors {
+  fill: string
+  stroke: string
+  text: string
+}
+
+/**
+ * Available surface token names
+ * Used in SubgraphStyle.fill to reference theme-aware colors
+ */
+export type SurfaceToken =
+  | 'surface-1' // Lightest/default background
+  | 'surface-2' // Slightly darker/more prominent
+  | 'surface-3' // Most prominent surface
+  | 'accent-blue' // Blue accent (cloud, external)
+  | 'accent-green' // Green accent (internal, success)
+  | 'accent-red' // Red accent (perimeter, security)
+  | 'accent-amber' // Amber accent (highlight, warning)
+  | 'accent-purple' // Purple accent
+
 export interface ThemeColors {
   /**
    * Background colors
@@ -55,6 +79,7 @@ export interface ThemeColors {
 
   /**
    * Module colors (for Bento Grid)
+   * @deprecated Use zonePresets instead
    */
   modules: {
     core: string
@@ -64,6 +89,12 @@ export interface ThemeColors {
     cloud: string
     default: string
   }
+
+  /**
+   * Surface token colors for subgraph rendering
+   * Token-based system for theme-aware subgraph colors
+   */
+  surfaces: Record<SurfaceToken, SurfaceColors>
 
   /**
    * Grid and guides

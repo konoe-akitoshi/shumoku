@@ -248,7 +248,15 @@ export function getNodeId(endpoint: string | LinkEndpoint): string {
 export type LayoutDirection = 'TB' | 'BT' | 'LR' | 'RL'
 
 export interface SubgraphStyle {
+  /**
+   * Fill color - can be a hex color or a surface token (e.g., "surface-1", "accent-blue")
+   * Surface tokens are resolved to actual colors based on the current theme
+   */
   fill?: string
+  /**
+   * Stroke color - can be a hex color or a surface token
+   * If using a surface token, the stroke color from that token is used
+   */
   stroke?: string
   strokeWidth?: number
   strokeDasharray?: string

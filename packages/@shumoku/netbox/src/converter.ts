@@ -95,42 +95,48 @@ interface DeviceInfo {
 }
 
 // ============================================
-// Style Constants
+// Style Constants (using surface tokens)
 // ============================================
 
-/** Subgraph style colors by hierarchy level (for tag-based grouping) */
-const SUBGRAPH_STYLES: Record<number, { fill: string; stroke: string }> = {
-  0: { fill: '#E3F2FD', stroke: '#1565C0' }, // OCX - Blue
-  1: { fill: '#E8F5E9', stroke: '#2E7D32' }, // ONU - Green
-  2: { fill: '#FFF3E0', stroke: '#E65100' }, // Router - Orange
-  3: { fill: '#FFF8E1', stroke: '#F9A825' }, // Core Switch - Yellow
-  4: { fill: '#F3E5F5', stroke: '#7B1FA2' }, // Edge Switch - Purple
-  5: { fill: '#FFEBEE', stroke: '#C62828' }, // Server/AP - Red
-  6: { fill: '#ECEFF1', stroke: '#546E7A' }, // Console - Gray
+/**
+ * Surface tokens by hierarchy level (for tag-based grouping)
+ * These tokens are resolved by the renderer based on the current theme
+ */
+const SUBGRAPH_TOKENS: Record<number, string> = {
+  0: 'accent-blue', // OCX - Blue
+  1: 'accent-green', // ONU - Green
+  2: 'accent-amber', // Router - Orange/Amber
+  3: 'surface-2', // Core Switch - Neutral
+  4: 'accent-purple', // Edge Switch - Purple
+  5: 'accent-red', // Server/AP - Red
+  6: 'surface-3', // Console - Gray
 }
 
-/** Style colors for site/location/prefix grouping */
-const GROUPING_STYLES = [
-  { fill: '#E3F2FD', stroke: '#1565C0' }, // Blue
-  { fill: '#E8F5E9', stroke: '#2E7D32' }, // Green
-  { fill: '#FFF3E0', stroke: '#E65100' }, // Orange
-  { fill: '#F3E5F5', stroke: '#7B1FA2' }, // Purple
-  { fill: '#FFEBEE', stroke: '#C62828' }, // Red
-  { fill: '#E0F7FA', stroke: '#00838F' }, // Cyan
-  { fill: '#FFF8E1', stroke: '#F9A825' }, // Yellow
-  { fill: '#ECEFF1', stroke: '#546E7A' }, // Gray
+/**
+ * Surface tokens for site/location/prefix grouping
+ * Cycles through available accent colors
+ */
+const GROUPING_TOKENS = [
+  'accent-blue',
+  'accent-green',
+  'accent-amber',
+  'accent-purple',
+  'accent-red',
+  'surface-2',
+  'surface-3',
 ]
 
-/** Prefix/subnet colors */
-const PREFIX_STYLES = [
-  { fill: '#DBEAFE', stroke: '#2563EB' }, // Blue
-  { fill: '#D1FAE5', stroke: '#059669' }, // Green
-  { fill: '#FEF3C7', stroke: '#D97706' }, // Yellow
-  { fill: '#FCE7F3', stroke: '#DB2777' }, // Pink
-  { fill: '#E0E7FF', stroke: '#4F46E5' }, // Indigo
-  { fill: '#F3E8FF', stroke: '#9333EA' }, // Purple
-  { fill: '#FFEDD5', stroke: '#EA580C' }, // Orange
-  { fill: '#ECFEFF', stroke: '#0891B2' }, // Cyan
+/**
+ * Surface tokens for prefix/subnet grouping
+ */
+const PREFIX_TOKENS = [
+  'accent-blue',
+  'accent-green',
+  'accent-amber',
+  'accent-purple',
+  'accent-red',
+  'surface-2',
+  'surface-3',
 ]
 
 /** VM node style (dashed border) */
@@ -463,12 +469,13 @@ function buildSubgraphsByTag(
     const tagConfig = mapping[tag]
     const level = tagConfig?.level ?? 99
     const label = tagConfig?.subgraph ?? tag
-    const style = SUBGRAPH_STYLES[level] ?? { fill: '#F5F5F5', stroke: '#9E9E9E' }
+    // Use surface token - renderer will resolve to actual colors based on theme
+    const token = SUBGRAPH_TOKENS[level] ?? 'surface-1'
 
     subgraphs.push({
       id: tag,
       label,
-      style: { fill: style.fill, stroke: style.stroke, strokeWidth: 2 },
+      style: { fill: token },
     })
   }
 
@@ -482,14 +489,14 @@ function buildSubgraphsByTag(
 function buildSubgraphsBySite(devices: Map<string, DeviceData>): Subgraph[] {
   return buildGroupedSubgraphs(
     groupDevicesBy(devices, (d) => d.site ?? 'unknown'),
-    GROUPING_STYLES,
+    GROUPING_TOKENS,
   )
 }
 
 function buildSubgraphsByLocation(devices: Map<string, DeviceData>): Subgraph[] {
   return buildGroupedSubgraphs(
     groupDevicesBy(devices, (d) => d.location ?? d.site ?? 'unknown'),
-    GROUPING_STYLES,
+    GROUPING_TOKENS,
   )
 }
 
@@ -505,20 +512,20 @@ function buildSubgraphsByPrefix(devices: Map<string, DeviceData>): Subgraph[] {
   })
 
   const subgraphs: Subgraph[] = []
-  let styleIndex = 0
+  let tokenIndex = 0
 
   for (const prefix of sortedPrefixes) {
     const devs = prefixDevices.get(prefix)!
     if (devs.length === 0) continue
 
-    const style = PREFIX_STYLES[styleIndex++ % PREFIX_STYLES.length]
+    const token = PREFIX_TOKENS[tokenIndex++ % PREFIX_TOKENS.length]
     const label =
       prefix === 'unknown' ? 'Unknown Network' : `Subnet: ${prefix.replace('.0.0/16', '.x.x')}`
 
     subgraphs.push({
       id: prefix.replace(/[./]/g, '-'),
       label,
-      style: { fill: style.fill, stroke: style.stroke, strokeWidth: 2 },
+      style: { fill: token },
     })
   }
 
@@ -538,21 +545,18 @@ function groupDevicesBy(
   return grouped
 }
 
-function buildGroupedSubgraphs(
-  grouped: Map<string, DeviceData[]>,
-  styles: typeof GROUPING_STYLES,
-): Subgraph[] {
+function buildGroupedSubgraphs(grouped: Map<string, DeviceData[]>, tokens: string[]): Subgraph[] {
   const subgraphs: Subgraph[] = []
-  let styleIndex = 0
+  let tokenIndex = 0
 
   for (const [key, devs] of grouped) {
     if (devs.length === 0) continue
 
-    const style = styles[styleIndex++ % styles.length]
+    const token = tokens[tokenIndex++ % tokens.length]
     subgraphs.push({
       id: key,
       label: formatLocationLabel(key),
-      style: { fill: style.fill, stroke: style.stroke, strokeWidth: 2 },
+      style: { fill: token },
     })
   }
 
@@ -727,20 +731,18 @@ function buildClusterSubgraphs(vmResp: NetBoxVirtualMachineResponse): Subgraph[]
   }
 
   const subgraphs: Subgraph[] = []
-  let styleIdx = 0
+  let tokenIdx = 0
 
   for (const clusterSlug of clusters) {
     const vm = vmResp.results.find((v) => v.cluster?.slug === clusterSlug)
     const clusterName = vm?.cluster?.name ?? clusterSlug
-    const style = GROUPING_STYLES[styleIdx++ % GROUPING_STYLES.length]
+    const token = GROUPING_TOKENS[tokenIdx++ % GROUPING_TOKENS.length]
 
     subgraphs.push({
       id: `cluster-${clusterSlug}`,
       label: clusterName,
       style: {
-        fill: style.fill,
-        stroke: style.stroke,
-        strokeWidth: 2,
+        fill: token,
         strokeDasharray: '4,2',
       },
     })
@@ -1177,17 +1179,15 @@ function generateMainYaml(
   lines.push('')
 
   lines.push('subgraphs:')
-  let styleIndex = 0
+  let tokenIndex = 0
   for (const [locationId] of locationDevices) {
-    const style = GROUPING_STYLES[styleIndex++ % GROUPING_STYLES.length]
+    const token = GROUPING_TOKENS[tokenIndex++ % GROUPING_TOKENS.length]
 
     lines.push(`  - id: ${locationId}`)
     lines.push(`    label: "${formatLocationLabel(locationId)}"`)
     lines.push(`    file: "${fileBasePath}${locationId}.yaml"`)
     lines.push('    style:')
-    lines.push(`      fill: "${style.fill}"`)
-    lines.push(`      stroke: "${style.stroke}"`)
-    lines.push(`      strokeWidth: 2`)
+    lines.push(`      fill: "${token}"`)
   }
   lines.push('')
 

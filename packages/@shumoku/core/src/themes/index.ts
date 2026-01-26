@@ -3,7 +3,7 @@
  */
 
 export { darkTheme } from './dark.js'
-export { modernTheme } from './modern.js'
+export { lightTheme, modernTheme } from './light.js'
 export * from './types.js'
 export {
   applyThemeToCSS,
@@ -13,12 +13,14 @@ export {
 } from './utils.js'
 
 import { darkTheme } from './dark.js'
-// Default themes map
-import { modernTheme } from './modern.js'
+import { lightTheme } from './light.js'
 
+// Default themes map
 export const themes = {
-  modern: modernTheme,
+  light: lightTheme,
   dark: darkTheme,
+  /** @deprecated Use 'light' instead */
+  modern: lightTheme,
 } as const
 
 export type ThemeName = keyof typeof themes

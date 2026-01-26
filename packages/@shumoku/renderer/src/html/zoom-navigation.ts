@@ -80,7 +80,7 @@ const SHEET_SWITCH_PROGRESS = 0.8 // Switch sheet at 80% of animation
  * Easing function: easeOutCubic for smooth deceleration
  */
 function easeOutCubic(t: number): number {
-  return 1 - Math.pow(1 - t, 3)
+  return 1 - (1 - t) ** 3
 }
 
 /**

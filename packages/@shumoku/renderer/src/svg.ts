@@ -18,7 +18,16 @@ import type {
   NodeShape,
   ThemeType,
 } from '@shumoku/core'
-import { DEFAULT_ICON_SIZE, getDeviceIcon, ICON_LABEL_GAP, LABEL_LINE_HEIGHT } from '@shumoku/core'
+import {
+  DEFAULT_ICON_SIZE,
+  darkTheme,
+  getDeviceIcon,
+  ICON_LABEL_GAP,
+  LABEL_LINE_HEIGHT,
+  lightTheme,
+  type SurfaceToken,
+  type Theme,
+} from '@shumoku/core'
 
 import {
   getCDNIconUrl,
@@ -29,10 +38,10 @@ import {
 import type { DataAttributeOptions, RenderMode } from './types.js'
 
 // ============================================
-// Theme Colors
+// Render Colors (derived from Theme)
 // ============================================
 
-interface ThemeColors {
+interface RenderColors {
   backgroundColor: string
   defaultNodeFill: string
   defaultNodeStroke: string
@@ -50,101 +59,75 @@ interface ThemeColors {
   endpointLabelStroke: string
 }
 
-const LIGHT_THEME: ThemeColors = {
-  backgroundColor: '#ffffff',
-  // Node: white card with soft shadow (shadow applied via filter)
-  defaultNodeFill: '#ffffff',
-  defaultNodeStroke: '#e2e8f0',
-  defaultLinkStroke: '#94a3b8',
-  // Labels
-  labelColor: '#1e293b',
-  labelSecondaryColor: '#64748b',
-  // Subgraph: thin border, light fill
-  subgraphFill: '#f8fafc',
-  subgraphStroke: '#e2e8f0',
-  subgraphLabelColor: '#64748b',
-  // Ports
-  portFill: '#334155',
-  portStroke: '#0f172a',
-  portLabelBg: '#0f172a',
-  portLabelColor: '#ffffff',
-  endpointLabelBg: '#ffffff',
-  endpointLabelStroke: '#e2e8f0',
-}
+/**
+ * Convert Theme to RenderColors for SVG rendering
+ */
+function themeToRenderColors(theme: Theme): RenderColors {
+  const { colors } = theme
+  const defaultSurface = colors.surfaces['surface-1']
 
-const DARK_THEME: ThemeColors = {
-  backgroundColor: '#1e293b',
-  defaultNodeFill: '#334155',
-  defaultNodeStroke: '#64748b',
-  defaultLinkStroke: '#64748b',
-  labelColor: '#f1f5f9',
-  labelSecondaryColor: '#94a3b8',
-  subgraphFill: '#0f172a',
-  subgraphStroke: '#475569',
-  subgraphLabelColor: '#e2e8f0',
-  portFill: '#64748b',
-  portStroke: '#94a3b8',
-  portLabelBg: '#0f172a',
-  portLabelColor: '#f1f5f9',
-  endpointLabelBg: '#1e293b',
-  endpointLabelStroke: '#475569',
-}
-
-// ============================================
-// Zone Color Mapping (for subgraph semantic colors)
-// ============================================
-
-interface ZoneColors {
-  fill: string
-  stroke: string
-  text: string
-}
-
-/** Zone color palette based on subgraph name/id */
-const ZONE_COLORS: Record<string, ZoneColors> = {
-  // Cloud/External - Blue
-  cloud: { fill: '#eff6ff', stroke: '#bfdbfe', text: '#3b82f6' },
-  external: { fill: '#eff6ff', stroke: '#bfdbfe', text: '#3b82f6' },
-  internet: { fill: '#eff6ff', stroke: '#bfdbfe', text: '#3b82f6' },
-  aws: { fill: '#eff6ff', stroke: '#bfdbfe', text: '#3b82f6' },
-  azure: { fill: '#eff6ff', stroke: '#bfdbfe', text: '#3b82f6' },
-  gcp: { fill: '#eff6ff', stroke: '#bfdbfe', text: '#3b82f6' },
-  // DMZ/Perimeter - Rose
-  dmz: { fill: '#fff1f2', stroke: '#fecdd3', text: '#e11d48' },
-  perimeter: { fill: '#fff1f2', stroke: '#fecdd3', text: '#e11d48' },
-  edge: { fill: '#fff1f2', stroke: '#fecdd3', text: '#e11d48' },
-  firewall: { fill: '#fff1f2', stroke: '#fecdd3', text: '#e11d48' },
-  // Internal/Campus - Green
-  campus: { fill: '#f0fdf4', stroke: '#bbf7d0', text: '#16a34a' },
-  internal: { fill: '#f0fdf4', stroke: '#bbf7d0', text: '#16a34a' },
-  core: { fill: '#f0fdf4', stroke: '#bbf7d0', text: '#16a34a' },
-  datacenter: { fill: '#f0fdf4', stroke: '#bbf7d0', text: '#16a34a' },
-  dc: { fill: '#f0fdf4', stroke: '#bbf7d0', text: '#16a34a' },
-  lan: { fill: '#f0fdf4', stroke: '#bbf7d0', text: '#16a34a' },
-}
-
-/** Default zone colors (Slate) */
-const DEFAULT_ZONE_COLORS: ZoneColors = {
-  fill: '#f8fafc',
-  stroke: '#e2e8f0',
-  text: '#64748b',
+  return {
+    backgroundColor: colors.background,
+    defaultNodeFill: colors.surface,
+    defaultNodeStroke: colors.textSecondary,
+    defaultLinkStroke: colors.textSecondary,
+    labelColor: colors.text,
+    labelSecondaryColor: colors.textSecondary,
+    subgraphFill: defaultSurface.fill,
+    subgraphStroke: defaultSurface.stroke,
+    subgraphLabelColor: defaultSurface.text,
+    // Ports use darker colors
+    portFill: theme.variant === 'dark' ? '#64748b' : '#334155',
+    portStroke: theme.variant === 'dark' ? '#94a3b8' : '#0f172a',
+    portLabelBg: theme.variant === 'dark' ? '#0f172a' : '#0f172a',
+    portLabelColor: '#ffffff',
+    endpointLabelBg: colors.background,
+    endpointLabelStroke: defaultSurface.stroke,
+  }
 }
 
 /**
- * Get zone colors based on subgraph id/label
+ * Check if a string is a surface token
  */
-function getZoneColors(id: string, label: string): ZoneColors {
-  const lowerLabel = label.toLowerCase()
-  const lowerId = id.toLowerCase()
+function isSurfaceToken(value: string): value is SurfaceToken {
+  return [
+    'surface-1',
+    'surface-2',
+    'surface-3',
+    'accent-blue',
+    'accent-green',
+    'accent-red',
+    'accent-amber',
+    'accent-purple',
+  ].includes(value)
+}
 
-  // Try to match by label first, then by id
-  for (const [key, colors] of Object.entries(ZONE_COLORS)) {
-    if (lowerLabel.includes(key) || lowerId.includes(key)) {
-      return colors
+/**
+ * Resolve a color value that may be a surface token or a direct color
+ * Returns SurfaceColors (fill, stroke, text) for the resolved value
+ */
+function resolveSurfaceColors(
+  theme: Theme,
+  fillValue?: string,
+  strokeValue?: string,
+): { fill: string; stroke: string; text: string } {
+  // Check if fill is a surface token
+  if (fillValue && isSurfaceToken(fillValue)) {
+    const surfaceColors = theme.colors.surfaces[fillValue]
+    return {
+      fill: surfaceColors.fill,
+      stroke: strokeValue || surfaceColors.stroke,
+      text: surfaceColors.text,
     }
   }
 
-  return DEFAULT_ZONE_COLORS
+  // Use default surface as base
+  const defaultSurface = theme.colors.surfaces['surface-1']
+  return {
+    fill: fillValue || defaultSurface.fill,
+    stroke: strokeValue || defaultSurface.stroke,
+    text: defaultSurface.text,
+  }
 }
 
 // ============================================
@@ -208,7 +191,8 @@ const DEFAULT_OPTIONS: Required<SVGRendererOptions> = {
 
 export class SVGRenderer {
   private options: Required<SVGRendererOptions>
-  private themeColors: ThemeColors = LIGHT_THEME
+  private theme: Theme = lightTheme
+  private renderColors: RenderColors = themeToRenderColors(lightTheme)
   private edgeStyle: EdgeStyle = 'orthogonal'
 
   constructor(options?: SVGRendererOptions) {
@@ -245,18 +229,18 @@ export class SVGRenderer {
   }
 
   /**
-   * Get theme colors based on theme type
+   * Set theme based on theme type
    */
-  private getThemeColors(theme?: ThemeType): ThemeColors {
-    return theme === 'dark' ? DARK_THEME : LIGHT_THEME
+  private setTheme(themeType?: ThemeType): void {
+    this.theme = themeType === 'dark' ? darkTheme : lightTheme
+    this.renderColors = themeToRenderColors(this.theme)
   }
 
   render(graph: NetworkGraph, layout: LayoutResult): string {
     const { bounds } = layout
 
-    // Set theme colors based on graph settings
-    const theme = graph.settings?.theme
-    this.themeColors = this.getThemeColors(theme)
+    // Set theme based on graph settings
+    this.setTheme(graph.settings?.theme)
 
     // Set edge style for link rendering
     this.edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
@@ -460,7 +444,7 @@ export class SVGRenderer {
     // Render legend box
     let svg = `<g class="legend" transform="translate(${legendX}, ${legendY})">
   <rect x="0" y="0" width="${legendWidth}" height="${legendHeight}" rx="4"
-    fill="${this.themeColors.backgroundColor}" stroke="${this.themeColors.subgraphStroke}" stroke-width="1" opacity="0.95" />
+    fill="${this.renderColors.backgroundColor}" stroke="${this.renderColors.subgraphStroke}" stroke-width="1" opacity="0.95" />
   <text x="${padding}" y="${padding + 12}" class="subgraph-label" font-size="11">Legend</text>`
 
     // Render items
@@ -487,7 +471,7 @@ export class SVGRenderer {
 
     const lines = offsets.map((offset) => {
       const y = offset
-      return `<line x1="0" y1="${y}" x2="${lineWidth}" y2="${y}" stroke="${this.themeColors.defaultLinkStroke}" stroke-width="${strokeWidth}" />`
+      return `<line x1="0" y1="${y}" x2="${lineWidth}" y2="${y}" stroke="${this.renderColors.defaultLinkStroke}" stroke-width="${strokeWidth}" />`
     })
 
     return `<g transform="translate(0, 0)">${lines.join('')}</g>`
@@ -498,7 +482,7 @@ export class SVGRenderer {
   viewBox="${viewBox}"
   width="${width}"
   height="${height}"
-  style="background: ${this.themeColors.backgroundColor}">`
+  style="background: ${this.renderColors.backgroundColor}">`
   }
 
   private renderDefs(): string {
@@ -506,7 +490,7 @@ export class SVGRenderer {
     return `<defs>
   <!-- Arrow marker -->
   <marker id="${this.arrowId}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="${this.themeColors.defaultLinkStroke}" />
+    <polygon points="0 0, 10 3.5, 0 7" fill="${this.renderColors.defaultLinkStroke}" />
   </marker>
   <marker id="${this.arrowRedId}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
     <polygon points="0 0, 10 3.5, 0 7" fill="#dc2626" />
@@ -523,14 +507,14 @@ export class SVGRenderer {
     const cssVars = this.isInteractive
       ? `
   :root {
-    --shumoku-bg: ${this.themeColors.backgroundColor};
-    --shumoku-surface: ${this.themeColors.subgraphFill};
-    --shumoku-text: ${this.themeColors.labelColor};
-    --shumoku-text-secondary: ${this.themeColors.labelSecondaryColor};
-    --shumoku-border: ${this.themeColors.subgraphStroke};
-    --shumoku-node-fill: ${this.themeColors.defaultNodeFill};
-    --shumoku-node-stroke: ${this.themeColors.defaultNodeStroke};
-    --shumoku-link-stroke: ${this.themeColors.defaultLinkStroke};
+    --shumoku-bg: ${this.renderColors.backgroundColor};
+    --shumoku-surface: ${this.renderColors.subgraphFill};
+    --shumoku-text: ${this.renderColors.labelColor};
+    --shumoku-text-secondary: ${this.renderColors.labelSecondaryColor};
+    --shumoku-border: ${this.renderColors.subgraphStroke};
+    --shumoku-node-fill: ${this.renderColors.defaultNodeFill};
+    --shumoku-node-stroke: ${this.renderColors.defaultNodeStroke};
+    --shumoku-link-stroke: ${this.renderColors.defaultLinkStroke};
     --shumoku-font: ${this.options.fontFamily};
   }`
       : ''
@@ -540,16 +524,16 @@ export class SVGRenderer {
 
     return `<style>${cssVars}
   /* Node labels: primary name in semibold */
-  .node-label { font-family: ${this.options.fontFamily}; font-size: 14px; font-weight: 600; fill: ${this.themeColors.labelColor}; }
+  .node-label { font-family: ${this.options.fontFamily}; font-size: 14px; font-weight: 600; fill: ${this.renderColors.labelColor}; }
   .node-label-bold { font-weight: 700; }
   /* Secondary/metadata labels: smaller, monospace for technical info */
-  .node-label-secondary { font-family: ${monoFont}; font-size: 10px; font-weight: 400; fill: ${this.themeColors.labelSecondaryColor}; }
-  .node-icon { color: ${this.themeColors.labelSecondaryColor}; }
+  .node-label-secondary { font-family: ${monoFont}; font-size: 10px; font-weight: 400; fill: ${this.renderColors.labelSecondaryColor}; }
+  .node-icon { color: ${this.renderColors.labelSecondaryColor}; }
   .subgraph-icon { opacity: 0.9; }
   /* Subgraph/zone labels: uppercase, letterspaced for modern look */
-  .subgraph-label { font-family: ${this.options.fontFamily}; font-size: 11px; font-weight: 700; fill: ${this.themeColors.subgraphLabelColor}; text-transform: uppercase; letter-spacing: 0.05em; }
-  .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${this.themeColors.labelSecondaryColor}; }
-  .endpoint-label { font-family: ${monoFont}; font-size: 9px; fill: ${this.themeColors.labelColor}; }
+  .subgraph-label { font-family: ${this.options.fontFamily}; font-size: 11px; font-weight: 700; fill: ${this.renderColors.subgraphLabelColor}; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${this.renderColors.labelSecondaryColor}; }
+  .endpoint-label { font-family: ${monoFont}; font-size: 9px; fill: ${this.renderColors.labelColor}; }
 </style>`
   }
 
@@ -557,11 +541,11 @@ export class SVGRenderer {
     const { bounds, subgraph } = sg
     const style = subgraph.style || {}
 
-    // Get zone-specific colors based on subgraph id/label
-    const zoneColors = getZoneColors(sg.id, subgraph.label)
-    const fill = style.fill || zoneColors.fill
-    const stroke = style.stroke || zoneColors.stroke
-    const labelColor = zoneColors.text
+    // Resolve surface colors from token or direct color value
+    const surfaceColors = resolveSurfaceColors(this.theme, style.fill, style.stroke)
+    const fill = surfaceColors.fill
+    const stroke = surfaceColors.stroke
+    const labelColor = surfaceColors.text
     const strokeWidth = style.strokeWidth || 1.5
     const strokeDasharray = style.strokeDasharray || ''
     const labelPos = style.labelPosition || 'top'
@@ -756,11 +740,11 @@ ${fg}
     const isExport = node.metadata?._isExport === true
 
     // Special styling for export connector nodes - use subgraph colors
-    let fill = style.fill || this.themeColors.defaultNodeFill
-    let stroke = style.stroke || this.themeColors.defaultNodeStroke
+    let fill = style.fill || this.renderColors.defaultNodeFill
+    let stroke = style.stroke || this.renderColors.defaultNodeStroke
     if (isExport) {
-      fill = style.fill || this.themeColors.subgraphFill
-      stroke = style.stroke || this.themeColors.defaultNodeStroke
+      fill = style.fill || this.renderColors.subgraphFill
+      stroke = style.stroke || this.renderColors.defaultNodeStroke
     }
     const strokeWidth = style.strokeWidth || 1
     const strokeDasharray = style.strokeDasharray || ''
@@ -857,7 +841,7 @@ ${fg}
       // Port box
       parts.push(`<rect class="port-box"
         x="${px - pw / 2}" y="${py - ph / 2}" width="${pw}" height="${ph}"
-        fill="${this.themeColors.portFill}" stroke="${this.themeColors.portStroke}" stroke-width="1" rx="2" />`)
+        fill="${this.renderColors.portFill}" stroke="${this.renderColors.portStroke}" stroke-width="1" rx="2" />`)
 
       // Port label - position based on side
       let labelX = px
@@ -898,10 +882,10 @@ ${fg}
       const bgY = labelY - labelHeight + 3
 
       parts.push(
-        `<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.themeColors.portLabelBg}" />`,
+        `<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.renderColors.portLabelBg}" />`,
       )
       parts.push(
-        `<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.themeColors.portLabelColor}">${labelText}</text>`,
+        `<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.renderColors.portLabelColor}">${labelText}</text>`,
       )
 
       // Wrap in a group with data attributes
@@ -1134,7 +1118,7 @@ ${fg}
     const arrow = link.arrow ?? this.getDefaultArrowType(link.redundancy)
 
     const stroke =
-      link.style?.stroke || this.getVlanStroke(link.vlan) || this.themeColors.defaultLinkStroke
+      link.style?.stroke || this.getVlanStroke(link.vlan) || this.renderColors.defaultLinkStroke
     const dasharray = link.style?.strokeDasharray || this.getLinkDasharray(type)
     const markerEnd = arrow !== 'none' ? `url(#${this.arrowId})` : ''
 
@@ -1361,7 +1345,7 @@ ${fg}
     // Simple offset approach (same as port labels)
     const rectY = y - lineHeight + 3
 
-    let result = `\n<rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" rx="2" fill="${this.themeColors.endpointLabelBg}" stroke="${this.themeColors.endpointLabelStroke}" stroke-width="0.5" />`
+    let result = `\n<rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" rx="2" fill="${this.renderColors.endpointLabelBg}" stroke="${this.renderColors.endpointLabelStroke}" stroke-width="0.5" />`
 
     for (const [i, line] of lines.entries()) {
       const textY = y + i * lineHeight

@@ -28,31 +28,26 @@ subgraphs:
     service: vpc
     resource: virtual-private-cloud-vpc
     style:
-      fill: "#f0f8ff"
-      stroke: "#0072bc"
+      fill: "accent-blue"
       strokeDasharray: "5 5"
 
   - id: perimeter
     label: "Perimeter (Edge + Security)"
     file: "./perimeter.yaml"
     style:
-      fill: "#fff5f5"
-      stroke: "#d4a017"
-      strokeWidth: 2
+      fill: "accent-red"
 
   - id: dmz
     label: "DMZ"
     file: "./dmz.yaml"
     style:
-      fill: "#fefce8"
-      stroke: "#ca8a04"
+      fill: "accent-amber"
 
   - id: campus
     label: "Campus"
     file: "./campus.yaml"
     style:
-      fill: "#fffbf0"
-      stroke: "#d4a017"
+      fill: "surface-2"
 
 links:
   # Cloud to Perimeter (VPN)
@@ -159,16 +154,12 @@ subgraphs:
   - id: edge
     label: "Edge (HA Routers)"
     style:
-      fill: "#fff5f5"
-      stroke: "#d4a017"
-      strokeWidth: 2
+      fill: "surface-2"
 
   - id: security
     label: "Security"
     style:
-      fill: "#fef2f2"
-      stroke: "#dc2626"
-      strokeWidth: 2
+      fill: "accent-red"
 
 nodes:
   # ========== Edge Layer ==========
@@ -348,23 +339,19 @@ subgraphs:
   - id: noc
     label: "NOC"
     style:
-      fill: "#e6f7ff"
-      stroke: "#0055a6"
-      strokeWidth: 2
+      fill: "accent-blue"
 
   - id: building-a
     label: "Building A"
     direction: TB
     style:
-      fill: "#f0fdf4"
-      stroke: "#22c55e"
+      fill: "accent-green"
 
   - id: building-b
     label: "Building B"
     direction: TB
     style:
-      fill: "#fef3c7"
-      stroke: "#f59e0b"
+      fill: "accent-amber"
 
 nodes:
   # ========== NOC ==========

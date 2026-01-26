@@ -3,16 +3,16 @@
  */
 
 import { DeviceType } from '../models/index.js'
-import { modernTheme } from './modern.js'
+import { lightTheme } from './light.js'
 import type { Theme } from './types.js'
 
 export const darkTheme: Theme = {
-  ...modernTheme,
+  ...lightTheme,
   name: 'dark',
   variant: 'dark',
 
   colors: {
-    ...modernTheme.colors,
+    ...lightTheme.colors,
 
     // Backgrounds (inverted)
     background: '#0f172a',
@@ -60,6 +60,7 @@ export const darkTheme: Theme = {
     },
 
     // Module colors (adjusted for dark)
+    // @deprecated Use zonePresets instead
     modules: {
       core: '#1e3a8a',
       distribution: '#581c87',
@@ -69,13 +70,25 @@ export const darkTheme: Theme = {
       default: '#374151',
     },
 
+    // Surface token colors for subgraph rendering (dark mode)
+    surfaces: {
+      'surface-1': { fill: '#1e293b', stroke: '#475569', text: '#94a3b8' }, // Slate-800
+      'surface-2': { fill: '#334155', stroke: '#64748b', text: '#cbd5e1' }, // Slate-700
+      'surface-3': { fill: '#475569', stroke: '#94a3b8', text: '#e2e8f0' }, // Slate-600
+      'accent-blue': { fill: '#1e3a8a', stroke: '#3b82f6', text: '#93c5fd' }, // Blue
+      'accent-green': { fill: '#064e3b', stroke: '#10b981', text: '#6ee7b7' }, // Green
+      'accent-red': { fill: '#4c0519', stroke: '#f43f5e', text: '#fda4af' }, // Rose
+      'accent-amber': { fill: '#78350f', stroke: '#f59e0b', text: '#fcd34d' }, // Amber
+      'accent-purple': { fill: '#3b0764', stroke: '#a855f7', text: '#d8b4fe' }, // Purple
+    },
+
     // Grid
     grid: '#334155',
     guideline: '#60a5fa',
   },
 
   shadows: {
-    ...modernTheme.shadows,
+    ...lightTheme.shadows,
 
     // Darker shadows for dark theme
     small: {
