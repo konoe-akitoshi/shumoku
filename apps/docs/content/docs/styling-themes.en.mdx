@@ -114,8 +114,7 @@ subgraphs:
   - id: dmz
     label: "DMZ"
     style:
-      fill: "#fff5f5"           # Background color
-      stroke: "#d4a017"         # Border color
+      fill: "accent-red"        # Surface token (recommended)
       strokeWidth: 2            # Border width
       strokeDasharray: "5 5"    # Dashed line
       labelPosition: top        # Label position
@@ -123,6 +122,47 @@ subgraphs:
       padding: 20               # Inner padding
       nodeSpacing: 50           # Node spacing
       rankSpacing: 100          # Rank spacing
+```
+
+### Surface Tokens
+
+You can specify surface tokens for `fill`. When using tokens, appropriate colors are automatically applied based on the theme (light/dark).
+
+| Token | Description |
+|-------|-------------|
+| `surface-1` | Lightest background (default) |
+| `surface-2` | Slightly darker background |
+| `surface-3` | Even darker background |
+| `accent-blue` | Blue accent (cloud, external connections) |
+| `accent-green` | Green accent (internal network, success state) |
+| `accent-red` | Red accent (DMZ, security zones) |
+| `accent-amber` | Amber accent (highlight, warning) |
+| `accent-purple` | Purple accent |
+
+```yaml
+subgraphs:
+  - id: cloud
+    label: "Cloud"
+    style:
+      fill: "accent-blue"
+
+  - id: internal
+    label: "Internal Network"
+    style:
+      fill: "accent-green"
+
+  - id: dmz
+    label: "DMZ"
+    style:
+      fill: "accent-red"
+```
+
+Traditional hex color values are still supported:
+
+```yaml
+style:
+  fill: "#fff5f5"
+  stroke: "#d4a017"
 ```
 
 ### Label Position
