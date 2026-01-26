@@ -224,3 +224,26 @@ See `apps/server/src/types.ts` for corresponding TypeScript interfaces:
 - **Journal mode:** WAL (Write-Ahead Logging) for better concurrency
 - **Foreign keys:** Enabled (`PRAGMA foreign_keys = ON`)
 - **ID generation:** nanoid (12 characters)
+
+## Backup
+
+SQLiteはファイルベースなので、DBファイルをコピーするだけでバックアップできます。
+
+**サーバー停止中（推奨）:**
+```bash
+cp ./data/shumoku.db ./data/shumoku_backup_$(date +%Y%m%d_%H%M%S).db
+```
+
+**サーバー稼働中（WALモード対応）:**
+```bash
+sqlite3 ./data/shumoku.db ".backup './data/shumoku_backup.db'"
+```
+
+**リストア:**
+```bash
+# サーバーを停止してから
+cp ./data/shumoku_backup.db ./data/shumoku.db
+```
+
+**マイグレーション前のバックアップ:**
+スキーマ変更を含むアップデート前には手動でバックアップを取ることを推奨します。
