@@ -5,9 +5,10 @@ import { goto } from '$app/navigation'
 import { api } from '$lib/api'
 import { metricsConnected, mappingStore, nodeMapping } from '$lib/stores'
 import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
-import type { NodeSelectEvent } from '$lib/components/InteractiveSvgDiagram.svelte'
+import type { NodeSelectEvent, SubgraphSelectEvent } from '$lib/components/InteractiveSvgDiagram.svelte'
 import TopologySettings from '$lib/components/TopologySettings.svelte'
 import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
+import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
 import type { Topology, TopologyDataSource } from '$lib/types'
 import X from 'phosphor-svelte/lib/X'
 
@@ -23,6 +24,13 @@ let settingsOpen = false
 let mappingModalOpen = false
 let selectedNodeData: NodeSelectEvent | null = null
 let netboxBaseUrl: string | undefined = undefined
+
+// Subgraph info modal state
+let subgraphModalOpen = false
+let selectedSubgraphData: SubgraphSelectEvent | null = null
+
+// Diagram component reference for drill-down
+let diagramComponent: InteractiveSvgDiagram
 
 // Get ID from route params
 $: topologyId = $page.params.id!
@@ -75,6 +83,15 @@ function handleNodeSelect(event: NodeSelectEvent) {
   mappingModalOpen = true
 }
 
+function handleSubgraphSelect(event: SubgraphSelectEvent) {
+  selectedSubgraphData = event
+  subgraphModalOpen = true
+}
+
+function handleSubgraphDrillDown(subgraphId: string) {
+  diagramComponent?.navigateToSheet(subgraphId)
+}
+
 function handleMappingSaved(_nodeId: string, _mapping: { hostId?: string; hostName?: string }) {
   // Mapping is now handled by the shared store, no need to update local state
 }
@@ -100,7 +117,7 @@ function handleMappingSaved(_nodeId: string, _mapping: { hostId?: string; hostNa
       </div>
     {:else if topology}
       <div class="absolute inset-0">
-        <InteractiveSvgDiagram {topologyId} onToggleSettings={toggleSettings} {settingsOpen} onNodeSelect={handleNodeSelect} />
+        <InteractiveSvgDiagram bind:this={diagramComponent} {topologyId} onToggleSettings={toggleSettings} {settingsOpen} onNodeSelect={handleNodeSelect} onSubgraphSelect={handleSubgraphSelect} />
       </div>
 
       <!-- Connection status indicator -->
@@ -138,6 +155,13 @@ function handleMappingSaved(_nodeId: string, _mapping: { hostId?: string; hostNa
     </div>
   {/if}
 </div>
+
+<!-- Subgraph Info Modal -->
+<SubgraphInfoModal
+  bind:open={subgraphModalOpen}
+  subgraphData={selectedSubgraphData}
+  onDrillDown={handleSubgraphDrillDown}
+/>
 
 <!-- Node Mapping Modal -->
 {#if topology}

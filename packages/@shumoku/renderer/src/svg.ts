@@ -761,6 +761,7 @@ export class SVGRenderer {
   private renderNode(layoutNode: LayoutNode): string {
     const { id, node } = layoutNode
     const dataAttrs = this.buildNodeDataAttributes(node)
+    const parentAttr = node.parent ? ` data-parent="${this.escapeXml(node.parent)}"` : ''
     const bg = this.renderNodeBackground(layoutNode)
     const fg = this.renderNodeForeground(layoutNode)
 
@@ -768,7 +769,7 @@ export class SVGRenderer {
     const shadowId = this.options.sheetId ? `node-shadow-${this.options.sheetId}` : 'node-shadow'
     const filterAttr = ` filter="url(#${shadowId})"`
 
-    return `<g class="node" data-id="${id}"${dataAttrs}${filterAttr}>
+    return `<g class="node" data-id="${id}"${dataAttrs}${parentAttr}${filterAttr}>
 ${bg}
 ${fg}
 </g>`

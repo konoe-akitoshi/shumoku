@@ -17,6 +17,18 @@ export interface NodeSelectEvent {
     bandwidth?: string
   }>
 }
+
+export interface SubgraphInfo {
+  id: string
+  label: string
+  nodeCount: number
+  linkCount: number
+  canDrillDown: boolean
+}
+
+export interface SubgraphSelectEvent {
+  subgraph: SubgraphInfo
+}
 </script>
 
 <script lang="ts">
@@ -43,6 +55,7 @@ export let topologyId: string
 export let onToggleSettings: (() => void) | undefined = undefined
 export let settingsOpen = false
 export let onNodeSelect: ((event: NodeSelectEvent) => void) | undefined = undefined
+export let onSubgraphSelect: ((event: SubgraphSelectEvent) => void) | undefined = undefined
 
 // Sheet types for hierarchical navigation
 interface SheetInfo {
@@ -239,8 +252,8 @@ async function initializeCurrentSheet() {
   }
 }
 
-// Navigate to a child sheet
-async function navigateToSheet(sheetId: string) {
+// Navigate to a child sheet (exported for external drill-down)
+export async function navigateToSheet(sheetId: string) {
   if (!sheets[sheetId]) return
 
   // Push current sheet to stack
@@ -552,15 +565,20 @@ function setupInteractivity() {
     sgEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
     sgEl.addEventListener('mouseleave', () => handleSubgraphLeave())
 
+    // Single-click: show info modal
+    sgEl.addEventListener('click', (e) => {
+      e.stopPropagation()
+      handleSubgraphSingleClick(sgId)
+    })
+    sgEl.style.cursor = 'pointer'
+
     // Enable double-click navigation if this subgraph has a corresponding sheet
-    // Single-click is reserved for future modal/details display
     if (hasSheet || sheets[sgId]) {
       sgEl.addEventListener('dblclick', (e) => {
         e.stopPropagation()
         e.preventDefault()
         handleSubgraphClick(sgId)
       })
-      sgEl.style.cursor = 'pointer'
     }
   })
 
@@ -655,6 +673,44 @@ function handleSubgraphHover(sgId: string, event: MouseEvent) {
 function handleSubgraphLeave() {
   highlightSubgraph(null, false)
   hideTooltip()
+}
+
+function handleSubgraphSingleClick(sgId: string) {
+  if (!svgElement || !onSubgraphSelect) return
+
+  const sgEl = svgElement.querySelector(`g.subgraph[data-id="${sgId}"]`)
+  if (!sgEl) return
+
+  const label = sgEl.getAttribute('data-label') || sgId
+
+  // Count nodes belonging to this subgraph via data-parent attribute
+  const memberNodes = svgElement.querySelectorAll(`g.node[data-parent="${sgId}"]`)
+  const memberNodeIds = new Set<string>()
+  memberNodes.forEach((n) => {
+    const nid = n.getAttribute('data-id')
+    if (nid) memberNodeIds.add(nid)
+  })
+
+  // Count links where both endpoints belong to this subgraph
+  let linkCount = 0
+  const allLinks = svgElement.querySelectorAll('g.link-group')
+  allLinks.forEach((link) => {
+    const from = (link.getAttribute('data-link-from') || '').split(':')[0]
+    const to = (link.getAttribute('data-link-to') || '').split(':')[0]
+    if (memberNodeIds.has(from) || memberNodeIds.has(to)) {
+      linkCount++
+    }
+  })
+
+  onSubgraphSelect({
+    subgraph: {
+      id: sgId,
+      label,
+      nodeCount: memberNodeIds.size,
+      linkCount,
+      canDrillDown: sheets[sgId] !== undefined,
+    },
+  })
 }
 
 function handleSubgraphClick(sgId: string) {
