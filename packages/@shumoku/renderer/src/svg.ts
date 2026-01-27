@@ -482,7 +482,7 @@ export class SVGRenderer {
   viewBox="${viewBox}"
   width="${width}"
   height="${height}"
-  style="background: ${this.renderColors.backgroundColor}">`
+  style="background: transparent">`
   }
 
   private renderDefs(): string {

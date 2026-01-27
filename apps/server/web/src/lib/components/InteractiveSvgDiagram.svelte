@@ -424,6 +424,26 @@ function checkZoomNavigation(mouseX: number, mouseY: number, zoomingIn: boolean)
   }
 }
 
+// Update dot grid background to follow panzoom transform (CAD-style)
+// Grid snaps to coarser intervals when zoomed out, finer when zoomed in
+const DOT_GRID_MIN_SCREEN_SIZE = 15
+const DOT_GRID_BASE_INTERVAL = 20
+function updateDotGrid() {
+  if (!container || !panzoomInstance) return
+  const { x, y, scale: s } = panzoomInstance.getTransform()
+
+  // Find the smallest power-of-2 multiple of base interval
+  // whose screen size is >= minimum
+  let interval = DOT_GRID_BASE_INTERVAL
+  while (interval * s < DOT_GRID_MIN_SCREEN_SIZE) {
+    interval *= 2
+  }
+
+  const screenSize = interval * s
+  container.style.backgroundSize = `${screenSize}px ${screenSize}px`
+  container.style.backgroundPosition = `${x % screenSize}px ${y % screenSize}px`
+}
+
 // Initialize panzoom
 function initPanZoom() {
   if (!svgWrapper || !container) return
@@ -439,10 +459,12 @@ function initPanZoom() {
 
   panzoomInstance.on('zoom', () => {
     scale = panzoomInstance?.getTransform().scale ?? 1
+    updateDotGrid()
   })
 
   panzoomInstance.on('pan', () => {
     scale = panzoomInstance?.getTransform().scale ?? 1
+    updateDotGrid()
   })
 
   // Add wheel listener for zoom navigation (debounced)
@@ -1133,6 +1155,7 @@ onDestroy(() => {
     background: var(--color-bg-canvas);
     background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
     background-size: 20px 20px;
+    background-position: 0 0;
   }
 
   .svg-wrapper {
