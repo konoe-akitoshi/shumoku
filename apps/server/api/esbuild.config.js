@@ -14,10 +14,10 @@ await esbuild.build({
   external: ['bun:sqlite', 'bun'],
   // Use browser entry point for renderer (avoids resvg native module)
   alias: {
-    '@shumoku/renderer': path.resolve(__dirname, '../../packages/@shumoku/renderer/dist/index.js'),
+    '@shumoku/renderer': path.resolve(__dirname, '../../../packages/@shumoku/renderer/dist/index.js'),
     '@shumoku/renderer/iife-string': path.resolve(
       __dirname,
-      '../../packages/@shumoku/renderer/dist/iife-string.js',
+      '../../../packages/@shumoku/renderer/dist/iife-string.js',
     ),
   },
 })

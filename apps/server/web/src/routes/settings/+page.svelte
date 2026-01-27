@@ -114,7 +114,7 @@ async function handleHealthCheck() {
           <div class="space-y-3">
             <div class="flex justify-between">
               <span class="text-theme-text-muted">Version</span>
-              <span class="text-theme-text">0.1.0</span>
+              <span class="text-theme-text">{__APP_VERSION__}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-theme-text-muted">Database</span>

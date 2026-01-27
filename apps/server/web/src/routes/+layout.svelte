@@ -137,7 +137,7 @@ function toggleSidebar() {
     <!-- Footer: Version -->
     <div class="py-3 px-2 border-t border-theme-border">
       <div class="text-xs text-theme-text-muted {sidebarCollapsed ? 'text-center' : 'px-3'}">
-        {sidebarCollapsed ? 'v0.1' : 'v0.1.0'}
+        {sidebarCollapsed ? `v${__APP_VERSION__.split('.').slice(0, 2).join('.')}` : `v${__APP_VERSION__}`}
       </div>
     </div>
   </nav>
