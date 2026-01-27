@@ -144,6 +144,21 @@ $: if (tooltipVisible && hoveredType === 'link' && hoveredLinkId && hoveredLinkI
   tooltipContent = content
 }
 
+// Drag detection — suppress click when user drags to pan
+const DRAG_THRESHOLD = 5 // pixels
+let mouseDownPos: { x: number; y: number } | null = null
+
+function onPointerDown(e: PointerEvent) {
+  mouseDownPos = { x: e.clientX, y: e.clientY }
+}
+
+function wasDrag(e: MouseEvent): boolean {
+  if (!mouseDownPos) return false
+  const dx = e.clientX - mouseDownPos.x
+  const dy = e.clientY - mouseDownPos.y
+  return Math.hypot(dx, dy) > DRAG_THRESHOLD
+}
+
 // Currently hovered/selected elements
 let hoveredNodeId: string | null = null
 let selectedNodeId: string | null = null
@@ -550,7 +565,7 @@ function setupInteractivity() {
     nodeEl.addEventListener('mouseenter', (e) => handleNodeHover(nodeId, e))
     nodeEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
     nodeEl.addEventListener('mouseleave', () => handleNodeLeave())
-    nodeEl.addEventListener('click', () => handleNodeClick(nodeId))
+    nodeEl.addEventListener('click', (e) => { if (!wasDrag(e)) handleNodeClick(nodeId) })
     nodeEl.style.cursor = 'pointer'
   })
 
@@ -565,8 +580,9 @@ function setupInteractivity() {
     sgEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
     sgEl.addEventListener('mouseleave', () => handleSubgraphLeave())
 
-    // Single-click: show info modal
+    // Single-click: show info modal (suppressed during drag/pan)
     sgEl.addEventListener('click', (e) => {
+      if (wasDrag(e)) return
       e.stopPropagation()
       handleSubgraphSingleClick(sgId)
     })
@@ -1088,7 +1104,7 @@ onDestroy(() => {
   </style>
 </svelte:head>
 
-<div class="diagram-container" bind:this={container}>
+<div class="diagram-container" bind:this={container} on:pointerdown={onPointerDown}>
   {#if loading}
     <div class="loading">
       <div class="spinner"></div>
