@@ -56,50 +56,83 @@ const initialState: MetricsState = {
   error: null,
 }
 
+// Use globalThis to persist WebSocket across HMR reloads
+const METRICS_WS_KEY = '__shumoku_metrics_ws__'
+interface MetricsGlobal {
+  ws: WebSocket | null
+  reconnectTimeout: ReturnType<typeof setTimeout> | null
+  reconnectAttempts: number
+  intentionalDisconnect: boolean
+}
+
+function getGlobal(): MetricsGlobal {
+  if (!(globalThis as Record<string, unknown>)[METRICS_WS_KEY]) {
+    ;(globalThis as Record<string, unknown>)[METRICS_WS_KEY] = {
+      ws: null,
+      reconnectTimeout: null,
+      reconnectAttempts: 0,
+      intentionalDisconnect: false,
+    }
+  }
+  return (globalThis as Record<string, unknown>)[METRICS_WS_KEY] as MetricsGlobal
+}
+
 function createMetricsStore() {
   const { subscribe, set, update } = writable<MetricsState>(initialState)
-  let ws: WebSocket | null = null
-  let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
-  let reconnectAttempts = 0
+  const g = getGlobal()
   const maxReconnectAttempts = 5
-  let intentionalDisconnect = false
 
   function getWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}/ws`
+    // In development (Vite), connect directly to API server
+    // In production, use same host
+    const isDev = window.location.port === '5173'
+    const host = isDev ? 'localhost:8080' : window.location.host
+    return `${protocol}//${host}/ws`
   }
 
   function cleanupWebSocket(): void {
-    if (ws) {
+    if (g.ws) {
       // Remove event handlers to prevent callbacks after cleanup
-      ws.onopen = null
-      ws.onmessage = null
-      ws.onclose = null
-      ws.onerror = null
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close()
+      g.ws.onopen = null
+      g.ws.onmessage = null
+      g.ws.onclose = null
+      g.ws.onerror = null
+      if (g.ws.readyState === WebSocket.OPEN || g.ws.readyState === WebSocket.CONNECTING) {
+        g.ws.close()
       }
-      ws = null
+      g.ws = null
     }
   }
 
   function connect(): void {
-    // Cancel any pending reconnect
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout)
-      reconnectTimeout = null
+    // If already connected, just sync the store state and return
+    if (g.ws?.readyState === WebSocket.OPEN) {
+      update((s) => ({ ...s, connected: true, error: null }))
+      return
     }
 
-    // Clean up existing connection (handles CONNECTING state too)
+    // If connecting, wait for it
+    if (g.ws?.readyState === WebSocket.CONNECTING) {
+      return
+    }
+
+    // Cancel any pending reconnect
+    if (g.reconnectTimeout) {
+      clearTimeout(g.reconnectTimeout)
+      g.reconnectTimeout = null
+    }
+
+    // Clean up existing connection (handles CLOSING/CLOSED state)
     cleanupWebSocket()
 
-    intentionalDisconnect = false
+    g.intentionalDisconnect = false
 
     try {
-      ws = new WebSocket(getWebSocketUrl())
+      g.ws = new WebSocket(getWebSocketUrl())
 
-      ws.onopen = () => {
-        reconnectAttempts = 0
+      g.ws.onopen = () => {
+        g.reconnectAttempts = 0
         update((s) => ({ ...s, connected: true, error: null }))
 
         // Re-subscribe if we had a topology
@@ -109,7 +142,7 @@ function createMetricsStore() {
         }
       }
 
-      ws.onmessage = (event) => {
+      g.ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data) as MetricsMessage
           if (msg.type === 'metrics') {
@@ -120,55 +153,55 @@ function createMetricsStore() {
         }
       }
 
-      ws.onclose = () => {
+      g.ws.onclose = () => {
         update((s) => ({ ...s, connected: false }))
         // Only reconnect if this wasn't an intentional disconnect
-        if (!intentionalDisconnect) {
+        if (!g.intentionalDisconnect) {
           scheduleReconnect()
         }
       }
 
-      ws.onerror = (event) => {
+      g.ws.onerror = (event) => {
         console.error('[Metrics] WebSocket error:', event)
         update((s) => ({ ...s, error: 'Connection error' }))
       }
     } catch (err) {
       console.error('[Metrics] Failed to create WebSocket:', err)
       update((s) => ({ ...s, error: 'Failed to connect' }))
-      if (!intentionalDisconnect) {
+      if (!g.intentionalDisconnect) {
         scheduleReconnect()
       }
     }
   }
 
   function scheduleReconnect(): void {
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout)
+    if (g.reconnectTimeout) {
+      clearTimeout(g.reconnectTimeout)
     }
 
-    if (reconnectAttempts < maxReconnectAttempts && !intentionalDisconnect) {
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-      reconnectAttempts++
-      reconnectTimeout = setTimeout(connect, delay)
+    if (g.reconnectAttempts < maxReconnectAttempts && !g.intentionalDisconnect) {
+      const delay = Math.min(1000 * Math.pow(2, g.reconnectAttempts), 30000)
+      g.reconnectAttempts++
+      g.reconnectTimeout = setTimeout(connect, delay)
     }
   }
 
   function disconnect(): void {
-    intentionalDisconnect = true
+    g.intentionalDisconnect = true
 
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout)
-      reconnectTimeout = null
+    if (g.reconnectTimeout) {
+      clearTimeout(g.reconnectTimeout)
+      g.reconnectTimeout = null
     }
 
     cleanupWebSocket()
-    reconnectAttempts = 0
+    g.reconnectAttempts = 0
     set(initialState)
   }
 
   function sendMessage(msg: ClientMessage): void {
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg))
+    if (g.ws?.readyState === WebSocket.OPEN) {
+      g.ws.send(JSON.stringify(msg))
     }
   }
 

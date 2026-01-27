@@ -29,6 +29,7 @@ import {
   liveUpdatesEnabled,
   showTrafficFlow,
   showNodeStatus,
+  themeSetting,
 } from '$lib/stores'
 import { formatTraffic } from '$lib/utils/format'
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
@@ -169,7 +170,9 @@ async function loadContent() {
   loading = true
   error = ''
   try {
-    const res = await fetch(`/api/topologies/${topologyId}/render`)
+    const theme = $themeSetting
+    const params = theme ? `?theme=${theme}` : ''
+    const res = await fetch(`/api/topologies/${topologyId}/render${params}`)
     if (!res.ok) {
       throw new Error(`Failed to load topology: ${res.status}`)
     }
@@ -986,6 +989,13 @@ $: if (svgElement && $metricsData) {
   }
 }
 
+// Reload content when theme changes
+let prevTheme = $themeSetting
+$: if ($themeSetting && prevTheme !== $themeSetting) {
+  prevTheme = $themeSetting
+  loadContent()
+}
+
 onMount(async () => {
   await loadContent()
 
@@ -996,7 +1006,9 @@ onMount(async () => {
 })
 
 onDestroy(() => {
-  metricsStore.disconnect()
+  // Don't disconnect - just unsubscribe. The store is a singleton and
+  // disconnecting would affect other components or the next navigation.
+  metricsStore.unsubscribe()
   if (panzoomInstance) {
     panzoomInstance.dispose()
   }

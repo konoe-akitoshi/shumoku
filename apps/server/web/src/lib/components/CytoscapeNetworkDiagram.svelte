@@ -336,7 +336,7 @@ onMount(async () => {
 })
 
 onDestroy(() => {
-  metricsStore.disconnect()
+  metricsStore.unsubscribe()
   cy?.destroy()
   cy = null
 })

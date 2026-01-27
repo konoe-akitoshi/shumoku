@@ -211,7 +211,7 @@ onMount(async () => {
 })
 
 onDestroy(() => {
-  metricsStore.disconnect()
+  metricsStore.unsubscribe()
   if (interactiveInstance) {
     interactiveInstance.destroy()
   }
