@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"bun run dev:api\" \"bun run dev:web\"",
     "dev:api": "cd api && NODE_ENV=development bun --watch src/index.ts",
-    "dev:web": "wait-on http://localhost:8080/api/health && cd web && bunx --bun vite dev",
+    "dev:web": "wait-on http://localhost:8080/api/health && cd web && bun run dev",
     "build": "cd api && bun run build && cd ../web && bun run build",
     "start": "cd api && bun run start",
     "typecheck": "cd api && bun run typecheck && cd ../web && bun run check",
