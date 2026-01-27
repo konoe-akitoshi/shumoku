@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { sampleNetwork } from './fixtures/index.js'
-import { darkTheme, HierarchicalLayout, modernTheme, version } from './index.js'
+import { darkTheme, HierarchicalLayout, lightTheme, version } from './index.js'
 import type { NetworkGraph } from './models/index.js'
 
 describe('@shumoku/core', () => {
@@ -14,7 +14,7 @@ describe('@shumoku/core', () => {
     })
 
     it('should export themes', () => {
-      expect(modernTheme).toBeDefined()
+      expect(lightTheme).toBeDefined()
       expect(darkTheme).toBeDefined()
     })
   })
@@ -52,10 +52,10 @@ describe('@shumoku/core', () => {
   })
 
   describe('themes', () => {
-    it('should have modernTheme with required properties', () => {
-      expect(modernTheme.name).toBeDefined()
-      expect(modernTheme.colors).toBeDefined()
-      expect(modernTheme.colors.background).toBeDefined()
+    it('should have lightTheme with required properties', () => {
+      expect(lightTheme.name).toBeDefined()
+      expect(lightTheme.colors).toBeDefined()
+      expect(lightTheme.colors.background).toBeDefined()
     })
 
     it('should have darkTheme with required properties', () => {

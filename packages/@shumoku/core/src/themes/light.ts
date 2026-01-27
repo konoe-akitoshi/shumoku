@@ -201,4 +201,3 @@ export const lightTheme: Theme = {
 /**
  * @deprecated Use lightTheme instead
  */
-export const modernTheme: Theme = lightTheme

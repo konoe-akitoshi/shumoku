@@ -3,6 +3,7 @@
  */
 
 import type { DeepPartial, Theme, ThemeOptions } from './types.js'
+import { lightTheme } from './light.js'
 
 /**
  * Merge theme with overrides
@@ -138,7 +139,5 @@ function deepMerge(target: any, source: any): any {
  * Get default theme
  */
 function getDefaultTheme(): Theme {
-  // Lazy import to avoid circular dependency
-  const { modernTheme } = require('./modern')
-  return modernTheme
+  return lightTheme
 }
