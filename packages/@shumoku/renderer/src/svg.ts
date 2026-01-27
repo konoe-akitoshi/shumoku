@@ -601,7 +601,7 @@ export class SVGRenderer {
       subgraph.service && subgraph.resource
         ? `${subgraph.service}/${subgraph.resource}`
         : subgraph.service || subgraph.model
-    const hasIcon = subgraph.icon || (subgraph.vendor && iconKey && hasCDNIcons(subgraph.vendor))
+    let hasIcon = false
     const defaultIconSize = 24
     const iconPadding = 8
 
@@ -611,6 +611,7 @@ export class SVGRenderer {
     let iconHeight = defaultIconSize
 
     if (subgraph.icon) {
+      hasIcon = true
       iconUrl = subgraph.icon
       const dims = this.options.iconDimensions.get(subgraph.icon)
       if (dims) {
@@ -624,9 +625,11 @@ export class SVGRenderer {
         }
       }
     } else if (subgraph.vendor && iconKey && hasCDNIcons(subgraph.vendor)) {
-      iconUrl = getCDNIconUrl(subgraph.vendor, iconKey)
-      const dims = this.options.iconDimensions.get(iconUrl)
+      const cdnUrl = getCDNIconUrl(subgraph.vendor, iconKey)
+      const dims = this.options.iconDimensions.get(cdnUrl)
       if (dims) {
+        hasIcon = true
+        iconUrl = cdnUrl
         const aspectRatio = dims.width / dims.height
         if (aspectRatio >= 1) {
           iconHeight = defaultIconSize
@@ -636,6 +639,7 @@ export class SVGRenderer {
           iconWidth = Math.round(defaultIconSize * aspectRatio)
         }
       }
+      // dims not found = icon doesn't exist on CDN, skip icon
     }
 
     // Calculate icon position (top-left corner)
@@ -1065,16 +1069,19 @@ ${fg}
       node.service && node.resource
         ? `${node.service}/${node.resource}`
         : node.service || node.model
-    // Use CDN icons for supported vendors
+    // Use CDN icons for supported vendors (only if dimensions were resolved, i.e. icon exists)
     if (node.vendor && iconKey && hasCDNIcons(node.vendor)) {
       const cdnUrl = getCDNIconUrl(node.vendor, iconKey)
       const dims = this.options.iconDimensions.get(cdnUrl)
-      const { width, height } = this.calculateIconSize(dims, maxIconWidth)
-      return {
-        width,
-        height,
-        svg: `<image href="${cdnUrl}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
+      if (dims) {
+        const { width, height } = this.calculateIconSize(dims, maxIconWidth)
+        return {
+          width,
+          height,
+          svg: `<image href="${cdnUrl}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
+        }
       }
+      // dims not found = icon doesn't exist on CDN, fall through to device type icon
     }
 
     // Fall back to device type icon
@@ -1501,6 +1508,105 @@ ${lines.join('\n')}
   }
 
   /**
+   * Simplify orthogonal path by absorbing micro-jogs.
+   * When the layout creates a short segment (< minLen) between two longer segments,
+   * it's typically a micro-offset (e.g., 5px horizontal jog between two long vertical runs).
+   * We absorb these by snapping the short segment's endpoints onto the adjacent segments'
+   * axis, effectively straightening the path.
+   *
+   * Example: ... → (100, 500) → (105, 500) → (105, 800) → ...
+   *   The 5px horizontal jog is absorbed: → (105, 500) → (105, 800) → ...
+   *   (or → (100, 500) → (100, 800) depending on which neighbor is longer)
+   */
+  private simplifyMicroJogs(
+    points: { x: number; y: number }[],
+    minLen: number,
+  ): { x: number; y: number }[] {
+    if (points.length <= 3) return points
+
+    // Iteratively remove micro-jogs until stable
+    let pts = points
+    let changed = true
+    while (changed) {
+      changed = false
+      if (pts.length <= 3) break
+
+      const result: { x: number; y: number }[] = [pts[0]]
+
+      let i = 1
+      while (i < pts.length - 1) {
+        const prev = result[result.length - 1]
+        const curr = pts[i]
+        const next = pts[i + 1]
+
+        const distToCurr = Math.hypot(curr.x - prev.x, curr.y - prev.y)
+
+        if (distToCurr < minLen && i + 1 < pts.length - 1) {
+          // This segment is short — it's a micro-jog.
+          // Absorb by skipping curr and adjusting next to align with prev's axis.
+          const distToNext = Math.hypot(next.x - curr.x, next.y - curr.y)
+          const distPrevToCurr = distToCurr
+
+          if (distToNext > distPrevToCurr) {
+            // Next segment is longer: snap curr onto next's line
+            // If the short segment is mostly horizontal, inherit next's x
+            // If mostly vertical, inherit next's y
+            if (Math.abs(curr.x - prev.x) > Math.abs(curr.y - prev.y)) {
+              // Short horizontal jog → snap prev endpoint's x to curr/next's x
+              result[result.length - 1] = { x: next.x, y: prev.y }
+            } else {
+              // Short vertical jog → snap prev endpoint's y to curr/next's y
+              result[result.length - 1] = { x: prev.x, y: next.y }
+            }
+          } else {
+            // Prev segment is longer: snap next onto prev's line
+            if (Math.abs(curr.x - prev.x) > Math.abs(curr.y - prev.y)) {
+              pts[i + 1] = { x: prev.x, y: next.y }
+            } else {
+              pts[i + 1] = { x: next.x, y: prev.y }
+            }
+          }
+          // Skip the micro-jog point
+          changed = true
+          i++
+          continue
+        }
+
+        result.push(curr)
+        i++
+      }
+
+      // Add remaining points
+      while (i < pts.length) {
+        result.push(pts[i])
+        i++
+      }
+
+      pts = result
+    }
+
+    // Final pass: remove collinear points
+    if (pts.length <= 2) return pts
+    const cleaned: { x: number; y: number }[] = [pts[0]]
+    for (let i = 1; i < pts.length - 1; i++) {
+      const prev = cleaned[cleaned.length - 1]
+      const curr = pts[i]
+      const next = pts[i + 1]
+      // Check if collinear (same direction)
+      const dx1 = curr.x - prev.x
+      const dy1 = curr.y - prev.y
+      const dx2 = next.x - curr.x
+      const dy2 = next.y - curr.y
+      const cross = dx1 * dy2 - dy1 * dx2
+      if (Math.abs(cross) > 0.01) {
+        cleaned.push(curr)
+      }
+    }
+    cleaned.push(pts[pts.length - 1])
+    return cleaned
+  }
+
+  /**
    * Build a filleted centerline: sequence of line segments and arc definitions.
    * Each corner is represented by its arc center, radius, tangent points, and sweep direction.
    */
@@ -1510,17 +1616,19 @@ ${lines.join('\n')}
   ): CenterlineSegment[] {
     if (points.length < 2) return []
     if (points.length === 2 || cornerRadius < 1) {
-      // No corners to fillet
       return [{ type: 'line', from: points[0], to: points[points.length - 1] }]
     }
 
-    const segments: CenterlineSegment[] = []
-    let prevEnd = points[0]
+    // Simplify micro-jogs that the layout engine creates
+    const merged = this.simplifyMicroJogs(points, cornerRadius * 2)
 
-    for (let i = 1; i < points.length - 1; i++) {
-      const prev = points[i - 1]
-      const curr = points[i]
-      const next = points[i + 1]
+    const segments: CenterlineSegment[] = []
+    let prevEnd = merged[0]
+
+    for (let i = 1; i < merged.length - 1; i++) {
+      const prev = merged[i - 1]
+      const curr = merged[i]
+      const next = merged[i + 1]
 
       const distPrev = Math.hypot(curr.x - prev.x, curr.y - prev.y)
       const distNext = Math.hypot(next.x - curr.x, next.y - curr.y)
@@ -1551,23 +1659,40 @@ ${lines.join('\n')}
         continue
       }
 
-      // Tangent points on the incoming and outgoing segments
-      const t0 = { x: curr.x - d0x * R, y: curr.y - d0y * R }
-      const t1 = { x: curr.x + d1x * R, y: curr.y + d1y * R }
-
-      // Arc center: offset from curr along the bisector toward the inside
-      // For orthogonal (90°) turns: center is at curr + R * (-d0 + d1) rotated appropriately
-      // General: center = intersection of lines offset R inward from both segments
+      // Compute arc center first, then derive tangent points from it.
+      // This ensures T0/T1 are exactly on the circle, minimizing floating-point drift.
+      //
+      // sign: determines which side of the segments the arc center lies on
+      // In SVG y-down coords, cross > 0 = clockwise visual turn
       const sign = cross > 0 ? 1 : -1
-      // Inward normal of incoming segment (pointing toward arc center)
-      const n0x = -sign * d0y
-      const n0y = sign * d0x
+
+      // Inward normals (pointing toward arc center) for each segment
+      const m0x = -sign * d0y
+      const m0y = sign * d0x
+      const m1x = -sign * d1y
+      const m1y = sign * d1x
+
+      // Center = intersection of two lines, each offset R inward from the segments
+      // Line 0: point (curr + R*m0), direction d0
+      // Line 1: point (curr + R*m1), direction d1
+      // Solve via parametric intersection: (curr + R*m0) + t*d0 = (curr + R*m1) + u*d1
+      // => t*d0 - u*d1 = R*(m1 - m0)
+      // Using cross product to solve for t:
+      const denom = d0x * d1y - d0y * d1x // = cross, already known non-zero
+      const diffX = R * (m1x - m0x)
+      const diffY = R * (m1y - m0y)
+      const t = (diffX * d1y - diffY * d1x) / denom
       const center = {
-        x: t0.x + n0x * R,
-        y: t0.y + n0y * R,
+        x: curr.x + R * m0x + t * d0x,
+        y: curr.y + R * m0y + t * d0y,
       }
 
-      // sweep-flag: in SVG y-down, cross > 0 means clockwise visually = sweep=1
+      // Tangent points: project center back onto each segment (perpendicular drop)
+      // T = C - R * inward_normal (since center is R away from segment in normal direction)
+      const t0 = { x: center.x - m0x * R, y: center.y - m0y * R }
+      const t1 = { x: center.x - m1x * R, y: center.y - m1y * R }
+
+      // sweep-flag: in SVG y-down, cross > 0 = clockwise visual turn = sweep=1
       const sweepFlag = cross > 0 ? 1 : 0
 
       // Line from previous end to tangent start
@@ -1579,7 +1704,7 @@ ${lines.join('\n')}
     }
 
     // Final line segment
-    const last = points[points.length - 1]
+    const last = merged[merged.length - 1]
     segments.push({ type: 'line', from: prevEnd, to: last })
 
     return segments
