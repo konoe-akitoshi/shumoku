@@ -84,16 +84,10 @@ export function createTopologiesApi(): Hono {
   // Supports hierarchical topologies with multiple sheets
   app.get('/:id/render', async (c) => {
     const id = c.req.param('id')
-    const theme = c.req.query('theme')
     try {
       const parsed = await service.getParsed(id)
       if (!parsed) {
         return c.json({ error: 'Topology not found' }, 404)
-      }
-
-      // Apply theme from query parameter
-      if (theme === 'dark' || theme === 'light') {
-        parsed.graph.settings = { ...parsed.graph.settings, theme }
       }
 
       // Check if topology has hierarchical content

@@ -29,7 +29,6 @@ import {
   liveUpdatesEnabled,
   showTrafficFlow,
   showNodeStatus,
-  themeSetting,
 } from '$lib/stores'
 import { formatTraffic } from '$lib/utils/format'
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
@@ -170,9 +169,7 @@ async function loadContent() {
   loading = true
   error = ''
   try {
-    const theme = $themeSetting
-    const params = theme ? `?theme=${theme}` : ''
-    const res = await fetch(`/api/topologies/${topologyId}/render${params}`)
+    const res = await fetch(`/api/topologies/${topologyId}/render`)
     if (!res.ok) {
       throw new Error(`Failed to load topology: ${res.status}`)
     }
@@ -1011,12 +1008,9 @@ $: if (svgElement && $metricsData) {
   }
 }
 
-// Reload content when theme changes
-let prevTheme = $themeSetting
-$: if ($themeSetting && prevTheme !== $themeSetting) {
-  prevTheme = $themeSetting
-  loadContent()
-}
+// Theme switching is handled by CSS variables.
+// The .dark class on <html> (set by +layout.svelte / header.svelte) triggers
+// the .dark { --shumoku-*: ... } overrides in the embeddable CSS. No action needed here.
 
 onMount(async () => {
   await loadContent()

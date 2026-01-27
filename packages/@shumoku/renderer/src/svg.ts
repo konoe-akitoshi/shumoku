@@ -110,9 +110,17 @@ function resolveSurfaceColors(
   theme: Theme,
   fillValue?: string,
   strokeValue?: string,
+  interactive?: boolean,
 ): { fill: string; stroke: string; text: string } {
   // Check if fill is a surface token
   if (fillValue && isSurfaceToken(fillValue)) {
+    if (interactive) {
+      return {
+        fill: `var(--shumoku-${fillValue}-fill)`,
+        stroke: strokeValue || `var(--shumoku-${fillValue}-stroke)`,
+        text: `var(--shumoku-${fillValue}-text)`,
+      }
+    }
     const surfaceColors = theme.colors.surfaces[fillValue]
     return {
       fill: surfaceColors.fill,
@@ -122,6 +130,13 @@ function resolveSurfaceColors(
   }
 
   // Use default surface as base
+  if (interactive) {
+    return {
+      fill: fillValue || 'var(--shumoku-surface-1-fill)',
+      stroke: strokeValue || 'var(--shumoku-surface-1-stroke)',
+      text: 'var(--shumoku-surface-1-text)',
+    }
+  }
   const defaultSurface = theme.colors.surfaces['surface-1']
   return {
     fill: fillValue || defaultSurface.fill,
@@ -226,6 +241,31 @@ export class SVGRenderer {
   /** Get red arrow marker ID */
   private get arrowRedId(): string {
     return `arrow-red${this.idSuffix}`
+  }
+
+  /**
+   * Get a color value: CSS variable in interactive mode, direct color in static mode.
+   */
+  private color(key: keyof RenderColors): string {
+    if (!this.isInteractive) return this.renderColors[key]
+    const varMap: Record<keyof RenderColors, string> = {
+      backgroundColor: 'var(--shumoku-bg)',
+      defaultNodeFill: 'var(--shumoku-node-fill)',
+      defaultNodeStroke: 'var(--shumoku-node-stroke)',
+      defaultLinkStroke: 'var(--shumoku-link-stroke)',
+      labelColor: 'var(--shumoku-text)',
+      labelSecondaryColor: 'var(--shumoku-text-secondary)',
+      subgraphFill: 'var(--shumoku-surface)',
+      subgraphStroke: 'var(--shumoku-border)',
+      subgraphLabelColor: 'var(--shumoku-subgraph-label)',
+      portFill: 'var(--shumoku-port-fill)',
+      portStroke: 'var(--shumoku-port-stroke)',
+      portLabelBg: 'var(--shumoku-port-label-bg)',
+      portLabelColor: 'var(--shumoku-port-label-color)',
+      endpointLabelBg: 'var(--shumoku-endpoint-label-bg)',
+      endpointLabelStroke: 'var(--shumoku-endpoint-label-stroke)',
+    }
+    return varMap[key]
   }
 
   /**
@@ -444,7 +484,7 @@ export class SVGRenderer {
     // Render legend box
     let svg = `<g class="legend" transform="translate(${legendX}, ${legendY})">
   <rect x="0" y="0" width="${legendWidth}" height="${legendHeight}" rx="4"
-    fill="${this.renderColors.backgroundColor}" stroke="${this.renderColors.subgraphStroke}" stroke-width="1" opacity="0.95" />
+    fill="${this.color('backgroundColor')}" stroke="${this.color('subgraphStroke')}" stroke-width="1" opacity="0.95" />
   <text x="${padding}" y="${padding + 12}" class="subgraph-label" font-size="11">Legend</text>`
 
     // Render items
@@ -471,7 +511,7 @@ export class SVGRenderer {
 
     const lines = offsets.map((offset) => {
       const y = offset
-      return `<line x1="0" y1="${y}" x2="${lineWidth}" y2="${y}" stroke="${this.renderColors.defaultLinkStroke}" stroke-width="${strokeWidth}" />`
+      return `<line x1="0" y1="${y}" x2="${lineWidth}" y2="${y}" stroke="${this.color('defaultLinkStroke')}" stroke-width="${strokeWidth}" />`
     })
 
     return `<g transform="translate(0, 0)">${lines.join('')}</g>`
@@ -490,7 +530,7 @@ export class SVGRenderer {
     return `<defs>
   <!-- Arrow marker -->
   <marker id="${this.arrowId}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="${this.renderColors.defaultLinkStroke}" />
+    <polygon points="0 0, 10 3.5, 0 7" fill="${this.color('defaultLinkStroke')}" />
   </marker>
   <marker id="${this.arrowRedId}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
     <polygon points="0 0, 10 3.5, 0 7" fill="#dc2626" />
@@ -503,37 +543,25 @@ export class SVGRenderer {
   }
 
   private renderStyles(): string {
-    // CSS variables for interactive runtime theming
-    const cssVars = this.isInteractive
-      ? `
-  :root {
-    --shumoku-bg: ${this.renderColors.backgroundColor};
-    --shumoku-surface: ${this.renderColors.subgraphFill};
-    --shumoku-text: ${this.renderColors.labelColor};
-    --shumoku-text-secondary: ${this.renderColors.labelSecondaryColor};
-    --shumoku-border: ${this.renderColors.subgraphStroke};
-    --shumoku-node-fill: ${this.renderColors.defaultNodeFill};
-    --shumoku-node-stroke: ${this.renderColors.defaultNodeStroke};
-    --shumoku-link-stroke: ${this.renderColors.defaultLinkStroke};
-    --shumoku-font: ${this.options.fontFamily};
-  }`
-      : ''
-
     // Monospace font stack for technical info
     const monoFont = 'ui-monospace, "JetBrains Mono", "Roboto Mono", Menlo, Consolas, monospace'
 
-    return `<style>${cssVars}
+    const textColor = this.color('labelColor')
+    const textSecondary = this.color('labelSecondaryColor')
+    const subgraphLabel = this.color('subgraphLabelColor')
+
+    return `<style>
   /* Node labels: primary name in semibold */
-  .node-label { font-family: ${this.options.fontFamily}; font-size: 14px; font-weight: 600; fill: ${this.renderColors.labelColor}; }
+  .node-label { font-family: ${this.options.fontFamily}; font-size: 14px; font-weight: 600; fill: ${textColor}; }
   .node-label-bold { font-weight: 700; }
   /* Secondary/metadata labels: smaller, monospace for technical info */
-  .node-label-secondary { font-family: ${monoFont}; font-size: 10px; font-weight: 400; fill: ${this.renderColors.labelSecondaryColor}; }
-  .node-icon { color: ${this.renderColors.labelSecondaryColor}; }
+  .node-label-secondary { font-family: ${monoFont}; font-size: 10px; font-weight: 400; fill: ${textSecondary}; }
+  .node-icon { color: ${textSecondary}; }
   .subgraph-icon { opacity: 0.9; }
   /* Subgraph/zone labels: uppercase, letterspaced for modern look */
-  .subgraph-label { font-family: ${this.options.fontFamily}; font-size: 11px; font-weight: 700; fill: ${this.renderColors.subgraphLabelColor}; text-transform: uppercase; letter-spacing: 0.05em; }
-  .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${this.renderColors.labelSecondaryColor}; }
-  .endpoint-label { font-family: ${monoFont}; font-size: 9px; fill: ${this.renderColors.labelColor}; }
+  .subgraph-label { font-family: ${this.options.fontFamily}; font-size: 11px; font-weight: 700; fill: ${subgraphLabel}; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${textSecondary}; }
+  .endpoint-label { font-family: ${monoFont}; font-size: 9px; fill: ${textColor}; }
 </style>`
   }
 
@@ -542,7 +570,7 @@ export class SVGRenderer {
     const style = subgraph.style || {}
 
     // Resolve surface colors from token or direct color value
-    const surfaceColors = resolveSurfaceColors(this.theme, style.fill, style.stroke)
+    const surfaceColors = resolveSurfaceColors(this.theme, style.fill, style.stroke, this.isInteractive)
     const fill = surfaceColors.fill
     const stroke = surfaceColors.stroke
     const labelColor = surfaceColors.text
@@ -740,11 +768,11 @@ ${fg}
     const isExport = node.metadata?._isExport === true
 
     // Special styling for export connector nodes - use subgraph colors
-    let fill = style.fill || this.renderColors.defaultNodeFill
-    let stroke = style.stroke || this.renderColors.defaultNodeStroke
+    let fill = style.fill || this.color('defaultNodeFill')
+    let stroke = style.stroke || this.color('defaultNodeStroke')
     if (isExport) {
-      fill = style.fill || this.renderColors.subgraphFill
-      stroke = style.stroke || this.renderColors.defaultNodeStroke
+      fill = style.fill || this.color('subgraphFill')
+      stroke = style.stroke || this.color('defaultNodeStroke')
     }
     const strokeWidth = style.strokeWidth || 1
     const strokeDasharray = style.strokeDasharray || ''
@@ -841,7 +869,7 @@ ${fg}
       // Port box
       parts.push(`<rect class="port-box"
         x="${px - pw / 2}" y="${py - ph / 2}" width="${pw}" height="${ph}"
-        fill="${this.renderColors.portFill}" stroke="${this.renderColors.portStroke}" stroke-width="1" rx="2" />`)
+        fill="${this.color('portFill')}" stroke="${this.color('portStroke')}" stroke-width="1" rx="2" />`)
 
       // Port label - position based on side
       let labelX = px
@@ -882,10 +910,10 @@ ${fg}
       const bgY = labelY - labelHeight + 3
 
       parts.push(
-        `<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.renderColors.portLabelBg}" />`,
+        `<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.color('portLabelBg')}" />`,
       )
       parts.push(
-        `<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.renderColors.portLabelColor}">${labelText}</text>`,
+        `<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.color('portLabelColor')}">${labelText}</text>`,
       )
 
       // Wrap in a group with data attributes
@@ -1118,7 +1146,7 @@ ${fg}
     const arrow = link.arrow ?? this.getDefaultArrowType(link.redundancy)
 
     const stroke =
-      link.style?.stroke || this.getVlanStroke(link.vlan) || this.renderColors.defaultLinkStroke
+      link.style?.stroke || this.getVlanStroke(link.vlan) || this.color('defaultLinkStroke')
     const dasharray = link.style?.strokeDasharray || this.getLinkDasharray(type)
     const markerEnd = arrow !== 'none' ? `url(#${this.arrowId})` : ''
 
@@ -1345,7 +1373,7 @@ ${fg}
     // Simple offset approach (same as port labels)
     const rectY = y - lineHeight + 3
 
-    let result = `\n<rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" rx="2" fill="${this.renderColors.endpointLabelBg}" stroke="${this.renderColors.endpointLabelStroke}" stroke-width="0.5" />`
+    let result = `\n<rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" rx="2" fill="${this.color('endpointLabelBg')}" stroke="${this.color('endpointLabelStroke')}" stroke-width="0.5" />`
 
     for (const [i, line] of lines.entries()) {
       const textY = y + i * lineHeight
