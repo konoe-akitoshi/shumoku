@@ -31,7 +31,7 @@ const METRIC_PRESETS: Record<string, PrometheusCustomMetrics> = {
     inOctets: 'ifHCInOctets',
     outOctets: 'ifHCOutOctets',
     interfaceLabel: 'ifName',
-    upMetric: 'up',
+    upMetric: 'snmp_up',
   },
   node_exporter: {
     inOctets: 'node_network_receive_bytes_total',
@@ -606,7 +606,7 @@ export class PrometheusPlugin
   }
 
   /**
-   * Check if a host is up using the 'up' metric
+   * Check if a host is up using the configured upMetric (snmp_up for SNMP, up for node_exporter)
    */
   private async checkHostUp(instance: string): Promise<boolean> {
     if (!this.config || !this.metrics) {
