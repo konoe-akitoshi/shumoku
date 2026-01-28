@@ -716,12 +716,18 @@ function generateHierarchicalHtml(
         var label = info ? info.label : currentSheet;
 
         if (currentSheet === 'root') {
-          titleEl.innerHTML = label;
+          titleEl.textContent = label;
         } else {
-          titleEl.innerHTML = '<button class="back-btn" id="back-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>' + label;
-          document.getElementById('back-btn').addEventListener('click', function() {
+          titleEl.textContent = '';
+          var backBtn = document.createElement('button');
+          backBtn.className = 'back-btn';
+          backBtn.id = 'back-btn';
+          backBtn.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
+          backBtn.addEventListener('click', function() {
             navigateToSheet('root');
           });
+          titleEl.appendChild(backBtn);
+          titleEl.appendChild(document.createTextNode(label));
         }
       }
 

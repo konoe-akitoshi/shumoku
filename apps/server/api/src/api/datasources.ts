@@ -10,18 +10,26 @@ import type { DataSourceInput } from '../types.js'
 /**
  * Mask sensitive fields in config JSON
  */
+const SECRET_KEYS = new Set(['token', 'password', 'secret', 'apikey', 'apiKey'])
+
 function maskConfigSecrets(configJson: string): string {
   try {
     const config = JSON.parse(configJson)
-    if (config.token) {
-      config.token = '••••••••'
-    }
-    if (config.password) {
-      config.password = '••••••••'
-    }
+    maskSecrets(config)
     return JSON.stringify(config)
   } catch {
     return configJson
+  }
+}
+
+function maskSecrets(obj: Record<string, unknown>): void {
+  for (const key of Object.keys(obj)) {
+    const value = obj[key]
+    if (SECRET_KEYS.has(key) && typeof value === 'string') {
+      obj[key] = '••••••••'
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      maskSecrets(value as Record<string, unknown>)
+    }
   }
 }
 

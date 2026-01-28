@@ -6,8 +6,18 @@
 import { Hono } from 'hono'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import { DataSourceService } from '../services/datasource.js'
-import type { TopologyDataSourceInput, SyncMode } from '../types.js'
+import type { TopologyDataSource, TopologyDataSourceInput, SyncMode } from '../types.js'
 import { getTopologyService } from './topologies.js'
+
+/** Strip webhookSecret from API responses */
+function stripSecret<T extends TopologyDataSource>(source: T): Omit<T, 'webhookSecret'> & { hasWebhookSecret: boolean } {
+  const { webhookSecret, ...rest } = source
+  return { ...rest, hasWebhookSecret: !!webhookSecret }
+}
+
+function stripSecrets(sources: TopologyDataSource[]) {
+  return sources.map(stripSecret)
+}
 
 // Lazy initialization to avoid database access at module load time
 let _topologySourcesService: TopologySourcesService | null = null
@@ -43,7 +53,7 @@ topologySourcesApi.get('/:topologyId/sources', async (c) => {
   }
 
   const sources = getTopologySourcesService().listByTopology(topologyId)
-  return c.json(sources)
+  return c.json(stripSecrets(sources))
 })
 
 /**
@@ -80,7 +90,7 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
 
   try {
     const source = await getTopologySourcesService().add(topologyId, body)
-    return c.json(source, 201)
+    return c.json(stripSecret(source), 201)
   } catch (error) {
     return c.json(
       { error: error instanceof Error ? error.message : 'Failed to add data source' },
@@ -114,7 +124,7 @@ topologySourcesApi.put('/:topologyId/sources/:sourceId', async (c) => {
     return c.json({ error: 'Failed to update' }, 500)
   }
 
-  return c.json(updated)
+  return c.json(stripSecret(updated))
 })
 
 /**
@@ -175,7 +185,7 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
 
   try {
     const sources = await getTopologySourcesService().replaceAll(topologyId, body.sources)
-    return c.json(sources)
+    return c.json(stripSecrets(sources))
   } catch (error) {
     return c.json(
       { error: error instanceof Error ? error.message : 'Failed to update sources' },
