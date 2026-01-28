@@ -1,38 +1,9 @@
 <script lang="ts">
 import { page } from '$app/stores'
-import { browser } from '$app/environment'
 import CaretRight from 'phosphor-svelte/lib/CaretRight'
 import Moon from 'phosphor-svelte/lib/Moon'
 import Sun from 'phosphor-svelte/lib/Sun'
-
-// Theme state
-let theme = 'light'
-
-// Initialize theme from localStorage
-$: if (browser) {
-  const localSettings = localStorage.getItem('shumoku-settings')
-  if (localSettings) {
-    const parsed = JSON.parse(localSettings)
-    theme = parsed.theme || 'light'
-  }
-}
-
-function toggleTheme() {
-  theme = theme === 'light' ? 'dark' : 'light'
-
-  // Save to localStorage
-  const localSettings = localStorage.getItem('shumoku-settings')
-  const parsed = localSettings ? JSON.parse(localSettings) : {}
-  parsed.theme = theme
-  localStorage.setItem('shumoku-settings', JSON.stringify(parsed))
-
-  // Apply theme
-  if (theme === 'dark') {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
-}
+import { themeSetting } from '$lib/stores/theme'
 
 // Generate breadcrumbs from current path
 interface Breadcrumb {
@@ -90,11 +61,11 @@ function generateBreadcrumbs(pathname: string): Breadcrumb[] {
 
   <!-- Theme Toggle -->
   <button
-    onclick={toggleTheme}
+    onclick={() => themeSetting.toggle()}
     class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text"
-    aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+    aria-label={$themeSetting === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
   >
-    {#if theme === 'light'}
+    {#if $themeSetting === 'light'}
       <Moon size={20} />
     {:else}
       <Sun size={20} />

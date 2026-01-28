@@ -34,19 +34,14 @@ onMount(async () => {
 })
 
 function saveLocalSettings() {
-  const localSettings = {
-    theme,
-    updateInterval: Number.parseInt(updateInterval, 10),
-  }
-  localStorage.setItem('shumoku-settings', JSON.stringify(localSettings))
-
-  // Apply theme
+  // Theme is managed by the store (handles DOM + localStorage)
   themeSetting.set(theme)
-  if (theme === 'dark') {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
+
+  // Save non-theme settings to localStorage
+  const stored = localStorage.getItem('shumoku-settings')
+  const settings_local = stored ? JSON.parse(stored) : {}
+  settings_local.updateInterval = Number.parseInt(updateInterval, 10)
+  localStorage.setItem('shumoku-settings', JSON.stringify(settings_local))
 }
 
 async function handleHealthCheck() {

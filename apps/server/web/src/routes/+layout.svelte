@@ -34,21 +34,13 @@ function isActive(href: string, pathname: string): boolean {
 // Sidebar collapsed state
 let sidebarCollapsed = false
 
-// Apply saved theme and sidebar state on mount
+// Load sidebar state on mount (theme is handled by themeSetting store)
 onMount(() => {
   if (browser) {
     const localSettings = localStorage.getItem('shumoku-settings')
-    let theme = 'light'
     if (localSettings) {
       const parsed = JSON.parse(localSettings)
-      theme = parsed.theme || 'light'
       sidebarCollapsed = parsed.sidebarCollapsed || false
-    }
-
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
     }
   }
 })

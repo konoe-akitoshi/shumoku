@@ -1,6 +1,6 @@
 /**
  * Theme Setting Store
- * Synced with shumoku-settings in localStorage (shared with +layout.svelte)
+ * Single source of truth for theme. Syncs to localStorage and DOM.
  */
 
 import { writable } from 'svelte/store'
@@ -19,13 +19,26 @@ function loadTheme(): string {
   return 'light'
 }
 
+function applyTheme(value: string) {
+  if (!browser) return
+  if (value === 'dark') {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+}
+
 function createThemeSettingStore() {
-  const { subscribe, set } = writable<string>(loadTheme())
+  const { subscribe, set: _set } = writable<string>(loadTheme())
+
+  // Apply initial theme on creation
+  if (browser) applyTheme(loadTheme())
 
   return {
     subscribe,
     set(value: string) {
-      set(value)
+      _set(value)
+      applyTheme(value)
       if (browser) {
         try {
           const stored = localStorage.getItem(SETTINGS_KEY)
@@ -34,6 +47,10 @@ function createThemeSettingStore() {
           localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
         } catch {}
       }
+    },
+    toggle() {
+      const current = loadTheme()
+      this.set(current === 'light' ? 'dark' : 'light')
     },
   }
 }

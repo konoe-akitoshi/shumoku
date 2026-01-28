@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* Custom dark variant for shadcn-svelte */
-@custom-variant dark (&:is(.dark *));
+/* Custom dark variant */
+@custom-variant dark (&:is(.dark, .dark *));
 
 /* Tailwind theme extensions */
 @theme {
@@ -354,3 +354,48 @@ body {
 .text-theme-text-muted { color: var(--color-text-muted); }
 .text-theme-text-emphasis { color: var(--color-text-emphasis); }
 .border-theme-border { border-color: var(--border); }
+
+/* Print styles — show only the SVG diagram */
+@media print {
+  html, body {
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only the SVG wrapper and its contents */
+  .svg-wrapper,
+  .svg-wrapper * {
+    visibility: visible !important;
+  }
+
+  .svg-wrapper {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: white !important;
+  }
+
+  .svg-wrapper svg {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: auto !important;
+    height: auto !important;
+  }
+
+  /* Remove dot-grid and other background images */
+  * {
+    background-image: none !important;
+  }
+}
