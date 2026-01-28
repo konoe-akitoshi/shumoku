@@ -65,6 +65,9 @@ export const homeTranslations = {
       subtitle: 'Try the Playground or read the documentation',
       playground: 'Try Playground',
     },
+    adopters: {
+      title: 'Trusted by',
+    },
   },
   ja: {
     hero: {
@@ -110,6 +113,9 @@ export const homeTranslations = {
       title: 'Ready to get started?',
       subtitle: 'Playground で試すか、ドキュメントを読んでみてください',
       playground: 'Try Playground',
+    },
+    adopters: {
+      title: '採用実績',
     },
   },
 } as const

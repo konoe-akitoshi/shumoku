@@ -28,7 +28,7 @@ export function FeaturesSection({ locale }: { locale: string }) {
   return (
     <section
       className={cn(
-        'relative overflow-hidden bg-neutral-50 dark:bg-neutral-900/50',
+        'relative overflow-hidden',
         sectionStyles.padding,
       )}
     >

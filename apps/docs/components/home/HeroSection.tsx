@@ -1,8 +1,23 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { ArrowRightIcon, CopyIcon } from './icons'
 import { backgrounds, buttonStyles, cardStyles } from './styles'
 import { type HeroTranslations, homeTranslations, type Locale } from './translations'
+
+type Adopter = {
+  name: string
+  logo: string
+  url?: string
+}
+
+const adopters: Adopter[] = [
+  {
+    name: '電気通信大学 情報基盤センター',
+    logo: '/adopters/itcuec_logo_300.png',
+    url: 'https://www.cc.uec.ac.jp/',
+  },
+]
 
 function StatusBadge({ t }: { t: HeroTranslations }) {
   return (
@@ -82,16 +97,58 @@ function DiagramPreview() {
   )
 }
 
+function Adopters({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+        {label}
+      </span>
+      <div className="flex items-center gap-8">
+        {adopters.map((adopter) =>
+          adopter.url ? (
+            <a
+              key={adopter.name}
+              href={adopter.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={adopter.name}
+            >
+              <Image
+                src={adopter.logo}
+                alt={adopter.name}
+                width={180}
+                height={54}
+                className="h-10 sm:h-12 w-auto object-contain opacity-70 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300"
+              />
+            </a>
+          ) : (
+            <Image
+              key={adopter.name}
+              src={adopter.logo}
+              alt={adopter.name}
+              width={180}
+              height={54}
+              className="h-10 sm:h-12 w-auto object-contain opacity-70 grayscale"
+            />
+          ),
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function HeroSection({ locale }: { locale: string }) {
   const t = homeTranslations[locale as Locale]?.hero ?? homeTranslations.en.hero
+  const adoptersLabel =
+    homeTranslations[locale as Locale]?.adopters?.title ?? homeTranslations.en.adopters.title
 
   return (
     <section className="relative">
       <div className="absolute inset-0 bg-white dark:bg-neutral-950 pointer-events-none" />
       <div className={cn('absolute inset-0 pointer-events-none', backgrounds.hero)} />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24">
-        <div className="grid lg:grid-cols-2 lg:items-stretch gap-12 lg:gap-16">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
+        <div className="grid lg:grid-cols-2 lg:items-stretch gap-8 lg:gap-12 mb-12 lg:mb-16">
           {/* Left: Text content */}
           <div className="max-w-xl">
             <StatusBadge t={t} />
@@ -106,6 +163,9 @@ export function HeroSection({ locale }: { locale: string }) {
             <DiagramPreview />
           </div>
         </div>
+
+        {/* Adopters */}
+        <Adopters label={adoptersLabel} />
       </div>
     </section>
   )

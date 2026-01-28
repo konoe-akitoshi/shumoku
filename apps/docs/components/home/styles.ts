@@ -27,10 +27,10 @@ export const buttonStyles = {
 } as const
 
 export const backgrounds = {
-  hero: 'bg-[radial-gradient(ellipse_110%_80%_at_60%_-30%,rgba(127,228,193,0.25),transparent)] dark:bg-[radial-gradient(ellipse_110%_80%_at_60%_-30%,rgba(127,228,193,0.12),transparent)]',
+  hero: 'bg-[radial-gradient(ellipse_120%_40%_at_50%_-10%,rgba(16,185,129,0.12),transparent_60%)] dark:bg-[radial-gradient(ellipse_120%_40%_at_50%_-10%,rgba(16,185,129,0.08),transparent_60%)]',
   features:
-    'bg-[radial-gradient(circle_at_15%_0%,rgba(16,185,129,0.18),transparent_55%)] dark:bg-[radial-gradient(circle_at_15%_0%,rgba(16,185,129,0.12),transparent_55%)]',
-  cta: 'bg-[radial-gradient(circle_at_80%_-20%,rgba(16,185,129,0.22),transparent_60%)] dark:bg-[radial-gradient(circle_at_80%_-20%,rgba(16,185,129,0.12),transparent_60%)]',
+    'bg-[radial-gradient(ellipse_80%_50%_at_20%_-10%,rgba(16,185,129,0.10),transparent_50%)] dark:bg-[radial-gradient(ellipse_80%_50%_at_20%_-10%,rgba(16,185,129,0.06),transparent_50%)]',
+  cta: 'bg-[radial-gradient(ellipse_80%_60%_at_80%_110%,rgba(16,185,129,0.12),transparent_60%)] dark:bg-[radial-gradient(ellipse_80%_60%_at_80%_110%,rgba(16,185,129,0.08),transparent_60%)]',
 } as const
 
 export const sectionStyles = {
