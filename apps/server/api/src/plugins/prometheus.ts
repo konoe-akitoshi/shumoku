@@ -31,7 +31,7 @@ const METRIC_PRESETS: Record<string, PrometheusCustomMetrics> = {
     inOctets: 'ifHCInOctets',
     outOctets: 'ifHCOutOctets',
     interfaceLabel: 'ifName',
-    upMetric: 'up',
+    upMetric: 'snmp_scrape_pdus_returned',
   },
   node_exporter: {
     inOctets: 'node_network_receive_bytes_total',
@@ -629,7 +629,9 @@ export class PrometheusPlugin
   }
 
   /**
-   * Check if a host is up using the configured upMetric (snmp_up for SNMP, up for node_exporter)
+   * Check if a host is up using the configured upMetric.
+   * For SNMP: snmp_scrape_pdus_returned > 0 means the device responded.
+   * For others: up == 1 means the scrape target is reachable.
    */
   private async checkHostUp(instance: string): Promise<boolean> {
     if (!this.config || !this.metrics) {
@@ -646,7 +648,11 @@ export class PrometheusPlugin
 
     try {
       const result = await this.instantQuery(query)
-      // Check if any result has value "1"
+      // For snmp_scrape_pdus_returned: value > 0 means device responded
+      // For standard up metric: value == 1 means target is reachable
+      if (upMetric === 'snmp_scrape_pdus_returned') {
+        return result.result.some((r) => Number(r.value[1]) > 0)
+      }
       return result.result.some((r) => r.value[1] === '1')
     } catch {
       return false
