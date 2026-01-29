@@ -1,15 +1,24 @@
 /**
  * Database Migration System
- * File-based SQL migrations for SQLite
+ * SQL migrations are imported as strings via esbuild text loader,
+ * so they are embedded in the bundle and work in both dev and Docker.
  */
 
 import type { Database } from 'bun:sqlite'
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const MIGRATIONS_DIR = path.join(__dirname, 'migrations')
+// Import migration SQL files (esbuild text loader embeds them as strings)
+import migration001 from './migrations/001_initial.sql'
+import migration002 from './migrations/002_health_check.sql'
+import migration003 from './migrations/003_topology_data_sources.sql'
+import migration004 from './migrations/004_topology_source_options.sql'
+
+/** Ordered list of all migrations */
+const MIGRATIONS: { name: string; sql: string }[] = [
+  { name: '001_initial.sql', sql: migration001 },
+  { name: '002_health_check.sql', sql: migration002 },
+  { name: '003_topology_data_sources.sql', sql: migration003 },
+  { name: '004_topology_source_options.sql', sql: migration004 },
+]
 
 interface MigrationRecord {
   id: number
@@ -39,25 +48,6 @@ function getAppliedMigrations(db: Database): Set<string> {
 }
 
 /**
- * Get migration files from directory, sorted by number
- */
-function getMigrationFiles(): string[] {
-  if (!fs.existsSync(MIGRATIONS_DIR)) {
-    return []
-  }
-
-  return fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.sql'))
-    .sort((a, b) => {
-      // Sort by leading number (001, 002, etc.)
-      const numA = Number.parseInt(a.split('_')[0], 10)
-      const numB = Number.parseInt(b.split('_')[0], 10)
-      return numA - numB
-    })
-}
-
-/**
  * Migrate from old schema_version system to new migrations table
  * Maps old version numbers to migration files
  */
@@ -84,9 +74,6 @@ function migrateFromSchemaVersion(db: Database): void {
   console.log(`[Migration] Migrating from schema_version ${oldVersion} to file-based system`)
 
   // Map old versions to migration files
-  // Version 1 = initial schema (001)
-  // Version 2 = plugin architecture (rolled into 001 for new DBs)
-  // Version 3 = health check (002)
   const versionToMigration: Record<number, string[]> = {
     1: ['001_initial.sql'],
     2: ['001_initial.sql'],
@@ -111,12 +98,9 @@ function migrateFromSchemaVersion(db: Database): void {
 }
 
 /**
- * Apply a single migration file
+ * Execute SQL from a migration string
  */
-function applyMigration(db: Database, fileName: string): void {
-  const filePath = path.join(MIGRATIONS_DIR, fileName)
-  const sql = fs.readFileSync(filePath, 'utf-8')
-
+function applyMigration(db: Database, name: string, sql: string): void {
   // Remove comment lines and split by semicolons
   const cleanedSql = sql
     .split('\n')
@@ -143,7 +127,7 @@ function applyMigration(db: Database, fileName: string): void {
   }
 
   // Record migration as applied
-  db.query('INSERT INTO migrations (name, applied_at) VALUES (?, ?)').run(fileName, Date.now())
+  db.query('INSERT INTO migrations (name, applied_at) VALUES (?, ?)').run(name, Date.now())
 }
 
 /**
@@ -156,12 +140,11 @@ export function runMigrations(db: Database): void {
   // Migrate from old schema_version if needed
   migrateFromSchemaVersion(db)
 
-  // Get applied and available migrations
+  // Get applied migrations
   const applied = getAppliedMigrations(db)
-  const available = getMigrationFiles()
 
   // Find pending migrations
-  const pending = available.filter((f) => !applied.has(f))
+  const pending = MIGRATIONS.filter((m) => !applied.has(m.name))
 
   if (pending.length === 0) {
     console.log('[Migration] Database is up to date')
@@ -170,10 +153,9 @@ export function runMigrations(db: Database): void {
 
   console.log(`[Migration] Applying ${pending.length} migration(s)...`)
 
-  // Apply each pending migration
   for (const migration of pending) {
-    console.log(`[Migration] Applying: ${migration}`)
-    applyMigration(db, migration)
+    console.log(`[Migration] Applying: ${migration.name}`)
+    applyMigration(db, migration.name, migration.sql)
   }
 
   console.log('[Migration] All migrations applied successfully')
@@ -190,8 +172,7 @@ export function getMigrationStatus(db: Database): {
 
   const applied = db.query('SELECT * FROM migrations ORDER BY id').all() as MigrationRecord[]
   const appliedNames = new Set(applied.map((m) => m.name))
-  const available = getMigrationFiles()
-  const pending = available.filter((f) => !appliedNames.has(f))
+  const pending = MIGRATIONS.filter((m) => !appliedNames.has(m.name)).map((m) => m.name)
 
   return { applied, pending }
 }

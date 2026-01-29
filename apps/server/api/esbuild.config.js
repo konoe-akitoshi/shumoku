@@ -12,6 +12,7 @@ await esbuild.build({
   format: 'esm',
   outfile: 'dist/bundle.js',
   external: ['bun:sqlite', 'bun'],
+  loader: { '.sql': 'text' },
   // Use browser entry point for renderer (avoids resvg native module)
   alias: {
     '@shumoku/renderer': path.resolve(__dirname, '../../../packages/@shumoku/renderer/dist/index.js'),
