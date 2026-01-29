@@ -6,7 +6,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "build": "tsc && cp -r src/db/migrations dist/db/",
+    "build": "tsc",
     "dev": "NODE_ENV=development bun --watch src/index.ts",
     "start": "bun dist/index.js",
     "typecheck": "tsc --noEmit",
