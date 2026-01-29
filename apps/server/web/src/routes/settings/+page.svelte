@@ -10,8 +10,7 @@ let loading = true
 let error = ''
 
 // Local settings (stored in localStorage)
-// Default to light mode since SVG renderer doesn't fully support dark mode yet
-let theme = 'light'
+let theme = 'system'
 let updateInterval = '30000'
 
 onMount(async () => {
@@ -19,7 +18,7 @@ onMount(async () => {
   const localSettings = localStorage.getItem('shumoku-settings')
   if (localSettings) {
     const parsed = JSON.parse(localSettings)
-    theme = parsed.theme || 'light'
+    theme = parsed.theme || 'system'
     updateInterval = String(parsed.updateInterval || 30000)
   }
 
@@ -74,11 +73,12 @@ async function handleHealthCheck() {
           <div>
             <label for="theme" class="label">Theme</label>
             <select id="theme" class="input" bind:value={theme} onchange={saveLocalSettings}>
+              <option value="system">System</option>
               <option value="light">Light</option>
-              <option value="dark">Dark (Beta)</option>
+              <option value="dark">Dark</option>
             </select>
             <p class="text-xs text-theme-text-muted mt-1">
-              Dark mode is in beta. Topology diagrams may not display correctly.
+              System follows your OS preference.
             </p>
           </div>
 

@@ -3,7 +3,7 @@ import { page } from '$app/stores'
 import CaretRight from 'phosphor-svelte/lib/CaretRight'
 import Moon from 'phosphor-svelte/lib/Moon'
 import Sun from 'phosphor-svelte/lib/Sun'
-import { themeSetting } from '$lib/stores/theme'
+import { themeSetting, resolvedTheme } from '$lib/stores/theme'
 
 // Generate breadcrumbs from current path
 interface Breadcrumb {
@@ -63,9 +63,9 @@ function generateBreadcrumbs(pathname: string): Breadcrumb[] {
   <button
     onclick={() => themeSetting.toggle()}
     class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text"
-    aria-label={$themeSetting === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+    aria-label={$resolvedTheme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
   >
-    {#if $themeSetting === 'light'}
+    {#if $resolvedTheme === 'dark'}
       <Moon size={20} />
     {:else}
       <Sun size={20} />

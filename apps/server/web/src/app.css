@@ -2,7 +2,7 @@
 @import 'tw-animate-css';
 
 /* Custom dark variant */
-@custom-variant dark (&:is(.dark, .dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* Tailwind theme extensions */
 @theme {
