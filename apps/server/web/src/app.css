@@ -385,6 +385,8 @@ body {
     align-items: center !important;
     justify-content: center !important;
     background: white !important;
+    /* Reset panzoom transform so the full diagram prints */
+    transform: none !important;
   }
 
   .svg-wrapper svg {
