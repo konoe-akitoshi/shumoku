@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount } from 'svelte'
-import { api } from '$lib/api'
+import { api, auth } from '$lib/api'
 import { themeSetting } from '$lib/stores'
 import GithubLogo from 'phosphor-svelte/lib/GithubLogo'
 import FileText from 'phosphor-svelte/lib/FileText'
@@ -41,6 +41,45 @@ function saveLocalSettings() {
   const settings_local = stored ? JSON.parse(stored) : {}
   settings_local.updateInterval = Number.parseInt(updateInterval, 10)
   localStorage.setItem('shumoku-settings', JSON.stringify(settings_local))
+}
+
+// Password change
+let currentPassword = ''
+let newPassword = ''
+let confirmNewPassword = ''
+let passwordError = ''
+let passwordSuccess = ''
+let passwordLoading = false
+
+async function handleChangePassword() {
+  passwordError = ''
+  passwordSuccess = ''
+
+  if (!currentPassword || !newPassword) {
+    passwordError = 'All fields are required'
+    return
+  }
+  if (newPassword.length < 8) {
+    passwordError = 'New password must be at least 8 characters'
+    return
+  }
+  if (newPassword !== confirmNewPassword) {
+    passwordError = 'New passwords do not match'
+    return
+  }
+
+  passwordLoading = true
+  try {
+    await auth.changePassword(currentPassword, newPassword)
+    passwordSuccess = 'Password changed successfully'
+    currentPassword = ''
+    newPassword = ''
+    confirmNewPassword = ''
+  } catch (e: any) {
+    passwordError = e.message || 'Failed to change password'
+  } finally {
+    passwordLoading = false
+  }
 }
 
 async function handleHealthCheck() {
@@ -122,6 +161,67 @@ async function handleHealthCheck() {
               Check Server Health
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Change Password -->
+      <div class="card lg:col-span-2">
+        <div class="card-header">
+          <h2 class="font-medium text-theme-text-emphasis">Change Password</h2>
+        </div>
+        <div class="card-body">
+          <form onsubmit={(e) => { e.preventDefault(); handleChangePassword() }} class="max-w-sm space-y-4">
+            <div>
+              <label for="currentPassword" class="label">Current Password</label>
+              <input
+                id="currentPassword"
+                type="password"
+                class="input"
+                bind:value={currentPassword}
+                disabled={passwordLoading}
+              />
+            </div>
+            <div>
+              <label for="newPassword" class="label">New Password</label>
+              <input
+                id="newPassword"
+                type="password"
+                class="input"
+                placeholder="Min 8 characters"
+                bind:value={newPassword}
+                disabled={passwordLoading}
+              />
+            </div>
+            <div>
+              <label for="confirmNewPassword" class="label">Confirm New Password</label>
+              <input
+                id="confirmNewPassword"
+                type="password"
+                class="input"
+                bind:value={confirmNewPassword}
+                disabled={passwordLoading}
+              />
+            </div>
+
+            {#if passwordError}
+              <div class="text-sm text-red-500 bg-red-500/10 rounded-lg px-3 py-2">
+                {passwordError}
+              </div>
+            {/if}
+            {#if passwordSuccess}
+              <div class="text-sm text-green-500 bg-green-500/10 rounded-lg px-3 py-2">
+                {passwordSuccess}
+              </div>
+            {/if}
+
+            <button
+              type="submit"
+              class="btn btn-primary"
+              disabled={passwordLoading}
+            >
+              {passwordLoading ? 'Changing...' : 'Change Password'}
+            </button>
+          </form>
         </div>
       </div>
 

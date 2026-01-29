@@ -101,6 +101,37 @@ export function createAuthApi(): Hono {
     return c.json({ success: true })
   })
 
+  // POST /auth/change-password - Change password (requires current password)
+  app.post('/change-password', async (c) => {
+    if (!isSetupComplete()) {
+      return c.json({ error: 'Setup not completed' }, 400)
+    }
+
+    const token = getCookie(c, SESSION_COOKIE)
+    if (!token || !validateSession(token)) {
+      return c.json({ error: 'Authentication required' }, 401)
+    }
+
+    const body = (await c.req.json()) as {
+      currentPassword?: string
+      newPassword?: string
+    }
+    if (!body.currentPassword || !body.newPassword) {
+      return c.json({ error: 'Current password and new password are required' }, 400)
+    }
+    if (body.newPassword.length < 8) {
+      return c.json({ error: 'New password must be at least 8 characters' }, 400)
+    }
+
+    const valid = await verifyPassword(body.currentPassword)
+    if (!valid) {
+      return c.json({ error: 'Current password is incorrect' }, 401)
+    }
+
+    await setPassword(body.newPassword)
+    return c.json({ success: true })
+  })
+
   // POST /auth/logout - Logout
   app.post('/logout', (c) => {
     const token = getCookie(c, SESSION_COOKIE)

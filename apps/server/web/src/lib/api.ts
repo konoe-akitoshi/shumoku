@@ -306,6 +306,12 @@ export const auth = {
     request<{ success: boolean }>('/auth/logout', {
       method: 'POST',
     }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ success: boolean }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 }
 
 // Combined API export

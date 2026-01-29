@@ -81,7 +81,7 @@ async function handleSubmit() {
         </p>
       {/if}
 
-      <form on:submit|preventDefault={handleSubmit} class="space-y-4">
+      <form onsubmit={(e) => { e.preventDefault(); handleSubmit() }} class="space-y-4">
         <div>
           <label for="password" class="block text-sm font-medium text-theme-text mb-1">
             Password
