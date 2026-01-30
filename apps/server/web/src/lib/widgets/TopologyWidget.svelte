@@ -43,6 +43,7 @@ let renderCache: Record<string, string> = {}
 let highlightedNodeId = $state<string | null>(null)
 let highlightTimeout: ReturnType<typeof setTimeout> | null = null
 let containerElement = $state<HTMLDivElement | null>(null)
+let styleElement: HTMLStyleElement | null = null
 let unsubscribeEvents: (() => void) | null = null
 
 async function loadTopologies() {
@@ -71,30 +72,42 @@ async function loadTopology() {
 
     if (renderData.hierarchical) {
       isHierarchical = true
-      // Build sheets list from render data
       sheets = Object.entries(renderData.sheets).map(([sheetId, sheet]: [string, any]) => ({
         id: sheetId,
         name: sheet.name || sheetId,
       }))
-      // Cache all sheets
       renderCache = {}
       for (const [sheetId, sheet] of Object.entries(renderData.sheets) as [string, any][]) {
         renderCache[sheetId] = sheet.svg
       }
-      // Show selected sheet
       const sheetId = config.sheetId || 'root'
       svgContent = renderCache[sheetId] || ''
+      // All sheets share the same theme CSS; pick from any sheet
+      const firstSheet = Object.values(renderData.sheets)[0] as any
+      injectCSS(firstSheet?.css)
     } else {
       isHierarchical = false
       sheets = []
       renderCache = {}
       svgContent = renderData.svg
+      injectCSS(renderData.css)
     }
   } catch (err) {
     error = err instanceof Error ? err.message : 'Failed to load topology'
   } finally {
     loading = false
   }
+}
+
+function injectCSS(css: string | undefined) {
+  if (!css) return
+  if (styleElement) {
+    styleElement.remove()
+  }
+  styleElement = document.createElement('style')
+  styleElement.setAttribute('data-shumoku-widget', id)
+  styleElement.textContent = css
+  document.head.appendChild(styleElement)
 }
 
 function selectTopology(topologyId: string) {
@@ -236,6 +249,10 @@ onDestroy(() => {
   }
   if (highlightTimeout) {
     clearTimeout(highlightTimeout)
+  }
+  if (styleElement) {
+    styleElement.remove()
+    styleElement = null
   }
 })
 
