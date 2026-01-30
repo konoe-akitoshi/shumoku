@@ -324,6 +324,47 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
                       </select>
                     </div>
 
+                    <!-- Webhook URL (shown right after sync mode selector) -->
+                    {#if source.syncMode === 'webhook' && currentSource?.webhookSecret}
+                      <div>
+                        <label for="webhook-url-{source.index}" class="text-xs text-theme-text-muted">Webhook URL</label>
+                        <div class="flex items-center gap-2 mt-1">
+                          <input
+                            id="webhook-url-{source.index}"
+                            type="text"
+                            class="input font-mono text-xs flex-1"
+                            value={getWebhookUrl(currentSource)}
+                            readonly
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onclick={() => copyWebhookUrl(currentSource)}
+                          >
+                            {#if copiedSecret === currentSource.id}
+                              <CheckCircle size={16} class="text-success" />
+                            {:else}
+                              <Copy size={16} />
+                            {/if}
+                          </Button>
+                        </div>
+                        <p class="text-xs text-theme-text-muted mt-1">
+                          Configure this URL in {dataSource?.type || 'your source'} webhooks
+                        </p>
+                        {#if currentSource.lastSyncedAt}
+                          <p class="text-xs text-theme-text-muted mt-1">
+                            Last received: {new Date(currentSource.lastSyncedAt).toLocaleString()}
+                          </p>
+                        {:else}
+                          <p class="text-xs text-warning mt-1">
+                            No webhook received yet
+                          </p>
+                        {/if}
+                      </div>
+                    {:else if source.syncMode === 'webhook' && !currentSource?.webhookSecret}
+                      <p class="text-xs text-warning">Save changes to generate webhook URL</p>
+                    {/if}
+
                     <!-- NetBox options (if source is netbox type) -->
                     {#if dataSource?.type === 'netbox'}
                       {@const opts = parseOptions(source.optionsJson)}
@@ -410,38 +451,6 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
                           </div>
                         </div>
                       </div>
-                    {/if}
-
-                    <!-- Webhook URL (if webhook mode and saved) -->
-                    {#if source.syncMode === 'webhook' && currentSource?.webhookSecret}
-                      <div>
-                        <label for="webhook-url-{source.index}" class="text-xs text-theme-text-muted">Webhook URL</label>
-                        <div class="flex items-center gap-2 mt-1">
-                          <input
-                            id="webhook-url-{source.index}"
-                            type="text"
-                            class="input font-mono text-xs flex-1"
-                            value={getWebhookUrl(currentSource)}
-                            readonly
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onclick={() => copyWebhookUrl(currentSource)}
-                          >
-                            {#if copiedSecret === currentSource.id}
-                              <CheckCircle size={16} class="text-success" />
-                            {:else}
-                              <Copy size={16} />
-                            {/if}
-                          </Button>
-                        </div>
-                        <p class="text-xs text-theme-text-muted mt-1">
-                          Configure this URL in {dataSource?.type || 'your source'} webhooks
-                        </p>
-                      </div>
-                    {:else if source.syncMode === 'webhook' && !currentSource?.webhookSecret}
-                      <p class="text-xs text-warning">Save changes to generate webhook URL</p>
                     {/if}
 
                     <!-- Last synced & sync button -->
