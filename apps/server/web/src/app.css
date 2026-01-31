@@ -355,7 +355,7 @@ body {
 .text-theme-text-emphasis { color: var(--color-text-emphasis); }
 .border-theme-border { border-color: var(--border); }
 
-/* Print styles — show only the SVG diagram */
+/* Print styles — show only the pure SVG topology */
 @media print {
   html, body {
     overflow: visible !important;
@@ -376,6 +376,16 @@ body {
     visibility: visible !important;
   }
 
+  /* Hide weathermap overlays — print the clean topology */
+  .svg-wrapper .wm-overlay {
+    display: none !important;
+  }
+
+  /* Restore original link paths hidden by weathermap */
+  .svg-wrapper path.link {
+    opacity: 1 !important;
+  }
+
   .svg-wrapper {
     position: fixed !important;
     inset: 0 !important;
@@ -385,7 +395,6 @@ body {
     align-items: center !important;
     justify-content: center !important;
     background: white !important;
-    /* Reset panzoom transform so the full diagram prints */
     transform: none !important;
   }
 
@@ -396,8 +405,20 @@ body {
     height: auto !important;
   }
 
-  /* Remove dot-grid and other background images */
+  /* Remove all filters (shadows etc.) for clean vector output */
+  .svg-wrapper * {
+    filter: none !important;
+  }
+
+  /* Remove backgrounds */
   * {
     background-image: none !important;
+  }
+
+  /* Reset live status indicators */
+  .svg-wrapper g.node.status-up .node-bg rect,
+  .svg-wrapper g.node.status-down .node-bg rect {
+    stroke: unset !important;
+    stroke-width: unset !important;
   }
 }

@@ -772,17 +772,6 @@ function applyMetrics(
 
       nodeGroup.classList.remove('status-up', 'status-down', 'status-unknown')
       nodeGroup.classList.add(`status-${nodeMetrics.status}`)
-
-      const rect = nodeGroup.querySelector('.node-bg rect, rect.node-bg') as SVGRectElement
-      if (rect) {
-        if (nodeMetrics.status === 'down') {
-          rect.setAttribute('stroke', '#ef4444')
-          rect.setAttribute('stroke-width', '2')
-        } else if (nodeMetrics.status === 'up') {
-          rect.setAttribute('stroke', '#22c55e')
-          rect.setAttribute('stroke-width', '2')
-        }
-      }
     }
   }
 }
@@ -797,11 +786,6 @@ function resetNodeStyles() {
   const nodeGroups = svgElement.querySelectorAll('g.node')
   nodeGroups.forEach((node) => {
     node.classList.remove('status-up', 'status-down', 'status-unknown')
-    const rect = node.querySelector('.node-bg rect, rect.node-bg') as SVGRectElement
-    if (rect) {
-      rect.removeAttribute('stroke')
-      rect.removeAttribute('stroke-width')
-    }
   })
 }
 
@@ -1080,6 +1064,17 @@ onDestroy(() => {
     stroke-width: 2px !important;
   }
 
+  /* Node status indicators */
+  .svg-wrapper :global(g.node.status-up .node-bg rect) {
+    stroke: #22c55e;
+    stroke-width: 2px;
+  }
+
+  .svg-wrapper :global(g.node.status-down .node-bg rect) {
+    stroke: #ef4444;
+    stroke-width: 2px;
+  }
+
   /* Search highlight pulse */
   .svg-wrapper :global(g.node.search-highlight .node-bg rect) {
     stroke: #f59e0b !important;
@@ -1298,5 +1293,22 @@ onDestroy(() => {
 
   .warning-text {
     white-space: nowrap;
+  }
+
+  /* Print: hide UI chrome (main print styles in app.css) */
+  @media print {
+    .diagram-container {
+      overflow: visible !important;
+      background: white !important;
+      background-image: none !important;
+    }
+
+    .controls,
+    .tooltip,
+    .breadcrumb,
+    .legend,
+    .warnings-banner {
+      display: none !important;
+    }
   }
 </style>
