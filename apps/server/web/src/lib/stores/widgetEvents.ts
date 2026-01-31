@@ -8,7 +8,13 @@ import { writable, get } from 'svelte/store'
 /**
  * Event types for widget communication
  */
-export type WidgetEventType = 'zoom-to-node' | 'highlight-node' | 'select-node' | 'clear-highlight'
+export type WidgetEventType =
+  | 'zoom-to-node'
+  | 'highlight-node'
+  | 'select-node'
+  | 'clear-highlight'
+  | 'highlight-nodes'
+  | 'highlight-by-attribute'
 
 /**
  * Widget event payload
@@ -18,8 +24,14 @@ export interface WidgetEvent {
   payload: {
     /** Target topology ID */
     topologyId: string
-    /** Target node ID */
-    nodeId: string
+    /** Target node ID (for single-node events) */
+    nodeId?: string
+    /** Target node IDs (for multi-node events) */
+    nodeIds?: string[]
+    /** Attribute filter (for attribute-based highlight) */
+    attribute?: { key: string; value: string }
+    /** Enable spotlight (dim non-highlighted nodes) */
+    spotlight?: boolean
     /** Duration in ms for temporary effects like highlight */
     duration?: number
     /** Source widget ID that triggered the event */
@@ -130,5 +142,54 @@ export function emitSelectNode(topologyId: string, nodeId: string, sourceWidgetI
   widgetEvents.emit({
     type: 'select-node',
     payload: { topologyId, nodeId, sourceWidgetId },
+  })
+}
+
+/**
+ * Helper to emit a highlight-nodes event (multiple nodes)
+ */
+export function emitHighlightNodes(
+  topologyId: string,
+  nodeIds: string[],
+  options?: { spotlight?: boolean; sourceWidgetId?: string },
+): void {
+  widgetEvents.emit({
+    type: 'highlight-nodes',
+    payload: {
+      topologyId,
+      nodeIds,
+      spotlight: options?.spotlight,
+      sourceWidgetId: options?.sourceWidgetId,
+    },
+  })
+}
+
+/**
+ * Helper to emit a highlight-by-attribute event
+ */
+export function emitHighlightByAttribute(
+  topologyId: string,
+  key: string,
+  value: string,
+  options?: { spotlight?: boolean; sourceWidgetId?: string },
+): void {
+  widgetEvents.emit({
+    type: 'highlight-by-attribute',
+    payload: {
+      topologyId,
+      attribute: { key, value },
+      spotlight: options?.spotlight,
+      sourceWidgetId: options?.sourceWidgetId,
+    },
+  })
+}
+
+/**
+ * Helper to emit a clear-highlight event
+ */
+export function emitClearHighlight(topologyId: string, sourceWidgetId?: string): void {
+  widgetEvents.emit({
+    type: 'clear-highlight',
+    payload: { topologyId, sourceWidgetId },
   })
 }

@@ -2,6 +2,7 @@
 import { onMount, onDestroy } from 'svelte'
 import { api } from '$lib/api'
 import { dashboardStore } from '$lib/stores/dashboards'
+import { emitHighlightByAttribute, emitClearHighlight } from '$lib/stores/widgetEvents'
 import WidgetWrapper from './WidgetWrapper.svelte'
 import Cpu from 'phosphor-svelte/lib/Cpu'
 import Spinner from 'phosphor-svelte/lib/Spinner'
@@ -25,6 +26,7 @@ let loading = $state(true)
 let error = $state('')
 let showSelector = $state(false)
 let isHovered = $state(false)
+let hoveredType = $state<string | null>(null)
 
 // Group nodes by type and calculate status
 interface TypeStatus {
@@ -312,6 +314,21 @@ let typeLabels = $derived.by(() => {
   return labels
 })
 
+function handleTypeHover(type: string) {
+  if (hoveredType === type || !config.topologyId) return
+  hoveredType = type
+  emitHighlightByAttribute(config.topologyId, 'data-device-type', type, {
+    spotlight: true,
+    sourceWidgetId: id,
+  })
+}
+
+function handleTypeLeave() {
+  if (!hoveredType || !config.topologyId) return
+  hoveredType = null
+  emitClearHighlight(config.topologyId, id)
+}
+
 function formatTypeName(type: string): string {
   // Convert kebab-case to Title Case
   return type
@@ -496,7 +513,7 @@ function handleSettings() {
       <div
         class="h-full flex flex-col items-center justify-center p-2 gap-2"
         onmouseenter={() => isHovered = true}
-        onmouseleave={() => isHovered = false}
+        onmouseleave={() => { isHovered = false; handleTypeLeave() }}
       >
         <!-- Main circular gauge - responsive size -->
         <div class="relative flex-1 w-full h-full flex items-center justify-center min-h-0 overflow-visible">
@@ -522,16 +539,19 @@ function handleSettings() {
                 {#if isHovered}
                   <!-- Hover: Pie segments by device type -->
                   {#each typeSegments as seg}
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <circle
                       cx="18"
                       cy="18"
                       r="15.5"
                       fill="none"
                       stroke={seg.color}
-                      stroke-width="4"
+                      stroke-width={hoveredType === seg.type ? "5" : "4"}
                       stroke-dasharray={seg.dashArray}
                       stroke-dashoffset={seg.dashOffset}
-                      class="transition-all duration-300"
+                      class="transition-all duration-300 cursor-pointer"
+                      onmouseenter={() => handleTypeHover(seg.type)}
+                      onmouseleave={handleTypeLeave}
                     />
                   {/each}
                 {:else}
@@ -578,14 +598,17 @@ function handleSettings() {
               <!-- Labels (not rotated) -->
               {#if isHovered}
                 {#each typeLabels as label}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
                   <text
                     x={label.x}
                     y={label.y}
                     text-anchor={label.anchor}
                     dominant-baseline="middle"
-                    class="fill-current text-theme-text-emphasis"
+                    class="fill-current cursor-pointer {hoveredType === label.type ? 'text-theme-text-emphasis' : 'text-theme-text-emphasis'}"
                     font-size="4.5"
-                    font-weight="600"
+                    font-weight={hoveredType === label.type ? "700" : "600"}
+                    onmouseenter={() => handleTypeHover(label.type)}
+                    onmouseleave={handleTypeLeave}
                   >
                     {label.displayName}
                   </text>

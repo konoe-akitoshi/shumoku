@@ -4,6 +4,7 @@ import { api } from '$lib/api'
 import type { Topology } from '$lib/types'
 import { dashboardStore, dashboardEditMode } from '$lib/stores/dashboards'
 import { widgetEvents, type WidgetEvent } from '$lib/stores/widgetEvents'
+import { highlightNodes, highlightByAttribute, clearHighlight as clearHighlightUtil } from '$lib/highlight'
 import WidgetWrapper from './WidgetWrapper.svelte'
 import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
 import Spinner from 'phosphor-svelte/lib/Spinner'
@@ -40,11 +41,11 @@ let sheets: SheetInfo[] = $state([])
 let renderCache: Record<string, string> = {}
 
 // Highlight support for widget events
-let highlightedNodeId = $state<string | null>(null)
 let highlightTimeout: ReturnType<typeof setTimeout> | null = null
 let containerElement = $state<HTMLDivElement | null>(null)
 let styleElement: HTMLStyleElement | null = null
 let unsubscribeEvents: (() => void) | null = null
+let savedViewBox: string | null = null
 
 async function loadTopologies() {
   try {
@@ -131,108 +132,156 @@ function selectSheet(sheetId: string) {
 function handleWidgetEvent(event: WidgetEvent) {
   // Only handle events for this topology
   if (event.payload.topologyId !== config.topologyId) return
-
-  const nodeId = event.payload.nodeId
+  if (!containerElement) return
 
   switch (event.type) {
     case 'zoom-to-node':
-    case 'highlight-node':
-      highlightNode(nodeId, event.payload.duration || 3000)
+    case 'highlight-node': {
+      const nodeId = event.payload.nodeId
+      if (!nodeId) break
+      clearCurrentHighlight()
+      highlightNodes(containerElement, [nodeId])
+      autoExpireHighlight(event.payload.duration || 3000)
       scrollToNode(nodeId)
       break
-    case 'select-node':
-      highlightNode(nodeId)
-      scrollToNode(nodeId)
-      break
-    case 'clear-highlight':
-      clearHighlight()
-      break
-  }
-}
-
-function highlightNode(nodeId: string, duration?: number) {
-  // Clear any existing highlight
-  clearHighlight()
-
-  highlightedNodeId = nodeId
-
-  // Apply highlight style to the node element
-  if (containerElement) {
-    const nodeElement = containerElement.querySelector(
-      `[data-node-id="${nodeId}"]`,
-    ) as HTMLElement | null
-    if (nodeElement) {
-      nodeElement.classList.add('node-highlighted')
     }
-  }
-
-  // Auto-clear after duration
-  if (duration) {
-    highlightTimeout = setTimeout(() => {
-      clearHighlight()
-    }, duration)
+    case 'select-node': {
+      const nodeId = event.payload.nodeId
+      if (!nodeId) break
+      clearCurrentHighlight()
+      highlightNodes(containerElement, [nodeId])
+      scrollToNode(nodeId)
+      break
+    }
+    case 'highlight-nodes': {
+      const ids = event.payload.nodeIds
+      if (!ids?.length) break
+      clearCurrentHighlight()
+      highlightNodes(containerElement, ids, { spotlight: event.payload.spotlight })
+      zoomToFitHighlighted()
+      if (event.payload.duration) autoExpireHighlight(event.payload.duration)
+      break
+    }
+    case 'highlight-by-attribute': {
+      const attr = event.payload.attribute
+      if (!attr) break
+      clearCurrentHighlight()
+      highlightByAttribute(containerElement, attr.key, attr.value, {
+        spotlight: event.payload.spotlight,
+      })
+      zoomToFitHighlighted()
+      if (event.payload.duration) autoExpireHighlight(event.payload.duration)
+      break
+    }
+    case 'clear-highlight':
+      clearCurrentHighlight()
+      break
   }
 }
 
-function clearHighlight() {
+function clearCurrentHighlight() {
   if (highlightTimeout) {
     clearTimeout(highlightTimeout)
     highlightTimeout = null
   }
-
-  if (highlightedNodeId && containerElement) {
-    const nodeElement = containerElement.querySelector(
-      `[data-node-id="${highlightedNodeId}"]`,
-    ) as HTMLElement | null
-    if (nodeElement) {
-      nodeElement.classList.remove('node-highlighted')
-    }
+  if (containerElement) {
+    clearHighlightUtil(containerElement)
   }
+  restoreViewBox()
+}
 
-  highlightedNodeId = null
+function autoExpireHighlight(duration: number) {
+  highlightTimeout = setTimeout(() => clearCurrentHighlight(), duration)
 }
 
 function scrollToNode(nodeId: string) {
   if (!containerElement) return
 
-  // Find the node element in the SVG
   const nodeElement = containerElement.querySelector(
-    `[data-node-id="${nodeId}"]`,
+    `.node[data-id="${nodeId}"]`,
   ) as SVGGElement | null
   if (!nodeElement) return
 
-  // Get the bounding box of the node
   const bbox = nodeElement.getBBox?.()
   if (!bbox) return
 
-  // Find the SVG element
   const svg = containerElement.querySelector('svg')
   if (!svg) return
 
-  // Get current viewBox
   const viewBox = svg.viewBox.baseVal
   if (!viewBox) return
 
-  // Calculate the center of the node
   const nodeCenterX = bbox.x + bbox.width / 2
   const nodeCenterY = bbox.y + bbox.height / 2
 
-  // Calculate new viewBox to center on the node with some padding
   const padding = 100
   const newWidth = Math.max(bbox.width + padding * 2, viewBox.width / 2)
   const newHeight = Math.max(bbox.height + padding * 2, viewBox.height / 2)
 
   const newViewBox = `${nodeCenterX - newWidth / 2} ${nodeCenterY - newHeight / 2} ${newWidth} ${newHeight}`
 
-  // Animate the viewBox change
   svg.style.transition = 'all 0.3s ease-out'
   svg.setAttribute('viewBox', newViewBox)
 
-  // Reset viewBox after a delay
   setTimeout(() => {
     svg.style.transition = 'all 0.5s ease-in-out'
     svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`)
   }, 2000)
+}
+
+/**
+ * Zoom to fit multiple highlighted nodes with padding.
+ * Saves original viewBox so it can be restored on clear.
+ */
+function zoomToFitHighlighted() {
+  if (!containerElement) return
+
+  const svg = containerElement.querySelector('svg')
+  if (!svg) return
+
+  const highlighted = containerElement.querySelectorAll('.node-highlighted') as NodeListOf<SVGGElement>
+  if (highlighted.length === 0) return
+
+  // Save original viewBox (only if not already saved)
+  const vb = svg.viewBox.baseVal
+  if (!savedViewBox && vb) {
+    savedViewBox = `${vb.x} ${vb.y} ${vb.width} ${vb.height}`
+  }
+
+  // Compute union bounding box
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const el of highlighted) {
+    const bbox = el.getBBox?.()
+    if (!bbox) continue
+    minX = Math.min(minX, bbox.x)
+    minY = Math.min(minY, bbox.y)
+    maxX = Math.max(maxX, bbox.x + bbox.width)
+    maxY = Math.max(maxY, bbox.y + bbox.height)
+  }
+
+  if (!isFinite(minX)) return
+
+  const padding = 80
+  const w = maxX - minX + padding * 2
+  const h = maxY - minY + padding * 2
+
+  // Keep at least half the original viewBox size to avoid extreme zoom
+  const finalW = vb ? Math.max(w, vb.width * 0.4) : w
+  const finalH = vb ? Math.max(h, vb.height * 0.4) : h
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+
+  svg.style.transition = 'all 0.3s ease-out'
+  svg.setAttribute('viewBox', `${cx - finalW / 2} ${cy - finalH / 2} ${finalW} ${finalH}`)
+}
+
+function restoreViewBox() {
+  if (!savedViewBox || !containerElement) return
+  const svg = containerElement.querySelector('svg')
+  if (!svg) return
+  svg.style.transition = 'all 0.3s ease-in-out'
+  svg.setAttribute('viewBox', savedViewBox)
+  savedViewBox = null
 }
 
 onMount(() => {
@@ -247,9 +296,7 @@ onDestroy(() => {
   if (unsubscribeEvents) {
     unsubscribeEvents()
   }
-  if (highlightTimeout) {
-    clearTimeout(highlightTimeout)
-  }
+  clearCurrentHighlight()
   if (styleElement) {
     styleElement.remove()
     styleElement = null
@@ -396,6 +443,11 @@ let editMode = $derived($dashboardEditMode)
     stroke: #f59e0b !important;
     stroke-width: 3px !important;
     filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.6));
+  }
+
+  .topology-container :global(.node-dimmed) {
+    opacity: 0.15;
+    transition: opacity 0.2s ease;
   }
 
   @keyframes node-pulse {
