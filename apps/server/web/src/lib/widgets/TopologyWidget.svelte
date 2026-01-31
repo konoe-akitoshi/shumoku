@@ -157,6 +157,9 @@ function handleWidgetEvent(event: WidgetEvent) {
       const ids = event.payload.nodeIds
       if (!ids?.length) break
       clearCurrentHighlight()
+      if (event.payload.highlightColor && containerElement) {
+        containerElement.style.setProperty('--highlight-color', event.payload.highlightColor)
+      }
       highlightNodes(containerElement, ids, { spotlight: event.payload.spotlight })
       zoomToFitHighlighted()
       if (event.payload.duration) autoExpireHighlight(event.payload.duration)
@@ -186,6 +189,7 @@ function clearCurrentHighlight() {
   }
   if (containerElement) {
     clearHighlightUtil(containerElement)
+    containerElement.style.removeProperty('--highlight-color')
   }
   restoreViewBox()
 }
@@ -450,9 +454,9 @@ let editMode = $derived($dashboardEditMode)
   .topology-container :global(.node-highlighted rect),
   .topology-container :global(.node-highlighted circle),
   .topology-container :global(.node-highlighted path) {
-    stroke: #f59e0b !important;
+    stroke: var(--highlight-color, #f59e0b) !important;
     stroke-width: 3px !important;
-    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.6));
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--highlight-color, #f59e0b) 60%, transparent));
   }
 
   .topology-container :global(.node-dimmed) {

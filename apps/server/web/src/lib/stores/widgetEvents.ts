@@ -34,6 +34,8 @@ export interface WidgetEvent {
     spotlight?: boolean
     /** Duration in ms for temporary effects like highlight */
     duration?: number
+    /** Custom highlight color (CSS color string) */
+    highlightColor?: string
     /** Source widget ID that triggered the event */
     sourceWidgetId?: string
   }
@@ -143,7 +145,12 @@ export function emitSelectNode(topologyId: string, nodeId: string, sourceWidgetI
 export function emitHighlightNodes(
   topologyId: string,
   nodeIds: string[],
-  options?: { spotlight?: boolean; sourceWidgetId?: string },
+  options?: {
+    spotlight?: boolean
+    duration?: number
+    highlightColor?: string
+    sourceWidgetId?: string
+  },
 ): void {
   widgetEvents.emit({
     type: 'highlight-nodes',
@@ -151,6 +158,8 @@ export function emitHighlightNodes(
       topologyId,
       nodeIds,
       spotlight: options?.spotlight,
+      duration: options?.duration,
+      highlightColor: options?.highlightColor,
       sourceWidgetId: options?.sourceWidgetId,
     },
   })

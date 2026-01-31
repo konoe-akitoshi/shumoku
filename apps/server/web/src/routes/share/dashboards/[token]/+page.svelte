@@ -4,6 +4,7 @@ import { page } from '$app/stores'
 import { browser } from '$app/environment'
 import { mount, unmount } from 'svelte'
 import { initializeWidgets, getWidget } from '$lib/widgets'
+import { dashboardStore } from '$lib/stores/dashboards'
 import type { WidgetInstance } from '$lib/types'
 import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
 
@@ -26,6 +27,7 @@ onMount(() => {
 
   return () => {
     cleanupAllWidgets()
+    dashboardStore.clearCurrent()
     if (grid) {
       grid.destroy(true)
       grid = null
@@ -54,6 +56,7 @@ async function loadDashboard() {
       const layout = JSON.parse(data.layoutJson)
       widgets = layout.widgets || []
       layoutData = layout
+      dashboardStore.setLayout(layout)
     } catch {
       error = 'Failed to parse dashboard layout'
     }

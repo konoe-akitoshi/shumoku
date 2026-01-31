@@ -308,6 +308,13 @@ function createDashboardStore() {
     },
 
     /**
+     * Set layout directly (for shared/read-only views)
+     */
+    setLayout: (layout: DashboardLayout) => {
+      update((s) => ({ ...s, currentLayout: layout }))
+    },
+
+    /**
      * Clear current dashboard
      */
     clearCurrent: () => {

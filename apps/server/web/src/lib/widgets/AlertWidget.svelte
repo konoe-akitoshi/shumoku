@@ -37,6 +37,7 @@ let showSelector = $state(false)
 let selectedAlert = $state<Alert | null>(null)
 let showDetailModal = $state(false)
 let refreshInterval: ReturnType<typeof setInterval> | null = null
+let previousAlertIds: Set<string> | null = null
 
 // Severity configuration
 const SEVERITY_COLORS: Record<AlertSeverity, string> = {
@@ -46,6 +47,15 @@ const SEVERITY_COLORS: Record<AlertSeverity, string> = {
   warning: '#0284c7', // sky-600
   information: '#16a34a', // green-600
   ok: '#6b7280', // gray-500
+}
+
+const SEVERITY_HIGHLIGHT_COLORS: Record<AlertSeverity, string> = {
+  disaster: '#dc2626',
+  high: '#ea580c',
+  average: '#d97706',
+  warning: '#ca8a04',
+  information: '#2563eb',
+  ok: '#6b7280',
 }
 
 const SEVERITY_BG_COLORS: Record<AlertSeverity, string> = {
@@ -115,6 +125,33 @@ async function loadAlerts() {
     alerts = fetchedAlerts.sort(
       (a, b) => (b.receivedAt ?? b.startTime) - (a.receivedAt ?? a.startTime),
     )
+
+    // Detect new active alerts and flash highlight
+    const currentActiveIds = new Set(
+      fetchedAlerts.filter((a) => a.status === 'active').map((a) => a.id),
+    )
+    if (previousAlertIds !== null) {
+      // Group new alerts by severity, collect hosts
+      const newAlertsBySeverity = new Map<AlertSeverity, string[]>()
+      for (const a of fetchedAlerts) {
+        if (a.status === 'active' && a.host && !previousAlertIds.has(a.id)) {
+          const hosts = newAlertsBySeverity.get(a.severity) || []
+          hosts.push(a.host)
+          newAlertsBySeverity.set(a.severity, hosts)
+        }
+      }
+      // Emit highlight for each severity group
+      for (const [severity, hosts] of newAlertsBySeverity) {
+        forEachTopology((tid) =>
+          emitHighlightNodes(tid, hosts, {
+            duration: 4000,
+            highlightColor: SEVERITY_HIGHLIGHT_COLORS[severity],
+            sourceWidgetId: id,
+          }),
+        )
+      }
+    }
+    previousAlertIds = currentActiveIds
   } catch (err) {
     error = err instanceof Error ? err.message : 'Failed to load alerts'
   } finally {
@@ -141,7 +178,12 @@ function forEachTopology(fn: (topologyId: string) => void) {
 
 function handleAlertHover(alert: Alert) {
   if (!alert.host) return
-  forEachTopology((tid) => emitHighlightNodes(tid, [alert.host!], { sourceWidgetId: id }))
+  forEachTopology((tid) =>
+    emitHighlightNodes(tid, [alert.host!], {
+      highlightColor: SEVERITY_HIGHLIGHT_COLORS[alert.severity],
+      sourceWidgetId: id,
+    }),
+  )
 }
 
 function handleAlertLeave() {
