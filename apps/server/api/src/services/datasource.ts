@@ -24,6 +24,9 @@ import type {
 } from '../plugins/types.js'
 import type { DataSource, DataSourceInput, DataSourceStatus, DataSourceType } from '../types.js'
 
+/** Config keys that should be preserved on update when not explicitly provided */
+const SECRET_KEYS = ['token', 'password', 'secret', 'apikey', 'apiKey']
+
 interface DataSourceRow {
   id: string
   name: string
@@ -91,6 +94,26 @@ export class DataSourceService {
   }
 
   /**
+   * Find a data source by its webhook secret (stored in config JSON)
+   */
+  findByWebhookSecret(secret: string): DataSource | null {
+    const rows = this.db
+      .query("SELECT * FROM data_sources WHERE type = 'grafana'")
+      .all() as DataSourceRow[]
+    for (const row of rows) {
+      try {
+        const config = JSON.parse(row.config_json)
+        if (config.webhookSecret === secret) {
+          return rowToDataSource(row)
+        }
+      } catch {
+        // skip invalid config
+      }
+    }
+    return null
+  }
+
+  /**
    * Get a data source by name
    */
   getByName(name: string): DataSource | null {
@@ -109,6 +132,18 @@ export class DataSourceService {
       throw new Error(`Unknown data source type: ${input.type}`)
     }
 
+    let configJson = input.configJson
+
+    // Generate webhookSecret if Grafana with useWebhook enabled
+    if (input.type === 'grafana') {
+      const config = JSON.parse(configJson)
+      if (config.useWebhook && !config.webhookSecret) {
+        const { nanoid } = await import('nanoid')
+        config.webhookSecret = nanoid(32)
+        configJson = JSON.stringify(config)
+      }
+    }
+
     const id = await generateId()
     const now = timestamp()
 
@@ -117,7 +152,7 @@ export class DataSourceService {
         `INSERT INTO data_sources (id, name, type, config_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, input.name, input.type, input.configJson, now, now)
+      .run(id, input.name, input.type, configJson, now, now)
 
     return this.get(id)!
   }
@@ -125,7 +160,7 @@ export class DataSourceService {
   /**
    * Update an existing data source
    */
-  update(id: string, input: Partial<DataSourceInput>): DataSource | null {
+  async update(id: string, input: Partial<DataSourceInput>): Promise<DataSource | null> {
     const existing = this.get(id)
     if (!existing) {
       return null
@@ -146,8 +181,34 @@ export class DataSourceService {
       values.push(input.type)
     }
     if (input.configJson !== undefined) {
+      let configJson = input.configJson
+      const newConfig = JSON.parse(configJson)
+      const existingConfig = JSON.parse(existing.configJson)
+
+      // Preserve sensitive fields (token, password, etc.) when not provided in update
+      for (const key of SECRET_KEYS) {
+        if (newConfig[key] === undefined && existingConfig[key] !== undefined) {
+          newConfig[key] = existingConfig[key]
+        }
+      }
+
+      // Handle Grafana-specific fields
+      const type = input.type ?? existing.type
+      if (type === 'grafana') {
+        // Preserve existing webhook secret
+        if (!newConfig.webhookSecret && existingConfig.webhookSecret) {
+          newConfig.webhookSecret = existingConfig.webhookSecret
+        }
+        // Generate secret when useWebhook is enabled and no secret exists
+        if (newConfig.useWebhook && !newConfig.webhookSecret) {
+          const { nanoid } = await import('nanoid')
+          newConfig.webhookSecret = nanoid(32)
+        }
+      }
+
+      configJson = JSON.stringify(newConfig)
       updates.push('config_json = ?')
-      values.push(input.configJson)
+      values.push(configJson)
     }
 
     if (updates.length === 0) {
@@ -187,7 +248,14 @@ export class DataSourceService {
     }
 
     const config = JSON.parse(dataSource.configJson)
-    return pluginRegistry.getInstance(id, dataSource.type, config)
+    const plugin = pluginRegistry.getInstance(id, dataSource.type, config)
+
+    // Set dataSourceId for plugins that need it (e.g., GrafanaPlugin for DB-based alerts)
+    if ('setDataSourceId' in plugin && typeof plugin.setDataSourceId === 'function') {
+      plugin.setDataSourceId(id)
+    }
+
+    return plugin
   }
 
   /**

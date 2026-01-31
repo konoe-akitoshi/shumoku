@@ -17,6 +17,9 @@ function isPublicRequest(method: string, pathname: string): boolean {
   // Health and runtime are always public
   if (pathname === '/api/health' || pathname === '/api/runtime.js') return true
 
+  // Webhook endpoints are public (secret-based auth)
+  if (method === 'POST' && pathname.startsWith('/api/webhooks/')) return true
+
   // Only GET requests can be public beyond this point
   if (method !== 'GET') return false
 

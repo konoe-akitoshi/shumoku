@@ -210,6 +210,8 @@ export interface Alert {
   status: AlertStatus
   /** Source system */
   source: 'zabbix' | 'prometheus' | 'grafana'
+  /** When the alert was received via webhook (Unix timestamp in ms) */
+  receivedAt?: number
   /** URL to the alert details in the source system */
   url?: string
   /** Labels from the source system */
@@ -357,6 +359,9 @@ export interface PrometheusLinkMapping {
 export interface GrafanaPluginConfig {
   url: string
   token: string
+  /** Whether to receive alerts via webhook instead of Alertmanager API polling */
+  useWebhook?: boolean
+  webhookSecret?: string
 }
 
 export type PluginConfig =

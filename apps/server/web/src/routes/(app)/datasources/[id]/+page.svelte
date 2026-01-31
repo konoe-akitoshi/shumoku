@@ -7,6 +7,8 @@ import type { DataSource, DataSourceType, ConnectionTestResult } from '$lib/type
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
 import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
 import XCircle from 'phosphor-svelte/lib/XCircle'
+import Copy from 'phosphor-svelte/lib/Copy'
+import Check from 'phosphor-svelte/lib/Check'
 
 // Get ID from route params (always defined for this route)
 let id = $derived($page.params.id!)
@@ -25,10 +27,18 @@ let formToken = $state('')
 let formPollInterval = $state(30000)
 let hasExistingToken = $state(false)
 
+// Grafana webhook state
+let formUseWebhook = $state(false)
+let webhookUrl = $state('')
+let webhookLoading = $state(false)
+let copied = $state(false)
+
 interface ParsedConfig {
   url?: string
   token?: string
   pollInterval?: number
+  useWebhook?: boolean
+  webhookSecret?: string
 }
 
 function parseConfig(configJson: string): ParsedConfig {
@@ -44,18 +54,37 @@ function getConfigFromForm(type: DataSourceType, existingConfig?: ParsedConfig):
     url: formUrl.trim(),
   }
 
-  // Only update token if a new one was entered, otherwise keep existing
+  // Only include token if user entered a new one; omit to let server preserve existing
   if (formToken.trim()) {
     config.token = formToken.trim()
-  } else if (existingConfig?.token) {
-    config.token = existingConfig.token
   }
 
   if (type === 'zabbix') {
     config.pollInterval = formPollInterval
   }
 
+  if (type === 'grafana') {
+    config.useWebhook = formUseWebhook
+  }
+
   return JSON.stringify(config)
+}
+
+async function loadWebhookUrl() {
+  if (!formUseWebhook) {
+    webhookUrl = ''
+    return
+  }
+  webhookLoading = true
+  try {
+    const result = await api.dataSources.getWebhookUrl(id)
+    webhookUrl = `${window.location.origin}${result.webhookPath}`
+  } catch (err) {
+    console.error('[WebhookUrl] Failed to load:', err)
+    webhookUrl = ''
+  } finally {
+    webhookLoading = false
+  }
 }
 
 onMount(async () => {
@@ -67,6 +96,11 @@ onMount(async () => {
     formToken = '' // Don't show existing token
     formPollInterval = config.pollInterval || 30000
     hasExistingToken = !!config.token
+    formUseWebhook = !!config.useWebhook
+
+    if (formUseWebhook) {
+      await loadWebhookUrl()
+    }
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to load data source'
   } finally {
@@ -96,6 +130,11 @@ async function handleSave() {
     // Update hasExistingToken state
     const newConfig = parseConfig(dataSource.configJson)
     hasExistingToken = !!newConfig.token
+
+    // Load webhook URL after save (secret may have been generated)
+    if (dataSource.type === 'grafana' && formUseWebhook) {
+      await loadWebhookUrl()
+    }
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to save'
   } finally {
@@ -206,6 +245,67 @@ async function handleDelete() {
                   <option value={60000}>1 minute</option>
                   <option value={300000}>5 minutes</option>
                 </select>
+              </div>
+            {/if}
+
+            {#if dataSource.type === 'grafana'}
+              <div class="pt-2 border-t border-theme-border">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm font-medium text-theme-text-emphasis">Webhook Alerts</p>
+                    <p class="text-xs text-theme-text-muted mt-0.5">
+                      Receive alerts via Grafana Contact Point instead of polling Alertmanager API.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={formUseWebhook}
+                    aria-label="Toggle webhook alerts"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {formUseWebhook ? 'bg-primary' : 'bg-theme-border'}"
+                    onclick={() => { formUseWebhook = !formUseWebhook; if (formUseWebhook) loadWebhookUrl(); else webhookUrl = ''; }}
+                  >
+                    <span
+                      class="inline-block h-4 w-4 rounded-full bg-white transition-transform {formUseWebhook ? 'translate-x-6' : 'translate-x-1'}"
+                    ></span>
+                  </button>
+                </div>
+
+                {#if formUseWebhook}
+                  <div class="mt-3 p-3 rounded-lg bg-theme-bg-canvas border border-theme-border">
+                    {#if webhookUrl}
+                      <p class="text-xs text-theme-text-muted mb-1.5">
+                        Set this URL as a Grafana Contact Point (Webhook type, POST method).
+                      </p>
+                      <div class="flex items-center gap-2">
+                        <input
+                          type="text"
+                          class="input flex-1 font-mono text-xs"
+                          value={webhookUrl}
+                          readonly
+                        />
+                        <button
+                          type="button"
+                          class="btn btn-secondary p-2"
+                          title="Copy to clipboard"
+                          onclick={() => { navigator.clipboard.writeText(webhookUrl); copied = true; setTimeout(() => copied = false, 2000); }}
+                        >
+                          {#if copied}
+                            <Check size={16} class="text-success" />
+                          {:else}
+                            <Copy size={16} />
+                          {/if}
+                        </button>
+                      </div>
+                    {:else if webhookLoading}
+                      <p class="text-xs text-theme-text-muted">Loading webhook URL...</p>
+                    {:else}
+                      <p class="text-xs text-theme-text-muted">
+                        Click <strong>Save Changes</strong> to generate the Webhook URL.
+                      </p>
+                    {/if}
+                  </div>
+                {/if}
               </div>
             {/if}
 

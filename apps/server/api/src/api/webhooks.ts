@@ -6,6 +6,7 @@
 import { Hono } from 'hono'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import { DataSourceService } from '../services/datasource.js'
+import { GrafanaAlertService, type GrafanaWebhookPayload } from '../services/grafana-alerts.js'
 import { getTopologyService } from './topologies.js'
 
 // Lazy initialization to avoid database access at module load time
@@ -116,6 +117,49 @@ webhooksApi.post('/topology/:secret', async (c) => {
     })
   } catch (error) {
     console.error('[Webhook] Error processing webhook:', error)
+    return c.json(
+      { error: error instanceof Error ? error.message : 'Failed to process webhook' },
+      500,
+    )
+  }
+})
+
+/**
+ * Webhook endpoint for Grafana alerts
+ * POST /api/webhooks/grafana/:secret
+ *
+ * Grafana Contact Point (Webhook) should point to:
+ * https://your-server/api/webhooks/grafana/{webhook_secret}
+ */
+webhooksApi.post('/grafana/:secret', async (c) => {
+  const { secret } = c.req.param()
+
+  // Find data source by webhook secret
+  const dataSource = getDataSourceService().findByWebhookSecret(secret)
+  if (!dataSource || dataSource.type !== 'grafana') {
+    console.log('[Webhook/Grafana] Invalid secret received')
+    return c.json({ error: 'Invalid webhook secret' }, 401)
+  }
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON payload' }, 400)
+  }
+
+  try {
+    const alertService = new GrafanaAlertService()
+    const count = alertService.upsertFromWebhook(
+      dataSource.id,
+      body as GrafanaWebhookPayload,
+    )
+
+    console.log(`[Webhook/Grafana] Upserted ${count} alerts for data source ${dataSource.id}`)
+
+    return c.json({ success: true, alertCount: count })
+  } catch (error) {
+    console.error('[Webhook/Grafana] Error processing webhook:', error)
     return c.json(
       { error: error instanceof Error ? error.message : 'Failed to process webhook' },
       500,

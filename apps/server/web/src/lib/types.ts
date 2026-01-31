@@ -469,6 +469,7 @@ export interface Alert {
   nodeId?: string
   startTime: number
   endTime?: number
+  receivedAt?: number
   status: AlertStatus
   source: 'zabbix' | 'prometheus' | 'grafana'
   url?: string

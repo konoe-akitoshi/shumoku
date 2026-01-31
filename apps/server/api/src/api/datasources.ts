@@ -132,7 +132,7 @@ export function createDataSourcesApi(): Hono {
         }
       }
 
-      const dataSource = service.update(id, body)
+      const dataSource = await service.update(id, body)
       if (!dataSource) {
         return c.json({ error: 'Data source not found' }, 404)
       }
@@ -220,6 +220,35 @@ export function createDataSourcesApi(): Hono {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
+    }
+  })
+
+  // Get webhook URL for Grafana data sources
+  app.get('/:id/webhook-url', async (c) => {
+    const id = c.req.param('id')
+    const dataSource = service.get(id)
+    if (!dataSource) {
+      return c.json({ error: 'Data source not found' }, 404)
+    }
+    if (dataSource.type !== 'grafana') {
+      return c.json({ error: 'Webhook URL only available for Grafana data sources' }, 400)
+    }
+    try {
+      let config = JSON.parse(dataSource.configJson)
+      if (!config.useWebhook) {
+        return c.json({ error: 'Webhook mode is not enabled' }, 400)
+      }
+      if (!config.webhookSecret) {
+        // Trigger secret generation via update
+        const updated = await service.update(id, { configJson: dataSource.configJson })
+        if (!updated) return c.json({ error: 'Failed to generate webhook secret' }, 500)
+        config = JSON.parse(updated.configJson)
+      }
+      return c.json({
+        webhookPath: `/api/webhooks/grafana/${config.webhookSecret}`,
+      })
+    } catch {
+      return c.json({ error: 'Invalid configuration' }, 500)
     }
   })
 

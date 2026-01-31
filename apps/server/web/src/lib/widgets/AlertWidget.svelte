@@ -57,15 +57,6 @@ const SEVERITY_BG_COLORS: Record<AlertSeverity, string> = {
   ok: 'bg-gray-500/10',
 }
 
-const SEVERITY_ORDER: AlertSeverity[] = [
-  'disaster',
-  'high',
-  'average',
-  'warning',
-  'information',
-  'ok',
-]
-
 function getSeverityIcon(severity: AlertSeverity) {
   switch (severity) {
     case 'disaster':
@@ -83,29 +74,18 @@ function getSeverityIcon(severity: AlertSeverity) {
   }
 }
 
-function formatTime(timestamp: number): string {
-  const now = Date.now()
-  const diff = now - timestamp
+function formatDuration(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  if (diff < 0) return 'just now'
 
-  if (diff < 60000) {
-    return 'just now'
-  }
-  if (diff < 3600000) {
-    const mins = Math.floor(diff / 60000)
-    return `${mins}m ago`
-  }
-  if (diff < 86400000) {
-    const hours = Math.floor(diff / 3600000)
-    return `${hours}h ago`
-  }
+  const days = Math.floor(diff / 86400000)
+  const hours = Math.floor((diff % 86400000) / 3600000)
+  const mins = Math.floor((diff % 3600000) / 60000)
 
-  const date = new Date(timestamp)
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  if (days > 0) return `${days}d ${hours}h ${mins}m`
+  if (hours > 0) return `${hours}h ${mins}m`
+  if (mins > 0) return `${mins}m`
+  return '<1m'
 }
 
 async function loadAlertDataSources() {
@@ -131,12 +111,10 @@ async function loadAlerts() {
       activeOnly: !config.showResolved,
     })
 
-    // Sort by severity then by time
-    alerts = fetchedAlerts.sort((a, b) => {
-      const severityDiff = SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)
-      if (severityDiff !== 0) return severityDiff
-      return b.startTime - a.startTime
-    })
+    // Sort by received time (webhook) descending, fallback to startTime
+    alerts = fetchedAlerts.sort(
+      (a, b) => (b.receivedAt ?? b.startTime) - (a.receivedAt ?? a.startTime),
+    )
   } catch (err) {
     error = err instanceof Error ? err.message : 'Failed to load alerts'
   } finally {
@@ -332,7 +310,7 @@ let activeAlerts = $derived(alerts.filter((a) => a.status === 'active'))
                       <span class="truncate max-w-[100px]">{alert.host}</span>
                       <span>-</span>
                     {/if}
-                    <span>{formatTime(alert.startTime)}</span>
+                    <span>{formatDuration(alert.receivedAt ?? alert.startTime)}</span>
                     {#if alert.status === 'resolved'}
                       <span
                         class="px-1 py-0.5 text-[10px] bg-success/20 text-success rounded"
@@ -408,7 +386,7 @@ let activeAlerts = $derived(alerts.filter((a) => a.status === 'active'))
           {/if}
           <div>
             <div class="text-xs font-medium text-theme-text-muted">Duration</div>
-            <div class="text-theme-text">{formatTime(selectedAlert.startTime)}</div>
+            <div class="text-theme-text">{formatDuration(selectedAlert.startTime)}</div>
           </div>
         </div>
 

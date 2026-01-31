@@ -1,14 +1,21 @@
 /**
  * Grafana Data Source Plugin
  *
- * Provides alerts capability via Grafana Alertmanager API.
- * Uses Service Account Token for authentication.
+ * Provides alerts capability via Grafana webhook (Contact Point).
+ * Alerts are stored in SQLite when received via webhook.
+ * Falls back to Alertmanager API polling when no webhook alerts exist in DB.
  */
 
+import {
+  GrafanaAlertService,
+  mapSeverity,
+  buildTitle,
+  filterLabels,
+  SEVERITY_ORDER,
+} from '../services/grafana-alerts.js'
 import type {
   Alert,
   AlertQueryOptions,
-  AlertSeverity,
   AlertsCapable,
   ConnectionResult,
   DataSourceCapability,
@@ -22,13 +29,22 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
   readonly capabilities: readonly DataSourceCapability[] = ['alerts']
 
   private config: GrafanaPluginConfig | null = null
+  private dataSourceId: string | null = null
 
   initialize(config: unknown): void {
     this.config = config as GrafanaPluginConfig
   }
 
+  /**
+   * Set the data source ID (needed for DB-based alert queries)
+   */
+  setDataSourceId(id: string): void {
+    this.dataSourceId = id
+  }
+
   dispose(): void {
     this.config = null
+    this.dataSourceId = null
   }
 
   async testConnection(): Promise<ConnectionResult> {
@@ -60,6 +76,21 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
   // ============================================
 
   async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
+    if (this.config?.useWebhook && this.dataSourceId) {
+      // Webhook mode: read from DB
+      const service = new GrafanaAlertService()
+      return service.getAlerts(this.dataSourceId, options)
+    }
+
+    // Default: poll Alertmanager API directly
+    return this.fetchAlertsFromApi(options)
+  }
+
+  // ============================================
+  // Alertmanager API Fallback
+  // ============================================
+
+  private async fetchAlertsFromApi(options?: AlertQueryOptions): Promise<Alert[]> {
     if (!this.config) {
       throw new Error('Plugin not initialized')
     }
@@ -89,7 +120,6 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
       const alerts: Alert[] = alertmanagerAlerts
         .filter((a) => {
           const isActive = a.status.state === 'active'
-          // Active alerts are always included; resolved alerts are filtered by timeRange
           if (!isActive) {
             if (options?.activeOnly) return false
             const startTime = new Date(a.startsAt).getTime()
@@ -97,26 +127,23 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
           }
           return true
         })
-        .map((a) => {
-          const severity = this.mapSeverity(a.labels.severity)
-          return {
+        .map((a) => ({
             id: a.fingerprint,
-            severity,
-            title: a.labels.alertname || 'Unknown Alert',
+            severity: mapSeverity(a.labels.severity),
+            title: buildTitle(a.labels),
             description: a.annotations?.description || a.annotations?.summary,
-            host: a.labels.instance || a.labels.host,
+            host: a.labels.hostname || a.labels.instance || a.labels.host,
             startTime: new Date(a.startsAt).getTime(),
             endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
             status: a.status.state === 'active' ? 'active' : 'resolved',
             source: 'grafana' as const,
             url: a.generatorURL,
-            labels: this.filterLabels(a.labels),
-          } satisfies Alert
-        })
+            labels: filterLabels(a.labels),
+          }) satisfies Alert)
 
       if (options?.minSeverity) {
-        const minOrder = this.getSeverityOrder(options.minSeverity)
-        return alerts.filter((a) => this.getSeverityOrder(a.severity) >= minOrder)
+        const minOrder = SEVERITY_ORDER[options.minSeverity]
+        return alerts.filter((a) => SEVERITY_ORDER[a.severity] >= minOrder)
       }
 
       return alerts
@@ -144,50 +171,4 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
     })
   }
 
-  private filterLabels(labels: Record<string, string>): Record<string, string> {
-    const filtered: Record<string, string> = {}
-    for (const [key, value] of Object.entries(labels)) {
-      // Skip internal Grafana labels
-      if (key.startsWith('__')) continue
-      filtered[key] = value
-    }
-    return filtered
-  }
-
-  private mapSeverity(severity?: string): AlertSeverity {
-    if (!severity) return 'information'
-
-    const severityLower = severity.toLowerCase()
-    const severityMap: Record<string, AlertSeverity> = {
-      critical: 'disaster',
-      disaster: 'disaster',
-      high: 'high',
-      major: 'high',
-      error: 'high',
-      average: 'average',
-      medium: 'average',
-      warning: 'warning',
-      warn: 'warning',
-      minor: 'warning',
-      low: 'information',
-      info: 'information',
-      information: 'information',
-      none: 'ok',
-      ok: 'ok',
-    }
-
-    return severityMap[severityLower] || 'information'
-  }
-
-  private getSeverityOrder(severity: AlertSeverity): number {
-    const order: Record<AlertSeverity, number> = {
-      ok: 0,
-      information: 1,
-      warning: 2,
-      average: 3,
-      high: 4,
-      disaster: 5,
-    }
-    return order[severity] ?? 1
-  }
 }

@@ -124,6 +124,9 @@ export const dataSources = {
     return request<Alert[]>(url)
   },
 
+  getWebhookUrl: (id: string) =>
+    request<{ webhookPath: string }>(`/datasources/${id}/webhook-url`),
+
   getFilterOptions: (id: string) =>
     request<{ sites: { slug: string; name: string }[]; tags: { slug: string; name: string }[] }>(
       `/datasources/${id}/filter-options`,
