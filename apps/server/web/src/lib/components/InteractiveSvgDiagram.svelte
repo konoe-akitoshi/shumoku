@@ -172,6 +172,8 @@ function wasDrag(e: MouseEvent): boolean {
 let hoveredNodeId: string | null = null
 let selectedNodeId: string | null = null
 
+// AbortController for event listeners (prevents leaks on sheet switch)
+let interactivityAbort: AbortController | null = null
 
 // Inject CSS into document head
 function injectCSS(css: string) {
@@ -404,54 +406,86 @@ function zoomOut() {
   panzoomInstance.smoothZoom(cx, cy, 0.67)
 }
 
-// Setup SVG interactivity
+// Setup SVG interactivity using event delegation on the SVG element.
+// Instead of adding listeners to every node/link/subgraph individually,
+// we listen on the SVG root and resolve the target element by walking up
+// the DOM. This makes sheet switching O(1) for listener setup.
 function setupInteractivity() {
   if (!svgElement) return
 
-  // Node hover/click
-  const nodes = svgElement.querySelectorAll('g.node')
-  nodes.forEach((node) => {
-    const nodeEl = node as SVGGElement
-    const nodeId = nodeEl.getAttribute('data-id') || ''
+  // Abort previous listeners to prevent leaks on sheet switch
+  interactivityAbort?.abort()
+  interactivityAbort = new AbortController()
+  const { signal } = interactivityAbort
 
-    nodeEl.addEventListener('mouseenter', (e) => handleNodeHover(nodeId, e))
-    nodeEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
-    nodeEl.addEventListener('mouseleave', () => handleNodeLeave())
-    nodeEl.addEventListener('click', (e) => { if (!wasDrag(e)) handleNodeClick(nodeId) })
-    nodeEl.style.cursor = 'pointer'
-  })
+  // Apply cursor styles via CSS class instead of per-element style
+  svgElement.classList.add('shumoku-interactive')
 
-  // Subgraph hover/click for hierarchical navigation
-  const subgraphs = svgElement.querySelectorAll('g.subgraph')
-  subgraphs.forEach((sg) => {
-    const sgEl = sg as SVGGElement
-    const sgId = sgEl.getAttribute('data-id') || ''
-    const hasSheet = sgEl.getAttribute('data-has-sheet') === 'true'
+  // Helper: find the closest interactive ancestor from an event target
+  function closestInteractive(target: EventTarget | null): { type: 'node'; el: SVGGElement; id: string }
+    | { type: 'subgraph'; el: SVGGElement; id: string }
+    | { type: 'link'; el: SVGGElement; id: string }
+    | null {
+    const el = (target as Element)?.closest?.('g.node, g.subgraph, g.link-group') as SVGGElement | null
+    if (!el) return null
+    if (el.classList.contains('node')) return { type: 'node', el, id: el.getAttribute('data-id') || '' }
+    if (el.classList.contains('subgraph')) return { type: 'subgraph', el, id: el.getAttribute('data-id') || '' }
+    if (el.classList.contains('link-group')) return { type: 'link', el, id: el.getAttribute('data-link-id') || '' }
+    return null
+  }
 
-    sgEl.addEventListener('mouseenter', (e) => handleSubgraphHover(sgId, e))
-    sgEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
-    sgEl.addEventListener('mouseleave', () => handleSubgraphLeave())
+  // Track what's currently hovered for delegation-based enter/leave
+  let currentHover: { type: string; id: string } | null = null
 
-    // Single-click: show info modal (drill-down available via modal button)
-    sgEl.addEventListener('click', (e) => {
-      if (wasDrag(e)) return
+  svgElement.addEventListener('mouseover', (e: MouseEvent) => {
+    const hit = closestInteractive(e.target)
+    const key = hit ? `${hit.type}:${hit.id}` : null
+    const prevKey = currentHover ? `${currentHover.type}:${currentHover.id}` : null
+    if (key === prevKey) return
+
+    // Leave previous
+    if (currentHover) {
+      if (currentHover.type === 'node') handleNodeLeave()
+      else if (currentHover.type === 'subgraph') handleSubgraphLeave()
+      else if (currentHover.type === 'link') handleLinkLeave()
+      currentHover = null
+    }
+
+    // Enter new
+    if (hit) {
+      currentHover = { type: hit.type, id: hit.id }
+      if (hit.type === 'node') handleNodeHover(hit.id, e)
+      else if (hit.type === 'subgraph') handleSubgraphHover(hit.id, e)
+      else if (hit.type === 'link') handleLinkHover(hit.id, e)
+    }
+  }, { signal })
+
+  svgElement.addEventListener('mouseout', (e: MouseEvent) => {
+    // Only clear if we're leaving the SVG entirely
+    const related = e.relatedTarget as Element | null
+    if (related && svgElement!.contains(related)) return
+    if (currentHover) {
+      if (currentHover.type === 'node') handleNodeLeave()
+      else if (currentHover.type === 'subgraph') handleSubgraphLeave()
+      else if (currentHover.type === 'link') handleLinkLeave()
+      currentHover = null
+    }
+  }, { signal })
+
+  svgElement.addEventListener('mousemove', (e: MouseEvent) => {
+    updateTooltipPosition(e)
+  }, { signal })
+
+  svgElement.addEventListener('click', (e: MouseEvent) => {
+    if (wasDrag(e)) return
+    const hit = closestInteractive(e.target)
+    if (!hit) return
+    if (hit.type === 'node') handleNodeClick(hit.id)
+    else if (hit.type === 'subgraph') {
       e.stopPropagation()
-      handleSubgraphSingleClick(sgId)
-    })
-    sgEl.style.cursor = 'pointer'
-  })
-
-  // Link hover
-  const links = svgElement.querySelectorAll('g.link-group')
-  links.forEach((link) => {
-    const linkEl = link as SVGGElement
-    const linkId = linkEl.getAttribute('data-link-id') || ''
-
-    linkEl.addEventListener('mouseenter', (e) => handleLinkHover(linkId, e))
-    linkEl.addEventListener('mousemove', (e) => updateTooltipPosition(e))
-    linkEl.addEventListener('mouseleave', () => handleLinkLeave())
-    linkEl.style.cursor = 'pointer'
-  })
+      handleSubgraphSingleClick(hit.id)
+    }
+  }, { signal })
 }
 
 // Update tooltip position on mouse move
@@ -837,6 +871,7 @@ onMount(async () => {
 })
 
 onDestroy(() => {
+  interactivityAbort?.abort()
   if (!readOnly) {
     metricsStore.unsubscribe()
   }
@@ -1043,6 +1078,13 @@ onDestroy(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Cursor styles for interactive elements (applied via delegation) */
+  .svg-wrapper :global(svg.shumoku-interactive g.node),
+  .svg-wrapper :global(svg.shumoku-interactive g.subgraph),
+  .svg-wrapper :global(svg.shumoku-interactive g.link-group) {
+    cursor: pointer;
   }
 
   /* Interactive highlight styles */

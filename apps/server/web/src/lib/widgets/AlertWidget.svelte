@@ -122,9 +122,11 @@ async function loadAlerts() {
     })
 
     // Sort by received time (webhook) descending, fallback to startTime
-    alerts = fetchedAlerts.sort(
-      (a, b) => (b.receivedAt ?? b.startTime) - (a.receivedAt ?? a.startTime),
-    )
+    // Limit to 100 entries to prevent unbounded memory growth
+    const MAX_ALERTS = 100
+    alerts = fetchedAlerts
+      .sort((a, b) => (b.receivedAt ?? b.startTime) - (a.receivedAt ?? a.startTime))
+      .slice(0, MAX_ALERTS)
 
     // Detect new active alerts and flash highlight
     const currentActiveIds = new Set(
