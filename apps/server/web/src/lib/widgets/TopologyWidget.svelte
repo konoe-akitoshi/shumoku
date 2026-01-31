@@ -230,8 +230,8 @@ function scrollToNode(nodeId: string) {
 }
 
 /**
- * Zoom to fit multiple highlighted nodes with padding.
- * Saves original viewBox so it can be restored on clear.
+ * Zoom to fit multiple highlighted nodes.
+ * The highlighted nodes will occupy ~70% of the viewport.
  */
 function zoomToFitHighlighted() {
   if (!containerElement) return
@@ -248,7 +248,7 @@ function zoomToFitHighlighted() {
     savedViewBox = `${vb.x} ${vb.y} ${vb.width} ${vb.height}`
   }
 
-  // Compute union bounding box
+  // Compute union bounding box of highlighted nodes
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (const el of highlighted) {
     const bbox = el.getBBox?.()
@@ -261,18 +261,28 @@ function zoomToFitHighlighted() {
 
   if (!isFinite(minX)) return
 
-  const padding = 80
-  const w = maxX - minX + padding * 2
-  const h = maxY - minY + padding * 2
-
-  // Keep at least half the original viewBox size to avoid extreme zoom
-  const finalW = vb ? Math.max(w, vb.width * 0.4) : w
-  const finalH = vb ? Math.max(h, vb.height * 0.4) : h
+  const contentW = maxX - minX
+  const contentH = maxY - minY
   const cx = (minX + maxX) / 2
   const cy = (minY + maxY) / 2
 
+  if (!vb || !vb.width || !vb.height) return
+
+  // How much we'd need to scale the original viewBox to fit content at 70%
+  const fillRatio = 0.7
+  const scaleX = contentW > 0 ? (fillRatio * vb.width) / contentW : 1
+  const scaleY = contentH > 0 ? (fillRatio * vb.height) / contentH : 1
+  const scale = Math.min(scaleX, scaleY)
+
+  // scale < 1 means we'd need to zoom out — skip
+  if (scale < 1) return
+
+  // New viewBox always matches display aspect ratio
+  const vbW = vb.width / scale
+  const vbH = vb.height / scale
+
   svg.style.transition = 'all 0.3s ease-out'
-  svg.setAttribute('viewBox', `${cx - finalW / 2} ${cy - finalH / 2} ${finalW} ${finalH}`)
+  svg.setAttribute('viewBox', `${cx - vbW / 2} ${cy - vbH / 2} ${vbW} ${vbH}`)
 }
 
 function restoreViewBox() {
