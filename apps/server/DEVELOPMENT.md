@@ -291,3 +291,5 @@ SQLITE_BUSY: database is locked
 
 - [README.md](./README.md) - ユーザー向けドキュメント
 - [CLAUDE.md](../../CLAUDE.md) - プロジェクト全体の説明
+- [docs/grafana-integration.md](./docs/grafana-integration.md) - Grafana連携（Webhook設定手順含む）
+- [docs/zabbix-integration.md](./docs/zabbix-integration.md) - Zabbix連携
