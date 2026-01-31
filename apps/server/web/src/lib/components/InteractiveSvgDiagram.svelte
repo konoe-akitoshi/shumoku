@@ -138,9 +138,15 @@ $: if (tooltipVisible && hoveredType === 'link' && hoveredLinkId && hoveredLinkI
       const outTraffic = formatTraffic(metrics.outBps || 0)
       content += `<br><span class="muted">In:</span> ${inTraffic} <span class="muted">Out:</span> ${outTraffic}`
     }
-    if (metrics.utilization !== undefined && metrics.utilization > 0) {
+    if (metrics.inUtilization !== undefined || metrics.outUtilization !== undefined) {
+      const inU = metrics.inUtilization ?? 0
+      const outU = metrics.outUtilization ?? 0
+      const inColor = getUtilizationColor(inU)
+      const outColor = getUtilizationColor(outU)
+      content += `<br><span style="color: ${inColor}">In: ${formatUtil(inU)}</span> <span style="color: ${outColor}">Out: ${formatUtil(outU)}</span>`
+    } else if (metrics.utilization !== undefined) {
       const color = getUtilizationColor(metrics.utilization)
-      content += `<br><span style="color: ${color}">Utilization: ${metrics.utilization.toFixed(1)}%</span>`
+      content += `<br><span style="color: ${color}">Utilization: ${formatUtil(metrics.utilization)}</span>`
     }
     content += `<br><span class="muted">Status: ${metrics.status}</span>`
   }
@@ -711,9 +717,15 @@ function showLinkTooltip(linkId: string, event: MouseEvent) {
       const outTraffic = formatTraffic(metrics.outBps || 0)
       content += `<br><span class="muted">In:</span> ${inTraffic} <span class="muted">Out:</span> ${outTraffic}`
     }
-    if (metrics.utilization !== undefined && metrics.utilization > 0) {
+    if (metrics.inUtilization !== undefined || metrics.outUtilization !== undefined) {
+      const inU = metrics.inUtilization ?? 0
+      const outU = metrics.outUtilization ?? 0
+      const inColor = getUtilizationColor(inU)
+      const outColor = getUtilizationColor(outU)
+      content += `<br><span style="color: ${inColor}">In: ${formatUtil(inU)}</span> <span style="color: ${outColor}">Out: ${formatUtil(outU)}</span>`
+    } else if (metrics.utilization !== undefined) {
       const color = getUtilizationColor(metrics.utilization)
-      content += `<br><span style="color: ${color}">Utilization: ${metrics.utilization.toFixed(1)}%</span>`
+      content += `<br><span style="color: ${color}">Utilization: ${formatUtil(metrics.utilization)}</span>`
     }
     content += `<br><span class="muted">Status: ${metrics.status}</span>`
   }
@@ -731,6 +743,10 @@ function hideTooltip() {
   hoveredLinkInfo = null
   hoveredNodeInfo = null
   hoveredSubgraphInfo = null
+}
+
+function formatUtil(util: number): string {
+  return `${Math.round(util)}%`
 }
 
 // Weathermap controller for in/out dual-path rendering

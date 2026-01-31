@@ -7,6 +7,7 @@ import * as fs from 'node:fs'
 import * as yaml from 'js-yaml'
 import type { Link, NetworkGraph } from '@shumoku/core'
 import type { ZabbixMapping } from '../types.js'
+import { getBandwidthCapacity } from '../bandwidth.js'
 import type { ZabbixClient } from './client.js'
 
 /**
@@ -124,7 +125,7 @@ export class ZabbixMapper {
       const explicit = this.mapping?.links?.[linkId]
 
       // Default capacity based on bandwidth
-      const capacity = explicit?.capacity || this.getBandwidthCapacity(link.bandwidth)
+      const capacity = explicit?.capacity || getBandwidthCapacity(link.bandwidth)
 
       if (explicit?.in || explicit?.out) {
         // Explicit item IDs
@@ -169,20 +170,4 @@ export class ZabbixMapper {
   /**
    * Get bandwidth capacity in bps
    */
-  private getBandwidthCapacity(bandwidth?: string): number {
-    switch (bandwidth) {
-      case '1G':
-        return 1_000_000_000
-      case '10G':
-        return 10_000_000_000
-      case '25G':
-        return 25_000_000_000
-      case '40G':
-        return 40_000_000_000
-      case '100G':
-        return 100_000_000_000
-      default:
-        return 1_000_000_000
-    }
-  }
 }

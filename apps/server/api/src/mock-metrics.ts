@@ -5,6 +5,7 @@
 
 import type { Link, NetworkGraph } from '@shumoku/core'
 import type { MetricsData } from './types.js'
+import { getBandwidthCapacity } from './bandwidth.js'
 
 /**
  * Extract node ID from a link endpoint (can be string or object)
@@ -57,7 +58,7 @@ export class MockMetricsProvider {
         status === 'up' ? this.generateSmoothValue(`link:${linkId}:out`, 0, 95, 10) : 0
 
       // Calculate bandwidth in bps based on link bandwidth setting
-      const capacity = this.getBandwidthCapacity(link.bandwidth)
+      const capacity = getBandwidthCapacity(link.bandwidth)
       const inBps = status === 'up' ? Math.round((inUtilization / 100) * capacity) : 0
       const outBps = status === 'up' ? Math.round((outUtilization / 100) * capacity) : 0
 
@@ -105,20 +106,4 @@ export class MockMetricsProvider {
   /**
    * Get bandwidth capacity in bps
    */
-  private getBandwidthCapacity(bandwidth?: string): number {
-    switch (bandwidth) {
-      case '1G':
-        return 1_000_000_000
-      case '10G':
-        return 10_000_000_000
-      case '25G':
-        return 25_000_000_000
-      case '40G':
-        return 40_000_000_000
-      case '100G':
-        return 100_000_000_000
-      default:
-        return 1_000_000_000
-    }
-  }
 }

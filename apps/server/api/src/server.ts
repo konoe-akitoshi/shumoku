@@ -16,12 +16,13 @@ import { MockMetricsProvider } from './mock-metrics.js'
 import { initDatabase, closeDatabase } from './db/index.js'
 import { createApiRouter } from './api/index.js'
 import { getTopologyService } from './api/topologies.js'
-import type { TopologyService } from './services/topology.js'
+import type { TopologyService, ParsedTopology } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { DataSourceService } from './services/datasource.js'
 import { registerBuiltinPlugins, pluginRegistry, hasMetricsCapability } from './plugins/index.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
 import type { ZabbixMapping } from './types.js'
+import { parseBandwidthCapacity } from './bandwidth.js'
 
 export class Server {
   private app: Hono
@@ -296,7 +297,7 @@ export class Server {
 
     const topologies = this.topologyService.list()
     for (const topology of topologies) {
-      const parsed = await this.topologyService.getParsed(topology.id)
+      const parsed: ParsedTopology | null = await this.topologyService.getParsed(topology.id)
       if (!parsed) continue
 
       let metrics: MetricsData | null = null
@@ -321,6 +322,18 @@ export class Server {
                   mapping = JSON.parse(topology.mappingJson)
                 } catch {
                   // Invalid mapping JSON, use empty
+                }
+              }
+
+              // Enrich mapping with bandwidth-derived capacity from graph
+              if (parsed?.graph?.links) {
+                for (const link of parsed.graph.links) {
+                  const linkId = link.id || `link-${parsed.graph.links.indexOf(link)}`
+                  const linkMapping = mapping.links?.[linkId]
+                  if (linkMapping && !linkMapping.capacity && link.bandwidth) {
+                    const cap = parseBandwidthCapacity(link.bandwidth)
+                    if (cap) linkMapping.capacity = cap
+                  }
                 }
               }
 

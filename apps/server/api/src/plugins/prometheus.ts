@@ -213,9 +213,9 @@ export class PrometheusPlugin
 
           metrics.links[linkId] = {
             status: 'up',
-            utilization: Math.round(maxUtil * 10) / 10,
-            inUtilization: Math.round(inUtil * 10) / 10,
-            outUtilization: Math.round(outUtil * 10) / 10,
+            utilization: Math.ceil(maxUtil),
+            inUtilization: Math.ceil(inUtil),
+            outUtilization: Math.ceil(outUtil),
             inBps,
             outBps,
           }

@@ -100,6 +100,18 @@ async function loadData(forceReload = false) {
   }
 }
 
+/** Map stored capacity (bps) to select value, or 'custom' if non-standard. */
+const standardCapacities = new Set([
+  '100000000', '1000000000', '10000000000', '25000000000', '40000000000', '100000000000',
+])
+let customCapacityLinks = $state(new Set<string>())
+function capacityToSelectValue(linkId: string, capacity?: number): string {
+  if (customCapacityLinks.has(linkId)) return 'custom'
+  if (!capacity) return ''
+  const s = String(capacity)
+  return standardCapacities.has(s) ? s : 'custom'
+}
+
 // Load interfaces for all nodes that are mapped and used in links
 function loadInterfacesForMappedNodes() {
   const hostIds = new Set<string>()
@@ -238,10 +250,10 @@ function handleNodeMappingChange(nodeId: string, hostId: string) {
   }
 }
 
-function handleLinkCapacityChange(linkId: string, capacity: number | undefined) {
+function handleLinkCapacityChange(linkId: string, capacityBps: number | undefined) {
   const existing = $linkMapping[linkId] || {}
-  if (capacity !== undefined) {
-    mappingStore.updateLink(linkId, { ...existing, capacity })
+  if (capacityBps !== undefined) {
+    mappingStore.updateLink(linkId, { ...existing, capacity: capacityBps })
   } else {
     const { capacity: _, ...rest } = existing
     if (Object.keys(rest).length > 0) {
@@ -545,18 +557,50 @@ let totalLinks = $derived(edges.length)
                     <p class="text-xs text-theme-text-muted">{edge.bandwidth || 'No bandwidth specified'}</p>
                   </div>
                   <div class="flex items-center gap-2 flex-shrink-0">
-                    <input
-                      type="number"
+                    <select
                       class="input"
-                      style="width: 5rem;"
-                      placeholder="Mbps"
-                      value={currentMapping.capacity || ''}
-                      oninput={(e) => {
-                        const value = e.currentTarget.value ? parseInt(e.currentTarget.value) : undefined
-                        handleLinkCapacityChange(linkId, value)
+                      style="width: 7rem;"
+                      value={capacityToSelectValue(linkId, currentMapping.capacity)}
+                      onchange={(e) => {
+                        const val = e.currentTarget.value
+                        if (val === '') {
+                          customCapacityLinks.delete(linkId)
+                          customCapacityLinks = new Set(customCapacityLinks)
+                          handleLinkCapacityChange(linkId, undefined)
+                        } else if (val === 'custom') {
+                          customCapacityLinks.add(linkId)
+                          customCapacityLinks = new Set(customCapacityLinks)
+                          handleLinkCapacityChange(linkId, 1_000_000_000)
+                        } else {
+                          customCapacityLinks.delete(linkId)
+                          customCapacityLinks = new Set(customCapacityLinks)
+                          handleLinkCapacityChange(linkId, parseInt(val))
+                        }
                       }}
-                    />
-                    <span class="text-xs text-theme-text-muted">Mbps</span>
+                    >
+                      <option value="">{edge.bandwidth ? `Auto (${edge.bandwidth})` : 'Auto (1G)'}</option>
+                      <option value="100000000">100M</option>
+                      <option value="1000000000">1G</option>
+                      <option value="10000000000">10G</option>
+                      <option value="25000000000">25G</option>
+                      <option value="40000000000">40G</option>
+                      <option value="100000000000">100G</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    {#if capacityToSelectValue(linkId, currentMapping.capacity) === 'custom'}
+                      <input
+                        type="number"
+                        class="input"
+                        style="width: 5rem;"
+                        placeholder="Mbps"
+                        value={currentMapping.capacity ? currentMapping.capacity / 1_000_000 : ''}
+                        oninput={(e) => {
+                          const mbps = e.currentTarget.value ? parseInt(e.currentTarget.value) : undefined
+                          handleLinkCapacityChange(linkId, mbps !== undefined ? mbps * 1_000_000 : undefined)
+                        }}
+                      />
+                      <span class="text-xs text-theme-text-muted">Mbps</span>
+                    {/if}
                   </div>
                 </div>
 

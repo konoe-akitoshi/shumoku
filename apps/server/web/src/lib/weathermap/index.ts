@@ -252,15 +252,21 @@ export class WeathermapController {
       const util = isIn ? inUtil : outUtil
       const bps = isIn ? inBps : outBps
 
-      path.setAttribute('stroke', getUtilizationColor(util))
+      const color = getUtilizationColor(util)
+      if (path.getAttribute('stroke') !== color) {
+        path.setAttribute('stroke', color)
+      }
 
       if (bps > 0) {
-        path.style.strokeDasharray = '16 8'
         const speed = Math.min(1, Math.log10(bps + 1) / 9)
         const duration = Math.max(0.3, 2 - speed * 1.5)
         const anim = isIn ? 'shumoku-edge-flow-out' : 'shumoku-edge-flow-in'
-        path.style.animation = `${anim} ${duration.toFixed(2)}s linear infinite`
-      } else {
+        const animValue = `${anim} ${duration.toFixed(2)}s linear infinite`
+        if (path.style.animation !== animValue) {
+          path.style.strokeDasharray = '16 8'
+          path.style.animation = animValue
+        }
+      } else if (path.style.animation) {
         path.style.strokeDasharray = ''
         path.style.animation = ''
       }
