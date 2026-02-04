@@ -150,6 +150,7 @@ export interface ConnectionTestResult {
   success: boolean
   message: string
   version?: string
+  warnings?: string[]
 }
 
 // ============================================

@@ -139,12 +139,15 @@ async function handleCreate() {
   formError = ''
 
   try {
-    await dataSources.create({
+    const created = await dataSources.create({
       name: formName.trim(),
       type: selectedPlugin.type as DataSourceType,
       configJson: getConfigFromForm(),
     })
     showCreateModal = false
+
+    // Auto-test connection after creation
+    await handleTest(created.id)
   } catch (e) {
     formError = e instanceof Error ? e.message : 'Failed to create data source'
   } finally {

@@ -7,6 +7,7 @@ import type { DataSource, DataSourceType, ConnectionTestResult } from '$lib/type
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
 import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
 import XCircle from 'phosphor-svelte/lib/XCircle'
+import Warning from 'phosphor-svelte/lib/Warning'
 import Copy from 'phosphor-svelte/lib/Copy'
 import Check from 'phosphor-svelte/lib/Check'
 
@@ -135,6 +136,9 @@ async function handleSave() {
     if (dataSource.type === 'grafana' && formUseWebhook) {
       await loadWebhookUrl()
     }
+
+    // Auto-test connection after save
+    await handleTest()
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to save'
   } finally {
@@ -351,6 +355,16 @@ async function handleDelete() {
                 <p class="text-sm text-theme-text-muted">{testResult.message}</p>
                 {#if testResult.version}
                   <p class="text-xs text-theme-text-muted mt-1">Version: {testResult.version}</p>
+                {/if}
+                {#if testResult.warnings?.length}
+                  <div class="mt-2 pt-2 border-t border-warning/30">
+                    {#each testResult.warnings as warning}
+                      <div class="flex items-center gap-1 text-xs text-warning">
+                        <Warning size={14} />
+                        <span>{warning}</span>
+                      </div>
+                    {/each}
+                  </div>
                 {/if}
               </div>
             {/if}
