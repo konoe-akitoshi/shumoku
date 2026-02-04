@@ -40,6 +40,7 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
     this.client = new NetBoxClient({
       url: this.config.url,
       token: this.config.token,
+      insecure: this.config.insecure,
     })
 
     console.log('[NetBox] Plugin initialized for:', this.config.url)
@@ -55,17 +56,25 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
   // ============================================
 
   async testConnection(): Promise<ConnectionResult> {
-    if (!this.client) {
+    if (!this.client || !this.config) {
       return { success: false, message: 'Plugin not initialized' }
     }
 
     try {
       // Try to fetch devices to test connection
       const resp = await this.client.fetchDevices()
-      return {
+
+      const result: ConnectionResult = {
         success: true,
         message: `Connected to NetBox (${resp.count} devices)`,
       }
+
+      // Warn about insecure HTTP connection
+      if (this.config.url.startsWith('http://')) {
+        result.warnings = ['Using insecure HTTP connection']
+      }
+
+      return result
     } catch (error) {
       return {
         success: false,

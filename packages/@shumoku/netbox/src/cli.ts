@@ -122,12 +122,11 @@ async function main(): Promise<void> {
   // Handle insecure mode
   if (opts.insecure) {
     console.warn('Warning: TLS certificate verification disabled')
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
   }
 
   try {
     console.log('Connecting to NetBox...')
-    const client = new NetBoxClient({ url, token, debug: opts.debug })
+    const client = new NetBoxClient({ url, token, debug: opts.debug, insecure: opts.insecure })
 
     // Build filters
     const queryParams: QueryParams = {}

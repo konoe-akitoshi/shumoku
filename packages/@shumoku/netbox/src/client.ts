@@ -41,6 +41,7 @@ export class NetBoxClient {
   private token: string
   private timeout: number
   private debug: boolean
+  private insecure: boolean
 
   constructor(options: NetBoxClientOptions) {
     // Remove trailing slash from URL
@@ -48,6 +49,12 @@ export class NetBoxClient {
     this.token = options.token
     this.timeout = options.timeout ?? 30000
     this.debug = options.debug ?? false
+    this.insecure = options.insecure ?? false
+
+    // Enable insecure mode for self-signed certificates
+    if (this.insecure) {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+    }
   }
 
   /**

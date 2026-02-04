@@ -30,6 +30,8 @@ export interface ConnectionResult {
   success: boolean
   message: string
   version?: string
+  /** Non-critical warnings (e.g., insecure HTTP connection) */
+  warnings?: string[]
 }
 
 export interface Host {
@@ -289,6 +291,8 @@ export interface ZabbixPluginConfig {
 export interface NetBoxPluginConfig {
   url: string
   token: string
+  /** Skip TLS certificate verification (for self-signed certs) */
+  insecure?: boolean
 }
 
 /**

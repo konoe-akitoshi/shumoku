@@ -712,4 +712,9 @@ export interface NetBoxClientOptions {
    * Enable debug output for API requests/responses
    */
   debug?: boolean
+
+  /**
+   * Skip TLS certificate verification (for self-signed certs)
+   */
+  insecure?: boolean
 }
