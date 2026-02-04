@@ -94,6 +94,7 @@ export class TopologyService {
   private db: Database
   private layout: BunHierarchicalLayout
   private cache: Map<string, ParsedTopology> = new Map()
+  private renderCache: Map<string, object> = new Map()
 
   constructor() {
     this.db = getDatabase()
@@ -157,6 +158,7 @@ export class TopologyService {
 
     // Clear cache to force re-parse
     this.cache.delete(id)
+    this.renderCache.delete(id)
 
     return this.get(id)!
   }
@@ -211,6 +213,7 @@ export class TopologyService {
 
     // Clear cache to force re-parse
     this.cache.delete(id)
+    this.renderCache.delete(id)
 
     return this.get(id)
   }
@@ -231,6 +234,7 @@ export class TopologyService {
 
     // Clear cache to force re-parse
     this.cache.delete(id)
+    this.renderCache.delete(id)
 
     return this.get(id)
   }
@@ -241,6 +245,7 @@ export class TopologyService {
   delete(id: string): boolean {
     const result = this.db.query('DELETE FROM topologies WHERE id = ?').run(id)
     this.cache.delete(id)
+    this.renderCache.delete(id)
     return result.changes > 0
   }
 
@@ -410,10 +415,25 @@ export class TopologyService {
   }
 
   /**
+   * Get cached render output
+   */
+  getRenderCache(id: string): object | undefined {
+    return this.renderCache.get(id)
+  }
+
+  /**
+   * Set cached render output
+   */
+  setRenderCache(id: string, output: object): void {
+    this.renderCache.set(id, output)
+  }
+
+  /**
    * Clear all cached topologies
    */
   clearCache(): void {
     this.cache.clear()
+    this.renderCache.clear()
   }
 
   /**
@@ -421,6 +441,7 @@ export class TopologyService {
    */
   clearCacheEntry(id: string): void {
     this.cache.delete(id)
+    this.renderCache.delete(id)
   }
 
   /**

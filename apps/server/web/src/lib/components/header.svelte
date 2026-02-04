@@ -62,7 +62,7 @@ function generateBreadcrumbs(pathname: string): Breadcrumb[] {
   <!-- Theme Toggle -->
   <button
     onclick={() => themeSetting.toggle()}
-    class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text"
+    class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer"
     aria-label={$resolvedTheme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
   >
     {#if $resolvedTheme === 'dark'}

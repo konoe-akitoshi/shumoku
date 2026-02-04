@@ -23,23 +23,30 @@ interface LinkMetrics {
 interface DirectionLayer {
   base: SVGPathElement
   dots: SVGPathElement
+  animation?: Animation
+  animDurationMs?: number
+  animDirection?: 'in' | 'out'
 }
 
 /** N original paths × 2 directions = 2N overlay pairs. */
 interface LinkOverlay {
   inLayers: DirectionLayer[]
   outLayers: DirectionLayer[]
+  origPaths: SVGPathElement[]
+  group: Element
+  ready: boolean
+  pending: boolean
 }
 
 // --- Constants ---
 
-const SAMPLE_INTERVAL = 4
-const MIN_SAMPLES = 30
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const CSS_GLOW = 'drop-shadow(0 0 2px currentColor)'
+const NEUTRAL_COLOR = '#6b7280'
+const DOWN_COLOR = '#ef4444'
 
 const UTILIZATION_COLORS = [
-  { max: 0, color: '#6b7280' },
+  { max: 0, color: NEUTRAL_COLOR },
   { max: 1, color: '#22c55e' },
   { max: 25, color: '#84cc16' },
   { max: 50, color: '#eab308' },
@@ -72,7 +79,12 @@ function allLayers(overlay: LinkOverlay): DirectionLayer[] {
 
 // --- Offset-path geometry ---
 
-function createOffsetPathD(path: SVGPathElement, offset: number): string {
+function createOffsetPathD(
+  path: SVGPathElement,
+  offset: number,
+  sampleInterval: number,
+  minSamples: number,
+): string {
   const len = path.getTotalLength()
   if (len === 0) return path.getAttribute('d') || ''
 
@@ -95,7 +107,7 @@ function createOffsetPathD(path: SVGPathElement, offset: number): string {
   }
 
   // Curved path: sample and offset along normals.
-  const numSamples = Math.max(MIN_SAMPLES, Math.ceil(len / SAMPLE_INTERVAL))
+  const numSamples = Math.max(minSamples, Math.ceil(len / sampleInterval))
   const points: string[] = []
 
   for (let i = 0; i <= numSamples; i++) {
@@ -114,16 +126,45 @@ function createOffsetPathD(path: SVGPathElement, offset: number): string {
 
 // --- WeathermapController ---
 
+type QualityTier = 'high' | 'medium' | 'low'
+
+interface OriginalStyle {
+  stroke: string | null
+  opacity: string
+  strokeDasharray: string
+}
+
 export class WeathermapController {
   private svg: SVGSVGElement
   private overlays = new Map<string, LinkOverlay>()
-  private hiddenPaths = new Set<SVGPathElement>()
+  private originalStyles = new Map<SVGPathElement, OriginalStyle>()
+  private overlayQueue: LinkOverlay[] = []
+  private idleHandle: number | null = null
+  private quality: QualityTier
+  private sampleInterval: number
+  private minSamples: number
+  private batchSize: number
+  private animationsEnabled: boolean
+  private animationsPaused = false
+  private lastLinks: Record<string, LinkMetrics> | undefined
 
   constructor(svg: SVGSVGElement) {
     this.svg = svg
+    const { quality, sampleInterval, minSamples, batchSize, animationsEnabled } =
+      this.detectQualityTier()
+    this.quality = quality
+    this.sampleInterval = sampleInterval
+    this.minSamples = minSamples
+    this.batchSize = batchSize
+    this.animationsEnabled = animationsEnabled
   }
 
   apply(links: Record<string, LinkMetrics> | undefined): void {
+    this.lastLinks = links
+    const svgRect = this.svg.getBoundingClientRect()
+    const viewportQueue: LinkOverlay[] = []
+    const deferredQueue: LinkOverlay[] = []
+
     for (const group of this.svg.querySelectorAll('g.link-group')) {
       const linkId = group.getAttribute('data-link-id') || ''
       const metrics = links?.[linkId]
@@ -132,64 +173,236 @@ export class WeathermapController {
       ) as SVGPathElement[]
       if (origPaths.length === 0) continue
 
-      for (const p of origPaths) {
-        if (!this.hiddenPaths.has(p)) {
-          p.style.opacity = '0'
-          this.hiddenPaths.add(p)
-        }
-      }
+      const overlay = this.ensureOverlayRecord(linkId, group, origPaths)
 
-      const overlay = this.ensureOverlay(linkId, group, origPaths)
-
-      if (metrics?.status === 'down') {
-        this.applyDown(overlay)
+      if (overlay.ready) {
+        this.applyOverlay(overlay, metrics)
+        this.hideOriginalPaths(origPaths)
       } else {
-        this.applyDirectional(overlay, metrics)
+        this.applyLowToOriginalPaths(origPaths, metrics)
+        this.enqueueOverlayCreation(
+          overlay,
+          this.isInViewport(group, svgRect) ? viewportQueue : deferredQueue,
+        )
       }
+    }
+
+    if (viewportQueue.length || deferredQueue.length) {
+      this.overlayQueue = [
+        ...viewportQueue,
+        ...this.overlayQueue.filter((overlay) => overlay.pending),
+        ...deferredQueue,
+      ]
+      this.scheduleBatch()
     }
   }
 
   reset(): void {
+    if (this.idleHandle !== null) {
+      this.cancelIdleCallback(this.idleHandle)
+      this.idleHandle = null
+    }
+    this.overlayQueue = []
+
     for (const overlay of this.overlays.values()) {
       for (const layer of allLayers(overlay)) {
+        if (layer.animation) {
+          layer.animation.cancel()
+          layer.animation = undefined
+        }
         layer.base.remove()
         layer.dots.remove()
       }
     }
     this.overlays.clear()
 
-    for (const path of this.hiddenPaths) path.style.opacity = ''
-    this.hiddenPaths.clear()
+    for (const [path, style] of this.originalStyles) {
+      if (style.stroke === null) {
+        path.removeAttribute('stroke')
+      } else {
+        path.setAttribute('stroke', style.stroke)
+      }
+      path.style.opacity = style.opacity
+      path.style.strokeDasharray = style.strokeDasharray
+    }
+    this.originalStyles.clear()
   }
 
   destroy(): void {
     this.reset()
   }
 
+  setInteracting(isInteracting: boolean): void {
+    if (!this.animationsEnabled) return
+    if (isInteracting) {
+      if (!this.animationsPaused) {
+        this.animationsPaused = true
+        this.pauseAnimations()
+      }
+      return
+    }
+
+    if (this.animationsPaused) {
+      this.animationsPaused = false
+      this.resumeAnimations()
+    }
+  }
+
   // --- Internals ---
 
-  private ensureOverlay(linkId: string, group: Element, origPaths: SVGPathElement[]): LinkOverlay {
+  private detectQualityTier(): {
+    quality: QualityTier
+    sampleInterval: number
+    minSamples: number
+    batchSize: number
+    animationsEnabled: boolean
+  } {
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      'matchMedia' in window &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const deviceMemory =
+      typeof navigator !== 'undefined' && 'deviceMemory' in navigator
+        ? Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4)
+        : 4
+    const hardwareConcurrency =
+      typeof navigator !== 'undefined' && 'hardwareConcurrency' in navigator
+        ? navigator.hardwareConcurrency || 4
+        : 4
+
+    if (prefersReducedMotion || deviceMemory <= 2 || hardwareConcurrency <= 4) {
+      return {
+        quality: 'low',
+        sampleInterval: 10,
+        minSamples: 14,
+        batchSize: 2,
+        animationsEnabled: false,
+      }
+    }
+
+    if (deviceMemory <= 4 || hardwareConcurrency <= 6) {
+      return {
+        quality: 'medium',
+        sampleInterval: 6,
+        minSamples: 22,
+        batchSize: 4,
+        animationsEnabled: true,
+      }
+    }
+
+    return {
+      quality: 'high',
+      sampleInterval: 4,
+      minSamples: 30,
+      batchSize: 6,
+      animationsEnabled: true,
+    }
+  }
+
+  private ensureOverlayRecord(linkId: string, group: Element, origPaths: SVGPathElement[]): LinkOverlay {
     const existing = this.overlays.get(linkId)
     if (existing) return existing
 
-    const strokeWidth = Number(origPaths[0].getAttribute('stroke-width') || '2')
+    const overlay: LinkOverlay = {
+      inLayers: [],
+      outLayers: [],
+      origPaths,
+      group,
+      ready: false,
+      pending: false,
+    }
+    this.overlays.set(linkId, overlay)
+    return overlay
+  }
+
+  private enqueueOverlayCreation(overlay: LinkOverlay, queue: LinkOverlay[]): void {
+    if (overlay.ready || overlay.pending) return
+    overlay.pending = true
+    queue.push(overlay)
+  }
+
+  private scheduleBatch(): void {
+    if (this.idleHandle !== null || this.overlayQueue.length === 0) return
+
+    const handler = (deadline?: IdleDeadline) => {
+      this.idleHandle = null
+      this.processBatch(deadline)
+      if (this.overlayQueue.length > 0) this.scheduleBatch()
+    }
+
+    if ('requestIdleCallback' in window) {
+      this.idleHandle = window.requestIdleCallback(handler, { timeout: 100 })
+    } else {
+      this.idleHandle = window.setTimeout(() => handler(undefined), 16)
+    }
+  }
+
+  private cancelIdleCallback(handle: number): void {
+    if ('cancelIdleCallback' in window) {
+      window.cancelIdleCallback(handle)
+    } else {
+      window.clearTimeout(handle)
+    }
+  }
+
+  private processBatch(deadline?: IdleDeadline): void {
+    const start = performance.now()
+    let processed = 0
+
+    while (this.overlayQueue.length > 0) {
+      const overlay = this.overlayQueue.shift()
+      if (!overlay) break
+
+      overlay.pending = false
+      if (!overlay.group.isConnected) continue
+
+      this.buildOverlay(overlay)
+      processed += 1
+
+      if (processed >= this.batchSize) break
+      if (deadline && deadline.timeRemaining() < 4) break
+      if (!deadline && performance.now() - start > 8) break
+    }
+  }
+
+  private buildOverlay(overlay: LinkOverlay): void {
+    if (overlay.ready) return
+
+    const { origPaths, group } = overlay
+    const strokeWidth = Number(origPaths[0]?.getAttribute('stroke-width') || '2')
     const sw = String(strokeWidth)
     const offset = strokeWidth / 2
     const inLayers: DirectionLayer[] = []
     const outLayers: DirectionLayer[] = []
 
     for (const origPath of origPaths) {
-      inLayers.push(this.createDirectionLayer(createOffsetPathD(origPath, offset), sw))
-      outLayers.push(this.createDirectionLayer(createOffsetPathD(origPath, -offset), sw))
+      if (!origPath.isConnected) continue
+      inLayers.push(
+        this.createDirectionLayer(
+          createOffsetPathD(origPath, offset, this.sampleInterval, this.minSamples),
+          sw,
+        ),
+      )
+      outLayers.push(
+        this.createDirectionLayer(
+          createOffsetPathD(origPath, -offset, this.sampleInterval, this.minSamples),
+          sw,
+        ),
+      )
     }
 
-    const overlay: LinkOverlay = { inLayers, outLayers }
+    overlay.inLayers = inLayers
+    overlay.outLayers = outLayers
     const layers = allLayers(overlay)
     for (const layer of layers) group.appendChild(layer.base)
     for (const layer of layers) group.appendChild(layer.dots)
 
-    this.overlays.set(linkId, overlay)
-    return overlay
+    overlay.ready = true
+
+    const linkId = group.getAttribute('data-link-id') || ''
+    const metrics = this.lastLinks?.[linkId]
+    this.applyOverlay(overlay, metrics)
+    this.hideOriginalPaths(origPaths)
   }
 
   private createDirectionLayer(d: string, strokeWidth: string): DirectionLayer {
@@ -206,21 +419,50 @@ export class WeathermapController {
     })
     dots.classList.add('wm-overlay')
     dots.style.pointerEvents = 'none'
-    dots.style.filter = CSS_GLOW
+    if (this.quality !== 'low') dots.style.filter = CSS_GLOW
 
     return { base, dots }
   }
 
+  private applyOverlay(overlay: LinkOverlay, metrics?: LinkMetrics): void {
+    if (metrics?.status === 'down') {
+      this.applyDown(overlay)
+      return
+    }
+
+    if (!metrics) {
+      this.applyLow(overlay)
+      return
+    }
+
+    this.applyDirectional(overlay, metrics)
+  }
+
+  private applyLow(overlay: LinkOverlay, metrics?: LinkMetrics): void {
+    const util = this.resolveUtilization(metrics)
+    const color = metrics?.status === 'down' ? DOWN_COLOR : getUtilizationColor(util)
+    for (const layer of allLayers(overlay)) {
+      this.setStroke(layer.base, color)
+      layer.base.style.opacity = '0.4'
+      if (layer.base.style.strokeDasharray) layer.base.style.strokeDasharray = ''
+
+      this.setStroke(layer.dots, color)
+      layer.dots.style.opacity = '0'
+      layer.dots.style.strokeDasharray = ''
+      this.stopDotsAnimation(layer)
+    }
+  }
+
   private applyDown(overlay: LinkOverlay): void {
     for (const layer of allLayers(overlay)) {
-      this.setStroke(layer.base, '#ef4444')
+      this.setStroke(layer.base, DOWN_COLOR)
       layer.base.style.opacity = '0.4'
       layer.base.style.strokeDasharray = '8 4'
 
-      this.setStroke(layer.dots, '#ef4444')
+      this.setStroke(layer.dots, DOWN_COLOR)
       layer.dots.style.strokeDasharray = '8 4'
       layer.dots.style.opacity = '0.6'
-      if (layer.dots.style.animation) layer.dots.style.animation = ''
+      this.stopDotsAnimation(layer)
     }
   }
 
@@ -243,27 +485,123 @@ export class WeathermapController {
 
     this.setStroke(layer.dots, color)
 
-    if (bps > 0) {
+    if (bps > 0 && this.animationsEnabled) {
       const speed = Math.min(1, Math.log10(bps + 1) / 9)
       const duration = Math.max(0.3, 2 - speed * 1.5)
-      const anim = isIn ? 'shumoku-edge-flow-out' : 'shumoku-edge-flow-in'
-      const animValue = `${anim} ${duration.toFixed(2)}s linear infinite`
-
       layer.dots.style.opacity = '1'
-      if (layer.dots.style.animation !== animValue) {
-        layer.dots.style.strokeDasharray = '3 21'
-        layer.dots.style.animation = animValue
-      }
+      layer.dots.style.strokeDasharray = '3 21'
+      this.startDotsAnimation(layer, duration, isIn)
     } else {
       layer.dots.style.opacity = '0'
-      if (layer.dots.style.animation) {
-        layer.dots.style.strokeDasharray = ''
-        layer.dots.style.animation = ''
-      }
+      layer.dots.style.strokeDasharray = ''
+      this.stopDotsAnimation(layer)
     }
   }
 
   private setStroke(el: SVGPathElement, color: string): void {
     if (el.getAttribute('stroke') !== color) el.setAttribute('stroke', color)
+  }
+
+  private resolveUtilization(metrics?: LinkMetrics): number {
+    if (!metrics) return 0
+    if (metrics.utilization !== undefined) return metrics.utilization
+    const inUtil = metrics.inUtilization ?? 0
+    const outUtil = metrics.outUtilization ?? 0
+    return Math.max(inUtil, outUtil)
+  }
+
+  private rememberOriginalStyle(path: SVGPathElement): void {
+    if (this.originalStyles.has(path)) return
+    this.originalStyles.set(path, {
+      stroke: path.getAttribute('stroke'),
+      opacity: path.style.opacity,
+      strokeDasharray: path.style.strokeDasharray,
+    })
+  }
+
+  private applyLowToOriginalPaths(paths: SVGPathElement[], metrics?: LinkMetrics): void {
+    const util = this.resolveUtilization(metrics)
+    const color = metrics?.status === 'down' ? DOWN_COLOR : getUtilizationColor(util)
+    const dash = metrics?.status === 'down' ? '8 4' : ''
+
+    for (const path of paths) {
+      this.rememberOriginalStyle(path)
+      path.setAttribute('stroke', color)
+      path.style.opacity = '0.6'
+      path.style.strokeDasharray = dash
+    }
+  }
+
+  private hideOriginalPaths(paths: SVGPathElement[]): void {
+    for (const path of paths) {
+      this.rememberOriginalStyle(path)
+      path.style.opacity = '0'
+    }
+  }
+
+  private isInViewport(group: Element, svgRect: DOMRect): boolean {
+    const rect = group.getBoundingClientRect()
+    return !(
+      rect.right < svgRect.left ||
+      rect.left > svgRect.right ||
+      rect.bottom < svgRect.top ||
+      rect.top > svgRect.bottom
+    )
+  }
+
+  private startDotsAnimation(layer: DirectionLayer, durationSeconds: number, isIn: boolean): void {
+    const direction: 'in' | 'out' = isIn ? 'out' : 'in'
+    const durationMs = Math.max(50, durationSeconds * 1000)
+    const needsNew =
+      !layer.animation ||
+      layer.animDurationMs !== durationMs ||
+      layer.animDirection !== direction
+
+    if (needsNew) {
+      if (layer.animation) layer.animation.cancel()
+      const keyframes =
+        direction === 'out'
+          ? [{ strokeDashoffset: 0 }, { strokeDashoffset: 24 }]
+          : [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }]
+      layer.animation = layer.dots.animate(keyframes, {
+        duration: durationMs,
+        iterations: Infinity,
+        easing: 'linear',
+      })
+      layer.animDurationMs = durationMs
+      layer.animDirection = direction
+    }
+
+    if (this.animationsPaused) {
+      layer.animation?.pause()
+    } else {
+      layer.animation?.play()
+    }
+  }
+
+  private stopDotsAnimation(layer: DirectionLayer): void {
+    if (layer.animation) {
+      layer.animation.cancel()
+      layer.animation = undefined
+      layer.animDurationMs = undefined
+      layer.animDirection = undefined
+    }
+  }
+
+  private pauseAnimations(): void {
+    for (const overlay of this.overlays.values()) {
+      for (const layer of allLayers(overlay)) {
+        layer.animation?.pause()
+      }
+    }
+  }
+
+  private resumeAnimations(): void {
+    if (!this.animationsEnabled) return
+    for (const overlay of this.overlays.values()) {
+      for (const layer of allLayers(overlay)) {
+        layer.animation?.play()
+      }
+    }
   }
 }

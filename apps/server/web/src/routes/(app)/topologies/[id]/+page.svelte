@@ -176,7 +176,7 @@ function handleKeydown(e: KeyboardEvent) {
         <h2 class="font-medium text-theme-text-emphasis">Settings</h2>
         <button
           onclick={toggleSettings}
-          class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text"
+          class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer"
           aria-label="Close settings"
         >
           <X size={20} />

@@ -38,7 +38,7 @@ let showSelector = $state(false)
 // Hierarchical topology support
 let isHierarchical = $state(false)
 let sheets: SheetInfo[] = $state([])
-let renderCache: Record<string, string> = {}
+let renderSheets: Record<string, { svg: string }> = {}
 
 // Highlight support for widget events
 let highlightTimeout: ReturnType<typeof setTimeout> | null = null
@@ -77,19 +77,16 @@ async function loadTopology() {
         id: sheetId,
         name: sheet.name || sheetId,
       }))
-      renderCache = {}
-      for (const [sheetId, sheet] of Object.entries(renderData.sheets) as [string, any][]) {
-        renderCache[sheetId] = sheet.svg
-      }
+      renderSheets = renderData.sheets
       const sheetId = config.sheetId || 'root'
-      svgContent = renderCache[sheetId] || ''
+      svgContent = renderSheets[sheetId]?.svg || ''
       // All sheets share the same theme CSS; pick from any sheet
       const firstSheet = Object.values(renderData.sheets)[0] as any
       injectCSS(firstSheet?.css)
     } else {
       isHierarchical = false
       sheets = []
-      renderCache = {}
+      renderSheets = {}
       svgContent = renderData.svg
       injectCSS(renderData.css)
     }
@@ -123,9 +120,8 @@ function selectSheet(sheetId: string) {
   if (!sheetId) return
   dashboardStore.updateWidgetConfig(id, { sheetId })
   config = { ...config, sheetId }
-  // Update SVG from cache
-  if (renderCache[sheetId]) {
-    svgContent = renderCache[sheetId]
+  if (renderSheets[sheetId]) {
+    svgContent = renderSheets[sheetId].svg
   }
 }
 
@@ -328,9 +324,9 @@ $effect(() => {
 // Watch for sheet ID changes (when topology is already loaded)
 $effect(() => {
   const sheetId = config.sheetId || 'root'
-  if (sheetId !== lastSheetId && renderCache[sheetId]) {
+  if (sheetId !== lastSheetId && renderSheets[sheetId]) {
     lastSheetId = sheetId
-    svgContent = renderCache[sheetId]
+    svgContent = renderSheets[sheetId].svg
   }
 })
 

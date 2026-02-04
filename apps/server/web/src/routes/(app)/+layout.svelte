@@ -108,7 +108,7 @@ function toggleSidebar() {
       {/if}
       <button
         onclick={toggleSidebar}
-        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg-elevated transition-colors text-theme-text-muted hover:text-theme-text {sidebarCollapsed
+        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg-elevated transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer {sidebarCollapsed
           ? 'mx-auto'
           : 'flex-shrink-0'}"
         aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}

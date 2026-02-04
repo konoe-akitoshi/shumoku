@@ -809,10 +809,7 @@ ${fg}
       strokeDasharray,
     )
 
-    // Build data attributes for interactive mode
-    const dataAttrs = this.buildNodeDataAttributes(node)
-
-    return `<g class="node-bg" data-id="${id}"${dataAttrs}>${shape}</g>`
+    return `<g class="node-bg" data-id="${id}">${shape}</g>`
   }
 
   /** Build data attributes for a node (interactive mode only) */
@@ -827,21 +824,6 @@ ${fg}
     if (node.service) attrs.push(`data-device-service="${this.escapeXml(node.service)}"`)
     if (node.resource) attrs.push(`data-device-resource="${this.escapeXml(node.resource)}"`)
 
-    // Include full metadata as JSON
-    if (this.dataAttrs.metadata) {
-      const deviceInfo = {
-        id: node.id,
-        label: node.label,
-        type: node.type,
-        vendor: node.vendor,
-        model: node.model,
-        service: node.service,
-        resource: node.resource,
-        metadata: node.metadata,
-      }
-      attrs.push(`data-device-json="${this.escapeXml(JSON.stringify(deviceInfo))}"`)
-    }
-
     return attrs.length > 0 ? ` ${attrs.join(' ')}` : ''
   }
 
@@ -854,10 +836,7 @@ ${fg}
 
     const content = this.renderNodeContent(node, x, y, w)
 
-    // Include data attributes for interactive mode (same as node-bg)
-    const dataAttrs = this.buildNodeDataAttributes(node)
-
-    return `<g class="node-fg" data-id="${id}"${dataAttrs}>
+    return `<g class="node-fg" data-id="${id}">
   ${content}
 </g>`
   }
@@ -1257,19 +1236,12 @@ ${fg}
     attrs.push(`data-link-from="${this.escapeXml(fromStr)}"`)
     attrs.push(`data-link-to="${this.escapeXml(toStr)}"`)
 
-    // Include full metadata as JSON
-    if (this.dataAttrs.metadata) {
-      const linkInfo = {
-        id: layoutLink.id,
-        from: fromEndpoint,
-        to: toEndpoint,
-        bandwidth: link.bandwidth,
-        vlan: link.vlan,
-        redundancy: link.redundancy,
-        label: link.label,
-        metadata: link.metadata,
+    // Export link destination info (for tooltip on hierarchical export connectors)
+    if (link.metadata?._destDevice) {
+      attrs.push(`data-link-dest-device="${this.escapeXml(String(link.metadata._destDevice))}"`)
+      if (link.metadata._destPort) {
+        attrs.push(`data-link-dest-port="${this.escapeXml(String(link.metadata._destPort))}"`)
       }
-      attrs.push(`data-link-json="${this.escapeXml(JSON.stringify(linkInfo))}"`)
     }
 
     return attrs.length > 0 ? ` ${attrs.join(' ')}` : ''

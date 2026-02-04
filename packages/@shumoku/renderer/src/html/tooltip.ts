@@ -85,31 +85,19 @@ export function getTooltipInfo(el: Element): TooltipInfo | null {
     const to = linkGroup.getAttribute('data-link-to') || ''
     const bw = linkGroup.getAttribute('data-link-bandwidth')
     const vlan = linkGroup.getAttribute('data-link-vlan')
-    const jsonAttr = linkGroup.getAttribute('data-link-json')
 
     // For export links, show device:port ↔ destination device:port
     const fromIsExport = from.startsWith('__export_')
     const toIsExport = to.startsWith('__export_')
-    if ((fromIsExport || toIsExport) && jsonAttr) {
-      try {
-        const linkData = JSON.parse(jsonAttr)
-        const meta = linkData.metadata
-        if (meta?._destDevice) {
-          // Get the actual device endpoint (non-export side)
-          const localDevice = fromIsExport ? to : from
-          // Get the destination device:port from metadata
-          const destDevice = meta._destPort
-            ? `${meta._destDevice}:${meta._destPort}`
-            : meta._destDevice
-          // Show: "local device ↔ remote device"
-          let text = `${localDevice} ↔ ${destDevice}`
-          if (bw) text += `\n${bw}`
-          if (vlan) text += `\nVLAN: ${vlan}`
-          return { text, element: linkGroup }
-        }
-      } catch {
-        // Fall through to default display
-      }
+    const destDevice = linkGroup.getAttribute('data-link-dest-device')
+    if ((fromIsExport || toIsExport) && destDevice) {
+      const destPort = linkGroup.getAttribute('data-link-dest-port')
+      const localDevice = fromIsExport ? to : from
+      const dest = destPort ? `${destDevice}:${destPort}` : destDevice
+      let text = `${localDevice} ↔ ${dest}`
+      if (bw) text += `\n${bw}`
+      if (vlan) text += `\nVLAN: ${vlan}`
+      return { text, element: linkGroup }
     }
 
     let text = `${from} ↔ ${to}`
@@ -120,19 +108,18 @@ export function getTooltipInfo(el: Element): TooltipInfo | null {
 
   const node = el.closest('.node[data-id]')
   if (node) {
-    const json = node.getAttribute('data-device-json')
-    if (json) {
-      try {
-        const data = JSON.parse(json)
-        const lines: string[] = []
-        if (data.label) lines.push(Array.isArray(data.label) ? data.label.join(' ') : data.label)
-        if (data.type) lines.push(`Type: ${data.type}`)
-        if (data.vendor) lines.push(`Vendor: ${data.vendor}`)
-        if (data.model) lines.push(`Model: ${data.model}`)
-        return { text: lines.join('\n'), element: node }
-      } catch {
-        // fallthrough
-      }
+    const lines: string[] = []
+    // Get label from the first text element inside the node
+    const labelEl = node.querySelector('.node-label')
+    if (labelEl?.textContent) lines.push(labelEl.textContent)
+    const type = node.getAttribute('data-device-type')
+    const vendor = node.getAttribute('data-device-vendor')
+    const model = node.getAttribute('data-device-model')
+    if (type) lines.push(`Type: ${type}`)
+    if (vendor) lines.push(`Vendor: ${vendor}`)
+    if (model) lines.push(`Model: ${model}`)
+    if (lines.length > 0) {
+      return { text: lines.join('\n'), element: node }
     }
     return { text: node.getAttribute('data-id') || '', element: node }
   }

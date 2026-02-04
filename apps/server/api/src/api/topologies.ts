@@ -175,11 +175,17 @@ export function createTopologiesApi(): Hono {
   app.get('/:id/render', async (c) => {
     const id = c.req.param('id')
     try {
+      const cached = service.getRenderCache(id)
+      if (cached) {
+        return c.json(cached)
+      }
       const parsed = await service.getParsed(id)
       if (!parsed) {
         return c.json({ error: 'Topology not found' }, 404)
       }
-      return c.json(await buildRenderOutput(parsed))
+      const output = await buildRenderOutput(parsed)
+      service.setRenderCache(id, output)
+      return c.json(output)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
