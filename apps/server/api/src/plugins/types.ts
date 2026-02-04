@@ -373,3 +373,17 @@ export type PluginConfig =
   | NetBoxPluginConfig
   | PrometheusPluginConfig
   | GrafanaPluginConfig
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Add HTTP warning to connection result if URL uses insecure HTTP
+ */
+export function addHttpWarning(url: string, result: ConnectionResult): ConnectionResult {
+  if (url.startsWith('http://')) {
+    result.warnings = [...(result.warnings || []), 'Using insecure HTTP connection']
+  }
+  return result
+}

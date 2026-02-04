@@ -6,15 +6,16 @@
 
 import type { NetworkGraph } from '@shumoku/core'
 import { NetBoxClient, convertToNetworkGraph } from '@shumoku/netbox'
-import type {
-  DataSourcePlugin,
-  DataSourceCapability,
-  TopologyCapable,
-  HostsCapable,
-  ConnectionResult,
-  Host,
-  HostItem,
-  NetBoxPluginConfig,
+import {
+  addHttpWarning,
+  type DataSourcePlugin,
+  type DataSourceCapability,
+  type TopologyCapable,
+  type HostsCapable,
+  type ConnectionResult,
+  type Host,
+  type HostItem,
+  type NetBoxPluginConfig,
 } from './types.js'
 
 export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCapable {
@@ -64,17 +65,10 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
       // Try to fetch devices to test connection
       const resp = await this.client.fetchDevices()
 
-      const result: ConnectionResult = {
+      return addHttpWarning(this.config.url, {
         success: true,
         message: `Connected to NetBox (${resp.count} devices)`,
-      }
-
-      // Warn about insecure HTTP connection
-      if (this.config.url.startsWith('http://')) {
-        result.warnings = ['Using insecure HTTP connection']
-      }
-
-      return result
+      })
     } catch (error) {
       return {
         success: false,

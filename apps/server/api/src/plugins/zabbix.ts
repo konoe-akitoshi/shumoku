@@ -6,21 +6,22 @@
 
 import type { NetworkGraph } from '@shumoku/core'
 import type { MetricsData, ZabbixMapping, ZabbixHost, ZabbixItem } from '../types.js'
-import type {
-  DataSourcePlugin,
-  DataSourceCapability,
-  MetricsCapable,
-  HostsCapable,
-  AutoMappingCapable,
-  AlertsCapable,
-  ConnectionResult,
-  Host,
-  HostItem,
-  MappingHint,
-  ZabbixPluginConfig,
-  Alert,
-  AlertQueryOptions,
-  AlertSeverity,
+import {
+  addHttpWarning,
+  type DataSourcePlugin,
+  type DataSourceCapability,
+  type MetricsCapable,
+  type HostsCapable,
+  type AutoMappingCapable,
+  type AlertsCapable,
+  type ConnectionResult,
+  type Host,
+  type HostItem,
+  type MappingHint,
+  type ZabbixPluginConfig,
+  type Alert,
+  type AlertQueryOptions,
+  type AlertSeverity,
 } from './types.js'
 
 export class ZabbixPlugin
@@ -51,13 +52,17 @@ export class ZabbixPlugin
   // ============================================
 
   async testConnection(): Promise<ConnectionResult> {
+    if (!this.config) {
+      return { success: false, message: 'Plugin not initialized' }
+    }
+
     try {
       const version = await this.apiRequest<string>('apiinfo.version')
-      return {
+      return addHttpWarning(this.config.url, {
         success: true,
         message: `Connected to Zabbix ${version}`,
         version,
-      }
+      })
     } catch (err) {
       return {
         success: false,

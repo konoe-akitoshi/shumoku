@@ -13,14 +13,15 @@ import {
   filterLabels,
   SEVERITY_ORDER,
 } from '../services/grafana-alerts.js'
-import type {
-  Alert,
-  AlertQueryOptions,
-  AlertsCapable,
-  ConnectionResult,
-  DataSourceCapability,
-  DataSourcePlugin,
-  GrafanaPluginConfig,
+import {
+  addHttpWarning,
+  type Alert,
+  type AlertQueryOptions,
+  type AlertsCapable,
+  type ConnectionResult,
+  type DataSourceCapability,
+  type DataSourcePlugin,
+  type GrafanaPluginConfig,
 } from './types.js'
 
 export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
@@ -48,6 +49,10 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
   }
 
   async testConnection(): Promise<ConnectionResult> {
+    if (!this.config) {
+      return { success: false, message: 'Plugin not initialized' }
+    }
+
     try {
       const response = await this.fetch('/api/health')
       if (!response.ok) {
@@ -58,11 +63,11 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
       }
 
       const data = (await response.json()) as { version?: string; database?: string }
-      return {
+      return addHttpWarning(this.config.url, {
         success: true,
         message: `Connected to Grafana${data.version ? ` ${data.version}` : ''}`,
         version: data.version,
-      }
+      })
     } catch (err) {
       return {
         success: false,

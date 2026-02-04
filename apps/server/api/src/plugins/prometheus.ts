@@ -6,21 +6,22 @@
  */
 
 import type { MetricsData, ZabbixMapping } from '../types.js'
-import type {
-  ConnectionResult,
-  DataSourceCapability,
-  DataSourcePlugin,
-  DiscoveredMetric,
-  Host,
-  HostItem,
-  HostsCapable,
-  MetricsCapable,
-  AlertsCapable,
-  PrometheusCustomMetrics,
-  PrometheusPluginConfig,
-  Alert,
-  AlertQueryOptions,
-  AlertSeverity,
+import {
+  addHttpWarning,
+  type ConnectionResult,
+  type DataSourceCapability,
+  type DataSourcePlugin,
+  type DiscoveredMetric,
+  type Host,
+  type HostItem,
+  type HostsCapable,
+  type MetricsCapable,
+  type AlertsCapable,
+  type PrometheusCustomMetrics,
+  type PrometheusPluginConfig,
+  type Alert,
+  type AlertQueryOptions,
+  type AlertSeverity,
 } from './types.js'
 
 /**
@@ -99,6 +100,10 @@ export class PrometheusPlugin
   // ============================================
 
   async testConnection(): Promise<ConnectionResult> {
+    if (!this.config) {
+      return { success: false, message: 'Plugin not initialized' }
+    }
+
     try {
       // First check health endpoint
       const healthResponse = await this.fetch('/-/healthy')
@@ -112,17 +117,17 @@ export class PrometheusPlugin
       // Try to get build info for version
       try {
         const buildInfo = await this.query<PrometheusBuildInfo>('/api/v1/status/buildinfo')
-        return {
+        return addHttpWarning(this.config.url, {
           success: true,
           message: `Connected to Prometheus ${buildInfo.version}`,
           version: buildInfo.version,
-        }
+        })
       } catch {
         // Build info might not be available, but health check passed
-        return {
+        return addHttpWarning(this.config.url, {
           success: true,
           message: 'Connected to Prometheus',
-        }
+        })
       }
     } catch (err) {
       return {
