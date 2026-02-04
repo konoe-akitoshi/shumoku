@@ -6,6 +6,7 @@ import type {
   NetBoxCableResponse,
   NetBoxClientOptions,
   NetBoxDeviceResponse,
+  NetBoxDeviceRoleResponse,
   NetBoxInterfaceResponse,
   NetBoxIPAddressResponse,
   NetBoxLocationResponse,
@@ -24,11 +25,14 @@ export interface QueryParams {
   site_id?: number // Filter by site ID
   location?: string | string[] // Filter by location slug(s)
   location_id?: number // Filter by location ID
-  role?: string // Filter by role slug
+  role?: string | string[] // Filter by role slug(s)
+  role__n?: string | string[] // Exclude by role slug(s)
   status?: string // Filter by status (active, planned, staged, failed, offline)
   tag?: string | string[] // Filter by tag slug(s)
+  tag__n?: string | string[] // Exclude by tag slug(s)
   manufacturer?: string // Filter by manufacturer slug
-  device_type?: string // Filter by device type slug
+  device_type?: string | string[] // Filter by device type slug(s)
+  device_type__n?: string | string[] // Exclude by device type slug(s)
   q?: string // Search query
 }
 
@@ -210,6 +214,13 @@ export class NetBoxClient {
    */
   async fetchTags(): Promise<NetBoxTagResponse> {
     return this.getExtras<NetBoxTagResponse>('tags')
+  }
+
+  /**
+   * Fetch device roles
+   */
+  async fetchDeviceRoles(): Promise<NetBoxDeviceRoleResponse> {
+    return this.getDcim<NetBoxDeviceRoleResponse>('device-roles')
   }
 
   /**

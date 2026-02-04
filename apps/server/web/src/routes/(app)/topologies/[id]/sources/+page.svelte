@@ -46,7 +46,11 @@ let copiedSecret = $state<string | null>(null)
 let filterOptionsCache = $state<
   Record<
     string,
-    { sites: { slug: string; name: string }[]; tags: { slug: string; name: string }[] }
+    {
+      sites: { slug: string; name: string }[]
+      tags: { slug: string; name: string }[]
+      roles: { slug: string; name: string }[]
+    }
   >
 >({})
 let filterOptionsLoading = $state<Record<string, boolean>>({})
@@ -191,6 +195,9 @@ interface NetBoxOptions {
   groupBy?: string
   siteFilter?: string[]
   tagFilter?: string[]
+  roleFilter?: string[]
+  excludeRoleFilter?: string[]
+  excludeTagFilter?: string[]
 }
 
 function parseOptions(optionsJson?: string): NetBoxOptions {
@@ -203,6 +210,15 @@ function parseOptions(optionsJson?: string): NetBoxOptions {
     }
     if (typeof raw.tagFilter === 'string') {
       raw.tagFilter = raw.tagFilter ? [raw.tagFilter] : []
+    }
+    if (typeof raw.roleFilter === 'string') {
+      raw.roleFilter = raw.roleFilter ? [raw.roleFilter] : []
+    }
+    if (typeof raw.excludeRoleFilter === 'string') {
+      raw.excludeRoleFilter = raw.excludeRoleFilter ? [raw.excludeRoleFilter] : []
+    }
+    if (typeof raw.excludeTagFilter === 'string') {
+      raw.excludeTagFilter = raw.excludeTagFilter ? [raw.excludeTagFilter] : []
     }
     return raw
   } catch {
@@ -217,6 +233,9 @@ function updateOptions(index: number, patch: Partial<NetBoxOptions>) {
   if (!merged.groupBy) delete merged.groupBy
   if (!merged.siteFilter?.length) delete merged.siteFilter
   if (!merged.tagFilter?.length) delete merged.tagFilter
+  if (!merged.roleFilter?.length) delete merged.roleFilter
+  if (!merged.excludeRoleFilter?.length) delete merged.excludeRoleFilter
+  if (!merged.excludeTagFilter?.length) delete merged.excludeTagFilter
   const json = Object.keys(merged).length > 0 ? JSON.stringify(merged) : undefined
   updateSource(index, { optionsJson: json })
 }
@@ -389,7 +408,8 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
                           </select>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3">
+                        <!-- Include Filters -->
+                        <div class="grid grid-cols-3 gap-3">
                           <div>
                             <label class="text-xs text-theme-text-muted">Site Filter</label>
                             {#if isLoading}
@@ -400,7 +420,7 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
                                   {@const selected = opts.siteFilter?.includes(site.slug)}
                                   <button
                                     type="button"
-                                    class="px-2 py-0.5 rounded-full text-xs border transition-colors
+                                    class="px-2 py-0.5 rounded-full text-xs border transition-colors cursor-pointer
                                       {selected
                                         ? 'bg-primary/15 border-primary/40 text-primary'
                                         : 'bg-theme-bg-canvas border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
@@ -413,7 +433,7 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
                               {#if opts.siteFilter?.length}
                                 <p class="text-xs text-theme-text-muted mt-1">{opts.siteFilter.length} selected</p>
                               {:else}
-                                <p class="text-xs text-theme-text-muted mt-1">All sites (no filter)</p>
+                                <p class="text-xs text-theme-text-muted mt-1">All sites</p>
                               {/if}
                             {:else}
                               <p class="text-xs text-theme-text-muted mt-1">No sites found</p>
@@ -430,7 +450,7 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
                                   {@const selected = opts.tagFilter?.includes(tag.slug)}
                                   <button
                                     type="button"
-                                    class="px-2 py-0.5 rounded-full text-xs border transition-colors
+                                    class="px-2 py-0.5 rounded-full text-xs border transition-colors cursor-pointer
                                       {selected
                                         ? 'bg-primary/15 border-primary/40 text-primary'
                                         : 'bg-theme-bg-canvas border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
@@ -443,7 +463,100 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
                               {#if opts.tagFilter?.length}
                                 <p class="text-xs text-theme-text-muted mt-1">{opts.tagFilter.length} selected</p>
                               {:else}
-                                <p class="text-xs text-theme-text-muted mt-1">All tags (no filter)</p>
+                                <p class="text-xs text-theme-text-muted mt-1">All tags</p>
+                              {/if}
+                            {:else}
+                              <p class="text-xs text-theme-text-muted mt-1">No tags found</p>
+                            {/if}
+                          </div>
+
+                          <div>
+                            <label class="text-xs text-theme-text-muted">Role Filter</label>
+                            {#if isLoading}
+                              <div class="input mt-1 text-theme-text-muted text-sm">Loading...</div>
+                            {:else if filterOpts?.roles?.length}
+                              <div class="mt-1 flex flex-wrap gap-1.5">
+                                {#each filterOpts.roles as role}
+                                  {@const selected = opts.roleFilter?.includes(role.slug)}
+                                  <button
+                                    type="button"
+                                    class="px-2 py-0.5 rounded-full text-xs border transition-colors cursor-pointer
+                                      {selected
+                                        ? 'bg-primary/15 border-primary/40 text-primary'
+                                        : 'bg-theme-bg-canvas border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
+                                    onclick={() => updateOptions(source.index, { roleFilter: toggleArrayOption(opts.roleFilter, role.slug) })}
+                                  >
+                                    {role.name}
+                                  </button>
+                                {/each}
+                              </div>
+                              {#if opts.roleFilter?.length}
+                                <p class="text-xs text-theme-text-muted mt-1">{opts.roleFilter.length} selected</p>
+                              {:else}
+                                <p class="text-xs text-theme-text-muted mt-1">All roles</p>
+                              {/if}
+                            {:else}
+                              <p class="text-xs text-theme-text-muted mt-1">No roles found</p>
+                            {/if}
+                          </div>
+                        </div>
+
+                        <!-- Exclude Filters -->
+                        <div class="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label class="text-xs text-danger">Exclude Roles</label>
+                            {#if isLoading}
+                              <div class="input mt-1 text-theme-text-muted text-sm">Loading...</div>
+                            {:else if filterOpts?.roles?.length}
+                              <div class="mt-1 flex flex-wrap gap-1.5">
+                                {#each filterOpts.roles as role}
+                                  {@const selected = opts.excludeRoleFilter?.includes(role.slug)}
+                                  <button
+                                    type="button"
+                                    class="px-2 py-0.5 rounded-full text-xs border transition-colors cursor-pointer
+                                      {selected
+                                        ? 'bg-danger/15 border-danger/40 text-danger'
+                                        : 'bg-theme-bg-canvas border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
+                                    onclick={() => updateOptions(source.index, { excludeRoleFilter: toggleArrayOption(opts.excludeRoleFilter, role.slug) })}
+                                  >
+                                    {role.name}
+                                  </button>
+                                {/each}
+                              </div>
+                              {#if opts.excludeRoleFilter?.length}
+                                <p class="text-xs text-danger mt-1">{opts.excludeRoleFilter.length} excluded</p>
+                              {:else}
+                                <p class="text-xs text-theme-text-muted mt-1">None excluded</p>
+                              {/if}
+                            {:else}
+                              <p class="text-xs text-theme-text-muted mt-1">No roles found</p>
+                            {/if}
+                          </div>
+
+                          <div>
+                            <label class="text-xs text-danger">Exclude Tags</label>
+                            {#if isLoading}
+                              <div class="input mt-1 text-theme-text-muted text-sm">Loading...</div>
+                            {:else if filterOpts?.tags?.length}
+                              <div class="mt-1 flex flex-wrap gap-1.5">
+                                {#each filterOpts.tags as tag}
+                                  {@const selected = opts.excludeTagFilter?.includes(tag.slug)}
+                                  <button
+                                    type="button"
+                                    class="px-2 py-0.5 rounded-full text-xs border transition-colors cursor-pointer
+                                      {selected
+                                        ? 'bg-danger/15 border-danger/40 text-danger'
+                                        : 'bg-theme-bg-canvas border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
+                                    onclick={() => updateOptions(source.index, { excludeTagFilter: toggleArrayOption(opts.excludeTagFilter, tag.slug) })}
+                                  >
+                                    {tag.name}
+                                  </button>
+                                {/each}
+                              </div>
+                              {#if opts.excludeTagFilter?.length}
+                                <p class="text-xs text-danger mt-1">{opts.excludeTagFilter.length} excluded</p>
+                              {:else}
+                                <p class="text-xs text-theme-text-muted mt-1">None excluded</p>
                               {/if}
                             {:else}
                               <p class="text-xs text-theme-text-muted mt-1">No tags found</p>

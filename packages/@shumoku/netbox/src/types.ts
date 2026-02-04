@@ -347,6 +347,21 @@ export interface NetBoxTagResponse {
   results: NetBoxTagFull[]
 }
 
+export interface NetBoxDeviceRole {
+  id: number
+  name: string
+  slug: string
+  color: string
+  description: string
+}
+
+export interface NetBoxDeviceRoleResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: NetBoxDeviceRole[]
+}
+
 // ============================================
 // Tag Mapping Configuration
 // ============================================
@@ -475,6 +490,7 @@ export const ROLE_TO_TYPE: Record<string, DeviceTypeString> = {
   'virtual-machine': 'server',
   'access-point': 'access-point',
   'wireless-ap': 'access-point',
+  ap: 'access-point',
   'load-balancer': 'load-balancer',
 }
 

@@ -39,9 +39,11 @@ Output:
 
 Filtering:
   -s, --site <slug>     Filter by site
-  -r, --role <slug>     Filter by device role
+  -r, --role <slug>     Filter by device role (can specify multiple: -r router -r switch)
+  --exclude-role <slug> Exclude by device role (e.g., --exclude-role ap)
   --status <status>     Filter by status (active|planned|staged|failed|offline)
   --tag <slug>          Filter by tag
+  --exclude-tag <slug>  Exclude by tag
 
 Display:
   -g, --group-by <type> Group by: tag|site|location|prefix|none (default: tag)
@@ -58,8 +60,9 @@ Other:
 Examples:
   netbox-to-shumoku -f html -o topology
   netbox-to-shumoku --site tokyo-dc -g location -o tokyo.svg
+  netbox-to-shumoku --exclude-role ap -o no-aps.svg    # Exclude access points
   netbox-to-shumoku --color-by-status --theme dark -f svg
-  netbox-to-shumoku -f json -o netbox.json   # Export as NetworkGraph JSON
+  netbox-to-shumoku -f json -o netbox.json             # Export as NetworkGraph JSON
 `
 
 type OutputFormat = 'yaml' | 'json' | 'svg' | 'html' | 'png'
@@ -74,9 +77,11 @@ function cli() {
       output: { type: 'string', short: 'o', default: 'topology' },
       theme: { type: 'string' },
       site: { type: 'string', short: 's' },
-      role: { type: 'string', short: 'r' },
+      role: { type: 'string', short: 'r', multiple: true },
+      'exclude-role': { type: 'string', multiple: true },
       status: { type: 'string' },
-      tag: { type: 'string' },
+      tag: { type: 'string', multiple: true },
+      'exclude-tag': { type: 'string', multiple: true },
       'group-by': { type: 'string', short: 'g' },
       'no-ports': { type: 'boolean', default: false },
       'no-colors': { type: 'boolean', default: false },
@@ -127,9 +132,15 @@ async function main(): Promise<void> {
     // Build filters
     const queryParams: QueryParams = {}
     if (opts.site) queryParams.site = opts.site
-    if (opts.role) queryParams.role = opts.role
+    if (opts.role?.length) queryParams.role = opts.role.length === 1 ? opts.role[0] : opts.role
+    if (opts['exclude-role']?.length)
+      queryParams.role__n =
+        opts['exclude-role'].length === 1 ? opts['exclude-role'][0] : opts['exclude-role']
     if (opts.status) queryParams.status = opts.status
-    if (opts.tag) queryParams.tag = opts.tag
+    if (opts.tag?.length) queryParams.tag = opts.tag.length === 1 ? opts.tag[0] : opts.tag
+    if (opts['exclude-tag']?.length)
+      queryParams.tag__n =
+        opts['exclude-tag'].length === 1 ? opts['exclude-tag'][0] : opts['exclude-tag']
 
     const hasFilters = Object.keys(queryParams).length > 0
     if (hasFilters) console.log('Filters:', queryParams)

@@ -83,14 +83,26 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
       throw new Error('Plugin not initialized')
     }
 
-    // Extract per-topology options (siteFilter/tagFilter support string or string[])
+    // Extract per-topology options (filters support string or string[])
     const groupBy = (options?.groupBy as string) || 'tag'
 
     const params: Record<string, string | string[] | number> = {}
+
+    // Include filters
     const site = options?.siteFilter as string | string[] | undefined
     const tag = options?.tagFilter as string | string[] | undefined
+    const role = options?.roleFilter as string | string[] | undefined
     if (site && (!Array.isArray(site) || site.length > 0)) params.site = site
     if (tag && (!Array.isArray(tag) || tag.length > 0)) params.tag = tag
+    if (role && (!Array.isArray(role) || role.length > 0)) params.role = role
+
+    // Exclude filters (NetBox uses __n suffix for negation)
+    const excludeRole = options?.excludeRoleFilter as string | string[] | undefined
+    const excludeTag = options?.excludeTagFilter as string | string[] | undefined
+    if (excludeRole && (!Array.isArray(excludeRole) || excludeRole.length > 0))
+      params.role__n = excludeRole
+    if (excludeTag && (!Array.isArray(excludeTag) || excludeTag.length > 0))
+      params.tag__n = excludeTag
 
     console.log('[NetBox] Fetching topology with params:', params)
 
@@ -171,19 +183,22 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
   async getFilterOptions(): Promise<{
     sites: { slug: string; name: string }[]
     tags: { slug: string; name: string }[]
+    roles: { slug: string; name: string }[]
   }> {
     if (!this.client) {
-      return { sites: [], tags: [] }
+      return { sites: [], tags: [], roles: [] }
     }
 
-    const [siteResp, tagResp] = await Promise.all([
+    const [siteResp, tagResp, roleResp] = await Promise.all([
       this.client.fetchSites(),
       this.client.fetchTags(),
+      this.client.fetchDeviceRoles(),
     ])
 
     return {
       sites: siteResp.results.map((s) => ({ slug: s.slug, name: s.name })),
       tags: tagResp.results.map((t) => ({ slug: t.slug, name: t.name })),
+      roles: roleResp.results.map((r) => ({ slug: r.slug, name: r.name })),
     }
   }
 
