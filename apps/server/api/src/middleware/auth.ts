@@ -28,7 +28,12 @@ function isPublicRequest(method: string, pathname: string): boolean {
   if (/^\/api\/dashboards\/[^/]+$/.test(pathname)) return true
 
   // Public GET: topology view endpoints
+  // Match /api/topologies/:id (single topology) and /api/topologies/:id/(context|render|alerts|parsed)
+  if (/^\/api\/topologies\/[^/]+$/.test(pathname)) return true
   if (/^\/api\/topologies\/[^/]+\/(context|render|alerts|parsed)/.test(pathname)) return true
+
+  // Public GET: data source alerts (for dashboard widgets)
+  if (/^\/api\/datasources\/[^/]+\/alerts$/.test(pathname)) return true
 
   return false
 }
