@@ -9,7 +9,7 @@ import { DataSourceService } from '../services/datasource.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { TopologyInput, ZabbixMapping } from '../types.js'
 import { renderEmbeddable, type EmbeddableRenderOutput } from '@shumoku/renderer'
-import { buildHierarchicalSheets } from '@shumoku/core'
+import { buildHierarchicalSheets, mergeNetworkGraphs } from '@shumoku/core'
 import { BunHierarchicalLayout } from '../layout.js'
 
 /**
@@ -339,7 +339,8 @@ export function createTopologiesApi(): Hono {
     }
   })
 
-  // Sync topology from its topology source (e.g., NetBox)
+  // Sync topology from its topology source(s) (e.g., NetBox, OCX)
+  // Supports multiple topology sources - fetches from all and merges
   app.post('/:id/sync-from-source', async (c) => {
     const id = c.req.param('id')
     try {
@@ -350,38 +351,110 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      if (!topology.topologySourceId) {
+      // Get all topology sources for this topology
+      const topologySources = getTopologySourcesService().listByPurpose(id, 'topology')
+
+      if (topologySources.length === 0 && !topology.topologySourceId) {
         return c.json({ error: 'No topology source configured' }, 400)
       }
 
-      console.log('[sync-from-source] Fetching from source:', topology.topologySourceId)
+      // Build list of sources to fetch from
+      // Prefer topology_data_sources table, fall back to legacy topologySourceId
+      const sourcesToFetch =
+        topologySources.length > 0
+          ? topologySources
+          : [{ dataSourceId: topology.topologySourceId!, optionsJson: undefined }]
 
-      // Look up topology_data_sources for per-source options
-      const topologySources = getTopologySourcesService().listByPurpose(id, 'topology')
-      const matchingSource = topologySources.find(
-        (s) => s.dataSourceId === topology.topologySourceId,
+      console.log(
+        '[sync-from-source] Fetching from',
+        sourcesToFetch.length,
+        'source(s):',
+        sourcesToFetch.map((s) => s.dataSourceId).join(', '),
       )
 
-      // Get the topology from the source
-      const graph = await dataSourceService.fetchTopologyWithOptionsJson(
-        topology.topologySourceId,
-        matchingSource?.optionsJson,
+      // Fetch topology from each source in parallel
+      const fetchResults = await Promise.allSettled(
+        sourcesToFetch.map(async (source) => {
+          const graph = await dataSourceService.fetchTopologyWithOptionsJson(
+            source.dataSourceId,
+            source.optionsJson,
+          )
+          if (!graph) {
+            throw new Error(`Failed to fetch topology from source ${source.dataSourceId}`)
+          }
+          return { sourceId: source.dataSourceId, graph }
+        }),
       )
-      if (!graph) {
-        return c.json({ error: 'Failed to fetch topology from source' }, 500)
+
+      // Collect successful fetches
+      const successfulFetches: Array<{ sourceId: string; graph: import('@shumoku/core').NetworkGraph }> = []
+      const failedSources: Array<{ sourceId: string; error: string }> = []
+
+      for (const result of fetchResults) {
+        if (result.status === 'fulfilled') {
+          successfulFetches.push(result.value)
+          console.log(
+            `[sync-from-source] Got graph from ${result.value.sourceId}:`,
+            result.value.graph.nodes.length,
+            'nodes,',
+            result.value.graph.links.length,
+            'links',
+          )
+        } else {
+          const error = result.reason instanceof Error ? result.reason.message : String(result.reason)
+          failedSources.push({ sourceId: 'unknown', error })
+          console.error('[sync-from-source] Failed to fetch from source:', error)
+        }
+      }
+
+      if (successfulFetches.length === 0) {
+        return c.json({
+          error: 'Failed to fetch topology from any source',
+          failedSources,
+        }, 500)
+      }
+
+      // Merge graphs if multiple sources
+      let finalGraph: import('@shumoku/core').NetworkGraph
+      let mergeInfo: { skippedNodes: number; skippedLinks: number } | undefined
+
+      if (successfulFetches.length === 1) {
+        finalGraph = successfulFetches[0].graph
+      } else {
+        console.log('[sync-from-source] Merging', successfulFetches.length, 'graphs')
+        const mergeResult = mergeNetworkGraphs(
+          successfulFetches.map((f) => f.graph),
+          {
+            nodeIdConflict: 'keep-first',
+            sourceIds: successfulFetches.map((f) => f.sourceId),
+          },
+        )
+        finalGraph = mergeResult.graph
+        mergeInfo = {
+          skippedNodes: mergeResult.skippedNodes.length,
+          skippedLinks: mergeResult.skippedLinks.length,
+        }
+
+        if (mergeResult.skippedNodes.length > 0) {
+          console.log(
+            '[sync-from-source] Merge skipped',
+            mergeResult.skippedNodes.length,
+            'duplicate nodes',
+          )
+        }
       }
 
       console.log(
-        '[sync-from-source] Got graph:',
-        graph.nodes.length,
+        '[sync-from-source] Final graph:',
+        finalGraph.nodes.length,
         'nodes,',
-        graph.links.length,
+        finalGraph.links.length,
         'links',
       )
 
       // Update the topology content
       const updated = await service.update(id, {
-        contentJson: JSON.stringify(graph),
+        contentJson: JSON.stringify(finalGraph),
       })
 
       console.log('[sync-from-source] Topology updated successfully')
@@ -389,8 +462,11 @@ export function createTopologiesApi(): Hono {
       return c.json({
         success: true,
         topology: updated,
-        nodeCount: graph.nodes.length,
-        linkCount: graph.links.length,
+        nodeCount: finalGraph.nodes.length,
+        linkCount: finalGraph.links.length,
+        sourcesCount: successfulFetches.length,
+        failedSources: failedSources.length > 0 ? failedSources : undefined,
+        mergeInfo,
       })
     } catch (err) {
       console.error('[sync-from-source] Error:', err)

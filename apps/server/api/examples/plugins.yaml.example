@@ -1,0 +1,13 @@
+# Example plugins.yaml configuration
+# Place this file in your data directory or specify via SHUMOKU_PLUGINS_CONFIG env var
+
+plugins:
+  # OCX (Open Cloud Exchange) plugin
+  - id: ocx
+    path: /path/to/ocx-plugin  # Absolute or relative path to plugin directory
+    enabled: true
+
+  # Example: Disabled plugin
+  # - id: custom
+  #   path: ./plugins/custom
+  #   enabled: false

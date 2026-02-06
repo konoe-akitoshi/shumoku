@@ -41,7 +41,7 @@
     },
     "apps/server": {
       "name": "@shumoku/server",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "devDependencies": {
         "concurrently": "^9.1.2",
         "wait-on": "^9.0.3",
@@ -49,12 +49,13 @@
     },
     "apps/server/api": {
       "name": "@shumoku/server-api",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@shumoku/core": "workspace:*",
         "@shumoku/netbox": "workspace:*",
         "@shumoku/parser-yaml": "workspace:*",
         "@shumoku/renderer": "workspace:*",
+        "adm-zip": "^0.5.16",
         "elkjs": "^0.11.0",
         "hono": "^4.7.11",
         "js-yaml": "^4.1.0",
@@ -62,6 +63,7 @@
         "web-worker": "^1.5.0",
       },
       "devDependencies": {
+        "@types/adm-zip": "^0.5.7",
         "@types/bun": "^1.3.6",
         "@types/js-yaml": "^4.0.9",
         "@types/node": "^25.0.7",
@@ -71,7 +73,7 @@
     },
     "apps/server/web": {
       "name": "@shumoku/server-web",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@shumoku/parser-yaml": "workspace:*",
         "@types/cytoscape": "^3.31.0",
@@ -673,6 +675,8 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.1.18", "", { "dependencies": { "@tailwindcss/node": "4.1.18", "@tailwindcss/oxide": "4.1.18", "tailwindcss": "4.1.18" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7" } }, "sha512-jVA+/UpKL1vRLg6Hkao5jldawNmRo7mQYrZtNHMIVpLfLhDml5nMRUo/8MwoX2vNXvnaXNNMedrMfMugAVX1nA=="],
 
+    "@types/adm-zip": ["@types/adm-zip@0.5.7", "", { "dependencies": { "@types/node": "*" } }, "sha512-DNEs/QvmyRLurdQPChqq0Md4zGvPwHerAJYWk9l2jCbD1VPpnzRJorOdiq4zsw09NFbYnhfsoEhWtxIzXpn2yw=="],
+
     "@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
 
     "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
@@ -734,6 +738,8 @@
     "acorn": ["acorn@8.15.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg=="],
 
     "acorn-jsx": ["acorn-jsx@5.3.2", "", { "peerDependencies": { "acorn": "^6.0.0 || ^7.0.0 || ^8.0.0" } }, "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ=="],
+
+    "adm-zip": ["adm-zip@0.5.16", "", {}, "sha512-TGw5yVi4saajsSEgz25grObGHEUaDrniwvA2qwSC060KfqGPdglhvPMA2lPIoxs3PQIItj2iag35fONcQqgUaQ=="],
 
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 

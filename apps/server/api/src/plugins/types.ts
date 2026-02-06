@@ -5,124 +5,42 @@
  * Each plugin declares its capabilities and implements corresponding interfaces.
  */
 
-import type { NetworkGraph } from '@shumoku/core'
 import type { MetricsData, ZabbixMapping } from '../types.js'
 
 // ============================================
-// Capability Types
+// Re-export base types from @shumoku/core
 // ============================================
 
-/**
- * Capabilities a data source plugin can provide
- */
-export type DataSourceCapability =
-  | 'topology' // Can provide NetworkGraph
-  | 'metrics' // Can provide MetricsData
-  | 'hosts' // Can list hosts (for mapping UI)
-  | 'auto-mapping' // Can suggest mappings automatically
-  | 'alerts' // Can provide alerts from monitoring system
+// These are the types that external plugins need
+export {
+  type DataSourceCapability,
+  type ConnectionResult,
+  type Host,
+  type HostItem,
+  type DiscoveredMetric,
+  type MappingHint,
+  type DataSourcePlugin,
+  type TopologyCapable,
+  type HostsCapable,
+  type AutoMappingCapable,
+  type PluginManifest,
+  type PluginConfigProperty,
+  hasTopologyCapability,
+  hasHostsCapability,
+  hasAutoMappingCapability,
+  addHttpWarning,
+} from '@shumoku/core'
+
+// Re-export registry types (defined in registry.ts)
+export type { PluginFactory, PluginRegistration, PluginRegistryInterface } from './registry.js'
 
 // ============================================
-// Common Types
+// Server-specific Capability Interfaces
 // ============================================
-
-export interface ConnectionResult {
-  success: boolean
-  message: string
-  version?: string
-  /** Non-critical warnings (e.g., insecure HTTP connection) */
-  warnings?: string[]
-}
-
-export interface Host {
-  id: string
-  name: string
-  displayName?: string
-  status?: 'up' | 'down' | 'unknown'
-  ip?: string
-}
-
-export interface HostItem {
-  id: string
-  hostId: string
-  name: string
-  key: string
-  lastValue?: string
-  unit?: string
-}
-
-/**
- * A metric discovered from a data source for a specific host
- */
-export interface DiscoveredMetric {
-  /** Metric name (e.g., "ifHCInOctets", "node_cpu_seconds_total") */
-  name: string
-  /** Labels associated with this metric */
-  labels: Record<string, string>
-  /** Current value */
-  value: number
-  /** Human-readable description (from HELP) */
-  help?: string
-  /** Metric type (counter, gauge, histogram, summary) */
-  type?: string
-}
-
-export interface MappingHint {
-  nodeId: string
-  suggestedHostId?: string
-  suggestedHostName?: string
-  confidence: number // 0-1
-}
-
-// ============================================
-// Base Plugin Interface
-// ============================================
-
-/**
- * Base interface all data source plugins must implement
- */
-export interface DataSourcePlugin {
-  /** Unique plugin type identifier */
-  readonly type: string
-
-  /** Human-readable name */
-  readonly displayName: string
-
-  /** List of capabilities this plugin provides */
-  readonly capabilities: readonly DataSourceCapability[]
-
-  /** Initialize the plugin with configuration */
-  initialize(config: unknown): void
-
-  /** Test connection to the data source */
-  testConnection(): Promise<ConnectionResult>
-
-  /** Clean up resources */
-  dispose?(): void
-}
-
-// ============================================
-// Capability Interfaces (Mixins)
-// ============================================
-
-/**
- * Plugin can provide topology (NetworkGraph)
- */
-export interface TopologyCapable {
-  /**
-   * Fetch the current topology
-   */
-  fetchTopology(options?: Record<string, unknown>): Promise<NetworkGraph>
-
-  /**
-   * Watch for topology changes (optional)
-   * Returns a cleanup function
-   */
-  watchTopology?(onChange: (graph: NetworkGraph) => void): () => void
-}
 
 /**
  * Plugin can provide metrics data
+ * (Server-specific: depends on MetricsData and ZabbixMapping)
  */
 export interface MetricsCapable {
   /**
@@ -137,43 +55,8 @@ export interface MetricsCapable {
   subscribeMetrics?(mapping: ZabbixMapping, onUpdate: (metrics: MetricsData) => void): () => void
 }
 
-/**
- * Plugin can list hosts (for mapping UI)
- */
-export interface HostsCapable {
-  /**
-   * Get all available hosts
-   */
-  getHosts(): Promise<Host[]>
-
-  /**
-   * Get items for a specific host
-   */
-  getHostItems?(hostId: string): Promise<HostItem[]>
-
-  /**
-   * Search hosts by name
-   */
-  searchHosts?(query: string): Promise<Host[]>
-
-  /**
-   * Discover all available metrics for a host
-   */
-  discoverMetrics?(hostId: string): Promise<DiscoveredMetric[]>
-}
-
-/**
- * Plugin can suggest automatic mappings
- */
-export interface AutoMappingCapable {
-  /**
-   * Get mapping suggestions for a graph
-   */
-  getMappingHints(graph: NetworkGraph): Promise<MappingHint[]>
-}
-
 // ============================================
-// Alerts Types
+// Alerts Types (Server-specific)
 // ============================================
 
 /**
@@ -245,31 +128,15 @@ export interface AlertsCapable {
 }
 
 // ============================================
-// Type Guards
+// Server-specific Type Guards
 // ============================================
 
-export function hasTopologyCapability(
-  plugin: DataSourcePlugin,
-): plugin is DataSourcePlugin & TopologyCapable {
-  return plugin.capabilities.includes('topology')
-}
+import type { DataSourcePlugin } from '@shumoku/core'
 
 export function hasMetricsCapability(
   plugin: DataSourcePlugin,
 ): plugin is DataSourcePlugin & MetricsCapable {
   return plugin.capabilities.includes('metrics')
-}
-
-export function hasHostsCapability(
-  plugin: DataSourcePlugin,
-): plugin is DataSourcePlugin & HostsCapable {
-  return plugin.capabilities.includes('hosts')
-}
-
-export function hasAutoMappingCapability(
-  plugin: DataSourcePlugin,
-): plugin is DataSourcePlugin & AutoMappingCapable {
-  return plugin.capabilities.includes('auto-mapping')
 }
 
 export function hasAlertsCapability(
@@ -279,7 +146,7 @@ export function hasAlertsCapability(
 }
 
 // ============================================
-// Plugin Configuration Types
+// Plugin Configuration Types (Server-specific)
 // ============================================
 
 export interface ZabbixPluginConfig {
@@ -373,17 +240,3 @@ export type PluginConfig =
   | NetBoxPluginConfig
   | PrometheusPluginConfig
   | GrafanaPluginConfig
-
-// ============================================
-// Helper Functions
-// ============================================
-
-/**
- * Add HTTP warning to connection result if URL uses insecure HTTP
- */
-export function addHttpWarning(url: string, result: ConnectionResult): ConnectionResult {
-  if (url.startsWith('http://')) {
-    result.warnings = [...(result.warnings || []), 'Using insecure HTTP connection']
-  }
-  return result
-}

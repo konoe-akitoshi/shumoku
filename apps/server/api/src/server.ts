@@ -19,7 +19,12 @@ import { getTopologyService } from './api/topologies.js'
 import type { TopologyService, ParsedTopology } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { DataSourceService } from './services/datasource.js'
-import { registerBuiltinPlugins, pluginRegistry, hasMetricsCapability } from './plugins/index.js'
+import {
+  registerBuiltinPlugins,
+  pluginRegistry,
+  hasMetricsCapability,
+  loadPluginsFromConfig,
+} from './plugins/index.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
 import type { ZabbixMapping } from './types.js'
 import { parseBandwidthCapacity } from './bandwidth.js'
@@ -367,6 +372,12 @@ export class Server {
   async initialize(): Promise<void> {
     // Register built-in plugins before database access
     registerBuiltinPlugins()
+
+    // Load external plugins from config file
+    const pluginsConfigPath =
+      process.env.SHUMOKU_PLUGINS_CONFIG ||
+      path.join(this.config.server.dataDir, 'plugins.yaml')
+    await loadPluginsFromConfig(pluginsConfigPath)
 
     initDatabase(this.config.server.dataDir)
     this.setupApiRoutes()

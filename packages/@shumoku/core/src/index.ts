@@ -12,8 +12,12 @@ export * from './hierarchical.js'
 export * from './icons/index.js'
 // Layout
 export * from './layout/index.js'
+// Merge
+export * from './merge.js'
 // Models
 export * from './models/index.js'
+// Plugin types
+export * from './plugin-types.js'
 // Themes
 export * from './themes/index.js'
 

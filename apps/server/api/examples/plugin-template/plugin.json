@@ -1,0 +1,25 @@
+{
+  "id": "example-plugin",
+  "name": "Example Plugin",
+  "version": "1.0.0",
+  "description": "An example external plugin template",
+  "capabilities": ["topology", "hosts"],
+  "entry": "index.js",
+  "configSchema": {
+    "type": "object",
+    "required": ["url", "token"],
+    "properties": {
+      "url": {
+        "type": "string",
+        "title": "API URL",
+        "description": "Base URL of the API"
+      },
+      "token": {
+        "type": "string",
+        "title": "API Token",
+        "format": "password",
+        "description": "Authentication token"
+      }
+    }
+  }
+}

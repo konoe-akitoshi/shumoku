@@ -304,6 +304,86 @@ export const health = {
   check: () => request<{ status: string; timestamp: number }>('/health'),
 }
 
+// Plugin types for UI
+export interface PluginInfo {
+  id: string
+  name: string
+  version: string
+  path: string
+  capabilities: string[]
+  configSchema?: {
+    type: 'object'
+    required?: string[]
+    properties: Record<string, {
+      type: string
+      title?: string
+      description?: string
+      format?: string
+      default?: unknown
+    }>
+  }
+  enabled: boolean
+  builtin: boolean
+  error?: string
+}
+
+// Plugins API
+export const plugins = {
+  list: () => request<PluginInfo[]>('/plugins'),
+
+  getManifest: (id: string) =>
+    request<{
+      id: string
+      name: string
+      version: string
+      capabilities: string[]
+      configSchema?: PluginInfo['configSchema']
+    }>(`/plugins/${id}/manifest`),
+
+  addByPath: (path: string) =>
+    request<PluginInfo>('/plugins', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }),
+
+  uploadZip: async (file: File): Promise<PluginInfo> => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`${BASE_URL}/plugins`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      let message = `HTTP error ${response.status}`
+      try {
+        const data = await response.json()
+        if (data.error) message = data.error
+      } catch { /* ignore */ }
+      throw new ApiError(message, response.status)
+    }
+
+    return response.json()
+  },
+
+  setEnabled: (id: string, enabled: boolean) =>
+    request<{ success: boolean }>(`/plugins/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
+    }),
+
+  remove: (id: string, deleteFiles = false) =>
+    request<{ success: boolean }>(`/plugins/${id}?deleteFiles=${deleteFiles}`, {
+      method: 'DELETE',
+    }),
+
+  reload: () =>
+    request<{ success: boolean; plugins: PluginInfo[]; count: number }>('/plugins/reload', {
+      method: 'POST',
+    }),
+}
+
 // Auth API
 export interface AuthStatus {
   setupComplete: boolean
@@ -341,6 +421,7 @@ export const auth = {
 export const api = {
   dashboards,
   dataSources,
+  plugins,
   topologies,
   settings,
   health,

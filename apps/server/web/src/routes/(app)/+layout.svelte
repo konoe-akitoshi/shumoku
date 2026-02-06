@@ -9,6 +9,7 @@ import House from 'phosphor-svelte/lib/House'
 import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
 import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
 import Database from 'phosphor-svelte/lib/Database'
+import Cube from 'phosphor-svelte/lib/Cube'
 import GearSix from 'phosphor-svelte/lib/GearSix'
 import CaretDoubleLeft from 'phosphor-svelte/lib/CaretDoubleLeft'
 import CaretDoubleRight from 'phosphor-svelte/lib/CaretDoubleRight'
@@ -17,7 +18,7 @@ import SignOut from 'phosphor-svelte/lib/SignOut'
 interface NavItem {
   href: string
   label: string
-  icon: 'home' | 'dashboard' | 'topology' | 'database' | 'settings'
+  icon: 'home' | 'dashboard' | 'topology' | 'database' | 'plugins' | 'settings'
 }
 
 const navItems: NavItem[] = [
@@ -25,6 +26,7 @@ const navItems: NavItem[] = [
   { href: '/dashboards', label: 'Dashboards', icon: 'dashboard' },
   { href: '/topologies', label: 'Topologies', icon: 'topology' },
   { href: '/datasources', label: 'Data Sources', icon: 'database' },
+  { href: '/plugins', label: 'Plugins', icon: 'plugins' },
   { href: '/settings', label: 'Settings', icon: 'settings' },
 ]
 
@@ -142,6 +144,8 @@ function toggleSidebar() {
               <TreeStructure size={20} />
             {:else if item.icon === 'database'}
               <Database size={20} />
+            {:else if item.icon === 'plugins'}
+              <Cube size={20} />
             {:else if item.icon === 'settings'}
               <GearSix size={20} />
             {/if}

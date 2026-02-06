@@ -6,6 +6,7 @@
 import { Hono } from 'hono'
 import { createDashboardsApi } from './dashboards.js'
 import { createDataSourcesApi } from './datasources.js'
+import { createPluginsApi } from './plugins.js'
 import { createTopologiesApi } from './topologies.js'
 import { createSettingsApi } from './settings.js'
 import { topologySourcesApi } from './topology-sources.js'
@@ -28,6 +29,7 @@ export function createApiRouter(): Hono {
   // Mount API routes
   api.route('/dashboards', createDashboardsApi())
   api.route('/datasources', createDataSourcesApi())
+  api.route('/plugins', createPluginsApi())
   api.route('/topologies', createTopologiesApi())
   api.route('/topologies', topologySourcesApi) // Nested: /topologies/:id/sources
   api.route('/settings', createSettingsApi())

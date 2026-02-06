@@ -6,6 +6,27 @@
 
 export * from './types.js'
 export * from './registry.js'
+export {
+  // Types
+  type PluginEntry,
+  type LoadedPluginInfo,
+  type AddPluginResult,
+  // Functions
+  loadPluginsFromConfig,
+  reloadPlugins,
+  addPlugin,
+  removePlugin,
+  setPluginEnabled,
+  installPluginFromZip,
+  getAllPlugins,
+  getLoadedPlugins,
+  getPluginManifest,
+  getPluginsDir,
+  getConfigPath,
+  isExternalPlugin,
+  isBuiltinPlugin,
+  markBuiltinPlugins,
+} from './loader.js'
 export { ZabbixPlugin } from './zabbix.js'
 export { NetBoxPlugin } from './netbox.js'
 export { PrometheusPlugin } from './prometheus.js'
