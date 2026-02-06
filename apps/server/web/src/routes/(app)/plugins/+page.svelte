@@ -24,8 +24,10 @@ let reloading = $state(false)
 
 // Modal state
 let showAddModal = $state(false)
-let addMethod = $state<'path' | 'upload'>('path')
+let addMethod = $state<'path' | 'url' | 'upload'>('url')
 let addPath = $state('')
+let addUrl = $state('')
+let addSubdirectory = $state('')
 let addFile = $state<File | null>(null)
 let addError = $state('')
 let addSubmitting = $state(false)
@@ -68,8 +70,10 @@ async function handleReload() {
 }
 
 function openAddModal() {
-  addMethod = 'path'
+  addMethod = 'url'
   addPath = ''
+  addUrl = ''
+  addSubdirectory = ''
   addFile = null
   addError = ''
   showAddModal = true
@@ -80,7 +84,13 @@ async function handleAdd() {
   addError = ''
 
   try {
-    if (addMethod === 'path') {
+    if (addMethod === 'url') {
+      if (!addUrl.trim()) {
+        addError = 'URL is required'
+        return
+      }
+      await api.plugins.addByUrl(addUrl.trim(), addSubdirectory.trim() || undefined)
+    } else if (addMethod === 'path') {
       if (!addPath.trim()) {
         addError = 'Path is required'
         return
@@ -91,7 +101,7 @@ async function handleAdd() {
         addError = 'Please select a file'
         return
       }
-      await api.plugins.uploadZip(addFile)
+      await api.plugins.uploadZip(addFile, addSubdirectory.trim() || undefined)
     }
 
     showAddModal = false
@@ -334,11 +344,11 @@ function getCapabilityLabel(cap: string): string {
 
 <!-- Add Plugin Modal -->
 <Dialog.Root bind:open={showAddModal}>
-  <Dialog.Content class="sm:max-w-md">
+  <Dialog.Content class="sm:max-w-lg">
     <Dialog.Header>
       <Dialog.Title>Add External Plugin</Dialog.Title>
       <Dialog.Description>
-        Add an external plugin by specifying a path or uploading a ZIP file.
+        Add an external plugin from URL, local path, or by uploading a ZIP file.
       </Dialog.Description>
     </Dialog.Header>
 
@@ -353,27 +363,66 @@ function getCapabilityLabel(cap: string): string {
       <div class="flex gap-2">
         <button
           type="button"
-          class="flex-1 p-3 rounded-lg border transition-colors {addMethod === 'path'
+          class="flex-1 p-2 rounded-lg border transition-colors {addMethod === 'url'
+            ? 'border-primary bg-primary/5'
+            : 'border-theme-border hover:border-primary/50'}"
+          onclick={() => addMethod = 'url'}
+        >
+          <p class="font-medium text-theme-text-emphasis text-sm">URL</p>
+          <p class="text-xs text-theme-text-muted mt-0.5">Download from URL</p>
+        </button>
+        <button
+          type="button"
+          class="flex-1 p-2 rounded-lg border transition-colors {addMethod === 'path'
             ? 'border-primary bg-primary/5'
             : 'border-theme-border hover:border-primary/50'}"
           onclick={() => addMethod = 'path'}
         >
-          <p class="font-medium text-theme-text-emphasis">Local Path</p>
-          <p class="text-xs text-theme-text-muted mt-1">Path on server filesystem</p>
+          <p class="font-medium text-theme-text-emphasis text-sm">Local Path</p>
+          <p class="text-xs text-theme-text-muted mt-0.5">Server filesystem</p>
         </button>
         <button
           type="button"
-          class="flex-1 p-3 rounded-lg border transition-colors {addMethod === 'upload'
+          class="flex-1 p-2 rounded-lg border transition-colors {addMethod === 'upload'
             ? 'border-primary bg-primary/5'
             : 'border-theme-border hover:border-primary/50'}"
           onclick={() => addMethod = 'upload'}
         >
-          <p class="font-medium text-theme-text-emphasis">Upload ZIP</p>
-          <p class="text-xs text-theme-text-muted mt-1">Upload plugin archive</p>
+          <p class="font-medium text-theme-text-emphasis text-sm">Upload</p>
+          <p class="text-xs text-theme-text-muted mt-0.5">ZIP file</p>
         </button>
       </div>
 
-      {#if addMethod === 'path'}
+      {#if addMethod === 'url'}
+        <div class="space-y-3">
+          <div>
+            <label for="url" class="label">Plugin URL</label>
+            <input
+              type="url"
+              id="url"
+              class="input font-mono text-sm"
+              placeholder="https://github.com/user/repo/archive/refs/heads/main.zip"
+              bind:value={addUrl}
+            />
+            <p class="text-xs text-theme-text-muted mt-1">
+              ZIP file URL, tar.gz URL, or Git repository URL
+            </p>
+          </div>
+          <div>
+            <label for="subdirectory-url" class="label">Subdirectory <span class="text-theme-text-muted">(optional)</span></label>
+            <input
+              type="text"
+              id="subdirectory-url"
+              class="input font-mono text-sm"
+              placeholder="shumoku-plugin"
+              bind:value={addSubdirectory}
+            />
+            <p class="text-xs text-theme-text-muted mt-1">
+              Path to plugin within the archive (if not at root)
+            </p>
+          </div>
+        </div>
+      {:else if addMethod === 'path'}
         <div>
           <label for="path" class="label">Plugin Path</label>
           <input
@@ -388,20 +437,35 @@ function getCapabilityLabel(cap: string): string {
           </p>
         </div>
       {:else}
-        <div>
-          <label for="file" class="label">Plugin ZIP File</label>
-          <input
-            type="file"
-            id="file"
-            class="input"
-            accept=".zip"
-            onchange={handleFileSelect}
-          />
-          {#if addFile}
+        <div class="space-y-3">
+          <div>
+            <label for="file" class="label">Plugin ZIP File</label>
+            <input
+              type="file"
+              id="file"
+              class="input"
+              accept=".zip"
+              onchange={handleFileSelect}
+            />
+            {#if addFile}
+              <p class="text-xs text-theme-text-muted mt-1">
+                Selected: {addFile.name} ({Math.round(addFile.size / 1024)} KB)
+              </p>
+            {/if}
+          </div>
+          <div>
+            <label for="subdirectory-upload" class="label">Subdirectory <span class="text-theme-text-muted">(optional)</span></label>
+            <input
+              type="text"
+              id="subdirectory-upload"
+              class="input font-mono text-sm"
+              placeholder="shumoku-plugin"
+              bind:value={addSubdirectory}
+            />
             <p class="text-xs text-theme-text-muted mt-1">
-              Selected: {addFile.name} ({Math.round(addFile.size / 1024)} KB)
+              Path to plugin within the ZIP (if not at root)
             </p>
-          {/if}
+          </div>
         </div>
       {/if}
     </div>

@@ -18,6 +18,7 @@ export {
   removePlugin,
   setPluginEnabled,
   installPluginFromZip,
+  installPluginFromUrl,
   getAllPlugins,
   getLoadedPlugins,
   getPluginManifest,

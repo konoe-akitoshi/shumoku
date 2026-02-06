@@ -346,9 +346,18 @@ export const plugins = {
       body: JSON.stringify({ path }),
     }),
 
-  uploadZip: async (file: File): Promise<PluginInfo> => {
+  addByUrl: (url: string, subdirectory?: string) =>
+    request<PluginInfo>('/plugins', {
+      method: 'POST',
+      body: JSON.stringify({ url, subdirectory }),
+    }),
+
+  uploadZip: async (file: File, subdirectory?: string): Promise<PluginInfo> => {
     const formData = new FormData()
     formData.append('file', file)
+    if (subdirectory) {
+      formData.append('subdirectory', subdirectory)
+    }
 
     const response = await fetch(`${BASE_URL}/plugins`, {
       method: 'POST',

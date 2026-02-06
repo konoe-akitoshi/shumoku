@@ -438,24 +438,270 @@ export async function setPluginEnabled(pluginId: string, enabled: boolean): Prom
 }
 
 /**
+ * Install plugin from URL
+ * Supports: ZIP files, tar.gz files, and git repositories
+ */
+export async function installPluginFromUrl(
+  url: string,
+  pluginsDir: string,
+  subdirectory?: string,
+): Promise<AddPluginResult> {
+  try {
+    console.log(`[Plugins] Installing from URL: ${url}`)
+
+    // Determine type from URL
+    const urlLower = url.toLowerCase()
+    const isZip = urlLower.endsWith('.zip') || urlLower.includes('/archive/')
+    const isTarGz = urlLower.endsWith('.tar.gz') || urlLower.endsWith('.tgz')
+    const isGit = urlLower.endsWith('.git') || urlLower.includes('github.com') || urlLower.includes('gitlab.com')
+
+    if (isZip || (!isTarGz && !isGit)) {
+      // Download as ZIP
+      const response = await fetch(url)
+      if (!response.ok) {
+        return { success: false, error: `Failed to download: HTTP ${response.status}` }
+      }
+      const buffer = Buffer.from(await response.arrayBuffer())
+      return installPluginFromZip(buffer, pluginsDir, subdirectory)
+    }
+
+    if (isTarGz) {
+      // Download and extract tar.gz
+      const response = await fetch(url)
+      if (!response.ok) {
+        return { success: false, error: `Failed to download: HTTP ${response.status}` }
+      }
+      const buffer = Buffer.from(await response.arrayBuffer())
+      return installPluginFromTarGz(buffer, pluginsDir, subdirectory)
+    }
+
+    if (isGit) {
+      // Git clone
+      return installPluginFromGit(url, pluginsDir, subdirectory)
+    }
+
+    return { success: false, error: 'Unsupported URL format' }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return { success: false, error: `Failed to install from URL: ${errorMsg}` }
+  }
+}
+
+/**
+ * Install plugin from tar.gz file
+ */
+async function installPluginFromTarGz(
+  buffer: Buffer,
+  pluginsDir: string,
+  subdirectory?: string,
+): Promise<AddPluginResult> {
+  try {
+    const { createGunzip } = await import('node:zlib')
+    const { Readable } = await import('node:stream')
+    const { pipeline } = await import('node:stream/promises')
+    const tar = await import('tar')
+
+    // Create temp directory for extraction
+    const tempDir = join(pluginsDir, `.tmp-${Date.now()}`)
+    await mkdir(tempDir, { recursive: true })
+
+    try {
+      // Extract tar.gz
+      const gunzip = createGunzip()
+      const extract = tar.extract({ cwd: tempDir })
+
+      await pipeline(
+        Readable.from(buffer),
+        gunzip,
+        extract,
+      )
+
+      // Find plugin.json
+      const { findPluginRoot, movePluginToFinal } = await getPluginHelpers()
+      const pluginRoot = await findPluginRoot(tempDir, subdirectory)
+
+      if (!pluginRoot) {
+        return { success: false, error: 'Could not find plugin.json in archive' }
+      }
+
+      // Read manifest to get plugin ID
+      const manifest = await readManifest(pluginRoot)
+      const finalPath = join(pluginsDir, manifest.id)
+
+      // Move to final location
+      await movePluginToFinal(pluginRoot, finalPath)
+
+      // Add the plugin
+      return addPlugin(finalPath)
+    } finally {
+      // Cleanup temp directory
+      try {
+        await rm(tempDir, { recursive: true })
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return { success: false, error: `Failed to extract tar.gz: ${errorMsg}` }
+  }
+}
+
+/**
+ * Install plugin from git repository
+ */
+async function installPluginFromGit(
+  gitUrl: string,
+  pluginsDir: string,
+  subdirectory?: string,
+): Promise<AddPluginResult> {
+  try {
+    const { execSync } = await import('node:child_process')
+
+    // Create temp directory for clone
+    const tempDir = join(pluginsDir, `.tmp-git-${Date.now()}`)
+    await mkdir(tempDir, { recursive: true })
+
+    try {
+      // Git clone with depth 1
+      execSync(`git clone --depth 1 "${gitUrl}" "${tempDir}"`, {
+        stdio: 'pipe',
+        timeout: 60000, // 60 second timeout
+      })
+
+      // Find plugin root
+      const { findPluginRoot, movePluginToFinal } = await getPluginHelpers()
+      const pluginRoot = await findPluginRoot(tempDir, subdirectory)
+
+      if (!pluginRoot) {
+        return { success: false, error: 'Could not find plugin.json in repository' }
+      }
+
+      // Read manifest to get plugin ID
+      const manifest = await readManifest(pluginRoot)
+      const finalPath = join(pluginsDir, manifest.id)
+
+      // Move to final location
+      await movePluginToFinal(pluginRoot, finalPath)
+
+      // Add the plugin
+      return addPlugin(finalPath)
+    } finally {
+      // Cleanup temp directory
+      try {
+        await rm(tempDir, { recursive: true })
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return { success: false, error: `Failed to clone git repository: ${errorMsg}` }
+  }
+}
+
+/**
+ * Helper functions for plugin installation
+ */
+async function getPluginHelpers() {
+  const { readdir, cp } = await import('node:fs/promises')
+
+  /**
+   * Find the directory containing plugin.json
+   */
+  async function findPluginRoot(baseDir: string, subdirectory?: string): Promise<string | null> {
+    // If subdirectory specified, look there first
+    if (subdirectory) {
+      const subPath = join(baseDir, subdirectory)
+      try {
+        await stat(join(subPath, 'plugin.json'))
+        return subPath
+      } catch {
+        // Not found in subdirectory
+      }
+    }
+
+    // Check base directory
+    try {
+      await stat(join(baseDir, 'plugin.json'))
+      return baseDir
+    } catch {
+      // Not in base
+    }
+
+    // Search one level deep (common for archives that have a root folder)
+    const entries = await readdir(baseDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        const dirPath = join(baseDir, entry.name)
+
+        // Check if subdirectory is inside this folder
+        if (subdirectory) {
+          const subPath = join(dirPath, subdirectory)
+          try {
+            await stat(join(subPath, 'plugin.json'))
+            return subPath
+          } catch {
+            // Continue searching
+          }
+        }
+
+        // Check this directory directly
+        try {
+          await stat(join(dirPath, 'plugin.json'))
+          return dirPath
+        } catch {
+          // Continue searching
+        }
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Move plugin to final location
+   */
+  async function movePluginToFinal(source: string, destination: string): Promise<void> {
+    // Remove existing if present
+    try {
+      await rm(destination, { recursive: true })
+    } catch {
+      // Didn't exist
+    }
+
+    // Copy to final location
+    await cp(source, destination, { recursive: true })
+  }
+
+  return { findPluginRoot, movePluginToFinal }
+}
+
+/**
  * Install plugin from ZIP file
  */
 export async function installPluginFromZip(
   zipBuffer: Buffer,
   pluginsDir: string,
+  subdirectory?: string,
 ): Promise<AddPluginResult> {
-  // Extract ZIP to temp location, validate, then move to plugins dir
-  // For now, we'll use a simple approach with AdmZip or similar
-
   try {
     const { default: AdmZip } = await import('adm-zip')
     const zip = new AdmZip(zipBuffer)
     const entries = zip.getEntries()
 
-    // Find plugin.json to get plugin ID
-    const manifestEntry = entries.find((e) => e.entryName.endsWith('plugin.json'))
+    // Find plugin.json, considering subdirectory if specified
+    let manifestEntry = entries.find((e) => {
+      if (subdirectory) {
+        // Look for plugin.json inside the subdirectory
+        return e.entryName.includes(subdirectory + '/plugin.json') ||
+               e.entryName.includes(subdirectory + '\\plugin.json')
+      }
+      return e.entryName.endsWith('plugin.json')
+    })
+
     if (!manifestEntry) {
-      return { success: false, error: 'ZIP does not contain plugin.json' }
+      return { success: false, error: 'ZIP does not contain plugin.json' + (subdirectory ? ` in ${subdirectory}` : '') }
     }
 
     const manifestJson = manifestEntry.getData().toString('utf-8')
@@ -469,16 +715,17 @@ export async function installPluginFromZip(
     const pluginPath = join(pluginsDir, manifest.id)
     await mkdir(pluginPath, { recursive: true })
 
-    // Extract files
-    // Handle both flat and nested ZIP structures
-    const rootDir = manifestEntry.entryName.replace('plugin.json', '')
+    // Determine root directory for extraction
+    // This is the path prefix to strip from entry names
+    const manifestDir = manifestEntry.entryName.replace(/plugin\.json$/, '')
+
     for (const entry of entries) {
       if (entry.isDirectory) continue
 
-      const relativePath = entry.entryName.startsWith(rootDir)
-        ? entry.entryName.slice(rootDir.length)
-        : entry.entryName
+      // Only extract files that are within the plugin directory
+      if (!entry.entryName.startsWith(manifestDir)) continue
 
+      const relativePath = entry.entryName.slice(manifestDir.length)
       if (!relativePath) continue
 
       const targetPath = join(pluginPath, relativePath)

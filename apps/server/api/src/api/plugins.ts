@@ -12,6 +12,7 @@ import {
   setPluginEnabled,
   reloadPlugins,
   installPluginFromZip,
+  installPluginFromUrl,
   getPluginsDir,
   isBuiltinPlugin,
 } from '../plugins/loader.js'
@@ -41,7 +42,7 @@ export function createPluginsApi(): Hono {
     return c.json(manifest)
   })
 
-  // Add plugin by path
+  // Add plugin by path, URL, or file upload
   app.post('/', async (c) => {
     const contentType = c.req.header('content-type') || ''
 
@@ -49,6 +50,7 @@ export function createPluginsApi(): Hono {
     if (contentType.includes('multipart/form-data')) {
       const formData = await c.req.formData()
       const file = formData.get('file')
+      const subdirectory = formData.get('subdirectory')?.toString()
 
       if (!file || !(file instanceof File)) {
         return c.json({ error: 'No file uploaded' }, 400)
@@ -60,7 +62,7 @@ export function createPluginsApi(): Hono {
       }
 
       const buffer = Buffer.from(await file.arrayBuffer())
-      const result = await installPluginFromZip(buffer, pluginsDir)
+      const result = await installPluginFromZip(buffer, pluginsDir, subdirectory)
 
       if (!result.success) {
         return c.json({ error: result.error }, 400)
@@ -69,20 +71,37 @@ export function createPluginsApi(): Hono {
       return c.json(result.plugin, 201)
     }
 
-    // Handle JSON body with path
-    const body = await c.req.json<{ path?: string }>()
+    // Handle JSON body with path or url
+    const body = await c.req.json<{ path?: string; url?: string; subdirectory?: string }>()
 
-    if (!body.path) {
-      return c.json({ error: 'path is required' }, 400)
+    const pluginsDir = getPluginsDir()
+    if (!pluginsDir) {
+      return c.json({ error: 'Plugins directory not configured' }, 500)
     }
 
-    const result = await addPlugin(body.path)
+    // URL-based installation
+    if (body.url) {
+      const result = await installPluginFromUrl(body.url, pluginsDir, body.subdirectory)
 
-    if (!result.success) {
-      return c.json({ error: result.error }, 400)
+      if (!result.success) {
+        return c.json({ error: result.error }, 400)
+      }
+
+      return c.json(result.plugin, 201)
     }
 
-    return c.json(result.plugin, 201)
+    // Path-based installation
+    if (body.path) {
+      const result = await addPlugin(body.path)
+
+      if (!result.success) {
+        return c.json({ error: result.error }, 400)
+      }
+
+      return c.json(result.plugin, 201)
+    }
+
+    return c.json({ error: 'Either path or url is required' }, 400)
   })
 
   // Enable/disable plugin
