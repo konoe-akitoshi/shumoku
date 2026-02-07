@@ -243,6 +243,12 @@ export const topologies = {
         `/topologies/${topologyId}/sources/${sourceId}/sync`,
         { method: 'POST' },
       ),
+
+    syncAll: (topologyId: string) =>
+      request<{ topology: Topology; nodeCount: number; linkCount: number }>(
+        `/topologies/${topologyId}/sync-from-source`,
+        { method: 'POST' },
+      ),
   },
 }
 

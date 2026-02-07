@@ -36,8 +36,8 @@ let topologyDataSources = $state<DataSource[]>([])
 let metricsDataSources = $state<DataSource[]>([])
 
 // Sync state
-let syncingSourceId = $state<string | null>(null)
-let syncResults = $state<Record<string, { nodeCount: number; linkCount: number }>>({})
+let syncing = $state(false)
+let syncResult = $state<{ nodeCount: number; linkCount: number } | null>(null)
 
 // Webhook URL state
 let copiedSecret = $state<string | null>(null)
@@ -160,16 +160,17 @@ async function handleSave() {
   }
 }
 
-async function handleSync(source: TopologyDataSource) {
-  syncingSourceId = source.id
+async function handleSyncAll() {
+  syncing = true
+  syncResult = null
   try {
-    const result = await api.topologies.sources.sync(topologyId, source.id)
-    syncResults = { ...syncResults, [source.id]: result }
+    const result = await api.topologies.sources.syncAll(topologyId)
+    syncResult = { nodeCount: result.nodeCount, linkCount: result.linkCount }
     topology = result.topology
   } catch (e) {
     alert(e instanceof Error ? e.message : 'Sync failed')
   } finally {
-    syncingSourceId = null
+    syncing = false
   }
 }
 
@@ -199,6 +200,7 @@ interface NetBoxOptions {
   excludeRoleFilter?: string[]
   excludeTagFilter?: string[]
 }
+
 
 function parseOptions(optionsJson?: string): NetBoxOptions {
   if (!optionsJson) return {}
@@ -244,6 +246,11 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
   const current = arr || []
   return current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
 }
+
+// Check if multiple topology sources exist (show merge link)
+let hasMultipleTopologySources = $derived(
+  editableSources.filter((s) => s.purpose === 'topology').length >= 2
+)
 </script>
 
 <svelte:head>
@@ -294,12 +301,44 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
     <!-- Topology Sources -->
     <div class="card mb-6">
       <div class="card-header flex items-center justify-between">
-        <h2 class="font-medium text-theme-text-emphasis">Topology Sources</h2>
-        <Button variant="outline" size="sm" onclick={() => addSource('topology')}>
-          <Plus size={16} class="mr-1" />
-          Add
-        </Button>
+        <div>
+          <h2 class="font-medium text-theme-text-emphasis">Topology Sources</h2>
+          {#if hasMultipleTopologySources}
+            <a
+              href="/topologies/{topologyId}/merge"
+              class="text-xs text-primary hover:underline"
+            >
+              Configure merge settings →
+            </a>
+          {/if}
+        </div>
+        <div class="flex items-center gap-2">
+          {#if getSourcesByPurpose('topology').length > 0}
+            <Button
+              variant="secondary"
+              size="sm"
+              onclick={handleSyncAll}
+              disabled={syncing || hasChanges}
+            >
+              {#if syncing}
+                <span class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></span>
+              {:else}
+                <ArrowsClockwise size={14} class="mr-1" />
+              {/if}
+              Sync All
+            </Button>
+          {/if}
+          <Button variant="outline" size="sm" onclick={() => addSource('topology')}>
+            <Plus size={16} class="mr-1" />
+            Add
+          </Button>
+        </div>
       </div>
+      {#if syncResult}
+        <div class="px-4 py-2 bg-success/10 border-b border-success/20 text-success text-sm">
+          Synced: {syncResult.nodeCount} nodes, {syncResult.linkCount} links
+        </div>
+      {/if}
       <div class="card-body">
         {#if getSourcesByPurpose('topology').length === 0}
           <p class="text-sm text-theme-text-muted text-center py-4">
@@ -566,33 +605,11 @@ function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
                       </div>
                     {/if}
 
-                    <!-- Last synced & sync button -->
-                    {#if currentSource}
-                      <div class="flex items-center gap-4">
-                        {#if currentSource.lastSyncedAt}
-                          <span class="text-xs text-theme-text-muted">
-                            Last synced: {new Date(currentSource.lastSyncedAt).toLocaleString()}
-                          </span>
-                        {/if}
-                        {#if syncResults[currentSource.id]}
-                          <span class="text-xs text-success">
-                            {syncResults[currentSource.id].nodeCount} nodes, {syncResults[currentSource.id].linkCount} links
-                          </span>
-                        {/if}
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onclick={() => handleSync(currentSource)}
-                          disabled={syncingSourceId === currentSource.id}
-                        >
-                          {#if syncingSourceId === currentSource.id}
-                            <span class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></span>
-                          {:else}
-                            <ArrowsClockwise size={14} class="mr-1" />
-                          {/if}
-                          Sync Now
-                        </Button>
-                      </div>
+                    <!-- Last synced info -->
+                    {#if currentSource?.lastSyncedAt}
+                      <p class="text-xs text-theme-text-muted">
+                        Last synced: {new Date(currentSource.lastSyncedAt).toLocaleString()}
+                      </p>
                     {/if}
                   </div>
 

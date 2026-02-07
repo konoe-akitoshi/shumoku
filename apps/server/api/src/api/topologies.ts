@@ -9,8 +9,9 @@ import { DataSourceService } from '../services/datasource.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { TopologyInput, ZabbixMapping } from '../types.js'
 import { renderEmbeddable, type EmbeddableRenderOutput } from '@shumoku/renderer'
-import { buildHierarchicalSheets, mergeNetworkGraphs } from '@shumoku/core'
+import { buildHierarchicalSheets, mergeWithOverlays, type OverlayConfig } from '@shumoku/core'
 import { BunHierarchicalLayout } from '../layout.js'
+import type { TopologySourceMergeConfig } from '../types.js'
 
 /**
  * Build render output from a parsed topology
@@ -422,24 +423,72 @@ export function createTopologiesApi(): Hono {
         finalGraph = successfulFetches[0].graph
       } else {
         console.log('[sync-from-source] Merging', successfulFetches.length, 'graphs')
-        const mergeResult = mergeNetworkGraphs(
+
+        // Check if we have configurable merge settings
+        const sourceConfigs = new Map<string, TopologySourceMergeConfig>()
+        for (const source of sourcesToFetch) {
+          if (source.optionsJson) {
+            try {
+              const opts = JSON.parse(source.optionsJson) as TopologySourceMergeConfig
+              sourceConfigs.set(source.dataSourceId, opts)
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+
+        // Find base source (first one marked as isBase, or first source)
+        const baseSourceId = Array.from(sourceConfigs.entries()).find(([, cfg]) => cfg.isBase)?.[0]
+          ?? successfulFetches[0].sourceId
+        const baseIndex = successfulFetches.findIndex((f) => f.sourceId === baseSourceId)
+
+        // Build overlay configurations
+        const overlayConfigs: OverlayConfig[] = []
+        for (const fetch of successfulFetches) {
+          if (fetch.sourceId === baseSourceId) continue
+
+          const cfg = sourceConfigs.get(fetch.sourceId)
+          overlayConfigs.push({
+            sourceId: fetch.sourceId,
+            match: cfg?.match ?? 'name', // Default to name matching
+            matchAttribute: cfg?.matchAttribute,
+            idMapping: cfg?.idMapping,
+            onMatch: cfg?.onMatch ?? 'merge-properties',
+            onUnmatched: cfg?.onUnmatched ?? 'add-to-subgraph',
+            subgraphName: cfg?.subgraphName,
+          })
+        }
+
+        console.log('[sync-from-source] Base source:', baseSourceId)
+        console.log('[sync-from-source] Overlay configs:', overlayConfigs.map((o) => `${o.sourceId}(${o.match})`).join(', '))
+
+        // Use configurable merge
+        const mergeResult = mergeWithOverlays(
           successfulFetches.map((f) => f.graph),
+          successfulFetches.map((f) => f.sourceId),
           {
-            nodeIdConflict: 'keep-first',
-            sourceIds: successfulFetches.map((f) => f.sourceId),
+            baseIndex,
+            overlays: overlayConfigs,
           },
         )
+
         finalGraph = mergeResult.graph
         mergeInfo = {
           skippedNodes: mergeResult.skippedNodes.length,
           skippedLinks: mergeResult.skippedLinks.length,
         }
 
+        console.log('[sync-from-source] Merge result by source:')
+        for (const [sourceId, count] of mergeResult.nodeCountBySource) {
+          console.log(`  ${sourceId}: ${count} nodes`)
+        }
+
         if (mergeResult.skippedNodes.length > 0) {
           console.log(
             '[sync-from-source] Merge skipped',
             mergeResult.skippedNodes.length,
-            'duplicate nodes',
+            'nodes:',
+            mergeResult.skippedNodes.slice(0, 5).map((n) => n.nodeId).join(', '),
           )
         }
       }
