@@ -18,7 +18,19 @@ export type FeaturesTranslations = {
 export type CTATranslations = {
   title: string
   subtitle: string
-  playground: string
+  contact: string
+}
+
+export type UseCasesTranslations = {
+  title: string
+  subtitle: string
+  items: readonly { title: string; description: string }[]
+}
+
+export type IntegrationsTranslations = {
+  title: string
+  subtitle: string
+  items: readonly { title: string; description: string }[]
 }
 
 export const homeTranslations = {
@@ -26,48 +38,92 @@ export const homeTranslations = {
     hero: {
       badge: '',
       title1: 'Network diagrams',
-      title2: 'that never go stale.',
+      title2: 'built for operations teams.',
       description:
-        'Shumoku renders network topology diagrams and overlays real-time metrics from your monitoring stack. Always accurate, zero manual updates.',
+        'Centralize topology management, automate rendering, and integrate with your monitoring stack for enterprise operations.',
       playground: 'Playground',
       documentation: 'Documentation',
       npmDocsPrefix: 'Prefer npm?',
       npmDocsLink: 'See npm docs',
     },
     features: {
-      title: 'Why Shumoku?',
-      subtitle: 'A modern diagram tool for network engineers',
+      title: 'What you can do',
+      subtitle: 'Turn static diagrams into live operational dashboards',
       items: [
         {
-          title: 'Define in YAML',
-          description: 'Simple, readable YAML syntax. Easy to manage with Git and review',
+          title: 'Live weathermap',
+          description: 'Overlay real-time traffic utilization on links, color-coded by load',
         },
         {
-          title: '900+ Vendor Icons',
-          description: 'Support for major vendors: Yamaha, Aruba, AWS, Juniper, and more',
+          title: 'Alert visualization',
+          description: 'Show active alerts from Zabbix, Prometheus, and Grafana on topology',
         },
         {
-          title: 'Auto Layout',
-          description: 'Hierarchical auto-layout powered by ELK.js. No manual positioning needed',
+          title: 'Auto-generate from NetBox',
+          description: 'Pull devices and cables from NetBox to build topology automatically',
         },
         {
-          title: 'SVG Export',
-          description: 'High-quality vector format. Looks crisp at any zoom level',
+          title: 'Interactive dashboards',
+          description: 'Pan, zoom, and drill into multi-layer network views in the browser',
         },
         {
-          title: 'TypeScript',
-          description: 'Full type safety. Perfect IDE autocompletion',
+          title: '900+ vendor icons',
+          description: 'Yamaha, Aruba, AWS, Juniper, and more — rendered at correct aspect ratios',
         },
         {
-          title: 'NetBox Integration',
-          description: 'Auto-generate diagrams from NetBox',
+          title: 'Shareable links',
+          description: 'Publish topology views with a share token — no login required',
+        },
+      ],
+    },
+    useCases: {
+      title: 'Use cases',
+      subtitle: 'Where operational teams use Shumoku',
+      items: [
+        {
+          title: 'NOC monitoring',
+          description: 'Unified view of traffic, alerts, and topology for daily ops',
+        },
+        {
+          title: 'Troubleshooting',
+          description: 'Identify bottlenecks and failing nodes during incidents',
+        },
+        {
+          title: 'Change management',
+          description: 'Review topology updates with approvals and audit trails',
+        },
+      ],
+    },
+    integrations: {
+      title: 'Integrations',
+      subtitle: 'Connect your monitoring stack',
+      items: [
+        {
+          title: 'Zabbix',
+          description: 'Pull traffic metrics, host status, and alerts via JSON-RPC API',
+        },
+        {
+          title: 'Prometheus',
+          description: 'Query SNMP and node exporter metrics for link utilization',
+        },
+        {
+          title: 'Grafana',
+          description: 'Receive alerts via webhook and display them on topology',
+        },
+        {
+          title: 'NetBox',
+          description: 'Auto-discover topology from DCIM inventory and IPAM data',
+        },
+        {
+          title: 'REST API',
+          description: 'Render topologies and fetch metrics programmatically from your own tools',
         },
       ],
     },
     cta: {
-      title: 'Ready to get started?',
-      subtitle: 'Try the Playground or read the documentation',
-      playground: 'Try Playground',
+      title: 'Evaluating for your organization?',
+      subtitle: 'Talk to us about deployment, integrations, and support',
+      contact: 'Contact us',
     },
     adopters: {
       title: 'Trusted by',
@@ -77,48 +133,92 @@ export const homeTranslations = {
     hero: {
       badge: '',
       title1: 'Network diagrams',
-      title2: 'that never go stale.',
+      title2: 'built for operations teams.',
       description:
-        'ネットワークトポロジー図を描画し、監視システムのメトリクスをリアルタイムに反映。常に正確な構成図を、手作業なしで維持します。',
+        '運用チーム向けに、トポロジー管理の一元化、生成の自動化、監視スタックとの連携を提供します。',
       playground: 'Playground',
       documentation: 'Documentation',
       npmDocsPrefix: 'npm 版はこちら:',
       npmDocsLink: 'npm ドキュメント',
     },
     features: {
-      title: 'Why Shumoku?',
-      subtitle: 'ネットワークエンジニアのためのモダンなダイアグラムツール',
+      title: 'できること',
+      subtitle: '静的な構成図をライブな運用ダッシュボードに',
       items: [
         {
-          title: 'YAML で定義',
-          description: 'シンプルで読みやすい YAML 記法。Git で管理、レビューも簡単',
+          title: 'ライブ Weathermap',
+          description: 'リンク上にトラフィック使用率をリアルタイム表示、負荷に応じて色分け',
+        },
+        {
+          title: 'アラート可視化',
+          description: 'Zabbix・Prometheus・Grafana のアラートをトポロジー上に表示',
+        },
+        {
+          title: 'NetBox から自動生成',
+          description: 'NetBox のデバイス・ケーブル情報からトポロジーを自動構築',
+        },
+        {
+          title: 'インタラクティブダッシュボード',
+          description: 'ブラウザでパン・ズーム、多階層ネットワークをドリルダウン',
         },
         {
           title: '900+ ベンダーアイコン',
-          description: 'Yamaha, Aruba, AWS, Juniper など主要ベンダーに対応',
+          description: 'Yamaha, Aruba, AWS, Juniper など — 正しいアスペクト比で描画',
         },
         {
-          title: '自動レイアウト',
-          description: 'ELK.js による階層的な自動レイアウト。手動配置不要',
+          title: '共有リンク',
+          description: 'トークン付きリンクでトポロジーを公開 — ログイン不要',
+        },
+      ],
+    },
+    useCases: {
+      title: 'ユースケース',
+      subtitle: '運用チームでの活用',
+      items: [
+        {
+          title: 'NOC 監視',
+          description: 'トラフィック・アラート・トポロジーを一画面で把握',
         },
         {
-          title: 'SVG エクスポート',
-          description: '高品質なベクター形式。ズームしても綺麗',
+          title: '障害対応',
+          description: '輻輳リンクや障害ノードをインシデント時に特定',
         },
         {
-          title: 'TypeScript',
-          description: '完全な型安全性。IDE での補完も完璧',
+          title: '変更管理',
+          description: '変更のレビュー、承認、監査ログに対応',
+        },
+      ],
+    },
+    integrations: {
+      title: '連携',
+      subtitle: '監視スタックと接続',
+      items: [
+        {
+          title: 'Zabbix',
+          description: 'JSON-RPC API でトラフィックメトリクス・ホスト状態・アラートを取得',
         },
         {
-          title: 'NetBox 連携',
-          description: 'NetBox から自動でダイアグラム生成',
+          title: 'Prometheus',
+          description: 'SNMP / Node Exporter メトリクスでリンク使用率を表示',
+        },
+        {
+          title: 'Grafana',
+          description: 'Webhook でアラートを受信しトポロジー上に表示',
+        },
+        {
+          title: 'NetBox',
+          description: 'DCIM・IPAM データからトポロジーを自動検出',
+        },
+        {
+          title: 'REST API',
+          description: '独自ツールからトポロジー描画やメトリクス取得をプログラマブルに実行',
         },
       ],
     },
     cta: {
-      title: 'Ready to get started?',
-      subtitle: 'Playground で試すか、ドキュメントを読んでみてください',
-      playground: 'Try Playground',
+      title: 'チーム導入を検討中ですか？',
+      subtitle: '導入相談、連携、サポートについてご相談ください',
+      contact: 'お問い合わせ',
     },
     adopters: {
       title: '採用実績',

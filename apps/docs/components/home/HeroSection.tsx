@@ -1,8 +1,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
-import { ArrowRightIcon, CopyIcon } from './icons'
-import { backgrounds, buttonStyles, cardStyles } from './styles'
+import { ArrowRightIcon } from './icons'
+import { backgrounds, buttonStyles } from './styles'
 import { type HeroTranslations, homeTranslations, type Locale } from './translations'
 
 type Adopter = {
@@ -65,19 +65,17 @@ function CTAButtons({ t, locale }: { t: HeroTranslations; locale: string }) {
   )
 }
 
-function InstallCommand() {
+function NpmDocsLink({ t, locale }: { t: HeroTranslations; locale: string }) {
   return (
-    <div className={cn(...cardStyles.install)}>
-      <span className="text-neutral-500 select-none font-mono text-sm">$</span>
-      <code className="font-mono text-sm text-neutral-200">npm install shumoku</code>
-      <button
-        type="button"
-        className="text-neutral-500 hover:text-neutral-300 transition-colors"
-        title="Copy"
+    <p className="text-sm text-neutral-600 dark:text-neutral-400">
+      {t.npmDocsPrefix}{' '}
+      <Link
+        href={`/${locale}/docs/npm`}
+        className="text-neutral-900 dark:text-neutral-200 underline-offset-4 hover:underline"
       >
-        <CopyIcon className="w-4 h-4" />
-      </button>
-    </div>
+        {t.npmDocsLink}
+      </Link>
+    </p>
   )
 }
 
@@ -151,11 +149,11 @@ export function HeroSection({ locale }: { locale: string }) {
         <div className="grid lg:grid-cols-2 lg:items-stretch gap-8 lg:gap-12 mb-12 lg:mb-16">
           {/* Left: Text content */}
           <div className="max-w-xl">
-            <StatusBadge t={t} />
+            {t.badge ? <StatusBadge t={t} /> : null}
             <HeroTitle t={t} />
             <HeroDescription t={t} />
             <CTAButtons t={t} locale={locale} />
-            <InstallCommand />
+            <NpmDocsLink t={t} locale={locale} />
           </div>
 
           {/* Right: Diagram */}

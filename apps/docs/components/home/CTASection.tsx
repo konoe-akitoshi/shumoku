@@ -1,6 +1,4 @@
-import Link from 'next/link'
 import { cn } from '@/lib/cn'
-import { GitHubIcon } from './icons'
 import { backgrounds, buttonStyles, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
@@ -16,17 +14,11 @@ export function CTASection({ locale }: { locale: string }) {
         <p className={cn(sectionStyles.subtitle, 'mb-6 sm:mb-10')}>{t.subtitle}</p>
 
         <div className="flex flex-wrap gap-3 sm:gap-4 justify-center">
-          <Link href={`/${locale}/playground`} className={cn(...buttonStyles.primaryLarge)}>
-            {t.playground}
-          </Link>
           <a
-            href="https://github.com/konoe-akitoshi/shumoku"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(...buttonStyles.secondaryLarge)}
+            href="mailto:info@shumoku.dev"
+            className={cn(...buttonStyles.primaryLarge)}
           >
-            <GitHubIcon className="w-5 h-5" />
-            GitHub
+            {t.contact}
           </a>
         </div>
       </div>
