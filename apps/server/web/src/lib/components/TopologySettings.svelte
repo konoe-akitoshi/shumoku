@@ -201,7 +201,7 @@ async function handleDelete() {
 
       <!-- Configure button -->
       <a
-        href="/topologies/{topology.id}/sources"
+        href="/topologies/{topology.id}/settings#sources"
         class="btn btn-secondary w-full justify-center"
       >
         <Database size={16} class="mr-2" />
@@ -238,7 +238,7 @@ async function handleDelete() {
           </div>
         </div>
         <a
-          href="/topologies/{topology.id}/mapping"
+          href="/topologies/{topology.id}/settings#mapping"
           class="btn btn-secondary w-full justify-center"
         >
           Configure Mapping

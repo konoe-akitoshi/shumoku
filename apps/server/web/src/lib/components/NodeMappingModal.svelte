@@ -503,7 +503,7 @@ function stripHtmlTags(text: string | undefined): string {
                   Configure a data source to see live metrics.
                 </p>
                 <a
-                  href="/topologies/{topologyId}/sources"
+                  href="/topologies/{topologyId}/settings#sources"
                   class="text-xs text-primary hover:underline"
                 >
                   Configure Data Sources
