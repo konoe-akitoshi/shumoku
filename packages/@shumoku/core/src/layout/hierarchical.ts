@@ -84,6 +84,74 @@ function toEndpoint(endpoint: string | LinkEndpoint): LinkEndpoint {
   return endpoint
 }
 
+function getBandwidthStrokeWidth(bandwidth?: string): number {
+  switch (bandwidth) {
+    case '1G':
+      return 6
+    case '10G':
+      return 10
+    case '25G':
+      return 14
+    case '40G':
+      return 18
+    case '100G':
+      return 24
+    default:
+      return 0
+  }
+}
+
+function getLinkTypeStrokeWidth(type?: string): number {
+  switch (type) {
+    case 'thick':
+      return 3
+    case 'double':
+      return 2
+    default:
+      return 2
+  }
+}
+
+function getLinkStrokeWidthForLayout(link: { bandwidth?: string; type?: string; style?: { strokeWidth?: number } }): number {
+  const styleWidth = link.style?.strokeWidth ?? 0
+  const bandwidthWidth = getBandwidthStrokeWidth(link.bandwidth)
+  const typeWidth = getLinkTypeStrokeWidth(link.type)
+  return Math.max(2, styleWidth, bandwidthWidth, typeWidth)
+}
+
+function getLayoutSpacingConstraints(graph: NetworkGraph): {
+  minEdgeGap: number
+  maxLinkStrokeWidth: number
+  portSpacingMin: number
+} {
+  const maxLinkStrokeWidth = graph.links.reduce(
+    (max, link) => Math.max(max, getLinkStrokeWidthForLayout(link)),
+    0,
+  )
+
+  // Minimum desired clearance between link outer edges.
+  // Keep this centralized so future label-based clearance can be added here.
+  const minEdgeGap = 16
+
+  // Port spacing should respect both label width and link clearance.
+  const portSpacingMin = Math.max(MIN_PORT_SPACING, Math.round(maxLinkStrokeWidth + minEdgeGap))
+
+  return { minEdgeGap, maxLinkStrokeWidth, portSpacingMin }
+}
+
+function getEdgeSpacing(
+  options: Pick<Required<HierarchicalLayoutOptions>, 'nodeSpacing'>,
+  spacing: { minEdgeGap: number; maxLinkStrokeWidth: number },
+): { edgeNodeSpacing: number; edgeEdgeSpacing: number } {
+  const edgeNodeSpacing = Math.max(10, Math.round(options.nodeSpacing * 0.4))
+  const edgeEdgeSpacing = Math.max(
+    8,
+    Math.round(options.nodeSpacing * 0.25),
+    Math.round(spacing.maxLinkStrokeWidth + spacing.minEdgeGap),
+  )
+  return { edgeNodeSpacing, edgeEdgeSpacing }
+}
+
 /** Collect ports for each node from links */
 function collectNodePorts(graph: NetworkGraph, haPairSet: Set<string>): Map<string, NodePortInfo> {
   const nodePorts = new Map<string, NodePortInfo>()
@@ -265,10 +333,11 @@ export class HierarchicalLayout {
       haPairSet.add([pair.nodeA, pair.nodeB].sort().join(':'))
     }
 
+    const spacing = getLayoutSpacingConstraints(graph)
     const nodePorts = collectNodePorts(graph, haPairSet)
 
     // Build ELK graph
-    const elkGraph = this.buildElkGraph(graph, options, nodePorts, haPairs)
+    const elkGraph = this.buildElkGraph(graph, options, nodePorts, haPairs, spacing)
 
     // Run ELK layout
     const layoutedGraph = await this.elk.layout(elkGraph)
@@ -276,9 +345,17 @@ export class HierarchicalLayout {
     // Extract results using ELK's positions and edge routes
     const result = this.extractLayoutResult(graph, layoutedGraph, nodePorts, options)
 
+    const edgeSpacing = getEdgeSpacing(options, spacing)
     result.metadata = {
       algorithm: 'elk-layered',
       duration: performance.now() - startTime,
+      spacing: {
+        minEdgeGap: spacing.minEdgeGap,
+        maxLinkStrokeWidth: spacing.maxLinkStrokeWidth,
+        portSpacingMin: spacing.portSpacingMin,
+        edgeNodeSpacing: edgeSpacing.edgeNodeSpacing,
+        edgeEdgeSpacing: edgeSpacing.edgeEdgeSpacing,
+      },
     }
 
     return result
@@ -292,6 +369,7 @@ export class HierarchicalLayout {
     options: Omit<Required<HierarchicalLayoutOptions>, 'elk'>,
     nodePorts: Map<string, NodePortInfo>,
     haPairs: { nodeA: string; nodeB: string }[],
+    spacing: { minEdgeGap: number; maxLinkStrokeWidth: number; portSpacingMin: number },
   ): ElkNode {
     const elkDirection = this.toElkDirection(options.direction)
 
@@ -318,7 +396,7 @@ export class HierarchicalLayout {
       const portInfo = nodePorts.get(node.id)
       const portCount = portInfo?.all.size || 0
       const height = this.calculateNodeHeight(node, portCount)
-      const width = this.calculateNodeWidth(node, portInfo)
+      const width = this.calculateNodeWidth(node, portInfo, spacing.portSpacingMin)
 
       const elkNode: ElkNode = {
         id: node.id,
@@ -332,7 +410,7 @@ export class HierarchicalLayout {
         elkNode.ports = []
 
         // Calculate port spacing based on label width
-        const portSpacing = this.calculatePortSpacing(portInfo.all)
+        const portSpacing = this.calculatePortSpacing(portInfo.all, spacing.portSpacingMin)
 
         // Helper to calculate port positions centered in the node
         const calcPortPositions = (count: number, totalWidth: number): number[] => {
@@ -405,7 +483,7 @@ export class HierarchicalLayout {
 
         elkNode.layoutOptions = {
           'elk.portConstraints': 'FIXED_POS',
-          'elk.spacing.portPort': String(MIN_PORT_SPACING),
+          'elk.spacing.portPort': String(spacing.portSpacingMin),
         }
       }
 
@@ -520,6 +598,10 @@ export class HierarchicalLayout {
         'elk.padding': `[top=${sgPadding + options.subgraphLabelHeight},left=${sgPadding},bottom=${sgPadding},right=${sgPadding}]`,
         'elk.spacing.nodeNode': String(options.nodeSpacing),
         'elk.layered.spacing.nodeNodeBetweenLayers': String(options.rankSpacing),
+        'elk.spacing.edgeNode': String(edgeNodeSpacing),
+        'elk.spacing.edgeEdge': String(edgeEdgeSpacing),
+        'elk.layered.spacing.edgeEdge': String(edgeEdgeSpacing),
+        'elk.layered.spacing.edgeEdgeBetweenLayers': String(edgeEdgeSpacing),
         'elk.edgeRouting': elkEdgeRouting,
         // Use ROOT coordinate system for consistent edge/shape positioning
         'org.eclipse.elk.json.edgeCoords': 'ROOT',
@@ -682,9 +764,8 @@ export class HierarchicalLayout {
       edgesByContainer.get(containerId)!.push(edge)
     }
 
-    // Dynamic edge spacing
-    const edgeNodeSpacing = Math.max(10, Math.round(options.nodeSpacing * 0.4))
-    const edgeEdgeSpacing = Math.max(8, Math.round(options.nodeSpacing * 0.25))
+    // Dynamic edge spacing (account for thick/bandwidth-based strokes)
+    const { edgeNodeSpacing, edgeEdgeSpacing } = getEdgeSpacing(options, spacing)
 
     // Root layout options
     // Convert edge style to ELK routing option
@@ -697,6 +778,8 @@ export class HierarchicalLayout {
       'elk.layered.spacing.nodeNodeBetweenLayers': String(options.rankSpacing),
       'elk.spacing.edgeNode': String(edgeNodeSpacing),
       'elk.spacing.edgeEdge': String(edgeEdgeSpacing),
+      'elk.layered.spacing.edgeEdge': String(edgeEdgeSpacing),
+      'elk.layered.spacing.edgeEdgeBetweenLayers': String(edgeEdgeSpacing),
       'elk.layered.compaction.postCompaction.strategy': 'EDGE_LENGTH',
       'elk.layered.compaction.connectedComponents': 'true',
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
@@ -1191,8 +1274,11 @@ export class HierarchicalLayout {
     return Math.max(this.options.nodeHeight, contentHeight + NODE_VERTICAL_PADDING)
   }
 
-  private calculatePortSpacing(portNames: Set<string> | undefined): number {
-    if (!portNames || portNames.size === 0) return MIN_PORT_SPACING
+  private calculatePortSpacing(
+    portNames: Set<string> | undefined,
+    minSpacing: number,
+  ): number {
+    if (!portNames || portNames.size === 0) return minSpacing
 
     let maxLabelLength = 0
     for (const name of portNames) {
@@ -1202,10 +1288,14 @@ export class HierarchicalLayout {
     const charWidth = PORT_LABEL_FONT_SIZE * CHAR_WIDTH_RATIO
     const maxLabelWidth = maxLabelLength * charWidth
     const spacingFromLabel = maxLabelWidth + PORT_LABEL_PADDING
-    return Math.max(MIN_PORT_SPACING, spacingFromLabel)
+    return Math.max(minSpacing, spacingFromLabel)
   }
 
-  private calculateNodeWidth(node: Node, portInfo: NodePortInfo | undefined): number {
+  private calculateNodeWidth(
+    node: Node,
+    portInfo: NodePortInfo | undefined,
+    portSpacingMin: number,
+  ): number {
     const labels = Array.isArray(node.label) ? node.label : [node.label]
     const maxLabelLength = Math.max(...labels.map((l) => l.length))
     const labelWidth = maxLabelLength * ESTIMATED_CHAR_WIDTH
@@ -1214,8 +1304,8 @@ export class HierarchicalLayout {
     const bottomCount = portInfo?.bottom.size || 0
     const maxPortsPerSide = Math.max(topCount, bottomCount)
 
-    const portSpacing = this.calculatePortSpacing(portInfo?.all)
-    const edgeMargin = Math.round(MIN_PORT_SPACING / 2)
+    const portSpacing = this.calculatePortSpacing(portInfo?.all, portSpacingMin)
+    const edgeMargin = Math.round(portSpacingMin / 2)
     const portWidth = maxPortsPerSide > 0 ? (maxPortsPerSide - 1) * portSpacing + edgeMargin * 2 : 0
 
     // Calculate icon width based on aspect ratio
@@ -1284,6 +1374,7 @@ export class HierarchicalLayout {
   }
 
   private calculateFallbackLayout(graph: NetworkGraph, _direction: LayoutDirection): LayoutResult {
+    const spacing = getLayoutSpacingConstraints(graph)
     const layoutNodes = new Map<string, LayoutNode>()
     const layoutSubgraphs = new Map<string, LayoutSubgraph>()
     const layoutLinks = new Map<string, LayoutLink>()
@@ -1306,7 +1397,7 @@ export class HierarchicalLayout {
       const portInfo = nodePorts.get(node.id)
       const portCount = portInfo?.all.size || 0
       const height = this.calculateNodeHeight(node, portCount)
-      const width = this.calculateNodeWidth(node, portInfo)
+      const width = this.calculateNodeWidth(node, portInfo, spacing.portSpacingMin)
       const colWidth = width + this.options.nodeSpacing
 
       layoutNodes.set(node.id, {

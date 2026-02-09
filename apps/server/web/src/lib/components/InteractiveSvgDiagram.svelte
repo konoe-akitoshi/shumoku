@@ -1103,7 +1103,6 @@ onDestroy(() => {
 
   .svg-wrapper :global(g.link-group.connected path.link),
   .svg-wrapper :global(g.link-group.highlighted path.link) {
-    stroke-width: 3px !important;
     filter: brightness(1.3);
   }
 

@@ -458,9 +458,9 @@ export class SVGRenderer {
       ) as LinkBandwidth[]
 
       for (const bw of sortedBandwidths) {
-        const config = this.getBandwidthConfig(bw)
+        const sw = this.getBandwidthStrokeWidth(bw)
         items.push({
-          icon: this.renderBandwidthLegendIcon(config.lineCount),
+          icon: this.renderBandwidthLegendIcon(sw),
           label: bw,
         })
       }
@@ -514,18 +514,9 @@ export class SVGRenderer {
   /**
    * Render bandwidth indicator for legend
    */
-  private renderBandwidthLegendIcon(lineCount: number): string {
-    const strokeWidth = 3
-    const lineSpacing = strokeWidth * 2
+  private renderBandwidthLegendIcon(strokeWidth: number): string {
     const lineWidth = 24
-    const offsets = this.calculateLineOffsets(lineCount, lineSpacing)
-
-    const lines = offsets.map((offset) => {
-      const y = offset
-      return `<line x1="0" y1="${y}" x2="${lineWidth}" y2="${y}" stroke="${this.color('defaultLinkStroke')}" stroke-width="${strokeWidth}" />`
-    })
-
-    return `<g transform="translate(0, 0)">${lines.join('')}</g>`
+    return `<line x1="0" y1="0" x2="${lineWidth}" y2="0" stroke="${this.color('defaultLinkStroke')}" stroke-width="${strokeWidth}" />`
   }
 
   private renderHeader(width: number, height: number, viewBox: string): string {
@@ -1152,20 +1143,19 @@ ${fg}
     const dasharray = link.style?.strokeDasharray || this.getLinkDasharray(type)
     const markerEnd = arrow !== 'none' ? `url(#${this.arrowId})` : ''
 
-    // Get bandwidth rendering config
-    const bandwidthConfig = this.getBandwidthConfig(link.bandwidth)
+    // Bandwidth determines stroke width
+    const bandwidthStrokeWidth = this.getBandwidthStrokeWidth(link.bandwidth)
     const strokeWidth =
-      link.style?.strokeWidth || bandwidthConfig.strokeWidth || this.getLinkStrokeWidth(type)
+      link.style?.strokeWidth || bandwidthStrokeWidth || this.getLinkStrokeWidth(type)
 
-    // Render link lines based on bandwidth (single or multiple parallel lines)
-    let result = this.renderBandwidthLines(
+    // Render link line
+    let result = this.renderLinkLine(
       id,
       points,
       stroke,
       strokeWidth,
       dasharray,
       markerEnd,
-      bandwidthConfig,
       type,
     )
 
@@ -1390,48 +1380,42 @@ ${fg}
   }
 
   /**
-   * Bandwidth rendering configuration - line count represents speed
-   * 1G   → 1 line
-   * 10G  → 2 lines
-   * 25G  → 3 lines
-   * 40G  → 4 lines
-   * 100G → 5 lines
+   * Bandwidth rendering configuration - stroke width represents speed
+   * 1G   → 6px
+   * 10G  → 10px
+   * 25G  → 14px
+   * 40G  → 18px
+   * 100G → 24px
    */
-  private getBandwidthConfig(bandwidth?: string): { lineCount: number; strokeWidth: number } {
-    const strokeWidth = 3
+  private getBandwidthStrokeWidth(bandwidth?: string): number {
     switch (bandwidth) {
       case '1G':
-        return { lineCount: 1, strokeWidth }
+        return 6
       case '10G':
-        return { lineCount: 2, strokeWidth }
+        return 10
       case '25G':
-        return { lineCount: 3, strokeWidth }
+        return 14
       case '40G':
-        return { lineCount: 4, strokeWidth }
+        return 18
       case '100G':
-        return { lineCount: 5, strokeWidth }
+        return 24
       default:
-        return { lineCount: 1, strokeWidth }
+        return 0
     }
   }
 
   /**
-   * Render bandwidth lines (single or multiple parallel lines)
-   * Uses segment+arc centerline model for mathematically correct concentric parallel lines
+   * Render a link line with the given stroke width
    */
-  private renderBandwidthLines(
+  private renderLinkLine(
     id: string,
     points: { x: number; y: number }[],
     stroke: string,
     strokeWidth: number,
     dasharray: string,
     markerEnd: string,
-    config: { lineCount: number; strokeWidth: number },
     type: LinkType,
   ): string {
-    const { lineCount } = config
-    const lineSpacing = strokeWidth * 2
-
     // Apply edge style transformations
     let effectivePoints = points
     let cornerRadius = 8
@@ -1447,36 +1431,25 @@ ${fg}
     const centerline = this.buildFilletedCenterline(effectivePoints, cornerRadius)
     const basePath = this.centerlineToPath(centerline, 0)
 
-    const lines: string[] = []
-
-    if (lineCount === 1) {
-      let linePath = `<path class="link" data-id="${id}" d="${basePath}"
+    let linePath = `<path class="link" data-id="${id}" d="${basePath}"
   fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"
   ${dasharray ? `stroke-dasharray="${dasharray}"` : ''}
   ${markerEnd ? `marker-end="${markerEnd}"` : ''} pointer-events="none" />`
 
-      if (type === 'double') {
-        linePath = `<path class="link-double-outer" d="${basePath}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth + 2}" pointer-events="none" />
-<path class="link-double-inner" d="${basePath}" fill="none" stroke="white" stroke-width="${strokeWidth - 1}" pointer-events="none" />
-${linePath}`
-      }
-      lines.push(linePath)
-    } else {
-      const offsets = this.calculateLineOffsets(lineCount, lineSpacing)
-      for (const offset of offsets) {
-        const path = this.centerlineToPath(centerline, offset)
-        lines.push(`<path class="link" data-id="${id}" d="${path}"
-  fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"
-  ${dasharray ? `stroke-dasharray="${dasharray}"` : ''} pointer-events="none" />`)
-      }
+    if (type === 'double') {
+      const gap = Math.max(3, Math.round(strokeWidth * 0.9))
+      const outerWidth = strokeWidth + gap * 2
+      const innerWidth = Math.max(1, strokeWidth)
+      const centerWidth = Math.max(1, strokeWidth - Math.round(gap * 0.8))
+      linePath = `<path class="link-double-outer" d="${basePath}" fill="none" stroke="${stroke}" stroke-width="${outerWidth}" pointer-events="none" />
+<path class="link-double-inner" d="${basePath}" fill="none" stroke="white" stroke-width="${innerWidth}" pointer-events="none" />
+<path class="link-double-center" d="${basePath}" fill="none" stroke="${stroke}" stroke-width="${centerWidth}" pointer-events="none" />`
     }
 
-    const hitWidth = lineCount === 1 ? strokeWidth : (lineCount - 1) * lineSpacing + strokeWidth
-
     return `<g class="link-lines">
-${lines.join('\n')}
+${linePath}
 <path class="link-hit-area" d="${basePath}"
-  fill="none" stroke="${stroke}" stroke-width="${hitWidth}" opacity="0" />
+  fill="none" stroke="${stroke}" stroke-width="${Math.max(strokeWidth, 8)}" opacity="0" />
 </g>`
   }
 
@@ -1762,19 +1735,6 @@ ${lines.join('\n')}
     return parts.join(' ')
   }
 
-  /**
-   * Calculate offsets for parallel lines (centered around 0)
-   */
-  private calculateLineOffsets(lineCount: number, spacing: number): number[] {
-    const offsets: number[] = []
-    const totalWidth = (lineCount - 1) * spacing
-    const startOffset = -totalWidth / 2
-
-    for (let i = 0; i < lineCount; i++) {
-      offsets.push(startOffset + i * spacing)
-    }
-    return offsets
-  }
 
   /**
    * Get default link type based on redundancy

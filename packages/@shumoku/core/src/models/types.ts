@@ -723,5 +723,13 @@ export interface LayoutResult {
   metadata?: {
     algorithm: string
     duration: number
+    spacing?: {
+      minEdgeGap: number
+      maxLinkStrokeWidth: number
+      portSpacingMin: number
+      edgeNodeSpacing: number
+      edgeEdgeSpacing: number
+    }
+    [key: string]: unknown
   }
 }

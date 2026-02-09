@@ -347,7 +347,6 @@ ${generateThemeVars(darkTheme)}
 .link-hit-area { cursor: pointer; }
 .link { transition: stroke-width 0.15s ease, filter 0.15s ease; }
 .link-group:hover .link {
-  stroke-width: 5px !important;
   filter: drop-shadow(0 0 6px currentColor);
 }
 
