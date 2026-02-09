@@ -340,7 +340,7 @@ export class HierarchicalLayout {
     const elkGraph = this.buildElkGraph(graph, options, nodePorts, haPairs, spacing)
 
     // Run ELK layout
-    const layoutedGraph = await this.elk.layout(elkGraph)
+    const layoutedGraph = await this.runElkLayout(elkGraph)
 
     // Extract results using ELK's positions and edge routes
     const result = this.extractLayoutResult(graph, layoutedGraph, nodePorts, options)
@@ -364,6 +364,37 @@ export class HierarchicalLayout {
   /**
    * Build ELK graph - uses container nodes for HA pairs
    */
+  /**
+   * Run ELK layout with automatic retry on known ELK bugs.
+   * Falls back to layout without post-compaction when ELK's scanline
+   * constraint calculation fails on certain graph topologies.
+   */
+  private async runElkLayout(elkGraph: ElkNode): Promise<ElkNode> {
+    try {
+      return await this.elk.layout(elkGraph)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!message.includes('Invalid hitboxes for scanline constraint calculation')) {
+        throw err
+      }
+      this.setLayoutOptionRecursive(
+        elkGraph,
+        'elk.layered.compaction.postCompaction.strategy',
+        'NONE',
+      )
+      return await this.elk.layout(elkGraph)
+    }
+  }
+
+  private setLayoutOptionRecursive(node: ElkNode, key: string, value: string): void {
+    if (node.layoutOptions) {
+      node.layoutOptions[key] = value
+    }
+    for (const child of node.children ?? []) {
+      this.setLayoutOptionRecursive(child, key, value)
+    }
+  }
+
   private buildElkGraph(
     graph: NetworkGraph,
     options: Omit<Required<HierarchicalLayoutOptions>, 'elk'>,
