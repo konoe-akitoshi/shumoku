@@ -151,6 +151,13 @@ const builtinWidgets: WidgetDefinition[] = [
         type: 'string',
         default: 'Device Status',
       },
+      {
+        name: 'showDetail',
+        label: 'Show Detail Breakdown',
+        type: 'boolean',
+        default: false,
+        description: 'Always show per-type breakdown instead of overview',
+      },
     ],
     component: DeviceStatusWidget,
   },

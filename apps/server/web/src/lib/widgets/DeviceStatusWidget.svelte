@@ -15,7 +15,7 @@ import type { Topology, NetworkNode } from '$lib/types'
 // --- Props ---
 interface Props {
   id: string
-  config: { topologyId?: string; title?: string }
+  config: { topologyId?: string; title?: string; showDetail?: boolean }
   onRemove?: () => void
 }
 let { id, config, onRemove }: Props = $props()
@@ -216,7 +216,8 @@ let detailSegments = $derived.by(() => {
   })
 })
 
-let currentSegments = $derived(isHovered ? detailSegments : overviewSegments)
+let expanded = $derived(isHovered || config.showDetail)
+let currentSegments = $derived(expanded ? detailSegments : overviewSegments)
 
 let typeLabels = $derived.by(() => {
   const items = buildDetailItems().map(({ count, gap, type }) => ({ count, gap, type }))
@@ -225,7 +226,7 @@ let typeLabels = $derived.by(() => {
 
 // Dynamically compute viewBox to fit donut + labels
 let viewBox = $derived.by(() => {
-  if (!isHovered || typeLabels.length === 0) return '0 0 36 36'
+  if (!expanded || typeLabels.length === 0) return '0 0 36 36'
 
   // Estimate text width: ~1.8 SVG units per character at font-size 3
   const charWidth = 1.8
@@ -391,6 +392,18 @@ function handleSettings() { showSelector = !showSelector }
             class="mt-1 w-full px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text"
           />
         </label>
+        <label class="flex items-center gap-2 text-xs text-theme-text-muted mt-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.showDetail ?? false}
+            onchange={(e) => {
+              dashboardStore.updateWidgetConfig(id, { showDetail: e.currentTarget.checked })
+              config = { ...config, showDetail: e.currentTarget.checked }
+            }}
+            class="accent-primary"
+          />
+          Show detail breakdown
+        </label>
         <div class="mt-auto">
           <button
             onclick={() => showSelector = false}
@@ -440,7 +453,7 @@ function handleSettings() { showSelector = !showSelector }
               class="text-theme-border opacity-20"
             />
             {#each currentSegments as seg}
-              {#if isHovered && seg.type}
+              {#if expanded && seg.type}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <circle
                   cx={CX} cy={CY} r={R} fill="none"
@@ -478,7 +491,7 @@ function handleSettings() { showSelector = !showSelector }
           >{centerLine2}</text>
 
           <!-- Type labels around donut (hover) -->
-          {#if isHovered}
+          {#if expanded}
             {#each typeLabels as label}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <text
