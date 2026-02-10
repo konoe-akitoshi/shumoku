@@ -23,6 +23,7 @@ interface Props {
     maxItems?: number
     autoRefresh?: number
     showResolved?: boolean
+    persistHighlight?: boolean
   }
   onRemove?: () => void
 }
@@ -142,11 +143,15 @@ async function loadAlerts() {
           newAlertsBySeverity.set(a.severity, hosts)
         }
       }
+      // Clear previous persistent highlight before applying new ones
+      if (config.persistHighlight && newAlertsBySeverity.size > 0) {
+        forEachTopology((tid) => emitClearHighlight(tid, id))
+      }
       // Emit highlight for each severity group
       for (const [severity, hosts] of newAlertsBySeverity) {
         forEachTopology((tid) =>
           emitHighlightNodes(tid, hosts, {
-            duration: 4000,
+            duration: config.persistHighlight ? undefined : 4000,
             highlightColor: SEVERITY_HIGHLIGHT_COLORS[severity],
             sourceWidgetId: id,
           }),
@@ -267,6 +272,19 @@ let activeAlerts = $derived(alerts.filter((a) => a.status === 'active'))
             {/each}
           </select>
         </div>
+
+        <label class="flex items-center gap-2 text-xs text-theme-text-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.persistHighlight ?? false}
+            onchange={(e) => {
+              dashboardStore.updateWidgetConfig(id, { persistHighlight: e.currentTarget.checked })
+              config = { ...config, persistHighlight: e.currentTarget.checked }
+            }}
+            class="accent-primary"
+          />
+          Keep highlight until next alert
+        </label>
 
         <button
           onclick={() => (showSelector = false)}

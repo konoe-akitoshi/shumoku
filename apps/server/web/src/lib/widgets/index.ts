@@ -200,6 +200,13 @@ const builtinWidgets: WidgetDefinition[] = [
         type: 'boolean',
         default: false,
       },
+      {
+        name: 'persistHighlight',
+        label: 'Keep Highlight Until Next Alert',
+        type: 'boolean',
+        default: false,
+        description: 'Keep topology highlight persistent instead of fading after 4 seconds',
+      },
     ],
     component: AlertWidget,
   },
