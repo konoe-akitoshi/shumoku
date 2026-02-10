@@ -443,7 +443,7 @@ function handleSettings() { showSelector = !showSelector }
     {:else}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        class="h-full w-full flex items-center justify-center p-2"
+        class="h-full w-full flex items-center justify-center"
         onmouseenter={() => isHovered = true}
         onmouseleave={() => { isHovered = false; handleHoverLeave() }}
       >
