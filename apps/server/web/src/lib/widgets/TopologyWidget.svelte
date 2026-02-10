@@ -4,6 +4,14 @@ import { api } from '$lib/api'
 import type { Topology } from '$lib/types'
 import { dashboardStore, dashboardEditMode } from '$lib/stores/dashboards'
 import { widgetEvents, type WidgetEvent } from '$lib/stores/widgetEvents'
+import {
+  metricsStore,
+  metricsData,
+  liveUpdatesEnabled,
+  showTrafficFlow,
+  showNodeStatus,
+} from '$lib/stores'
+import { WeathermapController } from '$lib/weathermap'
 import { highlightNodes, highlightByAttribute, clearHighlight as clearHighlightUtil } from '$lib/highlight'
 import WidgetWrapper from './WidgetWrapper.svelte'
 import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
@@ -47,6 +55,9 @@ let styleElement: HTMLStyleElement | null = null
 let unsubscribeEvents: (() => void) | null = null
 let savedViewBox: string | null = null
 
+// Live metrics
+let weathermap: WeathermapController | null = null
+
 async function loadTopologies() {
   try {
     topologies = await api.topologies.list()
@@ -70,6 +81,10 @@ async function loadTopology() {
     // Fetch rendered SVG
     const renderResult = await fetch(`/api/topologies/${config.topologyId}/render`)
     const renderData = await renderResult.json()
+
+    // Reset weathermap when SVG changes
+    weathermap?.destroy()
+    weathermap = null
 
     if (renderData.hierarchical) {
       isHierarchical = true
@@ -120,6 +135,8 @@ function selectSheet(sheetId: string) {
   if (!sheetId) return
   dashboardStore.updateWidgetConfig(id, { sheetId })
   config = { ...config, sheetId }
+  weathermap?.destroy()
+  weathermap = null
   if (renderSheets[sheetId]) {
     svgContent = renderSheets[sheetId].svg
   }
@@ -294,6 +311,45 @@ function restoreViewBox() {
   savedViewBox = null
 }
 
+// Connect to live metrics when topology is ready
+$effect(() => {
+  if ($liveUpdatesEnabled && config.topologyId && !loading) {
+    metricsStore.connect()
+    metricsStore.subscribeToTopology(config.topologyId)
+  }
+})
+
+// Apply live metrics (node status + traffic flow)
+$effect(() => {
+  const metrics = $metricsData
+  const live = $liveUpdatesEnabled
+  const flow = $showTrafficFlow
+  const status = $showNodeStatus
+  if (!containerElement || !live) return
+  const svg = containerElement.querySelector('svg') as SVGSVGElement | null
+  if (!svg) return
+
+  if (flow && metrics?.links) {
+    if (!weathermap) weathermap = new WeathermapController(svg)
+    weathermap.apply(metrics.links)
+  } else {
+    weathermap?.reset()
+  }
+
+  if (status && metrics?.nodes) {
+    for (const [nodeId, nodeMetrics] of Object.entries(metrics.nodes)) {
+      const nodeGroup = svg.querySelector(`g.node[data-id="${nodeId}"]`)
+      if (!nodeGroup) continue
+      nodeGroup.classList.remove('status-up', 'status-down', 'status-unknown')
+      nodeGroup.classList.add(`status-${nodeMetrics.status}`)
+    }
+  } else {
+    for (const node of svg.querySelectorAll('g.node')) {
+      node.classList.remove('status-up', 'status-down', 'status-unknown')
+    }
+  }
+})
+
 onMount(() => {
   loadTopologies()
   loadTopology()
@@ -307,6 +363,9 @@ onDestroy(() => {
     unsubscribeEvents()
   }
   clearCurrentHighlight()
+  weathermap?.destroy()
+  weathermap = null
+  metricsStore.unsubscribe()
   if (styleElement) {
     styleElement.remove()
     styleElement = null
@@ -458,6 +517,17 @@ let editMode = $derived($dashboardEditMode)
   .topology-container :global(.node-dimmed) {
     opacity: 0.15;
     transition: opacity 0.2s ease;
+  }
+
+  /* Node status indicators */
+  .topology-container :global(g.node.status-up .node-bg rect) {
+    stroke: #22c55e;
+    stroke-width: 2px;
+  }
+
+  .topology-container :global(g.node.status-down .node-bg rect) {
+    stroke: #ef4444;
+    stroke-width: 2px;
   }
 
   @keyframes node-pulse {
