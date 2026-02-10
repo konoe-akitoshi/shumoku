@@ -86,7 +86,7 @@ export class PrometheusPlugin
     if (this.config.preset === 'custom' && this.config.customMetrics) {
       this.metrics = this.config.customMetrics
     } else {
-      this.metrics = METRIC_PRESETS[this.config.preset] || METRIC_PRESETS.node_exporter
+      this.metrics = METRIC_PRESETS[this.config.preset] || METRIC_PRESETS.snmp
     }
   }
 
@@ -635,7 +635,8 @@ export class PrometheusPlugin
 
   /**
    * Check if a host is up using the configured upMetric.
-   * For SNMP: snmp_scrape_pdus_returned > 0 means the device responded.
+   * For SNMP preset: tries snmp_scrape_pdus_returned first (value > 0),
+   * then falls back to standard "up" metric for non-SNMP devices (e.g. APs).
    * For others: up == 1 means the scrape target is reachable.
    */
   private async checkHostUp(instance: string): Promise<boolean> {
@@ -646,18 +647,26 @@ export class PrometheusPlugin
     const hostLabel = this.config.hostLabel || 'instance'
     const upMetric = this.metrics.upMetric || 'up'
 
-    let query = `${upMetric}{${hostLabel}="${instance}"}`
-    if (this.config.jobFilter) {
-      query = `${upMetric}{${hostLabel}="${instance}",job="${this.config.jobFilter}"}`
+    const buildQuery = (metric: string) => {
+      if (this.config!.jobFilter) {
+        return `${metric}{${hostLabel}="${instance}",job="${this.config!.jobFilter}"}`
+      }
+      return `${metric}{${hostLabel}="${instance}"}`
     }
 
     try {
-      const result = await this.instantQuery(query)
-      // For snmp_scrape_pdus_returned: value > 0 means device responded
-      // For standard up metric: value == 1 means target is reachable
+      const result = await this.instantQuery(buildQuery(upMetric))
+
       if (upMetric === 'snmp_scrape_pdus_returned') {
-        return result.result.some((r) => Number(r.value[1]) > 0)
+        // SNMP device: value > 0 means device responded
+        if (result.result.length > 0) {
+          return result.result.some((r) => Number(r.value[1]) > 0)
+        }
+        // No SNMP metrics for this host — fall back to standard "up" metric
+        const fallback = await this.instantQuery(buildQuery('up'))
+        return fallback.result.some((r) => r.value[1] === '1')
       }
+
       return result.result.some((r) => r.value[1] === '1')
     } catch {
       return false
