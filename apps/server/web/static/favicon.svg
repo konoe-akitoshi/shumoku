@@ -1,6 +1,1 @@
-<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1024" height="1024" rx="200" fill="#7FE4C1"/>
-  <g transform="translate(90,40) scale(1.25)">
-    <path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z"/>
-  </g>
-</svg>
+../../../../assets/favicon.svg

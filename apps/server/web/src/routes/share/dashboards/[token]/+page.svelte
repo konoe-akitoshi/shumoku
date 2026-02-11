@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount, tick } from 'svelte'
+import Logo from '$lib/components/Logo.svelte'
 import { page } from '$app/stores'
 import { browser } from '$app/environment'
 import { mount, unmount } from 'svelte'
@@ -153,13 +154,7 @@ async function initGrid(layout: { columns?: number; rowHeight?: number; margin?:
   <!-- Header -->
   <div class="flex items-center justify-between px-4 py-3 border-b border-theme-border bg-theme-bg-elevated">
     <div class="flex items-center gap-2">
-      <div class="w-7 h-7 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-        <svg viewBox="0 0 1024 1024" class="w-3.5 h-3.5" fill="none">
-          <g transform="translate(90,40) scale(1.25)">
-            <path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z" />
-          </g>
-        </svg>
-      </div>
+      <Logo size={28} class="flex-shrink-0" />
       <span class="text-sm font-medium text-theme-text-emphasis">{name}</span>
       <span class="text-xs text-theme-text-muted px-2 py-0.5 bg-theme-bg rounded-full">Shared</span>
     </div>

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { ImageResponse } from 'next/og'
 import { getPageImage, source } from '@/lib/source'
+import { LogoSvg } from '@/lib/og-brand'
 
 export const revalidate = false
 
@@ -22,16 +23,8 @@ export async function GET(_req: Request, { params }: RouteContext<'/og/docs/[...
     >
       {/* Header with logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <svg width="48" height="48" viewBox="0 0 1024 1024" fill="none">
-          <rect x="64" y="64" width="896" height="896" rx="200" fill="#7FE4C1" />
-          <g transform="translate(90,40) scale(1.25)">
-            <path
-              fill="#1F2328"
-              d="M 380 340 H 450 V 505 H 700 V 555 H 510 V 645 H 450 V 645 H 380 Z"
-            />
-          </g>
-        </svg>
-        <span style={{ color: '#7FE4C1', fontSize: '28px', fontWeight: 600 }}>Shumoku</span>
+        <LogoSvg size={48} />
+        <span style={{ color: '#13ae67', fontSize: '28px', fontWeight: 600 }}>Shumoku</span>
       </div>
 
       {/* Title */}

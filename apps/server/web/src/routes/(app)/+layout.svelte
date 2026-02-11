@@ -13,6 +13,7 @@ import Cube from 'phosphor-svelte/lib/Cube'
 import GearSix from 'phosphor-svelte/lib/GearSix'
 import CaretDoubleLeft from 'phosphor-svelte/lib/CaretDoubleLeft'
 import CaretDoubleRight from 'phosphor-svelte/lib/CaretDoubleRight'
+import Logo from '$lib/components/Logo.svelte'
 import SignOut from 'phosphor-svelte/lib/SignOut'
 
 interface NavItem {
@@ -98,13 +99,7 @@ function toggleSidebar() {
     <div class="h-14 flex items-center justify-between px-3 border-b border-theme-border">
       {#if !sidebarCollapsed}
         <div class="flex items-center gap-2 min-w-0">
-          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg viewBox="0 0 1024 1024" class="w-4 h-4" fill="none">
-              <g transform="translate(90,40) scale(1.25)">
-                <path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z" />
-              </g>
-            </svg>
-          </div>
+          <Logo size={32} class="flex-shrink-0" />
           <span class="text-lg font-semibold text-theme-text-emphasis whitespace-nowrap">Shumoku</span>
         </div>
       {/if}

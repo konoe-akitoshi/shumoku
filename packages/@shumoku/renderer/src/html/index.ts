@@ -4,6 +4,7 @@
  */
 
 import type { HierarchicalNetworkGraph, LayoutResult, NetworkGraph } from '@shumoku/core'
+import { BRANDING_ICON_SVG } from '../brand.js'
 import { SVGRenderer } from '../svg.js'
 import type { HTMLRendererOptions } from '../types.js'
 import {
@@ -238,7 +239,7 @@ function buildNavigationState(
 function generateHtml(svg: string, title: string, options: Required<RenderOptions>): string {
   const brandingHtml = options.branding
     ? `<a class="branding" href="https://shumoku.packof.me" target="_blank" rel="noopener">
-      <svg class="branding-icon" viewBox="0 0 1024 1024" fill="none"><rect x="64" y="64" width="896" height="896" rx="200" fill="#7FE4C1"/><g transform="translate(90,40) scale(1.25)"><path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z"/></g></svg>
+      ${BRANDING_ICON_SVG}
       <span>Made with Shumoku</span>
     </a>`
     : ''
@@ -562,7 +563,7 @@ function generateHierarchicalHtml(
 ): string {
   const brandingHtml = options.branding
     ? `<a class="branding" href="https://shumoku.packof.me" target="_blank" rel="noopener">
-      <svg class="branding-icon" viewBox="0 0 1024 1024" fill="none"><rect x="64" y="64" width="896" height="896" rx="200" fill="#7FE4C1"/><g transform="translate(90,40) scale(1.25)"><path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z"/></g></svg>
+      ${BRANDING_ICON_SVG}
       <span>Made with Shumoku</span>
     </a>`
     : ''

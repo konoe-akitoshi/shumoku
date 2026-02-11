@@ -1,5 +1,6 @@
 <script lang="ts">
 import { auth } from '$lib/api'
+import Logo from '$lib/components/Logo.svelte'
 import { goto } from '$app/navigation'
 import { onMount } from 'svelte'
 
@@ -62,13 +63,7 @@ async function handleSubmit() {
     <div class="bg-theme-bg-elevated border border-theme-border rounded-xl p-8 shadow-lg">
       <!-- Logo -->
       <div class="flex justify-center mb-6">
-        <div class="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-          <svg viewBox="0 0 1024 1024" class="w-6 h-6" fill="none">
-            <g transform="translate(90,40) scale(1.25)">
-              <path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z" />
-            </g>
-          </svg>
-        </div>
+        <Logo size={48} />
       </div>
 
       <h1 class="text-xl font-semibold text-theme-text-emphasis text-center mb-2">

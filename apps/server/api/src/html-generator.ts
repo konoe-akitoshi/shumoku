@@ -157,12 +157,7 @@ export function generateMetricsHtml(
   <div class="toolbar">
     <div class="toolbar-left">
       <a href="/" style="text-decoration: none; color: inherit;">
-        <svg viewBox="0 0 1024 1024" width="24" height="24" fill="none">
-          <rect x="64" y="64" width="896" height="896" rx="200" fill="#7FE4C1"/>
-          <g transform="translate(90,40) scale(1.25)">
-            <path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z"/>
-          </g>
-        </svg>
+        <img src="/logo-symbol.svg" width="24" height="24" alt="Shumoku" />
       </a>
       <span class="toolbar-title">${escapeHtml(title)}</span>
       <div class="status-indicator">
@@ -204,12 +199,7 @@ export function generateMetricsHtml(
   <div class="container" id="container">
     ${svgContent}
     <a class="branding" href="https://shumoku.packof.me" target="_blank" rel="noopener">
-      <svg class="branding-icon" viewBox="0 0 1024 1024" fill="none">
-        <rect x="64" y="64" width="896" height="896" rx="200" fill="#7FE4C1"/>
-        <g transform="translate(90,40) scale(1.25)">
-          <path fill="#1F2328" d="M380 340H450V505H700V555H510V645H450V645H380Z"/>
-        </g>
-      </svg>
+      <img class="branding-icon" src="/logo-symbol.svg" alt="Shumoku" />
       <span>Made with Shumoku</span>
     </a>
   </div>

@@ -1,14 +1,14 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ImageResponse } from 'next/og'
+import { LogoSvg } from '@/lib/og-brand'
 
 export const revalidate = false
 
 const colors = {
   background: '#0a0a0a',
-  primary: '#7FE4C1',
+  primary: '#13ae67',
   text: '#ffffff',
-  logo: '#1F2328',
 } as const
 
 const size = { width: 1200, height: 630 } as const
@@ -17,20 +17,6 @@ async function loadDiagramImage() {
   const imgPath = join(process.cwd(), 'public', 'hero-diagram.png')
   const imgBuffer = await readFile(imgPath)
   return `data:image/png;base64,${imgBuffer.toString('base64')}`
-}
-
-function Logo() {
-  return (
-    <svg width="80" height="80" viewBox="0 0 1024 1024" fill="none">
-      <rect x="64" y="64" width="896" height="896" rx="200" fill={colors.primary} />
-      <g transform="translate(90,40) scale(1.25)">
-        <path
-          fill={colors.logo}
-          d="M 380 340 H 450 V 505 H 700 V 555 H 510 V 645 H 450 V 645 H 380 Z"
-        />
-      </g>
-    </svg>
-  )
 }
 
 export async function GET() {
@@ -68,7 +54,7 @@ export async function GET() {
           zIndex: 10,
         }}
       >
-        <Logo />
+        <LogoSvg size={80} />
         <h1
           style={{
             color: colors.text,

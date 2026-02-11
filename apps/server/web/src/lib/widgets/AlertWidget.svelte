@@ -45,9 +45,9 @@ let pinnedAlert = $state<Alert | null>(null)
 const SEVERITY_COLORS: Record<AlertSeverity, string> = {
   disaster: '#dc2626', // red-600
   high: '#ea580c', // orange-600
-  average: '#ca8a04', // yellow-600
-  warning: '#0284c7', // sky-600
-  information: '#16a34a', // green-600
+  average: '#d97706', // amber-600
+  warning: '#ca8a04', // yellow-600
+  information: '#eab308', // yellow-500
   ok: '#6b7280', // gray-500
 }
 
@@ -56,18 +56,21 @@ const SEVERITY_HIGHLIGHT_COLORS: Record<AlertSeverity, string> = {
   high: '#ea580c',
   average: '#d97706',
   warning: '#ca8a04',
-  information: '#2563eb',
+  information: '#eab308',
   ok: '#6b7280',
 }
 
 const SEVERITY_BG_COLORS: Record<AlertSeverity, string> = {
   disaster: 'bg-red-500/10',
   high: 'bg-orange-500/10',
-  average: 'bg-yellow-500/10',
-  warning: 'bg-sky-500/10',
-  information: 'bg-green-500/10',
+  average: 'bg-amber-500/10',
+  warning: 'bg-yellow-500/10',
+  information: 'bg-yellow-400/10',
   ok: 'bg-gray-500/10',
 }
+
+const RESOLVED_COLOR = '#16a34a' // green-600
+const RESOLVED_BG_COLOR = 'bg-green-500/10'
 
 const SEVERITY_RANK: Record<AlertSeverity, number> = {
   disaster: 0, high: 1, average: 2, warning: 3, information: 4, ok: 5,
@@ -88,6 +91,16 @@ function getSeverityIcon(severity: AlertSeverity) {
     default:
       return Warning
   }
+}
+
+function getAlertColor(alert: Alert): string {
+  if (alert.status === 'resolved') return RESOLVED_COLOR
+  return SEVERITY_COLORS[alert.severity]
+}
+
+function getAlertBgColor(alert: Alert): string {
+  if (alert.status === 'resolved') return RESOLVED_BG_COLOR
+  return SEVERITY_BG_COLORS[alert.severity]
 }
 
 function formatDuration(timestamp: number): string {
@@ -383,9 +396,9 @@ let activeAlerts = $derived(alerts.filter((a) => a.status === 'active'))
             {@const SeverityIcon = getSeverityIcon(alert.severity)}
             <button
               type="button"
-              class="w-full text-left p-2 rounded transition-colors cursor-pointer hover:brightness-90 {SEVERITY_BG_COLORS[
-                alert.severity
-              ]}"
+              class="w-full text-left p-2 rounded transition-colors cursor-pointer hover:brightness-90 {getAlertBgColor(
+                alert
+              )}"
               onclick={() => { selectedAlert = alert; showDetailModal = true }}
               onmouseenter={() => handleAlertHover(alert)}
               onmouseleave={handleAlertLeave}
@@ -393,7 +406,7 @@ let activeAlerts = $derived(alerts.filter((a) => a.status === 'active'))
               <div class="flex items-start gap-2">
                 <SeverityIcon
                   size={16}
-                  color={SEVERITY_COLORS[alert.severity]}
+                  color={getAlertColor(alert)}
                   weight="fill"
                   class="mt-0.5 flex-shrink-0"
                 />
@@ -431,17 +444,17 @@ let activeAlerts = $derived(alerts.filter((a) => a.status === 'active'))
       {@const SeverityIcon = getSeverityIcon(selectedAlert.severity)}
       <Dialog.Header>
         <div class="flex items-start gap-3">
-          <div class="p-1.5 rounded {SEVERITY_BG_COLORS[selectedAlert.severity]}">
+          <div class="p-1.5 rounded {getAlertBgColor(selectedAlert)}">
             <SeverityIcon
               size={20}
-              color={SEVERITY_COLORS[selectedAlert.severity]}
+              color={getAlertColor(selectedAlert)}
               weight="fill"
             />
           </div>
           <div class="min-w-0">
             <Dialog.Title class="break-words">{selectedAlert.title}</Dialog.Title>
             <div class="flex items-center gap-2 mt-1">
-              <span class="text-xs px-1.5 py-0.5 rounded font-medium {SEVERITY_BG_COLORS[selectedAlert.severity]}" style="color: {SEVERITY_COLORS[selectedAlert.severity]}">
+              <span class="text-xs px-1.5 py-0.5 rounded font-medium {getAlertBgColor(selectedAlert)}" style="color: {getAlertColor(selectedAlert)}">
                 {selectedAlert.severity}
               </span>
               {#if selectedAlert.status === 'active'}

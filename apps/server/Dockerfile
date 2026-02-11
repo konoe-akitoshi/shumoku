@@ -9,11 +9,16 @@ WORKDIR /app
 
 # Copy monorepo config and required packages
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
+COPY assets/ ./assets/
 COPY packages/@shumoku/core/ ./packages/@shumoku/core/
 COPY packages/@shumoku/parser-yaml/ ./packages/@shumoku/parser-yaml/
 COPY packages/@shumoku/renderer/ ./packages/@shumoku/renderer/
 COPY packages/@shumoku/netbox/ ./packages/@shumoku/netbox/
 COPY apps/server/ ./apps/server/
+
+# Resolve symlinks in static/ (Docker COPY may not follow cross-directory symlinks)
+RUN cd apps/server/web/static && \
+    for f in *; do [ -L "$f" ] && cp --remove-destination "$(readlink -f "$f")" "$f" || true; done
 
 # Install dependencies with cache mount
 RUN --mount=type=cache,target=/root/.bun/install/cache \

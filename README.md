@@ -1,6 +1,6 @@
 # Shumoku — Network Topology Diagram Generator
 
-<img src="apps/docs/public/logo.svg" alt="Shumoku Logo" width="128" height="128">
+<img src="assets/logo-symbol.svg" alt="Shumoku Logo" width="128" height="128">
 
 **Network diagrams, as code.** Generate beautiful network topology diagrams (SVG/HTML) from YAML definitions.
 
