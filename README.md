@@ -1,5 +1,8 @@
 # Shumoku — Network Topology Diagram Generator
 
+> [!IMPORTANT]
+> 製作者がJANOG57 NOCに参加中です。サーバー系機能のreadmeが全体的に整備されていません。何かあればご連絡ください。
+
 <img src="assets/logo-symbol.svg" alt="Shumoku Logo" width="128" height="128">
 
 **Network diagrams, as code.** Generate beautiful network topology diagrams (SVG/HTML) from YAML definitions.
