@@ -1,8 +1,11 @@
 # Shumoku
 
 > [!IMPORTANT]
-> 製作者がJANOG57 NOCに参加中です。サーバー系機能のreadmeが全体的に整備されていません。何かあればご連絡ください。
-> 📧 [contact@shumoku.dev](mailto:contact@shumoku.dev) / 𝕏 [@shumoku_dev](https://x.com/shumoku_dev)
+> 製作者がJANOG57 NOCに参加中です。サーバー系機能のreadmeが全体的に整備されていません。
+> 導入支援・技術サポートについてもお気軽にご相談ください。
+>
+> &ensp; 📧 &ensp;[contact@shumoku.dev](mailto:contact@shumoku.dev)
+> &ensp; 𝕏 &ensp;&ensp;[@shumoku_dev](https://x.com/shumoku_dev)
 
 <img src="assets/logo-symbol.svg" alt="Shumoku Logo" width="128" height="128">
 
