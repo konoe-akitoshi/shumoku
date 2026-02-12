@@ -5,7 +5,7 @@
   "description": "Real-time network topology visualization server with Zabbix integration",
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"bun run dev:api\" \"bun run dev:web\"",
-    "dev:api": "cd api && NODE_ENV=development bun --watch src/index.ts",
+    "dev:api": "cd api && NODE_ENV=development DEMO_MODE=true bun --watch src/index.ts",
     "dev:web": "wait-on http://localhost:8080/api/health && cd web && bun run dev",
     "build": "cd api && bun run build && cd ../web && bun run build",
     "start": "cd api && bun run start",

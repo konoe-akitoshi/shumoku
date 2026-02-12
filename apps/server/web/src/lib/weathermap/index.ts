@@ -4,10 +4,12 @@
  * Original SVG paths are hidden via opacity. Overlay paths are created on top
  * with `pointer-events: none` so they don't interfere with interactions.
  *
- * Each original path produces an in/out pair, each with two layers:
- *   1. Base line — solid stroke at reduced opacity showing utilization color
- *   2. Dot line  — small rounded dashes with CSS drop-shadow glow, animated along path
+ * Each original path produces an in/out pair:
+ *   1. Base line (SVG) — solid stroke at reduced opacity showing utilization color
+ *   2. Particle track (Canvas) — animated dots drawn by CanvasOverlayRenderer
  */
+
+import { CanvasOverlayRenderer, samplePathToPolyline, type ParticleTrack } from './canvas-overlay'
 
 // --- Types ---
 
@@ -22,10 +24,7 @@ interface LinkMetrics {
 
 interface DirectionLayer {
   base: SVGPathElement
-  dots: SVGPathElement
-  animation?: Animation
-  animDurationMs?: number
-  animDirection?: 'in' | 'out'
+  track: ParticleTrack
 }
 
 /** N original paths × 2 directions = 2N overlay pairs. */
@@ -41,7 +40,6 @@ interface LinkOverlay {
 // --- Constants ---
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
-const CSS_GLOW = 'drop-shadow(0 0 2px currentColor)'
 const NEUTRAL_COLOR = '#6b7280'
 const DOWN_COLOR = '#ef4444'
 
@@ -153,8 +151,8 @@ export class WeathermapController {
   private minSamples: number
   private batchSize: number
   private animationsEnabled: boolean
-  private animationsPaused = false
   private lastLinks: Record<string, LinkMetrics> | undefined
+  private canvasRenderer: CanvasOverlayRenderer | null = null
 
   constructor(svg: SVGSVGElement) {
     this.svg = svg
@@ -165,6 +163,11 @@ export class WeathermapController {
     this.minSamples = minSamples
     this.batchSize = batchSize
     this.animationsEnabled = animationsEnabled
+
+    if (this.animationsEnabled) {
+      this.canvasRenderer = new CanvasOverlayRenderer(svg, this.quality)
+      this.canvasRenderer.start()
+    }
   }
 
   apply(links: Record<string, LinkMetrics> | undefined): void {
@@ -203,6 +206,8 @@ export class WeathermapController {
       ]
       this.scheduleBatch()
     }
+
+    this.syncTracksToCanvas()
   }
 
   reset(): void {
@@ -214,15 +219,12 @@ export class WeathermapController {
 
     for (const overlay of this.overlays.values()) {
       for (const layer of allLayers(overlay)) {
-        if (layer.animation) {
-          layer.animation.cancel()
-          layer.animation = undefined
-        }
         layer.base.remove()
-        layer.dots.remove()
       }
     }
     this.overlays.clear()
+
+    this.canvasRenderer?.setTracks([])
 
     for (const [path, style] of this.originalStyles) {
       if (style.stroke === null) {
@@ -238,21 +240,16 @@ export class WeathermapController {
 
   destroy(): void {
     this.reset()
+    this.canvasRenderer?.destroy()
+    this.canvasRenderer = null
   }
 
   setInteracting(isInteracting: boolean): void {
-    if (!this.animationsEnabled) return
+    if (!this.animationsEnabled || !this.canvasRenderer) return
     if (isInteracting) {
-      if (!this.animationsPaused) {
-        this.animationsPaused = true
-        this.pauseAnimations()
-      }
-      return
-    }
-
-    if (this.animationsPaused) {
-      this.animationsPaused = false
-      this.resumeAnimations()
+      this.canvasRenderer.freeze()
+    } else {
+      this.canvasRenderer.unfreeze()
     }
   }
 
@@ -278,7 +275,7 @@ export class WeathermapController {
         ? navigator.hardwareConcurrency || 4
         : 4
 
-    if (prefersReducedMotion || deviceMemory <= 2 || hardwareConcurrency <= 4) {
+    if (deviceMemory <= 2 || hardwareConcurrency <= 2) {
       return {
         quality: 'low',
         sampleInterval: 10,
@@ -288,7 +285,9 @@ export class WeathermapController {
       }
     }
 
-    if (deviceMemory <= 4 || hardwareConcurrency <= 6) {
+    // prefers-reduced-motion: cap at medium (no glow) but keep animation
+    // since traffic flow is explicitly user-enabled
+    if (prefersReducedMotion || deviceMemory <= 4 || hardwareConcurrency <= 4) {
       return {
         quality: 'medium',
         sampleInterval: 6,
@@ -375,6 +374,8 @@ export class WeathermapController {
       if (deadline && deadline.timeRemaining() < 4) break
       if (!deadline && performance.now() - start > 8) break
     }
+
+    this.syncTracksToCanvas()
   }
 
   private buildOverlay(overlay: LinkOverlay): void {
@@ -389,25 +390,57 @@ export class WeathermapController {
 
     for (const origPath of origPaths) {
       if (!origPath.isConnected) continue
-      inLayers.push(
-        this.createDirectionLayer(
-          createOffsetPathD(origPath, offset, this.sampleInterval, this.minSamples),
-          sw,
-        ),
+
+      // Base line (SVG, static)
+      const inBaseD = createOffsetPathD(origPath, offset, this.sampleInterval, this.minSamples)
+      const outBaseD = createOffsetPathD(origPath, -offset, this.sampleInterval, this.minSamples)
+
+      // Particle tracks (for Canvas animation)
+      const inTrackData = samplePathToPolyline(
+        origPath,
+        offset,
+        this.sampleInterval,
+        this.minSamples,
       )
-      outLayers.push(
-        this.createDirectionLayer(
-          createOffsetPathD(origPath, -offset, this.sampleInterval, this.minSamples),
-          sw,
-        ),
+      const outTrackData = samplePathToPolyline(
+        origPath,
+        -offset,
+        this.sampleInterval,
+        this.minSamples,
       )
+
+      inLayers.push({
+        base: this.createBasePath(inBaseD, sw),
+        track: {
+          ...inTrackData,
+          offset: 0,
+          speed: 0,
+          direction: -1,
+          color: NEUTRAL_COLOR,
+          active: false,
+        },
+      })
+
+      outLayers.push({
+        base: this.createBasePath(outBaseD, sw),
+        track: {
+          ...outTrackData,
+          offset: 0,
+          speed: 0,
+          direction: 1,
+          color: NEUTRAL_COLOR,
+          active: false,
+        },
+      })
     }
 
     overlay.inLayers = inLayers
     overlay.outLayers = outLayers
-    const layers = allLayers(overlay)
-    for (const layer of layers) group.appendChild(layer.base)
-    for (const layer of layers) group.appendChild(layer.dots)
+
+    // Only append base paths to SVG (no dots elements)
+    for (const layer of allLayers(overlay)) {
+      group.appendChild(layer.base)
+    }
 
     overlay.ready = true
 
@@ -417,23 +450,17 @@ export class WeathermapController {
     this.hideOriginalPaths(origPaths)
   }
 
-  private createDirectionLayer(d: string, strokeWidth: string): DirectionLayer {
-    const common = { d, fill: 'none', 'stroke-linecap': 'round', 'stroke-width': strokeWidth }
-
-    const base = svgEl('path', common)
+  private createBasePath(d: string, strokeWidth: string): SVGPathElement {
+    const base = svgEl('path', {
+      d,
+      fill: 'none',
+      'stroke-linecap': 'round',
+      'stroke-width': strokeWidth,
+    })
     base.classList.add('wm-overlay')
     base.style.pointerEvents = 'none'
     base.style.opacity = '0.4'
-
-    const dots = svgEl('path', {
-      ...common,
-      'stroke-width': String(Math.max(Number(strokeWidth), 3)),
-    })
-    dots.classList.add('wm-overlay')
-    dots.style.pointerEvents = 'none'
-    if (this.quality !== 'low') dots.style.filter = CSS_GLOW
-
-    return { base, dots }
+    return base
   }
 
   private applyOverlay(overlay: LinkOverlay, metrics?: LinkMetrics): void {
@@ -458,10 +485,8 @@ export class WeathermapController {
       layer.base.style.opacity = '0.4'
       if (layer.base.style.strokeDasharray) layer.base.style.strokeDasharray = ''
 
-      this.setStroke(layer.dots, color)
-      layer.dots.style.opacity = '0'
-      layer.dots.style.strokeDasharray = ''
-      this.stopDotsAnimation(layer)
+      layer.track.active = false
+      layer.track.color = color
     }
   }
 
@@ -471,10 +496,8 @@ export class WeathermapController {
       layer.base.style.opacity = '0.4'
       layer.base.style.strokeDasharray = '8 4'
 
-      this.setStroke(layer.dots, DOWN_COLOR)
-      layer.dots.style.strokeDasharray = '8 4'
-      layer.dots.style.opacity = '0.6'
-      this.stopDotsAnimation(layer)
+      layer.track.active = false
+      layer.track.color = DOWN_COLOR
     }
   }
 
@@ -495,19 +518,33 @@ export class WeathermapController {
     layer.base.style.opacity = '0.4'
     if (layer.base.style.strokeDasharray) layer.base.style.strokeDasharray = ''
 
-    this.setStroke(layer.dots, color)
+    layer.track.color = color
 
     if (bps > 0 && this.animationsEnabled) {
-      const speed = Math.min(1, Math.log10(bps + 1) / 9)
-      const duration = Math.max(0.3, 2 - speed * 1.5)
-      layer.dots.style.opacity = '1'
-      layer.dots.style.strokeDasharray = '3 21'
-      this.startDotsAnimation(layer, duration, isIn)
+      // Convert bps to speed in SVG-units/ms (same curve as before)
+      const speedFactor = Math.min(1, Math.log10(bps + 1) / 9)
+      const durationSec = Math.max(0.3, 2 - speedFactor * 1.5)
+      // 24 SVG units (particle spacing) per cycle
+      layer.track.speed = 24 / (durationSec * 1000)
+      layer.track.direction = isIn ? -1 : 1
+      layer.track.active = true
     } else {
-      layer.dots.style.opacity = '0'
-      layer.dots.style.strokeDasharray = ''
-      this.stopDotsAnimation(layer)
+      layer.track.active = false
+      layer.track.speed = 0
     }
+  }
+
+  /** Collect all tracks from overlays and push to the canvas renderer. */
+  private syncTracksToCanvas(): void {
+    if (!this.canvasRenderer) return
+    const tracks: ParticleTrack[] = []
+    for (const overlay of this.overlays.values()) {
+      if (!overlay.ready) continue
+      for (const layer of allLayers(overlay)) {
+        tracks.push(layer.track)
+      }
+    }
+    this.canvasRenderer.setTracks(tracks)
   }
 
   private setStroke(el: SVGPathElement, color: string): void {
@@ -559,59 +596,5 @@ export class WeathermapController {
       rect.bottom < svgRect.top ||
       rect.top > svgRect.bottom
     )
-  }
-
-  private startDotsAnimation(layer: DirectionLayer, durationSeconds: number, isIn: boolean): void {
-    const direction: 'in' | 'out' = isIn ? 'out' : 'in'
-    const durationMs = Math.max(50, durationSeconds * 1000)
-    const needsNew =
-      !layer.animation || layer.animDurationMs !== durationMs || layer.animDirection !== direction
-
-    if (needsNew) {
-      if (layer.animation) layer.animation.cancel()
-      const keyframes =
-        direction === 'out'
-          ? [{ strokeDashoffset: 0 }, { strokeDashoffset: 24 }]
-          : [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }]
-      layer.animation = layer.dots.animate(keyframes, {
-        duration: durationMs,
-        iterations: Infinity,
-        easing: 'linear',
-      })
-      layer.animDurationMs = durationMs
-      layer.animDirection = direction
-    }
-
-    if (this.animationsPaused) {
-      layer.animation?.pause()
-    } else {
-      layer.animation?.play()
-    }
-  }
-
-  private stopDotsAnimation(layer: DirectionLayer): void {
-    if (layer.animation) {
-      layer.animation.cancel()
-      layer.animation = undefined
-      layer.animDurationMs = undefined
-      layer.animDirection = undefined
-    }
-  }
-
-  private pauseAnimations(): void {
-    for (const overlay of this.overlays.values()) {
-      for (const layer of allLayers(overlay)) {
-        layer.animation?.pause()
-      }
-    }
-  }
-
-  private resumeAnimations(): void {
-    if (!this.animationsEnabled) return
-    for (const overlay of this.overlays.values()) {
-      for (const layer of allLayers(overlay)) {
-        layer.animation?.play()
-      }
-    }
   }
 }

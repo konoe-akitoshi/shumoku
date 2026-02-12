@@ -1357,5 +1357,9 @@ onDestroy(() => {
     .warnings-banner {
       display: none !important;
     }
+
+    .diagram-container :global(canvas) {
+      display: none !important;
+    }
   }
 </style>

@@ -374,7 +374,11 @@ export class Server {
         }
       }
 
-      // Only update if we got real metrics (no mock fallback)
+      // Fall back to mock metrics when no data source is configured
+      if (!metrics && metricsSources.length === 0 && parsed.graph) {
+        metrics = this.metricsProvider.generateMetrics(parsed.graph)
+      }
+
       if (metrics) {
         this.dbTopologyMetrics.set(topology.id, metrics)
         this.topologyService.updateMetrics(topology.id, metrics)
