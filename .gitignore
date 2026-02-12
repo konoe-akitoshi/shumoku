@@ -50,3 +50,4 @@ lerna-debug.log*
 .claude/
 .wrangler/
 apps/server/data/plugins.yaml
+*tmp_targets*.json
