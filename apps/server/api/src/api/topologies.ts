@@ -259,7 +259,6 @@ export function createTopologiesApi(): Hono {
   // Create new topology
   app.post('/', async (c) => {
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const body = (await c.req.json()) as TopologyInput
       if (!body.name || !body.contentJson) {
         return c.json({ error: 'name and contentJson are required' }, 400)
@@ -277,7 +276,6 @@ export function createTopologiesApi(): Hono {
   app.put('/:id', async (c) => {
     const id = c.req.param('id')
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const body = (await c.req.json()) as Partial<TopologyInput>
       const topology = await service.update(id, body)
       if (!topology) {
@@ -294,7 +292,6 @@ export function createTopologiesApi(): Hono {
   app.put('/:id/mapping', async (c) => {
     const id = c.req.param('id')
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const mapping = (await c.req.json()) as ZabbixMapping
       const topology = service.updateMapping(id, mapping)
       if (!topology) {
@@ -312,7 +309,6 @@ export function createTopologiesApi(): Hono {
     const id = c.req.param('id')
     const nodeId = c.req.param('nodeId')
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const nodeMapping = (await c.req.json()) as { hostId?: string; hostName?: string }
       const topology = service.get(id)
       if (!topology) {

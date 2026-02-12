@@ -165,13 +165,11 @@ export class NetBoxClient {
       this.log(`Response: ${response.status} ${response.statusText} (${elapsed}ms)`)
 
       if (!response.ok) {
-        // biome-ignore lint/nursery/useAwaitThenable: response.text() returns a Promise
         const errorBody = await response.text()
         this.log('Error response body:', errorBody)
         throw new Error(`NetBox API request failed: ${response.status} ${response.statusText}`)
       }
 
-      // biome-ignore lint/nursery/useAwaitThenable: response.json() returns a Promise
       const data = (await response.json()) as T
       if (this.debug && typeof data === 'object' && data !== null && 'count' in data) {
         this.log(`Response data: ${(data as { count: number }).count} items`)

@@ -119,7 +119,6 @@ export async function parseYamlToNetworkGraph(
     const fileMap = new Map<string, string>([['main.yaml', yamlContent], ...additionalFiles])
     const resolver = createMemoryFileResolver(fileMap, '')
     const parser = new HierarchicalParser(resolver)
-    // biome-ignore lint/nursery/useAwaitThenable: parser.parse returns a Promise
     const result = await parser.parse(yamlContent, 'main.yaml')
     return result.graph
   }

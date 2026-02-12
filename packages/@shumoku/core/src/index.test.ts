@@ -31,7 +31,6 @@ describe('@shumoku/core', () => {
         nodes: [],
         links: [],
       }
-      // biome-ignore lint/nursery/useAwaitThenable: elk.layout() returns Promise at runtime
       const result = await engine.layout(graph)
       expect(result).toBeDefined()
       expect(result.nodes).toBeDefined()
@@ -47,7 +46,6 @@ describe('@shumoku/core', () => {
         ],
         links: [],
       }
-      // biome-ignore lint/nursery/useAwaitThenable: elk.layout() returns Promise at runtime
       const result = await engine.layout(graph)
       expect(result.nodes.size).toBe(2)
     })

@@ -40,7 +40,6 @@ export function createDashboardsApi(): Hono {
   // Create new dashboard
   app.post('/', async (c) => {
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const body = (await c.req.json()) as DashboardInput
       if (!body.name) {
         return c.json({ error: 'name is required' }, 400)
@@ -68,7 +67,6 @@ export function createDashboardsApi(): Hono {
   app.put('/:id', async (c) => {
     const id = c.req.param('id')
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const body = (await c.req.json()) as Partial<DashboardInput>
       const dashboard = service.update(id, body)
       if (!dashboard) {

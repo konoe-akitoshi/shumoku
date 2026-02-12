@@ -54,7 +54,6 @@ export function createAuthApi(): Hono {
       return c.json({ error: 'Setup already completed' }, 400)
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
     const body = (await c.req.json()) as { password?: string }
     if (!body.password || body.password.length < 8) {
       return c.json({ error: 'Password must be at least 8 characters' }, 400)
@@ -79,7 +78,6 @@ export function createAuthApi(): Hono {
       return c.json({ error: `Too many attempts. Try again in ${lockoutSeconds} seconds.` }, 429)
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
     const body = (await c.req.json()) as { password?: string }
     if (!body.password) {
       return c.json({ error: 'Password is required' }, 400)
@@ -109,7 +107,6 @@ export function createAuthApi(): Hono {
       return c.json({ error: 'Authentication required' }, 401)
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
     const body = (await c.req.json()) as {
       currentPassword?: string
       newPassword?: string

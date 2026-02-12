@@ -98,7 +98,6 @@ export function createDataSourcesApi(): Hono {
   // Create new data source
   app.post('/', async (c) => {
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const body = (await c.req.json()) as DataSourceInput
       if (!body.name || !body.type || !body.configJson) {
         return c.json({ error: 'name, type, and configJson are required' }, 400)
@@ -129,7 +128,6 @@ export function createDataSourcesApi(): Hono {
   app.put('/:id', async (c) => {
     const id = c.req.param('id')
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const body = (await c.req.json()) as Partial<DataSourceInput>
 
       // Validate configJson if provided

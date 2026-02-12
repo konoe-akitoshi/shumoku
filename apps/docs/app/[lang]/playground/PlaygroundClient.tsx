@@ -272,7 +272,6 @@ export default function PlaygroundClient() {
 
         const resolver = createMemoryFileResolver(fileMap, '/')
         const hierarchicalParser = new HierarchicalParser(resolver)
-        // biome-ignore lint/nursery/useAwaitThenable: parse() returns a Promise
         const result = await hierarchicalParser.parse(mainFile.content, '/main.yaml')
 
         if (result.warnings && result.warnings.length > 0) {
@@ -384,7 +383,6 @@ export default function PlaygroundClient() {
         try {
           const response = await fetch(url)
           if (!response.ok) return
-          // biome-ignore lint/nursery/useAwaitThenable: response.blob() returns a Promise
           const blob = await response.blob()
           const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader()

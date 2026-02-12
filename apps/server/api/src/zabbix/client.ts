@@ -39,7 +39,6 @@ export class ZabbixClient {
       throw new Error(`Zabbix API request failed: ${response.status} ${response.statusText}`)
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: response.json() returns a Promise
     const result = (await response.json()) as {
       result?: T
       error?: { message: string; data: string }

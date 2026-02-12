@@ -59,7 +59,6 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
     return c.json({ error: 'Topology not found' }, 404)
   }
 
-  // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
   const body = await c.req.json<TopologyDataSourceInput>()
 
   // Validate required fields
@@ -106,7 +105,6 @@ topologySourcesApi.put('/:topologyId/sources/:sourceId', async (c) => {
     return c.json({ error: 'Topology data source not found' }, 404)
   }
 
-  // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
   const body = await c.req.json<{ syncMode?: SyncMode; priority?: number; optionsJson?: string }>()
 
   const updated = getTopologySourcesService().update(sourceId, body)
@@ -156,7 +154,6 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
     return c.json({ error: 'Topology not found' }, 404)
   }
 
-  // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
   const body = await c.req.json<{ sources: TopologyDataSourceInput[] }>()
 
   if (!Array.isArray(body.sources)) {

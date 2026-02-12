@@ -124,7 +124,6 @@ export async function prepareRender(
       ...options?.layoutOptions,
       iconDimensions: iconDimensions?.byKey,
     })
-    // biome-ignore lint/nursery/useAwaitThenable: layoutAsync returns Promise<LayoutResult>
     layout = await layoutEngine.layoutAsync(graph)
   }
 

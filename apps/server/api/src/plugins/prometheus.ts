@@ -443,7 +443,6 @@ export class PrometheusPlugin
         generatorURL?: string
       }
 
-      // biome-ignore lint/nursery/useAwaitThenable: response.json() returns a Promise
       const alertmanagerAlerts = (await response.json()) as AlertmanagerAlert[]
 
       const now = Date.now()
@@ -599,7 +598,6 @@ export class PrometheusPlugin
       throw new Error(`Prometheus API request failed: ${response.status} ${response.statusText}`)
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: response.json() returns a Promise
     const json = (await response.json()) as PrometheusResponse<T>
 
     if (json.status === 'error') {
@@ -619,7 +617,6 @@ export class PrometheusPlugin
       throw new Error(`Prometheus API request failed: ${response.status}`)
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: response.json() returns a Promise
     const json = (await response.json()) as PrometheusResponse<T>
 
     if (json.status === 'error') {

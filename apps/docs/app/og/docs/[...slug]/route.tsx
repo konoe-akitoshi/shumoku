@@ -6,7 +6,6 @@ import { getPageImage, source } from '@/lib/source'
 export const revalidate = false
 
 export async function GET(_req: Request, { params }: RouteContext<'/og/docs/[...slug]'>) {
-  // biome-ignore lint/nursery/useAwaitThenable: Next.js params is a Promise in App Router
   const { slug } = await params
   const page = source.getPage(slug.slice(0, -1))
   if (!page) notFound()

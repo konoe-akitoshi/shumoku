@@ -295,7 +295,6 @@ describe('buildHierarchicalSheets integration', () => {
     })
 
     const layout = new HierarchicalLayout()
-    // biome-ignore lint/nursery/useAwaitThenable: layoutAsync returns a Promise
     const rootLayout = await layout.layoutAsync(graph)
     const sheets = await buildHierarchicalSheets(graph, rootLayout, layout)
 
@@ -312,7 +311,6 @@ describe('buildHierarchicalSheets integration', () => {
     })
 
     const layout = new HierarchicalLayout()
-    // biome-ignore lint/nursery/useAwaitThenable: layoutAsync returns a Promise
     const rootLayout = await layout.layoutAsync(graph)
     const sheets = await buildHierarchicalSheets(graph, rootLayout, layout)
 
@@ -341,7 +339,6 @@ describe('buildHierarchicalSheets integration', () => {
     })
 
     const layout = new HierarchicalLayout()
-    // biome-ignore lint/nursery/useAwaitThenable: layoutAsync returns a Promise
     const rootLayout = await layout.layoutAsync(graph)
     await buildHierarchicalSheets(graph, rootLayout, layout)
 
@@ -357,7 +354,6 @@ describe('buildHierarchicalSheets integration', () => {
     })
 
     const layout = new HierarchicalLayout()
-    // biome-ignore lint/nursery/useAwaitThenable: layoutAsync returns a Promise
     const rootLayout = await layout.layoutAsync(graph)
     const sheets = await buildHierarchicalSheets(graph, rootLayout, layout)
 
@@ -387,7 +383,6 @@ describe('buildHierarchicalSheets integration', () => {
     })
 
     const layout = new HierarchicalLayout()
-    // biome-ignore lint/nursery/useAwaitThenable: layoutAsync returns a Promise
     const rootLayout = await layout.layoutAsync(graph)
     const sheets = await buildHierarchicalSheets(graph, rootLayout, layout)
 

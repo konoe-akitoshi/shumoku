@@ -319,7 +319,6 @@ export class Server {
 
     const topologies = this.topologyService.list()
     for (const topology of topologies) {
-      // biome-ignore lint/nursery/useAwaitThenable: getParsed returns a Promise
       const parsed: ParsedTopology | null = await this.topologyService.getParsed(topology.id)
       if (!parsed) continue
 
@@ -361,7 +360,6 @@ export class Server {
               }
 
               // Poll real metrics
-              // biome-ignore lint/nursery/useAwaitThenable: plugin.pollMetrics returns a Promise
               metrics = await plugin.pollMetrics(mapping)
               console.log(
                 `[Server] Polled real metrics for topology "${topology.name}" from ${dataSource.type}`,
@@ -404,7 +402,6 @@ export class Server {
     this.topologyService = getTopologyService()
     this.topologySourcesService = new TopologySourcesService()
     this.dataSourceService = new DataSourceService()
-    // biome-ignore lint/nursery/useAwaitThenable: initializeSample returns a Promise
     await this.topologyService.initializeSample()
 
     await this.topologyManager.loadAll()

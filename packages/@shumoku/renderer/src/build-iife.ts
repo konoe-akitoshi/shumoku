@@ -4,7 +4,6 @@
 
 import { join } from 'node:path'
 
-// biome-ignore lint/nursery/useAwaitThenable: Bun.build returns a Promise
 const result = await Bun.build({
   entrypoints: [join(import.meta.dir, 'html', 'iife-entry.ts')],
   outdir: join(import.meta.dir, '..', 'dist'),

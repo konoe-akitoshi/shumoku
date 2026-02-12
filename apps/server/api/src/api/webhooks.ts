@@ -65,7 +65,6 @@ webhooksApi.post('/topology/:secret', async (c) => {
   // Parse the webhook body (NetBox sends JSON with event details)
   let body: unknown
   try {
-    // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
     body = await c.req.json()
     if (process.env.DEBUG) {
       console.log('[Webhook] Payload:', JSON.stringify(body, null, 2))
@@ -142,7 +141,6 @@ webhooksApi.post('/grafana/:secret', async (c) => {
 
   let body: unknown
   try {
-    // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
     body = await c.req.json()
   } catch {
     return c.json({ error: 'Invalid JSON payload' }, 400)

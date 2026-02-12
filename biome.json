@@ -20,7 +20,6 @@
       "nursery": {
         "noFloatingPromises": "error",
         "noMisusedPromises": "error",
-        "useAwaitThenable": "error",
         "useExhaustiveSwitchCases": "error",
         "noUnnecessaryConditions": "warn",
         "noShadow": "warn"

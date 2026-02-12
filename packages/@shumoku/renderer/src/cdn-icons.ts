@@ -112,7 +112,6 @@ export async function fetchCDNIcon(
     }
 
     const contentType = response.headers.get('content-type') || 'image/png'
-    // biome-ignore lint/nursery/useAwaitThenable: response.arrayBuffer() returns a Promise
     const arrayBuffer = await response.arrayBuffer()
     const bytes = new Uint8Array(arrayBuffer)
     const chunks: string[] = []
@@ -216,7 +215,6 @@ export async function fetchImageDimensions(
       return null
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: response.arrayBuffer() returns a Promise
     const arrayBuffer = await response.arrayBuffer()
     const dimensions = parseImageDimensions(new Uint8Array(arrayBuffer), url)
 

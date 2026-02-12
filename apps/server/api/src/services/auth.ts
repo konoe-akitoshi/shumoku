@@ -33,7 +33,6 @@ export function isSetupComplete(): boolean {
  * Uses Bun's built-in Bun.password API (argon2id by default)
  */
 export async function setPassword(password: string): Promise<void> {
-  // biome-ignore lint/nursery/useAwaitThenable: Bun.password.hash returns a Promise
   const hash = await Bun.password.hash(password)
   const db = getDatabase()
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('auth_password_hash', ?)").run(

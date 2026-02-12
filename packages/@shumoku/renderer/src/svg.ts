@@ -44,7 +44,11 @@ import type { DataAttributeOptions, RenderMode } from './types.js'
  * Check if an icon URL uses a safe protocol (http, https, or data URI)
  */
 function isSafeIconUrl(url: string): boolean {
-  return /^(https?:\/\/|data:image\/)/.test(url)
+  const safe = /^(https?:\/\/|data:image\/)/.test(url)
+  if (!safe) {
+    console.warn(`[SVG] Unsafe icon URL blocked: ${url}`)
+  }
+  return safe
 }
 
 /**

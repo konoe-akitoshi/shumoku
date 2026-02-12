@@ -6,7 +6,7 @@
 import { Hono } from 'hono'
 import { getDatabase } from '../db/index.js'
 
-const PROTECTED_KEYS = ['auth_password_hash']
+const PROTECTED_KEYS = new Set(['auth_password_hash'])
 
 interface SettingRow {
   key: string
@@ -43,7 +43,6 @@ export function createSettingsApi(): Hono {
   // Update settings (bulk)
   app.put('/', async (c) => {
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const body = (await c.req.json()) as Record<string, string>
       const db = getDatabase()
       const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
@@ -56,7 +55,7 @@ export function createSettingsApi(): Hono {
 
       const entries = Object.entries(body)
       for (const [key] of entries) {
-        if (PROTECTED_KEYS.includes(key)) {
+        if (PROTECTED_KEYS.has(key)) {
           return c.json({ error: 'Cannot modify protected setting' }, 403)
         }
       }
@@ -73,12 +72,11 @@ export function createSettingsApi(): Hono {
   app.put('/:key', async (c) => {
     const key = c.req.param('key')
 
-    if (PROTECTED_KEYS.includes(key)) {
+    if (PROTECTED_KEYS.has(key)) {
       return c.json({ error: 'Cannot modify protected setting' }, 403)
     }
 
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
       const body = (await c.req.json()) as { value: string }
       if (body.value === undefined) {
         return c.json({ error: 'value is required' }, 400)

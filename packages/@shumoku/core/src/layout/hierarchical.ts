@@ -382,7 +382,6 @@ export class HierarchicalLayout {
    */
   private async runElkLayout(elkGraph: ElkNode): Promise<ElkNode> {
     try {
-      // biome-ignore lint/nursery/useAwaitThenable: elk.layout() returns Promise at runtime
       return await this.elk.layout(elkGraph)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -394,7 +393,6 @@ export class HierarchicalLayout {
         'elk.layered.compaction.postCompaction.strategy',
         'NONE',
       )
-      // biome-ignore lint/nursery/useAwaitThenable: elk.layout() returns Promise at runtime
       return await this.elk.layout(elkGraph)
     }
   }

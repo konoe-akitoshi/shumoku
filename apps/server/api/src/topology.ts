@@ -81,7 +81,6 @@ export class TopologyManager {
       // Use hierarchical parser for multi-file diagrams
       const resolver = createFileResolver()
       const hierarchicalParser = new HierarchicalParser(resolver)
-      // biome-ignore lint/nursery/useAwaitThenable: parser.parse returns a Promise
       const result = await hierarchicalParser.parse(content, filePath)
       graph = result.graph
     } else {
@@ -91,7 +90,6 @@ export class TopologyManager {
       graph = result.graph
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: layout.layout may return a Promise
     const layoutResult = await this.layout.layout(graph)
 
     const instance: TopologyInstance = {
@@ -125,11 +123,9 @@ export class TopologyManager {
     // Use memory file resolver to parse the sample network
     const resolver = createMemoryFileResolver(files, '')
     const hierarchicalParser = new HierarchicalParser(resolver)
-    // biome-ignore lint/nursery/useAwaitThenable: parser.parse returns a Promise
     const result = await hierarchicalParser.parse(mainFile.content, 'main.yaml')
     const graph = result.graph
 
-    // biome-ignore lint/nursery/useAwaitThenable: layout.layout may return a Promise
     const layoutResult = await this.layout.layout(graph)
 
     const instance: TopologyInstance = {

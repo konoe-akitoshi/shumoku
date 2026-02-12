@@ -15,7 +15,6 @@ const size = { width: 1200, height: 630 } as const
 
 async function loadDiagramImage() {
   const imgPath = join(process.cwd(), 'public', 'hero-diagram.png')
-  // biome-ignore lint/nursery/useAwaitThenable: readFile returns a Promise
   const imgBuffer = await readFile(imgPath)
   return `data:image/png;base64,${imgBuffer.toString('base64')}`
 }
