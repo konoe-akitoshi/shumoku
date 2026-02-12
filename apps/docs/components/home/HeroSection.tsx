@@ -98,9 +98,7 @@ function DiagramPreview() {
 function Adopters({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-3">
-      <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-        {label}
-      </span>
+      <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">{label}</span>
       <div className="flex items-center gap-8">
         {adopters.map((adopter) =>
           adopter.url ? (

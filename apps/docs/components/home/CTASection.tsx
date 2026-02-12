@@ -14,10 +14,7 @@ export function CTASection({ locale }: { locale: string }) {
         <p className={cn(sectionStyles.subtitle, 'mb-6 sm:mb-10')}>{t.subtitle}</p>
 
         <div className="flex flex-wrap gap-3 sm:gap-4 justify-center">
-          <a
-            href="mailto:info@shumoku.dev"
-            className={cn(...buttonStyles.primaryLarge)}
-          >
+          <a href="mailto:info@shumoku.dev" className={cn(...buttonStyles.primaryLarge)}>
             {t.contact}
           </a>
         </div>

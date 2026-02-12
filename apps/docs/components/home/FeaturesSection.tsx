@@ -26,12 +26,7 @@ export function FeaturesSection({ locale }: { locale: string }) {
   const t = homeTranslations[locale as Locale]?.features ?? homeTranslations.en.features
 
   return (
-    <section
-      className={cn(
-        'relative overflow-hidden',
-        sectionStyles.padding,
-      )}
-    >
+    <section className={cn('relative overflow-hidden', sectionStyles.padding)}>
       <div className={cn('absolute inset-0 pointer-events-none', backgrounds.features)} />
 
       <div className="max-w-6xl mx-auto">

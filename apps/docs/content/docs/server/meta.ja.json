@@ -3,7 +3,5 @@
   "title": "Server",
   "description": "Shumoku Server のドキュメント",
   "icon": "Server",
-  "pages": [
-    "index"
-  ]
+  "pages": ["index"]
 }
