@@ -164,8 +164,7 @@ export class TopologySourcesService {
    * Add a data source to a topology
    */
   async add(topologyId: string, input: TopologyDataSourceInput): Promise<TopologyDataSource> {
-    // biome-ignore lint/nursery/useAwaitThenable: generateId returns a Promise
-    const id = await generateId()
+    const id = generateId()
     const now = timestamp()
     const syncMode = input.syncMode || 'manual'
 

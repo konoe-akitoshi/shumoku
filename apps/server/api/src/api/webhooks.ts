@@ -67,7 +67,9 @@ webhooksApi.post('/topology/:secret', async (c) => {
   try {
     // biome-ignore lint/nursery/useAwaitThenable: c.req.json() returns a Promise
     body = await c.req.json()
-    console.log('[Webhook] Payload:', JSON.stringify(body, null, 2))
+    if (process.env.DEBUG) {
+      console.log('[Webhook] Payload:', JSON.stringify(body, null, 2))
+    }
   } catch {
     return c.json({ error: 'Invalid JSON payload' }, 400)
   }

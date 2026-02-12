@@ -58,8 +58,7 @@ export class DashboardService {
    * Create a new dashboard
    */
   async create(input: DashboardInput): Promise<Dashboard> {
-    // biome-ignore lint/nursery/useAwaitThenable: generateId returns a Promise
-    const id = await generateId()
+    const id = generateId()
     const now = timestamp()
 
     this.db

@@ -146,8 +146,7 @@ export class DataSourceService {
       }
     }
 
-    // biome-ignore lint/nursery/useAwaitThenable: generateId returns a Promise
-    const id = await generateId()
+    const id = generateId()
     const now = timestamp()
 
     this.db
