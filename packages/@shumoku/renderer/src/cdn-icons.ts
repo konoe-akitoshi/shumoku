@@ -180,8 +180,8 @@ function getImageDimensionsViaBrowser(
 
 /**
  * Fetch image dimensions from URL
- * Uses image header parsing for efficiency (Node.js)
- * Falls back to Image.onload for CORS-blocked requests (Browser)
+ * In browser: uses Image.onload directly (avoids CORS errors in console)
+ * In Node.js: fetches and parses image headers for efficiency
  */
 export async function fetchImageDimensions(
   url: string,
@@ -192,6 +192,14 @@ export async function fetchImageDimensions(
     return dimensionsCache.get(url) ?? null
   }
 
+  // Browser: use Image.onload directly (no CORS issues, no console errors)
+  if (isBrowser()) {
+    const dimensions = await getImageDimensionsViaBrowser(url, timeout)
+    dimensionsCache.set(url, dimensions)
+    return dimensions
+  }
+
+  // Node.js: fetch and parse image headers
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
@@ -200,12 +208,6 @@ export async function fetchImageDimensions(
     clearTimeout(timeoutId)
 
     if (!response.ok) {
-      // Fetch failed, try browser fallback
-      if (isBrowser()) {
-        const dimensions = await getImageDimensionsViaBrowser(url, timeout)
-        dimensionsCache.set(url, dimensions)
-        return dimensions
-      }
       dimensionsCache.set(url, null)
       return null
     }
@@ -216,12 +218,6 @@ export async function fetchImageDimensions(
     dimensionsCache.set(url, dimensions)
     return dimensions
   } catch {
-    // Fetch failed (likely CORS), try browser fallback
-    if (isBrowser()) {
-      const dimensions = await getImageDimensionsViaBrowser(url, timeout)
-      dimensionsCache.set(url, dimensions)
-      return dimensions
-    }
     dimensionsCache.set(url, null)
     return null
   }
