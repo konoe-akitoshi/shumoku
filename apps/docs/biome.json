@@ -1,6 +1,6 @@
 {
   "root": false,
-  "$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
   "extends": ["../../biome.json"],
   "linter": {
     "rules": {
@@ -24,6 +24,22 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": [
+        "components/home/translations.ts",
+        "app/*/layout.tsx",
+        "components/home/HeroSection.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "security": {
+            "noSecrets": "off"
+          }
+        }
+      }
+    }
+  ],
   "files": {
     "includes": ["!.next", "!.source", "!next-env.d.ts"]
   }

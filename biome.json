@@ -16,6 +16,21 @@
       },
       "complexity": {
         "noBannedTypes": "off"
+      },
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "useAwaitThenable": "error",
+        "useExhaustiveSwitchCases": "error",
+        "noUnnecessaryConditions": "warn",
+        "noShadow": "warn"
+      },
+      "suspicious": {
+        "noEvolvingTypes": "error",
+        "noConstantBinaryExpressions": "error"
+      },
+      "security": {
+        "noSecrets": "error"
       }
     }
   },
