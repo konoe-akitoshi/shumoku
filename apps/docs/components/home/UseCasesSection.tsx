@@ -1,5 +1,5 @@
 import { cn } from '@/lib/cn'
-import { DocumentIcon, LayoutIcon, ImageIcon } from './icons'
+import { DocumentIcon, ImageIcon, LayoutIcon } from './icons'
 import { backgrounds, cardStyles, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 

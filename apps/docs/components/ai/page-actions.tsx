@@ -24,9 +24,11 @@ export function LLMCopyButton({
     setLoading(true)
 
     try {
+      // biome-ignore lint/nursery/useAwaitThenable: clipboard.write() returns a Promise
       await navigator.clipboard.write([
         new ClipboardItem({
           'text/plain': fetch(markdownUrl).then(async (res) => {
+            // biome-ignore lint/nursery/useAwaitThenable: res.text() returns a Promise
             const content = await res.text()
             cache.set(markdownUrl, content)
 
