@@ -44,9 +44,7 @@ export function createDataSourcesApi(): Hono {
     const types = service.getRegisteredTypes()
     // Get loaded plugin info for configSchema
     const loadedPlugins = getAllPlugins()
-    const pluginSchemas = new Map(
-      loadedPlugins.map((p) => [p.id, p.configSchema])
-    )
+    const pluginSchemas = new Map(loadedPlugins.map((p) => [p.id, p.configSchema]))
 
     // Only return serializable fields (exclude factory function)
     const serializable = types.map(({ type, displayName, capabilities }) => ({
@@ -73,7 +71,10 @@ export function createDataSourcesApi(): Hono {
   app.get('/by-capability/:capability', (c) => {
     const capability = c.req.param('capability') as 'topology' | 'metrics' | 'alerts'
     if (capability !== 'topology' && capability !== 'metrics' && capability !== 'alerts') {
-      return c.json({ error: 'Invalid capability. Must be "topology", "metrics", or "alerts"' }, 400)
+      return c.json(
+        { error: 'Invalid capability. Must be "topology", "metrics", or "alerts"' },
+        400,
+      )
     }
     const dataSources = service.listByCapability(capability)
     const sanitized = dataSources.map((ds) => ({

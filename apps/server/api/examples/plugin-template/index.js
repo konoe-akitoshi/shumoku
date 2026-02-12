@@ -10,16 +10,11 @@
  * @param {import('@shumoku/core').PluginRegistryInterface} pluginRegistry
  */
 export function register(pluginRegistry) {
-  pluginRegistry.register(
-    'example-plugin',
-    'Example Plugin',
-    ['topology', 'hosts'],
-    (config) => {
-      const plugin = new ExamplePlugin()
-      plugin.initialize(config)
-      return plugin
-    }
-  )
+  pluginRegistry.register('example-plugin', 'Example Plugin', ['topology', 'hosts'], (config) => {
+    const plugin = new ExamplePlugin()
+    plugin.initialize(config)
+    return plugin
+  })
 }
 
 /**
@@ -56,26 +51,26 @@ export class ExamplePlugin {
       // Example: Make a test API call
       const response = await fetch(`${this.url}/health`, {
         headers: {
-          Authorization: `Bearer ${this.token}`
-        }
+          Authorization: `Bearer ${this.token}`,
+        },
       })
 
       if (response.ok) {
         return {
           success: true,
           message: 'Connected successfully',
-          version: '1.0.0'
+          version: '1.0.0',
         }
       } else {
         return {
           success: false,
-          message: `HTTP ${response.status}: ${response.statusText}`
+          message: `HTTP ${response.status}: ${response.statusText}`,
         }
       }
     } catch (err) {
       return {
         success: false,
-        message: err.message
+        message: err.message,
       }
     }
   }
@@ -94,11 +89,9 @@ export class ExamplePlugin {
       name: 'Example Topology',
       nodes: [
         { id: 'node-1', label: 'Example Node 1', shape: 'rect' },
-        { id: 'node-2', label: 'Example Node 2', shape: 'rect' }
+        { id: 'node-2', label: 'Example Node 2', shape: 'rect' },
       ],
-      links: [
-        { from: 'node-1', to: 'node-2' }
-      ]
+      links: [{ from: 'node-1', to: 'node-2' }],
     }
   }
 
@@ -110,7 +103,7 @@ export class ExamplePlugin {
     // Example: Return a list of hosts for mapping UI
     return [
       { id: '1', name: 'host-1', displayName: 'Host 1', status: 'up' },
-      { id: '2', name: 'host-2', displayName: 'Host 2', status: 'up' }
+      { id: '2', name: 'host-2', displayName: 'Host 2', status: 'up' },
     ]
   }
 

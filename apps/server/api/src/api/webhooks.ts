@@ -150,10 +150,7 @@ webhooksApi.post('/grafana/:secret', async (c) => {
 
   try {
     const alertService = new GrafanaAlertService()
-    const count = alertService.upsertFromWebhook(
-      dataSource.id,
-      body as GrafanaWebhookPayload,
-    )
+    const count = alertService.upsertFromWebhook(dataSource.id, body as GrafanaWebhookPayload)
 
     console.log(`[Webhook/Grafana] Upserted ${count} alerts for data source ${dataSource.id}`)
 

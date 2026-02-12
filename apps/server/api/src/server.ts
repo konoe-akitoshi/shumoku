@@ -76,7 +76,8 @@ export class Server {
         return c.html('<h1>Topology not found</h1>', 404)
       }
 
-      const wsUrl = `ws://${c.req.header('host')}/ws`
+      const wsProtocol = c.req.header('x-forwarded-proto') === 'https' ? 'wss' : 'ws'
+      const wsUrl = `${wsProtocol}://${c.req.header('host')}/ws`
       const html = generateMetricsHtml(instance, {
         wsUrl,
         weathermap: this.config.weathermap,
@@ -88,7 +89,9 @@ export class Server {
   private setupStaticFileServing(): void {
     // Skip static file serving in development mode
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Server] Development mode - skipping static file serving (use apps/web dev server)')
+      console.log(
+        '[Server] Development mode - skipping static file serving (use apps/web dev server)',
+      )
       return
     }
 
@@ -99,12 +102,14 @@ export class Server {
       // Serve static assets
       this.app.use('/*', serveStatic({ root: webBuildPath }))
 
+      // Cache index.html content at startup
+      const indexPath = path.join(webBuildPath, 'index.html')
+      const indexHtml = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, 'utf-8') : null
+
       // SPA fallback - serve index.html for all non-API routes
       this.app.get('*', async (c) => {
-        const indexPath = path.join(webBuildPath, 'index.html')
-        if (fs.existsSync(indexPath)) {
-          const html = fs.readFileSync(indexPath, 'utf-8')
-          return c.html(html)
+        if (indexHtml) {
+          return c.html(indexHtml)
         }
         return c.text('Not found', 404)
       })
@@ -196,19 +201,29 @@ export class Server {
   }
 
   private broadcastMetrics(): void {
+    // Pre-serialize messages by topology to avoid redundant JSON.stringify calls
+    const serializedMessages = new Map<string, string>()
+
     for (const [ws, state] of this.clients.entries()) {
       if (!state.subscribedTopology) continue
 
       try {
+        const topologyId = state.subscribedTopology
+
         // Check DB topology first
-        const dbMetrics = this.dbTopologyMetrics.get(state.subscribedTopology)
+        const dbMetrics = this.dbTopologyMetrics.get(topologyId)
         if (dbMetrics) {
-          ws.send(JSON.stringify({ type: 'metrics', data: dbMetrics }))
+          let serialized = serializedMessages.get(topologyId)
+          if (!serialized) {
+            serialized = JSON.stringify({ type: 'metrics', data: dbMetrics })
+            serializedMessages.set(topologyId, serialized)
+          }
+          ws.send(serialized)
           continue
         }
 
         // Check file-based topology
-        const instance = this.topologyManager.getTopology(state.subscribedTopology)
+        const instance = this.topologyManager.getTopology(topologyId)
         if (instance) {
           const filteredMetrics = this.filterMetrics(instance.metrics, state.filter)
           ws.send(JSON.stringify({ type: 'metrics', data: filteredMetrics }))
@@ -375,8 +390,7 @@ export class Server {
 
     // Load external plugins from config file
     const pluginsConfigPath =
-      process.env.SHUMOKU_PLUGINS_CONFIG ||
-      path.join(this.config.server.dataDir, 'plugins.yaml')
+      process.env.SHUMOKU_PLUGINS_CONFIG || path.join(this.config.server.dataDir, 'plugins.yaml')
     await loadPluginsFromConfig(pluginsConfigPath)
 
     initDatabase(this.config.server.dataDir)

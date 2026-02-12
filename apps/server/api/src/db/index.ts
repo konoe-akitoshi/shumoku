@@ -6,6 +6,7 @@
 import { Database } from 'bun:sqlite'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { nanoid } from 'nanoid'
 import { runMigrations, getMigrationStatus } from './schema.js'
 
 export { getMigrationStatus }
@@ -70,8 +71,7 @@ export function closeDatabase(): void {
 /**
  * Generate a unique ID
  */
-export async function generateId(): Promise<string> {
-  const { nanoid } = await import('nanoid')
+export function generateId(): string {
   return nanoid(12)
 }
 

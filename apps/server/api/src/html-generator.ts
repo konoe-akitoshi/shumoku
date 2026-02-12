@@ -275,7 +275,7 @@ function generateMetricsRuntimeScript(options: HtmlGeneratorOptions): string {
   return `
 // Metrics Runtime
 (function() {
-  var wsUrl = '${options.wsUrl}';
+  var wsUrl = ${JSON.stringify(options.wsUrl)};
   var topologyName = '${options.wsUrl.includes('/ws') ? '' : 'sample-network'}';
   var ws = null;
   var reconnectAttempts = 0;

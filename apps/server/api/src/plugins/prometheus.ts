@@ -162,9 +162,7 @@ export class PrometheusPlugin
         const total = result.result.length
         const down = result.result.filter((r) => r.value[1] === '0').length
         if (down > 0) {
-          warnings.push(
-            `Scrape targets: ${down}/${total} down (job: ${this.config.jobFilter})`,
-          )
+          warnings.push(`Scrape targets: ${down}/${total} down (job: ${this.config.jobFilter})`)
         }
       } catch {
         warnings.push('Failed to check scrape target health')
@@ -513,7 +511,7 @@ export class PrometheusPlugin
       headers.Authorization = `Basic ${credentials}`
     }
 
-    return fetch(url, { headers })
+    return fetch(url, { headers, signal: AbortSignal.timeout(5000) })
   }
 
   private mapAlertmanagerSeverity(severity?: string): AlertSeverity {

@@ -39,10 +39,7 @@ export function createShareApi(): Hono {
             typeof l.from === 'string'
               ? { nodeId: l.from }
               : { nodeId: l.from.node, port: l.from.port },
-          to:
-            typeof l.to === 'string'
-              ? { nodeId: l.to }
-              : { nodeId: l.to.node, port: l.to.port },
+          to: typeof l.to === 'string' ? { nodeId: l.to } : { nodeId: l.to.node, port: l.to.port },
           bandwidth: l.bandwidth,
         })),
         subgraphs: parsed.graph.subgraphs || [],

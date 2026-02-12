@@ -50,6 +50,47 @@ export interface ResolvedIconDimensions {
 }
 
 /**
+ * Cached render output for a flat (single-sheet) topology
+ */
+export interface FlatRenderCacheEntry {
+  id: string
+  name: string
+  hierarchical: false
+  svg: string
+  css: string
+  viewBox: { x: number; y: number; width: number; height: number }
+  nodeCount: number
+  edgeCount: number
+}
+
+/**
+ * Cached render output for a hierarchical (multi-sheet) topology
+ */
+export interface HierarchicalRenderCacheEntry {
+  id: string
+  name: string
+  hierarchical: true
+  sheets: Record<
+    string,
+    {
+      svg: string
+      css: string
+      viewBox: { x: number; y: number; width: number; height: number }
+      label: string
+      parentId: string | null
+    }
+  >
+  rootSheetId: string
+  nodeCount: number
+  edgeCount: number
+}
+
+/**
+ * Union type for all possible render cache entries
+ */
+export type RenderCacheEntry = FlatRenderCacheEntry | HierarchicalRenderCacheEntry
+
+/**
  * Parsed topology with layout and metrics ready for rendering
  */
 export interface ParsedTopology {
@@ -94,7 +135,7 @@ export class TopologyService {
   private db: Database
   private layout: BunHierarchicalLayout
   private cache: Map<string, ParsedTopology> = new Map()
-  private renderCache: Map<string, object> = new Map()
+  private renderCache: Map<string, RenderCacheEntry> = new Map()
 
   constructor() {
     this.db = getDatabase()
@@ -281,9 +322,9 @@ export class TopologyService {
    * Get a topology by its share token
    */
   getByShareToken(token: string): Topology | null {
-    const row = this.db
-      .query('SELECT * FROM topologies WHERE share_token = ?')
-      .get(token) as TopologyRow | undefined
+    const row = this.db.query('SELECT * FROM topologies WHERE share_token = ?').get(token) as
+      | TopologyRow
+      | undefined
     return row ? rowToTopology(row) : null
   }
 
@@ -417,14 +458,14 @@ export class TopologyService {
   /**
    * Get cached render output
    */
-  getRenderCache(id: string): object | undefined {
+  getRenderCache(id: string): RenderCacheEntry | undefined {
     return this.renderCache.get(id)
   }
 
   /**
    * Set cached render output
    */
-  setRenderCache(id: string, output: object): void {
+  setRenderCache(id: string, output: RenderCacheEntry): void {
     this.renderCache.set(id, output)
   }
 
