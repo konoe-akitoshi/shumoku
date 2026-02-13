@@ -1,0 +1,73 @@
+---
+title: トポロジー
+description: トポロジーの作成と管理
+---
+
+## トポロジーの作成
+
+1. サイドバーの **Topologies** をクリック
+2. **Add Topology** をクリック
+3. 名前を入力し、YAML を貼り付けまたはアップロード
+4. 保存
+
+## 編集
+
+トポロジーを開き、**Edit** タブから YAML をブラウザ上で直接編集できます。変更はデータベースに保存されます。
+
+## YAML フォーマット
+
+トポロジーは npm ライブラリと同じ YAML 形式です。完全な構文は [YAML リファレンス](/ja/docs/npm/yaml-reference) を参照してください。
+
+```yaml
+name: My Network
+
+nodes:
+  - id: router1
+    label: Core Router
+    type: router
+  - id: switch1
+    label: Distribution Switch
+    type: l2-switch
+
+links:
+  - from: { node: router1, port: ge-0/0/0 }
+    to: { node: switch1, port: ge-0/0/1 }
+    bandwidth: 10G
+```
+
+## マルチファイルトポロジー
+
+大規模なネットワークでは `file:` 参照で定義を複数ファイルに分割できます。各ファイルはビューア上でナビゲート可能なシートになります。
+
+```yaml
+name: Campus Network
+
+nodes:
+  - id: core
+    label: Core
+    type: subnetwork
+    file: core.yaml
+  - id: building-a
+    label: Building A
+    type: subnetwork
+    file: building-a.yaml
+
+links:
+  - from: { node: core }
+    to: { node: building-a }
+    bandwidth: 10G
+```
+
+## データソースの紐付け
+
+トポロジーの **Settings** タブで:
+
+1. **Metrics Source**（Zabbix または Prometheus）を追加 — リアルタイムのリンク使用率・ノード状態を取得
+2. **Topology Source**（NetBox）を追加 — トポロジーデータの自動生成・マージ
+3. **Node Mapping** を設定 — トポロジーのノードと監視対象ホストを関連付け
+
+## 共有
+
+トポロジーの **Share** ボタンをクリックすると公開リンクを生成できます。リンクを持つ誰でもログインなしでトポロジーを閲覧できます。
+
+アクセスを取り消すには、トポロジー設定で共有トークンを削除します。

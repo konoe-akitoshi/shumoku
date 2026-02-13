@@ -10,7 +10,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://shumoku.packof.me'),
+  metadataBase: new URL('https://www.shumoku.dev'),
   title: {
     default: 'Shumoku - Network Topology Diagram Generator',
     template: '%s | Shumoku',

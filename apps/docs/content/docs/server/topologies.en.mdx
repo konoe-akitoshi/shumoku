@@ -1,0 +1,73 @@
+---
+title: Topologies
+description: Create and manage network topologies
+---
+
+## Creating a Topology
+
+1. Navigate to **Topologies** in the sidebar
+2. Click **Add Topology**
+3. Enter a name and paste or upload YAML content
+4. Save
+
+## Editing
+
+Click on a topology, then open the **Edit** tab to modify the YAML directly in the browser. Changes are saved to the database.
+
+## YAML Format
+
+Topologies use the same YAML format as the npm library. See the [YAML Reference](/docs/npm/yaml-reference) for the full syntax.
+
+```yaml
+name: My Network
+
+nodes:
+  - id: router1
+    label: Core Router
+    type: router
+  - id: switch1
+    label: Distribution Switch
+    type: l2-switch
+
+links:
+  - from: { node: router1, port: ge-0/0/0 }
+    to: { node: switch1, port: ge-0/0/1 }
+    bandwidth: 10G
+```
+
+## Multi-File Topology
+
+For large networks, you can split the definition across multiple YAML files using `file:` references. Each file becomes a navigable sheet in the viewer.
+
+```yaml
+name: Campus Network
+
+nodes:
+  - id: core
+    label: Core
+    type: subnetwork
+    file: core.yaml
+  - id: building-a
+    label: Building A
+    type: subnetwork
+    file: building-a.yaml
+
+links:
+  - from: { node: core }
+    to: { node: building-a }
+    bandwidth: 10G
+```
+
+## Linking Data Sources
+
+In the topology **Settings** tab:
+
+1. Add a **Metrics Source** (Zabbix or Prometheus) for real-time link utilization and node status
+2. Add a **Topology Source** (NetBox) to auto-generate or merge topology data
+3. Configure **Node Mapping** to associate topology nodes with monitored hosts
+
+## Sharing
+
+Click the **Share** button on any topology to generate a public link. Anyone with the link can view the topology without logging in.
+
+To revoke access, delete the share token in the topology settings.

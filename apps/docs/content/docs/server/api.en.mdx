@@ -1,0 +1,112 @@
+---
+title: API Reference
+description: HTTP endpoints and WebSocket protocol
+---
+
+## Authentication
+
+All API endpoints (except health check and shared views) require session authentication. Login via:
+
+```
+POST /api/auth/login
+Content-Type: application/json
+
+{ "password": "your-password" }
+```
+
+## HTTP Endpoints
+
+### Data Sources
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/datasources` | List all data sources |
+| POST | `/api/datasources` | Create data source |
+| GET | `/api/datasources/:id` | Get data source details |
+| PUT | `/api/datasources/:id` | Update data source |
+| DELETE | `/api/datasources/:id` | Delete data source |
+| POST | `/api/datasources/:id/test` | Test connection |
+| GET | `/api/datasources/:id/hosts` | List monitored hosts |
+| GET | `/api/datasources/:id/hosts/:hostId/items` | Host metrics items |
+| GET | `/api/datasources/:id/alerts` | Get alerts |
+
+### Topologies
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/topologies` | List all topologies |
+| POST | `/api/topologies` | Create topology |
+| GET | `/api/topologies/:id` | Get topology details |
+| PUT | `/api/topologies/:id` | Update topology |
+| DELETE | `/api/topologies/:id` | Delete topology |
+| GET | `/api/topologies/:id/render` | Get rendered layout data |
+| GET | `/api/topologies/:id/sources` | List linked data sources |
+| POST | `/api/topologies/:id/sources` | Link a data source |
+
+### Dashboards
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/dashboards` | List all dashboards |
+| POST | `/api/dashboards` | Create dashboard |
+| GET | `/api/dashboards/:id` | Get dashboard details |
+| PUT | `/api/dashboards/:id` | Update dashboard |
+| DELETE | `/api/dashboards/:id` | Delete dashboard |
+
+### Plugins
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/plugins` | List all plugins |
+| POST | `/api/plugins` | Add plugin (URL/path/upload) |
+| DELETE | `/api/plugins/:id` | Remove plugin |
+
+### Webhooks
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/webhooks/topology/:secret` | NetBox topology webhook |
+| POST | `/api/webhooks/alerts/:secret` | Grafana alert webhook |
+
+### Other
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check (no auth required) |
+| GET | `/api/auth/status` | Check authentication state |
+| POST | `/api/auth/setup` | Initial password setup |
+| POST | `/api/auth/logout` | Logout |
+
+## WebSocket
+
+Connect to `ws://<host>/ws` for real-time metrics streaming.
+
+### Client Messages
+
+```json
+// Subscribe to topology updates
+{ "type": "subscribe", "topology": "<topology-id>" }
+
+// Filter specific nodes/links
+{ "type": "filter", "nodes": ["router1"], "links": ["link-0"] }
+```
+
+### Server Messages
+
+```json
+{
+  "type": "metrics",
+  "data": {
+    "nodes": {
+      "router1": { "status": "up" }
+    },
+    "links": {
+      "link-0": {
+        "status": "up",
+        "utilization": { "in": 45.2, "out": 12.8 }
+      }
+    },
+    "timestamp": 1705849200000
+  }
+}
+```

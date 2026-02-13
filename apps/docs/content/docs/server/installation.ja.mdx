@@ -1,0 +1,129 @@
+---
+title: インストール
+description: Docker、systemd、手動で Shumoku Server をデプロイ
+---
+
+## Docker（推奨）
+
+```bash
+docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+```
+
+Docker Compose を使う場合:
+
+```bash
+git clone https://github.com/konoe-akitoshi/shumoku.git
+cd shumoku/apps/server
+docker compose up -d
+```
+
+`http://localhost:8080` を開き、管理者パスワードを設定すれば準備完了です。
+
+### Docker Compose オプション
+
+```bash
+# ポート変更
+SHUMOKU_PORT=80 docker compose up -d
+
+# サンプルネットワーク付きで起動
+DEMO_MODE=true docker compose up -d
+```
+
+## Systemd（Linux）
+
+### 前提条件
+
+- [Bun](https://bun.sh) ランタイム
+- Git
+
+### インストール
+
+```bash
+git clone https://github.com/konoe-akitoshi/shumoku.git /opt/shumoku
+cd /opt/shumoku/apps/server
+
+make setup
+
+sudo mkdir -p /var/lib/shumoku
+sudo chown shumoku:shumoku /var/lib/shumoku
+
+sudo cp scripts/shumoku.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable shumoku
+sudo systemctl start shumoku
+```
+
+### 管理
+
+```bash
+sudo systemctl status shumoku      # ステータス確認
+sudo journalctl -u shumoku -f      # ログ表示
+sudo systemctl restart shumoku     # 再起動
+```
+
+### アップデート
+
+```bash
+cd /opt/shumoku
+git pull
+cd apps/server
+make setup
+sudo systemctl restart shumoku
+```
+
+## 手動
+
+```bash
+cd apps/server
+make setup
+make start
+
+# カスタム設定で起動
+DATA_DIR=/path/to/data PORT=8080 bun dist/index.js
+```
+
+## リバースプロキシ（nginx）
+
+```nginx
+server {
+    listen 80;
+    server_name shumoku.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+WebSocket（`/ws`）には上記の `Upgrade` / `Connection` ヘッダーが必要です。
+
+## 環境変数
+
+| 変数 | 説明 | デフォルト |
+|------|------|-----------|
+| `PORT` | サーバーポート | `8080` |
+| `HOST` | バインドアドレス | `0.0.0.0` |
+| `DATA_DIR` | データディレクトリ（SQLite） | `/data` |
+| `SHUMOKU_PORT` | 外部ポート（Docker Compose） | `8080` |
+| `DEMO_MODE` | 空の DB にサンプルネットワークを読み込む | `false` |
+
+## バックアップとリストア
+
+全データは SQLite ファイル 1 つに格納されています。
+
+```bash
+# バックアップ（Docker）
+docker compose cp shumoku:/data/shumoku.db ./backup.db
+
+# バックアップ（Systemd）
+cp /var/lib/shumoku/shumoku.db ./backup.db
+
+# リストア
+cp ./backup.db /var/lib/shumoku/shumoku.db
+sudo systemctl restart shumoku
+```

@@ -1,0 +1,81 @@
+---
+title: データソース
+description: Zabbix、Prometheus、Grafana、NetBox の接続
+---
+
+データソースは Shumoku Server にライブメトリクスやトポロジーデータを提供します。サーバーはプラグインアーキテクチャを採用しており、各連携はプラグインとして有効化・無効化できます。
+
+## データソースの追加
+
+1. サイドバーの **Data Sources** をクリック
+2. **Add Data Source** をクリック
+3. プラグインタイプを選択（Zabbix、Prometheus、NetBox など）
+4. 接続情報を入力
+5. **Test Connection** で接続を確認
+6. 保存
+
+## Zabbix
+
+JSON-RPC API でトラフィックメトリクス・ホスト状態・アラートを取得します。
+
+| フィールド | 説明 |
+|-----------|------|
+| URL | Zabbix サーバーの URL（例: `https://zabbix.example.com`） |
+| API Token | 認証用の Zabbix API トークン |
+
+接続すると、Zabbix のホストとアイテムがトポロジー設定のノードマッピングで利用可能になります。
+
+## Prometheus
+
+SNMP / Node Exporter メトリクスでリンク使用率を表示します。
+
+| フィールド | 説明 |
+|-----------|------|
+| URL | Prometheus サーバーの URL（例: `http://prometheus:9090`） |
+
+## Grafana
+
+Webhook でアラートを受信しトポロジー上に表示します。
+
+| フィールド | 説明 |
+|-----------|------|
+| Webhook Secret | 受信 Webhook の認証用シークレットトークン |
+
+Grafana のアラート通知先を以下に設定してください:
+
+```
+POST https://your-shumoku-server/api/webhooks/alerts/<secret>
+```
+
+## NetBox
+
+DCIM・IPAM データからトポロジーを自動検出します。
+
+| フィールド | 説明 |
+|-----------|------|
+| URL | NetBox サーバーの URL（例: `https://netbox.example.com`） |
+| API Token | NetBox API トークン |
+
+### 同期モード
+
+| モード | 説明 |
+|--------|------|
+| Manual | 手動でトポロジーデータを更新 |
+| On-View | トポロジーを開いた時に自動更新 |
+| Webhook | NetBox Webhook で自動更新 |
+
+Webhook モードでは、NetBox の通知先を以下に設定してください:
+
+```
+POST https://your-shumoku-server/api/webhooks/topology/<secret>
+```
+
+## プラグイン
+
+プラグインシステムで追加のデータソースを導入できます。サイドバーの **Plugins** からインストール済みプラグインを管理できます。
+
+プラグインの追加方法:
+- ビルトインプラグイン（Zabbix、Prometheus、Grafana、NetBox）
+- GitHub URL
+- ローカルファイルパス
+- ZIP ファイルアップロード

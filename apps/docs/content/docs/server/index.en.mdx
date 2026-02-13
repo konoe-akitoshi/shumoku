@@ -1,18 +1,30 @@
 ---
-title: Server
-description: Use Shumoku Server to manage and render diagrams
+title: Overview
+description: Self-hosted network topology visualization and monitoring platform
 ---
 
-## Overview
+Shumoku Server is a self-hosted web application that turns YAML topology definitions into live operational dashboards with real-time metrics from your monitoring stack.
 
-Shumoku Server provides a web UI and API to manage network diagrams, render outputs, and integrate with external systems.
+## What You Can Do
 
-## Getting Started
+1. **Create topologies** — Upload YAML files or write them in the built-in editor
+2. **Connect data sources** — Link Zabbix, Prometheus, or NetBox to pull live metrics
+3. **Monitor in real-time** — See node status and link utilization update live on your diagrams
+4. **Build dashboards** — Combine multiple topologies and metric widgets into custom views
+5. **Share** — Generate public links for read-only access without authentication
 
-- Install and run the server
-- Open the web UI
-- Import or create diagrams
+## Integrations
+
+| | |
+|---|---|
+| **Zabbix** | Pull traffic metrics, host status, and alerts via JSON-RPC API |
+| **Prometheus** | Query SNMP and node exporter metrics for link utilization |
+| **Grafana** | Receive alerts via webhook and display them on topology |
+| **NetBox** | Auto-discover topology from DCIM inventory and IPAM data |
+| **REST API** | Render topologies and fetch metrics programmatically from your own tools |
 
 ## Next Steps
 
-Server documentation is being organized. For now, this section is a landing page for the server-first docs.
+- [Installation](/docs/server/installation) — Docker, systemd, or manual deployment
+- [Topologies](/docs/server/topologies) — Create and manage network topologies
+- [Data Sources](/docs/server/datasources) — Connect your monitoring stack

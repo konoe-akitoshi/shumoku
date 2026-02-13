@@ -1,0 +1,81 @@
+---
+title: Data Sources
+description: Connect Zabbix, Prometheus, Grafana, and NetBox
+---
+
+Data sources provide live metrics and topology data to Shumoku Server. The server uses a plugin architecture — each integration is a plugin that can be enabled or disabled.
+
+## Adding a Data Source
+
+1. Navigate to **Data Sources** in the sidebar
+2. Click **Add Data Source**
+3. Select a plugin type (Zabbix, Prometheus, NetBox, etc.)
+4. Enter connection details
+5. Click **Test Connection** to verify
+6. Save
+
+## Zabbix
+
+Pull traffic metrics, host status, and alerts via JSON-RPC API.
+
+| Field | Description |
+|-------|-------------|
+| URL | Zabbix server URL (e.g. `https://zabbix.example.com`) |
+| API Token | Zabbix API token for authentication |
+
+Once connected, Zabbix hosts and their items become available for node mapping in topology settings.
+
+## Prometheus
+
+Query SNMP and node exporter metrics for link utilization.
+
+| Field | Description |
+|-------|-------------|
+| URL | Prometheus server URL (e.g. `http://prometheus:9090`) |
+
+## Grafana
+
+Receive alerts via webhook and display them on topology.
+
+| Field | Description |
+|-------|-------------|
+| Webhook Secret | Secret token for authenticating incoming webhooks |
+
+Configure Grafana to send alert notifications to:
+
+```
+POST https://your-shumoku-server/api/webhooks/alerts/<secret>
+```
+
+## NetBox
+
+Auto-discover topology from DCIM inventory and IPAM data.
+
+| Field | Description |
+|-------|-------------|
+| URL | NetBox server URL (e.g. `https://netbox.example.com`) |
+| API Token | NetBox API token |
+
+### Sync Modes
+
+| Mode | Description |
+|------|-------------|
+| Manual | Refresh topology data manually |
+| On-View | Refresh when the topology is opened |
+| Webhook | Auto-update via NetBox webhook |
+
+For webhook mode, configure NetBox to send notifications to:
+
+```
+POST https://your-shumoku-server/api/webhooks/topology/<secret>
+```
+
+## Plugins
+
+Additional data sources can be added via the plugin system. Navigate to **Plugins** in the sidebar to manage installed plugins.
+
+Plugins can be added from:
+- Built-in plugins (Zabbix, Prometheus, Grafana, NetBox)
+- GitHub URL
+- Local file path
+- ZIP file upload

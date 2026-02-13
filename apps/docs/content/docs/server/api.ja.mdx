@@ -1,0 +1,112 @@
+---
+title: API リファレンス
+description: HTTP エンドポイントと WebSocket プロトコル
+---
+
+## 認証
+
+ヘルスチェックと共有ビューを除くすべての API エンドポイントはセッション認証が必要です。
+
+```
+POST /api/auth/login
+Content-Type: application/json
+
+{ "password": "your-password" }
+```
+
+## HTTP エンドポイント
+
+### データソース
+
+| メソッド | エンドポイント | 説明 |
+|---------|---------------|------|
+| GET | `/api/datasources` | データソース一覧 |
+| POST | `/api/datasources` | データソース作成 |
+| GET | `/api/datasources/:id` | データソース詳細 |
+| PUT | `/api/datasources/:id` | データソース更新 |
+| DELETE | `/api/datasources/:id` | データソース削除 |
+| POST | `/api/datasources/:id/test` | 接続テスト |
+| GET | `/api/datasources/:id/hosts` | 監視ホスト一覧 |
+| GET | `/api/datasources/:id/hosts/:hostId/items` | ホストのメトリクスアイテム |
+| GET | `/api/datasources/:id/alerts` | アラート取得 |
+
+### トポロジー
+
+| メソッド | エンドポイント | 説明 |
+|---------|---------------|------|
+| GET | `/api/topologies` | トポロジー一覧 |
+| POST | `/api/topologies` | トポロジー作成 |
+| GET | `/api/topologies/:id` | トポロジー詳細 |
+| PUT | `/api/topologies/:id` | トポロジー更新 |
+| DELETE | `/api/topologies/:id` | トポロジー削除 |
+| GET | `/api/topologies/:id/render` | レンダリングされたレイアウトデータ |
+| GET | `/api/topologies/:id/sources` | 紐付けデータソース一覧 |
+| POST | `/api/topologies/:id/sources` | データソースを紐付け |
+
+### ダッシュボード
+
+| メソッド | エンドポイント | 説明 |
+|---------|---------------|------|
+| GET | `/api/dashboards` | ダッシュボード一覧 |
+| POST | `/api/dashboards` | ダッシュボード作成 |
+| GET | `/api/dashboards/:id` | ダッシュボード詳細 |
+| PUT | `/api/dashboards/:id` | ダッシュボード更新 |
+| DELETE | `/api/dashboards/:id` | ダッシュボード削除 |
+
+### プラグイン
+
+| メソッド | エンドポイント | 説明 |
+|---------|---------------|------|
+| GET | `/api/plugins` | プラグイン一覧 |
+| POST | `/api/plugins` | プラグイン追加（URL/パス/アップロード） |
+| DELETE | `/api/plugins/:id` | プラグイン削除 |
+
+### Webhook
+
+| メソッド | エンドポイント | 説明 |
+|---------|---------------|------|
+| POST | `/api/webhooks/topology/:secret` | NetBox トポロジー Webhook |
+| POST | `/api/webhooks/alerts/:secret` | Grafana アラート Webhook |
+
+### その他
+
+| メソッド | エンドポイント | 説明 |
+|---------|---------------|------|
+| GET | `/api/health` | ヘルスチェック（認証不要） |
+| GET | `/api/auth/status` | 認証状態の確認 |
+| POST | `/api/auth/setup` | 初期パスワード設定 |
+| POST | `/api/auth/logout` | ログアウト |
+
+## WebSocket
+
+`ws://<host>/ws` に接続してリアルタイムメトリクスをストリーミングします。
+
+### クライアントメッセージ
+
+```json
+// トポロジー更新を購読
+{ "type": "subscribe", "topology": "<topology-id>" }
+
+// 特定のノード/リンクをフィルタ
+{ "type": "filter", "nodes": ["router1"], "links": ["link-0"] }
+```
+
+### サーバーメッセージ
+
+```json
+{
+  "type": "metrics",
+  "data": {
+    "nodes": {
+      "router1": { "status": "up" }
+    },
+    "links": {
+      "link-0": {
+        "status": "up",
+        "utilization": { "in": 45.2, "out": 12.8 }
+      }
+    },
+    "timestamp": 1705849200000
+  }
+}
+```

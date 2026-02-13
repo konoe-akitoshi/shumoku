@@ -4,6 +4,14 @@
   "description": "Shumoku Server のドキュメント",
   "icon": "Server",
   "pages": [
-    "index"
+    "---はじめに---",
+    "index",
+    "installation",
+    "---使い方---",
+    "topologies",
+    "datasources",
+    "dashboards",
+    "---リファレンス---",
+    "api"
   ]
 }

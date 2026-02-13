@@ -1,0 +1,129 @@
+---
+title: Installation
+description: Deploy Shumoku Server with Docker, systemd, or manually
+---
+
+## Docker (Recommended)
+
+```bash
+docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+```
+
+Or with Docker Compose:
+
+```bash
+git clone https://github.com/konoe-akitoshi/shumoku.git
+cd shumoku/apps/server
+docker compose up -d
+```
+
+Open `http://localhost:8080`, set an admin password, and you're ready to go.
+
+### Docker Compose Options
+
+```bash
+# Custom port
+SHUMOKU_PORT=80 docker compose up -d
+
+# Load sample network for demo
+DEMO_MODE=true docker compose up -d
+```
+
+## Systemd (Linux)
+
+### Prerequisites
+
+- [Bun](https://bun.sh) runtime
+- Git
+
+### Install
+
+```bash
+git clone https://github.com/konoe-akitoshi/shumoku.git /opt/shumoku
+cd /opt/shumoku/apps/server
+
+make setup
+
+sudo mkdir -p /var/lib/shumoku
+sudo chown shumoku:shumoku /var/lib/shumoku
+
+sudo cp scripts/shumoku.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable shumoku
+sudo systemctl start shumoku
+```
+
+### Manage
+
+```bash
+sudo systemctl status shumoku      # Status
+sudo journalctl -u shumoku -f      # Logs
+sudo systemctl restart shumoku     # Restart
+```
+
+### Update
+
+```bash
+cd /opt/shumoku
+git pull
+cd apps/server
+make setup
+sudo systemctl restart shumoku
+```
+
+## Manual
+
+```bash
+cd apps/server
+make setup
+make start
+
+# Or with custom settings
+DATA_DIR=/path/to/data PORT=8080 bun dist/index.js
+```
+
+## Reverse Proxy (nginx)
+
+```nginx
+server {
+    listen 80;
+    server_name shumoku.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above.
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | `8080` |
+| `HOST` | Bind address | `0.0.0.0` |
+| `DATA_DIR` | Data directory (SQLite) | `/data` |
+| `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
+| `DEMO_MODE` | Load sample network on empty DB | `false` |
+
+## Backup & Restore
+
+All data is stored in a single SQLite file.
+
+```bash
+# Backup (Docker)
+docker compose cp shumoku:/data/shumoku.db ./backup.db
+
+# Backup (Systemd)
+cp /var/lib/shumoku/shumoku.db ./backup.db
+
+# Restore
+cp ./backup.db /var/lib/shumoku/shumoku.db
+sudo systemctl restart shumoku
+```
