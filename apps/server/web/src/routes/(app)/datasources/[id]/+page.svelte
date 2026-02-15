@@ -27,6 +27,7 @@ let formUrl = $state('')
 let formToken = $state('')
 let formPollInterval = $state(30000)
 let hasExistingToken = $state(false)
+let formInsecure = $state(false)
 
 // Grafana webhook state
 let formUseWebhook = $state(false)
@@ -38,6 +39,7 @@ interface ParsedConfig {
   url?: string
   token?: string
   pollInterval?: number
+  insecure?: boolean
   useWebhook?: boolean
   webhookSecret?: string
 }
@@ -62,6 +64,10 @@ function getConfigFromForm(type: DataSourceType, existingConfig?: ParsedConfig):
 
   if (type === 'zabbix') {
     config.pollInterval = formPollInterval
+  }
+
+  if (type === 'netbox') {
+    if (formInsecure) config.insecure = true
   }
 
   if (type === 'grafana') {
@@ -97,6 +103,7 @@ onMount(async () => {
     formToken = '' // Don't show existing token
     formPollInterval = config.pollInterval || 30000
     hasExistingToken = !!config.token
+    formInsecure = !!config.insecure
     formUseWebhook = !!config.useWebhook
 
     if (formUseWebhook) {
@@ -249,6 +256,18 @@ async function handleDelete() {
                   <option value={60000}>1 minute</option>
                   <option value={300000}>5 minutes</option>
                 </select>
+              </div>
+            {/if}
+
+            {#if dataSource.type === 'netbox'}
+              <div class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="insecure"
+                  bind:checked={formInsecure}
+                />
+                <label for="insecure" class="text-sm">Skip TLS certificate verification</label>
+                <p class="text-xs text-muted-foreground">(for self-signed certificates)</p>
               </div>
             {/if}
 

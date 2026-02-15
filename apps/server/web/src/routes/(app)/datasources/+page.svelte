@@ -32,6 +32,7 @@ let formPollInterval = $state(30000)
 let formSiteFilter = $state('')
 let formTagFilter = $state('')
 let formPrometheusPreset = $state<'snmp' | 'node_exporter'>('snmp')
+let formInsecure = $state(false)
 let formError = $state('')
 let formSubmitting = $state(false)
 // Dynamic config values for external plugins
@@ -76,6 +77,7 @@ function selectPlugin(plugin: DataSourcePluginInfo) {
   formPollInterval = 30000
   formSiteFilter = ''
   formTagFilter = ''
+  formInsecure = false
   formPrometheusPreset = 'snmp'
   // Initialize dynamic config from schema defaults
   dynamicConfig = {}
@@ -108,6 +110,7 @@ function getConfigFromForm(): string {
       token: formToken.trim() || undefined,
       siteFilter: formSiteFilter.trim() || undefined,
       tagFilter: formTagFilter.trim() || undefined,
+      insecure: formInsecure || undefined,
     })
   }
 
@@ -551,6 +554,16 @@ function formatLastChecked(timestamp?: number): string {
               bind:value={formTagFilter}
             />
             <p class="text-xs text-muted-foreground mt-1">Filter devices by tag slug</p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="insecure"
+              bind:checked={formInsecure}
+            />
+            <label for="insecure" class="text-sm">Skip TLS certificate verification</label>
+            <p class="text-xs text-muted-foreground">(for self-signed certificates)</p>
           </div>
         {/if}
 
