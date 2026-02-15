@@ -5,7 +5,7 @@
   "fixed": [],
   "linked": [["@shumoku/*"]],
   "access": "public",
-  "baseBranch": "master",
+  "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": []
 }
