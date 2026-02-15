@@ -51,10 +51,7 @@ export class NetBoxClient {
     this.debug = options.debug ?? false
     this.insecure = options.insecure ?? false
 
-    // Enable insecure mode for self-signed certificates
-    if (this.insecure) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-    }
+    // Note: insecure mode is applied per-request via tls option in fetch()
   }
 
   /**
@@ -159,6 +156,7 @@ export class NetBoxClient {
           Accept: 'application/json',
         },
         signal: controller.signal,
+        ...(this.insecure && { tls: { rejectUnauthorized: false } }),
       })
       const elapsed = Date.now() - startTime
 

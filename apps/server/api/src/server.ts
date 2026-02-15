@@ -400,10 +400,10 @@ export class Server {
 
   async start(): Promise<void> {
     await this.initialize()
-    await this.startMetricsPolling()
 
     const self = this
 
+    // Start HTTP server before metrics polling so /api/health is available immediately
     this.bunServer = Bun.serve({
       port: this.config.server.port,
       hostname: this.config.server.host,
@@ -436,6 +436,9 @@ export class Server {
     })
 
     console.log(`[Server] Running at http://${this.config.server.host}:${this.config.server.port}`)
+
+    // Start metrics polling after server is listening (may block on slow data sources)
+    await this.startMetricsPolling()
   }
 
   stop(): void {
