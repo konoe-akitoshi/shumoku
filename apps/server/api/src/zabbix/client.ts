@@ -9,6 +9,13 @@ export class ZabbixClient {
   private config: ZabbixConfig
   private requestId = 0
 
+  /** Methods that must be called without Authorization header */
+  private static readonly UNAUTHENTICATED_METHODS = new Set([
+    'apiinfo.version',
+    'user.login',
+    'user.checkauthentication',
+  ])
+
   constructor(config: ZabbixConfig) {
     this.config = config
   }
@@ -20,12 +27,17 @@ export class ZabbixClient {
     const id = ++this.requestId
     const url = this.config.url.replace(/\/$/, '') + '/api_jsonrpc.php'
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json-rpc',
+    }
+
+    if (!ZabbixClient.UNAUTHENTICATED_METHODS.has(method)) {
+      headers.Authorization = `Bearer ${this.config.token}`
+    }
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json-rpc',
-        Authorization: `Bearer ${this.config.token}`,
-      },
+      headers,
       body: JSON.stringify({
         jsonrpc: '2.0',
         method,

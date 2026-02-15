@@ -352,6 +352,13 @@ export class ZabbixPlugin
   // Internal Zabbix API Methods
   // ============================================
 
+  /** Methods that must be called without Authorization header */
+  private static readonly UNAUTHENTICATED_METHODS = new Set([
+    'apiinfo.version',
+    'user.login',
+    'user.checkauthentication',
+  ])
+
   private async apiRequest<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     if (!this.config) {
       throw new Error('Plugin not initialized')
@@ -360,12 +367,17 @@ export class ZabbixPlugin
     const id = ++this.requestId
     const url = this.config.url.replace(/\/$/, '') + '/api_jsonrpc.php'
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json-rpc',
+    }
+
+    if (!ZabbixPlugin.UNAUTHENTICATED_METHODS.has(method)) {
+      headers.Authorization = `Bearer ${this.config.token}`
+    }
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json-rpc',
-        Authorization: `Bearer ${this.config.token}`,
-      },
+      headers,
       body: JSON.stringify({
         jsonrpc: '2.0',
         method,
