@@ -101,9 +101,22 @@ export class ZabbixPlugin
 
     // Poll link metrics
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
-      if (linkMapping.in || linkMapping.out) {
-        try {
-          const itemIds = [linkMapping.in, linkMapping.out].filter(Boolean) as string[]
+      try {
+        let inItemId = linkMapping.in
+        let outItemId = linkMapping.out
+
+        // Resolve item IDs from monitoredNodeId + interface if not directly set
+        if (!inItemId && !outItemId && linkMapping.monitoredNodeId && linkMapping.interface) {
+          const hostId = mapping.nodes[linkMapping.monitoredNodeId]?.hostId
+          if (hostId) {
+            const ifItems = await this.getInterfaceItems(hostId, linkMapping.interface)
+            inItemId = ifItems.in?.id
+            outItemId = ifItems.out?.id
+          }
+        }
+
+        if (inItemId || outItemId) {
+          const itemIds = [inItemId, outItemId].filter(Boolean) as string[]
           const items = await this.getItemsByIds(itemIds)
 
           let inBps = 0
@@ -111,9 +124,9 @@ export class ZabbixPlugin
 
           for (const item of items) {
             const value = Number.parseFloat(item.lastvalue) || 0
-            if (item.itemid === linkMapping.in) {
+            if (item.itemid === inItemId) {
               inBps = value
-            } else if (item.itemid === linkMapping.out) {
+            } else if (item.itemid === outItemId) {
               outBps = value
             }
           }
@@ -131,10 +144,10 @@ export class ZabbixPlugin
             inBps,
             outBps,
           }
-        } catch {
+        } else {
           metrics.links[linkId] = { status: 'unknown' }
         }
-      } else {
+      } catch {
         metrics.links[linkId] = { status: 'unknown' }
       }
     }
