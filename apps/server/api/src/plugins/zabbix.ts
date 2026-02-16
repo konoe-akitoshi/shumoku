@@ -181,19 +181,29 @@ export class ZabbixPlugin
   }
 
   async getHostItems(hostId: string): Promise<HostItem[]> {
+    // Fetch only network interface traffic items (net.if.in / net.if.out)
     const items = await this.apiRequest<ZabbixItem[]>('item.get', {
       output: ['itemid', 'hostid', 'name', 'key_', 'lastvalue', 'units'],
       hostids: [hostId],
+      search: { key_: ['net.if.in', 'net.if.out'] },
+      searchByAny: true,
+      filter: { status: '0', state: '0' },
     })
 
-    return items.map((item) => ({
-      id: item.itemid,
-      hostId: item.hostid,
-      name: item.name,
-      key: item.key_,
-      lastValue: item.lastvalue,
-      unit: (item as ZabbixItem & { units?: string }).units,
-    }))
+    return items.map((item) => {
+      const ifName = ZabbixPlugin.extractInterfaceName(item.name)
+      const isIn = item.key_.startsWith('net.if.in')
+      const direction = isIn ? 'Inbound' : 'Outbound'
+
+      return {
+        id: item.itemid,
+        hostId: item.hostid,
+        name: `${ifName} - ${direction}`,
+        key: item.key_,
+        lastValue: item.lastvalue,
+        unit: (item as ZabbixItem & { units?: string }).units,
+      }
+    })
   }
 
   async searchHosts(query: string): Promise<Host[]> {
@@ -506,27 +516,47 @@ export class ZabbixPlugin
   }
 
   /**
-   * Get interface traffic items for a host
+   * Extract interface name from Zabbix item name.
+   * Handles patterns like:
+   *   "Interface GigabitEthernet0/0(Uplink): Bits received" → "GigabitEthernet0/0"
+   *   "Interface eth0: Incoming network traffic" → "eth0"
+   */
+  private static extractInterfaceName(itemName: string): string {
+    // "Interface {name}({alias}): ..." or "Interface {name}: ..."
+    const match = itemName.match(/^Interface\s+(.+?)(?:\(.*?\))?:\s/)
+    return match ? match[1].trim() : itemName
+  }
+
+  /**
+   * Get interface traffic items for a host.
+   * Searches by both key pattern and item name to support
+   * agent-based (net.if.in[eth0]) and SNMP-based (net.if.in[ifHCInOctets.N]) items.
    */
   async getInterfaceItems(
     hostId: string,
     interfaceName?: string,
   ): Promise<{ in: HostItem | null; out: HostItem | null }> {
-    const keys = interfaceName
-      ? [`net.if.in[${interfaceName}]`, `net.if.out[${interfaceName}]`]
-      : ['net.if.in', 'net.if.out']
-
+    // Fetch all net.if.in / net.if.out items for this host
     const items = await this.apiRequest<ZabbixItem[]>('item.get', {
       output: ['itemid', 'hostid', 'name', 'key_', 'lastvalue'],
       hostids: [hostId],
-      search: { key_: keys },
+      search: { key_: ['net.if.in', 'net.if.out'] },
       searchByAny: true,
+      filter: { status: '0', state: '0' },
     })
 
     let inItem: HostItem | null = null
     let outItem: HostItem | null = null
 
     for (const item of items) {
+      // Match by interface name extracted from item name (works for both agent and SNMP)
+      if (interfaceName) {
+        const extractedName = ZabbixPlugin.extractInterfaceName(item.name)
+        if (extractedName !== interfaceName) {
+          continue
+        }
+      }
+
       const hostItem: HostItem = {
         id: item.itemid,
         hostId: item.hostid,
@@ -536,13 +566,9 @@ export class ZabbixPlugin
       }
 
       if (item.key_.startsWith('net.if.in')) {
-        if (!inItem || (interfaceName && item.key_.includes(interfaceName))) {
-          inItem = hostItem
-        }
+        inItem = hostItem
       } else if (item.key_.startsWith('net.if.out')) {
-        if (!outItem || (interfaceName && item.key_.includes(interfaceName))) {
-          outItem = hostItem
-        }
+        outItem = hostItem
       }
     }
 
