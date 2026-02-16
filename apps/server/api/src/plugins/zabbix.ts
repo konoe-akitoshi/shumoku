@@ -17,6 +17,7 @@ import {
   type ConnectionResult,
   type Host,
   type HostItem,
+  type DiscoveredMetric,
   type MappingHint,
   type ZabbixPluginConfig,
   type Alert,
@@ -208,6 +209,64 @@ export class ZabbixPlugin
       displayName: h.name,
       status: h.status === '0' ? 'up' : 'down',
     }))
+  }
+
+  async discoverMetrics(hostId: string): Promise<DiscoveredMetric[]> {
+    /** Zabbix value_type to human-readable type name */
+    const VALUE_TYPE_MAP: Record<string, string> = {
+      '0': 'gauge',   // Numeric (float)
+      '1': 'text',    // Character
+      '2': 'log',     // Log
+      '3': 'counter', // Numeric (unsigned integer)
+      '4': 'text',    // Text
+    }
+
+    interface ZabbixDiscoverItem {
+      itemid: string
+      name: string
+      key_: string
+      lastvalue: string
+      units: string
+      value_type: string
+      state: string
+      status: string
+      description: string
+      tags?: Array<{ tag: string; value: string }>
+    }
+
+    const items = await this.apiRequest<ZabbixDiscoverItem[]>('item.get', {
+      output: ['itemid', 'name', 'key_', 'lastvalue', 'units', 'value_type', 'state', 'status', 'description'],
+      selectTags: ['tag', 'value'],
+      hostids: [hostId],
+      filter: {
+        status: '0',  // ITEM_STATUS_ACTIVE (enabled)
+        state: '0',   // ITEM_STATE_NORMAL (active, not "not supported")
+      },
+      sortfield: 'name',
+    })
+
+    return items.map((item) => {
+      const labels: Record<string, string> = {
+        itemid: item.itemid,
+        key: item.key_,
+      }
+      if (item.units) {
+        labels.units = item.units
+      }
+      if (item.tags) {
+        for (const tag of item.tags) {
+          labels[`tag:${tag.tag}`] = tag.value
+        }
+      }
+
+      return {
+        name: item.name,
+        labels,
+        value: Number.parseFloat(item.lastvalue) || 0,
+        help: item.description || undefined,
+        type: VALUE_TYPE_MAP[item.value_type] || 'unknown',
+      }
+    })
   }
 
   // ============================================
