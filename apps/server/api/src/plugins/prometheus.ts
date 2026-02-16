@@ -290,23 +290,27 @@ export class PrometheusPlugin
       const items: HostItem[] = []
 
       for (const series of result.result) {
-        const interfaceName = series.metric[interfaceLabel]
-        if (interfaceName) {
+        const ifName = series.metric[interfaceLabel]
+        if (ifName) {
           // Add in/out items for this interface
           items.push({
-            id: `${hostId}:${interfaceName}:in`,
+            id: `${hostId}:${ifName}:in`,
             hostId,
-            name: `${interfaceName} - Inbound`,
-            key: `${this.metrics.inOctets}{${interfaceLabel}="${interfaceName}"}`,
+            name: `${ifName} - Inbound`,
+            key: `${this.metrics.inOctets}{${interfaceLabel}="${ifName}"}`,
             lastValue: series.value[1],
             unit: 'bytes/s',
+            interfaceName: ifName,
+            direction: 'in',
           })
           items.push({
-            id: `${hostId}:${interfaceName}:out`,
+            id: `${hostId}:${ifName}:out`,
             hostId,
-            name: `${interfaceName} - Outbound`,
-            key: `${this.metrics.outOctets}{${interfaceLabel}="${interfaceName}"}`,
+            name: `${ifName} - Outbound`,
+            key: `${this.metrics.outOctets}{${interfaceLabel}="${ifName}"}`,
             unit: 'bytes/s',
+            interfaceName: ifName,
+            direction: 'out',
           })
         }
       }

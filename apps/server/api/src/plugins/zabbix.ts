@@ -193,16 +193,17 @@ export class ZabbixPlugin
     return items.map((item) => {
       const ifName = ZabbixPlugin.extractInterfaceName(item.name)
       const isIn = item.key_.startsWith('net.if.in')
-      const direction = isIn ? 'Inbound' : 'Outbound'
 
       return {
         id: item.itemid,
         hostId: item.hostid,
-        name: `${ifName} - ${direction}`,
+        name: item.name,
         key: item.key_,
         lastValue: item.lastvalue,
         unit: (item as ZabbixItem & { units?: string }).units,
-      }
+        interfaceName: ifName,
+        direction: isIn ? 'in' : 'out',
+      } satisfies HostItem
     })
   }
 

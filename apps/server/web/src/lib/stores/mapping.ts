@@ -175,9 +175,14 @@ function createMappingStore() {
         const interfaceNames = new Set<string>()
         const interfaces: HostItem[] = []
         for (const item of items) {
-          // Extract interface name from item name (e.g., "ge-0/0/1 - Inbound" -> "ge-0/0/1")
-          const match = item.name.match(/^(.+?)\s*-\s*(Inbound|Outbound)$/i)
-          const ifName = match ? match[1].trim() : item.name
+          // Use structured interfaceName field if available, fall back to regex extraction
+          let ifName: string
+          if (item.interfaceName) {
+            ifName = item.interfaceName
+          } else {
+            const match = item.name.match(/^(.+?)\s*-\s*(Inbound|Outbound)$/i)
+            ifName = match ? match[1].trim() : item.name
+          }
           if (!interfaceNames.has(ifName)) {
             interfaceNames.add(ifName)
             interfaces.push({

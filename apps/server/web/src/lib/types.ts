@@ -82,6 +82,10 @@ export interface HostItem {
   key: string
   lastValue?: string
   unit?: string
+  /** Extracted interface name (e.g., "GigabitEthernet0/0", "eth0") */
+  interfaceName?: string
+  /** Traffic direction */
+  direction?: 'in' | 'out'
 }
 
 export interface MappingHint {
