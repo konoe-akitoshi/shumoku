@@ -5,7 +5,7 @@
  */
 
 import type { NetworkGraph } from '@shumoku/core'
-import type { MetricsData, ZabbixMapping, ZabbixHost, ZabbixItem } from '../types.js'
+import type { MetricsData, MetricsMapping, LinkMetricsMapping, ZabbixHost, ZabbixItem } from '../types.js'
 import {
   addHttpWarning,
   type DataSourcePlugin,
@@ -23,6 +23,12 @@ import {
   type AlertQueryOptions,
   type AlertSeverity,
 } from './types.js'
+
+/** Zabbix-specific link mapping with item IDs for direct item reference */
+interface ZabbixLinkMapping extends LinkMetricsMapping {
+  in?: string
+  out?: string
+}
 
 export class ZabbixPlugin
   implements DataSourcePlugin, MetricsCapable, HostsCapable, AutoMappingCapable, AlertsCapable
@@ -75,7 +81,7 @@ export class ZabbixPlugin
   // MetricsCapable Implementation
   // ============================================
 
-  async pollMetrics(mapping: ZabbixMapping): Promise<MetricsData> {
+  async pollMetrics(mapping: MetricsMapping): Promise<MetricsData> {
     const metrics: MetricsData = {
       nodes: {},
       links: {},
@@ -100,8 +106,9 @@ export class ZabbixPlugin
     }
 
     // Poll link metrics
-    for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
+    for (const [linkId, baseLinkMapping] of Object.entries(mapping.links || {})) {
       try {
+        const linkMapping = baseLinkMapping as ZabbixLinkMapping
         let inItemId = linkMapping.in
         let outItemId = linkMapping.out
 

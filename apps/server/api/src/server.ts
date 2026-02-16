@@ -26,7 +26,7 @@ import {
   loadPluginsFromConfig,
 } from './plugins/index.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
-import type { ZabbixMapping } from './types.js'
+import type { MetricsMapping } from './types.js'
 import { parseBandwidthCapacity } from './bandwidth.js'
 
 export class Server {
@@ -321,7 +321,7 @@ export class Server {
 
             if (hasMetricsCapability(plugin)) {
               // Parse mapping from topology
-              let mapping: ZabbixMapping = { nodes: {}, links: {} }
+              let mapping: MetricsMapping = { nodes: {}, links: {} }
               if (topology.mappingJson) {
                 try {
                   mapping = JSON.parse(topology.mappingJson)

@@ -5,7 +5,7 @@
 
 import { writable, derived } from 'svelte/store'
 import { api } from '$lib/api'
-import type { Topology, TopologyInput, ZabbixMapping } from '$lib/types'
+import type { Topology, TopologyInput, MetricsMapping } from '$lib/types'
 
 interface TopologiesState {
   items: Topology[]
@@ -61,7 +61,7 @@ function createTopologiesStore() {
       }))
     },
 
-    async updateMapping(id: string, mapping: ZabbixMapping) {
+    async updateMapping(id: string, mapping: MetricsMapping) {
       const topology = await api.topologies.updateMapping(id, mapping)
       update((s) => ({
         ...s,

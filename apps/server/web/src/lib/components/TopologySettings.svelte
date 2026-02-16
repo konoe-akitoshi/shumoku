@@ -10,7 +10,7 @@ import {
   showTrafficFlow,
   showNodeStatus,
 } from '$lib/stores'
-import type { Topology, ZabbixMapping, TopologyDataSource } from '$lib/types'
+import type { Topology, MetricsMapping, TopologyDataSource } from '$lib/types'
 import PencilSimple from 'phosphor-svelte/lib/PencilSimple'
 import Trash from 'phosphor-svelte/lib/Trash'
 import Database from 'phosphor-svelte/lib/Database'
@@ -73,12 +73,12 @@ async function updateEdgeStyle() {
 function getMappingStats(mappingJson?: string): { mappedNodes: number; mappedLinks: number } {
   if (!mappingJson) return { mappedNodes: 0, mappedLinks: 0 }
   try {
-    const mapping = JSON.parse(mappingJson) as ZabbixMapping
+    const mapping = JSON.parse(mappingJson) as MetricsMapping
     const mappedNodes = Object.values(mapping.nodes || {}).filter(
       (n) => n.hostId || n.hostName,
     ).length
     const mappedLinks = Object.values(mapping.links || {}).filter(
-      (l) => l.interface || l.in || l.out,
+      (l) => l.interface || l.monitoredNodeId,
     ).length
     return { mappedNodes, mappedLinks }
   } catch {

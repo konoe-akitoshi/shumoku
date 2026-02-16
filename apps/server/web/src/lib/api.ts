@@ -11,7 +11,7 @@ import type {
   Topology,
   TopologyInput,
   TopologyContext,
-  ZabbixMapping,
+  MetricsMapping,
   ConnectionTestResult,
   TopologyDataSource,
   TopologyDataSourceInput,
@@ -156,7 +156,7 @@ export const topologies = {
       method: 'DELETE',
     }),
 
-  updateMapping: (id: string, mapping: ZabbixMapping) =>
+  updateMapping: (id: string, mapping: MetricsMapping) =>
     request<Topology>(`/topologies/${id}/mapping`, {
       method: 'PUT',
       body: JSON.stringify(mapping),

@@ -5,7 +5,7 @@
  * Each plugin declares its capabilities and implements corresponding interfaces.
  */
 
-import type { MetricsData, ZabbixMapping } from '../types.js'
+import type { MetricsData, MetricsMapping } from '../types.js'
 
 // ============================================
 // Re-export base types from @shumoku/core
@@ -40,19 +40,19 @@ export type { PluginFactory, PluginRegistration, PluginRegistryInterface } from 
 
 /**
  * Plugin can provide metrics data
- * (Server-specific: depends on MetricsData and ZabbixMapping)
+ * (Server-specific: depends on MetricsData and MetricsMapping)
  */
 export interface MetricsCapable {
   /**
    * Poll current metrics based on mapping
    */
-  pollMetrics(mapping: ZabbixMapping): Promise<MetricsData>
+  pollMetrics(mapping: MetricsMapping): Promise<MetricsData>
 
   /**
    * Subscribe to metrics updates (optional)
    * Returns a cleanup function
    */
-  subscribeMetrics?(mapping: ZabbixMapping, onUpdate: (metrics: MetricsData) => void): () => void
+  subscribeMetrics?(mapping: MetricsMapping, onUpdate: (metrics: MetricsData) => void): () => void
 }
 
 // ============================================

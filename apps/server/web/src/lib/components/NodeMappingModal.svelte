@@ -4,7 +4,7 @@ import * as Dialog from '$lib/components/ui/dialog'
 import { Button } from '$lib/components/ui/button'
 import { metricsData, mappingStore, mappingHosts } from '$lib/stores'
 import { formatTraffic } from '$lib/utils/format'
-import type { ZabbixMapping, DiscoveredMetric } from '$lib/types'
+import type { MetricsMapping, DiscoveredMetric } from '$lib/types'
 import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
 import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
 import Link from 'phosphor-svelte/lib/Link'
@@ -25,7 +25,7 @@ interface Props {
   metricsSourceId: string | undefined
   netboxBaseUrl: string | undefined
   nodeData: NodeSelectEvent | null
-  currentMapping: ZabbixMapping | null
+  currentMapping: MetricsMapping | null
   onSaved?: (nodeId: string, mapping: { hostId?: string; hostName?: string }) => void
 }
 

@@ -5,11 +5,11 @@
 
 import { writable, derived, get } from 'svelte/store'
 import { api } from '$lib/api'
-import type { ZabbixMapping, Host, HostItem } from '$lib/types'
+import type { MetricsMapping, Host, HostItem } from '$lib/types'
 
 interface MappingState {
   topologyId: string | null
-  mapping: ZabbixMapping
+  mapping: MetricsMapping
   hosts: Host[]
   // Interfaces per host (hostId -> interfaces)
   hostInterfaces: Record<string, HostItem[]>
@@ -58,7 +58,7 @@ function createMappingStore() {
         ])
 
         // Parse mapping
-        let mapping: ZabbixMapping = { nodes: {}, links: {} }
+        let mapping: MetricsMapping = { nodes: {}, links: {} }
         if (topo.mappingJson) {
           try {
             mapping = JSON.parse(topo.mappingJson)

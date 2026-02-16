@@ -5,7 +5,7 @@
  * Supports SNMP exporter and node_exporter metric formats.
  */
 
-import type { MetricsData, ZabbixMapping } from '../types.js'
+import type { MetricsData, MetricsMapping } from '../types.js'
 import {
   addHttpWarning,
   type ConnectionResult,
@@ -141,7 +141,7 @@ export class PrometheusPlugin
   // MetricsCapable Implementation
   // ============================================
 
-  async pollMetrics(mapping: ZabbixMapping): Promise<MetricsData> {
+  async pollMetrics(mapping: MetricsMapping): Promise<MetricsData> {
     const warnings: string[] = []
     const metrics: MetricsData = {
       nodes: {},
@@ -173,8 +173,7 @@ export class PrometheusPlugin
 
     // Poll node metrics (up/down status)
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
-      // Use instance from mapping, supporting both Zabbix format (hostId) and Prometheus format
-      const instance = (nodeMapping as { instance?: string }).instance || nodeMapping.hostId
+      const instance = nodeMapping.hostId
 
       if (instance) {
         try {
@@ -193,16 +192,13 @@ export class PrometheusPlugin
 
     // Poll link metrics (interface traffic)
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
-      // Get instance either directly or via monitoredNodeId -> node mapping
-      let instance = (linkMapping as { instance?: string }).instance
-      const monitoredNodeId = (linkMapping as { monitoredNodeId?: string }).monitoredNodeId
-      if (!instance && monitoredNodeId && mapping.nodes?.[monitoredNodeId]) {
-        // Resolve instance from node mapping (hostId is the Prometheus instance)
-        instance = mapping.nodes[monitoredNodeId].hostId
+      // Get instance via monitoredNodeId -> node mapping
+      let instance: string | undefined
+      if (linkMapping.monitoredNodeId && mapping.nodes?.[linkMapping.monitoredNodeId]) {
+        instance = mapping.nodes[linkMapping.monitoredNodeId].hostId
       }
 
-      const interfaceName =
-        (linkMapping as { interface?: string }).interface || linkMapping.interface
+      const interfaceName = linkMapping.interface
 
       if (instance && interfaceName) {
         try {

@@ -6,7 +6,7 @@
 import * as fs from 'node:fs'
 import * as yaml from 'js-yaml'
 import type { Link, NetworkGraph } from '@shumoku/core'
-import type { ZabbixMapping } from '../types.js'
+import type { MetricsMapping, LinkMetricsMapping } from '../types.js'
 import { getBandwidthCapacity } from '../bandwidth.js'
 import type { ZabbixClient } from './client.js'
 
@@ -32,6 +32,17 @@ export interface ResolvedLinkMapping {
   inItemId?: string
   outItemId?: string
   capacity: number
+}
+
+/** Zabbix-specific link mapping with item IDs */
+interface ZabbixLinkMapping extends LinkMetricsMapping {
+  in?: string
+  out?: string
+}
+
+/** Zabbix mapping with extended link fields */
+interface ZabbixMapping extends MetricsMapping {
+  links: Record<string, ZabbixLinkMapping>
 }
 
 export class ZabbixMapper {

@@ -7,7 +7,7 @@ import { Hono } from 'hono'
 import { TopologyService } from '../services/topology.js'
 import { DataSourceService } from '../services/datasource.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
-import type { TopologyInput, ZabbixMapping } from '../types.js'
+import type { TopologyInput, MetricsMapping } from '../types.js'
 import { renderEmbeddable, type EmbeddableRenderOutput } from '@shumoku/renderer'
 import { buildHierarchicalSheets, mergeWithOverlays, type OverlayConfig } from '@shumoku/core'
 import { BunHierarchicalLayout } from '../layout.js'
@@ -278,7 +278,7 @@ export function createTopologiesApi(): Hono {
   app.put('/:id/mapping', async (c) => {
     const id = c.req.param('id')
     try {
-      const mapping = (await c.req.json()) as ZabbixMapping
+      const mapping = (await c.req.json()) as MetricsMapping
       const topology = service.updateMapping(id, mapping)
       if (!topology) {
         return c.json({ error: 'Topology not found' }, 404)
@@ -302,10 +302,10 @@ export function createTopologiesApi(): Hono {
       }
 
       // Get existing mapping or create new one
-      let mapping: ZabbixMapping = { nodes: {}, links: {} }
+      let mapping: MetricsMapping = { nodes: {}, links: {} }
       if (topology.mappingJson) {
         try {
-          mapping = JSON.parse(topology.mappingJson) as ZabbixMapping
+          mapping = JSON.parse(topology.mappingJson) as MetricsMapping
         } catch {
           // Invalid JSON, start fresh
         }

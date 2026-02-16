@@ -13,7 +13,7 @@ import { BunHierarchicalLayout } from '../layout.js'
 import { YamlParser, HierarchicalParser, createMemoryFileResolver } from '@shumoku/parser-yaml'
 import { resolveIconDimensionsForGraph, collectIconUrls } from '@shumoku/renderer'
 import { getDatabase, generateId, timestamp } from '../db/index.js'
-import type { Topology, TopologyInput, MetricsData, ZabbixMapping } from '../types.js'
+import type { Topology, TopologyInput, MetricsData, MetricsMapping } from '../types.js'
 
 interface TopologyRow {
   id: string
@@ -61,7 +61,7 @@ export interface ParsedTopology {
   metrics: MetricsData
   topologySourceId?: string
   metricsSourceId?: string
-  mapping?: ZabbixMapping
+  mapping?: MetricsMapping
 }
 
 /**
@@ -219,9 +219,9 @@ export class TopologyService {
   }
 
   /**
-   * Update Zabbix mapping for a topology
+   * Update metrics mapping for a topology
    */
-  updateMapping(id: string, mapping: ZabbixMapping): Topology | null {
+  updateMapping(id: string, mapping: MetricsMapping): Topology | null {
     const existing = this.get(id)
     if (!existing) {
       return null
@@ -341,10 +341,10 @@ export class TopologyService {
     const layoutResult = await this.layout.layoutAsync(graph, iconDimensions.byKey)
     const metrics = this.createEmptyMetrics(graph)
 
-    let mapping: ZabbixMapping | undefined
+    let mapping: MetricsMapping | undefined
     if (topology.mappingJson) {
       try {
-        mapping = JSON.parse(topology.mappingJson) as ZabbixMapping
+        mapping = JSON.parse(topology.mappingJson) as MetricsMapping
       } catch {
         // Invalid JSON, ignore
       }

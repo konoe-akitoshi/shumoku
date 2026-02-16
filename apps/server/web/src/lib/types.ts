@@ -137,25 +137,20 @@ export function serializeMultiFileContent(files: TopologyFile[]): string {
   return JSON.stringify({ files }, null, 2)
 }
 
-export interface ZabbixMapping {
-  nodes: Record<
-    string,
-    {
-      hostId?: string
-      hostName?: string
-    }
-  >
-  links: Record<
-    string,
-    {
-      in?: string
-      out?: string
-      capacity?: number
-      // Simplified link mapping: single monitored interface
-      monitoredNodeId?: string // Which node (from/to) is being monitored
-      interface?: string // Interface name on the monitored node
-    }
-  >
+export interface NodeMetricsMapping {
+  hostId?: string
+  hostName?: string
+}
+
+export interface LinkMetricsMapping {
+  monitoredNodeId?: string
+  interface?: string
+  capacity?: number
+}
+
+export interface MetricsMapping {
+  nodes: Record<string, NodeMetricsMapping>
+  links: Record<string, LinkMetricsMapping>
 }
 
 export interface ConnectionTestResult {
@@ -393,7 +388,7 @@ export interface TopologyContext {
   animationCSS: string
   metrics: MetricsData
   dataSourceId?: string
-  mapping?: ZabbixMapping
+  mapping?: MetricsMapping
 }
 
 // NetworkGraph types for Cytoscape converter
@@ -462,7 +457,7 @@ export interface ParsedTopologyResponse {
   layout: LayoutResult
   metrics: MetricsData
   dataSourceId?: string
-  mapping?: ZabbixMapping
+  mapping?: MetricsMapping
 }
 
 // ============================================
