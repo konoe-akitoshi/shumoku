@@ -19,7 +19,7 @@ export default async function Page({
   const gitConfig = {
     user: 'konoe-akitoshi',
     repo: 'shumoku',
-    branch: 'master',
+    branch: 'main',
   }
 
   const githubPath = page.slugs.length === 0 ? 'index' : page.slugs.join('/')
@@ -32,7 +32,7 @@ export default async function Page({
         <LLMCopyButton markdownUrl={`${page.url}.mdx`} />
         <ViewOptions
           markdownUrl={`${page.url}.mdx`}
-          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/apps/docs/content/docs/${githubPath}.mdx`}
+          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/apps/docs/content/docs/${githubPath}.${lang}.mdx`}
         />
       </div>
       <DocsBody>
