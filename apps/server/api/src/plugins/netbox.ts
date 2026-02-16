@@ -27,8 +27,6 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
   private client: NetBoxClient | null = null
 
   initialize(config: unknown): void {
-    console.log('[NetBox] initialize called with config:', JSON.stringify(config, null, 2))
-
     const cfg = config as NetBoxPluginConfig
     if (!cfg || typeof cfg !== 'object') {
       throw new Error('NetBox plugin config is required')
