@@ -139,6 +139,10 @@ export function createTopologiesApi(): Hono {
     try {
       const parsed = await service.getParsed(id)
       if (!parsed) {
+        const parseError = service.getParseError(id)
+        if (parseError) {
+          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+        }
         return c.json({ error: 'Topology not found' }, 404)
       }
 
@@ -182,6 +186,10 @@ export function createTopologiesApi(): Hono {
       }
       const parsed = await service.getParsed(id)
       if (!parsed) {
+        const parseError = service.getParseError(id)
+        if (parseError) {
+          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+        }
         return c.json({ error: 'Topology not found' }, 404)
       }
       const output = await buildRenderOutput(parsed)

@@ -194,7 +194,17 @@ async function loadContent() {
   try {
     const res = await fetch(effectiveRenderUrl)
     if (!res.ok) {
-      throw new Error(`Failed to load topology: ${res.status}`)
+      let errorMsg = `Failed to load topology: ${res.status}`
+      try {
+        const body = await res.json()
+        if (body.error) {
+          const phase = body.errorPhase ? `${body.errorPhase} error` : 'Error'
+          errorMsg = `${phase}: ${body.error}`
+        }
+      } catch {
+        // Response wasn't JSON, use default message
+      }
+      throw new Error(errorMsg)
     }
     const data = await res.json()
 

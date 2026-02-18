@@ -50,6 +50,17 @@ export interface ResolvedIconDimensions {
 }
 
 /**
+ * Error information when a topology fails to parse or layout
+ */
+export interface TopologyParseError {
+  id: string
+  name: string
+  phase: 'parse' | 'layout'
+  message: string
+  timestamp: number
+}
+
+/**
  * Parsed topology with layout and metrics ready for rendering
  */
 export interface ParsedTopology {
@@ -95,6 +106,7 @@ export class TopologyService {
   private layout: BunHierarchicalLayout
   private cache: Map<string, ParsedTopology> = new Map()
   private renderCache: Map<string, object> = new Map()
+  private errorCache: Map<string, TopologyParseError> = new Map()
 
   constructor() {
     this.db = getDatabase()
@@ -297,14 +309,37 @@ export class TopologyService {
       return this.cache.get(id)!
     }
 
+    // If there's a cached error, skip re-parse (cleared on content update)
+    if (this.errorCache.has(id)) {
+      return null
+    }
+
     const topology = this.get(id)
     if (!topology) {
       return null
     }
 
-    const parsed = await this.parseTopology(topology)
-    this.cache.set(id, parsed)
-    return parsed
+    try {
+      const parsed = await this.parseTopology(topology)
+      this.cache.set(id, parsed)
+      this.errorCache.delete(id)
+      return parsed
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      const phase = message.includes('Invalid NetworkGraph') ? 'parse' : 'layout'
+      this.errorCache.set(id, {
+        id,
+        name: topology.name,
+        phase,
+        message,
+        timestamp: Date.now(),
+      })
+      console.error(
+        `[TopologyService] Failed to parse topology "${topology.name}" (${id}):`,
+        message,
+      )
+      return null
+    }
   }
 
   /**
@@ -405,6 +440,20 @@ export class TopologyService {
   }
 
   /**
+   * Get parse error for a topology (if any)
+   */
+  getParseError(id: string): TopologyParseError | undefined {
+    return this.errorCache.get(id)
+  }
+
+  /**
+   * Get all topology parse errors
+   */
+  getAllParseErrors(): TopologyParseError[] {
+    return Array.from(this.errorCache.values())
+  }
+
+  /**
    * Update metrics for a cached topology
    */
   updateMetrics(id: string, metrics: MetricsData): void {
@@ -434,6 +483,7 @@ export class TopologyService {
   clearCache(): void {
     this.cache.clear()
     this.renderCache.clear()
+    this.errorCache.clear()
   }
 
   /**
@@ -442,6 +492,7 @@ export class TopologyService {
   clearCacheEntry(id: string): void {
     this.cache.delete(id)
     this.renderCache.delete(id)
+    this.errorCache.delete(id)
   }
 
   /**

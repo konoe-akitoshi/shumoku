@@ -203,8 +203,31 @@ export class Server {
         // Check DB topology first
         const dbMetrics = this.dbTopologyMetrics.get(state.subscribedTopology)
         if (dbMetrics) {
-          ws.send(JSON.stringify({ type: 'metrics', data: dbMetrics }))
+          // Inject parse error warnings if any
+          const parseError = this.topologyService?.getParseError(state.subscribedTopology)
+          if (parseError) {
+            const warnings = [...(dbMetrics.warnings || [])]
+            warnings.push(`Parse error: ${parseError.message}`)
+            ws.send(JSON.stringify({ type: 'metrics', data: { ...dbMetrics, warnings } }))
+          } else {
+            ws.send(JSON.stringify({ type: 'metrics', data: dbMetrics }))
+          }
           continue
+        }
+
+        // Check for parse error on DB topology with no metrics yet
+        if (this.topologyService) {
+          const parseError = this.topologyService.getParseError(state.subscribedTopology)
+          if (parseError) {
+            const errorMetrics: MetricsData = {
+              nodes: {},
+              links: {},
+              timestamp: Date.now(),
+              warnings: [`Parse error: ${parseError.message}`],
+            }
+            ws.send(JSON.stringify({ type: 'metrics', data: errorMetrics }))
+            continue
+          }
         }
 
         // Check file-based topology
@@ -302,7 +325,15 @@ export class Server {
 
     const topologies = this.topologyService.list()
     for (const topology of topologies) {
-      const parsed: ParsedTopology | null = await this.topologyService.getParsed(topology.id)
+      let parsed: ParsedTopology | null = null
+      try {
+        parsed = await this.topologyService.getParsed(topology.id)
+      } catch (err) {
+        console.error(
+          `[Server] Unexpected error parsing topology "${topology.name}":`,
+          err instanceof Error ? err.message : err,
+        )
+      }
       if (!parsed) continue
 
       let metrics: MetricsData | null = null

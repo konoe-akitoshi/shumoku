@@ -22,6 +22,10 @@ export function createShareApi(): Hono {
     try {
       const parsed = await service.getParsed(topology.id)
       if (!parsed) {
+        const parseError = service.getParseError(topology.id)
+        if (parseError) {
+          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+        }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
 
@@ -66,6 +70,10 @@ export function createShareApi(): Hono {
     try {
       const parsed = await service.getParsed(topology.id)
       if (!parsed) {
+        const parseError = service.getParseError(topology.id)
+        if (parseError) {
+          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+        }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
       return c.json(await buildRenderOutput(parsed))
