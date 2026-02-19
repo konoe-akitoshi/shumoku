@@ -105,8 +105,9 @@ function Adopters({ label }: { label: string }) {
         {label}
       </span>
       <div className="flex items-center gap-8">
-        {adopters.map((adopter) =>
-          adopter.url ? (
+        {adopters.map((adopter) => {
+          const imgClassName = 'h-10 sm:h-12 w-auto object-contain'
+          return adopter.url ? (
             <a
               key={adopter.name}
               href={adopter.url}
@@ -119,7 +120,7 @@ function Adopters({ label }: { label: string }) {
                 alt={adopter.name}
                 width={180}
                 height={54}
-                className="h-10 sm:h-12 w-auto object-contain opacity-70 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300"
+                className={imgClassName}
               />
             </a>
           ) : (
@@ -129,10 +130,10 @@ function Adopters({ label }: { label: string }) {
               alt={adopter.name}
               width={180}
               height={54}
-              className="h-10 sm:h-12 w-auto object-contain opacity-70 grayscale"
+              className={imgClassName}
             />
-          ),
-        )}
+          )
+        })}
       </div>
     </div>
   )
