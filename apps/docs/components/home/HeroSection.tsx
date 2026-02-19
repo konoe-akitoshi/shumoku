@@ -86,15 +86,13 @@ function NpmDocsLink({ t, locale }: { t: HeroTranslations; locale: string }) {
 
 function DiagramPreview() {
   return (
-    <div className="relative mt-8 sm:mt-10 lg:mt-0 min-h-[300px] sm:min-h-[400px] lg:min-h-0 lg:flex-1">
-      <div className="absolute inset-0 rounded-2xl overflow-hidden bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70">
+    <div className="mt-8 sm:mt-10 lg:mt-0 lg:flex-1 flex items-center">
+      <div className="rounded-2xl overflow-hidden border border-neutral-200/70 dark:border-neutral-800/70 shadow-2xl">
         <img
-          src="/hero-diagram.svg"
-          alt="Network diagram example"
-          className="w-full h-full object-cover object-top"
+          src="/screenshots/topology.png"
+          alt="Topology viewer with live weathermap"
+          className="w-full h-auto"
         />
-        {/* Bottom gradient */}
-        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-white dark:from-neutral-900 to-transparent pointer-events-none" />
       </div>
     </div>
   )
