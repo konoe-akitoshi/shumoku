@@ -237,7 +237,7 @@ async function handleHealthCheck() {
           </p>
           <div class="flex items-center gap-4">
             <a
-              href="https://github.com/shumoku/shumoku"
+              href="https://github.com/konoe-akitoshi/shumoku"
               target="_blank"
               class="text-primary hover:text-primary-dark flex items-center gap-2"
             >
