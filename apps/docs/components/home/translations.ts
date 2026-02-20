@@ -47,8 +47,9 @@ export type IntegrationsTranslations = {
   title: string
   inputLabel: string
   monitoringLabel: string
-  inputs: readonly { title: string; description: string; tag?: string }[]
-  monitoring: readonly { title: string; description: string; tag?: string }[]
+  centerDescription: string
+  inputs: readonly { title: string; description: string; tag?: string; logo?: string }[]
+  monitoring: readonly { title: string; description: string; tag?: string; logo?: string }[]
 }
 
 export type ForTeamsTranslations = {
@@ -154,14 +155,15 @@ export const homeTranslations = {
       title: 'Integrations',
       inputLabel: 'Topology Sources',
       monitoringLabel: 'Monitoring Sources',
+      centerDescription: 'Topology visualization from your infrastructure',
       inputs: [
         { title: 'YAML', description: 'Define topology as code', tag: 'built-in' },
-        { title: 'NetBox', description: 'Auto-discover from DCIM/IPAM', tag: 'plugin' },
+        { title: 'NetBox', description: 'Auto-discover from DCIM/IPAM', tag: 'plugin', logo: '/integrations/netbox.svg' },
       ],
       monitoring: [
-        { title: 'Zabbix', description: 'Traffic, host status, alerts', tag: 'plugin' },
-        { title: 'Prometheus', description: 'SNMP & node exporter metrics', tag: 'plugin' },
-        { title: 'Grafana', description: 'Webhook alerts', tag: 'plugin' },
+        { title: 'Zabbix', description: 'Traffic, host status, alerts', tag: 'plugin', logo: '/integrations/zabbix.svg' },
+        { title: 'Prometheus', description: 'SNMP & node exporter metrics', tag: 'plugin', logo: '/integrations/prometheus.svg' },
+        { title: 'Grafana', description: 'Webhook alerts', tag: 'plugin', logo: '/integrations/grafana.svg' },
         { title: 'Custom API', description: 'Your own data source', tag: 'plugin' },
       ],
     },
@@ -299,14 +301,15 @@ export const homeTranslations = {
       title: '連携',
       inputLabel: 'トポロジーソース',
       monitoringLabel: '監視ソース',
+      centerDescription: 'インフラからトポロジーを可視化',
       inputs: [
         { title: 'YAML', description: 'トポロジーをコードで定義', tag: 'built-in' },
-        { title: 'NetBox', description: 'DCIM/IPAM から自動検出', tag: 'plugin' },
+        { title: 'NetBox', description: 'DCIM/IPAM から自動検出', tag: 'plugin', logo: '/integrations/netbox.svg' },
       ],
       monitoring: [
-        { title: 'Zabbix', description: 'トラフィック・ホスト状態・アラート', tag: 'plugin' },
-        { title: 'Prometheus', description: 'SNMP & Node Exporter メトリクス', tag: 'plugin' },
-        { title: 'Grafana', description: 'Webhook アラート', tag: 'plugin' },
+        { title: 'Zabbix', description: 'トラフィック・ホスト状態・アラート', tag: 'plugin', logo: '/integrations/zabbix.svg' },
+        { title: 'Prometheus', description: 'SNMP & Node Exporter メトリクス', tag: 'plugin', logo: '/integrations/prometheus.svg' },
+        { title: 'Grafana', description: 'Webhook アラート', tag: 'plugin', logo: '/integrations/grafana.svg' },
         { title: 'Custom API', description: '独自データソース', tag: 'plugin' },
       ],
     },
