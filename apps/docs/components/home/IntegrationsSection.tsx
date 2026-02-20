@@ -100,7 +100,7 @@ export function IntegrationsSection({ locale }: { locale: string }) {
             <div className="space-y-3">
               {t.inputs.map((item) => (
                 <div key={item.title} className="flex items-center gap-2 justify-end">
-                  <NodeCard title={item.title} description={item.description} tag={item.tag} logo={item.logo} />
+                  <NodeCard title={item.title} description={item.description} tag={item.tag} logo={'logo' in item ? item.logo : undefined} />
                   <DashedLine direction="right" />
                 </div>
               ))}
@@ -119,7 +119,7 @@ export function IntegrationsSection({ locale }: { locale: string }) {
               {t.monitoring.map((item) => (
                 <div key={item.title} className="flex items-center gap-2">
                   <DashedLine direction="left" />
-                  <NodeCard title={item.title} description={item.description} tag={item.tag} logo={item.logo} />
+                  <NodeCard title={item.title} description={item.description} tag={item.tag} logo={'logo' in item ? item.logo : undefined} />
                 </div>
               ))}
             </div>
