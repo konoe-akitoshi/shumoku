@@ -1,7 +1,9 @@
 export type HeroTranslations = {
+  label: string
   title1: string
   title2: string
-  description: string
+  description1: string
+  description2: string
   deploy: string
   talkToUs: string
   githubLabel: string
@@ -81,9 +83,11 @@ export type BottomTranslations = {
 export const homeTranslations = {
   en: {
     hero: {
-      title1: 'Trust your',
-      title2: 'topology.',
-      description: 'Auto-generated from your infrastructure. Always accurate. Open-source core.',
+      label: 'Infrastructure Topology Platform',
+      title1: 'Topology you',
+      title2: 'can trust.',
+      description1: 'Automatically derived from real infrastructure.',
+      description2: 'Built for operations teams and enterprise environments.',
       deploy: 'Deploy Server',
       talkToUs: 'Talk to Us',
       githubLabel: 'GitHub',
@@ -222,14 +226,16 @@ export const homeTranslations = {
       },
     },
     adopters: {
-      title: 'Trusted by',
+      title: 'Used by teams in production environments',
     },
   },
   ja: {
     hero: {
-      title1: 'Trust your',
-      title2: 'topology.',
-      description: 'インフラから自動生成。常に正確。オープンソースコア。',
+      label: 'Infrastructure Topology Platform',
+      title1: '信頼できる',
+      title2: 'トポロジーを。',
+      description1: '現実のインフラから自動生成される構造基盤。',
+      description2: '運用チームとエンタープライズ環境のために。',
       deploy: 'サーバーを導入',
       talkToUs: 'お問い合わせ',
       githubLabel: 'GitHub',
@@ -368,7 +374,7 @@ export const homeTranslations = {
       },
     },
     adopters: {
-      title: '採用実績',
+      title: '本番環境で運用チームに採用されています',
     },
   },
 } as const
