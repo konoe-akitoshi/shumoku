@@ -5,7 +5,7 @@ export type HeroTranslations = {
   description1: string
   description2: string
   deploy: string
-  talkToUs: string
+  demo: string
   githubLabel: string
 }
 
@@ -89,7 +89,7 @@ export const homeTranslations = {
       description1: 'Automatically derived from real infrastructure.',
       description2: 'Built for operations teams and enterprise environments.',
       deploy: 'Deploy Server',
-      talkToUs: 'Talk to Us',
+      demo: 'Request Demo',
       githubLabel: 'GitHub',
     },
     why: {
@@ -237,7 +237,7 @@ export const homeTranslations = {
       description1: '現実のインフラから自動生成される構造基盤。',
       description2: '運用チームとエンタープライズ環境のために。',
       deploy: 'サーバーを導入',
-      talkToUs: 'お問い合わせ',
+      demo: 'デモを見る',
       githubLabel: 'GitHub',
     },
     why: {
