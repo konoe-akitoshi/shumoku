@@ -8,13 +8,13 @@ export function HeroSection({ locale }: { locale: string }) {
   const t = homeTranslations[locale as Locale]?.hero ?? homeTranslations.en.hero
 
   return (
-    <section className="relative">
+    <section className="relative overflow-hidden">
       <div className="absolute inset-0 bg-white dark:bg-neutral-950 pointer-events-none" />
       <div className={cn('absolute inset-0 pointer-events-none', backgrounds.hero)} />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-8 sm:pt-16 sm:pb-10 lg:pt-20 lg:pb-12">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:pl-8 lg:pr-0 pt-12 pb-8 sm:pt-16 sm:pb-10 lg:pt-20 lg:pb-12">
         <div className="grid lg:grid-cols-[5fr_7fr] lg:items-center gap-8 lg:gap-12">
-          <div>
+          <div className="order-2 lg:order-none">
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[0.98]">
               <span className="text-neutral-900 dark:text-white">{t.title1}</span>
               <br />
@@ -49,7 +49,7 @@ export function HeroSection({ locale }: { locale: string }) {
             </div>
           </div>
 
-          <div className="rounded-2xl overflow-hidden border border-neutral-200/70 dark:border-neutral-800/70 shadow-2xl">
+          <div className="order-1 lg:order-none rounded-2xl lg:rounded-r-none overflow-hidden border border-neutral-200/70 dark:border-neutral-800/70 lg:border-r-0 shadow-2xl lg:-mr-[10vw]">
             <img
               src="/screenshots/topology.png"
               alt="Topology viewer with live weathermap"

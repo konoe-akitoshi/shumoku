@@ -242,7 +242,7 @@ export const homeTranslations = {
     hero: {
       label: 'Infrastructure Topology Platform',
       title1: '信頼できる',
-      title2: 'トポロジーを。',
+      title2: '構成図を。',
       description1: '現実のインフラから自動生成される構造基盤。',
       description2: '運用チームとエンタープライズ環境のために。',
       deploy: 'サーバーを導入',
