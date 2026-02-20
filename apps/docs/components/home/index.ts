@@ -1,3 +1,4 @@
+export { AdoptersSection } from './AdoptersSection'
 export { BottomSection } from './BottomSection'
 export { FeaturesSection } from './FeaturesSection'
 export { ForTeamsSection } from './ForTeamsSection'

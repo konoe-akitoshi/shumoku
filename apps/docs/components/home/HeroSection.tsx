@@ -1,33 +1,11 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { ArrowRightIcon, GitHubIcon } from './icons'
 import { backgrounds, buttonStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
-type Adopter = {
-  name: string
-  logo: string
-  url?: string
-}
-
-const adopters: Adopter[] = [
-  {
-    name: '電気通信大学 情報基盤センター',
-    logo: '/adopters/itcuec_logo_300.png',
-    url: 'https://www.cc.uec.ac.jp/',
-  },
-  {
-    name: 'JANOG57',
-    logo: '/adopters/janog57_logo.svg',
-    url: 'https://www.janog.gr.jp/meeting/janog57/',
-  },
-]
-
 export function HeroSection({ locale }: { locale: string }) {
   const t = homeTranslations[locale as Locale]?.hero ?? homeTranslations.en.hero
-  const adoptersLabel =
-    homeTranslations[locale as Locale]?.adopters?.title ?? homeTranslations.en.adopters.title
 
   return (
     <section className="relative">
@@ -78,40 +56,6 @@ export function HeroSection({ locale }: { locale: string }) {
           </div>
         </div>
 
-        {/* Adopters */}
-        <div className="flex flex-col items-center gap-3">
-          <span className="text-sm text-neutral-500 dark:text-neutral-500">{adoptersLabel}</span>
-          <div className="flex items-center gap-8">
-            {adopters.map((adopter) =>
-              adopter.url ? (
-                <a
-                  key={adopter.name}
-                  href={adopter.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={adopter.name}
-                >
-                  <Image
-                    src={adopter.logo}
-                    alt={adopter.name}
-                    width={180}
-                    height={54}
-                    className="h-10 sm:h-12 w-auto object-contain"
-                  />
-                </a>
-              ) : (
-                <Image
-                  key={adopter.name}
-                  src={adopter.logo}
-                  alt={adopter.name}
-                  width={180}
-                  height={54}
-                  className="h-10 sm:h-12 w-auto object-contain"
-                />
-              ),
-            )}
-          </div>
-        </div>
       </div>
     </section>
   )

@@ -33,23 +33,6 @@ export function ForTeamsSection({ locale }: { locale: string }) {
           ))}
         </div>
 
-        {/* Early Adopters */}
-        <h3 className="text-sm font-semibold text-center text-neutral-500 uppercase tracking-wider mb-6">
-          {t.adopters.title}
-        </h3>
-        <div className="grid md:grid-cols-2 gap-4">
-          {t.adopters.items.map((item) => (
-            <div
-              key={item.attribution}
-              className="rounded-xl border border-neutral-200/70 dark:border-neutral-700/50 p-5 bg-white/90 dark:bg-neutral-800/60"
-            >
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 mb-3 leading-relaxed">
-                &ldquo;{item.quote}&rdquo;
-              </p>
-              <p className="text-xs text-neutral-500">{item.attribution}</p>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   )

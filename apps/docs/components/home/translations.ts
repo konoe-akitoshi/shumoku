@@ -100,8 +100,8 @@ export const homeTranslations = {
       solution: {
         title: 'With Shumoku',
         items: [
-          'Topology generated from NetBox, Zabbix, Prometheus',
-          'Live traffic and alerts overlaid automatically',
+          'Topology auto-generated from NetBox, custom API',
+          'Live traffic and alerts from Zabbix, Prometheus, Grafana',
           'Single source of truth — always current',
         ],
       },
@@ -245,8 +245,8 @@ export const homeTranslations = {
       solution: {
         title: 'Shumoku があれば',
         items: [
-          'NetBox・Zabbix・Prometheus からトポロジーを自動生成',
-          'トラフィックとアラートを自動でオーバーレイ',
+          'NetBox・独自APIからトポロジーを自動生成',
+          'Zabbix・Prometheus・Grafana のトラフィック・アラートを自動オーバーレイ',
           'Single Source of Truth — 常に最新',
         ],
       },
