@@ -55,10 +55,14 @@ export type IntegrationsTranslations = {
 }
 
 export type ForTeamsTranslations = {
+  tagline1: string
+  tagline2: string
   title: string
-  services: readonly string[]
+  description: string
+  nodes: readonly { title: string; description: string }[]
   roadmapLabel: string
   roadmap: readonly string[]
+  cta: string
   adopters: {
     title: string
     items: readonly { quote: string; attribution: string }[]
@@ -172,14 +176,19 @@ export const homeTranslations = {
       ],
     },
     forTeams: {
-      title: 'For teams',
-      services: [
-        'Deployment support',
-        'Plugin development',
-        'Security review',
+      tagline1: 'Shumoku is more than software.',
+      tagline2: "It's a foundation we build together.",
+      title: 'Build with Shumoku',
+      description: 'Extend and embed Shumoku into your own products and workflows.',
+      nodes: [
+        { title: 'Custom Plugins', description: 'Proprietary data source integrations' },
+        { title: 'Product Embedding', description: '@shumoku packages in your products' },
+        { title: 'API Extensions', description: 'Custom APIs and platform extensions' },
+        { title: 'Enterprise Roadmap', description: 'SSO, RBAC, audit logging' },
       ],
       roadmapLabel: 'Roadmap',
       roadmap: ['SSO & access control', 'Role-based permissions', 'Audit logging'],
+      cta: 'Design your topology strategy',
       adopters: {
         title: 'Early adopters',
         items: [
@@ -320,14 +329,19 @@ export const homeTranslations = {
       ],
     },
     forTeams: {
-      title: 'チーム向け',
-      services: [
-        'デプロイサポート',
-        'プラグイン開発',
-        'セキュリティレビュー',
+      tagline1: 'Shumoku はただのソフトウェアではありません。',
+      tagline2: '一緒に築いていく基盤です。',
+      title: 'Shumoku と一緒に作る',
+      description: '自社プロダクトやワークフローに Shumoku を組み込み・拡張できます。',
+      nodes: [
+        { title: 'カスタムプラグイン', description: '独自データソース連携' },
+        { title: 'プロダクト組み込み', description: '@shumoku パッケージで製品に統合' },
+        { title: 'API 拡張', description: '独自APIとプラットフォーム拡張' },
+        { title: 'エンタープライズ', description: 'SSO・RBAC・監査ログ' },
       ],
       roadmapLabel: 'ロードマップ',
       roadmap: ['SSO & アクセス制御', 'ロールベース権限管理', '監査ログ'],
+      cta: 'トポロジー戦略を設計する',
       adopters: {
         title: '導入実績',
         items: [
