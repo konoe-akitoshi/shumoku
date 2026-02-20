@@ -1,32 +1,83 @@
+import { FileCode2, Plug } from 'lucide-react'
 import { cn } from '@/lib/cn'
-import { CodeIcon, ImageIcon, NetBoxIcon, TerminalIcon } from './icons'
-import { backgrounds, cardStyles, sectionStyles } from './styles'
+import { sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
-type IntegrationItem = {
-  title: string
-  description: string
+const builtinIcons: Record<string, React.ReactNode> = {
+  YAML: <FileCode2 className="w-7 h-7 shrink-0 text-neutral-500 dark:text-neutral-400" />,
+  'Custom API': <Plug className="w-7 h-7 shrink-0 text-neutral-500 dark:text-neutral-400" />,
 }
 
-// Order matches translations.integrations.items: Zabbix, Prometheus, Grafana, NetBox, REST API
-const integrationIcons = [
-  <TerminalIcon key="zabbix" className="w-6 h-6" />,
-  <TerminalIcon key="prometheus" className="w-6 h-6" />,
-  <ImageIcon key="grafana" className="w-6 h-6" />,
-  <NetBoxIcon key="netbox" className="w-6 h-6" />,
-  <CodeIcon key="api" className="w-6 h-6" />,
-]
-
-function IntegrationCard({ item, icon }: { item: IntegrationItem; icon: React.ReactNode }) {
+function NodeCard({
+  title,
+  description,
+  tag,
+  logo,
+}: {
+  title: string
+  description: string
+  tag?: string
+  logo?: string
+}) {
   return (
-    <div className={cn(...cardStyles.feature)}>
-      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#7FE4C1]/40 to-transparent dark:from-[#7FE4C1]/20 dark:to-transparent text-[#1F2328] dark:text-[#7FE4C1] flex items-center justify-center mb-4">
-        {icon}
+    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-neutral-200/70 dark:border-neutral-700/50 bg-white/90 dark:bg-neutral-800/60 w-full">
+      {logo ? (
+        <img src={logo} alt={title} className="w-7 h-7 shrink-0 object-contain" />
+      ) : (
+        builtinIcons[title] ?? null
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">{title}</span>
+          {tag && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400">
+              {tag}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-0.5">{description}</p>
       </div>
-      <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
-      <p className="text-neutral-600 dark:text-neutral-400 text-sm leading-relaxed">
-        {item.description}
-      </p>
+    </div>
+  )
+}
+
+function CenterDemo({ description }: { description: string }) {
+  return (
+    <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-white/90 dark:bg-neutral-800/60">
+      <div className="px-2.5 pt-2.5">
+        <div className="rounded-lg overflow-hidden border border-neutral-100 dark:border-neutral-700/30">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            src="/screenshots/demo.mp4"
+            className="w-full h-auto"
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 px-4 py-3">
+        <img src="/logo-symbol.svg" alt="Shumoku" className="w-7 h-7 shrink-0" />
+        <div>
+          <span className="text-sm font-semibold">Shumoku</span>
+          <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-0.5">{description}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DashedLine({ direction }: { direction: 'right' | 'left' }) {
+  return (
+    <div className="hidden lg:flex items-center px-1">
+      <div className="w-10 border-t-2 border-dashed border-neutral-300 dark:border-neutral-600 relative">
+        {direction === 'right' && (
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0 h-0 border-l-[5px] border-l-neutral-300 dark:border-l-neutral-600 border-y-[4px] border-y-transparent" />
+        )}
+        {direction === 'left' && (
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0 h-0 border-r-[5px] border-r-neutral-300 dark:border-r-neutral-600 border-y-[4px] border-y-transparent" />
+        )}
+      </div>
     </div>
   )
 }
@@ -36,23 +87,70 @@ export function IntegrationsSection({ locale }: { locale: string }) {
 
   return (
     <section className={cn('relative overflow-hidden', sectionStyles.padding)}>
-      <div className={cn('absolute inset-0 pointer-events-none', backgrounds.features)} />
+      <div className="max-w-5xl mx-auto">
+        <h2 className={cn(sectionStyles.title, 'text-center mb-8 sm:mb-12')}>{t.title}</h2>
 
-      <div className="max-w-6xl mx-auto">
-        <h2 className={cn(sectionStyles.title, 'text-center mb-3 sm:mb-4')}>{t.title}</h2>
-        <p
-          className={cn(
-            sectionStyles.subtitle,
-            'text-center mb-8 sm:mb-12 lg:mb-16 max-w-2xl mx-auto',
-          )}
-        >
-          {t.subtitle}
-        </p>
+        {/* Desktop: 3-column flow diagram */}
+        <div className="hidden lg:grid lg:grid-cols-[1fr_2fr_1fr] gap-4 items-center">
+          {/* Left: Input sources */}
+          <div>
+            <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3 text-right">
+              {t.inputLabel}
+            </div>
+            <div className="space-y-3">
+              {t.inputs.map((item) => (
+                <div key={item.title} className="flex items-center gap-2 justify-end">
+                  <NodeCard title={item.title} description={item.description} tag={item.tag} logo={item.logo} />
+                  <DashedLine direction="right" />
+                </div>
+              ))}
+            </div>
+          </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {t.items.map((item, index) => (
-            <IntegrationCard key={item.title} item={item} icon={integrationIcons[index]} />
-          ))}
+          {/* Center: Shumoku */}
+          <CenterDemo description={t.centerDescription} />
+
+          {/* Right: Monitoring sources */}
+          <div>
+            <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">
+              {t.monitoringLabel}
+            </div>
+            <div className="space-y-3">
+              {t.monitoring.map((item) => (
+                <div key={item.title} className="flex items-center gap-2">
+                  <DashedLine direction="left" />
+                  <NodeCard title={item.title} description={item.description} tag={item.tag} logo={item.logo} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile: stacked layout */}
+        <div className="lg:hidden space-y-6">
+          <div>
+            <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">
+              {t.inputLabel}
+            </div>
+            <div className="space-y-2">
+              {t.inputs.map((item) => (
+                <NodeCard key={item.title} title={item.title} description={item.description} tag={item.tag} />
+              ))}
+            </div>
+          </div>
+
+          <CenterDemo description={t.centerDescription} />
+
+          <div>
+            <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">
+              {t.monitoringLabel}
+            </div>
+            <div className="space-y-2">
+              {t.monitoring.map((item) => (
+                <NodeCard key={item.title} title={item.title} description={item.description} tag={item.tag} />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </section>
