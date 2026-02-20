@@ -145,7 +145,7 @@ export const homeTranslations = {
         cta: 'Setup Guide',
       },
       production: {
-        label: 'Production',
+        label: 'Enterprise',
         items: [
           'Architecture guidance',
           'Scaling & HA setup',
@@ -293,7 +293,7 @@ export const homeTranslations = {
         cta: 'セットアップガイド',
       },
       production: {
-        label: 'プロダクション',
+        label: 'エンタープライズ',
         items: [
           'アーキテクチャガイダンス',
           'スケーリング & HA 構成',
