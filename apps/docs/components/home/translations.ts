@@ -45,7 +45,10 @@ export type GettingStartedTranslations = {
 
 export type IntegrationsTranslations = {
   title: string
-  items: readonly { title: string; description: string }[]
+  inputLabel: string
+  monitoringLabel: string
+  inputs: readonly { title: string; description: string; tag?: string }[]
+  monitoring: readonly { title: string; description: string; tag?: string }[]
 }
 
 export type ForTeamsTranslations = {
@@ -149,12 +152,17 @@ export const homeTranslations = {
     },
     integrations: {
       title: 'Integrations',
-      items: [
-        { title: 'Zabbix', description: 'Traffic metrics, host status, alerts via JSON-RPC' },
-        { title: 'Prometheus', description: 'SNMP and node exporter metrics for utilization' },
-        { title: 'Grafana', description: 'Webhook alerts displayed on topology' },
-        { title: 'NetBox', description: 'Auto-discover topology from DCIM/IPAM' },
-        { title: 'REST API', description: 'Programmatic rendering and metric retrieval' },
+      inputLabel: 'Topology Sources',
+      monitoringLabel: 'Monitoring Sources',
+      inputs: [
+        { title: 'YAML', description: 'Define topology as code', tag: 'built-in' },
+        { title: 'NetBox', description: 'Auto-discover from DCIM/IPAM', tag: 'plugin' },
+      ],
+      monitoring: [
+        { title: 'Zabbix', description: 'Traffic, host status, alerts', tag: 'plugin' },
+        { title: 'Prometheus', description: 'SNMP & node exporter metrics', tag: 'plugin' },
+        { title: 'Grafana', description: 'Webhook alerts', tag: 'plugin' },
+        { title: 'Custom API', description: 'Your own data source', tag: 'plugin' },
       ],
     },
     forTeams: {
@@ -289,12 +297,17 @@ export const homeTranslations = {
     },
     integrations: {
       title: '連携',
-      items: [
-        { title: 'Zabbix', description: 'JSON-RPC でトラフィック・ホスト状態・アラートを取得' },
-        { title: 'Prometheus', description: 'SNMP / Node Exporter メトリクスで使用率表示' },
-        { title: 'Grafana', description: 'Webhook アラートをトポロジー上に表示' },
-        { title: 'NetBox', description: 'DCIM/IPAM からトポロジーを自動検出' },
-        { title: 'REST API', description: 'トポロジー描画・メトリクス取得をプログラマブルに実行' },
+      inputLabel: 'トポロジーソース',
+      monitoringLabel: '監視ソース',
+      inputs: [
+        { title: 'YAML', description: 'トポロジーをコードで定義', tag: 'built-in' },
+        { title: 'NetBox', description: 'DCIM/IPAM から自動検出', tag: 'plugin' },
+      ],
+      monitoring: [
+        { title: 'Zabbix', description: 'トラフィック・ホスト状態・アラート', tag: 'plugin' },
+        { title: 'Prometheus', description: 'SNMP & Node Exporter メトリクス', tag: 'plugin' },
+        { title: 'Grafana', description: 'Webhook アラート', tag: 'plugin' },
+        { title: 'Custom API', description: '独自データソース', tag: 'plugin' },
       ],
     },
     forTeams: {
