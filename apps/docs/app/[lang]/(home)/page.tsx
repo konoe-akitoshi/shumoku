@@ -1,10 +1,13 @@
 import type { Metadata } from 'next'
 import {
-  CTASection,
+  BottomSection,
   FeaturesSection,
+  ForTeamsSection,
+  GallerySection,
+  GettingStartedSection,
   HeroSection,
   IntegrationsSection,
-  UseCasesSection,
+  WhySection,
 } from '@/components/home'
 
 export const metadata: Metadata = {
@@ -19,10 +22,13 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
   return (
     <main className="flex-1">
       <HeroSection locale={lang} />
+      <WhySection locale={lang} />
       <FeaturesSection locale={lang} />
-      <UseCasesSection locale={lang} />
+      <GallerySection locale={lang} />
+      <GettingStartedSection locale={lang} />
       <IntegrationsSection locale={lang} />
-      <CTASection locale={lang} />
+      <ForTeamsSection locale={lang} />
+      <BottomSection locale={lang} />
     </main>
   )
 }

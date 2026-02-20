@@ -3,12 +3,6 @@ import { CodeIcon, ImageIcon, NetBoxIcon, TerminalIcon } from './icons'
 import { backgrounds, cardStyles, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
-type IntegrationItem = {
-  title: string
-  description: string
-}
-
-// Order matches translations.integrations.items: Zabbix, Prometheus, Grafana, NetBox, REST API
 const integrationIcons = [
   <TerminalIcon key="zabbix" className="w-6 h-6" />,
   <TerminalIcon key="prometheus" className="w-6 h-6" />,
@@ -16,20 +10,6 @@ const integrationIcons = [
   <NetBoxIcon key="netbox" className="w-6 h-6" />,
   <CodeIcon key="api" className="w-6 h-6" />,
 ]
-
-function IntegrationCard({ item, icon }: { item: IntegrationItem; icon: React.ReactNode }) {
-  return (
-    <div className={cn(...cardStyles.feature)}>
-      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#7FE4C1]/40 to-transparent dark:from-[#7FE4C1]/20 dark:to-transparent text-[#1F2328] dark:text-[#7FE4C1] flex items-center justify-center mb-4">
-        {icon}
-      </div>
-      <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
-      <p className="text-neutral-600 dark:text-neutral-400 text-sm leading-relaxed">
-        {item.description}
-      </p>
-    </div>
-  )
-}
 
 export function IntegrationsSection({ locale }: { locale: string }) {
   const t = homeTranslations[locale as Locale]?.integrations ?? homeTranslations.en.integrations
@@ -39,19 +19,17 @@ export function IntegrationsSection({ locale }: { locale: string }) {
       <div className={cn('absolute inset-0 pointer-events-none', backgrounds.features)} />
 
       <div className="max-w-6xl mx-auto">
-        <h2 className={cn(sectionStyles.title, 'text-center mb-3 sm:mb-4')}>{t.title}</h2>
-        <p
-          className={cn(
-            sectionStyles.subtitle,
-            'text-center mb-8 sm:mb-12 lg:mb-16 max-w-2xl mx-auto',
-          )}
-        >
-          {t.subtitle}
-        </p>
+        <h2 className={cn(sectionStyles.title, 'text-center mb-8 sm:mb-12')}>{t.title}</h2>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {t.items.map((item, index) => (
-            <IntegrationCard key={item.title} item={item} icon={integrationIcons[index]} />
+            <div key={item.title} className={cn(...cardStyles.feature)}>
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#7FE4C1]/40 to-transparent dark:from-[#7FE4C1]/20 dark:to-transparent text-[#1F2328] dark:text-[#7FE4C1] flex items-center justify-center mb-3">
+                {integrationIcons[index]}
+              </div>
+              <h3 className="text-base font-semibold mb-1">{item.title}</h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">{item.description}</p>
+            </div>
           ))}
         </div>
       </div>

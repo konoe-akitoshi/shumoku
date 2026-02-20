@@ -1,129 +1,215 @@
 export type HeroTranslations = {
-  badge: string
   title1: string
   title2: string
   description: string
-  playground: string
-  documentation: string
-  npmDocsPrefix: string
-  npmDocsLink: string
+  deploy: string
+  talkToUs: string
+  githubLabel: string
+}
+
+export type WhyTranslations = {
+  problem: {
+    title: string
+    items: readonly string[]
+  }
+  arrow: string
+  solution: {
+    title: string
+    items: readonly string[]
+  }
 }
 
 export type FeaturesTranslations = {
   title: string
-  subtitle: string
   items: readonly { title: string; description: string }[]
 }
 
-export type CTATranslations = {
+export type GalleryTranslations = {
   title: string
-  subtitle: string
-  contact: string
+  items: readonly { src: string; alt: string; caption: string }[]
 }
 
-export type UseCasesTranslations = {
+export type GettingStartedTranslations = {
   title: string
-  subtitle: string
-  items: readonly { title: string; description: string }[]
+  community: {
+    label: string
+    steps: readonly string[]
+    cta: string
+  }
+  production: {
+    label: string
+    items: readonly string[]
+    cta: string
+  }
 }
 
 export type IntegrationsTranslations = {
   title: string
-  subtitle: string
   items: readonly { title: string; description: string }[]
+}
+
+export type ForTeamsTranslations = {
+  title: string
+  services: readonly string[]
+  roadmapLabel: string
+  roadmap: readonly string[]
+  adopters: {
+    title: string
+    items: readonly { quote: string; attribution: string }[]
+  }
+}
+
+export type BottomTranslations = {
+  faq: {
+    title: string
+    items: readonly { question: string; answer: string }[]
+  }
+  community: {
+    items: readonly { name: string; url: string }[]
+  }
+  cta: {
+    title: string
+    deploy: string
+    contact: string
+  }
 }
 
 export const homeTranslations = {
   en: {
     hero: {
-      badge: '',
-      title1: 'Network diagrams',
-      title2: 'built for operations teams.',
-      description:
-        'Centralize topology management, automate rendering, and integrate with your monitoring stack for enterprise operations.',
-      playground: 'Playground',
-      documentation: 'Documentation',
-      npmDocsPrefix: 'Prefer npm?',
-      npmDocsLink: 'See npm docs',
+      title1: 'Trust your',
+      title2: 'topology.',
+      description: 'Auto-generated from your infrastructure. Always accurate. Open-source core.',
+      deploy: 'Deploy Server',
+      talkToUs: 'Talk to Us',
+      githubLabel: 'GitHub',
+    },
+    why: {
+      problem: {
+        title: 'Without Shumoku',
+        items: [
+          'Hand-drawn diagrams drift from reality',
+          'CMDB data goes stale silently',
+          'Nobody knows the true structure during incidents',
+        ],
+      },
+      arrow: 'Shumoku derives topology from your actual infrastructure',
+      solution: {
+        title: 'With Shumoku',
+        items: [
+          'Topology generated from NetBox, Zabbix, Prometheus',
+          'Live traffic and alerts overlaid automatically',
+          'Single source of truth — always current',
+        ],
+      },
     },
     features: {
-      title: 'What you can do',
-      subtitle: 'Turn static diagrams into live operational dashboards',
+      title: 'Features',
+      items: [
+        { title: 'Live weathermap', description: 'Traffic utilization on links, color-coded by load' },
+        { title: 'Alert overlay', description: 'Active alerts from Zabbix, Prometheus, Grafana on topology' },
+        { title: 'NetBox auto-generation', description: 'Devices and cables pulled directly from NetBox' },
+        { title: 'Interactive navigation', description: 'Pan, zoom, multi-layer drill-down in the browser' },
+        { title: '900+ vendor icons', description: 'Yamaha, Aruba, AWS, Juniper — correct aspect ratios' },
+        { title: 'Shareable links', description: 'Public topology views with a token — no login required' },
+      ],
+    },
+    gallery: {
+      title: 'In production',
       items: [
         {
-          title: 'Live weathermap',
-          description: 'Overlay real-time traffic utilization on links, color-coded by load',
+          src: '/screenshots/topology.png',
+          alt: 'Topology viewer with live weathermap',
+          caption: 'Live traffic overlay — JANOG57 NOC',
         },
         {
-          title: 'Alert visualization',
-          description: 'Show active alerts from Zabbix, Prometheus, and Grafana on topology',
-        },
-        {
-          title: 'Auto-generate from NetBox',
-          description: 'Pull devices and cables from NetBox to build topology automatically',
-        },
-        {
-          title: 'Interactive dashboards',
-          description: 'Pan, zoom, and drill into multi-layer network views in the browser',
-        },
-        {
-          title: '900+ vendor icons',
-          description: 'Yamaha, Aruba, AWS, Juniper, and more — rendered at correct aspect ratios',
-        },
-        {
-          title: 'Shareable links',
-          description: 'Publish topology views with a share token — no login required',
+          src: '/screenshots/dashboard.png',
+          alt: 'NOC dashboard',
+          caption: 'NOC dashboard — JANOG57',
         },
       ],
     },
-    useCases: {
-      title: 'Use cases',
-      subtitle: 'Where operational teams use Shumoku',
-      items: [
-        {
-          title: 'NOC monitoring',
-          description: 'Unified view of traffic, alerts, and topology for daily ops',
-        },
-        {
-          title: 'Troubleshooting',
-          description: 'Identify bottlenecks and failing nodes during incidents',
-        },
-        {
-          title: 'Change management',
-          description: 'Review topology updates with approvals and audit trails',
-        },
-      ],
+    gettingStarted: {
+      title: 'Deploy',
+      community: {
+        label: 'Community',
+        steps: ['docker compose up -d', 'Open localhost:3000', 'Upload YAML or connect NetBox'],
+        cta: 'Setup Guide',
+      },
+      production: {
+        label: 'Production',
+        items: [
+          'Architecture guidance',
+          'Scaling & HA setup',
+          'Custom plugin development',
+          'Maintenance support',
+        ],
+        cta: 'Contact Us',
+      },
     },
     integrations: {
       title: 'Integrations',
-      subtitle: 'Connect your monitoring stack',
       items: [
-        {
-          title: 'Zabbix',
-          description: 'Pull traffic metrics, host status, and alerts via JSON-RPC API',
-        },
-        {
-          title: 'Prometheus',
-          description: 'Query SNMP and node exporter metrics for link utilization',
-        },
-        {
-          title: 'Grafana',
-          description: 'Receive alerts via webhook and display them on topology',
-        },
-        {
-          title: 'NetBox',
-          description: 'Auto-discover topology from DCIM inventory and IPAM data',
-        },
-        {
-          title: 'REST API',
-          description: 'Render topologies and fetch metrics programmatically from your own tools',
-        },
+        { title: 'Zabbix', description: 'Traffic metrics, host status, alerts via JSON-RPC' },
+        { title: 'Prometheus', description: 'SNMP and node exporter metrics for utilization' },
+        { title: 'Grafana', description: 'Webhook alerts displayed on topology' },
+        { title: 'NetBox', description: 'Auto-discover topology from DCIM/IPAM' },
+        { title: 'REST API', description: 'Programmatic rendering and metric retrieval' },
       ],
     },
-    cta: {
-      title: 'Evaluating for your organization?',
-      subtitle: 'Talk to us about deployment, integrations, and support',
-      contact: 'Contact us',
+    forTeams: {
+      title: 'For teams',
+      services: [
+        'Deployment support',
+        'Plugin development',
+        'Security review',
+      ],
+      roadmapLabel: 'Roadmap',
+      roadmap: ['SSO & access control', 'Role-based permissions', 'Audit logging'],
+      adopters: {
+        title: 'Early adopters',
+        items: [
+          {
+            quote: 'Replaced static Visio diagrams with auto-generated live topology. Used in production for JANOG57 NOC.',
+            attribution: 'Network Operations — JANOG57',
+          },
+          {
+            quote: 'Campus network monitoring with Zabbix. Live weathermaps running within a day.',
+            attribution: 'Infrastructure Team — University NOC',
+          },
+        ],
+      },
+    },
+    bottom: {
+      faq: {
+        title: 'FAQ',
+        items: [
+          {
+            question: 'Is it free?',
+            answer: 'Community edition is MIT licensed. We offer paid support, consulting, and custom development for production use.',
+          },
+          {
+            question: 'How is it different from PHP Weathermap?',
+            answer: 'Dedicated topology-first UI with multi-layer navigation, 900+ vendor icons, and native integrations — no Grafana required.',
+          },
+          {
+            question: 'Can I use it without monitoring tools?',
+            answer: 'Yes. Works as a standalone topology viewer. Monitoring integrations are optional.',
+          },
+        ],
+      },
+      community: {
+        items: [
+          { name: 'GitHub', url: 'https://github.com/konoe-akitoshi/shumoku' },
+          { name: 'X', url: 'https://x.com/shumoku_dev' },
+          { name: 'Email', url: 'mailto:contact@shumoku.dev' },
+        ],
+      },
+      cta: {
+        title: 'Ready to deploy?',
+        deploy: 'Deploy Server',
+        contact: 'Contact Us',
+      },
     },
     adopters: {
       title: 'Trusted by',
@@ -131,94 +217,139 @@ export const homeTranslations = {
   },
   ja: {
     hero: {
-      badge: '',
-      title1: 'Network diagrams',
-      title2: 'built for operations teams.',
-      description:
-        '運用チーム向けに、トポロジー管理の一元化、生成の自動化、監視スタックとの連携を提供します。',
-      playground: 'Playground',
-      documentation: 'Documentation',
-      npmDocsPrefix: 'npm 版はこちら:',
-      npmDocsLink: 'npm ドキュメント',
+      title1: 'Trust your',
+      title2: 'topology.',
+      description: 'インフラから自動生成。常に正確。オープンソースコア。',
+      deploy: 'サーバーを導入',
+      talkToUs: 'お問い合わせ',
+      githubLabel: 'GitHub',
+    },
+    why: {
+      problem: {
+        title: 'Shumoku なしでは',
+        items: [
+          '手書きの構成図は現実と乖離する',
+          'CMDB のデータは気づかないうちに陳腐化する',
+          '障害時に誰も正しい構造を把握していない',
+        ],
+      },
+      arrow: 'Shumoku は実際のインフラからトポロジーを導出します',
+      solution: {
+        title: 'Shumoku があれば',
+        items: [
+          'NetBox・Zabbix・Prometheus からトポロジーを自動生成',
+          'トラフィックとアラートを自動でオーバーレイ',
+          'Single Source of Truth — 常に最新',
+        ],
+      },
     },
     features: {
-      title: 'できること',
-      subtitle: '静的な構成図をライブな運用ダッシュボードに',
+      title: '機能',
+      items: [
+        { title: 'ライブ Weathermap', description: 'リンクのトラフィック使用率を負荷に応じて色分け表示' },
+        { title: 'アラートオーバーレイ', description: 'Zabbix・Prometheus・Grafana のアラートをトポロジー上に表示' },
+        { title: 'NetBox 自動生成', description: 'NetBox からデバイス・ケーブル情報を直接取得' },
+        { title: 'インタラクティブ操作', description: 'パン・ズーム・多階層ドリルダウン' },
+        { title: '900+ ベンダーアイコン', description: 'Yamaha, Aruba, AWS, Juniper — 正しいアスペクト比' },
+        { title: '共有リンク', description: 'トークン付き公開ビュー — ログイン不要' },
+      ],
+    },
+    gallery: {
+      title: '本番稼働実績',
       items: [
         {
-          title: 'ライブ Weathermap',
-          description: 'リンク上にトラフィック使用率をリアルタイム表示、負荷に応じて色分け',
+          src: '/screenshots/topology.png',
+          alt: 'ライブ Weathermap 付きトポロジービューア',
+          caption: 'ライブトラフィック表示 — JANOG57 NOC',
         },
         {
-          title: 'アラート可視化',
-          description: 'Zabbix・Prometheus・Grafana のアラートをトポロジー上に表示',
-        },
-        {
-          title: 'NetBox から自動生成',
-          description: 'NetBox のデバイス・ケーブル情報からトポロジーを自動構築',
-        },
-        {
-          title: 'インタラクティブダッシュボード',
-          description: 'ブラウザでパン・ズーム、多階層ネットワークをドリルダウン',
-        },
-        {
-          title: '900+ ベンダーアイコン',
-          description: 'Yamaha, Aruba, AWS, Juniper など — 正しいアスペクト比で描画',
-        },
-        {
-          title: '共有リンク',
-          description: 'トークン付きリンクでトポロジーを公開 — ログイン不要',
+          src: '/screenshots/dashboard.png',
+          alt: 'NOC ダッシュボード',
+          caption: 'NOC ダッシュボード — JANOG57',
         },
       ],
     },
-    useCases: {
-      title: 'ユースケース',
-      subtitle: '運用チームでの活用',
-      items: [
-        {
-          title: 'NOC 監視',
-          description: 'トラフィック・アラート・トポロジーを一画面で把握',
-        },
-        {
-          title: '障害対応',
-          description: '輻輳リンクや障害ノードをインシデント時に特定',
-        },
-        {
-          title: '変更管理',
-          description: '変更のレビュー、承認、監査ログに対応',
-        },
-      ],
+    gettingStarted: {
+      title: 'デプロイ',
+      community: {
+        label: 'コミュニティ',
+        steps: ['docker compose up -d', 'localhost:3000 を開く', 'YAML アップロードまたは NetBox 接続'],
+        cta: 'セットアップガイド',
+      },
+      production: {
+        label: 'プロダクション',
+        items: [
+          'アーキテクチャガイダンス',
+          'スケーリング & HA 構成',
+          'カスタムプラグイン開発',
+          'メンテナンスサポート',
+        ],
+        cta: 'お問い合わせ',
+      },
     },
     integrations: {
       title: '連携',
-      subtitle: '監視スタックと接続',
       items: [
-        {
-          title: 'Zabbix',
-          description: 'JSON-RPC API でトラフィックメトリクス・ホスト状態・アラートを取得',
-        },
-        {
-          title: 'Prometheus',
-          description: 'SNMP / Node Exporter メトリクスでリンク使用率を表示',
-        },
-        {
-          title: 'Grafana',
-          description: 'Webhook でアラートを受信しトポロジー上に表示',
-        },
-        {
-          title: 'NetBox',
-          description: 'DCIM・IPAM データからトポロジーを自動検出',
-        },
-        {
-          title: 'REST API',
-          description: '独自ツールからトポロジー描画やメトリクス取得をプログラマブルに実行',
-        },
+        { title: 'Zabbix', description: 'JSON-RPC でトラフィック・ホスト状態・アラートを取得' },
+        { title: 'Prometheus', description: 'SNMP / Node Exporter メトリクスで使用率表示' },
+        { title: 'Grafana', description: 'Webhook アラートをトポロジー上に表示' },
+        { title: 'NetBox', description: 'DCIM/IPAM からトポロジーを自動検出' },
+        { title: 'REST API', description: 'トポロジー描画・メトリクス取得をプログラマブルに実行' },
       ],
     },
-    cta: {
-      title: 'チーム導入を検討中ですか？',
-      subtitle: '導入相談、連携、サポートについてご相談ください',
-      contact: 'お問い合わせ',
+    forTeams: {
+      title: 'チーム向け',
+      services: [
+        'デプロイサポート',
+        'プラグイン開発',
+        'セキュリティレビュー',
+      ],
+      roadmapLabel: 'ロードマップ',
+      roadmap: ['SSO & アクセス制御', 'ロールベース権限管理', '監査ログ'],
+      adopters: {
+        title: '導入実績',
+        items: [
+          {
+            quote: '静的な Visio 図面を自動生成のライブトポロジーに置き換え。JANOG57 NOC で本番運用。',
+            attribution: 'ネットワーク運用 — JANOG57',
+          },
+          {
+            quote: 'Zabbix 連携でキャンパスネットワーク監視に導入。1日で Weathermap が稼働。',
+            attribution: 'インフラチーム — 大学 NOC',
+          },
+        ],
+      },
+    },
+    bottom: {
+      faq: {
+        title: 'FAQ',
+        items: [
+          {
+            question: '無料ですか？',
+            answer: 'コミュニティ版は MIT ライセンス。本番向けに有償サポート・コンサルティング・カスタム開発を提供。',
+          },
+          {
+            question: 'PHP Weathermap との違いは？',
+            answer: 'トポロジーファースト UI、多階層ナビ、900+ ベンダーアイコン、ネイティブ連携 — Grafana 不要。',
+          },
+          {
+            question: '監視ツールなしでも使える？',
+            answer: 'はい。スタンドアロンのトポロジービューアとして動作。監視連携はオプション。',
+          },
+        ],
+      },
+      community: {
+        items: [
+          { name: 'GitHub', url: 'https://github.com/konoe-akitoshi/shumoku' },
+          { name: 'X', url: 'https://x.com/shumoku_dev' },
+          { name: 'Email', url: 'mailto:contact@shumoku.dev' },
+        ],
+      },
+      cta: {
+        title: '導入を始めますか？',
+        deploy: 'サーバーを導入',
+        contact: 'お問い合わせ',
+      },
     },
     adopters: {
       title: '採用実績',
