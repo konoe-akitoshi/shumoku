@@ -193,8 +193,8 @@ export const homeTranslations = {
         title: 'Early adopters',
         items: [
           {
-            quote: 'Replaced static Visio diagrams with auto-generated live topology. Used in production for JANOG57 NOC.',
-            attribution: 'Network Operations — JANOG57',
+            quote: 'Replaced static topology diagrams with auto-generated live topology. Used in production for JANOG57 NOC. Streamed on NOC Live.',
+            attribution: 'NOC BB Team — JANOG57',
           },
           {
             quote: 'Campus network monitoring with Zabbix. Live weathermaps running within a day.',
@@ -346,8 +346,8 @@ export const homeTranslations = {
         title: '導入実績',
         items: [
           {
-            quote: '静的な Visio 図面を自動生成のライブトポロジーに置き換え。JANOG57 NOC で本番運用。',
-            attribution: 'ネットワーク運用 — JANOG57',
+            quote: '静的なトポロジー図を自動生成のライブトポロジーに置き換え。JANOG57 NOC で本番運用。NOC Liveで配信。',
+            attribution: 'NOC BBチーム — JANOG57',
           },
           {
             quote: 'Zabbix 連携でキャンパスネットワーク監視に導入。1日で Weathermap が稼働。',
