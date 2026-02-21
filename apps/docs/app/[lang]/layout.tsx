@@ -9,24 +9,51 @@ const inter = Inter({
   subsets: ['latin'],
 })
 
-export const metadata: Metadata = {
-  metadataBase: new URL('https://www.shumoku.dev'),
-  title: {
-    default: 'Shumoku - Network Topology Diagram Generator',
-    template: '%s | Shumoku',
-  },
-  description:
-    'Network topology diagram generator. Generate SVG network diagrams from YAML. Supports Cisco, Yamaha, Juniper, Aruba, AWS icons (900+). NetBox integration. Diagram as code for network engineers.',
-  openGraph: {
-    title: 'Shumoku - Network Topology Diagram Generator',
+const meta = {
+  en: {
+    title: 'Shumoku - Infrastructure Topology Platform',
     description:
-      'Generate network topology diagrams from YAML. Diagram as code with 900+ vendor icons. NetBox integration.',
-    siteName: 'Shumoku',
-    type: 'website',
+      'Auto-generate network topology from NetBox and YAML. Overlay live traffic and alerts from Zabbix, Prometheus, Grafana. 900+ vendor icons. Open source, enterprise ready.',
+    ogTitle: 'Shumoku - Topology you can trust.',
+    ogDescription:
+      'Auto-generate topology from NetBox and YAML. Overlay live traffic and alerts from Zabbix and Prometheus.',
   },
-  twitter: {
-    card: 'summary_large_image',
+  ja: {
+    title: 'Shumoku - インフラ構成図プラットフォーム',
+    description:
+      'NetBox やYAML からネットワーク構成図を自動生成。Zabbix・Prometheus のトラフィックやアラートをリアルタイム表示。900以上のベンダーアイコン対応。',
+    ogTitle: 'Shumoku - 信頼できる構成図を。',
+    ogDescription:
+      'NetBox やYAML から構成図を自動生成。Zabbix・Prometheus のトラフィック・アラートをリアルタイム表示。',
   },
+} as const
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ lang: string }>
+}): Promise<Metadata> {
+  const { lang } = await params
+  const t = meta[lang as keyof typeof meta] ?? meta.en
+
+  return {
+    metadataBase: new URL('https://www.shumoku.dev'),
+    title: {
+      default: t.title,
+      template: '%s | Shumoku',
+    },
+    description: t.description,
+    openGraph: {
+      title: t.ogTitle,
+      description: t.ogDescription,
+      siteName: 'Shumoku',
+      type: 'website',
+      images: [{ url: `/og?lang=${lang}`, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+    },
+  }
 }
 
 const { provider } = defineI18nUI(i18n, {
