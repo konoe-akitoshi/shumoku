@@ -16,15 +16,17 @@ export function GettingStartedSection({ locale }: { locale: string }) {
         <div className="grid md:grid-cols-2 gap-6">
           {/* Open Source */}
           <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-white/90 dark:bg-neutral-800/60 flex flex-col">
-            <div className="flex items-center gap-2 px-6 pt-6 mb-5">
-              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+            <div className="flex items-center gap-1.5 px-4 py-3 border-b border-neutral-200/70 dark:border-neutral-700/50">
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-400/60 dark:bg-red-500/70" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/60 dark:bg-yellow-500/70" />
+                <div className="w-2.5 h-2.5 rounded-full bg-green-400/60 dark:bg-green-500/70" />
+              </div>
+              <span className="text-xs text-neutral-500 dark:text-neutral-500 ml-1.5">
                 {t.community.label}
               </span>
-              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 border border-neutral-200/70 dark:border-neutral-600">
-                MIT
-              </span>
             </div>
-            <div className="px-6 space-y-2.5 flex-1">
+            <div className="px-5 pt-5 space-y-2.5 flex-1">
               {t.community.steps.map((step, i) => {
                 const isCommand = /^[a-z]/.test(step)
                 return (
@@ -39,7 +41,7 @@ export function GettingStartedSection({ locale }: { locale: string }) {
                 )
               })}
             </div>
-            <div className="px-6 pb-6 pt-5">
+            <div className="px-5 pb-5 pt-5">
               <Link
                 href={`/${locale}/docs/server`}
                 className={cn(...buttonStyles.secondary, 'text-sm')}
@@ -51,7 +53,7 @@ export function GettingStartedSection({ locale }: { locale: string }) {
           </div>
 
           {/* Enterprise */}
-          <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-white/90 dark:bg-neutral-800/60 flex flex-col">
+          <div className="rounded-2xl border border-emerald-300/50 dark:border-emerald-700/50 bg-gradient-to-br from-emerald-50/50 to-transparent dark:from-emerald-950/20 dark:to-transparent flex flex-col">
             <div className="px-6 pt-6 mb-5">
               <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
                 {t.production.label}
