@@ -144,17 +144,17 @@ export const homeTranslations = {
     gettingStarted: {
       title: 'Deploy',
       community: {
-        label: 'Community',
-        steps: ['docker compose up -d', 'Open localhost:3000', 'Upload YAML or connect NetBox'],
+        label: 'Open Source',
+        steps: ['git clone && cd shumoku/apps/server', 'docker compose up -d', 'Open localhost:8080 and set admin password', 'Import YAML or connect NetBox'],
         cta: 'Setup Guide',
       },
       production: {
         label: 'Enterprise',
         items: [
-          'Architecture guidance',
-          'Scaling & HA setup',
-          'Custom plugin development',
-          'Maintenance support',
+          'Deployment architecture design',
+          'Scaling & high availability',
+          'Security & compliance review',
+          'Priority support with SLA',
         ],
         cta: 'Contact Us',
       },
@@ -297,17 +297,17 @@ export const homeTranslations = {
     gettingStarted: {
       title: 'デプロイ',
       community: {
-        label: 'コミュニティ',
-        steps: ['docker compose up -d', 'localhost:3000 を開く', 'YAML アップロードまたは NetBox 接続'],
+        label: 'オープンソース',
+        steps: ['git clone && cd shumoku/apps/server', 'docker compose up -d', 'localhost:8080 を開き管理者パスワードを設定', 'YAML インポートまたは NetBox 接続'],
         cta: 'セットアップガイド',
       },
       production: {
         label: 'エンタープライズ',
         items: [
-          'アーキテクチャガイダンス',
-          'スケーリング & HA 構成',
-          'カスタムプラグイン開発',
-          'メンテナンスサポート',
+          'デプロイアーキテクチャ設計',
+          'スケーリング & 高可用性',
+          'セキュリティ & コンプライアンス',
+          '優先サポート（SLA付き）',
         ],
         cta: 'お問い合わせ',
       },

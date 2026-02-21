@@ -14,37 +14,52 @@ export function GettingStartedSection({ locale }: { locale: string }) {
         <h2 className={cn(sectionStyles.title, 'text-center mb-8 sm:mb-12')}>{t.title}</h2>
 
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Community */}
-          <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 p-6 bg-white/90 dark:bg-neutral-800/60">
-            <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-4">
-              {t.community.label}
+          {/* Open Source */}
+          <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-white/90 dark:bg-neutral-800/60 flex flex-col">
+            <div className="flex items-center gap-2 px-6 pt-6 mb-5">
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                {t.community.label}
+              </span>
+              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 border border-neutral-200/70 dark:border-neutral-600">
+                MIT
+              </span>
             </div>
-            <div className="space-y-2 mb-6">
-              {t.community.steps.map((step, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <span className="w-5 h-5 rounded-full bg-neutral-100 dark:bg-neutral-700 text-[10px] font-medium flex items-center justify-center text-neutral-500 shrink-0">
-                    {i + 1}
-                  </span>
-                  <code className="text-sm text-neutral-700 dark:text-neutral-300">{step}</code>
-                </div>
-              ))}
+            <div className="px-6 space-y-2.5 flex-1">
+              {t.community.steps.map((step, i) => {
+                const isCommand = /^[a-z]/.test(step)
+                return (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 dark:text-emerald-400 shrink-0 select-none font-mono text-sm mt-px">
+                      {isCommand ? '$' : '→'}
+                    </span>
+                    <span className={cn('text-sm', isCommand ? 'font-mono text-neutral-700 dark:text-neutral-300' : 'text-neutral-600 dark:text-neutral-400')}>
+                      {step}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
-            <Link
-              href={`/${locale}/docs/server`}
-              className={cn(...buttonStyles.secondary, 'text-sm')}
-            >
-              {t.community.cta}
-            </Link>
+            <div className="px-6 pb-6 pt-5">
+              <Link
+                href={`/${locale}/docs/server`}
+                className={cn(...buttonStyles.secondary, 'text-sm')}
+              >
+                {t.community.cta}
+                <ArrowRightIcon className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
 
-          {/* Production */}
-          <div className="rounded-2xl border border-emerald-300/50 dark:border-emerald-700/50 p-6 bg-gradient-to-br from-emerald-50/50 to-transparent dark:from-emerald-950/20 dark:to-transparent">
-            <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-4">
-              {t.production.label}
+          {/* Enterprise */}
+          <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-white/90 dark:bg-neutral-800/60 flex flex-col">
+            <div className="px-6 pt-6 mb-5">
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                {t.production.label}
+              </span>
             </div>
-            <ul className="space-y-2.5 mb-6">
+            <ul className="px-6 space-y-2.5 flex-1">
               {t.production.items.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                <li key={item} className="flex items-start gap-2.5 text-sm text-neutral-700 dark:text-neutral-300">
                   <svg className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
@@ -52,10 +67,12 @@ export function GettingStartedSection({ locale }: { locale: string }) {
                 </li>
               ))}
             </ul>
-            <a href="mailto:info@shumoku.dev" className={cn(...buttonStyles.primary, 'text-sm')}>
-              {t.production.cta}
-              <ArrowRightIcon className="w-4 h-4" />
-            </a>
+            <div className="px-6 pb-6 pt-5">
+              <a href="mailto:info@shumoku.dev" className={cn(...buttonStyles.primary, 'text-sm')}>
+                {t.production.cta}
+                <ArrowRightIcon className="w-4 h-4" />
+              </a>
+            </div>
           </div>
         </div>
       </div>
