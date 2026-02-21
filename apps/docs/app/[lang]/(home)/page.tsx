@@ -1,4 +1,3 @@
-import type { Metadata } from 'next'
 import {
   AdoptersSection,
   BottomSection,
@@ -10,12 +9,6 @@ import {
   IntegrationsSection,
   WhySection,
 } from '@/components/home'
-
-export const metadata: Metadata = {
-  openGraph: {
-    images: '/og',
-  },
-}
 
 export default async function HomePage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params

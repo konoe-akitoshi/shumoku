@@ -34,10 +34,9 @@ async function loadScreenshot() {
   return `data:image/png;base64,${imgBuffer.toString('base64')}`
 }
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const lang = searchParams.get('lang') === 'ja' ? 'ja' : 'en'
-  const t = ogText[lang]
+export async function GET(_req: Request, { params }: RouteContext<'/[lang]/og'>) {
+  const { lang } = await params
+  const t = ogText[lang as keyof typeof ogText] ?? ogText.en
 
   const screenshotUrl = await loadScreenshot()
 
