@@ -13,6 +13,11 @@ const adopters: Adopter[] = [
     logo: '/adopters/itcuec_logo_300.png',
     url: 'https://www.cc.uec.ac.jp/',
   },
+  {
+    name: 'JANOG57',
+    logo: '/adopters/janog57_logo.png',
+    url: 'https://www.janog.gr.jp/meeting/janog57/',
+  },
 ]
 
 export function AdoptersSection({ locale }: { locale: string }) {
