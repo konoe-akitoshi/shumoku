@@ -1,14 +1,9 @@
 'use client'
 
-import type { PreparedRender, SheetData } from '@shumoku/renderer'
-import {
-  html,
-  prepareRender,
-  renderHtml,
-  renderHtmlHierarchical,
-  renderSvg,
-} from '@shumoku/renderer'
-import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
+import type { PreparedRender } from '@shumoku/renderer-svg'
+import { prepareRender, renderSvg } from '@shumoku/renderer-svg'
+import type { SheetData } from '@shumoku/renderer-html'
+import { html, renderHtml, renderHtmlHierarchical, INTERACTIVE_IIFE } from '@shumoku/renderer-html'
 import { useEffect, useRef, useState } from 'react'
 import type { NetworkGraph } from 'shumoku'
 import { createMemoryFileResolver, HierarchicalParser, parser, sampleNetwork } from 'shumoku'

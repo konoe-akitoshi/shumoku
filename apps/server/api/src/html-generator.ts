@@ -3,7 +3,7 @@
  * Generates HTML pages with real-time metrics update capability
  */
 
-import { svg as svgRenderer } from '@shumoku/renderer'
+import { svg as svgRenderer } from '@shumoku/renderer-svg'
 import type { TopologyInstance, WeathermapConfig } from './types.js'
 
 export interface HtmlGeneratorOptions {

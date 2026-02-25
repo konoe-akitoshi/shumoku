@@ -1,0 +1,55 @@
+{
+  "name": "@shumoku/netbox",
+  "version": "0.2.25",
+  "description": "NetBox API client and Shumoku converter",
+  "license": "MIT",
+  "author": "konoe-akitoshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/@shumoku/netbox"
+  },
+  "homepage": "https://shumoku.packof.me/",
+  "bugs": {
+    "url": "https://github.com/konoe-akitoshi/shumoku/issues"
+  },
+  "keywords": [
+    "netbox",
+    "network",
+    "topology",
+    "diagram",
+    "shumoku"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.7",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.17"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

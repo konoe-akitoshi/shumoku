@@ -8,9 +8,8 @@ const config = {
   transpilePackages: [
     'shumoku',
     '@shumoku/core',
-    '@shumoku/parser-yaml',
-    '@shumoku/icons',
-    '@shumoku/renderer',
+    '@shumoku/renderer-svg',
+    '@shumoku/renderer-html',
   ],
   async rewrites() {
     return [

@@ -1,0 +1,65 @@
+{
+  "name": "@shumoku/renderer-svg",
+  "version": "0.2.25",
+  "description": "SVG renderer, pipeline, CDN icons, and PNG for Shumoku network diagrams",
+  "license": "MIT",
+  "author": "konoe-akitoshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/@shumoku/renderer-svg"
+  },
+  "homepage": "https://shumoku.packof.me/",
+  "bugs": {
+    "url": "https://github.com/konoe-akitoshi/shumoku/issues"
+  },
+  "keywords": [
+    "network",
+    "topology",
+    "diagram",
+    "visualization",
+    "svg",
+    "renderer"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "node": {
+        "types": "./dist/index.node.d.ts",
+        "import": "./dist/index.node.js"
+      },
+      "default": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*"
+  },
+  "optionalDependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.6.3",
+    "vitest": "^3.1.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

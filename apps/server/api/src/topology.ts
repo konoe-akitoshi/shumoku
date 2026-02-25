@@ -5,14 +5,15 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { sampleNetwork, type NetworkGraph } from '@shumoku/core'
-import { BunHierarchicalLayout } from './layout.js'
 import {
+  sampleNetwork,
+  type NetworkGraph,
   HierarchicalParser,
   createMemoryFileResolver,
   YamlParser,
   type FileResolver,
-} from '@shumoku/parser-yaml'
+} from '@shumoku/core'
+import { BunHierarchicalLayout } from './layout.js'
 import type { Config, MetricsData, TopologyConfig, TopologyInstance } from './types.js'
 import { resolvePath } from './config.js'
 

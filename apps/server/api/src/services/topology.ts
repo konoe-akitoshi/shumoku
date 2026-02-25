@@ -8,10 +8,9 @@
 
 import type { Database } from 'bun:sqlite'
 import type { LayoutResult, NetworkGraph, IconDimensions } from '@shumoku/core'
-import { sampleNetwork } from '@shumoku/core'
+import { sampleNetwork, YamlParser, HierarchicalParser, createMemoryFileResolver } from '@shumoku/core'
 import { BunHierarchicalLayout } from '../layout.js'
-import { YamlParser, HierarchicalParser, createMemoryFileResolver } from '@shumoku/parser-yaml'
-import { resolveIconDimensionsForGraph, collectIconUrls } from '@shumoku/renderer'
+import { resolveIconDimensionsForGraph, collectIconUrls } from '@shumoku/renderer-svg'
 import { getDatabase, generateId, timestamp } from '../db/index.js'
 import type { Topology, TopologyInput, MetricsData, MetricsMapping } from '../types.js'
 

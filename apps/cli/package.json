@@ -1,0 +1,25 @@
+{
+  "name": "@shumoku/cli",
+  "version": "0.2.25",
+  "private": true,
+  "description": "Shumoku CLI tools (shumoku render + netbox-to-shumoku)",
+  "license": "MIT",
+  "author": "konoe-akitoshi",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*",
+    "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/renderer-html": "workspace:*",
+    "@shumoku/netbox": "workspace:*",
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.7",
+    "typescript": "^5.6.3"
+  }
+}

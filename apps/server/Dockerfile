@@ -10,10 +10,10 @@ WORKDIR /app
 # Copy monorepo config and required packages
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
 COPY assets/ ./assets/
-COPY packages/@shumoku/core/ ./packages/@shumoku/core/
-COPY packages/@shumoku/parser-yaml/ ./packages/@shumoku/parser-yaml/
-COPY packages/@shumoku/renderer/ ./packages/@shumoku/renderer/
-COPY packages/@shumoku/netbox/ ./packages/@shumoku/netbox/
+COPY libs/@shumoku/core/ ./libs/@shumoku/core/
+COPY libs/@shumoku/renderer-svg/ ./libs/@shumoku/renderer-svg/
+COPY libs/@shumoku/renderer-html/ ./libs/@shumoku/renderer-html/
+COPY libs/@shumoku/netbox/ ./libs/@shumoku/netbox/
 COPY apps/server/ ./apps/server/
 
 # Resolve symlinks in static/ (Docker COPY may not follow cross-directory symlinks)
