@@ -13,9 +13,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm version](https://img.shields.io/npm/v/shumoku.svg)](https://www.npmjs.com/package/shumoku)
+[![Discord](https://img.shields.io/discord/1476527182669938720?logo=discord&logoColor=white&label=Discord)](https://discord.gg/dyYbEsDZYr)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/akitoshi)
 
-**[Website](https://www.shumoku.dev/)** | **[Server Documentation](https://www.shumoku.dev/ja/docs/server)**
+**[Website](https://www.shumoku.dev/)** | **[Server Documentation](https://www.shumoku.dev/ja/docs/server)** | **[Discord](https://discord.gg/dyYbEsDZYr)**
 
 <picture>
   <img src="assets/screenshots/topology.png" alt="Topology viewer with live weathermap">
