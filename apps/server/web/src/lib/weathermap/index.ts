@@ -134,6 +134,10 @@ interface OriginalStyle {
   strokeDasharray: string
 }
 
+export interface WeathermapOptions {
+  forceAnimations?: boolean
+}
+
 export class WeathermapController {
   private svg: SVGSVGElement
   private overlays = new Map<string, LinkOverlay>()
@@ -147,8 +151,9 @@ export class WeathermapController {
   private animationsEnabled: boolean
   private animationsPaused = false
   private lastLinks: Record<string, LinkMetrics> | undefined
+  readonly _forceAnimations: boolean
 
-  constructor(svg: SVGSVGElement) {
+  constructor(svg: SVGSVGElement, options?: WeathermapOptions) {
     this.svg = svg
     const { quality, sampleInterval, minSamples, batchSize, animationsEnabled } =
       this.detectQualityTier()
@@ -156,7 +161,8 @@ export class WeathermapController {
     this.sampleInterval = sampleInterval
     this.minSamples = minSamples
     this.batchSize = batchSize
-    this.animationsEnabled = animationsEnabled
+    this._forceAnimations = options?.forceAnimations ?? false
+    this.animationsEnabled = this._forceAnimations || animationsEnabled
   }
 
   apply(links: Record<string, LinkMetrics> | undefined): void {

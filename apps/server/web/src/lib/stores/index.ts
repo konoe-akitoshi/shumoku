@@ -35,6 +35,7 @@ export {
   liveUpdatesEnabled,
   showTrafficFlow,
   showNodeStatus,
+  forceAnimations,
   type DisplaySettings,
 } from './displaySettings'
 

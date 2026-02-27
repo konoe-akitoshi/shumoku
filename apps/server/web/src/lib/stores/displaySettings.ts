@@ -18,12 +18,15 @@ export interface DisplaySettings {
   // Individual display toggles (only apply when connected and receiving data)
   showTrafficFlow: boolean // Show animated link utilization colors
   showNodeStatus: boolean // Show node up/down status indicators
+  // Force traffic flow animations even on low-spec devices
+  forceAnimations: boolean
 }
 
 const defaultSettings: DisplaySettings = {
   liveUpdates: true,
   showTrafficFlow: true,
   showNodeStatus: true,
+  forceAnimations: false,
 }
 
 function loadSettings(): DisplaySettings {
@@ -78,6 +81,14 @@ function createDisplaySettingsStore() {
       })
     },
 
+    setForceAnimations(enabled: boolean) {
+      update((s) => {
+        const newSettings = { ...s, forceAnimations: enabled }
+        saveSettings(newSettings)
+        return newSettings
+      })
+    },
+
     reset() {
       set(defaultSettings)
       saveSettings(defaultSettings)
@@ -91,3 +102,4 @@ export const displaySettings = createDisplaySettingsStore()
 export const liveUpdatesEnabled = derived(displaySettings, ($s) => $s.liveUpdates)
 export const showTrafficFlow = derived(displaySettings, ($s) => $s.showTrafficFlow)
 export const showNodeStatus = derived(displaySettings, ($s) => $s.showNodeStatus)
+export const forceAnimations = derived(displaySettings, ($s) => $s.forceAnimations)

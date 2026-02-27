@@ -10,6 +10,7 @@ import {
   liveUpdatesEnabled,
   showTrafficFlow,
   showNodeStatus,
+  forceAnimations,
 } from '$lib/stores'
 import { WeathermapController } from '$lib/weathermap'
 import { highlightNodes, highlightByAttribute, clearHighlight as clearHighlightUtil } from '$lib/highlight'
@@ -325,12 +326,18 @@ $effect(() => {
   const live = $liveUpdatesEnabled
   const flow = $showTrafficFlow
   const status = $showNodeStatus
+  const force = $forceAnimations
   if (!containerElement || !live) return
   const svg = containerElement.querySelector('svg') as SVGSVGElement | null
   if (!svg) return
 
   if (flow && metrics?.links) {
-    if (!weathermap) weathermap = new WeathermapController(svg)
+    // Recreate weathermap if forceAnimations setting changed
+    if (weathermap && weathermap._forceAnimations !== force) {
+      weathermap.destroy()
+      weathermap = null
+    }
+    if (!weathermap) weathermap = new WeathermapController(svg, { forceAnimations: force })
     weathermap.apply(metrics.links)
   } else {
     weathermap?.reset()

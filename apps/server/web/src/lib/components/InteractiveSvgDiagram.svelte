@@ -42,6 +42,7 @@ import {
   liveUpdatesEnabled,
   showTrafficFlow,
   showNodeStatus,
+  forceAnimations,
 } from '$lib/stores'
 import { formatTraffic } from '$lib/utils/format'
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
@@ -820,7 +821,12 @@ function applyMetrics(
   if (!svgElement || !metrics) return
 
   if (applyTrafficFlow) {
-    if (!weathermap) weathermap = new WeathermapController(svgElement)
+    const force = $forceAnimations
+    if (weathermap && weathermap._forceAnimations !== force) {
+      weathermap.destroy()
+      weathermap = null
+    }
+    if (!weathermap) weathermap = new WeathermapController(svgElement, { forceAnimations: force })
     weathermap.apply(metrics.links)
   }
 

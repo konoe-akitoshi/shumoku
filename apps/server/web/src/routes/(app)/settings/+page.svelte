@@ -2,6 +2,7 @@
 import { onMount } from 'svelte'
 import { api, auth } from '$lib/api'
 import { themeSetting } from '$lib/stores'
+import { displaySettings, forceAnimations } from '$lib/stores/displaySettings'
 import GithubLogo from 'phosphor-svelte/lib/GithubLogo'
 import FileText from 'phosphor-svelte/lib/FileText'
 
@@ -131,6 +132,22 @@ async function handleHealthCheck() {
               <option value="300000">5 minutes</option>
             </select>
             <p class="text-xs text-theme-text-muted mt-1">How often to refresh metrics data</p>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <div>
+              <label for="forceAnimations" class="label mb-0">Force Traffic Animations</label>
+              <p class="text-xs text-theme-text-muted mt-0.5">
+                Enable traffic flow animations even on low-spec devices (e.g. Raspberry Pi).
+              </p>
+            </div>
+            <input
+              id="forceAnimations"
+              type="checkbox"
+              class="toggle"
+              checked={$forceAnimations}
+              onchange={(e) => displaySettings.setForceAnimations(e.currentTarget.checked)}
+            />
           </div>
 
           <p class="text-xs text-theme-text-muted pt-2 border-t border-theme-border">
