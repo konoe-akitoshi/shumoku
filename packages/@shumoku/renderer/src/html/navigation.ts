@@ -1,3 +1,7 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+// For commercial licensing, contact: contact@shumoku.dev
+
 /**
  * Navigation UI for hierarchical network diagrams
  * Provides breadcrumb, tabs, and back button for sheet navigation

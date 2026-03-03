@@ -2,7 +2,7 @@
   "name": "@shumoku/netbox",
   "version": "0.2.25",
   "description": "NetBox API client and Shumoku converter",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
   "repository": {
     "type": "git",

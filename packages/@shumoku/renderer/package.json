@@ -2,7 +2,7 @@
   "name": "@shumoku/renderer",
   "version": "0.2.25",
   "description": "SVG and HTML renderers for Shumoku network diagrams",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
   "repository": {
     "type": "git",

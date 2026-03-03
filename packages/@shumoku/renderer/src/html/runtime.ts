@@ -1,3 +1,7 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+// For commercial licensing, contact: contact@shumoku.dev
+
 /**
  * Interactive Runtime - Mobile-first pan/zoom with tap tooltips and spotlight effect
  * Google Maps style touch: 1 finger = page scroll (in HTML) / pan (here), 2 fingers = pinch zoom

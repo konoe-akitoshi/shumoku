@@ -1,3 +1,7 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+// For commercial licensing, contact: contact@shumoku.dev
+
 // Re-export everything from core (canonical source for shared types)
 export * from '@shumoku/core'
 export type {

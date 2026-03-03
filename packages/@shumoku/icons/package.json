@@ -49,7 +49,7 @@
     "yamaha",
     "juniper"
   ],
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "publishConfig": {
     "access": "public"
   }
