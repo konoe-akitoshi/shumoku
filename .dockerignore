@@ -14,7 +14,6 @@ apps/server/web/build/
 .idea/
 
 # Packages not needed for server
-packages/@shumoku/icons/
 packages/shumoku/
 apps/docs/
 

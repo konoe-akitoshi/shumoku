@@ -9,7 +9,6 @@ Shumoku の TypeScript API リファレンスです。
 | `shumoku` | メインパッケージ（全機能を含む） |
 | `@shumoku/core` | コアライブラリ（モデル、レイアウト、レンダラー） |
 | `@shumoku/parser-yaml` | YAML パーサー |
-| `@shumoku/icons` | ベンダーアイコン |
 
 ## YamlParser
 
@@ -165,17 +164,7 @@ enum DeviceType {
 
 ## Icons
 
-ベンダーアイコンを登録・取得します。
-
-```typescript
-import { registerAllIcons, getVendorIcon } from '@shumoku/icons'
-
-// 全アイコンを登録
-registerAllIcons()
-
-// 特定のアイコンを取得
-const icon = getVendorIcon('yamaha', 'rtx3510')
-```
+ベンダーアイコンは CDN (`https://icons.shumoku.packof.me`) から自動的に配信されます。レンダラーがアイコンの寸法を取得し、適切なアスペクト比でレンダリングします。
 
 ### Supported Vendors
 

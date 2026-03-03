@@ -9,7 +9,6 @@ const config = {
     'shumoku',
     '@shumoku/core',
     '@shumoku/parser-yaml',
-    '@shumoku/icons',
     '@shumoku/renderer',
   ],
   async rewrites() {

@@ -6,9 +6,6 @@
  * Shumoku CLI - Render NetworkGraph YAML/JSON to SVG/HTML/PNG
  */
 
-// Import @shumoku/icons to auto-register vendor icons
-import '@shumoku/icons'
-
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, extname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'

@@ -126,20 +126,6 @@
         "react",
       ],
     },
-    "packages/@shumoku/icons": {
-      "name": "@shumoku/icons",
-      "version": "0.2.4",
-      "dependencies": {
-        "@shumoku/core": "^0.2.3",
-      },
-      "devDependencies": {
-        "sharp": "^0.34.5",
-        "typescript": "^5.8.3",
-      },
-      "peerDependencies": {
-        "@shumoku/core": "^0.2.3",
-      },
-    },
     "packages/@shumoku/netbox": {
       "name": "@shumoku/netbox",
       "version": "0.2.25",
@@ -618,8 +604,6 @@
     "@shumoku/core": ["@shumoku/core@workspace:packages/@shumoku/core"],
 
     "@shumoku/docs": ["@shumoku/docs@workspace:apps/docs"],
-
-    "@shumoku/icons": ["@shumoku/icons@workspace:packages/@shumoku/icons"],
 
     "@shumoku/netbox": ["@shumoku/netbox@workspace:packages/@shumoku/netbox"],
 

@@ -131,7 +131,6 @@ npx shumoku render network.yaml -f html -o diagram.html
 | [`@shumoku/core`](packages/@shumoku/core) | Core library (models, layout) |
 | [`@shumoku/renderer`](packages/@shumoku/renderer) | SVG/HTML renderers + CLI |
 | [`@shumoku/parser-yaml`](packages/@shumoku/parser-yaml) | YAML parser |
-| [`@shumoku/icons`](packages/@shumoku/icons) | Vendor icons (Yamaha, Aruba, AWS, Juniper) |
 | [`@shumoku/netbox`](packages/@shumoku/netbox) | NetBox API integration |
 
 </details>

@@ -60,11 +60,11 @@ export function getDeviceIcon(type?: DeviceType): string | undefined {
   return defaultIcons[iconKey]
 }
 
-// Vendor icon registry (populated by @shumoku/icons if installed)
+// Vendor icon registry (populated via registerVendorIcons())
 const vendorIconRegistry: Record<string, Record<string, IconEntry>> = {}
 
 /**
- * Register vendor icons (called by @shumoku/icons)
+ * Register vendor icons for a given vendor
  */
 export function registerVendorIcons(vendor: string, icons: Record<string, IconEntry>): void {
   vendorIconRegistry[vendor] = icons

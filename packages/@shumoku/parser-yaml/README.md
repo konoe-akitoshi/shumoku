@@ -82,7 +82,6 @@ subgraphs:
 ## Related Packages
 
 - [`@shumoku/core`](https://www.npmjs.com/package/@shumoku/core) - Core library
-- [`@shumoku/icons`](https://www.npmjs.com/package/@shumoku/icons) - Vendor icons
 
 ## Documentation
 

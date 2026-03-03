@@ -44,7 +44,6 @@ const svg = renderer.render(layout)
 ## Related Packages
 
 - [`@shumoku/parser-yaml`](https://www.npmjs.com/package/@shumoku/parser-yaml) - YAML parser for network definitions
-- [`@shumoku/icons`](https://www.npmjs.com/package/@shumoku/icons) - Vendor-specific icons (Yamaha, Aruba, AWS, Juniper)
 
 ## Documentation
 

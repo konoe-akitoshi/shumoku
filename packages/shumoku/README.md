@@ -68,7 +68,6 @@ This package bundles:
 
 - [`@shumoku/core`](https://www.npmjs.com/package/@shumoku/core) - Core library (models, layout, renderer)
 - [`@shumoku/parser-yaml`](https://www.npmjs.com/package/@shumoku/parser-yaml) - YAML parser
-- [`@shumoku/icons`](https://www.npmjs.com/package/@shumoku/icons) - Vendor-specific icons (900+)
 
 ## Documentation
 

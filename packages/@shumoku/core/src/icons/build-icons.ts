@@ -107,13 +107,13 @@ function generateTypeScript(icons: Record<string, string>): string {
   lines.push('}')
   lines.push('')
 
-  // Vendor icon stubs (for compatibility, actual implementation in @shumoku/icons)
-  lines.push('// Vendor icon registry (populated by @shumoku/icons if installed)')
+  // Vendor icon registry and registration API
+  lines.push('// Vendor icon registry (populated via registerVendorIcons())')
   lines.push('let vendorIconRegistry: Record<string, Record<string, IconEntry>> = {}')
   lines.push('')
 
   lines.push('/**')
-  lines.push(' * Register vendor icons (called by @shumoku/icons)')
+  lines.push(' * Register vendor icons for a given vendor')
   lines.push(' */')
   lines.push(
     'export function registerVendorIcons(vendor: string, icons: Record<string, IconEntry>): void {',

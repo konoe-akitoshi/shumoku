@@ -118,13 +118,8 @@ nodes:
 
 ### 手順
 
-1. アイコンファイルを `packages/@shumoku/icons/src/{vendor}/` に配置
+1. アイコンファイルを準備
 2. アップロードスクリプトを実行
-
-```bash
-cd packages/@shumoku/icons
-./upload-to-r2.sh
-```
 
 ### 個別アップロード
 
@@ -137,10 +132,9 @@ npx wrangler r2 object put "shumoku-icons/v1/yamaha/new-model.png" \
 
 ## 新規ベンダーの追加
 
-1. `packages/@shumoku/icons/src/{vendor}/` ディレクトリを作成
-2. アイコンファイルを配置
-3. `packages/@shumoku/icons/upload-to-r2.sh` に正規化関数とアップロード処理を追加
-4. `packages/@shumoku/renderer/src/cdn-icons.ts` を更新:
+1. アイコンファイルを準備
+2. `upload-to-r2.sh` に正規化関数とアップロード処理を追加
+3. `packages/@shumoku/renderer/src/cdn-icons.ts` を更新:
    - `SVG_VENDORS` または `PNG_VENDORS` に追加
 
 ```typescript

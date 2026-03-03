@@ -2,20 +2,9 @@
 
 Shumoku で使用可能なベンダー固有アイコンのリファレンス。
 
-## インストール
-
-```bash
-npm install @shumoku/icons
-```
-
-```typescript
-import { registerAllIcons } from '@shumoku/icons'
-
-// アイコンを登録
-registerAllIcons()
-```
-
 ## 使用方法
+
+ベンダーアイコンは CDN (`https://icons.shumoku.packof.me`) から自動的に配信されます。インストールや手動登録は不要です。
 
 ### ハードウェアベンダー (Yamaha, Juniper 等)
 
@@ -399,10 +388,5 @@ nodes:
 
 ## アイコンの追加
 
-新しいベンダーアイコンを追加するには:
-
-1. `packages/@shumoku/icons/icons/{vendor}/` にアイコンファイル (SVG/PNG) を配置
-2. `bun run build` を実行
-3. `generated-icons.ts` が自動生成される
-
-詳細は `packages/@shumoku/icons/src/build-icons.ts` を参照。
+新しいベンダーアイコンを追加するには、CDN にアップロードしてください。
+詳細は `docs/cdn-icons.md` を参照。
