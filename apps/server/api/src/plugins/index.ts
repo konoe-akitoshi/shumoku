@@ -25,54 +25,28 @@ export {
   getPluginsDir,
   getConfigPath,
   isExternalPlugin,
-  isBuiltinPlugin,
-  markBuiltinPlugins,
+  isBundledPlugin,
+  markBundledPlugins,
 } from './loader.js'
-export { ZabbixPlugin } from './zabbix.js'
-export { NetBoxPlugin } from './netbox.js'
-export { PrometheusPlugin } from './prometheus.js'
-export { GrafanaPlugin } from './grafana.js'
 
-// Register built-in plugins
+// Re-export plugin classes from bundled plugins
+export { NetBoxPlugin } from '../../../plugins/netbox/index.js'
+export { ZabbixPlugin } from '../../../plugins/zabbix/index.js'
+export { PrometheusPlugin } from '../../../plugins/prometheus/index.js'
+export { GrafanaPlugin } from '../../../plugins/grafana/index.js'
+
+// Register bundled plugins
 import { pluginRegistry } from './registry.js'
-import { ZabbixPlugin } from './zabbix.js'
-import { NetBoxPlugin } from './netbox.js'
-import { PrometheusPlugin } from './prometheus.js'
-import { GrafanaPlugin } from './grafana.js'
+import { register as registerNetBox } from '../../../plugins/netbox/index.js'
+import { register as registerZabbix } from '../../../plugins/zabbix/index.js'
+import { register as registerPrometheus } from '../../../plugins/prometheus/index.js'
+import { register as registerGrafana } from '../../../plugins/grafana/index.js'
 
-export function registerBuiltinPlugins(): void {
-  // Zabbix - metrics, hosts, auto-mapping, alerts
-  pluginRegistry.register(
-    'zabbix',
-    'Zabbix',
-    ['metrics', 'hosts', 'auto-mapping', 'alerts'],
-    (config) => {
-      const plugin = new ZabbixPlugin()
-      plugin.initialize(config)
-      return plugin
-    },
-  )
+export function registerBundledPlugins(): void {
+  registerNetBox(pluginRegistry)
+  registerZabbix(pluginRegistry)
+  registerPrometheus(pluginRegistry)
+  registerGrafana(pluginRegistry)
 
-  // NetBox - topology, hosts
-  pluginRegistry.register('netbox', 'NetBox', ['topology', 'hosts'], (config) => {
-    const plugin = new NetBoxPlugin()
-    plugin.initialize(config)
-    return plugin
-  })
-
-  // Prometheus - metrics, hosts, alerts
-  pluginRegistry.register('prometheus', 'Prometheus', ['metrics', 'hosts', 'alerts'], (config) => {
-    const plugin = new PrometheusPlugin()
-    plugin.initialize(config)
-    return plugin
-  })
-
-  // Grafana - alerts
-  pluginRegistry.register('grafana', 'Grafana', ['alerts'], (config) => {
-    const plugin = new GrafanaPlugin()
-    plugin.initialize(config)
-    return plugin
-  })
-
-  console.log('[Plugins] Built-in plugins registered')
+  console.log('[Plugins] Bundled plugins registered')
 }

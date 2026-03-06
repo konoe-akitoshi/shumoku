@@ -13,7 +13,6 @@ COPY assets/ ./assets/
 COPY packages/@shumoku/core/ ./packages/@shumoku/core/
 COPY packages/@shumoku/parser-yaml/ ./packages/@shumoku/parser-yaml/
 COPY packages/@shumoku/renderer/ ./packages/@shumoku/renderer/
-COPY packages/@shumoku/netbox/ ./packages/@shumoku/netbox/
 COPY apps/server/ ./apps/server/
 
 # Resolve symlinks in static/ (Docker COPY may not follow cross-directory symlinks)

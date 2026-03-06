@@ -52,7 +52,6 @@
       "version": "0.1.1",
       "dependencies": {
         "@shumoku/core": "workspace:*",
-        "@shumoku/netbox": "workspace:*",
         "@shumoku/parser-yaml": "workspace:*",
         "@shumoku/renderer": "workspace:*",
         "adm-zip": "^0.5.16",
@@ -125,22 +124,6 @@
         "@pixi/react",
         "react",
       ],
-    },
-    "packages/@shumoku/netbox": {
-      "name": "@shumoku/netbox",
-      "version": "0.2.25",
-      "bin": {
-        "netbox-to-shumoku": "./dist/cli.js",
-      },
-      "dependencies": {
-        "@shumoku/core": "^0.2.23",
-        "@shumoku/renderer": "^0.2.25",
-      },
-      "devDependencies": {
-        "@types/node": "^25.0.7",
-        "typescript": "^5.6.3",
-        "vitest": "^4.0.17",
-      },
     },
     "packages/@shumoku/parser-yaml": {
       "name": "@shumoku/parser-yaml",
@@ -604,8 +587,6 @@
     "@shumoku/core": ["@shumoku/core@workspace:packages/@shumoku/core"],
 
     "@shumoku/docs": ["@shumoku/docs@workspace:apps/docs"],
-
-    "@shumoku/netbox": ["@shumoku/netbox@workspace:packages/@shumoku/netbox"],
 
     "@shumoku/parser-yaml": ["@shumoku/parser-yaml@workspace:packages/@shumoku/parser-yaml"],
 

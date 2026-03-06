@@ -1,0 +1,17 @@
+{
+  "id": "zabbix",
+  "name": "Zabbix",
+  "version": "0.1.0",
+  "description": "Zabbix monitoring integration for metrics, hosts, auto-mapping, and alerts",
+  "capabilities": ["metrics", "hosts", "auto-mapping", "alerts"],
+  "entry": "index.js",
+  "configSchema": {
+    "type": "object",
+    "required": ["url", "token"],
+    "properties": {
+      "url": { "type": "string", "title": "Zabbix URL" },
+      "token": { "type": "string", "title": "API Token", "format": "password" },
+      "pollInterval": { "type": "number", "title": "Poll Interval (ms)" }
+    }
+  }
+}

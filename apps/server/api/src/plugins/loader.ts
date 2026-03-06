@@ -49,7 +49,7 @@ export interface LoadedPluginInfo {
   capabilities: string[]
   configSchema?: PluginManifest['configSchema']
   enabled: boolean
-  builtin: boolean
+  bundled: boolean
   error?: string
 }
 
@@ -72,29 +72,29 @@ let loadedPlugins: LoadedPluginInfo[] = []
 /** Current config file path */
 let currentConfigPath: string | null = null
 
-/** Builtin plugin IDs (registered before external plugins) */
-const builtinPluginIds = new Set<string>()
+/** Bundled plugin IDs (registered before external plugins) */
+const bundledPluginIds = new Set<string>()
 
 // ============================================
-// Builtin Plugin Tracking
+// Bundled Plugin Tracking
 // ============================================
 
 /**
- * Mark current registered plugins as builtin
- * Call this after registerBuiltinPlugins() and before loading external plugins
+ * Mark current registered plugins as bundled
+ * Call this after registerBundledPlugins() and before loading external plugins
  */
-export function markBuiltinPlugins(): void {
-  builtinPluginIds.clear()
+export function markBundledPlugins(): void {
+  bundledPluginIds.clear()
   for (const reg of pluginRegistry.getRegisteredTypes()) {
-    builtinPluginIds.add(reg.type)
+    bundledPluginIds.add(reg.type)
   }
 }
 
 /**
- * Check if a plugin ID is builtin
+ * Check if a plugin ID is bundled
  */
-export function isBuiltinPlugin(pluginId: string): boolean {
-  return builtinPluginIds.has(pluginId)
+export function isBundledPlugin(pluginId: string): boolean {
+  return bundledPluginIds.has(pluginId)
 }
 
 // ============================================
@@ -144,8 +144,8 @@ async function writeConfig(configPath: string, config: PluginsConfig): Promise<v
 export async function loadPluginsFromConfig(configPath: string): Promise<LoadedPluginInfo[]> {
   currentConfigPath = configPath
 
-  // Mark builtin plugins before loading externals
-  markBuiltinPlugins()
+  // Mark bundled plugins before loading externals
+  markBundledPlugins()
 
   const config = await readConfig(configPath)
 
@@ -189,7 +189,7 @@ async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<L
         capabilities: manifest.capabilities,
         configSchema: manifest.configSchema,
         enabled: false,
-        builtin: false,
+        bundled: false,
       }
     } catch {
       return {
@@ -199,7 +199,7 @@ async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<L
         path: pluginPath,
         capabilities: [],
         enabled: false,
-        builtin: false,
+        bundled: false,
         error: 'Plugin disabled, manifest not readable',
       }
     }
@@ -247,7 +247,7 @@ async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<L
       capabilities: manifest.capabilities,
       configSchema: manifest.configSchema,
       enabled: true,
-      builtin: false,
+      bundled: false,
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
@@ -260,7 +260,7 @@ async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<L
       path: pluginPath,
       capabilities: [],
       enabled: false,
-      builtin: false,
+      bundled: false,
       error: errorMsg,
     }
   }
@@ -302,7 +302,7 @@ export async function reloadPlugins(): Promise<LoadedPluginInfo[]> {
 
   // Clear cached instances for external plugins
   for (const plugin of loadedPlugins) {
-    if (!plugin.builtin) {
+    if (!plugin.bundled) {
       pluginRegistry.removeInstance(plugin.id)
     }
   }
@@ -340,9 +340,9 @@ export async function addPlugin(path: string): Promise<AddPluginResult> {
       return { success: false, error: `Plugin "${manifest.id}" already exists` }
     }
 
-    // Check if conflicts with builtin
-    if (builtinPluginIds.has(manifest.id)) {
-      return { success: false, error: `Plugin ID "${manifest.id}" conflicts with builtin plugin` }
+    // Check if conflicts with bundled
+    if (bundledPluginIds.has(manifest.id)) {
+      return { success: false, error: `Plugin ID "${manifest.id}" conflicts with bundled plugin` }
     }
 
     // Add to config
@@ -374,9 +374,9 @@ export async function removePlugin(pluginId: string, deleteFiles = false): Promi
     return { success: false, error: 'No config path set' }
   }
 
-  // Check if builtin
-  if (builtinPluginIds.has(pluginId)) {
-    return { success: false, error: 'Cannot remove builtin plugin' }
+  // Check if bundled
+  if (bundledPluginIds.has(pluginId)) {
+    return { success: false, error: 'Cannot remove bundled plugin' }
   }
 
   const pluginInfo = loadedPlugins.find((p) => p.id === pluginId)
@@ -416,9 +416,9 @@ export async function setPluginEnabled(pluginId: string, enabled: boolean): Prom
     return { success: false, error: 'No config path set' }
   }
 
-  // Check if builtin
-  if (builtinPluginIds.has(pluginId)) {
-    return { success: false, error: 'Cannot modify builtin plugin' }
+  // Check if bundled
+  if (bundledPluginIds.has(pluginId)) {
+    return { success: false, error: 'Cannot modify bundled plugin' }
   }
 
   // Update config
@@ -746,26 +746,26 @@ export async function installPluginFromZip(
 // ============================================
 
 /**
- * Get list of all plugins (builtin + external)
+ * Get list of all plugins (bundled + external)
  */
 export function getAllPlugins(): LoadedPluginInfo[] {
-  // Get builtin plugins from registry
-  const builtinPlugins: LoadedPluginInfo[] = []
+  // Get bundled plugins from registry
+  const bundledPlugins: LoadedPluginInfo[] = []
   for (const reg of pluginRegistry.getRegisteredTypes()) {
-    if (builtinPluginIds.has(reg.type)) {
-      builtinPlugins.push({
+    if (bundledPluginIds.has(reg.type)) {
+      bundledPlugins.push({
         id: reg.type,
         name: reg.displayName,
-        version: 'builtin',
+        version: 'bundled',
         path: '',
         capabilities: [...reg.capabilities],
         enabled: true,
-        builtin: true,
+        bundled: true,
       })
     }
   }
 
-  return [...builtinPlugins, ...loadedPlugins]
+  return [...bundledPlugins, ...loadedPlugins]
 }
 
 /**
@@ -776,7 +776,7 @@ export function getLoadedPlugins(): readonly LoadedPluginInfo[] {
 }
 
 /**
- * Check if a plugin is external (vs builtin)
+ * Check if a plugin is external (vs bundled)
  */
 export function isExternalPlugin(pluginId: string): boolean {
   return loadedPlugins.some((p) => p.id === pluginId)

@@ -8,7 +8,7 @@ Type=simple
 User=shumoku
 Group=shumoku
 WorkingDirectory=/opt/shumoku/apps/server
-ExecStart=/usr/bin/bun dist/index.js
+ExecStart=/usr/bin/bun dist/api/src/index.js
 Restart=always
 RestartSec=5
 

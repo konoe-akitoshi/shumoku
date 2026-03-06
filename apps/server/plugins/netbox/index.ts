@@ -1,11 +1,11 @@
 /**
- * NetBox Data Source Plugin
+ * NetBox Bundled Plugin
  *
- * Uses @shumoku/netbox package for topology conversion
+ * NetBox DCIM/IPAM integration for topology and hosts.
  */
 
 import type { NetworkGraph } from '@shumoku/core'
-import { NetBoxClient, convertToNetworkGraph } from '@shumoku/netbox'
+import type { PluginRegistryInterface } from '../../api/src/plugins/registry.js'
 import {
   addHttpWarning,
   type DataSourcePlugin,
@@ -15,8 +15,15 @@ import {
   type ConnectionResult,
   type Host,
   type HostItem,
-  type NetBoxPluginConfig,
-} from './types.js'
+} from '../../api/src/plugins/types.js'
+import { NetBoxClient } from './client.js'
+import { convertToNetworkGraph } from './converter.js'
+
+interface NetBoxPluginConfig {
+  url: string
+  token: string
+  insecure?: boolean
+}
 
 export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCapable {
   readonly type = 'netbox'
@@ -50,17 +57,12 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
     this.client = null
   }
 
-  // ============================================
-  // Base Plugin Methods
-  // ============================================
-
   async testConnection(): Promise<ConnectionResult> {
     if (!this.client || !this.config) {
       return { success: false, message: 'Plugin not initialized' }
     }
 
     try {
-      // Try to fetch devices to test connection
       const resp = await this.client.fetchDevices()
 
       return addHttpWarning(this.config.url, {
@@ -75,21 +77,15 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
     }
   }
 
-  // ============================================
-  // TopologyCapable Implementation
-  // ============================================
-
   async fetchTopology(options?: Record<string, unknown>): Promise<NetworkGraph> {
     if (!this.client || !this.config) {
       throw new Error('Plugin not initialized')
     }
 
-    // Extract per-topology options (filters support string or string[])
     const groupBy = (options?.groupBy as string) || 'tag'
 
     const params: Record<string, string | string[] | number> = {}
 
-    // Include filters
     const site = options?.siteFilter as string | string[] | undefined
     const tag = options?.tagFilter as string | string[] | undefined
     const role = options?.roleFilter as string | string[] | undefined
@@ -97,7 +93,6 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
     if (tag && (!Array.isArray(tag) || tag.length > 0)) params.tag = tag
     if (role && (!Array.isArray(role) || role.length > 0)) params.role = role
 
-    // Exclude filters (NetBox uses __n suffix for negation)
     const excludeRole = options?.excludeRoleFilter as string | string[] | undefined
     const excludeTag = options?.excludeTagFilter as string | string[] | undefined
     if (excludeRole && (!Array.isArray(excludeRole) || excludeRole.length > 0))
@@ -107,7 +102,6 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
 
     console.log('[NetBox] Fetching topology with params:', params)
 
-    // Fetch data using @shumoku/netbox client
     const [deviceResp, interfaceResp, cableResp] = await Promise.all([
       this.client.fetchDevices(params),
       this.client.fetchInterfaces(params),
@@ -120,7 +114,6 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
       cables: cableResp.results.length,
     })
 
-    // Convert to NetworkGraph using @shumoku/netbox converter
     const graph = convertToNetworkGraph(deviceResp, interfaceResp, cableResp, {
       groupBy: groupBy as 'tag' | 'site' | 'location' | 'prefix' | 'none',
       showPorts: true,
@@ -136,10 +129,6 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
 
     return graph
   }
-
-  // ============================================
-  // HostsCapable Implementation
-  // ============================================
 
   async getHosts(): Promise<Host[]> {
     if (!this.client || !this.config) {
@@ -162,7 +151,6 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
       return []
     }
 
-    // Note: device_id is a valid NetBox API parameter but not in QueryParams type
     const interfaceResp = await this.client.fetchInterfaces({
       device_id: parseInt(hostId),
     } as unknown as Parameters<typeof this.client.fetchInterfaces>[0])
@@ -176,10 +164,6 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
       unit: iface.type?.label || 'interface',
     }))
   }
-
-  // ============================================
-  // Filter Options (for UI dropdowns)
-  // ============================================
 
   async getFilterOptions(): Promise<{
     sites: { slug: string; name: string }[]
@@ -203,10 +187,6 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
     }
   }
 
-  // ============================================
-  // Private Helper Methods
-  // ============================================
-
   private mapDeviceStatus(status?: string): 'up' | 'down' | 'unknown' {
     switch (status) {
       case 'active':
@@ -218,4 +198,12 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
         return 'unknown'
     }
   }
+}
+
+export function register(registry: PluginRegistryInterface): void {
+  registry.register('netbox', 'NetBox', ['topology', 'hosts'], (config) => {
+    const plugin = new NetBoxPlugin()
+    plugin.initialize(config)
+    return plugin
+  })
 }

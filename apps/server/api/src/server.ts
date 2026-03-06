@@ -20,7 +20,7 @@ import type { TopologyService, ParsedTopology } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { DataSourceService } from './services/datasource.js'
 import {
-  registerBuiltinPlugins,
+  registerBundledPlugins,
   pluginRegistry,
   hasMetricsCapability,
   loadPluginsFromConfig,
@@ -401,8 +401,8 @@ export class Server {
   }
 
   async initialize(): Promise<void> {
-    // Register built-in plugins before database access
-    registerBuiltinPlugins()
+    // Register bundled plugins before database access
+    registerBundledPlugins()
 
     // Load external plugins from config file
     const pluginsConfigPath =
