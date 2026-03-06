@@ -27,9 +27,11 @@ import type {
   DeviceStatusValue,
   GroupBy,
   NetBoxCableResponse,
+  NetBoxCircuitResponse,
   NetBoxDeviceResponse,
   NetBoxInterfaceResponse,
   NetBoxTag,
+  NetBoxTermination,
   NetBoxVirtualMachineResponse,
   NetBoxVMInterfaceResponse,
   TagMapping,
@@ -161,6 +163,7 @@ export function convertToNetworkGraph(
   interfaceResp: NetBoxInterfaceResponse,
   cableResp: NetBoxCableResponse,
   options: ConverterOptions = {},
+  circuitResp?: NetBoxCircuitResponse,
 ): NetworkGraph {
   const tagMapping = { ...DEFAULT_TAG_MAPPING, ...options.tagMapping }
   const groupBy: GroupBy = options.groupBy ?? (options.groupByTag === false ? 'none' : 'tag')
@@ -169,6 +172,9 @@ export function convertToNetworkGraph(
   const useRoleForType = options.useRoleForType ?? true
   const colorByStatus = options.colorByStatus ?? false
 
+  // Build circuit map for provider lookups
+  const circuitMap = buildCircuitMap(circuitResp)
+
   // Build device maps
   const { deviceTagMap, deviceInfoMap } = buildDeviceMaps(deviceResp)
 
@@ -176,18 +182,31 @@ export function convertToNetworkGraph(
   const { portVlanMap, portSpeedMap } = buildPortMaps(interfaceResp)
 
   // Build devices and connections from cables
-  const { devices, connections } = buildDevicesAndConnections(
+  const { devices, connections, providerNodes } = buildDevicesAndConnections(
     cableResp,
     deviceTagMap,
     deviceInfoMap,
     portVlanMap,
     portSpeedMap,
     tagMapping,
+    circuitMap,
   )
 
   // Build graph components
   const subgraphs = buildSubgraphsByGroupBy(devices, tagMapping, groupBy)
   const nodes = buildNodes(devices, tagMapping, groupBy, useRoleForType, colorByStatus)
+
+  // Add provider nodes
+  for (const [, providerInfo] of providerNodes) {
+    nodes.push({
+      id: providerInfo.id,
+      label: providerInfo.label,
+      shape: 'rounded',
+      type: 'internet' as DeviceType,
+      rank: -1,
+    })
+  }
+
   const links = buildLinks(connections, showPorts, colorByCableType)
 
   return {
@@ -215,8 +234,9 @@ export function convertToNetworkGraphWithVMs(
   vmResp: NetBoxVirtualMachineResponse,
   vmInterfaceResp: NetBoxVMInterfaceResponse,
   options: ConverterOptions = {},
+  circuitResp?: NetBoxCircuitResponse,
 ): NetworkGraph {
-  const graph = convertToNetworkGraph(deviceResp, interfaceResp, cableResp, options)
+  const graph = convertToNetworkGraph(deviceResp, interfaceResp, cableResp, options, circuitResp)
 
   if (!options.includeVMs) {
     return graph
@@ -247,6 +267,80 @@ export function convertToNetworkGraphWithVMs(
 // ============================================
 // Device & Port Map Builders
 // ============================================
+
+/**
+ * Circuit info resolved from NetBox circuit data
+ */
+interface CircuitInfo {
+  cid: string
+  providerName: string
+  providerSlug: string
+  typeName: string
+}
+
+function buildCircuitMap(
+  circuitResp?: NetBoxCircuitResponse,
+): Map<number, CircuitInfo> {
+  const map = new Map<number, CircuitInfo>()
+  if (!circuitResp) return map
+
+  for (const circuit of circuitResp.results) {
+    map.set(circuit.id, {
+      cid: circuit.cid,
+      providerName: circuit.provider.name,
+      providerSlug: circuit.provider.slug,
+      typeName: circuit.type.name,
+    })
+  }
+
+  return map
+}
+
+/**
+ * Check if a termination is a circuit termination
+ */
+function isCircuitTermination(term: NetBoxTermination): boolean {
+  return (
+    term.object_type === 'circuits.circuittermination' ||
+    (!term.object.device && !!term.object.circuit)
+  )
+}
+
+/**
+ * Get provider node ID from a circuit termination
+ */
+function getProviderNodeId(term: NetBoxTermination, circuitMap: Map<number, CircuitInfo>): string {
+  const circuitId = term.object.circuit?.id
+  if (circuitId) {
+    const info = circuitMap.get(circuitId)
+    if (info) return `provider-${info.providerSlug}`
+  }
+  // Fallback: use provider_network name or circuit cid
+  if (term.object.provider_network) {
+    return `provider-network-${term.object.provider_network.id}`
+  }
+  return `circuit-${term.object.circuit?.cid ?? 'unknown'}`
+}
+
+/**
+ * Get provider node label from a circuit termination
+ */
+function getProviderNodeLabel(
+  term: NetBoxTermination,
+  circuitMap: Map<number, CircuitInfo>,
+): string[] {
+  const circuitId = term.object.circuit?.id
+  if (circuitId) {
+    const info = circuitMap.get(circuitId)
+    if (info) {
+      return [`<b>${info.providerName}</b>`, info.typeName]
+    }
+  }
+  if (term.object.provider_network) {
+    return [`<b>${term.object.provider_network.name}</b>`]
+  }
+  return [`<b>${term.object.circuit?.cid ?? 'Circuit'}</b>`]
+}
 
 function buildDeviceMaps(deviceResp: NetBoxDeviceResponse) {
   const deviceTagMap = new Map<string, string>()
@@ -291,6 +385,16 @@ function buildPortMaps(interfaceResp: NetBoxInterfaceResponse) {
   return { portVlanMap, portSpeedMap }
 }
 
+/**
+ * Provider node info tracked during conversion
+ */
+interface ProviderNodeInfo {
+  id: string
+  label: string[]
+  circuitCid?: string
+  typeName?: string
+}
+
 function buildDevicesAndConnections(
   cableResp: NetBoxCableResponse,
   deviceTagMap: Map<string, string>,
@@ -298,17 +402,74 @@ function buildDevicesAndConnections(
   portVlanMap: Map<string, Map<string, number[]>>,
   portSpeedMap: Map<string, Map<string, number | null>>,
   tagMapping: Record<string, TagMapping>,
+  circuitMap: Map<number, CircuitInfo> = new Map(),
 ) {
   const devices = new Map<string, DeviceData>()
   const connections: ConnectionData[] = []
+  const providerNodes = new Map<string, ProviderNodeInfo>()
 
   for (const cable of cableResp.results) {
     if (cable.a_terminations.length === 0 || cable.b_terminations.length === 0) continue
 
-    const termA = cable.a_terminations[0].object
-    const termB = cable.b_terminations[0].object
+    const fullTermA = cable.a_terminations[0]
+    const fullTermB = cable.b_terminations[0]
+    const termA = fullTermA.object
+    const termB = fullTermB.object
 
-    // Skip if termination is not a device interface (e.g., circuit, console port, power port)
+    const aIsCircuit = isCircuitTermination(fullTermA)
+    const bIsCircuit = isCircuitTermination(fullTermB)
+
+    // Both are circuit terminations — skip
+    if (aIsCircuit && bIsCircuit) continue
+
+    // One side is circuit termination, other is device
+    if (aIsCircuit || bIsCircuit) {
+      const deviceTerm = aIsCircuit ? fullTermB : fullTermA
+      const circuitTerm = aIsCircuit ? fullTermA : fullTermB
+
+      // Must have a device on the device side
+      if (!deviceTerm.object.device) continue
+
+      const deviceName = deviceTerm.object.device.name ?? `noname-${deviceTerm.object.device.id}`
+      if (!deviceTagMap.has(deviceName)) continue
+
+      const deviceTag = deviceTagMap.get(deviceName)!
+      const deviceInfo = deviceInfoMap.get(deviceName)
+      const portName = deviceTerm.object.name ?? ''
+      const vlans = portVlanMap.get(deviceName)?.get(portName) ?? []
+      const speed = portSpeedMap.get(deviceName)?.get(portName) ?? null
+
+      registerDevice(devices, deviceName, deviceTag, portName, vlans, speed, deviceInfo)
+
+      // Create/track provider node
+      const providerNodeId = getProviderNodeId(circuitTerm, circuitMap)
+      const providerLabel = getProviderNodeLabel(circuitTerm, circuitMap)
+      if (!providerNodes.has(providerNodeId)) {
+        const circuitId = circuitTerm.object.circuit?.id
+        const circuitInfo = circuitId ? circuitMap.get(circuitId) : undefined
+        providerNodes.set(providerNodeId, {
+          id: providerNodeId,
+          label: providerLabel,
+          circuitCid: circuitInfo?.cid ?? circuitTerm.object.circuit?.cid,
+          typeName: circuitInfo?.typeName,
+        })
+      }
+
+      const deviceLevel = getLevelByTag(deviceTag, tagMapping)
+      const circuitCid = circuitTerm.object.circuit?.cid ?? ''
+
+      const conn = createConnection(
+        { name: providerNodeId, port: circuitCid, level: -1, tag: 'provider' },
+        { name: deviceName, port: portName, level: deviceLevel, tag: deviceTag },
+        cable,
+        speed,
+        vlans,
+      )
+      connections.push(conn)
+      continue
+    }
+
+    // Both are device interfaces (original logic)
     if (!termA.device || !termB.device) continue
 
     const nameA = termA.device.name ?? `noname-${termA.device.id}`
@@ -322,13 +483,13 @@ function buildDevicesAndConnections(
 
     const infoA = deviceInfoMap.get(nameA)
     const infoB = deviceInfoMap.get(nameB)
-    const vlansA = portVlanMap.get(nameA)?.get(termA.name) ?? []
-    const vlansB = portVlanMap.get(nameB)?.get(termB.name) ?? []
-    const speedA = portSpeedMap.get(nameA)?.get(termA.name) ?? null
-    const speedB = portSpeedMap.get(nameB)?.get(termB.name) ?? null
+    const vlansA = portVlanMap.get(nameA)?.get(termA.name ?? '') ?? []
+    const vlansB = portVlanMap.get(nameB)?.get(termB.name ?? '') ?? []
+    const speedA = portSpeedMap.get(nameA)?.get(termA.name ?? '') ?? null
+    const speedB = portSpeedMap.get(nameB)?.get(termB.name ?? '') ?? null
 
-    registerDevice(devices, nameA, tagA, termA.name, vlansA, speedA, infoA)
-    registerDevice(devices, nameB, tagB, termB.name, vlansB, speedB, infoB)
+    registerDevice(devices, nameA, tagA, termA.name ?? '', vlansA, speedA, infoA)
+    registerDevice(devices, nameB, tagB, termB.name ?? '', vlansB, speedB, infoB)
 
     const combinedVlans = [...new Set([...vlansA, ...vlansB])]
     const linkSpeed = speedA ?? speedB
@@ -337,11 +498,11 @@ function buildDevicesAndConnections(
 
     const conn = createConnection(
       levelA <= levelB
-        ? { name: nameA, port: termA.name, level: levelA, tag: tagA }
-        : { name: nameB, port: termB.name, level: levelB, tag: tagB },
+        ? { name: nameA, port: termA.name ?? '', level: levelA, tag: tagA }
+        : { name: nameB, port: termB.name ?? '', level: levelB, tag: tagB },
       levelA <= levelB
-        ? { name: nameB, port: termB.name, level: levelB, tag: tagB }
-        : { name: nameA, port: termA.name, level: levelA, tag: tagA },
+        ? { name: nameB, port: termB.name ?? '', level: levelB, tag: tagB }
+        : { name: nameA, port: termA.name ?? '', level: levelA, tag: tagA },
       cable,
       linkSpeed,
       combinedVlans,
@@ -349,7 +510,7 @@ function buildDevicesAndConnections(
     connections.push(conn)
   }
 
-  return { devices, connections }
+  return { devices, connections, providerNodes }
 }
 
 function createConnection(
@@ -1050,10 +1211,13 @@ function analyzeCables(
   for (const cable of cableResp.results) {
     if (cable.a_terminations.length === 0 || cable.b_terminations.length === 0) continue
 
-    const termA = cable.a_terminations[0].object
-    const termB = cable.b_terminations[0].object
+    const fullTermA = cable.a_terminations[0]
+    const fullTermB = cable.b_terminations[0]
+    const termA = fullTermA.object
+    const termB = fullTermB.object
 
     // Skip if termination is not a device interface (e.g., circuit, console port, power port)
+    if (isCircuitTermination(fullTermA) || isCircuitTermination(fullTermB)) continue
     if (!termA.device || !termB.device) continue
 
     const nameA = termA.device.name ?? `noname-${termA.device.id}`
@@ -1065,17 +1229,19 @@ function analyzeCables(
     const locA = getLocationKey(nameA)
     const locB = getLocationKey(nameB)
 
-    const vlansA = portVlanMap.get(nameA)?.get(termA.name) ?? []
-    const vlansB = portVlanMap.get(nameB)?.get(termB.name) ?? []
-    const speedA = portSpeedMap.get(nameA)?.get(termA.name) ?? null
-    const speedB = portSpeedMap.get(nameB)?.get(termB.name) ?? null
+    const portA = termA.name ?? ''
+    const portB = termB.name ?? ''
+    const vlansA = portVlanMap.get(nameA)?.get(portA) ?? []
+    const vlansB = portVlanMap.get(nameB)?.get(portB) ?? []
+    const speedA = portSpeedMap.get(nameA)?.get(portA) ?? null
+    const speedB = portSpeedMap.get(nameB)?.get(portB) ?? null
 
     const conn: ConnectionData = {
       srcDev: nameA,
-      srcPort: termA.name,
+      srcPort: portA,
       srcLevel: 0,
       dstDev: nameB,
-      dstPort: termB.name,
+      dstPort: portB,
       dstLevel: 0,
       dstTag: '',
       cableType: cable.type,
@@ -1091,10 +1257,10 @@ function analyzeCables(
       crossLinks.push({
         fromLocation: locA,
         fromDevice: nameA,
-        fromPort: termA.name,
+        fromPort: portA,
         toLocation: locB,
         toDevice: nameB,
-        toPort: termB.name,
+        toPort: portB,
         cable: conn,
       })
     } else {

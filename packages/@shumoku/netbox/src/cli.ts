@@ -160,6 +160,10 @@ async function main(): Promise<void> {
     const cables = await client.fetchCables()
     console.log(`  Found ${cables.results.length} cables`)
 
+    console.log('Fetching circuits...')
+    const circuits = await client.fetchCircuits()
+    console.log(`  Found ${circuits.results.length} circuits`)
+
     // Convert
     console.log('Converting to Shumoku format...')
     const converterOptions: ConverterOptions = {
@@ -171,7 +175,7 @@ async function main(): Promise<void> {
       legend: opts.legend,
     }
 
-    const graph = convertToNetworkGraph(devices, interfaces, cables, converterOptions)
+    const graph = convertToNetworkGraph(devices, interfaces, cables, converterOptions, circuits)
     console.log(`  Created ${graph.nodes.length} nodes, ${graph.links.length} links`)
     if (graph.subgraphs) console.log(`  Created ${graph.subgraphs.length} subgraphs`)
 

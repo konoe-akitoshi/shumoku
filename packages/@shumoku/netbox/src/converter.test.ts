@@ -11,7 +11,12 @@ import { buildHierarchicalSheets } from '@shumoku/core'
 import { HierarchicalLayout } from '@shumoku/core/layout'
 import { describe, expect, it } from 'vitest'
 import { convertToNetworkGraph } from './converter.js'
-import type { NetBoxCableResponse, NetBoxDeviceResponse, NetBoxInterfaceResponse } from './types.js'
+import type {
+  NetBoxCableResponse,
+  NetBoxCircuitResponse,
+  NetBoxDeviceResponse,
+  NetBoxInterfaceResponse,
+} from './types.js'
 
 // ============================================
 // Test Fixtures - Realistic NetBox API Responses
@@ -506,5 +511,166 @@ describe('edge cases', () => {
     // Should have nodes but no subgraphs
     expect(graph.nodes.length).toBe(4)
     expect(graph.subgraphs).toBeUndefined()
+  })
+})
+
+// ============================================
+// Circuit Termination Tests
+// ============================================
+
+describe('circuit termination support', () => {
+  const cpeDevice: NetBoxDeviceResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    results: [
+      {
+        id: 10,
+        name: 'cpe-01',
+        tags: [{ slug: 'onu', name: 'ONU' }],
+        status: { value: 'active', label: 'Active' },
+        role: { name: 'CPE', slug: 'cpe' },
+        site: { id: 1, name: 'Home', slug: 'home' },
+      },
+    ],
+  }
+
+  const cpeInterfaces: NetBoxInterfaceResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    results: [
+      {
+        id: 100,
+        name: 'PON',
+        device: { id: 10, name: 'cpe-01' },
+        enabled: true,
+        speed: 1000000,
+        untagged_vlan: null,
+        tagged_vlans: [],
+      },
+    ],
+  }
+
+  const circuits: NetBoxCircuitResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    results: [
+      {
+        id: 1,
+        cid: 'FTTH-001',
+        provider: { id: 1, name: 'NTT East', slug: 'ntt-east' },
+        type: { id: 1, name: 'FTTH', slug: 'ftth' },
+        status: { value: 'active', label: 'Active' },
+      },
+    ],
+  }
+
+  it('should create provider node and link when cable connects device to circuit termination', () => {
+    const cables: NetBoxCableResponse = {
+      count: 1,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 1,
+          type: 'smf',
+          a_terminations: [
+            { object: { name: 'PON', device: { id: 10, name: 'cpe-01' } } },
+          ],
+          b_terminations: [
+            {
+              object_type: 'circuits.circuittermination',
+              object: {
+                circuit: { id: 1, cid: 'FTTH-001' },
+                term_side: 'A',
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    const graph = convertToNetworkGraph(cpeDevice, cpeInterfaces, cables, {}, circuits)
+
+    // Should have the CPE device + provider node
+    expect(graph.nodes.length).toBe(2)
+
+    const cpeNode = graph.nodes.find((n) => n.id === 'cpe-01')
+    expect(cpeNode).toBeDefined()
+
+    const providerNode = graph.nodes.find((n) => n.id === 'provider-ntt-east')
+    expect(providerNode).toBeDefined()
+    expect(providerNode?.type).toBe('internet')
+    expect(providerNode?.label).toContain('<b>NTT East</b>')
+
+    // Should have a link between them
+    expect(graph.links).toHaveLength(1)
+  })
+
+  it('should skip cables where both terminations are circuit terminations', () => {
+    const cables: NetBoxCableResponse = {
+      count: 1,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 1,
+          type: 'smf',
+          a_terminations: [
+            {
+              object_type: 'circuits.circuittermination',
+              object: { circuit: { id: 1, cid: 'FTTH-001' }, term_side: 'A' },
+            },
+          ],
+          b_terminations: [
+            {
+              object_type: 'circuits.circuittermination',
+              object: { circuit: { id: 1, cid: 'FTTH-001' }, term_side: 'Z' },
+            },
+          ],
+        },
+      ],
+    }
+
+    const graph = convertToNetworkGraph(cpeDevice, cpeInterfaces, cables, {}, circuits)
+    expect(graph.nodes).toHaveLength(0)
+    expect(graph.links).toHaveLength(0)
+  })
+
+  it('should fallback to circuit CID when circuit data is not provided', () => {
+    const cables: NetBoxCableResponse = {
+      count: 1,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 1,
+          type: 'smf',
+          a_terminations: [
+            { object: { name: 'PON', device: { id: 10, name: 'cpe-01' } } },
+          ],
+          b_terminations: [
+            {
+              object_type: 'circuits.circuittermination',
+              object: {
+                circuit: { id: 99, cid: 'UNKNOWN-001' },
+                term_side: 'A',
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    // No circuit data provided
+    const graph = convertToNetworkGraph(cpeDevice, cpeInterfaces, cables)
+
+    expect(graph.nodes.length).toBe(2)
+    const providerNode = graph.nodes.find((n) => n.id !== 'cpe-01')
+    expect(providerNode).toBeDefined()
+    // Should fallback to circuit CID in label
+    expect(providerNode?.label).toContain('<b>UNKNOWN-001</b>')
   })
 })

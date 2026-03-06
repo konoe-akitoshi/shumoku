@@ -32,6 +32,9 @@ export type {
   GroupBy,
   NetBoxCable,
   NetBoxCableResponse,
+  // Circuit types
+  NetBoxCircuit,
+  NetBoxCircuitResponse,
   NetBoxClientOptions,
   // Virtual Machine types
   NetBoxCluster,
@@ -53,6 +56,8 @@ export type {
   NetBoxTag,
   NetBoxTagFull,
   NetBoxTagResponse,
+  NetBoxProvider,
+  NetBoxProviderNetwork,
   NetBoxTermination,
   NetBoxVirtualMachine,
   NetBoxVirtualMachineResponse,

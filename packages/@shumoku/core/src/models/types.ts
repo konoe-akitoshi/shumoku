@@ -649,6 +649,7 @@ export enum DeviceType {
   LoadBalancer = 'load-balancer',
   Server = 'server',
   AccessPoint = 'access-point',
+  CPE = 'cpe',
   Cloud = 'cloud',
   Internet = 'internet',
   VPN = 'vpn',

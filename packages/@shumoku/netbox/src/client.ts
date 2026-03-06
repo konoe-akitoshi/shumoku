@@ -8,6 +8,7 @@
 
 import type {
   NetBoxCableResponse,
+  NetBoxCircuitResponse,
   NetBoxClientOptions,
   NetBoxDeviceResponse,
   NetBoxDeviceRoleResponse,
@@ -116,6 +117,13 @@ export class NetBoxClient {
   }
 
   /**
+   * Make GET request to NetBox Circuits API
+   */
+  private async getCircuits<T>(endpoint: string, params?: QueryParams): Promise<T> {
+    return this.get<T>(`circuits/${endpoint}`, params)
+  }
+
+  /**
    * Make GET request to NetBox Virtualization API
    */
   private async getVirtualization<T>(endpoint: string, params?: QueryParams): Promise<T> {
@@ -205,6 +213,13 @@ export class NetBoxClient {
   }
 
   /**
+   * Fetch circuits with optional filtering
+   */
+  async fetchCircuits(params?: QueryParams): Promise<NetBoxCircuitResponse> {
+    return this.getCircuits<NetBoxCircuitResponse>('circuits', params)
+  }
+
+  /**
    * Fetch sites with optional filtering
    */
   async fetchSites(params?: QueryParams): Promise<NetBoxSiteResponse> {
@@ -267,14 +282,16 @@ export class NetBoxClient {
     devices: NetBoxDeviceResponse
     interfaces: NetBoxInterfaceResponse
     cables: NetBoxCableResponse
+    circuits: NetBoxCircuitResponse
   }> {
-    const [devices, interfaces, cables] = await Promise.all([
+    const [devices, interfaces, cables, circuits] = await Promise.all([
       this.fetchDevices(),
       this.fetchInterfaces(),
       this.fetchCables(),
+      this.fetchCircuits(),
     ])
 
-    return { devices, interfaces, cables }
+    return { devices, interfaces, cables, circuits }
   }
 
   /**
@@ -284,17 +301,20 @@ export class NetBoxClient {
     devices: NetBoxDeviceResponse
     interfaces: NetBoxInterfaceResponse
     cables: NetBoxCableResponse
+    circuits: NetBoxCircuitResponse
     virtualMachines: NetBoxVirtualMachineResponse
     vmInterfaces: NetBoxVMInterfaceResponse
   }> {
-    const [devices, interfaces, cables, virtualMachines, vmInterfaces] = await Promise.all([
-      this.fetchDevices(),
-      this.fetchInterfaces(),
-      this.fetchCables(),
-      this.fetchVirtualMachines(),
-      this.fetchVMInterfaces(),
-    ])
+    const [devices, interfaces, cables, circuits, virtualMachines, vmInterfaces] =
+      await Promise.all([
+        this.fetchDevices(),
+        this.fetchInterfaces(),
+        this.fetchCables(),
+        this.fetchCircuits(),
+        this.fetchVirtualMachines(),
+        this.fetchVMInterfaces(),
+      ])
 
-    return { devices, interfaces, cables, virtualMachines, vmInterfaces }
+    return { devices, interfaces, cables, circuits, virtualMachines, vmInterfaces }
   }
 }
