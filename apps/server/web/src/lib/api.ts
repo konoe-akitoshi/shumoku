@@ -329,7 +329,7 @@ export interface PluginInfo {
     }>
   }
   enabled: boolean
-  builtin: boolean
+  bundled: boolean
   error?: string
 }
 

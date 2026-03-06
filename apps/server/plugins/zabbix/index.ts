@@ -5,7 +5,23 @@
  */
 
 import type { NetworkGraph } from '@shumoku/core'
-import type { MetricsData, MetricsMapping, LinkMetricsMapping, ZabbixHost, ZabbixItem } from '../../api/src/types.js'
+import type { MetricsData, MetricsMapping, LinkMetricsMapping } from '../../api/src/types.js'
+
+interface ZabbixHost {
+  hostid: string
+  host: string
+  name: string
+  status: string
+}
+
+interface ZabbixItem {
+  itemid: string
+  hostid: string
+  name: string
+  key_: string
+  lastvalue: string
+  lastclock: string
+}
 import type { PluginRegistryInterface } from '../../api/src/plugins/registry.js'
 import {
   addHttpWarning,

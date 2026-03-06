@@ -285,7 +285,7 @@ export class Server {
     await this.updateAllMetrics()
     this.broadcastMetrics()
 
-    const interval = this.config.zabbix?.pollInterval || 5000
+    const interval = this.config.server.pollInterval || 5000
     let isPolling = false
 
     this.pollInterval = setInterval(async () => {

@@ -12,12 +12,7 @@ export interface ServerConfig {
   port: number
   host: string
   dataDir: string
-}
-
-export interface ZabbixConfig {
-  url: string
-  token: string
-  pollInterval: number
+  pollInterval?: number
 }
 
 export interface TopologyConfig {
@@ -37,7 +32,6 @@ export interface WeathermapConfig {
 
 export interface Config {
   server: ServerConfig
-  zabbix?: ZabbixConfig
   topologies: TopologyConfig[]
   weathermap: WeathermapConfig
 }
@@ -46,7 +40,7 @@ export interface Config {
 // Database Entity Types
 // ============================================
 
-export type DataSourceType = 'zabbix' | 'netbox' | 'prometheus' | 'grafana'
+export type DataSourceType = string
 export type DataSourceStatus = 'connected' | 'disconnected' | 'unknown'
 
 export interface DataSource {
@@ -66,12 +60,6 @@ export interface DataSourceInput {
   name: string
   type: DataSourceType
   configJson: string
-}
-
-// Plugin config types (used inside configJson)
-export interface NetBoxConfig {
-  url: string
-  token: string
 }
 
 export interface Topology {
@@ -234,26 +222,6 @@ export interface TopologyInstance {
   graph: NetworkGraph
   layout: LayoutResult
   metrics: MetricsData
-}
-
-// ============================================
-// Zabbix Types
-// ============================================
-
-export interface ZabbixHost {
-  hostid: string
-  host: string
-  name: string
-  status: string
-}
-
-export interface ZabbixItem {
-  itemid: string
-  hostid: string
-  name: string
-  key_: string
-  lastvalue: string
-  lastclock: string
 }
 
 // ============================================

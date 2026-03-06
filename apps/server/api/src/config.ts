@@ -70,17 +70,8 @@ export function loadConfig(configPath?: string): Config {
   if (process.env.DATA_DIR) {
     config.server.dataDir = process.env.DATA_DIR
   }
-  if (process.env.ZABBIX_URL) {
-    config.zabbix = config.zabbix || { url: '', token: '', pollInterval: 30000 }
-    config.zabbix.url = process.env.ZABBIX_URL
-  }
-  if (process.env.ZABBIX_TOKEN) {
-    config.zabbix = config.zabbix || { url: '', token: '', pollInterval: 30000 }
-    config.zabbix.token = process.env.ZABBIX_TOKEN
-  }
-  if (process.env.ZABBIX_POLL_INTERVAL) {
-    config.zabbix = config.zabbix || { url: '', token: '', pollInterval: 30000 }
-    config.zabbix.pollInterval = Number.parseInt(process.env.ZABBIX_POLL_INTERVAL, 10)
+  if (process.env.POLL_INTERVAL) {
+    config.server.pollInterval = Number.parseInt(process.env.POLL_INTERVAL, 10)
   }
 
   // Handle ${VAR} syntax in config values
