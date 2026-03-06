@@ -8,7 +8,7 @@
  */
 
 export type { LegendSettings } from '@shumoku/core/models'
-export { NetBoxClient, type QueryParams } from './client.js'
+export { NetBoxApiError, NetBoxClient, type QueryParams } from './client.js'
 export type {
   CrossLocationLink,
   HierarchicalConverterOptions,
