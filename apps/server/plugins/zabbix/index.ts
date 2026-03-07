@@ -580,9 +580,9 @@ export class ZabbixPlugin
         lastValue: item.lastvalue,
       }
 
-      if (item.key_.startsWith('net.if.in')) {
+      if (item.key_.includes('InOctets')) {
         inItem = hostItem
-      } else if (item.key_.startsWith('net.if.out')) {
+      } else if (item.key_.includes('OutOctets')) {
         outItem = hostItem
       }
     }
