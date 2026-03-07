@@ -177,7 +177,7 @@ async function loadAlerts() {
           forEachTopology((tid) => emitClearHighlight(tid, id))
           forEachTopology((tid) =>
             emitHighlightNodes(tid, newHosts, {
-              duration: 4000,
+              duration: 15000,
               highlightColor: SEVERITY_HIGHLIGHT_COLORS[highestSeverity],
               sourceWidgetId: id,
             }),
