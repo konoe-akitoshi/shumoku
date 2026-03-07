@@ -159,7 +159,7 @@ async function handleCreate() {
     return
   }
 
-  // Validation for builtin plugins
+  // Validation for bundled plugins
   if (['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)) {
     if (!formName.trim() || !formUrl.trim()) {
       formError = 'Name and URL are required'

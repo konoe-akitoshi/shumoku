@@ -14,13 +14,13 @@ import {
   installPluginFromZip,
   installPluginFromUrl,
   getPluginsDir,
-  isBuiltinPlugin,
+  isBundledPlugin,
 } from '../plugins/loader.js'
 
 export function createPluginsApi(): Hono {
   const app = new Hono()
 
-  // List all plugins (builtin + external)
+  // List all plugins (bundled + external)
   app.get('/', (c) => {
     const plugins = getAllPlugins()
     return c.json(plugins)
@@ -30,8 +30,8 @@ export function createPluginsApi(): Hono {
   app.get('/:id/manifest', async (c) => {
     const id = c.req.param('id')
 
-    if (isBuiltinPlugin(id)) {
-      return c.json({ error: 'Builtin plugins do not have a manifest' }, 400)
+    if (isBundledPlugin(id)) {
+      return c.json({ error: 'Bundled plugins do not have a manifest' }, 400)
     }
 
     const manifest = await getPluginManifest(id)

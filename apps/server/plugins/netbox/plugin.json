@@ -1,0 +1,17 @@
+{
+  "id": "netbox",
+  "name": "NetBox",
+  "version": "0.1.0",
+  "description": "NetBox DCIM/IPAM integration for topology and hosts",
+  "capabilities": ["topology", "hosts"],
+  "entry": "index.js",
+  "configSchema": {
+    "type": "object",
+    "required": ["url", "token"],
+    "properties": {
+      "url": { "type": "string", "title": "NetBox URL" },
+      "token": { "type": "string", "title": "API Token", "format": "password" },
+      "insecure": { "type": "boolean", "title": "Skip TLS verification" }
+    }
+  }
+}

@@ -13,7 +13,6 @@ COPY assets/ ./assets/
 COPY packages/@shumoku/core/ ./packages/@shumoku/core/
 COPY packages/@shumoku/parser-yaml/ ./packages/@shumoku/parser-yaml/
 COPY packages/@shumoku/renderer/ ./packages/@shumoku/renderer/
-COPY packages/@shumoku/netbox/ ./packages/@shumoku/netbox/
 COPY apps/server/ ./apps/server/
 
 # Resolve symlinks in static/ (Docker COPY may not follow cross-directory symlinks)
@@ -24,8 +23,14 @@ RUN cd apps/server/web/static && \
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install
 
-# Build all packages (turborepo handles dependency order)
-RUN bun run build
+# Build library packages (turborepo handles dependency order)
+RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/parser-yaml --filter=@shumoku/renderer
+
+# Create workspace symlinks for server packages (bun may skip these when some workspace dirs are missing)
+RUN mkdir -p /app/apps/server/node_modules/@shumoku && \
+    ln -s /app/packages/@shumoku/core /app/apps/server/node_modules/@shumoku/core && \
+    ln -s /app/packages/@shumoku/parser-yaml /app/apps/server/node_modules/@shumoku/parser-yaml && \
+    ln -s /app/packages/@shumoku/renderer /app/apps/server/node_modules/@shumoku/renderer
 
 # Build API server (tsc)
 WORKDIR /app/apps/server/api

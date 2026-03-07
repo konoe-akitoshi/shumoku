@@ -2,11 +2,11 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "..",
     "composite": true,
     "skipLibCheck": true,
     "types": ["bun"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../plugins/**/*"],
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"]
 }

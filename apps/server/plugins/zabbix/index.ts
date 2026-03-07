@@ -1,11 +1,28 @@
 /**
- * Zabbix Data Source Plugin
+ * Zabbix Bundled Plugin
  *
- * Provides metrics, hosts, and auto-mapping capabilities.
+ * Zabbix monitoring integration for metrics, hosts, auto-mapping, and alerts.
  */
 
 import type { NetworkGraph } from '@shumoku/core'
-import type { MetricsData, MetricsMapping, LinkMetricsMapping, ZabbixHost, ZabbixItem } from '../types.js'
+import type { MetricsData, MetricsMapping, LinkMetricsMapping } from '../../api/src/types.js'
+
+interface ZabbixHost {
+  hostid: string
+  host: string
+  name: string
+  status: string
+}
+
+interface ZabbixItem {
+  itemid: string
+  hostid: string
+  name: string
+  key_: string
+  lastvalue: string
+  lastclock: string
+}
+import type { PluginRegistryInterface } from '../../api/src/plugins/registry.js'
 import {
   addHttpWarning,
   type DataSourcePlugin,
@@ -19,11 +36,16 @@ import {
   type HostItem,
   type DiscoveredMetric,
   type MappingHint,
-  type ZabbixPluginConfig,
   type Alert,
   type AlertQueryOptions,
   type AlertSeverity,
-} from './types.js'
+} from '../../api/src/plugins/types.js'
+
+interface ZabbixPluginConfig {
+  url: string
+  token: string
+  pollInterval?: number
+}
 
 /** Zabbix-specific link mapping with item IDs for direct item reference */
 interface ZabbixLinkMapping extends LinkMetricsMapping {
@@ -518,26 +540,19 @@ export class ZabbixPlugin
 
   /**
    * Extract interface name from Zabbix item name.
-   * Handles patterns like:
-   *   "Interface GigabitEthernet0/0(Uplink): Bits received" → "GigabitEthernet0/0"
-   *   "Interface eth0: Incoming network traffic" → "eth0"
    */
   private static extractInterfaceName(itemName: string): string {
-    // "Interface {name}({alias}): ..." or "Interface {name}: ..."
     const match = itemName.match(/^Interface\s+(.+?)(?:\(.*?\))?:\s/)
     return match ? match[1].trim() : itemName
   }
 
   /**
    * Get interface traffic items for a host.
-   * Searches by both key pattern and item name to support
-   * agent-based (net.if.in[eth0]) and SNMP-based (net.if.in[ifHCInOctets.N]) items.
    */
   async getInterfaceItems(
     hostId: string,
     interfaceName?: string,
   ): Promise<{ in: HostItem | null; out: HostItem | null }> {
-    // Fetch all net.if.in / net.if.out items for this host
     const items = await this.apiRequest<ZabbixItem[]>('item.get', {
       output: ['itemid', 'hostid', 'name', 'key_', 'lastvalue'],
       hostids: [hostId],
@@ -550,7 +565,6 @@ export class ZabbixPlugin
     let outItem: HostItem | null = null
 
     for (const item of items) {
-      // Match by interface name extracted from item name (works for both agent and SNMP)
       if (interfaceName) {
         const extractedName = ZabbixPlugin.extractInterfaceName(item.name)
         if (extractedName !== interfaceName) {
@@ -566,13 +580,26 @@ export class ZabbixPlugin
         lastValue: item.lastvalue,
       }
 
-      if (item.key_.startsWith('net.if.in')) {
+      if (item.key_.includes('InOctets')) {
         inItem = hostItem
-      } else if (item.key_.startsWith('net.if.out')) {
+      } else if (item.key_.includes('OutOctets')) {
         outItem = hostItem
       }
     }
 
     return { in: inItem, out: outItem }
   }
+}
+
+export function register(registry: PluginRegistryInterface): void {
+  registry.register(
+    'zabbix',
+    'Zabbix',
+    ['metrics', 'hosts', 'auto-mapping', 'alerts'],
+    (config) => {
+      const plugin = new ZabbixPlugin()
+      plugin.initialize(config)
+      return plugin
+    },
+  )
 }

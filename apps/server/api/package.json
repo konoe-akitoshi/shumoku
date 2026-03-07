@@ -4,17 +4,16 @@
   "private": true,
   "description": "Shumoku API server",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/api/src/index.js",
   "scripts": {
-    "build": "tsc && bun -e \"import{cpSync}from'fs';cpSync('src/db/migrations','dist/db/migrations',{recursive:true})\"",
+    "build": "tsc && bun -e \"import{cpSync}from'fs';cpSync('src/db/migrations','dist/api/src/db/migrations',{recursive:true})\"",
     "dev": "NODE_ENV=development bun --watch src/index.ts",
-    "start": "bun dist/index.js",
+    "start": "bun dist/api/src/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "biome check ."
   },
   "dependencies": {
     "@shumoku/core": "workspace:*",
-    "@shumoku/netbox": "workspace:*",
     "@shumoku/parser-yaml": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "adm-zip": "^0.5.16",

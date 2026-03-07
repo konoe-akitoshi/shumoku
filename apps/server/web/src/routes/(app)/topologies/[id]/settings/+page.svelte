@@ -1,4 +1,5 @@
 <script lang="ts">
+import { findBestInterfaceMatch } from '@shumoku/core'
 import { onMount } from 'svelte'
 import { page } from '$app/stores'
 import { goto } from '$app/navigation'
@@ -90,7 +91,8 @@ let hasMergeChanges = $state(false)
 let parsedTopology = $state<ParsedTopologyResponse | null>(null)
 let savingMapping = $state(false)
 let nodeSearchQuery = $state('')
-let autoMapResult = $state<{ matched: number; total: number } | null>(null)
+let autoMapResult = $state<{ matched: number; total: number; kind: 'nodes' | 'links' } | null>(null)
+let singleCandidateFallback = $state(true)
 
 interface EdgeData {
   id: string
@@ -580,7 +582,7 @@ function handleNodeMappingChange(nodeId: string, hostId: string) {
 
 function handleAutoMap() {
   if (!parsedTopology) return
-  autoMapResult = mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false })
+  autoMapResult = { ...mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false }), kind: 'nodes' }
   setTimeout(() => { autoMapResult = null }, 5000)
 }
 
@@ -679,20 +681,7 @@ function handleAutoMapLinks() {
 }
 
 function findMatchingInterface(portName: string, interfaces: Array<{ name: string }>): string | null {
-  const normalized = portName.toLowerCase().replace(/[:\s]/g, '')
-  for (const iface of interfaces) {
-    if (iface.name.toLowerCase() === portName.toLowerCase()) return iface.name
-  }
-  for (const iface of interfaces) {
-    const ifNorm = iface.name.toLowerCase().replace(/[:\s]/g, '')
-    if (ifNorm.includes(normalized) || normalized.includes(ifNorm)) return iface.name
-  }
-  const basePort = normalized.split('.')[0]
-  for (const iface of interfaces) {
-    const baseIf = iface.name.toLowerCase().split('.')[0]
-    if (baseIf === basePort) return iface.name
-  }
-  return null
+  return findBestInterfaceMatch(portName, interfaces.map((i) => i.name), { singleCandidateFallback })
 }
 </script>
 
@@ -1314,7 +1303,7 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
           {#if autoMapResult}
             <div class="p-3 bg-success/10 border border-success/20 rounded-lg text-success text-sm flex items-center gap-2">
               <CheckCircle size={16} />
-              Auto-mapped {autoMapResult.matched} of {autoMapResult.total} nodes
+              Auto-mapped {autoMapResult.matched} of {autoMapResult.total} {autoMapResult.kind}
             </div>
           {/if}
 
@@ -1383,16 +1372,22 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
             <div class="card-header">
               <div class="flex items-center justify-between gap-4">
                 <h2 class="font-medium text-theme-text-emphasis">Link Mapping</h2>
-                <Button variant="outline" size="sm" onclick={() => {
-                  const matched = handleAutoMapLinks()
-                  if (matched > 0) {
-                    autoMapResult = { matched, total: edges.length }
-                    setTimeout(() => { autoMapResult = null }, 5000)
-                  }
-                }}>
-                  <Lightning size={14} class="mr-1" />
-                  Auto-map
-                </Button>
+                <div class="flex items-center gap-3">
+                  <label class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
+                    <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded" />
+                    Single candidate fallback
+                  </label>
+                  <Button variant="outline" size="sm" onclick={() => {
+                    const matched = handleAutoMapLinks()
+                    if (matched > 0) {
+                      autoMapResult = { matched, total: edges.length, kind: 'links' }
+                      setTimeout(() => { autoMapResult = null }, 5000)
+                    }
+                  }}>
+                    <Lightning size={14} class="mr-1" />
+                    Auto-map
+                  </Button>
+                </div>
               </div>
             </div>
             <div class="divide-y divide-theme-border max-h-96 overflow-y-auto">

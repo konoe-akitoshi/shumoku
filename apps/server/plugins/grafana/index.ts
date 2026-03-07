@@ -1,18 +1,17 @@
 /**
- * Grafana Data Source Plugin
+ * Grafana Bundled Plugin
  *
- * Provides alerts capability via Grafana webhook (Contact Point).
- * Alerts are stored in SQLite when received via webhook.
- * Falls back to Alertmanager API polling when no webhook alerts exist in DB.
+ * Grafana integration for alerts via Alertmanager API or webhook.
  */
 
+import type { PluginRegistryInterface } from '../../api/src/plugins/registry.js'
 import {
   GrafanaAlertService,
   mapSeverity,
   buildTitle,
   filterLabels,
   SEVERITY_ORDER,
-} from '../services/grafana-alerts.js'
+} from '../../api/src/services/grafana-alerts.js'
 import {
   addHttpWarning,
   type Alert,
@@ -21,8 +20,14 @@ import {
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
-  type GrafanaPluginConfig,
-} from './types.js'
+} from '../../api/src/plugins/types.js'
+
+interface GrafanaPluginConfig {
+  url: string
+  token: string
+  useWebhook?: boolean
+  webhookSecret?: string
+}
 
 export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
   readonly type = 'grafana'
@@ -76,24 +81,14 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
     }
   }
 
-  // ============================================
-  // AlertsCapable Implementation
-  // ============================================
-
   async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
     if (this.config?.useWebhook && this.dataSourceId) {
-      // Webhook mode: read from DB
       const service = new GrafanaAlertService()
       return service.getAlerts(this.dataSourceId, options)
     }
 
-    // Default: poll Alertmanager API directly
     return this.fetchAlertsFromApi(options)
   }
-
-  // ============================================
-  // Alertmanager API Fallback
-  // ============================================
 
   private async fetchAlertsFromApi(options?: AlertQueryOptions): Promise<Alert[]> {
     if (!this.config) {
@@ -158,10 +153,6 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
     }
   }
 
-  // ============================================
-  // Internal Methods
-  // ============================================
-
   private async fetch(path: string): Promise<Response> {
     if (!this.config) {
       throw new Error('Plugin not initialized')
@@ -175,5 +166,12 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
       signal: AbortSignal.timeout(5000),
     })
   }
+}
 
+export function register(registry: PluginRegistryInterface): void {
+  registry.register('grafana', 'Grafana', ['alerts'], (config) => {
+    const plugin = new GrafanaPlugin()
+    plugin.initialize(config)
+    return plugin
+  })
 }

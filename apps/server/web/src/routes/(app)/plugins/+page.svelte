@@ -38,8 +38,8 @@ let deleteFiles = $state(false)
 let deleting = $state(false)
 
 // Derived
-let builtinPlugins = $derived(plugins.filter((p) => p.builtin))
-let externalPlugins = $derived(plugins.filter((p) => !p.builtin))
+let bundledPlugins = $derived(plugins.filter((p) => p.bundled))
+let externalPlugins = $derived(plugins.filter((p) => !p.bundled))
 
 onMount(async () => {
   await loadPlugins()
@@ -215,11 +215,11 @@ function getCapabilityLabel(cap: string): string {
       <Button variant="outline" class="mt-4" onclick={loadPlugins}>Retry</Button>
     </div>
   {:else}
-    <!-- Built-in Plugins -->
+    <!-- Bundled Plugins -->
     <div class="mb-8">
-      <h2 class="text-lg font-semibold text-theme-text-emphasis mb-4">Built-in Plugins</h2>
+      <h2 class="text-lg font-semibold text-theme-text-emphasis mb-4">Bundled Plugins</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {#each builtinPlugins as plugin}
+        {#each bundledPlugins as plugin}
           <div class="card p-4">
             <div class="flex items-start gap-3">
               <div class="p-2 rounded-lg bg-primary/10">
