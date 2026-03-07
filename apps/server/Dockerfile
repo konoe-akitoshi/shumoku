@@ -23,8 +23,8 @@ RUN cd apps/server/web/static && \
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install
 
-# Build all packages (turborepo handles dependency order)
-RUN bun run build
+# Build library packages (turborepo handles dependency order)
+RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/parser-yaml --filter=@shumoku/renderer
 
 # Build API server (tsc)
 WORKDIR /app/apps/server/api
