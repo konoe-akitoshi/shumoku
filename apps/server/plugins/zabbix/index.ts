@@ -369,20 +369,22 @@ export class ZabbixPlugin
 
     const timeFrom = Math.floor((Date.now() - (options?.timeRange || 3600) * 1000) / 1000)
 
-    interface ZabbixProblem {
+    interface ZabbixEvent {
       eventid: string
       objectid: string
       name: string
       severity: string
       clock: string
-      r_clock: string
+      value: string // '1' = problem, '0' = resolved
       hosts?: Array<{ hostid: string; host: string; name: string }>
     }
 
+    // Use event.get instead of problem.get (Zabbix 7.0 removed selectHosts from problem.get)
     const params: Record<string, unknown> = {
-      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'r_clock'],
+      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'value'],
       selectHosts: ['hostid', 'host', 'name'],
-      recent: true,
+      source: 0, // triggers
+      object: 0, // triggers
       time_from: timeFrom,
       sortfield: ['clock'],
       sortorder: 'DESC',
@@ -398,29 +400,26 @@ export class ZabbixPlugin
       params.hostids = options.hostIds
     }
 
-    const problems = await this.apiRequest<ZabbixProblem[]>('problem.get', params)
-
-    const alerts: Alert[] = problems.map((p) => ({
-      id: p.eventid,
-      severity: this.mapZabbixSeverity(p.severity),
-      title: p.name,
-      host: p.hosts?.[0]?.host,
-      hostId: p.hosts?.[0]?.hostid,
-      startTime: Number.parseInt(p.clock) * 1000,
-      endTime: p.r_clock && p.r_clock !== '0' ? Number.parseInt(p.r_clock) * 1000 : undefined,
-      status: p.r_clock && p.r_clock !== '0' ? 'resolved' : 'active',
-      source: 'zabbix' as const,
-      url: this.config
-        ? `${this.config.url.replace(/\/$/, '')}/tr_events.php?triggerid=${p.objectid}&eventid=${p.eventid}`
-        : undefined,
-    }))
-
-    // Filter active only if requested
+    // Filter active problems only
     if (options?.activeOnly) {
-      return alerts.filter((a) => a.status === 'active')
+      params.value = 1
     }
 
-    return alerts
+    const events = await this.apiRequest<ZabbixEvent[]>('event.get', params)
+
+    return events.map((e) => ({
+      id: e.eventid,
+      severity: this.mapZabbixSeverity(e.severity),
+      title: e.name,
+      host: e.hosts?.[0]?.host,
+      hostId: e.hosts?.[0]?.hostid,
+      startTime: Number.parseInt(e.clock) * 1000,
+      status: e.value === '1' ? ('active' as const) : ('resolved' as const),
+      source: 'zabbix' as const,
+      url: this.config
+        ? `${this.config.url.replace(/\/$/, '')}/tr_events.php?triggerid=${e.objectid}&eventid=${e.eventid}`
+        : undefined,
+    }))
   }
 
   private mapZabbixSeverity(severity: string): AlertSeverity {
