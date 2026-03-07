@@ -270,23 +270,24 @@ export class WeathermapController {
         ? navigator.hardwareConcurrency || 4
         : 4
 
-    if (prefersReducedMotion || deviceMemory <= 2 || hardwareConcurrency <= 4) {
+    // TODO: Replace hardware-based detection with edge-count or FPS-based approach
+    // if (prefersReducedMotion || deviceMemory <= 2 || hardwareConcurrency <= 4) {
+    //   return {
+    //     quality: 'low',
+    //     sampleInterval: 10,
+    //     minSamples: 14,
+    //     batchSize: 2,
+    //     animationsEnabled: false,
+    //   }
+    // }
+
+    if (prefersReducedMotion) {
       return {
         quality: 'low',
         sampleInterval: 10,
         minSamples: 14,
         batchSize: 2,
         animationsEnabled: false,
-      }
-    }
-
-    if (deviceMemory <= 4 || hardwareConcurrency <= 6) {
-      return {
-        quality: 'medium',
-        sampleInterval: 6,
-        minSamples: 22,
-        batchSize: 4,
-        animationsEnabled: true,
       }
     }
 
