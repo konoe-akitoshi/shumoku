@@ -22,6 +22,8 @@ export * from './merge.js'
 export * from './models/index.js'
 // Plugin types
 export * from './plugin-types.js'
+// Auto-mapping
+export * from './auto-mapping.js'
 // Themes
 export * from './themes/index.js'
 
