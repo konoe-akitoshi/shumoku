@@ -5,28 +5,12 @@
  * Plugins are registered at startup and can be instantiated on demand.
  */
 
-import type { DataSourcePlugin, DataSourceCapability } from './types.js'
-
-/** Factory function to create plugin instances */
-export type PluginFactory = (config: unknown) => DataSourcePlugin
-
-/** Plugin registration info */
-export interface PluginRegistration {
-  type: string
-  displayName: string
-  capabilities: readonly DataSourceCapability[]
-  factory: PluginFactory
-}
-
-/** Registry interface for external plugins */
-export interface PluginRegistryInterface {
-  register(
-    type: string,
-    displayName: string,
-    capabilities: readonly DataSourceCapability[],
-    factory: PluginFactory,
-  ): void
-}
+import type {
+  DataSourcePlugin,
+  DataSourceCapability,
+  PluginFactory,
+  PluginRegistration,
+} from '@shumoku/core'
 
 class PluginRegistry {
   private plugins = new Map<string, PluginRegistration>()

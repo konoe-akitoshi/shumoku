@@ -2,7 +2,15 @@
  * Type definitions for the Shumoku real-time server
  */
 
-import type { LayoutResult, NetworkGraph } from '@shumoku/core'
+import type { LayoutResult, MetricsData, NetworkGraph } from '@shumoku/core'
+export type {
+  NodeMetrics,
+  LinkMetrics,
+  MetricsData,
+  NodeMetricsMapping,
+  LinkMetricsMapping,
+  MetricsMapping,
+} from '@shumoku/core'
 
 // ============================================
 // Configuration Types
@@ -157,33 +165,6 @@ export interface DashboardInput {
 }
 
 // ============================================
-// Metrics Types
-// ============================================
-
-export interface NodeMetrics {
-  status: 'up' | 'down' | 'unknown'
-  cpu?: number
-  memory?: number
-  lastSeen?: number
-}
-
-export interface LinkMetrics {
-  status: 'up' | 'down' | 'unknown'
-  utilization?: number // Legacy: max of in/out for backward compatibility
-  inUtilization?: number // Incoming direction utilization (0-100)
-  outUtilization?: number // Outgoing direction utilization (0-100)
-  inBps?: number
-  outBps?: number
-}
-
-export interface MetricsData {
-  nodes: Record<string, NodeMetrics>
-  links: Record<string, LinkMetrics>
-  timestamp: number
-  warnings?: string[]
-}
-
-// ============================================
 // WebSocket Message Types
 // ============================================
 
@@ -222,26 +203,6 @@ export interface TopologyInstance {
   graph: NetworkGraph
   layout: LayoutResult
   metrics: MetricsData
-}
-
-// ============================================
-// Metrics Mapping Types
-// ============================================
-
-export interface NodeMetricsMapping {
-  hostId?: string
-  hostName?: string
-}
-
-export interface LinkMetricsMapping {
-  monitoredNodeId?: string
-  interface?: string
-  capacity?: number
-}
-
-export interface MetricsMapping {
-  nodes: Record<string, NodeMetricsMapping>
-  links: Record<string, LinkMetricsMapping>
 }
 
 // ============================================
