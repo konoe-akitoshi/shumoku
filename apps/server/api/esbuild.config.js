@@ -13,12 +13,19 @@ await esbuild.build({
   outfile: 'dist/bundle.js',
   external: ['bun:sqlite', 'bun'],
   loader: { '.sql': 'text' },
-  // Use browser entry point for renderer (avoids resvg native module)
+  // Use browser entry point for renderer-svg (avoids resvg native module)
   alias: {
-    '@shumoku/renderer': path.resolve(__dirname, '../../../packages/@shumoku/renderer/dist/index.js'),
-    '@shumoku/renderer/iife-string': path.resolve(
+    '@shumoku/renderer-svg': path.resolve(
       __dirname,
-      '../../../packages/@shumoku/renderer/dist/iife-string.js',
+      '../../../libs/@shumoku/renderer-svg/dist/index.js',
+    ),
+    '@shumoku/renderer-html': path.resolve(
+      __dirname,
+      '../../../libs/@shumoku/renderer-html/dist/index.js',
+    ),
+    '@shumoku/renderer-html/iife-string': path.resolve(
+      __dirname,
+      '../../../libs/@shumoku/renderer-html/dist/iife-string.js',
     ),
   },
 })
