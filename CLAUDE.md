@@ -25,22 +25,32 @@ bun run test          # Run tests across packages
 cd apps/docs && bun run dev
 
 # Run tests for core package only
-cd packages/@shumoku/core && bun run test
+cd libs/@shumoku/core && bun run test
 
 # Watch mode for core development
-cd packages/@shumoku/core && bun run dev
+cd libs/@shumoku/core && bun run dev
 ```
 
 ## Architecture
 
 ### Monorepo Structure
-- `packages/@shumoku/core` - Core library (models, layout engines, themes, fixtures)
-- `packages/@shumoku/parser-yaml` - YAML parser for network definitions
-- `packages/@shumoku/renderer` - SVG/HTML renderers with interactive features
-- `packages/@shumoku/icons` - Vendor icon sets (AWS, Juniper, Yamaha, Aruba)
-- `packages/@shumoku/netbox` - NetBox API integration and CLI
-- `packages/shumoku` - Main wrapper package (re-exports all packages)
-- `apps/docs` - Documentation site with playground (Next.js)
+```
+libs/
+  @shumoku/core              ← models, layout, themes, parser, plugin-types, fixtures, icons
+  @shumoku/renderer-svg      ← SVG renderer, pipeline, CDN icons, PNG
+  @shumoku/renderer-html     ← HTML renderer (depends on renderer-svg)
+  shumoku                    ← Main wrapper (re-exports core + renderer-svg + renderer-html)
+  plugins/
+    grafana/                 ← Grafana plugin (alerts)
+    netbox/                  ← NetBox plugin (topology, hosts)
+    prometheus/              ← Prometheus plugin (metrics, hosts, alerts)
+    zabbix/                  ← Zabbix plugin (metrics, hosts, auto-mapping, alerts)
+
+apps/
+  cli/     ← CLI tool (shumoku render)
+  docs/    ← Documentation site with playground (Next.js)
+  server/  ← Real-time visualization server
+```
 
 ### Core Library (`@shumoku/core`)
 
@@ -50,53 +60,48 @@ cd packages/@shumoku/core && bun run dev
 - `Subgraph` - Logical groupings with nested structure
 - `NetworkGraph` - Root container for the entire network definition
 
+**Parser** (`src/parser/`): YAML parser for network definitions
+- `YamlParser` - Single-file YAML parser
+- `HierarchicalParser` - Multi-file parser with `file:` references
+- Device:port notation, type aliases, bandwidth normalization
+
 **Layout Engines** (`src/layout/`): Automatic positioning algorithms
-- `HierarchicalLayout` - Dagre-based hierarchical layout
+- `HierarchicalLayout` - ELK-based hierarchical layout
 - Produces `LayoutResult` with positioned nodes, links, subgraphs
 
+**Plugin Types** (`src/plugin-types.ts`): All capability interfaces
+- `DataSourcePlugin`, `TopologyCapable`, `HostsCapable`
+- `MetricsCapable`, `AlertsCapable`, `AutoMappingCapable`
+- `MetricsData`, `MetricsMapping`, `Alert`, `AlertSeverity`
+
 **Themes** (`src/themes/`): Visual styling
-- `modernTheme`, `darkTheme` presets
+- `lightTheme`, `darkTheme` presets
 - `createTheme()`, `mergeTheme()` utilities
 
-**Fixtures** (`src/fixtures/`): Sample data for testing
-- `sampleNetwork` - Multi-file hierarchical network example
-
-### YAML Parser (`@shumoku/parser-yaml`)
-
-Converts YAML network definitions to `NetworkGraph`. Supports:
-- Nested or flat structure
-- Multi-file hierarchical parsing with `file:` references
-- Device:port notation: `"router1:eth0"`
-- Type aliases: `switch` -> `l2-switch`, `fw` -> `firewall`
-
-### Renderer (`@shumoku/renderer`)
+### Renderer SVG (`@shumoku/renderer-svg`)
 
 **Pipeline API** (`src/pipeline.ts`): Unified render pipeline
 - `prepareRender()` - Resolve icon dimensions and compute layout
 - `renderSvg()` - Render to SVG from prepared data
-- `renderHtml()` - Render to interactive HTML
 - `renderPng()` - Render to PNG (Node.js only, requires @resvg/resvg-js)
-
-**Convenience functions**: One-liner API
-- `renderGraphToSvg()` - Direct graph to SVG
-- `renderGraphToHtml()` - Direct graph to HTML
-- `renderGraphToPng()` - Direct graph to PNG
+- `renderEmbeddable()` - Render for embedding in web apps
 
 **CDN Icons** (`src/cdn-icons.ts`): Icon dimension resolution
-- Fetches icon dimensions from `https://icons.shumoku.packof.me`
-- Supports proper aspect ratio rendering for vendor icons
-- Browser fallback uses Image.onload for CORS-blocked requests
 
-**Low-level renderers**:
-- `svg.render()` - Pure SVG output
-- `html.render()` - Interactive HTML with pan/zoom, tooltips
-- `html.renderHierarchical()` - Multi-sheet navigation for hierarchical networks
+### Renderer HTML (`@shumoku/renderer-html`)
 
-### NetBox (`@shumoku/netbox`)
+- `render()` - Interactive HTML with pan/zoom, tooltips
+- `renderHierarchical()` - Multi-sheet navigation
+- `renderHtml()`, `renderHtmlHierarchical()` - Pipeline convenience wrappers
+- IIFE bundle for interactive features
 
-- CLI tool: `npx @shumoku/netbox`
-- Converts NetBox API data to NetworkGraph
-- Supports grouping by tag, site, location, or prefix
+### Plugins (`libs/plugins/`)
+
+Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on core.
+- **grafana**: Alerts via Alertmanager API or webhook
+- **netbox**: Topology and hosts from NetBox DCIM/IPAM
+- **prometheus**: Metrics, hosts, alerts from Prometheus/Alertmanager
+- **zabbix**: Metrics, hosts, auto-mapping, alerts from Zabbix
 
 ### Data Flow
 ```
@@ -135,15 +140,16 @@ const graph: NetworkGraph = {
 }
 
 // Recommended: Use pipeline API (handles icon dimensions automatically)
-import { prepareRender, renderSvg, renderHtml, renderPng } from '@shumoku/renderer'
+import { prepareRender, renderSvg } from '@shumoku/renderer-svg'
+import { renderHtml } from '@shumoku/renderer-html'
 
 const prepared = await prepareRender(graph)
 const svgOutput = await renderSvg(prepared)
 const htmlOutput = renderHtml(prepared)
-const pngBuffer = await renderPng(prepared)  // Node.js only
 
 // Or use convenience functions
-import { renderGraphToSvg, renderGraphToHtml } from '@shumoku/renderer'
+import { renderGraphToSvg } from '@shumoku/renderer-svg'
+import { renderGraphToHtml } from '@shumoku/renderer-html'
 
 const svg = await renderGraphToSvg(graph)
 const html = await renderGraphToHtml(graph)

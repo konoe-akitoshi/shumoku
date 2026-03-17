@@ -14,8 +14,9 @@ apps/server/web/build/
 .idea/
 
 # Packages not needed for server
-packages/shumoku/
+libs/shumoku/
 apps/docs/
+apps/cli/
 
 # Misc
 **/*.log

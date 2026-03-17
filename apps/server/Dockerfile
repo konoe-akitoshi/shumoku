@@ -10,9 +10,10 @@ WORKDIR /app
 # Copy monorepo config and required packages
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
 COPY assets/ ./assets/
-COPY packages/@shumoku/core/ ./packages/@shumoku/core/
-COPY packages/@shumoku/parser-yaml/ ./packages/@shumoku/parser-yaml/
-COPY packages/@shumoku/renderer/ ./packages/@shumoku/renderer/
+COPY libs/@shumoku/core/ ./libs/@shumoku/core/
+COPY libs/@shumoku/renderer-svg/ ./libs/@shumoku/renderer-svg/
+COPY libs/@shumoku/renderer-html/ ./libs/@shumoku/renderer-html/
+COPY libs/plugins/ ./libs/plugins/
 COPY apps/server/ ./apps/server/
 
 # Resolve symlinks in static/ (Docker COPY may not follow cross-directory symlinks)
@@ -24,13 +25,13 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install
 
 # Build library packages (turborepo handles dependency order)
-RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/parser-yaml --filter=@shumoku/renderer
+RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter='./libs/plugins/**'
 
 # Create workspace symlinks for server packages (bun may skip these when some workspace dirs are missing)
 RUN mkdir -p /app/apps/server/node_modules/@shumoku && \
-    ln -s /app/packages/@shumoku/core /app/apps/server/node_modules/@shumoku/core && \
-    ln -s /app/packages/@shumoku/parser-yaml /app/apps/server/node_modules/@shumoku/parser-yaml && \
-    ln -s /app/packages/@shumoku/renderer /app/apps/server/node_modules/@shumoku/renderer
+    ln -s /app/libs/@shumoku/core /app/apps/server/node_modules/@shumoku/core && \
+    ln -s /app/libs/@shumoku/renderer-svg /app/apps/server/node_modules/@shumoku/renderer-svg && \
+    ln -s /app/libs/@shumoku/renderer-html /app/apps/server/node_modules/@shumoku/renderer-html
 
 # Build API server (tsc)
 WORKDIR /app/apps/server/api
