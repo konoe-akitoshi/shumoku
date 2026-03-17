@@ -45,24 +45,6 @@ interface ExportPoint {
 }
 
 // ============================================
-// Type Guards
-// ============================================
-
-/**
- * Check if a node is a virtual export connector
- */
-export function isExportNode(nodeId: string): boolean {
-  return nodeId.startsWith(EXPORT_NODE_PREFIX)
-}
-
-/**
- * Check if a link is a virtual export connector link
- */
-export function isExportLink(linkId: string): boolean {
-  return linkId.startsWith(EXPORT_LINK_PREFIX)
-}
-
-// ============================================
 // Main Function
 // ============================================
 

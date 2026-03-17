@@ -7,7 +7,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
-    "directory": "packages/shumoku"
+    "directory": "libs/shumoku"
   },
   "homepage": "https://shumoku.packof.me/",
   "bugs": {
@@ -56,8 +56,8 @@
   },
   "dependencies": {
     "@shumoku/core": "^0.2.13",
-    "@shumoku/parser-yaml": "^0.2.13",
-    "@shumoku/renderer": "^0.2.3"
+    "@shumoku/renderer-svg": "^0.2.25",
+    "@shumoku/renderer-html": "^0.2.25"
   },
   "publishConfig": {
     "access": "public"

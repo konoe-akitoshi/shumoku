@@ -15,7 +15,8 @@
   "license": "AGPL-3.0-only",
   "packageManager": "bun@1.3.4",
   "workspaces": [
-    "packages/**",
+    "libs/**",
+    "libs/plugins/*",
     "apps/*",
     "apps/server/api",
     "apps/server/web"
@@ -31,7 +32,7 @@
     "typecheck": "turbo run typecheck",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo run build --filter='./packages/**' && changeset publish"
+    "release": "turbo run build --filter='./libs/**' && changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
