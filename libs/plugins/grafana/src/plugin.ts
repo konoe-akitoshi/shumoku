@@ -1,33 +1,76 @@
 /**
- * Grafana Bundled Plugin
+ * Grafana Data Source Plugin
  *
- * Grafana integration for alerts via Alertmanager API or webhook.
+ * Provides alerts capability via Grafana webhook or Alertmanager API.
+ * Alert storage is injected via setAlertStore() for server environments.
  */
 
-import type { PluginRegistryInterface } from '../../api/src/plugins/registry.js'
-import {
-  GrafanaAlertService,
-  mapSeverity,
-  buildTitle,
-  filterLabels,
-  SEVERITY_ORDER,
-} from '../../api/src/services/grafana-alerts.js'
 import {
   addHttpWarning,
   type Alert,
   type AlertQueryOptions,
+  type AlertSeverity,
   type AlertsCapable,
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
-} from '../../api/src/plugins/types.js'
+} from '@shumoku/core'
+import type { AlertStoreService, GrafanaPluginConfig } from './types.js'
 
-interface GrafanaPluginConfig {
-  url: string
-  token: string
-  useWebhook?: boolean
-  webhookSecret?: string
+// ============================================
+// Helper Functions
+// ============================================
+
+const SEVERITY_MAP: Record<string, AlertSeverity> = {
+  critical: 'disaster',
+  disaster: 'disaster',
+  high: 'high',
+  major: 'high',
+  error: 'high',
+  average: 'average',
+  medium: 'average',
+  warning: 'warning',
+  warn: 'warning',
+  minor: 'warning',
+  low: 'information',
+  info: 'information',
+  information: 'information',
+  none: 'ok',
+  ok: 'ok',
 }
+
+export const SEVERITY_ORDER: Record<AlertSeverity, number> = {
+  ok: 0,
+  information: 1,
+  warning: 2,
+  average: 3,
+  high: 4,
+  disaster: 5,
+}
+
+export function mapSeverity(severity?: string): AlertSeverity {
+  if (!severity) return 'information'
+  return SEVERITY_MAP[severity.toLowerCase()] || 'information'
+}
+
+export function buildTitle(labels: Record<string, string>): string {
+  const name = labels.alertname || 'Unknown Alert'
+  const host = labels.hostname || labels.instance || labels.host
+  return host ? `${name} - ${host}` : name
+}
+
+export function filterLabels(labels: Record<string, string>): Record<string, string> {
+  const filtered: Record<string, string> = {}
+  for (const [key, value] of Object.entries(labels)) {
+    if (key.startsWith('__')) continue
+    filtered[key] = value
+  }
+  return filtered
+}
+
+// ============================================
+// Plugin Class
+// ============================================
 
 export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
   readonly type = 'grafana'
@@ -36,6 +79,7 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
 
   private config: GrafanaPluginConfig | null = null
   private dataSourceId: string | null = null
+  private alertStore: AlertStoreService | null = null
 
   initialize(config: unknown): void {
     this.config = config as GrafanaPluginConfig
@@ -48,9 +92,17 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
     this.dataSourceId = id
   }
 
+  /**
+   * Set the alert store service (DI for server environments)
+   */
+  setAlertStore(store: AlertStoreService): void {
+    this.alertStore = store
+  }
+
   dispose(): void {
     this.config = null
     this.dataSourceId = null
+    this.alertStore = null
   }
 
   async testConnection(): Promise<ConnectionResult> {
@@ -81,14 +133,23 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
     }
   }
 
+  // ============================================
+  // AlertsCapable Implementation
+  // ============================================
+
   async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
-    if (this.config?.useWebhook && this.dataSourceId) {
-      const service = new GrafanaAlertService()
-      return service.getAlerts(this.dataSourceId, options)
+    if (this.config?.useWebhook && this.dataSourceId && this.alertStore) {
+      // Webhook mode: read from injected alert store
+      return this.alertStore.getAlerts(this.dataSourceId, options)
     }
 
+    // Default: poll Alertmanager API directly
     return this.fetchAlertsFromApi(options)
   }
+
+  // ============================================
+  // Alertmanager API Fallback
+  // ============================================
 
   private async fetchAlertsFromApi(options?: AlertQueryOptions): Promise<Alert[]> {
     if (!this.config) {
@@ -153,6 +214,10 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
     }
   }
 
+  // ============================================
+  // Internal Methods
+  // ============================================
+
   private async fetch(path: string): Promise<Response> {
     if (!this.config) {
       throw new Error('Plugin not initialized')
@@ -166,12 +231,4 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
       signal: AbortSignal.timeout(5000),
     })
   }
-}
-
-export function register(registry: PluginRegistryInterface): void {
-  registry.register('grafana', 'Grafana', ['alerts'], (config) => {
-    const plugin = new GrafanaPlugin()
-    plugin.initialize(config)
-    return plugin
-  })
 }

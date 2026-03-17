@@ -340,7 +340,7 @@ export class DataSourceService {
     if (!plugin || plugin.type !== 'netbox') {
       return null
     }
-    return (plugin as import('../../../plugins/netbox/index.js').NetBoxPlugin).getFilterOptions()
+    return (plugin as import('shumoku-plugin-netbox').NetBoxPlugin).getFilterOptions()
   }
 
   /**

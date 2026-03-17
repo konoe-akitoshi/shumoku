@@ -1,7 +1,3 @@
-// Copyright (C) 2026-present Akitoshi Saeki
-// SPDX-License-Identifier: AGPL-3.0-only
-// For commercial licensing, contact: contact@shumoku.dev
-
 /**
  * NetBox API Types
  * Based on NetBox REST API responses
@@ -124,23 +120,12 @@ export interface NetBoxInterfaceResponse {
 }
 
 export interface NetBoxTermination {
-  object_type?: string // 'dcim.interface' | 'circuits.circuittermination' | etc
   object: {
-    name?: string
-    device?: {
+    name: string
+    device: {
       id: number
       name: string | null
     }
-    // Circuit termination fields
-    circuit?: {
-      id: number
-      cid: string
-    }
-    term_side?: string // 'A' | 'Z'
-    provider_network?: {
-      id: number
-      name: string
-    } | null
   }
 }
 
@@ -168,45 +153,6 @@ export interface NetBoxCableResponse {
   next: string | null
   previous: string | null
   results: NetBoxCable[]
-}
-
-// ============================================
-// Circuit Types
-// ============================================
-
-export interface NetBoxProvider {
-  id: number
-  name: string
-  slug: string
-}
-
-export interface NetBoxProviderNetwork {
-  id: number
-  name: string
-  provider: NetBoxProvider
-}
-
-export interface NetBoxCircuit {
-  id: number
-  cid: string
-  provider: NetBoxProvider
-  type: {
-    id: number
-    name: string
-    slug: string
-  }
-  status: {
-    value: string
-    label: string
-  }
-  description?: string
-}
-
-export interface NetBoxCircuitResponse {
-  count: number
-  next: string | null
-  previous: string | null
-  results: NetBoxCircuit[]
 }
 
 // ============================================
@@ -428,8 +374,6 @@ export type DeviceTypeString =
   | 'access-point'
   | 'firewall'
   | 'load-balancer'
-  | 'cpe'
-  | 'internet'
   | 'generic'
 
 export interface TagMapping {
@@ -444,7 +388,7 @@ export interface TagMapping {
  */
 export const DEFAULT_TAG_MAPPING: Record<string, TagMapping> = {
   ocx: { type: 'l3-switch', level: 0, subgraph: 'OCX' },
-  onu: { type: 'cpe', level: 1, subgraph: 'ONU' },
+  onu: { type: 'router', level: 1, subgraph: 'ONU' },
   router: { type: 'router', level: 2, subgraph: 'Router' },
   'core-switch': { type: 'l3-switch', level: 3, subgraph: 'Core Switch' },
   'edge-switch': { type: 'l2-switch', level: 4, subgraph: 'Edge Switch' },
@@ -537,9 +481,6 @@ export const ROLE_TO_TYPE: Record<string, DeviceTypeString> = {
   'core-router': 'router',
   'border-router': 'router',
   'edge-router': 'router',
-  cpe: 'cpe',
-  onu: 'cpe',
-  ont: 'cpe',
   switch: 'l2-switch',
   'access-switch': 'l2-switch',
   'distribution-switch': 'l3-switch',
@@ -775,5 +716,16 @@ export interface NetBoxClientOptions {
   /**
    * Skip TLS certificate verification (for self-signed certs)
    */
+  insecure?: boolean
+}
+
+// ============================================
+// Plugin Configuration
+// ============================================
+
+export interface NetBoxPluginConfig {
+  url: string
+  token: string
+  /** Skip TLS certificate verification (for self-signed certs) */
   insecure?: boolean
 }

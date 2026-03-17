@@ -30,17 +30,17 @@ export {
 } from './loader.js'
 
 // Re-export plugin classes from bundled plugins
-export { NetBoxPlugin } from '../../../plugins/netbox/index.js'
-export { ZabbixPlugin } from '../../../plugins/zabbix/index.js'
-export { PrometheusPlugin } from '../../../plugins/prometheus/index.js'
-export { GrafanaPlugin } from '../../../plugins/grafana/index.js'
+export { NetBoxPlugin } from 'shumoku-plugin-netbox'
+export { ZabbixPlugin } from 'shumoku-plugin-zabbix'
+export { PrometheusPlugin } from 'shumoku-plugin-prometheus'
+export { GrafanaPlugin } from 'shumoku-plugin-grafana'
 
 // Register bundled plugins
 import { pluginRegistry } from './registry.js'
-import { register as registerNetBox } from '../../../plugins/netbox/index.js'
-import { register as registerZabbix } from '../../../plugins/zabbix/index.js'
-import { register as registerPrometheus } from '../../../plugins/prometheus/index.js'
-import { register as registerGrafana } from '../../../plugins/grafana/index.js'
+import { register as registerNetBox } from 'shumoku-plugin-netbox'
+import { register as registerZabbix } from 'shumoku-plugin-zabbix'
+import { register as registerPrometheus } from 'shumoku-plugin-prometheus'
+import { register as registerGrafana } from 'shumoku-plugin-grafana'
 
 export function registerBundledPlugins(): void {
   registerNetBox(pluginRegistry)

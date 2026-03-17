@@ -1,14 +1,9 @@
-// Copyright (C) 2026-present Akitoshi Saeki
-// SPDX-License-Identifier: AGPL-3.0-only
-// For commercial licensing, contact: contact@shumoku.dev
-
 /**
  * NetBox API Client
  */
 
 import type {
   NetBoxCableResponse,
-  NetBoxCircuitResponse,
   NetBoxClientOptions,
   NetBoxDeviceResponse,
   NetBoxDeviceRoleResponse,
@@ -21,28 +16,6 @@ import type {
   NetBoxVirtualMachineResponse,
   NetBoxVMInterfaceResponse,
 } from './types.js'
-
-/**
- * Custom error class for NetBox API errors
- */
-export class NetBoxApiError extends Error {
-  readonly status: number
-  readonly statusText: string
-  readonly body: string
-  readonly url: string
-
-  constructor(status: number, statusText: string, body: string, url: string) {
-    const truncatedBody = body.length > 500 ? `${body.slice(0, 500)}...` : body
-    super(
-      `NetBox API error ${status} ${statusText} for ${url}\n${truncatedBody}`,
-    )
-    this.name = 'NetBoxApiError'
-    this.status = status
-    this.statusText = statusText
-    this.body = body
-    this.url = url
-  }
-}
 
 /**
  * Query parameters for filtering API requests
@@ -139,13 +112,6 @@ export class NetBoxClient {
   }
 
   /**
-   * Make GET request to NetBox Circuits API
-   */
-  private async getCircuits<T>(endpoint: string, params?: QueryParams): Promise<T> {
-    return this.get<T>(`circuits/${endpoint}`, params)
-  }
-
-  /**
    * Make GET request to NetBox Virtualization API
    */
   private async getVirtualization<T>(endpoint: string, params?: QueryParams): Promise<T> {
@@ -199,44 +165,15 @@ export class NetBoxClient {
       if (!response.ok) {
         const errorBody = await response.text()
         this.log('Error response body:', errorBody)
-        throw new NetBoxApiError(response.status, response.statusText, errorBody, url)
-      }
-
-      const contentType = response.headers.get('content-type') ?? ''
-      if (!contentType.includes('application/json')) {
-        const body = await response.text()
-        throw new NetBoxApiError(
-          response.status,
-          `Unexpected content-type: ${contentType}`,
-          body,
-          url,
-        )
+        throw new Error(`NetBox API request failed: ${response.status} ${response.statusText}`)
       }
 
       const data = (await response.json()) as T
-
-      // Validate paginated response structure
-      if (typeof data === 'object' && data !== null) {
-        if ('count' in data) {
-          this.log(`Response data: ${(data as { count: number }).count} items`)
-        }
-        if (!('results' in data)) {
-          throw new NetBoxApiError(
-            response.status,
-            'Unexpected response structure (missing "results" field)',
-            JSON.stringify(data).slice(0, 1000),
-            url,
-          )
-        }
+      if (this.debug && typeof data === 'object' && data !== null && 'count' in data) {
+        this.log(`Response data: ${(data as { count: number }).count} items`)
       }
 
       return data
-    } catch (err) {
-      if (err instanceof NetBoxApiError) throw err
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error(`NetBox API request timed out after ${this.timeout}ms: ${url}`)
-      }
-      throw err
     } finally {
       clearTimeout(timeoutId)
     }
@@ -261,13 +198,6 @@ export class NetBoxClient {
    */
   async fetchCables(): Promise<NetBoxCableResponse> {
     return this.getDcim<NetBoxCableResponse>('cables')
-  }
-
-  /**
-   * Fetch circuits with optional filtering
-   */
-  async fetchCircuits(params?: QueryParams): Promise<NetBoxCircuitResponse> {
-    return this.getCircuits<NetBoxCircuitResponse>('circuits', params)
   }
 
   /**
@@ -333,33 +263,14 @@ export class NetBoxClient {
     devices: NetBoxDeviceResponse
     interfaces: NetBoxInterfaceResponse
     cables: NetBoxCableResponse
-    circuits: NetBoxCircuitResponse
   }> {
-    const results = await Promise.allSettled([
+    const [devices, interfaces, cables] = await Promise.all([
       this.fetchDevices(),
       this.fetchInterfaces(),
       this.fetchCables(),
-      this.fetchCircuits(),
     ])
 
-    const labels = ['devices', 'interfaces', 'cables', 'circuits'] as const
-    const errors: string[] = []
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]
-      if (r.status === 'rejected') {
-        errors.push(`${labels[i]}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`)
-      }
-    }
-    if (errors.length > 0) {
-      throw new Error(`Failed to fetch from NetBox:\n${errors.join('\n')}`)
-    }
-
-    return {
-      devices: (results[0] as PromiseFulfilledResult<NetBoxDeviceResponse>).value,
-      interfaces: (results[1] as PromiseFulfilledResult<NetBoxInterfaceResponse>).value,
-      cables: (results[2] as PromiseFulfilledResult<NetBoxCableResponse>).value,
-      circuits: (results[3] as PromiseFulfilledResult<NetBoxCircuitResponse>).value,
-    }
+    return { devices, interfaces, cables }
   }
 
   /**
@@ -369,40 +280,17 @@ export class NetBoxClient {
     devices: NetBoxDeviceResponse
     interfaces: NetBoxInterfaceResponse
     cables: NetBoxCableResponse
-    circuits: NetBoxCircuitResponse
     virtualMachines: NetBoxVirtualMachineResponse
     vmInterfaces: NetBoxVMInterfaceResponse
   }> {
-    const results = await Promise.allSettled([
+    const [devices, interfaces, cables, virtualMachines, vmInterfaces] = await Promise.all([
       this.fetchDevices(),
       this.fetchInterfaces(),
       this.fetchCables(),
-      this.fetchCircuits(),
       this.fetchVirtualMachines(),
       this.fetchVMInterfaces(),
     ])
 
-    const labels = [
-      'devices', 'interfaces', 'cables', 'circuits', 'virtualMachines', 'vmInterfaces',
-    ] as const
-    const errors: string[] = []
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]
-      if (r.status === 'rejected') {
-        errors.push(`${labels[i]}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`)
-      }
-    }
-    if (errors.length > 0) {
-      throw new Error(`Failed to fetch from NetBox:\n${errors.join('\n')}`)
-    }
-
-    return {
-      devices: (results[0] as PromiseFulfilledResult<NetBoxDeviceResponse>).value,
-      interfaces: (results[1] as PromiseFulfilledResult<NetBoxInterfaceResponse>).value,
-      cables: (results[2] as PromiseFulfilledResult<NetBoxCableResponse>).value,
-      circuits: (results[3] as PromiseFulfilledResult<NetBoxCircuitResponse>).value,
-      virtualMachines: (results[4] as PromiseFulfilledResult<NetBoxVirtualMachineResponse>).value,
-      vmInterfaces: (results[5] as PromiseFulfilledResult<NetBoxVMInterfaceResponse>).value,
-    }
+    return { devices, interfaces, cables, virtualMachines, vmInterfaces }
   }
 }

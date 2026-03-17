@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onMount } from 'svelte'
 import { topologies, topologiesList, topologiesLoading, topologiesError } from '$lib/stores'
-import { YamlParser } from '@shumoku/parser-yaml'
+import { YamlParser } from '@shumoku/core'
 import * as Dialog from '$lib/components/ui/dialog'
 import { Button } from '$lib/components/ui/button'
 import Plus from 'phosphor-svelte/lib/Plus'

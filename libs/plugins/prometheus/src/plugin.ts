@@ -1,13 +1,14 @@
 /**
- * Prometheus Bundled Plugin
+ * Prometheus Data Source Plugin
  *
- * Prometheus monitoring integration for metrics, hosts, and alerts.
+ * Provides metrics and hosts capabilities via Prometheus HTTP API.
+ * Supports SNMP exporter and node_exporter metric formats.
  */
 
-import type { MetricsData, MetricsMapping } from '../../api/src/types.js'
-import type { PluginRegistryInterface } from '../../api/src/plugins/registry.js'
 import {
   addHttpWarning,
+  type MetricsData,
+  type MetricsMapping,
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
@@ -20,30 +21,8 @@ import {
   type Alert,
   type AlertQueryOptions,
   type AlertSeverity,
-} from '../../api/src/plugins/types.js'
-
-/**
- * Custom metric configuration for Prometheus
- */
-interface PrometheusCustomMetrics {
-  inOctets: string
-  outOctets: string
-  interfaceLabel: string
-  upMetric?: string
-}
-
-interface PrometheusPluginConfig {
-  url: string
-  basicAuth?: {
-    username: string
-    password: string
-  }
-  preset: 'snmp' | 'node_exporter' | 'custom'
-  customMetrics?: PrometheusCustomMetrics
-  hostLabel?: string
-  jobFilter?: string
-  alertmanagerUrl?: string
-}
+} from '@shumoku/core'
+import type { PrometheusCustomMetrics, PrometheusPluginConfig } from './types.js'
 
 /**
  * Metric presets for common exporters
@@ -77,7 +56,7 @@ interface PrometheusVectorResult {
   resultType: 'vector'
   result: Array<{
     metric: Record<string, string>
-    value: [number, string]
+    value: [number, string] // [timestamp, value]
   }>
 }
 
@@ -103,6 +82,7 @@ export class PrometheusPlugin
   initialize(config: unknown): void {
     this.config = config as PrometheusPluginConfig
 
+    // Resolve metric names from preset or custom config
     if (this.config.preset === 'custom' && this.config.customMetrics) {
       this.metrics = this.config.customMetrics
     } else {
@@ -115,12 +95,17 @@ export class PrometheusPlugin
     this.metrics = null
   }
 
+  // ============================================
+  // Base Plugin Methods
+  // ============================================
+
   async testConnection(): Promise<ConnectionResult> {
     if (!this.config) {
       return { success: false, message: 'Plugin not initialized' }
     }
 
     try {
+      // First check health endpoint
       const healthResponse = await this.fetch('/-/healthy')
       if (!healthResponse.ok) {
         return {
@@ -129,6 +114,7 @@ export class PrometheusPlugin
         }
       }
 
+      // Try to get build info for version
       try {
         const buildInfo = await this.query<PrometheusBuildInfo>('/api/v1/status/buildinfo')
         return addHttpWarning(this.config.url, {
@@ -137,6 +123,7 @@ export class PrometheusPlugin
           version: buildInfo.version,
         })
       } catch {
+        // Build info might not be available, but health check passed
         return addHttpWarning(this.config.url, {
           success: true,
           message: 'Connected to Prometheus',
@@ -150,6 +137,10 @@ export class PrometheusPlugin
     }
   }
 
+  // ============================================
+  // MetricsCapable Implementation
+  // ============================================
+
   async pollMetrics(mapping: MetricsMapping): Promise<MetricsData> {
     const warnings: string[] = []
     const metrics: MetricsData = {
@@ -162,6 +153,8 @@ export class PrometheusPlugin
       return metrics
     }
 
+    // Exporter health check (scrape target status)
+    // Only run when jobFilter is configured to avoid noisy results from unrelated jobs
     if (this.config?.jobFilter) {
       try {
         const query = `up{job="${this.config.jobFilter}"}`
@@ -178,6 +171,7 @@ export class PrometheusPlugin
       }
     }
 
+    // Poll node metrics (up/down status)
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
       const instance = nodeMapping.hostId
 
@@ -196,7 +190,9 @@ export class PrometheusPlugin
       }
     }
 
+    // Poll link metrics (interface traffic)
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
+      // Get instance via monitoredNodeId -> node mapping
       let instance: string | undefined
       if (linkMapping.monitoredNodeId && mapping.nodes?.[linkMapping.monitoredNodeId]) {
         instance = mapping.nodes[linkMapping.monitoredNodeId].hostId
@@ -207,8 +203,9 @@ export class PrometheusPlugin
       if (instance && interfaceName) {
         try {
           const traffic = await this.getInterfaceTraffic(instance, interfaceName)
-          const capacity = linkMapping.capacity || 1_000_000_000
+          const capacity = linkMapping.capacity || 1_000_000_000 // Default 1Gbps
 
+          // Calculate utilization (traffic is in bytes/sec, convert to bits)
           const inBps = traffic.inBytesPerSec * 8
           const outBps = traffic.outBytesPerSec * 8
           const inUtil = (inBps / capacity) * 100
@@ -237,6 +234,10 @@ export class PrometheusPlugin
     return metrics
   }
 
+  // ============================================
+  // HostsCapable Implementation
+  // ============================================
+
   async getHosts(): Promise<Host[]> {
     if (!this.config) {
       throw new Error('Plugin not initialized')
@@ -245,20 +246,26 @@ export class PrometheusPlugin
     const hostLabel = this.config.hostLabel || 'instance'
 
     try {
+      // Get all unique values for the host label
       let url = `/api/v1/label/${hostLabel}/values`
 
+      // If job filter is specified, add a match parameter
       if (this.config.jobFilter) {
         url += `?match[]={job="${this.config.jobFilter}"}`
       }
 
       const response = await this.apiRequest<string[]>(url)
 
+      // Convert label values to Host objects
       const hosts: Host[] = response.map((value) => ({
         id: value,
         name: value,
         displayName: this.formatHostDisplayName(value),
         status: 'unknown' as const,
       }))
+
+      // Optionally check status for each host (can be slow for many hosts)
+      // For now, return with unknown status - UI can check on demand
 
       return hosts
     } catch (err) {
@@ -276,6 +283,7 @@ export class PrometheusPlugin
     const interfaceLabel = this.metrics.interfaceLabel
 
     try {
+      // Query for interface metrics to list available interfaces
       const query = `${this.metrics.inOctets}{${hostLabel}="${hostId}"}`
       const result = await this.instantQuery(query)
 
@@ -284,6 +292,7 @@ export class PrometheusPlugin
       for (const series of result.result) {
         const ifName = series.metric[interfaceLabel]
         if (ifName) {
+          // Add in/out items for this interface
           items.push({
             id: `${hostId}:${ifName}:in`,
             hostId,
@@ -333,6 +342,7 @@ export class PrometheusPlugin
     const metrics: DiscoveredMetric[] = []
 
     try {
+      // Get all series for this host
       let selector = `{${hostLabel}="${hostId}"}`
       if (this.config.jobFilter) {
         selector = `{${hostLabel}="${hostId}",job="${this.config.jobFilter}"}`
@@ -341,6 +351,7 @@ export class PrometheusPlugin
       const seriesUrl = `/api/v1/series?match[]=${encodeURIComponent(selector)}`
       const seriesData = await this.apiRequest<Array<Record<string, string>>>(seriesUrl)
 
+      // Get unique metric names
       const metricNames = new Set<string>()
       for (const series of seriesData) {
         if (series.__name__) {
@@ -348,6 +359,7 @@ export class PrometheusPlugin
         }
       }
 
+      // Fetch metadata for all metrics (HELP, TYPE)
       const metadataMap: Record<string, { type: string; help: string }> = {}
       try {
         const metadataUrl = '/api/v1/metadata'
@@ -362,6 +374,7 @@ export class PrometheusPlugin
         // Metadata endpoint might not be available
       }
 
+      // Query current values for each metric
       for (const metricName of metricNames) {
         try {
           let query = `${metricName}{${hostLabel}="${hostId}"}`
@@ -388,6 +401,7 @@ export class PrometheusPlugin
         }
       }
 
+      // Sort by metric name
       metrics.sort((a, b) => a.name.localeCompare(b.name))
 
       return metrics
@@ -397,11 +411,17 @@ export class PrometheusPlugin
     }
   }
 
+  // ============================================
+  // AlertsCapable Implementation
+  // ============================================
+
   async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
     if (!this.config) {
       throw new Error('Plugin not initialized')
     }
 
+    // Alertmanager API
+    // Try to use alertmanagerUrl from config, or derive from Prometheus URL
     const alertmanagerUrl = this.getAlertmanagerUrl()
 
     try {
@@ -429,6 +449,7 @@ export class PrometheusPlugin
       const alerts: Alert[] = alertmanagerAlerts
         .filter((a) => {
           const isActive = a.status.state === 'active'
+          // Active alerts are always included; resolved alerts are filtered by timeRange
           if (!isActive) {
             if (options?.activeOnly) return false
             const startTime = new Date(a.startsAt).getTime()
@@ -452,6 +473,7 @@ export class PrometheusPlugin
           } satisfies Alert
         })
 
+      // Filter by minimum severity
       if (options?.minSeverity) {
         const minSeverityOrder = this.getSeverityOrder(options.minSeverity)
         return alerts.filter((a) => this.getSeverityOrder(a.severity) >= minSeverityOrder)
@@ -469,10 +491,12 @@ export class PrometheusPlugin
       throw new Error('Plugin not initialized')
     }
 
+    // If alertmanagerUrl is configured, use it
     if (this.config.alertmanagerUrl) {
       return this.config.alertmanagerUrl.replace(/\/$/, '')
     }
 
+    // Otherwise, try to derive from Prometheus URL (common pattern: replace 9090 with 9093)
     const prometheusUrl = this.config.url.replace(/\/$/, '')
     return prometheusUrl.replace(':9090', ':9093')
   }
@@ -481,6 +505,7 @@ export class PrometheusPlugin
     const url = baseUrl + path
     const headers: Record<string, string> = {}
 
+    // Use same auth as Prometheus if configured
     if (this.config?.basicAuth) {
       const credentials = btoa(
         `${this.config.basicAuth.username}:${this.config.basicAuth.password}`,
@@ -528,6 +553,13 @@ export class PrometheusPlugin
     return order[severity] ?? 1
   }
 
+  // ============================================
+  // Internal Methods
+  // ============================================
+
+  /**
+   * Make an HTTP request to Prometheus
+   */
   private async fetch(path: string, options: RequestInit = {}): Promise<Response> {
     if (!this.config) {
       throw new Error('Plugin not initialized')
@@ -538,6 +570,7 @@ export class PrometheusPlugin
       ...((options.headers as Record<string, string>) || {}),
     }
 
+    // Add basic auth if configured
     if (this.config.basicAuth) {
       const credentials = btoa(
         `${this.config.basicAuth.username}:${this.config.basicAuth.password}`,
@@ -552,6 +585,9 @@ export class PrometheusPlugin
     })
   }
 
+  /**
+   * Query the Prometheus API and return data
+   */
   private async query<T>(path: string): Promise<T> {
     const response = await this.fetch(path)
 
@@ -568,6 +604,9 @@ export class PrometheusPlugin
     return json.data as T
   }
 
+  /**
+   * Make a generic API request that returns data directly
+   */
   private async apiRequest<T>(path: string): Promise<T> {
     const response = await this.fetch(path)
 
@@ -581,14 +620,25 @@ export class PrometheusPlugin
       throw new Error(`Prometheus error: ${json.error}`)
     }
 
+    // For label values endpoint, data is the array directly
+    // For other endpoints, it might be nested
     return json.data as T
   }
 
+  /**
+   * Execute an instant query
+   */
   private async instantQuery(query: string): Promise<PrometheusVectorResult> {
     const encodedQuery = encodeURIComponent(query)
     return this.query<PrometheusVectorResult>(`/api/v1/query?query=${encodedQuery}`)
   }
 
+  /**
+   * Check if a host is up using the configured upMetric.
+   * For SNMP preset: tries snmp_scrape_pdus_returned first (value > 0),
+   * then falls back to standard "up" metric for non-SNMP devices (e.g. APs).
+   * For others: up == 1 means the scrape target is reachable.
+   */
   private async checkHostUp(instance: string): Promise<boolean> {
     if (!this.config || !this.metrics) {
       return false
@@ -608,9 +658,11 @@ export class PrometheusPlugin
       const result = await this.instantQuery(buildQuery(upMetric))
 
       if (upMetric === 'snmp_scrape_pdus_returned') {
+        // SNMP device: value > 0 means device responded
         if (result.result.length > 0) {
           return result.result.some((r) => Number(r.value[1]) > 0)
         }
+        // No SNMP metrics for this host — fall back to standard "up" metric
         const fallback = await this.instantQuery(buildQuery('up'))
         return fallback.result.some((r) => r.value[1] === '1')
       }
@@ -621,6 +673,10 @@ export class PrometheusPlugin
     }
   }
 
+  /**
+   * Get interface traffic metrics
+   * Returns bytes per second (using rate over 5 minutes)
+   */
   private async getInterfaceTraffic(
     instance: string,
     interfaceName: string,
@@ -632,11 +688,13 @@ export class PrometheusPlugin
     const hostLabel = this.config.hostLabel || 'instance'
     const interfaceLabel = this.metrics.interfaceLabel
 
+    // Build label selector
     let labelSelector = `${hostLabel}="${instance}",${interfaceLabel}="${interfaceName}"`
     if (this.config.jobFilter) {
       labelSelector += `,job="${this.config.jobFilter}"`
     }
 
+    // Use rate() to convert counter to bytes/sec
     const inQuery = `rate(${this.metrics.inOctets}{${labelSelector}}[5m])`
     const outQuery = `rate(${this.metrics.outOctets}{${labelSelector}}[5m])`
 
@@ -664,22 +722,20 @@ export class PrometheusPlugin
     return { inBytesPerSec, outBytesPerSec }
   }
 
+  /**
+   * Format instance label to a more readable display name
+   * e.g., "192.168.1.1:9116" -> "192.168.1.1"
+   */
   private formatHostDisplayName(instance: string): string {
+    // Remove port if present
     const colonIndex = instance.lastIndexOf(':')
     if (colonIndex > 0) {
       const possiblePort = instance.substring(colonIndex + 1)
+      // Check if it looks like a port number
       if (/^\d+$/.test(possiblePort)) {
         return instance.substring(0, colonIndex)
       }
     }
     return instance
   }
-}
-
-export function register(registry: PluginRegistryInterface): void {
-  registry.register('prometheus', 'Prometheus', ['metrics', 'hosts', 'alerts'], (config) => {
-    const plugin = new PrometheusPlugin()
-    plugin.initialize(config)
-    return plugin
-  })
 }

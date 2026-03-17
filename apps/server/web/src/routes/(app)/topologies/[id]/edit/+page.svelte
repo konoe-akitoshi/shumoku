@@ -3,7 +3,7 @@ import { onMount } from 'svelte'
 import { page } from '$app/stores'
 import { goto } from '$app/navigation'
 import { api } from '$lib/api'
-import { YamlParser } from '@shumoku/parser-yaml'
+import { YamlParser } from '@shumoku/core'
 import type { Topology } from '$lib/types'
 import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
 

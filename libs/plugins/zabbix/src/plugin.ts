@@ -1,51 +1,31 @@
 /**
- * Zabbix Bundled Plugin
+ * Zabbix Data Source Plugin
  *
- * Zabbix monitoring integration for metrics, hosts, auto-mapping, and alerts.
+ * Provides metrics, hosts, and auto-mapping capabilities.
  */
 
-import type { NetworkGraph } from '@shumoku/core'
-import type { MetricsData, MetricsMapping, LinkMetricsMapping } from '../../api/src/types.js'
-
-interface ZabbixHost {
-  hostid: string
-  host: string
-  name: string
-  status: string
-}
-
-interface ZabbixItem {
-  itemid: string
-  hostid: string
-  name: string
-  key_: string
-  lastvalue: string
-  lastclock: string
-}
-import type { PluginRegistryInterface } from '../../api/src/plugins/registry.js'
-import {
-  addHttpWarning,
-  type DataSourcePlugin,
-  type DataSourceCapability,
-  type MetricsCapable,
-  type HostsCapable,
-  type AutoMappingCapable,
-  type AlertsCapable,
-  type ConnectionResult,
-  type Host,
-  type HostItem,
-  type DiscoveredMetric,
-  type MappingHint,
-  type Alert,
-  type AlertQueryOptions,
-  type AlertSeverity,
-} from '../../api/src/plugins/types.js'
-
-interface ZabbixPluginConfig {
-  url: string
-  token: string
-  pollInterval?: number
-}
+import type {
+  Alert,
+  AlertQueryOptions,
+  AlertSeverity,
+  AlertsCapable,
+  AutoMappingCapable,
+  ConnectionResult,
+  DataSourceCapability,
+  DataSourcePlugin,
+  DiscoveredMetric,
+  Host,
+  HostItem,
+  HostsCapable,
+  LinkMetricsMapping,
+  MappingHint,
+  MetricsCapable,
+  MetricsData,
+  MetricsMapping,
+  NetworkGraph,
+} from '@shumoku/core'
+import { addHttpWarning } from '@shumoku/core'
+import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
 
 /** Zabbix-specific link mapping with item IDs for direct item reference */
 interface ZabbixLinkMapping extends LinkMetricsMapping {
@@ -247,11 +227,11 @@ export class ZabbixPlugin
   async discoverMetrics(hostId: string): Promise<DiscoveredMetric[]> {
     /** Zabbix value_type to human-readable type name */
     const VALUE_TYPE_MAP: Record<string, string> = {
-      '0': 'gauge',   // Numeric (float)
-      '1': 'text',    // Character
-      '2': 'log',     // Log
+      '0': 'gauge', // Numeric (float)
+      '1': 'text', // Character
+      '2': 'log', // Log
       '3': 'counter', // Numeric (unsigned integer)
-      '4': 'text',    // Text
+      '4': 'text', // Text
     }
 
     interface ZabbixDiscoverItem {
@@ -268,12 +248,22 @@ export class ZabbixPlugin
     }
 
     const items = await this.apiRequest<ZabbixDiscoverItem[]>('item.get', {
-      output: ['itemid', 'name', 'key_', 'lastvalue', 'units', 'value_type', 'state', 'status', 'description'],
+      output: [
+        'itemid',
+        'name',
+        'key_',
+        'lastvalue',
+        'units',
+        'value_type',
+        'state',
+        'status',
+        'description',
+      ],
       selectTags: ['tag', 'value'],
       hostids: [hostId],
       filter: {
-        status: '0',  // ITEM_STATUS_ACTIVE (enabled)
-        state: '0',   // ITEM_STATE_NORMAL (active, not "not supported")
+        status: '0', // ITEM_STATUS_ACTIVE (enabled)
+        state: '0', // ITEM_STATE_NORMAL (active, not "not supported")
       },
       sortfield: 'name',
     })
@@ -369,22 +359,20 @@ export class ZabbixPlugin
 
     const timeFrom = Math.floor((Date.now() - (options?.timeRange || 3600) * 1000) / 1000)
 
-    interface ZabbixEvent {
+    interface ZabbixProblem {
       eventid: string
       objectid: string
       name: string
       severity: string
       clock: string
-      value: string // '1' = problem, '0' = resolved
+      r_clock: string
       hosts?: Array<{ hostid: string; host: string; name: string }>
     }
 
-    // Use event.get instead of problem.get (Zabbix 7.0 removed selectHosts from problem.get)
     const params: Record<string, unknown> = {
-      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'value'],
+      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'r_clock'],
       selectHosts: ['hostid', 'host', 'name'],
-      source: 0, // triggers
-      object: 0, // triggers
+      recent: true,
       time_from: timeFrom,
       sortfield: ['clock'],
       sortorder: 'DESC',
@@ -400,26 +388,29 @@ export class ZabbixPlugin
       params.hostids = options.hostIds
     }
 
-    // Filter active problems only
-    if (options?.activeOnly) {
-      params.value = 1
-    }
+    const problems = await this.apiRequest<ZabbixProblem[]>('problem.get', params)
 
-    const events = await this.apiRequest<ZabbixEvent[]>('event.get', params)
-
-    return events.map((e) => ({
-      id: e.eventid,
-      severity: this.mapZabbixSeverity(e.severity),
-      title: e.name,
-      host: e.hosts?.[0]?.host,
-      hostId: e.hosts?.[0]?.hostid,
-      startTime: Number.parseInt(e.clock) * 1000,
-      status: e.value === '1' ? ('active' as const) : ('resolved' as const),
+    const alerts: Alert[] = problems.map((p) => ({
+      id: p.eventid,
+      severity: this.mapZabbixSeverity(p.severity),
+      title: p.name,
+      host: p.hosts?.[0]?.host,
+      hostId: p.hosts?.[0]?.hostid,
+      startTime: Number.parseInt(p.clock, 10) * 1000,
+      endTime: p.r_clock && p.r_clock !== '0' ? Number.parseInt(p.r_clock, 10) * 1000 : undefined,
+      status: p.r_clock && p.r_clock !== '0' ? 'resolved' : 'active',
       source: 'zabbix' as const,
       url: this.config
-        ? `${this.config.url.replace(/\/$/, '')}/tr_events.php?triggerid=${e.objectid}&eventid=${e.eventid}`
+        ? `${this.config.url.replace(/\/$/, '')}/tr_events.php?triggerid=${p.objectid}&eventid=${p.eventid}`
         : undefined,
     }))
+
+    // Filter active only if requested
+    if (options?.activeOnly) {
+      return alerts.filter((a) => a.status === 'active')
+    }
+
+    return alerts
   }
 
   private mapZabbixSeverity(severity: string): AlertSeverity {
@@ -476,7 +467,7 @@ export class ZabbixPlugin
     }
 
     const id = ++this.requestId
-    const url = this.config.url.replace(/\/$/, '') + '/api_jsonrpc.php'
+    const url = `${this.config.url.replace(/\/$/, '')}/api_jsonrpc.php`
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json-rpc',
@@ -539,19 +530,26 @@ export class ZabbixPlugin
 
   /**
    * Extract interface name from Zabbix item name.
+   * Handles patterns like:
+   *   "Interface GigabitEthernet0/0(Uplink): Bits received" → "GigabitEthernet0/0"
+   *   "Interface eth0: Incoming network traffic" → "eth0"
    */
   private static extractInterfaceName(itemName: string): string {
+    // "Interface {name}({alias}): ..." or "Interface {name}: ..."
     const match = itemName.match(/^Interface\s+(.+?)(?:\(.*?\))?:\s/)
     return match ? match[1].trim() : itemName
   }
 
   /**
    * Get interface traffic items for a host.
+   * Searches by both key pattern and item name to support
+   * agent-based (net.if.in[eth0]) and SNMP-based (net.if.in[ifHCInOctets.N]) items.
    */
   async getInterfaceItems(
     hostId: string,
     interfaceName?: string,
   ): Promise<{ in: HostItem | null; out: HostItem | null }> {
+    // Fetch all net.if.in / net.if.out items for this host
     const items = await this.apiRequest<ZabbixItem[]>('item.get', {
       output: ['itemid', 'hostid', 'name', 'key_', 'lastvalue'],
       hostids: [hostId],
@@ -564,6 +562,7 @@ export class ZabbixPlugin
     let outItem: HostItem | null = null
 
     for (const item of items) {
+      // Match by interface name extracted from item name (works for both agent and SNMP)
       if (interfaceName) {
         const extractedName = ZabbixPlugin.extractInterfaceName(item.name)
         if (extractedName !== interfaceName) {
@@ -579,26 +578,13 @@ export class ZabbixPlugin
         lastValue: item.lastvalue,
       }
 
-      if (item.key_.includes('InOctets')) {
+      if (item.key_.startsWith('net.if.in')) {
         inItem = hostItem
-      } else if (item.key_.includes('OutOctets')) {
+      } else if (item.key_.startsWith('net.if.out')) {
         outItem = hostItem
       }
     }
 
     return { in: inItem, out: outItem }
   }
-}
-
-export function register(registry: PluginRegistryInterface): void {
-  registry.register(
-    'zabbix',
-    'Zabbix',
-    ['metrics', 'hosts', 'auto-mapping', 'alerts'],
-    (config) => {
-      const plugin = new ZabbixPlugin()
-      plugin.initialize(config)
-      return plugin
-    },
-  )
 }
