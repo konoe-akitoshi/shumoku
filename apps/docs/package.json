@@ -12,7 +12,8 @@
     "format": "biome format --write"
   },
   "dependencies": {
-    "@shumoku/renderer": "workspace:*",
+    "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/renderer-html": "workspace:*",
     "shumoku": "workspace:*",
     "fumadocs-core": "16.4.6",
     "fumadocs-mdx": "14.2.4",

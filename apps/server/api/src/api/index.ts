@@ -14,7 +14,7 @@ import { webhooksApi } from './webhooks.js'
 import { createAuthApi } from './auth.js'
 import { createShareApi } from './share.js'
 import { authMiddleware } from '../middleware/auth.js'
-import { INTERACTIVE_IIFE } from '@shumoku/renderer/iife-string'
+import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 
 export function createApiRouter(): Hono {
   const api = new Hono()

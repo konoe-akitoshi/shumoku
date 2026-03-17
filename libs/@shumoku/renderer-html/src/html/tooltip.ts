@@ -1,0 +1,132 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+// For commercial licensing, contact: contact@shumoku.dev
+
+/**
+ * Tooltip Module
+ * Handles tooltip creation, positioning, and display
+ */
+
+let tooltip: HTMLDivElement | null = null
+
+export function getTooltip(): HTMLDivElement {
+  if (!tooltip) {
+    tooltip = document.createElement('div')
+    tooltip.style.cssText = `
+      position: fixed;
+      z-index: 10000;
+      padding: 8px 12px;
+      background: rgba(30, 41, 59, 0.95);
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.4;
+      border-radius: 6px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 280px;
+      white-space: pre-line;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `
+    document.body.appendChild(tooltip)
+  }
+  return tooltip
+}
+
+export function showTooltip(text: string, x: number, y: number): void {
+  const t = getTooltip()
+  t.textContent = text
+  t.style.opacity = '1'
+
+  requestAnimationFrame(() => {
+    const rect = t.getBoundingClientRect()
+    const pad = 12
+    let left = x + pad
+    let top = y - rect.height - pad
+
+    if (left + rect.width > window.innerWidth - pad) {
+      left = x - rect.width - pad
+    }
+    if (top < pad) {
+      top = y + pad
+    }
+
+    t.style.left = `${Math.max(pad, left)}px`
+    t.style.top = `${Math.max(pad, top)}px`
+  })
+}
+
+export function hideTooltip(): void {
+  if (tooltip) {
+    tooltip.style.opacity = '0'
+  }
+}
+
+export function destroyTooltip(): void {
+  if (tooltip) {
+    tooltip.remove()
+    tooltip = null
+  }
+}
+
+export interface TooltipInfo {
+  text: string
+  element: Element
+}
+
+export function getTooltipInfo(el: Element): TooltipInfo | null {
+  const port = el.closest('.port[data-port]')
+  if (port) {
+    const portId = port.getAttribute('data-port') || ''
+    const deviceId = port.getAttribute('data-port-device') || ''
+    return { text: `${deviceId}:${portId}`, element: port }
+  }
+
+  const linkGroup = el.closest('.link-group[data-link-id]')
+  if (linkGroup) {
+    const from = linkGroup.getAttribute('data-link-from') || ''
+    const to = linkGroup.getAttribute('data-link-to') || ''
+    const bw = linkGroup.getAttribute('data-link-bandwidth')
+    const vlan = linkGroup.getAttribute('data-link-vlan')
+
+    // For export links, show device:port ↔ destination device:port
+    const fromIsExport = from.startsWith('__export_')
+    const toIsExport = to.startsWith('__export_')
+    const destDevice = linkGroup.getAttribute('data-link-dest-device')
+    if ((fromIsExport || toIsExport) && destDevice) {
+      const destPort = linkGroup.getAttribute('data-link-dest-port')
+      const localDevice = fromIsExport ? to : from
+      const dest = destPort ? `${destDevice}:${destPort}` : destDevice
+      let text = `${localDevice} ↔ ${dest}`
+      if (bw) text += `\n${bw}`
+      if (vlan) text += `\nVLAN: ${vlan}`
+      return { text, element: linkGroup }
+    }
+
+    let text = `${from} ↔ ${to}`
+    if (bw) text += `\n${bw}`
+    if (vlan) text += `\nVLAN: ${vlan}`
+    return { text, element: linkGroup }
+  }
+
+  const node = el.closest('.node[data-id]')
+  if (node) {
+    const lines: string[] = []
+    // Get label from the first text element inside the node
+    const labelEl = node.querySelector('.node-label')
+    if (labelEl?.textContent) lines.push(labelEl.textContent)
+    const type = node.getAttribute('data-device-type')
+    const vendor = node.getAttribute('data-device-vendor')
+    const model = node.getAttribute('data-device-model')
+    if (type) lines.push(`Type: ${type}`)
+    if (vendor) lines.push(`Vendor: ${vendor}`)
+    if (model) lines.push(`Model: ${model}`)
+    if (lines.length > 0) {
+      return { text: lines.join('\n'), element: node }
+    }
+    return { text: node.getAttribute('data-id') || '', element: node }
+  }
+
+  return null
+}
