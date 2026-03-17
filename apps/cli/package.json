@@ -1,0 +1,28 @@
+{
+  "name": "@shumoku/cli",
+  "version": "0.2.25",
+  "description": "Shumoku CLI for rendering network diagrams",
+  "license": "AGPL-3.0-only",
+  "author": "konoe-akitoshi",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "shumoku": "./dist/shumoku.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@shumoku/core": "workspace:*",
+    "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/renderer-html": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.7",
+    "typescript": "^5.9.3"
+  }
+}
