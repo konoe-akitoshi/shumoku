@@ -8,6 +8,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, extname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { Resvg } from '@resvg/resvg-js'
 import type { NetworkGraph } from '@shumoku/core'
@@ -16,7 +17,9 @@ import { svg } from '@shumoku/renderer-svg'
 import { render as renderHtml, renderHierarchical as renderHtmlHierarchical, setIIFE } from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 
-const VERSION = '0.2.25'
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'))
+const VERSION = pkg.version as string
 
 const HELP = `
 shumoku v${VERSION} - Render NetworkGraph YAML/JSON to SVG/HTML/PNG
