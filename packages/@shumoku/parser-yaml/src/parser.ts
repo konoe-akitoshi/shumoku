@@ -334,7 +334,7 @@ export class YamlParser {
     }
     return {
       node: endpoint.node,
-      port: endpoint.port,
+      port: endpoint.port != null ? String(endpoint.port) : undefined,
       ip: endpoint.ip,
       pin: endpoint.pin,
     }
