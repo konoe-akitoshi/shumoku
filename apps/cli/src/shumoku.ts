@@ -10,10 +10,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { Resvg } from '@resvg/resvg-js'
 import type { NetworkGraph } from '@shumoku/core'
 import { buildHierarchicalSheets, HierarchicalLayout, parser } from '@shumoku/core'
 import { svg } from '@shumoku/renderer-svg'
+import { png } from '@shumoku/renderer-png'
 import { render as renderHtml, renderHierarchical as renderHtmlHierarchical, setIIFE } from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 
@@ -174,16 +174,9 @@ async function main(): Promise<void> {
       }
     } else if (format === 'png') {
       console.log('Rendering PNG...')
-      const svgString = svg.render(graph, layoutResult)
       const scale = Number.parseFloat(values.scale!) || 2
-      const resvg = new Resvg(svgString, {
-        fitTo: { mode: 'zoom', value: scale },
-        font: {
-          loadSystemFonts: true,
-        },
-      })
-      const pngData = resvg.render()
-      writeFileSync(outputPath, pngData.asPng())
+      const pngBuffer = await png.render(graph, layoutResult, { scale })
+      writeFileSync(outputPath, pngBuffer)
     } else {
       console.log('Rendering SVG...')
       writeFileSync(outputPath, svg.render(graph, layoutResult), 'utf-8')

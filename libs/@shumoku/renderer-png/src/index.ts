@@ -3,19 +3,20 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Node.js-specific render pipeline extensions
- *
- * Adds PNG rendering support using resvg-js
+ * @shumoku/renderer-png - PNG renderer for network diagrams
+ * Node.js only (requires @resvg/resvg-js)
  */
 
-import type { PreparedRender } from './pipeline.js'
+import type { NetworkGraph } from '@shumoku/core'
+import type { PreparedRender, PrepareOptions } from '@shumoku/renderer-svg'
+import { prepareRender } from '@shumoku/renderer-svg'
 import * as png from './png.js'
 
-// Re-export everything from base pipeline
-export * from './pipeline.js'
+export { png }
+export type { PngOptions } from './png.js'
 
 /**
- * Options for PNG rendering (Node.js only)
+ * Options for PNG rendering
  */
 export interface PNGRenderOptions {
   /** Scale factor (default: 2) */
@@ -41,19 +42,11 @@ export async function renderPng(
 /**
  * Render network graph directly to PNG buffer.
  * Convenience function that combines prepareRender + renderPng.
- *
- * @example
- * ```typescript
- * import { renderGraphToPng } from '@shumoku/renderer-svg'
- * const pngBuffer = await renderGraphToPng(graph)
- * writeFileSync('output.png', pngBuffer)
- * ```
  */
 export async function renderGraphToPng(
-  graph: Parameters<typeof import('./pipeline.js').prepareRender>[0],
-  options?: Parameters<typeof import('./pipeline.js').prepareRender>[1] & PNGRenderOptions,
+  graph: NetworkGraph,
+  options?: PrepareOptions & PNGRenderOptions,
 ): Promise<Buffer> {
-  const { prepareRender } = await import('./pipeline.js')
   const prepared = await prepareRender(graph, options)
   return renderPng(prepared, options)
 }

@@ -16,10 +16,10 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@resvg/resvg-js": "^2.6.2",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer-svg": "workspace:*",
-    "@shumoku/renderer-html": "workspace:*"
+    "@shumoku/renderer-html": "workspace:*",
+    "@shumoku/renderer-png": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.0.7",

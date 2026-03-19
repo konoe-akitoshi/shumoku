@@ -37,7 +37,8 @@ cd libs/@shumoku/core && bun run dev
 ```
 libs/
   @shumoku/core              ← models, layout, themes, parser, plugin-types, fixtures, icons
-  @shumoku/renderer-svg      ← SVG renderer, pipeline, CDN icons, PNG
+  @shumoku/renderer-svg      ← SVG renderer, pipeline, CDN icons
+  @shumoku/renderer-png      ← PNG renderer (depends on renderer-svg, @resvg/resvg-js)
   @shumoku/renderer-html     ← HTML renderer (depends on renderer-svg)
   shumoku                    ← Main wrapper (re-exports core + renderer-svg + renderer-html)
   plugins/
@@ -83,10 +84,15 @@ apps/
 **Pipeline API** (`src/pipeline.ts`): Unified render pipeline
 - `prepareRender()` - Resolve icon dimensions and compute layout
 - `renderSvg()` - Render to SVG from prepared data
-- `renderPng()` - Render to PNG (Node.js only, requires @resvg/resvg-js)
 - `renderEmbeddable()` - Render for embedding in web apps
 
 **CDN Icons** (`src/cdn-icons.ts`): Icon dimension resolution
+
+### Renderer PNG (`@shumoku/renderer-png`)
+
+- `renderPng()` - Render to PNG from prepared data (Node.js only, requires @resvg/resvg-js)
+- `renderGraphToPng()` - Convenience one-liner
+- Depends on renderer-svg for SVG generation
 
 ### Renderer HTML (`@shumoku/renderer-html`)
 

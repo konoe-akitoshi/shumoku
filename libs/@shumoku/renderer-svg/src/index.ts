@@ -3,14 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * @shumoku/renderer-svg - SVG and PNG renderers for network diagrams
- * Browser entry point (PNG throws error)
+ * @shumoku/renderer-svg - SVG renderer for network diagrams
  */
 
-import * as png from './png.browser.js'
 import * as svg from './svg.js'
 
-export { svg, png }
+export { svg }
 export { SVGRenderer } from './svg.js'
 
 export type { CDNConfig, IconDimensions, ResolvedIconDimensions } from './cdn-icons.js'
@@ -30,20 +28,17 @@ export {
 export type {
   EmbeddableRenderOptions,
   EmbeddableRenderOutput,
-  PNGRenderOptions,
   PreparedRender,
   PrepareOptions,
   SVGRenderOptions,
-} from './pipeline.browser.js'
-// Unified render pipeline (PNG throws in browser, use Canvas API instead)
+} from './pipeline.js'
+// Unified render pipeline
 export {
   prepareRender,
   renderEmbeddable,
-  renderGraphToPng,
   renderGraphToSvg,
-  renderPng,
   renderSvg,
-} from './pipeline.browser.js'
+} from './pipeline.js'
 // Re-export collectIconUrls for server-side icon dimension resolution
 export { collectIconUrls } from './svg.js'
 // Brand

@@ -16,8 +16,8 @@ import {
   hasCDNIcons,
   type IconDimensions,
   resolveAllIconDimensions,
-} from './cdn-icons.js'
-import * as svg from './svg.js'
+  svg,
+} from '@shumoku/renderer-svg'
 
 export interface PngOptions {
   /** Scale factor for output resolution (default: 2) */
