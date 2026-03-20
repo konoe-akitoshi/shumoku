@@ -1,0 +1,51 @@
+{
+  "name": "@shumoku/renderer-html",
+  "version": "0.2.25",
+  "description": "HTML renderer for Shumoku network diagrams",
+  "license": "AGPL-3.0-only",
+  "author": "konoe-akitoshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/@shumoku/renderer-html"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/style.css",
+    "./iife": "./dist/shumoku-interactive.iife.js",
+    "./iife-string": {
+      "types": "./dist/iife-string.d.ts",
+      "import": "./dist/iife-string.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc && bun run build:css && bun run build:iife && bun run build:iife-string",
+    "build:css": "bun src/build-css.ts",
+    "build:iife": "bun src/build-iife.ts",
+    "build:iife-string": "bun src/build-iife-string.ts",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@shumoku/core": "^0.2.23",
+    "@shumoku/renderer-svg": "^0.2.25"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.6.3",
+    "vitest": "^3.1.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

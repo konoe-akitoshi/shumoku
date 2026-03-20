@@ -27,7 +27,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build packages
-        run: bun run build --filter='./packages/**'
+        run: bun run build --filter='./libs/**'
 
       - name: Create Release Pull Request or Publish
         id: changesets
