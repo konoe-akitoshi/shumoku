@@ -1,0 +1,82 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/konoe-akitoshi/shumoku
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: shumoku.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  storageClass: ""
+  existingClaim: ""
+
+config: {}
+  # server:
+  #   port: 8080
+  #   host: 0.0.0.0
+  #   dataDir: /data
+  # topologies:
+  #   - name: main-network
+  #     file: /data/topologies/main.yaml
+  # weathermap:
+  #   thresholds:
+  #     - value: 0
+  #       color: '#73BF69'
+  #     - value: 50
+  #       color: '#FADE2A'
+  #     - value: 75
+  #       color: '#FF9830'
+  #     - value: 90
+  #       color: '#FF0000'
+
+env: []
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

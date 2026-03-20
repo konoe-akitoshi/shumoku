@@ -1,0 +1,11 @@
+apiVersion: v2
+name: shumoku
+description: Network topology visualization server
+type: application
+version: 0.1.0
+appVersion: "0.1.1"
+home: https://shumoku.packof.me/
+sources:
+  - https://github.com/konoe-akitoshi/shumoku
+maintainers:
+  - name: konoe-akitoshi
