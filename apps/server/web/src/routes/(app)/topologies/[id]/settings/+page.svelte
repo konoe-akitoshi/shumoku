@@ -1,698 +1,773 @@
 <script lang="ts">
-import { findBestInterfaceMatch } from '@shumoku/core'
-import { onMount } from 'svelte'
-import { page } from '$app/stores'
-import { goto } from '$app/navigation'
-import { api } from '$lib/api'
-import { Button } from '$lib/components/ui/button'
-import {
-  displaySettings,
-  metricsConnected,
-  liveUpdatesEnabled,
-  showTrafficFlow,
-  showNodeStatus,
-  mappingStore,
-  mappingLoading,
-  mappingError,
-  nodeMapping,
-  linkMapping,
-  mappingHosts,
-  hostInterfaces,
-  hostInterfacesLoading,
-} from '$lib/stores'
-import type {
-  Topology,
-  TopologyDataSource,
-  TopologyDataSourceInput,
-  DataSource,
-  SyncMode,
-  ParsedTopologyResponse,
-} from '$lib/types'
-import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-import PencilSimple from 'phosphor-svelte/lib/PencilSimple'
-import Trash from 'phosphor-svelte/lib/Trash'
-import Plus from 'phosphor-svelte/lib/Plus'
-import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise'
-import Copy from 'phosphor-svelte/lib/Copy'
-import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-import FloppyDisk from 'phosphor-svelte/lib/FloppyDisk'
-import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
-import Lightning from 'phosphor-svelte/lib/Lightning'
-import ArrowRight from 'phosphor-svelte/lib/ArrowRight'
-import Star from 'phosphor-svelte/lib/Star'
-import ArrowDown from 'phosphor-svelte/lib/ArrowDown'
+  import { findBestInterfaceMatch } from '@shumoku/core'
+  import { onMount } from 'svelte'
+  import { page } from '$app/stores'
+  import { goto } from '$app/navigation'
+  import { api } from '$lib/api'
+  import { Button } from '$lib/components/ui/button'
+  import {
+    displaySettings,
+    metricsConnected,
+    liveUpdatesEnabled,
+    showTrafficFlow,
+    showNodeStatus,
+    mappingStore,
+    mappingLoading,
+    mappingError,
+    nodeMapping,
+    linkMapping,
+    mappingHosts,
+    hostInterfaces,
+    hostInterfacesLoading,
+  } from '$lib/stores'
+  import type {
+    Topology,
+    TopologyDataSource,
+    TopologyDataSourceInput,
+    DataSource,
+    SyncMode,
+    ParsedTopologyResponse,
+  } from '$lib/types'
+  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
+  import PencilSimple from 'phosphor-svelte/lib/PencilSimple'
+  import Trash from 'phosphor-svelte/lib/Trash'
+  import Plus from 'phosphor-svelte/lib/Plus'
+  import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise'
+  import Copy from 'phosphor-svelte/lib/Copy'
+  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
+  import FloppyDisk from 'phosphor-svelte/lib/FloppyDisk'
+  import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
+  import Lightning from 'phosphor-svelte/lib/Lightning'
+  import ArrowRight from 'phosphor-svelte/lib/ArrowRight'
+  import Star from 'phosphor-svelte/lib/Star'
+  import ArrowDown from 'phosphor-svelte/lib/ArrowDown'
 
-// ============================================
-// State
-// ============================================
+  // ============================================
+  // State
+  // ============================================
 
-let topologyId = $derived($page.params.id!)
+  let topologyId = $derived($page.params.id!)
 
-// Tab state - check URL hash for initial tab
-let activeTab = $state<'general' | 'sources' | 'mapping'>('general')
+  // Tab state - check URL hash for initial tab
+  let activeTab = $state<'general' | 'sources' | 'mapping'>('general')
 
-// General data
-let topology = $state<Topology | null>(null)
-let loading = $state(true)
-let error = $state('')
-let deleting = $state(false)
-let renderData = $state<{ nodeCount: number; edgeCount: number } | null>(null)
+  // General data
+  let topology = $state<Topology | null>(null)
+  let loading = $state(true)
+  let error = $state('')
+  let deleting = $state(false)
+  let renderData = $state<{ nodeCount: number; edgeCount: number } | null>(null)
 
-// Edge style settings
-let edgeStyle = $state('orthogonal')
-let splineMode = $state('sloppy')
-let savingEdgeStyle = $state(false)
+  // Edge style settings
+  let edgeStyle = $state('orthogonal')
+  let splineMode = $state('sloppy')
+  let savingEdgeStyle = $state(false)
 
-// Sources state
-let currentSources = $state<TopologyDataSource[]>([])
-let editableSources = $state<TopologyDataSourceInput[]>([])
-let topologyDataSources = $state<DataSource[]>([])
-let metricsDataSources = $state<DataSource[]>([])
-let savingSources = $state(false)
-let hasSourceChanges = $state(false)
-let syncing = $state(false)
-let syncResult = $state<{ nodeCount: number; linkCount: number } | null>(null)
-let copiedSecret = $state<string | null>(null)
+  // Sources state
+  let currentSources = $state<TopologyDataSource[]>([])
+  let editableSources = $state<TopologyDataSourceInput[]>([])
+  let topologyDataSources = $state<DataSource[]>([])
+  let metricsDataSources = $state<DataSource[]>([])
+  let savingSources = $state(false)
+  let hasSourceChanges = $state(false)
+  let syncing = $state(false)
+  let syncResult = $state<{ nodeCount: number; linkCount: number } | null>(null)
+  let copiedSecret = $state<string | null>(null)
 
-// Filter options cache
-let filterOptionsCache = $state<Record<string, {
-  sites: { slug: string; name: string }[]
-  tags: { slug: string; name: string }[]
-  roles?: { slug: string; name: string }[]
-}>>({})
-let filterOptionsLoading = $state<Record<string, boolean>>({})
-
-// Merge state
-let baseSourceId = $state<string | null>(null)
-let overlayConfigs = $state<Record<string, OverlayConfig>>({})
-let hasMergeChanges = $state(false)
-
-// Mapping state
-let parsedTopology = $state<ParsedTopologyResponse | null>(null)
-let savingMapping = $state(false)
-let nodeSearchQuery = $state('')
-let autoMapResult = $state<{ matched: number; total: number; kind: 'nodes' | 'links' } | null>(null)
-let singleCandidateFallback = $state(true)
-
-interface EdgeData {
-  id: string
-  from: { nodeId: string; port?: string }
-  to: { nodeId: string; port?: string }
-  bandwidth?: string
-}
-let edges = $state<EdgeData[]>([])
-
-// ============================================
-// Types
-// ============================================
-
-type MergeMatchStrategy = 'id' | 'name' | 'attribute' | 'manual'
-type MergeMergeStrategy = 'merge-properties' | 'keep-base' | 'keep-overlay'
-type MergeUnmatchedStrategy = 'add-to-root' | 'add-to-subgraph' | 'ignore'
-
-interface OverlayConfig {
-  match: MergeMatchStrategy
-  matchAttribute?: string
-  idMapping?: Record<string, string>
-  onMatch: MergeMergeStrategy
-  onUnmatched: MergeUnmatchedStrategy
-  subgraphName?: string
-}
-
-interface MergeConfig {
-  isBase?: boolean
-  match?: MergeMatchStrategy
-  matchAttribute?: string
-  idMapping?: Record<string, string>
-  onMatch?: MergeMergeStrategy
-  onUnmatched?: MergeUnmatchedStrategy
-  subgraphName?: string
-}
-
-interface NetBoxOptions {
-  groupBy?: string
-  siteFilter?: string[]
-  tagFilter?: string[]
-  roleFilter?: string[]
-  excludeRoleFilter?: string[]
-  excludeTagFilter?: string[]
-}
-
-// ============================================
-// Derived
-// ============================================
-
-let metricsSourceId = $derived($mappingStore.metricsSourceId)
-let hasMetricsSource = $derived(!!metricsSourceId)
-
-let topologySources = $derived(editableSources.filter(s => s.purpose === 'topology'))
-let metricsSources = $derived(editableSources.filter(s => s.purpose === 'metrics'))
-let hasMultipleTopologySources = $derived(topologySources.length >= 2)
-
-let overlaySources = $derived(currentSources.filter(s => s.purpose === 'topology' && s.dataSourceId !== baseSourceId))
-
-let filteredNodes = $derived(
-  parsedTopology?.graph.nodes.filter(node => {
-    if (!nodeSearchQuery) return true
-    const label = getNodeLabel(node).toLowerCase()
-    return label.includes(nodeSearchQuery.toLowerCase())
-  }) || []
-)
-
-let mappedCount = $derived(
-  parsedTopology?.graph.nodes.filter(n => $nodeMapping[n.id]?.hostId).length || 0
-)
-let totalNodes = $derived(parsedTopology?.graph.nodes.length || 0)
-let mappedLinksCount = $derived(
-  edges.filter(e => {
-    const m = $linkMapping[e.id]
-    return m?.monitoredNodeId && m?.interface
-  }).length
-)
-let totalLinks = $derived(edges.length)
-
-// ============================================
-// Lifecycle
-// ============================================
-
-onMount(async () => {
-  // Check URL hash for initial tab
-  const hash = window.location.hash.slice(1)
-  if (hash === 'sources' || hash === 'mapping') {
-    activeTab = hash
-  }
-
-  await loadData()
-})
-
-async function loadData() {
-  try {
-    const [topoData, renderResponse, sources, topoSources, metricsSrcs] = await Promise.all([
-      api.topologies.get(topologyId),
-      fetch(`/api/topologies/${topologyId}/render`).then(r => r.json()),
-      api.topologies.sources.list(topologyId),
-      api.dataSources.listByCapability('topology'),
-      api.dataSources.listByCapability('metrics'),
-    ])
-
-    topology = topoData
-    renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
-    currentSources = sources
-    topologyDataSources = topoSources
-    metricsDataSources = metricsSrcs
-
-    // Parse graph settings
-    parseGraphSettings()
-
-    // Initialize editable sources
-    editableSources = sources.map(s => ({
-      dataSourceId: s.dataSourceId,
-      purpose: s.purpose,
-      syncMode: s.syncMode,
-      priority: s.priority,
-      optionsJson: s.optionsJson,
-    }))
-
-    // Load filter options for NetBox sources
-    for (const s of editableSources) {
-      loadFilterOptions(s.dataSourceId)
-    }
-
-    // Initialize merge state
-    for (const source of sources.filter(s => s.purpose === 'topology')) {
-      const config = parseMergeConfig(source.optionsJson)
-      if (config.isBase) {
-        baseSourceId = source.dataSourceId
-      } else {
-        overlayConfigs[source.dataSourceId] = {
-          match: config.match || 'name',
-          matchAttribute: config.matchAttribute,
-          idMapping: config.idMapping,
-          onMatch: config.onMatch || 'merge-properties',
-          onUnmatched: config.onUnmatched || 'add-to-subgraph',
-          subgraphName: config.subgraphName,
-        }
+  // Filter options cache
+  let filterOptionsCache = $state<
+    Record<
+      string,
+      {
+        sites: { slug: string; name: string }[]
+        tags: { slug: string; name: string }[]
+        roles?: { slug: string; name: string }[]
       }
+    >
+  >({})
+  let filterOptionsLoading = $state<Record<string, boolean>>({})
+
+  // Merge state
+  let baseSourceId = $state<string | null>(null)
+  let overlayConfigs = $state<Record<string, OverlayConfig>>({})
+  let hasMergeChanges = $state(false)
+
+  // Mapping state
+  let parsedTopology = $state<ParsedTopologyResponse | null>(null)
+  let savingMapping = $state(false)
+  let nodeSearchQuery = $state('')
+  let autoMapResult = $state<{ matched: number; total: number; kind: 'nodes' | 'links' } | null>(
+    null,
+  )
+  let singleCandidateFallback = $state(true)
+
+  interface EdgeData {
+    id: string
+    from: { nodeId: string; port?: string }
+    to: { nodeId: string; port?: string }
+    bandwidth?: string
+  }
+  let edges = $state<EdgeData[]>([])
+
+  // ============================================
+  // Types
+  // ============================================
+
+  type MergeMatchStrategy = 'id' | 'name' | 'attribute' | 'manual'
+  type MergeMergeStrategy = 'merge-properties' | 'keep-base' | 'keep-overlay'
+  type MergeUnmatchedStrategy = 'add-to-root' | 'add-to-subgraph' | 'ignore'
+
+  interface OverlayConfig {
+    match: MergeMatchStrategy
+    matchAttribute?: string
+    idMapping?: Record<string, string>
+    onMatch: MergeMergeStrategy
+    onUnmatched: MergeUnmatchedStrategy
+    subgraphName?: string
+  }
+
+  interface MergeConfig {
+    isBase?: boolean
+    match?: MergeMatchStrategy
+    matchAttribute?: string
+    idMapping?: Record<string, string>
+    onMatch?: MergeMergeStrategy
+    onUnmatched?: MergeUnmatchedStrategy
+    subgraphName?: string
+  }
+
+  interface NetBoxOptions {
+    groupBy?: string
+    siteFilter?: string[]
+    tagFilter?: string[]
+    roleFilter?: string[]
+    excludeRoleFilter?: string[]
+    excludeTagFilter?: string[]
+  }
+
+  // ============================================
+  // Derived
+  // ============================================
+
+  let metricsSourceId = $derived($mappingStore.metricsSourceId)
+  let hasMetricsSource = $derived(!!metricsSourceId)
+
+  let topologySources = $derived(editableSources.filter((s) => s.purpose === 'topology'))
+  let metricsSources = $derived(editableSources.filter((s) => s.purpose === 'metrics'))
+  let hasMultipleTopologySources = $derived(topologySources.length >= 2)
+
+  let overlaySources = $derived(
+    currentSources.filter((s) => s.purpose === 'topology' && s.dataSourceId !== baseSourceId),
+  )
+
+  let filteredNodes = $derived(
+    parsedTopology?.graph.nodes.filter((node) => {
+      if (!nodeSearchQuery) return true
+      const label = getNodeLabel(node).toLowerCase()
+      return label.includes(nodeSearchQuery.toLowerCase())
+    }) || [],
+  )
+
+  let mappedCount = $derived(
+    parsedTopology?.graph.nodes.filter((n) => $nodeMapping[n.id]?.hostId).length || 0,
+  )
+  let totalNodes = $derived(parsedTopology?.graph.nodes.length || 0)
+  let mappedLinksCount = $derived(
+    edges.filter((e) => {
+      const m = $linkMapping[e.id]
+      return m?.monitoredNodeId && m?.interface
+    }).length,
+  )
+  let totalLinks = $derived(edges.length)
+
+  // ============================================
+  // Lifecycle
+  // ============================================
+
+  onMount(async () => {
+    // Check URL hash for initial tab
+    const hash = window.location.hash.slice(1)
+    if (hash === 'sources' || hash === 'mapping') {
+      activeTab = hash
     }
 
-    if (!baseSourceId && sources.filter(s => s.purpose === 'topology').length > 0) {
-      baseSourceId = sources.find(s => s.purpose === 'topology')?.dataSourceId || null
-    }
+    await loadData()
+  })
 
-    // Load mapping data
-    await loadMappingData()
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to load topology'
-  } finally {
-    loading = false
-  }
-}
+  async function loadData() {
+    try {
+      const [topoData, renderResponse, sources, topoSources, metricsSrcs] = await Promise.all([
+        api.topologies.get(topologyId),
+        fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
+        api.topologies.sources.list(topologyId),
+        api.dataSources.listByCapability('topology'),
+        api.dataSources.listByCapability('metrics'),
+      ])
 
-async function loadMappingData() {
-  try {
-    await mappingStore.load(topologyId, false)
-    const contextData = await api.topologies.getContext(topologyId)
-    edges = contextData.edges
-    parsedTopology = {
-      id: contextData.id,
-      name: contextData.name,
-      graph: {
-        nodes: contextData.nodes.map(n => ({
-          id: n.id,
-          label: n.label,
-          type: n.type,
-          vendor: n.vendor,
-        })),
-        links: contextData.edges.map(e => ({
-          id: e.id,
-          from: e.from.nodeId,
-          to: e.to.nodeId,
-          bandwidth: e.bandwidth,
-        })),
-      },
-      layout: { nodes: {} },
-      metrics: contextData.metrics,
-      dataSourceId: contextData.dataSourceId,
-      mapping: contextData.mapping,
-    }
-    loadInterfacesForMappedNodes()
-  } catch {
-    // Mapping may not be available
-  }
-}
+      topology = topoData
+      renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
+      currentSources = sources
+      topologyDataSources = topoSources
+      metricsDataSources = metricsSrcs
 
-// ============================================
-// General Tab Functions
-// ============================================
+      // Parse graph settings
+      parseGraphSettings()
 
-function parseGraphSettings() {
-  try {
-    const graph = JSON.parse(topology?.contentJson || '{}')
-    edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
-    splineMode = graph.settings?.splineMode || 'sloppy'
-  } catch {
-    // Use defaults
-  }
-}
+      // Initialize editable sources
+      editableSources = sources.map((s) => ({
+        dataSourceId: s.dataSourceId,
+        purpose: s.purpose,
+        syncMode: s.syncMode,
+        priority: s.priority,
+        optionsJson: s.optionsJson,
+      }))
 
-async function updateEdgeStyle() {
-  if (!topology) return
-  savingEdgeStyle = true
-  try {
-    const graph = JSON.parse(topology.contentJson)
-    graph.settings = graph.settings || {}
-    graph.settings.edgeStyle = edgeStyle
-    if (edgeStyle === 'splines') {
-      graph.settings.splineMode = splineMode
-    } else {
-      delete graph.settings.splineMode
-    }
-    const updated = await api.topologies.update(topology.id, { contentJson: JSON.stringify(graph) })
-    if (updated) topology = updated
-  } catch (e) {
-    console.error('Failed to update edge style:', e)
-  } finally {
-    savingEdgeStyle = false
-  }
-}
+      // Load filter options for NetBox sources
+      for (const s of editableSources) {
+        loadFilterOptions(s.dataSourceId)
+      }
 
-async function handleDelete() {
-  if (!topology) return
-  if (!confirm(`Delete topology "${topology.name}"? This action cannot be undone.`)) return
-  deleting = true
-  try {
-    await api.topologies.delete(topology.id)
-    goto('/topologies')
-  } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to delete')
-    deleting = false
-  }
-}
-
-// ============================================
-// Sources Tab Functions
-// ============================================
-
-function getDataSource(id: string): DataSource | undefined {
-  return [...topologyDataSources, ...metricsDataSources].find(ds => ds.id === id)
-}
-
-function getCurrentSource(dataSourceId: string, purpose: string): TopologyDataSource | undefined {
-  return currentSources.find(s => s.dataSourceId === dataSourceId && s.purpose === purpose)
-}
-
-function getSourcesByPurpose(purpose: 'topology' | 'metrics') {
-  return editableSources.map((s, index) => ({ ...s, index })).filter(s => s.purpose === purpose)
-}
-
-function addSource(purpose: 'topology' | 'metrics') {
-  const availableSources = purpose === 'topology' ? topologyDataSources : metricsDataSources
-  const existing = editableSources.filter(s => s.purpose === purpose).map(s => s.dataSourceId)
-  const available = availableSources.filter(ds => !existing.includes(ds.id))
-  if (available.length === 0) {
-    alert('No more data sources available to add')
-    return
-  }
-  editableSources = [...editableSources, {
-    dataSourceId: available[0].id,
-    purpose,
-    syncMode: 'manual',
-    priority: existing.length,
-  }]
-  hasSourceChanges = true
-}
-
-function removeSource(index: number) {
-  editableSources = editableSources.filter((_, i) => i !== index)
-  hasSourceChanges = true
-}
-
-function updateSource(index: number, updates: Partial<TopologyDataSourceInput>) {
-  editableSources = editableSources.map((s, i) => i === index ? { ...s, ...updates } : s)
-  hasSourceChanges = true
-  if (updates.dataSourceId) loadFilterOptions(updates.dataSourceId)
-}
-
-async function loadFilterOptions(dataSourceId: string) {
-  if (filterOptionsCache[dataSourceId] || filterOptionsLoading[dataSourceId]) return
-  const ds = getDataSource(dataSourceId)
-  if (ds?.type !== 'netbox') return
-  filterOptionsLoading = { ...filterOptionsLoading, [dataSourceId]: true }
-  try {
-    const options = await api.dataSources.getFilterOptions(dataSourceId)
-    filterOptionsCache = { ...filterOptionsCache, [dataSourceId]: options }
-  } catch {
-    // silently fail
-  } finally {
-    filterOptionsLoading = { ...filterOptionsLoading, [dataSourceId]: false }
-  }
-}
-
-function parseOptions(optionsJson?: string): NetBoxOptions {
-  if (!optionsJson) return {}
-  try {
-    const raw = JSON.parse(optionsJson)
-    if (typeof raw.siteFilter === 'string') raw.siteFilter = raw.siteFilter ? [raw.siteFilter] : []
-    if (typeof raw.tagFilter === 'string') raw.tagFilter = raw.tagFilter ? [raw.tagFilter] : []
-    if (typeof raw.roleFilter === 'string') raw.roleFilter = raw.roleFilter ? [raw.roleFilter] : []
-    if (typeof raw.excludeRoleFilter === 'string') raw.excludeRoleFilter = raw.excludeRoleFilter ? [raw.excludeRoleFilter] : []
-    if (typeof raw.excludeTagFilter === 'string') raw.excludeTagFilter = raw.excludeTagFilter ? [raw.excludeTagFilter] : []
-    return raw
-  } catch {
-    return {}
-  }
-}
-
-function updateOptions(index: number, patch: Partial<NetBoxOptions>) {
-  const current = parseOptions(editableSources[index].optionsJson)
-  const merged = { ...current, ...patch }
-  if (!merged.groupBy) delete merged.groupBy
-  if (!merged.siteFilter?.length) delete merged.siteFilter
-  if (!merged.tagFilter?.length) delete merged.tagFilter
-  if (!merged.roleFilter?.length) delete merged.roleFilter
-  if (!merged.excludeRoleFilter?.length) delete merged.excludeRoleFilter
-  if (!merged.excludeTagFilter?.length) delete merged.excludeTagFilter
-  const json = Object.keys(merged).length > 0 ? JSON.stringify(merged) : undefined
-  updateSource(index, { optionsJson: json })
-}
-
-function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
-  const current = arr || []
-  return current.includes(value) ? current.filter(v => v !== value) : [...current, value]
-}
-
-async function handleSaveSources() {
-  savingSources = true
-  error = ''
-  try {
-    // Include merge config in optionsJson
-    const sourcesWithMerge = editableSources.map(source => {
-      if (source.purpose !== 'topology') return source
-
-      const otherOptions = getOtherOptions(source.optionsJson)
-      let mergeConfig: MergeConfig = {}
-
-      if (source.dataSourceId === baseSourceId) {
-        mergeConfig = { isBase: true }
-      } else {
-        const overlay = overlayConfigs[source.dataSourceId]
-        if (overlay) {
-          mergeConfig = {
-            match: overlay.match,
-            matchAttribute: overlay.matchAttribute,
-            idMapping: overlay.idMapping,
-            onMatch: overlay.onMatch,
-            onUnmatched: overlay.onUnmatched,
-            subgraphName: overlay.subgraphName,
+      // Initialize merge state
+      for (const source of sources.filter((s) => s.purpose === 'topology')) {
+        const config = parseMergeConfig(source.optionsJson)
+        if (config.isBase) {
+          baseSourceId = source.dataSourceId
+        } else {
+          overlayConfigs[source.dataSourceId] = {
+            match: config.match || 'name',
+            matchAttribute: config.matchAttribute,
+            idMapping: config.idMapping,
+            onMatch: config.onMatch || 'merge-properties',
+            onUnmatched: config.onUnmatched || 'add-to-subgraph',
+            subgraphName: config.subgraphName,
           }
         }
       }
 
-      const combined: Record<string, unknown> = { ...otherOptions, ...mergeConfig }
-      for (const key of Object.keys(combined)) {
-        if (combined[key] === undefined || combined[key] === '') delete combined[key]
+      if (!baseSourceId && sources.filter((s) => s.purpose === 'topology').length > 0) {
+        baseSourceId = sources.find((s) => s.purpose === 'topology')?.dataSourceId || null
       }
 
-      return {
-        ...source,
-        optionsJson: Object.keys(combined).length > 0 ? JSON.stringify(combined) : undefined,
+      // Load mapping data
+      await loadMappingData()
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to load topology'
+    } finally {
+      loading = false
+    }
+  }
+
+  async function loadMappingData() {
+    try {
+      await mappingStore.load(topologyId, false)
+      const contextData = await api.topologies.getContext(topologyId)
+      edges = contextData.edges
+      parsedTopology = {
+        id: contextData.id,
+        name: contextData.name,
+        graph: {
+          nodes: contextData.nodes.map((n) => ({
+            id: n.id,
+            label: n.label,
+            type: n.type,
+            vendor: n.vendor,
+          })),
+          links: contextData.edges.map((e) => ({
+            id: e.id,
+            from: e.from.nodeId,
+            to: e.to.nodeId,
+            bandwidth: e.bandwidth,
+          })),
+        },
+        layout: { nodes: {} },
+        metrics: contextData.metrics,
+        dataSourceId: contextData.dataSourceId,
+        mapping: contextData.mapping,
       }
-    })
-
-    const updated = await api.topologies.sources.replaceAll(topologyId, sourcesWithMerge)
-    currentSources = updated
-    editableSources = updated.map(s => ({
-      dataSourceId: s.dataSourceId,
-      purpose: s.purpose,
-      syncMode: s.syncMode,
-      priority: s.priority,
-      optionsJson: s.optionsJson,
-    }))
-    hasSourceChanges = false
-    hasMergeChanges = false
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to save'
-  } finally {
-    savingSources = false
+      loadInterfacesForMappedNodes()
+    } catch {
+      // Mapping may not be available
+    }
   }
-}
 
-async function handleSyncAll() {
-  syncing = true
-  syncResult = null
-  try {
-    const result = await api.topologies.sources.syncAll(topologyId)
-    syncResult = { nodeCount: result.nodeCount, linkCount: result.linkCount }
-    topology = result.topology
-  } catch (e) {
-    alert(e instanceof Error ? e.message : 'Sync failed')
-  } finally {
-    syncing = false
+  // ============================================
+  // General Tab Functions
+  // ============================================
+
+  function parseGraphSettings() {
+    try {
+      const graph = JSON.parse(topology?.contentJson || '{}')
+      edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
+      splineMode = graph.settings?.splineMode || 'sloppy'
+    } catch {
+      // Use defaults
+    }
   }
-}
 
-function getWebhookUrl(source: TopologyDataSource): string {
-  return `${window.location.origin}/api/webhooks/topology/${source.webhookSecret}`
-}
-
-async function copyWebhookUrl(source: TopologyDataSource) {
-  await navigator.clipboard.writeText(getWebhookUrl(source))
-  copiedSecret = source.id
-  setTimeout(() => { copiedSecret = null }, 2000)
-}
-
-// Merge functions
-function parseMergeConfig(optionsJson?: string): MergeConfig {
-  if (!optionsJson) return {}
-  try { return JSON.parse(optionsJson) } catch { return {} }
-}
-
-function getOtherOptions(optionsJson?: string): Record<string, unknown> {
-  if (!optionsJson) return {}
-  try {
-    const parsed = JSON.parse(optionsJson)
-    const { isBase, match, matchAttribute, idMapping, onMatch, onUnmatched, subgraphName, ...rest } = parsed
-    return rest
-  } catch { return {} }
-}
-
-function setBaseSource(dataSourceId: string) {
-  baseSourceId = dataSourceId
-  hasMergeChanges = true
-  hasSourceChanges = true
-}
-
-function updateOverlayConfig(dataSourceId: string, updates: Partial<OverlayConfig>) {
-  overlayConfigs = {
-    ...overlayConfigs,
-    [dataSourceId]: { ...overlayConfigs[dataSourceId], ...updates },
+  async function updateEdgeStyle() {
+    if (!topology) return
+    savingEdgeStyle = true
+    try {
+      const graph = JSON.parse(topology.contentJson)
+      graph.settings = graph.settings || {}
+      graph.settings.edgeStyle = edgeStyle
+      if (edgeStyle === 'splines') {
+        graph.settings.splineMode = splineMode
+      } else {
+        delete graph.settings.splineMode
+      }
+      const updated = await api.topologies.update(topology.id, {
+        contentJson: JSON.stringify(graph),
+      })
+      if (updated) topology = updated
+    } catch (e) {
+      console.error('Failed to update edge style:', e)
+    } finally {
+      savingEdgeStyle = false
+    }
   }
-  hasMergeChanges = true
-  hasSourceChanges = true
-}
 
-function getSourceName(dataSourceId: string): string {
-  const source = currentSources.find(s => s.dataSourceId === dataSourceId)
-  return source?.dataSource?.name || dataSourceId
-}
-
-function getSourceType(dataSourceId: string): string {
-  const source = currentSources.find(s => s.dataSourceId === dataSourceId)
-  return source?.dataSource?.type || 'unknown'
-}
-
-// ============================================
-// Mapping Tab Functions
-// ============================================
-
-function getNodeLabel(node: { label?: string | string[] }): string {
-  let label: string
-  if (Array.isArray(node.label)) {
-    label = node.label[0] || 'Unnamed'
-  } else {
-    label = node.label || 'Unnamed'
+  async function handleDelete() {
+    if (!topology) return
+    if (!confirm(`Delete topology "${topology.name}"? This action cannot be undone.`)) return
+    deleting = true
+    try {
+      await api.topologies.delete(topology.id)
+      goto('/topologies')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to delete')
+      deleting = false
+    }
   }
-  return label.replace(/<[^>]*>/g, '')
-}
 
-function getNodeLabelById(nodeId: string): string {
-  const node = parsedTopology?.graph.nodes.find(n => n.id === nodeId)
-  if (!node) return nodeId
-  return getNodeLabel(node)
-}
+  // ============================================
+  // Sources Tab Functions
+  // ============================================
 
-function loadInterfacesForMappedNodes() {
-  const hostIds = new Set<string>()
-  for (const edge of edges) {
-    const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
-    const toHostId = $nodeMapping[edge.to.nodeId]?.hostId
-    if (fromHostId) hostIds.add(fromHostId)
-    if (toHostId) hostIds.add(toHostId)
+  function getDataSource(id: string): DataSource | undefined {
+    return [...topologyDataSources, ...metricsDataSources].find((ds) => ds.id === id)
   }
-  for (const hostId of hostIds) {
-    mappingStore.loadHostInterfaces(hostId)
+
+  function getCurrentSource(dataSourceId: string, purpose: string): TopologyDataSource | undefined {
+    return currentSources.find((s) => s.dataSourceId === dataSourceId && s.purpose === purpose)
   }
-}
 
-function handleNodeMappingChange(nodeId: string, hostId: string) {
-  const host = $mappingHosts.find(h => h.id === hostId)
-  mappingStore.updateNode(nodeId, hostId ? { hostId, hostName: host?.name || host?.displayName } : {})
-  if (hostId) mappingStore.loadHostInterfaces(hostId)
-}
-
-function handleAutoMap() {
-  if (!parsedTopology) return
-  autoMapResult = { ...mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false }), kind: 'nodes' }
-  setTimeout(() => { autoMapResult = null }, 5000)
-}
-
-function handleClearAll() {
-  if (confirm('Clear all node mappings?')) {
-    mappingStore.clearAllNodes()
-    autoMapResult = null
+  function getSourcesByPurpose(purpose: 'topology' | 'metrics') {
+    return editableSources.map((s, index) => ({ ...s, index })).filter((s) => s.purpose === purpose)
   }
-}
 
-async function handleSaveMapping() {
-  savingMapping = true
-  try {
-    await mappingStore.save()
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to save mapping'
-  } finally {
-    savingMapping = false
+  function addSource(purpose: 'topology' | 'metrics') {
+    const availableSources = purpose === 'topology' ? topologyDataSources : metricsDataSources
+    const existing = editableSources.filter((s) => s.purpose === purpose).map((s) => s.dataSourceId)
+    const available = availableSources.filter((ds) => !existing.includes(ds.id))
+    if (available.length === 0) {
+      alert('No more data sources available to add')
+      return
+    }
+    editableSources = [
+      ...editableSources,
+      {
+        dataSourceId: available[0].id,
+        purpose,
+        syncMode: 'manual',
+        priority: existing.length,
+      },
+    ]
+    hasSourceChanges = true
   }
-}
 
-function handleMonitoredNodeChange(linkId: string, nodeId: string) {
-  const existing = $linkMapping[linkId] || {}
-  if (nodeId) {
-    mappingStore.updateLink(linkId, { ...existing, monitoredNodeId: nodeId, interface: undefined })
-    const hostId = $nodeMapping[nodeId]?.hostId
-    if (hostId) mappingStore.loadHostInterfaces(hostId)
-  } else {
-    mappingStore.updateLink(linkId, { ...existing, monitoredNodeId: undefined, interface: undefined })
+  function removeSource(index: number) {
+    editableSources = editableSources.filter((_, i) => i !== index)
+    hasSourceChanges = true
   }
-}
 
-function handleLinkInterfaceChange(linkId: string, interfaceName: string) {
-  const existing = $linkMapping[linkId] || {}
-  mappingStore.updateLink(linkId, { ...existing, interface: interfaceName || undefined })
-}
+  function updateSource(index: number, updates: Partial<TopologyDataSourceInput>) {
+    editableSources = editableSources.map((s, i) => (i === index ? { ...s, ...updates } : s))
+    hasSourceChanges = true
+    if (updates.dataSourceId) loadFilterOptions(updates.dataSourceId)
+  }
 
-const standardCapacities = new Set(['100000000', '1000000000', '10000000000', '25000000000', '40000000000', '100000000000'])
-let customCapacityLinks = $state(new Set<string>())
+  async function loadFilterOptions(dataSourceId: string) {
+    if (filterOptionsCache[dataSourceId] || filterOptionsLoading[dataSourceId]) return
+    const ds = getDataSource(dataSourceId)
+    if (ds?.type !== 'netbox') return
+    filterOptionsLoading = { ...filterOptionsLoading, [dataSourceId]: true }
+    try {
+      const options = await api.dataSources.getFilterOptions(dataSourceId)
+      filterOptionsCache = { ...filterOptionsCache, [dataSourceId]: options }
+    } catch {
+      // silently fail
+    } finally {
+      filterOptionsLoading = { ...filterOptionsLoading, [dataSourceId]: false }
+    }
+  }
 
-function capacityToSelectValue(linkId: string, capacity?: number): string {
-  if (customCapacityLinks.has(linkId)) return 'custom'
-  if (!capacity) return ''
-  const s = String(capacity)
-  return standardCapacities.has(s) ? s : 'custom'
-}
+  function parseOptions(optionsJson?: string): NetBoxOptions {
+    if (!optionsJson) return {}
+    try {
+      const raw = JSON.parse(optionsJson)
+      if (typeof raw.siteFilter === 'string')
+        raw.siteFilter = raw.siteFilter ? [raw.siteFilter] : []
+      if (typeof raw.tagFilter === 'string') raw.tagFilter = raw.tagFilter ? [raw.tagFilter] : []
+      if (typeof raw.roleFilter === 'string')
+        raw.roleFilter = raw.roleFilter ? [raw.roleFilter] : []
+      if (typeof raw.excludeRoleFilter === 'string')
+        raw.excludeRoleFilter = raw.excludeRoleFilter ? [raw.excludeRoleFilter] : []
+      if (typeof raw.excludeTagFilter === 'string')
+        raw.excludeTagFilter = raw.excludeTagFilter ? [raw.excludeTagFilter] : []
+      return raw
+    } catch {
+      return {}
+    }
+  }
 
-function handleLinkCapacityChange(linkId: string, capacityBps: number | undefined) {
-  const existing = $linkMapping[linkId] || {}
-  if (capacityBps !== undefined) {
-    mappingStore.updateLink(linkId, { ...existing, capacity: capacityBps })
-  } else {
-    const { capacity: _, ...rest } = existing
-    if (Object.keys(rest).length > 0) {
-      mappingStore.updateLink(linkId, rest)
+  function updateOptions(index: number, patch: Partial<NetBoxOptions>) {
+    const current = parseOptions(editableSources[index].optionsJson)
+    const merged = { ...current, ...patch }
+    if (!merged.groupBy) delete merged.groupBy
+    if (!merged.siteFilter?.length) delete merged.siteFilter
+    if (!merged.tagFilter?.length) delete merged.tagFilter
+    if (!merged.roleFilter?.length) delete merged.roleFilter
+    if (!merged.excludeRoleFilter?.length) delete merged.excludeRoleFilter
+    if (!merged.excludeTagFilter?.length) delete merged.excludeTagFilter
+    const json = Object.keys(merged).length > 0 ? JSON.stringify(merged) : undefined
+    updateSource(index, { optionsJson: json })
+  }
+
+  function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
+    const current = arr || []
+    return current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
+  }
+
+  async function handleSaveSources() {
+    savingSources = true
+    error = ''
+    try {
+      // Include merge config in optionsJson
+      const sourcesWithMerge = editableSources.map((source) => {
+        if (source.purpose !== 'topology') return source
+
+        const otherOptions = getOtherOptions(source.optionsJson)
+        let mergeConfig: MergeConfig = {}
+
+        if (source.dataSourceId === baseSourceId) {
+          mergeConfig = { isBase: true }
+        } else {
+          const overlay = overlayConfigs[source.dataSourceId]
+          if (overlay) {
+            mergeConfig = {
+              match: overlay.match,
+              matchAttribute: overlay.matchAttribute,
+              idMapping: overlay.idMapping,
+              onMatch: overlay.onMatch,
+              onUnmatched: overlay.onUnmatched,
+              subgraphName: overlay.subgraphName,
+            }
+          }
+        }
+
+        const combined: Record<string, unknown> = { ...otherOptions, ...mergeConfig }
+        for (const key of Object.keys(combined)) {
+          if (combined[key] === undefined || combined[key] === '') delete combined[key]
+        }
+
+        return {
+          ...source,
+          optionsJson: Object.keys(combined).length > 0 ? JSON.stringify(combined) : undefined,
+        }
+      })
+
+      const updated = await api.topologies.sources.replaceAll(topologyId, sourcesWithMerge)
+      currentSources = updated
+      editableSources = updated.map((s) => ({
+        dataSourceId: s.dataSourceId,
+        purpose: s.purpose,
+        syncMode: s.syncMode,
+        priority: s.priority,
+        optionsJson: s.optionsJson,
+      }))
+      hasSourceChanges = false
+      hasMergeChanges = false
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to save'
+    } finally {
+      savingSources = false
+    }
+  }
+
+  async function handleSyncAll() {
+    syncing = true
+    syncResult = null
+    try {
+      const result = await api.topologies.sources.syncAll(topologyId)
+      syncResult = { nodeCount: result.nodeCount, linkCount: result.linkCount }
+      topology = result.topology
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Sync failed')
+    } finally {
+      syncing = false
+    }
+  }
+
+  function getWebhookUrl(source: TopologyDataSource): string {
+    return `${window.location.origin}/api/webhooks/topology/${source.webhookSecret}`
+  }
+
+  async function copyWebhookUrl(source: TopologyDataSource) {
+    await navigator.clipboard.writeText(getWebhookUrl(source))
+    copiedSecret = source.id
+    setTimeout(() => {
+      copiedSecret = null
+    }, 2000)
+  }
+
+  // Merge functions
+  function parseMergeConfig(optionsJson?: string): MergeConfig {
+    if (!optionsJson) return {}
+    try {
+      return JSON.parse(optionsJson)
+    } catch {
+      return {}
+    }
+  }
+
+  function getOtherOptions(optionsJson?: string): Record<string, unknown> {
+    if (!optionsJson) return {}
+    try {
+      const parsed = JSON.parse(optionsJson)
+      const {
+        isBase,
+        match,
+        matchAttribute,
+        idMapping,
+        onMatch,
+        onUnmatched,
+        subgraphName,
+        ...rest
+      } = parsed
+      return rest
+    } catch {
+      return {}
+    }
+  }
+
+  function setBaseSource(dataSourceId: string) {
+    baseSourceId = dataSourceId
+    hasMergeChanges = true
+    hasSourceChanges = true
+  }
+
+  function updateOverlayConfig(dataSourceId: string, updates: Partial<OverlayConfig>) {
+    overlayConfigs = {
+      ...overlayConfigs,
+      [dataSourceId]: { ...overlayConfigs[dataSourceId], ...updates },
+    }
+    hasMergeChanges = true
+    hasSourceChanges = true
+  }
+
+  function getSourceName(dataSourceId: string): string {
+    const source = currentSources.find((s) => s.dataSourceId === dataSourceId)
+    return source?.dataSource?.name || dataSourceId
+  }
+
+  function getSourceType(dataSourceId: string): string {
+    const source = currentSources.find((s) => s.dataSourceId === dataSourceId)
+    return source?.dataSource?.type || 'unknown'
+  }
+
+  // ============================================
+  // Mapping Tab Functions
+  // ============================================
+
+  function getNodeLabel(node: { label?: string | string[] }): string {
+    let label: string
+    if (Array.isArray(node.label)) {
+      label = node.label[0] || 'Unnamed'
     } else {
-      mappingStore.updateLink(linkId, null)
+      label = node.label || 'Unnamed'
+    }
+    return label.replace(/<[^>]*>/g, '')
+  }
+
+  function getNodeLabelById(nodeId: string): string {
+    const node = parsedTopology?.graph.nodes.find((n) => n.id === nodeId)
+    if (!node) return nodeId
+    return getNodeLabel(node)
+  }
+
+  function loadInterfacesForMappedNodes() {
+    const hostIds = new Set<string>()
+    for (const edge of edges) {
+      const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
+      const toHostId = $nodeMapping[edge.to.nodeId]?.hostId
+      if (fromHostId) hostIds.add(fromHostId)
+      if (toHostId) hostIds.add(toHostId)
+    }
+    for (const hostId of hostIds) {
+      mappingStore.loadHostInterfaces(hostId)
     }
   }
-}
 
-function handleAutoMapLinks() {
-  let matched = 0
-  for (const edge of edges) {
-    const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
-    const toHostId = $nodeMapping[edge.to.nodeId]?.hostId
-    const fromInterfaces = fromHostId ? $hostInterfaces[fromHostId] || [] : []
-    const toInterfaces = toHostId ? $hostInterfaces[toHostId] || [] : []
-    const currentMapping = $linkMapping[edge.id] || {}
-    if (currentMapping.interface) continue
+  function handleNodeMappingChange(nodeId: string, hostId: string) {
+    const host = $mappingHosts.find((h) => h.id === hostId)
+    mappingStore.updateNode(
+      nodeId,
+      hostId ? { hostId, hostName: host?.name || host?.displayName } : {},
+    )
+    if (hostId) mappingStore.loadHostInterfaces(hostId)
+  }
 
-    let monitoredNodeId: string | null = null
-    let matchedInterface: string | null = null
-
-    if (fromHostId && fromInterfaces.length > 0 && edge.from.port) {
-      const match = findMatchingInterface(edge.from.port, fromInterfaces)
-      if (match) { monitoredNodeId = edge.from.nodeId; matchedInterface = match }
+  function handleAutoMap() {
+    if (!parsedTopology) return
+    autoMapResult = {
+      ...mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false }),
+      kind: 'nodes',
     }
-    if (!matchedInterface && toHostId && toInterfaces.length > 0 && edge.to.port) {
-      const match = findMatchingInterface(edge.to.port, toInterfaces)
-      if (match) { monitoredNodeId = edge.to.nodeId; matchedInterface = match }
-    }
-    if (!matchedInterface) {
-      if (fromHostId && fromInterfaces.length > 0) monitoredNodeId = edge.from.nodeId
-      else if (toHostId && toInterfaces.length > 0) monitoredNodeId = edge.to.nodeId
-    }
+    setTimeout(() => {
+      autoMapResult = null
+    }, 5000)
+  }
 
-    if (monitoredNodeId && matchedInterface) {
-      mappingStore.updateLink(edge.id, { ...currentMapping, monitoredNodeId, interface: matchedInterface })
-      matched++
-    } else if (monitoredNodeId && !currentMapping.monitoredNodeId) {
-      mappingStore.updateLink(edge.id, { ...currentMapping, monitoredNodeId })
+  function handleClearAll() {
+    if (confirm('Clear all node mappings?')) {
+      mappingStore.clearAllNodes()
+      autoMapResult = null
     }
   }
-  return matched
-}
 
-function findMatchingInterface(portName: string, interfaces: Array<{ name: string }>): string | null {
-  return findBestInterfaceMatch(portName, interfaces.map((i) => i.name), { singleCandidateFallback })
-}
+  async function handleSaveMapping() {
+    savingMapping = true
+    try {
+      await mappingStore.save()
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to save mapping'
+    } finally {
+      savingMapping = false
+    }
+  }
+
+  function handleMonitoredNodeChange(linkId: string, nodeId: string) {
+    const existing = $linkMapping[linkId] || {}
+    if (nodeId) {
+      mappingStore.updateLink(linkId, {
+        ...existing,
+        monitoredNodeId: nodeId,
+        interface: undefined,
+      })
+      const hostId = $nodeMapping[nodeId]?.hostId
+      if (hostId) mappingStore.loadHostInterfaces(hostId)
+    } else {
+      mappingStore.updateLink(linkId, {
+        ...existing,
+        monitoredNodeId: undefined,
+        interface: undefined,
+      })
+    }
+  }
+
+  function handleLinkInterfaceChange(linkId: string, interfaceName: string) {
+    const existing = $linkMapping[linkId] || {}
+    mappingStore.updateLink(linkId, { ...existing, interface: interfaceName || undefined })
+  }
+
+  const standardCapacities = new Set([
+    '100000000',
+    '1000000000',
+    '10000000000',
+    '25000000000',
+    '40000000000',
+    '100000000000',
+  ])
+  let customCapacityLinks = $state(new Set<string>())
+
+  function capacityToSelectValue(linkId: string, capacity?: number): string {
+    if (customCapacityLinks.has(linkId)) return 'custom'
+    if (!capacity) return ''
+    const s = String(capacity)
+    return standardCapacities.has(s) ? s : 'custom'
+  }
+
+  function handleLinkCapacityChange(linkId: string, capacityBps: number | undefined) {
+    const existing = $linkMapping[linkId] || {}
+    if (capacityBps !== undefined) {
+      mappingStore.updateLink(linkId, { ...existing, capacity: capacityBps })
+    } else {
+      const { capacity: _, ...rest } = existing
+      if (Object.keys(rest).length > 0) {
+        mappingStore.updateLink(linkId, rest)
+      } else {
+        mappingStore.updateLink(linkId, null)
+      }
+    }
+  }
+
+  function handleAutoMapLinks() {
+    let matched = 0
+    for (const edge of edges) {
+      const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
+      const toHostId = $nodeMapping[edge.to.nodeId]?.hostId
+      const fromInterfaces = fromHostId ? $hostInterfaces[fromHostId] || [] : []
+      const toInterfaces = toHostId ? $hostInterfaces[toHostId] || [] : []
+      const currentMapping = $linkMapping[edge.id] || {}
+      if (currentMapping.interface) continue
+
+      let monitoredNodeId: string | null = null
+      let matchedInterface: string | null = null
+
+      if (fromHostId && fromInterfaces.length > 0 && edge.from.port) {
+        const match = findMatchingInterface(edge.from.port, fromInterfaces)
+        if (match) {
+          monitoredNodeId = edge.from.nodeId
+          matchedInterface = match
+        }
+      }
+      if (!matchedInterface && toHostId && toInterfaces.length > 0 && edge.to.port) {
+        const match = findMatchingInterface(edge.to.port, toInterfaces)
+        if (match) {
+          monitoredNodeId = edge.to.nodeId
+          matchedInterface = match
+        }
+      }
+      if (!matchedInterface) {
+        if (fromHostId && fromInterfaces.length > 0) monitoredNodeId = edge.from.nodeId
+        else if (toHostId && toInterfaces.length > 0) monitoredNodeId = edge.to.nodeId
+      }
+
+      if (monitoredNodeId && matchedInterface) {
+        mappingStore.updateLink(edge.id, {
+          ...currentMapping,
+          monitoredNodeId,
+          interface: matchedInterface,
+        })
+        matched++
+      } else if (monitoredNodeId && !currentMapping.monitoredNodeId) {
+        mappingStore.updateLink(edge.id, { ...currentMapping, monitoredNodeId })
+      }
+    }
+    return matched
+  }
+
+  function findMatchingInterface(
+    portName: string,
+    interfaces: Array<{ name: string }>,
+  ): string | null {
+    return findBestInterfaceMatch(
+      portName,
+      interfaces.map((i) => i.name),
+      { singleCandidateFallback },
+    )
+  }
 </script>
 
-<svelte:head>
-  <title>Settings - {topology?.name || 'Topology'} - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Settings - {topology?.name || 'Topology'} - Shumoku</title> </svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
   {#if loading}
     <div class="flex items-center justify-center py-12">
-      <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div
+        class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"
+      ></div>
     </div>
   {:else if error && !topology}
     <div class="card p-6 text-center">
@@ -745,7 +820,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
     </div>
 
     {#if error}
-      <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm mb-6">{error}</div>
+      <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm mb-6">
+        {error}
+      </div>
     {/if}
 
     <!-- ============================================ -->
@@ -763,15 +840,21 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
               <div class="grid grid-cols-3 gap-4">
                 <div class="bg-theme-bg rounded-lg p-3">
                   <p class="text-xs text-theme-text-muted">Nodes</p>
-                  <p class="text-xl font-semibold text-theme-text-emphasis">{renderData.nodeCount}</p>
+                  <p class="text-xl font-semibold text-theme-text-emphasis">
+                    {renderData.nodeCount}
+                  </p>
                 </div>
                 <div class="bg-theme-bg rounded-lg p-3">
                   <p class="text-xs text-theme-text-muted">Edges</p>
-                  <p class="text-xl font-semibold text-theme-text-emphasis">{renderData.edgeCount}</p>
+                  <p class="text-xl font-semibold text-theme-text-emphasis">
+                    {renderData.edgeCount}
+                  </p>
                 </div>
                 <div class="bg-theme-bg rounded-lg p-3">
                   <p class="text-xs text-theme-text-muted">Updated</p>
-                  <p class="text-sm text-theme-text">{new Date(topology.updatedAt).toLocaleDateString()}</p>
+                  <p class="text-sm text-theme-text">
+                    {new Date(topology.updatedAt).toLocaleDateString()}
+                  </p>
                 </div>
               </div>
             </div>
@@ -803,7 +886,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
 
             {#if edgeStyle === 'splines'}
               <div>
-                <label for="splineMode" class="text-sm text-theme-text block mb-1">Spline Mode</label>
+                <label for="splineMode" class="text-sm text-theme-text block mb-1"
+                  >Spline Mode</label
+                >
                 <select
                   id="splineMode"
                   class="input w-full"
@@ -818,7 +903,7 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
               </div>
             {/if}
 
-            <hr class="border-theme-border" />
+            <hr class="border-theme-border">
 
             <!-- Connection Status -->
             <div class="flex items-center justify-between">
@@ -848,10 +933,12 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                 class="toggle"
                 checked={$liveUpdatesEnabled}
                 onchange={(e) => displaySettings.setLiveUpdates(e.currentTarget.checked)}
-              />
+              >
             </label>
 
-            <label class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}">
+            <label
+              class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}"
+            >
               <div>
                 <p class="text-sm text-theme-text">Traffic Flow</p>
                 <p class="text-xs text-theme-text-muted">Show link utilization colors</p>
@@ -862,10 +949,12 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                 checked={$showTrafficFlow}
                 disabled={!$liveUpdatesEnabled}
                 onchange={(e) => displaySettings.setShowTrafficFlow(e.currentTarget.checked)}
-              />
+              >
             </label>
 
-            <label class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}">
+            <label
+              class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}"
+            >
               <div>
                 <p class="text-sm text-theme-text">Node Status</p>
                 <p class="text-xs text-theme-text-muted">Show up/down indicators</p>
@@ -876,7 +965,7 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                 checked={$showNodeStatus}
                 disabled={!$liveUpdatesEnabled}
                 onchange={(e) => displaySettings.setShowNodeStatus(e.currentTarget.checked)}
-              />
+              >
             </label>
           </div>
         </div>
@@ -887,7 +976,10 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
             <h2 class="font-medium text-theme-text-emphasis">Actions</h2>
           </div>
           <div class="card-body">
-            <a href="/topologies/{topology.id}/edit" class="btn btn-secondary w-full justify-center">
+            <a
+              href="/topologies/{topology.id}/edit"
+              class="btn btn-secondary w-full justify-center"
+            >
               <PencilSimple size={16} class="mr-2" />
               Edit YAML
             </a>
@@ -900,10 +992,19 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
             <h2 class="font-medium text-danger">Danger Zone</h2>
           </div>
           <div class="card-body">
-            <p class="text-xs text-theme-text-muted mb-3">Once deleted, this topology cannot be recovered.</p>
-            <Button variant="destructive" class="w-full justify-center" onclick={handleDelete} disabled={deleting}>
+            <p class="text-xs text-theme-text-muted mb-3">
+              Once deleted, this topology cannot be recovered.
+            </p>
+            <Button
+              variant="destructive"
+              class="w-full justify-center"
+              onclick={handleDelete}
+              disabled={deleting}
+            >
               {#if deleting}
-                <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+                <span
+                  class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+                ></span>
               {:else}
                 <Trash size={16} class="mr-2" />
               {/if}
@@ -923,7 +1024,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
         <div class="flex justify-end">
           <Button onclick={handleSaveSources} disabled={savingSources || !hasSourceChanges}>
             {#if savingSources}
-              <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+              <span
+                class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+              ></span>
             {:else}
               <FloppyDisk size={16} class="mr-2" />
             {/if}
@@ -937,9 +1040,16 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
             <h2 class="font-medium text-theme-text-emphasis">Topology Sources</h2>
             <div class="flex items-center gap-2">
               {#if topologySources.length > 0}
-                <Button variant="secondary" size="sm" onclick={handleSyncAll} disabled={syncing || hasSourceChanges}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onclick={handleSyncAll}
+                  disabled={syncing || hasSourceChanges}
+                >
                   {#if syncing}
-                    <span class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></span>
+                    <span
+                      class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
+                    ></span>
                   {:else}
                     <ArrowsClockwise size={14} class="mr-1" />
                   {/if}
@@ -1001,8 +1111,12 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                               class="input font-mono text-xs flex-1"
                               value={getWebhookUrl(currentSource)}
                               readonly
-                            />
-                            <Button variant="outline" size="sm" onclick={() => copyWebhookUrl(currentSource)}>
+                            >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onclick={() => copyWebhookUrl(currentSource)}
+                            >
                               {#if copiedSecret === currentSource.id}
                                 <CheckCircle size={16} class="text-success" />
                               {:else}
@@ -1018,7 +1132,11 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                           {@const filterOpts = filterOptionsCache[source.dataSourceId]}
                           {@const isLoading = filterOptionsLoading[source.dataSourceId]}
                           <div class="border-t border-theme-border pt-3 space-y-3">
-                            <p class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">NetBox Options</p>
+                            <p
+                              class="text-xs font-medium text-theme-text-muted uppercase tracking-wide"
+                            >
+                              NetBox Options
+                            </p>
 
                             <div class="flex items-center gap-4">
                               <label class="text-xs text-theme-text-muted">Group By</label>
@@ -1048,7 +1166,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                                         class="px-2 py-0.5 rounded-full text-xs border cursor-pointer
                                           {selected ? 'bg-primary/15 border-primary/40 text-primary' : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
                                         onclick={() => updateOptions(source.index, { siteFilter: toggleArrayOption(opts.siteFilter, site.slug) })}
-                                      >{site.name}</button>
+                                      >
+                                        {site.name}
+                                      </button>
                                     {/each}
                                   </div>
                                 </div>
@@ -1063,7 +1183,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                                         class="px-2 py-0.5 rounded-full text-xs border cursor-pointer
                                           {selected ? 'bg-primary/15 border-primary/40 text-primary' : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
                                         onclick={() => updateOptions(source.index, { tagFilter: toggleArrayOption(opts.tagFilter, tag.slug) })}
-                                      >{tag.name}</button>
+                                      >
+                                        {tag.name}
+                                      </button>
                                     {/each}
                                   </div>
                                 </div>
@@ -1078,7 +1200,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                                         class="px-2 py-0.5 rounded-full text-xs border cursor-pointer
                                           {selected ? 'bg-primary/15 border-primary/40 text-primary' : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
                                         onclick={() => updateOptions(source.index, { roleFilter: toggleArrayOption(opts.roleFilter, role.slug) })}
-                                      >{role.name}</button>
+                                      >
+                                        {role.name}
+                                      </button>
                                     {/each}
                                   </div>
                                 </div>
@@ -1096,7 +1220,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                                         class="px-2 py-0.5 rounded-full text-xs border cursor-pointer
                                           {selected ? 'bg-danger/15 border-danger/40 text-danger' : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
                                         onclick={() => updateOptions(source.index, { excludeRoleFilter: toggleArrayOption(opts.excludeRoleFilter, role.slug) })}
-                                      >{role.name}</button>
+                                      >
+                                        {role.name}
+                                      </button>
                                     {/each}
                                   </div>
                                 </div>
@@ -1111,7 +1237,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                                         class="px-2 py-0.5 rounded-full text-xs border cursor-pointer
                                           {selected ? 'bg-danger/15 border-danger/40 text-danger' : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
                                         onclick={() => updateOptions(source.index, { excludeTagFilter: toggleArrayOption(opts.excludeTagFilter, tag.slug) })}
-                                      >{tag.name}</button>
+                                      >
+                                        {tag.name}
+                                      </button>
                                     {/each}
                                   </div>
                                 </div>
@@ -1122,7 +1250,12 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                           </div>
                         {/if}
                       </div>
-                      <Button variant="ghost" size="sm" class="text-danger hover:bg-danger/10" onclick={() => removeSource(source.index)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="text-danger hover:bg-danger/10"
+                        onclick={() => removeSource(source.index)}
+                      >
                         <Trash size={16} />
                       </Button>
                     </div>
@@ -1145,7 +1278,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
             <div class="card-body space-y-4">
               <!-- Base source selection -->
               <div>
-                <p class="text-xs text-theme-text-muted mb-2">Base Source (others merge into this)</p>
+                <p class="text-xs text-theme-text-muted mb-2">
+                  Base Source (others merge into this)
+                </p>
                 <div class="flex flex-wrap gap-2">
                   {#each currentSources.filter(s => s.purpose === 'topology') as source}
                     {@const isBase = source.dataSourceId === baseSourceId}
@@ -1170,7 +1305,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                 {#each overlaySources as source}
                   {@const config = overlayConfigs[source.dataSourceId] || { match: 'name', onMatch: 'merge-properties', onUnmatched: 'add-to-subgraph' }}
                   <div class="border border-theme-border rounded-lg p-4">
-                    <h3 class="font-medium text-theme-text-emphasis mb-3">{getSourceName(source.dataSourceId)}</h3>
+                    <h3 class="font-medium text-theme-text-emphasis mb-3">
+                      {getSourceName(source.dataSourceId)}
+                    </h3>
                     <div class="grid grid-cols-2 gap-3">
                       <div>
                         <label class="text-xs text-theme-text-muted">Match Strategy</label>
@@ -1222,7 +1359,7 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                             placeholder={getSourceType(source.dataSourceId)}
                             value={config.subgraphName || ''}
                             onchange={(e) => updateOverlayConfig(source.dataSourceId, { subgraphName: e.currentTarget.value })}
-                          />
+                          >
                         </div>
                       {/if}
                     </div>
@@ -1260,7 +1397,12 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                         <option value={ds.id}>{ds.name} ({ds.type})</option>
                       {/each}
                     </select>
-                    <Button variant="ghost" size="sm" class="text-danger hover:bg-danger/10" onclick={() => removeSource(source.index)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="text-danger hover:bg-danger/10"
+                      onclick={() => removeSource(source.index)}
+                    >
                       <Trash size={16} />
                     </Button>
                   </div>
@@ -1288,11 +1430,15 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
           <!-- Save button -->
           <div class="flex items-center justify-between">
             <div class="text-sm text-theme-text-muted">
-              {mappedCount}/{totalNodes} nodes • {mappedLinksCount}/{totalLinks} links
+              {mappedCount}/{totalNodes}
+              nodes • {mappedLinksCount}/{totalLinks}
+              links
             </div>
             <Button onclick={handleSaveMapping} disabled={savingMapping}>
               {#if savingMapping}
-                <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+                <span
+                  class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+                ></span>
               {:else}
                 <FloppyDisk size={16} class="mr-2" />
               {/if}
@@ -1301,7 +1447,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
           </div>
 
           {#if autoMapResult}
-            <div class="p-3 bg-success/10 border border-success/20 rounded-lg text-success text-sm flex items-center gap-2">
+            <div
+              class="p-3 bg-success/10 border border-success/20 rounded-lg text-success text-sm flex items-center gap-2"
+            >
               <CheckCircle size={16} />
               Auto-mapped {autoMapResult.matched} of {autoMapResult.total} {autoMapResult.kind}
             </div>
@@ -1313,25 +1461,38 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
               <div class="flex items-center justify-between gap-4 mb-3">
                 <h2 class="font-medium text-theme-text-emphasis">Node Mapping</h2>
                 <div class="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onclick={handleAutoMap} disabled={$mappingStore.hostsLoading}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onclick={handleAutoMap}
+                    disabled={$mappingStore.hostsLoading}
+                  >
                     <Lightning size={14} class="mr-1" />
                     Auto-map
                   </Button>
-                  <Button variant="outline" size="sm" onclick={handleClearAll} disabled={mappedCount === 0}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onclick={handleClearAll}
+                    disabled={mappedCount === 0}
+                  >
                     <Trash size={14} class="mr-1" />
                     Clear
                   </Button>
                 </div>
               </div>
               <div class="relative">
-                <MagnifyingGlass size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted" />
+                <MagnifyingGlass
+                  size={16}
+                  class="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted"
+                />
                 <input
                   type="text"
                   class="input w-full"
                   style="padding-left: 2.25rem;"
                   placeholder="Search nodes..."
                   bind:value={nodeSearchQuery}
-                />
+                >
               </div>
             </div>
             <div class="divide-y divide-theme-border max-h-96 overflow-y-auto">
@@ -1344,8 +1505,12 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                   {@const isMapped = !!$nodeMapping[node.id]?.hostId}
                   <div class="p-3 flex items-center gap-4">
                     <div class="flex-1 min-w-0">
-                      <p class="font-medium text-theme-text-emphasis truncate flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full flex-shrink-0 {isMapped ? 'bg-success' : 'bg-theme-text-muted'}"></span>
+                      <p
+                        class="font-medium text-theme-text-emphasis truncate flex items-center gap-2"
+                      >
+                        <span
+                          class="w-2 h-2 rounded-full flex-shrink-0 {isMapped ? 'bg-success' : 'bg-theme-text-muted'}"
+                        ></span>
                         {getNodeLabel(node)}
                       </p>
                       <p class="text-xs text-theme-text-muted">{node.type || 'Unknown'}</p>
@@ -1373,17 +1538,23 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
               <div class="flex items-center justify-between gap-4">
                 <h2 class="font-medium text-theme-text-emphasis">Link Mapping</h2>
                 <div class="flex items-center gap-3">
-                  <label class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
-                    <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded" />
+                  <label
+                    class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer"
+                  >
+                    <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded">
                     Single candidate fallback
                   </label>
-                  <Button variant="outline" size="sm" onclick={() => {
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onclick={() => {
                     const matched = handleAutoMapLinks()
                     if (matched > 0) {
                       autoMapResult = { matched, total: edges.length, kind: 'links' }
                       setTimeout(() => { autoMapResult = null }, 5000)
                     }
-                  }}>
+                  }}
+                  >
                     <Lightning size={14} class="mr-1" />
                     Auto-map
                   </Button>
@@ -1404,13 +1575,19 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                   {@const hasAnyMappedNode = !!fromHostId || !!toHostId}
                   <div class="p-3 space-y-2">
                     <div class="flex items-center gap-2 text-sm">
-                      <span class="w-2 h-2 rounded-full flex-shrink-0
-                        {currentMapping.monitoredNodeId && currentMapping.interface ? 'bg-success' : currentMapping.monitoredNodeId ? 'bg-warning' : 'bg-theme-text-muted'}"></span>
+                      <span
+                        class="w-2 h-2 rounded-full flex-shrink-0
+                        {currentMapping.monitoredNodeId && currentMapping.interface ? 'bg-success' : currentMapping.monitoredNodeId ? 'bg-warning' : 'bg-theme-text-muted'}"
+                      ></span>
                       <span class="font-medium">{getNodeLabelById(edge.from.nodeId)}</span>
-                      {#if edge.from.port}<span class="text-theme-text-muted">({edge.from.port})</span>{/if}
+                      {#if edge.from.port}
+                        <span class="text-theme-text-muted">({edge.from.port})</span>
+                      {/if}
                       <ArrowRight size={14} class="text-theme-text-muted" />
                       <span class="font-medium">{getNodeLabelById(edge.to.nodeId)}</span>
-                      {#if edge.to.port}<span class="text-theme-text-muted">({edge.to.port})</span>{/if}
+                      {#if edge.to.port}
+                        <span class="text-theme-text-muted">({edge.to.port})</span>
+                      {/if}
                     </div>
                     {#if hasAnyMappedNode}
                       <div class="flex items-center gap-2">
@@ -1421,8 +1598,16 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                           onchange={(e) => handleMonitoredNodeChange(edge.id, e.currentTarget.value)}
                         >
                           <option value="">Monitor from...</option>
-                          {#if fromHostId}<option value={edge.from.nodeId}>{getNodeLabelById(edge.from.nodeId)}</option>{/if}
-                          {#if toHostId}<option value={edge.to.nodeId}>{getNodeLabelById(edge.to.nodeId)}</option>{/if}
+                          {#if fromHostId}
+                            <option value={edge.from.nodeId}>
+                              {getNodeLabelById(edge.from.nodeId)}
+                            </option>
+                          {/if}
+                          {#if toHostId}
+                            <option value={edge.to.nodeId}>
+                              {getNodeLabelById(edge.to.nodeId)}
+                            </option>
+                          {/if}
                         </select>
                         {#if monitoredNodeId && interfaces.length > 0}
                           <select
@@ -1464,7 +1649,9 @@ function findMatchingInterface(portName: string, interfaces: Array<{ name: strin
                         </select>
                       </div>
                     {:else}
-                      <p class="text-xs text-theme-text-muted italic">Map at least one node first</p>
+                      <p class="text-xs text-theme-text-muted italic">
+                        Map at least one node first
+                      </p>
                     {/if}
                   </div>
                 {/each}

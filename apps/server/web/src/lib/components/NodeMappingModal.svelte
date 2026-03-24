@@ -1,250 +1,250 @@
 <script lang="ts">
-import { api } from '$lib/api'
-import * as Dialog from '$lib/components/ui/dialog'
-import { Button } from '$lib/components/ui/button'
-import { metricsData, mappingStore, mappingHosts } from '$lib/stores'
-import { formatTraffic } from '$lib/utils/format'
-import type { MetricsMapping, DiscoveredMetric } from '$lib/types'
-import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
-import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
-import Link from 'phosphor-svelte/lib/Link'
-import LinkBreak from 'phosphor-svelte/lib/LinkBreak'
-import Warning from 'phosphor-svelte/lib/Warning'
-import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-import GearSix from 'phosphor-svelte/lib/GearSix'
-import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
-import Cube from 'phosphor-svelte/lib/Cube'
-import ChartLine from 'phosphor-svelte/lib/ChartLine'
-import CaretDown from 'phosphor-svelte/lib/CaretDown'
-import CaretRight from 'phosphor-svelte/lib/CaretRight'
+  import { api } from '$lib/api'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { Button } from '$lib/components/ui/button'
+  import { metricsData, mappingStore, mappingHosts } from '$lib/stores'
+  import { formatTraffic } from '$lib/utils/format'
+  import type { MetricsMapping, DiscoveredMetric } from '$lib/types'
+  import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
+  import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
+  import Link from 'phosphor-svelte/lib/Link'
+  import LinkBreak from 'phosphor-svelte/lib/LinkBreak'
+  import Warning from 'phosphor-svelte/lib/Warning'
+  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
+  import GearSix from 'phosphor-svelte/lib/GearSix'
+  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
+  import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
+  import Cube from 'phosphor-svelte/lib/Cube'
+  import ChartLine from 'phosphor-svelte/lib/ChartLine'
+  import CaretDown from 'phosphor-svelte/lib/CaretDown'
+  import CaretRight from 'phosphor-svelte/lib/CaretRight'
 
-interface Props {
-  open: boolean
-  topologyId: string
-  metricsSourceId: string | undefined
-  netboxBaseUrl: string | undefined
-  nodeData: NodeSelectEvent | null
-  currentMapping: MetricsMapping | null
-  onSaved?: (nodeId: string, mapping: { hostId?: string; hostName?: string }) => void
-}
+  interface Props {
+    open: boolean
+    topologyId: string
+    metricsSourceId: string | undefined
+    netboxBaseUrl: string | undefined
+    nodeData: NodeSelectEvent | null
+    currentMapping: MetricsMapping | null
+    onSaved?: (nodeId: string, mapping: { hostId?: string; hostName?: string }) => void
+  }
 
-let {
-  open = $bindable(false),
-  topologyId,
-  metricsSourceId,
-  netboxBaseUrl,
-  nodeData = null,
-  currentMapping = null,
-  onSaved,
-}: Props = $props()
+  let {
+    open = $bindable(false),
+    topologyId,
+    metricsSourceId,
+    netboxBaseUrl,
+    nodeData = null,
+    currentMapping = null,
+    onSaved,
+  }: Props = $props()
 
-// View mode: 'status' shows current state, 'mapping' shows configuration
-let mode = $state<'status' | 'mapping'>('status')
+  // View mode: 'status' shows current state, 'mapping' shows configuration
+  let mode = $state<'status' | 'mapping'>('status')
 
-// State for mapping mode
-let selectedHostId = $state('')
-let saving = $state(false)
-let searchQuery = $state('')
+  // State for mapping mode
+  let selectedHostId = $state('')
+  let saving = $state(false)
+  let searchQuery = $state('')
 
-// Use hosts from shared store
-let hosts = $derived($mappingHosts)
-let loadingHosts = $derived($mappingStore.hostsLoading)
+  // Use hosts from shared store
+  let hosts = $derived($mappingHosts)
+  let loadingHosts = $derived($mappingStore.hostsLoading)
 
-// State for metrics discovery
-let discoveredMetrics = $state<DiscoveredMetric[]>([])
-let loadingMetrics = $state(false)
-let metricsError = $state('')
-let metricsExpanded = $state(false)
-let metricsSearchQuery = $state('')
+  // State for metrics discovery
+  let discoveredMetrics = $state<DiscoveredMetric[]>([])
+  let loadingMetrics = $state(false)
+  let metricsError = $state('')
+  let metricsExpanded = $state(false)
+  let metricsSearchQuery = $state('')
 
-// Computed
-let filteredHosts = $derived(
-  searchQuery
-    ? hosts.filter(
-        (h) =>
-          h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (h.displayName && h.displayName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (h.ip && h.ip.includes(searchQuery)),
-      )
-    : hosts,
-)
-
-let currentNodeMapping = $derived(nodeData && currentMapping?.nodes?.[nodeData.node.id])
-let hasMetricsSource = $derived(!!metricsSourceId)
-
-// Filter discovered metrics by search query
-let filteredMetrics = $derived(
-  metricsSearchQuery
-    ? discoveredMetrics.filter(
-        (m) =>
-          m.name.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||
-          (m.help && m.help.toLowerCase().includes(metricsSearchQuery.toLowerCase())) ||
-          Object.entries(m.labels).some(
-            ([k, v]) =>
-              k.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||
-              v.toLowerCase().includes(metricsSearchQuery.toLowerCase()),
-          ),
-      )
-    : discoveredMetrics,
-)
-
-// NetBox device URL (search by name since we don't have device ID)
-let netboxDeviceUrl = $derived(
-  netboxBaseUrl && nodeData?.node.id
-    ? `${netboxBaseUrl}/dcim/devices/?name=${encodeURIComponent(nodeData.node.id)}`
-    : undefined,
-)
-
-// Get current metrics for this node
-let nodeMetrics = $derived(nodeData ? $metricsData?.nodes?.[nodeData.node.id] : null)
-
-// Get metrics for connected links - explicitly access $metricsData outside reduce for reactivity
-let linkMetricsMap = $derived.by(() => {
-  const allLinkMetrics = $metricsData?.links
-  if (!nodeData?.connectedLinks || !allLinkMetrics) return {}
-
-  return nodeData.connectedLinks.reduce(
-    (acc, link) => {
-      const metrics = allLinkMetrics[link.id]
-      if (metrics) {
-        acc[link.id] = metrics
-      }
-      return acc
-    },
-    {} as Record<
-      string,
-      {
-        status: string
-        utilization?: number
-        inUtilization?: number
-        outUtilization?: number
-        inBps?: number
-        outBps?: number
-      }
-    >,
+  // Computed
+  let filteredHosts = $derived(
+    searchQuery
+      ? hosts.filter(
+          (h) =>
+            h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (h.displayName && h.displayName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (h.ip && h.ip.includes(searchQuery)),
+        )
+      : hosts,
   )
-})
 
-// Reset state when modal opens
-$effect(() => {
-  if (open) {
-    mode = 'status'
-    metricsExpanded = false
-    discoveredMetrics = []
-    metricsSearchQuery = ''
-  }
-})
+  let currentNodeMapping = $derived(nodeData && currentMapping?.nodes?.[nodeData.node.id])
+  let hasMetricsSource = $derived(!!metricsSourceId)
 
-// Hosts are loaded via shared store, no need to load separately
+  // Filter discovered metrics by search query
+  let filteredMetrics = $derived(
+    metricsSearchQuery
+      ? discoveredMetrics.filter(
+          (m) =>
+            m.name.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||
+            (m.help && m.help.toLowerCase().includes(metricsSearchQuery.toLowerCase())) ||
+            Object.entries(m.labels).some(
+              ([k, v]) =>
+                k.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||
+                v.toLowerCase().includes(metricsSearchQuery.toLowerCase()),
+            ),
+        )
+      : discoveredMetrics,
+  )
 
-// Set initial selected host when entering mapping mode
-$effect(() => {
-  if (mode === 'mapping' && nodeData && currentMapping) {
-    const mapping = currentMapping.nodes?.[nodeData.node.id]
-    selectedHostId = mapping?.hostId || ''
-  }
-})
+  // NetBox device URL (search by name since we don't have device ID)
+  let netboxDeviceUrl = $derived(
+    netboxBaseUrl && nodeData?.node.id
+      ? `${netboxBaseUrl}/dcim/devices/?name=${encodeURIComponent(nodeData.node.id)}`
+      : undefined,
+  )
 
-// Hosts are loaded via shared store
+  // Get current metrics for this node
+  let nodeMetrics = $derived(nodeData ? $metricsData?.nodes?.[nodeData.node.id] : null)
 
-async function loadDiscoveredMetrics() {
-  if (!metricsSourceId || !currentNodeMapping?.hostId) return
+  // Get metrics for connected links - explicitly access $metricsData outside reduce for reactivity
+  let linkMetricsMap = $derived.by(() => {
+    const allLinkMetrics = $metricsData?.links
+    if (!nodeData?.connectedLinks || !allLinkMetrics) return {}
 
-  loadingMetrics = true
-  metricsError = ''
-  try {
-    discoveredMetrics = await api.dataSources.discoverMetrics(
-      metricsSourceId,
-      currentNodeMapping.hostId,
+    return nodeData.connectedLinks.reduce(
+      (acc, link) => {
+        const metrics = allLinkMetrics[link.id]
+        if (metrics) {
+          acc[link.id] = metrics
+        }
+        return acc
+      },
+      {} as Record<
+        string,
+        {
+          status: string
+          utilization?: number
+          inUtilization?: number
+          outUtilization?: number
+          inBps?: number
+          outBps?: number
+        }
+      >,
     )
-  } catch (e) {
-    metricsError = e instanceof Error ? e.message : 'Failed to load metrics'
-  } finally {
-    loadingMetrics = false
-  }
-}
+  })
 
-function handleMetricsToggle() {
-  metricsExpanded = !metricsExpanded
-  if (metricsExpanded && discoveredMetrics.length === 0 && !loadingMetrics) {
-    loadDiscoveredMetrics()
-  }
-}
-
-function formatMetricValue(value: number): string {
-  if (value === 0) return '0'
-  if (Math.abs(value) >= 1e12) return `${(value / 1e12).toFixed(2)}T`
-  if (Math.abs(value) >= 1e9) return `${(value / 1e9).toFixed(2)}G`
-  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(2)}M`
-  if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(2)}K`
-  if (Number.isInteger(value)) return value.toString()
-  return value.toFixed(2)
-}
-
-async function handleSave() {
-  if (!nodeData) return
-
-  saving = true
-  try {
-    const selectedHost = hosts.find((h) => h.id === selectedHostId)
-    const mapping = selectedHostId ? { hostId: selectedHostId, hostName: selectedHost?.name } : {}
-
-    // Update via shared store (which handles API call)
-    await mappingStore.updateNode(nodeData.node.id, mapping)
-
-    if (onSaved) {
-      onSaved(nodeData.node.id, mapping)
+  // Reset state when modal opens
+  $effect(() => {
+    if (open) {
+      mode = 'status'
+      metricsExpanded = false
+      discoveredMetrics = []
+      metricsSearchQuery = ''
     }
-    mode = 'status' // Return to status view after saving
-  } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to save mapping')
-  } finally {
-    saving = false
+  })
+
+  // Hosts are loaded via shared store, no need to load separately
+
+  // Set initial selected host when entering mapping mode
+  $effect(() => {
+    if (mode === 'mapping' && nodeData && currentMapping) {
+      const mapping = currentMapping.nodes?.[nodeData.node.id]
+      selectedHostId = mapping?.hostId || ''
+    }
+  })
+
+  // Hosts are loaded via shared store
+
+  async function loadDiscoveredMetrics() {
+    if (!metricsSourceId || !currentNodeMapping?.hostId) return
+
+    loadingMetrics = true
+    metricsError = ''
+    try {
+      discoveredMetrics = await api.dataSources.discoverMetrics(
+        metricsSourceId,
+        currentNodeMapping.hostId,
+      )
+    } catch (e) {
+      metricsError = e instanceof Error ? e.message : 'Failed to load metrics'
+    } finally {
+      loadingMetrics = false
+    }
   }
-}
 
-function handleClear() {
-  selectedHostId = ''
-}
-
-function handleClose() {
-  open = false
-  searchQuery = ''
-  mode = 'status'
-}
-
-function formatUtilization(value: number | undefined): string {
-  if (value === undefined) return '-'
-  return `${value.toFixed(1)}%`
-}
-
-function getStatusColor(status: string | undefined): string {
-  switch (status) {
-    case 'up':
-      return 'text-success'
-    case 'down':
-      return 'text-destructive'
-    default:
-      return 'text-muted-foreground'
+  function handleMetricsToggle() {
+    metricsExpanded = !metricsExpanded
+    if (metricsExpanded && discoveredMetrics.length === 0 && !loadingMetrics) {
+      loadDiscoveredMetrics()
+    }
   }
-}
 
-function getStatusBgColor(status: string | undefined): string {
-  switch (status) {
-    case 'up':
-      return 'bg-success'
-    case 'down':
-      return 'bg-destructive'
-    default:
-      return 'bg-muted-foreground'
+  function formatMetricValue(value: number): string {
+    if (value === 0) return '0'
+    if (Math.abs(value) >= 1e12) return `${(value / 1e12).toFixed(2)}T`
+    if (Math.abs(value) >= 1e9) return `${(value / 1e9).toFixed(2)}G`
+    if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(2)}M`
+    if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(2)}K`
+    if (Number.isInteger(value)) return value.toString()
+    return value.toFixed(2)
   }
-}
 
-function stripHtmlTags(text: string | undefined): string {
-  if (!text) return ''
-  return text.replace(/<[^>]*>/g, '')
-}
+  async function handleSave() {
+    if (!nodeData) return
+
+    saving = true
+    try {
+      const selectedHost = hosts.find((h) => h.id === selectedHostId)
+      const mapping = selectedHostId ? { hostId: selectedHostId, hostName: selectedHost?.name } : {}
+
+      // Update via shared store (which handles API call)
+      await mappingStore.updateNode(nodeData.node.id, mapping)
+
+      if (onSaved) {
+        onSaved(nodeData.node.id, mapping)
+      }
+      mode = 'status' // Return to status view after saving
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to save mapping')
+    } finally {
+      saving = false
+    }
+  }
+
+  function handleClear() {
+    selectedHostId = ''
+  }
+
+  function handleClose() {
+    open = false
+    searchQuery = ''
+    mode = 'status'
+  }
+
+  function formatUtilization(value: number | undefined): string {
+    if (value === undefined) return '-'
+    return `${value.toFixed(1)}%`
+  }
+
+  function getStatusColor(status: string | undefined): string {
+    switch (status) {
+      case 'up':
+        return 'text-success'
+      case 'down':
+        return 'text-destructive'
+      default:
+        return 'text-muted-foreground'
+    }
+  }
+
+  function getStatusBgColor(status: string | undefined): string {
+    switch (status) {
+      case 'up':
+        return 'bg-success'
+      case 'down':
+        return 'bg-destructive'
+      default:
+        return 'bg-muted-foreground'
+    }
+  }
+
+  function stripHtmlTags(text: string | undefined): string {
+    if (!text) return ''
+    return text.replace(/<[^>]*>/g, '')
+  }
 </script>
 
 <Dialog.Root {open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
@@ -273,7 +273,8 @@ function stripHtmlTags(text: string | undefined): string {
             <!-- Status Row -->
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full {getStatusBgColor(nodeMetrics?.status)}"
+                <span
+                  class="w-2.5 h-2.5 rounded-full {getStatusBgColor(nodeMetrics?.status)}"
                 ></span>
                 <span class="font-medium {getStatusColor(nodeMetrics?.status)}">
                   {#if nodeMetrics?.status === 'up'}
@@ -343,7 +344,8 @@ function stripHtmlTags(text: string | undefined): string {
                   <div class="p-3 space-y-1">
                     <div class="flex items-center justify-between">
                       <span class="text-sm font-medium flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full {getStatusBgColor(metrics?.status)}"
+                        <span
+                          class="w-2 h-2 rounded-full {getStatusBgColor(metrics?.status)}"
                         ></span>
                         {isFrom ? '→' : '←'} {otherNode}
                       </span>
@@ -443,7 +445,7 @@ function stripHtmlTags(text: string | undefined): string {
                           placeholder="Search metrics..."
                           class="w-full pl-7 pr-2 py-1 text-xs bg-background border rounded focus:outline-none focus:ring-1 focus:ring-ring"
                           bind:value={metricsSearchQuery}
-                        />
+                        >
                       </div>
                     </div>
 
@@ -464,7 +466,7 @@ function stripHtmlTags(text: string | undefined): string {
                           {/if}
                           {#if Object.keys(metric.labels).length > 0}
                             <div class="flex flex-wrap gap-1">
-                              {#each Object.entries(metric.labels) as [key, value]}
+                              {#each Object.entries(metric.labels) as [ key, value ]}
                                 <span class="bg-muted px-1.5 py-0.5 rounded text-[10px]">
                                   {key}=<span class="text-muted-foreground">{value}</span>
                                 </span>
@@ -577,7 +579,7 @@ function stripHtmlTags(text: string | undefined): string {
                   placeholder="Search hosts..."
                   class="w-full pl-9 pr-3 py-2 text-sm bg-background border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                   bind:value={searchQuery}
-                />
+                >
               </div>
 
               <!-- Host List -->
@@ -598,7 +600,7 @@ function stripHtmlTags(text: string | undefined): string {
                           value={host.id}
                           bind:group={selectedHostId}
                           class="w-4 h-4"
-                        />
+                        >
                         <div class="flex-1 min-w-0">
                           <div class="text-sm font-medium truncate">
                             {host.displayName || host.name}

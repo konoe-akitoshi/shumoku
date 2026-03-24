@@ -1,404 +1,413 @@
 <script lang="ts">
-import { onMount, onDestroy } from 'svelte'
-import { api } from '$lib/api'
-import type { Topology } from '$lib/types'
-import { dashboardStore, dashboardEditMode } from '$lib/stores/dashboards'
-import { widgetEvents, type WidgetEvent } from '$lib/stores/widgetEvents'
-import {
-  metricsStore,
-  metricsData,
-  liveUpdatesEnabled,
-  showTrafficFlow,
-  showNodeStatus,
-} from '$lib/stores'
-import { WeathermapController } from '$lib/weathermap'
-import { highlightNodes, highlightByAttribute, clearHighlight as clearHighlightUtil } from '$lib/highlight'
-import WidgetWrapper from './WidgetWrapper.svelte'
-import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-import Spinner from 'phosphor-svelte/lib/Spinner'
-import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
+  import { onMount, onDestroy } from 'svelte'
+  import { api } from '$lib/api'
+  import type { Topology } from '$lib/types'
+  import { dashboardStore, dashboardEditMode } from '$lib/stores/dashboards'
+  import { widgetEvents, type WidgetEvent } from '$lib/stores/widgetEvents'
+  import {
+    metricsStore,
+    metricsData,
+    liveUpdatesEnabled,
+    showTrafficFlow,
+    showNodeStatus,
+  } from '$lib/stores'
+  import { WeathermapController } from '$lib/weathermap'
+  import {
+    highlightNodes,
+    highlightByAttribute,
+    clearHighlight as clearHighlightUtil,
+  } from '$lib/highlight'
+  import WidgetWrapper from './WidgetWrapper.svelte'
+  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+  import Spinner from 'phosphor-svelte/lib/Spinner'
+  import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
 
-interface SheetInfo {
-  id: string
-  name: string
-}
-
-interface Props {
-  id: string
-  config: {
-    topologyId?: string
-    sheetId?: string
-  }
-  onRemove?: () => void
-}
-
-let { id, config, onRemove }: Props = $props()
-
-let topology: Topology | null = $state(null)
-let topologies: Topology[] = $state([])
-let svgContent = $state('')
-let loading = $state(true)
-let error = $state('')
-let lastTopologyId = $state('')
-let lastSheetId = $state('')
-let showSelector = $state(false)
-
-// Hierarchical topology support
-let isHierarchical = $state(false)
-let sheets: SheetInfo[] = $state([])
-let renderSheets: Record<string, { svg: string }> = {}
-
-// Highlight support for widget events
-let highlightTimeout: ReturnType<typeof setTimeout> | null = null
-let containerElement = $state<HTMLDivElement | null>(null)
-let styleElement: HTMLStyleElement | null = null
-let unsubscribeEvents: (() => void) | null = null
-let savedViewBox: string | null = null
-
-// Live metrics
-let weathermap: WeathermapController | null = null
-
-async function loadTopologies() {
-  try {
-    topologies = await api.topologies.list()
-  } catch (err) {
-    console.error('Failed to load topologies:', err)
-  }
-}
-
-async function loadTopology() {
-  if (!config.topologyId) {
-    loading = false
-    return
+  interface SheetInfo {
+    id: string
+    name: string
   }
 
-  loading = true
-  error = ''
+  interface Props {
+    id: string
+    config: {
+      topologyId?: string
+      sheetId?: string
+    }
+    onRemove?: () => void
+  }
 
-  try {
-    topology = await api.topologies.get(config.topologyId)
+  let { id, config, onRemove }: Props = $props()
 
-    // Fetch rendered SVG
-    const renderResult = await fetch(`/api/topologies/${config.topologyId}/render`)
-    const renderData = await renderResult.json()
+  let topology: Topology | null = $state(null)
+  let topologies: Topology[] = $state([])
+  let svgContent = $state('')
+  let loading = $state(true)
+  let error = $state('')
+  let lastTopologyId = $state('')
+  let lastSheetId = $state('')
+  let showSelector = $state(false)
 
-    // Reset weathermap when SVG changes
+  // Hierarchical topology support
+  let isHierarchical = $state(false)
+  let sheets: SheetInfo[] = $state([])
+  let renderSheets: Record<string, { svg: string }> = {}
+
+  // Highlight support for widget events
+  let highlightTimeout: ReturnType<typeof setTimeout> | null = null
+  let containerElement = $state<HTMLDivElement | null>(null)
+  let styleElement: HTMLStyleElement | null = null
+  let unsubscribeEvents: (() => void) | null = null
+  let savedViewBox: string | null = null
+
+  // Live metrics
+  let weathermap: WeathermapController | null = null
+
+  async function loadTopologies() {
+    try {
+      topologies = await api.topologies.list()
+    } catch (err) {
+      console.error('Failed to load topologies:', err)
+    }
+  }
+
+  async function loadTopology() {
+    if (!config.topologyId) {
+      loading = false
+      return
+    }
+
+    loading = true
+    error = ''
+
+    try {
+      topology = await api.topologies.get(config.topologyId)
+
+      // Fetch rendered SVG
+      const renderResult = await fetch(`/api/topologies/${config.topologyId}/render`)
+      const renderData = await renderResult.json()
+
+      // Reset weathermap when SVG changes
+      weathermap?.destroy()
+      weathermap = null
+
+      if (renderData.hierarchical) {
+        isHierarchical = true
+        sheets = Object.entries(renderData.sheets).map(([sheetId, sheet]: [string, any]) => ({
+          id: sheetId,
+          name: sheet.name || sheetId,
+        }))
+        renderSheets = renderData.sheets
+        const sheetId = config.sheetId || 'root'
+        svgContent = renderSheets[sheetId]?.svg || ''
+        // All sheets share the same theme CSS; pick from any sheet
+        const firstSheet = Object.values(renderData.sheets)[0] as any
+        injectCSS(firstSheet?.css)
+      } else {
+        isHierarchical = false
+        sheets = []
+        renderSheets = {}
+        svgContent = renderData.svg
+        injectCSS(renderData.css)
+      }
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to load topology'
+    } finally {
+      loading = false
+    }
+  }
+
+  function injectCSS(css: string | undefined) {
+    if (!css) return
+    if (styleElement) {
+      styleElement.remove()
+    }
+    styleElement = document.createElement('style')
+    styleElement.setAttribute('data-shumoku-widget', id)
+    styleElement.textContent = css
+    document.head.appendChild(styleElement)
+  }
+
+  function selectTopology(topologyId: string) {
+    if (!topologyId) return
+    // Reset sheet when changing topology
+    dashboardStore.updateWidgetConfig(id, { topologyId, sheetId: 'root' })
+    config = { ...config, topologyId, sheetId: 'root' }
+    showSelector = false
+  }
+
+  function selectSheet(sheetId: string) {
+    if (!sheetId) return
+    dashboardStore.updateWidgetConfig(id, { sheetId })
+    config = { ...config, sheetId }
     weathermap?.destroy()
     weathermap = null
-
-    if (renderData.hierarchical) {
-      isHierarchical = true
-      sheets = Object.entries(renderData.sheets).map(([sheetId, sheet]: [string, any]) => ({
-        id: sheetId,
-        name: sheet.name || sheetId,
-      }))
-      renderSheets = renderData.sheets
-      const sheetId = config.sheetId || 'root'
-      svgContent = renderSheets[sheetId]?.svg || ''
-      // All sheets share the same theme CSS; pick from any sheet
-      const firstSheet = Object.values(renderData.sheets)[0] as any
-      injectCSS(firstSheet?.css)
-    } else {
-      isHierarchical = false
-      sheets = []
-      renderSheets = {}
-      svgContent = renderData.svg
-      injectCSS(renderData.css)
+    if (renderSheets[sheetId]) {
+      svgContent = renderSheets[sheetId].svg
     }
-  } catch (err) {
-    error = err instanceof Error ? err.message : 'Failed to load topology'
-  } finally {
-    loading = false
   }
-}
 
-function injectCSS(css: string | undefined) {
-  if (!css) return
-  if (styleElement) {
-    styleElement.remove()
-  }
-  styleElement = document.createElement('style')
-  styleElement.setAttribute('data-shumoku-widget', id)
-  styleElement.textContent = css
-  document.head.appendChild(styleElement)
-}
+  function handleWidgetEvent(event: WidgetEvent) {
+    // Only handle events for this topology
+    if (event.payload.topologyId !== config.topologyId) return
+    if (!containerElement) return
 
-function selectTopology(topologyId: string) {
-  if (!topologyId) return
-  // Reset sheet when changing topology
-  dashboardStore.updateWidgetConfig(id, { topologyId, sheetId: 'root' })
-  config = { ...config, topologyId, sheetId: 'root' }
-  showSelector = false
-}
-
-function selectSheet(sheetId: string) {
-  if (!sheetId) return
-  dashboardStore.updateWidgetConfig(id, { sheetId })
-  config = { ...config, sheetId }
-  weathermap?.destroy()
-  weathermap = null
-  if (renderSheets[sheetId]) {
-    svgContent = renderSheets[sheetId].svg
-  }
-}
-
-function handleWidgetEvent(event: WidgetEvent) {
-  // Only handle events for this topology
-  if (event.payload.topologyId !== config.topologyId) return
-  if (!containerElement) return
-
-  switch (event.type) {
-    case 'zoom-to-node':
-    case 'highlight-node': {
-      const nodeId = event.payload.nodeId
-      if (!nodeId) break
-      clearCurrentHighlight()
-      highlightNodes(containerElement, [nodeId])
-      autoExpireHighlight(event.payload.duration || 3000)
-      scrollToNode(nodeId)
-      break
-    }
-    case 'select-node': {
-      const nodeId = event.payload.nodeId
-      if (!nodeId) break
-      clearCurrentHighlight()
-      highlightNodes(containerElement, [nodeId])
-      scrollToNode(nodeId)
-      break
-    }
-    case 'highlight-nodes': {
-      const ids = event.payload.nodeIds
-      if (!ids?.length) break
-      clearCurrentHighlight()
-      if (event.payload.highlightColor && containerElement) {
-        containerElement.style.setProperty('--highlight-color', event.payload.highlightColor)
+    switch (event.type) {
+      case 'zoom-to-node':
+      case 'highlight-node': {
+        const nodeId = event.payload.nodeId
+        if (!nodeId) break
+        clearCurrentHighlight()
+        highlightNodes(containerElement, [nodeId])
+        autoExpireHighlight(event.payload.duration || 3000)
+        scrollToNode(nodeId)
+        break
       }
-      highlightNodes(containerElement, ids, { spotlight: event.payload.spotlight })
-      zoomToFitHighlighted()
-      if (event.payload.duration) autoExpireHighlight(event.payload.duration)
-      break
-    }
-    case 'highlight-by-attribute': {
-      const attr = event.payload.attribute
-      if (!attr) break
-      clearCurrentHighlight()
-      highlightByAttribute(containerElement, attr.key, attr.value, {
-        spotlight: event.payload.spotlight,
-      })
-      zoomToFitHighlighted()
-      if (event.payload.duration) autoExpireHighlight(event.payload.duration)
-      break
-    }
-    case 'clear-highlight':
-      clearCurrentHighlight()
-      break
-  }
-}
-
-function clearCurrentHighlight() {
-  if (highlightTimeout) {
-    clearTimeout(highlightTimeout)
-    highlightTimeout = null
-  }
-  if (containerElement) {
-    clearHighlightUtil(containerElement)
-    containerElement.style.removeProperty('--highlight-color')
-  }
-  restoreViewBox()
-}
-
-function autoExpireHighlight(duration: number) {
-  highlightTimeout = setTimeout(() => clearCurrentHighlight(), duration)
-}
-
-function scrollToNode(nodeId: string) {
-  if (!containerElement) return
-
-  const nodeElement = containerElement.querySelector(
-    `.node[data-id="${nodeId}"]`,
-  ) as SVGGElement | null
-  if (!nodeElement) return
-
-  const bbox = nodeElement.getBBox?.()
-  if (!bbox) return
-
-  const svg = containerElement.querySelector('svg')
-  if (!svg) return
-
-  const viewBox = svg.viewBox.baseVal
-  if (!viewBox) return
-
-  const nodeCenterX = bbox.x + bbox.width / 2
-  const nodeCenterY = bbox.y + bbox.height / 2
-
-  const padding = 100
-  const newWidth = Math.max(bbox.width + padding * 2, viewBox.width / 2)
-  const newHeight = Math.max(bbox.height + padding * 2, viewBox.height / 2)
-
-  const newViewBox = `${nodeCenterX - newWidth / 2} ${nodeCenterY - newHeight / 2} ${newWidth} ${newHeight}`
-
-  svg.style.transition = 'all 0.3s ease-out'
-  svg.setAttribute('viewBox', newViewBox)
-
-  setTimeout(() => {
-    svg.style.transition = 'all 0.5s ease-in-out'
-    svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`)
-  }, 2000)
-}
-
-/**
- * Zoom to fit multiple highlighted nodes.
- * The highlighted nodes will occupy ~70% of the viewport.
- */
-function zoomToFitHighlighted() {
-  if (!containerElement) return
-
-  const svg = containerElement.querySelector('svg')
-  if (!svg) return
-
-  const highlighted = containerElement.querySelectorAll('.node-highlighted') as NodeListOf<SVGGElement>
-  if (highlighted.length === 0) return
-
-  // Save original viewBox (only if not already saved)
-  const vb = svg.viewBox.baseVal
-  if (!savedViewBox && vb) {
-    savedViewBox = `${vb.x} ${vb.y} ${vb.width} ${vb.height}`
-  }
-
-  // Compute union bounding box of highlighted nodes
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const el of highlighted) {
-    const bbox = el.getBBox?.()
-    if (!bbox) continue
-    minX = Math.min(minX, bbox.x)
-    minY = Math.min(minY, bbox.y)
-    maxX = Math.max(maxX, bbox.x + bbox.width)
-    maxY = Math.max(maxY, bbox.y + bbox.height)
-  }
-
-  if (!isFinite(minX)) return
-
-  const contentW = maxX - minX
-  const contentH = maxY - minY
-  const cx = (minX + maxX) / 2
-  const cy = (minY + maxY) / 2
-
-  if (!vb || !vb.width || !vb.height) return
-
-  // How much we'd need to scale the original viewBox to fit content at 70%
-  const fillRatio = 0.7
-  const scaleX = contentW > 0 ? (fillRatio * vb.width) / contentW : 1
-  const scaleY = contentH > 0 ? (fillRatio * vb.height) / contentH : 1
-  const scale = Math.min(scaleX, scaleY)
-
-  // scale < 1 means we'd need to zoom out — skip
-  if (scale < 1) return
-
-  // New viewBox always matches display aspect ratio
-  const vbW = vb.width / scale
-  const vbH = vb.height / scale
-
-  svg.style.transition = 'all 0.3s ease-out'
-  svg.setAttribute('viewBox', `${cx - vbW / 2} ${cy - vbH / 2} ${vbW} ${vbH}`)
-}
-
-function restoreViewBox() {
-  if (!savedViewBox || !containerElement) return
-  const svg = containerElement.querySelector('svg')
-  if (!svg) return
-  svg.style.transition = 'all 0.3s ease-in-out'
-  svg.setAttribute('viewBox', savedViewBox)
-  savedViewBox = null
-}
-
-// Connect to live metrics when topology is ready
-$effect(() => {
-  if ($liveUpdatesEnabled && config.topologyId && !loading) {
-    metricsStore.connect()
-    metricsStore.subscribeToTopology(config.topologyId)
-  }
-})
-
-// Apply live metrics (node status + traffic flow)
-$effect(() => {
-  const metrics = $metricsData
-  const live = $liveUpdatesEnabled
-  const flow = $showTrafficFlow
-  const status = $showNodeStatus
-  if (!containerElement || !live) return
-  const svg = containerElement.querySelector('svg') as SVGSVGElement | null
-  if (!svg) return
-
-  if (flow && metrics?.links) {
-    if (!weathermap) weathermap = new WeathermapController(svg)
-    weathermap.apply(metrics.links)
-  } else {
-    weathermap?.reset()
-  }
-
-  if (status && metrics?.nodes) {
-    for (const [nodeId, nodeMetrics] of Object.entries(metrics.nodes)) {
-      const nodeGroup = svg.querySelector(`g.node[data-id="${nodeId}"]`)
-      if (!nodeGroup) continue
-      nodeGroup.classList.remove('status-up', 'status-down', 'status-unknown')
-      nodeGroup.classList.add(`status-${nodeMetrics.status}`)
-    }
-  } else {
-    for (const node of svg.querySelectorAll('g.node')) {
-      node.classList.remove('status-up', 'status-down', 'status-unknown')
+      case 'select-node': {
+        const nodeId = event.payload.nodeId
+        if (!nodeId) break
+        clearCurrentHighlight()
+        highlightNodes(containerElement, [nodeId])
+        scrollToNode(nodeId)
+        break
+      }
+      case 'highlight-nodes': {
+        const ids = event.payload.nodeIds
+        if (!ids?.length) break
+        clearCurrentHighlight()
+        if (event.payload.highlightColor && containerElement) {
+          containerElement.style.setProperty('--highlight-color', event.payload.highlightColor)
+        }
+        highlightNodes(containerElement, ids, { spotlight: event.payload.spotlight })
+        zoomToFitHighlighted()
+        if (event.payload.duration) autoExpireHighlight(event.payload.duration)
+        break
+      }
+      case 'highlight-by-attribute': {
+        const attr = event.payload.attribute
+        if (!attr) break
+        clearCurrentHighlight()
+        highlightByAttribute(containerElement, attr.key, attr.value, {
+          spotlight: event.payload.spotlight,
+        })
+        zoomToFitHighlighted()
+        if (event.payload.duration) autoExpireHighlight(event.payload.duration)
+        break
+      }
+      case 'clear-highlight':
+        clearCurrentHighlight()
+        break
     }
   }
-})
 
-onMount(() => {
-  loadTopologies()
-  loadTopology()
-
-  // Subscribe to widget events
-  unsubscribeEvents = widgetEvents.on(handleWidgetEvent)
-})
-
-onDestroy(() => {
-  if (unsubscribeEvents) {
-    unsubscribeEvents()
+  function clearCurrentHighlight() {
+    if (highlightTimeout) {
+      clearTimeout(highlightTimeout)
+      highlightTimeout = null
+    }
+    if (containerElement) {
+      clearHighlightUtil(containerElement)
+      containerElement.style.removeProperty('--highlight-color')
+    }
+    restoreViewBox()
   }
-  clearCurrentHighlight()
-  weathermap?.destroy()
-  weathermap = null
-  metricsStore.unsubscribe()
-  if (styleElement) {
-    styleElement.remove()
-    styleElement = null
-  }
-})
 
-// Watch for topology ID changes
-$effect(() => {
-  if (config.topologyId && config.topologyId !== lastTopologyId) {
-    lastTopologyId = config.topologyId
+  function autoExpireHighlight(duration: number) {
+    highlightTimeout = setTimeout(() => clearCurrentHighlight(), duration)
+  }
+
+  function scrollToNode(nodeId: string) {
+    if (!containerElement) return
+
+    const nodeElement = containerElement.querySelector(
+      `.node[data-id="${nodeId}"]`,
+    ) as SVGGElement | null
+    if (!nodeElement) return
+
+    const bbox = nodeElement.getBBox?.()
+    if (!bbox) return
+
+    const svg = containerElement.querySelector('svg')
+    if (!svg) return
+
+    const viewBox = svg.viewBox.baseVal
+    if (!viewBox) return
+
+    const nodeCenterX = bbox.x + bbox.width / 2
+    const nodeCenterY = bbox.y + bbox.height / 2
+
+    const padding = 100
+    const newWidth = Math.max(bbox.width + padding * 2, viewBox.width / 2)
+    const newHeight = Math.max(bbox.height + padding * 2, viewBox.height / 2)
+
+    const newViewBox = `${nodeCenterX - newWidth / 2} ${nodeCenterY - newHeight / 2} ${newWidth} ${newHeight}`
+
+    svg.style.transition = 'all 0.3s ease-out'
+    svg.setAttribute('viewBox', newViewBox)
+
+    setTimeout(() => {
+      svg.style.transition = 'all 0.5s ease-in-out'
+      svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`)
+    }, 2000)
+  }
+
+  /**
+   * Zoom to fit multiple highlighted nodes.
+   * The highlighted nodes will occupy ~70% of the viewport.
+   */
+  function zoomToFitHighlighted() {
+    if (!containerElement) return
+
+    const svg = containerElement.querySelector('svg')
+    if (!svg) return
+
+    const highlighted = containerElement.querySelectorAll(
+      '.node-highlighted',
+    ) as NodeListOf<SVGGElement>
+    if (highlighted.length === 0) return
+
+    // Save original viewBox (only if not already saved)
+    const vb = svg.viewBox.baseVal
+    if (!savedViewBox && vb) {
+      savedViewBox = `${vb.x} ${vb.y} ${vb.width} ${vb.height}`
+    }
+
+    // Compute union bounding box of highlighted nodes
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity
+    for (const el of highlighted) {
+      const bbox = el.getBBox?.()
+      if (!bbox) continue
+      minX = Math.min(minX, bbox.x)
+      minY = Math.min(minY, bbox.y)
+      maxX = Math.max(maxX, bbox.x + bbox.width)
+      maxY = Math.max(maxY, bbox.y + bbox.height)
+    }
+
+    if (!isFinite(minX)) return
+
+    const contentW = maxX - minX
+    const contentH = maxY - minY
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+
+    if (!vb || !vb.width || !vb.height) return
+
+    // How much we'd need to scale the original viewBox to fit content at 70%
+    const fillRatio = 0.7
+    const scaleX = contentW > 0 ? (fillRatio * vb.width) / contentW : 1
+    const scaleY = contentH > 0 ? (fillRatio * vb.height) / contentH : 1
+    const scale = Math.min(scaleX, scaleY)
+
+    // scale < 1 means we'd need to zoom out — skip
+    if (scale < 1) return
+
+    // New viewBox always matches display aspect ratio
+    const vbW = vb.width / scale
+    const vbH = vb.height / scale
+
+    svg.style.transition = 'all 0.3s ease-out'
+    svg.setAttribute('viewBox', `${cx - vbW / 2} ${cy - vbH / 2} ${vbW} ${vbH}`)
+  }
+
+  function restoreViewBox() {
+    if (!savedViewBox || !containerElement) return
+    const svg = containerElement.querySelector('svg')
+    if (!svg) return
+    svg.style.transition = 'all 0.3s ease-in-out'
+    svg.setAttribute('viewBox', savedViewBox)
+    savedViewBox = null
+  }
+
+  // Connect to live metrics when topology is ready
+  $effect(() => {
+    if ($liveUpdatesEnabled && config.topologyId && !loading) {
+      metricsStore.connect()
+      metricsStore.subscribeToTopology(config.topologyId)
+    }
+  })
+
+  // Apply live metrics (node status + traffic flow)
+  $effect(() => {
+    const metrics = $metricsData
+    const live = $liveUpdatesEnabled
+    const flow = $showTrafficFlow
+    const status = $showNodeStatus
+    if (!containerElement || !live) return
+    const svg = containerElement.querySelector('svg') as SVGSVGElement | null
+    if (!svg) return
+
+    if (flow && metrics?.links) {
+      if (!weathermap) weathermap = new WeathermapController(svg)
+      weathermap.apply(metrics.links)
+    } else {
+      weathermap?.reset()
+    }
+
+    if (status && metrics?.nodes) {
+      for (const [nodeId, nodeMetrics] of Object.entries(metrics.nodes)) {
+        const nodeGroup = svg.querySelector(`g.node[data-id="${nodeId}"]`)
+        if (!nodeGroup) continue
+        nodeGroup.classList.remove('status-up', 'status-down', 'status-unknown')
+        nodeGroup.classList.add(`status-${nodeMetrics.status}`)
+      }
+    } else {
+      for (const node of svg.querySelectorAll('g.node')) {
+        node.classList.remove('status-up', 'status-down', 'status-unknown')
+      }
+    }
+  })
+
+  onMount(() => {
+    loadTopologies()
     loadTopology()
+
+    // Subscribe to widget events
+    unsubscribeEvents = widgetEvents.on(handleWidgetEvent)
+  })
+
+  onDestroy(() => {
+    if (unsubscribeEvents) {
+      unsubscribeEvents()
+    }
+    clearCurrentHighlight()
+    weathermap?.destroy()
+    weathermap = null
+    metricsStore.unsubscribe()
+    if (styleElement) {
+      styleElement.remove()
+      styleElement = null
+    }
+  })
+
+  // Watch for topology ID changes
+  $effect(() => {
+    if (config.topologyId && config.topologyId !== lastTopologyId) {
+      lastTopologyId = config.topologyId
+      loadTopology()
+    }
+  })
+
+  // Watch for sheet ID changes (when topology is already loaded)
+  $effect(() => {
+    const sheetId = config.sheetId || 'root'
+    if (sheetId !== lastSheetId && renderSheets[sheetId]) {
+      lastSheetId = sheetId
+      svgContent = renderSheets[sheetId].svg
+    }
+  })
+
+  function handleSettings() {
+    showSelector = !showSelector
   }
-})
 
-// Watch for sheet ID changes (when topology is already loaded)
-$effect(() => {
-  const sheetId = config.sheetId || 'root'
-  if (sheetId !== lastSheetId && renderSheets[sheetId]) {
-    lastSheetId = sheetId
-    svgContent = renderSheets[sheetId].svg
-  }
-})
+  // Get display name for current sheet
+  let currentSheetName = $derived(
+    sheets.find((s) => s.id === (config.sheetId || 'root'))?.name || 'root',
+  )
 
-function handleSettings() {
-  showSelector = !showSelector
-}
-
-// Get display name for current sheet
-let currentSheetName = $derived(
-  sheets.find((s) => s.id === (config.sheetId || 'root'))?.name || 'root',
-)
-
-let editMode = $derived($dashboardEditMode)
+  let editMode = $derived($dashboardEditMode)
 </script>
 
 <WidgetWrapper
@@ -465,15 +474,13 @@ let editMode = $derived($dashboardEditMode)
     {:else if error}
       <div class="h-full flex flex-col items-center justify-center text-danger gap-2">
         <span class="text-sm">{error}</span>
-        <button
-          onclick={loadTopology}
-          class="text-xs text-primary hover:underline"
-        >
-          Retry
-        </button>
+        <button onclick={loadTopology} class="text-xs text-primary hover:underline">Retry</button>
       </div>
     {:else if svgContent}
-      <div class="h-full w-full overflow-hidden topology-container relative group" bind:this={containerElement}>
+      <div
+        class="h-full w-full overflow-hidden topology-container relative group"
+        bind:this={containerElement}
+      >
         {@html svgContent}
         {#if !editMode && config.topologyId}
           <a
@@ -511,7 +518,9 @@ let editMode = $derived($dashboardEditMode)
   .topology-container :global(.node-highlighted path) {
     stroke: var(--highlight-color, #f59e0b) !important;
     stroke-width: 3px !important;
-    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--highlight-color, #f59e0b) 60%, transparent));
+    filter: drop-shadow(
+      0 0 8px color-mix(in srgb, var(--highlight-color, #f59e0b) 60%, transparent)
+    );
   }
 
   .topology-container :global(.node-dimmed) {

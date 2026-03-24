@@ -1,32 +1,28 @@
 <script lang="ts">
-import * as Dialog from '$lib/components/ui/dialog'
-import { Button } from '$lib/components/ui/button'
-import type { SubgraphSelectEvent } from './InteractiveSvgDiagram.svelte'
-import Graph from 'phosphor-svelte/lib/Graph'
-import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { Button } from '$lib/components/ui/button'
+  import type { SubgraphSelectEvent } from './InteractiveSvgDiagram.svelte'
+  import Graph from 'phosphor-svelte/lib/Graph'
+  import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
 
-interface Props {
-  open: boolean
-  subgraphData: SubgraphSelectEvent | null
-  onDrillDown?: (subgraphId: string) => void
-}
+  interface Props {
+    open: boolean
+    subgraphData: SubgraphSelectEvent | null
+    onDrillDown?: (subgraphId: string) => void
+  }
 
-let {
-  open = $bindable(false),
-  subgraphData = null,
-  onDrillDown,
-}: Props = $props()
+  let { open = $bindable(false), subgraphData = null, onDrillDown }: Props = $props()
 
-function handleClose() {
-  open = false
-}
-
-function handleDrillDown() {
-  if (subgraphData?.subgraph.id && onDrillDown) {
-    onDrillDown(subgraphData.subgraph.id)
+  function handleClose() {
     open = false
   }
-}
+
+  function handleDrillDown() {
+    if (subgraphData?.subgraph.id && onDrillDown) {
+      onDrillDown(subgraphData.subgraph.id)
+      open = false
+    }
+  }
 </script>
 
 <Dialog.Root {open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>

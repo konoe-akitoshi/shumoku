@@ -1,22 +1,22 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { topologies, topologiesList, topologiesLoading, topologiesError } from '$lib/stores'
-import { YamlParser } from '@shumoku/core'
-import * as Dialog from '$lib/components/ui/dialog'
-import { Button } from '$lib/components/ui/button'
-import Plus from 'phosphor-svelte/lib/Plus'
-import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-import GearSix from 'phosphor-svelte/lib/GearSix'
+  import { onMount } from 'svelte'
+  import { topologies, topologiesList, topologiesLoading, topologiesError } from '$lib/stores'
+  import { YamlParser } from '@shumoku/core'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { Button } from '$lib/components/ui/button'
+  import Plus from 'phosphor-svelte/lib/Plus'
+  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+  import GearSix from 'phosphor-svelte/lib/GearSix'
 
-let showCreateModal = $state(false)
+  let showCreateModal = $state(false)
 
-// Form state
-let formName = $state('')
-let formYaml = $state('')
-let formError = $state('')
-let formSubmitting = $state(false)
+  // Form state
+  let formName = $state('')
+  let formYaml = $state('')
+  let formError = $state('')
+  let formSubmitting = $state(false)
 
-const sampleYaml = `name: My Network
+  const sampleYaml = `name: My Network
 nodes:
   - id: router1
     label: Core Router
@@ -30,49 +30,47 @@ links:
     bandwidth: 1G
 `
 
-onMount(() => {
-  topologies.load()
-})
+  onMount(() => {
+    topologies.load()
+  })
 
-function openCreateModal() {
-  formName = ''
-  formYaml = sampleYaml
-  formError = ''
-  showCreateModal = true
-}
-
-async function handleCreate() {
-  if (!formName.trim() || !formYaml.trim()) {
-    formError = 'Name and YAML content are required'
-    return
+  function openCreateModal() {
+    formName = ''
+    formYaml = sampleYaml
+    formError = ''
+    showCreateModal = true
   }
 
-  formSubmitting = true
-  formError = ''
+  async function handleCreate() {
+    if (!formName.trim() || !formYaml.trim()) {
+      formError = 'Name and YAML content are required'
+      return
+    }
 
-  try {
-    // Parse YAML to NetworkGraph
-    const parser = new YamlParser()
-    const result = parser.parse(formYaml)
+    formSubmitting = true
+    formError = ''
 
-    // Send NetworkGraph JSON
-    const contentJson = JSON.stringify(result.graph)
-    await topologies.create({
-      name: formName.trim(),
-      contentJson,
-    })
-    showCreateModal = false
-  } catch (e) {
-    formError = e instanceof Error ? e.message : 'Failed to create topology'
-  } finally {
-    formSubmitting = false
+    try {
+      // Parse YAML to NetworkGraph
+      const parser = new YamlParser()
+      const result = parser.parse(formYaml)
+
+      // Send NetworkGraph JSON
+      const contentJson = JSON.stringify(result.graph)
+      await topologies.create({
+        name: formName.trim(),
+        contentJson,
+      })
+      showCreateModal = false
+    } catch (e) {
+      formError = e instanceof Error ? e.message : 'Failed to create topology'
+    } finally {
+      formSubmitting = false
+    }
   }
-}
 </script>
 
-<svelte:head>
-  <title>Topologies - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Topologies - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   <!-- Actions -->
@@ -85,7 +83,9 @@ async function handleCreate() {
 
   {#if $topologiesLoading}
     <div class="flex items-center justify-center py-12">
-      <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div
+        class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"
+      ></div>
     </div>
   {:else if $topologiesError}
     <div class="card p-6 text-center">
@@ -124,10 +124,16 @@ async function handleCreate() {
             </p>
 
             <div class="flex items-center gap-2">
-              <a href="/topologies/{topo.id}" class="btn btn-primary py-1 px-3 text-xs flex-1 text-center">
+              <a
+                href="/topologies/{topo.id}"
+                class="btn btn-primary py-1 px-3 text-xs flex-1 text-center"
+              >
                 View
               </a>
-              <a href="/topologies/{topo.id}/edit" class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center">
+              <a
+                href="/topologies/{topo.id}/edit"
+                class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
+              >
                 Edit
               </a>
             </div>
@@ -143,25 +149,26 @@ async function handleCreate() {
   <Dialog.Content class="sm:max-w-2xl max-h-[90vh] flex flex-col">
     <Dialog.Header>
       <Dialog.Title>Add Topology</Dialog.Title>
-      <Dialog.Description>Create a new network topology diagram using YAML definition.</Dialog.Description>
+      <Dialog.Description
+        >Create a new network topology diagram using YAML definition.</Dialog.Description
+      >
     </Dialog.Header>
 
-    <form class="space-y-4 overflow-auto flex-1" onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
+    <form
+      class="space-y-4 overflow-auto flex-1"
+      onsubmit={(e) => { e.preventDefault(); handleCreate(); }}
+    >
       {#if formError}
-        <div class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+        <div
+          class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm"
+        >
           {formError}
         </div>
       {/if}
 
       <div>
         <label for="name" class="label">Name</label>
-        <input
-          type="text"
-          id="name"
-          class="input"
-          placeholder="My Network"
-          bind:value={formName}
-        />
+        <input type="text" id="name" class="input" placeholder="My Network" bind:value={formName}>
       </div>
 
       <div>
@@ -175,7 +182,11 @@ async function handleCreate() {
         ></textarea>
         <p class="text-xs text-muted-foreground mt-1">
           Define your network topology using YAML format.
-          <a href="https://shumoku-docs.dev/yaml-spec" target="_blank" class="text-primary hover:underline">
+          <a
+            href="https://shumoku-docs.dev/yaml-spec"
+            target="_blank"
+            class="text-primary hover:underline"
+          >
             View documentation
           </a>
         </p>
@@ -186,7 +197,9 @@ async function handleCreate() {
       <Button variant="outline" onclick={() => showCreateModal = false}>Cancel</Button>
       <Button onclick={handleCreate} disabled={formSubmitting}>
         {#if formSubmitting}
-          <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+          <span
+            class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+          ></span>
         {/if}
         Create
       </Button>

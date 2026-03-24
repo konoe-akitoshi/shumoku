@@ -1,44 +1,42 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { api } from '$lib/api'
-import type { Topology, DataSource, Dashboard } from '$lib/types'
-import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-import Database from 'phosphor-svelte/lib/Database'
-import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
-import Plus from 'phosphor-svelte/lib/Plus'
-import ArrowRight from 'phosphor-svelte/lib/ArrowRight'
-import Spinner from 'phosphor-svelte/lib/Spinner'
+  import { onMount } from 'svelte'
+  import { api } from '$lib/api'
+  import type { Topology, DataSource, Dashboard } from '$lib/types'
+  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+  import Database from 'phosphor-svelte/lib/Database'
+  import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
+  import Plus from 'phosphor-svelte/lib/Plus'
+  import ArrowRight from 'phosphor-svelte/lib/ArrowRight'
+  import Spinner from 'phosphor-svelte/lib/Spinner'
 
-let topologies: Topology[] = $state([])
-let dataSources: DataSource[] = $state([])
-let dashboards: Dashboard[] = $state([])
-let loading = $state(true)
-let error = $state('')
+  let topologies: Topology[] = $state([])
+  let dataSources: DataSource[] = $state([])
+  let dashboards: Dashboard[] = $state([])
+  let loading = $state(true)
+  let error = $state('')
 
-onMount(async () => {
-  try {
-    const [topoRes, dsRes, dashRes] = await Promise.all([
-      api.topologies.list(),
-      api.dataSources.list(),
-      api.dashboards.list(),
-    ])
-    topologies = topoRes
-    dataSources = dsRes
-    dashboards = dashRes
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to load data'
-  } finally {
-    loading = false
-  }
-})
+  onMount(async () => {
+    try {
+      const [topoRes, dsRes, dashRes] = await Promise.all([
+        api.topologies.list(),
+        api.dataSources.list(),
+        api.dashboards.list(),
+      ])
+      topologies = topoRes
+      dataSources = dsRes
+      dashboards = dashRes
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to load data'
+    } finally {
+      loading = false
+    }
+  })
 
-// Count connected data sources
-let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connected').length)
+  // Count connected data sources
+  let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connected').length)
 </script>
 
-<svelte:head>
-  <title>Home - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Home - Shumoku</title> </svelte:head>
 
 <div class="h-full overflow-auto">
   {#if loading}
@@ -65,7 +63,9 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <a href="/topologies" class="card p-4 hover:border-primary/50 transition-colors group">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+            <div
+              class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors"
+            >
               <TreeStructure size={20} class="text-primary" />
             </div>
             <div>
@@ -77,7 +77,9 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
 
         <a href="/dashboards" class="card p-4 hover:border-primary/50 transition-colors group">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-info/10 rounded-lg flex items-center justify-center group-hover:bg-info/20 transition-colors">
+            <div
+              class="w-10 h-10 bg-info/10 rounded-lg flex items-center justify-center group-hover:bg-info/20 transition-colors"
+            >
               <SquaresFour size={20} class="text-info" />
             </div>
             <div>
@@ -89,11 +91,16 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
 
         <a href="/datasources" class="card p-4 hover:border-primary/50 transition-colors group">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center group-hover:bg-warning/20 transition-colors">
+            <div
+              class="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center group-hover:bg-warning/20 transition-colors"
+            >
               <Database size={20} class="text-warning" />
             </div>
             <div>
-              <p class="text-2xl font-bold text-theme-text-emphasis">{connectedSources}<span class="text-sm font-normal text-theme-text-muted">/{dataSources.length}</span></p>
+              <p class="text-2xl font-bold text-theme-text-emphasis">
+                {connectedSources}
+                <span class="text-sm font-normal text-theme-text-muted">/{dataSources.length}</span>
+              </p>
               <p class="text-xs text-theme-text-muted">Data Sources</p>
             </div>
           </div>
@@ -118,7 +125,10 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
         <div class="card">
           <div class="px-4 py-3 border-b border-theme-border flex items-center justify-between">
             <h2 class="font-semibold text-theme-text-emphasis">Topologies</h2>
-            <a href="/topologies" class="text-xs text-primary hover:underline flex items-center gap-1">
+            <a
+              href="/topologies"
+              class="text-xs text-primary hover:underline flex items-center gap-1"
+            >
               View all <ArrowRight size={12} />
             </a>
           </div>
@@ -127,7 +137,10 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
               <div class="text-center py-8">
                 <TreeStructure size={40} class="text-theme-text-muted mx-auto mb-3" />
                 <p class="text-sm text-theme-text-muted mb-3">No topologies yet</p>
-                <a href="/topologies" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors">
+                <a
+                  href="/topologies"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors"
+                >
                   <Plus size={14} />
                   Create Topology
                 </a>
@@ -138,11 +151,15 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
                   href="/topologies/{topology.id}"
                   class="flex items-center gap-3 p-2 rounded-lg hover:bg-theme-bg transition-colors"
                 >
-                  <div class="w-8 h-8 bg-primary/10 rounded flex items-center justify-center flex-shrink-0">
+                  <div
+                    class="w-8 h-8 bg-primary/10 rounded flex items-center justify-center flex-shrink-0"
+                  >
                     <TreeStructure size={16} class="text-primary" />
                   </div>
                   <div class="min-w-0 flex-1">
-                    <p class="font-medium text-sm text-theme-text-emphasis truncate">{topology.name}</p>
+                    <p class="font-medium text-sm text-theme-text-emphasis truncate">
+                      {topology.name}
+                    </p>
                     <p class="text-xs text-theme-text-muted">
                       {new Date(topology.updatedAt).toLocaleDateString()}
                     </p>
@@ -157,7 +174,10 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
         <div class="card">
           <div class="px-4 py-3 border-b border-theme-border flex items-center justify-between">
             <h2 class="font-semibold text-theme-text-emphasis">Dashboards</h2>
-            <a href="/dashboards" class="text-xs text-primary hover:underline flex items-center gap-1">
+            <a
+              href="/dashboards"
+              class="text-xs text-primary hover:underline flex items-center gap-1"
+            >
               View all <ArrowRight size={12} />
             </a>
           </div>
@@ -166,7 +186,10 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
               <div class="text-center py-8">
                 <SquaresFour size={40} class="text-theme-text-muted mx-auto mb-3" />
                 <p class="text-sm text-theme-text-muted mb-3">No dashboards yet</p>
-                <a href="/dashboards" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors">
+                <a
+                  href="/dashboards"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors"
+                >
                   <Plus size={14} />
                   Create Dashboard
                 </a>
@@ -177,11 +200,15 @@ let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connec
                   href="/dashboards/{dashboard.id}"
                   class="flex items-center gap-3 p-2 rounded-lg hover:bg-theme-bg transition-colors"
                 >
-                  <div class="w-8 h-8 bg-info/10 rounded flex items-center justify-center flex-shrink-0">
+                  <div
+                    class="w-8 h-8 bg-info/10 rounded flex items-center justify-center flex-shrink-0"
+                  >
                     <SquaresFour size={16} class="text-info" />
                   </div>
                   <div class="min-w-0 flex-1">
-                    <p class="font-medium text-sm text-theme-text-emphasis truncate">{dashboard.name}</p>
+                    <p class="font-medium text-sm text-theme-text-emphasis truncate">
+                      {dashboard.name}
+                    </p>
                     <p class="text-xs text-theme-text-muted">
                       {new Date(dashboard.updatedAt).toLocaleDateString()}
                     </p>

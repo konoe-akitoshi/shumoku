@@ -1,91 +1,91 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { browser } from '$app/environment'
-import { page } from '$app/stores'
-import { goto } from '$app/navigation'
-import Header from '$lib/components/header.svelte'
-import { auth } from '$lib/api'
-import House from 'phosphor-svelte/lib/House'
-import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
-import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-import Database from 'phosphor-svelte/lib/Database'
-import Cube from 'phosphor-svelte/lib/Cube'
-import GearSix from 'phosphor-svelte/lib/GearSix'
-import CaretDoubleLeft from 'phosphor-svelte/lib/CaretDoubleLeft'
-import CaretDoubleRight from 'phosphor-svelte/lib/CaretDoubleRight'
-import Logo from '$lib/components/Logo.svelte'
-import SignOut from 'phosphor-svelte/lib/SignOut'
+  import { onMount } from 'svelte'
+  import { browser } from '$app/environment'
+  import { page } from '$app/stores'
+  import { goto } from '$app/navigation'
+  import Header from '$lib/components/header.svelte'
+  import { auth } from '$lib/api'
+  import House from 'phosphor-svelte/lib/House'
+  import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
+  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+  import Database from 'phosphor-svelte/lib/Database'
+  import Cube from 'phosphor-svelte/lib/Cube'
+  import GearSix from 'phosphor-svelte/lib/GearSix'
+  import CaretDoubleLeft from 'phosphor-svelte/lib/CaretDoubleLeft'
+  import CaretDoubleRight from 'phosphor-svelte/lib/CaretDoubleRight'
+  import Logo from '$lib/components/Logo.svelte'
+  import SignOut from 'phosphor-svelte/lib/SignOut'
 
-interface NavItem {
-  href: string
-  label: string
-  icon: 'home' | 'dashboard' | 'topology' | 'database' | 'plugins' | 'settings'
-}
+  interface NavItem {
+    href: string
+    label: string
+    icon: 'home' | 'dashboard' | 'topology' | 'database' | 'plugins' | 'settings'
+  }
 
-const navItems: NavItem[] = [
-  { href: '/', label: 'Home', icon: 'home' },
-  { href: '/dashboards', label: 'Dashboards', icon: 'dashboard' },
-  { href: '/topologies', label: 'Topologies', icon: 'topology' },
-  { href: '/datasources', label: 'Data Sources', icon: 'database' },
-  { href: '/plugins', label: 'Plugins', icon: 'plugins' },
-  { href: '/settings', label: 'Settings', icon: 'settings' },
-]
+  const navItems: NavItem[] = [
+    { href: '/', label: 'Home', icon: 'home' },
+    { href: '/dashboards', label: 'Dashboards', icon: 'dashboard' },
+    { href: '/topologies', label: 'Topologies', icon: 'topology' },
+    { href: '/datasources', label: 'Data Sources', icon: 'database' },
+    { href: '/plugins', label: 'Plugins', icon: 'plugins' },
+    { href: '/settings', label: 'Settings', icon: 'settings' },
+  ]
 
-function isActive(href: string, pathname: string): boolean {
-  if (href === '/') return pathname === '/'
-  return pathname.startsWith(href)
-}
+  function isActive(href: string, pathname: string): boolean {
+    if (href === '/') return pathname === '/'
+    return pathname.startsWith(href)
+  }
 
-// Sidebar collapsed state
-let sidebarCollapsed = false
-let authenticated = false
+  // Sidebar collapsed state
+  let sidebarCollapsed = false
+  let authenticated = false
 
-// Load sidebar state on mount + check auth
-onMount(async () => {
-  if (browser) {
-    const localSettings = localStorage.getItem('shumoku-settings')
-    if (localSettings) {
-      const parsed = JSON.parse(localSettings)
-      sidebarCollapsed = parsed.sidebarCollapsed || false
+  // Load sidebar state on mount + check auth
+  onMount(async () => {
+    if (browser) {
+      const localSettings = localStorage.getItem('shumoku-settings')
+      if (localSettings) {
+        const parsed = JSON.parse(localSettings)
+        sidebarCollapsed = parsed.sidebarCollapsed || false
+      }
+
+      try {
+        const status = await auth.status()
+        if (!status.setupComplete) {
+          goto('/login')
+          return
+        }
+        authenticated = status.authenticated
+        if (!authenticated) {
+          goto('/login')
+          return
+        }
+      } catch {
+        // Server down — allow viewing
+      }
     }
+  })
 
+  async function handleLogout() {
     try {
-      const status = await auth.status()
-      if (!status.setupComplete) {
-        goto('/login')
-        return
-      }
-      authenticated = status.authenticated
-      if (!authenticated) {
-        goto('/login')
-        return
-      }
+      await auth.logout()
     } catch {
-      // Server down — allow viewing
+      // Ignore
+    }
+    goto('/login')
+  }
+
+  function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed
+
+    // Save to localStorage
+    if (browser) {
+      const localSettings = localStorage.getItem('shumoku-settings')
+      const parsed = localSettings ? JSON.parse(localSettings) : {}
+      parsed.sidebarCollapsed = sidebarCollapsed
+      localStorage.setItem('shumoku-settings', JSON.stringify(parsed))
     }
   }
-})
-
-async function handleLogout() {
-  try {
-    await auth.logout()
-  } catch {
-    // Ignore
-  }
-  goto('/login')
-}
-
-function toggleSidebar() {
-  sidebarCollapsed = !sidebarCollapsed
-
-  // Save to localStorage
-  if (browser) {
-    const localSettings = localStorage.getItem('shumoku-settings')
-    const parsed = localSettings ? JSON.parse(localSettings) : {}
-    parsed.sidebarCollapsed = sidebarCollapsed
-    localStorage.setItem('shumoku-settings', JSON.stringify(parsed))
-  }
-}
 </script>
 
 <div class="flex h-screen">
@@ -100,7 +100,9 @@ function toggleSidebar() {
       {#if !sidebarCollapsed}
         <div class="flex items-center gap-2 min-w-0">
           <Logo size={32} class="flex-shrink-0" />
-          <span class="text-lg font-semibold text-theme-text-emphasis whitespace-nowrap">Shumoku</span>
+          <span class="text-lg font-semibold text-theme-text-emphasis whitespace-nowrap"
+            >Shumoku</span
+          >
         </div>
       {/if}
       <button
@@ -180,8 +182,6 @@ function toggleSidebar() {
     <Header />
 
     <!-- Main Content -->
-    <main class="flex-1 overflow-auto">
-      <slot />
-    </main>
+    <main class="flex-1 overflow-auto"><slot /></main>
   </div>
 </div>

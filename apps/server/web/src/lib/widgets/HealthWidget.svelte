@@ -1,80 +1,80 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { api } from '$lib/api'
-import WidgetWrapper from './WidgetWrapper.svelte'
-import Heart from 'phosphor-svelte/lib/Heart'
-import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-import XCircle from 'phosphor-svelte/lib/XCircle'
-import Spinner from 'phosphor-svelte/lib/Spinner'
+  import { onMount } from 'svelte'
+  import { api } from '$lib/api'
+  import WidgetWrapper from './WidgetWrapper.svelte'
+  import Heart from 'phosphor-svelte/lib/Heart'
+  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
+  import XCircle from 'phosphor-svelte/lib/XCircle'
+  import Spinner from 'phosphor-svelte/lib/Spinner'
 
-interface Props {
-  id: string
-  config: {
-    title?: string
-    showDetails?: boolean
-  }
-  onConfigChange?: (config: Record<string, unknown>) => void
-  onRemove?: () => void
-}
-
-let { id, config, onConfigChange, onRemove }: Props = $props()
-
-let title = $derived(config.title || 'System Health')
-let showDetails = $derived(config.showDetails !== false)
-
-interface HealthStatus {
-  api: boolean
-  topologies: number
-  dataSources: { total: number; connected: number }
-}
-
-let health: HealthStatus | null = $state(null)
-let loading = $state(true)
-let error = $state('')
-
-async function checkHealth() {
-  loading = true
-  error = ''
-
-  try {
-    const [apiHealth, topologies, dataSources] = await Promise.all([
-      api.health.check(),
-      api.topologies.list(),
-      api.dataSources.list(),
-    ])
-
-    health = {
-      api: apiHealth.status === 'ok',
-      topologies: topologies.length,
-      dataSources: {
-        total: dataSources.length,
-        connected: dataSources.filter((ds) => ds.status === 'connected').length,
-      },
+  interface Props {
+    id: string
+    config: {
+      title?: string
+      showDetails?: boolean
     }
-  } catch (err) {
-    error = err instanceof Error ? err.message : 'Health check failed'
-    health = null
-  } finally {
-    loading = false
+    onConfigChange?: (config: Record<string, unknown>) => void
+    onRemove?: () => void
   }
-}
 
-onMount(() => {
-  checkHealth()
-  // Auto-refresh every 30 seconds
-  const interval = setInterval(checkHealth, 30000)
-  return () => clearInterval(interval)
-})
+  let { id, config, onConfigChange, onRemove }: Props = $props()
 
-let overallHealthy = $derived(
-  health !== null &&
-    health.api &&
-    (health.dataSources.total === 0 || health.dataSources.connected > 0),
-)
+  let title = $derived(config.title || 'System Health')
+  let showDetails = $derived(config.showDetails !== false)
 
-function handleSettings() {
-  // Settings modal handled by parent
-}
+  interface HealthStatus {
+    api: boolean
+    topologies: number
+    dataSources: { total: number; connected: number }
+  }
+
+  let health: HealthStatus | null = $state(null)
+  let loading = $state(true)
+  let error = $state('')
+
+  async function checkHealth() {
+    loading = true
+    error = ''
+
+    try {
+      const [apiHealth, topologies, dataSources] = await Promise.all([
+        api.health.check(),
+        api.topologies.list(),
+        api.dataSources.list(),
+      ])
+
+      health = {
+        api: apiHealth.status === 'ok',
+        topologies: topologies.length,
+        dataSources: {
+          total: dataSources.length,
+          connected: dataSources.filter((ds) => ds.status === 'connected').length,
+        },
+      }
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Health check failed'
+      health = null
+    } finally {
+      loading = false
+    }
+  }
+
+  onMount(() => {
+    checkHealth()
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(checkHealth, 30000)
+    return () => clearInterval(interval)
+  })
+
+  let overallHealthy = $derived(
+    health !== null &&
+      health.api &&
+      (health.dataSources.total === 0 || health.dataSources.connected > 0),
+  )
+
+  function handleSettings() {
+    // Settings modal handled by parent
+  }
 </script>
 
 <WidgetWrapper {title} {onRemove} onSettings={handleSettings}>
@@ -97,9 +97,7 @@ function handleSettings() {
         {:else}
           <XCircle size={32} weight="fill" />
         {/if}
-        <span class="text-lg font-semibold">
-          {overallHealthy ? 'Healthy' : 'Degraded'}
-        </span>
+        <span class="text-lg font-semibold"> {overallHealthy ? 'Healthy' : 'Degraded'} </span>
       </div>
 
       <!-- Details -->

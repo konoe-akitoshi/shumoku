@@ -1,269 +1,267 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { api } from '$lib/api'
-import { dataSources, dataSourcesList, dataSourcesLoading, dataSourcesError } from '$lib/stores'
-import type {
-  DataSource,
-  DataSourceType,
-  DataSourcePluginInfo,
-  ConnectionTestResult,
-} from '$lib/types'
-import * as Dialog from '$lib/components/ui/dialog'
-import { Button } from '$lib/components/ui/button'
-import Plus from 'phosphor-svelte/lib/Plus'
-import Database from 'phosphor-svelte/lib/Database'
-import ChartLine from 'phosphor-svelte/lib/ChartLine'
-import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-import Cube from 'phosphor-svelte/lib/Cube'
+  import { onMount } from 'svelte'
+  import { api } from '$lib/api'
+  import { dataSources, dataSourcesList, dataSourcesLoading, dataSourcesError } from '$lib/stores'
+  import type {
+    DataSource,
+    DataSourceType,
+    DataSourcePluginInfo,
+    ConnectionTestResult,
+  } from '$lib/types'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { Button } from '$lib/components/ui/button'
+  import Plus from 'phosphor-svelte/lib/Plus'
+  import Database from 'phosphor-svelte/lib/Database'
+  import ChartLine from 'phosphor-svelte/lib/ChartLine'
+  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+  import Cube from 'phosphor-svelte/lib/Cube'
 
-let showCreateModal = $state(false)
-let testingId = $state<string | null>(null)
-let testResults = $state<Record<string, ConnectionTestResult>>({})
+  let showCreateModal = $state(false)
+  let testingId = $state<string | null>(null)
+  let testResults = $state<Record<string, ConnectionTestResult>>({})
 
-// Plugin types from API
-let pluginTypes = $state<DataSourcePluginInfo[]>([])
-let selectedPlugin = $state<DataSourcePluginInfo | null>(null)
+  // Plugin types from API
+  let pluginTypes = $state<DataSourcePluginInfo[]>([])
+  let selectedPlugin = $state<DataSourcePluginInfo | null>(null)
 
-// Form state
-let formName = $state('')
-let formUrl = $state('')
-let formToken = $state('')
-let formPollInterval = $state(30000)
-let formSiteFilter = $state('')
-let formTagFilter = $state('')
-let formPrometheusPreset = $state<'snmp' | 'node_exporter'>('snmp')
-let formInsecure = $state(false)
-let formError = $state('')
-let formSubmitting = $state(false)
-// Dynamic config values for external plugins
-let dynamicConfig = $state<Record<string, string>>({})
+  // Form state
+  let formName = $state('')
+  let formUrl = $state('')
+  let formToken = $state('')
+  let formPollInterval = $state(30000)
+  let formSiteFilter = $state('')
+  let formTagFilter = $state('')
+  let formPrometheusPreset = $state<'snmp' | 'node_exporter'>('snmp')
+  let formInsecure = $state(false)
+  let formError = $state('')
+  let formSubmitting = $state(false)
+  // Dynamic config values for external plugins
+  let dynamicConfig = $state<Record<string, string>>({})
 
-// Plugin type lookup
-let pluginTypeMap = $derived(
-  pluginTypes.reduce(
-    (acc, p) => {
-      acc[p.type] = p
-      return acc
-    },
-    {} as Record<string, DataSourcePluginInfo>,
-  ),
-)
+  // Plugin type lookup
+  let pluginTypeMap = $derived(
+    pluginTypes.reduce(
+      (acc, p) => {
+        acc[p.type] = p
+        return acc
+      },
+      {} as Record<string, DataSourcePluginInfo>,
+    ),
+  )
 
-onMount(async () => {
-  dataSources.load()
-  // Load available plugin types
-  try {
-    pluginTypes = await api.dataSources.getPluginTypes()
-  } catch (e) {
-    console.error('Failed to load plugin types:', e)
-  }
-})
-
-function openCreateModal() {
-  selectedPlugin = null
-  formName = ''
-  formUrl = ''
-  formToken = ''
-  formPollInterval = 30000
-  formError = ''
-  showCreateModal = true
-}
-
-function selectPlugin(plugin: DataSourcePluginInfo) {
-  selectedPlugin = plugin
-  formName = ''
-  formUrl = ''
-  formToken = ''
-  formPollInterval = 30000
-  formSiteFilter = ''
-  formTagFilter = ''
-  formInsecure = false
-  formPrometheusPreset = 'snmp'
-  // Initialize dynamic config from schema defaults
-  dynamicConfig = {}
-  if (plugin.configSchema?.properties) {
-    for (const [key, prop] of Object.entries(plugin.configSchema.properties)) {
-      if (prop.default !== undefined) {
-        dynamicConfig[key] = String(prop.default)
-      } else {
-        dynamicConfig[key] = ''
-      }
+  onMount(async () => {
+    dataSources.load()
+    // Load available plugin types
+    try {
+      pluginTypes = await api.dataSources.getPluginTypes()
+    } catch (e) {
+      console.error('Failed to load plugin types:', e)
     }
-  }
-}
-
-function getConfigFromForm(): string {
-  if (!selectedPlugin) return '{}'
-
-  // Builtin plugins with hardcoded config
-  if (selectedPlugin.type === 'zabbix') {
-    return JSON.stringify({
-      url: formUrl.trim(),
-      token: formToken.trim() || undefined,
-      pollInterval: formPollInterval,
-    })
-  }
-
-  if (selectedPlugin.type === 'netbox') {
-    return JSON.stringify({
-      url: formUrl.trim(),
-      token: formToken.trim() || undefined,
-      siteFilter: formSiteFilter.trim() || undefined,
-      tagFilter: formTagFilter.trim() || undefined,
-      insecure: formInsecure || undefined,
-    })
-  }
-
-  if (selectedPlugin.type === 'prometheus') {
-    return JSON.stringify({
-      url: formUrl.trim(),
-      preset: formPrometheusPreset,
-    })
-  }
-
-  if (selectedPlugin.type === 'grafana') {
-    return JSON.stringify({
-      url: formUrl.trim(),
-      token: formToken.trim() || undefined,
-    })
-  }
-
-  // External plugins with configSchema - use dynamicConfig
-  if (selectedPlugin.configSchema?.properties) {
-    const config: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(dynamicConfig)) {
-      if (value.trim()) {
-        config[key] = value.trim()
-      }
-    }
-    return JSON.stringify(config)
-  }
-
-  // Generic config for other types
-  return JSON.stringify({
-    url: formUrl.trim(),
   })
-}
 
-function parseConfig(configJson: string): { url?: string; pollInterval?: number } {
-  try {
-    return JSON.parse(configJson)
-  } catch {
-    return {}
-  }
-}
-
-async function handleCreate() {
-  if (!selectedPlugin) {
-    formError = 'Please select a data source type'
-    return
+  function openCreateModal() {
+    selectedPlugin = null
+    formName = ''
+    formUrl = ''
+    formToken = ''
+    formPollInterval = 30000
+    formError = ''
+    showCreateModal = true
   }
 
-  // Validation for bundled plugins
-  if (['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)) {
-    if (!formName.trim() || !formUrl.trim()) {
-      formError = 'Name and URL are required'
+  function selectPlugin(plugin: DataSourcePluginInfo) {
+    selectedPlugin = plugin
+    formName = ''
+    formUrl = ''
+    formToken = ''
+    formPollInterval = 30000
+    formSiteFilter = ''
+    formTagFilter = ''
+    formInsecure = false
+    formPrometheusPreset = 'snmp'
+    // Initialize dynamic config from schema defaults
+    dynamicConfig = {}
+    if (plugin.configSchema?.properties) {
+      for (const [key, prop] of Object.entries(plugin.configSchema.properties)) {
+        if (prop.default !== undefined) {
+          dynamicConfig[key] = String(prop.default)
+        } else {
+          dynamicConfig[key] = ''
+        }
+      }
+    }
+  }
+
+  function getConfigFromForm(): string {
+    if (!selectedPlugin) return '{}'
+
+    // Builtin plugins with hardcoded config
+    if (selectedPlugin.type === 'zabbix') {
+      return JSON.stringify({
+        url: formUrl.trim(),
+        token: formToken.trim() || undefined,
+        pollInterval: formPollInterval,
+      })
+    }
+
+    if (selectedPlugin.type === 'netbox') {
+      return JSON.stringify({
+        url: formUrl.trim(),
+        token: formToken.trim() || undefined,
+        siteFilter: formSiteFilter.trim() || undefined,
+        tagFilter: formTagFilter.trim() || undefined,
+        insecure: formInsecure || undefined,
+      })
+    }
+
+    if (selectedPlugin.type === 'prometheus') {
+      return JSON.stringify({
+        url: formUrl.trim(),
+        preset: formPrometheusPreset,
+      })
+    }
+
+    if (selectedPlugin.type === 'grafana') {
+      return JSON.stringify({
+        url: formUrl.trim(),
+        token: formToken.trim() || undefined,
+      })
+    }
+
+    // External plugins with configSchema - use dynamicConfig
+    if (selectedPlugin.configSchema?.properties) {
+      const config: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(dynamicConfig)) {
+        if (value.trim()) {
+          config[key] = value.trim()
+        }
+      }
+      return JSON.stringify(config)
+    }
+
+    // Generic config for other types
+    return JSON.stringify({
+      url: formUrl.trim(),
+    })
+  }
+
+  function parseConfig(configJson: string): { url?: string; pollInterval?: number } {
+    try {
+      return JSON.parse(configJson)
+    } catch {
+      return {}
+    }
+  }
+
+  async function handleCreate() {
+    if (!selectedPlugin) {
+      formError = 'Please select a data source type'
       return
     }
-  } else if (selectedPlugin.configSchema?.properties) {
-    // Validation for external plugins with configSchema
-    if (!formName.trim()) {
-      formError = 'Name is required'
-      return
-    }
-    const required = selectedPlugin.configSchema.required || []
-    for (const key of required) {
-      if (!dynamicConfig[key]?.trim()) {
-        const prop = selectedPlugin.configSchema.properties[key]
-        formError = `${prop?.title || key} is required`
+
+    // Validation for bundled plugins
+    if (['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)) {
+      if (!formName.trim() || !formUrl.trim()) {
+        formError = 'Name and URL are required'
+        return
+      }
+    } else if (selectedPlugin.configSchema?.properties) {
+      // Validation for external plugins with configSchema
+      if (!formName.trim()) {
+        formError = 'Name is required'
+        return
+      }
+      const required = selectedPlugin.configSchema.required || []
+      for (const key of required) {
+        if (!dynamicConfig[key]?.trim()) {
+          const prop = selectedPlugin.configSchema.properties[key]
+          formError = `${prop?.title || key} is required`
+          return
+        }
+      }
+    } else {
+      if (!formName.trim() || !formUrl.trim()) {
+        formError = 'Name and URL are required'
         return
       }
     }
-  } else {
-    if (!formName.trim() || !formUrl.trim()) {
-      formError = 'Name and URL are required'
+
+    formSubmitting = true
+    formError = ''
+
+    try {
+      const created = await dataSources.create({
+        name: formName.trim(),
+        type: selectedPlugin.type as DataSourceType,
+        configJson: getConfigFromForm(),
+      })
+      showCreateModal = false
+
+      // Auto-test connection after creation
+      await handleTest(created.id)
+    } catch (e) {
+      formError = e instanceof Error ? e.message : 'Failed to create data source'
+    } finally {
+      formSubmitting = false
+    }
+  }
+
+  async function handleTest(id: string) {
+    testingId = id
+    try {
+      const result = await dataSources.test(id)
+      testResults = { ...testResults, [id]: result }
+      // Refresh data source list to get updated status
+      await dataSources.load()
+    } catch (e) {
+      testResults = {
+        ...testResults,
+        [id]: {
+          success: false,
+          message: e instanceof Error ? e.message : 'Test failed',
+        },
+      }
+    }
+    testingId = null
+  }
+
+  async function handleDelete(ds: DataSource) {
+    if (!confirm(`Delete data source "${ds.name}"?`)) {
       return
     }
-  }
-
-  formSubmitting = true
-  formError = ''
-
-  try {
-    const created = await dataSources.create({
-      name: formName.trim(),
-      type: selectedPlugin.type as DataSourceType,
-      configJson: getConfigFromForm(),
-    })
-    showCreateModal = false
-
-    // Auto-test connection after creation
-    await handleTest(created.id)
-  } catch (e) {
-    formError = e instanceof Error ? e.message : 'Failed to create data source'
-  } finally {
-    formSubmitting = false
-  }
-}
-
-async function handleTest(id: string) {
-  testingId = id
-  try {
-    const result = await dataSources.test(id)
-    testResults = { ...testResults, [id]: result }
-    // Refresh data source list to get updated status
-    await dataSources.load()
-  } catch (e) {
-    testResults = {
-      ...testResults,
-      [id]: {
-        success: false,
-        message: e instanceof Error ? e.message : 'Test failed',
-      },
+    try {
+      await dataSources.delete(ds.id)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to delete')
     }
   }
-  testingId = null
-}
 
-async function handleDelete(ds: DataSource) {
-  if (!confirm(`Delete data source "${ds.name}"?`)) {
-    return
+  function getTypeLabel(type: string): string {
+    return pluginTypeMap[type]?.displayName || type
   }
-  try {
-    await dataSources.delete(ds.id)
-  } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to delete')
+
+  function getCapabilityIcon(capability: string) {
+    switch (capability) {
+      case 'metrics':
+        return ChartLine
+      case 'topology':
+        return TreeStructure
+      default:
+        return Database
+    }
   }
-}
 
-function getTypeLabel(type: string): string {
-  return pluginTypeMap[type]?.displayName || type
-}
-
-function getCapabilityIcon(capability: string) {
-  switch (capability) {
-    case 'metrics':
-      return ChartLine
-    case 'topology':
-      return TreeStructure
-    default:
-      return Database
+  function formatLastChecked(timestamp?: number): string {
+    if (!timestamp) return ''
+    const diff = Date.now() - timestamp
+    if (diff < 60_000) return 'just now'
+    if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
+    if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
+    return new Date(timestamp).toLocaleDateString()
   }
-}
-
-function formatLastChecked(timestamp?: number): string {
-  if (!timestamp) return ''
-  const diff = Date.now() - timestamp
-  if (diff < 60_000) return 'just now'
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
-  return new Date(timestamp).toLocaleDateString()
-}
 </script>
 
-<svelte:head>
-  <title>Data Sources - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Data Sources - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   <!-- Actions -->
@@ -276,7 +274,9 @@ function formatLastChecked(timestamp?: number): string {
 
   {#if $dataSourcesLoading}
     <div class="flex items-center justify-center py-12">
-      <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div
+        class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"
+      ></div>
     </div>
   {:else if $dataSourcesError}
     <div class="card p-6 text-center">
@@ -287,7 +287,9 @@ function formatLastChecked(timestamp?: number): string {
     <div class="card p-12 text-center">
       <Database size={64} class="text-theme-text-muted mx-auto mb-4" />
       <h3 class="text-lg font-medium text-theme-text-emphasis mb-2">No data sources</h3>
-      <p class="text-theme-text-muted mb-4">Add a data source to start collecting metrics or topology</p>
+      <p class="text-theme-text-muted mb-4">
+        Add a data source to start collecting metrics or topology
+      </p>
       <Button onclick={openCreateModal}>Add Data Source</Button>
     </div>
   {:else}
@@ -296,11 +298,11 @@ function formatLastChecked(timestamp?: number): string {
       <div class="datasources-table">
         <table class="table table-auto">
           <colgroup>
-          <col class="w-[12%]" />
-          <col class="w-[18%]" />
-          <col />
-          <col class="w-[12%]" />
-          <col class="w-[18%]" />
+            <col class="w-[12%]">
+            <col class="w-[18%]">
+            <col>
+            <col class="w-[12%]">
+            <col class="w-[18%]">
           </colgroup>
           <thead>
             <tr>
@@ -317,7 +319,10 @@ function formatLastChecked(timestamp?: number): string {
               {@const testResult = testResults[ds.id]}
               <tr>
                 <td>
-                  <a href="/datasources/{ds.id}" class="font-medium text-theme-text-emphasis hover:text-primary">
+                  <a
+                    href="/datasources/{ds.id}"
+                    class="font-medium text-theme-text-emphasis hover:text-primary"
+                  >
                     {ds.name}
                   </a>
                 </td>
@@ -327,7 +332,10 @@ function formatLastChecked(timestamp?: number): string {
                     {#if pluginTypeMap[ds.type]}
                       <div class="flex gap-1">
                         {#each pluginTypeMap[ds.type].capabilities as cap}
-                          <span class="text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted" title={cap}>
+                          <span
+                            class="text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted"
+                            title={cap}
+                          >
                             {#if cap === 'metrics'}
                               <ChartLine size={12} />
                             {:else if cap === 'topology'}
@@ -341,7 +349,9 @@ function formatLastChecked(timestamp?: number): string {
                     {/if}
                   </div>
                 </td>
-                <td class="text-theme-text-muted text-sm font-mono truncate">{config.url || '-'}</td>
+                <td class="text-theme-text-muted text-sm font-mono truncate">
+                  {config.url || '-'}
+                </td>
                 <td class="datasources-status-cell">
                   <div class="flex flex-col gap-0.5">
                     {#if ds.status === 'connected'}
@@ -352,7 +362,9 @@ function formatLastChecked(timestamp?: number): string {
                       <span class="badge badge-secondary">Unknown</span>
                     {/if}
                     {#if ds.lastCheckedAt}
-                      <span class="text-xs text-theme-text-muted">{formatLastChecked(ds.lastCheckedAt)}</span>
+                      <span class="text-xs text-theme-text-muted"
+                        >{formatLastChecked(ds.lastCheckedAt)}</span
+                      >
                     {/if}
                   </div>
                 </td>
@@ -365,12 +377,21 @@ function formatLastChecked(timestamp?: number): string {
                       disabled={testingId === ds.id}
                     >
                       {#if testingId === ds.id}
-                        <span class="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1"></span>
+                        <span
+                          class="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1"
+                        ></span>
                       {/if}
                       Test
                     </Button>
-                    <Button variant="outline" size="sm" onclick={() => window.location.href = `/datasources/${ds.id}`}>Edit</Button>
-                    <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}>Delete</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onclick={() => window.location.href = `/datasources/${ds.id}`}
+                      >Edit</Button
+                    >
+                    <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}
+                      >Delete</Button
+                    >
                   </div>
                 </td>
               </tr>
@@ -407,7 +428,9 @@ function formatLastChecked(timestamp?: number): string {
       <div class="py-4">
         {#if pluginTypes.length === 0}
           <div class="text-center py-8 text-theme-text-muted">
-            <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <div
+              class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"
+            ></div>
             Loading plugins...
           </div>
         {:else}
@@ -419,7 +442,9 @@ function formatLastChecked(timestamp?: number): string {
                 onclick={() => selectPlugin(plugin)}
               >
                 <div class="flex items-start gap-3">
-                  <div class="p-2 rounded-lg bg-theme-bg group-hover:bg-primary/10 transition-colors">
+                  <div
+                    class="p-2 rounded-lg bg-theme-bg group-hover:bg-primary/10 transition-colors"
+                  >
                     {#if plugin.type === 'zabbix'}
                       <ChartLine size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {:else if plugin.type === 'netbox'}
@@ -434,7 +459,9 @@ function formatLastChecked(timestamp?: number): string {
                     <p class="font-medium text-theme-text-emphasis">{plugin.displayName}</p>
                     <div class="flex flex-wrap gap-1 mt-1">
                       {#each plugin.capabilities as cap}
-                        <span class="text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted">
+                        <span
+                          class="text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted"
+                        >
                           {cap}
                         </span>
                       {/each}
@@ -454,7 +481,9 @@ function formatLastChecked(timestamp?: number): string {
       <!-- Plugin Configuration Form -->
       <form class="space-y-4 py-2" onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
         {#if formError}
-          <div class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+          <div
+            class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm"
+          >
             {formError}
           </div>
         {/if}
@@ -467,7 +496,7 @@ function formatLastChecked(timestamp?: number): string {
             class="input"
             placeholder="My {selectedPlugin.displayName} Server"
             bind:value={formName}
-          />
+          >
         </div>
 
         {#if !selectedPlugin.configSchema?.properties || ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)}
@@ -479,7 +508,7 @@ function formatLastChecked(timestamp?: number): string {
               class="input"
               placeholder="https://example.com"
               bind:value={formUrl}
-            />
+            >
           </div>
         {/if}
 
@@ -492,9 +521,11 @@ function formatLastChecked(timestamp?: number): string {
               class="input"
               placeholder="Enter API token"
               bind:value={formToken}
-            />
+            >
             {#if selectedPlugin.type === 'zabbix'}
-              <p class="text-xs text-muted-foreground mt-1">Required for API access (Zabbix 5.4+)</p>
+              <p class="text-xs text-muted-foreground mt-1">
+                Required for API access (Zabbix 5.4+)
+              </p>
             {:else if selectedPlugin.type === 'grafana'}
               <p class="text-xs text-muted-foreground mt-1">Service Account Token (Bearer token)</p>
             {/if}
@@ -540,7 +571,7 @@ function formatLastChecked(timestamp?: number): string {
               class="input"
               placeholder="e.g., tokyo-dc1"
               bind:value={formSiteFilter}
-            />
+            >
             <p class="text-xs text-muted-foreground mt-1">Filter devices by site slug</p>
           </div>
 
@@ -552,16 +583,12 @@ function formatLastChecked(timestamp?: number): string {
               class="input"
               placeholder="e.g., production"
               bind:value={formTagFilter}
-            />
+            >
             <p class="text-xs text-muted-foreground mt-1">Filter devices by tag slug</p>
           </div>
 
           <div class="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="insecure"
-              bind:checked={formInsecure}
-            />
+            <input type="checkbox" id="insecure" bind:checked={formInsecure}>
             <label for="insecure" class="text-sm">Skip TLS certificate verification</label>
             <p class="text-xs text-muted-foreground">(for self-signed certificates)</p>
           </div>
@@ -569,7 +596,7 @@ function formatLastChecked(timestamp?: number): string {
 
         <!-- Dynamic fields from configSchema (external plugins) -->
         {#if selectedPlugin.configSchema?.properties && !['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)}
-          {#each Object.entries(selectedPlugin.configSchema.properties) as [key, prop]}
+          {#each Object.entries(selectedPlugin.configSchema.properties) as [ key, prop ]}
             <div>
               <label for="config-{key}" class="label">
                 {prop.title || key}
@@ -578,11 +605,7 @@ function formatLastChecked(timestamp?: number): string {
                 {/if}
               </label>
               {#if prop.enum}
-                <select
-                  id="config-{key}"
-                  class="input"
-                  bind:value={dynamicConfig[key]}
-                >
+                <select id="config-{key}" class="input" bind:value={dynamicConfig[key]}>
                   {#each prop.enum as option}
                     <option value={option}>{option}</option>
                   {/each}
@@ -594,7 +617,7 @@ function formatLastChecked(timestamp?: number): string {
                   class="input"
                   placeholder={prop.description || ''}
                   bind:value={dynamicConfig[key]}
-                />
+                >
               {/if}
               {#if prop.description}
                 <p class="text-xs text-muted-foreground mt-1">{prop.description}</p>
@@ -608,7 +631,9 @@ function formatLastChecked(timestamp?: number): string {
         <Button variant="outline" onclick={() => selectedPlugin = null}>Back</Button>
         <Button onclick={handleCreate} disabled={formSubmitting}>
           {#if formSubmitting}
-            <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+            <span
+              class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+            ></span>
           {/if}
           Create
         </Button>
