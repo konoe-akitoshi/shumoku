@@ -1,53 +1,53 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { goto } from '$app/navigation'
-import {
-  dashboardStore,
-  dashboards,
-  dashboardLoading,
-  dashboardError,
-} from '$lib/stores/dashboards'
-import Plus from 'phosphor-svelte/lib/Plus'
-import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
-import Trash from 'phosphor-svelte/lib/Trash'
-import Spinner from 'phosphor-svelte/lib/Spinner'
-import CaretRight from 'phosphor-svelte/lib/CaretRight'
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
+  import {
+    dashboardStore,
+    dashboards,
+    dashboardLoading,
+    dashboardError,
+  } from '$lib/stores/dashboards'
+  import Plus from 'phosphor-svelte/lib/Plus'
+  import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
+  import Trash from 'phosphor-svelte/lib/Trash'
+  import Spinner from 'phosphor-svelte/lib/Spinner'
+  import CaretRight from 'phosphor-svelte/lib/CaretRight'
 
-let showCreateModal = $state(false)
-let newDashboardName = $state('')
-let creating = $state(false)
-let deleteConfirmId = $state<string | null>(null)
+  let showCreateModal = $state(false)
+  let newDashboardName = $state('')
+  let creating = $state(false)
+  let deleteConfirmId = $state<string | null>(null)
 
-onMount(() => {
-  dashboardStore.load()
-})
-
-async function handleCreate() {
-  if (!newDashboardName.trim()) return
-
-  creating = true
-  const dashboard = await dashboardStore.create(newDashboardName.trim())
-  creating = false
-
-  if (dashboard) {
-    showCreateModal = false
-    newDashboardName = ''
-    goto(`/dashboards/${dashboard.id}`)
-  }
-}
-
-async function handleDelete(id: string) {
-  await dashboardStore.delete(id)
-  deleteConfirmId = null
-}
-
-function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+  onMount(() => {
+    dashboardStore.load()
   })
-}
+
+  async function handleCreate() {
+    if (!newDashboardName.trim()) return
+
+    creating = true
+    const dashboard = await dashboardStore.create(newDashboardName.trim())
+    creating = false
+
+    if (dashboard) {
+      showCreateModal = false
+      newDashboardName = ''
+      goto(`/dashboards/${dashboard.id}`)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    await dashboardStore.delete(id)
+    deleteConfirmId = null
+  }
+
+  function formatDate(timestamp: number): string {
+    return new Date(timestamp).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
 </script>
 
 <div class="p-6 max-w-6xl mx-auto">
@@ -147,7 +147,9 @@ function formatDate(timestamp: number): string {
     role="dialog"
     aria-modal="true"
   >
-    <div class="bg-theme-bg-elevated rounded-lg border border-theme-border shadow-xl w-full max-w-md mx-4">
+    <div
+      class="bg-theme-bg-elevated rounded-lg border border-theme-border shadow-xl w-full max-w-md mx-4"
+    >
       <div class="p-4 border-b border-theme-border">
         <h2 class="text-lg font-semibold text-theme-text-emphasis">Create Dashboard</h2>
       </div>
@@ -169,7 +171,7 @@ function formatDate(timestamp: number): string {
             placeholder="My Dashboard"
             class="w-full px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded-lg text-theme-text placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
             autofocus
-          />
+          >
         </div>
         <div class="flex justify-end gap-2">
           <button
@@ -205,7 +207,9 @@ function formatDate(timestamp: number): string {
     role="dialog"
     aria-modal="true"
   >
-    <div class="bg-theme-bg-elevated rounded-lg border border-theme-border shadow-xl w-full max-w-sm mx-4 p-4">
+    <div
+      class="bg-theme-bg-elevated rounded-lg border border-theme-border shadow-xl w-full max-w-sm mx-4 p-4"
+    >
       <h2 class="text-lg font-semibold text-theme-text-emphasis mb-2">Delete Dashboard?</h2>
       <p class="text-theme-text-muted mb-4">
         This action cannot be undone. The dashboard and all its widgets will be permanently deleted.

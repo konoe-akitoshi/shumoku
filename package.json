@@ -35,7 +35,7 @@
     "release": "turbo run build --filter='./libs/**' && changeset publish"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.11",
+    "@biomejs/biome": "^2.4.8",
     "@changesets/cli": "^2.29.8",
     "@types/node": "^25.0.7",
     "turbo": "^2.7.4",

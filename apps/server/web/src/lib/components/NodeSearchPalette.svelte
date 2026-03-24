@@ -1,66 +1,62 @@
 <script lang="ts">
-import * as Command from '$lib/components/ui/command'
+  import * as Command from '$lib/components/ui/command'
 
-interface NodeEntry {
-  id: string
-  label: string
-  type?: string
-  vendor?: string
-  model?: string
-}
+  interface NodeEntry {
+    id: string
+    label: string
+    type?: string
+    vendor?: string
+    model?: string
+  }
 
-interface Props {
-  open: boolean
-  getSvgElement: () => SVGSVGElement | null
-  onSelect?: (nodeId: string) => void
-}
+  interface Props {
+    open: boolean
+    getSvgElement: () => SVGSVGElement | null
+    onSelect?: (nodeId: string) => void
+  }
 
-let {
-  open = $bindable(false),
-  getSvgElement,
-  onSelect,
-}: Props = $props()
+  let { open = $bindable(false), getSvgElement, onSelect }: Props = $props()
 
-// Collect nodes from SVG each time palette opens
-let allNodes = $derived.by(() => {
-  if (!open) return []
-  const svgElement = getSvgElement()
-  if (!svgElement) return []
-  const nodes: NodeEntry[] = []
-  const nodeEls = svgElement.querySelectorAll('g.node')
-  nodeEls.forEach((el) => {
-    const id = el.getAttribute('data-id') || ''
-    const labelEl = el.querySelector('text.node-label, text')
-    const label = labelEl?.textContent?.trim() || id
-    const type = el.getAttribute('data-device-type') || undefined
-    const vendor = el.getAttribute('data-device-vendor') || undefined
-    const model = el.getAttribute('data-device-model') || undefined
-    nodes.push({ id, label, type, vendor, model })
+  // Collect nodes from SVG each time palette opens
+  let allNodes = $derived.by(() => {
+    if (!open) return []
+    const svgElement = getSvgElement()
+    if (!svgElement) return []
+    const nodes: NodeEntry[] = []
+    const nodeEls = svgElement.querySelectorAll('g.node')
+    nodeEls.forEach((el) => {
+      const id = el.getAttribute('data-id') || ''
+      const labelEl = el.querySelector('text.node-label, text')
+      const label = labelEl?.textContent?.trim() || id
+      const type = el.getAttribute('data-device-type') || undefined
+      const vendor = el.getAttribute('data-device-vendor') || undefined
+      const model = el.getAttribute('data-device-model') || undefined
+      nodes.push({ id, label, type, vendor, model })
+    })
+    return nodes
   })
-  return nodes
-})
 
-// Custom filter: match label/id/type, prioritize label-starts-with
-function filterNodes(value: string, search: string, keywords?: string[]) {
-  const q = search.toLowerCase()
-  const v = value.toLowerCase()
-  // keywords contain id and type joined
-  const kw = (keywords ?? []).join(' ').toLowerCase()
+  // Custom filter: match label/id/type, prioritize label-starts-with
+  function filterNodes(value: string, search: string, keywords?: string[]) {
+    const q = search.toLowerCase()
+    const v = value.toLowerCase()
+    // keywords contain id and type joined
+    const kw = (keywords ?? []).join(' ').toLowerCase()
 
-  const labelStarts = v.startsWith(q)
-  const labelContains = v.includes(q)
-  const kwContains = kw.includes(q)
+    const labelStarts = v.startsWith(q)
+    const labelContains = v.includes(q)
+    const kwContains = kw.includes(q)
 
-  if (labelStarts) return 1
-  if (labelContains) return 0.5
-  if (kwContains) return 0.25
-  return 0
-}
+    if (labelStarts) return 1
+    if (labelContains) return 0.5
+    if (kwContains) return 0.25
+    return 0
+  }
 
-function handleSelect(nodeId: string) {
-  open = false
-  onSelect?.(nodeId)
-}
+  function handleSelect(nodeId: string) {
+    open = false
+    onSelect?.(nodeId)
+  }
 </script>
 
 <Command.Dialog

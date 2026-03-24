@@ -1,45 +1,45 @@
 <script lang="ts">
-import { page } from '$app/stores'
-import CaretRight from 'phosphor-svelte/lib/CaretRight'
-import Moon from 'phosphor-svelte/lib/Moon'
-import Sun from 'phosphor-svelte/lib/Sun'
-import { themeSetting, resolvedTheme } from '$lib/stores/theme'
+  import { page } from '$app/stores'
+  import CaretRight from 'phosphor-svelte/lib/CaretRight'
+  import Moon from 'phosphor-svelte/lib/Moon'
+  import Sun from 'phosphor-svelte/lib/Sun'
+  import { themeSetting, resolvedTheme } from '$lib/stores/theme'
 
-// Generate breadcrumbs from current path
-interface Breadcrumb {
-  label: string
-  href: string
-}
-
-const routeLabels: Record<string, string> = {
-  '': 'Home',
-  dashboards: 'Dashboards',
-  topologies: 'Topologies',
-  datasources: 'Data Sources',
-  settings: 'Settings',
-  edit: 'Edit',
-}
-
-$: breadcrumbs = generateBreadcrumbs($page.url.pathname)
-
-function generateBreadcrumbs(pathname: string): Breadcrumb[] {
-  const parts = pathname.split('/').filter(Boolean)
-
-  if (parts.length === 0) {
-    return [{ label: 'Home', href: '/' }]
+  // Generate breadcrumbs from current path
+  interface Breadcrumb {
+    label: string
+    href: string
   }
 
-  const crumbs: Breadcrumb[] = [{ label: 'Home', href: '/' }]
-
-  let currentPath = ''
-  for (const part of parts) {
-    currentPath += `/${part}`
-    const label = routeLabels[part] || decodeURIComponent(part)
-    crumbs.push({ label, href: currentPath })
+  const routeLabels: Record<string, string> = {
+    '': 'Home',
+    dashboards: 'Dashboards',
+    topologies: 'Topologies',
+    datasources: 'Data Sources',
+    settings: 'Settings',
+    edit: 'Edit',
   }
 
-  return crumbs
-}
+  $: breadcrumbs = generateBreadcrumbs($page.url.pathname)
+
+  function generateBreadcrumbs(pathname: string): Breadcrumb[] {
+    const parts = pathname.split('/').filter(Boolean)
+
+    if (parts.length === 0) {
+      return [{ label: 'Home', href: '/' }]
+    }
+
+    const crumbs: Breadcrumb[] = [{ label: 'Home', href: '/' }]
+
+    let currentPath = ''
+    for (const part of parts) {
+      currentPath += `/${part}`
+      const label = routeLabels[part] || decodeURIComponent(part)
+      crumbs.push({ label, href: currentPath })
+    }
+
+    return crumbs
+  }
 </script>
 
 <header class="h-14 border-b border-theme-border bg-theme-bg-elevated flex items-center px-4 gap-4">

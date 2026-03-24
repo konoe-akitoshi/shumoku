@@ -1,105 +1,107 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { api, auth } from '$lib/api'
-import { themeSetting } from '$lib/stores'
-import GithubLogo from 'phosphor-svelte/lib/GithubLogo'
-import FileText from 'phosphor-svelte/lib/FileText'
+  import { onMount } from 'svelte'
+  import { api, auth } from '$lib/api'
+  import { themeSetting } from '$lib/stores'
+  import GithubLogo from 'phosphor-svelte/lib/GithubLogo'
+  import FileText from 'phosphor-svelte/lib/FileText'
 
-let settings: Record<string, string> = {}
-let loading = true
-let error = ''
+  let settings: Record<string, string> = {}
+  let loading = true
+  let error = ''
 
-// Local settings (stored in localStorage)
-let theme = 'system'
-let updateInterval = '30000'
+  // Local settings (stored in localStorage)
+  let theme = 'system'
+  let updateInterval = '30000'
 
-onMount(async () => {
-  // Load local settings
-  const localSettings = localStorage.getItem('shumoku-settings')
-  if (localSettings) {
-    const parsed = JSON.parse(localSettings)
-    theme = parsed.theme || 'system'
-    updateInterval = String(parsed.updateInterval || 30000)
+  onMount(async () => {
+    // Load local settings
+    const localSettings = localStorage.getItem('shumoku-settings')
+    if (localSettings) {
+      const parsed = JSON.parse(localSettings)
+      theme = parsed.theme || 'system'
+      updateInterval = String(parsed.updateInterval || 30000)
+    }
+
+    // Load server settings
+    try {
+      settings = await api.settings.get()
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to load settings'
+    } finally {
+      loading = false
+    }
+  })
+
+  function saveLocalSettings() {
+    // Theme is managed by the store (handles DOM + localStorage)
+    themeSetting.set(theme)
+
+    // Save non-theme settings to localStorage
+    const stored = localStorage.getItem('shumoku-settings')
+    const settings_local = stored ? JSON.parse(stored) : {}
+    settings_local.updateInterval = Number.parseInt(updateInterval, 10)
+    localStorage.setItem('shumoku-settings', JSON.stringify(settings_local))
   }
 
-  // Load server settings
-  try {
-    settings = await api.settings.get()
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to load settings'
-  } finally {
-    loading = false
-  }
-})
+  // Password change
+  let currentPassword = ''
+  let newPassword = ''
+  let confirmNewPassword = ''
+  let passwordError = ''
+  let passwordSuccess = ''
+  let passwordLoading = false
 
-function saveLocalSettings() {
-  // Theme is managed by the store (handles DOM + localStorage)
-  themeSetting.set(theme)
+  async function handleChangePassword() {
+    passwordError = ''
+    passwordSuccess = ''
 
-  // Save non-theme settings to localStorage
-  const stored = localStorage.getItem('shumoku-settings')
-  const settings_local = stored ? JSON.parse(stored) : {}
-  settings_local.updateInterval = Number.parseInt(updateInterval, 10)
-  localStorage.setItem('shumoku-settings', JSON.stringify(settings_local))
-}
+    if (!currentPassword || !newPassword) {
+      passwordError = 'All fields are required'
+      return
+    }
+    if (newPassword.length < 8) {
+      passwordError = 'New password must be at least 8 characters'
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      passwordError = 'New passwords do not match'
+      return
+    }
 
-// Password change
-let currentPassword = ''
-let newPassword = ''
-let confirmNewPassword = ''
-let passwordError = ''
-let passwordSuccess = ''
-let passwordLoading = false
-
-async function handleChangePassword() {
-  passwordError = ''
-  passwordSuccess = ''
-
-  if (!currentPassword || !newPassword) {
-    passwordError = 'All fields are required'
-    return
-  }
-  if (newPassword.length < 8) {
-    passwordError = 'New password must be at least 8 characters'
-    return
-  }
-  if (newPassword !== confirmNewPassword) {
-    passwordError = 'New passwords do not match'
-    return
+    passwordLoading = true
+    try {
+      await auth.changePassword(currentPassword, newPassword)
+      passwordSuccess = 'Password changed successfully'
+      currentPassword = ''
+      newPassword = ''
+      confirmNewPassword = ''
+    } catch (e: any) {
+      passwordError = e.message || 'Failed to change password'
+    } finally {
+      passwordLoading = false
+    }
   }
 
-  passwordLoading = true
-  try {
-    await auth.changePassword(currentPassword, newPassword)
-    passwordSuccess = 'Password changed successfully'
-    currentPassword = ''
-    newPassword = ''
-    confirmNewPassword = ''
-  } catch (e: any) {
-    passwordError = e.message || 'Failed to change password'
-  } finally {
-    passwordLoading = false
+  async function handleHealthCheck() {
+    try {
+      const result = await api.health.check()
+      alert(
+        `Server is ${result.status} (timestamp: ${new Date(result.timestamp).toLocaleString()})`,
+      )
+    } catch (e) {
+      alert(`Health check failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    }
   }
-}
-
-async function handleHealthCheck() {
-  try {
-    const result = await api.health.check()
-    alert(`Server is ${result.status} (timestamp: ${new Date(result.timestamp).toLocaleString()})`)
-  } catch (e) {
-    alert(`Health check failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
-  }
-}
 </script>
 
-<svelte:head>
-  <title>Settings - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Settings - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   {#if loading}
     <div class="flex items-center justify-center py-12">
-      <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div
+        class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"
+      ></div>
     </div>
   {:else}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -116,14 +118,17 @@ async function handleHealthCheck() {
               <option value="light">Light</option>
               <option value="dark">Dark</option>
             </select>
-            <p class="text-xs text-theme-text-muted mt-1">
-              System follows your OS preference.
-            </p>
+            <p class="text-xs text-theme-text-muted mt-1">System follows your OS preference.</p>
           </div>
 
           <div>
             <label for="updateInterval" class="label">Update Interval</label>
-            <select id="updateInterval" class="input" bind:value={updateInterval} onchange={saveLocalSettings}>
+            <select
+              id="updateInterval"
+              class="input"
+              bind:value={updateInterval}
+              onchange={saveLocalSettings}
+            >
               <option value="5000">5 seconds</option>
               <option value="10000">10 seconds</option>
               <option value="30000">30 seconds</option>
@@ -170,7 +175,10 @@ async function handleHealthCheck() {
           <h2 class="font-medium text-theme-text-emphasis">Change Password</h2>
         </div>
         <div class="card-body">
-          <form onsubmit={(e) => { e.preventDefault(); handleChangePassword() }} class="max-w-sm space-y-4">
+          <form
+            onsubmit={(e) => { e.preventDefault(); handleChangePassword() }}
+            class="max-w-sm space-y-4"
+          >
             <div>
               <label for="currentPassword" class="label">Current Password</label>
               <input
@@ -179,7 +187,7 @@ async function handleHealthCheck() {
                 class="input"
                 bind:value={currentPassword}
                 disabled={passwordLoading}
-              />
+              >
             </div>
             <div>
               <label for="newPassword" class="label">New Password</label>
@@ -190,7 +198,7 @@ async function handleHealthCheck() {
                 placeholder="Min 8 characters"
                 bind:value={newPassword}
                 disabled={passwordLoading}
-              />
+              >
             </div>
             <div>
               <label for="confirmNewPassword" class="label">Confirm New Password</label>
@@ -200,7 +208,7 @@ async function handleHealthCheck() {
                 class="input"
                 bind:value={confirmNewPassword}
                 disabled={passwordLoading}
-              />
+              >
             </div>
 
             {#if passwordError}
@@ -214,11 +222,7 @@ async function handleHealthCheck() {
               </div>
             {/if}
 
-            <button
-              type="submit"
-              class="btn btn-primary"
-              disabled={passwordLoading}
-            >
+            <button type="submit" class="btn btn-primary" disabled={passwordLoading}>
               {passwordLoading ? 'Changing...' : 'Change Password'}
             </button>
           </form>
@@ -232,8 +236,8 @@ async function handleHealthCheck() {
         </div>
         <div class="card-body">
           <p class="text-theme-text-muted mb-4">
-            Shumoku is a modern network topology visualization library for Markdown.
-            It enables network engineers to create interactive network diagrams directly in documentation.
+            Shumoku is a modern network topology visualization library for Markdown. It enables
+            network engineers to create interactive network diagrams directly in documentation.
           </p>
           <div class="flex items-center gap-4">
             <a

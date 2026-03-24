@@ -1,190 +1,188 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { api, type PluginInfo } from '$lib/api'
-import * as Dialog from '$lib/components/ui/dialog'
-import { Button } from '$lib/components/ui/button'
-import Plus from 'phosphor-svelte/lib/Plus'
-import Cube from 'phosphor-svelte/lib/Cube'
-import Package from 'phosphor-svelte/lib/Package'
-import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise'
-import Trash from 'phosphor-svelte/lib/Trash'
-import Check from 'phosphor-svelte/lib/Check'
-import X from 'phosphor-svelte/lib/X'
-import Warning from 'phosphor-svelte/lib/Warning'
-import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-import ChartLine from 'phosphor-svelte/lib/ChartLine'
-import Users from 'phosphor-svelte/lib/Users'
-import Bell from 'phosphor-svelte/lib/Bell'
+  import { onMount } from 'svelte'
+  import { api, type PluginInfo } from '$lib/api'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { Button } from '$lib/components/ui/button'
+  import Plus from 'phosphor-svelte/lib/Plus'
+  import Cube from 'phosphor-svelte/lib/Cube'
+  import Package from 'phosphor-svelte/lib/Package'
+  import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise'
+  import Trash from 'phosphor-svelte/lib/Trash'
+  import Check from 'phosphor-svelte/lib/Check'
+  import X from 'phosphor-svelte/lib/X'
+  import Warning from 'phosphor-svelte/lib/Warning'
+  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
+  import ChartLine from 'phosphor-svelte/lib/ChartLine'
+  import Users from 'phosphor-svelte/lib/Users'
+  import Bell from 'phosphor-svelte/lib/Bell'
 
-// State
-let plugins = $state<PluginInfo[]>([])
-let loading = $state(true)
-let error = $state<string | null>(null)
-let reloading = $state(false)
+  // State
+  let plugins = $state<PluginInfo[]>([])
+  let loading = $state(true)
+  let error = $state<string | null>(null)
+  let reloading = $state(false)
 
-// Modal state
-let showAddModal = $state(false)
-let addMethod = $state<'path' | 'url' | 'upload'>('url')
-let addPath = $state('')
-let addUrl = $state('')
-let addSubdirectory = $state('')
-let addFile = $state<File | null>(null)
-let addError = $state('')
-let addSubmitting = $state(false)
+  // Modal state
+  let showAddModal = $state(false)
+  let addMethod = $state<'path' | 'url' | 'upload'>('url')
+  let addPath = $state('')
+  let addUrl = $state('')
+  let addSubdirectory = $state('')
+  let addFile = $state<File | null>(null)
+  let addError = $state('')
+  let addSubmitting = $state(false)
 
-// Confirm delete state
-let deletePlugin = $state<PluginInfo | null>(null)
-let deleteFiles = $state(false)
-let deleting = $state(false)
+  // Confirm delete state
+  let deletePlugin = $state<PluginInfo | null>(null)
+  let deleteFiles = $state(false)
+  let deleting = $state(false)
 
-// Derived
-let bundledPlugins = $derived(plugins.filter((p) => p.bundled))
-let externalPlugins = $derived(plugins.filter((p) => !p.bundled))
+  // Derived
+  let bundledPlugins = $derived(plugins.filter((p) => p.bundled))
+  let externalPlugins = $derived(plugins.filter((p) => !p.bundled))
 
-onMount(async () => {
-  await loadPlugins()
-})
+  onMount(async () => {
+    await loadPlugins()
+  })
 
-async function loadPlugins() {
-  loading = true
-  error = null
-  try {
-    plugins = await api.plugins.list()
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to load plugins'
-  } finally {
-    loading = false
-  }
-}
-
-async function handleReload() {
-  reloading = true
-  try {
-    const result = await api.plugins.reload()
-    plugins = result.plugins
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to reload plugins'
-  } finally {
-    reloading = false
-  }
-}
-
-function openAddModal() {
-  addMethod = 'url'
-  addPath = ''
-  addUrl = ''
-  addSubdirectory = ''
-  addFile = null
-  addError = ''
-  showAddModal = true
-}
-
-async function handleAdd() {
-  addSubmitting = true
-  addError = ''
-
-  try {
-    if (addMethod === 'url') {
-      if (!addUrl.trim()) {
-        addError = 'URL is required'
-        return
-      }
-      await api.plugins.addByUrl(addUrl.trim(), addSubdirectory.trim() || undefined)
-    } else if (addMethod === 'path') {
-      if (!addPath.trim()) {
-        addError = 'Path is required'
-        return
-      }
-      await api.plugins.addByPath(addPath.trim())
-    } else {
-      if (!addFile) {
-        addError = 'Please select a file'
-        return
-      }
-      await api.plugins.uploadZip(addFile, addSubdirectory.trim() || undefined)
+  async function loadPlugins() {
+    loading = true
+    error = null
+    try {
+      plugins = await api.plugins.list()
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to load plugins'
+    } finally {
+      loading = false
     }
-
-    showAddModal = false
-    await loadPlugins()
-  } catch (e) {
-    addError = e instanceof Error ? e.message : 'Failed to add plugin'
-  } finally {
-    addSubmitting = false
   }
-}
 
-async function handleToggleEnabled(plugin: PluginInfo) {
-  try {
-    await api.plugins.setEnabled(plugin.id, !plugin.enabled)
-    await loadPlugins()
-  } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to update plugin')
+  async function handleReload() {
+    reloading = true
+    try {
+      const result = await api.plugins.reload()
+      plugins = result.plugins
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to reload plugins'
+    } finally {
+      reloading = false
+    }
   }
-}
 
-function confirmDelete(plugin: PluginInfo) {
-  deletePlugin = plugin
-  deleteFiles = false
-}
-
-async function handleDelete() {
-  if (!deletePlugin) return
-
-  deleting = true
-  try {
-    await api.plugins.remove(deletePlugin.id, deleteFiles)
-    deletePlugin = null
-    await loadPlugins()
-  } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to remove plugin')
-  } finally {
-    deleting = false
+  function openAddModal() {
+    addMethod = 'url'
+    addPath = ''
+    addUrl = ''
+    addSubdirectory = ''
+    addFile = null
+    addError = ''
+    showAddModal = true
   }
-}
 
-function handleFileSelect(e: Event) {
-  const input = e.target as HTMLInputElement
-  if (input.files && input.files.length > 0) {
-    addFile = input.files[0]
-  }
-}
+  async function handleAdd() {
+    addSubmitting = true
+    addError = ''
 
-function getCapabilityIcon(cap: string) {
-  switch (cap) {
-    case 'topology':
-      return TreeStructure
-    case 'metrics':
-      return ChartLine
-    case 'hosts':
-      return Users
-    case 'alerts':
-      return Bell
-    default:
-      return Cube
-  }
-}
+    try {
+      if (addMethod === 'url') {
+        if (!addUrl.trim()) {
+          addError = 'URL is required'
+          return
+        }
+        await api.plugins.addByUrl(addUrl.trim(), addSubdirectory.trim() || undefined)
+      } else if (addMethod === 'path') {
+        if (!addPath.trim()) {
+          addError = 'Path is required'
+          return
+        }
+        await api.plugins.addByPath(addPath.trim())
+      } else {
+        if (!addFile) {
+          addError = 'Please select a file'
+          return
+        }
+        await api.plugins.uploadZip(addFile, addSubdirectory.trim() || undefined)
+      }
 
-function getCapabilityLabel(cap: string): string {
-  switch (cap) {
-    case 'topology':
-      return 'Topology'
-    case 'metrics':
-      return 'Metrics'
-    case 'hosts':
-      return 'Hosts'
-    case 'alerts':
-      return 'Alerts'
-    case 'auto-mapping':
-      return 'Auto-mapping'
-    default:
-      return cap
+      showAddModal = false
+      await loadPlugins()
+    } catch (e) {
+      addError = e instanceof Error ? e.message : 'Failed to add plugin'
+    } finally {
+      addSubmitting = false
+    }
   }
-}
+
+  async function handleToggleEnabled(plugin: PluginInfo) {
+    try {
+      await api.plugins.setEnabled(plugin.id, !plugin.enabled)
+      await loadPlugins()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to update plugin')
+    }
+  }
+
+  function confirmDelete(plugin: PluginInfo) {
+    deletePlugin = plugin
+    deleteFiles = false
+  }
+
+  async function handleDelete() {
+    if (!deletePlugin) return
+
+    deleting = true
+    try {
+      await api.plugins.remove(deletePlugin.id, deleteFiles)
+      deletePlugin = null
+      await loadPlugins()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to remove plugin')
+    } finally {
+      deleting = false
+    }
+  }
+
+  function handleFileSelect(e: Event) {
+    const input = e.target as HTMLInputElement
+    if (input.files && input.files.length > 0) {
+      addFile = input.files[0]
+    }
+  }
+
+  function getCapabilityIcon(cap: string) {
+    switch (cap) {
+      case 'topology':
+        return TreeStructure
+      case 'metrics':
+        return ChartLine
+      case 'hosts':
+        return Users
+      case 'alerts':
+        return Bell
+      default:
+        return Cube
+    }
+  }
+
+  function getCapabilityLabel(cap: string): string {
+    switch (cap) {
+      case 'topology':
+        return 'Topology'
+      case 'metrics':
+        return 'Metrics'
+      case 'hosts':
+        return 'Hosts'
+      case 'alerts':
+        return 'Alerts'
+      case 'auto-mapping':
+        return 'Auto-mapping'
+      default:
+        return cap
+    }
+  }
 </script>
 
-<svelte:head>
-  <title>Plugins - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Plugins - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   <!-- Header -->
@@ -207,7 +205,9 @@ function getCapabilityLabel(cap: string): string {
 
   {#if loading}
     <div class="flex items-center justify-center py-12">
-      <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div
+        class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"
+      ></div>
     </div>
   {:else if error}
     <div class="card p-6 text-center">
@@ -275,14 +275,15 @@ function getCapabilityLabel(cap: string): string {
                   <td>
                     <div>
                       <p class="font-medium text-theme-text-emphasis">{plugin.name}</p>
-                      <p class="text-xs text-theme-text-muted font-mono truncate max-w-[300px]" title={plugin.path}>
+                      <p
+                        class="text-xs text-theme-text-muted font-mono truncate max-w-[300px]"
+                        title={plugin.path}
+                      >
                         {plugin.path}
                       </p>
                     </div>
                   </td>
-                  <td>
-                    <span class="badge badge-info">{plugin.version}</span>
-                  </td>
+                  <td><span class="badge badge-info">{plugin.version}</span></td>
                   <td>
                     <div class="flex flex-wrap gap-1">
                       {#each plugin.capabilities as cap}
@@ -323,11 +324,7 @@ function getCapabilityLabel(cap: string): string {
                       >
                         {plugin.enabled ? 'Disable' : 'Enable'}
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onclick={() => confirmDelete(plugin)}
-                      >
+                      <Button variant="destructive" size="sm" onclick={() => confirmDelete(plugin)}>
                         <Trash size={16} />
                       </Button>
                     </div>
@@ -354,7 +351,9 @@ function getCapabilityLabel(cap: string): string {
 
     <div class="py-4 space-y-4">
       {#if addError}
-        <div class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+        <div
+          class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm"
+        >
           {addError}
         </div>
       {/if}
@@ -403,20 +402,22 @@ function getCapabilityLabel(cap: string): string {
               class="input font-mono text-sm"
               placeholder="https://github.com/user/repo/archive/refs/heads/main.zip"
               bind:value={addUrl}
-            />
+            >
             <p class="text-xs text-theme-text-muted mt-1">
               ZIP file URL, tar.gz URL, or Git repository URL
             </p>
           </div>
           <div>
-            <label for="subdirectory-url" class="label">Subdirectory <span class="text-theme-text-muted">(optional)</span></label>
+            <label for="subdirectory-url" class="label"
+              >Subdirectory <span class="text-theme-text-muted">(optional)</span></label
+            >
             <input
               type="text"
               id="subdirectory-url"
               class="input font-mono text-sm"
               placeholder="shumoku-plugin"
               bind:value={addSubdirectory}
-            />
+            >
             <p class="text-xs text-theme-text-muted mt-1">
               Path to plugin within the archive (if not at root)
             </p>
@@ -431,7 +432,7 @@ function getCapabilityLabel(cap: string): string {
             class="input font-mono text-sm"
             placeholder="/path/to/plugin"
             bind:value={addPath}
-          />
+          >
           <p class="text-xs text-theme-text-muted mt-1">
             Absolute path to the plugin directory on the server
           </p>
@@ -440,28 +441,25 @@ function getCapabilityLabel(cap: string): string {
         <div class="space-y-3">
           <div>
             <label for="file" class="label">Plugin ZIP File</label>
-            <input
-              type="file"
-              id="file"
-              class="input"
-              accept=".zip"
-              onchange={handleFileSelect}
-            />
+            <input type="file" id="file" class="input" accept=".zip" onchange={handleFileSelect}>
             {#if addFile}
               <p class="text-xs text-theme-text-muted mt-1">
-                Selected: {addFile.name} ({Math.round(addFile.size / 1024)} KB)
+                Selected: {addFile.name} ({Math.round(addFile.size / 1024)}
+                KB)
               </p>
             {/if}
           </div>
           <div>
-            <label for="subdirectory-upload" class="label">Subdirectory <span class="text-theme-text-muted">(optional)</span></label>
+            <label for="subdirectory-upload" class="label"
+              >Subdirectory <span class="text-theme-text-muted">(optional)</span></label
+            >
             <input
               type="text"
               id="subdirectory-upload"
               class="input font-mono text-sm"
               placeholder="shumoku-plugin"
               bind:value={addSubdirectory}
-            />
+            >
             <p class="text-xs text-theme-text-muted mt-1">
               Path to plugin within the ZIP (if not at root)
             </p>
@@ -474,7 +472,9 @@ function getCapabilityLabel(cap: string): string {
       <Button variant="outline" onclick={() => showAddModal = false}>Cancel</Button>
       <Button onclick={handleAdd} disabled={addSubmitting}>
         {#if addSubmitting}
-          <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+          <span
+            class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+          ></span>
         {/if}
         Add Plugin
       </Button>
@@ -483,7 +483,10 @@ function getCapabilityLabel(cap: string): string {
 </Dialog.Root>
 
 <!-- Delete Confirmation Modal -->
-<Dialog.Root open={deletePlugin !== null} onOpenChange={(open) => { if (!open) deletePlugin = null }}>
+<Dialog.Root
+  open={deletePlugin !== null}
+  onOpenChange={(open) => { if (!open) deletePlugin = null }}
+>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
       <Dialog.Title>Remove Plugin</Dialog.Title>
@@ -498,7 +501,7 @@ function getCapabilityLabel(cap: string): string {
           type="checkbox"
           class="w-4 h-4 rounded border-theme-border"
           bind:checked={deleteFiles}
-        />
+        >
         <span class="text-sm text-theme-text">Also delete plugin files from disk</span>
       </label>
     </div>
@@ -507,7 +510,9 @@ function getCapabilityLabel(cap: string): string {
       <Button variant="outline" onclick={() => deletePlugin = null}>Cancel</Button>
       <Button variant="destructive" onclick={handleDelete} disabled={deleting}>
         {#if deleting}
-          <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+          <span
+            class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+          ></span>
         {/if}
         Remove
       </Button>

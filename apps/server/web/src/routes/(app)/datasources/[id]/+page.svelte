@@ -1,199 +1,202 @@
 <script lang="ts">
-import { onMount } from 'svelte'
-import { page } from '$app/stores'
-import { goto } from '$app/navigation'
-import { api } from '$lib/api'
-import type { DataSource, DataSourceType, ConnectionTestResult } from '$lib/types'
-import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-import XCircle from 'phosphor-svelte/lib/XCircle'
-import Warning from 'phosphor-svelte/lib/Warning'
-import Copy from 'phosphor-svelte/lib/Copy'
-import Check from 'phosphor-svelte/lib/Check'
+  import { onMount } from 'svelte'
+  import { page } from '$app/stores'
+  import { goto } from '$app/navigation'
+  import { api } from '$lib/api'
+  import type { DataSource, DataSourceType, ConnectionTestResult } from '$lib/types'
+  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
+  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
+  import XCircle from 'phosphor-svelte/lib/XCircle'
+  import Warning from 'phosphor-svelte/lib/Warning'
+  import Copy from 'phosphor-svelte/lib/Copy'
+  import Check from 'phosphor-svelte/lib/Check'
 
-// Get ID from route params (always defined for this route)
-let id = $derived($page.params.id!)
+  // Get ID from route params (always defined for this route)
+  let id = $derived($page.params.id!)
 
-let dataSource = $state<DataSource | null>(null)
-let loading = $state(true)
-let error = $state('')
-let saving = $state(false)
-let testResult = $state<ConnectionTestResult | null>(null)
-let testing = $state(false)
+  let dataSource = $state<DataSource | null>(null)
+  let loading = $state(true)
+  let error = $state('')
+  let saving = $state(false)
+  let testResult = $state<ConnectionTestResult | null>(null)
+  let testing = $state(false)
 
-// Form state
-let formName = $state('')
-let formUrl = $state('')
-let formToken = $state('')
-let formPollInterval = $state(30000)
-let hasExistingToken = $state(false)
-let formInsecure = $state(false)
+  // Form state
+  let formName = $state('')
+  let formUrl = $state('')
+  let formToken = $state('')
+  let formPollInterval = $state(30000)
+  let hasExistingToken = $state(false)
+  let formInsecure = $state(false)
 
-// Grafana webhook state
-let formUseWebhook = $state(false)
-let webhookUrl = $state('')
-let webhookLoading = $state(false)
-let copied = $state(false)
+  // Grafana webhook state
+  let formUseWebhook = $state(false)
+  let webhookUrl = $state('')
+  let webhookLoading = $state(false)
+  let copied = $state(false)
 
-interface ParsedConfig {
-  url?: string
-  token?: string
-  pollInterval?: number
-  insecure?: boolean
-  useWebhook?: boolean
-  webhookSecret?: string
-}
-
-function parseConfig(configJson: string): ParsedConfig {
-  try {
-    return JSON.parse(configJson)
-  } catch {
-    return {}
-  }
-}
-
-function getConfigFromForm(type: DataSourceType, existingConfig?: ParsedConfig): string {
-  const config: Record<string, unknown> = {
-    url: formUrl.trim(),
+  interface ParsedConfig {
+    url?: string
+    token?: string
+    pollInterval?: number
+    insecure?: boolean
+    useWebhook?: boolean
+    webhookSecret?: string
   }
 
-  // Only include token if user entered a new one; omit to let server preserve existing
-  if (formToken.trim()) {
-    config.token = formToken.trim()
-  }
-
-  if (type === 'zabbix') {
-    config.pollInterval = formPollInterval
-  }
-
-  if (type === 'netbox') {
-    if (formInsecure) config.insecure = true
-  }
-
-  if (type === 'grafana') {
-    config.useWebhook = formUseWebhook
-  }
-
-  return JSON.stringify(config)
-}
-
-async function loadWebhookUrl() {
-  if (!formUseWebhook) {
-    webhookUrl = ''
-    return
-  }
-  webhookLoading = true
-  try {
-    const result = await api.dataSources.getWebhookUrl(id)
-    webhookUrl = `${window.location.origin}${result.webhookPath}`
-  } catch (err) {
-    console.error('[WebhookUrl] Failed to load:', err)
-    webhookUrl = ''
-  } finally {
-    webhookLoading = false
-  }
-}
-
-onMount(async () => {
-  try {
-    dataSource = await api.dataSources.get(id)
-    formName = dataSource.name
-    const config = parseConfig(dataSource.configJson)
-    formUrl = config.url || ''
-    formToken = '' // Don't show existing token
-    formPollInterval = config.pollInterval || 30000
-    hasExistingToken = !!config.token
-    formInsecure = !!config.insecure
-    formUseWebhook = !!config.useWebhook
-
-    if (formUseWebhook) {
-      await loadWebhookUrl()
-    }
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to load data source'
-  } finally {
-    loading = false
-  }
-})
-
-async function handleSave() {
-  if (!formName.trim() || !formUrl.trim()) {
-    error = 'Name and URL are required'
-    return
-  }
-
-  saving = true
-  error = ''
-
-  try {
-    // Get existing config to preserve token if not changed
-    const existingConfig = dataSource ? parseConfig(dataSource.configJson) : undefined
-
-    const updates = {
-      name: formName.trim(),
-      configJson: getConfigFromForm(dataSource!.type, existingConfig),
-    }
-
-    dataSource = await api.dataSources.update(id, updates)
-    // Update hasExistingToken state
-    const newConfig = parseConfig(dataSource.configJson)
-    hasExistingToken = !!newConfig.token
-
-    // Load webhook URL after save (secret may have been generated)
-    if (dataSource.type === 'grafana' && formUseWebhook) {
-      await loadWebhookUrl()
-    }
-
-    // Auto-test connection after save
-    await handleTest()
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to save'
-  } finally {
-    saving = false
-  }
-}
-
-async function handleTest() {
-  testing = true
-  testResult = null
-  try {
-    testResult = await api.dataSources.test(id)
-  } catch (e) {
-    testResult = {
-      success: false,
-      message: e instanceof Error ? e.message : 'Test failed',
+  function parseConfig(configJson: string): ParsedConfig {
+    try {
+      return JSON.parse(configJson)
+    } catch {
+      return {}
     }
   }
-  testing = false
-}
 
-async function handleDelete() {
-  if (!confirm(`Delete data source "${dataSource?.name}"?`)) {
-    return
+  function getConfigFromForm(type: DataSourceType, existingConfig?: ParsedConfig): string {
+    const config: Record<string, unknown> = {
+      url: formUrl.trim(),
+    }
+
+    // Only include token if user entered a new one; omit to let server preserve existing
+    if (formToken.trim()) {
+      config.token = formToken.trim()
+    }
+
+    if (type === 'zabbix') {
+      config.pollInterval = formPollInterval
+    }
+
+    if (type === 'netbox') {
+      if (formInsecure) config.insecure = true
+    }
+
+    if (type === 'grafana') {
+      config.useWebhook = formUseWebhook
+    }
+
+    return JSON.stringify(config)
   }
-  try {
-    await api.dataSources.delete(id)
-    goto('/datasources')
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to delete'
+
+  async function loadWebhookUrl() {
+    if (!formUseWebhook) {
+      webhookUrl = ''
+      return
+    }
+    webhookLoading = true
+    try {
+      const result = await api.dataSources.getWebhookUrl(id)
+      webhookUrl = `${window.location.origin}${result.webhookPath}`
+    } catch (err) {
+      console.error('[WebhookUrl] Failed to load:', err)
+      webhookUrl = ''
+    } finally {
+      webhookLoading = false
+    }
   }
-}
+
+  onMount(async () => {
+    try {
+      dataSource = await api.dataSources.get(id)
+      formName = dataSource.name
+      const config = parseConfig(dataSource.configJson)
+      formUrl = config.url || ''
+      formToken = '' // Don't show existing token
+      formPollInterval = config.pollInterval || 30000
+      hasExistingToken = !!config.token
+      formInsecure = !!config.insecure
+      formUseWebhook = !!config.useWebhook
+
+      if (formUseWebhook) {
+        await loadWebhookUrl()
+      }
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to load data source'
+    } finally {
+      loading = false
+    }
+  })
+
+  async function handleSave() {
+    if (!formName.trim() || !formUrl.trim()) {
+      error = 'Name and URL are required'
+      return
+    }
+
+    saving = true
+    error = ''
+
+    try {
+      // Get existing config to preserve token if not changed
+      const existingConfig = dataSource ? parseConfig(dataSource.configJson) : undefined
+
+      const updates = {
+        name: formName.trim(),
+        configJson: getConfigFromForm(dataSource!.type, existingConfig),
+      }
+
+      dataSource = await api.dataSources.update(id, updates)
+      // Update hasExistingToken state
+      const newConfig = parseConfig(dataSource.configJson)
+      hasExistingToken = !!newConfig.token
+
+      // Load webhook URL after save (secret may have been generated)
+      if (dataSource.type === 'grafana' && formUseWebhook) {
+        await loadWebhookUrl()
+      }
+
+      // Auto-test connection after save
+      await handleTest()
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to save'
+    } finally {
+      saving = false
+    }
+  }
+
+  async function handleTest() {
+    testing = true
+    testResult = null
+    try {
+      testResult = await api.dataSources.test(id)
+    } catch (e) {
+      testResult = {
+        success: false,
+        message: e instanceof Error ? e.message : 'Test failed',
+      }
+    }
+    testing = false
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Delete data source "${dataSource?.name}"?`)) {
+      return
+    }
+    try {
+      await api.dataSources.delete(id)
+      goto('/datasources')
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to delete'
+    }
+  }
 </script>
 
-<svelte:head>
-  <title>{dataSource?.name || 'Data Source'} - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>{dataSource?.name || 'Data Source'} - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   <!-- Back link -->
-  <a href="/datasources" class="inline-flex items-center gap-2 text-theme-text-muted hover:text-theme-text mb-4">
+  <a
+    href="/datasources"
+    class="inline-flex items-center gap-2 text-theme-text-muted hover:text-theme-text mb-4"
+  >
     <ArrowLeft size={16} />
     Back to Data Sources
   </a>
 
   {#if loading}
     <div class="flex items-center justify-center py-12">
-      <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div
+        class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"
+      ></div>
     </div>
   {:else if error && !dataSource}
     <div class="card p-6 text-center">
@@ -222,12 +225,12 @@ async function handleDelete() {
 
             <div>
               <label for="name" class="label">Name</label>
-              <input type="text" id="name" class="input" bind:value={formName} />
+              <input type="text" id="name" class="input" bind:value={formName}>
             </div>
 
             <div>
               <label for="url" class="label">URL</label>
-              <input type="url" id="url" class="input" bind:value={formUrl} />
+              <input type="url" id="url" class="input" bind:value={formUrl}>
             </div>
 
             {#if dataSource.type === 'zabbix' || dataSource.type === 'netbox' || dataSource.type === 'grafana'}
@@ -239,7 +242,7 @@ async function handleDelete() {
                   class="input"
                   placeholder="Enter new token to update"
                   bind:value={formToken}
-                />
+                >
                 <p class="text-xs text-theme-text-muted mt-1">
                   {hasExistingToken ? 'Token is set. Enter a new value to update.' : 'No token set.'}
                 </p>
@@ -261,11 +264,7 @@ async function handleDelete() {
 
             {#if dataSource.type === 'netbox'}
               <div class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="insecure"
-                  bind:checked={formInsecure}
-                />
+                <input type="checkbox" id="insecure" bind:checked={formInsecure}>
                 <label for="insecure" class="text-sm">Skip TLS certificate verification</label>
                 <p class="text-xs text-muted-foreground">(for self-signed certificates)</p>
               </div>
@@ -306,7 +305,7 @@ async function handleDelete() {
                           class="input flex-1 font-mono text-xs"
                           value={webhookUrl}
                           readonly
-                        />
+                        >
                         <button
                           type="button"
                           class="btn btn-secondary p-2"
@@ -335,7 +334,9 @@ async function handleDelete() {
             <div class="flex justify-end pt-4 border-t border-theme-border">
               <button type="submit" class="btn btn-primary" disabled={saving}>
                 {#if saving}
-                  <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+                  <span
+                    class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+                  ></span>
                 {/if}
                 Save Changes
               </button>
@@ -353,15 +354,15 @@ async function handleDelete() {
           <div class="card-body">
             <button class="btn btn-secondary w-full mb-4" onclick={handleTest} disabled={testing}>
               {#if testing}
-                <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+                <span
+                  class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+                ></span>
               {/if}
               Test Connection
             </button>
 
             {#if testResult}
-              <div
-                class="p-4 rounded-lg {testResult.success ? 'bg-success/10' : 'bg-danger/10'}"
-              >
+              <div class="p-4 rounded-lg {testResult.success ? 'bg-success/10' : 'bg-danger/10'}">
                 <div class="flex items-center gap-2 mb-2">
                   {#if testResult.success}
                     <CheckCircle size={20} class="text-success" />
