@@ -153,6 +153,19 @@
         "react",
       ],
     },
+    "libs/@shumoku/layout": {
+      "name": "@shumoku/layout",
+      "version": "0.1.0",
+      "dependencies": {
+        "@shumoku/core": "workspace:*",
+        "elkjs": "^0.11.0",
+      },
+      "devDependencies": {
+        "@types/node": "^25.0.7",
+        "typescript": "^5.6.3",
+        "vitest": "^4.0.17",
+      },
+    },
     "libs/@shumoku/renderer-html": {
       "name": "@shumoku/renderer-html",
       "version": "0.2.25",
@@ -672,6 +685,8 @@
     "@shumoku/core": ["@shumoku/core@workspace:libs/@shumoku/core"],
 
     "@shumoku/docs": ["@shumoku/docs@workspace:apps/docs"],
+
+    "@shumoku/layout": ["@shumoku/layout@workspace:libs/@shumoku/layout"],
 
     "@shumoku/renderer-html": ["@shumoku/renderer-html@workspace:libs/@shumoku/renderer-html"],
 
