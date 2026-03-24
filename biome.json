@@ -26,6 +26,12 @@
       "trailingCommas": "all"
     }
   },
+  "html": {
+    "formatter": {
+      "enabled": true
+    },
+    "experimentalFullSupportEnabled": true
+  },
   "files": {
     "includes": ["**", "!**/dist", "!**/node_modules", "!**/.next"]
   },
