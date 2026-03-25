@@ -80,7 +80,7 @@
     }
   })
 
-  let icon = $derived.by(() => {
+  let Icon = $derived.by(() => {
     switch (metricType) {
       case 'nodes-up':
       case 'links-healthy':
@@ -101,7 +101,7 @@
   <div class="h-full flex flex-col items-center justify-center gap-2">
     {#if value !== null}
       <div class="flex items-center gap-2 {colorClass}">
-        <svelte:component this={icon} size={24} />
+        <Icon />
         <span class="text-4xl font-bold">{value}</span>
         {#if total !== null && metricType !== 'utilization'}
           <span class="text-lg text-theme-text-muted">/ {total}</span>
