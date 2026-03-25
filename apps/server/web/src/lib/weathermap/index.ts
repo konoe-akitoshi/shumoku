@@ -261,16 +261,16 @@ export class WeathermapController {
       typeof window !== 'undefined' &&
       'matchMedia' in window &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const deviceMemory =
-      typeof navigator !== 'undefined' && 'deviceMemory' in navigator
-        ? Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4)
-        : 4
-    const hardwareConcurrency =
-      typeof navigator !== 'undefined' && 'hardwareConcurrency' in navigator
-        ? navigator.hardwareConcurrency || 4
-        : 4
 
     // TODO: Replace hardware-based detection with edge-count or FPS-based approach
+    // const deviceMemory =
+    //   typeof navigator !== 'undefined' && 'deviceMemory' in navigator
+    //     ? Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4)
+    //     : 4
+    // const hardwareConcurrency =
+    //   typeof navigator !== 'undefined' && 'hardwareConcurrency' in navigator
+    //     ? navigator.hardwareConcurrency || 4
+    //     : 4
     // if (prefersReducedMotion || deviceMemory <= 2 || hardwareConcurrency <= 4) {
     //   return {
     //     quality: 'low',
