@@ -28,7 +28,7 @@
     dataSources: { total: number; connected: number }
   }
 
-  let health: HealthStatus | null = $state(null)
+  let health = $state<HealthStatus | null>(null)
   let loading = $state(true)
   let error = $state('')
 
