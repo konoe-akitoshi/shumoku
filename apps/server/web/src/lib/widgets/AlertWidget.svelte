@@ -298,6 +298,8 @@
 
   let displayedAlerts = $derived(alerts.slice(0, config.maxItems || 10))
   let activeAlerts = $derived(alerts.filter((a) => a.status === 'active'))
+
+  const componentId = $props.id()
 </script>
 
 <WidgetWrapper title={config.title || 'Alerts'} {onRemove} onSettings={handleSettings}>
@@ -308,8 +310,11 @@
         <div class="text-sm font-medium text-theme-text-emphasis">Widget Settings</div>
 
         <div>
-          <label class="text-xs text-theme-text-muted mb-1 block">Data Source</label>
+          <label for={componentId} class="text-xs text-theme-text-muted mb-1 block"
+            >Data Source</label
+          >
           <select
+            id={componentId}
             value={config.dataSourceId || ''}
             onchange={(e) => selectDataSource(e.currentTarget.value)}
             class="w-full px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text"

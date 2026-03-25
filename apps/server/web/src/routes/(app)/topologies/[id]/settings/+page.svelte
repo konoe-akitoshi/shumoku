@@ -758,6 +758,13 @@
       { singleCandidateFallback },
     )
   }
+
+  const componentId = $props.id()
+  const groupBySelectorId = componentId + ':groupBy'
+  const matchStrategySelectorId = componentId + ':matchStrategy'
+  const unmatchedNodesSelectorId = componentId + ':unmatchedNodes'
+  const idMappingId = componentId + ':idMapping'
+  const subgraphNameId = componentId + ':subgraph'
 </script>
 
 <svelte:head> <title>Settings - {topology?.name || 'Topology'} - Shumoku</title> </svelte:head>
@@ -1139,8 +1146,11 @@
                             </p>
 
                             <div class="flex items-center gap-4">
-                              <label class="text-xs text-theme-text-muted">Group By</label>
+                              <label for={groupBySelectorId} class="text-xs text-theme-text-muted"
+                                >Group By</label
+                              >
                               <select
+                                id={groupBySelectorId}
                                 class="input text-sm"
                                 value={opts.groupBy || 'tag'}
                                 onchange={(e) => updateOptions(source.index, { groupBy: e.currentTarget.value })}
@@ -1310,8 +1320,11 @@
                     </h3>
                     <div class="grid grid-cols-2 gap-3">
                       <div>
-                        <label class="text-xs text-theme-text-muted">Match Strategy</label>
+                        <label for={matchStrategySelectorId} class="text-xs text-theme-text-muted"
+                          >Match Strategy</label
+                        >
                         <select
+                          id={matchStrategySelectorId}
                           class="input mt-1"
                           value={config.match}
                           onchange={(e) => updateOverlayConfig(source.dataSourceId, { match: e.currentTarget.value as MergeMatchStrategy })}
@@ -1322,8 +1335,11 @@
                         </select>
                       </div>
                       <div>
-                        <label class="text-xs text-theme-text-muted">Unmatched Nodes</label>
+                        <label for={unmatchedNodesSelectorId} class="text-xs text-theme-text-muted"
+                          >Unmatched Nodes</label
+                        >
                         <select
+                          id={unmatchedNodesSelectorId}
                           class="input mt-1"
                           value={config.onUnmatched}
                           onchange={(e) => updateOverlayConfig(source.dataSourceId, { onUnmatched: e.currentTarget.value as MergeUnmatchedStrategy })}
@@ -1335,8 +1351,11 @@
                       </div>
                       {#if config.match === 'manual'}
                         <div class="col-span-2">
-                          <label class="text-xs text-theme-text-muted">ID Mapping (JSON)</label>
+                          <label for={idMappingId} class="text-xs text-theme-text-muted"
+                            >ID Mapping (JSON)</label
+                          >
                           <textarea
+                            id={idMappingId}
                             class="input mt-1 font-mono text-xs"
                             rows="4"
                             placeholder={`{\n  "overlay-id": "base-id"\n}`}
@@ -1352,8 +1371,11 @@
                       {/if}
                       {#if config.onUnmatched === 'add-to-subgraph'}
                         <div class="col-span-2">
-                          <label class="text-xs text-theme-text-muted">Subgraph Name</label>
+                          <label for={subgraphNameId} class="text-xs text-theme-text-muted"
+                            >Subgraph Name</label
+                          >
                           <input
+                            id={subgraphNameId}
                             type="text"
                             class="input mt-1"
                             placeholder={getSourceType(source.dataSourceId)}

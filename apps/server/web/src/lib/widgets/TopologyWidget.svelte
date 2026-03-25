@@ -408,6 +408,10 @@
   )
 
   let editMode = $derived($dashboardEditMode)
+
+  const componentId = $props.id()
+  const selectorId = componentId + ':selector'
+  const hierarchicalSelectorId = componentId + ':hierarchicalSelector'
 </script>
 
 <WidgetWrapper
@@ -421,8 +425,9 @@
       <div class="absolute inset-0 bg-theme-bg-elevated z-10 p-4 flex flex-col overflow-auto">
         <div class="text-sm font-medium text-theme-text-emphasis mb-3">Widget Settings</div>
 
-        <label class="text-xs text-theme-text-muted mb-1">Topology</label>
+        <label for={selectorId} class="text-xs text-theme-text-muted mb-1">Topology</label>
         <select
+          id={selectorId}
           value={config.topologyId || ''}
           onchange={(e) => selectTopology(e.currentTarget.value)}
           class="px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text mb-4"
@@ -434,8 +439,11 @@
         </select>
 
         {#if isHierarchical && sheets.length > 0}
-          <label class="text-xs text-theme-text-muted mb-1">Sheet (Hierarchy Level)</label>
+          <label for={hierarchicalSelectorId} class="text-xs text-theme-text-muted mb-1"
+            >Sheet (Hierarchy Level)</label
+          >
           <select
+            id={hierarchicalSelectorId}
             value={config.sheetId || 'root'}
             onchange={(e) => selectSheet(e.currentTarget.value)}
             class="px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text mb-4"
