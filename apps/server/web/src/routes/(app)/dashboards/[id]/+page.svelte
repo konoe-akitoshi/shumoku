@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
-  import { page } from '$app/stores'
   import { goto } from '$app/navigation'
   import { browser } from '$app/environment'
   import { mount, unmount } from 'svelte'
@@ -29,7 +28,8 @@
   import Cpu from 'phosphor-svelte/lib/Cpu'
   import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
 
-  let id = $derived($page.params.id)
+  let { data } = $props()
+  let id = $derived(data.id)
 
   // UI State
   let showWidgetPanel = $state(false)
