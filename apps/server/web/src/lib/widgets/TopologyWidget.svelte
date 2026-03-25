@@ -18,9 +18,7 @@
     clearHighlight as clearHighlightUtil,
   } from '$lib/highlight'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import Spinner from 'phosphor-svelte/lib/Spinner'
-  import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
+  import { ArrowSquareOutIcon, SpinnerIcon, TreeStructureIcon } from 'phosphor-svelte'
 
   interface SheetInfo {
     id: string
@@ -466,7 +464,7 @@
     {:else if !config.topologyId}
       <!-- No topology selected -->
       <div class="h-full flex flex-col items-center justify-center text-theme-text-muted gap-3">
-        <TreeStructure size={32} />
+        <TreeStructureIcon size={32} />
         <span class="text-sm">No topology selected</span>
         <button
           onclick={() => showSelector = true}
@@ -477,7 +475,7 @@
       </div>
     {:else if loading}
       <div class="h-full flex items-center justify-center">
-        <Spinner size={24} class="animate-spin text-theme-text-muted" />
+        <SpinnerIcon size={24} class="animate-spin text-theme-text-muted" />
       </div>
     {:else if error}
       <div class="h-full flex flex-col items-center justify-center text-danger gap-2">
@@ -495,7 +493,7 @@
             href="/topologies/{config.topologyId}"
             class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-theme-bg-elevated border border-theme-border rounded-lg px-3 py-1.5 flex items-center gap-1.5 text-xs text-theme-text hover:bg-theme-bg-canvas hover:border-primary/50 shadow-sm no-underline"
           >
-            <ArrowSquareOut size={14} />
+            <ArrowSquareOutIcon size={14} />
             <span>Open</span>
           </a>
         {/if}

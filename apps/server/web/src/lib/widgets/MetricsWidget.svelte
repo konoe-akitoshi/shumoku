@@ -1,9 +1,7 @@
 <script lang="ts">
   import { metricsData } from '$lib/stores/metrics'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import ChartLine from 'phosphor-svelte/lib/ChartLine'
-  import ArrowUp from 'phosphor-svelte/lib/ArrowUp'
-  import ArrowDown from 'phosphor-svelte/lib/ArrowDown'
+  import { ArrowDownIcon, ArrowUpIcon, ChartLineIcon } from 'phosphor-svelte'
 
   interface Props {
     id: string
@@ -84,11 +82,11 @@
     switch (metricType) {
       case 'nodes-up':
       case 'links-healthy':
-        return ArrowUp
+        return ArrowUpIcon
       case 'nodes-down':
-        return ArrowDown
+        return ArrowDownIcon
       default:
-        return ChartLine
+        return ChartLineIcon
     }
   })
 
@@ -122,7 +120,7 @@
       </span>
     {:else}
       <div class="text-theme-text-muted flex flex-col items-center gap-2">
-        <ChartLine size={32} />
+        <ChartLineIcon size={32} />
         <span class="text-sm">No metrics data</span>
       </div>
     {/if}

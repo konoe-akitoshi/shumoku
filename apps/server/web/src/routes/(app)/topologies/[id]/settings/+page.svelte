@@ -28,19 +28,23 @@
     SyncMode,
     ParsedTopologyResponse,
   } from '$lib/types'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-  import PencilSimple from 'phosphor-svelte/lib/PencilSimple'
   import Trash from 'phosphor-svelte/lib/Trash'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise'
-  import Copy from 'phosphor-svelte/lib/Copy'
-  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-  import FloppyDisk from 'phosphor-svelte/lib/FloppyDisk'
-  import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
   import Lightning from 'phosphor-svelte/lib/Lightning'
-  import ArrowRight from 'phosphor-svelte/lib/ArrowRight'
   import Star from 'phosphor-svelte/lib/Star'
-  import ArrowDown from 'phosphor-svelte/lib/ArrowDown'
+  import {
+    ArrowDownIcon,
+    ArrowLeftIcon,
+    ArrowRightIcon,
+    ArrowsClockwiseIcon,
+    CheckCircleIcon,
+    CopyIcon,
+    FloppyDiskIcon,
+    LightningIcon,
+    MagnifyingGlassIcon,
+    PencilSimpleIcon,
+    PlusIcon,
+    TrashIcon,
+  } from 'phosphor-svelte'
 
   // ============================================
   // State
@@ -788,7 +792,7 @@
         href="/topologies/{topologyId}"
         class="inline-flex items-center gap-2 text-sm text-theme-text-muted hover:text-theme-text transition-colors mb-4"
       >
-        <ArrowLeft size={16} />
+        <ArrowLeftIcon size={16} />
         Back to Diagram
       </a>
       <h1 class="text-xl font-semibold text-theme-text-emphasis">{topology.name}</h1>
@@ -987,7 +991,7 @@
               href="/topologies/{topology.id}/edit"
               class="btn btn-secondary w-full justify-center"
             >
-              <PencilSimple size={16} class="mr-2" />
+              <PencilSimpleIcon size={16} class="mr-2" />
               Edit YAML
             </a>
           </div>
@@ -1013,7 +1017,7 @@
                   class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
                 ></span>
               {:else}
-                <Trash size={16} class="mr-2" />
+                <TrashIcon size={16} class="mr-2" />
               {/if}
               Delete Topology
             </Button>
@@ -1035,7 +1039,7 @@
                 class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
               ></span>
             {:else}
-              <FloppyDisk size={16} class="mr-2" />
+              <FloppyDiskIcon size={16} class="mr-2" />
             {/if}
             Save Changes
           </Button>
@@ -1058,13 +1062,13 @@
                       class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
                     ></span>
                   {:else}
-                    <ArrowsClockwise size={14} class="mr-1" />
+                    <ArrowsClockwiseIcon size={14} class="mr-1" />
                   {/if}
                   Sync All
                 </Button>
               {/if}
               <Button variant="outline" size="sm" onclick={() => addSource('topology')}>
-                <Plus size={16} class="mr-1" />
+                <PlusIcon size={16} class="mr-1" />
                 Add
               </Button>
             </div>
@@ -1125,9 +1129,9 @@
                               onclick={() => copyWebhookUrl(currentSource)}
                             >
                               {#if copiedSecret === currentSource.id}
-                                <CheckCircle size={16} class="text-success" />
+                                <CheckCircleIcon size={16} class="text-success" />
                               {:else}
-                                <Copy size={16} />
+                                <CopyIcon size={16} />
                               {/if}
                             </Button>
                           </div>
@@ -1266,7 +1270,7 @@
                         class="text-danger hover:bg-danger/10"
                         onclick={() => removeSource(source.index)}
                       >
-                        <Trash size={16} />
+                        <TrashIcon size={16} />
                       </Button>
                     </div>
                   </div>
@@ -1309,7 +1313,7 @@
               <!-- Overlay configs -->
               {#if overlaySources.length > 0}
                 <div class="flex justify-center">
-                  <ArrowDown size={20} class="text-theme-text-muted" />
+                  <ArrowDownIcon size={20} class="text-theme-text-muted" />
                 </div>
 
                 {#each overlaySources as source}
@@ -1397,7 +1401,7 @@
           <div class="card-header flex items-center justify-between">
             <h2 class="font-medium text-theme-text-emphasis">Metrics Sources</h2>
             <Button variant="outline" size="sm" onclick={() => addSource('metrics')}>
-              <Plus size={16} class="mr-1" />
+              <PlusIcon size={16} class="mr-1" />
               Add
             </Button>
           </div>
@@ -1425,7 +1429,7 @@
                       class="text-danger hover:bg-danger/10"
                       onclick={() => removeSource(source.index)}
                     >
-                      <Trash size={16} />
+                      <TrashIcon size={16} />
                     </Button>
                   </div>
                 {/each}
@@ -1462,7 +1466,7 @@
                   class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
                 ></span>
               {:else}
-                <FloppyDisk size={16} class="mr-2" />
+                <FloppyDiskIcon size={16} class="mr-2" />
               {/if}
               Save Mapping
             </Button>
@@ -1472,7 +1476,7 @@
             <div
               class="p-3 bg-success/10 border border-success/20 rounded-lg text-success text-sm flex items-center gap-2"
             >
-              <CheckCircle size={16} />
+              <CheckCircleIcon size={16} />
               Auto-mapped {autoMapResult.matched} of {autoMapResult.total} {autoMapResult.kind}
             </div>
           {/if}
@@ -1504,7 +1508,7 @@
                 </div>
               </div>
               <div class="relative">
-                <MagnifyingGlass
+                <MagnifyingGlassIcon
                   size={16}
                   class="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted"
                 />
@@ -1577,7 +1581,7 @@
                     }
                   }}
                   >
-                    <Lightning size={14} class="mr-1" />
+                    <LightningIcon size={14} class="mr-1" />
                     Auto-map
                   </Button>
                 </div>
@@ -1605,7 +1609,7 @@
                       {#if edge.from.port}
                         <span class="text-theme-text-muted">({edge.from.port})</span>
                       {/if}
-                      <ArrowRight size={14} class="text-theme-text-muted" />
+                      <ArrowRightIcon size={14} class="text-theme-text-muted" />
                       <span class="font-medium">{getNodeLabelById(edge.to.nodeId)}</span>
                       {#if edge.to.port}
                         <span class="text-theme-text-muted">({edge.to.port})</span>
