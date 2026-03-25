@@ -2,15 +2,17 @@
   import X from 'phosphor-svelte/lib/X'
   import GearSix from 'phosphor-svelte/lib/GearSix'
   import { dashboardEditMode } from '$lib/stores/dashboards'
+  import type { Snippet } from 'svelte'
 
   interface Props {
     title: string
     onRemove?: () => void
     onSettings?: () => void
     class?: string
+    children: Snippet
   }
 
-  let { title, onRemove, onSettings, class: className = '' }: Props = $props()
+  let { title, onRemove, onSettings, class: className = '', children }: Props = $props()
 
   // Subscribe to edit mode store directly
   let editMode = $derived($dashboardEditMode)
@@ -49,5 +51,5 @@
   </div>
 
   <!-- Widget Content -->
-  <div class="flex-1 overflow-auto p-3"><slot /></div>
+  <div class="flex-1 overflow-auto p-3">{@render children?.()}</div>
 </div>
