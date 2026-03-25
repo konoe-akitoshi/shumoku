@@ -331,16 +331,16 @@ export class WeathermapController {
       if (this.overlayQueue.length > 0) this.scheduleBatch()
     }
 
-    if ('requestIdleCallback' in window) {
-      this.idleHandle = window.requestIdleCallback(handler, { timeout: 100 })
+    if (typeof requestIdleCallback === 'function') {
+      this.idleHandle = requestIdleCallback(handler, { timeout: 100 })
     } else {
       this.idleHandle = window.setTimeout(() => handler(undefined), 16)
     }
   }
 
   private cancelIdleCallback(handle: number): void {
-    if ('cancelIdleCallback' in window) {
-      window.cancelIdleCallback(handle)
+    if (typeof cancelIdleCallback === 'function') {
+      cancelIdleCallback(handle)
     } else {
       window.clearTimeout(handle)
     }
