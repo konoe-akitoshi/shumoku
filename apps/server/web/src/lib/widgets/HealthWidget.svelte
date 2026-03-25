@@ -5,16 +5,14 @@
   import { CheckCircleIcon, HeartIcon, SpinnerIcon, XCircleIcon } from 'phosphor-svelte'
 
   interface Props {
-    id: string
     config: {
       title?: string
       showDetails?: boolean
     }
-    onConfigChange?: (config: Record<string, unknown>) => void
     onRemove?: () => void
   }
 
-  let { id, config, onConfigChange, onRemove }: Props = $props()
+  let { config, onRemove }: Props = $props()
 
   let title = $derived(config.title || 'System Health')
   let showDetails = $derived(config.showDetails !== false)

@@ -14,7 +14,7 @@ interface DataSourcesState {
 }
 
 function createDataSourcesStore() {
-  const { subscribe, set, update } = writable<DataSourcesState>({
+  const { subscribe, update } = writable<DataSourcesState>({
     items: [],
     loading: false,
     error: null,

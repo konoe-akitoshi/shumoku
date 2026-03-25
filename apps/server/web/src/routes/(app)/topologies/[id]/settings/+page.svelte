@@ -12,13 +12,10 @@
     showTrafficFlow,
     showNodeStatus,
     mappingStore,
-    mappingLoading,
-    mappingError,
     nodeMapping,
     linkMapping,
     mappingHosts,
     hostInterfaces,
-    hostInterfacesLoading,
   } from '$lib/stores'
   import type {
     Topology,
@@ -94,7 +91,6 @@
   // Merge state
   let baseSourceId = $state<string | null>(null)
   let overlayConfigs = $state<Record<string, OverlayConfig>>({})
-  let hasMergeChanges = $state(false)
 
   // Mapping state
   let parsedTopology = $state<ParsedTopologyResponse | null>(null)
@@ -491,7 +487,6 @@
         optionsJson: s.optionsJson,
       }))
       hasSourceChanges = false
-      hasMergeChanges = false
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to save'
     } finally {
@@ -557,7 +552,6 @@
 
   function setBaseSource(dataSourceId: string) {
     baseSourceId = dataSourceId
-    hasMergeChanges = true
     hasSourceChanges = true
   }
 
@@ -566,7 +560,6 @@
       ...overlayConfigs,
       [dataSourceId]: { ...overlayConfigs[dataSourceId], ...updates },
     }
-    hasMergeChanges = true
     hasSourceChanges = true
   }
 

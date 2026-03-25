@@ -4,16 +4,14 @@
   import { ArrowDownIcon, ArrowUpIcon, ChartLineIcon } from 'phosphor-svelte'
 
   interface Props {
-    id: string
     config: {
       title?: string
       metricType?: 'nodes-up' | 'nodes-down' | 'links-healthy' | 'utilization'
     }
-    onConfigChange?: (config: Record<string, unknown>) => void
     onRemove?: () => void
   }
 
-  let { id, config, onConfigChange, onRemove }: Props = $props()
+  let { config, onRemove }: Props = $props()
 
   let title = $derived(config.title || 'Metrics')
   let metricType = $derived(config.metricType || 'nodes-up')

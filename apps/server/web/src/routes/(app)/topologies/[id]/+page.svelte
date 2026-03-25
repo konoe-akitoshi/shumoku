@@ -3,7 +3,7 @@
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
   import { api } from '$lib/api'
-  import { metricsConnected, mappingStore, nodeMapping } from '$lib/stores'
+  import { metricsConnected, mappingStore } from '$lib/stores'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import type {
     NodeSelectEvent,

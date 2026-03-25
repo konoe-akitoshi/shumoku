@@ -95,23 +95,6 @@
   $: currentSheet = sheets[currentSheetId]
   $: svgContent = currentSheet?.svg || ''
 
-  // Build breadcrumb from navigation stack + current
-  // Explicitly reference reactive variables to ensure updates
-  $: breadcrumb = (() => {
-    const result: Array<{ id: string; label: string }> = []
-    for (const sheetId of navigationStack) {
-      const sheet = sheets[sheetId]
-      if (sheet) {
-        result.push({ id: sheetId, label: sheet.label })
-      }
-    }
-    // Reference currentSheet and currentSheetId for reactivity
-    if (currentSheet && currentSheetId) {
-      result.push({ id: currentSheetId, label: currentSheet.label })
-    }
-    return result
-  })()
-
   // Tooltip state
   let tooltipVisible = false
   let tooltipContent = ''
@@ -122,14 +105,6 @@
   let hoveredType: 'node' | 'link' | 'subgraph' | null = null
   let hoveredLinkId: string | null = null
   let hoveredLinkInfo: { from: string; to: string; bandwidth: string } | null = null
-  let hoveredNodeInfo: {
-    id: string
-    label: string
-    type: string
-    vendor: string
-    model: string
-  } | null = null
-  let hoveredSubgraphInfo: { id: string; label: string; canNavigate: boolean } | null = null
 
   // Dynamic tooltip content - recalculates when metricsData changes
   $: if (tooltipVisible && hoveredType === 'link' && hoveredLinkId && hoveredLinkInfo) {
@@ -660,13 +635,6 @@
     })
   }
 
-  function handleSubgraphClick(sgId: string) {
-    // Navigate to child sheet if it exists
-    if (sheets[sgId]) {
-      navigateToSheet(sgId)
-    }
-  }
-
   // Link handlers
   function handleLinkHover(linkId: string, event: MouseEvent) {
     highlightLink(linkId, true)
@@ -738,10 +706,8 @@
     const model = node.getAttribute('data-device-model') || ''
 
     hoveredType = 'node'
-    hoveredNodeInfo = { id: nodeId, label, type, vendor, model }
     hoveredLinkId = null
     hoveredLinkInfo = null
-    hoveredSubgraphInfo = null
 
     // Build content for nodes (static, no metrics)
     let content = `<strong>${label}</strong>`
@@ -764,10 +730,8 @@
     const canNavigate = sheets[sgId] !== undefined
 
     hoveredType = 'subgraph'
-    hoveredSubgraphInfo = { id: sgId, label, canNavigate }
     hoveredLinkId = null
     hoveredLinkInfo = null
-    hoveredNodeInfo = null
 
     // Build content for subgraphs (static)
     let content = `<strong>${label}</strong>`
@@ -791,8 +755,6 @@
     hoveredType = 'link'
     hoveredLinkId = linkId
     hoveredLinkInfo = { from, to, bandwidth }
-    hoveredNodeInfo = null
-    hoveredSubgraphInfo = null
 
     // Initial content - will be updated reactively by $: statement
     let content = `<strong>${from} → ${to}</strong>`
@@ -829,8 +791,6 @@
     hoveredType = null
     hoveredLinkId = null
     hoveredLinkInfo = null
-    hoveredNodeInfo = null
-    hoveredSubgraphInfo = null
   }
 
   function formatUtil(util: number): string {

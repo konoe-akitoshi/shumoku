@@ -14,7 +14,7 @@ interface TopologiesState {
 }
 
 function createTopologiesStore() {
-  const { subscribe, set, update } = writable<TopologiesState>({
+  const { subscribe, update } = writable<TopologiesState>({
     items: [],
     loading: false,
     error: null,

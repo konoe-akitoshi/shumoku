@@ -6,9 +6,7 @@
   import FileText from 'phosphor-svelte/lib/FileText'
   import type { ThemeValue } from '$lib/stores/theme'
 
-  let settings: Record<string, string> = {}
   let loading = true
-  let error = ''
 
   // Local settings (stored in localStorage)
   let theme: ThemeValue = 'system'
@@ -25,9 +23,9 @@
 
     // Load server settings
     try {
-      settings = await api.settings.get()
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load settings'
+      await api.settings.get()
+    } catch {
+      // Settings load failed; non-critical for local-only page
     } finally {
       loading = false
     }

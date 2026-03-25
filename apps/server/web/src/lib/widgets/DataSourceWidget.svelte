@@ -10,16 +10,14 @@
   import Spinner from 'phosphor-svelte/lib/Spinner'
 
   interface Props {
-    id: string
     config: {
       title?: string
       showLastChecked?: boolean
     }
-    onConfigChange?: (config: Record<string, unknown>) => void
     onRemove?: () => void
   }
 
-  let { id, config, onConfigChange, onRemove }: Props = $props()
+  let { config, onRemove }: Props = $props()
 
   let title = $derived(config.title || 'Data Sources')
   let showLastChecked = $derived(config.showLastChecked !== false)

@@ -54,7 +54,7 @@
     }
   }
 
-  function getConfigFromForm(type: DataSourceType, existingConfig?: ParsedConfig): string {
+  function getConfigFromForm(type: DataSourceType): string {
     const config: Record<string, unknown> = {
       url: formUrl.trim(),
     }
@@ -128,12 +128,9 @@
     error = ''
 
     try {
-      // Get existing config to preserve token if not changed
-      const existingConfig = dataSource ? parseConfig(dataSource.configJson) : undefined
-
       const updates = {
         name: formName.trim(),
-        configJson: getConfigFromForm(dataSource!.type, existingConfig),
+        configJson: getConfigFromForm(dataSource!.type),
       }
 
       dataSource = await api.dataSources.update(id, updates)

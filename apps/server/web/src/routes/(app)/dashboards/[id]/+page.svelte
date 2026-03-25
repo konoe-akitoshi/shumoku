@@ -207,7 +207,6 @@
     if (!grid || !$currentLayout) return
 
     const widgetDef = getWidget(type)
-    const defaultSize = widgetDef?.defaultSize || { w: 4, h: 3 }
 
     // Add to store
     dashboardStore.addWidget(type)
@@ -269,7 +268,7 @@
   async function handleShare() {
     const dashboard = $currentDashboard
     if (!dashboard || !id) return
-    const result = await api.dashboards.share(dashboard.id)
+    await api.dashboards.share(dashboard.id)
     // Refresh to pick up new shareToken
     dashboardStore.get(id)
   }

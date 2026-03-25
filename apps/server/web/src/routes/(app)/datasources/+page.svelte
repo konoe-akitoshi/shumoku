@@ -240,17 +240,6 @@
     return pluginTypeMap[type]?.displayName || type
   }
 
-  function getCapabilityIcon(capability: string) {
-    switch (capability) {
-      case 'metrics':
-        return ChartLine
-      case 'topology':
-        return TreeStructure
-      default:
-        return Database
-    }
-  }
-
   function formatLastChecked(timestamp?: number): string {
     if (!timestamp) return ''
     const diff = Date.now() - timestamp
@@ -316,7 +305,6 @@
           <tbody>
             {#each $dataSourcesList as ds}
               {@const config = parseConfig(ds.configJson)}
-              {@const testResult = testResults[ds.id]}
               <tr>
                 <td>
                   <a
