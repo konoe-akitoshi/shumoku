@@ -3,7 +3,7 @@
  * This module converts shumoku themes to Cytoscape stylesheets
  */
 
-import type { Stylesheet } from 'cytoscape'
+import type { StylesheetJsonBlock } from 'cytoscape'
 
 // Re-export formatTraffic from shared utils
 export { formatTraffic } from '$lib/utils/format'
@@ -52,7 +52,7 @@ export const statusColors = {
 /**
  * Generate Cytoscape stylesheet for dark theme
  */
-export function createDarkStylesheet(): Stylesheet[] {
+export function createDarkStylesheet(): StylesheetJsonBlock[] {
   return [
     // ========== Base Node Style ==========
     {
@@ -96,7 +96,7 @@ export function createDarkStylesheet(): Stylesheet[] {
         'border-width': 2,
         'border-color': '#475569',
         'border-style': 'solid',
-        padding: 24,
+        padding: '24px',
         'text-valign': 'top',
         'text-halign': 'center',
         'text-margin-y': -8,
@@ -199,6 +199,7 @@ export function createDarkStylesheet(): Stylesheet[] {
       style: {
         'border-width': 3,
         'border-color': '#60a5fa',
+        // @ts-expect-error box-shadow is not in cytoscape's type definitions but works at runtime
         'box-shadow': '0 0 0 4px rgba(96, 165, 250, 0.3)',
       },
     },
