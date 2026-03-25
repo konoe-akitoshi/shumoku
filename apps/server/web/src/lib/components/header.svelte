@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/stores'
-  import CaretRight from 'phosphor-svelte/lib/CaretRight'
-  import Moon from 'phosphor-svelte/lib/Moon'
-  import Sun from 'phosphor-svelte/lib/Sun'
+  import { CaretRightIcon } from 'phosphor-svelte'
+  import { MoonIcon } from 'phosphor-svelte'
+  import { SunIcon } from 'phosphor-svelte'
   import { themeSetting, resolvedTheme } from '$lib/stores/theme'
 
   // Generate breadcrumbs from current path
@@ -47,7 +47,7 @@
   <nav class="flex items-center gap-2 text-sm flex-1">
     {#each breadcrumbs as crumb, i}
       {#if i > 0}
-        <CaretRight size={16} class="text-theme-text-muted" />
+        <CaretRightIcon size={16} class="text-theme-text-muted" />
       {/if}
       {#if i === breadcrumbs.length - 1}
         <span class="text-theme-text-emphasis font-medium">{crumb.label}</span>
@@ -66,9 +66,9 @@
     aria-label={$resolvedTheme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
   >
     {#if $resolvedTheme === 'dark'}
-      <Moon size={20} />
+      <MoonIcon size={20} />
     {:else}
-      <Sun size={20} />
+      <SunIcon size={20} />
     {/if}
   </button>
 </header>

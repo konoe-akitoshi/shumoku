@@ -15,17 +15,19 @@
   import type { DashboardLayout, WidgetPosition } from '$lib/types'
   import ShareButton from '$lib/components/ShareButton.svelte'
   import { api } from '$lib/api'
-  import PencilSimple from 'phosphor-svelte/lib/PencilSimple'
-  import FloppyDisk from 'phosphor-svelte/lib/FloppyDisk'
-  import X from 'phosphor-svelte/lib/X'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import Spinner from 'phosphor-svelte/lib/Spinner'
-  import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import ChartLine from 'phosphor-svelte/lib/ChartLine'
-  import Heart from 'phosphor-svelte/lib/Heart'
-  import Database from 'phosphor-svelte/lib/Database'
-  import Cpu from 'phosphor-svelte/lib/Cpu'
+  import {
+    ChartLineIcon,
+    CpuIcon,
+    DatabaseIcon,
+    FloppyDiskIcon,
+    HeartIcon,
+    PencilSimpleIcon,
+    PlusIcon,
+    SpinnerIcon,
+    SquaresFourIcon,
+    TreeStructureIcon,
+    XIcon,
+  } from 'phosphor-svelte'
   import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
 
   let { data } = $props()
@@ -281,14 +283,14 @@
   }
 
   function getWidgetIcon(type: string) {
-    const icons: Record<string, typeof SquaresFour> = {
-      topology: TreeStructure,
-      'metrics-gauge': ChartLine,
-      'health-status': Heart,
-      'datasource-status': Database,
-      'device-status': Cpu,
+    const icons: Record<string, typeof SquaresFourIcon> = {
+      topology: TreeStructureIcon,
+      'metrics-gauge': ChartLineIcon,
+      'health-status': HeartIcon,
+      'datasource-status': DatabaseIcon,
+      'device-status': CpuIcon,
     }
-    return icons[type] || SquaresFour
+    return icons[type] || SquaresFourIcon
   }
 </script>
 
@@ -300,7 +302,7 @@
     class="flex items-center justify-between px-4 py-3 border-b border-theme-border bg-theme-bg-elevated"
   >
     <div class="flex items-center gap-3">
-      <SquaresFour size={24} class="text-primary" />
+      <SquaresFourIcon size={24} class="text-primary" />
       <h1 class="text-lg font-semibold text-theme-text-emphasis">
         {$currentDashboard?.name || 'Dashboard'}
       </h1>
@@ -313,14 +315,14 @@
           onclick={() => (showWidgetPanel = !showWidgetPanel)}
           class="flex items-center gap-2 px-3 py-1.5 bg-theme-bg-canvas border border-theme-border rounded-lg hover:border-primary/50 transition-colors text-sm"
         >
-          <Plus size={16} />
+          <PlusIcon size={16} />
           <span>Add Widget</span>
         </button>
         <button
           onclick={handleCancel}
           class="flex items-center gap-2 px-3 py-1.5 text-theme-text-muted hover:text-theme-text transition-colors text-sm"
         >
-          <X size={16} />
+          <XIcon size={16} />
           <span>Cancel</span>
         </button>
         <button
@@ -329,9 +331,9 @@
           class="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors text-sm disabled:opacity-50"
         >
           {#if saving}
-            <Spinner size={16} class="animate-spin" />
+            <SpinnerIcon size={16} class="animate-spin" />
           {:else}
-            <FloppyDisk size={16} />
+            <FloppyDiskIcon size={16} />
           {/if}
           <span>Save</span>
         </button>
@@ -347,7 +349,7 @@
           onclick={() => dashboardStore.setEditMode(true)}
           class="flex items-center gap-2 px-3 py-1.5 bg-theme-bg-canvas border border-theme-border rounded-lg hover:border-primary/50 transition-colors text-sm"
         >
-          <PencilSimple size={16} />
+          <PencilSimpleIcon size={16} />
           <span>Edit</span>
         </button>
       {/if}
@@ -358,7 +360,7 @@
   <div class="flex-1 overflow-auto relative">
     {#if $dashboardLoading && !$currentLayout}
       <div class="flex items-center justify-center h-full">
-        <Spinner size={32} class="animate-spin text-theme-text-muted" />
+        <SpinnerIcon size={32} class="animate-spin text-theme-text-muted" />
       </div>
     {:else if $dashboardError}
       <div class="flex flex-col items-center justify-center h-full text-danger gap-2">
@@ -378,7 +380,7 @@
         <div
           class="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-theme-bg-canvas/80"
         >
-          <SquaresFour size={64} class="text-theme-text-muted mb-4" />
+          <SquaresFourIcon size={64} class="text-theme-text-muted mb-4" />
           <h2 class="text-xl font-semibold text-theme-text-emphasis mb-2">
             This dashboard is empty
           </h2>
@@ -389,7 +391,7 @@
             onclick={() => dashboardStore.setEditMode(true)}
             class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
           >
-            <PencilSimple size={20} />
+            <PencilSimpleIcon size={20} />
             <span>Start Editing</span>
           </button>
         </div>
@@ -407,7 +409,7 @@
             onclick={() => (showWidgetPanel = false)}
             class="w-6 h-6 flex items-center justify-center rounded hover:bg-theme-bg-canvas text-theme-text-muted hover:text-theme-text transition-colors"
           >
-            <X size={16} />
+            <XIcon size={16} />
           </button>
         </div>
         <div class="flex-1 overflow-auto p-3">

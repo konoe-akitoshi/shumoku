@@ -6,18 +6,20 @@
   import { formatTraffic } from '$lib/utils/format'
   import type { MetricsMapping, DiscoveredMetric } from '$lib/types'
   import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
-  import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
-  import Link from 'phosphor-svelte/lib/Link'
-  import LinkBreak from 'phosphor-svelte/lib/LinkBreak'
-  import Warning from 'phosphor-svelte/lib/Warning'
-  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-  import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
-  import Cube from 'phosphor-svelte/lib/Cube'
-  import ChartLine from 'phosphor-svelte/lib/ChartLine'
-  import CaretDown from 'phosphor-svelte/lib/CaretDown'
-  import CaretRight from 'phosphor-svelte/lib/CaretRight'
+  import {
+    ArrowLeftIcon,
+    ArrowSquareOutIcon,
+    CaretDownIcon,
+    CaretRightIcon,
+    ChartLineIcon,
+    CheckCircleIcon,
+    CubeIcon,
+    GearSixIcon,
+    LinkBreakIcon,
+    LinkIcon,
+    MagnifyingGlassIcon,
+    WarningIcon,
+  } from 'phosphor-svelte'
 
   interface Props {
     open: boolean
@@ -257,7 +259,7 @@
             onclick={() => (mode = 'status')}
             aria-label="Back to status"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeftIcon size={16} />
           </button>
         {/if}
         {stripHtmlTags(nodeData?.node.label) || 'Node'}
@@ -292,7 +294,7 @@
                 </span>
               {:else}
                 <span class="inline-flex items-center gap-1 text-xs text-warning">
-                  <LinkBreak size={12} />
+                  <LinkBreakIcon size={12} />
                   Not mapped
                 </span>
               {/if}
@@ -322,9 +324,9 @@
                 rel="noopener noreferrer"
                 class="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
               >
-                <Cube size={12} />
+                <CubeIcon size={12} />
                 View in NetBox
-                <ArrowSquareOut size={10} />
+                <ArrowSquareOutIcon size={10} />
               </a>
             {/if}
           </div>
@@ -333,7 +335,7 @@
           {#if nodeData.connectedLinks.length > 0}
             <div class="space-y-2">
               <div class="flex items-center gap-2 text-sm font-medium">
-                <Link size={14} />
+                <LinkIcon size={14} />
                 <span>Traffic ({nodeData.connectedLinks.length} links)</span>
               </div>
               <div class="border rounded-lg divide-y max-h-48 overflow-y-auto">
@@ -398,11 +400,11 @@
                 onclick={handleMetricsToggle}
               >
                 {#if metricsExpanded}
-                  <CaretDown size={14} />
+                  <CaretDownIcon size={14} />
                 {:else}
-                  <CaretRight size={14} />
+                  <CaretRightIcon size={14} />
                 {/if}
-                <ChartLine size={14} />
+                <ChartLineIcon size={14} />
                 <span>All Metrics</span>
                 {#if discoveredMetrics.length > 0}
                   <span class="text-xs text-muted-foreground">({discoveredMetrics.length})</span>
@@ -436,7 +438,7 @@
                     <!-- Search -->
                     <div class="p-2 border-b">
                       <div class="relative">
-                        <MagnifyingGlass
+                        <MagnifyingGlassIcon
                           size={14}
                           class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
                         />
@@ -498,7 +500,7 @@
             <div
               class="flex items-start gap-2 p-3 bg-warning/10 border border-warning/20 rounded-lg text-sm"
             >
-              <Warning size={16} class="text-warning mt-0.5 flex-shrink-0" />
+              <WarningIcon size={16} class="text-warning mt-0.5 flex-shrink-0" />
               <div class="space-y-1">
                 <p class="font-medium text-warning">No metrics source configured</p>
                 <p class="text-xs text-muted-foreground">
@@ -518,7 +520,7 @@
         <Dialog.Footer>
           <Button variant="outline" onclick={handleClose}>Close</Button>
           <Button variant="outline" onclick={() => (mode = 'mapping')}>
-            <GearSix size={16} class="mr-1" />
+            <GearSixIcon size={16} class="mr-1" />
             Configure Mapping
           </Button>
         </Dialog.Footer>
@@ -530,12 +532,12 @@
             <span class="text-sm">Current mapping:</span>
             {#if currentNodeMapping?.hostId}
               <span class="text-sm font-medium flex items-center gap-1">
-                <CheckCircle size={14} class="text-success" />
+                <CheckCircleIcon size={14} class="text-success" />
                 {currentNodeMapping.hostName || currentNodeMapping.hostId}
               </span>
             {:else}
               <span class="text-sm text-muted-foreground flex items-center gap-1">
-                <LinkBreak size={14} />
+                <LinkBreakIcon size={14} />
                 Not mapped
               </span>
             {/if}
@@ -549,7 +551,7 @@
               <div
                 class="flex items-start gap-2 p-3 bg-warning/10 border border-warning/20 rounded-lg text-sm"
               >
-                <Warning size={16} class="text-warning mt-0.5 flex-shrink-0" />
+                <WarningIcon size={16} class="text-warning mt-0.5 flex-shrink-0" />
                 <div class="space-y-1">
                   <p class="font-medium text-warning">No metrics source configured</p>
                   <a
@@ -570,7 +572,7 @@
             {:else}
               <!-- Search -->
               <div class="relative">
-                <MagnifyingGlass
+                <MagnifyingGlassIcon
                   size={16}
                   class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                 />

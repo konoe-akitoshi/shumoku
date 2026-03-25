@@ -3,11 +3,11 @@
   import { api } from '$lib/api'
   import type { DataSource } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import Database from 'phosphor-svelte/lib/Database'
-  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-  import XCircle from 'phosphor-svelte/lib/XCircle'
-  import Question from 'phosphor-svelte/lib/Question'
-  import Spinner from 'phosphor-svelte/lib/Spinner'
+  import { DatabaseIcon } from 'phosphor-svelte'
+  import { CheckCircleIcon } from 'phosphor-svelte'
+  import { XCircleIcon } from 'phosphor-svelte'
+  import { QuestionIcon } from 'phosphor-svelte'
+  import { SpinnerIcon } from 'phosphor-svelte'
 
   interface Props {
     config: {
@@ -60,7 +60,7 @@
 <WidgetWrapper {title} {onRemove} onSettings={handleSettings}>
   {#if loading && dataSources.length === 0}
     <div class="h-full flex items-center justify-center">
-      <Spinner size={24} class="animate-spin text-theme-text-muted" />
+      <SpinnerIcon size={24} class="animate-spin text-theme-text-muted" />
     </div>
   {:else if error && dataSources.length === 0}
     <div class="h-full flex flex-col items-center justify-center text-danger gap-2">
@@ -69,7 +69,7 @@
     </div>
   {:else if dataSources.length === 0}
     <div class="h-full flex flex-col items-center justify-center text-theme-text-muted gap-2">
-      <Database size={32} />
+      <DatabaseIcon size={32} />
       <span class="text-sm">No data sources</span>
     </div>
   {:else}
@@ -79,11 +79,11 @@
           <!-- Status Icon -->
           <div class="flex-shrink-0">
             {#if ds.status === 'connected'}
-              <CheckCircle size={18} class="text-success" weight="fill" />
+              <CheckCircleIcon size={18} class="text-success" weight="fill" />
             {:else if ds.status === 'disconnected'}
-              <XCircle size={18} class="text-danger" weight="fill" />
+              <XCircleIcon size={18} class="text-danger" weight="fill" />
             {:else}
-              <Question size={18} class="text-theme-text-muted" />
+              <QuestionIcon size={18} class="text-theme-text-muted" />
             {/if}
           </div>
 

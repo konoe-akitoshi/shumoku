@@ -44,13 +44,13 @@
     showNodeStatus,
   } from '$lib/stores'
   import { formatTraffic } from '$lib/utils/format'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-  import MagnifyingGlassPlus from 'phosphor-svelte/lib/MagnifyingGlassPlus'
-  import MagnifyingGlassMinus from 'phosphor-svelte/lib/MagnifyingGlassMinus'
-  import CornersOut from 'phosphor-svelte/lib/CornersOut'
-  import ArrowCounterClockwise from 'phosphor-svelte/lib/ArrowCounterClockwise'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
-  import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
+  import { ArrowLeftIcon } from 'phosphor-svelte'
+  import { MagnifyingGlassPlusIcon } from 'phosphor-svelte'
+  import { MagnifyingGlassMinusIcon } from 'phosphor-svelte'
+  import { CornersOutIcon } from 'phosphor-svelte'
+  import { ArrowCounterClockwiseIcon } from 'phosphor-svelte'
+  import { GearSixIcon } from 'phosphor-svelte'
+  import { MagnifyingGlassIcon } from 'phosphor-svelte'
 
   // Props
   export let topologyId: string = ''
@@ -924,7 +924,7 @@
           on:click={() => navigateToBreadcrumb(navigationStack[navigationStack.length - 1] || 'root')}
           title="Go back"
         >
-          <ArrowLeft size={14} />
+          <ArrowLeftIcon size={14} />
         </button>
         <span class="breadcrumb-current">{currentSheet?.label}</span>
       </div>
@@ -950,24 +950,24 @@
   <!-- Controls -->
   <div class="controls">
     <div class="control-group">
-      <button on:click={zoomIn} title="Zoom In"><MagnifyingGlassPlus size={18} /></button>
+      <button on:click={zoomIn} title="Zoom In"><MagnifyingGlassPlusIcon size={18} /></button>
       <span class="zoom-level">{Math.round(scale * 100)}%</span>
-      <button on:click={zoomOut} title="Zoom Out"><MagnifyingGlassMinus size={18} /></button>
+      <button on:click={zoomOut} title="Zoom Out"><MagnifyingGlassMinusIcon size={18} /></button>
     </div>
     <div class="control-group">
-      <button on:click={fitToView} title="Fit to View"><CornersOut size={18} /></button>
-      <button on:click={resetView} title="Reset View"><ArrowCounterClockwise size={18} /></button>
+      <button on:click={fitToView} title="Fit to View"><CornersOutIcon size={18} /></button>
+      <button on:click={resetView} title="Reset View"><ArrowCounterClockwiseIcon size={18} /></button>
       {#if onSearchOpen}
         <button
           on:click={onSearchOpen}
           title="Search Nodes ({navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl+'}K)"
         >
-          <MagnifyingGlass size={18} />
+          <MagnifyingGlassIcon size={18} />
         </button>
       {/if}
       {#if onToggleSettings}
         <button on:click={onToggleSettings} title="Settings" class:active={settingsOpen}>
-          <GearSix size={18} />
+          <GearSixIcon size={18} />
         </button>
       {/if}
     </div>

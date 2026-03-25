@@ -25,9 +25,6 @@
     SyncMode,
     ParsedTopologyResponse,
   } from '$lib/types'
-  import Trash from 'phosphor-svelte/lib/Trash'
-  import Lightning from 'phosphor-svelte/lib/Lightning'
-  import Star from 'phosphor-svelte/lib/Star'
   import {
     ArrowDownIcon,
     ArrowLeftIcon,
@@ -40,6 +37,7 @@
     MagnifyingGlassIcon,
     PencilSimpleIcon,
     PlusIcon,
+    StarIcon,
     TrashIcon,
   } from 'phosphor-svelte'
 
@@ -1278,7 +1276,7 @@
           <div class="card">
             <div class="card-header">
               <h2 class="font-medium text-theme-text-emphasis flex items-center gap-2">
-                <Star size={18} weight="fill" class="text-warning" />
+                <StarIcon size={18} weight="fill" class="text-warning" />
                 Merge Configuration
               </h2>
             </div>
@@ -1486,7 +1484,7 @@
                     onclick={handleAutoMap}
                     disabled={$mappingStore.hostsLoading}
                   >
-                    <Lightning size={14} class="mr-1" />
+                    <LightningIcon size={14} class="mr-1" />
                     Auto-map
                   </Button>
                   <Button
@@ -1495,7 +1493,7 @@
                     onclick={handleClearAll}
                     disabled={mappedCount === 0}
                   >
-                    <Trash size={14} class="mr-1" />
+                    <TrashIcon size={14} class="mr-1" />
                     Clear
                   </Button>
                 </div>

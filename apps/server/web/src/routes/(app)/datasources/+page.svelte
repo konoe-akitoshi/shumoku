@@ -10,11 +10,11 @@
   } from '$lib/types'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import Database from 'phosphor-svelte/lib/Database'
-  import ChartLine from 'phosphor-svelte/lib/ChartLine'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import Cube from 'phosphor-svelte/lib/Cube'
+  import { PlusIcon } from 'phosphor-svelte'
+  import { DatabaseIcon } from 'phosphor-svelte'
+  import { ChartLineIcon } from 'phosphor-svelte'
+  import { TreeStructureIcon } from 'phosphor-svelte'
+  import { CubeIcon } from 'phosphor-svelte'
 
   let showCreateModal = $state(false)
   let testingId = $state<string | null>(null)
@@ -256,7 +256,7 @@
   <!-- Actions -->
   <div class="flex items-center justify-end mb-6">
     <Button onclick={openCreateModal}>
-      <Plus size={20} class="mr-1" />
+      <PlusIcon size={20} class="mr-1" />
       Add Data Source
     </Button>
   </div>
@@ -274,7 +274,7 @@
     </div>
   {:else if $dataSourcesList.length === 0}
     <div class="card p-12 text-center">
-      <Database size={64} class="text-theme-text-muted mx-auto mb-4" />
+      <DatabaseIcon size={64} class="text-theme-text-muted mx-auto mb-4" />
       <h3 class="text-lg font-medium text-theme-text-emphasis mb-2">No data sources</h3>
       <p class="text-theme-text-muted mb-4">
         Add a data source to start collecting metrics or topology
@@ -325,9 +325,9 @@
                             title={cap}
                           >
                             {#if cap === 'metrics'}
-                              <ChartLine size={12} />
+                              <ChartLineIcon size={12} />
                             {:else if cap === 'topology'}
-                              <TreeStructure size={12} />
+                              <TreeStructureIcon size={12} />
                             {:else}
                               {cap}
                             {/if}
@@ -434,13 +434,13 @@
                     class="p-2 rounded-lg bg-theme-bg group-hover:bg-primary/10 transition-colors"
                   >
                     {#if plugin.type === 'zabbix'}
-                      <ChartLine size={24} class="text-theme-text-muted group-hover:text-primary" />
+                      <ChartLineIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {:else if plugin.type === 'netbox'}
-                      <Cube size={24} class="text-theme-text-muted group-hover:text-primary" />
+                      <CubeIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {:else if plugin.type === 'prometheus'}
-                      <ChartLine size={24} class="text-theme-text-muted group-hover:text-primary" />
+                      <ChartLineIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {:else}
-                      <Database size={24} class="text-theme-text-muted group-hover:text-primary" />
+                      <DatabaseIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {/if}
                   </div>
                   <div class="flex-1 min-w-0">

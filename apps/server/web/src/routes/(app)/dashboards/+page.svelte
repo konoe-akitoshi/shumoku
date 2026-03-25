@@ -7,11 +7,13 @@
     dashboardLoading,
     dashboardError,
   } from '$lib/stores/dashboards'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
-  import Trash from 'phosphor-svelte/lib/Trash'
-  import Spinner from 'phosphor-svelte/lib/Spinner'
-  import CaretRight from 'phosphor-svelte/lib/CaretRight'
+  import {
+    CaretRightIcon,
+    PlusIcon,
+    SpinnerIcon,
+    SquaresFourIcon,
+    TrashIcon,
+  } from 'phosphor-svelte'
 
   let showCreateModal = $state(false)
   let newDashboardName = $state('')
@@ -61,7 +63,7 @@
       onclick={() => (showCreateModal = true)}
       class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
     >
-      <Plus size={20} />
+      <PlusIcon size={20} />
       <span>New Dashboard</span>
     </button>
   </div>
@@ -76,12 +78,12 @@
   <!-- Loading -->
   {#if $dashboardLoading && $dashboards.length === 0}
     <div class="flex items-center justify-center py-12">
-      <Spinner size={32} class="animate-spin text-theme-text-muted" />
+      <SpinnerIcon size={32} class="animate-spin text-theme-text-muted" />
     </div>
   {:else if $dashboards.length === 0}
     <!-- Empty State -->
     <div class="flex flex-col items-center justify-center py-16 text-center">
-      <SquaresFour size={64} class="text-theme-text-muted mb-4" />
+      <SquaresFourIcon size={64} class="text-theme-text-muted mb-4" />
       <h2 class="text-xl font-semibold text-theme-text-emphasis mb-2">No dashboards yet</h2>
       <p class="text-theme-text-muted mb-6 max-w-md">
         Create your first dashboard to get started. You can add widgets to visualize your network
@@ -91,7 +93,7 @@
         onclick={() => (showCreateModal = true)}
         class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
       >
-        <Plus size={20} />
+        <PlusIcon size={20} />
         <span>Create Dashboard</span>
       </button>
     </div>
@@ -105,10 +107,10 @@
           <a href="/dashboards/{dashboard.id}" class="block p-4">
             <div class="flex items-start justify-between mb-3">
               <div class="flex items-center gap-2">
-                <SquaresFour size={20} class="text-primary" />
+                <SquaresFourIcon size={20} class="text-primary" />
                 <h3 class="font-semibold text-theme-text-emphasis">{dashboard.name}</h3>
               </div>
-              <CaretRight
+              <CaretRightIcon
                 size={16}
                 class="text-theme-text-muted group-hover:text-primary transition-colors"
               />
@@ -132,7 +134,7 @@
             class="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-danger/10 text-theme-text-muted hover:text-danger transition-all"
             title="Delete dashboard"
           >
-            <Trash size={16} />
+            <TrashIcon size={16} />
           </button>
         </div>
       {/each}
@@ -191,7 +193,7 @@
             class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {#if creating}
-              <Spinner size={16} class="animate-spin" />
+              <SpinnerIcon size={16} class="animate-spin" />
             {/if}
             Create
           </button>

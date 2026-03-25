@@ -1,8 +1,8 @@
 <script lang="ts">
-  import ShareNetwork from 'phosphor-svelte/lib/ShareNetwork'
-  import LinkSimple from 'phosphor-svelte/lib/LinkSimple'
-  import X from 'phosphor-svelte/lib/X'
-  import Check from 'phosphor-svelte/lib/Check'
+  import { ShareNetworkIcon } from 'phosphor-svelte'
+  import { LinkSimpleIcon } from 'phosphor-svelte'
+  import { XIcon } from 'phosphor-svelte'
+  import { CheckIcon } from 'phosphor-svelte'
 
   export let shareToken: string | undefined = undefined
   export let shareType: 'topologies' | 'dashboards' = 'topologies'
@@ -61,7 +61,7 @@
       : 'bg-theme-bg-canvas border-theme-border text-theme-text-muted hover:border-primary/50 hover:text-theme-text'}"
     title="Share"
   >
-    <ShareNetwork size={16} />
+    <ShareNetworkIcon size={16} />
     <span>Share</span>
   </button>
 
@@ -83,7 +83,7 @@
           onclick={() => (showPopover = false)}
           class="w-6 h-6 flex items-center justify-center rounded hover:bg-theme-bg text-theme-text-muted hover:text-theme-text"
         >
-          <X size={14} />
+          <XIcon size={14} />
         </button>
       </div>
 
@@ -104,9 +104,9 @@
             title="Copy link"
           >
             {#if copied}
-              <Check size={16} />
+              <CheckIcon size={16} />
             {:else}
-              <LinkSimple size={16} />
+              <LinkSimpleIcon size={16} />
             {/if}
           </button>
         </div>

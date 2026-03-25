@@ -15,7 +15,7 @@
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
   import type { Topology, TopologyDataSource } from '$lib/types'
   import ShareButton from '$lib/components/ShareButton.svelte'
-  import X from 'phosphor-svelte/lib/X'
+  import { XIcon } from 'phosphor-svelte'
 
   let topology: Topology | null = null
   let renderData: { nodeCount: number; edgeCount: number } | null = null
@@ -201,7 +201,7 @@
           class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer"
           aria-label="Close settings"
         >
-          <X size={20} />
+          <XIcon size={20} />
         </button>
       </div>
 

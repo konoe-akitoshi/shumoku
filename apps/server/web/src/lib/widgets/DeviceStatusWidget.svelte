@@ -8,8 +8,8 @@
     emitClearHighlight,
   } from '$lib/stores/widgetEvents'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import Cpu from 'phosphor-svelte/lib/Cpu'
-  import Spinner from 'phosphor-svelte/lib/Spinner'
+  import { CpuIcon } from 'phosphor-svelte'
+  import { SpinnerIcon } from 'phosphor-svelte'
   import type { Topology, NetworkNode } from '$lib/types'
 
   // --- Props ---
@@ -468,7 +468,7 @@
       </div>
     {:else if !config.topologyId}
       <div class="h-full flex flex-col items-center justify-center text-theme-text-muted gap-3">
-        <Cpu size={32} />
+        <CpuIcon size={32} />
         <span class="text-sm">No topology selected</span>
         <button
           onclick={() => showSelector = true}
@@ -479,7 +479,7 @@
       </div>
     {:else if loading}
       <div class="h-full flex items-center justify-center">
-        <Spinner size={24} class="animate-spin text-theme-text-muted" />
+        <SpinnerIcon size={24} class="animate-spin text-theme-text-muted" />
       </div>
     {:else if error}
       <div class="h-full flex flex-col items-center justify-center text-danger gap-2">
@@ -490,7 +490,7 @@
       </div>
     {:else if typeStatuses.length === 0}
       <div class="h-full flex flex-col items-center justify-center text-theme-text-muted gap-2">
-        <Cpu size={32} />
+        <CpuIcon size={32} />
         <span class="text-sm">No devices found</span>
       </div>
     {:else}

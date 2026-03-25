@@ -2,8 +2,8 @@
   import { onMount } from 'svelte'
   import { api, auth } from '$lib/api'
   import { themeSetting } from '$lib/stores'
-  import GithubLogo from 'phosphor-svelte/lib/GithubLogo'
-  import FileText from 'phosphor-svelte/lib/FileText'
+  import { GithubLogoIcon } from 'phosphor-svelte'
+  import { FileTextIcon } from 'phosphor-svelte'
   import type { ThemeValue } from '$lib/stores/theme'
 
   let loading = true
@@ -244,7 +244,7 @@
               target="_blank"
               class="text-primary hover:text-primary-dark flex items-center gap-2"
             >
-              <GithubLogo size={20} />
+              <GithubLogoIcon size={20} />
               GitHub Repository
             </a>
             <a
@@ -252,7 +252,7 @@
               target="_blank"
               class="text-primary hover:text-primary-dark flex items-center gap-2"
             >
-              <FileText size={20} />
+              <FileTextIcon size={20} />
               Documentation
             </a>
           </div>
