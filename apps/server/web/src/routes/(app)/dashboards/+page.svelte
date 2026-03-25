@@ -164,6 +164,7 @@
           <label for="dashboard-name" class="block text-sm font-medium text-theme-text mb-1.5">
             Dashboard Name
           </label>
+          <!-- svelte-ignore a11y_autofocus -->
           <input
             id="dashboard-name"
             type="text"
