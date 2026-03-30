@@ -44,13 +44,13 @@
     showNodeStatus,
   } from '$lib/stores'
   import { formatTraffic } from '$lib/utils/format'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-  import MagnifyingGlassPlus from 'phosphor-svelte/lib/MagnifyingGlassPlus'
-  import MagnifyingGlassMinus from 'phosphor-svelte/lib/MagnifyingGlassMinus'
-  import CornersOut from 'phosphor-svelte/lib/CornersOut'
-  import ArrowCounterClockwise from 'phosphor-svelte/lib/ArrowCounterClockwise'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
-  import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass'
+  import { ArrowLeftIcon } from 'phosphor-svelte'
+  import { MagnifyingGlassPlusIcon } from 'phosphor-svelte'
+  import { MagnifyingGlassMinusIcon } from 'phosphor-svelte'
+  import { CornersOutIcon } from 'phosphor-svelte'
+  import { ArrowCounterClockwiseIcon } from 'phosphor-svelte'
+  import { GearSixIcon } from 'phosphor-svelte'
+  import { MagnifyingGlassIcon } from 'phosphor-svelte'
 
   // Props
   export let topologyId: string = ''
@@ -95,23 +95,6 @@
   $: currentSheet = sheets[currentSheetId]
   $: svgContent = currentSheet?.svg || ''
 
-  // Build breadcrumb from navigation stack + current
-  // Explicitly reference reactive variables to ensure updates
-  $: breadcrumb = (() => {
-    const result: Array<{ id: string; label: string }> = []
-    for (const sheetId of navigationStack) {
-      const sheet = sheets[sheetId]
-      if (sheet) {
-        result.push({ id: sheetId, label: sheet.label })
-      }
-    }
-    // Reference currentSheet and currentSheetId for reactivity
-    if (currentSheet && currentSheetId) {
-      result.push({ id: currentSheetId, label: currentSheet.label })
-    }
-    return result
-  })()
-
   // Tooltip state
   let tooltipVisible = false
   let tooltipContent = ''
@@ -122,14 +105,6 @@
   let hoveredType: 'node' | 'link' | 'subgraph' | null = null
   let hoveredLinkId: string | null = null
   let hoveredLinkInfo: { from: string; to: string; bandwidth: string } | null = null
-  let hoveredNodeInfo: {
-    id: string
-    label: string
-    type: string
-    vendor: string
-    model: string
-  } | null = null
-  let hoveredSubgraphInfo: { id: string; label: string; canNavigate: boolean } | null = null
 
   // Dynamic tooltip content - recalculates when metricsData changes
   $: if (tooltipVisible && hoveredType === 'link' && hoveredLinkId && hoveredLinkInfo) {
@@ -660,13 +635,6 @@
     })
   }
 
-  function handleSubgraphClick(sgId: string) {
-    // Navigate to child sheet if it exists
-    if (sheets[sgId]) {
-      navigateToSheet(sgId)
-    }
-  }
-
   // Link handlers
   function handleLinkHover(linkId: string, event: MouseEvent) {
     highlightLink(linkId, true)
@@ -738,10 +706,8 @@
     const model = node.getAttribute('data-device-model') || ''
 
     hoveredType = 'node'
-    hoveredNodeInfo = { id: nodeId, label, type, vendor, model }
     hoveredLinkId = null
     hoveredLinkInfo = null
-    hoveredSubgraphInfo = null
 
     // Build content for nodes (static, no metrics)
     let content = `<strong>${label}</strong>`
@@ -764,10 +730,8 @@
     const canNavigate = sheets[sgId] !== undefined
 
     hoveredType = 'subgraph'
-    hoveredSubgraphInfo = { id: sgId, label, canNavigate }
     hoveredLinkId = null
     hoveredLinkInfo = null
-    hoveredNodeInfo = null
 
     // Build content for subgraphs (static)
     let content = `<strong>${label}</strong>`
@@ -791,8 +755,6 @@
     hoveredType = 'link'
     hoveredLinkId = linkId
     hoveredLinkInfo = { from, to, bandwidth }
-    hoveredNodeInfo = null
-    hoveredSubgraphInfo = null
 
     // Initial content - will be updated reactively by $: statement
     let content = `<strong>${from} → ${to}</strong>`
@@ -829,8 +791,6 @@
     hoveredType = null
     hoveredLinkId = null
     hoveredLinkInfo = null
-    hoveredNodeInfo = null
-    hoveredSubgraphInfo = null
   }
 
   function formatUtil(util: number): string {
@@ -964,7 +924,7 @@
           on:click={() => navigateToBreadcrumb(navigationStack[navigationStack.length - 1] || 'root')}
           title="Go back"
         >
-          <ArrowLeft size={14} />
+          <ArrowLeftIcon size={14} />
         </button>
         <span class="breadcrumb-current">{currentSheet?.label}</span>
       </div>
@@ -990,24 +950,24 @@
   <!-- Controls -->
   <div class="controls">
     <div class="control-group">
-      <button on:click={zoomIn} title="Zoom In"><MagnifyingGlassPlus size={18} /></button>
+      <button on:click={zoomIn} title="Zoom In"><MagnifyingGlassPlusIcon size={18} /></button>
       <span class="zoom-level">{Math.round(scale * 100)}%</span>
-      <button on:click={zoomOut} title="Zoom Out"><MagnifyingGlassMinus size={18} /></button>
+      <button on:click={zoomOut} title="Zoom Out"><MagnifyingGlassMinusIcon size={18} /></button>
     </div>
     <div class="control-group">
-      <button on:click={fitToView} title="Fit to View"><CornersOut size={18} /></button>
-      <button on:click={resetView} title="Reset View"><ArrowCounterClockwise size={18} /></button>
+      <button on:click={fitToView} title="Fit to View"><CornersOutIcon size={18} /></button>
+      <button on:click={resetView} title="Reset View"><ArrowCounterClockwiseIcon size={18} /></button>
       {#if onSearchOpen}
         <button
           on:click={onSearchOpen}
           title="Search Nodes ({navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl+'}K)"
         >
-          <MagnifyingGlass size={18} />
+          <MagnifyingGlassIcon size={18} />
         </button>
       {/if}
       {#if onToggleSettings}
         <button on:click={onToggleSettings} title="Settings" class:active={settingsOpen}>
-          <GearSix size={18} />
+          <GearSixIcon size={18} />
         </button>
       {/if}
     </div>

@@ -1,16 +1,18 @@
 <script lang="ts">
-  import X from 'phosphor-svelte/lib/X'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
+  import { XIcon } from 'phosphor-svelte'
+  import { GearSixIcon } from 'phosphor-svelte'
   import { dashboardEditMode } from '$lib/stores/dashboards'
+  import type { Snippet } from 'svelte'
 
   interface Props {
     title: string
     onRemove?: () => void
     onSettings?: () => void
     class?: string
+    children: Snippet
   }
 
-  let { title, onRemove, onSettings, class: className = '' }: Props = $props()
+  let { title, onRemove, onSettings, class: className = '', children }: Props = $props()
 
   // Subscribe to edit mode store directly
   let editMode = $derived($dashboardEditMode)
@@ -32,7 +34,7 @@
             class="w-6 h-6 flex items-center justify-center rounded hover:bg-theme-bg-elevated text-theme-text-muted hover:text-theme-text transition-colors"
             title="Widget settings"
           >
-            <GearSix size={14} />
+            <GearSixIcon size={14} />
           </button>
         {/if}
         {#if onRemove}
@@ -41,7 +43,7 @@
             class="w-6 h-6 flex items-center justify-center rounded hover:bg-danger/10 text-theme-text-muted hover:text-danger transition-colors"
             title="Remove widget"
           >
-            <X size={14} />
+            <XIcon size={14} />
           </button>
         {/if}
       </div>
@@ -49,5 +51,5 @@
   </div>
 
   <!-- Widget Content -->
-  <div class="flex-1 overflow-auto p-3"><slot /></div>
+  <div class="flex-1 overflow-auto p-3">{@render children?.()}</div>
 </div>

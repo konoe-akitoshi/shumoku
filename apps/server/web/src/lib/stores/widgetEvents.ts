@@ -47,7 +47,7 @@ export interface WidgetEvent {
 type WidgetEventListener = (event: WidgetEvent) => void
 
 function createWidgetEventBus() {
-  const { subscribe, set, update } = writable<WidgetEvent | null>(null)
+  const { subscribe, set } = writable<WidgetEvent | null>(null)
 
   // Store listeners separately for cleanup
   const listeners = new Set<WidgetEventListener>()

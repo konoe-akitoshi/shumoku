@@ -28,12 +28,8 @@
   // State
   let loading = true
   let error = ''
-  let currentSheet = 'root'
   let breadcrumb: { id: string; label: string }[] = [{ id: 'root', label: 'Root' }]
   let scale = 1
-  let hoveredNode: string | null = null
-  let selectedNode: string | null = null
-
   // Tooltip state
   let tooltipVisible = false
   let tooltipContent = ''
@@ -130,7 +126,6 @@
       console.log('Navigate to:', data.destSubgraphId)
     }
 
-    selectedNode = data.id
     dispatch('nodeClick', { nodeId: data.id, nodeData: data })
   }
 
@@ -197,13 +192,11 @@
         // Event handlers
         cy.on('mouseover', 'node', (e) => {
           const node = e.target as NodeSingular
-          hoveredNode = node.id()
           highlightNeighbors(node)
           showTooltip(node, e)
         })
 
         cy.on('mouseout', 'node', () => {
-          hoveredNode = null
           clearHighlight()
           hideTooltip()
         })
@@ -234,12 +227,6 @@
           scale = cy?.zoom() || 1
         })
 
-        // Background click to deselect
-        cy.on('tap', (e) => {
-          if (e.target === cy) {
-            selectedNode = null
-          }
-        })
       }
 
       // Fit to view
@@ -356,7 +343,6 @@
           on:click={() => {
             // Navigate to this level
             breadcrumb = breadcrumb.slice(0, i + 1)
-            currentSheet = crumb.id
           }}
         >
           {crumb.label}

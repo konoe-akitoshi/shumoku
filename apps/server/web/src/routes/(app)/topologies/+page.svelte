@@ -4,9 +4,9 @@
   import { YamlParser } from '@shumoku/core'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
+  import { PlusIcon } from 'phosphor-svelte'
+  import { TreeStructureIcon } from 'phosphor-svelte'
+  import { GearSixIcon } from 'phosphor-svelte'
 
   let showCreateModal = $state(false)
 
@@ -76,7 +76,7 @@ links:
   <!-- Actions -->
   <div class="flex items-center justify-end mb-6">
     <Button onclick={openCreateModal}>
-      <Plus size={20} class="mr-1" />
+      <PlusIcon size={20} class="mr-1" />
       Add Topology
     </Button>
   </div>
@@ -94,7 +94,7 @@ links:
     </div>
   {:else if $topologiesList.length === 0}
     <div class="card p-12 text-center">
-      <TreeStructure size={64} class="text-theme-text-muted mx-auto mb-4" />
+      <TreeStructureIcon size={64} class="text-theme-text-muted mx-auto mb-4" />
       <h3 class="text-lg font-medium text-theme-text-emphasis mb-2">No topologies</h3>
       <p class="text-theme-text-muted mb-4">Create your first network topology diagram</p>
       <Button onclick={openCreateModal}>Add Topology</Button>
@@ -107,14 +107,14 @@ links:
           <div class="card-body">
             <div class="flex items-start justify-between mb-4">
               <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                <TreeStructure size={24} class="text-primary" />
+                <TreeStructureIcon size={24} class="text-primary" />
               </div>
               <a
                 href="/topologies/{topo.id}/settings"
                 class="text-theme-text-muted hover:text-theme-text"
                 title="Settings"
               >
-                <GearSix size={20} />
+                <GearSixIcon size={20} />
               </a>
             </div>
 

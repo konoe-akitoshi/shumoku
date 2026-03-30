@@ -3,18 +3,20 @@
   import { api, type PluginInfo } from '$lib/api'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import Cube from 'phosphor-svelte/lib/Cube'
-  import Package from 'phosphor-svelte/lib/Package'
-  import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise'
-  import Trash from 'phosphor-svelte/lib/Trash'
-  import Check from 'phosphor-svelte/lib/Check'
-  import X from 'phosphor-svelte/lib/X'
-  import Warning from 'phosphor-svelte/lib/Warning'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import ChartLine from 'phosphor-svelte/lib/ChartLine'
-  import Users from 'phosphor-svelte/lib/Users'
-  import Bell from 'phosphor-svelte/lib/Bell'
+  import {
+    ArrowsClockwiseIcon,
+    BellIcon,
+    ChartLineIcon,
+    CheckIcon,
+    CubeIcon,
+    PackageIcon,
+    PlusIcon,
+    TrashIcon,
+    TreeStructureIcon,
+    UsersIcon,
+    WarningIcon,
+    XIcon,
+  } from 'phosphor-svelte'
 
   // State
   let plugins = $state<PluginInfo[]>([])
@@ -152,15 +154,15 @@
   function getCapabilityIcon(cap: string) {
     switch (cap) {
       case 'topology':
-        return TreeStructure
+        return TreeStructureIcon
       case 'metrics':
-        return ChartLine
+        return ChartLineIcon
       case 'hosts':
-        return Users
+        return UsersIcon
       case 'alerts':
-        return Bell
+        return BellIcon
       default:
-        return Cube
+        return CubeIcon
     }
   }
 
@@ -193,11 +195,11 @@
     </div>
     <div class="flex items-center gap-2">
       <Button variant="outline" onclick={handleReload} disabled={reloading}>
-        <ArrowsClockwise size={20} class="mr-1 {reloading ? 'animate-spin' : ''}" />
+        <ArrowsClockwiseIcon size={20} class="mr-1 {reloading ? 'animate-spin' : ''}" />
         Reload
       </Button>
       <Button onclick={openAddModal}>
-        <Plus size={20} class="mr-1" />
+        <PlusIcon size={20} class="mr-1" />
         Add Plugin
       </Button>
     </div>
@@ -223,7 +225,7 @@
           <div class="card p-4">
             <div class="flex items-start gap-3">
               <div class="p-2 rounded-lg bg-primary/10">
-                <Package size={24} class="text-primary" />
+                <PackageIcon size={24} class="text-primary" />
               </div>
               <div class="flex-1 min-w-0">
                 <p class="font-medium text-theme-text-emphasis">{plugin.name}</p>
@@ -252,7 +254,7 @@
       <h2 class="text-lg font-semibold text-theme-text-emphasis mb-4">External Plugins</h2>
       {#if externalPlugins.length === 0}
         <div class="card p-12 text-center">
-          <Cube size={64} class="text-theme-text-muted mx-auto mb-4" />
+          <CubeIcon size={64} class="text-theme-text-muted mx-auto mb-4" />
           <h3 class="text-lg font-medium text-theme-text-emphasis mb-2">No external plugins</h3>
           <p class="text-theme-text-muted mb-4">Add an external plugin to extend functionality</p>
           <Button onclick={openAddModal}>Add Plugin</Button>
@@ -300,17 +302,17 @@
                   <td>
                     {#if plugin.error}
                       <div class="flex items-center gap-1 text-destructive" title={plugin.error}>
-                        <Warning size={16} />
+                        <WarningIcon size={16} />
                         <span class="text-sm">Error</span>
                       </div>
                     {:else if plugin.enabled}
                       <div class="flex items-center gap-1 text-success">
-                        <Check size={16} />
+                        <CheckIcon size={16} />
                         <span class="text-sm">Enabled</span>
                       </div>
                     {:else}
                       <div class="flex items-center gap-1 text-theme-text-muted">
-                        <X size={16} />
+                        <XIcon size={16} />
                         <span class="text-sm">Disabled</span>
                       </div>
                     {/if}
@@ -325,7 +327,7 @@
                         {plugin.enabled ? 'Disable' : 'Enable'}
                       </Button>
                       <Button variant="destructive" size="sm" onclick={() => confirmDelete(plugin)}>
-                        <Trash size={16} />
+                        <TrashIcon size={16} />
                       </Button>
                     </div>
                   </td>

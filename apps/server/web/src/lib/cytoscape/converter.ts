@@ -4,7 +4,7 @@
  */
 
 import type { ElementDefinition, NodeDataDefinition, EdgeDataDefinition } from 'cytoscape'
-import type { NetworkGraph, ParsedTopologyResponse } from '../types'
+import type { ParsedTopologyResponse } from '../types'
 import { getCDNIconUrl } from './icons'
 import { getUtilizationColor } from './theme'
 

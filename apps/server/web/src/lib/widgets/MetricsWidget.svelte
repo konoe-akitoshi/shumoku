@@ -1,21 +1,17 @@
 <script lang="ts">
   import { metricsData } from '$lib/stores/metrics'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import ChartLine from 'phosphor-svelte/lib/ChartLine'
-  import ArrowUp from 'phosphor-svelte/lib/ArrowUp'
-  import ArrowDown from 'phosphor-svelte/lib/ArrowDown'
+  import { ArrowDownIcon, ArrowUpIcon, ChartLineIcon } from 'phosphor-svelte'
 
   interface Props {
-    id: string
     config: {
       title?: string
       metricType?: 'nodes-up' | 'nodes-down' | 'links-healthy' | 'utilization'
     }
-    onConfigChange?: (config: Record<string, unknown>) => void
     onRemove?: () => void
   }
 
-  let { id, config, onConfigChange, onRemove }: Props = $props()
+  let { config, onRemove }: Props = $props()
 
   let title = $derived(config.title || 'Metrics')
   let metricType = $derived(config.metricType || 'nodes-up')
@@ -80,15 +76,15 @@
     }
   })
 
-  let icon = $derived.by(() => {
+  let Icon = $derived.by(() => {
     switch (metricType) {
       case 'nodes-up':
       case 'links-healthy':
-        return ArrowUp
+        return ArrowUpIcon
       case 'nodes-down':
-        return ArrowDown
+        return ArrowDownIcon
       default:
-        return ChartLine
+        return ChartLineIcon
     }
   })
 
@@ -101,7 +97,7 @@
   <div class="h-full flex flex-col items-center justify-center gap-2">
     {#if value !== null}
       <div class="flex items-center gap-2 {colorClass}">
-        <svelte:component this={icon} size={24} />
+        <Icon />
         <span class="text-4xl font-bold">{value}</span>
         {#if total !== null && metricType !== 'utilization'}
           <span class="text-lg text-theme-text-muted">/ {total}</span>
@@ -122,7 +118,7 @@
       </span>
     {:else}
       <div class="text-theme-text-muted flex flex-col items-center gap-2">
-        <ChartLine size={32} />
+        <ChartLineIcon size={32} />
         <span class="text-sm">No metrics data</span>
       </div>
     {/if}

@@ -18,9 +18,7 @@
     clearHighlight as clearHighlightUtil,
   } from '$lib/highlight'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import Spinner from 'phosphor-svelte/lib/Spinner'
-  import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
+  import { ArrowSquareOutIcon, SpinnerIcon, TreeStructureIcon } from 'phosphor-svelte'
 
   interface SheetInfo {
     id: string
@@ -408,6 +406,10 @@
   )
 
   let editMode = $derived($dashboardEditMode)
+
+  const componentId = $props.id()
+  const selectorId = componentId + ':selector'
+  const hierarchicalSelectorId = componentId + ':hierarchicalSelector'
 </script>
 
 <WidgetWrapper
@@ -421,8 +423,9 @@
       <div class="absolute inset-0 bg-theme-bg-elevated z-10 p-4 flex flex-col overflow-auto">
         <div class="text-sm font-medium text-theme-text-emphasis mb-3">Widget Settings</div>
 
-        <label class="text-xs text-theme-text-muted mb-1">Topology</label>
+        <label for={selectorId} class="text-xs text-theme-text-muted mb-1">Topology</label>
         <select
+          id={selectorId}
           value={config.topologyId || ''}
           onchange={(e) => selectTopology(e.currentTarget.value)}
           class="px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text mb-4"
@@ -434,8 +437,11 @@
         </select>
 
         {#if isHierarchical && sheets.length > 0}
-          <label class="text-xs text-theme-text-muted mb-1">Sheet (Hierarchy Level)</label>
+          <label for={hierarchicalSelectorId} class="text-xs text-theme-text-muted mb-1"
+            >Sheet (Hierarchy Level)</label
+          >
           <select
+            id={hierarchicalSelectorId}
             value={config.sheetId || 'root'}
             onchange={(e) => selectSheet(e.currentTarget.value)}
             class="px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text mb-4"
@@ -458,7 +464,7 @@
     {:else if !config.topologyId}
       <!-- No topology selected -->
       <div class="h-full flex flex-col items-center justify-center text-theme-text-muted gap-3">
-        <TreeStructure size={32} />
+        <TreeStructureIcon size={32} />
         <span class="text-sm">No topology selected</span>
         <button
           onclick={() => showSelector = true}
@@ -469,7 +475,7 @@
       </div>
     {:else if loading}
       <div class="h-full flex items-center justify-center">
-        <Spinner size={24} class="animate-spin text-theme-text-muted" />
+        <SpinnerIcon size={24} class="animate-spin text-theme-text-muted" />
       </div>
     {:else if error}
       <div class="h-full flex flex-col items-center justify-center text-danger gap-2">
@@ -487,7 +493,7 @@
             href="/topologies/{config.topologyId}"
             class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-theme-bg-elevated border border-theme-border rounded-lg px-3 py-1.5 flex items-center gap-1.5 text-xs text-theme-text hover:bg-theme-bg-canvas hover:border-primary/50 shadow-sm no-underline"
           >
-            <ArrowSquareOut size={14} />
+            <ArrowSquareOutIcon size={14} />
             <span>Open</span>
           </a>
         {/if}

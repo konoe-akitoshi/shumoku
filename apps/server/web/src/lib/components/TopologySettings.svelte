@@ -11,9 +11,9 @@
     showNodeStatus,
   } from '$lib/stores'
   import type { Topology, MetricsMapping, TopologyDataSource } from '$lib/types'
-  import PencilSimple from 'phosphor-svelte/lib/PencilSimple'
-  import Trash from 'phosphor-svelte/lib/Trash'
-  import Database from 'phosphor-svelte/lib/Database'
+  import { PencilSimpleIcon } from 'phosphor-svelte'
+  import { TrashIcon } from 'phosphor-svelte'
+  import { DatabaseIcon } from 'phosphor-svelte'
 
   interface Props {
     topology: Topology
@@ -180,7 +180,7 @@
               {/if}
             </p>
           </div>
-          <Database size={20} class="text-theme-text-muted" />
+          <DatabaseIcon size={20} class="text-theme-text-muted" />
         </div>
       </div>
 
@@ -199,7 +199,7 @@
               {/if}
             </p>
           </div>
-          <Database size={20} class="text-theme-text-muted" />
+          <DatabaseIcon size={20} class="text-theme-text-muted" />
         </div>
       </div>
 
@@ -208,7 +208,7 @@
         href="/topologies/{topology.id}/settings#sources"
         class="btn btn-secondary w-full justify-center"
       >
-        <Database size={16} class="mr-2" />
+        <DatabaseIcon size={16} class="mr-2" />
         Configure Data Sources
       </a>
     </div>
@@ -381,7 +381,7 @@
     <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">Actions</h3>
     <div class="space-y-2">
       <a href="/topologies/{topology.id}/edit" class="btn btn-secondary w-full justify-center">
-        <PencilSimple size={16} class="mr-2" />
+        <PencilSimpleIcon size={16} class="mr-2" />
         Edit YAML
       </a>
     </div>
@@ -407,7 +407,7 @@
             class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
           ></span>
         {:else}
-          <Trash size={16} class="mr-2" />
+          <TrashIcon size={16} class="mr-2" />
         {/if}
         Delete Topology
       </Button>

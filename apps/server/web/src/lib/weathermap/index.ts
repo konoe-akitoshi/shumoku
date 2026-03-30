@@ -261,16 +261,16 @@ export class WeathermapController {
       typeof window !== 'undefined' &&
       'matchMedia' in window &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const deviceMemory =
-      typeof navigator !== 'undefined' && 'deviceMemory' in navigator
-        ? Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4)
-        : 4
-    const hardwareConcurrency =
-      typeof navigator !== 'undefined' && 'hardwareConcurrency' in navigator
-        ? navigator.hardwareConcurrency || 4
-        : 4
 
     // TODO: Replace hardware-based detection with edge-count or FPS-based approach
+    // const deviceMemory =
+    //   typeof navigator !== 'undefined' && 'deviceMemory' in navigator
+    //     ? Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4)
+    //     : 4
+    // const hardwareConcurrency =
+    //   typeof navigator !== 'undefined' && 'hardwareConcurrency' in navigator
+    //     ? navigator.hardwareConcurrency || 4
+    //     : 4
     // if (prefersReducedMotion || deviceMemory <= 2 || hardwareConcurrency <= 4) {
     //   return {
     //     quality: 'low',
@@ -331,16 +331,16 @@ export class WeathermapController {
       if (this.overlayQueue.length > 0) this.scheduleBatch()
     }
 
-    if ('requestIdleCallback' in window) {
-      this.idleHandle = window.requestIdleCallback(handler, { timeout: 100 })
+    if (typeof requestIdleCallback === 'function') {
+      this.idleHandle = requestIdleCallback(handler, { timeout: 100 })
     } else {
       this.idleHandle = window.setTimeout(() => handler(undefined), 16)
     }
   }
 
   private cancelIdleCallback(handle: number): void {
-    if ('cancelIdleCallback' in window) {
-      window.cancelIdleCallback(handle)
+    if (typeof cancelIdleCallback === 'function') {
+      cancelIdleCallback(handle)
     } else {
       window.clearTimeout(handle)
     }

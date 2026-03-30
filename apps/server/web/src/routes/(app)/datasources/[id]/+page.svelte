@@ -4,12 +4,14 @@
   import { goto } from '$app/navigation'
   import { api } from '$lib/api'
   import type { DataSource, DataSourceType, ConnectionTestResult } from '$lib/types'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
-  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-  import XCircle from 'phosphor-svelte/lib/XCircle'
-  import Warning from 'phosphor-svelte/lib/Warning'
-  import Copy from 'phosphor-svelte/lib/Copy'
-  import Check from 'phosphor-svelte/lib/Check'
+  import {
+    ArrowLeftIcon,
+    CheckCircleIcon,
+    CheckIcon,
+    CopyIcon,
+    WarningIcon,
+    XCircleIcon,
+  } from 'phosphor-svelte'
 
   // Get ID from route params (always defined for this route)
   let id = $derived($page.params.id!)
@@ -52,7 +54,7 @@
     }
   }
 
-  function getConfigFromForm(type: DataSourceType, existingConfig?: ParsedConfig): string {
+  function getConfigFromForm(type: DataSourceType): string {
     const config: Record<string, unknown> = {
       url: formUrl.trim(),
     }
@@ -126,12 +128,9 @@
     error = ''
 
     try {
-      // Get existing config to preserve token if not changed
-      const existingConfig = dataSource ? parseConfig(dataSource.configJson) : undefined
-
       const updates = {
         name: formName.trim(),
-        configJson: getConfigFromForm(dataSource!.type, existingConfig),
+        configJson: getConfigFromForm(dataSource!.type),
       }
 
       dataSource = await api.dataSources.update(id, updates)
@@ -188,7 +187,7 @@
     href="/datasources"
     class="inline-flex items-center gap-2 text-theme-text-muted hover:text-theme-text mb-4"
   >
-    <ArrowLeft size={16} />
+    <ArrowLeftIcon size={16} />
     Back to Data Sources
   </a>
 
@@ -313,9 +312,9 @@
                           onclick={() => { navigator.clipboard.writeText(webhookUrl); copied = true; setTimeout(() => copied = false, 2000); }}
                         >
                           {#if copied}
-                            <Check size={16} class="text-success" />
+                            <CheckIcon size={16} class="text-success" />
                           {:else}
-                            <Copy size={16} />
+                            <CopyIcon size={16} />
                           {/if}
                         </button>
                       </div>
@@ -365,10 +364,10 @@
               <div class="p-4 rounded-lg {testResult.success ? 'bg-success/10' : 'bg-danger/10'}">
                 <div class="flex items-center gap-2 mb-2">
                   {#if testResult.success}
-                    <CheckCircle size={20} class="text-success" />
+                    <CheckCircleIcon size={20} class="text-success" />
                     <span class="font-medium text-success">Connected</span>
                   {:else}
-                    <XCircle size={20} class="text-danger" />
+                    <XCircleIcon size={20} class="text-danger" />
                     <span class="font-medium text-danger">Failed</span>
                   {/if}
                 </div>
@@ -380,7 +379,7 @@
                   <div class="mt-2 pt-2 border-t border-warning/30">
                     {#each testResult.warnings as warning}
                       <div class="flex items-center gap-1 text-xs text-warning">
-                        <Warning size={14} />
+                        <WarningIcon size={14} />
                         <span>{warning}</span>
                       </div>
                     {/each}

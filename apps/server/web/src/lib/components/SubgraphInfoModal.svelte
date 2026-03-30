@@ -2,8 +2,8 @@
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
   import type { SubgraphSelectEvent } from './InteractiveSvgDiagram.svelte'
-  import Graph from 'phosphor-svelte/lib/Graph'
-  import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
+  import { GraphIcon } from 'phosphor-svelte'
+  import { ArrowSquareOutIcon } from 'phosphor-svelte'
 
   interface Props {
     open: boolean
@@ -29,7 +29,7 @@
   <Dialog.Content class="sm:max-w-sm">
     <Dialog.Header>
       <Dialog.Title class="flex items-center gap-2">
-        <Graph size={18} />
+        <GraphIcon size={18} />
         {subgraphData?.subgraph.label || 'Subgraph'}
       </Dialog.Title>
     </Dialog.Header>
@@ -50,7 +50,7 @@
         {#if subgraphData.subgraph.canDrillDown}
           <div class="pt-2 border-t border-theme-border">
             <Button variant="outline" size="sm" class="w-full" onclick={handleDrillDown}>
-              <ArrowSquareOut size={14} class="mr-1.5" />
+              <ArrowSquareOutIcon size={14} class="mr-1.5" />
               詳細を見る
             </Button>
           </div>

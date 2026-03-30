@@ -5,7 +5,7 @@
   import { api } from '$lib/api'
   import { YamlParser } from '@shumoku/core'
   import type { Topology } from '$lib/types'
-  import ArrowLeft from 'phosphor-svelte/lib/ArrowLeft'
+  import { ArrowLeftIcon } from 'phosphor-svelte'
 
   // Get ID from route params (always defined for this route)
   $: id = $page.params.id!
@@ -160,7 +160,7 @@
     href="/topologies/{$page.params.id}"
     class="inline-flex items-center gap-2 text-theme-text-muted hover:text-theme-text mb-4"
   >
-    <ArrowLeft size={16} />
+    <ArrowLeftIcon size={16} />
     Back to Topology
   </a>
 

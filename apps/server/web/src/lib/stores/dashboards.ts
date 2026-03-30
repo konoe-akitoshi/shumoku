@@ -46,7 +46,7 @@ function parseDashboardLayout(dashboard: Dashboard): DashboardLayout {
 }
 
 function createDashboardStore() {
-  const { subscribe, set, update } = writable<DashboardState>(initialState)
+  const { subscribe, update } = writable<DashboardState>(initialState)
 
   return {
     subscribe,

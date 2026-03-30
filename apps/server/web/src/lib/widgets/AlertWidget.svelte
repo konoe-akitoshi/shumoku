@@ -7,13 +7,15 @@
   import { get } from 'svelte/store'
   import WidgetWrapper from './WidgetWrapper.svelte'
   import * as Dialog from '$lib/components/ui/dialog'
-  import Warning from 'phosphor-svelte/lib/Warning'
-  import Fire from 'phosphor-svelte/lib/Fire'
-  import Info from 'phosphor-svelte/lib/Info'
-  import CheckCircle from 'phosphor-svelte/lib/CheckCircle'
-  import Spinner from 'phosphor-svelte/lib/Spinner'
-  import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise'
-  import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut'
+  import {
+    ArrowsClockwiseIcon,
+    ArrowSquareOutIcon,
+    CheckCircleIcon,
+    FireIcon,
+    InfoIcon,
+    SpinnerIcon,
+    WarningIcon,
+  } from 'phosphor-svelte'
 
   interface Props {
     id: string
@@ -84,17 +86,17 @@
   function getSeverityIcon(severity: AlertSeverity) {
     switch (severity) {
       case 'disaster':
-        return Fire
+        return FireIcon
       case 'high':
       case 'average':
-        return Warning
+        return WarningIcon
       case 'warning':
       case 'information':
-        return Info
+        return InfoIcon
       case 'ok':
-        return CheckCircle
+        return CheckCircleIcon
       default:
-        return Warning
+        return WarningIcon
     }
   }
 
@@ -298,6 +300,8 @@
 
   let displayedAlerts = $derived(alerts.slice(0, config.maxItems || 10))
   let activeAlerts = $derived(alerts.filter((a) => a.status === 'active'))
+
+  const componentId = $props.id()
 </script>
 
 <WidgetWrapper title={config.title || 'Alerts'} {onRemove} onSettings={handleSettings}>
@@ -308,8 +312,11 @@
         <div class="text-sm font-medium text-theme-text-emphasis">Widget Settings</div>
 
         <div>
-          <label class="text-xs text-theme-text-muted mb-1 block">Data Source</label>
+          <label for={componentId} class="text-xs text-theme-text-muted mb-1 block"
+            >Data Source</label
+          >
           <select
+            id={componentId}
             value={config.dataSourceId || ''}
             onchange={(e) => selectDataSource(e.currentTarget.value)}
             class="w-full px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text"
@@ -344,7 +351,7 @@
     {:else if !config.dataSourceId}
       <!-- No data source selected -->
       <div class="h-full flex flex-col items-center justify-center text-theme-text-muted gap-3">
-        <Warning size={32} />
+        <WarningIcon size={32} />
         <span class="text-sm">No data source selected</span>
         <button
           onclick={() => (showSelector = true)}
@@ -355,7 +362,7 @@
       </div>
     {:else if loading}
       <div class="h-full flex items-center justify-center">
-        <Spinner size={24} class="animate-spin text-theme-text-muted" />
+        <SpinnerIcon size={24} class="animate-spin text-theme-text-muted" />
       </div>
     {:else if error}
       <div class="h-full flex flex-col items-center justify-center text-danger gap-2">
@@ -378,14 +385,14 @@
           class="p-1 rounded hover:bg-theme-bg-canvas text-theme-text-muted hover:text-theme-text transition-colors"
           title="Refresh alerts"
         >
-          <ArrowsClockwise size={14} />
+          <ArrowsClockwiseIcon size={14} />
         </button>
       </div>
 
       <!-- Alert list -->
       {#if displayedAlerts.length === 0}
         <div class="flex-1 flex flex-col items-center justify-center text-theme-text-muted gap-2">
-          <CheckCircle size={32} class="text-success" />
+          <CheckCircleIcon size={32} class="text-success" />
           <span class="text-sm">All clear</span>
         </div>
       {:else}
@@ -522,7 +529,7 @@
             class="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
           >
             Open in {selectedAlert.source}
-            <ArrowSquareOut size={14} />
+            <ArrowSquareOutIcon size={14} />
           </a>
         </Dialog.Footer>
       {/if}

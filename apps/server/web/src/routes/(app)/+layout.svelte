@@ -5,16 +5,16 @@
   import { goto } from '$app/navigation'
   import Header from '$lib/components/header.svelte'
   import { auth } from '$lib/api'
-  import House from 'phosphor-svelte/lib/House'
-  import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import Database from 'phosphor-svelte/lib/Database'
-  import Cube from 'phosphor-svelte/lib/Cube'
-  import GearSix from 'phosphor-svelte/lib/GearSix'
-  import CaretDoubleLeft from 'phosphor-svelte/lib/CaretDoubleLeft'
-  import CaretDoubleRight from 'phosphor-svelte/lib/CaretDoubleRight'
+  import { HouseIcon } from 'phosphor-svelte'
+  import { SquaresFourIcon } from 'phosphor-svelte'
+  import { TreeStructureIcon } from 'phosphor-svelte'
+  import { DatabaseIcon } from 'phosphor-svelte'
+  import { CubeIcon } from 'phosphor-svelte'
+  import { GearSixIcon } from 'phosphor-svelte'
+  import { CaretDoubleLeftIcon } from 'phosphor-svelte'
+  import { CaretDoubleRightIcon } from 'phosphor-svelte'
   import Logo from '$lib/components/Logo.svelte'
-  import SignOut from 'phosphor-svelte/lib/SignOut'
+  import { SignOutIcon } from 'phosphor-svelte'
 
   interface NavItem {
     href: string
@@ -113,9 +113,9 @@
         aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {#if sidebarCollapsed}
-          <CaretDoubleRight size={20} />
+          <CaretDoubleRightIcon size={20} />
         {:else}
-          <CaretDoubleLeft size={20} />
+          <CaretDoubleLeftIcon size={20} />
         {/if}
       </button>
     </div>
@@ -134,17 +134,17 @@
             title={sidebarCollapsed ? item.label : undefined}
           >
             {#if item.icon === 'home'}
-              <House size={20} />
+              <HouseIcon size={20} />
             {:else if item.icon === 'dashboard'}
-              <SquaresFour size={20} />
+              <SquaresFourIcon size={20} />
             {:else if item.icon === 'topology'}
-              <TreeStructure size={20} />
+              <TreeStructureIcon size={20} />
             {:else if item.icon === 'database'}
-              <Database size={20} />
+              <DatabaseIcon size={20} />
             {:else if item.icon === 'plugins'}
-              <Cube size={20} />
+              <CubeIcon size={20} />
             {:else if item.icon === 'settings'}
-              <GearSix size={20} />
+              <GearSixIcon size={20} />
             {/if}
             {#if !sidebarCollapsed}
               <span class="whitespace-nowrap">{item.label}</span>
@@ -164,7 +164,7 @@
             : 'gap-3 px-3'}"
           title={sidebarCollapsed ? 'Logout' : undefined}
         >
-          <SignOut size={20} />
+          <SignOutIcon size={20} />
           {#if !sidebarCollapsed}
             <span class="whitespace-nowrap">Logout</span>
           {/if}

@@ -2,12 +2,12 @@
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import type { Topology, DataSource, Dashboard } from '$lib/types'
-  import TreeStructure from 'phosphor-svelte/lib/TreeStructure'
-  import Database from 'phosphor-svelte/lib/Database'
-  import SquaresFour from 'phosphor-svelte/lib/SquaresFour'
-  import Plus from 'phosphor-svelte/lib/Plus'
-  import ArrowRight from 'phosphor-svelte/lib/ArrowRight'
-  import Spinner from 'phosphor-svelte/lib/Spinner'
+  import { TreeStructureIcon } from 'phosphor-svelte'
+  import { DatabaseIcon } from 'phosphor-svelte'
+  import { SquaresFourIcon } from 'phosphor-svelte'
+  import { PlusIcon } from 'phosphor-svelte'
+  import { ArrowRightIcon } from 'phosphor-svelte'
+  import { SpinnerIcon } from 'phosphor-svelte'
 
   let topologies: Topology[] = $state([])
   let dataSources: DataSource[] = $state([])
@@ -41,7 +41,7 @@
 <div class="h-full overflow-auto">
   {#if loading}
     <div class="flex items-center justify-center h-full">
-      <Spinner size={32} class="animate-spin text-theme-text-muted" />
+      <SpinnerIcon size={32} class="animate-spin text-theme-text-muted" />
     </div>
   {:else if error}
     <div class="p-6">
@@ -66,7 +66,7 @@
             <div
               class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors"
             >
-              <TreeStructure size={20} class="text-primary" />
+              <TreeStructureIcon size={20} class="text-primary" />
             </div>
             <div>
               <p class="text-2xl font-bold text-theme-text-emphasis">{topologies.length}</p>
@@ -80,7 +80,7 @@
             <div
               class="w-10 h-10 bg-info/10 rounded-lg flex items-center justify-center group-hover:bg-info/20 transition-colors"
             >
-              <SquaresFour size={20} class="text-info" />
+              <SquaresFourIcon size={20} class="text-info" />
             </div>
             <div>
               <p class="text-2xl font-bold text-theme-text-emphasis">{dashboards.length}</p>
@@ -94,7 +94,7 @@
             <div
               class="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center group-hover:bg-warning/20 transition-colors"
             >
-              <Database size={20} class="text-warning" />
+              <DatabaseIcon size={20} class="text-warning" />
             </div>
             <div>
               <p class="text-2xl font-bold text-theme-text-emphasis">
@@ -129,19 +129,19 @@
               href="/topologies"
               class="text-xs text-primary hover:underline flex items-center gap-1"
             >
-              View all <ArrowRight size={12} />
+              View all <ArrowRightIcon size={12} />
             </a>
           </div>
           <div class="p-2">
             {#if topologies.length === 0}
               <div class="text-center py-8">
-                <TreeStructure size={40} class="text-theme-text-muted mx-auto mb-3" />
+                <TreeStructureIcon size={40} class="text-theme-text-muted mx-auto mb-3" />
                 <p class="text-sm text-theme-text-muted mb-3">No topologies yet</p>
                 <a
                   href="/topologies"
                   class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors"
                 >
-                  <Plus size={14} />
+                  <PlusIcon size={14} />
                   Create Topology
                 </a>
               </div>
@@ -154,7 +154,7 @@
                   <div
                     class="w-8 h-8 bg-primary/10 rounded flex items-center justify-center flex-shrink-0"
                   >
-                    <TreeStructure size={16} class="text-primary" />
+                    <TreeStructureIcon size={16} class="text-primary" />
                   </div>
                   <div class="min-w-0 flex-1">
                     <p class="font-medium text-sm text-theme-text-emphasis truncate">
@@ -178,19 +178,19 @@
               href="/dashboards"
               class="text-xs text-primary hover:underline flex items-center gap-1"
             >
-              View all <ArrowRight size={12} />
+              View all <ArrowRightIcon size={12} />
             </a>
           </div>
           <div class="p-2">
             {#if dashboards.length === 0}
               <div class="text-center py-8">
-                <SquaresFour size={40} class="text-theme-text-muted mx-auto mb-3" />
+                <SquaresFourIcon size={40} class="text-theme-text-muted mx-auto mb-3" />
                 <p class="text-sm text-theme-text-muted mb-3">No dashboards yet</p>
                 <a
                   href="/dashboards"
                   class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors"
                 >
-                  <Plus size={14} />
+                  <PlusIcon size={14} />
                   Create Dashboard
                 </a>
               </div>
@@ -203,7 +203,7 @@
                   <div
                     class="w-8 h-8 bg-info/10 rounded flex items-center justify-center flex-shrink-0"
                   >
-                    <SquaresFour size={16} class="text-info" />
+                    <SquaresFourIcon size={16} class="text-info" />
                   </div>
                   <div class="min-w-0 flex-1">
                     <p class="font-medium text-sm text-theme-text-emphasis truncate">
