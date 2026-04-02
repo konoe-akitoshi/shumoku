@@ -26,10 +26,10 @@ export function GettingStartedSection({ locale }: { locale: string }) {
               </span>
             </div>
             <div className="px-5 pt-5 space-y-2.5 flex-1">
-              {t.community.steps.map((step, i) => {
+              {t.community.steps.map((step) => {
                 const isCommand = /^[a-z]/.test(step)
                 return (
-                  <div key={i} className="flex items-start gap-2.5">
+                  <div key={step} className="flex items-start gap-2.5">
                     <span className="text-emerald-600 dark:text-emerald-400 shrink-0 select-none font-mono text-sm mt-px">
                       {isCommand ? '$' : '→'}
                     </span>
