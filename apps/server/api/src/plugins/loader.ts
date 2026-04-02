@@ -703,8 +703,8 @@ export async function installPluginFromZip(
       if (subdirectory) {
         // Look for plugin.json inside the subdirectory
         return (
-          e.entryName.includes(subdirectory + '/plugin.json') ||
-          e.entryName.includes(subdirectory + '\\plugin.json')
+          e.entryName.includes(`${subdirectory}/plugin.json`) ||
+          e.entryName.includes(`${subdirectory}\\plugin.json`)
         )
       }
       return e.entryName.endsWith('plugin.json')
@@ -713,7 +713,7 @@ export async function installPluginFromZip(
     if (!manifestEntry) {
       return {
         success: false,
-        error: 'ZIP does not contain plugin.json' + (subdirectory ? ` in ${subdirectory}` : ''),
+        error: `ZIP does not contain plugin.json${subdirectory ? ` in ${subdirectory}` : ''}`,
       }
     }
 
