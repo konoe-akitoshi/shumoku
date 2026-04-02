@@ -43,7 +43,8 @@
   // Initialize grid when container is bound and data is ready
   $effect(() => {
     if (browser && gridContainer && layoutData && !grid) {
-      tick().then(() => initGrid(layoutData!))
+      const data = layoutData
+      tick().then(() => initGrid(data))
     }
   })
 

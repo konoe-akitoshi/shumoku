@@ -225,7 +225,7 @@
           Cancel
         </button>
         <button
-          onclick={() => handleDelete(deleteConfirmId!)}
+          onclick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
           class="px-4 py-2 bg-danger text-white rounded-lg hover:bg-danger/80 transition-colors"
         >
           Delete

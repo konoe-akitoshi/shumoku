@@ -230,8 +230,9 @@
 
   function handleAlertHover(alert: Alert) {
     if (!alert.host) return
+    const host = alert.host
     forEachTopology((tid) =>
-      emitHighlightNodes(tid, [alert.host!], {
+      emitHighlightNodes(tid, [host], {
         highlightColor: SEVERITY_HIGHLIGHT_COLORS[alert.severity],
         sourceWidgetId: id,
       }),
