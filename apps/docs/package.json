@@ -9,7 +9,7 @@
     "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit",
     "postinstall": "fumadocs-mdx",
     "lint": "biome check",
-    "format": "biome format --write"
+    "format": "biome check --write ."
   },
   "dependencies": {
     "@shumoku/renderer-svg": "workspace:*",

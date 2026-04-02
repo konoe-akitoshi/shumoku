@@ -32,6 +32,7 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
+    "format": "biome check --write .",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

@@ -40,7 +40,8 @@
     "dev": "tsc --watch",
     "test": "vitest --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "format": "biome check --write ."
   },
   "dependencies": {
     "@shumoku/core": "workspace:*"
