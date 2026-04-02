@@ -211,8 +211,8 @@
     const layout = get(currentLayout)
     if (!layout) return
     for (const w of layout.widgets) {
-      if (w.type === 'topology' && w.config.topologyId) {
-        fn(w.config.topologyId as string)
+      if (w.type === 'topology' && w.config['topologyId']) {
+        fn(w.config['topologyId'] as string)
       }
     }
   }

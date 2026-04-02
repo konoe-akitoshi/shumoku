@@ -44,21 +44,21 @@ export function convertToCytoscapeElements(data: ParsedTopologyResponse): Cytosc
 
       // Custom styling
       if (subgraph.style?.fill) {
-        nodeData.subgraphFill = subgraph.style.fill
+        nodeData['subgraphFill'] = subgraph.style.fill
       }
       if (subgraph.style?.stroke) {
-        nodeData.subgraphStroke = subgraph.style.stroke
+        nodeData['subgraphStroke'] = subgraph.style.stroke
       }
 
       // File reference (for drill-down navigation)
       if (subgraph.file) {
-        nodeData.hasFile = 'true'
-        nodeData.file = subgraph.file
+        nodeData['hasFile'] = 'true'
+        nodeData['file'] = subgraph.file
       }
 
       // Icon for subgraph (e.g., AWS VPC icon)
       if (subgraph.vendor && subgraph.service && subgraph.resource) {
-        nodeData.iconUrl = getCDNIconUrl(
+        nodeData['iconUrl'] = getCDNIconUrl(
           subgraph.vendor,
           `${subgraph.service}/${subgraph.resource}`,
         )
@@ -85,22 +85,22 @@ export function convertToCytoscapeElements(data: ParsedTopologyResponse): Cytosc
 
     // Vendor icon
     if (node.vendor && node.model) {
-      nodeData.iconUrl = getCDNIconUrl(node.vendor, node.model)
+      nodeData['iconUrl'] = getCDNIconUrl(node.vendor, node.model)
     } else if (node.icon) {
-      nodeData.iconUrl = node.icon
+      nodeData['iconUrl'] = node.icon
     }
 
     // Export connector check
     if (node.id.startsWith('__export_')) {
-      nodeData.isExport = 'true'
-      if (node.metadata?._destSubgraphId) {
-        nodeData.destSubgraphId = node.metadata._destSubgraphId
+      nodeData['isExport'] = 'true'
+      if (node.metadata?.['_destSubgraphId']) {
+        nodeData['destSubgraphId'] = node.metadata['_destSubgraphId']
       }
     }
 
     // Store original metadata
     if (node.metadata) {
-      nodeData.metadata = node.metadata
+      nodeData['metadata'] = node.metadata
     }
 
     nodes.push({
@@ -128,33 +128,33 @@ export function convertToCytoscapeElements(data: ParsedTopologyResponse): Cytosc
 
     // Label with bandwidth or custom label
     if (link.label) {
-      edgeData.label = link.label
+      edgeData['label'] = link.label
     } else if (link.bandwidth) {
-      edgeData.label = link.bandwidth
+      edgeData['label'] = link.bandwidth
     }
 
     // Port info
-    if (fromPort) edgeData.sourcePort = fromPort
-    if (toPort) edgeData.targetPort = toPort
+    if (fromPort) edgeData['sourcePort'] = fromPort
+    if (toPort) edgeData['targetPort'] = toPort
 
     // Line style
     if (link.type === 'dashed') {
-      edgeData.lineStyle = 'dashed'
+      edgeData['lineStyle'] = 'dashed'
     }
 
     // Arrow
     if (link.arrow) {
-      edgeData.arrow = link.arrow
+      edgeData['arrow'] = link.arrow
     }
 
     // VLAN
     if (link.vlan) {
-      edgeData.vlan = Array.isArray(link.vlan) ? link.vlan.join(',') : link.vlan
+      edgeData['vlan'] = Array.isArray(link.vlan) ? link.vlan.join(',') : link.vlan
     }
 
     // Redundancy type
     if (link.redundancy) {
-      edgeData.redundancy = link.redundancy
+      edgeData['redundancy'] = link.redundancy
     }
 
     edges.push({ data: edgeData })
