@@ -18,7 +18,15 @@ export function parseViewBox(svg: SVGSVGElement): ViewBox | null {
   const vb = svg.getAttribute('viewBox')
   if (!vb) return null
   const parts = vb.split(/\s+|,/).map(Number)
-  if (parts.length !== 4 || parts.some(Number.isNaN)) return null
+  if (
+    parts.length !== 4 ||
+    !parts[0] ||
+    !parts[1] ||
+    !parts[2] ||
+    !parts[3] ||
+    parts.some(Number.isNaN)
+  )
+    return null
   return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
 }
 
