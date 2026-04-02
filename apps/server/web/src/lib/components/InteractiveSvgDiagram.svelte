@@ -573,7 +573,7 @@
           // Extract node ID from "node:port" format
           const from = fromRaw.split(':')[0]
           const to = toRaw.split(':')[0]
-          if (from === nodeId || to === nodeId) {
+          if (from !== undefined && to !== undefined && (from === nodeId || to === nodeId)) {
             connectedLinks.push({
               id: link.getAttribute('data-link-id') || '',
               from,
@@ -621,7 +621,11 @@
     allLinks.forEach((link) => {
       const from = (link.getAttribute('data-link-from') || '').split(':')[0]
       const to = (link.getAttribute('data-link-to') || '').split(':')[0]
-      if (memberNodeIds.has(from) || memberNodeIds.has(to)) {
+      if (
+        from !== undefined &&
+        to !== undefined &&
+        (memberNodeIds.has(from) || memberNodeIds.has(to))
+      ) {
         linkCount++
       }
     })
@@ -750,8 +754,8 @@
     const link = svgElement.querySelector(`g.link-group[data-link-id="${linkId}"]`)
     if (!link) return
 
-    const from = (link.getAttribute('data-link-from') || '').split(':')[0]
-    const to = (link.getAttribute('data-link-to') || '').split(':')[0]
+    const from = (link.getAttribute('data-link-from') || '').split(':')[0] ?? ''
+    const to = (link.getAttribute('data-link-to') || '').split(':')[0] ?? ''
     const bandwidth = link.getAttribute('data-link-bandwidth') || ''
 
     hoveredType = 'link'
