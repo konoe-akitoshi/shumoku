@@ -165,7 +165,7 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
 
     // Note: device_id is a valid NetBox API parameter but not in QueryParams type
     const interfaceResp = await this.client.fetchInterfaces({
-      device_id: parseInt(hostId),
+      device_id: parseInt(hostId, 10),
     } as unknown as Parameters<typeof this.client.fetchInterfaces>[0])
 
     return interfaceResp.results.map((iface) => ({
