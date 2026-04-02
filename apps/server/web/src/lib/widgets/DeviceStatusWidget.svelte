@@ -182,9 +182,9 @@
     >()
     for (const node of nodes) {
       const type = node.type || 'unknown'
-      if (!groups.has(type)) groups.set(type, { nodes: [], up: 0, down: 0, unknown: 0 })
-      const g = groups.get(type)!
+      const g = groups.get(type) ?? { nodes: [], up: 0, down: 0, unknown: 0 }
       g.nodes.push(node)
+      groups.set(type, g)
       const s = nodeMetrics[node.id]?.status || 'unknown'
       if (s === 'up') g.up++
       else if (s === 'down') g.down++
@@ -284,8 +284,9 @@
   })
 
   let centerLine1 = $derived.by(() => {
-    if (hoveredSegment) {
-      const ts = typeStatuses.find((t) => t.type === hoveredSegment!.type)
+    if (hoveredSegment && hoveredSegment.type) {
+      const type = hoveredSegment.type
+      const ts = typeStatuses.find((t) => t.type === type)
       if (!ts) return ''
       return String(ts[hoveredSegment.status as 'up' | 'down' | 'unknown'])
     }
@@ -527,7 +528,7 @@
                   stroke-dashoffset={seg.dashOffset}
                   opacity={seg.opacity}
                   class="transition-opacity duration-200 cursor-pointer"
-                  onmouseenter={() => handleSegmentHover(seg.type!, seg.status!)}
+                  onmouseenter={() => seg.type && seg.status && handleSegmentHover(seg.type, seg.status)}
                   onmouseleave={() => { hoveredSegment = null; if (hoveredType) handleTypeHover(hoveredType) }}
                 />
               {:else}

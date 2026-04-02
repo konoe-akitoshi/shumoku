@@ -119,6 +119,11 @@
   })
 
   async function handleSave() {
+    if (!dataSource) {
+      error = 'dataSource is null'
+      return
+    }
+
     if (!formName.trim() || !formUrl.trim()) {
       error = 'Name and URL are required'
       return
@@ -130,7 +135,7 @@
     try {
       const updates = {
         name: formName.trim(),
-        configJson: getConfigFromForm(dataSource!.type),
+        configJson: getConfigFromForm(dataSource.type),
       }
 
       dataSource = await api.dataSources.update(id, updates)

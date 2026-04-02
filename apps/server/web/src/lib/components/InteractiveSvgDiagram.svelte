@@ -484,7 +484,7 @@
       (e: MouseEvent) => {
         // Only clear if we're leaving the SVG entirely
         const related = e.relatedTarget as Element | null
-        if (related && svgElement!.contains(related)) return
+        if (related && svgElement?.contains(related)) return
         if (currentHover) {
           if (currentHover.type === 'node') handleNodeLeave()
           else if (currentHover.type === 'subgraph') handleSubgraphLeave()

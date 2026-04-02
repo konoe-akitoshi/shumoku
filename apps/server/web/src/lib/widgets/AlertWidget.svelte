@@ -219,10 +219,13 @@
 
   function emitPinnedHighlight() {
     if (!pinnedAlert?.host) return
+    const host = pinnedAlert.host
+    const severity = pinnedAlert.severity
+
     forEachTopology((tid) => emitClearHighlight(tid, id))
     forEachTopology((tid) =>
-      emitHighlightNodes(tid, [pinnedAlert!.host!], {
-        highlightColor: SEVERITY_HIGHLIGHT_COLORS[pinnedAlert!.severity],
+      emitHighlightNodes(tid, [host], {
+        highlightColor: SEVERITY_HIGHLIGHT_COLORS[severity],
         sourceWidgetId: id,
       }),
     )
