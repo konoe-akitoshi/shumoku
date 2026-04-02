@@ -149,12 +149,29 @@ export class TopologyService {
    * Create a new topology
    * contentJson should be NetworkGraph JSON
    */
-  async create(input: TopologyInput): Promise<Topology> {
+  async create({
+    name,
+    contentJson,
+    topologySourceId,
+    metricsSourceId,
+    mappingJson,
+  }: TopologyInput): Promise<Topology> {
     // Validate content by parsing it
-    this.parseContent(input.contentJson)
+    this.parseContent(contentJson)
 
     const id = await generateId()
     const now = timestamp()
+
+    const topology: Topology = {
+      id,
+      name,
+      contentJson,
+      topologySourceId,
+      metricsSourceId,
+      mappingJson,
+      createdAt: now,
+      updatedAt: now,
+    }
 
     this.db
       .prepare(
@@ -163,11 +180,11 @@ export class TopologyService {
       )
       .run(
         id,
-        input.name,
-        input.contentJson,
-        input.topologySourceId || null,
-        input.metricsSourceId || null,
-        input.mappingJson || null,
+        name,
+        contentJson,
+        topologySourceId || null,
+        metricsSourceId || null,
+        mappingJson || null,
         now,
         now,
       )
@@ -176,7 +193,7 @@ export class TopologyService {
     this.cache.delete(id)
     this.renderCache.delete(id)
 
-    return this.get(id)!
+    return topology
   }
 
   /**
@@ -309,8 +326,9 @@ export class TopologyService {
    */
   async getParsed(id: string): Promise<ParsedTopology | null> {
     // Check cache first
-    if (this.cache.has(id)) {
-      return this.cache.get(id)!
+    const cache = this.cache.get(id)
+    if (cache) {
+      return cache
     }
 
     // If there's a cached error, skip re-parse (cleared on content update)
@@ -431,8 +449,8 @@ export class TopologyService {
       nodes[node.id] = { status: 'unknown' }
     }
 
-    for (let i = 0; i < graph.links.length; i++) {
-      const linkId = graph.links[i].id || `link-${i}`
+    for (const [i, link] of graph.links.entries()) {
+      const linkId = link.id || `link-${i}`
       links[linkId] = { status: 'unknown' }
     }
 
