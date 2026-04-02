@@ -190,7 +190,7 @@ export function findBestInterfaceMatch(
   if (bestScore >= threshold) return bestCandidate
 
   // Fallback: single candidate → assume it's the same physical port
-  if (opts.singleCandidateFallback && candidates.length === 1) {
+  if (opts.singleCandidateFallback && candidates[0]) {
     return candidates[0]
   }
 
