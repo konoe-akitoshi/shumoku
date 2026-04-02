@@ -152,8 +152,8 @@ export class TopologyManager {
       nodes[node.id] = { status: 'unknown' }
     }
 
-    for (let i = 0; i < graph.links.length; i++) {
-      const linkId = graph.links[i].id || `link-${i}`
+    for (const [i, link] of graph.links.entries()) {
+      const linkId = link.id || `link-${i}`
       links[linkId] = { status: 'unknown' }
     }
 
