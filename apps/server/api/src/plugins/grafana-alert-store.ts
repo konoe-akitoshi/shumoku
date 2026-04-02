@@ -104,10 +104,10 @@ export class GrafanaAlertStore implements AlertStoreService {
     `)
 
     for (const a of payload.alerts) {
-      const severity = mapSeverity(a.labels.severity)
+      const severity = mapSeverity(a.labels['severity'])
       const title = buildTitle(a.labels)
-      const description = a.annotations?.description || a.annotations?.summary || null
-      const host = a.labels.hostname || a.labels.instance || a.labels.host || null
+      const description = a.annotations?.['description'] || a.annotations?.['summary'] || null
+      const host = a.labels['hostname'] || a.labels['instance'] || a.labels['host'] || null
       const status = a.status === 'firing' ? 'active' : 'resolved'
       const startedAt = new Date(a.startsAt).getTime()
       const endedAt = a.endsAt ? new Date(a.endsAt).getTime() : null

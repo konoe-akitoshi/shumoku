@@ -406,7 +406,7 @@ export class Server {
 
     // Load external plugins from config file
     const pluginsConfigPath =
-      process.env.SHUMOKU_PLUGINS_CONFIG || path.join(this.config.server.dataDir, 'plugins.yaml')
+      process.env['SHUMOKU_PLUGINS_CONFIG'] || path.join(this.config.server.dataDir, 'plugins.yaml')
     await loadPluginsFromConfig(pluginsConfigPath)
 
     initDatabase(this.config.server.dataDir)
