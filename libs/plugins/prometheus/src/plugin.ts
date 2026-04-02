@@ -86,7 +86,7 @@ export class PrometheusPlugin
     if (this.config.preset === 'custom' && this.config.customMetrics) {
       this.metrics = this.config.customMetrics
     } else {
-      this.metrics = METRIC_PRESETS[this.config.preset] || METRIC_PRESETS.snmp
+      this.metrics = (METRIC_PRESETS[this.config.preset] || METRIC_PRESETS['snmp']) ?? null
     }
   }
 
@@ -192,8 +192,9 @@ export class PrometheusPlugin
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
       // Get instance via monitoredNodeId -> node mapping
       let instance: string | undefined
-      if (linkMapping.monitoredNodeId && mapping.nodes?.[linkMapping.monitoredNodeId]) {
-        instance = mapping.nodes[linkMapping.monitoredNodeId].hostId
+      const monitoredNodeId = linkMapping.monitoredNodeId
+      if (monitoredNodeId && mapping.nodes?.[monitoredNodeId]) {
+        instance = mapping.nodes[monitoredNodeId].hostId
       }
 
       const interfaceName = linkMapping.interface
@@ -363,9 +364,10 @@ export class PrometheusPlugin
         const metadataUrl = '/api/v1/metadata'
         const metadataResponse =
           await this.apiRequest<Record<string, Array<{ type: string; help: string }>>>(metadataUrl)
+
         for (const [name, entries] of Object.entries(metadataResponse)) {
-          if (entries.length > 0) {
-            metadataMap[name] = entries[0]
+          if (entries[0]) {
+            metadataMap[name]
           }
         }
       } catch {
@@ -646,8 +648,8 @@ export class PrometheusPlugin
     const upMetric = this.metrics.upMetric || 'up'
 
     const buildQuery = (metric: string) => {
-      if (this.config!.jobFilter) {
-        return `${metric}{${hostLabel}="${instance}",job="${this.config!.jobFilter}"}`
+      if (this.config?.jobFilter) {
+        return `${metric}{${hostLabel}="${instance}",job="${this.config.jobFilter}"}`
       }
       return `${metric}{${hostLabel}="${instance}"}`
     }
@@ -701,7 +703,7 @@ export class PrometheusPlugin
 
     try {
       const inResult = await this.instantQuery(inQuery)
-      if (inResult.result.length > 0) {
+      if (inResult.result[0]) {
         inBytesPerSec = parseFloat(inResult.result[0].value[1]) || 0
       }
     } catch {
@@ -710,7 +712,7 @@ export class PrometheusPlugin
 
     try {
       const outResult = await this.instantQuery(outQuery)
-      if (outResult.result.length > 0) {
+      if (outResult.result[0]) {
         outBytesPerSec = parseFloat(outResult.result[0].value[1]) || 0
       }
     } catch {

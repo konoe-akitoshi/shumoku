@@ -444,8 +444,8 @@ export class ZabbixPlugin
     if (minIndex === -1) return []
 
     const result: number[] = []
-    for (let i = minIndex; i < severityOrder.length; i++) {
-      result.push(...severityToZabbix[severityOrder[i]])
+    for (const o of severityOrder.slice(minIndex)) {
+      result.push(...severityToZabbix[o])
     }
     return result
   }
@@ -537,7 +537,7 @@ export class ZabbixPlugin
   private static extractInterfaceName(itemName: string): string {
     // "Interface {name}({alias}): ..." or "Interface {name}: ..."
     const match = itemName.match(/^Interface\s+(.+?)(?:\(.*?\))?:\s/)
-    return match ? match[1].trim() : itemName
+    return match?.[1] ? match[1].trim() : itemName
   }
 
   /**
