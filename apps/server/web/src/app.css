@@ -16,8 +16,8 @@
   --color-info: #3b82f6;
 
   /* Font families */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 
   /* shadcn-svelte color mappings */
   --color-background: var(--background);
