@@ -62,9 +62,7 @@
   })
 
   let overallHealthy = $derived(
-    health !== null &&
-      health.api &&
-      (health.dataSources.total === 0 || health.dataSources.connected > 0),
+    health?.api && (health.dataSources.total === 0 || health.dataSources.connected > 0),
   )
 
   function handleSettings() {
