@@ -83,7 +83,7 @@ export function normalizeInterfaceName(name: string): NormalizedInterface {
 
   if (!prefix) {
     const m = lower.match(/^([a-z][a-z-]*)(.*)$/)
-    if (m) {
+    if (m?.[1] && m[2]) {
       prefix = m[1]
       rest = m[2]
     } else {
@@ -99,15 +99,16 @@ export function normalizeInterfaceName(name: string): NormalizedInterface {
 
   if (rest) {
     const segments = rest.split('/')
-    for (let i = 0; i < segments.length; i++) {
-      const dotParts = segments[i].split('.')
+    for (const [i, seg] of segments.entries()) {
+      const dotParts = seg.split('.')
+      if (!dotParts[0]) continue
       const main = parseInt(dotParts[0], 10)
-      if (!isNaN(main)) numbers.push(main)
+      if (!Number.isNaN(main)) numbers.push(main)
 
       // Sub-interface: only on last segment
-      if (i === segments.length - 1 && dotParts.length > 1) {
+      if (i === segments.length - 1 && dotParts.length > 1 && dotParts[1]) {
         const s = parseInt(dotParts[1], 10)
-        if (!isNaN(s)) sub = s
+        if (!Number.isNaN(s)) sub = s
       }
     }
   }
