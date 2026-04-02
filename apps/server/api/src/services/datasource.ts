@@ -154,6 +154,7 @@ export class DataSourceService {
       )
       .run(id, input.name, input.type, configJson, now, now)
 
+    // biome-ignore lint/style/noNonNullAssertion: temporary ignored: related #65
     return this.get(id)!
   }
 
