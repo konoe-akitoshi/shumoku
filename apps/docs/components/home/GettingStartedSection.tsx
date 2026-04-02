@@ -4,8 +4,8 @@ import { ArrowRightIcon } from './icons'
 import { buttonStyles, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
-export function GettingStartedSection({ locale }: { locale: string }) {
-  const t = homeTranslations[locale as Locale]?.gettingStarted ?? homeTranslations.en.gettingStarted
+export function GettingStartedSection({ locale }: { locale: Locale }) {
+  const t = homeTranslations[locale]?.gettingStarted ?? homeTranslations.en.gettingStarted
 
   return (
     <section className={cn('relative overflow-hidden', sectionStyles.padding)}>

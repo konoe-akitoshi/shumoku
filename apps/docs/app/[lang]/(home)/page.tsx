@@ -9,8 +9,9 @@ import {
   IntegrationsSection,
   WhySection,
 } from '@/components/home'
+import type { Locale } from '@/components/home/translations'
 
-export default async function HomePage({ params }: { params: Promise<{ lang: string }> }) {
+export default async function HomePage({ params }: { params: Promise<{ lang: Locale }> }) {
   const { lang } = await params
 
   return (
