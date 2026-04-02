@@ -182,7 +182,7 @@ function createMappingStore() {
             ifName = item.interfaceName
           } else {
             const match = item.name.match(/^(.+?)\s*-\s*(Inbound|Outbound)$/i)
-            ifName = match ? match[1].trim() : item.name
+            ifName = match?.[1] ? match[1].trim() : item.name
           }
           if (!interfaceNames.has(ifName)) {
             interfaceNames.add(ifName)
