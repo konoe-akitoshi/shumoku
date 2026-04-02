@@ -283,7 +283,7 @@
       maxY = Math.max(maxY, bbox.y + bbox.height)
     }
 
-    if (!isFinite(minX)) return
+    if (!Number.isFinite(minX)) return
 
     const contentW = maxX - minX
     const contentH = maxY - minY
