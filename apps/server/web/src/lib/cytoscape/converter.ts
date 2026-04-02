@@ -110,8 +110,7 @@ export function convertToCytoscapeElements(data: ParsedTopologyResponse): Cytosc
   }
 
   // Convert links to edges
-  for (let i = 0; i < data.graph.links.length; i++) {
-    const link = data.graph.links[i]
+  for (const [i, link] of data.graph.links.entries()) {
     const linkId = link.id || `link-${i}`
 
     // Parse endpoints
