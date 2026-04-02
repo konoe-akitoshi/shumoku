@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { XIcon } from 'phosphor-svelte'
-  import { GearSixIcon } from 'phosphor-svelte'
-  import { dashboardEditMode } from '$lib/stores/dashboards'
+  import { GearSixIcon, XIcon } from 'phosphor-svelte'
   import type { Snippet } from 'svelte'
+  import { dashboardEditMode } from '$lib/stores/dashboards'
 
   interface Props {
     title: string

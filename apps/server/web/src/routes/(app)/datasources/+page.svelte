@@ -1,20 +1,22 @@
 <script lang="ts">
+  import {
+    ChartLineIcon,
+    CubeIcon,
+    DatabaseIcon,
+    PlusIcon,
+    TreeStructureIcon,
+  } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
-  import { dataSources, dataSourcesList, dataSourcesLoading, dataSourcesError } from '$lib/stores'
-  import type {
-    DataSource,
-    DataSourceType,
-    DataSourcePluginInfo,
-    ConnectionTestResult,
-  } from '$lib/types'
-  import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
-  import { PlusIcon } from 'phosphor-svelte'
-  import { DatabaseIcon } from 'phosphor-svelte'
-  import { ChartLineIcon } from 'phosphor-svelte'
-  import { TreeStructureIcon } from 'phosphor-svelte'
-  import { CubeIcon } from 'phosphor-svelte'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { dataSources, dataSourcesError, dataSourcesList, dataSourcesLoading } from '$lib/stores'
+  import type {
+    ConnectionTestResult,
+    DataSource,
+    DataSourcePluginInfo,
+    DataSourceType,
+  } from '$lib/types'
 
   let showCreateModal = $state(false)
   let testingId = $state<string | null>(null)
@@ -434,13 +436,22 @@
                     class="p-2 rounded-lg bg-theme-bg group-hover:bg-primary/10 transition-colors"
                   >
                     {#if plugin.type === 'zabbix'}
-                      <ChartLineIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
+                      <ChartLineIcon
+                        size={24}
+                        class="text-theme-text-muted group-hover:text-primary"
+                      />
                     {:else if plugin.type === 'netbox'}
                       <CubeIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
                     {:else if plugin.type === 'prometheus'}
-                      <ChartLineIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
+                      <ChartLineIcon
+                        size={24}
+                        class="text-theme-text-muted group-hover:text-primary"
+                      />
                     {:else}
-                      <DatabaseIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
+                      <DatabaseIcon
+                        size={24}
+                        class="text-theme-text-muted group-hover:text-primary"
+                      />
                     {/if}
                   </div>
                   <div class="flex-1 min-w-0">

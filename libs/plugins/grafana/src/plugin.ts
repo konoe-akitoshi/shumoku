@@ -6,11 +6,11 @@
  */
 
 import {
-  addHttpWarning,
   type Alert,
   type AlertQueryOptions,
   type AlertSeverity,
   type AlertsCapable,
+  addHttpWarning,
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
@@ -188,19 +188,22 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
           }
           return true
         })
-        .map((a) => ({
-            id: a.fingerprint,
-            severity: mapSeverity(a.labels.severity),
-            title: buildTitle(a.labels),
-            description: a.annotations?.description || a.annotations?.summary,
-            host: a.labels.hostname || a.labels.instance || a.labels.host,
-            startTime: new Date(a.startsAt).getTime(),
-            endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
-            status: a.status.state === 'active' ? 'active' : 'resolved',
-            source: 'grafana' as const,
-            url: a.generatorURL,
-            labels: filterLabels(a.labels),
-          }) satisfies Alert)
+        .map(
+          (a) =>
+            ({
+              id: a.fingerprint,
+              severity: mapSeverity(a.labels.severity),
+              title: buildTitle(a.labels),
+              description: a.annotations?.description || a.annotations?.summary,
+              host: a.labels.hostname || a.labels.instance || a.labels.host,
+              startTime: new Date(a.startsAt).getTime(),
+              endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
+              status: a.status.state === 'active' ? 'active' : 'resolved',
+              source: 'grafana' as const,
+              url: a.generatorURL,
+              labels: filterLabels(a.labels),
+            }) satisfies Alert,
+        )
 
       if (options?.minSeverity) {
         const minOrder = SEVERITY_ORDER[options.minSeverity]

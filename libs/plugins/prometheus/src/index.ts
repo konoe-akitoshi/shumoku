@@ -1,10 +1,10 @@
 export { PrometheusPlugin } from './plugin.js'
 export type {
-  PrometheusMetricPreset,
   PrometheusCustomMetrics,
-  PrometheusPluginConfig,
-  PrometheusNodeMapping,
   PrometheusLinkMapping,
+  PrometheusMetricPreset,
+  PrometheusNodeMapping,
+  PrometheusPluginConfig,
 } from './types.js'
 
 import type { PluginRegistryInterface } from '@shumoku/core'

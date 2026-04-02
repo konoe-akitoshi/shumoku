@@ -13,7 +13,14 @@
   "bugs": {
     "url": "https://github.com/konoe-akitoshi/shumoku/issues"
   },
-  "keywords": ["grafana", "network", "topology", "diagram", "shumoku", "plugin"],
+  "keywords": [
+    "grafana",
+    "network",
+    "topology",
+    "diagram",
+    "shumoku",
+    "plugin"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -24,7 +31,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

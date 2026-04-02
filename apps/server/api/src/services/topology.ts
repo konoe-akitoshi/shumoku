@@ -7,12 +7,17 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import type { LayoutResult, NetworkGraph, IconDimensions } from '@shumoku/core'
-import { sampleNetwork, YamlParser, HierarchicalParser, createMemoryFileResolver } from '@shumoku/core'
+import type { IconDimensions, LayoutResult, NetworkGraph } from '@shumoku/core'
+import {
+  createMemoryFileResolver,
+  HierarchicalParser,
+  sampleNetwork,
+  YamlParser,
+} from '@shumoku/core'
+import { collectIconUrls, resolveIconDimensionsForGraph } from '@shumoku/renderer-svg'
+import { generateId, getDatabase, timestamp } from '../db/index.js'
 import { BunHierarchicalLayout } from '../layout.js'
-import { resolveIconDimensionsForGraph, collectIconUrls } from '@shumoku/renderer-svg'
-import { getDatabase, generateId, timestamp } from '../db/index.js'
-import type { Topology, TopologyInput, MetricsData, MetricsMapping } from '../types.js'
+import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
 
 interface TopologyRow {
   id: string
@@ -292,9 +297,9 @@ export class TopologyService {
    * Get a topology by its share token
    */
   getByShareToken(token: string): Topology | null {
-    const row = this.db
-      .query('SELECT * FROM topologies WHERE share_token = ?')
-      .get(token) as TopologyRow | undefined
+    const row = this.db.query('SELECT * FROM topologies WHERE share_token = ?').get(token) as
+      | TopologyRow
+      | undefined
     return row ? rowToTopology(row) : null
   }
 

@@ -1,9 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
-  import type { DataSource, DataSourceType, ConnectionTestResult } from '$lib/types'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -12,6 +7,11 @@
     WarningIcon,
     XCircleIcon,
   } from 'phosphor-svelte'
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
+  import { api } from '$lib/api'
+  import type { ConnectionTestResult, DataSource, DataSourceType } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
   let id = $derived($page.params.id!)

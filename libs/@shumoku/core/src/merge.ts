@@ -455,7 +455,9 @@ export function mergeNetworkGraphs(
       }
 
       // Update children references if they were remapped
-      const updatedChildren = subgraph.children?.map((childId) => localIdRemap.get(childId) ?? childId)
+      const updatedChildren = subgraph.children?.map(
+        (childId) => localIdRemap.get(childId) ?? childId,
+      )
 
       mergedSubgraphs.set(subgraphId, {
         ...subgraph,
@@ -473,8 +475,16 @@ export function mergeNetworkGraphs(
   const firstGraph = graphs[0]
   const mergedGraph: NetworkGraph = {
     version: firstGraph?.version ?? '1.0',
-    name: graphs.map((g) => g.name).filter(Boolean).join(' + ') || 'Merged Network',
-    description: graphs.map((g) => g.description).filter(Boolean).join('\n\n') || undefined,
+    name:
+      graphs
+        .map((g) => g.name)
+        .filter(Boolean)
+        .join(' + ') || 'Merged Network',
+    description:
+      graphs
+        .map((g) => g.description)
+        .filter(Boolean)
+        .join('\n\n') || undefined,
     nodes: Array.from(mergedNodes.values()),
     links: mergedLinks,
     subgraphs: mergedSubgraphs.size > 0 ? Array.from(mergedSubgraphs.values()) : undefined,

@@ -6,7 +6,7 @@
 import type { Database } from 'bun:sqlite'
 import type { Alert, AlertQueryOptions, AlertSeverity } from '@shumoku/core'
 import type { AlertStoreService, GrafanaWebhookPayload } from 'shumoku-plugin-grafana'
-import { mapSeverity, buildTitle, filterLabels, SEVERITY_ORDER } from 'shumoku-plugin-grafana'
+import { buildTitle, filterLabels, mapSeverity, SEVERITY_ORDER } from 'shumoku-plugin-grafana'
 import { getDatabase } from '../db/index.js'
 
 interface GrafanaAlertRow {

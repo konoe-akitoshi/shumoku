@@ -16,14 +16,17 @@ export interface DataSourcePluginInfo {
   configSchema?: {
     type: 'object'
     required?: string[]
-    properties: Record<string, {
-      type: string
-      title?: string
-      description?: string
-      format?: string
-      default?: unknown
-      enum?: string[]
-    }>
+    properties: Record<
+      string,
+      {
+        type: string
+        title?: string
+        description?: string
+        format?: string
+        default?: unknown
+        enum?: string[]
+      }
+    >
   }
 }
 

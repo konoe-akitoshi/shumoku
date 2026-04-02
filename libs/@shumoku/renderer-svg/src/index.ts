@@ -8,9 +8,8 @@
 
 import * as svg from './svg.js'
 
-export { svg }
-export { SVGRenderer } from './svg.js'
-
+// Brand
+export { BRANDING_ICON_SVG, LOGO_PATHS, LOGO_VIEWBOX } from './brand.js'
 export type { CDNConfig, IconDimensions, ResolvedIconDimensions } from './cdn-icons.js'
 // CDN icon utilities
 export {
@@ -40,9 +39,7 @@ export {
   renderSvg,
 } from './pipeline.js'
 // Re-export collectIconUrls for server-side icon dimension resolution
-export { collectIconUrls } from './svg.js'
-// Brand
-export { BRANDING_ICON_SVG, LOGO_PATHS, LOGO_VIEWBOX } from './brand.js'
+export { collectIconUrls, SVGRenderer } from './svg.js'
 // Types
 export type {
   DataAttributeOptions,
@@ -55,3 +52,4 @@ export type {
   PortInfo,
   RenderMode,
 } from './types.js'
+export { svg }

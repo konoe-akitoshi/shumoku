@@ -3,15 +3,14 @@
  * CRUD endpoints for topology management
  */
 
-import { Hono } from 'hono'
-import { TopologyService } from '../services/topology.js'
-import { DataSourceService } from '../services/datasource.js'
-import { TopologySourcesService } from '../services/topology-sources.js'
-import type { TopologyInput, MetricsMapping } from '../types.js'
-import { renderEmbeddable, type EmbeddableRenderOutput } from '@shumoku/renderer-svg'
 import { buildHierarchicalSheets, mergeWithOverlays, type OverlayConfig } from '@shumoku/core'
+import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
+import { Hono } from 'hono'
 import { BunHierarchicalLayout } from '../layout.js'
-import type { TopologySourceMergeConfig } from '../types.js'
+import { DataSourceService } from '../services/datasource.js'
+import { TopologyService } from '../services/topology.js'
+import { TopologySourcesService } from '../services/topology-sources.js'
+import type { MetricsMapping, TopologyInput, TopologySourceMergeConfig } from '../types.js'
 
 /**
  * Build render output from a parsed topology
@@ -396,7 +395,10 @@ export function createTopologiesApi(): Hono {
       )
 
       // Collect successful fetches
-      const successfulFetches: Array<{ sourceId: string; graph: import('@shumoku/core').NetworkGraph }> = []
+      const successfulFetches: Array<{
+        sourceId: string
+        graph: import('@shumoku/core').NetworkGraph
+      }> = []
       const failedSources: Array<{ sourceId: string; error: string }> = []
 
       for (const result of fetchResults) {
@@ -410,17 +412,21 @@ export function createTopologiesApi(): Hono {
             'links',
           )
         } else {
-          const error = result.reason instanceof Error ? result.reason.message : String(result.reason)
+          const error =
+            result.reason instanceof Error ? result.reason.message : String(result.reason)
           failedSources.push({ sourceId: 'unknown', error })
           console.error('[sync-from-source] Failed to fetch from source:', error)
         }
       }
 
       if (successfulFetches.length === 0) {
-        return c.json({
-          error: 'Failed to fetch topology from any source',
-          failedSources,
-        }, 500)
+        return c.json(
+          {
+            error: 'Failed to fetch topology from any source',
+            failedSources,
+          },
+          500,
+        )
       }
 
       // Merge graphs if multiple sources
@@ -446,8 +452,9 @@ export function createTopologiesApi(): Hono {
         }
 
         // Find base source (first one marked as isBase, or first source)
-        const baseSourceId = Array.from(sourceConfigs.entries()).find(([, cfg]) => cfg.isBase)?.[0]
-          ?? successfulFetches[0].sourceId
+        const baseSourceId =
+          Array.from(sourceConfigs.entries()).find(([, cfg]) => cfg.isBase)?.[0] ??
+          successfulFetches[0].sourceId
         const baseIndex = successfulFetches.findIndex((f) => f.sourceId === baseSourceId)
 
         // Build overlay configurations
@@ -468,7 +475,10 @@ export function createTopologiesApi(): Hono {
         }
 
         console.log('[sync-from-source] Base source:', baseSourceId)
-        console.log('[sync-from-source] Overlay configs:', overlayConfigs.map((o) => `${o.sourceId}(${o.match})`).join(', '))
+        console.log(
+          '[sync-from-source] Overlay configs:',
+          overlayConfigs.map((o) => `${o.sourceId}(${o.match})`).join(', '),
+        )
 
         // Use configurable merge
         const mergeResult = mergeWithOverlays(
@@ -496,7 +506,10 @@ export function createTopologiesApi(): Hono {
             '[sync-from-source] Merge skipped',
             mergeResult.skippedNodes.length,
             'nodes:',
-            mergeResult.skippedNodes.slice(0, 5).map((n) => n.nodeId).join(', '),
+            mergeResult.skippedNodes
+              .slice(0, 5)
+              .map((n) => n.nodeId)
+              .join(', '),
           )
         }
       }

@@ -4,43 +4,42 @@
  * Data source plugin system for Shumoku.
  */
 
-export * from './types.js'
-export * from './registry.js'
+export { GrafanaPlugin } from 'shumoku-plugin-grafana'
+// Re-export plugin classes from bundled plugins
+export { NetBoxPlugin } from 'shumoku-plugin-netbox'
+export { PrometheusPlugin } from 'shumoku-plugin-prometheus'
+export { ZabbixPlugin } from 'shumoku-plugin-zabbix'
 export {
-  // Types
-  type PluginEntry,
-  type LoadedPluginInfo,
   type AddPluginResult,
-  // Functions
-  loadPluginsFromConfig,
-  reloadPlugins,
   addPlugin,
-  removePlugin,
-  setPluginEnabled,
-  installPluginFromZip,
-  installPluginFromUrl,
   getAllPlugins,
+  getConfigPath,
   getLoadedPlugins,
   getPluginManifest,
   getPluginsDir,
-  getConfigPath,
-  isExternalPlugin,
+  installPluginFromUrl,
+  installPluginFromZip,
   isBundledPlugin,
+  isExternalPlugin,
+  type LoadedPluginInfo,
+  // Functions
+  loadPluginsFromConfig,
   markBundledPlugins,
+  // Types
+  type PluginEntry,
+  reloadPlugins,
+  removePlugin,
+  setPluginEnabled,
 } from './loader.js'
+export * from './registry.js'
+export * from './types.js'
 
-// Re-export plugin classes from bundled plugins
-export { NetBoxPlugin } from 'shumoku-plugin-netbox'
-export { ZabbixPlugin } from 'shumoku-plugin-zabbix'
-export { PrometheusPlugin } from 'shumoku-plugin-prometheus'
-export { GrafanaPlugin } from 'shumoku-plugin-grafana'
-
+import { register as registerGrafana } from 'shumoku-plugin-grafana'
+import { register as registerNetBox } from 'shumoku-plugin-netbox'
+import { register as registerPrometheus } from 'shumoku-plugin-prometheus'
+import { register as registerZabbix } from 'shumoku-plugin-zabbix'
 // Register bundled plugins
 import { pluginRegistry } from './registry.js'
-import { register as registerNetBox } from 'shumoku-plugin-netbox'
-import { register as registerZabbix } from 'shumoku-plugin-zabbix'
-import { register as registerPrometheus } from 'shumoku-plugin-prometheus'
-import { register as registerGrafana } from 'shumoku-plugin-grafana'
 
 export function registerBundledPlugins(): void {
   registerNetBox(pluginRegistry)

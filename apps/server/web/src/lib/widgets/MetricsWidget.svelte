@@ -1,7 +1,7 @@
 <script lang="ts">
+  import { ArrowDownIcon, ArrowUpIcon, ChartLineIcon } from 'phosphor-svelte'
   import { metricsData } from '$lib/stores/metrics'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import { ArrowDownIcon, ArrowUpIcon, ChartLineIcon } from 'phosphor-svelte'
 
   interface Props {
     config: {
@@ -31,10 +31,11 @@
         return nodeStatuses.filter((n) => n.status === 'down').length
       case 'links-healthy':
         return linkStatuses.filter((l) => l.status === 'up').length
-      case 'utilization':
+      case 'utilization': {
         if (linkStatuses.length === 0) return 0
         const totalUtil = linkStatuses.reduce((sum, l) => sum + (l.utilization || 0), 0)
         return Math.round(totalUtil / linkStatuses.length)
+      }
       default:
         return 0
     }

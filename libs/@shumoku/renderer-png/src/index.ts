@@ -12,8 +12,8 @@ import type { PreparedRender, PrepareOptions } from '@shumoku/renderer-svg'
 import { prepareRender } from '@shumoku/renderer-svg'
 import * as png from './png.js'
 
-export { png }
 export type { PngOptions } from './png.js'
+export { png }
 
 /**
  * Options for PNG rendering

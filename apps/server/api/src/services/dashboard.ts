@@ -145,9 +145,9 @@ export class DashboardService {
    * Get a dashboard by its share token
    */
   getByShareToken(token: string): Dashboard | null {
-    const row = this.db
-      .query('SELECT * FROM dashboards WHERE share_token = ?')
-      .get(token) as DashboardRow | undefined
+    const row = this.db.query('SELECT * FROM dashboards WHERE share_token = ?').get(token) as
+      | DashboardRow
+      | undefined
     return row ? rowToDashboard(row) : null
   }
 }

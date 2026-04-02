@@ -1,8 +1,8 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
   import { auth } from '$lib/api'
   import Logo from '$lib/components/Logo.svelte'
-  import { goto } from '$app/navigation'
-  import { onMount } from 'svelte'
 
   let password = ''
   let confirmPassword = ''

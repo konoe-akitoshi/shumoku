@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import Logo from '$lib/components/Logo.svelte'
   import { page } from '$app/stores'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
+  import Logo from '$lib/components/Logo.svelte'
 
   let name = ''
   let loading = true

@@ -3,8 +3,8 @@
  * NetBox data source plugin and API client for Shumoku
  */
 
-// Plugin class
-export { NetBoxPlugin } from './plugin.js'
+// Types
+export type { LegendSettings } from '@shumoku/core/models'
 
 // API Client
 export { NetBoxClient, type QueryParams } from './client.js'
@@ -21,9 +21,8 @@ export {
   convertToNetworkGraphWithVMs,
   toYaml,
 } from './converter.js'
-
-// Types
-export type { LegendSettings } from '@shumoku/core/models'
+// Plugin class
+export { NetBoxPlugin } from './plugin.js'
 export type {
   CableStyle,
   ConnectionData,

@@ -4,15 +4,15 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import { getDatabase, generateId, timestamp } from '../db/index.js'
+import crypto from 'node:crypto'
+import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type {
-  TopologyDataSource,
-  TopologyDataSourceInput,
   DataSource,
   DataSourcePurpose,
   SyncMode,
+  TopologyDataSource,
+  TopologyDataSourceInput,
 } from '../types.js'
-import crypto from 'node:crypto'
 
 interface TopologyDataSourceRow {
   id: string

@@ -6,8 +6,8 @@
  */
 
 import type {
-  DataSourcePlugin,
   DataSourceCapability,
+  DataSourcePlugin,
   PluginFactory,
   PluginRegistration,
 } from '@shumoku/core'

@@ -1,5 +1,5 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 /* Custom dark variant */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -160,7 +160,9 @@ body {
 
 .btn:focus {
   outline: none;
-  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-primary);
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 4px var(--color-primary);
 }
 
 .btn:disabled {
@@ -337,7 +339,7 @@ body {
 }
 
 .toggle::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 2px;
   left: 2px;
@@ -365,21 +367,38 @@ body {
 
 .toggle:focus {
   outline: none;
-  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-primary);
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 4px var(--color-primary);
 }
 
 /* Theme color utilities */
-.bg-theme-bg { background-color: var(--color-bg); }
-.bg-theme-bg-elevated { background-color: var(--color-bg-elevated); }
-.bg-theme-bg-canvas { background-color: var(--color-bg-canvas); }
-.text-theme-text { color: var(--color-text); }
-.text-theme-text-muted { color: var(--color-text-muted); }
-.text-theme-text-emphasis { color: var(--color-text-emphasis); }
-.border-theme-border { border-color: var(--border); }
+.bg-theme-bg {
+  background-color: var(--color-bg);
+}
+.bg-theme-bg-elevated {
+  background-color: var(--color-bg-elevated);
+}
+.bg-theme-bg-canvas {
+  background-color: var(--color-bg-canvas);
+}
+.text-theme-text {
+  color: var(--color-text);
+}
+.text-theme-text-muted {
+  color: var(--color-text-muted);
+}
+.text-theme-text-emphasis {
+  color: var(--color-text-emphasis);
+}
+.border-theme-border {
+  border-color: var(--border);
+}
 
 /* Print styles — show only the pure SVG topology */
 @media print {
-  html, body {
+  html,
+  body {
     overflow: visible !important;
     background: white !important;
     color: black !important;

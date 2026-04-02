@@ -3,18 +3,18 @@
  * Combines all API endpoints
  */
 
+import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 import { Hono } from 'hono'
+import { authMiddleware } from '../middleware/auth.js'
+import { createAuthApi } from './auth.js'
 import { createDashboardsApi } from './dashboards.js'
 import { createDataSourcesApi } from './datasources.js'
 import { createPluginsApi } from './plugins.js'
-import { createTopologiesApi } from './topologies.js'
 import { createSettingsApi } from './settings.js'
+import { createShareApi } from './share.js'
+import { createTopologiesApi } from './topologies.js'
 import { topologySourcesApi } from './topology-sources.js'
 import { webhooksApi } from './webhooks.js'
-import { createAuthApi } from './auth.js'
-import { createShareApi } from './share.js'
-import { authMiddleware } from '../middleware/auth.js'
-import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 
 export function createApiRouter(): Hono {
   const api = new Hono()

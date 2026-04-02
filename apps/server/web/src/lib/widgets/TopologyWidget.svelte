@@ -1,24 +1,24 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
-  import { api } from '$lib/api'
-  import type { Topology } from '$lib/types'
-  import { dashboardStore, dashboardEditMode } from '$lib/stores/dashboards'
-  import { widgetEvents, type WidgetEvent } from '$lib/stores/widgetEvents'
-  import {
-    metricsStore,
-    metricsData,
-    liveUpdatesEnabled,
-    showTrafficFlow,
-    showNodeStatus,
-  } from '$lib/stores'
-  import { WeathermapController } from '$lib/weathermap'
-  import {
-    highlightNodes,
-    highlightByAttribute,
-    clearHighlight as clearHighlightUtil,
-  } from '$lib/highlight'
-  import WidgetWrapper from './WidgetWrapper.svelte'
   import { ArrowSquareOutIcon, SpinnerIcon, TreeStructureIcon } from 'phosphor-svelte'
+  import { onDestroy, onMount } from 'svelte'
+  import { api } from '$lib/api'
+  import {
+    clearHighlight as clearHighlightUtil,
+    highlightByAttribute,
+    highlightNodes,
+  } from '$lib/highlight'
+  import {
+    liveUpdatesEnabled,
+    metricsData,
+    metricsStore,
+    showNodeStatus,
+    showTrafficFlow,
+  } from '$lib/stores'
+  import { dashboardEditMode, dashboardStore } from '$lib/stores/dashboards'
+  import { type WidgetEvent, widgetEvents } from '$lib/stores/widgetEvents'
+  import type { Topology } from '$lib/types'
+  import { WeathermapController } from '$lib/weathermap'
+  import WidgetWrapper from './WidgetWrapper.svelte'
 
   interface SheetInfo {
     id: string

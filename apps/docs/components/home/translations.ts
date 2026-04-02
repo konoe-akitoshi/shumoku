@@ -118,12 +118,30 @@ export const homeTranslations = {
     features: {
       title: 'Features',
       items: [
-        { title: 'Live weathermap', description: 'Traffic utilization on links, color-coded by load' },
-        { title: 'Alert overlay', description: 'Active alerts from Zabbix, Prometheus, Grafana on topology' },
-        { title: 'NetBox auto-generation', description: 'Devices and cables pulled directly from NetBox' },
-        { title: 'Interactive navigation', description: 'Pan, zoom, multi-layer drill-down in the browser' },
-        { title: '900+ vendor icons', description: 'Yamaha, Aruba, AWS, Juniper — correct aspect ratios' },
-        { title: 'Shareable links', description: 'Public topology views with a token — no login required' },
+        {
+          title: 'Live weathermap',
+          description: 'Traffic utilization on links, color-coded by load',
+        },
+        {
+          title: 'Alert overlay',
+          description: 'Active alerts from Zabbix, Prometheus, Grafana on topology',
+        },
+        {
+          title: 'NetBox auto-generation',
+          description: 'Devices and cables pulled directly from NetBox',
+        },
+        {
+          title: 'Interactive navigation',
+          description: 'Pan, zoom, multi-layer drill-down in the browser',
+        },
+        {
+          title: '900+ vendor icons',
+          description: 'Yamaha, Aruba, AWS, Juniper — correct aspect ratios',
+        },
+        {
+          title: 'Shareable links',
+          description: 'Public topology views with a token — no login required',
+        },
       ],
     },
     gallery: {
@@ -145,7 +163,12 @@ export const homeTranslations = {
       title: 'Deploy',
       community: {
         label: 'Open Source',
-        steps: ['git clone && cd shumoku/apps/server', 'docker compose up -d', 'Open localhost:8080 and set admin password', 'Import YAML or connect NetBox'],
+        steps: [
+          'git clone && cd shumoku/apps/server',
+          'docker compose up -d',
+          'Open localhost:8080 and set admin password',
+          'Import YAML or connect NetBox',
+        ],
         cta: 'Setup Guide',
       },
       production: {
@@ -166,12 +189,32 @@ export const homeTranslations = {
       centerDescription: 'Topology visualization from your infrastructure',
       inputs: [
         { title: 'YAML', description: 'Define topology as code', tag: 'built-in' },
-        { title: 'NetBox', description: 'Auto-discover from DCIM/IPAM', tag: 'plugin', logo: '/integrations/netbox.svg' },
+        {
+          title: 'NetBox',
+          description: 'Auto-discover from DCIM/IPAM',
+          tag: 'plugin',
+          logo: '/integrations/netbox.svg',
+        },
       ],
       monitoring: [
-        { title: 'Zabbix', description: 'Traffic, host status, alerts', tag: 'plugin', logo: '/integrations/zabbix.svg' },
-        { title: 'Prometheus', description: 'SNMP & node exporter metrics', tag: 'plugin', logo: '/integrations/prometheus.svg' },
-        { title: 'Grafana', description: 'Webhook alerts', tag: 'plugin', logo: '/integrations/grafana.svg' },
+        {
+          title: 'Zabbix',
+          description: 'Traffic, host status, alerts',
+          tag: 'plugin',
+          logo: '/integrations/zabbix.svg',
+        },
+        {
+          title: 'Prometheus',
+          description: 'SNMP & node exporter metrics',
+          tag: 'plugin',
+          logo: '/integrations/prometheus.svg',
+        },
+        {
+          title: 'Grafana',
+          description: 'Webhook alerts',
+          tag: 'plugin',
+          logo: '/integrations/grafana.svg',
+        },
         { title: 'Custom API', description: 'Your own data source', tag: 'plugin' },
       ],
     },
@@ -193,7 +236,8 @@ export const homeTranslations = {
         title: 'Early adopters',
         items: [
           {
-            quote: 'Replaced static topology diagrams with auto-generated live topology. Used in production for JANOG57 NOC. Streamed on NOC Live.',
+            quote:
+              'Replaced static topology diagrams with auto-generated live topology. Used in production for JANOG57 NOC. Streamed on NOC Live.',
             attribution: 'NOC BB Team — JANOG57',
           },
           {
@@ -209,15 +253,18 @@ export const homeTranslations = {
         items: [
           {
             question: 'Is it free?',
-            answer: 'Community edition is MIT licensed. We offer paid support, consulting, and custom development for production use.',
+            answer:
+              'Community edition is MIT licensed. We offer paid support, consulting, and custom development for production use.',
           },
           {
             question: 'How is it different from PHP Weathermap?',
-            answer: 'Dedicated topology-first UI with multi-layer navigation, 900+ vendor icons, and native integrations — no Grafana required.',
+            answer:
+              'Dedicated topology-first UI with multi-layer navigation, 900+ vendor icons, and native integrations — no Grafana required.',
           },
           {
             question: 'Can I use it without monitoring tools?',
-            answer: 'Yes. Works as a standalone topology viewer. Monitoring integrations are optional.',
+            answer:
+              'Yes. Works as a standalone topology viewer. Monitoring integrations are optional.',
           },
         ],
       },
@@ -271,11 +318,20 @@ export const homeTranslations = {
     features: {
       title: '機能',
       items: [
-        { title: 'ライブ Weathermap', description: 'リンクのトラフィック使用率を負荷に応じて色分け表示' },
-        { title: 'アラートオーバーレイ', description: 'Zabbix・Prometheus・Grafana のアラートをトポロジー上に表示' },
+        {
+          title: 'ライブ Weathermap',
+          description: 'リンクのトラフィック使用率を負荷に応じて色分け表示',
+        },
+        {
+          title: 'アラートオーバーレイ',
+          description: 'Zabbix・Prometheus・Grafana のアラートをトポロジー上に表示',
+        },
         { title: 'NetBox 自動生成', description: 'NetBox からデバイス・ケーブル情報を直接取得' },
         { title: 'インタラクティブ操作', description: 'パン・ズーム・多階層ドリルダウン' },
-        { title: '900+ ベンダーアイコン', description: 'Yamaha, Aruba, AWS, Juniper — 正しいアスペクト比' },
+        {
+          title: '900+ ベンダーアイコン',
+          description: 'Yamaha, Aruba, AWS, Juniper — 正しいアスペクト比',
+        },
         { title: '共有リンク', description: 'トークン付き公開ビュー — ログイン不要' },
       ],
     },
@@ -298,7 +354,12 @@ export const homeTranslations = {
       title: 'デプロイ',
       community: {
         label: 'オープンソース',
-        steps: ['git clone && cd shumoku/apps/server', 'docker compose up -d', 'localhost:8080 を開き管理者パスワードを設定', 'YAML インポートまたは NetBox 接続'],
+        steps: [
+          'git clone && cd shumoku/apps/server',
+          'docker compose up -d',
+          'localhost:8080 を開き管理者パスワードを設定',
+          'YAML インポートまたは NetBox 接続',
+        ],
         cta: 'セットアップガイド',
       },
       production: {
@@ -319,12 +380,32 @@ export const homeTranslations = {
       centerDescription: 'インフラからトポロジーを可視化',
       inputs: [
         { title: 'YAML', description: 'トポロジーをコードで定義', tag: 'built-in' },
-        { title: 'NetBox', description: 'DCIM/IPAM から自動検出', tag: 'plugin', logo: '/integrations/netbox.svg' },
+        {
+          title: 'NetBox',
+          description: 'DCIM/IPAM から自動検出',
+          tag: 'plugin',
+          logo: '/integrations/netbox.svg',
+        },
       ],
       monitoring: [
-        { title: 'Zabbix', description: 'トラフィック・ホスト状態・アラート', tag: 'plugin', logo: '/integrations/zabbix.svg' },
-        { title: 'Prometheus', description: 'SNMP & Node Exporter メトリクス', tag: 'plugin', logo: '/integrations/prometheus.svg' },
-        { title: 'Grafana', description: 'Webhook アラート', tag: 'plugin', logo: '/integrations/grafana.svg' },
+        {
+          title: 'Zabbix',
+          description: 'トラフィック・ホスト状態・アラート',
+          tag: 'plugin',
+          logo: '/integrations/zabbix.svg',
+        },
+        {
+          title: 'Prometheus',
+          description: 'SNMP & Node Exporter メトリクス',
+          tag: 'plugin',
+          logo: '/integrations/prometheus.svg',
+        },
+        {
+          title: 'Grafana',
+          description: 'Webhook アラート',
+          tag: 'plugin',
+          logo: '/integrations/grafana.svg',
+        },
         { title: 'Custom API', description: '独自データソース', tag: 'plugin' },
       ],
     },
@@ -346,7 +427,8 @@ export const homeTranslations = {
         title: '導入実績',
         items: [
           {
-            quote: '静的なトポロジー図を自動生成のライブトポロジーに置き換え。JANOG57 NOC で本番運用。NOC Liveで配信。',
+            quote:
+              '静的なトポロジー図を自動生成のライブトポロジーに置き換え。JANOG57 NOC で本番運用。NOC Liveで配信。',
             attribution: 'NOC BBチーム — JANOG57',
           },
           {
@@ -362,11 +444,13 @@ export const homeTranslations = {
         items: [
           {
             question: '無料ですか？',
-            answer: 'コミュニティ版は MIT ライセンス。本番向けに有償サポート・コンサルティング・カスタム開発を提供。',
+            answer:
+              'コミュニティ版は MIT ライセンス。本番向けに有償サポート・コンサルティング・カスタム開発を提供。',
           },
           {
             question: 'PHP Weathermap との違いは？',
-            answer: 'トポロジーファースト UI、多階層ナビ、900+ ベンダーアイコン、ネイティブ連携 — Grafana 不要。',
+            answer:
+              'トポロジーファースト UI、多階層ナビ、900+ ベンダーアイコン、ネイティブ連携 — Grafana 不要。',
           },
           {
             question: '監視ツールなしでも使える？',

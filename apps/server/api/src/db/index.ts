@@ -6,7 +6,7 @@
 import { Database } from 'bun:sqlite'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { runMigrations, getMigrationStatus } from './schema.js'
+import { getMigrationStatus, runMigrations } from './schema.js'
 
 export { getMigrationStatus }
 

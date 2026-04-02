@@ -5,27 +5,25 @@
 
 import type { Context } from 'hono'
 import { Hono } from 'hono'
-import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import {
-  SESSION_COOKIE,
-  isSetupComplete,
-  setPassword,
-  verifyPassword,
+  checkRateLimit,
+  clearAttempts,
   createSession,
   deleteSession,
-  validateSession,
-  checkRateLimit,
+  isSetupComplete,
   recordFailedAttempt,
-  clearAttempts,
+  SESSION_COOKIE,
+  setPassword,
+  validateSession,
+  verifyPassword,
 } from '../services/auth.js'
 
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 // 7 days in seconds
 
 function getClientIp(c: Context): string {
   return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    '0.0.0.0'
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || '0.0.0.0'
   )
 }
 
@@ -77,10 +75,7 @@ export function createAuthApi(): Hono {
     const ip = getClientIp(c)
     const lockoutSeconds = checkRateLimit(ip)
     if (lockoutSeconds > 0) {
-      return c.json(
-        { error: `Too many attempts. Try again in ${lockoutSeconds} seconds.` },
-        429,
-      )
+      return c.json({ error: `Too many attempts. Try again in ${lockoutSeconds} seconds.` }, 429)
     }
 
     const body = (await c.req.json()) as { password?: string }

@@ -6,6 +6,8 @@
  * @shumoku/core - Network topology visualization core library
  */
 
+// Auto-mapping
+export * from './auto-mapping.js'
 // Constants
 export * from './constants.js'
 // Fixtures
@@ -24,8 +26,6 @@ export * from './models/index.js'
 export * from './parser/index.js'
 // Plugin types
 export * from './plugin-types.js'
-// Auto-mapping
-export * from './auto-mapping.js'
 // Themes
 export * from './themes/index.js'
 

@@ -193,8 +193,14 @@ function generateThemeVars(theme: typeof lightTheme): string {
   const portStroke = theme.variant === 'dark' ? '#94a3b8' : '#0f172a'
   const portLabelBg = theme.variant === 'dark' ? '#0f172a' : '#0f172a'
   const surfaceTokens: SurfaceToken[] = [
-    'surface-1', 'surface-2', 'surface-3',
-    'accent-blue', 'accent-green', 'accent-red', 'accent-amber', 'accent-purple',
+    'surface-1',
+    'surface-2',
+    'surface-3',
+    'accent-blue',
+    'accent-green',
+    'accent-red',
+    'accent-amber',
+    'accent-purple',
   ]
 
   const lines = [

@@ -6,9 +6,11 @@
  */
 
 import {
+  type Alert,
+  type AlertQueryOptions,
+  type AlertSeverity,
+  type AlertsCapable,
   addHttpWarning,
-  type MetricsData,
-  type MetricsMapping,
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
@@ -17,10 +19,8 @@ import {
   type HostItem,
   type HostsCapable,
   type MetricsCapable,
-  type AlertsCapable,
-  type Alert,
-  type AlertQueryOptions,
-  type AlertSeverity,
+  type MetricsData,
+  type MetricsMapping,
 } from '@shumoku/core'
 import type { PrometheusCustomMetrics, PrometheusPluginConfig } from './types.js'
 
@@ -162,9 +162,7 @@ export class PrometheusPlugin
         const total = result.result.length
         const down = result.result.filter((r) => r.value[1] === '0').length
         if (down > 0) {
-          warnings.push(
-            `Scrape targets: ${down}/${total} down (job: ${this.config.jobFilter})`,
-          )
+          warnings.push(`Scrape targets: ${down}/${total} down (job: ${this.config.jobFilter})`)
         }
       } catch {
         warnings.push('Failed to check scrape target health')

@@ -3,10 +3,10 @@
  * Shared state for topology node/link mapping across pages
  */
 
-import { nodeNameMatchScore, NODE_MATCH_THRESHOLD } from '@shumoku/core'
-import { writable, derived, get } from 'svelte/store'
+import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '@shumoku/core'
+import { derived, get, writable } from 'svelte/store'
 import { api } from '$lib/api'
-import type { MetricsMapping, Host, HostItem } from '$lib/types'
+import type { Host, HostItem, MetricsMapping } from '$lib/types'
 
 interface MappingState {
   topologyId: string | null

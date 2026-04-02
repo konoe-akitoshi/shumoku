@@ -1,20 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte'
-  import { goto } from '$app/navigation'
-  import { browser } from '$app/environment'
-  import { mount, unmount } from 'svelte'
-  import {
-    dashboardStore,
-    currentDashboard,
-    currentLayout,
-    dashboardLoading,
-    dashboardError,
-    dashboardEditMode,
-  } from '$lib/stores/dashboards'
-  import { initializeWidgets, getAllWidgets, getWidget } from '$lib/widgets'
-  import type { DashboardLayout, WidgetPosition } from '$lib/types'
-  import ShareButton from '$lib/components/ShareButton.svelte'
-  import { api } from '$lib/api'
+  import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
   import {
     ChartLineIcon,
     CpuIcon,
@@ -28,7 +13,21 @@
     TreeStructureIcon,
     XIcon,
   } from 'phosphor-svelte'
-  import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
+  import { mount, onMount, tick, unmount } from 'svelte'
+  import { browser } from '$app/environment'
+  import { goto } from '$app/navigation'
+  import { api } from '$lib/api'
+  import ShareButton from '$lib/components/ShareButton.svelte'
+  import {
+    currentDashboard,
+    currentLayout,
+    dashboardEditMode,
+    dashboardError,
+    dashboardLoading,
+    dashboardStore,
+  } from '$lib/stores/dashboards'
+  import type { DashboardLayout, WidgetPosition } from '$lib/types'
+  import { getAllWidgets, getWidget, initializeWidgets } from '$lib/widgets'
 
   let { data } = $props()
   let id = $derived(data.id)

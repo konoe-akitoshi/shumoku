@@ -3,19 +3,18 @@
  * Exports all widget components and registry
  */
 
-export * from './types'
 export * from './registry'
+export * from './types'
 
-// Import widget components
-import TopologyWidget from './TopologyWidget.svelte'
-import MetricsWidget from './MetricsWidget.svelte'
-import HealthWidget from './HealthWidget.svelte'
+import AlertWidget from './AlertWidget.svelte'
 import DataSourceWidget from './DataSourceWidget.svelte'
 import DeviceStatusWidget from './DeviceStatusWidget.svelte'
-import AlertWidget from './AlertWidget.svelte'
-
+import HealthWidget from './HealthWidget.svelte'
+import MetricsWidget from './MetricsWidget.svelte'
 // Import registry
 import { registerWidget } from './registry'
+// Import widget components
+import TopologyWidget from './TopologyWidget.svelte'
 import type { WidgetDefinition } from './types'
 
 // Define built-in widgets
@@ -221,10 +220,10 @@ export function initializeWidgets(): void {
 
 // Export widget components
 export {
-  TopologyWidget,
-  MetricsWidget,
-  HealthWidget,
+  AlertWidget,
   DataSourceWidget,
   DeviceStatusWidget,
-  AlertWidget,
+  HealthWidget,
+  MetricsWidget,
+  TopologyWidget,
 }

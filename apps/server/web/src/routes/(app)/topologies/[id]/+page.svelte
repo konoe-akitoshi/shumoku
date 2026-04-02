@@ -1,21 +1,21 @@
 <script lang="ts">
+  import { XIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
-  import { page } from '$app/stores'
   import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
   import { api } from '$lib/api'
-  import { metricsConnected, mappingStore } from '$lib/stores'
-  import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import type {
     NodeSelectEvent,
     SubgraphSelectEvent,
   } from '$lib/components/InteractiveSvgDiagram.svelte'
-  import TopologySettings from '$lib/components/TopologySettings.svelte'
+  import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
-  import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
-  import type { Topology, TopologyDataSource } from '$lib/types'
   import ShareButton from '$lib/components/ShareButton.svelte'
-  import { XIcon } from 'phosphor-svelte'
+  import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
+  import TopologySettings from '$lib/components/TopologySettings.svelte'
+  import { mappingStore, metricsConnected } from '$lib/stores'
+  import type { Topology, TopologyDataSource } from '$lib/types'
 
   let topology: Topology | null = null
   let renderData: { nodeCount: number; edgeCount: number } | null = null
@@ -28,7 +28,7 @@
   // Node mapping modal state
   let mappingModalOpen = false
   let selectedNodeData: NodeSelectEvent | null = null
-  let netboxBaseUrl: string | undefined = undefined
+  let netboxBaseUrl: string | undefined
 
   // Node search palette state
   let searchPaletteOpen = false

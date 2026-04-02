@@ -171,8 +171,7 @@ export function findBestInterfaceMatch(
 ): string | null {
   if (candidates.length === 0) return null
 
-  const opts: InterfaceMatchOptions =
-    typeof options === 'number' ? { threshold: options } : options
+  const opts: InterfaceMatchOptions = typeof options === 'number' ? { threshold: options } : options
   const threshold = opts.threshold ?? 0.5
 
   const norm = normalizeInterfaceName(portName)
@@ -225,7 +224,11 @@ export const NODE_MATCH_THRESHOLD = 0.7
 /**
  * Score how well a topology node name matches a monitoring host name (0–1).
  */
-export function nodeNameMatchScore(nodeName: string, hostName: string, hostDisplayName?: string): number {
+export function nodeNameMatchScore(
+  nodeName: string,
+  hostName: string,
+  hostDisplayName?: string,
+): number {
   const n = nodeName.toLowerCase().trim()
   const h = hostName.toLowerCase().trim()
   const d = hostDisplayName?.toLowerCase().trim()

@@ -1,13 +1,15 @@
 <script lang="ts">
+  import {
+    ArrowRightIcon,
+    DatabaseIcon,
+    PlusIcon,
+    SpinnerIcon,
+    SquaresFourIcon,
+    TreeStructureIcon,
+  } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
-  import type { Topology, DataSource, Dashboard } from '$lib/types'
-  import { TreeStructureIcon } from 'phosphor-svelte'
-  import { DatabaseIcon } from 'phosphor-svelte'
-  import { SquaresFourIcon } from 'phosphor-svelte'
-  import { PlusIcon } from 'phosphor-svelte'
-  import { ArrowRightIcon } from 'phosphor-svelte'
-  import { SpinnerIcon } from 'phosphor-svelte'
+  import type { Dashboard, DataSource, Topology } from '$lib/types'
 
   let topologies: Topology[] = $state([])
   let dataSources: DataSource[] = $state([])

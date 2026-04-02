@@ -12,10 +12,14 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import type { NetworkGraph } from '@shumoku/core'
 import { buildHierarchicalSheets, HierarchicalLayout, parser } from '@shumoku/core'
-import { svg } from '@shumoku/renderer-svg'
-import { png } from '@shumoku/renderer-png'
-import { render as renderHtml, renderHierarchical as renderHtmlHierarchical, setIIFE } from '@shumoku/renderer-html'
+import {
+  render as renderHtml,
+  renderHierarchical as renderHtmlHierarchical,
+  setIIFE,
+} from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
+import { png } from '@shumoku/renderer-png'
+import { svg } from '@shumoku/renderer-svg'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'))

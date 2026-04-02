@@ -3,13 +3,14 @@
  */
 
 import type { LayoutResult, MetricsData, NetworkGraph } from '@shumoku/core'
+
 export type {
-  NodeMetrics,
   LinkMetrics,
-  MetricsData,
-  NodeMetricsMapping,
   LinkMetricsMapping,
+  MetricsData,
   MetricsMapping,
+  NodeMetrics,
+  NodeMetricsMapping,
 } from '@shumoku/core'
 
 // ============================================

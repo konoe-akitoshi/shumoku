@@ -5,16 +5,16 @@
 
 import { Hono } from 'hono'
 import {
+  addPlugin,
   getAllPlugins,
   getPluginManifest,
-  addPlugin,
+  getPluginsDir,
+  installPluginFromUrl,
+  installPluginFromZip,
+  isBundledPlugin,
+  reloadPlugins,
   removePlugin,
   setPluginEnabled,
-  reloadPlugins,
-  installPluginFromZip,
-  installPluginFromUrl,
-  getPluginsDir,
-  isBundledPlugin,
 } from '../plugins/loader.js'
 
 export function createPluginsApi(): Hono {

@@ -3,7 +3,7 @@
  * Enables inter-widget communication for coordinated actions
  */
 
-import { writable, get } from 'svelte/store'
+import { get, writable } from 'svelte/store'
 
 /**
  * Event types for widget communication

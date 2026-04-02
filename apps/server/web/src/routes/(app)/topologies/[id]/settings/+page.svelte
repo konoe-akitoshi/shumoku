@@ -1,30 +1,5 @@
 <script lang="ts">
   import { findBestInterfaceMatch } from '@shumoku/core'
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
-  import { Button } from '$lib/components/ui/button'
-  import {
-    displaySettings,
-    metricsConnected,
-    liveUpdatesEnabled,
-    showTrafficFlow,
-    showNodeStatus,
-    mappingStore,
-    nodeMapping,
-    linkMapping,
-    mappingHosts,
-    hostInterfaces,
-  } from '$lib/stores'
-  import type {
-    Topology,
-    TopologyDataSource,
-    TopologyDataSourceInput,
-    DataSource,
-    SyncMode,
-    ParsedTopologyResponse,
-  } from '$lib/types'
   import {
     ArrowDownIcon,
     ArrowLeftIcon,
@@ -40,6 +15,31 @@
     StarIcon,
     TrashIcon,
   } from 'phosphor-svelte'
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
+  import { api } from '$lib/api'
+  import { Button } from '$lib/components/ui/button'
+  import {
+    displaySettings,
+    hostInterfaces,
+    linkMapping,
+    liveUpdatesEnabled,
+    mappingHosts,
+    mappingStore,
+    metricsConnected,
+    nodeMapping,
+    showNodeStatus,
+    showTrafficFlow,
+  } from '$lib/stores'
+  import type {
+    DataSource,
+    ParsedTopologyResponse,
+    SyncMode,
+    Topology,
+    TopologyDataSource,
+    TopologyDataSourceInput,
+  } from '$lib/types'
 
   // ============================================
   // State

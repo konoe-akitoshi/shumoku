@@ -1,6 +1,6 @@
 import { LOGO_PATHS, LOGO_VIEWBOX } from '../../../assets/brand'
 
-export { LOGO_VIEWBOX, LOGO_PATHS }
+export { LOGO_PATHS, LOGO_VIEWBOX }
 
 export function LogoSvg({ size = 48 }: { size?: number }) {
   return (

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
   import { YamlParser } from '@shumoku/core'
-  import type { Topology } from '$lib/types'
   import { ArrowLeftIcon } from 'phosphor-svelte'
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
+  import { api } from '$lib/api'
+  import type { Topology } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
   $: id = $page.params.id!

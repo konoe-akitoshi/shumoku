@@ -8,7 +8,7 @@
 
 import type { Context, Next } from 'hono'
 import { getCookie } from 'hono/cookie'
-import { SESSION_COOKIE, isSetupComplete, validateSession } from '../services/auth.js'
+import { isSetupComplete, SESSION_COOKIE, validateSession } from '../services/auth.js'
 
 /**
  * Check if a request path + method is public (no auth needed)

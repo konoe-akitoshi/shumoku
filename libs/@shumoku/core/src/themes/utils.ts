@@ -6,8 +6,8 @@
  * Theme utilities
  */
 
-import type { DeepPartial, Theme, ThemeOptions } from './types.js'
 import { lightTheme } from './light.js'
+import type { DeepPartial, Theme, ThemeOptions } from './types.js'
 
 /**
  * Merge theme with overrides

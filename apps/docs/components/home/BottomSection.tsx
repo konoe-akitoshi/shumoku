@@ -43,7 +43,10 @@ export function BottomSection({ locale }: { locale: string }) {
         <h2 className={cn(sectionStyles.title, 'text-center mb-8')}>{t.faq.title}</h2>
         <div className="space-y-5 mb-12 sm:mb-16">
           {t.faq.items.map((item) => (
-            <div key={item.question} className="border-b border-neutral-200 dark:border-neutral-800 pb-5">
+            <div
+              key={item.question}
+              className="border-b border-neutral-200 dark:border-neutral-800 pb-5"
+            >
               <h3 className="text-sm font-semibold mb-1.5">{item.question}</h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400">{item.answer}</p>
             </div>

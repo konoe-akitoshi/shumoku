@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte'
-  import { metricsStore, metricsData } from '$lib/stores'
+  import { onDestroy, onMount, tick } from 'svelte'
+  import { metricsData, metricsStore } from '$lib/stores'
 
   // Props
   export let topologyId: string

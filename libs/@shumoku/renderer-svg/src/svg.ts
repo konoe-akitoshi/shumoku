@@ -580,7 +580,12 @@ export class SVGRenderer {
     const style = subgraph.style || {}
 
     // Resolve surface colors from token or direct color value
-    const surfaceColors = resolveSurfaceColors(this.theme, style.fill, style.stroke, this.isInteractive)
+    const surfaceColors = resolveSurfaceColors(
+      this.theme,
+      style.fill,
+      style.stroke,
+      this.isInteractive,
+    )
     const fill = surfaceColors.fill
     const stroke = surfaceColors.stroke
     const labelColor = surfaceColors.text
@@ -1153,15 +1158,7 @@ ${fg}
       link.style?.strokeWidth || bandwidthStrokeWidth || this.getLinkStrokeWidth(type)
 
     // Render link line
-    let result = this.renderLinkLine(
-      id,
-      points,
-      stroke,
-      strokeWidth,
-      dasharray,
-      markerEnd,
-      type,
-    )
+    let result = this.renderLinkLine(id, points, stroke, strokeWidth, dasharray, markerEnd, type)
 
     // Center label and VLANs
     const midPoint = this.getMidPoint(points)
@@ -1738,7 +1735,6 @@ ${linePath}
 
     return parts.join(' ')
   }
-
 
   /**
    * Get default link type based on redundancy

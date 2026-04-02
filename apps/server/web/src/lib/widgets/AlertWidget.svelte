@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
-  import { api } from '$lib/api'
-  import type { Alert, AlertSeverity, DataSource } from '$lib/types'
-  import { dashboardStore, currentLayout } from '$lib/stores/dashboards'
-  import { emitHighlightNodes, emitClearHighlight } from '$lib/stores/widgetEvents'
-  import { get } from 'svelte/store'
-  import WidgetWrapper from './WidgetWrapper.svelte'
-  import * as Dialog from '$lib/components/ui/dialog'
   import {
-    ArrowsClockwiseIcon,
     ArrowSquareOutIcon,
+    ArrowsClockwiseIcon,
     CheckCircleIcon,
     FireIcon,
     InfoIcon,
     SpinnerIcon,
     WarningIcon,
   } from 'phosphor-svelte'
+  import { onDestroy, onMount } from 'svelte'
+  import { get } from 'svelte/store'
+  import { api } from '$lib/api'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { currentLayout, dashboardStore } from '$lib/stores/dashboards'
+  import { emitClearHighlight, emitHighlightNodes } from '$lib/stores/widgetEvents'
+  import type { Alert, AlertSeverity, DataSource } from '$lib/types'
+  import WidgetWrapper from './WidgetWrapper.svelte'
 
   interface Props {
     id: string

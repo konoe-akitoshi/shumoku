@@ -6,16 +6,16 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import {
-  sampleNetwork,
-  type NetworkGraph,
-  HierarchicalParser,
   createMemoryFileResolver,
-  YamlParser,
   type FileResolver,
+  HierarchicalParser,
+  type NetworkGraph,
+  sampleNetwork,
+  YamlParser,
 } from '@shumoku/core'
+import { resolvePath } from './config.js'
 import { BunHierarchicalLayout } from './layout.js'
 import type { Config, MetricsData, TopologyConfig, TopologyInstance } from './types.js'
-import { resolvePath } from './config.js'
 
 /**
  * Create a Node.js file resolver for the given base path

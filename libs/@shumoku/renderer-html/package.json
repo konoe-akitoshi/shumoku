@@ -25,7 +25,10 @@
       "import": "./dist/iife-string.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc && bun run build:css && bun run build:iife && bun run build:iife-string",
     "build:css": "bun src/build-css.ts",

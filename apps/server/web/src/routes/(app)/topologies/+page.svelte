@@ -1,12 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { topologies, topologiesList, topologiesLoading, topologiesError } from '$lib/stores'
   import { YamlParser } from '@shumoku/core'
-  import * as Dialog from '$lib/components/ui/dialog'
+  import { GearSixIcon, PlusIcon, TreeStructureIcon } from 'phosphor-svelte'
+  import { onMount } from 'svelte'
   import { Button } from '$lib/components/ui/button'
-  import { PlusIcon } from 'phosphor-svelte'
-  import { TreeStructureIcon } from 'phosphor-svelte'
-  import { GearSixIcon } from 'phosphor-svelte'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { topologies, topologiesError, topologiesList, topologiesLoading } from '$lib/stores'
 
   let showCreateModal = $state(false)
 

@@ -4,8 +4,8 @@
  */
 
 import type { Link, NetworkGraph } from '@shumoku/core'
-import type { MetricsData } from './types.js'
 import { getBandwidthCapacity } from './bandwidth.js'
+import type { MetricsData } from './types.js'
 
 /**
  * Extract node ID from a link endpoint (can be string or object)

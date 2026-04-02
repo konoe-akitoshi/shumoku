@@ -32,25 +32,27 @@
 </script>
 
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte'
-  import panzoom from 'panzoom'
   import type { PanZoom } from 'panzoom'
+  import panzoom from 'panzoom'
   import {
-    metricsStore,
-    metricsData,
-    metricsWarnings,
+    ArrowCounterClockwiseIcon,
+    ArrowLeftIcon,
+    CornersOutIcon,
+    GearSixIcon,
+    MagnifyingGlassIcon,
+    MagnifyingGlassMinusIcon,
+    MagnifyingGlassPlusIcon,
+  } from 'phosphor-svelte'
+  import { onDestroy, onMount, tick } from 'svelte'
+  import {
     liveUpdatesEnabled,
-    showTrafficFlow,
+    metricsData,
+    metricsStore,
+    metricsWarnings,
     showNodeStatus,
+    showTrafficFlow,
   } from '$lib/stores'
   import { formatTraffic } from '$lib/utils/format'
-  import { ArrowLeftIcon } from 'phosphor-svelte'
-  import { MagnifyingGlassPlusIcon } from 'phosphor-svelte'
-  import { MagnifyingGlassMinusIcon } from 'phosphor-svelte'
-  import { CornersOutIcon } from 'phosphor-svelte'
-  import { ArrowCounterClockwiseIcon } from 'phosphor-svelte'
-  import { GearSixIcon } from 'phosphor-svelte'
-  import { MagnifyingGlassIcon } from 'phosphor-svelte'
 
   // Props
   export let topologyId: string = ''
@@ -798,7 +800,8 @@
   }
 
   // Weathermap controller for in/out dual-path rendering
-  import { WeathermapController, getUtilizationColor } from '$lib/weathermap'
+  import { getUtilizationColor, WeathermapController } from '$lib/weathermap'
+
   let weathermap: WeathermapController | null = null
 
   function applyMetrics(
@@ -956,7 +959,9 @@
     </div>
     <div class="control-group">
       <button on:click={fitToView} title="Fit to View"><CornersOutIcon size={18} /></button>
-      <button on:click={resetView} title="Reset View"><ArrowCounterClockwiseIcon size={18} /></button>
+      <button on:click={resetView} title="Reset View">
+        <ArrowCounterClockwiseIcon size={18} />
+      </button>
       {#if onSearchOpen}
         <button
           on:click={onSearchOpen}

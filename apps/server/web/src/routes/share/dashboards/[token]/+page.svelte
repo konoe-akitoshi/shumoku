@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte'
-  import Logo from '$lib/components/Logo.svelte'
-  import { page } from '$app/stores'
+  import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
+  import { mount, onMount, tick, unmount } from 'svelte'
   import { browser } from '$app/environment'
-  import { mount, unmount } from 'svelte'
-  import { initializeWidgets, getWidget } from '$lib/widgets'
+  import { page } from '$app/stores'
+  import Logo from '$lib/components/Logo.svelte'
   import { dashboardStore } from '$lib/stores/dashboards'
   import type { WidgetInstance } from '$lib/types'
-  import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
+  import { getWidget, initializeWidgets } from '$lib/widgets'
 
   let name = $state('')
   let loading = $state(true)

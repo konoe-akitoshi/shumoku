@@ -1,16 +1,15 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { CpuIcon, SpinnerIcon } from 'phosphor-svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { api } from '$lib/api'
   import { dashboardStore } from '$lib/stores/dashboards'
   import {
+    emitClearHighlight,
     emitHighlightByAttribute,
     emitHighlightNodes,
-    emitClearHighlight,
   } from '$lib/stores/widgetEvents'
+  import type { NetworkNode, Topology } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import { CpuIcon } from 'phosphor-svelte'
-  import { SpinnerIcon } from 'phosphor-svelte'
-  import type { Topology, NetworkNode } from '$lib/types'
 
   // --- Props ---
   interface Props {

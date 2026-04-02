@@ -1,11 +1,4 @@
 <script lang="ts">
-  import { api } from '$lib/api'
-  import * as Dialog from '$lib/components/ui/dialog'
-  import { Button } from '$lib/components/ui/button'
-  import { metricsData, mappingStore, mappingHosts } from '$lib/stores'
-  import { formatTraffic } from '$lib/utils/format'
-  import type { MetricsMapping, DiscoveredMetric } from '$lib/types'
-  import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
   import {
     ArrowLeftIcon,
     ArrowSquareOutIcon,
@@ -20,6 +13,13 @@
     MagnifyingGlassIcon,
     WarningIcon,
   } from 'phosphor-svelte'
+  import { api } from '$lib/api'
+  import { Button } from '$lib/components/ui/button'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { mappingHosts, mappingStore, metricsData } from '$lib/stores'
+  import type { DiscoveredMetric, MetricsMapping } from '$lib/types'
+  import { formatTraffic } from '$lib/utils/format'
+  import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
 
   interface Props {
     open: boolean

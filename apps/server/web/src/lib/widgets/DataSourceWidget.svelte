@@ -1,13 +1,15 @@
 <script lang="ts">
+  import {
+    CheckCircleIcon,
+    DatabaseIcon,
+    QuestionIcon,
+    SpinnerIcon,
+    XCircleIcon,
+  } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import type { DataSource } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import { DatabaseIcon } from 'phosphor-svelte'
-  import { CheckCircleIcon } from 'phosphor-svelte'
-  import { XCircleIcon } from 'phosphor-svelte'
-  import { QuestionIcon } from 'phosphor-svelte'
-  import { SpinnerIcon } from 'phosphor-svelte'
 
   interface Props {
     config: {

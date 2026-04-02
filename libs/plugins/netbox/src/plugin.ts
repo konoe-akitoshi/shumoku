@@ -7,13 +7,13 @@
 import type { NetworkGraph } from '@shumoku/core'
 import {
   addHttpWarning,
-  type DataSourcePlugin,
-  type DataSourceCapability,
-  type TopologyCapable,
-  type HostsCapable,
   type ConnectionResult,
+  type DataSourceCapability,
+  type DataSourcePlugin,
   type Host,
   type HostItem,
+  type HostsCapable,
+  type TopologyCapable,
 } from '@shumoku/core'
 import { NetBoxClient } from './client.js'
 import { convertToNetworkGraph } from './converter.js'

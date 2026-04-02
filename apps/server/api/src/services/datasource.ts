@@ -7,20 +7,20 @@ import type { Database } from 'bun:sqlite'
 import type { NetworkGraph } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import {
+  hasAlertsCapability,
   hasAutoMappingCapability,
   hasHostsCapability,
   hasTopologyCapability,
-  hasAlertsCapability,
   pluginRegistry,
 } from '../plugins/index.js'
 import type {
+  Alert,
+  AlertQueryOptions,
   ConnectionResult,
   DiscoveredMetric,
   Host,
   HostItem,
   MappingHint,
-  Alert,
-  AlertQueryOptions,
 } from '../plugins/types.js'
 import type { DataSource, DataSourceInput, DataSourceStatus, DataSourceType } from '../types.js'
 

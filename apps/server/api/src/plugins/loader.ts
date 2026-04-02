@@ -9,11 +9,11 @@
  * - index.js: Entry point exporting a register(pluginRegistry) function
  */
 
-import { readFile, writeFile, stat, mkdir, rm } from 'node:fs/promises'
-import { join, resolve, isAbsolute, dirname } from 'node:path'
-import { load as parseYaml, dump as dumpYaml } from 'js-yaml'
-import type { PluginManifest } from './types.js'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { dump as dumpYaml, load as parseYaml } from 'js-yaml'
 import { pluginRegistry } from './registry.js'
+import type { PluginManifest } from './types.js'
 
 // ============================================
 // Types
@@ -356,7 +356,10 @@ export async function addPlugin(path: string): Promise<AddPluginResult> {
     await writeConfig(currentConfigPath, config)
 
     // Load the plugin
-    const info = await loadPluginEntry({ id: manifest.id, path: pluginPath, enabled: true }, dirname(currentConfigPath))
+    const info = await loadPluginEntry(
+      { id: manifest.id, path: pluginPath, enabled: true },
+      dirname(currentConfigPath),
+    )
     loadedPlugins.push(info)
 
     return { success: true, plugin: info }
@@ -369,7 +372,10 @@ export async function addPlugin(path: string): Promise<AddPluginResult> {
 /**
  * Remove an external plugin
  */
-export async function removePlugin(pluginId: string, deleteFiles = false): Promise<{ success: boolean; error?: string }> {
+export async function removePlugin(
+  pluginId: string,
+  deleteFiles = false,
+): Promise<{ success: boolean; error?: string }> {
   if (!currentConfigPath) {
     return { success: false, error: 'No config path set' }
   }
@@ -411,7 +417,10 @@ export async function removePlugin(pluginId: string, deleteFiles = false): Promi
 /**
  * Enable or disable an external plugin
  */
-export async function setPluginEnabled(pluginId: string, enabled: boolean): Promise<{ success: boolean; error?: string }> {
+export async function setPluginEnabled(
+  pluginId: string,
+  enabled: boolean,
+): Promise<{ success: boolean; error?: string }> {
   if (!currentConfigPath) {
     return { success: false, error: 'No config path set' }
   }
@@ -453,7 +462,10 @@ export async function installPluginFromUrl(
     const urlLower = url.toLowerCase()
     const isZip = urlLower.endsWith('.zip') || urlLower.includes('/archive/')
     const isTarGz = urlLower.endsWith('.tar.gz') || urlLower.endsWith('.tgz')
-    const isGit = urlLower.endsWith('.git') || urlLower.includes('github.com') || urlLower.includes('gitlab.com')
+    const isGit =
+      urlLower.endsWith('.git') ||
+      urlLower.includes('github.com') ||
+      urlLower.includes('gitlab.com')
 
     if (isZip || (!isTarGz && !isGit)) {
       // Download as ZIP
@@ -510,11 +522,7 @@ async function installPluginFromTarGz(
       const gunzip = createGunzip()
       const extract = tar.extract({ cwd: tempDir })
 
-      await pipeline(
-        Readable.from(buffer),
-        gunzip,
-        extract,
-      )
+      await pipeline(Readable.from(buffer), gunzip, extract)
 
       // Find plugin.json
       const { findPluginRoot, movePluginToFinal } = await getPluginHelpers()
@@ -691,17 +699,22 @@ export async function installPluginFromZip(
     const entries = zip.getEntries()
 
     // Find plugin.json, considering subdirectory if specified
-    let manifestEntry = entries.find((e) => {
+    const manifestEntry = entries.find((e) => {
       if (subdirectory) {
         // Look for plugin.json inside the subdirectory
-        return e.entryName.includes(subdirectory + '/plugin.json') ||
-               e.entryName.includes(subdirectory + '\\plugin.json')
+        return (
+          e.entryName.includes(subdirectory + '/plugin.json') ||
+          e.entryName.includes(subdirectory + '\\plugin.json')
+        )
       }
       return e.entryName.endsWith('plugin.json')
     })
 
     if (!manifestEntry) {
-      return { success: false, error: 'ZIP does not contain plugin.json' + (subdirectory ? ` in ${subdirectory}` : '') }
+      return {
+        success: false,
+        error: 'ZIP does not contain plugin.json' + (subdirectory ? ` in ${subdirectory}` : ''),
+      }
     }
 
     const manifestJson = manifestEntry.getData().toString('utf-8')

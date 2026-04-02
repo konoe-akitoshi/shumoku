@@ -116,7 +116,11 @@ function getLinkTypeStrokeWidth(type?: string): number {
   }
 }
 
-function getLinkStrokeWidthForLayout(link: { bandwidth?: string; type?: string; style?: { strokeWidth?: number } }): number {
+function getLinkStrokeWidthForLayout(link: {
+  bandwidth?: string
+  type?: string
+  style?: { strokeWidth?: number }
+}): number {
   const styleWidth = link.style?.strokeWidth ?? 0
   const bandwidthWidth = getBandwidthStrokeWidth(link.bandwidth)
   const typeWidth = getLinkTypeStrokeWidth(link.type)
@@ -1329,10 +1333,7 @@ export class HierarchicalLayout {
     return Math.max(this.options.nodeHeight, contentHeight + NODE_VERTICAL_PADDING)
   }
 
-  private calculatePortSpacing(
-    portNames: Set<string> | undefined,
-    minSpacing: number,
-  ): number {
+  private calculatePortSpacing(portNames: Set<string> | undefined, minSpacing: number): number {
     if (!portNames || portNames.size === 0) return minSpacing
 
     let maxLabelLength = 0
