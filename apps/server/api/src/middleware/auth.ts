@@ -41,10 +41,11 @@ function isPublicRequest(method: string, pathname: string): boolean {
 /**
  * Hono middleware that enforces authentication on protected routes
  */
-export async function authMiddleware(c: Context, next: Next): Promise<Response | void> {
+export async function authMiddleware(c: Context, next: Next): Promise<Response | undefined> {
   // If password not set yet, allow everything (setup not complete)
   if (!isSetupComplete()) {
-    return next()
+    next()
+    return
   }
 
   const pathname = new URL(c.req.url).pathname
@@ -52,7 +53,8 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
 
   // Allow public requests through
   if (isPublicRequest(method, pathname)) {
-    return next()
+    next()
+    return
   }
 
   // Check session cookie
@@ -61,5 +63,6 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     return c.json({ error: 'Authentication required' }, 401)
   }
 
-  return next()
+  next()
+  return
 }
