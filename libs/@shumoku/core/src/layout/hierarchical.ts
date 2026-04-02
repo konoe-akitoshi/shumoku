@@ -14,7 +14,6 @@ import ELK, {
   type LayoutOptions,
 } from 'elkjs/lib/elk.bundled.js'
 import {
-  CHAR_WIDTH_RATIO,
   DEFAULT_ICON_SIZE,
   ESTIMATED_CHAR_WIDTH,
   ICON_LABEL_GAP,
@@ -22,8 +21,8 @@ import {
   MIN_PORT_SPACING,
   NODE_HORIZONTAL_PADDING,
   NODE_VERTICAL_PADDING,
-  PORT_LABEL_FONT_SIZE,
   PORT_LABEL_PADDING,
+  SMALL_LABEL_CHAR_WIDTH,
 } from '../constants.js'
 import { getDeviceIcon } from '../icons/index.js'
 import {
@@ -314,7 +313,7 @@ export class HierarchicalLayout {
     const baseSpacing = rawSpacing * portDensityFactor
 
     const portLabelProtrusion = portCount > 0 ? 28 : 0
-    const portLabelWidth = maxPortLabelLength * PORT_LABEL_FONT_SIZE * CHAR_WIDTH_RATIO
+    const portLabelWidth = maxPortLabelLength * SMALL_LABEL_CHAR_WIDTH
     const minRankSpacing = Math.max(portLabelWidth, portLabelProtrusion) + 16
     const minSubgraphPadding = portLabelProtrusion + 8
 
@@ -1326,8 +1325,7 @@ export class HierarchicalLayout {
       maxLabelLength = Math.max(maxLabelLength, name.length)
     }
 
-    const charWidth = PORT_LABEL_FONT_SIZE * CHAR_WIDTH_RATIO
-    const maxLabelWidth = maxLabelLength * charWidth
+    const maxLabelWidth = maxLabelLength * SMALL_LABEL_CHAR_WIDTH
     const spacingFromLabel = maxLabelWidth + PORT_LABEL_PADDING
     return Math.max(minSpacing, spacingFromLabel)
   }

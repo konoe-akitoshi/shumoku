@@ -29,6 +29,7 @@ import {
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
+  SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   type Theme,
 } from '@shumoku/core'
@@ -895,8 +896,7 @@ ${fg}
 
       // Port label with black background
       const labelText = this.escapeXml(port.label)
-      const charWidth = 5.5
-      const labelWidth = labelText.length * charWidth + 4
+      const labelWidth = labelText.length * SMALL_LABEL_CHAR_WIDTH + 4
       const labelHeight = 12
 
       // Calculate background rect position based on text anchor
@@ -1354,12 +1354,11 @@ ${fg}
     if (lines.length === 0) return ''
 
     const lineHeight = 12
-    const charWidth = 5.5
     const paddingX = 4
 
     // Calculate dimensions
     const maxLen = Math.max(...lines.map((l) => l.length))
-    const rectWidth = maxLen * charWidth + paddingX
+    const rectWidth = maxLen * SMALL_LABEL_CHAR_WIDTH + paddingX
     const rectHeight = lines.length * lineHeight
 
     // Adjust rect position based on text anchor
