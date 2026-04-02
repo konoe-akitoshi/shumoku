@@ -91,7 +91,7 @@ export class TopologyManager {
       graph = result.graph
     }
 
-    const layoutResult = await this.layout.layout(graph)
+    const layoutResult = this.layout.layout(graph)
 
     const instance: TopologyInstance = {
       name: topoConfig.name,
@@ -127,7 +127,7 @@ export class TopologyManager {
     const result = await hierarchicalParser.parse(mainFile.content, 'main.yaml')
     const graph = result.graph
 
-    const layoutResult = await this.layout.layout(graph)
+    const layoutResult = this.layout.layout(graph)
 
     const instance: TopologyInstance = {
       name: 'sample-network',
