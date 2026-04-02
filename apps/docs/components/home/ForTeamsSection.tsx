@@ -1,4 +1,4 @@
-import { Code2, Map, Package, Plug } from 'lucide-react'
+import { Code2, MapIcon, Package, Plug } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
@@ -7,7 +7,7 @@ const nodeIcons = [
   <Code2 key="plugin" className="w-5 h-5" />,
   <Package key="embed" className="w-5 h-5" />,
   <Plug key="api" className="w-5 h-5" />,
-  <Map key="roadmap" className="w-5 h-5" />,
+  <MapIcon key="roadmap" className="w-5 h-5" />,
 ]
 
 function CoreNode() {
