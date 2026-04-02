@@ -759,11 +759,11 @@
   }
 
   const componentId = $props.id()
-  const groupBySelectorId = componentId + ':groupBy'
-  const matchStrategySelectorId = componentId + ':matchStrategy'
-  const unmatchedNodesSelectorId = componentId + ':unmatchedNodes'
-  const idMappingId = componentId + ':idMapping'
-  const subgraphNameId = componentId + ':subgraph'
+  const groupBySelectorId = `${componentId}:groupBy`
+  const matchStrategySelectorId = `${componentId}:matchStrategy`
+  const unmatchedNodesSelectorId = `${componentId}:unmatchedNodes`
+  const idMappingId = `${componentId}:idMapping`
+  const subgraphNameId = `${componentId}:subgraph`
 </script>
 
 <svelte:head> <title>Settings - {topology?.name || 'Topology'} - Shumoku</title> </svelte:head>

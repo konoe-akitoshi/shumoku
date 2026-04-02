@@ -408,8 +408,8 @@
   let editMode = $derived($dashboardEditMode)
 
   const componentId = $props.id()
-  const selectorId = componentId + ':selector'
-  const hierarchicalSelectorId = componentId + ':hierarchicalSelector'
+  const selectorId = `${componentId}:selector`
+  const hierarchicalSelectorId = `${componentId}:hierarchicalSelector`
 </script>
 
 <WidgetWrapper
