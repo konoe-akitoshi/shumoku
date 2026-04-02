@@ -513,7 +513,7 @@ export class TopologyService {
    */
   async initializeSample(): Promise<void> {
     // Skip sample creation unless DEMO_MODE is enabled
-    if (process.env.DEMO_MODE !== 'true') {
+    if (process.env['DEMO_MODE'] !== 'true') {
       return
     }
 
