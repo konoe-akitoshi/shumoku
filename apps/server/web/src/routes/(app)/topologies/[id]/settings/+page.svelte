@@ -1659,7 +1659,7 @@
                             } else {
                               customCapacityLinks.delete(edge.id)
                               customCapacityLinks = new Set(customCapacityLinks)
-                              handleLinkCapacityChange(edge.id, parseInt(val))
+                              handleLinkCapacityChange(edge.id, parseInt(val, 10))
                             }
                           }}
                         >
