@@ -482,12 +482,8 @@ export function createTopologiesApi(): Hono {
 
         // Use configurable merge
         const mergeResult = mergeWithOverlays(
-          successfulFetches.map((f) => f.graph),
-          successfulFetches.map((f) => f.sourceId),
-          {
-            baseIndex,
-            overlays: overlayConfigs,
-          },
+          successfulFetches.map((r) => ({ graph: r.graph, sourceId: r.sourceId })),
+          { baseIndex, overlays: overlayConfigs },
         )
 
         finalGraph = mergeResult.graph

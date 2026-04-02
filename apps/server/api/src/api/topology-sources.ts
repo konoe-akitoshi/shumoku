@@ -349,8 +349,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
 
     // Merge
     const mergeResult = mergeWithOverlays(
-      successfulFetches.map((f) => f.graph),
-      successfulFetches.map((f) => f.sourceId),
+      successfulFetches.map((r) => ({ graph: r.graph, sourceId: r.sourceId })),
       { baseIndex, overlays: overlayConfigs },
     )
 
