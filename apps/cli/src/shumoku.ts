@@ -146,7 +146,7 @@ async function main(): Promise<void> {
     }
 
     // Determine format
-    const outputBase = values.output!
+    const outputBase = values.output
     const extMatch = outputBase.toLowerCase().match(/\.(svg|html|htm|png)$/)
     const format: OutputFormat =
       (values.format as OutputFormat) ??
@@ -178,7 +178,7 @@ async function main(): Promise<void> {
       }
     } else if (format === 'png') {
       console.log('Rendering PNG...')
-      const scale = Number.parseFloat(values.scale!) || 2
+      const scale = Number.parseFloat(values.scale) || 2
       const pngBuffer = await png.render(graph, layoutResult, { scale })
       writeFileSync(outputPath, pngBuffer)
     } else {
