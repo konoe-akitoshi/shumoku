@@ -280,7 +280,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
       }
     }
 
-    if (successfulFetches.length === 0) {
+    if (!successfulFetches[0]) {
       return c.json({ error: 'Failed to fetch from any source' }, 500)
     }
 
