@@ -12,9 +12,8 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@shumoku/renderer-svg": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",
-    "shumoku": "workspace:*",
+    "@shumoku/renderer-svg": "workspace:*",
     "fumadocs-core": "16.4.6",
     "fumadocs-mdx": "14.2.4",
     "fumadocs-ui": "16.4.6",
@@ -22,7 +21,9 @@
     "next": "16.1.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "tailwind-merge": "^3.4.0"
+    "shumoku": "workspace:*",
+    "tailwind-merge": "^3.4.0",
+    "zod": "4.3.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
