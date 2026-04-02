@@ -280,9 +280,9 @@ function parseImageDimensions(data: Uint8Array, url: string): IconDimensions | n
 
     // Try viewBox first
     const viewBoxMatch = text.match(/viewBox=["']([^"']+)["']/)
-    if (viewBoxMatch) {
+    if (viewBoxMatch?.[1]) {
       const parts = viewBoxMatch[1].trim().split(/\s+/)
-      if (parts.length >= 4) {
+      if (parts.length >= 4 && parts[2] && parts[3]) {
         return { width: parseFloat(parts[2]), height: parseFloat(parts[3]) }
       }
     }
@@ -290,7 +290,7 @@ function parseImageDimensions(data: Uint8Array, url: string): IconDimensions | n
     // Try width/height attributes
     const widthMatch = text.match(/\bwidth=["'](\d+(?:\.\d+)?)(?:px)?["']/)
     const heightMatch = text.match(/\bheight=["'](\d+(?:\.\d+)?)(?:px)?["']/)
-    if (widthMatch && heightMatch) {
+    if (widthMatch?.[1] && heightMatch?.[1]) {
       return { width: parseFloat(widthMatch[1]), height: parseFloat(heightMatch[1]) }
     }
   }
