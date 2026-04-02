@@ -785,7 +785,7 @@ ${fg}
     const style = node.style || {}
 
     // Check if this is an export connector node (for hierarchical diagrams)
-    const isExport = node.metadata?._isExport === true
+    const isExport = node.metadata?.['_isExport'] === true
 
     // Special styling for export connector nodes - use subgraph colors
     let fill = style.fill || this.color('defaultNodeFill')
@@ -1080,7 +1080,7 @@ ${fg}
    */
   private renderNodeContent(node: Node, x: number, y: number, w: number): string {
     // Check if this is an export connector node
-    const isExport = node.metadata?._isExport === true
+    const isExport = node.metadata?.['_isExport'] === true
 
     // For export connectors, render with arrow icon
     if (isExport) {
@@ -1228,10 +1228,10 @@ ${fg}
     attrs.push(`data-link-to="${this.escapeXml(toStr)}"`)
 
     // Export link destination info (for tooltip on hierarchical export connectors)
-    if (link.metadata?._destDevice) {
-      attrs.push(`data-link-dest-device="${this.escapeXml(String(link.metadata._destDevice))}"`)
-      if (link.metadata._destPort) {
-        attrs.push(`data-link-dest-port="${this.escapeXml(String(link.metadata._destPort))}"`)
+    if (link.metadata?.['_destDevice']) {
+      attrs.push(`data-link-dest-device="${this.escapeXml(String(link.metadata['_destDevice']))}"`)
+      if (link.metadata['_destPort']) {
+        attrs.push(`data-link-dest-port="${this.escapeXml(String(link.metadata['_destPort']))}"`)
       }
     }
 
