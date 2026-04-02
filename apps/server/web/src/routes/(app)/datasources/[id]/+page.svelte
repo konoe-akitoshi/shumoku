@@ -61,19 +61,19 @@
 
     // Only include token if user entered a new one; omit to let server preserve existing
     if (formToken.trim()) {
-      config.token = formToken.trim()
+      config['token'] = formToken.trim()
     }
 
     if (type === 'zabbix') {
-      config.pollInterval = formPollInterval
+      config['pollInterval'] = formPollInterval
     }
 
     if (type === 'netbox') {
-      if (formInsecure) config.insecure = true
+      if (formInsecure) config['insecure'] = true
     }
 
     if (type === 'grafana') {
-      config.useWebhook = formUseWebhook
+      config['useWebhook'] = formUseWebhook
     }
 
     return JSON.stringify(config)
