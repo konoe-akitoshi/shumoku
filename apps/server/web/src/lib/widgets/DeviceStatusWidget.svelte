@@ -31,7 +31,7 @@
   let hoveredSegment = $state<{ type: string; status: string } | null>(null)
 
   // --- Constants ---
-  const STATUS_COLORS: Record<string, string> = {
+  const STATUS_COLORS = {
     up: '#22c55e',
     down: '#ef4444',
     unknown: '#6b7280',
@@ -76,7 +76,7 @@
   function formatTypeName(type: string): string {
     return type
       .split('-')
-      .map((w) => w[0].toUpperCase() + w.slice(1))
+      .map((w) => (w[0] ?? '').toUpperCase() + w.slice(1))
       .join(' ')
   }
 
@@ -161,14 +161,13 @@
   /** Expand typeStatuses into flat per-status items with gap info */
   function buildDetailItems() {
     const items: { count: number; color: string; type: string; status: string; gap: number }[] = []
-    for (let ti = 0; ti < typeStatuses.length; ti++) {
-      const ts = typeStatuses[ti]
+    for (const [ti, ts] of typeStatuses.entries()) {
       const entries = (['up', 'down', 'unknown'] as const)
         .filter((s) => ts[s] > 0)
         .map((s) => ({ status: s, count: ts[s], color: STATUS_COLORS[s] }))
-      for (let i = 0; i < entries.length; i++) {
+      for (const [i, entry] of entries.entries()) {
         const isTypeBoundary = i === entries.length - 1 && ti < typeStatuses.length - 1
-        items.push({ ...entries[i], type: ts.type, gap: isTypeBoundary ? TYPE_GAP : GAP })
+        items.push({ ...entry, type: ts.type, gap: isTypeBoundary ? TYPE_GAP : GAP })
       }
     }
     return items
@@ -221,9 +220,9 @@
   let overviewSegments = $derived.by(() => {
     const { total, up, down, unknown } = overallStats
     const items = [
-      { count: up, color: STATUS_COLORS.up, gap: GAP },
-      { count: down, color: STATUS_COLORS.down, gap: GAP },
-      { count: unknown, color: STATUS_COLORS.unknown, gap: GAP },
+      { count: up, color: STATUS_COLORS['up'], gap: GAP },
+      { count: down, color: STATUS_COLORS['down'], gap: GAP },
+      { count: unknown, color: STATUS_COLORS['unknown'], gap: GAP },
     ].filter((s) => s.count > 0)
     return buildSegments(items, total)
   })
