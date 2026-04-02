@@ -371,7 +371,10 @@ export function createTopologiesApi(): Hono {
       const sourcesToFetch =
         topologySources.length > 0
           ? topologySources
-          : [{ dataSourceId: topology.topologySourceId!, optionsJson: undefined }]
+          : (() => {
+              if (!topology.topologySourceId) throw new Error('topologySourceId is undefined')
+              return [{ dataSourceId: topology.topologySourceId, optionsJson: undefined }]
+            })()
 
       console.log(
         '[sync-from-source] Fetching from',
@@ -419,7 +422,7 @@ export function createTopologiesApi(): Hono {
         }
       }
 
-      if (successfulFetches.length === 0) {
+      if (successfulFetches.length === 0 || !successfulFetches[0]) {
         return c.json(
           {
             error: 'Failed to fetch topology from any source',
