@@ -14,6 +14,7 @@
   import type { ConnectionTestResult, DataSource, DataSourceType } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
+  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
   let id = $derived($page.params.id!)
 
   let dataSource = $state<DataSource | null>(null)

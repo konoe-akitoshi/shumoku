@@ -41,6 +41,7 @@
   let diagramComponent: InteractiveSvgDiagram
 
   // Get ID from route params
+  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
   $: topologyId = $page.params.id!
 
   // Get mapping from store

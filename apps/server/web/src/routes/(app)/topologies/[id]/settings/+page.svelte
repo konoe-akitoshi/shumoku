@@ -45,6 +45,7 @@
   // State
   // ============================================
 
+  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
   let topologyId = $derived($page.params.id!)
 
   // Tab state - check URL hash for initial tab

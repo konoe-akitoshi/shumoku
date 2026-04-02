@@ -8,6 +8,7 @@
   import type { Topology } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
+  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
   $: id = $page.params.id!
 
   let topology: Topology | null = null
