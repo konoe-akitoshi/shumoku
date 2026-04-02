@@ -321,7 +321,7 @@
                     <span class="badge badge-info">{getTypeLabel(ds.type)}</span>
                     {#if pluginTypeMap[ds.type]}
                       <div class="flex gap-1">
-                        {#each pluginTypeMap[ds.type].capabilities as cap}
+                        {#each pluginTypeMap[ds.type]?.capabilities as cap}
                           <span
                             class="text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted"
                             title={cap}

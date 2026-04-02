@@ -41,28 +41,28 @@
   function graphToYaml(graph: Record<string, unknown>): string {
     const lines: string[] = []
 
-    if (graph.name) lines.push(`name: ${graph.name}`)
-    if (graph.version) lines.push(`version: "${graph.version}"`)
-    if (graph.description) lines.push(`description: ${graph.description}`)
+    if (graph['name']) lines.push(`name: ${graph['name']}`)
+    if (graph['version']) lines.push(`version: "${graph['version']}"`)
+    if (graph['description']) lines.push(`description: ${graph['description']}`)
 
     lines.push('')
     lines.push('nodes:')
-    const nodes = (graph.nodes as Array<Record<string, unknown>>) || []
+    const nodes = (graph['nodes'] as Array<Record<string, unknown>>) || []
     for (const node of nodes) {
-      lines.push(`  - id: ${node.id}`)
-      if (node.label) lines.push(`    label: ${node.label}`)
-      if (node.type) lines.push(`    type: ${node.type}`)
-      if (node.vendor) lines.push(`    vendor: ${node.vendor}`)
-      if (node.model) lines.push(`    model: ${node.model}`)
-      if (node.parent) lines.push(`    parent: ${node.parent}`)
+      lines.push(`  - id: ${node['id']}`)
+      if (node['label']) lines.push(`    label: ${node['label']}`)
+      if (node['type']) lines.push(`    type: ${node['type']}`)
+      if (node['vendor']) lines.push(`    vendor: ${node['vendor']}`)
+      if (node['model']) lines.push(`    model: ${node['model']}`)
+      if (node['parent']) lines.push(`    parent: ${node['parent']}`)
     }
 
     lines.push('')
     lines.push('links:')
-    const links = (graph.links as Array<Record<string, unknown>>) || []
+    const links = (graph['links'] as Array<Record<string, unknown>>) || []
     for (const link of links) {
-      const from = link.from as string | { node: string; port?: string }
-      const to = link.to as string | { node: string; port?: string }
+      const from = link['from'] as string | { node: string; port?: string }
+      const to = link['to'] as string | { node: string; port?: string }
 
       if (typeof from === 'string') {
         lines.push(`  - from: ${from}`)
@@ -80,17 +80,17 @@
         if (to.port) lines.push(`      port: ${to.port}`)
       }
 
-      if (link.bandwidth) lines.push(`    bandwidth: ${link.bandwidth}`)
+      if (link['bandwidth']) lines.push(`    bandwidth: ${link['bandwidth']}`)
     }
 
-    const subgraphs = graph.subgraphs as Array<Record<string, unknown>> | undefined
+    const subgraphs = graph['subgraphs'] as Array<Record<string, unknown>> | undefined
     if (subgraphs && subgraphs.length > 0) {
       lines.push('')
       lines.push('subgraphs:')
       for (const sg of subgraphs) {
-        lines.push(`  - id: ${sg.id}`)
-        if (sg.label) lines.push(`    label: ${sg.label}`)
-        if (sg.parent) lines.push(`    parent: ${sg.parent}`)
+        lines.push(`  - id: ${sg['id']}`)
+        if (sg['label']) lines.push(`    label: ${sg['label']}`)
+        if (sg['parent']) lines.push(`    parent: ${sg['parent']}`)
       }
     }
 
