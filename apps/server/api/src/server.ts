@@ -340,7 +340,7 @@ export class Server {
 
       // Try to get metrics from configured data source
       const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
-      if (metricsSources.length > 0) {
+      if (metricsSources[0]) {
         const source = metricsSources[0] // Use first metrics source
         const dataSource = this.dataSourceService.get(source.dataSourceId)
 
