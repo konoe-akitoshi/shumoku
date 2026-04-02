@@ -141,7 +141,7 @@ async function buildChildSheet(
   // e.g., `perimeter/edge` -> `edge`
   const transformedNodes = childNodes.map((n) => {
     let newParent = n.parent
-    if (newParent && newParent.startsWith(`${subgraph.id}/`)) {
+    if (newParent?.startsWith(`${subgraph.id}/`)) {
       newParent = newParent.slice(subgraph.id.length + 1)
     } else if (newParent === subgraph.id) {
       newParent = undefined
@@ -199,42 +199,44 @@ function generateExportConnectors(
       const destSubgraphId = destSubgraph?.id || '__external__'
       const key = `${subgraphId}:to:${destSubgraphId}`
 
-      if (!exportPoints.has(key)) {
-        exportPoints.set(key, {
-          subgraphId,
-          destSubgraphId,
-          destSubgraphLabel: destSubgraph?.label || toNode,
-          isSource: true,
-          connections: [],
-        })
+      const point: ExportPoint = exportPoints.get(key) ?? {
+        subgraphId,
+        destSubgraphId,
+        destSubgraphLabel: destSubgraph?.label || toNode,
+        isSource: true,
+        connections: [],
       }
-      exportPoints.get(key)!.connections.push({
+
+      point.connections.push({
         device: fromNode,
         port: fromPort,
         destDevice: toNode,
         destPort: toPort,
       })
+
+      exportPoints.set(key, point)
     } else if (!fromInside && toInside) {
       // Incoming connection - group by source subgraph
       const srcSubgraph = findNodeSubgraph(rootGraph, fromNode)
       const srcSubgraphId = srcSubgraph?.id || '__external__'
       const key = `${subgraphId}:from:${srcSubgraphId}`
 
-      if (!exportPoints.has(key)) {
-        exportPoints.set(key, {
-          subgraphId,
-          destSubgraphId: srcSubgraphId,
-          destSubgraphLabel: srcSubgraph?.label || fromNode,
-          isSource: false,
-          connections: [],
-        })
+      const point = exportPoints.get(key) ?? {
+        subgraphId,
+        destSubgraphId: srcSubgraphId,
+        destSubgraphLabel: srcSubgraph?.label || fromNode,
+        isSource: false,
+        connections: [],
       }
-      exportPoints.get(key)!.connections.push({
+
+      point.connections.push({
         device: toNode,
         port: toPort,
         destDevice: fromNode,
         destPort: fromPort,
       })
+
+      exportPoints.set(key, point)
     }
   }
 
@@ -258,8 +260,7 @@ function generateExportConnectors(
     })
 
     // Export links (one per connection)
-    for (let i = 0; i < exportPoint.connections.length; i++) {
-      const conn = exportPoint.connections[i]
+    for (const [i, conn] of exportPoint.connections.entries()) {
       const deviceEndpoint = conn.port ? { node: conn.device, port: conn.port } : conn.device
 
       exportLinks.push({
