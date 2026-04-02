@@ -90,6 +90,7 @@
 
       if (renderData.hierarchical) {
         isHierarchical = true
+        // biome-ignore lint/suspicious/noExplicitAny: the api response is not correctly typed
         sheets = Object.entries(renderData.sheets).map(([sheetId, sheet]: [string, any]) => ({
           id: sheetId,
           name: sheet.name || sheetId,
@@ -98,6 +99,7 @@
         const sheetId = config.sheetId || 'root'
         svgContent = renderSheets[sheetId]?.svg || ''
         // All sheets share the same theme CSS; pick from any sheet
+        // biome-ignore lint/suspicious/noExplicitAny: casting to any because the api response is not correctly typed
         const firstSheet = Object.values(renderData.sheets)[0] as any
         injectCSS(firstSheet?.css)
       } else {
