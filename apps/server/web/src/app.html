@@ -15,13 +15,15 @@
       rel="stylesheet"
     >
     <script>
+      var t
+      var dark
       try {
-        var t = JSON.parse(localStorage.getItem('shumoku-settings') || '{}').theme || 'system'
-        var dark =
+        t = JSON.parse(localStorage.getItem('shumoku-settings') || '{}').theme || 'system'
+        dark =
           t === 'dark' ||
           (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
         if (dark) document.documentElement.classList.add('dark')
-      } catch (e) {}
+      } catch {}
     </script>
     %sveltekit.head%
   </head>
