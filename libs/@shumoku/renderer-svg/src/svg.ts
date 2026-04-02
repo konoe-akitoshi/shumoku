@@ -1788,7 +1788,7 @@ ${linePath}
       return undefined
     }
 
-    if (vlan.length === 1) {
+    if (vlan[0]) {
       // Single VLAN: use color based on VLAN ID
       const colorIndex = vlan[0] % SVGRenderer.VLAN_COLORS.length
       return SVGRenderer.VLAN_COLORS[colorIndex]
@@ -1812,7 +1812,9 @@ ${linePath}
   }
 
   private getMidPoint(points: { x: number; y: number }[]): { x: number; y: number } {
-    if (points.length === 4) {
+    if (!points[0]) throw new Error('the array is empty')
+
+    if (points.length === 4 && points[0] && points[1] && points[2] && points[3]) {
       // Cubic bezier curve midpoint at t=0.5
       const t = 0.5
       const mt = 1 - t
@@ -1829,7 +1831,7 @@ ${linePath}
       return { x, y }
     }
 
-    if (points.length === 2) {
+    if (points.length === 2 && points[0] && points[1]) {
       // Simple midpoint between two points
       return {
         x: (points[0].x + points[1].x) / 2,
@@ -1839,10 +1841,11 @@ ${linePath}
 
     // For polylines, find the middle segment and get its midpoint
     const midIndex = Math.floor(points.length / 2)
-    if (midIndex > 0 && midIndex < points.length) {
+    const prevMidIndex = midIndex - 1
+    if (midIndex > 0 && midIndex < points.length && points[prevMidIndex] && points[midIndex]) {
       return {
-        x: (points[midIndex - 1].x + points[midIndex].x) / 2,
-        y: (points[midIndex - 1].y + points[midIndex].y) / 2,
+        x: (points[prevMidIndex].x + points[midIndex].x) / 2,
+        y: (points[prevMidIndex].y + points[midIndex].y) / 2,
       }
     }
 
