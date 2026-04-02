@@ -352,8 +352,8 @@ export class PrometheusPlugin
       // Get unique metric names
       const metricNames = new Set<string>()
       for (const series of seriesData) {
-        if (series.__name__) {
-          metricNames.add(series.__name__)
+        if (series['__name__']) {
+          metricNames.add(series['__name__'])
         }
       }
 
@@ -384,7 +384,7 @@ export class PrometheusPlugin
 
           for (const series of result.result) {
             const labels = { ...series.metric }
-            delete labels.__name__
+            delete labels['__name__']
 
             metrics.push({
               name: metricName,
@@ -456,13 +456,13 @@ export class PrometheusPlugin
           return true
         })
         .map((a) => {
-          const severity = this.mapAlertmanagerSeverity(a.labels.severity)
+          const severity = this.mapAlertmanagerSeverity(a.labels['severity'])
           return {
             id: a.fingerprint,
             severity,
-            title: a.labels.alertname || 'Unknown Alert',
-            description: a.annotations?.description || a.annotations?.summary,
-            host: a.labels.instance || a.labels.host,
+            title: a.labels['alertname'] || 'Unknown Alert',
+            description: a.annotations?.['description'] || a.annotations?.['summary'],
+            host: a.labels['instance'] || a.labels['host'],
             startTime: new Date(a.startsAt).getTime(),
             endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
             status: a.status.state === 'active' ? 'active' : 'resolved',
@@ -508,7 +508,7 @@ export class PrometheusPlugin
       const credentials = btoa(
         `${this.config.basicAuth.username}:${this.config.basicAuth.password}`,
       )
-      headers.Authorization = `Basic ${credentials}`
+      headers['Authorization'] = `Basic ${credentials}`
     }
 
     return fetch(url, { headers })
@@ -573,7 +573,7 @@ export class PrometheusPlugin
       const credentials = btoa(
         `${this.config.basicAuth.username}:${this.config.basicAuth.password}`,
       )
-      headers.Authorization = `Basic ${credentials}`
+      headers['Authorization'] = `Basic ${credentials}`
     }
 
     return fetch(url, {

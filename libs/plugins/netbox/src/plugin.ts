@@ -86,25 +86,25 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
     }
 
     // Extract per-topology options (filters support string or string[])
-    const groupBy = (options?.groupBy as string) || 'tag'
+    const groupBy = (options?.['groupBy'] as string) || 'tag'
 
     const params: Record<string, string | string[] | number> = {}
 
     // Include filters
-    const site = options?.siteFilter as string | string[] | undefined
-    const tag = options?.tagFilter as string | string[] | undefined
-    const role = options?.roleFilter as string | string[] | undefined
-    if (site && (!Array.isArray(site) || site.length > 0)) params.site = site
-    if (tag && (!Array.isArray(tag) || tag.length > 0)) params.tag = tag
-    if (role && (!Array.isArray(role) || role.length > 0)) params.role = role
+    const site = options?.['siteFilter'] as string | string[] | undefined
+    const tag = options?.['tagFilter'] as string | string[] | undefined
+    const role = options?.['roleFilter'] as string | string[] | undefined
+    if (site && (!Array.isArray(site) || site.length > 0)) params['site'] = site
+    if (tag && (!Array.isArray(tag) || tag.length > 0)) params['tag'] = tag
+    if (role && (!Array.isArray(role) || role.length > 0)) params['role'] = role
 
     // Exclude filters (NetBox uses __n suffix for negation)
-    const excludeRole = options?.excludeRoleFilter as string | string[] | undefined
-    const excludeTag = options?.excludeTagFilter as string | string[] | undefined
+    const excludeRole = options?.['excludeRoleFilter'] as string | string[] | undefined
+    const excludeTag = options?.['excludeTagFilter'] as string | string[] | undefined
     if (excludeRole && (!Array.isArray(excludeRole) || excludeRole.length > 0))
-      params.role__n = excludeRole
+      params['role__n'] = excludeRole
     if (excludeTag && (!Array.isArray(excludeTag) || excludeTag.length > 0))
-      params.tag__n = excludeTag
+      params['tag__n'] = excludeTag
 
     console.log('[NetBox] Fetching topology with params:', params)
 

@@ -54,8 +54,8 @@ export function mapSeverity(severity?: string): AlertSeverity {
 }
 
 export function buildTitle(labels: Record<string, string>): string {
-  const name = labels.alertname || 'Unknown Alert'
-  const host = labels.hostname || labels.instance || labels.host
+  const name = labels['alertname'] || 'Unknown Alert'
+  const host = labels['hostname'] || labels['instance'] || labels['host']
   return host ? `${name} - ${host}` : name
 }
 
@@ -192,10 +192,10 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
           (a) =>
             ({
               id: a.fingerprint,
-              severity: mapSeverity(a.labels.severity),
+              severity: mapSeverity(a.labels['severity']),
               title: buildTitle(a.labels),
-              description: a.annotations?.description || a.annotations?.summary,
-              host: a.labels.hostname || a.labels.instance || a.labels.host,
+              description: a.annotations?.['description'] || a.annotations?.['summary'],
+              host: a.labels['hostname'] || a.labels['instance'] || a.labels['host'],
               startTime: new Date(a.startsAt).getTime(),
               endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
               status: a.status.state === 'active' ? 'active' : 'resolved',

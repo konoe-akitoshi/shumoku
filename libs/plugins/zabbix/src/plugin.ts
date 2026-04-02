@@ -274,7 +274,7 @@ export class ZabbixPlugin
         key: item.key_,
       }
       if (item.units) {
-        labels.units = item.units
+        labels['units'] = item.units
       }
       if (item.tags) {
         for (const tag of item.tags) {
@@ -380,12 +380,12 @@ export class ZabbixPlugin
 
     // Filter by severity
     if (severityFilter.length > 0) {
-      params.severities = severityFilter
+      params['severities'] = severityFilter
     }
 
     // Filter by host IDs
     if (options?.hostIds && options.hostIds.length > 0) {
-      params.hostids = options.hostIds
+      params['hostids'] = options.hostIds
     }
 
     const problems = await this.apiRequest<ZabbixProblem[]>('problem.get', params)
@@ -474,7 +474,7 @@ export class ZabbixPlugin
     }
 
     if (!ZabbixPlugin.UNAUTHENTICATED_METHODS.has(method)) {
-      headers.Authorization = `Bearer ${this.config.token}`
+      headers['Authorization'] = `Bearer ${this.config.token}`
     }
 
     const response = await fetch(url, {
