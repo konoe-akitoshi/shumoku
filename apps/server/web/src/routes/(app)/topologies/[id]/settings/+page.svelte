@@ -358,7 +358,7 @@
     const availableSources = purpose === 'topology' ? topologyDataSources : metricsDataSources
     const existing = editableSources.filter((s) => s.purpose === purpose).map((s) => s.dataSourceId)
     const available = availableSources.filter((ds) => !existing.includes(ds.id))
-    if (available.length === 0) {
+    if (!available[0]) {
       alert('No more data sources available to add')
       return
     }
@@ -420,7 +420,7 @@
   }
 
   function updateOptions(index: number, patch: Partial<NetBoxOptions>) {
-    const current = parseOptions(editableSources[index].optionsJson)
+    const current = parseOptions(editableSources[index]?.optionsJson)
     const merged = { ...current, ...patch }
     if (!merged.groupBy) delete merged.groupBy
     if (!merged.siteFilter?.length) delete merged.siteFilter
@@ -554,10 +554,14 @@
   }
 
   function updateOverlayConfig(dataSourceId: string, updates: Partial<OverlayConfig>) {
-    overlayConfigs = {
-      ...overlayConfigs,
-      [dataSourceId]: { ...overlayConfigs[dataSourceId], ...updates },
+    const prevConfig = overlayConfigs[dataSourceId]
+    if (prevConfig) {
+      overlayConfigs[dataSourceId] = {
+        ...prevConfig,
+        ...updates,
+      }
     }
+
     hasSourceChanges = true
   }
 
