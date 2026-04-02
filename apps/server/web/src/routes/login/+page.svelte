@@ -50,8 +50,10 @@
         await auth.login(password)
       }
       goto('/')
-    } catch (e: any) {
-      error = e.message || 'Authentication failed'
+    } catch (e) {
+      if (typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string') {
+        error = e.message || 'Authentication failed'
+      }
     } finally {
       loading = false
     }

@@ -73,8 +73,10 @@
       currentPassword = ''
       newPassword = ''
       confirmNewPassword = ''
-    } catch (e: any) {
-      passwordError = e.message || 'Failed to change password'
+    } catch (e) {
+      if (typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string') {
+        passwordError = e.message || 'Failed to change password'
+      }
     } finally {
       passwordLoading = false
     }
