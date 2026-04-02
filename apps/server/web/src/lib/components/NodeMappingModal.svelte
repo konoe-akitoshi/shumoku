@@ -66,8 +66,8 @@
       ? hosts.filter(
           (h) =>
             h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (h.displayName && h.displayName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (h.ip && h.ip.includes(searchQuery)),
+            h.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            h.ip?.includes(searchQuery),
         )
       : hosts,
   )
@@ -81,7 +81,7 @@
       ? discoveredMetrics.filter(
           (m) =>
             m.name.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||
-            (m.help && m.help.toLowerCase().includes(metricsSearchQuery.toLowerCase())) ||
+            m.help?.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||
             Object.entries(m.labels).some(
               ([k, v]) =>
                 k.toLowerCase().includes(metricsSearchQuery.toLowerCase()) ||

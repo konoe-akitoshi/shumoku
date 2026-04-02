@@ -233,7 +233,7 @@
     return buildSegments(items, overallStats.total, (item) => {
       if (!active) return 1
       if (item.type !== active) return 0.2
-      if (hoveredSegment && hoveredSegment.status !== item.status) return 0.5
+      if (hoveredSegment?.status !== item.status) return 0.5
       return 1
     })
   })
@@ -284,7 +284,7 @@
   })
 
   let centerLine1 = $derived.by(() => {
-    if (hoveredSegment && hoveredSegment.type) {
+    if (hoveredSegment?.type) {
       const type = hoveredSegment.type
       const ts = typeStatuses.find((t) => t.type === type)
       if (!ts) return ''
