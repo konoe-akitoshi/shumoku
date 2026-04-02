@@ -304,7 +304,7 @@
 
   // Navigate back via breadcrumb
   async function navigateToBreadcrumb(targetId: string) {
-    const targetIndex = navigationStack.findIndex((id) => id === targetId)
+    const targetIndex = navigationStack.indexOf(targetId)
 
     if (targetIndex === -1 && targetId === currentSheetId) {
       // Already at target
