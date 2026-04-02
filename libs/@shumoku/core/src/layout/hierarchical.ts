@@ -8,9 +8,9 @@
  */
 
 import ELK, {
-  ElkPort,
   type ElkExtendedEdge,
   type ElkNode,
+  type ElkPort,
   type LayoutOptions,
 } from 'elkjs/lib/elk.bundled.js'
 import {
@@ -803,7 +803,7 @@ export class HierarchicalLayout {
       if (!edgesByContainer.has(containerId)) {
         edgesByContainer.set(containerId, [])
       }
-      edgesByContainer.get(containerId)!.push(edge)
+      edgesByContainer.get(containerId)?.push(edge)
     }
 
     // Dynamic edge spacing (account for thick/bandwidth-based strokes)
@@ -888,9 +888,10 @@ export class HierarchicalLayout {
       const width = elkNode.width || 0
       const height = elkNode.height || 0
 
-      if (subgraphMap.has(elkNode.id)) {
+      const sg = subgraphMap.get(elkNode.id)
+      const node = nodeMap.get(elkNode.id)
+      if (sg) {
         // Subgraph
-        const sg = subgraphMap.get(elkNode.id)!
         const layoutSg: LayoutSubgraph = {
           id: elkNode.id,
           bounds: { x, y, width, height },
@@ -911,9 +912,8 @@ export class HierarchicalLayout {
             processElkNode(child)
           }
         }
-      } else if (nodeMap.has(elkNode.id)) {
+      } else if (node) {
         // Regular node
-        const node = nodeMap.get(elkNode.id)!
         const portInfo = nodePorts.get(node.id)
         const nodeHeight = this.calculateNodeHeight(node, portInfo?.all.size || 0)
 
@@ -1055,7 +1055,7 @@ export class HierarchicalLayout {
           const isSubgraphEdge = fromSubgraph || toSubgraph
 
           // HA edges inside HA containers: use ELK's edge routing directly
-          if (isHAContainer(container.id) && elkEdge.sections && elkEdge.sections.length > 0) {
+          if (isHAContainer(container.id) && elkEdge.sections?.[0]) {
             const section = elkEdge.sections[0]
             points.push({ x: section.startPoint.x, y: section.startPoint.y })
             if (section.bendPoints) {
@@ -1066,7 +1066,7 @@ export class HierarchicalLayout {
             points.push({ x: section.endPoint.x, y: section.endPoint.y })
           } else if (isSubgraphEdge) {
             // Subgraph edges: use ELK's coordinates directly
-            if (elkEdge.sections && elkEdge.sections.length > 0) {
+            if (elkEdge.sections?.[0]) {
               const section = elkEdge.sections[0]
               points.push({ x: section.startPoint.x, y: section.startPoint.y })
               if (section.bendPoints) {
@@ -1088,7 +1088,7 @@ export class HierarchicalLayout {
             const toParent = graph.nodes.find((n) => n.id === toEndpoint_.node)?.parent
             const isCrossSubgraph = fromParent !== toParent
 
-            if (elkEdge.sections && elkEdge.sections.length > 0) {
+            if (elkEdge.sections?.[0]) {
               const section = elkEdge.sections[0]
 
               if (isCrossSubgraph) {
