@@ -19,7 +19,10 @@
     "declarationMap": true,
     "sourceMap": true,
     "allowJs": false,
-    "incremental": true
+    "incremental": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitOverride": true
   },
   "exclude": ["node_modules", "dist", "build", ".turbo"]
 }
