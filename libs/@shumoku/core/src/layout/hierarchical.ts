@@ -172,16 +172,20 @@ function collectNodePorts(graph: NetworkGraph, haPairSet: Set<string>): Map<stri
   const nodePorts = new Map<string, NodePortInfo>()
 
   const getOrCreate = (nodeId: string): NodePortInfo => {
-    if (!nodePorts.has(nodeId)) {
-      nodePorts.set(nodeId, {
+    const info = nodePorts.get(nodeId)
+    if (info) {
+      return info
+    } else {
+      const info: NodePortInfo = {
         all: new Set(),
         top: new Set(),
         bottom: new Set(),
         left: new Set(),
         right: new Set(),
-      })
+      }
+      nodePorts.set(nodeId, info)
+      return info
     }
-    return nodePorts.get(nodeId)!
   }
 
   // Check if link is between HA pair nodes
