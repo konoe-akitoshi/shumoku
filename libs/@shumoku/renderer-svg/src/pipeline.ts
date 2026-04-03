@@ -119,7 +119,7 @@ export async function prepareRender(
  * Set to true to enable libavoid edge routing. Currently disabled while
  * coordinate mapping issues are being resolved (#73).
  */
-const USE_LIBAVOID_ROUTING = true
+const USE_LIBAVOID_ROUTING = false
 
 async function computeLayout(
   graph: NetworkGraph,
