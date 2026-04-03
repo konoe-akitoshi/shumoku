@@ -68,9 +68,7 @@ links:
   }
 </script>
 
-<svelte:head>
-  <title>Topologies - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Topologies - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   <!-- Actions -->

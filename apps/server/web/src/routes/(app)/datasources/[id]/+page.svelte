@@ -185,9 +185,7 @@
   }
 </script>
 
-<svelte:head>
-  <title>{dataSource?.name || 'Data Source'} - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>{dataSource?.name || 'Data Source'} - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   <!-- Back link -->

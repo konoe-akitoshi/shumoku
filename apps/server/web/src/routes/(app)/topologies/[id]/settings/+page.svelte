@@ -767,9 +767,7 @@
   const subgraphNameId = `${componentId}:subgraph`
 </script>
 
-<svelte:head>
-  <title>Settings - {topology?.name || 'Topology'} - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Settings - {topology?.name || 'Topology'} - Shumoku</title> </svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
   {#if loading}

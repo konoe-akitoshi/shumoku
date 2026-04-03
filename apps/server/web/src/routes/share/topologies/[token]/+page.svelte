@@ -30,9 +30,7 @@
   })
 </script>
 
-<svelte:head>
-  <title>{name || 'Shared Topology'} - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>{name || 'Shared Topology'} - Shumoku</title> </svelte:head>
 
 <div class="h-screen flex flex-col bg-theme-bg-canvas">
   <!-- Header -->
@@ -59,9 +57,7 @@
         <p class="text-theme-text-muted">{error}</p>
       </div>
     {:else}
-      <div class="absolute inset-0">
-        <InteractiveSvgDiagram {renderUrl} readOnly={true} />
-      </div>
+      <div class="absolute inset-0"><InteractiveSvgDiagram {renderUrl} readOnly={true} /></div>
     {/if}
   </div>
 </div>

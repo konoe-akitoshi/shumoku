@@ -293,9 +293,7 @@
   }
 </script>
 
-<svelte:head>
-  <title>{$currentDashboard?.name || 'Dashboard'} - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>{$currentDashboard?.name || 'Dashboard'} - Shumoku</title> </svelte:head>
 
 <div class="h-full flex flex-col">
   <!-- Header -->

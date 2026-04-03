@@ -131,9 +131,7 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<svelte:head>
-  <title>{topology?.name || 'Topology'} - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>{topology?.name || 'Topology'} - Shumoku</title> </svelte:head>
 
 <div class="h-full flex overflow-hidden">
   <!-- Main diagram area -->

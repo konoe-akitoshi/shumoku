@@ -64,9 +64,7 @@
   <div class="w-full max-w-sm mx-4">
     <div class="bg-theme-bg-elevated border border-theme-border rounded-xl p-8 shadow-lg">
       <!-- Logo -->
-      <div class="flex justify-center mb-6">
-        <Logo size={48} />
-      </div>
+      <div class="flex justify-center mb-6"><Logo size={48} /></div>
 
       <h1 class="text-xl font-semibold text-theme-text-emphasis text-center mb-2">
         {isSetup ? 'Setup Shumoku' : 'Login'}

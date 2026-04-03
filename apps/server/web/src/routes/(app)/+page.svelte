@@ -38,9 +38,7 @@
   let connectedSources = $derived(dataSources.filter((ds) => ds.status === 'connected').length)
 </script>
 
-<svelte:head>
-  <title>Home - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Home - Shumoku</title> </svelte:head>
 
 <div class="h-full overflow-auto">
   {#if loading}

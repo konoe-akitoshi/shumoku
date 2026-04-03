@@ -252,9 +252,7 @@
   }
 </script>
 
-<svelte:head>
-  <title>Data Sources - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Data Sources - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   <!-- Actions -->

@@ -184,9 +184,7 @@
   }
 </script>
 
-<svelte:head>
-  <title>Plugins - Shumoku</title>
-</svelte:head>
+<svelte:head> <title>Plugins - Shumoku</title> </svelte:head>
 
 <div class="p-6">
   <!-- Header -->
