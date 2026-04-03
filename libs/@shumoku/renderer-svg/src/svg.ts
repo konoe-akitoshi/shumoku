@@ -1470,115 +1470,6 @@ ${linePath}
   }
 
   /**
-   * Simplify orthogonal path by absorbing micro-jogs.
-   * When the layout creates a short segment (< minLen) between two longer segments,
-   * it's typically a micro-offset (e.g., 5px horizontal jog between two long vertical runs).
-   * We absorb these by snapping the short segment's endpoints onto the adjacent segments'
-   * axis, effectively straightening the path.
-   *
-   * Example: ... → (100, 500) → (105, 500) → (105, 800) → ...
-   *   The 5px horizontal jog is absorbed: → (105, 500) → (105, 800) → ...
-   *   (or → (100, 500) → (100, 800) depending on which neighbor is longer)
-   */
-  private simplifyMicroJogs(
-    points: { x: number; y: number }[],
-    minLen: number,
-  ): { x: number; y: number }[] {
-    if (points.length <= 3) return points
-
-    // Iteratively remove micro-jogs until stable
-    let pts = points
-    let changed = true
-    while (changed) {
-      changed = false
-      if (pts.length <= 3) break
-
-      const first = pts[0]
-      if (!first) break
-      const result: { x: number; y: number }[] = [first]
-
-      let i = 1
-      while (i < pts.length - 1) {
-        const prev = result[result.length - 1]
-        const curr = pts[i]
-        const next = pts[i + 1]
-        if (!prev || !curr || !next) {
-          i++
-          continue
-        }
-
-        const distToCurr = Math.hypot(curr.x - prev.x, curr.y - prev.y)
-
-        if (distToCurr < minLen && i + 1 < pts.length - 1) {
-          // This segment is short — it's a micro-jog.
-          // Absorb by skipping curr and adjusting next to align with prev's axis.
-          const distToNext = Math.hypot(next.x - curr.x, next.y - curr.y)
-          const distPrevToCurr = distToCurr
-
-          if (distToNext > distPrevToCurr) {
-            // Next segment is longer: snap curr onto next's line
-            // If the short segment is mostly horizontal, inherit next's x
-            // If mostly vertical, inherit next's y
-            if (Math.abs(curr.x - prev.x) > Math.abs(curr.y - prev.y)) {
-              // Short horizontal jog → snap prev endpoint's x to curr/next's x
-              result[result.length - 1] = { x: next.x, y: prev.y }
-            } else {
-              // Short vertical jog → snap prev endpoint's y to curr/next's y
-              result[result.length - 1] = { x: prev.x, y: next.y }
-            }
-          } else {
-            // Prev segment is longer: snap next onto prev's line
-            if (Math.abs(curr.x - prev.x) > Math.abs(curr.y - prev.y)) {
-              pts[i + 1] = { x: prev.x, y: next.y }
-            } else {
-              pts[i + 1] = { x: next.x, y: prev.y }
-            }
-          }
-          // Skip the micro-jog point
-          changed = true
-          i++
-          continue
-        }
-
-        result.push(curr)
-        i++
-      }
-
-      // Add remaining points
-      for (const pt of pts.slice(i)) {
-        result.push(pt)
-      }
-
-      pts = result
-    }
-
-    // Final pass: remove collinear points
-    if (pts.length <= 2) return pts
-    const firstPt = pts[0]
-    if (!firstPt) return pts
-    const cleaned: { x: number; y: number }[] = [firstPt]
-    let prev = firstPt
-    for (const [i, curr] of pts.slice(1, -1).entries()) {
-      const originalIdx = i + 1
-      const next = pts[originalIdx + 1]
-      if (!next) continue
-      // Check if collinear (same direction)
-      const dx1 = curr.x - prev.x
-      const dy1 = curr.y - prev.y
-      const dx2 = next.x - curr.x
-      const dy2 = next.y - curr.y
-      const cross = dx1 * dy2 - dy1 * dx2
-      if (Math.abs(cross) > 0.01) {
-        cleaned.push(curr)
-        prev = curr
-      }
-    }
-    const lastPt = pts[pts.length - 1]
-    if (lastPt) cleaned.push(lastPt)
-    return cleaned
-  }
-
-  /**
    * Build a filleted centerline: sequence of line segments and arc definitions.
    * Each corner is represented by its arc center, radius, tangent points, and sweep direction.
    */
@@ -1594,8 +1485,10 @@ ${linePath}
       return [{ type: 'line', from: firstPoint, to: lastPoint }]
     }
 
-    // Simplify micro-jogs that the layout engine creates
-    const merged = this.simplifyMicroJogs(points, cornerRadius * 2)
+    // Use points directly — corner radius clamping handles short segments.
+    // simplifyMicroJogs was previously used here but it destructively
+    // altered paths, causing loops and backward segments (#79).
+    const merged = points
 
     const segments: CenterlineSegment[] = []
     let prevEnd = merged[0]
