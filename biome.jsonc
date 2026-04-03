@@ -48,7 +48,7 @@
     "experimentalFullSupportEnabled": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.next"]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.next", "!**/.turbo"]
   },
   "overrides": [
     {
