@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'vitest'
 import {
-  normalizeInterfaceName,
-  interfaceMatchScore,
   findBestInterfaceMatch,
-  rankInterfaceMatches,
+  interfaceMatchScore,
   nodeNameMatchScore,
+  normalizeInterfaceName,
+  rankInterfaceMatches,
 } from './auto-mapping'
 
 // ============================================
@@ -168,8 +168,11 @@ describe('interfaceMatchScore', () => {
 describe('findBestInterfaceMatch', () => {
   it('UNIVERGE IX: NetBox GE0/N ↔ Zabbix GigaEthernetN', () => {
     const zabbixInterfaces = [
-      'GigaEthernet0', 'GigaEthernet1', 'GigaEthernet2',
-      'GigaEthernet3', 'GigaEthernet5',
+      'GigaEthernet0',
+      'GigaEthernet1',
+      'GigaEthernet2',
+      'GigaEthernet3',
+      'GigaEthernet5',
     ]
     expect(findBestInterfaceMatch('GE0/0', zabbixInterfaces)).toBe('GigaEthernet0')
     expect(findBestInterfaceMatch('GE0/1', zabbixInterfaces)).toBe('GigaEthernet1')
@@ -180,9 +183,17 @@ describe('findBestInterfaceMatch', () => {
 
   it('Cisco Catalyst: NetBox GE0/N ↔ Zabbix Gi1/0/N', () => {
     const zabbixInterfaces = [
-      'Gi1/0/1', 'Gi1/0/2', 'Gi1/0/3', 'Gi1/0/4',
-      'Gi1/0/10', 'Gi1/0/22', 'Gi1/0/24',
-      'Te1/1/1', 'Te1/1/2', 'Te1/1/3', 'Te1/1/4',
+      'Gi1/0/1',
+      'Gi1/0/2',
+      'Gi1/0/3',
+      'Gi1/0/4',
+      'Gi1/0/10',
+      'Gi1/0/22',
+      'Gi1/0/24',
+      'Te1/1/1',
+      'Te1/1/2',
+      'Te1/1/3',
+      'Te1/1/4',
     ]
     expect(findBestInterfaceMatch('GE0/1', zabbixInterfaces)).toBe('Gi1/0/1')
     expect(findBestInterfaceMatch('GE0/2', zabbixInterfaces)).toBe('Gi1/0/2')
@@ -195,8 +206,15 @@ describe('findBestInterfaceMatch', () => {
 
   it('Cisco ASR: NetBox GE0/N ↔ Zabbix Gi0/0/N', () => {
     const zabbixInterfaces = [
-      'Gi0', 'Gi0/0/0', 'Gi0/0/1', 'Gi0/0/2', 'Gi0/0/3',
-      'Gi0/0/4', 'Gi0/0/5', 'Te0/0/0', 'Te0/0/1',
+      'Gi0',
+      'Gi0/0/0',
+      'Gi0/0/1',
+      'Gi0/0/2',
+      'Gi0/0/3',
+      'Gi0/0/4',
+      'Gi0/0/5',
+      'Te0/0/0',
+      'Te0/0/1',
     ]
     expect(findBestInterfaceMatch('GE0/0', zabbixInterfaces)).toBe('Gi0/0/0')
     expect(findBestInterfaceMatch('GE0/1', zabbixInterfaces)).toBe('Gi0/0/1')
@@ -216,15 +234,21 @@ describe('findBestInterfaceMatch', () => {
   })
 
   it('AP single candidate fallback: main ↔ wired0', () => {
-    expect(findBestInterfaceMatch('main', ['wired0'], { singleCandidateFallback: true })).toBe('wired0')
+    expect(findBestInterfaceMatch('main', ['wired0'], { singleCandidateFallback: true })).toBe(
+      'wired0',
+    )
   })
 
   it('single candidate fallback disabled by default', () => {
-    expect(findBestInterfaceMatch('main', ['wired0'], { singleCandidateFallback: false })).toBeNull()
+    expect(
+      findBestInterfaceMatch('main', ['wired0'], { singleCandidateFallback: false }),
+    ).toBeNull()
   })
 
   it('single candidate fallback only works with exactly 1 candidate', () => {
-    expect(findBestInterfaceMatch('main', ['wired0', 'wired1'], { singleCandidateFallback: true })).toBeNull()
+    expect(
+      findBestInterfaceMatch('main', ['wired0', 'wired1'], { singleCandidateFallback: true }),
+    ).toBeNull()
   })
 
   it('returns null for empty candidates', () => {

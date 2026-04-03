@@ -4,9 +4,9 @@
  */
 
 import { Hono } from 'hono'
-import { TopologySourcesService } from '../services/topology-sources.js'
 import { DataSourceService } from '../services/datasource.js'
-import type { TopologyDataSourceInput, SyncMode } from '../types.js'
+import { TopologySourcesService } from '../services/topology-sources.js'
+import type { SyncMode, TopologyDataSourceInput } from '../types.js'
 import { getTopologyService } from './topologies.js'
 
 // Lazy initialization to avoid database access at module load time
@@ -280,7 +280,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
       }
     }
 
-    if (successfulFetches.length === 0) {
+    if (!successfulFetches[0]) {
       return c.json({ error: 'Failed to fetch from any source' }, 500)
     }
 
@@ -349,8 +349,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
 
     // Merge
     const mergeResult = mergeWithOverlays(
-      successfulFetches.map((f) => f.graph),
-      successfulFetches.map((f) => f.sourceId),
+      successfulFetches.map((r) => ({ graph: r.graph, sourceId: r.sourceId })),
       { baseIndex, overlays: overlayConfigs },
     )
 

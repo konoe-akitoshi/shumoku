@@ -88,7 +88,9 @@ export async function GET(_req: Request, { params }: RouteContext<'/[lang]/og'>)
           <br />
           {t.line2}
         </h1>
-        <p style={{ color: colors.muted, fontSize: 22, fontWeight: 400, margin: 0, lineHeight: 1.5 }}>
+        <p
+          style={{ color: colors.muted, fontSize: 22, fontWeight: 400, margin: 0, lineHeight: 1.5 }}
+        >
           {t.sub1}
           <br />
           {t.sub2}

@@ -42,7 +42,7 @@ async function embedExternalImages(svgString: string, timeout = 3000): Promise<s
   if (matches.length === 0) return svgString
 
   // Fetch all unique URLs in parallel
-  const uniqueUrls = [...new Set(matches.map((m) => m[1]))]
+  const uniqueUrls = [...new Set(matches.map((m) => m[1]).filter((m) => m !== undefined))]
   const urlToBase64 = new Map<string, string>()
 
   await Promise.all(

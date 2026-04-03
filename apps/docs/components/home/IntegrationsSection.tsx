@@ -24,7 +24,7 @@ function NodeCard({
       {logo ? (
         <img src={logo} alt={title} className="w-7 h-7 shrink-0 object-contain" />
       ) : (
-        builtinIcons[title] ?? null
+        (builtinIcons[title] ?? null)
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -100,7 +100,12 @@ export function IntegrationsSection({ locale }: { locale: string }) {
             <div className="space-y-3">
               {t.inputs.map((item) => (
                 <div key={item.title} className="flex items-center gap-2 justify-end">
-                  <NodeCard title={item.title} description={item.description} tag={item.tag} logo={'logo' in item ? item.logo : undefined} />
+                  <NodeCard
+                    title={item.title}
+                    description={item.description}
+                    tag={item.tag}
+                    logo={'logo' in item ? item.logo : undefined}
+                  />
                   <DashedLine direction="right" />
                 </div>
               ))}
@@ -119,7 +124,12 @@ export function IntegrationsSection({ locale }: { locale: string }) {
               {t.monitoring.map((item) => (
                 <div key={item.title} className="flex items-center gap-2">
                   <DashedLine direction="left" />
-                  <NodeCard title={item.title} description={item.description} tag={item.tag} logo={'logo' in item ? item.logo : undefined} />
+                  <NodeCard
+                    title={item.title}
+                    description={item.description}
+                    tag={item.tag}
+                    logo={'logo' in item ? item.logo : undefined}
+                  />
                 </div>
               ))}
             </div>
@@ -134,7 +144,12 @@ export function IntegrationsSection({ locale }: { locale: string }) {
             </div>
             <div className="space-y-2">
               {t.inputs.map((item) => (
-                <NodeCard key={item.title} title={item.title} description={item.description} tag={item.tag} />
+                <NodeCard
+                  key={item.title}
+                  title={item.title}
+                  description={item.description}
+                  tag={item.tag}
+                />
               ))}
             </div>
           </div>
@@ -147,7 +162,12 @@ export function IntegrationsSection({ locale }: { locale: string }) {
             </div>
             <div className="space-y-2">
               {t.monitoring.map((item) => (
-                <NodeCard key={item.title} title={item.title} description={item.description} tag={item.tag} />
+                <NodeCard
+                  key={item.title}
+                  title={item.title}
+                  description={item.description}
+                  tag={item.tag}
+                />
               ))}
             </div>
           </div>

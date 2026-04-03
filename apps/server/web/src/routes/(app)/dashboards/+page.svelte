@@ -1,12 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { goto } from '$app/navigation'
-  import {
-    dashboardStore,
-    dashboards,
-    dashboardLoading,
-    dashboardError,
-  } from '$lib/stores/dashboards'
   import {
     CaretRightIcon,
     PlusIcon,
@@ -14,6 +6,14 @@
     SquaresFourIcon,
     TrashIcon,
   } from 'phosphor-svelte'
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
+  import {
+    dashboardError,
+    dashboardLoading,
+    dashboardStore,
+    dashboards,
+  } from '$lib/stores/dashboards'
 
   let showCreateModal = $state(false)
   let newDashboardName = $state('')
@@ -225,7 +225,7 @@
           Cancel
         </button>
         <button
-          onclick={() => handleDelete(deleteConfirmId!)}
+          onclick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
           class="px-4 py-2 bg-danger text-white rounded-lg hover:bg-danger/80 transition-colors"
         >
           Delete

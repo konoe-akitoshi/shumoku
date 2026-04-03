@@ -4,20 +4,20 @@
  */
 
 import type {
+  Alert,
+  AlertQueryOptions,
+  ConnectionTestResult,
   Dashboard,
   DashboardInput,
   DataSource,
   DataSourceInput,
-  Topology,
-  TopologyInput,
-  TopologyContext,
   MetricsMapping,
-  ConnectionTestResult,
+  SyncMode,
+  Topology,
+  TopologyContext,
   TopologyDataSource,
   TopologyDataSourceInput,
-  SyncMode,
-  Alert,
-  AlertQueryOptions,
+  TopologyInput,
 } from './types'
 
 const BASE_URL = '/api'
@@ -62,9 +62,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 import type {
   DataSourceCapability,
   DataSourcePluginInfo,
+  DiscoveredMetric,
   Host,
   HostItem,
-  DiscoveredMetric,
 } from './types'
 
 // Data Sources API
@@ -124,8 +124,7 @@ export const dataSources = {
     return request<Alert[]>(url)
   },
 
-  getWebhookUrl: (id: string) =>
-    request<{ webhookPath: string }>(`/datasources/${id}/webhook-url`),
+  getWebhookUrl: (id: string) => request<{ webhookPath: string }>(`/datasources/${id}/webhook-url`),
 
   getFilterOptions: (id: string) =>
     request<{ sites: { slug: string; name: string }[]; tags: { slug: string; name: string }[] }>(
@@ -320,13 +319,16 @@ export interface PluginInfo {
   configSchema?: {
     type: 'object'
     required?: string[]
-    properties: Record<string, {
-      type: string
-      title?: string
-      description?: string
-      format?: string
-      default?: unknown
-    }>
+    properties: Record<
+      string,
+      {
+        type: string
+        title?: string
+        description?: string
+        format?: string
+        default?: unknown
+      }
+    >
   }
   enabled: boolean
   bundled: boolean
@@ -375,7 +377,9 @@ export const plugins = {
       try {
         const data = await response.json()
         if (data.error) message = data.error
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       throw new ApiError(message, response.status)
     }
 

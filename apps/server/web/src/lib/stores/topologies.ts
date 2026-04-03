@@ -3,9 +3,9 @@
  * Reactive state management for topologies
  */
 
-import { writable, derived } from 'svelte/store'
+import { derived, writable } from 'svelte/store'
 import { api } from '$lib/api'
-import type { Topology, TopologyInput, MetricsMapping } from '$lib/types'
+import type { MetricsMapping, Topology, TopologyInput } from '$lib/types'
 
 interface TopologiesState {
   items: Topology[]

@@ -3,16 +3,16 @@
  * Uses web-worker package to make elkjs work in Bun
  */
 
-import ELKApi from 'elkjs/lib/elk-api.js'
-import Worker from 'web-worker'
 import { createRequire } from 'node:module'
 import {
   HierarchicalLayout,
-  type NetworkGraph,
-  type LayoutResult,
   type HierarchicalLayoutOptions,
   type IconDimensions,
+  type LayoutResult,
+  type NetworkGraph,
 } from '@shumoku/core'
+import ELKApi from 'elkjs/lib/elk-api.js'
+import Worker from 'web-worker'
 
 // Get the path to elk-worker.min.js
 const require = createRequire(import.meta.url)

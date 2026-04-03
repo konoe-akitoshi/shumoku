@@ -44,11 +44,7 @@ export async function renderHtmlHierarchical(
 ): Promise<string> {
   const sheets =
     options?.sheets ??
-    (await buildHierarchicalSheets(
-      prepared.graph,
-      prepared.layout,
-      new HierarchicalLayout(),
-    ))
+    (await buildHierarchicalSheets(prepared.graph, prepared.layout, new HierarchicalLayout()))
   return html.renderHierarchical(sheets, options)
 }
 

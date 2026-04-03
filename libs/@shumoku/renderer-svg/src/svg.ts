@@ -580,7 +580,12 @@ export class SVGRenderer {
     const style = subgraph.style || {}
 
     // Resolve surface colors from token or direct color value
-    const surfaceColors = resolveSurfaceColors(this.theme, style.fill, style.stroke, this.isInteractive)
+    const surfaceColors = resolveSurfaceColors(
+      this.theme,
+      style.fill,
+      style.stroke,
+      this.isInteractive,
+    )
     const fill = surfaceColors.fill
     const stroke = surfaceColors.stroke
     const labelColor = surfaceColors.text
@@ -780,7 +785,7 @@ ${fg}
     const style = node.style || {}
 
     // Check if this is an export connector node (for hierarchical diagrams)
-    const isExport = node.metadata?._isExport === true
+    const isExport = node.metadata?.['_isExport'] === true
 
     // Special styling for export connector nodes - use subgraph colors
     let fill = style.fill || this.color('defaultNodeFill')
@@ -1075,7 +1080,7 @@ ${fg}
    */
   private renderNodeContent(node: Node, x: number, y: number, w: number): string {
     // Check if this is an export connector node
-    const isExport = node.metadata?._isExport === true
+    const isExport = node.metadata?.['_isExport'] === true
 
     // For export connectors, render with arrow icon
     if (isExport) {
@@ -1153,15 +1158,7 @@ ${fg}
       link.style?.strokeWidth || bandwidthStrokeWidth || this.getLinkStrokeWidth(type)
 
     // Render link line
-    let result = this.renderLinkLine(
-      id,
-      points,
-      stroke,
-      strokeWidth,
-      dasharray,
-      markerEnd,
-      type,
-    )
+    let result = this.renderLinkLine(id, points, stroke, strokeWidth, dasharray, markerEnd, type)
 
     // Center label and VLANs
     const midPoint = this.getMidPoint(points)
@@ -1183,23 +1180,37 @@ ${fg}
     // Get node center positions for label placement
     const fromNode = nodes.get(fromEndpoint.node)
     const toNode = nodes.get(toEndpoint.node)
-    const fromNodeCenterX = fromNode ? fromNode.position.x : points[0].x
-    const toNodeCenterX = toNode ? toNode.position.x : points[points.length - 1].x
+    const fromNodeCenterX = fromNode ? fromNode.position.x : (points[0]?.x ?? 0)
+    const toNodeCenterX = toNode ? toNode.position.x : (points[points.length - 1]?.x ?? 0)
 
     // Endpoint labels (port/ip at both ends) - positioned along the line
     const fromLabels = this.formatEndpointLabels(fromEndpoint)
     const toLabels = this.formatEndpointLabels(toEndpoint)
 
-    if (fromLabels.length > 0 && points.length > 1) {
-      const portName = fromEndpoint.port || ''
-      const labelPos = this.getEndpointLabelPosition(points, 'start', fromNodeCenterX, portName)
-      result += this.renderEndpointLabels(fromLabels, labelPos.x, labelPos.y, labelPos.anchor)
-    }
+    const p0 = points[0]
+    const p1 = points[1]
+    if (p0 && p1) {
+      if (fromLabels.length > 0) {
+        const portName = fromEndpoint.port || ''
+        const labelPos = this.getEndpointLabelPosition(
+          [p0, p1, ...points.slice(2)],
+          'start',
+          fromNodeCenterX,
+          portName,
+        )
+        result += this.renderEndpointLabels(fromLabels, labelPos.x, labelPos.y, labelPos.anchor)
+      }
 
-    if (toLabels.length > 0 && points.length > 1) {
-      const portName = toEndpoint.port || ''
-      const labelPos = this.getEndpointLabelPosition(points, 'end', toNodeCenterX, portName)
-      result += this.renderEndpointLabels(toLabels, labelPos.x, labelPos.y, labelPos.anchor)
+      if (toLabels.length > 0) {
+        const portName = toEndpoint.port || ''
+        const labelPos = this.getEndpointLabelPosition(
+          [p0, p1, ...points.slice(2)],
+          'end',
+          toNodeCenterX,
+          portName,
+        )
+        result += this.renderEndpointLabels(toLabels, labelPos.x, labelPos.y, labelPos.anchor)
+      }
     }
 
     // Build data attributes for interactive mode
@@ -1231,10 +1242,10 @@ ${fg}
     attrs.push(`data-link-to="${this.escapeXml(toStr)}"`)
 
     // Export link destination info (for tooltip on hierarchical export connectors)
-    if (link.metadata?._destDevice) {
-      attrs.push(`data-link-dest-device="${this.escapeXml(String(link.metadata._destDevice))}"`)
-      if (link.metadata._destPort) {
-        attrs.push(`data-link-dest-port="${this.escapeXml(String(link.metadata._destPort))}"`)
+    if (link.metadata?.['_destDevice']) {
+      attrs.push(`data-link-dest-device="${this.escapeXml(String(link.metadata['_destDevice']))}"`)
+      if (link.metadata['_destPort']) {
+        attrs.push(`data-link-dest-port="${this.escapeXml(String(link.metadata['_destPort']))}"`)
       }
     }
 
@@ -1254,18 +1265,18 @@ ${fg}
    * Labels are placed based on port position relative to node center
    */
   private getEndpointLabelPosition(
-    points: { x: number; y: number }[],
+    points: [{ x: number; y: number }, { x: number; y: number }, ...{ x: number; y: number }[]],
     which: 'start' | 'end',
     nodeCenterX: number,
     portName: string,
   ): { x: number; y: number; anchor: string } {
     // Get the endpoint position (port position)
     const endpointIdx = which === 'start' ? 0 : points.length - 1
-    const endpoint = points[endpointIdx]
+    const endpoint = points[endpointIdx] ?? points[0]
 
     // Get the next/prev point to determine line direction
     const nextIdx = which === 'start' ? 1 : points.length - 2
-    const nextPoint = points[nextIdx]
+    const nextPoint = points[nextIdx] ?? endpoint
 
     // Calculate direction from endpoint toward the line
     const dx = nextPoint.x - endpoint.x
@@ -1425,7 +1436,9 @@ ${fg}
     let cornerRadius = 8
 
     if (this.edgeStyle === 'straight') {
-      effectivePoints = [points[0], points[points.length - 1]]
+      const first = points[0]
+      const last = points[points.length - 1]
+      if (first && last) effectivePoints = [first, last]
       cornerRadius = 0
     } else if (this.edgeStyle === 'polyline') {
       cornerRadius = 0
@@ -1481,13 +1494,19 @@ ${linePath}
       changed = false
       if (pts.length <= 3) break
 
-      const result: { x: number; y: number }[] = [pts[0]]
+      const first = pts[0]
+      if (!first) break
+      const result: { x: number; y: number }[] = [first]
 
       let i = 1
       while (i < pts.length - 1) {
         const prev = result[result.length - 1]
         const curr = pts[i]
         const next = pts[i + 1]
+        if (!prev || !curr || !next) {
+          i++
+          continue
+        }
 
         const distToCurr = Math.hypot(curr.x - prev.x, curr.y - prev.y)
 
@@ -1527,9 +1546,8 @@ ${linePath}
       }
 
       // Add remaining points
-      while (i < pts.length) {
-        result.push(pts[i])
-        i++
+      for (const pt of pts.slice(i)) {
+        result.push(pt)
       }
 
       pts = result
@@ -1537,11 +1555,14 @@ ${linePath}
 
     // Final pass: remove collinear points
     if (pts.length <= 2) return pts
-    const cleaned: { x: number; y: number }[] = [pts[0]]
-    for (let i = 1; i < pts.length - 1; i++) {
-      const prev = cleaned[cleaned.length - 1]
-      const curr = pts[i]
-      const next = pts[i + 1]
+    const firstPt = pts[0]
+    if (!firstPt) return pts
+    const cleaned: { x: number; y: number }[] = [firstPt]
+    let prev = firstPt
+    for (const [i, curr] of pts.slice(1, -1).entries()) {
+      const originalIdx = i + 1
+      const next = pts[originalIdx + 1]
+      if (!next) continue
       // Check if collinear (same direction)
       const dx1 = curr.x - prev.x
       const dy1 = curr.y - prev.y
@@ -1550,9 +1571,11 @@ ${linePath}
       const cross = dx1 * dy2 - dy1 * dx2
       if (Math.abs(cross) > 0.01) {
         cleaned.push(curr)
+        prev = curr
       }
     }
-    cleaned.push(pts[pts.length - 1])
+    const lastPt = pts[pts.length - 1]
+    if (lastPt) cleaned.push(lastPt)
     return cleaned
   }
 
@@ -1565,8 +1588,11 @@ ${linePath}
     cornerRadius: number,
   ): CenterlineSegment[] {
     if (points.length < 2) return []
+    const firstPoint = points[0]
+    const lastPoint = points[points.length - 1]
+    if (!firstPoint || !lastPoint) return []
     if (points.length === 2 || cornerRadius < 1) {
-      return [{ type: 'line', from: points[0], to: points[points.length - 1] }]
+      return [{ type: 'line', from: firstPoint, to: lastPoint }]
     }
 
     // Simplify micro-jogs that the layout engine creates
@@ -1574,11 +1600,13 @@ ${linePath}
 
     const segments: CenterlineSegment[] = []
     let prevEnd = merged[0]
+    if (!prevEnd) return []
 
     for (let i = 1; i < merged.length - 1; i++) {
       const prev = merged[i - 1]
       const curr = merged[i]
       const next = merged[i + 1]
+      if (!prev || !curr || !next) continue
 
       const distPrev = Math.hypot(curr.x - prev.x, curr.y - prev.y)
       const distNext = Math.hypot(next.x - curr.x, next.y - curr.y)
@@ -1655,7 +1683,7 @@ ${linePath}
 
     // Final line segment
     const last = merged[merged.length - 1]
-    segments.push({ type: 'line', from: prevEnd, to: last })
+    if (last) segments.push({ type: 'line', from: prevEnd, to: last })
 
     return segments
   }
@@ -1739,7 +1767,6 @@ ${linePath}
     return parts.join(' ')
   }
 
-
   /**
    * Get default link type based on redundancy
    */
@@ -1792,7 +1819,7 @@ ${linePath}
       return undefined
     }
 
-    if (vlan.length === 1) {
+    if (vlan[0]) {
       // Single VLAN: use color based on VLAN ID
       const colorIndex = vlan[0] % SVGRenderer.VLAN_COLORS.length
       return SVGRenderer.VLAN_COLORS[colorIndex]
@@ -1816,7 +1843,9 @@ ${linePath}
   }
 
   private getMidPoint(points: { x: number; y: number }[]): { x: number; y: number } {
-    if (points.length === 4) {
+    if (!points[0]) throw new Error('the array is empty')
+
+    if (points.length === 4 && points[0] && points[1] && points[2] && points[3]) {
       // Cubic bezier curve midpoint at t=0.5
       const t = 0.5
       const mt = 1 - t
@@ -1833,7 +1862,7 @@ ${linePath}
       return { x, y }
     }
 
-    if (points.length === 2) {
+    if (points.length === 2 && points[0] && points[1]) {
       // Simple midpoint between two points
       return {
         x: (points[0].x + points[1].x) / 2,
@@ -1843,10 +1872,11 @@ ${linePath}
 
     // For polylines, find the middle segment and get its midpoint
     const midIndex = Math.floor(points.length / 2)
-    if (midIndex > 0 && midIndex < points.length) {
+    const prevMidIndex = midIndex - 1
+    if (midIndex > 0 && midIndex < points.length && points[prevMidIndex] && points[midIndex]) {
       return {
-        x: (points[midIndex - 1].x + points[midIndex].x) / 2,
-        y: (points[midIndex - 1].y + points[midIndex].y) / 2,
+        x: (points[prevMidIndex].x + points[midIndex].x) / 2,
+        y: (points[prevMidIndex].y + points[midIndex].y) / 2,
       }
     }
 

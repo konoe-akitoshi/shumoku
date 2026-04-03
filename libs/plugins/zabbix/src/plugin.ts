@@ -274,7 +274,7 @@ export class ZabbixPlugin
         key: item.key_,
       }
       if (item.units) {
-        labels.units = item.units
+        labels['units'] = item.units
       }
       if (item.tags) {
         for (const tag of item.tags) {
@@ -380,12 +380,12 @@ export class ZabbixPlugin
 
     // Filter by severity
     if (severityFilter.length > 0) {
-      params.severities = severityFilter
+      params['severities'] = severityFilter
     }
 
     // Filter by host IDs
     if (options?.hostIds && options.hostIds.length > 0) {
-      params.hostids = options.hostIds
+      params['hostids'] = options.hostIds
     }
 
     const problems = await this.apiRequest<ZabbixProblem[]>('problem.get', params)
@@ -444,8 +444,8 @@ export class ZabbixPlugin
     if (minIndex === -1) return []
 
     const result: number[] = []
-    for (let i = minIndex; i < severityOrder.length; i++) {
-      result.push(...severityToZabbix[severityOrder[i]])
+    for (const o of severityOrder.slice(minIndex)) {
+      result.push(...severityToZabbix[o])
     }
     return result
   }
@@ -474,7 +474,7 @@ export class ZabbixPlugin
     }
 
     if (!ZabbixPlugin.UNAUTHENTICATED_METHODS.has(method)) {
-      headers.Authorization = `Bearer ${this.config.token}`
+      headers['Authorization'] = `Bearer ${this.config.token}`
     }
 
     const response = await fetch(url, {
@@ -537,7 +537,7 @@ export class ZabbixPlugin
   private static extractInterfaceName(itemName: string): string {
     // "Interface {name}({alias}): ..." or "Interface {name}: ..."
     const match = itemName.match(/^Interface\s+(.+?)(?:\(.*?\))?:\s/)
-    return match ? match[1].trim() : itemName
+    return match?.[1] ? match[1].trim() : itemName
   }
 
   /**

@@ -6,8 +6,11 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "lint": "biome lint .",
+    "format": "biome check --write ."
   },
   "devDependencies": {
     "@internationalized/date": "^3.10.0",

@@ -7,12 +7,17 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import type { LayoutResult, NetworkGraph, IconDimensions } from '@shumoku/core'
-import { sampleNetwork, YamlParser, HierarchicalParser, createMemoryFileResolver } from '@shumoku/core'
+import type { IconDimensions, LayoutResult, NetworkGraph } from '@shumoku/core'
+import {
+  createMemoryFileResolver,
+  HierarchicalParser,
+  sampleNetwork,
+  YamlParser,
+} from '@shumoku/core'
+import { collectIconUrls, resolveIconDimensionsForGraph } from '@shumoku/renderer-svg'
+import { generateId, getDatabase, timestamp } from '../db/index.js'
 import { BunHierarchicalLayout } from '../layout.js'
-import { resolveIconDimensionsForGraph, collectIconUrls } from '@shumoku/renderer-svg'
-import { getDatabase, generateId, timestamp } from '../db/index.js'
-import type { Topology, TopologyInput, MetricsData, MetricsMapping } from '../types.js'
+import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
 
 interface TopologyRow {
   id: string
@@ -144,12 +149,29 @@ export class TopologyService {
    * Create a new topology
    * contentJson should be NetworkGraph JSON
    */
-  async create(input: TopologyInput): Promise<Topology> {
+  async create({
+    name,
+    contentJson,
+    topologySourceId,
+    metricsSourceId,
+    mappingJson,
+  }: TopologyInput): Promise<Topology> {
     // Validate content by parsing it
-    this.parseContent(input.contentJson)
+    this.parseContent(contentJson)
 
     const id = await generateId()
     const now = timestamp()
+
+    const topology: Topology = {
+      id,
+      name,
+      contentJson,
+      topologySourceId,
+      metricsSourceId,
+      mappingJson,
+      createdAt: now,
+      updatedAt: now,
+    }
 
     this.db
       .prepare(
@@ -158,11 +180,11 @@ export class TopologyService {
       )
       .run(
         id,
-        input.name,
-        input.contentJson,
-        input.topologySourceId || null,
-        input.metricsSourceId || null,
-        input.mappingJson || null,
+        name,
+        contentJson,
+        topologySourceId || null,
+        metricsSourceId || null,
+        mappingJson || null,
         now,
         now,
       )
@@ -171,7 +193,7 @@ export class TopologyService {
     this.cache.delete(id)
     this.renderCache.delete(id)
 
-    return this.get(id)!
+    return topology
   }
 
   /**
@@ -292,9 +314,9 @@ export class TopologyService {
    * Get a topology by its share token
    */
   getByShareToken(token: string): Topology | null {
-    const row = this.db
-      .query('SELECT * FROM topologies WHERE share_token = ?')
-      .get(token) as TopologyRow | undefined
+    const row = this.db.query('SELECT * FROM topologies WHERE share_token = ?').get(token) as
+      | TopologyRow
+      | undefined
     return row ? rowToTopology(row) : null
   }
 
@@ -304,8 +326,9 @@ export class TopologyService {
    */
   async getParsed(id: string): Promise<ParsedTopology | null> {
     // Check cache first
-    if (this.cache.has(id)) {
-      return this.cache.get(id)!
+    const cache = this.cache.get(id)
+    if (cache) {
+      return cache
     }
 
     // If there's a cached error, skip re-parse (cleared on content update)
@@ -426,8 +449,8 @@ export class TopologyService {
       nodes[node.id] = { status: 'unknown' }
     }
 
-    for (let i = 0; i < graph.links.length; i++) {
-      const linkId = graph.links[i].id || `link-${i}`
+    for (const [i, link] of graph.links.entries()) {
+      const linkId = link.id || `link-${i}`
       links[linkId] = { status: 'unknown' }
     }
 
@@ -508,7 +531,7 @@ export class TopologyService {
    */
   async initializeSample(): Promise<void> {
     // Skip sample creation unless DEMO_MODE is enabled
-    if (process.env.DEMO_MODE !== 'true') {
+    if (process.env['DEMO_MODE'] !== 'true') {
       return
     }
 

@@ -1,30 +1,5 @@
 <script lang="ts">
   import { findBestInterfaceMatch } from '@shumoku/core'
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
-  import { Button } from '$lib/components/ui/button'
-  import {
-    displaySettings,
-    metricsConnected,
-    liveUpdatesEnabled,
-    showTrafficFlow,
-    showNodeStatus,
-    mappingStore,
-    nodeMapping,
-    linkMapping,
-    mappingHosts,
-    hostInterfaces,
-  } from '$lib/stores'
-  import type {
-    Topology,
-    TopologyDataSource,
-    TopologyDataSourceInput,
-    DataSource,
-    SyncMode,
-    ParsedTopologyResponse,
-  } from '$lib/types'
   import {
     ArrowDownIcon,
     ArrowLeftIcon,
@@ -40,11 +15,37 @@
     StarIcon,
     TrashIcon,
   } from 'phosphor-svelte'
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
+  import { api } from '$lib/api'
+  import { Button } from '$lib/components/ui/button'
+  import {
+    displaySettings,
+    hostInterfaces,
+    linkMapping,
+    liveUpdatesEnabled,
+    mappingHosts,
+    mappingStore,
+    metricsConnected,
+    nodeMapping,
+    showNodeStatus,
+    showTrafficFlow,
+  } from '$lib/stores'
+  import type {
+    DataSource,
+    ParsedTopologyResponse,
+    SyncMode,
+    Topology,
+    TopologyDataSource,
+    TopologyDataSourceInput,
+  } from '$lib/types'
 
   // ============================================
   // State
   // ============================================
 
+  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
   let topologyId = $derived($page.params.id!)
 
   // Tab state - check URL hash for initial tab
@@ -358,7 +359,7 @@
     const availableSources = purpose === 'topology' ? topologyDataSources : metricsDataSources
     const existing = editableSources.filter((s) => s.purpose === purpose).map((s) => s.dataSourceId)
     const available = availableSources.filter((ds) => !existing.includes(ds.id))
-    if (available.length === 0) {
+    if (!available[0]) {
       alert('No more data sources available to add')
       return
     }
@@ -420,7 +421,7 @@
   }
 
   function updateOptions(index: number, patch: Partial<NetBoxOptions>) {
-    const current = parseOptions(editableSources[index].optionsJson)
+    const current = parseOptions(editableSources[index]?.optionsJson)
     const merged = { ...current, ...patch }
     if (!merged.groupBy) delete merged.groupBy
     if (!merged.siteFilter?.length) delete merged.siteFilter
@@ -554,10 +555,14 @@
   }
 
   function updateOverlayConfig(dataSourceId: string, updates: Partial<OverlayConfig>) {
-    overlayConfigs = {
-      ...overlayConfigs,
-      [dataSourceId]: { ...overlayConfigs[dataSourceId], ...updates },
+    const prevConfig = overlayConfigs[dataSourceId]
+    if (prevConfig) {
+      overlayConfigs[dataSourceId] = {
+        ...prevConfig,
+        ...updates,
+      }
     }
+
     hasSourceChanges = true
   }
 
@@ -755,11 +760,11 @@
   }
 
   const componentId = $props.id()
-  const groupBySelectorId = componentId + ':groupBy'
-  const matchStrategySelectorId = componentId + ':matchStrategy'
-  const unmatchedNodesSelectorId = componentId + ':unmatchedNodes'
-  const idMappingId = componentId + ':idMapping'
-  const subgraphNameId = componentId + ':subgraph'
+  const groupBySelectorId = `${componentId}:groupBy`
+  const matchStrategySelectorId = `${componentId}:matchStrategy`
+  const unmatchedNodesSelectorId = `${componentId}:unmatchedNodes`
+  const idMappingId = `${componentId}:idMapping`
+  const subgraphNameId = `${componentId}:subgraph`
 </script>
 
 <svelte:head> <title>Settings - {topology?.name || 'Topology'} - Shumoku</title> </svelte:head>
@@ -1655,7 +1660,7 @@
                             } else {
                               customCapacityLinks.delete(edge.id)
                               customCapacityLinks = new Set(customCapacityLinks)
-                              handleLinkCapacityChange(edge.id, parseInt(val))
+                              handleLinkCapacityChange(edge.id, parseInt(val, 10))
                             }
                           }}
                         >

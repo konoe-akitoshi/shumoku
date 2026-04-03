@@ -175,8 +175,17 @@ export class HierarchicalParser {
   ): Promise<ParseWarning[]> {
     const warnings: ParseWarning[] = []
 
+    if (!subgraph.file) {
+      warnings.push({
+        code: 'FILE_LOAD_ERROR',
+        message: `Failed to load: file path is not specified`,
+        severity: 'error',
+      })
+      return warnings
+    }
+
     try {
-      const filePath = this.resolver.resolve(basePath, subgraph.file!)
+      const filePath = this.resolver.resolve(basePath, subgraph.file)
 
       // Check for circular references
       if (this.loadedFiles.has(filePath)) {
@@ -364,39 +373,41 @@ export class HierarchicalParser {
     for (const crossLink of crossLinks) {
       // Source side (from) - grouped by destination subgraph
       const fromKey = `${crossLink.fromSubgraph}:to:${crossLink.toSubgraph}`
-      if (!exportPoints.has(fromKey)) {
-        exportPoints.set(fromKey, {
-          subgraphId: crossLink.fromSubgraph,
-          destSubgraphId: crossLink.toSubgraph,
-          destSubgraphLabel: crossLink.toSubgraphLabel,
-          isSource: true,
-          connections: [],
-        })
+      const fromPoint = exportPoints.get(fromKey) ?? {
+        subgraphId: crossLink.fromSubgraph,
+        destSubgraphId: crossLink.toSubgraph,
+        destSubgraphLabel: crossLink.toSubgraphLabel,
+        isSource: true,
+        connections: [],
       }
-      exportPoints.get(fromKey)!.connections.push({
+
+      fromPoint.connections.push({
         device: crossLink.fromDevice,
         port: crossLink.fromPort,
         destDevice: crossLink.toDevice,
         destPort: crossLink.toPort,
       })
 
+      exportPoints.set(fromKey, fromPoint)
+
       // Destination side (to) - grouped by source subgraph
       const toKey = `${crossLink.toSubgraph}:from:${crossLink.fromSubgraph}`
-      if (!exportPoints.has(toKey)) {
-        exportPoints.set(toKey, {
-          subgraphId: crossLink.toSubgraph,
-          destSubgraphId: crossLink.fromSubgraph,
-          destSubgraphLabel: crossLink.fromSubgraphLabel,
-          isSource: false,
-          connections: [],
-        })
+      const toPoint = exportPoints.get(toKey) ?? {
+        subgraphId: crossLink.toSubgraph,
+        destSubgraphId: crossLink.fromSubgraph,
+        destSubgraphLabel: crossLink.fromSubgraphLabel,
+        isSource: false,
+        connections: [],
       }
-      exportPoints.get(toKey)!.connections.push({
+
+      toPoint.connections.push({
         device: crossLink.toDevice,
         port: crossLink.toPort,
         destDevice: crossLink.fromDevice,
         destPort: crossLink.fromPort,
       })
+
+      exportPoints.set(toKey, toPoint)
     }
 
     return exportPoints
@@ -435,8 +446,7 @@ export class HierarchicalParser {
   ): void {
     const exportNodeId = `${EXPORT_NODE_PREFIX}${exportId}`
 
-    for (let i = 0; i < exportPoint.connections.length; i++) {
-      const conn = exportPoint.connections[i]
+    for (const [i, conn] of exportPoint.connections.entries()) {
       const deviceEndpoint = conn.port ? { node: conn.device, port: conn.port } : conn.device
       const linkId = `${EXPORT_LINK_PREFIX}${exportId}_${i}`
 

@@ -1,8 +1,8 @@
 <script lang="ts">
+  import { CheckCircleIcon, HeartIcon, SpinnerIcon, XCircleIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import WidgetWrapper from './WidgetWrapper.svelte'
-  import { CheckCircleIcon, HeartIcon, SpinnerIcon, XCircleIcon } from 'phosphor-svelte'
 
   interface Props {
     config: {
@@ -62,9 +62,7 @@
   })
 
   let overallHealthy = $derived(
-    health !== null &&
-      health.api &&
-      (health.dataSources.total === 0 || health.dataSources.connected > 0),
+    health?.api && (health.dataSources.total === 0 || health.dataSources.connected > 0),
   )
 
   function handleSettings() {

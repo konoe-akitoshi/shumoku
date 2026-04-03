@@ -4,30 +4,28 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { serveStatic } from 'hono/bun'
 import type { Server as BunServer, ServerWebSocket } from 'bun'
-import type { Config, ClientMessage, ClientState, MetricsData } from './types.js'
-import { TopologyManager } from './topology.js'
-import { generateMetricsHtml } from './html-generator.js'
-import { MockMetricsProvider } from './mock-metrics.js'
-import { initDatabase, closeDatabase } from './db/index.js'
+import { Hono } from 'hono'
+import { serveStatic } from 'hono/bun'
+import { cors } from 'hono/cors'
 import { createApiRouter } from './api/index.js'
 import { getTopologyService } from './api/topologies.js'
-import type { TopologyService, ParsedTopology } from './services/topology.js'
-import { TopologySourcesService } from './services/topology-sources.js'
-import { DataSourceService } from './services/datasource.js'
+import { parseBandwidthCapacity } from './bandwidth.js'
+import { closeDatabase, initDatabase } from './db/index.js'
+import { generateMetricsHtml } from './html-generator.js'
+import { MockMetricsProvider } from './mock-metrics.js'
 import {
-  registerBundledPlugins,
-  pluginRegistry,
   hasMetricsCapability,
   loadPluginsFromConfig,
+  pluginRegistry,
+  registerBundledPlugins,
 } from './plugins/index.js'
+import { DataSourceService } from './services/datasource.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
-import type { MetricsMapping } from './types.js'
-import { parseBandwidthCapacity } from './bandwidth.js'
+import type { ParsedTopology, TopologyService } from './services/topology.js'
+import { TopologySourcesService } from './services/topology-sources.js'
+import { TopologyManager } from './topology.js'
+import type { ClientMessage, ClientState, Config, MetricsData, MetricsMapping } from './types.js'
 
 export class Server {
   private app: Hono
@@ -88,7 +86,9 @@ export class Server {
   private setupStaticFileServing(): void {
     // Skip static file serving in development mode
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Server] Development mode - skipping static file serving (use apps/web dev server)')
+      console.log(
+        '[Server] Development mode - skipping static file serving (use apps/web dev server)',
+      )
       return
     }
 
@@ -340,7 +340,7 @@ export class Server {
 
       // Try to get metrics from configured data source
       const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
-      if (metricsSources.length > 0) {
+      if (metricsSources[0]) {
         const source = metricsSources[0] // Use first metrics source
         const dataSource = this.dataSourceService.get(source.dataSourceId)
 
@@ -406,8 +406,7 @@ export class Server {
 
     // Load external plugins from config file
     const pluginsConfigPath =
-      process.env.SHUMOKU_PLUGINS_CONFIG ||
-      path.join(this.config.server.dataDir, 'plugins.yaml')
+      process.env['SHUMOKU_PLUGINS_CONFIG'] || path.join(this.config.server.dataDir, 'plugins.yaml')
     await loadPluginsFromConfig(pluginsConfigPath)
 
     initDatabase(this.config.server.dataDir)

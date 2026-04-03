@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte'
-  import { metricsStore, metricsData } from '$lib/stores'
+  import { onDestroy, onMount, tick } from 'svelte'
+  import { metricsData, metricsStore } from '$lib/stores'
 
   // Props
   export let topologyId: string
@@ -50,6 +50,7 @@
 
   // Load interactive runtime script
   async function loadRuntime(): Promise<void> {
+    // biome-ignore lint/suspicious/noExplicitAny: check if the runtime script is loaded
     if ((window as any).ShumokuInteractive) return
 
     return new Promise((resolve, reject) => {
@@ -88,10 +89,12 @@
       await tick()
 
       svgElement = container?.querySelector('svg') || null
+      // biome-ignore lint/suspicious/noExplicitAny: check if the runtime script is loaded
       if (svgElement && (window as any).ShumokuInteractive) {
         if (interactiveInstance) {
           interactiveInstance.destroy()
         }
+        // biome-ignore lint/suspicious/noExplicitAny: accessing runtime script value
         interactiveInstance = (window as any).ShumokuInteractive.initInteractive({
           target: svgElement,
           panZoom: { enabled: true },

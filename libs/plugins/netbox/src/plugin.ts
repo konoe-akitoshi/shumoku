@@ -7,13 +7,13 @@
 import type { NetworkGraph } from '@shumoku/core'
 import {
   addHttpWarning,
-  type DataSourcePlugin,
-  type DataSourceCapability,
-  type TopologyCapable,
-  type HostsCapable,
   type ConnectionResult,
+  type DataSourceCapability,
+  type DataSourcePlugin,
   type Host,
   type HostItem,
+  type HostsCapable,
+  type TopologyCapable,
 } from '@shumoku/core'
 import { NetBoxClient } from './client.js'
 import { convertToNetworkGraph } from './converter.js'
@@ -86,25 +86,25 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
     }
 
     // Extract per-topology options (filters support string or string[])
-    const groupBy = (options?.groupBy as string) || 'tag'
+    const groupBy = (options?.['groupBy'] as string) || 'tag'
 
     const params: Record<string, string | string[] | number> = {}
 
     // Include filters
-    const site = options?.siteFilter as string | string[] | undefined
-    const tag = options?.tagFilter as string | string[] | undefined
-    const role = options?.roleFilter as string | string[] | undefined
-    if (site && (!Array.isArray(site) || site.length > 0)) params.site = site
-    if (tag && (!Array.isArray(tag) || tag.length > 0)) params.tag = tag
-    if (role && (!Array.isArray(role) || role.length > 0)) params.role = role
+    const site = options?.['siteFilter'] as string | string[] | undefined
+    const tag = options?.['tagFilter'] as string | string[] | undefined
+    const role = options?.['roleFilter'] as string | string[] | undefined
+    if (site && (!Array.isArray(site) || site.length > 0)) params['site'] = site
+    if (tag && (!Array.isArray(tag) || tag.length > 0)) params['tag'] = tag
+    if (role && (!Array.isArray(role) || role.length > 0)) params['role'] = role
 
     // Exclude filters (NetBox uses __n suffix for negation)
-    const excludeRole = options?.excludeRoleFilter as string | string[] | undefined
-    const excludeTag = options?.excludeTagFilter as string | string[] | undefined
+    const excludeRole = options?.['excludeRoleFilter'] as string | string[] | undefined
+    const excludeTag = options?.['excludeTagFilter'] as string | string[] | undefined
     if (excludeRole && (!Array.isArray(excludeRole) || excludeRole.length > 0))
-      params.role__n = excludeRole
+      params['role__n'] = excludeRole
     if (excludeTag && (!Array.isArray(excludeTag) || excludeTag.length > 0))
-      params.tag__n = excludeTag
+      params['tag__n'] = excludeTag
 
     console.log('[NetBox] Fetching topology with params:', params)
 
@@ -165,7 +165,7 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
 
     // Note: device_id is a valid NetBox API parameter but not in QueryParams type
     const interfaceResp = await this.client.fetchInterfaces({
-      device_id: parseInt(hostId),
+      device_id: parseInt(hostId, 10),
     } as unknown as Parameters<typeof this.client.fetchInterfaces>[0])
 
     return interfaceResp.results.map((iface) => ({

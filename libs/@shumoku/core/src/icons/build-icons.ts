@@ -19,7 +19,7 @@ const OUTPUT_FILE = path.join(__dirname, 'generated-icons.ts')
 
 function extractSvgContent(svgContent: string): string {
   const contentMatch = svgContent.match(/<svg[^>]*>([\s\S]*?)<\/svg>/i)
-  if (!contentMatch) return ''
+  if (!contentMatch?.[1]) return ''
   return contentMatch[1].trim().replace(/\s+/g, ' ')
 }
 
@@ -140,6 +140,7 @@ function generateTypeScript(icons: Record<string, string>): string {
   lines.push('  const vendorIcons = vendorIconRegistry[vendor]')
   lines.push('  if (!vendorIcons) return undefined')
   lines.push('')
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: generating typescript source
   lines.push('  const key = resource ? `${service}/${resource}` : service')
   lines.push('  const entry = vendorIcons[key]')
   lines.push('  if (!entry) {')

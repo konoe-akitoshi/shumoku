@@ -72,22 +72,22 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
   // ============================================
 
   const getTouchDistance = (touches: TouchList): number => {
-    if (touches.length < 2) return 0
+    if (!touches[0] || !touches[1]) return 0
     const dx = touches[1].clientX - touches[0].clientX
     const dy = touches[1].clientY - touches[0].clientY
     return Math.hypot(dx, dy)
   }
 
-  const getTouchCenter = (touches: TouchList): { x: number; y: number } => ({
-    x: (touches[0].clientX + touches[1].clientX) / 2,
-    y: (touches[0].clientY + touches[1].clientY) / 2,
+  const getTouchCenter = (t1: Touch, t2: Touch): { x: number; y: number } => ({
+    x: (t1.clientX + t2.clientX) / 2,
+    y: (t1.clientY + t2.clientY) / 2,
   })
 
   const handleTouchStart = (e: TouchEvent) => {
-    if (e.touches.length >= 2 && panZoomEnabled) {
+    if (e.touches[0] && e.touches[1] && panZoomEnabled) {
       e.preventDefault()
       const dist = getTouchDistance(e.touches)
-      const center = getTouchCenter(e.touches)
+      const center = getTouchCenter(e.touches[0], e.touches[1])
       const vb = parseViewBox(svg)
       if (vb) {
         const rect = svg.getBoundingClientRect()
@@ -107,11 +107,11 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
   }
 
   const handleTouchMove = (e: TouchEvent) => {
-    if (e.touches.length >= 2 && pinchState && panZoomEnabled) {
+    if (e.touches[0] && e.touches[1] && pinchState && panZoomEnabled) {
       e.preventDefault()
 
       const dist = getTouchDistance(e.touches)
-      const center = getTouchCenter(e.touches)
+      const center = getTouchCenter(e.touches[0], e.touches[1])
 
       if (dist === 0 || pinchState.initialDist === 0) return
 
@@ -294,7 +294,7 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
   let lastTapTarget: Element | null = null
 
   const handleTouchStartForTap = (e: TouchEvent) => {
-    if (e.touches.length === 1) {
+    if (e.touches[0]) {
       tapStart = {
         x: e.touches[0].clientX,
         y: e.touches[0].clientY,
@@ -306,7 +306,7 @@ export function initInteractive(options: InteractiveOptions): InteractiveInstanc
   }
 
   const handleTouchEndForTap = (e: TouchEvent) => {
-    if (!tapStart || e.touches.length > 0) {
+    if (!tapStart || e.touches.length > 0 || !e.changedTouches[0]) {
       tapStart = null
       return
     }

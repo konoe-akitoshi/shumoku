@@ -4,9 +4,8 @@ import { ArrowRightIcon } from './icons'
 import { buttonStyles, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
-export function GettingStartedSection({ locale }: { locale: string }) {
-  const t =
-    homeTranslations[locale as Locale]?.gettingStarted ?? homeTranslations.en.gettingStarted
+export function GettingStartedSection({ locale }: { locale: Locale }) {
+  const t = homeTranslations[locale]?.gettingStarted ?? homeTranslations.en.gettingStarted
 
   return (
     <section className={cn('relative overflow-hidden', sectionStyles.padding)}>
@@ -27,14 +26,21 @@ export function GettingStartedSection({ locale }: { locale: string }) {
               </span>
             </div>
             <div className="px-5 pt-5 space-y-2.5 flex-1">
-              {t.community.steps.map((step, i) => {
+              {t.community.steps.map((step) => {
                 const isCommand = /^[a-z]/.test(step)
                 return (
-                  <div key={i} className="flex items-start gap-2.5">
+                  <div key={step} className="flex items-start gap-2.5">
                     <span className="text-emerald-600 dark:text-emerald-400 shrink-0 select-none font-mono text-sm mt-px">
                       {isCommand ? '$' : '→'}
                     </span>
-                    <span className={cn('text-sm', isCommand ? 'font-mono text-neutral-700 dark:text-neutral-300' : 'text-neutral-600 dark:text-neutral-400')}>
+                    <span
+                      className={cn(
+                        'text-sm',
+                        isCommand
+                          ? 'font-mono text-neutral-700 dark:text-neutral-300'
+                          : 'text-neutral-600 dark:text-neutral-400',
+                      )}
+                    >
                       {step}
                     </span>
                   </div>
@@ -61,9 +67,22 @@ export function GettingStartedSection({ locale }: { locale: string }) {
             </div>
             <ul className="px-6 space-y-2.5 flex-1">
               {t.production.items.map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-sm text-neutral-700 dark:text-neutral-300">
-                  <svg className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <li
+                  key={item}
+                  className="flex items-start gap-2.5 text-sm text-neutral-700 dark:text-neutral-300"
+                >
+                  <svg
+                    className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                   {item}
                 </li>

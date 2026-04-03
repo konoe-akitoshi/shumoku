@@ -15,7 +15,7 @@ export function VendorIcons() {
   const [selectedVendor, setSelectedVendor] = useState<VendorKey | 'all'>('all')
 
   const iconCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: 0 }
+    const counts: { all: number } & Record<string, number> = { all: 0 }
     for (const vendor of vendorOrder) {
       const count = vendorIcons[vendor].length
       counts[vendor] = count

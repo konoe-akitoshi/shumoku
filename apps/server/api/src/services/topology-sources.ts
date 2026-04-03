@@ -4,15 +4,15 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import { getDatabase, generateId, timestamp } from '../db/index.js'
+import crypto from 'node:crypto'
+import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type {
-  TopologyDataSource,
-  TopologyDataSourceInput,
   DataSource,
   DataSourcePurpose,
   SyncMode,
+  TopologyDataSource,
+  TopologyDataSourceInput,
 } from '../types.js'
-import crypto from 'node:crypto'
 
 interface TopologyDataSourceRow {
   id: string
@@ -53,16 +53,16 @@ function rowToTopologyDataSource(row: TopologyDataSourceRow): TopologyDataSource
   }
 
   // Include joined data source if available
-  if (row.ds_id) {
+  if (row.ds_id && row.ds_name && row.ds_config_json && row.ds_created_at && row.ds_updated_at) {
     result.dataSource = {
       id: row.ds_id,
-      name: row.ds_name!,
+      name: row.ds_name,
       type: row.ds_type as DataSource['type'],
-      configJson: row.ds_config_json!,
+      configJson: row.ds_config_json,
       status: (row.ds_status as DataSource['status']) || 'unknown',
       failCount: row.ds_fail_count || 0,
-      createdAt: row.ds_created_at!,
-      updatedAt: row.ds_updated_at!,
+      createdAt: row.ds_created_at,
+      updatedAt: row.ds_updated_at,
     }
   }
 
@@ -205,13 +205,33 @@ export class TopologySourcesService {
   /**
    * Add a data source to a topology
    */
-  async add(topologyId: string, input: TopologyDataSourceInput): Promise<TopologyDataSource> {
+  async add(
+    topologyId: string,
+    {
+      dataSourceId,
+      purpose,
+      syncMode: syncModeInput,
+      priority,
+      optionsJson,
+    }: TopologyDataSourceInput,
+  ): Promise<TopologyDataSource> {
     const id = await generateId()
     const now = timestamp()
-    const syncMode = input.syncMode || 'manual'
+    const syncMode = syncModeInput || 'manual'
 
     // Generate webhook secret if webhook mode
     const webhookSecret = syncMode === 'webhook' ? crypto.randomBytes(32).toString('hex') : null
+
+    const topology: TopologyDataSource = {
+      id,
+      topologyId,
+      dataSourceId,
+      purpose,
+      syncMode,
+      priority: priority ?? 0,
+      createdAt: now,
+      updatedAt: now,
+    }
 
     this.db
       .query(
@@ -222,17 +242,17 @@ export class TopologySourcesService {
       .run(
         id,
         topologyId,
-        input.dataSourceId,
-        input.purpose,
+        dataSourceId,
+        purpose,
         syncMode,
         webhookSecret,
-        input.priority ?? 0,
-        input.optionsJson ?? null,
+        priority ?? 0,
+        optionsJson ?? null,
         now,
         now,
       )
 
-    return this.get(id)!
+    return topology
   }
 
   /**

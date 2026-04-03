@@ -69,8 +69,8 @@ export class NetBoxClient {
    * Create client from environment variables
    */
   static fromEnv(): NetBoxClient {
-    const url = process.env.NETBOX_URL
-    const token = process.env.NETBOX_TOKEN
+    const url = process.env['NETBOX_URL']
+    const token = process.env['NETBOX_TOKEN']
 
     if (!url) {
       throw new Error('NETBOX_URL environment variable is required')

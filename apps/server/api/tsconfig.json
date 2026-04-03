@@ -4,7 +4,6 @@
     "outDir": "./dist",
     "rootDir": "..",
     "composite": true,
-    "skipLibCheck": true,
     "types": ["bun"]
   },
   "include": ["src/**/*", "../plugins/**/*"],

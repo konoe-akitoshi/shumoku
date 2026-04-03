@@ -1,20 +1,22 @@
 <script lang="ts">
+  import {
+    CaretDoubleLeftIcon,
+    CaretDoubleRightIcon,
+    CubeIcon,
+    DatabaseIcon,
+    GearSixIcon,
+    HouseIcon,
+    SignOutIcon,
+    SquaresFourIcon,
+    TreeStructureIcon,
+  } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { browser } from '$app/environment'
-  import { page } from '$app/stores'
   import { goto } from '$app/navigation'
-  import Header from '$lib/components/header.svelte'
+  import { page } from '$app/stores'
   import { auth } from '$lib/api'
-  import { HouseIcon } from 'phosphor-svelte'
-  import { SquaresFourIcon } from 'phosphor-svelte'
-  import { TreeStructureIcon } from 'phosphor-svelte'
-  import { DatabaseIcon } from 'phosphor-svelte'
-  import { CubeIcon } from 'phosphor-svelte'
-  import { GearSixIcon } from 'phosphor-svelte'
-  import { CaretDoubleLeftIcon } from 'phosphor-svelte'
-  import { CaretDoubleRightIcon } from 'phosphor-svelte'
+  import Header from '$lib/components/header.svelte'
   import Logo from '$lib/components/Logo.svelte'
-  import { SignOutIcon } from 'phosphor-svelte'
 
   interface NavItem {
     href: string

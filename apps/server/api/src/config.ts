@@ -22,8 +22,8 @@ const DEFAULT_WEATHERMAP_CONFIG: WeathermapConfig = {
  * - Local: resolves to apps/server/data from this file's location
  */
 const getDefaultDataDir = (): string => {
-  if (process.env.DATA_DIR) {
-    return process.env.DATA_DIR
+  if (process.env['DATA_DIR']) {
+    return process.env['DATA_DIR']
   }
   // api/src/config.ts → apps/server/data
   const serverDir = path.resolve(import.meta.dir, '..', '..')
@@ -47,7 +47,7 @@ export function loadConfig(configPath?: string): Config {
   let config = { ...DEFAULT_CONFIG }
 
   // Try to load from file
-  const filePath = configPath || process.env.SHUMOKU_CONFIG || './config.yaml'
+  const filePath = configPath || process.env['SHUMOKU_CONFIG'] || './config.yaml'
   if (fs.existsSync(filePath)) {
     const content = fs.readFileSync(filePath, 'utf-8')
     const fileConfig = yaml.load(content) as Partial<Config>
@@ -61,17 +61,17 @@ export function loadConfig(configPath?: string): Config {
   }
 
   // Override with environment variables
-  if (process.env.PORT) {
-    config.server.port = Number.parseInt(process.env.PORT, 10)
+  if (process.env['PORT']) {
+    config.server.port = Number.parseInt(process.env['PORT'], 10)
   }
-  if (process.env.HOST) {
-    config.server.host = process.env.HOST
+  if (process.env['HOST']) {
+    config.server.host = process.env['HOST']
   }
-  if (process.env.DATA_DIR) {
-    config.server.dataDir = process.env.DATA_DIR
+  if (process.env['DATA_DIR']) {
+    config.server.dataDir = process.env['DATA_DIR']
   }
-  if (process.env.POLL_INTERVAL) {
-    config.server.pollInterval = Number.parseInt(process.env.POLL_INTERVAL, 10)
+  if (process.env['POLL_INTERVAL']) {
+    config.server.pollInterval = Number.parseInt(process.env['POLL_INTERVAL'], 10)
   }
 
   // Handle ${VAR} syntax in config values

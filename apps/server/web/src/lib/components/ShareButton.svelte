@@ -1,8 +1,5 @@
 <script lang="ts">
-  import { ShareNetworkIcon } from 'phosphor-svelte'
-  import { LinkSimpleIcon } from 'phosphor-svelte'
-  import { XIcon } from 'phosphor-svelte'
-  import { CheckIcon } from 'phosphor-svelte'
+  import { CheckIcon, LinkSimpleIcon, ShareNetworkIcon, XIcon } from 'phosphor-svelte'
 
   export let shareToken: string | undefined = undefined
   export let shareType: 'topologies' | 'dashboards' = 'topologies'

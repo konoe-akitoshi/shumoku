@@ -4,8 +4,8 @@
  */
 
 import { Hono } from 'hono'
-import { getTopologyService, buildRenderOutput } from './topologies.js'
 import { getDashboardService } from './dashboards.js'
+import { buildRenderOutput, getTopologyService } from './topologies.js'
 
 export function createShareApi(): Hono {
   const app = new Hono()
@@ -43,10 +43,7 @@ export function createShareApi(): Hono {
             typeof l.from === 'string'
               ? { nodeId: l.from }
               : { nodeId: l.from.node, port: l.from.port },
-          to:
-            typeof l.to === 'string'
-              ? { nodeId: l.to }
-              : { nodeId: l.to.node, port: l.to.port },
+          to: typeof l.to === 'string' ? { nodeId: l.to } : { nodeId: l.to.node, port: l.to.port },
           bandwidth: l.bandwidth,
         })),
         subgraphs: parsed.graph.subgraphs || [],

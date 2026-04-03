@@ -10,6 +10,7 @@
 import ELK, {
   type ElkExtendedEdge,
   type ElkNode,
+  type ElkPort,
   type LayoutOptions,
 } from 'elkjs/lib/elk.bundled.js'
 import {
@@ -116,7 +117,11 @@ function getLinkTypeStrokeWidth(type?: string): number {
   }
 }
 
-function getLinkStrokeWidthForLayout(link: { bandwidth?: string; type?: string; style?: { strokeWidth?: number } }): number {
+function getLinkStrokeWidthForLayout(link: {
+  bandwidth?: string
+  type?: string
+  style?: { strokeWidth?: number }
+}): number {
   const styleWidth = link.style?.strokeWidth ?? 0
   const bandwidthWidth = getBandwidthStrokeWidth(link.bandwidth)
   const typeWidth = getLinkTypeStrokeWidth(link.type)
@@ -168,16 +173,20 @@ function collectNodePorts(graph: NetworkGraph, haPairSet: Set<string>): Map<stri
   const nodePorts = new Map<string, NodePortInfo>()
 
   const getOrCreate = (nodeId: string): NodePortInfo => {
-    if (!nodePorts.has(nodeId)) {
-      nodePorts.set(nodeId, {
+    const info = nodePorts.get(nodeId)
+    if (info) {
+      return info
+    } else {
+      const info: NodePortInfo = {
         all: new Set(),
         top: new Set(),
         bottom: new Set(),
         left: new Set(),
         right: new Set(),
-      })
+      }
+      nodePorts.set(nodeId, info)
+      return info
     }
-    return nodePorts.get(nodeId)!
   }
 
   // Check if link is between HA pair nodes
@@ -456,87 +465,67 @@ export class HierarchicalLayout {
         elkNode.layoutOptions = { 'elk.partitioning.partition': String(partition) }
       }
 
+      if (!portInfo || portInfo.all.size === 0) return elkNode
+
       // Add ports
-      if (portInfo && portInfo.all.size > 0) {
-        elkNode.ports = []
+      elkNode.ports = []
 
-        // Calculate port spacing based on label width
-        const portSpacing = this.calculatePortSpacing(portInfo.all, spacing.portSpacingMin)
+      // Calculate port spacing based on label width
+      const portSpacing = this.calculatePortSpacing(portInfo.all, spacing.portSpacingMin)
 
-        // Helper to calculate port positions centered in the node
-        const calcPortPositions = (count: number, totalWidth: number): number[] => {
-          if (count === 0) return []
-          if (count === 1) return [totalWidth / 2]
-          const totalSpan = (count - 1) * portSpacing
-          const startX = (totalWidth - totalSpan) / 2
-          return Array.from({ length: count }, (_, i) => startX + i * portSpacing)
-        }
+      const convertNodePortInfoToElkPort = (
+        nodePortInfo: NodePortInfo,
+        direction: 'top' | 'bottom' | 'left' | 'right',
+      ): ElkPort[] => {
+        const ports = Array.from(nodePortInfo[direction])
+        const orientation =
+          direction === 'top' || direction === 'bottom' ? 'vertical' : 'horizontal'
 
-        // Top ports (incoming)
-        const topPorts = Array.from(portInfo.top)
-        const topPositions = calcPortPositions(topPorts.length, width)
-        for (const [i, portName] of topPorts.entries()) {
-          elkNode.ports!.push({
+        const totalWidth = orientation === 'vertical' ? width : height
+        const totalSpan = (ports.length - 1) * portSpacing
+        const startX = (totalWidth - totalSpan) / 2
+        const offset = (orientation === 'vertical' ? PORT_WIDTH : PORT_HEIGHT) / 2
+
+        const elkDirection =
+          direction === 'top'
+            ? 'NORTH'
+            : direction === 'bottom'
+              ? 'SOUTH'
+              : direction === 'left'
+                ? 'WEST'
+                : 'EAST'
+
+        return ports.map((portName, i) => {
+          const pos = startX + i * portSpacing - offset
+          return {
             id: `${node.id}:${portName}`,
             width: PORT_WIDTH,
             height: PORT_HEIGHT,
-            x: topPositions[i] - PORT_WIDTH / 2,
-            y: 0,
+            x: orientation === 'vertical' ? pos : 0,
+            y: orientation === 'horizontal' ? pos : 0,
             labels: [{ text: portName }],
-            layoutOptions: { 'elk.port.side': 'NORTH' },
-          })
-        }
+            layoutOptions: { 'elk.port.side': elkDirection },
+          }
+        })
+      }
 
-        // Bottom ports (outgoing)
-        const bottomPorts = Array.from(portInfo.bottom)
-        const bottomPositions = calcPortPositions(bottomPorts.length, width)
-        for (const [i, portName] of bottomPorts.entries()) {
-          elkNode.ports!.push({
-            id: `${node.id}:${portName}`,
-            width: PORT_WIDTH,
-            height: PORT_HEIGHT,
-            x: bottomPositions[i] - PORT_WIDTH / 2,
-            y: height - PORT_HEIGHT,
-            labels: [{ text: portName }],
-            layoutOptions: { 'elk.port.side': 'SOUTH' },
-          })
-        }
+      elkNode.ports.push(
+        ...[
+          // Top ports (incoming)
+          ...convertNodePortInfoToElkPort(portInfo, 'top'),
+          // Bottom ports (outgoing)
+          ...convertNodePortInfoToElkPort(portInfo, 'bottom'),
+          // Left ports (HA)
+          ...convertNodePortInfoToElkPort(portInfo, 'left'),
+          // Right ports (HA)
+          ...convertNodePortInfoToElkPort(portInfo, 'right'),
+        ],
+      )
 
-        // Left ports (HA)
-        const leftPorts = Array.from(portInfo.left)
-        const leftPositions = calcPortPositions(leftPorts.length, height)
-        for (const [i, portName] of leftPorts.entries()) {
-          elkNode.ports!.push({
-            id: `${node.id}:${portName}`,
-            width: PORT_WIDTH,
-            height: PORT_HEIGHT,
-            x: 0,
-            y: leftPositions[i] - PORT_HEIGHT / 2,
-            labels: [{ text: portName }],
-            layoutOptions: { 'elk.port.side': 'WEST' },
-          })
-        }
-
-        // Right ports (HA)
-        const rightPorts = Array.from(portInfo.right)
-        const rightPositions = calcPortPositions(rightPorts.length, height)
-        for (const [i, portName] of rightPorts.entries()) {
-          elkNode.ports!.push({
-            id: `${node.id}:${portName}`,
-            width: PORT_WIDTH,
-            height: PORT_HEIGHT,
-            x: width - PORT_WIDTH,
-            y: rightPositions[i] - PORT_HEIGHT / 2,
-            labels: [{ text: portName }],
-            layoutOptions: { 'elk.port.side': 'EAST' },
-          })
-        }
-
-        elkNode.layoutOptions = {
-          ...elkNode.layoutOptions,
-          'elk.portConstraints': 'FIXED_POS',
-          'elk.spacing.portPort': String(spacing.portSpacingMin),
-        }
+      elkNode.layoutOptions = {
+        ...elkNode.layoutOptions,
+        'elk.portConstraints': 'FIXED_POS',
+        'elk.spacing.portPort': String(spacing.portSpacingMin),
       }
 
       return elkNode
@@ -814,7 +803,7 @@ export class HierarchicalLayout {
       if (!edgesByContainer.has(containerId)) {
         edgesByContainer.set(containerId, [])
       }
-      edgesByContainer.get(containerId)!.push(edge)
+      edgesByContainer.get(containerId)?.push(edge)
     }
 
     // Dynamic edge spacing (account for thick/bandwidth-based strokes)
@@ -899,9 +888,10 @@ export class HierarchicalLayout {
       const width = elkNode.width || 0
       const height = elkNode.height || 0
 
-      if (subgraphMap.has(elkNode.id)) {
+      const sg = subgraphMap.get(elkNode.id)
+      const node = nodeMap.get(elkNode.id)
+      if (sg) {
         // Subgraph
-        const sg = subgraphMap.get(elkNode.id)!
         const layoutSg: LayoutSubgraph = {
           id: elkNode.id,
           bounds: { x, y, width, height },
@@ -922,9 +912,8 @@ export class HierarchicalLayout {
             processElkNode(child)
           }
         }
-      } else if (nodeMap.has(elkNode.id)) {
+      } else if (node) {
         // Regular node
-        const node = nodeMap.get(elkNode.id)!
         const portInfo = nodePorts.get(node.id)
         const nodeHeight = this.calculateNodeHeight(node, portInfo?.all.size || 0)
 
@@ -1066,7 +1055,7 @@ export class HierarchicalLayout {
           const isSubgraphEdge = fromSubgraph || toSubgraph
 
           // HA edges inside HA containers: use ELK's edge routing directly
-          if (isHAContainer(container.id) && elkEdge.sections && elkEdge.sections.length > 0) {
+          if (isHAContainer(container.id) && elkEdge.sections?.[0]) {
             const section = elkEdge.sections[0]
             points.push({ x: section.startPoint.x, y: section.startPoint.y })
             if (section.bendPoints) {
@@ -1077,7 +1066,7 @@ export class HierarchicalLayout {
             points.push({ x: section.endPoint.x, y: section.endPoint.y })
           } else if (isSubgraphEdge) {
             // Subgraph edges: use ELK's coordinates directly
-            if (elkEdge.sections && elkEdge.sections.length > 0) {
+            if (elkEdge.sections?.[0]) {
               const section = elkEdge.sections[0]
               points.push({ x: section.startPoint.x, y: section.startPoint.y })
               if (section.bendPoints) {
@@ -1099,7 +1088,7 @@ export class HierarchicalLayout {
             const toParent = graph.nodes.find((n) => n.id === toEndpoint_.node)?.parent
             const isCrossSubgraph = fromParent !== toParent
 
-            if (elkEdge.sections && elkEdge.sections.length > 0) {
+            if (elkEdge.sections?.[0]) {
               const section = elkEdge.sections[0]
 
               if (isCrossSubgraph) {
@@ -1329,10 +1318,7 @@ export class HierarchicalLayout {
     return Math.max(this.options.nodeHeight, contentHeight + NODE_VERTICAL_PADDING)
   }
 
-  private calculatePortSpacing(
-    portNames: Set<string> | undefined,
-    minSpacing: number,
-  ): number {
+  private calculatePortSpacing(portNames: Set<string> | undefined, minSpacing: number): number {
     if (!portNames || portNames.size === 0) return minSpacing
 
     let maxLabelLength = 0

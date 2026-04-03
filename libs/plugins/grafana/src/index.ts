@@ -1,9 +1,9 @@
-export { GrafanaPlugin, mapSeverity, buildTitle, filterLabels, SEVERITY_ORDER } from './plugin.js'
+export { buildTitle, filterLabels, GrafanaPlugin, mapSeverity, SEVERITY_ORDER } from './plugin.js'
 export type {
-  GrafanaPluginConfig,
-  GrafanaWebhookPayload,
-  GrafanaWebhookAlert,
   AlertStoreService,
+  GrafanaPluginConfig,
+  GrafanaWebhookAlert,
+  GrafanaWebhookPayload,
 } from './types.js'
 
 import type { PluginRegistryInterface } from '@shumoku/core'

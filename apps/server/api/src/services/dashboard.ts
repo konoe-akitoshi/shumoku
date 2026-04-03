@@ -57,18 +57,26 @@ export class DashboardService {
   /**
    * Create a new dashboard
    */
-  async create(input: DashboardInput): Promise<Dashboard> {
+  async create({ name, layoutJson }: DashboardInput): Promise<Dashboard> {
     const id = await generateId()
     const now = timestamp()
+
+    const dashboard: Dashboard = {
+      id,
+      name,
+      layoutJson,
+      createdAt: now,
+      updatedAt: now,
+    }
 
     this.db
       .query(
         `INSERT INTO dashboards (id, name, layout_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?)`,
       )
-      .run(id, input.name, input.layoutJson, now, now)
+      .run(id, name, layoutJson, now, now)
 
-    return this.get(id)!
+    return dashboard
   }
 
   /**
@@ -145,9 +153,9 @@ export class DashboardService {
    * Get a dashboard by its share token
    */
   getByShareToken(token: string): Dashboard | null {
-    const row = this.db
-      .query('SELECT * FROM dashboards WHERE share_token = ?')
-      .get(token) as DashboardRow | undefined
+    const row = this.db.query('SELECT * FROM dashboards WHERE share_token = ?').get(token) as
+      | DashboardRow
+      | undefined
     return row ? rowToDashboard(row) : null
   }
 }

@@ -1,9 +1,7 @@
 <script lang="ts">
+  import { CaretRightIcon, MoonIcon, SunIcon } from 'phosphor-svelte'
   import { page } from '$app/stores'
-  import { CaretRightIcon } from 'phosphor-svelte'
-  import { MoonIcon } from 'phosphor-svelte'
-  import { SunIcon } from 'phosphor-svelte'
-  import { themeSetting, resolvedTheme } from '$lib/stores/theme'
+  import { resolvedTheme, themeSetting } from '$lib/stores/theme'
 
   // Generate breadcrumbs from current path
   interface Breadcrumb {

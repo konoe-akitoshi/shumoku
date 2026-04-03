@@ -83,7 +83,7 @@ export function normalizeInterfaceName(name: string): NormalizedInterface {
 
   if (!prefix) {
     const m = lower.match(/^([a-z][a-z-]*)(.*)$/)
-    if (m) {
+    if (m?.[1] && m[2]) {
       prefix = m[1]
       rest = m[2]
     } else {
@@ -99,15 +99,16 @@ export function normalizeInterfaceName(name: string): NormalizedInterface {
 
   if (rest) {
     const segments = rest.split('/')
-    for (let i = 0; i < segments.length; i++) {
-      const dotParts = segments[i].split('.')
+    for (const [i, seg] of segments.entries()) {
+      const dotParts = seg.split('.')
+      if (!dotParts[0]) continue
       const main = parseInt(dotParts[0], 10)
-      if (!isNaN(main)) numbers.push(main)
+      if (!Number.isNaN(main)) numbers.push(main)
 
       // Sub-interface: only on last segment
-      if (i === segments.length - 1 && dotParts.length > 1) {
+      if (i === segments.length - 1 && dotParts.length > 1 && dotParts[1]) {
         const s = parseInt(dotParts[1], 10)
-        if (!isNaN(s)) sub = s
+        if (!Number.isNaN(s)) sub = s
       }
     }
   }
@@ -171,8 +172,7 @@ export function findBestInterfaceMatch(
 ): string | null {
   if (candidates.length === 0) return null
 
-  const opts: InterfaceMatchOptions =
-    typeof options === 'number' ? { threshold: options } : options
+  const opts: InterfaceMatchOptions = typeof options === 'number' ? { threshold: options } : options
   const threshold = opts.threshold ?? 0.5
 
   const norm = normalizeInterfaceName(portName)
@@ -191,7 +191,7 @@ export function findBestInterfaceMatch(
 
   // Fallback: single candidate → assume it's the same physical port
   if (opts.singleCandidateFallback && candidates.length === 1) {
-    return candidates[0]
+    return candidates[0] ?? null
   }
 
   return null
@@ -225,7 +225,11 @@ export const NODE_MATCH_THRESHOLD = 0.7
 /**
  * Score how well a topology node name matches a monitoring host name (0–1).
  */
-export function nodeNameMatchScore(nodeName: string, hostName: string, hostDisplayName?: string): number {
+export function nodeNameMatchScore(
+  nodeName: string,
+  hostName: string,
+  hostDisplayName?: string,
+): number {
   const n = nodeName.toLowerCase().trim()
   const h = hostName.toLowerCase().trim()
   const d = hostDisplayName?.toLowerCase().trim()

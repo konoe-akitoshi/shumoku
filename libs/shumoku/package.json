@@ -52,7 +52,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome check --write ."
   },
   "dependencies": {
     "@shumoku/core": "^0.2.13",

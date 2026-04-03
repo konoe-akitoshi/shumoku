@@ -3,10 +3,10 @@
  * Shared state for topology node/link mapping across pages
  */
 
-import { nodeNameMatchScore, NODE_MATCH_THRESHOLD } from '@shumoku/core'
-import { writable, derived, get } from 'svelte/store'
+import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '@shumoku/core'
+import { derived, get, writable } from 'svelte/store'
 import { api } from '$lib/api'
-import type { MetricsMapping, Host, HostItem } from '$lib/types'
+import type { Host, HostItem, MetricsMapping } from '$lib/types'
 
 interface MappingState {
   topologyId: string | null
@@ -182,7 +182,7 @@ function createMappingStore() {
             ifName = item.interfaceName
           } else {
             const match = item.name.match(/^(.+?)\s*-\s*(Inbound|Outbound)$/i)
-            ifName = match ? match[1].trim() : item.name
+            ifName = match?.[1] ? match[1].trim() : item.name
           }
           if (!interfaceNames.has(ifName)) {
             interfaceNames.add(ifName)

@@ -83,7 +83,7 @@ export function createDarkStylesheet(): StylesheetJsonBlock[] {
       selector: `node[type="${type}"]`,
       style: {
         'border-color': color,
-        'background-color': color + '20', // 20% opacity
+        'background-color': `${color}20`, // 20% opacity
       },
     })),
 

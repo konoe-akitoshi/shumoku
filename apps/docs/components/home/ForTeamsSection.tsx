@@ -1,5 +1,5 @@
+import { Code2, MapIcon, Package, Plug } from 'lucide-react'
 import { cn } from '@/lib/cn'
-import { Code2, Map, Package, Plug } from 'lucide-react'
 import { sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
@@ -7,7 +7,7 @@ const nodeIcons = [
   <Code2 key="plugin" className="w-5 h-5" />,
   <Package key="embed" className="w-5 h-5" />,
   <Plug key="api" className="w-5 h-5" />,
-  <Map key="roadmap" className="w-5 h-5" />,
+  <MapIcon key="roadmap" className="w-5 h-5" />,
 ]
 
 function CoreNode() {
@@ -77,21 +77,37 @@ export function ForTeamsSection({ locale }: { locale: string }) {
         {/* Desktop: center-core cross layout */}
         <div className="hidden lg:flex flex-col items-center">
           {/* Top node */}
-          <SatelliteNode title={t.nodes[0].title} description={t.nodes[0].description} icon={nodeIcons[0]} />
+          <SatelliteNode
+            title={t.nodes[0].title}
+            description={t.nodes[0].description}
+            icon={nodeIcons[0]}
+          />
           <DashedConnector orientation="vertical" />
 
           {/* Middle row: left — center — right */}
           <div className="flex items-center justify-center">
-            <SatelliteNode title={t.nodes[1].title} description={t.nodes[1].description} icon={nodeIcons[1]} />
+            <SatelliteNode
+              title={t.nodes[1].title}
+              description={t.nodes[1].description}
+              icon={nodeIcons[1]}
+            />
             <DashedConnector orientation="horizontal" />
             <CoreNode />
             <DashedConnector orientation="horizontal" />
-            <SatelliteNode title={t.nodes[2].title} description={t.nodes[2].description} icon={nodeIcons[2]} />
+            <SatelliteNode
+              title={t.nodes[2].title}
+              description={t.nodes[2].description}
+              icon={nodeIcons[2]}
+            />
           </div>
 
           <DashedConnector orientation="vertical" />
           {/* Bottom node */}
-          <SatelliteNode title={t.nodes[3].title} description={t.nodes[3].description} icon={nodeIcons[3]} />
+          <SatelliteNode
+            title={t.nodes[3].title}
+            description={t.nodes[3].description}
+            icon={nodeIcons[3]}
+          />
         </div>
 
         {/* Mobile: stacked layout */}
@@ -99,7 +115,12 @@ export function ForTeamsSection({ locale }: { locale: string }) {
           <CoreNode />
           <div className="grid grid-cols-2 gap-6 max-w-sm">
             {t.nodes.map((node, i) => (
-              <SatelliteNode key={node.title} title={node.title} description={node.description} icon={nodeIcons[i]} />
+              <SatelliteNode
+                key={node.title}
+                title={node.title}
+                description={node.description}
+                icon={nodeIcons[i]}
+              />
             ))}
           </div>
         </div>

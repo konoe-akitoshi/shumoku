@@ -25,7 +25,10 @@
       "import": "./dist/iife-string.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc && bun run build:css && bun run build:iife && bun run build:iife-string",
     "build:css": "bun src/build-css.ts",
@@ -34,6 +37,7 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
+    "format": "biome check --write .",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

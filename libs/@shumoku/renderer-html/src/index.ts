@@ -3,10 +3,10 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 export * from './html/index.js'
+export type { HTMLRenderOptions } from './pipeline.js'
 export {
-  renderHtml,
-  renderHtmlHierarchical,
   renderGraphToHtml,
   renderGraphToHtmlHierarchical,
+  renderHtml,
+  renderHtmlHierarchical,
 } from './pipeline.js'
-export type { HTMLRenderOptions } from './pipeline.js'

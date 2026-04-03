@@ -4,9 +4,9 @@
  */
 
 import { Hono } from 'hono'
-import { TopologySourcesService } from '../services/topology-sources.js'
 import { DataSourceService } from '../services/datasource.js'
 import { GrafanaAlertService, type GrafanaWebhookPayload } from '../services/grafana-alerts.js'
+import { TopologySourcesService } from '../services/topology-sources.js'
 import { getTopologyService } from './topologies.js'
 
 // Lazy initialization to avoid database access at module load time
@@ -150,10 +150,7 @@ webhooksApi.post('/grafana/:secret', async (c) => {
 
   try {
     const alertService = new GrafanaAlertService()
-    const count = alertService.upsertFromWebhook(
-      dataSource.id,
-      body as GrafanaWebhookPayload,
-    )
+    const count = alertService.upsertFromWebhook(dataSource.id, body as GrafanaWebhookPayload)
 
     console.log(`[Webhook/Grafana] Upserted ${count} alerts for data source ${dataSource.id}`)
 

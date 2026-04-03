@@ -33,7 +33,7 @@ export function getCDNIconUrl(vendor: string, model: string): string | undefined
   }
 
   const ext = ICON_EXTENSIONS[vendorLower] || 'svg'
-  const modelPath = model.toLowerCase().replace(/[^a-z0-9\-_\/]/g, '')
+  const modelPath = model.toLowerCase().replace(/[^a-z0-9\-_/]/g, '')
 
   return `${CDN_BASE_URL}/${vendorLower}/${modelPath}.${ext}`
 }

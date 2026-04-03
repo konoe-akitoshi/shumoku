@@ -431,8 +431,9 @@ export function setupZoomNavigation(opts: ZoomNavigationOptions): () => void {
           // Sheet switch at 80%
           if (pendingTarget) {
             opts.initSheet(pendingTarget.sheetId)
+            const sheetViewBox = opts.getSheetViewBox(pendingTarget.sheetId)
             initChildViewBox(
-              { [pendingTarget.sheetId]: opts.getSheetViewBox(pendingTarget.sheetId)! },
+              sheetViewBox ? { [pendingTarget.sheetId]: sheetViewBox } : {},
               pendingTarget.sheetId,
               opts.container.clientWidth,
               opts.container.clientHeight,

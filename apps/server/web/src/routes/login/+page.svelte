@@ -1,8 +1,8 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
   import { auth } from '$lib/api'
   import Logo from '$lib/components/Logo.svelte'
-  import { goto } from '$app/navigation'
-  import { onMount } from 'svelte'
 
   let password = ''
   let confirmPassword = ''
@@ -50,8 +50,10 @@
         await auth.login(password)
       }
       goto('/')
-    } catch (e: any) {
-      error = e.message || 'Authentication failed'
+    } catch (e) {
+      if (typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string') {
+        error = e.message || 'Authentication failed'
+      }
     } finally {
       loading = false
     }

@@ -10,7 +10,8 @@
     "dev": "NODE_ENV=development bun --watch src/index.ts",
     "start": "bun dist/api/src/index.js",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "format": "biome check --write ."
   },
   "dependencies": {
     "@shumoku/core": "workspace:*",

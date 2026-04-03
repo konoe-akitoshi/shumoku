@@ -8,8 +8,8 @@
  */
 
 import type { HierarchicalNetworkGraph, LayoutResult, NetworkGraph } from '@shumoku/core'
-import { BRANDING_ICON_SVG, SVGRenderer } from '@shumoku/renderer-svg'
 import type { HTMLRendererOptions } from '@shumoku/renderer-svg'
+import { BRANDING_ICON_SVG, SVGRenderer } from '@shumoku/renderer-svg'
 import {
   generateNavigationToolbar,
   getNavigationScript,

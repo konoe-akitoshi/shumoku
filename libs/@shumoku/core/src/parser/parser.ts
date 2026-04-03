@@ -6,6 +6,7 @@
  * YAML parser for network diagrams
  */
 
+import yaml from 'js-yaml'
 import type {
   ArrowType,
   CanvasSettings,
@@ -21,7 +22,6 @@ import type {
   Subgraph,
   ThemeType,
 } from '../models/types.js'
-import yaml from 'js-yaml'
 
 // Re-define DeviceType enum locally (same as v2.DeviceType)
 enum DeviceType {

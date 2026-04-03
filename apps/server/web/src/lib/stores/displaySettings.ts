@@ -7,7 +7,7 @@
  * whether real-time data is available.
  */
 
-import { writable, derived } from 'svelte/store'
+import { derived, writable } from 'svelte/store'
 import { browser } from '$app/environment'
 
 const STORAGE_KEY = 'shumoku-display-settings'

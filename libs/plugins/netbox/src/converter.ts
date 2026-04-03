@@ -280,8 +280,8 @@ function buildPortMaps(interfaceResp: NetBoxInterfaceResponse) {
     if (iface.untagged_vlan?.vid) vlans.add(iface.untagged_vlan.vid)
     for (const tv of iface.tagged_vlans) vlans.add(tv.vid)
 
-    portVlanMap.get(devName)!.set(portName, Array.from(vlans))
-    portSpeedMap.get(devName)!.set(portName, iface.speed)
+    portVlanMap.get(devName)?.set(portName, Array.from(vlans))
+    portSpeedMap.get(devName)?.set(portName, iface.speed)
   }
 
   return { portVlanMap, portSpeedMap }
@@ -299,7 +299,7 @@ function buildDevicesAndConnections(
   const connections: ConnectionData[] = []
 
   for (const cable of cableResp.results) {
-    if (cable.a_terminations.length === 0 || cable.b_terminations.length === 0) continue
+    if (!cable.a_terminations[0] || !cable.b_terminations[0]) continue
 
     const termA = cable.a_terminations[0].object
     const termB = cable.b_terminations[0].object
@@ -310,11 +310,11 @@ function buildDevicesAndConnections(
     const nameA = termA.device.name ?? `noname-${termA.device.id}`
     const nameB = termB.device.name ?? `noname-${termB.device.id}`
 
-    // Skip cables where either device is not in the filtered device list
-    if (!deviceTagMap.has(nameA) || !deviceTagMap.has(nameB)) continue
+    const tagA = deviceTagMap.get(nameA)
+    const tagB = deviceTagMap.get(nameB)
 
-    const tagA = deviceTagMap.get(nameA)!
-    const tagB = deviceTagMap.get(nameB)!
+    // Skip cables where either device is not in the filtered device list
+    if (!tagA || !tagB) continue
 
     const infoA = deviceInfoMap.get(nameA)
     const infoB = deviceInfoMap.get(nameB)
@@ -382,7 +382,7 @@ function resolvePrimaryTag(tags: NetBoxTag[]): string {
   for (const priority of TAG_PRIORITY) {
     if (tagSet.has(priority)) return priority
   }
-  return tags.length > 0 ? tags[0].slug : 'other'
+  return tags[0] ? tags[0].slug : 'other'
 }
 
 function getLevelByTag(tag: string, mapping: Record<string, TagMapping>): number {
@@ -398,27 +398,26 @@ function registerDevice(
   speed: number | null,
   info?: Omit<DeviceInfo, 'name' | 'tags' | 'rack'>,
 ): void {
-  if (!devices.has(name)) {
-    devices.set(name, {
-      name,
-      primaryTag: tag,
-      ports: new Set(),
-      portVlans: new Map(),
-      portSpeeds: new Map(),
-      model: info?.model,
-      manufacturer: info?.manufacturer,
-      ip: info?.ip,
-      role: info?.role,
-      site: info?.site,
-      location: info?.location,
-      status: info?.status,
-    })
+  const device = devices.get(name) ?? {
+    name,
+    primaryTag: tag,
+    ports: new Set(),
+    portVlans: new Map(),
+    portSpeeds: new Map(),
+    model: info?.model,
+    manufacturer: info?.manufacturer,
+    ip: info?.ip,
+    role: info?.role,
+    site: info?.site,
+    location: info?.location,
+    status: info?.status,
   }
 
-  const device = devices.get(name)!
   device.ports.add(port)
   device.portVlans.set(port, vlans)
   device.portSpeeds.set(port, speed)
+
+  devices.set(name, device)
 }
 
 function getNetworkPrefix(ip: string | undefined): string | null {
@@ -510,17 +509,17 @@ function buildSubgraphsByPrefix(devices: Map<string, DeviceData>): Subgraph[] {
   const sortedPrefixes = Array.from(prefixDevices.keys()).sort((a, b) => {
     if (a === 'unknown') return 1
     if (b === 'unknown') return -1
-    const aNum = a.split('.').slice(0, 2).map(Number)
-    const bNum = b.split('.').slice(0, 2).map(Number)
-    return aNum[0] - bNum[0] || aNum[1] - bNum[1]
+    const [a0 = 0, a1 = 0] = a.split('.').slice(0, 2).map(Number)
+    const [b0 = 0, b1 = 0] = b.split('.').slice(0, 2).map(Number)
+    return a0 - b0 || a1 - b1
   })
 
   const subgraphs: Subgraph[] = []
   let tokenIndex = 0
 
   for (const prefix of sortedPrefixes) {
-    const devs = prefixDevices.get(prefix)!
-    if (devs.length === 0) continue
+    const devs = prefixDevices.get(prefix)
+    if (devs?.length === 0) continue
 
     const token = PREFIX_TOKENS[tokenIndex++ % PREFIX_TOKENS.length]
     const label =
@@ -543,8 +542,9 @@ function groupDevicesBy(
   const grouped = new Map<string, DeviceData[]>()
   for (const device of devices.values()) {
     const key = keyFn(device)
-    if (!grouped.has(key)) grouped.set(key, [])
-    grouped.get(key)!.push(device)
+    const data = grouped.get(key) ?? []
+    data.push(device)
+    grouped.set(key, data)
   }
   return grouped
 }
@@ -721,8 +721,9 @@ function buildVMVlanMap(vmInterfaceResp: NetBoxVMInterfaceResponse): Map<string,
     if (vmIface.untagged_vlan?.vid) vlans.add(vmIface.untagged_vlan.vid)
     for (const tv of vmIface.tagged_vlans) vlans.add(tv.vid)
 
-    if (!vmVlanMap.has(vmName)) vmVlanMap.set(vmName, [])
-    vmVlanMap.get(vmName)!.push(...vlans)
+    const arr = vmVlanMap.get(vmName) ?? []
+    arr.push(...vlans)
+    vmVlanMap.set(vmName, arr)
   }
 
   return vmVlanMap
@@ -960,8 +961,9 @@ export function convertToHierarchicalYaml(
   const locationDevices = new Map<string, Set<string>>()
   for (const [deviceName] of deviceInfoMap) {
     const loc = getLocationKey(deviceName)
-    if (!locationDevices.has(loc)) locationDevices.set(loc, new Set())
-    locationDevices.get(loc)!.add(deviceName)
+    const deviceNames = locationDevices.get(loc) ?? new Set()
+    deviceNames.add(deviceName)
+    locationDevices.set(loc, deviceNames)
   }
 
   // Analyze cables
@@ -1044,7 +1046,7 @@ function analyzeCables(
   const internalConnections = new Map<string, ConnectionData[]>()
 
   for (const cable of cableResp.results) {
-    if (cable.a_terminations.length === 0 || cable.b_terminations.length === 0) continue
+    if (!cable.a_terminations[0] || !cable.b_terminations[0]) continue
 
     const termA = cable.a_terminations[0].object
     const termB = cable.b_terminations[0].object
@@ -1094,8 +1096,9 @@ function analyzeCables(
         cable: conn,
       })
     } else {
-      if (!internalConnections.has(locA)) internalConnections.set(locA, [])
-      internalConnections.get(locA)!.push(conn)
+      const connections = internalConnections.get(locA) ?? []
+      connections.push(conn)
+      internalConnections.set(locA, connections)
     }
   }
 

@@ -1,10 +1,10 @@
 'use client'
 
+import type { SheetData } from '@shumoku/renderer-html'
+import { renderHtml, renderHtmlHierarchical, setIIFE } from '@shumoku/renderer-html'
+import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 import type { PreparedRender } from '@shumoku/renderer-svg'
 import { prepareRender, renderSvg } from '@shumoku/renderer-svg'
-import type { SheetData } from '@shumoku/renderer-html'
-import { setIIFE, renderHtml, renderHtmlHierarchical } from '@shumoku/renderer-html'
-import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 import { useEffect, useRef, useState } from 'react'
 import type { NetworkGraph } from 'shumoku'
 import { createMemoryFileResolver, HierarchicalParser, parser, sampleNetwork } from 'shumoku'
@@ -236,7 +236,7 @@ export default function PlaygroundClient() {
     if (files.length <= 1) return
     const newFiles = files.filter((f) => f.name !== name)
     setFiles(newFiles)
-    if (activeFile === name) {
+    if (activeFile === name && newFiles[0]) {
       setActiveFile(newFiles[0].name)
     }
   }
@@ -371,7 +371,7 @@ export default function PlaygroundClient() {
     const matches = [...svgString.matchAll(imageUrlRegex)]
     if (matches.length === 0) return svgString
 
-    const uniqueUrls = [...new Set(matches.map((m) => m[1]))]
+    const uniqueUrls = [...new Set(matches.map((m) => m[1]).filter((m) => m !== undefined))]
     const urlToBase64 = new Map<string, string>()
 
     await Promise.all(

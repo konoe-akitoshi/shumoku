@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
-  import { api } from '$lib/api'
-  import type { Alert, AlertSeverity, DataSource } from '$lib/types'
-  import { dashboardStore, currentLayout } from '$lib/stores/dashboards'
-  import { emitHighlightNodes, emitClearHighlight } from '$lib/stores/widgetEvents'
-  import { get } from 'svelte/store'
-  import WidgetWrapper from './WidgetWrapper.svelte'
-  import * as Dialog from '$lib/components/ui/dialog'
   import {
-    ArrowsClockwiseIcon,
     ArrowSquareOutIcon,
+    ArrowsClockwiseIcon,
     CheckCircleIcon,
     FireIcon,
     InfoIcon,
     SpinnerIcon,
     WarningIcon,
   } from 'phosphor-svelte'
+  import { onDestroy, onMount } from 'svelte'
+  import { get } from 'svelte/store'
+  import { api } from '$lib/api'
+  import * as Dialog from '$lib/components/ui/dialog'
+  import { currentLayout, dashboardStore } from '$lib/stores/dashboards'
+  import { emitClearHighlight, emitHighlightNodes } from '$lib/stores/widgetEvents'
+  import type { Alert, AlertSeverity, DataSource } from '$lib/types'
+  import WidgetWrapper from './WidgetWrapper.svelte'
 
   interface Props {
     id: string
@@ -211,18 +211,21 @@
     const layout = get(currentLayout)
     if (!layout) return
     for (const w of layout.widgets) {
-      if (w.type === 'topology' && w.config.topologyId) {
-        fn(w.config.topologyId as string)
+      if (w.type === 'topology' && w.config['topologyId']) {
+        fn(w.config['topologyId'] as string)
       }
     }
   }
 
   function emitPinnedHighlight() {
     if (!pinnedAlert?.host) return
+    const host = pinnedAlert.host
+    const severity = pinnedAlert.severity
+
     forEachTopology((tid) => emitClearHighlight(tid, id))
     forEachTopology((tid) =>
-      emitHighlightNodes(tid, [pinnedAlert!.host!], {
-        highlightColor: SEVERITY_HIGHLIGHT_COLORS[pinnedAlert!.severity],
+      emitHighlightNodes(tid, [host], {
+        highlightColor: SEVERITY_HIGHLIGHT_COLORS[severity],
         sourceWidgetId: id,
       }),
     )
@@ -230,8 +233,9 @@
 
   function handleAlertHover(alert: Alert) {
     if (!alert.host) return
+    const host = alert.host
     forEachTopology((tid) =>
-      emitHighlightNodes(tid, [alert.host!], {
+      emitHighlightNodes(tid, [host], {
         highlightColor: SEVERITY_HIGHLIGHT_COLORS[alert.severity],
         sourceWidgetId: id,
       }),

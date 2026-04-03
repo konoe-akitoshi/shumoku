@@ -6,9 +6,11 @@
  */
 
 import {
+  type Alert,
+  type AlertQueryOptions,
+  type AlertSeverity,
+  type AlertsCapable,
   addHttpWarning,
-  type MetricsData,
-  type MetricsMapping,
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
@@ -17,10 +19,8 @@ import {
   type HostItem,
   type HostsCapable,
   type MetricsCapable,
-  type AlertsCapable,
-  type Alert,
-  type AlertQueryOptions,
-  type AlertSeverity,
+  type MetricsData,
+  type MetricsMapping,
 } from '@shumoku/core'
 import type { PrometheusCustomMetrics, PrometheusPluginConfig } from './types.js'
 
@@ -86,7 +86,7 @@ export class PrometheusPlugin
     if (this.config.preset === 'custom' && this.config.customMetrics) {
       this.metrics = this.config.customMetrics
     } else {
-      this.metrics = METRIC_PRESETS[this.config.preset] || METRIC_PRESETS.snmp
+      this.metrics = (METRIC_PRESETS[this.config.preset] || METRIC_PRESETS['snmp']) ?? null
     }
   }
 
@@ -162,9 +162,7 @@ export class PrometheusPlugin
         const total = result.result.length
         const down = result.result.filter((r) => r.value[1] === '0').length
         if (down > 0) {
-          warnings.push(
-            `Scrape targets: ${down}/${total} down (job: ${this.config.jobFilter})`,
-          )
+          warnings.push(`Scrape targets: ${down}/${total} down (job: ${this.config.jobFilter})`)
         }
       } catch {
         warnings.push('Failed to check scrape target health')
@@ -194,8 +192,9 @@ export class PrometheusPlugin
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
       // Get instance via monitoredNodeId -> node mapping
       let instance: string | undefined
-      if (linkMapping.monitoredNodeId && mapping.nodes?.[linkMapping.monitoredNodeId]) {
-        instance = mapping.nodes[linkMapping.monitoredNodeId].hostId
+      const monitoredNodeId = linkMapping.monitoredNodeId
+      if (monitoredNodeId && mapping.nodes?.[monitoredNodeId]) {
+        instance = mapping.nodes[monitoredNodeId].hostId
       }
 
       const interfaceName = linkMapping.interface
@@ -354,8 +353,8 @@ export class PrometheusPlugin
       // Get unique metric names
       const metricNames = new Set<string>()
       for (const series of seriesData) {
-        if (series.__name__) {
-          metricNames.add(series.__name__)
+        if (series['__name__']) {
+          metricNames.add(series['__name__'])
         }
       }
 
@@ -365,9 +364,10 @@ export class PrometheusPlugin
         const metadataUrl = '/api/v1/metadata'
         const metadataResponse =
           await this.apiRequest<Record<string, Array<{ type: string; help: string }>>>(metadataUrl)
+
         for (const [name, entries] of Object.entries(metadataResponse)) {
-          if (entries.length > 0) {
-            metadataMap[name] = entries[0]
+          if (entries[0]) {
+            metadataMap[name]
           }
         }
       } catch {
@@ -386,7 +386,7 @@ export class PrometheusPlugin
 
           for (const series of result.result) {
             const labels = { ...series.metric }
-            delete labels.__name__
+            delete labels['__name__']
 
             metrics.push({
               name: metricName,
@@ -458,13 +458,13 @@ export class PrometheusPlugin
           return true
         })
         .map((a) => {
-          const severity = this.mapAlertmanagerSeverity(a.labels.severity)
+          const severity = this.mapAlertmanagerSeverity(a.labels['severity'])
           return {
             id: a.fingerprint,
             severity,
-            title: a.labels.alertname || 'Unknown Alert',
-            description: a.annotations?.description || a.annotations?.summary,
-            host: a.labels.instance || a.labels.host,
+            title: a.labels['alertname'] || 'Unknown Alert',
+            description: a.annotations?.['description'] || a.annotations?.['summary'],
+            host: a.labels['instance'] || a.labels['host'],
             startTime: new Date(a.startsAt).getTime(),
             endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
             status: a.status.state === 'active' ? 'active' : 'resolved',
@@ -510,7 +510,7 @@ export class PrometheusPlugin
       const credentials = btoa(
         `${this.config.basicAuth.username}:${this.config.basicAuth.password}`,
       )
-      headers.Authorization = `Basic ${credentials}`
+      headers['Authorization'] = `Basic ${credentials}`
     }
 
     return fetch(url, { headers })
@@ -575,7 +575,7 @@ export class PrometheusPlugin
       const credentials = btoa(
         `${this.config.basicAuth.username}:${this.config.basicAuth.password}`,
       )
-      headers.Authorization = `Basic ${credentials}`
+      headers['Authorization'] = `Basic ${credentials}`
     }
 
     return fetch(url, {
@@ -648,8 +648,8 @@ export class PrometheusPlugin
     const upMetric = this.metrics.upMetric || 'up'
 
     const buildQuery = (metric: string) => {
-      if (this.config!.jobFilter) {
-        return `${metric}{${hostLabel}="${instance}",job="${this.config!.jobFilter}"}`
+      if (this.config?.jobFilter) {
+        return `${metric}{${hostLabel}="${instance}",job="${this.config.jobFilter}"}`
       }
       return `${metric}{${hostLabel}="${instance}"}`
     }
@@ -703,7 +703,7 @@ export class PrometheusPlugin
 
     try {
       const inResult = await this.instantQuery(inQuery)
-      if (inResult.result.length > 0) {
+      if (inResult.result[0]) {
         inBytesPerSec = parseFloat(inResult.result[0].value[1]) || 0
       }
     } catch {
@@ -712,7 +712,7 @@ export class PrometheusPlugin
 
     try {
       const outResult = await this.instantQuery(outQuery)
-      if (outResult.result.length > 0) {
+      if (outResult.result[0]) {
         outBytesPerSec = parseFloat(outResult.result[0].value[1]) || 0
       }
     } catch {

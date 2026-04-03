@@ -1,9 +1,8 @@
 <script lang="ts">
+  import { FileTextIcon, GithubLogoIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api, auth } from '$lib/api'
   import { themeSetting } from '$lib/stores'
-  import { GithubLogoIcon } from 'phosphor-svelte'
-  import { FileTextIcon } from 'phosphor-svelte'
   import type { ThemeValue } from '$lib/stores/theme'
 
   let loading = true
@@ -74,8 +73,10 @@
       currentPassword = ''
       newPassword = ''
       confirmNewPassword = ''
-    } catch (e: any) {
-      passwordError = e.message || 'Failed to change password'
+    } catch (e) {
+      if (typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string') {
+        passwordError = e.message || 'Failed to change password'
+      }
     } finally {
       passwordLoading = false
     }

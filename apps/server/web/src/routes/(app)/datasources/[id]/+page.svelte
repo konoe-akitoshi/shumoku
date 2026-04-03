@@ -1,9 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
-  import type { DataSource, DataSourceType, ConnectionTestResult } from '$lib/types'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -12,8 +7,14 @@
     WarningIcon,
     XCircleIcon,
   } from 'phosphor-svelte'
+  import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
+  import { api } from '$lib/api'
+  import type { ConnectionTestResult, DataSource, DataSourceType } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
+  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
   let id = $derived($page.params.id!)
 
   let dataSource = $state<DataSource | null>(null)
@@ -61,19 +62,19 @@
 
     // Only include token if user entered a new one; omit to let server preserve existing
     if (formToken.trim()) {
-      config.token = formToken.trim()
+      config['token'] = formToken.trim()
     }
 
     if (type === 'zabbix') {
-      config.pollInterval = formPollInterval
+      config['pollInterval'] = formPollInterval
     }
 
     if (type === 'netbox') {
-      if (formInsecure) config.insecure = true
+      if (formInsecure) config['insecure'] = true
     }
 
     if (type === 'grafana') {
-      config.useWebhook = formUseWebhook
+      config['useWebhook'] = formUseWebhook
     }
 
     return JSON.stringify(config)
@@ -119,6 +120,11 @@
   })
 
   async function handleSave() {
+    if (!dataSource) {
+      error = 'dataSource is null'
+      return
+    }
+
     if (!formName.trim() || !formUrl.trim()) {
       error = 'Name and URL are required'
       return
@@ -130,7 +136,7 @@
     try {
       const updates = {
         name: formName.trim(),
-        configJson: getConfigFromForm(dataSource!.type),
+        configJson: getConfigFromForm(dataSource.type),
       }
 
       dataSource = await api.dataSources.update(id, updates)

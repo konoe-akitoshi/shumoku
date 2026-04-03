@@ -12,10 +12,19 @@
     "rules": {
       "recommended": true,
       "style": {
-        "noNonNullAssertion": "off"
+        "noNonNullAssertion": "error"
       },
       "complexity": {
-        "noBannedTypes": "off"
+        "noBannedTypes": "error",
+        // conflicts with noPropertyAccessFromIndexSignature
+        "useLiteralKeys": "off"
+      }
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
       }
     }
   },

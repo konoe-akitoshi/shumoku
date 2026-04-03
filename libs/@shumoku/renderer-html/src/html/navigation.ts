@@ -78,6 +78,9 @@ export function generateBackButton(state: NavigationState): string {
   if (state.breadcrumb.length <= 1) return ''
 
   const parentId = state.breadcrumb[state.breadcrumb.length - 2]
+
+  if (!parentId) return ''
+
   const parentLabel =
     parentId === 'root' ? 'Overview' : (state.sheets.get(parentId)?.label ?? parentId)
 

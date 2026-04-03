@@ -12,10 +12,14 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import type { NetworkGraph } from '@shumoku/core'
 import { buildHierarchicalSheets, HierarchicalLayout, parser } from '@shumoku/core'
-import { svg } from '@shumoku/renderer-svg'
-import { png } from '@shumoku/renderer-png'
-import { render as renderHtml, renderHierarchical as renderHtmlHierarchical, setIIFE } from '@shumoku/renderer-html'
+import {
+  render as renderHtml,
+  renderHierarchical as renderHtmlHierarchical,
+  setIIFE,
+} from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
+import { png } from '@shumoku/renderer-png'
+import { svg } from '@shumoku/renderer-svg'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'))
@@ -142,7 +146,7 @@ async function main(): Promise<void> {
     }
 
     // Determine format
-    const outputBase = values.output!
+    const outputBase = values.output
     const extMatch = outputBase.toLowerCase().match(/\.(svg|html|htm|png)$/)
     const format: OutputFormat =
       (values.format as OutputFormat) ??
@@ -174,7 +178,7 @@ async function main(): Promise<void> {
       }
     } else if (format === 'png') {
       console.log('Rendering PNG...')
-      const scale = Number.parseFloat(values.scale!) || 2
+      const scale = Number.parseFloat(values.scale) || 2
       const pngBuffer = await png.render(graph, layoutResult, { scale })
       writeFileSync(outputPath, pngBuffer)
     } else {

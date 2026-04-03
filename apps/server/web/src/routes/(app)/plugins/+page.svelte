@@ -1,8 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { api, type PluginInfo } from '$lib/api'
-  import * as Dialog from '$lib/components/ui/dialog'
-  import { Button } from '$lib/components/ui/button'
   import {
     ArrowsClockwiseIcon,
     BellIcon,
@@ -17,6 +13,10 @@
     WarningIcon,
     XIcon,
   } from 'phosphor-svelte'
+  import { onMount } from 'svelte'
+  import { api, type PluginInfo } from '$lib/api'
+  import { Button } from '$lib/components/ui/button'
+  import * as Dialog from '$lib/components/ui/dialog'
 
   // State
   let plugins = $state<PluginInfo[]>([])
@@ -146,7 +146,7 @@
 
   function handleFileSelect(e: Event) {
     const input = e.target as HTMLInputElement
-    if (input.files && input.files.length > 0) {
+    if (input.files?.[0]) {
       addFile = input.files[0]
     }
   }

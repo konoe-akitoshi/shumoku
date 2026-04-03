@@ -326,8 +326,7 @@ export function mergeNetworkGraphs(
   const nodeSourceMap = new Map<string, string>()
 
   // Process each graph
-  for (let graphIndex = 0; graphIndex < graphs.length; graphIndex++) {
-    const graph = graphs[graphIndex]
+  for (const [graphIndex, graph] of graphs.entries()) {
     const sourceId = opts.sourceIds?.[graphIndex] ?? `source-${graphIndex}`
 
     // Get ID mapping for this source
@@ -345,14 +344,15 @@ export function mergeNetworkGraphs(
       let nodeId = node.id
 
       // Apply explicit ID mapping if provided
-      if (sourceIdMapping?.has(nodeId)) {
-        const mappedId = sourceIdMapping.get(nodeId)!
+      const mappedId = sourceIdMapping?.get(nodeId)
+      if (mappedId) {
         appliedIdMappings.set(`${sourceId}:${nodeId}`, mappedId)
         nodeId = mappedId
       }
 
       // Check for conflicts
-      if (mergedNodes.has(nodeId)) {
+      const existingMergedNodes = mergedNodes.get(nodeId)
+      if (existingMergedNodes) {
         switch (opts.nodeIdConflict) {
           case 'keep-first':
             skippedNodes.push({
@@ -367,8 +367,7 @@ export function mergeNetworkGraphs(
           case 'keep-last':
             // Replace existing node
             if (opts.mergeMetadata) {
-              const existing = mergedNodes.get(nodeId)!
-              const mergedMeta = { ...existing.metadata, ...node.metadata }
+              const mergedMeta = { ...existingMergedNodes.metadata, ...node.metadata }
               mergedNodes.set(nodeId, { ...node, id: nodeId, metadata: mergedMeta })
             } else {
               mergedNodes.set(nodeId, { ...node, id: nodeId })
@@ -404,9 +403,7 @@ export function mergeNetworkGraphs(
     }
 
     // Process links
-    for (let linkIndex = 0; linkIndex < graph.links.length; linkIndex++) {
-      const link = graph.links[linkIndex]
-
+    for (const [linkIndex, link] of graph.links.entries()) {
       // Resolve node IDs through mappings
       const fromNodeId = getEndpointNodeId(link.from)
       const toNodeId = getEndpointNodeId(link.to)
@@ -455,7 +452,9 @@ export function mergeNetworkGraphs(
       }
 
       // Update children references if they were remapped
-      const updatedChildren = subgraph.children?.map((childId) => localIdRemap.get(childId) ?? childId)
+      const updatedChildren = subgraph.children?.map(
+        (childId) => localIdRemap.get(childId) ?? childId,
+      )
 
       mergedSubgraphs.set(subgraphId, {
         ...subgraph,
@@ -473,8 +472,16 @@ export function mergeNetworkGraphs(
   const firstGraph = graphs[0]
   const mergedGraph: NetworkGraph = {
     version: firstGraph?.version ?? '1.0',
-    name: graphs.map((g) => g.name).filter(Boolean).join(' + ') || 'Merged Network',
-    description: graphs.map((g) => g.description).filter(Boolean).join('\n\n') || undefined,
+    name:
+      graphs
+        .map((g) => g.name)
+        .filter(Boolean)
+        .join(' + ') || 'Merged Network',
+    description:
+      graphs
+        .map((g) => g.description)
+        .filter(Boolean)
+        .join('\n\n') || undefined,
     nodes: Array.from(mergedNodes.values()),
     links: mergedLinks,
     subgraphs: mergedSubgraphs.size > 0 ? Array.from(mergedSubgraphs.values()) : undefined,
@@ -528,19 +535,21 @@ export function simpleMerge(...graphs: NetworkGraph[]): NetworkGraph {
  * ```
  */
 export function mergeWithOverlays(
-  graphs: NetworkGraph[],
-  sourceIds: string[],
+  graphs: { sourceId: string; graph: NetworkGraph }[],
   config: {
     baseIndex?: number
     overlays: OverlayConfig[]
   },
 ): MergeResult {
   const baseIndex = config.baseIndex ?? 0
-  const baseGraph = graphs[baseIndex]
-  const baseSourceId = sourceIds[baseIndex]
+  const { graph: baseGraph, sourceId: baseSourceId } = graphs[baseIndex] ?? {}
 
   if (!baseGraph) {
     throw new Error('Base graph not found')
+  }
+
+  if (!baseSourceId) {
+    throw new Error('Base source Id not found')
   }
 
   // Result tracking
@@ -580,13 +589,10 @@ export function mergeWithOverlays(
   const globalIdRemap = new Map<string, string>()
 
   // Process each overlay
-  for (let i = 0; i < graphs.length; i++) {
+  for (const [i, { graph: overlayGraph, sourceId: overlaySourceId }] of graphs.entries()) {
     if (i === baseIndex) continue
 
-    const overlayGraph = graphs[i]
-    const overlaySourceId = sourceIds[i]
     const overlayConfig = config.overlays.find((o) => o.sourceId === overlaySourceId)
-
     if (!overlayConfig) {
       console.warn(`[merge] No overlay config for source ${overlaySourceId}, skipping`)
       continue
@@ -680,9 +686,7 @@ export function mergeWithOverlays(
     }
 
     // Process overlay links
-    for (let linkIndex = 0; linkIndex < overlayGraph.links.length; linkIndex++) {
-      const link = overlayGraph.links[linkIndex]
-
+    for (const [linkIndex, link] of overlayGraph.links.entries()) {
       const fromNodeId = getEndpointNodeId(link.from)
       const toNodeId = getEndpointNodeId(link.to)
 

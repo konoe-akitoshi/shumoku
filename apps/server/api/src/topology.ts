@@ -6,16 +6,16 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import {
-  sampleNetwork,
-  type NetworkGraph,
-  HierarchicalParser,
   createMemoryFileResolver,
-  YamlParser,
   type FileResolver,
+  HierarchicalParser,
+  type NetworkGraph,
+  sampleNetwork,
+  YamlParser,
 } from '@shumoku/core'
+import { resolvePath } from './config.js'
 import { BunHierarchicalLayout } from './layout.js'
 import type { Config, MetricsData, TopologyConfig, TopologyInstance } from './types.js'
-import { resolvePath } from './config.js'
 
 /**
  * Create a Node.js file resolver for the given base path
@@ -56,7 +56,7 @@ export class TopologyManager {
     }
 
     // If no topologies configured and DEMO_MODE is enabled, load sample network
-    if (this.topologies.size === 0 && process.env.DEMO_MODE === 'true') {
+    if (this.topologies.size === 0 && process.env['DEMO_MODE'] === 'true') {
       console.log('[Topology] Demo mode: loading sample network')
       await this.loadSampleNetwork()
     }
@@ -91,7 +91,7 @@ export class TopologyManager {
       graph = result.graph
     }
 
-    const layoutResult = await this.layout.layout(graph)
+    const layoutResult = this.layout.layout(graph)
 
     const instance: TopologyInstance = {
       name: topoConfig.name,
@@ -127,7 +127,7 @@ export class TopologyManager {
     const result = await hierarchicalParser.parse(mainFile.content, 'main.yaml')
     const graph = result.graph
 
-    const layoutResult = await this.layout.layout(graph)
+    const layoutResult = this.layout.layout(graph)
 
     const instance: TopologyInstance = {
       name: 'sample-network',
@@ -152,8 +152,8 @@ export class TopologyManager {
       nodes[node.id] = { status: 'unknown' }
     }
 
-    for (let i = 0; i < graph.links.length; i++) {
-      const linkId = graph.links[i].id || `link-${i}`
+    for (const [i, link] of graph.links.entries()) {
+      const linkId = link.id || `link-${i}`
       links[linkId] = { status: 'unknown' }
     }
 

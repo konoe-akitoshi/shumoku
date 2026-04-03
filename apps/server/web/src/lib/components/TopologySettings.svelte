@@ -1,19 +1,17 @@
 <script lang="ts">
+  import { DatabaseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import {
     displaySettings,
-    metricsConnected,
     liveUpdatesEnabled,
-    showTrafficFlow,
+    metricsConnected,
     showNodeStatus,
+    showTrafficFlow,
   } from '$lib/stores'
-  import type { Topology, MetricsMapping, TopologyDataSource } from '$lib/types'
-  import { PencilSimpleIcon } from 'phosphor-svelte'
-  import { TrashIcon } from 'phosphor-svelte'
-  import { DatabaseIcon } from 'phosphor-svelte'
+  import type { MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
   interface Props {
     topology: Topology

@@ -3,7 +3,7 @@
  * WebSocket connection and real-time metrics updates
  */
 
-import { writable, derived, get } from 'svelte/store'
+import { derived, get, writable } from 'svelte/store'
 
 // Types
 export type NodeStatus = 'up' | 'down' | 'unknown' | 'warning'
@@ -181,7 +181,7 @@ function createMetricsStore() {
     }
 
     if (g.reconnectAttempts < maxReconnectAttempts && !g.intentionalDisconnect) {
-      const delay = Math.min(1000 * Math.pow(2, g.reconnectAttempts), 30000)
+      const delay = Math.min(1000 * 2 ** g.reconnectAttempts, 30000)
       g.reconnectAttempts++
       g.reconnectTimeout = setTimeout(connect, delay)
     }
@@ -235,7 +235,4 @@ export const metricsStore = createMetricsStore()
 export const metricsConnected = derived(metricsStore, ($store) => $store.connected)
 export const metricsData = derived(metricsStore, ($store) => $store.metrics)
 export const metricsError = derived(metricsStore, ($store) => $store.error)
-export const metricsWarnings = derived(
-  metricsStore,
-  ($store) => $store.metrics?.warnings ?? [],
-)
+export const metricsWarnings = derived(metricsStore, ($store) => $store.metrics?.warnings ?? [])
