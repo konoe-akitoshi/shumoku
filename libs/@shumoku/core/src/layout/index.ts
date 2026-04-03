@@ -9,6 +9,10 @@
 export type { HierarchicalLayoutOptions } from './hierarchical.js'
 export { HierarchicalLayout } from './hierarchical.js'
 
+// Concrete engine implementations
+export { ElkNodePlacement } from './elk-placement.js'
+export { LibavoidEdgeRouter, ensureLibavoidLoaded } from './libavoid-router.js'
+
 // Layout engine interfaces and composition utilities
 export type {
   EdgeRoutingEngine,
