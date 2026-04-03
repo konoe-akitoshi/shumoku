@@ -68,11 +68,17 @@ let avoidInstance: any = null
  * Ensure libavoid WASM is loaded (idempotent).
  * Uses dynamic import to avoid loading WASM at module evaluation time,
  * which would fail in SSR/SSG environments (Vercel, etc.).
+ *
+ * In browser environments, the WASM file is served from /libavoid.wasm
+ * (must be placed in the app's public directory).
+ * In Node.js/Bun, libavoid-js resolves the WASM path automatically.
  */
 export async function ensureLibavoidLoaded(): Promise<any> {
   if (!avoidInstance) {
     const { AvoidLib } = await import('libavoid-js')
-    await AvoidLib.load()
+    // In browser, provide path to public WASM file
+    const isBrowser = typeof window !== 'undefined'
+    await AvoidLib.load(isBrowser ? '/libavoid.wasm' : undefined)
     avoidInstance = AvoidLib.getInstance()
   }
   return avoidInstance
