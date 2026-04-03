@@ -10,10 +10,12 @@
  */
 
 import {
+  composeLayoutResult,
   darkTheme,
-  HierarchicalLayout,
+  ElkNodePlacement,
   type HierarchicalLayoutOptions,
   type LayoutResult,
+  LibavoidEdgeRouter,
   lightTheme,
   type NetworkGraph,
   type SurfaceToken,
@@ -105,14 +107,42 @@ export async function prepareRender(
   // 2. Compute layout (skip if already provided)
   let layout = options?.layout
   if (!layout) {
-    const layoutEngine = new HierarchicalLayout({
-      ...options?.layoutOptions,
-      iconDimensions: iconDimensions?.byKey,
-    })
-    layout = await layoutEngine.layoutAsync(graph)
+    layout = await computeLayout(graph, iconDimensions, options?.layoutOptions)
   }
 
   return { graph, layout, iconDimensions }
+}
+
+/**
+ * Two-stage layout pipeline: ELK (node placement) → libavoid (edge routing)
+ */
+async function computeLayout(
+  graph: NetworkGraph,
+  iconDimensions: ResolvedIconDimensions | null,
+  layoutOptions?: Omit<HierarchicalLayoutOptions, 'iconDimensions'>,
+): Promise<LayoutResult> {
+  // Stage 1: Node placement via ELK
+  const placer = new ElkNodePlacement({
+    ...layoutOptions,
+    iconDimensions: iconDimensions?.byKey,
+  })
+  const placement = await placer.place(graph)
+
+  // Stage 2: Edge routing via libavoid
+  const edgeStyle = graph.settings?.edgeStyle ?? layoutOptions?.edgeStyle ?? 'orthogonal'
+  const router = new LibavoidEdgeRouter({
+    edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
+    shapeBufferDistance: 10,
+    idealNudgingDistance: 15,
+    nudgeConnectedSegments: true,
+  })
+  const routing = await router.route(placement, graph.links)
+
+  // Compose into LayoutResult for renderer compatibility
+  return composeLayoutResult(graph, placement, routing, {
+    algorithm: 'elk-placement+libavoid-routing',
+    duration: 0,
+  })
 }
 
 /**
