@@ -8,21 +8,12 @@
  * Uses libavoid (WASM) for high-quality orthogonal/polyline edge routing
  * with obstacle avoidance and automatic parallel edge nudging.
  *
- * Features:
- * - Port-based connections via ShapeConnectionPin
- * - Parallel edge separation via idealNudgingDistance
- * - Obstacle-aware routing (nodes as obstacles)
- * - Incremental re-routing support (for future interactive use)
+ * Accepts ResolvedNode/ResolvedPort with absolute coordinates — no coordinate
+ * conversion needed. Port absolute positions are used directly as connection pins.
  */
 
 import type { Link, LinkEndpoint, Position } from '../models/types.js'
-import type {
-  EdgeRoutingEngine,
-  EdgeRoutingResult,
-  NodePlacementResult,
-  RoutedEdge,
-  RoutingOptions,
-} from './types.js'
+import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
 
 // libavoid direction flags (from C++ source)
 const ConnDirUp = 1
@@ -44,17 +35,14 @@ function sideToConnDir(side: 'top' | 'bottom' | 'left' | 'right'): number {
   }
 }
 
-/** Resolve a LinkEndpoint to a node ID */
 function getNodeId(endpoint: string | LinkEndpoint): string {
   return typeof endpoint === 'string' ? endpoint : endpoint.node
 }
 
-/** Resolve a LinkEndpoint to a port name (if any) */
 function getPortName(endpoint: string | LinkEndpoint): string | undefined {
   return typeof endpoint === 'string' ? undefined : endpoint.port
 }
 
-/** Convert LinkEndpoint to normalized form */
 function toEndpoint(endpoint: string | LinkEndpoint): LinkEndpoint {
   if (typeof endpoint === 'string') {
     return { node: endpoint }
@@ -68,18 +56,12 @@ let avoidInstance: any = null
  * Ensure libavoid WASM is loaded (idempotent).
  * Uses dynamic import to avoid loading WASM at module evaluation time,
  * which would fail in SSR/SSG environments (Vercel, etc.).
- *
- * In browser environments, passes an absolute origin URL to bypass
- * Emscripten's locateFile issues with bundlers and i18n routing.
- *
- * In Node.js/Bun, libavoid-js resolves the WASM path automatically.
  */
 export async function ensureLibavoidLoaded(): Promise<any> {
   if (!avoidInstance) {
     const { AvoidLib } = await import('libavoid-js')
     const isBrowser = typeof window !== 'undefined'
     if (isBrowser) {
-      // Use absolute URL to bypass i18n rewrites (e.g., /ja/libavoid.wasm → 404)
       const wasmUrl = `${window.location.origin}/libavoid.wasm`
       await AvoidLib.load(wasmUrl)
     } else {
@@ -90,198 +72,211 @@ export async function ensureLibavoidLoaded(): Promise<any> {
   return avoidInstance
 }
 
-export class LibavoidEdgeRouter implements EdgeRoutingEngine {
-  private defaultOptions: RoutingOptions
+/** Options for edge routing */
+export interface LibavoidRoutingOptions {
+  edgeStyle?: 'orthogonal' | 'polyline' | 'straight'
+  shapeBufferDistance?: number
+  idealNudgingDistance?: number
+  nudgeConnectedSegments?: boolean
+}
 
-  constructor(options?: RoutingOptions) {
-    this.defaultOptions = {
-      edgeStyle: 'orthogonal',
-      shapeBufferDistance: 10,
-      idealNudgingDistance: 15,
-      nudgeConnectedSegments: true,
-      ...options,
-    }
+/**
+ * Route edges using libavoid with absolute coordinates.
+ *
+ * Takes ResolvedNode (for obstacles) and ResolvedPort (for connection pins)
+ * directly — no coordinate conversion needed.
+ *
+ * @param nodes - Positioned nodes (obstacles for routing)
+ * @param ports - Positioned ports with absolute coordinates (connection pins)
+ * @param links - Link definitions
+ * @param options - Routing options
+ * @returns Map of edge ID → ResolvedEdge
+ */
+export async function routeEdges(
+  nodes: Map<string, ResolvedNode>,
+  ports: Map<string, ResolvedPort>,
+  links: Link[],
+  options?: LibavoidRoutingOptions,
+): Promise<Map<string, ResolvedEdge>> {
+  const Avoid = await ensureLibavoidLoaded()
+
+  const opts: Required<LibavoidRoutingOptions> = {
+    edgeStyle: 'orthogonal',
+    shapeBufferDistance: 10,
+    idealNudgingDistance: 15,
+    nudgeConnectedSegments: true,
+    ...options,
   }
 
-  async route(
-    placement: NodePlacementResult,
-    links: Link[],
-    options?: RoutingOptions,
-  ): Promise<EdgeRoutingResult> {
-    // Dynamic import + lazy init to avoid WASM loading at module evaluation time
-    const Avoid = await ensureLibavoidLoaded()
+  const routingFlag =
+    opts.edgeStyle === 'polyline'
+      ? Avoid['RouterFlag']['PolyLineRouting'].value
+      : Avoid['RouterFlag']['OrthogonalRouting'].value
 
-    const opts = { ...this.defaultOptions, ...options }
+  const router = new Avoid.Router(routingFlag)
 
-    // Select routing type
-    // libavoid-js enum values are objects with .value property
-    const routingFlag =
-      opts.edgeStyle === 'polyline'
-        ? Avoid['RouterFlag']['PolyLineRouting'].value
-        : Avoid['RouterFlag']['OrthogonalRouting'].value
-
-    const router = new Avoid.Router(routingFlag)
-
-    // Configure routing parameters
-    router.setRoutingParameter(
-      Avoid['RoutingParameter']['shapeBufferDistance'].value,
-      opts.shapeBufferDistance ?? 10,
+  router.setRoutingParameter(
+    Avoid['RoutingParameter']['shapeBufferDistance'].value,
+    opts.shapeBufferDistance,
+  )
+  router.setRoutingParameter(
+    Avoid['RoutingParameter']['idealNudgingDistance'].value,
+    opts.idealNudgingDistance,
+  )
+  if (opts.nudgeConnectedSegments) {
+    router.setRoutingOption(
+      Avoid['RoutingOption']['nudgeOrthogonalSegmentsConnectedToShapes'].value,
+      true,
     )
-    router.setRoutingParameter(
-      Avoid['RoutingParameter']['idealNudgingDistance'].value,
-      opts.idealNudgingDistance ?? 15,
+  }
+
+  try {
+    return doRoute(Avoid, router, nodes, ports, links, opts)
+  } finally {
+    router.delete()
+  }
+}
+
+function doRoute(
+  Avoid: any,
+  router: any,
+  nodes: Map<string, ResolvedNode>,
+  ports: Map<string, ResolvedPort>,
+  links: Link[],
+  opts: Required<LibavoidRoutingOptions>,
+): Map<string, ResolvedEdge> {
+  // Step 1: Register nodes as obstacles
+  // Avoid.Rectangle(centre, width, height) — ResolvedNode.position is center
+  const shapeRefs = new Map<string, any>()
+  for (const [id, node] of nodes) {
+    const shape = new Avoid.ShapeRef(
+      router,
+      new Avoid.Rectangle(
+        new Avoid.Point(node.position.x, node.position.y),
+        node.size.width,
+        node.size.height,
+      ),
     )
-    if (opts.nudgeConnectedSegments) {
-      router.setRoutingOption(
-        Avoid['RoutingOption']['nudgeOrthogonalSegmentsConnectedToShapes'].value,
-        true,
-      )
-    }
-
-    try {
-      return this.routeWithRouter(Avoid, router, placement, links, opts)
-    } finally {
-      router.delete()
-    }
+    shapeRefs.set(id, shape)
   }
 
-  private routeWithRouter(
-    Avoid: any,
-    router: any,
-    placement: NodePlacementResult,
-    links: Link[],
-    opts: RoutingOptions,
-  ): EdgeRoutingResult {
-    // Step 1: Register nodes as obstacles
-    // Avoid.Rectangle(centre, width, height) — LayoutNode.position is already center from ELK
-    const shapeRefs = new Map<string, any>()
-    for (const [id, node] of placement.nodes) {
-      const shape = new Avoid.ShapeRef(
-        router,
-        new Avoid.Rectangle(
-          new Avoid.Point(node.position.x, node.position.y),
-          node.size.width,
-          node.size.height,
-        ),
-      )
-      shapeRefs.set(id, shape)
-    }
+  // Step 2: Register ports as ShapeConnectionPins using ABSOLUTE coordinates
+  // No proportional conversion — use absolute offsets from shape center
+  let pinClassId = 1
+  const pinClassIds = new Map<string, number>() // portId → classId
 
-    // Step 2: Register ports as ShapeConnectionPins
-    // Pin classId scheme: we use a counter to ensure uniqueness
-    let pinClassId = 1
-    // Map: "nodeId:portName" → classId
-    const pinClassIds = new Map<string, number>()
+  for (const [portId, port] of ports) {
+    const shape = shapeRefs.get(port.nodeId)
+    if (!shape) continue
 
-    for (const [nodeId, node] of placement.nodes) {
-      const shape = shapeRefs.get(nodeId)
-      if (!shape) continue
+    const node = nodes.get(port.nodeId)
+    if (!node) continue
 
-      for (const [portId, port] of node.ports) {
-        const classId = pinClassId++
-        // Port map key from ELK is already "nodeId:portName" format (e.g., "rt1:eth0")
-        // Link endpoints use { node: "rt1", port: "eth0" } → lookup key is "rt1:eth0"
-        // So we use portId directly as the key (it's already nodeId:portName)
-        pinClassIds.set(portId, classId)
+    const classId = pinClassId++
+    pinClassIds.set(portId, classId)
 
-        // Convert port position (relative to node center) to proportional (0-1)
-        // port.position is relative to node center, need to convert to proportion
-        const xProp = (port.position.x + node.size.width / 2) / node.size.width
-        const yProp = (port.position.y + node.size.height / 2) / node.size.height
+    // Absolute offset from node center → proportional on shape
+    // This is safe because we control both the Rectangle center and port position
+    const xOffset = port.absolutePosition.x - (node.position.x - node.size.width / 2)
+    const yOffset = port.absolutePosition.y - (node.position.y - node.size.height / 2)
+    const xProp = xOffset / node.size.width
+    const yProp = yOffset / node.size.height
 
-        const connDir = sideToConnDir(port.side)
+    const connDir = sideToConnDir(port.side)
 
-        const pin = new Avoid.ShapeConnectionPin(
-          shape,
-          classId,
-          Math.max(0, Math.min(1, xProp)),
-          Math.max(0, Math.min(1, yProp)),
-          true, // proportional
-          0, // insideOffset
-          connDir,
-        )
-        pin.setExclusive(false)
-      }
-    }
-
-    // Step 3: Create connectors for each link
-    const connRefs = new Map<string, any>()
-
-    for (let i = 0; i < links.length; i++) {
-      const link = links[i]!
-      const linkId = link.id ?? `__link_${i}`
-      const fromNodeId = getNodeId(link.from)
-      const toNodeId = getNodeId(link.to)
-      const fromPort = getPortName(link.from)
-      const toPort = getPortName(link.to)
-
-      // Skip links to/from nodes not in placement (e.g., filtered out)
-      if (!shapeRefs.has(fromNodeId) || !shapeRefs.has(toNodeId)) continue
-
-      let srcEnd: any
-      let dstEnd: any
-
-      // Use port-based connection if ports are defined and registered
-      const fromKey = fromPort ? `${fromNodeId}:${fromPort}` : null
-      const toKey = toPort ? `${toNodeId}:${toPort}` : null
-      const fromClassId = fromKey ? pinClassIds.get(fromKey) : undefined
-      const toClassId = toKey ? pinClassIds.get(toKey) : undefined
-
-      if (fromClassId !== undefined) {
-        srcEnd = new Avoid.ConnEnd(shapeRefs.get(fromNodeId), fromClassId)
-      } else {
-        // Fallback: connect to node center
-        const node = placement.nodes.get(fromNodeId)!
-        srcEnd = new Avoid.ConnEnd(new Avoid.Point(node.position.x, node.position.y))
-      }
-
-      if (toClassId !== undefined) {
-        dstEnd = new Avoid.ConnEnd(shapeRefs.get(toNodeId), toClassId)
-      } else {
-        const node = placement.nodes.get(toNodeId)!
-        dstEnd = new Avoid.ConnEnd(new Avoid.Point(node.position.x, node.position.y))
-      }
-
-      const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
-      connRefs.set(linkId, conn)
-    }
-
-    // Step 4: Process all routes
-    router.processTransaction()
-
-    // Step 5: Extract routed paths
-    const edges = new Map<string, RoutedEdge>()
-
-    for (let i = 0; i < links.length; i++) {
-      const link = links[i]!
-      const linkId = link.id ?? `__link_${i}`
-      const conn = connRefs.get(linkId)
-      if (!conn) continue
-
-      const route = conn.displayRoute()
-      const points: Position[] = []
-      for (let j = 0; j < route.size(); j++) {
-        const pt = route.at(j)
-        points.push({ x: pt.x, y: pt.y })
-      }
-
-      // For 'straight' style, only keep first and last point
-      const finalPoints =
-        opts.edgeStyle === 'straight' && points.length > 2
-          ? [points[0]!, points[points.length - 1]!]
-          : points
-
-      edges.set(linkId, {
-        id: linkId,
-        from: getNodeId(link.from),
-        to: getNodeId(link.to),
-        fromEndpoint: toEndpoint(link.from),
-        toEndpoint: toEndpoint(link.to),
-        points: finalPoints,
-        link,
-      })
-    }
-
-    return { edges }
+    const pin = new Avoid.ShapeConnectionPin(
+      shape,
+      classId,
+      Math.max(0, Math.min(1, xProp)),
+      Math.max(0, Math.min(1, yProp)),
+      true, // proportional
+      0, // insideOffset
+      connDir,
+    )
+    pin.setExclusive(false)
   }
+
+  // Step 3: Create connectors
+  const connRefs = new Map<string, any>()
+
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i]!
+    const linkId = link.id ?? `__link_${i}`
+    const fromNodeId = getNodeId(link.from)
+    const toNodeId = getNodeId(link.to)
+    const fromPort = getPortName(link.from)
+    const toPort = getPortName(link.to)
+
+    if (!shapeRefs.has(fromNodeId) || !shapeRefs.has(toNodeId)) continue
+
+    // Look up port by "nodeId:portName"
+    const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
+    const toPortId = toPort ? `${toNodeId}:${toPort}` : null
+    const fromClassId = fromPortId ? pinClassIds.get(fromPortId) : undefined
+    const toClassId = toPortId ? pinClassIds.get(toPortId) : undefined
+
+    let srcEnd: any
+    if (fromClassId !== undefined) {
+      srcEnd = new Avoid.ConnEnd(shapeRefs.get(fromNodeId), fromClassId)
+    } else {
+      // Fallback: node center
+      const node = nodes.get(fromNodeId)!
+      srcEnd = new Avoid.ConnEnd(new Avoid.Point(node.position.x, node.position.y))
+    }
+
+    let dstEnd: any
+    if (toClassId !== undefined) {
+      dstEnd = new Avoid.ConnEnd(shapeRefs.get(toNodeId), toClassId)
+    } else {
+      const node = nodes.get(toNodeId)!
+      dstEnd = new Avoid.ConnEnd(new Avoid.Point(node.position.x, node.position.y))
+    }
+
+    const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
+    connRefs.set(linkId, conn)
+  }
+
+  // Step 4: Route
+  router.processTransaction()
+
+  // Step 5: Extract results
+  const edges = new Map<string, ResolvedEdge>()
+
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i]!
+    const linkId = link.id ?? `__link_${i}`
+    const conn = connRefs.get(linkId)
+    if (!conn) continue
+
+    const route = conn.displayRoute()
+    const points: Position[] = []
+    for (let j = 0; j < route.size(); j++) {
+      const pt = route.at(j)
+      points.push({ x: pt.x, y: pt.y })
+    }
+
+    const finalPoints =
+      opts.edgeStyle === 'straight' && points.length > 2
+        ? [points[0]!, points[points.length - 1]!]
+        : points
+
+    const fromNodeId = getNodeId(link.from)
+    const toNodeId = getNodeId(link.to)
+    const fromPort = getPortName(link.from)
+    const toPort = getPortName(link.to)
+
+    edges.set(linkId, {
+      id: linkId,
+      fromPortId: fromPort ? `${fromNodeId}:${fromPort}` : null,
+      toPortId: toPort ? `${toNodeId}:${toPort}` : null,
+      fromNodeId,
+      toNodeId,
+      fromEndpoint: toEndpoint(link.from),
+      toEndpoint: toEndpoint(link.to),
+      points: finalPoints,
+      link,
+    })
+  }
+
+  return edges
 }

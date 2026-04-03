@@ -11,7 +11,8 @@ export { HierarchicalLayout } from './hierarchical.js'
 
 // Concrete engine implementations
 export { ElkNodePlacement } from './elk-placement.js'
-export { LibavoidEdgeRouter, ensureLibavoidLoaded } from './libavoid-router.js'
+export { routeEdges, ensureLibavoidLoaded } from './libavoid-router.js'
+export type { LibavoidRoutingOptions } from './libavoid-router.js'
 
 // Resolved layout model (Node/Port/Edge as independent objects)
 export type {

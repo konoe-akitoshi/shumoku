@@ -10,16 +10,17 @@
  */
 
 import {
-  composeLayoutResult,
   darkTheme,
   ElkNodePlacement,
   HierarchicalLayout,
   type HierarchicalLayoutOptions,
   type LayoutResult,
-  LibavoidEdgeRouter,
   lightTheme,
   type NetworkGraph,
+  placePorts,
+  routeEdges,
   type SurfaceToken,
+  unresolveLayout,
 } from '@shumoku/core'
 import { type ResolvedIconDimensions, resolveIconDimensionsForGraph } from './cdn-icons.js'
 import { collectIconUrls, SVGRenderer } from './svg.js'
@@ -115,18 +116,17 @@ export async function prepareRender(
 }
 
 /**
- * Toggle for the new two-stage pipeline (ELK placement + libavoid routing).
- * Set to true to enable libavoid edge routing. Currently disabled while
- * coordinate mapping issues are being resolved (#73).
+ * Toggle for the new three-stage pipeline with resolved model (#79).
+ * ELK (node placement) → placePorts (absolute coords) → libavoid (edge routing)
  */
-const USE_LIBAVOID_ROUTING = false
+const USE_RESOLVED_PIPELINE = false
 
 async function computeLayout(
   graph: NetworkGraph,
   iconDimensions: ResolvedIconDimensions | null,
   layoutOptions?: Omit<HierarchicalLayoutOptions, 'iconDimensions'>,
 ): Promise<LayoutResult> {
-  if (!USE_LIBAVOID_ROUTING) {
+  if (!USE_RESOLVED_PIPELINE) {
     // Legacy: single-pass ELK layout (placement + routing)
     const layoutEngine = new HierarchicalLayout({
       ...layoutOptions,
@@ -135,25 +135,47 @@ async function computeLayout(
     return layoutEngine.layoutAsync(graph)
   }
 
-  // Two-stage pipeline: ELK (node placement) → libavoid (edge routing)
+  // Three-stage pipeline with resolved model:
+  // 1. Node placement via ELK
   const placer = new ElkNodePlacement({
     ...layoutOptions,
     iconDimensions: iconDimensions?.byKey,
   })
   const placement = await placer.place(graph)
 
-  const edgeStyle = graph.settings?.edgeStyle ?? layoutOptions?.edgeStyle ?? 'orthogonal'
-  const router = new LibavoidEdgeRouter({
-    edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
-    shapeBufferDistance: 10,
-    idealNudgingDistance: 15,
-    nudgeConnectedSegments: true,
-  })
-  const routing = await router.route(placement, graph.links)
+  // Convert to ResolvedNode
+  const resolvedNodes = new Map(
+    [...placement.nodes].map(([id, pn]) => {
+      const originalNode = graph.nodes.find((n) => n.id === id)
+      return [id, { id, position: pn.position, size: pn.size, node: originalNode! }]
+    }),
+  )
 
-  return composeLayoutResult(graph, placement, routing, {
-    algorithm: 'elk-placement+libavoid-routing',
-    duration: 0,
+  // 2. Port placement — independent, absolute coordinates
+  const direction = graph.settings?.direction ?? layoutOptions?.direction ?? 'TB'
+  const resolvedPorts = placePorts(resolvedNodes, graph.links, direction)
+
+  // 3. Edge routing via libavoid — uses absolute port positions directly
+  const edgeStyle = graph.settings?.edgeStyle ?? layoutOptions?.edgeStyle ?? 'orthogonal'
+  const resolvedEdges = await routeEdges(resolvedNodes, resolvedPorts, graph.links, {
+    edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
+  })
+
+  // 4. Convert to LayoutResult for existing renderer
+  const resolvedSubgraphs = new Map(
+    [...placement.subgraphs].map(([id, ps]) => [
+      id,
+      { id, bounds: ps.bounds, subgraph: ps.subgraph },
+    ]),
+  )
+
+  return unresolveLayout({
+    nodes: resolvedNodes,
+    ports: resolvedPorts,
+    edges: resolvedEdges,
+    subgraphs: resolvedSubgraphs,
+    bounds: placement.bounds,
+    metadata: { algorithm: 'elk+placePorts+libavoid', duration: 0 },
   })
 }
 
