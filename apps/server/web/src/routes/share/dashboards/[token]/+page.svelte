@@ -157,7 +157,9 @@
   }
 </script>
 
-<svelte:head> <title>{name || 'Shared Dashboard'} - Shumoku</title> </svelte:head>
+<svelte:head>
+  <title>{name || 'Shared Dashboard'} - Shumoku</title>
+</svelte:head>
 
 <div class="h-screen flex flex-col bg-theme-bg-canvas">
   <!-- Header -->

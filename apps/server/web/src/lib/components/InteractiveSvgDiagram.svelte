@@ -940,9 +940,7 @@
     <!-- Warnings banner -->
     {#if $liveUpdatesEnabled && $metricsWarnings.length > 0}
       <div class="warnings-banner">
-        {#each $metricsWarnings as warning}
-          <span class="warning-text">{warning}</span>
-        {/each}
+        {#each $metricsWarnings as warning}<span class="warning-text">{warning}</span>{/each}
       </div>
     {/if}
 
@@ -957,12 +955,18 @@
   <!-- Controls -->
   <div class="controls">
     <div class="control-group">
-      <button on:click={zoomIn} title="Zoom In"><MagnifyingGlassPlusIcon size={18} /></button>
+      <button on:click={zoomIn} title="Zoom In">
+        <MagnifyingGlassPlusIcon size={18} />
+      </button>
       <span class="zoom-level">{Math.round(scale * 100)}%</span>
-      <button on:click={zoomOut} title="Zoom Out"><MagnifyingGlassMinusIcon size={18} /></button>
+      <button on:click={zoomOut} title="Zoom Out">
+        <MagnifyingGlassMinusIcon size={18} />
+      </button>
     </div>
     <div class="control-group">
-      <button on:click={fitToView} title="Fit to View"><CornersOutIcon size={18} /></button>
+      <button on:click={fitToView} title="Fit to View">
+        <CornersOutIcon size={18} />
+      </button>
       <button on:click={resetView} title="Reset View">
         <ArrowCounterClockwiseIcon size={18} />
       </button>

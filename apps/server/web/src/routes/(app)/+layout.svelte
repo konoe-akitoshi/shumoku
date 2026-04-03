@@ -125,34 +125,32 @@
     <!-- Navigation Items -->
     <div class="flex-1 py-3 px-2">
       <div class="space-y-1">
-        {#each navItems as item}
-          <a
-            href={item.href}
-            class="flex items-center h-10 text-sm rounded-lg transition-colors {sidebarCollapsed
+        {#each navItems as item}<a
+          href={item.href}
+          class="flex items-center h-10 text-sm rounded-lg transition-colors {sidebarCollapsed
               ? 'justify-center w-10 mx-auto'
               : 'gap-3 px-3'} {isActive(item.href, $page.url.pathname)
               ? 'bg-primary/10 text-primary'
               : 'text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text'}"
-            title={sidebarCollapsed ? item.label : undefined}
-          >
-            {#if item.icon === 'home'}
-              <HouseIcon size={20} />
-            {:else if item.icon === 'dashboard'}
-              <SquaresFourIcon size={20} />
-            {:else if item.icon === 'topology'}
-              <TreeStructureIcon size={20} />
-            {:else if item.icon === 'database'}
-              <DatabaseIcon size={20} />
-            {:else if item.icon === 'plugins'}
-              <CubeIcon size={20} />
-            {:else if item.icon === 'settings'}
-              <GearSixIcon size={20} />
-            {/if}
-            {#if !sidebarCollapsed}
-              <span class="whitespace-nowrap">{item.label}</span>
-            {/if}
-          </a>
-        {/each}
+          title={sidebarCollapsed ? item.label : undefined}
+        >
+          {#if item.icon === 'home'}
+            <HouseIcon size={20} />
+          {:else if item.icon === 'dashboard'}
+            <SquaresFourIcon size={20} />
+          {:else if item.icon === 'topology'}
+            <TreeStructureIcon size={20} />
+          {:else if item.icon === 'database'}
+            <DatabaseIcon size={20} />
+          {:else if item.icon === 'plugins'}
+            <CubeIcon size={20} />
+          {:else if item.icon === 'settings'}
+            <GearSixIcon size={20} />
+          {/if}
+          {#if !sidebarCollapsed}
+            <span class="whitespace-nowrap">{item.label}</span>
+          {/if}
+        </a>{/each}
       </div>
     </div>
 
@@ -184,6 +182,8 @@
     <Header />
 
     <!-- Main Content -->
-    <main class="flex-1 overflow-auto"><slot /></main>
+    <main class="flex-1 overflow-auto">
+      <slot />
+    </main>
   </div>
 </div>

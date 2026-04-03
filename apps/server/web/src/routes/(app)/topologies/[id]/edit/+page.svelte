@@ -153,7 +153,9 @@
   }
 </script>
 
-<svelte:head> <title>Edit {topology?.name || 'Topology'} - Shumoku</title> </svelte:head>
+<svelte:head>
+  <title>Edit {topology?.name || 'Topology'} - Shumoku</title>
+</svelte:head>
 
 <div class="p-6 h-full flex flex-col">
   <!-- Back link -->

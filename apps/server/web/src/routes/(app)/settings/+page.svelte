@@ -94,7 +94,9 @@
   }
 </script>
 
-<svelte:head> <title>Settings - Shumoku</title> </svelte:head>
+<svelte:head>
+  <title>Settings - Shumoku</title>
+</svelte:head>
 
 <div class="p-6">
   {#if loading}

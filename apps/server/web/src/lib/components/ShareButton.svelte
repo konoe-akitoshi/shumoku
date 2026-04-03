@@ -38,7 +38,9 @@
     try {
       await navigator.clipboard.writeText(getShareUrl())
       copied = true
-      setTimeout(() => (copied = false), 2000)
+      setTimeout(() => {
+        copied = false
+      }, 2000)
     } catch {
       // Fallback
     }

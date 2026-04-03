@@ -252,7 +252,9 @@
   }
 </script>
 
-<svelte:head> <title>Data Sources - Shumoku</title> </svelte:head>
+<svelte:head>
+  <title>Data Sources - Shumoku</title>
+</svelte:head>
 
 <div class="p-6">
   <!-- Actions -->
@@ -377,11 +379,12 @@
                       variant="outline"
                       size="sm"
                       onclick={() => window.location.href = `/datasources/${ds.id}`}
-                      >Edit</Button
                     >
-                    <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}
-                      >Delete</Button
-                    >
+                      Edit
+                    </Button>
+                    <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}>
+                      Delete
+                    </Button>
                   </div>
                 </td>
               </tr>

@@ -28,6 +28,11 @@
       }
     }
   },
+  "css": {
+    "parser": {
+      "cssModules": true
+    }
+  },
   "javascript": {
     "formatter": {
       "quoteStyle": "single",

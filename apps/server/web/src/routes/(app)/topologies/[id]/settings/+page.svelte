@@ -767,7 +767,9 @@
   const subgraphNameId = `${componentId}:subgraph`
 </script>
 
-<svelte:head> <title>Settings - {topology?.name || 'Topology'} - Shumoku</title> </svelte:head>
+<svelte:head>
+  <title>Settings - {topology?.name || 'Topology'} - Shumoku</title>
+</svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
   {#if loading}
@@ -893,9 +895,9 @@
 
             {#if edgeStyle === 'splines'}
               <div>
-                <label for="splineMode" class="text-sm text-theme-text block mb-1"
-                  >Spline Mode</label
-                >
+                <label for="splineMode" class="text-sm text-theme-text block mb-1">
+                  Spline Mode
+                </label>
                 <select
                   id="splineMode"
                   class="input w-full"
@@ -1146,9 +1148,9 @@
                             </p>
 
                             <div class="flex items-center gap-4">
-                              <label for={groupBySelectorId} class="text-xs text-theme-text-muted"
-                                >Group By</label
-                              >
+                              <label for={groupBySelectorId} class="text-xs text-theme-text-muted">
+                                Group By
+                              </label>
                               <select
                                 id={groupBySelectorId}
                                 class="input text-sm"
@@ -1320,9 +1322,9 @@
                     </h3>
                     <div class="grid grid-cols-2 gap-3">
                       <div>
-                        <label for={matchStrategySelectorId} class="text-xs text-theme-text-muted"
-                          >Match Strategy</label
-                        >
+                        <label for={matchStrategySelectorId} class="text-xs text-theme-text-muted">
+                          Match Strategy
+                        </label>
                         <select
                           id={matchStrategySelectorId}
                           class="input mt-1"
@@ -1335,9 +1337,9 @@
                         </select>
                       </div>
                       <div>
-                        <label for={unmatchedNodesSelectorId} class="text-xs text-theme-text-muted"
-                          >Unmatched Nodes</label
-                        >
+                        <label for={unmatchedNodesSelectorId} class="text-xs text-theme-text-muted">
+                          Unmatched Nodes
+                        </label>
                         <select
                           id={unmatchedNodesSelectorId}
                           class="input mt-1"
@@ -1351,9 +1353,9 @@
                       </div>
                       {#if config.match === 'manual'}
                         <div class="col-span-2">
-                          <label for={idMappingId} class="text-xs text-theme-text-muted"
-                            >ID Mapping (JSON)</label
-                          >
+                          <label for={idMappingId} class="text-xs text-theme-text-muted">
+                            ID Mapping (JSON)
+                          </label>
                           <textarea
                             id={idMappingId}
                             class="input mt-1 font-mono text-xs"
@@ -1371,9 +1373,9 @@
                       {/if}
                       {#if config.onUnmatched === 'add-to-subgraph'}
                         <div class="col-span-2">
-                          <label for={subgraphNameId} class="text-xs text-theme-text-muted"
-                            >Subgraph Name</label
-                          >
+                          <label for={subgraphNameId} class="text-xs text-theme-text-muted">
+                            Subgraph Name
+                          </label>
                           <input
                             id={subgraphNameId}
                             type="text"
