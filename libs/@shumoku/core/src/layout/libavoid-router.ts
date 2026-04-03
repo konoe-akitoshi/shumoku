@@ -123,6 +123,16 @@ export async function routeEdges(
     Avoid['RoutingParameter']['idealNudgingDistance'].value,
     opts.idealNudgingDistance,
   )
+  // Heavily penalize routes that reverse direction (e.g., going up in a TB layout)
+  router.setRoutingParameter(
+    Avoid['RoutingParameter']['reverseDirectionPenalty'].value,
+    500,
+  )
+  // Penalize unnecessary segments to prefer simpler routes
+  router.setRoutingParameter(
+    Avoid['RoutingParameter']['segmentPenalty'].value,
+    50,
+  )
   if (opts.nudgeConnectedSegments) {
     router.setRoutingOption(
       Avoid['RoutingOption']['nudgeOrthogonalSegmentsConnectedToShapes'].value,

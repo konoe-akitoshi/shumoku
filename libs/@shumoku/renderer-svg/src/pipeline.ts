@@ -118,7 +118,7 @@ export async function prepareRender(
  * Toggle for the new three-stage pipeline with resolved model (#79).
  * ELK (node placement) → placePorts (absolute coords) → libavoid (edge routing)
  */
-const USE_RESOLVED_PIPELINE = true
+const USE_RESOLVED_PIPELINE = false
 
 async function computeLayout(
   graph: NetworkGraph,
