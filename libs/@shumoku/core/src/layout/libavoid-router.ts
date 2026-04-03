@@ -15,7 +15,6 @@
  * - Incremental re-routing support (for future interactive use)
  */
 
-import { AvoidLib } from 'libavoid-js'
 import type { Link, LinkEndpoint, Position } from '../models/types.js'
 import type {
   EdgeRoutingEngine,
@@ -63,14 +62,20 @@ function toEndpoint(endpoint: string | LinkEndpoint): LinkEndpoint {
   return endpoint
 }
 
-let avoidInitialized = false
+let avoidInstance: any = null
 
-/** Ensure libavoid WASM is loaded (idempotent) */
-export async function ensureLibavoidLoaded(): Promise<void> {
-  if (!avoidInitialized) {
+/**
+ * Ensure libavoid WASM is loaded (idempotent).
+ * Uses dynamic import to avoid loading WASM at module evaluation time,
+ * which would fail in SSR/SSG environments (Vercel, etc.).
+ */
+export async function ensureLibavoidLoaded(): Promise<any> {
+  if (!avoidInstance) {
+    const { AvoidLib } = await import('libavoid-js')
     await AvoidLib.load()
-    avoidInitialized = true
+    avoidInstance = AvoidLib.getInstance()
   }
+  return avoidInstance
 }
 
 export class LibavoidEdgeRouter implements EdgeRoutingEngine {
@@ -91,10 +96,8 @@ export class LibavoidEdgeRouter implements EdgeRoutingEngine {
     links: Link[],
     options?: RoutingOptions,
   ): Promise<EdgeRoutingResult> {
-    await ensureLibavoidLoaded()
-    // Use 'any' for Avoid instance because libavoid-js type definitions
-    // don't match runtime API (enum values have .value property, etc.)
-    const Avoid: any = AvoidLib.getInstance()
+    // Dynamic import + lazy init to avoid WASM loading at module evaluation time
+    const Avoid = await ensureLibavoidLoaded()
 
     const opts = { ...this.defaultOptions, ...options }
 
