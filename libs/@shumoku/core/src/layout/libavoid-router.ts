@@ -153,15 +153,14 @@ export class LibavoidEdgeRouter implements EdgeRoutingEngine {
     opts: RoutingOptions,
   ): EdgeRoutingResult {
     // Step 1: Register nodes as obstacles
+    // Avoid.Rectangle(centre, width, height) — node.position is top-left from ELK
     const shapeRefs = new Map<string, any>()
     for (const [id, node] of placement.nodes) {
+      const cx = node.position.x + node.size.width / 2
+      const cy = node.position.y + node.size.height / 2
       const shape = new Avoid.ShapeRef(
         router,
-        new Avoid.Rectangle(
-          new Avoid.Point(node.position.x, node.position.y),
-          node.size.width,
-          node.size.height,
-        ),
+        new Avoid.Rectangle(new Avoid.Point(cx, cy), node.size.width, node.size.height),
       )
       shapeRefs.set(id, shape)
     }
