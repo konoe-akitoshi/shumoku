@@ -22,6 +22,7 @@ export type {
   ResolvedSubgraph,
 } from './resolved-types.js'
 export { resolveLayout, unresolveLayout } from './resolve.js'
+export { placePorts } from './port-placement.js'
 
 // Layout engine interfaces and composition utilities
 export type {
