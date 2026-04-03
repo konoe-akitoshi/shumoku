@@ -18,6 +18,12 @@
         "noBannedTypes": "error",
         // conflicts with noPropertyAccessFromIndexSignature
         "useLiteralKeys": "off"
+      },
+      "correctness": {
+        "noUnusedImports": {
+          "level": "error",
+          "fix": "safe"
+        }
       }
     }
   },
