@@ -153,14 +153,16 @@ export class LibavoidEdgeRouter implements EdgeRoutingEngine {
     opts: RoutingOptions,
   ): EdgeRoutingResult {
     // Step 1: Register nodes as obstacles
-    // Avoid.Rectangle(centre, width, height) — node.position is top-left from ELK
+    // Avoid.Rectangle(centre, width, height) — LayoutNode.position is already center from ELK
     const shapeRefs = new Map<string, any>()
     for (const [id, node] of placement.nodes) {
-      const cx = node.position.x + node.size.width / 2
-      const cy = node.position.y + node.size.height / 2
       const shape = new Avoid.ShapeRef(
         router,
-        new Avoid.Rectangle(new Avoid.Point(cx, cy), node.size.width, node.size.height),
+        new Avoid.Rectangle(
+          new Avoid.Point(node.position.x, node.position.y),
+          node.size.width,
+          node.size.height,
+        ),
       )
       shapeRefs.set(id, shape)
     }
@@ -175,10 +177,12 @@ export class LibavoidEdgeRouter implements EdgeRoutingEngine {
       const shape = shapeRefs.get(nodeId)
       if (!shape) continue
 
-      for (const [portName, port] of node.ports) {
+      for (const [portId, port] of node.ports) {
         const classId = pinClassId++
-        const key = `${nodeId}:${portName}`
-        pinClassIds.set(key, classId)
+        // Port map key from ELK is already "nodeId:portName" format (e.g., "rt1:eth0")
+        // Link endpoints use { node: "rt1", port: "eth0" } → lookup key is "rt1:eth0"
+        // So we use portId directly as the key (it's already nodeId:portName)
+        pinClassIds.set(portId, classId)
 
         // Convert port position (relative to node center) to proportional (0-1)
         // port.position is relative to node center, need to convert to proportion
