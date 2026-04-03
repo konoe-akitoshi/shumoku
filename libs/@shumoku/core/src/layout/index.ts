@@ -8,3 +8,17 @@
 
 export type { HierarchicalLayoutOptions } from './hierarchical.js'
 export { HierarchicalLayout } from './hierarchical.js'
+
+// Layout engine interfaces and composition utilities
+export type {
+  EdgeRoutingEngine,
+  EdgeRoutingResult,
+  NodePlacementEngine,
+  NodePlacementResult,
+  PlacementOptions,
+  PositionedNode,
+  PositionedSubgraph,
+  RoutedEdge,
+  RoutingOptions,
+} from './types.js'
+export { composeLayoutResult, decomposeLayoutResult } from './types.js'
