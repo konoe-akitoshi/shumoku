@@ -13,6 +13,16 @@ export { HierarchicalLayout } from './hierarchical.js'
 export { ElkNodePlacement } from './elk-placement.js'
 export { LibavoidEdgeRouter, ensureLibavoidLoaded } from './libavoid-router.js'
 
+// Resolved layout model (Node/Port/Edge as independent objects)
+export type {
+  ResolvedEdge,
+  ResolvedLayout,
+  ResolvedNode,
+  ResolvedPort,
+  ResolvedSubgraph,
+} from './resolved-types.js'
+export { resolveLayout, unresolveLayout } from './resolve.js'
+
 // Layout engine interfaces and composition utilities
 export type {
   EdgeRoutingEngine,
