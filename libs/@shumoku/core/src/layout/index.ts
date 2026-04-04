@@ -24,6 +24,7 @@ export type {
   ResolvedPort,
   ResolvedSubgraph,
 } from './resolved-types.js'
+export { getLinkWidth } from './resolved-types.js'
 
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'

@@ -17,6 +17,7 @@ import type {
   LayoutSubgraph,
   LinkEndpoint,
 } from '../models/types.js'
+import { getLinkWidth } from './resolved-types.js'
 import type {
   ResolvedEdge,
   ResolvedLayout,
@@ -80,6 +81,7 @@ export function resolveLayout(result: LayoutResult): ResolvedLayout {
       fromEndpoint: ll.fromEndpoint,
       toEndpoint: ll.toEndpoint,
       points: ll.points,
+      width: getLinkWidth(ll.link),
       link: ll.link,
     })
   }

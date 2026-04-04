@@ -11,6 +11,7 @@
 
 import { SMALL_LABEL_CHAR_WIDTH } from '../constants.js'
 import type { Link, LinkEndpoint, Position } from '../models/types.js'
+import { getLinkWidth } from './resolved-types.js'
 import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
 
 // libavoid ConnDirFlags
@@ -86,6 +87,7 @@ export async function routeEdges(
   router.setRoutingParameter(Avoid['RoutingParameter']['segmentPenalty'].value, 50)
 
   // Nudging: separate overlapping/parallel edge segments
+  router.setRoutingOption(Avoid['RoutingOption']['nudgeOrthogonalSegmentsConnectedToShapes'].value, true)
   router.setRoutingOption(Avoid['RoutingOption']['nudgeOrthogonalTouchingColinearSegments'].value, true)
   router.setRoutingOption(Avoid['RoutingOption']['performUnifyingNudgingPreprocessingStep'].value, true)
   router.setRoutingOption(Avoid['RoutingOption']['nudgeSharedPathsWithCommonEndPoint'].value, true)
@@ -311,9 +313,132 @@ function doRoute(
       fromEndpoint: toEndpoint(link.from),
       toEndpoint: toEndpoint(link.to),
       points: finalPoints,
+      width: getLinkWidth(link),
       link,
     })
   }
 
+  // Post-process: spread overlapping segments considering line width
+  spreadOverlappingSegments(edges)
+
   return edges
+}
+
+// ============================================================================
+// Post-processing: spread overlapping segments
+// ============================================================================
+
+interface Segment {
+  edgeId: string
+  pointIndex: number // index of the first point in the segment
+  fixed: number      // the shared coordinate (Y for horizontal, X for vertical)
+  min: number        // start of range on the other axis
+  max: number        // end of range
+  width: number      // line width
+}
+
+/**
+ * Detect horizontal/vertical segments that visually overlap (considering line width)
+ * and push them apart.
+ */
+function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
+  // Collect horizontal segments (consecutive points with same Y)
+  const hSegs: Segment[] = []
+  for (const [edgeId, edge] of edges) {
+    for (let i = 0; i < edge.points.length - 1; i++) {
+      const a = edge.points[i]!
+      const b = edge.points[i + 1]!
+      if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 1) {
+        hSegs.push({
+          edgeId, pointIndex: i,
+          fixed: a.y,
+          min: Math.min(a.x, b.x),
+          max: Math.max(a.x, b.x),
+          width: edge.width,
+        })
+      }
+    }
+  }
+
+  spreadSegments(hSegs, edges, 'y')
+
+  // Collect vertical segments (consecutive points with same X)
+  const vSegs: Segment[] = []
+  for (const [edgeId, edge] of edges) {
+    for (let i = 0; i < edge.points.length - 1; i++) {
+      const a = edge.points[i]!
+      const b = edge.points[i + 1]!
+      if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) > 1) {
+        vSegs.push({
+          edgeId, pointIndex: i,
+          fixed: a.x,
+          min: Math.min(a.y, b.y),
+          max: Math.max(a.y, b.y),
+          width: edge.width,
+        })
+      }
+    }
+  }
+
+  spreadSegments(vSegs, edges, 'x')
+}
+
+function spreadSegments(
+  segs: Segment[],
+  edges: Map<string, ResolvedEdge>,
+  axis: 'x' | 'y',
+): void {
+  if (segs.length < 2) return
+
+  // Sort by fixed coordinate
+  segs.sort((a, b) => a.fixed - b.fixed)
+
+  // Check adjacent pairs for overlap
+  for (let i = 0; i < segs.length - 1; i++) {
+    const s1 = segs[i]!
+    const s2 = segs[i + 1]!
+
+    // Do they overlap on the range axis?
+    if (s1.max <= s2.min || s2.max <= s1.min) continue
+
+    // Minimum center-to-center distance:
+    // half-widths (no overlap) + gap equal to the wider line (clearance = line width)
+    const minDist = (s1.width + s2.width) / 2 + Math.max(s1.width, s2.width)
+    const actualDist = Math.abs(s2.fixed - s1.fixed)
+
+    if (actualDist >= minDist) continue
+
+    // Push apart: move each by half the deficit
+    const deficit = minDist - actualDist
+    const shift = deficit / 2
+
+    shiftSegment(edges, s1, -shift, axis)
+    shiftSegment(edges, s2, shift, axis)
+
+    // Update fixed values for subsequent comparisons
+    s1.fixed -= shift
+    s2.fixed += shift
+  }
+}
+
+function shiftSegment(
+  edges: Map<string, ResolvedEdge>,
+  seg: Segment,
+  delta: number,
+  axis: 'x' | 'y',
+): void {
+  const edge = edges.get(seg.edgeId)
+  if (!edge) return
+
+  const p1 = edge.points[seg.pointIndex]
+  const p2 = edge.points[seg.pointIndex + 1]
+  if (!p1 || !p2) return
+
+  if (axis === 'y') {
+    p1.y += delta
+    p2.y += delta
+  } else {
+    p1.x += delta
+    p2.x += delta
+  }
 }
