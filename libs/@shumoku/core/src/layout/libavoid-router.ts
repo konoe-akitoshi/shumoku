@@ -9,6 +9,7 @@
  * Pins ensure lines exit/enter ports perpendicularly.
  */
 
+import { SMALL_LABEL_CHAR_WIDTH } from '../constants.js'
 import type { Link, LinkEndpoint, Position } from '../models/types.js'
 import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
 
@@ -113,8 +114,9 @@ function doRoute(
   }
 
   // Step 2: Register ports as ShapeConnectionPins
-  // Each pin has a unique classId (per shape) and a direction constraint.
-  // Pin position is proportional (0-1) on the shape rectangle.
+  // Direction = flow direction, not port side.
+  // In TB layout: all vertical ports use ConnDirDown (lines always flow down).
+  // HA ports (left/right) use their natural horizontal direction.
   const pinIds = new Map<string, number>() // portId → classId
   let nextClassId = 1
 
@@ -126,15 +128,20 @@ function doRoute(
     const classId = nextClassId++
     pinIds.set(portId, classId)
 
-    // Convert absolute position → proportional on rectangle
     const xProp = (port.absolutePosition.x - (node.position.x - node.size.width / 2)) / node.size.width
     const yProp = (port.absolutePosition.y - (node.position.y - node.size.height / 2)) / node.size.height
+
+    // Direction = graph flow direction for vertical ports (TB → always down),
+    // side direction for horizontal ports (HA).
+    const dir = (port.side === 'top' || port.side === 'bottom')
+      ? ConnDirDown
+      : sideToDir(port.side)
 
     const pin = new Avoid.ShapeConnectionPin(
       shape, classId,
       Math.max(0, Math.min(1, xProp)),
       Math.max(0, Math.min(1, yProp)),
-      true, 0, sideToDir(port.side),
+      true, 0, dir,
     )
     pin.setExclusive(false)
   }
@@ -157,9 +164,8 @@ function doRoute(
     const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
     const toPortId = toPort ? `${toNodeId}:${toPort}` : null
     const fromPin = fromPortId ? pinIds.get(fromPortId) : undefined
-    const toPin = toPortId ? pinIds.get(toPortId) : undefined
 
-    // Use pin-based ConnEnd when available, Point fallback otherwise
+    // Source: use pin (direction constraint → perpendicular exit)
     let srcEnd: any
     if (fromPin !== undefined) {
       srcEnd = new Avoid.ConnEnd(shapeRefs.get(fromNodeId), fromPin)
@@ -168,15 +174,37 @@ function doRoute(
       srcEnd = new Avoid.ConnEnd(new Avoid.Point(pos.x, pos.y))
     }
 
-    let dstEnd: any
-    if (toPin !== undefined) {
-      dstEnd = new Avoid.ConnEnd(shapeRefs.get(toNodeId), toPin)
-    } else {
-      const pos = toPortId && ports.has(toPortId) ? ports.get(toPortId)!.absolutePosition : nodes.get(toNodeId)!.position
-      dstEnd = new Avoid.ConnEnd(new Avoid.Point(pos.x, pos.y))
-    }
+    // Destination: use Point (no direction constraint → natural arrival)
+    // Pin direction must be outward, but for destination ports the line
+    // approaches from outside → inward direction needed → libavoid rejects it.
+    const dstPos = toPortId && ports.has(toPortId) ? ports.get(toPortId)!.absolutePosition : nodes.get(toNodeId)!.position
+    const dstEnd = new Avoid.ConnEnd(new Avoid.Point(dstPos.x, dstPos.y))
 
     const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
+
+    // Add checkpoint near destination to force perpendicular arrival.
+    // The checkpoint is placed just outside the port in the approach direction.
+    const dstPortObj = toPortId ? ports.get(toPortId) : null
+    if (dstPortObj) {
+      // Offset = port size + label extent (label length * char width + padding)
+      // This places the checkpoint just past the port label, ensuring
+      // the line approaches perpendicularly through the label area.
+      const portHalf = Math.max(dstPortObj.size.width, dstPortObj.size.height) / 2
+      const labelExtent = dstPortObj.label.length * SMALL_LABEL_CHAR_WIDTH + 8
+      const offset = portHalf + labelExtent
+      let cpX = dstPortObj.absolutePosition.x
+      let cpY = dstPortObj.absolutePosition.y
+      switch (dstPortObj.side) {
+        case 'top': cpY -= offset; break
+        case 'bottom': cpY += offset; break
+        case 'left': cpX -= offset; break
+        case 'right': cpX += offset; break
+      }
+      const checkpoints = new Avoid.CheckpointVector()
+      checkpoints.push_back(new Avoid.Checkpoint(new Avoid.Point(cpX, cpY)))
+      conn.setRoutingCheckpoints(checkpoints)
+    }
+
     connRefs.set(linkId, conn)
 
     // Track first pin-based link for verification
