@@ -133,12 +133,9 @@ export async function routeEdges(
     Avoid['RoutingParameter']['segmentPenalty'].value,
     50,
   )
-  if (opts.nudgeConnectedSegments) {
-    router.setRoutingOption(
-      Avoid['RoutingOption']['nudgeOrthogonalSegmentsConnectedToShapes'].value,
-      true,
-    )
-  }
+  // Do NOT enable nudgeOrthogonalSegmentsConnectedToShapes — it moves
+  // edge endpoints away from pin positions, breaking port-edge alignment.
+  // Parallel edge separation is handled by distinct pin positions instead.
 
   try {
     return doRoute(Avoid, router, nodes, ports, links, opts)
@@ -265,7 +262,7 @@ function doRoute(
       points.push({ x: pt.x, y: pt.y })
     }
 
-    const finalPoints =
+    let finalPoints =
       opts.edgeStyle === 'straight' && points.length > 2
         ? [points[0]!, points[points.length - 1]!]
         : points
@@ -275,10 +272,13 @@ function doRoute(
     const fromPort = getPortName(link.from)
     const toPort = getPortName(link.to)
 
+    const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
+    const toPortId = toPort ? `${toNodeId}:${toPort}` : null
+
     edges.set(linkId, {
       id: linkId,
-      fromPortId: fromPort ? `${fromNodeId}:${fromPort}` : null,
-      toPortId: toPort ? `${toNodeId}:${toPort}` : null,
+      fromPortId,
+      toPortId,
       fromNodeId,
       toNodeId,
       fromEndpoint: toEndpoint(link.from),

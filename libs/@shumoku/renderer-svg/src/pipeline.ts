@@ -17,7 +17,6 @@ import {
   layoutNetwork,
   lightTheme,
   type NetworkGraph,
-  placePorts,
   routeEdges,
   type SurfaceToken,
   unresolveLayout,
@@ -136,14 +135,11 @@ async function computeLayout(
   }
 
   // Custom network layout + libavoid routing
-  // All three stages designed together — no coordinate mismatch.
+  // Nodes, ports, and routing designed together — no coordinate mismatch.
 
-  // 1. Node placement (network-aware hierarchical)
+  // 1. Layout: nodes + ports (ports are part of the node box model)
   const direction = graph.settings?.direction ?? layoutOptions?.direction ?? 'TB'
-  const { nodes, subgraphs, bounds } = layoutNetwork(graph, { direction })
-
-  // 2. Port placement (absolute coordinates, single source of truth)
-  const ports = placePorts(nodes, graph.links, direction)
+  const { nodes, ports, subgraphs, bounds } = layoutNetwork(graph, { direction })
 
   // 3. Edge routing via libavoid (uses absolute port positions directly)
   const edgeStyle = graph.settings?.edgeStyle ?? layoutOptions?.edgeStyle ?? 'orthogonal'
