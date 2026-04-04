@@ -11,7 +11,6 @@ import type {
   EdgeStyle,
   LayoutLink,
   LayoutNode,
-  LayoutPort,
   LayoutResult,
   LayoutSubgraph,
   LegendSettings,
@@ -20,6 +19,8 @@ import type {
   NetworkGraph,
   Node,
   NodeShape,
+  ResolvedLayout,
+  ResolvedPort,
   ThemeType,
 } from '@shumoku/core'
 import {
@@ -293,15 +294,62 @@ export class SVGRenderer {
   }
 
   render(graph: NetworkGraph, layout: LayoutResult): string {
+    // Convert LayoutResult ports to ResolvedPort-style for unified rendering
+    const resolvedPorts = new Map<string, ResolvedPort>()
+    for (const node of layout.nodes.values()) {
+      if (!node.ports) continue
+      for (const [portId, lp] of node.ports) {
+        resolvedPorts.set(portId, {
+          id: portId,
+          nodeId: node.id,
+          label: lp.label,
+          absolutePosition: { x: node.position.x + lp.position.x, y: node.position.y + lp.position.y },
+          side: lp.side,
+          size: lp.size,
+        })
+      }
+    }
+    return this.renderWithPorts(graph, layout, resolvedPorts)
+  }
+
+  /**
+   * Render directly from ResolvedLayout — no conversion needed.
+   * Ports are independent objects with their own position.
+   */
+  renderResolved(graph: NetworkGraph, resolved: ResolvedLayout): string {
+    // ResolvedLayout → LayoutResult-compatible views (nodes, links, subgraphs share same shape)
+    // Only difference: ports are in a separate Map instead of nested in nodes
+    const layoutCompat: LayoutResult = {
+      nodes: new Map([...resolved.nodes].map(([id, rn]) => [id, {
+        id, position: rn.position, size: rn.size, node: rn.node,
+      }])),
+      links: new Map([...resolved.edges].map(([id, re]) => [id, {
+        id, from: re.fromNodeId, to: re.toNodeId,
+        fromEndpoint: re.fromEndpoint, toEndpoint: re.toEndpoint,
+        points: re.points, link: re.link,
+      }])),
+      subgraphs: new Map([...resolved.subgraphs].map(([id, rs]) => [id, {
+        id, bounds: rs.bounds, subgraph: rs.subgraph,
+      }])),
+      bounds: resolved.bounds,
+      metadata: resolved.metadata,
+    }
+    return this.renderWithPorts(graph, layoutCompat, resolved.ports)
+  }
+
+  /**
+   * Core render with ports as independent objects (position = absolute).
+   */
+  private renderWithPorts(
+    graph: NetworkGraph,
+    layout: LayoutResult,
+    ports: Map<string, ResolvedPort>,
+  ): string {
     const { bounds } = layout
 
-    // Set theme based on graph settings
     this.setTheme(graph.settings?.theme)
-
-    // Set edge style for link rendering
     this.edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
 
-    // Calculate legend dimensions if enabled
     const legendSettings = this.getLegendSettings(graph.settings?.legend)
     let legendWidth = 0
     let legendHeight = 0
@@ -311,7 +359,6 @@ export class SVGRenderer {
       legendHeight = legendDims.height
     }
 
-    // Expand bounds to include legend with padding
     const legendPadding = 20
     const expandedBounds = {
       x: bounds.x,
@@ -321,48 +368,36 @@ export class SVGRenderer {
     }
 
     const parts: string[] = []
-
-    // SVG header using expanded bounds
     const viewBox = `${expandedBounds.x} ${expandedBounds.y} ${expandedBounds.width} ${expandedBounds.height}`
     parts.push(this.renderHeader(expandedBounds.width, expandedBounds.height, viewBox))
-
-    // Defs (markers, gradients)
     parts.push(this.renderDefs())
-
-    // Styles
     parts.push(this.renderStyles())
 
-    // Layer 1: Subgraphs (background)
+    // Layer 1: Subgraphs
     for (const sg of layout.subgraphs.values()) {
       parts.push(this.renderSubgraph(sg))
     }
 
-    // Layer 2: Links (below nodes)
+    // Layer 2: Links
     for (const link of layout.links.values()) {
       parts.push(this.renderLink(link, layout.nodes))
     }
 
-    // Layer 3: Nodes (bg + fg as one unit, without ports)
+    // Layer 3: Nodes
     for (const node of layout.nodes.values()) {
       parts.push(this.renderNode(node))
     }
 
-    // Layer 4: Ports (separate layer on top of nodes)
-    for (const node of layout.nodes.values()) {
-      const portsRendered = this.renderPorts(node.id, node.position.x, node.position.y, node.ports)
-      if (portsRendered) {
-        parts.push(portsRendered)
-      }
+    // Layer 4: Ports — each port drawn at its own position (no offset calculation)
+    for (const port of ports.values()) {
+      parts.push(this.renderResolvedPort(port))
     }
 
-    // Legend (if enabled) - use already calculated legendSettings
     if (legendSettings.enabled && legendWidth > 0) {
       parts.push(this.renderLegend(graph, layout, legendSettings))
     }
 
-    // Close SVG
     parts.push('</svg>')
-
     return parts.join('\n')
   }
 
@@ -843,85 +878,48 @@ ${fg}
   }
 
   /**
-   * Render ports on a node (as separate groups)
+   * Render a single port at its own position (no node offset needed).
    */
-  private renderPorts(
-    nodeId: string,
-    nodeX: number,
-    nodeY: number,
-    ports?: Map<string, LayoutPort>,
-  ): string {
-    if (!ports || ports.size === 0) return ''
+  private renderResolvedPort(port: ResolvedPort): string {
+    const px = port.absolutePosition.x
+    const py = port.absolutePosition.y
+    const pw = port.size.width
+    const ph = port.size.height
 
-    const groups: string[] = []
+    const portDeviceAttr = this.isInteractive ? ` data-port-device="${port.nodeId}"` : ''
+    const parts: string[] = []
 
-    for (const port of ports.values()) {
-      const px = nodeX + port.position.x
-      const py = nodeY + port.position.y
-      const pw = port.size.width
-      const ph = port.size.height
-
-      // Port data attribute for interactive mode
-      const portDeviceAttr = this.isInteractive ? ` data-port-device="${nodeId}"` : ''
-
-      const parts: string[] = []
-
-      // Port box
-      parts.push(`<rect class="port-box"
+    // Port box
+    parts.push(`<rect class="port-box"
         x="${px - pw / 2}" y="${py - ph / 2}" width="${pw}" height="${ph}"
         fill="${this.color('portFill')}" stroke="${this.color('portStroke')}" stroke-width="1" rx="2" />`)
 
-      // Port label - position based on side
-      let labelX = px
-      let labelY = py
-      let textAnchor = 'middle'
-      const labelOffset = 12
+    // Port label
+    let labelX = px
+    let labelY = py
+    let textAnchor = 'middle'
+    const labelOffset = 12
 
-      switch (port.side) {
-        case 'top':
-          labelY = py - labelOffset
-          break
-        case 'bottom':
-          labelY = py + labelOffset + 4
-          break
-        case 'left':
-          labelX = px - labelOffset
-          textAnchor = 'end'
-          break
-        case 'right':
-          labelX = px + labelOffset
-          textAnchor = 'start'
-          break
-      }
-
-      // Port label with black background
-      const labelText = this.escapeXml(port.label)
-      const labelWidth = labelText.length * SMALL_LABEL_CHAR_WIDTH + 4
-      const labelHeight = 12
-
-      // Calculate background rect position based on text anchor
-      let bgX = labelX - 2
-      if (textAnchor === 'middle') {
-        bgX = labelX - labelWidth / 2
-      } else if (textAnchor === 'end') {
-        bgX = labelX - labelWidth + 2
-      }
-      const bgY = labelY - labelHeight + 3
-
-      parts.push(
-        `<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.color('portLabelBg')}" />`,
-      )
-      parts.push(
-        `<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.color('portLabelColor')}">${labelText}</text>`,
-      )
-
-      // Wrap in a group with data attributes
-      groups.push(`<g class="port" data-port="${port.id}"${portDeviceAttr}>
-  ${parts.join('\n  ')}
-</g>`)
+    switch (port.side) {
+      case 'top': labelY = py - labelOffset; break
+      case 'bottom': labelY = py + labelOffset + 4; break
+      case 'left': labelX = px - labelOffset; textAnchor = 'end'; break
+      case 'right': labelX = px + labelOffset; textAnchor = 'start'; break
     }
 
-    return groups.join('\n')
+    const labelText = this.escapeXml(port.label)
+    const labelWidth = labelText.length * SMALL_LABEL_CHAR_WIDTH + 4
+    const labelHeight = 12
+
+    let bgX = labelX - 2
+    if (textAnchor === 'middle') bgX = labelX - labelWidth / 2
+    else if (textAnchor === 'end') bgX = labelX - labelWidth + 2
+    const bgY = labelY - labelHeight + 3
+
+    parts.push(`<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.color('portLabelBg')}" />`)
+    parts.push(`<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.color('portLabelColor')}">${labelText}</text>`)
+
+    return `<g class="port" data-port="${port.id}"${portDeviceAttr}>\n  ${parts.join('\n  ')}\n</g>`
   }
 
   private renderNodeShape(
