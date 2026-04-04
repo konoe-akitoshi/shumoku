@@ -141,14 +141,37 @@ async function computeLayout(
   const direction = graph.settings?.direction ?? layoutOptions?.direction ?? 'TB'
   const { nodes, ports, subgraphs, bounds } = layoutNetwork(graph, { direction })
 
+  // Debug: verify nodes/ports before routing
+  const testPort = ports.get('isp1:eth0')
+  const testNode = testPort ? nodes.get(testPort.nodeId) : null
+  if (testPort && testNode) {
+    console.log(`[pipeline] before routeEdges: isp1:eth0 port=(${testPort.absolutePosition.x},${testPort.absolutePosition.y}) node=(${testNode.position.x},${testNode.position.y}) size=(${testNode.size.width},${testNode.size.height})`)
+  }
+
   // 3. Edge routing via libavoid (uses absolute port positions directly)
   const edgeStyle = graph.settings?.edgeStyle ?? layoutOptions?.edgeStyle ?? 'orthogonal'
   const edges = await routeEdges(nodes, ports, graph.links, {
     edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
   })
 
-  // 4. Convert to LayoutResult for existing renderer
-  return unresolveLayout({
+  // Debug: check port-node consistency
+  for (const [portId, port] of ports) {
+    const node = nodes.get(port.nodeId)
+    if (!node) continue
+    const hw = node.size.width / 2
+    const hh = node.size.height / 2
+    const onEdge =
+      Math.abs(port.absolutePosition.x - (node.position.x - hw)) < 1 ||
+      Math.abs(port.absolutePosition.x - (node.position.x + hw)) < 1 ||
+      Math.abs(port.absolutePosition.y - (node.position.y - hh)) < 1 ||
+      Math.abs(port.absolutePosition.y - (node.position.y + hh)) < 1
+    if (!onEdge) {
+      console.warn(`[layout] port ${portId} NOT on node edge: port=(${port.absolutePosition.x},${port.absolutePosition.y}) node center=(${node.position.x},${node.position.y}) size=(${node.size.width},${node.size.height})`)
+    }
+  }
+
+  // Debug: check unresolve round-trip
+  const result = unresolveLayout({
     nodes,
     ports,
     edges,
@@ -156,6 +179,39 @@ async function computeLayout(
     bounds,
     metadata: { algorithm: 'network-layout+libavoid', duration: 0 },
   })
+
+  // Verify: LayoutPort absolute position = node.position + port.position
+  for (const [_nodeId, ln] of result.nodes) {
+    if (!ln.ports) continue
+    for (const [portId, lp] of ln.ports) {
+      const resolvedPort = ports.get(portId)
+      if (!resolvedPort) continue
+      const renderedX = ln.position.x + lp.position.x
+      const renderedY = ln.position.y + lp.position.y
+      const dx = Math.abs(renderedX - resolvedPort.absolutePosition.x)
+      const dy = Math.abs(renderedY - resolvedPort.absolutePosition.y)
+      if (dx > 0.5 || dy > 0.5) {
+        console.warn(`[unresolve] port ${portId}: rendered=(${renderedX},${renderedY}) expected=(${resolvedPort.absolutePosition.x},${resolvedPort.absolutePosition.y}) delta=(${dx.toFixed(1)},${dy.toFixed(1)})`)
+      }
+    }
+  }
+
+  // Verify: edge endpoints vs port positions
+  for (const [edgeId, ll] of result.links) {
+    if (ll.points.length === 0) continue
+    const fromPortId = ll.fromEndpoint.port ? `${ll.from}:${ll.fromEndpoint.port}` : null
+    if (fromPortId && ports.has(fromPortId)) {
+      const port = ports.get(fromPortId)!
+      const ep = ll.points[0]!
+      const dx = Math.abs(ep.x - port.absolutePosition.x)
+      const dy = Math.abs(ep.y - port.absolutePosition.y)
+      if (dx > 1 || dy > 1) {
+        console.warn(`[edge] ${edgeId} start: edge=(${ep.x},${ep.y}) port ${fromPortId}=(${port.absolutePosition.x},${port.absolutePosition.y}) delta=(${dx.toFixed(1)},${dy.toFixed(1)})`)
+      }
+    }
+  }
+
+  return result
 }
 
 /**

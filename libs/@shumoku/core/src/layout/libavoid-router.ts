@@ -182,12 +182,19 @@ function doRoute(
     const classId = pinClassId++
     pinClassIds.set(portId, classId)
 
-    // Absolute offset from node center → proportional on shape
-    // This is safe because we control both the Rectangle center and port position
     const xOffset = port.absolutePosition.x - (node.position.x - node.size.width / 2)
     const yOffset = port.absolutePosition.y - (node.position.y - node.size.height / 2)
     const xProp = xOffset / node.size.width
     const yProp = yOffset / node.size.height
+
+    // Debug: verify pin will be at expected position
+    const expectedX = node.position.x - node.size.width / 2 + xProp * node.size.width
+    const expectedY = node.position.y - node.size.height / 2 + yProp * node.size.height
+    const dx = Math.abs(expectedX - port.absolutePosition.x)
+    const dy = Math.abs(expectedY - port.absolutePosition.y)
+    if (dx > 0.5 || dy > 0.5 || portId.includes('eth0')) {
+      console.log(`[pin] ${portId}: port=(${port.absolutePosition.x},${port.absolutePosition.y}) node=(${node.position.x},${node.position.y}) size=(${node.size.width},${node.size.height}) prop=(${xProp.toFixed(3)},${yProp.toFixed(3)}) expected=(${expectedX},${expectedY})`)
+    }
 
     const connDir = sideToConnDir(port.side)
 
@@ -214,7 +221,10 @@ function doRoute(
     const fromPort = getPortName(link.from)
     const toPort = getPortName(link.to)
 
-    if (!shapeRefs.has(fromNodeId) || !shapeRefs.has(toNodeId)) continue
+    if (!shapeRefs.has(fromNodeId) || !shapeRefs.has(toNodeId)) {
+      console.warn(`[libavoid] skip link ${linkId}: from=${fromNodeId}(${shapeRefs.has(fromNodeId)}) to=${toNodeId}(${shapeRefs.has(toNodeId)})`)
+      continue
+    }
 
     // Look up port by "nodeId:portName"
     const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
@@ -226,7 +236,7 @@ function doRoute(
     if (fromClassId !== undefined) {
       srcEnd = new Avoid.ConnEnd(shapeRefs.get(fromNodeId), fromClassId)
     } else {
-      // Fallback: node center
+      if (fromPortId) console.warn(`[libavoid] pin miss: ${fromPortId} | link=${linkId} | pins=[${[...pinClassIds.keys()].join(',')}]`)
       const node = nodes.get(fromNodeId)!
       srcEnd = new Avoid.ConnEnd(new Avoid.Point(node.position.x, node.position.y))
     }
@@ -245,6 +255,18 @@ function doRoute(
 
   // Step 4: Route
   router.processTransaction()
+
+  // Debug: check first few routed endpoints vs pin positions
+  let debugCount = 0
+  for (const [lid, conn] of connRefs) {
+    if (debugCount >= 3) break
+    const route = conn.displayRoute()
+    if (route.size() > 0) {
+      const startPt = route.at(0)
+      console.log(`[route-debug] ${lid}: start=(${startPt.x},${startPt.y}) pts=${route.size()}`)
+    }
+    debugCount++
+  }
 
   // Step 5: Extract results
   const edges = new Map<string, ResolvedEdge>()
