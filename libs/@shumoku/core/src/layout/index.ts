@@ -6,15 +6,15 @@
  * Shumoku Layout Engines
  */
 
+// Legacy ELK-based layout (used by server, CLI, renderer-html)
 export type { HierarchicalLayoutOptions } from './hierarchical.js'
 export { HierarchicalLayout } from './hierarchical.js'
 
-// Concrete engine implementations
-export { ElkNodePlacement } from './elk-placement.js'
-export { routeEdges, ensureLibavoidLoaded } from './libavoid-router.js'
-export type { LibavoidRoutingOptions } from './libavoid-router.js'
+// Custom network layout + libavoid routing
 export { layoutNetwork } from './network-layout.js'
 export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
+export { routeEdges, ensureLibavoidLoaded } from './libavoid-router.js'
+export type { LibavoidRoutingOptions } from './libavoid-router.js'
 
 // Resolved layout model (Node/Port/Edge as independent objects)
 export type {
@@ -24,19 +24,7 @@ export type {
   ResolvedPort,
   ResolvedSubgraph,
 } from './resolved-types.js'
+
+// Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
 export { placePorts } from './port-placement.js'
-
-// Layout engine interfaces and composition utilities
-export type {
-  EdgeRoutingEngine,
-  EdgeRoutingResult,
-  NodePlacementEngine,
-  NodePlacementResult,
-  PlacementOptions,
-  PositionedNode,
-  PositionedSubgraph,
-  RoutedEdge,
-  RoutingOptions,
-} from './types.js'
-export { composeLayoutResult, decomposeLayoutResult } from './types.js'
