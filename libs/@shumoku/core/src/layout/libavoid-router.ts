@@ -15,26 +15,6 @@
 import type { Link, LinkEndpoint, Position } from '../models/types.js'
 import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
 
-// libavoid direction flags (from C++ source)
-const ConnDirUp = 1
-const ConnDirDown = 2
-const ConnDirLeft = 4
-const ConnDirRight = 8
-
-/** Map port side to libavoid direction flag */
-function sideToConnDir(side: 'top' | 'bottom' | 'left' | 'right'): number {
-  switch (side) {
-    case 'top':
-      return ConnDirUp
-    case 'bottom':
-      return ConnDirDown
-    case 'left':
-      return ConnDirLeft
-    case 'right':
-      return ConnDirRight
-  }
-}
-
 function getNodeId(endpoint: string | LinkEndpoint): string {
   return typeof endpoint === 'string' ? endpoint : endpoint.node
 }
@@ -167,50 +147,11 @@ function doRoute(
     shapeRefs.set(id, shape)
   }
 
-  // Step 2: Register ports as ShapeConnectionPins using ABSOLUTE coordinates
-  // No proportional conversion — use absolute offsets from shape center
-  let pinClassId = 1
-  const pinClassIds = new Map<string, number>() // portId → classId
-
-  for (const [portId, port] of ports) {
-    const shape = shapeRefs.get(port.nodeId)
-    if (!shape) continue
-
-    const node = nodes.get(port.nodeId)
-    if (!node) continue
-
-    const classId = pinClassId++
-    pinClassIds.set(portId, classId)
-
-    const xOffset = port.absolutePosition.x - (node.position.x - node.size.width / 2)
-    const yOffset = port.absolutePosition.y - (node.position.y - node.size.height / 2)
-    const xProp = xOffset / node.size.width
-    const yProp = yOffset / node.size.height
-
-    // Debug: verify pin will be at expected position
-    const expectedX = node.position.x - node.size.width / 2 + xProp * node.size.width
-    const expectedY = node.position.y - node.size.height / 2 + yProp * node.size.height
-    const dx = Math.abs(expectedX - port.absolutePosition.x)
-    const dy = Math.abs(expectedY - port.absolutePosition.y)
-    if (dx > 0.5 || dy > 0.5 || portId.includes('eth0')) {
-      console.log(`[pin] ${portId}: port=(${port.absolutePosition.x},${port.absolutePosition.y}) node=(${node.position.x},${node.position.y}) size=(${node.size.width},${node.size.height}) prop=(${xProp.toFixed(3)},${yProp.toFixed(3)}) expected=(${expectedX},${expectedY})`)
-    }
-
-    const connDir = sideToConnDir(port.side)
-
-    const pin = new Avoid.ShapeConnectionPin(
-      shape,
-      classId,
-      Math.max(0, Math.min(1, xProp)),
-      Math.max(0, Math.min(1, yProp)),
-      true, // proportional
-      0, // insideOffset
-      connDir,
-    )
-    pin.setExclusive(false)
-  }
-
-  // Step 3: Create connectors
+  // Step 2: Create connectors using port absolute positions directly.
+  // Uses ConnEnd(Point) instead of ConnEnd(ShapeRef, classId) because
+  // the pin-based approach has unreliable constructor overload resolution
+  // in bundled browser environments (Emscripten WebIDL binding issue).
+  // Since we already have port absolute coordinates, this is simpler and correct.
   const connRefs = new Map<string, any>()
 
   for (let i = 0; i < links.length; i++) {
@@ -221,33 +162,19 @@ function doRoute(
     const fromPort = getPortName(link.from)
     const toPort = getPortName(link.to)
 
-    if (!shapeRefs.has(fromNodeId) || !shapeRefs.has(toNodeId)) {
-      console.warn(`[libavoid] skip link ${linkId}: from=${fromNodeId}(${shapeRefs.has(fromNodeId)}) to=${toNodeId}(${shapeRefs.has(toNodeId)})`)
-      continue
-    }
+    if (!shapeRefs.has(fromNodeId) || !shapeRefs.has(toNodeId)) continue
 
-    // Look up port by "nodeId:portName"
+    // Source: port absolute position or node center
     const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
+    const fromPortObj = fromPortId ? ports.get(fromPortId) : null
+    const fromPos = fromPortObj ? fromPortObj.absolutePosition : nodes.get(fromNodeId)!.position
+    const srcEnd = new Avoid.ConnEnd(new Avoid.Point(fromPos.x, fromPos.y))
+
+    // Destination: port absolute position or node center
     const toPortId = toPort ? `${toNodeId}:${toPort}` : null
-    const fromClassId = fromPortId ? pinClassIds.get(fromPortId) : undefined
-    const toClassId = toPortId ? pinClassIds.get(toPortId) : undefined
-
-    let srcEnd: any
-    if (fromClassId !== undefined) {
-      srcEnd = new Avoid.ConnEnd(shapeRefs.get(fromNodeId), fromClassId)
-    } else {
-      if (fromPortId) console.warn(`[libavoid] pin miss: ${fromPortId} | link=${linkId} | pins=[${[...pinClassIds.keys()].join(',')}]`)
-      const node = nodes.get(fromNodeId)!
-      srcEnd = new Avoid.ConnEnd(new Avoid.Point(node.position.x, node.position.y))
-    }
-
-    let dstEnd: any
-    if (toClassId !== undefined) {
-      dstEnd = new Avoid.ConnEnd(shapeRefs.get(toNodeId), toClassId)
-    } else {
-      const node = nodes.get(toNodeId)!
-      dstEnd = new Avoid.ConnEnd(new Avoid.Point(node.position.x, node.position.y))
-    }
+    const toPortObj = toPortId ? ports.get(toPortId) : null
+    const toPos = toPortObj ? toPortObj.absolutePosition : nodes.get(toNodeId)!.position
+    const dstEnd = new Avoid.ConnEnd(new Avoid.Point(toPos.x, toPos.y))
 
     const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
     connRefs.set(linkId, conn)
@@ -256,19 +183,7 @@ function doRoute(
   // Step 4: Route
   router.processTransaction()
 
-  // Debug: check first few routed endpoints vs pin positions
-  let debugCount = 0
-  for (const [lid, conn] of connRefs) {
-    if (debugCount >= 3) break
-    const route = conn.displayRoute()
-    if (route.size() > 0) {
-      const startPt = route.at(0)
-      console.log(`[route-debug] ${lid}: start=(${startPt.x},${startPt.y}) pts=${route.size()}`)
-    }
-    debugCount++
-  }
-
-  // Step 5: Extract results
+  // Step 4: Extract results
   const edges = new Map<string, ResolvedEdge>()
 
   for (let i = 0; i < links.length; i++) {
