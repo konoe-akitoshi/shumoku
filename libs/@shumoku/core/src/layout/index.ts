@@ -13,6 +13,8 @@ export { HierarchicalLayout } from './hierarchical.js'
 export { ElkNodePlacement } from './elk-placement.js'
 export { routeEdges, ensureLibavoidLoaded } from './libavoid-router.js'
 export type { LibavoidRoutingOptions } from './libavoid-router.js'
+export { layoutNetwork } from './network-layout.js'
+export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
 
 // Resolved layout model (Node/Port/Edge as independent objects)
 export type {

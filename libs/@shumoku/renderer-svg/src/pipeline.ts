@@ -14,9 +14,10 @@ import {
   HierarchicalLayout,
   type HierarchicalLayoutOptions,
   type LayoutResult,
+  layoutNetwork,
   lightTheme,
   type NetworkGraph,
-  resolveLayout,
+  placePorts,
   routeEdges,
   type SurfaceToken,
   unresolveLayout,
@@ -115,18 +116,18 @@ export async function prepareRender(
 }
 
 /**
- * Toggle for the new three-stage pipeline with resolved model (#79).
- * ELK (node placement) → placePorts (absolute coords) → libavoid (edge routing)
+ * Layout engine selection.
+ * 'elk' = legacy single-pass ELK layout
+ * 'network' = custom network layout + libavoid routing (#68)
  */
-const USE_RESOLVED_PIPELINE = false
+const LAYOUT_ENGINE: 'elk' | 'network' = 'network'
 
 async function computeLayout(
   graph: NetworkGraph,
   iconDimensions: ResolvedIconDimensions | null,
   layoutOptions?: Omit<HierarchicalLayoutOptions, 'iconDimensions'>,
 ): Promise<LayoutResult> {
-  if (!USE_RESOLVED_PIPELINE) {
-    // Legacy: single-pass ELK layout (placement + routing)
+  if (LAYOUT_ENGINE === 'elk') {
     const layoutEngine = new HierarchicalLayout({
       ...layoutOptions,
       iconDimensions: iconDimensions?.byKey,
@@ -134,33 +135,30 @@ async function computeLayout(
     return layoutEngine.layoutAsync(graph)
   }
 
-  // Pipeline: ELK full layout → resolve (absolute coords) → discard ELK edges → libavoid routing
-  //
-  // Key insight: ELK's port positions are consistent with its node placement.
-  // We use ELK's ports as-is and only replace edge routing with libavoid.
-  // placePorts() is for Phase 2 (post-ELK removal).
+  // Custom network layout + libavoid routing
+  // All three stages designed together — no coordinate mismatch.
 
-  // 1. Full ELK layout (nodes + ports + edges)
-  const layoutEngine = new HierarchicalLayout({
-    ...layoutOptions,
-    iconDimensions: iconDimensions?.byKey,
-  })
-  const elkResult = await layoutEngine.layoutAsync(graph)
+  // 1. Node placement (network-aware hierarchical)
+  const direction = graph.settings?.direction ?? layoutOptions?.direction ?? 'TB'
+  const { nodes, subgraphs, bounds } = layoutNetwork(graph, { direction })
 
-  // 2. Resolve to absolute coordinates (ports become absolute)
-  const resolved = resolveLayout(elkResult)
+  // 2. Port placement (absolute coordinates, single source of truth)
+  const ports = placePorts(nodes, graph.links, direction)
 
-  // 3. Re-route edges with libavoid using ELK's port absolute positions
+  // 3. Edge routing via libavoid (uses absolute port positions directly)
   const edgeStyle = graph.settings?.edgeStyle ?? layoutOptions?.edgeStyle ?? 'orthogonal'
-  const resolvedEdges = await routeEdges(resolved.nodes, resolved.ports, graph.links, {
+  const edges = await routeEdges(nodes, ports, graph.links, {
     edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
   })
 
-  // 4. Replace ELK edges with libavoid edges, convert back to LayoutResult
+  // 4. Convert to LayoutResult for existing renderer
   return unresolveLayout({
-    ...resolved,
-    edges: resolvedEdges,
-    metadata: { algorithm: 'elk-layout+libavoid-routing', duration: 0 },
+    nodes,
+    ports,
+    edges,
+    subgraphs,
+    bounds,
+    metadata: { algorithm: 'network-layout+libavoid', duration: 0 },
   })
 }
 
