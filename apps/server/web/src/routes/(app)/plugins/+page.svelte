@@ -410,9 +410,9 @@
             </p>
           </div>
           <div>
-            <label for="subdirectory-url" class="label"
-              >Subdirectory <span class="text-theme-text-muted">(optional)</span></label
-            >
+            <label for="subdirectory-url" class="label">
+              Subdirectory <span class="text-theme-text-muted">(optional)</span>
+            </label>
             <input
               type="text"
               id="subdirectory-url"
@@ -452,9 +452,9 @@
             {/if}
           </div>
           <div>
-            <label for="subdirectory-upload" class="label"
-              >Subdirectory <span class="text-theme-text-muted">(optional)</span></label
-            >
+            <label for="subdirectory-upload" class="label">
+              Subdirectory <span class="text-theme-text-muted">(optional)</span>
+            </label>
             <input
               type="text"
               id="subdirectory-upload"

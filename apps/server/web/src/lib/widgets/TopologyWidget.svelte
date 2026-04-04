@@ -439,9 +439,9 @@
         </select>
 
         {#if isHierarchical && sheets.length > 0}
-          <label for={hierarchicalSelectorId} class="text-xs text-theme-text-muted mb-1"
-            >Sheet (Hierarchy Level)</label
-          >
+          <label for={hierarchicalSelectorId} class="text-xs text-theme-text-muted mb-1">
+            Sheet (Hierarchy Level)
+          </label>
           <select
             id={hierarchicalSelectorId}
             value={config.sheetId || 'root'}

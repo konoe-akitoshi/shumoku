@@ -349,7 +349,8 @@
                         <span
                           class="w-2 h-2 rounded-full {getStatusBgColor(metrics?.status)}"
                         ></span>
-                        {isFrom ? '→' : '←'} {otherNode}
+                        {isFrom ? '→' : '←'}
+                        {otherNode}
                       </span>
                       {#if link.bandwidth}
                         <span class="text-xs text-muted-foreground">{link.bandwidth}</span>

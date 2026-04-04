@@ -377,11 +377,12 @@
                       variant="outline"
                       size="sm"
                       onclick={() => window.location.href = `/datasources/${ds.id}`}
-                      >Edit</Button
                     >
-                    <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}
-                      >Delete</Button
-                    >
+                      Edit
+                    </Button>
+                    <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}>
+                      Delete
+                    </Button>
                   </div>
                 </td>
               </tr>

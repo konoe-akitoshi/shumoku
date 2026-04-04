@@ -147,9 +147,9 @@ links:
   <Dialog.Content class="sm:max-w-2xl max-h-[90vh] flex flex-col">
     <Dialog.Header>
       <Dialog.Title>Add Topology</Dialog.Title>
-      <Dialog.Description
-        >Create a new network topology diagram using YAML definition.</Dialog.Description
-      >
+      <Dialog.Description>
+        Create a new network topology diagram using YAML definition.
+      </Dialog.Description>
     </Dialog.Header>
 
     <form

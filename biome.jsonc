@@ -18,6 +18,12 @@
         "noBannedTypes": "error",
         // conflicts with noPropertyAccessFromIndexSignature
         "useLiteralKeys": "off"
+      },
+      "correctness": {
+        "noUnusedImports": {
+          "level": "error",
+          "fix": "safe"
+        }
       }
     }
   },
@@ -26,6 +32,11 @@
       "source": {
         "organizeImports": "on"
       }
+    }
+  },
+  "css": {
+    "parser": {
+      "cssModules": true
     }
   },
   "javascript": {
@@ -43,7 +54,7 @@
     "experimentalFullSupportEnabled": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.next"]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.next", "!**/.turbo"]
   },
   "overrides": [
     {

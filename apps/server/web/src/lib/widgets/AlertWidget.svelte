@@ -316,9 +316,9 @@
         <div class="text-sm font-medium text-theme-text-emphasis">Widget Settings</div>
 
         <div>
-          <label for={componentId} class="text-xs text-theme-text-muted mb-1 block"
-            >Data Source</label
-          >
+          <label for={componentId} class="text-xs text-theme-text-muted mb-1 block">
+            Data Source
+          </label>
           <select
             id={componentId}
             value={config.dataSourceId || ''}
@@ -516,7 +516,8 @@
                 <span
                   class="inline-flex items-center text-xs px-2 py-0.5 rounded bg-theme-bg-canvas border border-theme-border text-theme-text"
                 >
-                  <span class="text-theme-text-muted">{key}=</span>{value}
+                  <span class="text-theme-text-muted">{key}=</span>
+                  {value}
                 </span>
               {/each}
             </div>
