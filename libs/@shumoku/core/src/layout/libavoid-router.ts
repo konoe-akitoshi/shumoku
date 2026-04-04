@@ -71,7 +71,7 @@ export async function routeEdges(
   const opts = {
     edgeStyle: 'orthogonal' as const,
     shapeBufferDistance: 10,
-    idealNudgingDistance: 15,
+    idealNudgingDistance: 20,
     ...options,
   }
 
@@ -84,6 +84,11 @@ export async function routeEdges(
   router.setRoutingParameter(Avoid['RoutingParameter']['idealNudgingDistance'].value, opts.idealNudgingDistance)
   router.setRoutingParameter(Avoid['RoutingParameter']['reverseDirectionPenalty'].value, 500)
   router.setRoutingParameter(Avoid['RoutingParameter']['segmentPenalty'].value, 50)
+
+  // Nudging: separate overlapping/parallel edge segments
+  router.setRoutingOption(Avoid['RoutingOption']['nudgeOrthogonalTouchingColinearSegments'].value, true)
+  router.setRoutingOption(Avoid['RoutingOption']['performUnifyingNudgingPreprocessingStep'].value, true)
+  router.setRoutingOption(Avoid['RoutingOption']['nudgeSharedPathsWithCommonEndPoint'].value, true)
 
   try {
     return doRoute(Avoid, router, nodes, ports, links, opts.edgeStyle)
