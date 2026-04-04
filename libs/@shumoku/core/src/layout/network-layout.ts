@@ -76,6 +76,7 @@ function epPort(ep: string | LinkEndpoint) { return typeof ep === 'string' ? und
 // ============================================================================
 
 interface PreProcessed {
+  graph: NetworkGraph
   parentOf: Map<string, string | null>
   childrenOf: Map<string | null, string[]>
   edgesAt: Map<string | null, Array<[string, string]>>
@@ -165,7 +166,7 @@ function preProcess(graph: NetworkGraph, direction: string): PreProcessed {
     }
   }
 
-  return { parentOf, childrenOf, edgesAt, portsByNode, nodeMap, sgMap }
+  return { graph, parentOf, childrenOf, edgesAt, portsByNode, nodeMap, sgMap }
 }
 
 // ============================================================================
@@ -243,13 +244,14 @@ function buildTree(
 
     // Compute child rows: all leaves in one row, each branch in its own row
     // Actually, simpler: leaves as row 0, branches each as individual items below
+    // All children in a single row: leaves first (left), then branches (right).
+    // Each branch expands its subtree downward independently.
     const leafChildren = childTrees.filter((c) => c.children.length === 0 && c.childRows.length === 0)
     const branchChildren = childTrees.filter((c) => c.children.length > 0 || c.childRows.length > 0)
 
     const childRows: TreeNode[][] = []
-    if (leafChildren.length > 0) childRows.push(leafChildren)
-    // Each branch as its own item in a row (side by side if multiple branches)
-    if (branchChildren.length > 0) childRows.push(branchChildren)
+    const singleRow = [...leafChildren, ...branchChildren]
+    if (singleRow.length > 0) childRows.push(singleRow)
 
     tn.children = childTrees
     tn.childRows = childRows
@@ -416,7 +418,7 @@ function arrangeTree(
       size: { width: tn.ownWidth, height: tn.ownHeight },
       node: tn.node,
     })
-    placeNodePorts(tn, nodeCx, nodeCy, ports, opts)
+    // Ports are placed after children (see below) so connected nodes are available for sorting
   } else if (tn.kind === 'subgraph' && tn.subgraph) {
     subgraphs.set(tn.id, {
       id: tn.id,
@@ -454,18 +456,50 @@ function arrangeTree(
 
     childY += rowH + opts.gap
   }
+
+  // Place ports AFTER children are positioned, so we can sort ports
+  // by connected node's position to prevent line crossings.
+  if (tn.kind === 'node' && tn.node) {
+    const nodeCx = bx + tn.ownWidth / 2
+    const nodeCy = by + tn.ownHeight / 2
+    placeNodePorts(tn, nodeCx, nodeCy, ports, nodes, pp.graph, opts)
+  }
 }
 
 function placeNodePorts(
   tn: TreeNode, cx: number, cy: number,
-  ports: Map<string, ResolvedPort>, opts: Required<NetworkLayoutOptions>,
+  ports: Map<string, ResolvedPort>,
+  allNodes: Map<string, ResolvedNode>,
+  graph: NetworkGraph,
+  opts: Required<NetworkLayoutOptions>,
 ): void {
   const bySide: Record<Side, PortInfo[]> = { top: [], bottom: [], left: [], right: [] }
   for (const p of tn.ports) bySide[p.side].push(p)
   const hw = tn.ownWidth / 2, hh = tn.ownHeight / 2
 
+  // Sort ports on horizontal sides (top/bottom) by connected node's X position,
+  // and vertical sides (left/right) by connected node's Y position.
+  // This prevents line crossings when children are placed left-to-right.
+  const portTarget = buildPortTargetMap(tn.id, tn.ports, graph)
+
   for (const side of ['top', 'bottom', 'left', 'right'] as Side[]) {
     const sp = bySide[side]
+
+    // Sort by connected node's position to match child layout order
+    if (side === 'top' || side === 'bottom') {
+      sp.sort((a, b) => {
+        const ax = allNodes.get(portTarget.get(a.name) ?? '')?.position.x ?? 0
+        const bx = allNodes.get(portTarget.get(b.name) ?? '')?.position.x ?? 0
+        return ax - bx
+      })
+    } else {
+      sp.sort((a, b) => {
+        const ay = allNodes.get(portTarget.get(a.name) ?? '')?.position.y ?? 0
+        const by = allNodes.get(portTarget.get(b.name) ?? '')?.position.y ?? 0
+        return ay - by
+      })
+    }
+
     for (let i = 0; i < sp.length; i++) {
       const p = sp[i]!
       const r = (i + 1) / (sp.length + 1)
@@ -483,6 +517,22 @@ function placeNodePorts(
       })
     }
   }
+}
+
+/** Map portName → connected nodeId for a given node */
+function buildPortTargetMap(
+  nodeId: string,
+  _portInfos: PortInfo[],
+  graph: NetworkGraph,
+): Map<string, string> {
+  const result = new Map<string, string>()
+  for (const link of graph.links) {
+    const fId = epId(link.from), tId = epId(link.to)
+    const fP = epPort(link.from), tP = epPort(link.to)
+    if (fId === nodeId && fP) result.set(fP, tId)
+    if (tId === nodeId && tP) result.set(tP, fId)
+  }
+  return result
 }
 
 // ============================================================================
