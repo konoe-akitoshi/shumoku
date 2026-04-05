@@ -6,7 +6,7 @@
 import { buildHierarchicalSheets, mergeWithOverlays, type OverlayConfig } from '@shumoku/core'
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
-import { BunHierarchicalLayout } from '../layout.js'
+import { getLayoutEngine } from '../layout.js'
 import { DataSourceService } from '../services/datasource.js'
 import { TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
@@ -20,10 +20,7 @@ export async function buildRenderOutput(parsed: import('../services/topology.js'
   const hasSubgraphs = parsed.graph.subgraphs && parsed.graph.subgraphs.length > 0
 
   if (hasSubgraphs) {
-    const layoutEngine = new BunHierarchicalLayout({
-      iconDimensions: parsed.iconDimensions.byKey,
-    })
-    const sheets = await buildHierarchicalSheets(parsed.graph, parsed.layout, layoutEngine)
+    const sheets = await buildHierarchicalSheets(parsed.graph, parsed.layout, getLayoutEngine())
 
     const renderedSheets: Record<
       string,

@@ -16,7 +16,7 @@ import {
 } from '@shumoku/core'
 import { collectIconUrls, resolveIconDimensionsForGraph } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
-import { BunHierarchicalLayout } from '../layout.js'
+import { computeLayout } from '../layout.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
 
 interface TopologyRow {
@@ -107,14 +107,12 @@ export async function parseYamlToNetworkGraph(
 
 export class TopologyService {
   private db: Database
-  private layout: BunHierarchicalLayout
   private cache: Map<string, ParsedTopology> = new Map()
   private renderCache: Map<string, object> = new Map()
   private errorCache: Map<string, TopologyParseError> = new Map()
 
   constructor() {
     this.db = getDatabase()
-    this.layout = new BunHierarchicalLayout()
   }
 
   /**
@@ -395,7 +393,7 @@ export class TopologyService {
 
     // Compute layout with icon dimensions for proper node sizing
     // Use byKey (vendor/model format) for layout engine
-    const layoutResult = await this.layout.layoutAsync(graph, iconDimensions.byKey)
+    const layoutResult = await computeLayout(graph)
     const metrics = this.createEmptyMetrics(graph)
 
     let mapping: MetricsMapping | undefined

@@ -11,7 +11,7 @@ import { dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import type { NetworkGraph } from '@shumoku/core'
-import { buildHierarchicalSheets, HierarchicalLayout, parser } from '@shumoku/core'
+import { buildHierarchicalSheets, createNetworkLayoutEngine, parser } from '@shumoku/core'
 import {
   render as renderHtml,
   renderHierarchical as renderHtmlHierarchical,
@@ -161,7 +161,7 @@ async function main(): Promise<void> {
 
     // Layout
     console.log('Generating layout...')
-    const layout = new HierarchicalLayout()
+    const layout = createNetworkLayoutEngine()
     const layoutResult = await layout.layoutAsync(graph)
 
     // Render

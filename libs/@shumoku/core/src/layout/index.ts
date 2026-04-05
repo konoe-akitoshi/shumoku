@@ -26,3 +26,5 @@ export type {
   ResolvedPort,
   ResolvedSubgraph,
 } from './resolved-types.js'
+// Unified layout engine (wraps network layout + libavoid)
+export { computeNetworkLayout, createNetworkLayoutEngine } from './unified-engine.js'

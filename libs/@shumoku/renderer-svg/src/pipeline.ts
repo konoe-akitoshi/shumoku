@@ -10,14 +10,13 @@
  */
 
 import {
+  computeNetworkLayout,
   darkTheme,
   type HierarchicalLayoutOptions,
   type LayoutResult,
-  layoutNetwork,
   lightTheme,
   type NetworkGraph,
   type ResolvedLayout,
-  routeEdges,
   type SurfaceToken,
 } from '@shumoku/core'
 import { type ResolvedIconDimensions, resolveIconDimensionsForGraph } from './cdn-icons.js'
@@ -112,53 +111,8 @@ export async function prepareRender(
     return { graph, layout: options.layout, iconDimensions }
   }
 
-  // Custom network layout + libavoid routing
-  // 3 steps: place nodes+ports → route edges → done
-  const direction = graph.settings?.direction ?? options?.layoutOptions?.direction ?? 'TB'
-  const edgeStyle = graph.settings?.edgeStyle ?? options?.layoutOptions?.edgeStyle ?? 'orthogonal'
-
-  const { nodes, ports, subgraphs, bounds } = layoutNetwork(graph, { direction })
-  const edges = await routeEdges(nodes, ports, graph.links, {
-    edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
-  })
-
-  const resolved: ResolvedLayout = {
-    nodes,
-    ports,
-    edges,
-    subgraphs,
-    bounds,
-    metadata: { algorithm: 'network-layout+libavoid', duration: 0 },
-  }
-
-  // Also provide legacy layout for backward compatibility
-  const layout: LayoutResult = {
-    nodes: new Map(
-      [...nodes].map(([id, rn]) => [
-        id,
-        { id, position: rn.position, size: rn.size, node: rn.node },
-      ]),
-    ),
-    links: new Map(
-      [...edges].map(([id, re]) => [
-        id,
-        {
-          id,
-          from: re.fromNodeId,
-          to: re.toNodeId,
-          fromEndpoint: re.fromEndpoint,
-          toEndpoint: re.toEndpoint,
-          points: re.points,
-          link: re.link,
-        },
-      ]),
-    ),
-    subgraphs: new Map(
-      [...subgraphs].map(([id, rs]) => [id, { id, bounds: rs.bounds, subgraph: rs.subgraph }]),
-    ),
-    bounds,
-    metadata: resolved.metadata,
-  }
+  // Custom network layout + libavoid routing (shared with server/CLI)
+  const { resolved, layout } = await computeNetworkLayout(graph)
 
   return { graph, layout, resolved, iconDimensions }
 }
