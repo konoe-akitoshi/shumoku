@@ -17,6 +17,7 @@ import type {
   LayoutSubgraph,
   LinkEndpoint,
 } from '../models/types.js'
+import { getLinkWidth } from './link-utils.js'
 import type {
   ResolvedEdge,
   ResolvedLayout,
@@ -24,7 +25,6 @@ import type {
   ResolvedPort,
   ResolvedSubgraph,
 } from './resolved-types.js'
-import { getLinkWidth } from './resolved-types.js'
 
 // ============================================================================
 // LayoutResult → ResolvedLayout

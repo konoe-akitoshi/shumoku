@@ -399,9 +399,7 @@ function measureSubgraphTree(
   // Compute internal content size
   let contentW = 0
   let contentH = 0
-  for (let i = 0; i < internalTrees.length; i++) {
-    const t = internalTrees[i]
-    if (!t) continue
+  for (const [i, t] of internalTrees.entries()) {
     contentW += t.columnWidth
     if (i < internalTrees.length - 1) contentW += opts.gap
     contentH = Math.max(contentH, t.columnHeight)
@@ -447,14 +445,10 @@ function computeColumnSize(tn: TreeNode, opts: Required<NetworkLayoutOptions>): 
   // Children row widths and heights
   let maxRowW = 0
   let totalRowH = 0
-  for (let r = 0; r < tn.childRows.length; r++) {
-    const row = tn.childRows[r]
-    if (!row) continue
+  for (const [r, row] of tn.childRows.entries()) {
     let rowW = 0
     let rowH = 0
-    for (let c = 0; c < row.length; c++) {
-      const child = row[c]
-      if (!child) continue
+    for (const [c, child] of row.entries()) {
       rowW += child.columnWidth
       if (c < row.length - 1) rowW += opts.gap
       rowH = Math.max(rowH, child.columnHeight)
@@ -538,9 +532,7 @@ function arrangeTree(
   for (const row of tn.childRows) {
     // Calculate total row width
     let totalRowW = 0
-    for (let i = 0; i < row.length; i++) {
-      const item = row[i]
-      if (!item) continue
+    for (const [i, item] of row.entries()) {
       totalRowW += item.columnWidth
       if (i < row.length - 1) totalRowW += opts.gap
     }
@@ -604,9 +596,7 @@ function placeNodePorts(
       })
     }
 
-    for (let i = 0; i < sp.length; i++) {
-      const p = sp[i]
-      if (!p) continue
+    for (const [i, p] of sp.entries()) {
       const r = (i + 1) / (sp.length + 1)
       let ax: number, ay: number
       switch (side) {

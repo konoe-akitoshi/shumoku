@@ -11,6 +11,7 @@ export type { HierarchicalLayoutOptions } from './hierarchical.js'
 export { HierarchicalLayout } from './hierarchical.js'
 export type { LibavoidRoutingOptions } from './libavoid-router.js'
 export { ensureLibavoidLoaded, routeEdges } from './libavoid-router.js'
+export { getLinkWidth } from './link-utils.js'
 export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
 // Custom network layout + libavoid routing
 export { layoutNetwork } from './network-layout.js'
@@ -25,4 +26,3 @@ export type {
   ResolvedPort,
   ResolvedSubgraph,
 } from './resolved-types.js'
-export { getLinkWidth } from './resolved-types.js'

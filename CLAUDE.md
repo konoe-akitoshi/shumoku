@@ -136,11 +136,12 @@ Pipeline internally handles:
 ### Lint Rules (IMPORTANT)
 コミット前に必ず `bun x biome check <変更ファイル>` を実行してlintエラーがないか確認する。
 
-- **非null断言 (`!`) は使わない** — optional chaining (`?.`) またはガード句 (`if (!x) return/continue`) を��う
+- **Non-null assertion (`!`) は使わない** — optional chaining (`?.`) またはガード句 (`if (!x) return/continue`) を使う
 - **`any` は原則使わない** — 外部ライブラリのWASMバインディング等でやむを得ない場合のみ `// biome-ignore lint/suspicious/noExplicitAny: <理由>` で抑制
-- **`for...of` を優先** — インデックスが不要な場合は `for (const item of array)` を使う。`for (let i = 0; ...)` はインデックスが必要な場合のみ
+- **`for...of` を使う** — `for (const item of array)` または `for (const [i, item] of array.entries())` を使う。通常の `for (let i = 0; ...)` は使わない
 - **未使用変数/importを残さない** — biomeが検出する。`_` プレフィックスで意図的な未使用を明示
 - **import順序** — biomeの `organizeImports` に従う（自動修正される）
+- **引数を破壊的に変更しない** — 引数を変更する場合はコピーして変更後の値を返す
 
 ## Key Types
 

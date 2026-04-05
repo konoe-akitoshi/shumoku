@@ -195,9 +195,7 @@ export function placePorts(
     const node = nodes.get(nodeId)
     if (!node) continue
 
-    for (let i = 0; i < sideAssignments.length; i++) {
-      const a = sideAssignments[i]
-      if (!a) continue
+    for (const [i, a] of sideAssignments.entries()) {
       const portId = `${a.nodeId}:${a.portName}`
       const absolutePosition = computePortPosition(node, side, i, sideAssignments.length)
 

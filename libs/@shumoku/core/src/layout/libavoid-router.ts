@@ -11,8 +11,8 @@
 
 import { SMALL_LABEL_CHAR_WIDTH } from '../constants.js'
 import type { Link, LinkEndpoint, Position } from '../models/types.js'
+import { getLinkWidth } from './link-utils.js'
 import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
-import { getLinkWidth } from './resolved-types.js'
 
 // libavoid ConnDirFlags
 const ConnDirUp = 1
@@ -121,17 +121,14 @@ export async function routeEdges(
   }
 }
 
-function doRoute(
+function registerObstacles(
   // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
   Avoid: any,
   // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
   router: any,
   nodes: Map<string, ResolvedNode>,
-  ports: Map<string, ResolvedPort>,
-  links: Link[],
-  edgeStyle: string,
-): Map<string, ResolvedEdge> {
-  // Step 1: Register nodes as obstacles
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
+): Map<string, any> {
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
   const shapeRefs = new Map<string, any>()
   for (const [id, node] of nodes) {
@@ -147,8 +144,17 @@ function doRoute(
       ),
     )
   }
+  return shapeRefs
+}
 
-  // Step 2: Register ports as ShapeConnectionPins
+function registerPins(
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
+  Avoid: any,
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
+  shapeRefs: Map<string, any>,
+  nodes: Map<string, ResolvedNode>,
+  ports: Map<string, ResolvedPort>,
+): Map<string, number> {
   // Direction = flow direction, not port side.
   // In TB layout: all vertical ports use ConnDirDown (lines always flow down).
   // HA ports (left/right) use their natural horizontal direction.
@@ -184,16 +190,29 @@ function doRoute(
     pin.setExclusive(false)
   }
 
-  // Step 3: Create connectors
+  return pinIds
+}
+
+function createConnectors(
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
+  Avoid: any,
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
+  router: any,
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
+  shapeRefs: Map<string, any>,
+  pinIds: Map<string, number>,
+  nodes: Map<string, ResolvedNode>,
+  ports: Map<string, ResolvedPort>,
+  links: Link[],
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
+): Map<string, any> {
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
   const connRefs = new Map<string, any>()
   // Track whether pin-based ConnEnd works (checked after first route)
   let pinTestLinkId: string | null = null
   let pinTestPortId: string | null = null
 
-  for (let i = 0; i < links.length; i++) {
-    const link = links[i]
-    if (!link) continue
+  for (const [i, link] of links.entries()) {
     const linkId = link.id ?? `__link_${i}`
     const fromNodeId = getNodeId(link.from)
     const toNodeId = getNodeId(link.to)
@@ -269,10 +288,10 @@ function doRoute(
     }
   }
 
-  // Step 4: Route
+  // Route
   router.processTransaction()
 
-  // Step 5: Verify pin-based routing works
+  // Verify pin-based routing works
   // If the first pin-based endpoint doesn't match the port position,
   // fall back to Point-based routing for all connectors.
   let usePinEndpoints = true
@@ -297,13 +316,10 @@ function doRoute(
 
   // If pins don't work, redo with Point-based ConnEnd
   if (!usePinEndpoints) {
-    // Clear and redo
     router.processTransaction() // ensure clean state
     connRefs.clear()
 
-    for (let i = 0; i < links.length; i++) {
-      const link = links[i]
-      if (!link) continue
+    for (const [i, link] of links.entries()) {
       const linkId = link.id ?? `__link_${i}`
       const fromNodeId = getNodeId(link.from)
       const toNodeId = getNodeId(link.to)
@@ -333,12 +349,18 @@ function doRoute(
     router.processTransaction()
   }
 
-  // Step 6: Extract results
+  return connRefs
+}
+
+function extractEdges(
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
+  connRefs: Map<string, any>,
+  links: Link[],
+  edgeStyle: string,
+): Map<string, ResolvedEdge> {
   const edges = new Map<string, ResolvedEdge>()
 
-  for (let i = 0; i < links.length; i++) {
-    const link = links[i]
-    if (!link) continue
+  for (const [i, link] of links.entries()) {
     const linkId = link.id ?? `__link_${i}`
     const conn = connRefs.get(linkId)
     if (!conn) continue
@@ -374,10 +396,24 @@ function doRoute(
     })
   }
 
-  // Post-process: spread overlapping segments considering line width
-  spreadOverlappingSegments(edges)
-
   return edges
+}
+
+function doRoute(
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
+  Avoid: any,
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
+  router: any,
+  nodes: Map<string, ResolvedNode>,
+  ports: Map<string, ResolvedPort>,
+  links: Link[],
+  edgeStyle: string,
+): Map<string, ResolvedEdge> {
+  const shapeRefs = registerObstacles(Avoid, router, nodes)
+  const pinIds = registerPins(Avoid, shapeRefs, nodes, ports)
+  const connRefs = createConnectors(Avoid, router, shapeRefs, pinIds, nodes, ports, links)
+  const edges = extractEdges(connRefs, links, edgeStyle)
+  return spreadOverlappingSegments(edges)
 }
 
 // ============================================================================
@@ -397,14 +433,22 @@ interface Segment {
  * Detect horizontal/vertical segments that visually overlap (considering line width)
  * and push them apart.
  */
-function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
+function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): Map<string, ResolvedEdge> {
+  // Deep copy edges so we don't mutate the input
+  const result = new Map<string, ResolvedEdge>()
+  for (const [id, edge] of edges) {
+    result.set(id, {
+      ...edge,
+      points: edge.points.map((p) => ({ ...p })),
+    })
+  }
+
   // Collect horizontal segments (consecutive points with same Y)
   const hSegs: Segment[] = []
-  for (const [edgeId, edge] of edges) {
-    for (let i = 0; i < edge.points.length - 1; i++) {
-      const a = edge.points[i]
+  for (const [edgeId, edge] of result) {
+    for (const [i, a] of edge.points.entries()) {
       const b = edge.points[i + 1]
-      if (!a || !b) continue
+      if (!b) continue
       if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 1) {
         hSegs.push({
           edgeId,
@@ -418,15 +462,14 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
     }
   }
 
-  spreadSegments(hSegs, edges, 'y')
+  spreadSegments(hSegs, result, 'y')
 
   // Collect vertical segments (consecutive points with same X)
   const vSegs: Segment[] = []
-  for (const [edgeId, edge] of edges) {
-    for (let i = 0; i < edge.points.length - 1; i++) {
-      const a = edge.points[i]
+  for (const [edgeId, edge] of result) {
+    for (const [i, a] of edge.points.entries()) {
       const b = edge.points[i + 1]
-      if (!a || !b) continue
+      if (!b) continue
       if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) > 1) {
         vSegs.push({
           edgeId,
@@ -440,7 +483,9 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
     }
   }
 
-  spreadSegments(vSegs, edges, 'x')
+  spreadSegments(vSegs, result, 'x')
+
+  return result
 }
 
 function spreadSegments(segs: Segment[], edges: Map<string, ResolvedEdge>, axis: 'x' | 'y'): void {
@@ -450,10 +495,9 @@ function spreadSegments(segs: Segment[], edges: Map<string, ResolvedEdge>, axis:
   segs.sort((a, b) => a.fixed - b.fixed)
 
   // Check adjacent pairs for overlap
-  for (let i = 0; i < segs.length - 1; i++) {
-    const s1 = segs[i]
+  for (const [i, s1] of segs.entries()) {
     const s2 = segs[i + 1]
-    if (!s1 || !s2) continue
+    if (!s2) continue
 
     // Do they overlap on the range axis?
     if (s1.max <= s2.min || s2.max <= s1.min) continue

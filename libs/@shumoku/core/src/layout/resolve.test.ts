@@ -2,8 +2,8 @@
 // Ensures absolute coordinates are correctly computed and round-trip works.
 
 import { describe, expect, it } from 'vitest'
-import type { LayoutResult, Link, NetworkGraph, Node } from '../../models/types.js'
-import { resolveLayout, unresolveLayout } from '../resolve.js'
+import type { LayoutResult, Link, NetworkGraph, Node } from '../models/types.js'
+import { resolveLayout, unresolveLayout } from './resolve.js'
 
 function makeTestGraph(): NetworkGraph {
   const nodes: Node[] = [
