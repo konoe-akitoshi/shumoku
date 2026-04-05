@@ -98,16 +98,18 @@ describe('resolveLayout', () => {
     // sw1 port eth0: node center (200,100) + relative (0,40) = absolute (200,140)
     const port1 = resolved.ports.get('sw1:eth0')
     expect(port1).toBeDefined()
-    expect(port1!.absolutePosition).toEqual({ x: 200, y: 140 })
-    expect(port1!.nodeId).toBe('sw1')
-    expect(port1!.side).toBe('bottom')
+    if (!port1) return
+    expect(port1.absolutePosition).toEqual({ x: 200, y: 140 })
+    expect(port1.nodeId).toBe('sw1')
+    expect(port1.side).toBe('bottom')
 
     // sw2 port eth0: node center (200,300) + relative (0,-40) = absolute (200,260)
     const port2 = resolved.ports.get('sw2:eth0')
     expect(port2).toBeDefined()
-    expect(port2!.absolutePosition).toEqual({ x: 200, y: 260 })
-    expect(port2!.nodeId).toBe('sw2')
-    expect(port2!.side).toBe('top')
+    if (!port2) return
+    expect(port2.absolutePosition).toEqual({ x: 200, y: 260 })
+    expect(port2.nodeId).toBe('sw2')
+    expect(port2.side).toBe('top')
   })
 
   it('resolves edge port references', () => {
@@ -117,10 +119,11 @@ describe('resolveLayout', () => {
 
     const edge = resolved.edges.get('link1')
     expect(edge).toBeDefined()
-    expect(edge!.fromPortId).toBe('sw1:eth0')
-    expect(edge!.toPortId).toBe('sw2:eth0')
-    expect(edge!.fromNodeId).toBe('sw1')
-    expect(edge!.toNodeId).toBe('sw2')
+    if (!edge) return
+    expect(edge.fromPortId).toBe('sw1:eth0')
+    expect(edge.toPortId).toBe('sw2:eth0')
+    expect(edge.fromNodeId).toBe('sw1')
+    expect(edge.toNodeId).toBe('sw2')
   })
 
   it('preserves node data', () => {

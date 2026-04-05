@@ -160,6 +160,7 @@ function doRoute(
   }
 
   // Step 3: Create connectors
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
   const connRefs = new Map<string, any>()
   // Track whether pin-based ConnEnd works (checked after first route)
   let pinTestLinkId: string | null = null
