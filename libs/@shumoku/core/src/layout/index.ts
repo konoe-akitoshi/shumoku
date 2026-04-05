@@ -18,6 +18,8 @@ export { layoutNetwork } from './network-layout.js'
 export { placePorts } from './port-placement.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
+// Unified layout engine (wraps network layout + libavoid)
+export { computeNetworkLayout, createNetworkLayoutEngine } from './unified-engine.js'
 // Resolved layout model (Node/Port/Edge as independent objects)
 export type {
   ResolvedEdge,

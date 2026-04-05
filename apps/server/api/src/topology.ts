@@ -14,7 +14,7 @@ import {
   YamlParser,
 } from '@shumoku/core'
 import { resolvePath } from './config.js'
-import { BunHierarchicalLayout } from './layout.js'
+import { computeLayout } from './layout.js'
 import type { Config, MetricsData, TopologyConfig, TopologyInstance } from './types.js'
 
 /**
@@ -35,11 +35,8 @@ function createFileResolver(): FileResolver {
 export class TopologyManager {
   private config: Config
   private topologies: Map<string, TopologyInstance> = new Map()
-  private layout: BunHierarchicalLayout
-
   constructor(config: Config) {
     this.config = config
-    this.layout = new BunHierarchicalLayout()
   }
 
   /**
@@ -91,7 +88,7 @@ export class TopologyManager {
       graph = result.graph
     }
 
-    const layoutResult = this.layout.layout(graph)
+    const layoutResult = await computeLayout(graph)
 
     const instance: TopologyInstance = {
       name: topoConfig.name,
@@ -127,7 +124,7 @@ export class TopologyManager {
     const result = await hierarchicalParser.parse(mainFile.content, 'main.yaml')
     const graph = result.graph
 
-    const layoutResult = this.layout.layout(graph)
+    const layoutResult = await computeLayout(graph)
 
     const instance: TopologyInstance = {
       name: 'sample-network',

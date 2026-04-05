@@ -9,7 +9,7 @@
 
 import {
   buildHierarchicalSheets,
-  HierarchicalLayout,
+  createNetworkLayoutEngine,
   type NetworkGraph,
   type SheetData,
 } from '@shumoku/core'
@@ -44,7 +44,7 @@ export async function renderHtmlHierarchical(
 ): Promise<string> {
   const sheets =
     options?.sheets ??
-    (await buildHierarchicalSheets(prepared.graph, prepared.layout, new HierarchicalLayout()))
+    (await buildHierarchicalSheets(prepared.graph, prepared.layout, createNetworkLayoutEngine()))
   return html.renderHierarchical(sheets, options)
 }
 
