@@ -2,14 +2,14 @@
 // Validates WASM loading, API, parallel edge nudging, port connections, and performance
 //
 // API notes (v0.5.0-beta.5):
-// - Enum values are objects with .value property: Avoid.RouterFlag.OrthogonalRouting.value
+// - Enum values are objects with .value property: avoidLib.RouterFlag.OrthogonalRouting.value
 // - Router constructor takes numeric flag, not enum object
 // - ConnDirFlags are numeric: Up=1, Down=2, Left=4, Right=8, All=15
 // - ShapeConnectionPin: (shape, classId, xOffset, yOffset, proportional, insideOffset, visDirs)
-// - ConnEnd with pin: new Avoid.ConnEnd(shape, classId)
+// - ConnEnd with pin: new avoidLib.ConnEnd(shape, classId)
 
 import { describe, it, expect, beforeAll } from 'vitest'
-import { AvoidLib, type Avoid } from 'libavoid-js'
+import { AvoidLib } from 'libavoid-js'
 
 // Direction flag constants (from libavoid C++ source)
 const ConnDirUp = 1
@@ -17,13 +17,15 @@ const ConnDirDown = 2
 const ConnDirLeft = 4
 const ConnDirRight = 8
 
-let Avoid: Avoid
+// biome-ignore lint/suspicious/noExplicitAny: libavoid-js WASM API is untyped
+let avoidLib: any
 
 beforeAll(async () => {
   await AvoidLib.load()
-  Avoid = AvoidLib.getInstance()
+  avoidLib = AvoidLib.getInstance()
 })
 
+// biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef
 function getRoutePoints(conn: any): Array<{ x: number; y: number }> {
   const route = conn.displayRoute()
   const pts: Array<{ x: number; y: number }> = []
@@ -37,35 +39,35 @@ function getRoutePoints(conn: any): Array<{ x: number; y: number }> {
 describe('libavoid-js spike', () => {
   describe('WASM initialization', () => {
     it('loads WASM and provides Avoid instance with expected API', () => {
-      expect(Avoid).toBeDefined()
-      expect(Avoid.Router).toBeDefined()
-      expect(Avoid.ShapeRef).toBeDefined()
-      expect(Avoid.ConnRef).toBeDefined()
-      expect(Avoid.ShapeConnectionPin).toBeDefined()
-      expect(Avoid.RouterFlag.OrthogonalRouting).toBeDefined()
-      expect(Avoid.RouterFlag.PolyLineRouting).toBeDefined()
-      expect(Avoid.RoutingParameter.shapeBufferDistance).toBeDefined()
-      expect(Avoid.RoutingParameter.idealNudgingDistance).toBeDefined()
-      expect(Avoid.RoutingOption.nudgeOrthogonalSegmentsConnectedToShapes).toBeDefined()
+      expect(avoidLib).toBeDefined()
+      expect(avoidLib.Router).toBeDefined()
+      expect(avoidLib.ShapeRef).toBeDefined()
+      expect(avoidLib.ConnRef).toBeDefined()
+      expect(avoidLib.ShapeConnectionPin).toBeDefined()
+      expect(avoidLib.RouterFlag.OrthogonalRouting).toBeDefined()
+      expect(avoidLib.RouterFlag.PolyLineRouting).toBeDefined()
+      expect(avoidLib.RoutingParameter.shapeBufferDistance).toBeDefined()
+      expect(avoidLib.RoutingParameter.idealNudgingDistance).toBeDefined()
+      expect(avoidLib.RoutingOption.nudgeOrthogonalSegmentsConnectedToShapes).toBeDefined()
     })
   })
 
   describe('basic orthogonal routing', () => {
     it('routes an edge between two nodes avoiding an obstacle', () => {
-      const router = new Avoid.Router(Avoid.RouterFlag.OrthogonalRouting.value)
-      router.setRoutingParameter(Avoid.RoutingParameter.shapeBufferDistance.value, 10)
+      const router = new avoidLib.Router(avoidLib.RouterFlag.OrthogonalRouting.value)
+      router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 10)
 
       // Node A at center (50, 30), 100x60
-      new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(50, 30), 100, 60))
+      new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(50, 30), 100, 60))
       // Node B at center (350, 230), 100x60
-      new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(350, 230), 100, 60))
+      new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(350, 230), 100, 60))
       // Obstacle in between
-      new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(190, 140), 80, 80))
+      new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(190, 140), 80, 80))
 
-      const conn = new Avoid.ConnRef(
+      const conn = new avoidLib.ConnRef(
         router,
-        new Avoid.ConnEnd(new Avoid.Point(50, 60)),
-        new Avoid.ConnEnd(new Avoid.Point(350, 200)),
+        new avoidLib.ConnEnd(new avoidLib.Point(50, 60)),
+        new avoidLib.ConnEnd(new avoidLib.Point(350, 200)),
       )
 
       router.processTransaction()
@@ -85,23 +87,23 @@ describe('libavoid-js spike', () => {
 
   describe('ShapeConnectionPin (port-based connections)', () => {
     it('connects via specific ports on shapes', () => {
-      const router = new Avoid.Router(Avoid.RouterFlag.OrthogonalRouting.value)
-      router.setRoutingParameter(Avoid.RoutingParameter.shapeBufferDistance.value, 10)
+      const router = new avoidLib.Router(avoidLib.RouterFlag.OrthogonalRouting.value)
+      router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 10)
 
       // Node A at center (100, 100), 120x80
-      const shapeA = new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(100, 100), 120, 80))
+      const shapeA = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(100, 100), 120, 80))
       // Node B at center (400, 100), 120x80
-      const shapeB = new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(400, 100), 120, 80))
+      const shapeB = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(400, 100), 120, 80))
 
       // Pin on right of A (proportional: x=1.0=right, y=0.5=center)
-      const pinA = new Avoid.ShapeConnectionPin(shapeA, 1, 1.0, 0.5, true, 0, ConnDirRight)
+      const pinA = new avoidLib.ShapeConnectionPin(shapeA, 1, 1.0, 0.5, true, 0, ConnDirRight)
       pinA.setExclusive(false)
 
       // Pin on left of B
-      const pinB = new Avoid.ShapeConnectionPin(shapeB, 2, 0.0, 0.5, true, 0, ConnDirLeft)
+      const pinB = new avoidLib.ShapeConnectionPin(shapeB, 2, 0.0, 0.5, true, 0, ConnDirLeft)
       pinB.setExclusive(false)
 
-      const conn = new Avoid.ConnRef(router, new Avoid.ConnEnd(shapeA, 1), new Avoid.ConnEnd(shapeB, 2))
+      const conn = new avoidLib.ConnRef(router, new avoidLib.ConnEnd(shapeA, 1), new avoidLib.ConnEnd(shapeB, 2))
 
       router.processTransaction()
 
@@ -119,29 +121,29 @@ describe('libavoid-js spike', () => {
     })
 
     it('supports multiple ports per side', () => {
-      const router = new Avoid.Router(Avoid.RouterFlag.OrthogonalRouting.value)
-      router.setRoutingParameter(Avoid.RoutingParameter.shapeBufferDistance.value, 10)
+      const router = new avoidLib.Router(avoidLib.RouterFlag.OrthogonalRouting.value)
+      router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 10)
 
-      const shape = new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(200, 200), 120, 100))
+      const shape = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(200, 200), 120, 100))
 
       // 3 ports on bottom
       for (let i = 0; i < 3; i++) {
-        const pin = new Avoid.ShapeConnectionPin(shape, 10 + i, (i + 1) / 4, 1.0, true, 0, ConnDirDown)
+        const pin = new avoidLib.ShapeConnectionPin(shape, 10 + i, (i + 1) / 4, 1.0, true, 0, ConnDirDown)
         pin.setExclusive(false)
       }
 
       // Connect to 3 different destinations
       const dests = [
-        new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(100, 400), 60, 40)),
-        new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(200, 400), 60, 40)),
-        new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(300, 400), 60, 40)),
+        new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(100, 400), 60, 40)),
+        new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(200, 400), 60, 40)),
+        new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(300, 400), 60, 40)),
       ]
 
       const conns = dests.map((dest, i) =>
-        new Avoid.ConnRef(
+        new avoidLib.ConnRef(
           router,
-          new Avoid.ConnEnd(shape, 10 + i),
-          new Avoid.ConnEnd(new Avoid.Point(dest.position().x, dest.position().y - 20)),
+          new avoidLib.ConnEnd(shape, 10 + i),
+          new avoidLib.ConnEnd(new avoidLib.Point(dest.position().x, dest.position().y - 20)),
         ),
       )
 
@@ -157,28 +159,28 @@ describe('libavoid-js spike', () => {
 
   describe('parallel edge nudging', () => {
     it('separates parallel edges between the same node pair', () => {
-      const router = new Avoid.Router(Avoid.RouterFlag.OrthogonalRouting.value)
-      router.setRoutingParameter(Avoid.RoutingParameter.shapeBufferDistance.value, 10)
-      router.setRoutingParameter(Avoid.RoutingParameter.idealNudgingDistance.value, 20)
+      const router = new avoidLib.Router(avoidLib.RouterFlag.OrthogonalRouting.value)
+      router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 10)
+      router.setRoutingParameter(avoidLib.RoutingParameter.idealNudgingDistance.value, 20)
       router.setRoutingOption(
-        Avoid.RoutingOption.nudgeOrthogonalSegmentsConnectedToShapes.value,
+        avoidLib.RoutingOption.nudgeOrthogonalSegmentsConnectedToShapes.value,
         true,
       )
 
-      const shapeA = new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(200, 50), 120, 80))
-      const shapeB = new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(200, 300), 120, 80))
+      const shapeA = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(200, 50), 120, 80))
+      const shapeB = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(200, 300), 120, 80))
 
       // 3 pins on bottom of A, 3 on top of B
       for (let i = 0; i < 3; i++) {
         const xRatio = (i + 1) / 4
-        const pA = new Avoid.ShapeConnectionPin(shapeA, 10 + i, xRatio, 1.0, true, 0, ConnDirDown)
+        const pA = new avoidLib.ShapeConnectionPin(shapeA, 10 + i, xRatio, 1.0, true, 0, ConnDirDown)
         pA.setExclusive(false)
-        const pB = new Avoid.ShapeConnectionPin(shapeB, 20 + i, xRatio, 0.0, true, 0, ConnDirUp)
+        const pB = new avoidLib.ShapeConnectionPin(shapeB, 20 + i, xRatio, 0.0, true, 0, ConnDirUp)
         pB.setExclusive(false)
       }
 
       const conns = Array.from({ length: 3 }, (_, i) =>
-        new Avoid.ConnRef(router, new Avoid.ConnEnd(shapeA, 10 + i), new Avoid.ConnEnd(shapeB, 20 + i)),
+        new avoidLib.ConnRef(router, new avoidLib.ConnEnd(shapeA, 10 + i), new avoidLib.ConnEnd(shapeB, 20 + i)),
       )
 
       router.processTransaction()
@@ -200,16 +202,16 @@ describe('libavoid-js spike', () => {
 
   describe('polyline routing', () => {
     it('routes with non-orthogonal segments', () => {
-      const router = new Avoid.Router(Avoid.RouterFlag.PolyLineRouting.value)
-      router.setRoutingParameter(Avoid.RoutingParameter.shapeBufferDistance.value, 10)
+      const router = new avoidLib.Router(avoidLib.RouterFlag.PolyLineRouting.value)
+      router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 10)
 
-      new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(100, 100), 80, 60))
-      new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(400, 300), 80, 60))
+      new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(100, 100), 80, 60))
+      new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(400, 300), 80, 60))
 
-      const conn = new Avoid.ConnRef(
+      const conn = new avoidLib.ConnRef(
         router,
-        new Avoid.ConnEnd(new Avoid.Point(140, 130)),
-        new Avoid.ConnEnd(new Avoid.Point(400, 270)),
+        new avoidLib.ConnEnd(new avoidLib.Point(140, 130)),
+        new avoidLib.ConnEnd(new avoidLib.Point(400, 270)),
       )
 
       router.processTransaction()
@@ -223,33 +225,35 @@ describe('libavoid-js spike', () => {
 
   describe('performance', () => {
     it('routes 180 edges across 100 nodes in under 2 seconds', () => {
-      const router = new Avoid.Router(Avoid.RouterFlag.OrthogonalRouting.value)
-      router.setRoutingParameter(Avoid.RoutingParameter.shapeBufferDistance.value, 8)
-      router.setRoutingParameter(Avoid.RoutingParameter.idealNudgingDistance.value, 12)
+      const router = new avoidLib.Router(avoidLib.RouterFlag.OrthogonalRouting.value)
+      router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 8)
+      router.setRoutingParameter(avoidLib.RoutingParameter.idealNudgingDistance.value, 12)
 
       const cols = 10
       const rows = 10
+      // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef
       const shapes: any[] = []
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           shapes.push(
-            new Avoid.ShapeRef(
+            new avoidLib.ShapeRef(
               router,
-              new Avoid.Rectangle(new Avoid.Point(100 + c * 200, 100 + r * 150), 80, 60),
+              new avoidLib.Rectangle(new avoidLib.Point(100 + c * 200, 100 + r * 150), 80, 60),
             ),
           )
         }
       }
 
+      // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef
       const conns: any[] = []
       // Horizontal
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols - 1; c++) {
           conns.push(
-            new Avoid.ConnRef(
+            new avoidLib.ConnRef(
               router,
-              new Avoid.ConnEnd(new Avoid.Point(140 + c * 200, 100 + r * 150)),
-              new Avoid.ConnEnd(new Avoid.Point(160 + (c + 1) * 200, 100 + r * 150)),
+              new avoidLib.ConnEnd(new avoidLib.Point(140 + c * 200, 100 + r * 150)),
+              new avoidLib.ConnEnd(new avoidLib.Point(160 + (c + 1) * 200, 100 + r * 150)),
             ),
           )
         }
@@ -258,10 +262,10 @@ describe('libavoid-js spike', () => {
       for (let r = 0; r < rows - 1; r++) {
         for (let c = 0; c < cols; c++) {
           conns.push(
-            new Avoid.ConnRef(
+            new avoidLib.ConnRef(
               router,
-              new Avoid.ConnEnd(new Avoid.Point(100 + c * 200, 130 + r * 150)),
-              new Avoid.ConnEnd(new Avoid.Point(100 + c * 200, 70 + (r + 1) * 150)),
+              new avoidLib.ConnEnd(new avoidLib.Point(100 + c * 200, 130 + r * 150)),
+              new avoidLib.ConnEnd(new avoidLib.Point(100 + c * 200, 70 + (r + 1) * 150)),
             ),
           )
         }
@@ -285,17 +289,17 @@ describe('libavoid-js spike', () => {
     })
 
     it('incremental re-route after node move completes under 100ms', () => {
-      const router = new Avoid.Router(Avoid.RouterFlag.OrthogonalRouting.value)
-      router.setRoutingParameter(Avoid.RoutingParameter.shapeBufferDistance.value, 10)
+      const router = new avoidLib.Router(avoidLib.RouterFlag.OrthogonalRouting.value)
+      router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 10)
 
-      const shapeA = new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(100, 100), 80, 60))
-      new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(400, 100), 80, 60))
-      const obstacle = new Avoid.ShapeRef(router, new Avoid.Rectangle(new Avoid.Point(250, 100), 60, 60))
+      new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(100, 100), 80, 60))
+      new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(400, 100), 80, 60))
+      const obstacle = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(250, 100), 60, 60))
 
-      const conn = new Avoid.ConnRef(
+      const conn = new avoidLib.ConnRef(
         router,
-        new Avoid.ConnEnd(new Avoid.Point(140, 100)),
-        new Avoid.ConnEnd(new Avoid.Point(360, 100)),
+        new avoidLib.ConnEnd(new avoidLib.Point(140, 100)),
+        new avoidLib.ConnEnd(new avoidLib.Point(360, 100)),
       )
 
       router.processTransaction()
