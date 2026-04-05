@@ -45,7 +45,7 @@ describe('placePorts', () => {
     const ports = placePorts(nodes, links, 'TB')
 
     // sw1:eth0 should be on bottom (source in TB)
-    const p1 = ports.get('sw1:eth0')!
+    const p1 = ports.get('sw1:eth0')
     expect(p1.side).toBe('bottom')
     expect(p1.nodeId).toBe('sw1')
     // Bottom center of sw1: y = 100 + 40 = 140
@@ -54,7 +54,7 @@ describe('placePorts', () => {
     expect(p1.absolutePosition.x).toBe(200)
 
     // sw2:eth0 should be on top (destination in TB)
-    const p2 = ports.get('sw2:eth0')!
+    const p2 = ports.get('sw2:eth0')
     expect(p2.side).toBe('top')
     // Top center of sw2: y = 300 - 40 = 260
     expect(p2.absolutePosition.y).toBe(260)
@@ -72,9 +72,9 @@ describe('placePorts', () => {
 
     // 3 ports on bottom of sw1 (width=120, center x=200)
     // Positions: 200-60 + 120*(1/4) = 170, 200-60 + 120*(2/4) = 200, 200-60 + 120*(3/4) = 230
-    const p0 = ports.get('sw1:eth0')!
-    const p1 = ports.get('sw1:eth1')!
-    const p2 = ports.get('sw1:eth2')!
+    const p0 = ports.get('sw1:eth0')
+    const p1 = ports.get('sw1:eth1')
+    const p2 = ports.get('sw1:eth2')
 
     expect(p0.absolutePosition.x).toBe(170)
     expect(p1.absolutePosition.x).toBe(200)
@@ -99,8 +99,8 @@ describe('placePorts', () => {
     const ports = placePorts(nodes, links, 'TB')
 
     // HA in TB: source → right, dest → left
-    expect(ports.get('sw1:ha0')!.side).toBe('right')
-    expect(ports.get('sw3:ha0')!.side).toBe('left')
+    expect(ports.get('sw1:ha0').side).toBe('right')
+    expect(ports.get('sw3:ha0').side).toBe('left')
   })
 
   it('handles LR direction', () => {
@@ -112,8 +112,8 @@ describe('placePorts', () => {
     const ports = placePorts(nodes, links, 'LR')
 
     // LR: source → right, dest → left
-    expect(ports.get('sw1:eth0')!.side).toBe('right')
-    expect(ports.get('sw2:eth0')!.side).toBe('left')
+    expect(ports.get('sw1:eth0').side).toBe('right')
+    expect(ports.get('sw2:eth0').side).toBe('left')
   })
 
   it('handles mixed normal and HA links', () => {
@@ -130,11 +130,11 @@ describe('placePorts', () => {
     const ports = placePorts(nodes, links, 'TB')
 
     // Normal: bottom/top
-    expect(ports.get('sw1:eth0')!.side).toBe('bottom')
-    expect(ports.get('sw2:eth0')!.side).toBe('top')
+    expect(ports.get('sw1:eth0').side).toBe('bottom')
+    expect(ports.get('sw2:eth0').side).toBe('top')
     // HA: right/left
-    expect(ports.get('sw1:ha0')!.side).toBe('right')
-    expect(ports.get('sw3:ha0')!.side).toBe('left')
+    expect(ports.get('sw1:ha0').side).toBe('right')
+    expect(ports.get('sw3:ha0').side).toBe('left')
   })
 
   it('returns empty map for portless links', () => {

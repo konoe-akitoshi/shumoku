@@ -2,7 +2,7 @@
 // Ensures absolute coordinates are correctly computed and round-trip works.
 
 import { describe, it, expect } from 'vitest'
-import type { LayoutResult, Link, Node, Subgraph } from '../../models/types.js'
+import type { LayoutResult, Link, Node } from '../../models/types.js'
 import { resolveLayout, unresolveLayout } from '../resolve.js'
 import type { NetworkGraph } from '../../models/types.js'
 
@@ -132,8 +132,11 @@ describe('resolveLayout', () => {
     const resolved = resolveLayout(layout)
 
     expect(resolved.nodes.size).toBe(2)
-    expect(resolved.nodes.get('sw1')!.node.label).toBe('Switch 1')
-    expect(resolved.nodes.get('sw1')!.position).toEqual({ x: 200, y: 100 })
+    const sw1 = resolved.nodes.get('sw1')
+    expect(sw1).toBeDefined()
+    if (!sw1) return
+    expect(sw1.node.label).toBe('Switch 1')
+    expect(sw1.position).toEqual({ x: 200, y: 100 })
   })
 })
 
@@ -148,8 +151,9 @@ describe('unresolveLayout', () => {
     for (const [id, node] of original.nodes) {
       const rNode = restored.nodes.get(id)
       expect(rNode).toBeDefined()
-      expect(rNode!.position).toEqual(node.position)
-      expect(rNode!.size).toEqual(node.size)
+      if (!rNode) continue
+      expect(rNode.position).toEqual(node.position)
+      expect(rNode.size).toEqual(node.size)
     }
 
     // Port positions (center-relative)
