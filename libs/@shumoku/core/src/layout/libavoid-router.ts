@@ -39,8 +39,10 @@ function toEndpoint(ep: string | LinkEndpoint): LinkEndpoint {
   return typeof ep === 'string' ? { node: ep } : ep
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: libavoid-js types don't match runtime API
 let avoidInstance: any = null
 
+// biome-ignore lint/suspicious/noExplicitAny: libavoid-js dynamic WASM API
 export async function ensureLibavoidLoaded(): Promise<any> {
   if (!avoidInstance) {
     const { AvoidLib } = await import('libavoid-js')
@@ -99,8 +101,11 @@ export async function routeEdges(
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: libavoid-js WASM bindings are untyped
 function doRoute(
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
   Avoid: any,
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
   router: any,
   nodes: Map<string, ResolvedNode>,
   ports: Map<string, ResolvedPort>,
@@ -108,6 +113,7 @@ function doRoute(
   edgeStyle: string,
 ): Map<string, ResolvedEdge> {
   // Step 1: Register nodes as obstacles
+  // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
   const shapeRefs = new Map<string, any>()
   for (const [id, node] of nodes) {
     shapeRefs.set(id, new Avoid.ShapeRef(
@@ -174,6 +180,7 @@ function doRoute(
     const fromPin = fromPortId ? pinIds.get(fromPortId) : undefined
 
     // Source: use pin (direction constraint → perpendicular exit)
+    // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnEnd
     let srcEnd: any
     if (fromPin !== undefined) {
       srcEnd = new Avoid.ConnEnd(shapeRefs.get(fromNodeId), fromPin)

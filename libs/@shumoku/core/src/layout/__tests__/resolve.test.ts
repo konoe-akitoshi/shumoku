@@ -30,7 +30,7 @@ function makeTestLayout(graph: NetworkGraph): LayoutResult {
           id: 'sw1',
           position: { x: 200, y: 100 }, // center
           size: { width: 120, height: 80 },
-          node: graph.nodes[0]!,
+          node: graph.nodes[0] ?? { id: 'sw1', label: 'Switch 1' },
           ports: new Map([
             [
               'sw1:eth0',
@@ -51,7 +51,7 @@ function makeTestLayout(graph: NetworkGraph): LayoutResult {
           id: 'sw2',
           position: { x: 200, y: 300 }, // center
           size: { width: 120, height: 80 },
-          node: graph.nodes[1]!,
+          node: graph.nodes[1] ?? { id: 'sw2', label: 'Switch 2' },
           ports: new Map([
             [
               'sw2:eth0',
@@ -80,7 +80,7 @@ function makeTestLayout(graph: NetworkGraph): LayoutResult {
             { x: 200, y: 140 },
             { x: 200, y: 260 },
           ],
-          link: graph.links[0]!,
+          link: graph.links[0] ?? { from: { node: 'sw1', port: 'eth0' }, to: { node: 'sw2', port: 'eth0' } },
         },
       ],
     ]),
@@ -150,13 +150,16 @@ describe('unresolveLayout', () => {
     }
 
     // Port positions (center-relative)
-    const origPort = original.nodes.get('sw1')!.ports!.get('sw1:eth0')!
-    const restoredPort = restored.nodes.get('sw1')!.ports!.get('sw1:eth0')!
+    const origPort = original.nodes.get('sw1')?.ports?.get('sw1:eth0')
+    const restoredPort = restored.nodes.get('sw1')?.ports?.get('sw1:eth0')
+    expect(origPort).toBeDefined()
+    expect(restoredPort).toBeDefined()
+    if (!origPort || !restoredPort) return
     expect(restoredPort.position.x).toBeCloseTo(origPort.position.x, 5)
     expect(restoredPort.position.y).toBeCloseTo(origPort.position.y, 5)
 
     // Edge points
-    expect(restored.links.get('link1')!.points).toEqual(original.links.get('link1')!.points)
+    expect(restored.links.get('link1')?.points).toEqual(original.links.get('link1')?.points)
 
     // Bounds
     expect(restored.bounds).toEqual(original.bounds)
@@ -169,16 +172,26 @@ describe('port absolute position consistency', () => {
     const layout = makeTestLayout(graph)
     const resolved = resolveLayout(layout)
 
-    const edge = resolved.edges.get('link1')!
-    const fromPort = resolved.ports.get(edge.fromPortId!)!
-    const toPort = resolved.ports.get(edge.toPortId!)!
+    const edge = resolved.edges.get('link1')
+    expect(edge).toBeDefined()
+    if (!edge) return
+    const fromPort = edge.fromPortId ? resolved.ports.get(edge.fromPortId) : undefined
+    const toPort = edge.toPortId ? resolved.ports.get(edge.toPortId) : undefined
+    expect(fromPort).toBeDefined()
+    expect(toPort).toBeDefined()
+    if (!fromPort || !toPort) return
 
     // Edge first point should be at/near from port
-    expect(edge.points[0]!.x).toBeCloseTo(fromPort.absolutePosition.x, 0)
-    expect(edge.points[0]!.y).toBeCloseTo(fromPort.absolutePosition.y, 0)
+    const firstPoint = edge.points[0]
+    expect(firstPoint).toBeDefined()
+    if (!firstPoint) return
+    expect(firstPoint.x).toBeCloseTo(fromPort.absolutePosition.x, 0)
+    expect(firstPoint.y).toBeCloseTo(fromPort.absolutePosition.y, 0)
 
     // Edge last point should be at/near to port
-    const lastPoint = edge.points[edge.points.length - 1]!
+    const lastPoint = edge.points[edge.points.length - 1]
+    expect(lastPoint).toBeDefined()
+    if (!lastPoint) return
     expect(lastPoint.x).toBeCloseTo(toPort.absolutePosition.x, 0)
     expect(lastPoint.y).toBeCloseTo(toPort.absolutePosition.y, 0)
   })
