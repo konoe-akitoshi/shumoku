@@ -160,7 +160,8 @@ function doRoute(
   let pinTestPortId: string | null = null
 
   for (let i = 0; i < links.length; i++) {
-    const link = links[i]!
+    const link = links[i]
+    if (!link) continue
     const linkId = link.id ?? `__link_${i}`
     const fromNodeId = getNodeId(link.from)
     const toNodeId = getNodeId(link.to)
@@ -177,14 +178,20 @@ function doRoute(
     if (fromPin !== undefined) {
       srcEnd = new Avoid.ConnEnd(shapeRefs.get(fromNodeId), fromPin)
     } else {
-      const pos = fromPortId && ports.has(fromPortId) ? ports.get(fromPortId)!.absolutePosition : nodes.get(fromNodeId)!.position
+      const fromPortObj = fromPortId ? ports.get(fromPortId) : undefined
+      const fromNodeObj = nodes.get(fromNodeId)
+      const pos = fromPortObj?.absolutePosition ?? fromNodeObj?.position
+      if (!pos) continue
       srcEnd = new Avoid.ConnEnd(new Avoid.Point(pos.x, pos.y))
     }
 
     // Destination: use Point (no direction constraint → natural arrival)
     // Pin direction must be outward, but for destination ports the line
     // approaches from outside → inward direction needed → libavoid rejects it.
-    const dstPos = toPortId && ports.has(toPortId) ? ports.get(toPortId)!.absolutePosition : nodes.get(toNodeId)!.position
+    const toPortObj = toPortId ? ports.get(toPortId) : undefined
+    const toNodeObj = nodes.get(toNodeId)
+    const dstPos = toPortObj?.absolutePosition ?? toNodeObj?.position
+    if (!dstPos) continue
     const dstEnd = new Avoid.ConnEnd(new Avoid.Point(dstPos.x, dstPos.y))
 
     const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
@@ -252,7 +259,8 @@ function doRoute(
     connRefs.clear()
 
     for (let i = 0; i < links.length; i++) {
-      const link = links[i]!
+      const link = links[i]
+      if (!link) continue
       const linkId = link.id ?? `__link_${i}`
       const fromNodeId = getNodeId(link.from)
       const toNodeId = getNodeId(link.to)
@@ -263,12 +271,14 @@ function doRoute(
       const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
       const toPortId = toPort ? `${toNodeId}:${toPort}` : null
 
-      const fromPos = fromPortId && ports.has(fromPortId)
-        ? ports.get(fromPortId)!.absolutePosition
-        : nodes.get(fromNodeId)!.position
-      const toPos = toPortId && ports.has(toPortId)
-        ? ports.get(toPortId)!.absolutePosition
-        : nodes.get(toNodeId)!.position
+      const fromPortObj2 = fromPortId ? ports.get(fromPortId) : undefined
+      const fromNodeObj2 = nodes.get(fromNodeId)
+      const fromPos = fromPortObj2?.absolutePosition ?? fromNodeObj2?.position
+      if (!fromPos) continue
+      const toPortObj2 = toPortId ? ports.get(toPortId) : undefined
+      const toNodeObj2 = nodes.get(toNodeId)
+      const toPos = toPortObj2?.absolutePosition ?? toNodeObj2?.position
+      if (!toPos) continue
 
       const conn = new Avoid.ConnRef(router,
         new Avoid.ConnEnd(new Avoid.Point(fromPos.x, fromPos.y)),
@@ -283,7 +293,8 @@ function doRoute(
   const edges = new Map<string, ResolvedEdge>()
 
   for (let i = 0; i < links.length; i++) {
-    const link = links[i]!
+    const link = links[i]
+    if (!link) continue
     const linkId = link.id ?? `__link_${i}`
     const conn = connRefs.get(linkId)
     if (!conn) continue
@@ -295,8 +306,10 @@ function doRoute(
       points.push({ x: pt.x, y: pt.y })
     }
 
-    const finalPoints = edgeStyle === 'straight' && points.length > 2
-      ? [points[0]!, points[points.length - 1]!]
+    const first = points[0]
+    const last = points[points.length - 1]
+    const finalPoints = edgeStyle === 'straight' && points.length > 2 && first && last
+      ? [first, last]
       : points
 
     const fromNodeId = getNodeId(link.from)
@@ -346,8 +359,9 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
   const hSegs: Segment[] = []
   for (const [edgeId, edge] of edges) {
     for (let i = 0; i < edge.points.length - 1; i++) {
-      const a = edge.points[i]!
-      const b = edge.points[i + 1]!
+      const a = edge.points[i]
+      const b = edge.points[i + 1]
+      if (!a || !b) continue
       if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 1) {
         hSegs.push({
           edgeId, pointIndex: i,
@@ -366,8 +380,9 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
   const vSegs: Segment[] = []
   for (const [edgeId, edge] of edges) {
     for (let i = 0; i < edge.points.length - 1; i++) {
-      const a = edge.points[i]!
-      const b = edge.points[i + 1]!
+      const a = edge.points[i]
+      const b = edge.points[i + 1]
+      if (!a || !b) continue
       if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) > 1) {
         vSegs.push({
           edgeId, pointIndex: i,
@@ -395,8 +410,9 @@ function spreadSegments(
 
   // Check adjacent pairs for overlap
   for (let i = 0; i < segs.length - 1; i++) {
-    const s1 = segs[i]!
-    const s2 = segs[i + 1]!
+    const s1 = segs[i]
+    const s2 = segs[i + 1]
+    if (!s1 || !s2) continue
 
     // Do they overlap on the range axis?
     if (s1.max <= s2.min || s2.max <= s1.min) continue

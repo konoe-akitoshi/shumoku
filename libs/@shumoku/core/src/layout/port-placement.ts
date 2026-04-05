@@ -191,13 +191,16 @@ export function placePorts(
   const ports = new Map<string, ResolvedPort>()
 
   for (const [_key, sideAssignments] of bySide) {
-    const nodeId = sideAssignments[0]!.nodeId
-    const side = sideAssignments[0]!.side
+    const first = sideAssignments[0]
+    if (!first) continue
+    const nodeId = first.nodeId
+    const side = first.side
     const node = nodes.get(nodeId)
     if (!node) continue
 
     for (let i = 0; i < sideAssignments.length; i++) {
-      const a = sideAssignments[i]!
+      const a = sideAssignments[i]
+      if (!a) continue
       const portId = `${a.nodeId}:${a.portName}`
       const absolutePosition = computePortPosition(node, side, i, sideAssignments.length)
 

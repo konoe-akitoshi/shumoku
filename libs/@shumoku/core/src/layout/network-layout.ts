@@ -98,7 +98,8 @@ function preProcess(graph: NetworkGraph, direction: string): PreProcessed {
   for (const sg of graph.subgraphs ?? []) childrenOf.set(sg.id, [])
   for (const [id, parent] of parentOf) {
     if (!childrenOf.has(parent)) childrenOf.set(parent, [])
-    childrenOf.get(parent)!.push(id)
+    const siblings = childrenOf.get(parent)
+    if (siblings) siblings.push(id)
   }
 
   // Ancestor chain for resolving node→container at each level
@@ -157,12 +158,14 @@ function preProcess(graph: NetworkGraph, direction: string): PreProcessed {
     if (fP && !seen.has(`${fId}:${fP}`)) {
       seen.add(`${fId}:${fP}`)
       if (!portsByNode.has(fId)) portsByNode.set(fId, [])
-      portsByNode.get(fId)!.push({ name: fP, side: isHA ? haSrc : src })
+      const fPorts = portsByNode.get(fId)
+      if (fPorts) fPorts.push({ name: fP, side: isHA ? haSrc : src })
     }
     if (tP && !seen.has(`${tId}:${tP}`)) {
       seen.add(`${tId}:${tP}`)
       if (!portsByNode.has(tId)) portsByNode.set(tId, [])
-      portsByNode.get(tId)!.push({ name: tP, side: isHA ? haDst : dst })
+      const tPorts = portsByNode.get(tId)
+      if (tPorts) tPorts.push({ name: tP, side: isHA ? haDst : dst })
     }
   }
 
@@ -210,8 +213,9 @@ function buildTree(
   const inDegree = new Map<string, number>()
   for (const id of childIds) { downstream.set(id, new Set()); inDegree.set(id, 0) }
   for (const [f, t] of edges) {
-    if (idSet.has(f) && idSet.has(t) && !downstream.get(f)!.has(t)) {
-      downstream.get(f)!.add(t)
+    const fDown = downstream.get(f)
+    if (idSet.has(f) && idSet.has(t) && fDown && !fDown.has(t)) {
+      fDown.add(t)
       inDegree.set(t, (inDegree.get(t) ?? 0) + 1)
     }
   }
@@ -273,7 +277,8 @@ function buildTree(
 }
 
 function measureNodeTree(id: string, pp: PreProcessed, opts: Required<NetworkLayoutOptions>): TreeNode {
-  const node = pp.nodeMap.get(id)!
+  const node = pp.nodeMap.get(id)
+  if (!node) return { id, kind: 'node', node: undefined, ports: [], ownWidth: 0, ownHeight: 0, ownMargin: { top: 0, right: 0, bottom: 0, left: 0 }, children: [], childRows: [], columnWidth: 0, columnHeight: 0 }
   const ports = pp.portsByNode.get(id) ?? []
 
   const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
@@ -305,7 +310,8 @@ function measureNodeTree(id: string, pp: PreProcessed, opts: Required<NetworkLay
 }
 
 function measureSubgraphTree(id: string, pp: PreProcessed, opts: Required<NetworkLayoutOptions>): TreeNode {
-  const sg = pp.sgMap.get(id)!
+  const sg = pp.sgMap.get(id)
+  if (!sg) return { id, kind: 'subgraph', subgraph: undefined, ports: [], ownWidth: 0, ownHeight: 0, ownMargin: { top: 0, right: 0, bottom: 0, left: 0 }, children: [], childRows: [], columnWidth: 0, columnHeight: 0 }
 
   // Recursively build internal tree
   const internalTrees = buildTree(id, pp, opts)
@@ -314,7 +320,8 @@ function measureSubgraphTree(id: string, pp: PreProcessed, opts: Required<Networ
   let contentW = 0
   let contentH = 0
   for (let i = 0; i < internalTrees.length; i++) {
-    const t = internalTrees[i]!
+    const t = internalTrees[i]
+    if (!t) continue
     contentW += t.columnWidth
     if (i < internalTrees.length - 1) contentW += opts.gap
     contentH = Math.max(contentH, t.columnHeight)
@@ -352,11 +359,13 @@ function computeColumnSize(tn: TreeNode, opts: Required<NetworkLayoutOptions>): 
   let maxRowW = 0
   let totalRowH = 0
   for (let r = 0; r < tn.childRows.length; r++) {
-    const row = tn.childRows[r]!
+    const row = tn.childRows[r]
+    if (!row) continue
     let rowW = 0
     let rowH = 0
     for (let c = 0; c < row.length; c++) {
-      const child = row[c]!
+      const child = row[c]
+      if (!child) continue
       rowW += child.columnWidth
       if (c < row.length - 1) rowW += opts.gap
       rowH = Math.max(rowH, child.columnHeight)
@@ -440,7 +449,9 @@ function arrangeTree(
     // Calculate total row width
     let totalRowW = 0
     for (let i = 0; i < row.length; i++) {
-      totalRowW += row[i]!.columnWidth
+      const item = row[i]
+      if (!item) continue
+      totalRowW += item.columnWidth
       if (i < row.length - 1) totalRowW += opts.gap
     }
 
@@ -501,7 +512,8 @@ function placeNodePorts(
     }
 
     for (let i = 0; i < sp.length; i++) {
-      const p = sp[i]!
+      const p = sp[i]
+      if (!p) continue
       const r = (i + 1) / (sp.length + 1)
       let ax: number, ay: number
       switch (side) {
