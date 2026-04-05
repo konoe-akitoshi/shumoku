@@ -303,7 +303,10 @@ export class SVGRenderer {
           id: portId,
           nodeId: node.id,
           label: lp.label,
-          absolutePosition: { x: node.position.x + lp.position.x, y: node.position.y + lp.position.y },
+          absolutePosition: {
+            x: node.position.x + lp.position.x,
+            y: node.position.y + lp.position.y,
+          },
           side: lp.side,
           size: lp.size,
         })
@@ -320,17 +323,41 @@ export class SVGRenderer {
     // ResolvedLayout → LayoutResult-compatible views (nodes, links, subgraphs share same shape)
     // Only difference: ports are in a separate Map instead of nested in nodes
     const layoutCompat: LayoutResult = {
-      nodes: new Map([...resolved.nodes].map(([id, rn]) => [id, {
-        id, position: rn.position, size: rn.size, node: rn.node,
-      }])),
-      links: new Map([...resolved.edges].map(([id, re]) => [id, {
-        id, from: re.fromNodeId, to: re.toNodeId,
-        fromEndpoint: re.fromEndpoint, toEndpoint: re.toEndpoint,
-        points: re.points, link: re.link,
-      }])),
-      subgraphs: new Map([...resolved.subgraphs].map(([id, rs]) => [id, {
-        id, bounds: rs.bounds, subgraph: rs.subgraph,
-      }])),
+      nodes: new Map(
+        [...resolved.nodes].map(([id, rn]) => [
+          id,
+          {
+            id,
+            position: rn.position,
+            size: rn.size,
+            node: rn.node,
+          },
+        ]),
+      ),
+      links: new Map(
+        [...resolved.edges].map(([id, re]) => [
+          id,
+          {
+            id,
+            from: re.fromNodeId,
+            to: re.toNodeId,
+            fromEndpoint: re.fromEndpoint,
+            toEndpoint: re.toEndpoint,
+            points: re.points,
+            link: re.link,
+          },
+        ]),
+      ),
+      subgraphs: new Map(
+        [...resolved.subgraphs].map(([id, rs]) => [
+          id,
+          {
+            id,
+            bounds: rs.bounds,
+            subgraph: rs.subgraph,
+          },
+        ]),
+      ),
       bounds: resolved.bounds,
       metadata: resolved.metadata,
     }
@@ -901,10 +928,20 @@ ${fg}
     const labelOffset = 12
 
     switch (port.side) {
-      case 'top': labelY = py - labelOffset; break
-      case 'bottom': labelY = py + labelOffset + 4; break
-      case 'left': labelX = px - labelOffset; textAnchor = 'end'; break
-      case 'right': labelX = px + labelOffset; textAnchor = 'start'; break
+      case 'top':
+        labelY = py - labelOffset
+        break
+      case 'bottom':
+        labelY = py + labelOffset + 4
+        break
+      case 'left':
+        labelX = px - labelOffset
+        textAnchor = 'end'
+        break
+      case 'right':
+        labelX = px + labelOffset
+        textAnchor = 'start'
+        break
     }
 
     const labelText = this.escapeXml(port.label)
@@ -916,8 +953,12 @@ ${fg}
     else if (textAnchor === 'end') bgX = labelX - labelWidth + 2
     const bgY = labelY - labelHeight + 3
 
-    parts.push(`<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.color('portLabelBg')}" />`)
-    parts.push(`<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.color('portLabelColor')}">${labelText}</text>`)
+    parts.push(
+      `<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.color('portLabelBg')}" />`,
+    )
+    parts.push(
+      `<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.color('portLabelColor')}">${labelText}</text>`,
+    )
 
     return `<g class="port" data-port="${port.id}"${portDeviceAttr}>\n  ${parts.join('\n  ')}\n</g>`
   }

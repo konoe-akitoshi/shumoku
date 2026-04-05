@@ -19,15 +19,7 @@
  * 4. Rendering     → draw each object independently using absolute coordinates
  */
 
-import type {
-  Bounds,
-  Link,
-  LinkEndpoint,
-  Node,
-  Position,
-  Size,
-  Subgraph,
-} from '../models/types.js'
+import type { Bounds, Link, LinkEndpoint, Node, Position, Size, Subgraph } from '../models/types.js'
 
 /**
  * Compute the visual line width for a link.
@@ -39,11 +31,16 @@ export function getLinkWidth(link: Link): number {
 
   // Bandwidth determines width
   switch (link.bandwidth) {
-    case '100G': return 24
-    case '40G': return 18
-    case '25G': return 14
-    case '10G': return 10
-    case '1G': return 6
+    case '100G':
+      return 24
+    case '40G':
+      return 18
+    case '25G':
+      return 14
+    case '10G':
+      return 10
+    case '1G':
+      return 6
   }
 
   // Link type

@@ -8,8 +8,8 @@
 // - ShapeConnectionPin: (shape, classId, xOffset, yOffset, proportional, insideOffset, visDirs)
 // - ConnEnd with pin: new avoidLib.ConnEnd(shape, classId)
 
-import { describe, it, expect, beforeAll } from 'vitest'
 import { AvoidLib } from 'libavoid-js'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 // Direction flag constants (from libavoid C++ source)
 const ConnDirUp = 1
@@ -91,9 +91,15 @@ describe('libavoid-js spike', () => {
       router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 10)
 
       // Node A at center (100, 100), 120x80
-      const shapeA = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(100, 100), 120, 80))
+      const shapeA = new avoidLib.ShapeRef(
+        router,
+        new avoidLib.Rectangle(new avoidLib.Point(100, 100), 120, 80),
+      )
       // Node B at center (400, 100), 120x80
-      const shapeB = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(400, 100), 120, 80))
+      const shapeB = new avoidLib.ShapeRef(
+        router,
+        new avoidLib.Rectangle(new avoidLib.Point(400, 100), 120, 80),
+      )
 
       // Pin on right of A (proportional: x=1.0=right, y=0.5=center)
       const pinA = new avoidLib.ShapeConnectionPin(shapeA, 1, 1.0, 0.5, true, 0, ConnDirRight)
@@ -103,7 +109,11 @@ describe('libavoid-js spike', () => {
       const pinB = new avoidLib.ShapeConnectionPin(shapeB, 2, 0.0, 0.5, true, 0, ConnDirLeft)
       pinB.setExclusive(false)
 
-      const conn = new avoidLib.ConnRef(router, new avoidLib.ConnEnd(shapeA, 1), new avoidLib.ConnEnd(shapeB, 2))
+      const conn = new avoidLib.ConnRef(
+        router,
+        new avoidLib.ConnEnd(shapeA, 1),
+        new avoidLib.ConnEnd(shapeB, 2),
+      )
 
       router.processTransaction()
 
@@ -124,11 +134,22 @@ describe('libavoid-js spike', () => {
       const router = new avoidLib.Router(avoidLib.RouterFlag.OrthogonalRouting.value)
       router.setRoutingParameter(avoidLib.RoutingParameter.shapeBufferDistance.value, 10)
 
-      const shape = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(200, 200), 120, 100))
+      const shape = new avoidLib.ShapeRef(
+        router,
+        new avoidLib.Rectangle(new avoidLib.Point(200, 200), 120, 100),
+      )
 
       // 3 ports on bottom
       for (let i = 0; i < 3; i++) {
-        const pin = new avoidLib.ShapeConnectionPin(shape, 10 + i, (i + 1) / 4, 1.0, true, 0, ConnDirDown)
+        const pin = new avoidLib.ShapeConnectionPin(
+          shape,
+          10 + i,
+          (i + 1) / 4,
+          1.0,
+          true,
+          0,
+          ConnDirDown,
+        )
         pin.setExclusive(false)
       }
 
@@ -139,12 +160,13 @@ describe('libavoid-js spike', () => {
         new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(300, 400), 60, 40)),
       ]
 
-      const conns = dests.map((dest, i) =>
-        new avoidLib.ConnRef(
-          router,
-          new avoidLib.ConnEnd(shape, 10 + i),
-          new avoidLib.ConnEnd(new avoidLib.Point(dest.position().x, dest.position().y - 20)),
-        ),
+      const conns = dests.map(
+        (dest, i) =>
+          new avoidLib.ConnRef(
+            router,
+            new avoidLib.ConnEnd(shape, 10 + i),
+            new avoidLib.ConnEnd(new avoidLib.Point(dest.position().x, dest.position().y - 20)),
+          ),
       )
 
       router.processTransaction()
@@ -167,20 +189,40 @@ describe('libavoid-js spike', () => {
         true,
       )
 
-      const shapeA = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(200, 50), 120, 80))
-      const shapeB = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(200, 300), 120, 80))
+      const shapeA = new avoidLib.ShapeRef(
+        router,
+        new avoidLib.Rectangle(new avoidLib.Point(200, 50), 120, 80),
+      )
+      const shapeB = new avoidLib.ShapeRef(
+        router,
+        new avoidLib.Rectangle(new avoidLib.Point(200, 300), 120, 80),
+      )
 
       // 3 pins on bottom of A, 3 on top of B
       for (let i = 0; i < 3; i++) {
         const xRatio = (i + 1) / 4
-        const pA = new avoidLib.ShapeConnectionPin(shapeA, 10 + i, xRatio, 1.0, true, 0, ConnDirDown)
+        const pA = new avoidLib.ShapeConnectionPin(
+          shapeA,
+          10 + i,
+          xRatio,
+          1.0,
+          true,
+          0,
+          ConnDirDown,
+        )
         pA.setExclusive(false)
         const pB = new avoidLib.ShapeConnectionPin(shapeB, 20 + i, xRatio, 0.0, true, 0, ConnDirUp)
         pB.setExclusive(false)
       }
 
-      const conns = Array.from({ length: 3 }, (_, i) =>
-        new avoidLib.ConnRef(router, new avoidLib.ConnEnd(shapeA, 10 + i), new avoidLib.ConnEnd(shapeB, 20 + i)),
+      const conns = Array.from(
+        { length: 3 },
+        (_, i) =>
+          new avoidLib.ConnRef(
+            router,
+            new avoidLib.ConnEnd(shapeA, 10 + i),
+            new avoidLib.ConnEnd(shapeB, 20 + i),
+          ),
       )
 
       router.processTransaction()
@@ -283,7 +325,9 @@ describe('libavoid-js spike', () => {
       }
       expect(validRoutes).toBe(conns.length)
 
-      console.log(`[libavoid perf] ${conns.length} edges, ${shapes.length} nodes: ${elapsed.toFixed(1)}ms`)
+      console.log(
+        `[libavoid perf] ${conns.length} edges, ${shapes.length} nodes: ${elapsed.toFixed(1)}ms`,
+      )
 
       router.delete()
     })
@@ -294,7 +338,10 @@ describe('libavoid-js spike', () => {
 
       new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(100, 100), 80, 60))
       new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(400, 100), 80, 60))
-      const obstacle = new avoidLib.ShapeRef(router, new avoidLib.Rectangle(new avoidLib.Point(250, 100), 60, 60))
+      const obstacle = new avoidLib.ShapeRef(
+        router,
+        new avoidLib.Rectangle(new avoidLib.Point(250, 100), 60, 60),
+      )
 
       const conn = new avoidLib.ConnRef(
         router,

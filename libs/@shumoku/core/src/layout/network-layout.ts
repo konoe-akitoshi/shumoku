@@ -66,10 +66,17 @@ const DEFAULTS: Required<NetworkLayoutOptions> = {
 // ============================================================================
 
 type Side = 'top' | 'bottom' | 'left' | 'right'
-interface PortInfo { name: string; side: Side }
+interface PortInfo {
+  name: string
+  side: Side
+}
 
-function epId(ep: string | LinkEndpoint) { return typeof ep === 'string' ? ep : ep.node }
-function epPort(ep: string | LinkEndpoint) { return typeof ep === 'string' ? undefined : ep.port }
+function epId(ep: string | LinkEndpoint) {
+  return typeof ep === 'string' ? ep : ep.node
+}
+function epPort(ep: string | LinkEndpoint) {
+  return typeof ep === 'string' ? undefined : ep.port
+}
 
 // ============================================================================
 // Pre-processing
@@ -107,7 +114,10 @@ function preProcess(graph: NetworkGraph, direction: string): PreProcessed {
   for (const n of graph.nodes) {
     const chain: string[] = [n.id]
     let cur: string | null | undefined = n.parent
-    while (cur) { chain.push(cur); cur = sgMap.get(cur)?.parent }
+    while (cur) {
+      chain.push(cur)
+      cur = sgMap.get(cur)?.parent
+    }
     ancestorChain.set(n.id, chain)
   }
 
@@ -117,7 +127,9 @@ function preProcess(graph: NetworkGraph, direction: string): PreProcessed {
     const kids = childrenOf.get(container)
     if (!kids) return null
     const kidSet = new Set(kids)
-    for (const id of chain) { if (kidSet.has(id)) return id }
+    for (const id of chain) {
+      if (kidSet.has(id)) return id
+    }
     return null
   }
 
@@ -128,7 +140,9 @@ function preProcess(graph: NetworkGraph, direction: string): PreProcessed {
 
   const haPairs = new Set<string>()
   for (const link of graph.links) {
-    if (link.redundancy) { haPairs.add([epId(link.from), epId(link.to)].sort().join(':')) }
+    if (link.redundancy) {
+      haPairs.add([epId(link.from), epId(link.to)].sort().join(':'))
+    }
   }
 
   for (const container of [null, ...(graph.subgraphs ?? []).map((s) => s.id)]) {
@@ -144,16 +158,22 @@ function preProcess(graph: NetworkGraph, direction: string): PreProcessed {
 
   // Port collection
   const portsByNode = new Map<string, PortInfo[]>()
-  const { src, dst } = direction === 'BT' ? { src: 'top' as Side, dst: 'bottom' as Side }
-    : direction === 'LR' ? { src: 'right' as Side, dst: 'left' as Side }
-    : direction === 'RL' ? { src: 'left' as Side, dst: 'right' as Side }
-    : { src: 'bottom' as Side, dst: 'top' as Side }
-  const haSrc: Side = (direction === 'LR' || direction === 'RL') ? 'bottom' : 'right'
-  const haDst: Side = (direction === 'LR' || direction === 'RL') ? 'top' : 'left'
+  const { src, dst } =
+    direction === 'BT'
+      ? { src: 'top' as Side, dst: 'bottom' as Side }
+      : direction === 'LR'
+        ? { src: 'right' as Side, dst: 'left' as Side }
+        : direction === 'RL'
+          ? { src: 'left' as Side, dst: 'right' as Side }
+          : { src: 'bottom' as Side, dst: 'top' as Side }
+  const haSrc: Side = direction === 'LR' || direction === 'RL' ? 'bottom' : 'right'
+  const haDst: Side = direction === 'LR' || direction === 'RL' ? 'top' : 'left'
   const seen = new Set<string>()
   for (const link of graph.links) {
-    const fId = epId(link.from), tId = epId(link.to)
-    const fP = epPort(link.from), tP = epPort(link.to)
+    const fId = epId(link.from),
+      tId = epId(link.to)
+    const fP = epPort(link.from),
+      tP = epPort(link.to)
     const isHA = haPairs.has([fId, tId].sort().join(':'))
     if (fP && !seen.has(`${fId}:${fP}`)) {
       seen.add(`${fId}:${fP}`)
@@ -211,7 +231,10 @@ function buildTree(
   // Build downstream/upstream within this container
   const downstream = new Map<string, Set<string>>()
   const inDegree = new Map<string, number>()
-  for (const id of childIds) { downstream.set(id, new Set()); inDegree.set(id, 0) }
+  for (const id of childIds) {
+    downstream.set(id, new Set())
+    inDegree.set(id, 0)
+  }
   for (const [f, t] of edges) {
     const fDown = downstream.get(f)
     if (idSet.has(f) && idSet.has(t) && fDown && !fDown.has(t)) {
@@ -240,7 +263,9 @@ function buildTree(
     const downIds = [...(downstream.get(id) ?? [])].filter((d) => !visited.has(d))
 
     // Sort: leaves first (no further downstream), then branches
-    const leaves = downIds.filter((d) => (downstream.get(d)?.size ?? 0) === 0 && !(pp.childrenOf.get(d)?.length))
+    const leaves = downIds.filter(
+      (d) => (downstream.get(d)?.size ?? 0) === 0 && !pp.childrenOf.get(d)?.length,
+    )
     const branches = downIds.filter((d) => !leaves.includes(d))
     const orderedChildren = [...leaves, ...branches]
 
@@ -250,7 +275,9 @@ function buildTree(
     // Actually, simpler: leaves as row 0, branches each as individual items below
     // All children in a single row: leaves first (left), then branches (right).
     // Each branch expands its subtree downward independently.
-    const leafChildren = childTrees.filter((c) => c.children.length === 0 && c.childRows.length === 0)
+    const leafChildren = childTrees.filter(
+      (c) => c.children.length === 0 && c.childRows.length === 0,
+    )
     const branchChildren = childTrees.filter((c) => c.children.length > 0 || c.childRows.length > 0)
 
     const childRows: TreeNode[][] = []
@@ -276,9 +303,26 @@ function buildTree(
   return trees
 }
 
-function measureNodeTree(id: string, pp: PreProcessed, opts: Required<NetworkLayoutOptions>): TreeNode {
+function measureNodeTree(
+  id: string,
+  pp: PreProcessed,
+  opts: Required<NetworkLayoutOptions>,
+): TreeNode {
   const node = pp.nodeMap.get(id)
-  if (!node) return { id, kind: 'node', node: undefined, ports: [], ownWidth: 0, ownHeight: 0, ownMargin: { top: 0, right: 0, bottom: 0, left: 0 }, children: [], childRows: [], columnWidth: 0, columnHeight: 0 }
+  if (!node)
+    return {
+      id,
+      kind: 'node',
+      node: undefined,
+      ports: [],
+      ownWidth: 0,
+      ownHeight: 0,
+      ownMargin: { top: 0, right: 0, bottom: 0, left: 0 },
+      children: [],
+      childRows: [],
+      columnWidth: 0,
+      columnHeight: 0,
+    }
   const ports = pp.portsByNode.get(id) ?? []
 
   const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
@@ -291,27 +335,63 @@ function measureNodeTree(id: string, pp: PreProcessed, opts: Required<NetworkLay
 
   const ps: Record<Side, number> = { top: 0, bottom: 0, left: 0, right: 0 }
   let maxPL = 0
-  for (const p of ports) { ps[p.side]++; maxPL = Math.max(maxPL, p.name.length) }
+  for (const p of ports) {
+    ps[p.side]++
+    maxPL = Math.max(maxPL, p.name.length)
+  }
   const portExt = maxPL > 0 ? maxPL * SMALL_LABEL_CHAR_WIDTH + opts.portLabelPadding : 0
 
-  const w = Math.max(opts.nodeWidth, contentW + NODE_HORIZONTAL_PADDING * 2, Math.max(ps.top, ps.bottom) * opts.minPortSpacing)
-  const h = Math.max(60, contentH + NODE_VERTICAL_PADDING, Math.max(ps.left, ps.right) * opts.minPortSpacing)
+  const w = Math.max(
+    opts.nodeWidth,
+    contentW + NODE_HORIZONTAL_PADDING * 2,
+    Math.max(ps.top, ps.bottom) * opts.minPortSpacing,
+  )
+  const h = Math.max(
+    60,
+    contentH + NODE_VERTICAL_PADDING,
+    Math.max(ps.left, ps.right) * opts.minPortSpacing,
+  )
 
   return {
-    id, kind: 'node', node, ports,
-    ownWidth: w, ownHeight: h,
+    id,
+    kind: 'node',
+    node,
+    ports,
+    ownWidth: w,
+    ownHeight: h,
     ownMargin: {
-      top: ps.top > 0 ? portExt : 0, bottom: ps.bottom > 0 ? portExt : 0,
-      left: ps.left > 0 ? portExt : 0, right: ps.right > 0 ? portExt : 0,
+      top: ps.top > 0 ? portExt : 0,
+      bottom: ps.bottom > 0 ? portExt : 0,
+      left: ps.left > 0 ? portExt : 0,
+      right: ps.right > 0 ? portExt : 0,
     },
-    children: [], childRows: [],
-    columnWidth: w, columnHeight: h,
+    children: [],
+    childRows: [],
+    columnWidth: w,
+    columnHeight: h,
   }
 }
 
-function measureSubgraphTree(id: string, pp: PreProcessed, opts: Required<NetworkLayoutOptions>): TreeNode {
+function measureSubgraphTree(
+  id: string,
+  pp: PreProcessed,
+  opts: Required<NetworkLayoutOptions>,
+): TreeNode {
   const sg = pp.sgMap.get(id)
-  if (!sg) return { id, kind: 'subgraph', subgraph: undefined, ports: [], ownWidth: 0, ownHeight: 0, ownMargin: { top: 0, right: 0, bottom: 0, left: 0 }, children: [], childRows: [], columnWidth: 0, columnHeight: 0 }
+  if (!sg)
+    return {
+      id,
+      kind: 'subgraph',
+      subgraph: undefined,
+      ports: [],
+      ownWidth: 0,
+      ownHeight: 0,
+      ownMargin: { top: 0, right: 0, bottom: 0, left: 0 },
+      children: [],
+      childRows: [],
+      columnWidth: 0,
+      columnHeight: 0,
+    }
 
   // Recursively build internal tree
   const internalTrees = buildTree(id, pp, opts)
@@ -326,7 +406,10 @@ function measureSubgraphTree(id: string, pp: PreProcessed, opts: Required<Networ
     if (i < internalTrees.length - 1) contentW += opts.gap
     contentH = Math.max(contentH, t.columnHeight)
   }
-  if (internalTrees.length === 0) { contentW = opts.nodeWidth; contentH = 40 }
+  if (internalTrees.length === 0) {
+    contentW = opts.nodeWidth
+    contentH = 40
+  }
 
   const pad = opts.subgraphPadding
   const labelH = opts.subgraphLabelHeight
@@ -334,11 +417,17 @@ function measureSubgraphTree(id: string, pp: PreProcessed, opts: Required<Networ
   const h = contentH + pad * 2 + labelH
 
   return {
-    id, kind: 'subgraph', subgraph: sg, ports: [],
-    ownWidth: w, ownHeight: h,
+    id,
+    kind: 'subgraph',
+    subgraph: sg,
+    ports: [],
+    ownWidth: w,
+    ownHeight: h,
     ownMargin: { top: 0, right: 0, bottom: 0, left: 0 },
-    children: [], childRows: [],
-    columnWidth: w, columnHeight: h,
+    children: [],
+    childRows: [],
+    columnWidth: w,
+    columnHeight: h,
     internalTrees, // preserve for arrange pass
   }
 }
@@ -377,7 +466,8 @@ function computeColumnSize(tn: TreeNode, opts: Required<NetworkLayoutOptions>): 
 
   const ownOuter = tn.ownWidth + tn.ownMargin.left + tn.ownMargin.right
   tn.columnWidth = Math.max(ownOuter, maxRowW)
-  tn.columnHeight = tn.ownMargin.top + tn.ownHeight + tn.ownMargin.bottom + opts.topLevelGap + totalRowH
+  tn.columnHeight =
+    tn.ownMargin.top + tn.ownHeight + tn.ownMargin.bottom + opts.topLevelGap + totalRowH
 }
 
 // ============================================================================
@@ -478,7 +568,9 @@ function arrangeTree(
 }
 
 function placeNodePorts(
-  tn: TreeNode, cx: number, cy: number,
+  tn: TreeNode,
+  cx: number,
+  cy: number,
   ports: Map<string, ResolvedPort>,
   allNodes: Map<string, ResolvedNode>,
   graph: NetworkGraph,
@@ -486,7 +578,8 @@ function placeNodePorts(
 ): void {
   const bySide: Record<Side, PortInfo[]> = { top: [], bottom: [], left: [], right: [] }
   for (const p of tn.ports) bySide[p.side].push(p)
-  const hw = tn.ownWidth / 2, hh = tn.ownHeight / 2
+  const hw = tn.ownWidth / 2,
+    hh = tn.ownHeight / 2
 
   // Sort ports on horizontal sides (top/bottom) by connected node's X position,
   // and vertical sides (left/right) by connected node's Y position.
@@ -517,14 +610,29 @@ function placeNodePorts(
       const r = (i + 1) / (sp.length + 1)
       let ax: number, ay: number
       switch (side) {
-        case 'top': ax = cx - hw + tn.ownWidth * r; ay = cy - hh; break
-        case 'bottom': ax = cx - hw + tn.ownWidth * r; ay = cy + hh; break
-        case 'left': ax = cx - hw; ay = cy - hh + tn.ownHeight * r; break
-        case 'right': ax = cx + hw; ay = cy - hh + tn.ownHeight * r; break
+        case 'top':
+          ax = cx - hw + tn.ownWidth * r
+          ay = cy - hh
+          break
+        case 'bottom':
+          ax = cx - hw + tn.ownWidth * r
+          ay = cy + hh
+          break
+        case 'left':
+          ax = cx - hw
+          ay = cy - hh + tn.ownHeight * r
+          break
+        case 'right':
+          ax = cx + hw
+          ay = cy - hh + tn.ownHeight * r
+          break
       }
       ports.set(`${tn.id}:${p.name}`, {
-        id: `${tn.id}:${p.name}`, nodeId: tn.id, label: p.name,
-        absolutePosition: { x: ax, y: ay }, side,
+        id: `${tn.id}:${p.name}`,
+        nodeId: tn.id,
+        label: p.name,
+        absolutePosition: { x: ax, y: ay },
+        side,
         size: { width: opts.portSize, height: opts.portSize },
       })
     }
@@ -539,8 +647,10 @@ function buildPortTargetMap(
 ): Map<string, string> {
   const result = new Map<string, string>()
   for (const link of graph.links) {
-    const fId = epId(link.from), tId = epId(link.to)
-    const fP = epPort(link.from), tP = epPort(link.to)
+    const fId = epId(link.from),
+      tId = epId(link.to)
+    const fP = epPort(link.from),
+      tP = epPort(link.to)
     if (fId === nodeId && fP) result.set(fP, tId)
     if (tId === nodeId && tP) result.set(tP, fId)
   }
@@ -568,7 +678,10 @@ export function layoutNetwork(
   arrangeTrees(trees, 0, 0, opts.topLevelGap, pp, opts, nodes, subgraphs, ports)
 
   // Bounds
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity
   for (const rn of nodes.values()) {
     minX = Math.min(minX, rn.position.x - rn.size.width / 2)
     minY = Math.min(minY, rn.position.y - rn.size.height / 2)
@@ -576,15 +689,24 @@ export function layoutNetwork(
     maxY = Math.max(maxY, rn.position.y + rn.size.height / 2)
   }
   for (const sg of subgraphs.values()) {
-    minX = Math.min(minX, sg.bounds.x); minY = Math.min(minY, sg.bounds.y)
+    minX = Math.min(minX, sg.bounds.x)
+    minY = Math.min(minY, sg.bounds.y)
     maxX = Math.max(maxX, sg.bounds.x + sg.bounds.width)
     maxY = Math.max(maxY, sg.bounds.y + sg.bounds.height)
   }
   const pad = 50
   return {
-    nodes, ports, subgraphs,
-    bounds: minX === Infinity
-      ? { x: 0, y: 0, width: 400, height: 300 }
-      : { x: minX - pad, y: minY - pad, width: maxX - minX + pad * 2, height: maxY - minY + pad * 2 },
+    nodes,
+    ports,
+    subgraphs,
+    bounds:
+      minX === Infinity
+        ? { x: 0, y: 0, width: 400, height: 300 }
+        : {
+            x: minX - pad,
+            y: minY - pad,
+            width: maxX - minX + pad * 2,
+            height: maxY - minY + pad * 2,
+          },
   }
 }

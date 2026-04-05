@@ -88,10 +88,7 @@ function getHASides(direction: Direction): { sourceSide: Side; destSide: Side } 
 /**
  * Assign each port to a side of its node based on link connections.
  */
-function assignPortSides(
-  links: Link[],
-  direction: Direction,
-): PortAssignment[] {
+function assignPortSides(links: Link[], direction: Direction): PortAssignment[] {
   const haPairs = detectHAPairs(links)
   const assignments: PortAssignment[] = []
   const seen = new Set<string>() // "nodeId:portName" dedup

@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { Link } from '../../models/types.js'
-import type { ResolvedNode } from '../resolved-types.js'
 import { placePorts } from '../port-placement.js'
+import type { ResolvedNode } from '../resolved-types.js'
 
 function makeNodes(): Map<string, ResolvedNode> {
   return new Map([

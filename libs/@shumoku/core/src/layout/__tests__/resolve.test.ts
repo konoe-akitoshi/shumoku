@@ -1,10 +1,9 @@
 // Tests for ResolvedLayout conversion
 // Ensures absolute coordinates are correctly computed and round-trip works.
 
-import { describe, it, expect } from 'vitest'
-import type { LayoutResult, Link, Node } from '../../models/types.js'
+import { describe, expect, it } from 'vitest'
+import type { LayoutResult, Link, NetworkGraph, Node } from '../../models/types.js'
 import { resolveLayout, unresolveLayout } from '../resolve.js'
-import type { NetworkGraph } from '../../models/types.js'
 
 function makeTestGraph(): NetworkGraph {
   const nodes: Node[] = [
@@ -80,7 +79,10 @@ function makeTestLayout(graph: NetworkGraph): LayoutResult {
             { x: 200, y: 140 },
             { x: 200, y: 260 },
           ],
-          link: graph.links[0] ?? { from: { node: 'sw1', port: 'eth0' }, to: { node: 'sw2', port: 'eth0' } },
+          link: graph.links[0] ?? {
+            from: { node: 'sw1', port: 'eth0' },
+            to: { node: 'sw2', port: 'eth0' },
+          },
         },
       ],
     ]),

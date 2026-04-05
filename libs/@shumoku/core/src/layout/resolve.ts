@@ -17,7 +17,6 @@ import type {
   LayoutSubgraph,
   LinkEndpoint,
 } from '../models/types.js'
-import { getLinkWidth } from './resolved-types.js'
 import type {
   ResolvedEdge,
   ResolvedLayout,
@@ -25,6 +24,7 @@ import type {
   ResolvedPort,
   ResolvedSubgraph,
 } from './resolved-types.js'
+import { getLinkWidth } from './resolved-types.js'
 
 // ============================================================================
 // LayoutResult → ResolvedLayout
@@ -128,10 +128,7 @@ export function resolveLayout(result: LayoutResult): ResolvedLayout {
 /**
  * Find the port ID for a link endpoint, if the port exists in the layout.
  */
-function resolvePortId(
-  endpoint: LinkEndpoint,
-  nodes: Map<string, LayoutNode>,
-): string | null {
+function resolvePortId(endpoint: LinkEndpoint, nodes: Map<string, LayoutNode>): string | null {
   if (!endpoint.port) return null
   const node = nodes.get(endpoint.node)
   if (!node?.ports) return null

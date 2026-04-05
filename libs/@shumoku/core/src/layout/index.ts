@@ -9,13 +9,14 @@
 // Legacy ELK-based layout (used by server, CLI, renderer-html)
 export type { HierarchicalLayoutOptions } from './hierarchical.js'
 export { HierarchicalLayout } from './hierarchical.js'
-
+export type { LibavoidRoutingOptions } from './libavoid-router.js'
+export { ensureLibavoidLoaded, routeEdges } from './libavoid-router.js'
+export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
 // Custom network layout + libavoid routing
 export { layoutNetwork } from './network-layout.js'
-export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
-export { routeEdges, ensureLibavoidLoaded } from './libavoid-router.js'
-export type { LibavoidRoutingOptions } from './libavoid-router.js'
-
+export { placePorts } from './port-placement.js'
+// Conversion utilities (for backward compatibility with legacy LayoutResult)
+export { resolveLayout, unresolveLayout } from './resolve.js'
 // Resolved layout model (Node/Port/Edge as independent objects)
 export type {
   ResolvedEdge,
@@ -25,7 +26,3 @@ export type {
   ResolvedSubgraph,
 } from './resolved-types.js'
 export { getLinkWidth } from './resolved-types.js'
-
-// Conversion utilities (for backward compatibility with legacy LayoutResult)
-export { resolveLayout, unresolveLayout } from './resolve.js'
-export { placePorts } from './port-placement.js'

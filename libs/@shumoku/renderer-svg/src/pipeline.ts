@@ -123,15 +123,39 @@ export async function prepareRender(
   })
 
   const resolved: ResolvedLayout = {
-    nodes, ports, edges, subgraphs, bounds,
+    nodes,
+    ports,
+    edges,
+    subgraphs,
+    bounds,
     metadata: { algorithm: 'network-layout+libavoid', duration: 0 },
   }
 
   // Also provide legacy layout for backward compatibility
   const layout: LayoutResult = {
-    nodes: new Map([...nodes].map(([id, rn]) => [id, { id, position: rn.position, size: rn.size, node: rn.node }])),
-    links: new Map([...edges].map(([id, re]) => [id, { id, from: re.fromNodeId, to: re.toNodeId, fromEndpoint: re.fromEndpoint, toEndpoint: re.toEndpoint, points: re.points, link: re.link }])),
-    subgraphs: new Map([...subgraphs].map(([id, rs]) => [id, { id, bounds: rs.bounds, subgraph: rs.subgraph }])),
+    nodes: new Map(
+      [...nodes].map(([id, rn]) => [
+        id,
+        { id, position: rn.position, size: rn.size, node: rn.node },
+      ]),
+    ),
+    links: new Map(
+      [...edges].map(([id, re]) => [
+        id,
+        {
+          id,
+          from: re.fromNodeId,
+          to: re.toNodeId,
+          fromEndpoint: re.fromEndpoint,
+          toEndpoint: re.toEndpoint,
+          points: re.points,
+          link: re.link,
+        },
+      ]),
+    ),
+    subgraphs: new Map(
+      [...subgraphs].map(([id, rs]) => [id, { id, bounds: rs.bounds, subgraph: rs.subgraph }]),
+    ),
     bounds,
     metadata: resolved.metadata,
   }

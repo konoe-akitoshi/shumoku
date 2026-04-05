@@ -11,8 +11,8 @@
 
 import { SMALL_LABEL_CHAR_WIDTH } from '../constants.js'
 import type { Link, LinkEndpoint, Position } from '../models/types.js'
-import { getLinkWidth } from './resolved-types.js'
 import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
+import { getLinkWidth } from './resolved-types.js'
 
 // libavoid ConnDirFlags
 const ConnDirUp = 1
@@ -22,10 +22,14 @@ const ConnDirRight = 8
 
 function sideToDir(side: 'top' | 'bottom' | 'left' | 'right'): number {
   switch (side) {
-    case 'top': return ConnDirUp
-    case 'bottom': return ConnDirDown
-    case 'left': return ConnDirLeft
-    case 'right': return ConnDirRight
+    case 'top':
+      return ConnDirUp
+    case 'bottom':
+      return ConnDirDown
+    case 'left':
+      return ConnDirLeft
+    case 'right':
+      return ConnDirRight
   }
 }
 
@@ -78,20 +82,36 @@ export async function routeEdges(
     ...options,
   }
 
-  const routingFlag = opts.edgeStyle === 'polyline'
-    ? Avoid['RouterFlag']['PolyLineRouting'].value
-    : Avoid['RouterFlag']['OrthogonalRouting'].value
+  const routingFlag =
+    opts.edgeStyle === 'polyline'
+      ? Avoid['RouterFlag']['PolyLineRouting'].value
+      : Avoid['RouterFlag']['OrthogonalRouting'].value
 
   const router = new Avoid.Router(routingFlag)
-  router.setRoutingParameter(Avoid['RoutingParameter']['shapeBufferDistance'].value, opts.shapeBufferDistance)
-  router.setRoutingParameter(Avoid['RoutingParameter']['idealNudgingDistance'].value, opts.idealNudgingDistance)
+  router.setRoutingParameter(
+    Avoid['RoutingParameter']['shapeBufferDistance'].value,
+    opts.shapeBufferDistance,
+  )
+  router.setRoutingParameter(
+    Avoid['RoutingParameter']['idealNudgingDistance'].value,
+    opts.idealNudgingDistance,
+  )
   router.setRoutingParameter(Avoid['RoutingParameter']['reverseDirectionPenalty'].value, 500)
   router.setRoutingParameter(Avoid['RoutingParameter']['segmentPenalty'].value, 50)
 
   // Nudging: separate overlapping/parallel edge segments
-  router.setRoutingOption(Avoid['RoutingOption']['nudgeOrthogonalSegmentsConnectedToShapes'].value, true)
-  router.setRoutingOption(Avoid['RoutingOption']['nudgeOrthogonalTouchingColinearSegments'].value, true)
-  router.setRoutingOption(Avoid['RoutingOption']['performUnifyingNudgingPreprocessingStep'].value, true)
+  router.setRoutingOption(
+    Avoid['RoutingOption']['nudgeOrthogonalSegmentsConnectedToShapes'].value,
+    true,
+  )
+  router.setRoutingOption(
+    Avoid['RoutingOption']['nudgeOrthogonalTouchingColinearSegments'].value,
+    true,
+  )
+  router.setRoutingOption(
+    Avoid['RoutingOption']['performUnifyingNudgingPreprocessingStep'].value,
+    true,
+  )
   router.setRoutingOption(Avoid['RoutingOption']['nudgeSharedPathsWithCommonEndPoint'].value, true)
 
   try {
@@ -101,7 +121,6 @@ export async function routeEdges(
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: libavoid-js WASM bindings are untyped
 function doRoute(
   // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
   Avoid: any,
@@ -116,14 +135,17 @@ function doRoute(
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
   const shapeRefs = new Map<string, any>()
   for (const [id, node] of nodes) {
-    shapeRefs.set(id, new Avoid.ShapeRef(
-      router,
-      new Avoid.Rectangle(
-        new Avoid.Point(node.position.x, node.position.y),
-        node.size.width,
-        node.size.height,
+    shapeRefs.set(
+      id,
+      new Avoid.ShapeRef(
+        router,
+        new Avoid.Rectangle(
+          new Avoid.Point(node.position.x, node.position.y),
+          node.size.width,
+          node.size.height,
+        ),
       ),
-    ))
+    )
   }
 
   // Step 2: Register ports as ShapeConnectionPins
@@ -141,20 +163,23 @@ function doRoute(
     const classId = nextClassId++
     pinIds.set(portId, classId)
 
-    const xProp = (port.absolutePosition.x - (node.position.x - node.size.width / 2)) / node.size.width
-    const yProp = (port.absolutePosition.y - (node.position.y - node.size.height / 2)) / node.size.height
+    const xProp =
+      (port.absolutePosition.x - (node.position.x - node.size.width / 2)) / node.size.width
+    const yProp =
+      (port.absolutePosition.y - (node.position.y - node.size.height / 2)) / node.size.height
 
     // Direction = graph flow direction for vertical ports (TB → always down),
     // side direction for horizontal ports (HA).
-    const dir = (port.side === 'top' || port.side === 'bottom')
-      ? ConnDirDown
-      : sideToDir(port.side)
+    const dir = port.side === 'top' || port.side === 'bottom' ? ConnDirDown : sideToDir(port.side)
 
     const pin = new Avoid.ShapeConnectionPin(
-      shape, classId,
+      shape,
+      classId,
       Math.max(0, Math.min(1, xProp)),
       Math.max(0, Math.min(1, yProp)),
-      true, 0, dir,
+      true,
+      0,
+      dir,
     )
     pin.setExclusive(false)
   }
@@ -217,10 +242,18 @@ function doRoute(
       let cpX = dstPortObj.absolutePosition.x
       let cpY = dstPortObj.absolutePosition.y
       switch (dstPortObj.side) {
-        case 'top': cpY -= offset; break
-        case 'bottom': cpY += offset; break
-        case 'left': cpX -= offset; break
-        case 'right': cpX += offset; break
+        case 'top':
+          cpY -= offset
+          break
+        case 'bottom':
+          cpY += offset
+          break
+        case 'left':
+          cpX -= offset
+          break
+        case 'right':
+          cpX += offset
+          break
       }
       const checkpoints = new Avoid.CheckpointVector()
       checkpoints.push_back(new Avoid.Checkpoint(new Avoid.Point(cpX, cpY)))
@@ -253,7 +286,9 @@ function doRoute(
         const dx = Math.abs(startPt.x - testPort.absolutePosition.x)
         const dy = Math.abs(startPt.y - testPort.absolutePosition.y)
         if (dx > 2 || dy > 2) {
-          console.warn(`[libavoid] Pin-based ConnEnd not working (delta=${dx.toFixed(1)},${dy.toFixed(1)}). Falling back to Point-based.`)
+          console.warn(
+            `[libavoid] Pin-based ConnEnd not working (delta=${dx.toFixed(1)},${dy.toFixed(1)}). Falling back to Point-based.`,
+          )
           usePinEndpoints = false
         }
       }
@@ -288,7 +323,8 @@ function doRoute(
       const toPos = toPortObj2?.absolutePosition ?? toNodeObj2?.position
       if (!toPos) continue
 
-      const conn = new Avoid.ConnRef(router,
+      const conn = new Avoid.ConnRef(
+        router,
         new Avoid.ConnEnd(new Avoid.Point(fromPos.x, fromPos.y)),
         new Avoid.ConnEnd(new Avoid.Point(toPos.x, toPos.y)),
       )
@@ -316,9 +352,8 @@ function doRoute(
 
     const first = points[0]
     const last = points[points.length - 1]
-    const finalPoints = edgeStyle === 'straight' && points.length > 2 && first && last
-      ? [first, last]
-      : points
+    const finalPoints =
+      edgeStyle === 'straight' && points.length > 2 && first && last ? [first, last] : points
 
     const fromNodeId = getNodeId(link.from)
     const toNodeId = getNodeId(link.to)
@@ -352,10 +387,10 @@ function doRoute(
 interface Segment {
   edgeId: string
   pointIndex: number // index of the first point in the segment
-  fixed: number      // the shared coordinate (Y for horizontal, X for vertical)
-  min: number        // start of range on the other axis
-  max: number        // end of range
-  width: number      // line width
+  fixed: number // the shared coordinate (Y for horizontal, X for vertical)
+  min: number // start of range on the other axis
+  max: number // end of range
+  width: number // line width
 }
 
 /**
@@ -372,7 +407,8 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
       if (!a || !b) continue
       if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 1) {
         hSegs.push({
-          edgeId, pointIndex: i,
+          edgeId,
+          pointIndex: i,
           fixed: a.y,
           min: Math.min(a.x, b.x),
           max: Math.max(a.x, b.x),
@@ -393,7 +429,8 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
       if (!a || !b) continue
       if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) > 1) {
         vSegs.push({
-          edgeId, pointIndex: i,
+          edgeId,
+          pointIndex: i,
           fixed: a.x,
           min: Math.min(a.y, b.y),
           max: Math.max(a.y, b.y),
@@ -406,11 +443,7 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): void {
   spreadSegments(vSegs, edges, 'x')
 }
 
-function spreadSegments(
-  segs: Segment[],
-  edges: Map<string, ResolvedEdge>,
-  axis: 'x' | 'y',
-): void {
+function spreadSegments(segs: Segment[], edges: Map<string, ResolvedEdge>, axis: 'x' | 'y'): void {
   if (segs.length < 2) return
 
   // Sort by fixed coordinate
