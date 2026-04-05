@@ -11,7 +11,6 @@ import type {
   EdgeStyle,
   LayoutLink,
   LayoutNode,
-  LayoutPort,
   LayoutResult,
   LayoutSubgraph,
   LegendSettings,
@@ -20,6 +19,8 @@ import type {
   NetworkGraph,
   Node,
   NodeShape,
+  ResolvedLayout,
+  ResolvedPort,
   ThemeType,
 } from '@shumoku/core'
 import {
@@ -29,6 +30,7 @@ import {
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
+  SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   type Theme,
 } from '@shumoku/core'
@@ -292,15 +294,89 @@ export class SVGRenderer {
   }
 
   render(graph: NetworkGraph, layout: LayoutResult): string {
+    // Convert LayoutResult ports to ResolvedPort-style for unified rendering
+    const resolvedPorts = new Map<string, ResolvedPort>()
+    for (const node of layout.nodes.values()) {
+      if (!node.ports) continue
+      for (const [portId, lp] of node.ports) {
+        resolvedPorts.set(portId, {
+          id: portId,
+          nodeId: node.id,
+          label: lp.label,
+          absolutePosition: {
+            x: node.position.x + lp.position.x,
+            y: node.position.y + lp.position.y,
+          },
+          side: lp.side,
+          size: lp.size,
+        })
+      }
+    }
+    return this.renderWithPorts(graph, layout, resolvedPorts)
+  }
+
+  /**
+   * Render directly from ResolvedLayout — no conversion needed.
+   * Ports are independent objects with their own position.
+   */
+  renderResolved(graph: NetworkGraph, resolved: ResolvedLayout): string {
+    // ResolvedLayout → LayoutResult-compatible views (nodes, links, subgraphs share same shape)
+    // Only difference: ports are in a separate Map instead of nested in nodes
+    const layoutCompat: LayoutResult = {
+      nodes: new Map(
+        [...resolved.nodes].map(([id, rn]) => [
+          id,
+          {
+            id,
+            position: rn.position,
+            size: rn.size,
+            node: rn.node,
+          },
+        ]),
+      ),
+      links: new Map(
+        [...resolved.edges].map(([id, re]) => [
+          id,
+          {
+            id,
+            from: re.fromNodeId,
+            to: re.toNodeId,
+            fromEndpoint: re.fromEndpoint,
+            toEndpoint: re.toEndpoint,
+            points: re.points,
+            link: re.link,
+          },
+        ]),
+      ),
+      subgraphs: new Map(
+        [...resolved.subgraphs].map(([id, rs]) => [
+          id,
+          {
+            id,
+            bounds: rs.bounds,
+            subgraph: rs.subgraph,
+          },
+        ]),
+      ),
+      bounds: resolved.bounds,
+      metadata: resolved.metadata,
+    }
+    return this.renderWithPorts(graph, layoutCompat, resolved.ports)
+  }
+
+  /**
+   * Core render with ports as independent objects (position = absolute).
+   */
+  private renderWithPorts(
+    graph: NetworkGraph,
+    layout: LayoutResult,
+    ports: Map<string, ResolvedPort>,
+  ): string {
     const { bounds } = layout
 
-    // Set theme based on graph settings
     this.setTheme(graph.settings?.theme)
-
-    // Set edge style for link rendering
     this.edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
 
-    // Calculate legend dimensions if enabled
     const legendSettings = this.getLegendSettings(graph.settings?.legend)
     let legendWidth = 0
     let legendHeight = 0
@@ -310,7 +386,6 @@ export class SVGRenderer {
       legendHeight = legendDims.height
     }
 
-    // Expand bounds to include legend with padding
     const legendPadding = 20
     const expandedBounds = {
       x: bounds.x,
@@ -320,48 +395,36 @@ export class SVGRenderer {
     }
 
     const parts: string[] = []
-
-    // SVG header using expanded bounds
     const viewBox = `${expandedBounds.x} ${expandedBounds.y} ${expandedBounds.width} ${expandedBounds.height}`
     parts.push(this.renderHeader(expandedBounds.width, expandedBounds.height, viewBox))
-
-    // Defs (markers, gradients)
     parts.push(this.renderDefs())
-
-    // Styles
     parts.push(this.renderStyles())
 
-    // Layer 1: Subgraphs (background)
+    // Layer 1: Subgraphs
     for (const sg of layout.subgraphs.values()) {
       parts.push(this.renderSubgraph(sg))
     }
 
-    // Layer 2: Links (below nodes)
+    // Layer 2: Links
     for (const link of layout.links.values()) {
       parts.push(this.renderLink(link, layout.nodes))
     }
 
-    // Layer 3: Nodes (bg + fg as one unit, without ports)
+    // Layer 3: Nodes
     for (const node of layout.nodes.values()) {
       parts.push(this.renderNode(node))
     }
 
-    // Layer 4: Ports (separate layer on top of nodes)
-    for (const node of layout.nodes.values()) {
-      const portsRendered = this.renderPorts(node.id, node.position.x, node.position.y, node.ports)
-      if (portsRendered) {
-        parts.push(portsRendered)
-      }
+    // Layer 4: Ports — each port drawn at its own position (no offset calculation)
+    for (const port of ports.values()) {
+      parts.push(this.renderResolvedPort(port))
     }
 
-    // Legend (if enabled) - use already calculated legendSettings
     if (legendSettings.enabled && legendWidth > 0) {
       parts.push(this.renderLegend(graph, layout, legendSettings))
     }
 
-    // Close SVG
     parts.push('</svg>')
-
     return parts.join('\n')
   }
 
@@ -842,86 +905,62 @@ ${fg}
   }
 
   /**
-   * Render ports on a node (as separate groups)
+   * Render a single port at its own position (no node offset needed).
    */
-  private renderPorts(
-    nodeId: string,
-    nodeX: number,
-    nodeY: number,
-    ports?: Map<string, LayoutPort>,
-  ): string {
-    if (!ports || ports.size === 0) return ''
+  private renderResolvedPort(port: ResolvedPort): string {
+    const px = port.absolutePosition.x
+    const py = port.absolutePosition.y
+    const pw = port.size.width
+    const ph = port.size.height
 
-    const groups: string[] = []
+    const portDeviceAttr = this.isInteractive ? ` data-port-device="${port.nodeId}"` : ''
+    const parts: string[] = []
 
-    for (const port of ports.values()) {
-      const px = nodeX + port.position.x
-      const py = nodeY + port.position.y
-      const pw = port.size.width
-      const ph = port.size.height
-
-      // Port data attribute for interactive mode
-      const portDeviceAttr = this.isInteractive ? ` data-port-device="${nodeId}"` : ''
-
-      const parts: string[] = []
-
-      // Port box
-      parts.push(`<rect class="port-box"
+    // Port box
+    parts.push(`<rect class="port-box"
         x="${px - pw / 2}" y="${py - ph / 2}" width="${pw}" height="${ph}"
         fill="${this.color('portFill')}" stroke="${this.color('portStroke')}" stroke-width="1" rx="2" />`)
 
-      // Port label - position based on side
-      let labelX = px
-      let labelY = py
-      let textAnchor = 'middle'
-      const labelOffset = 12
+    // Port label
+    let labelX = px
+    let labelY = py
+    let textAnchor = 'middle'
+    const labelOffset = 12
 
-      switch (port.side) {
-        case 'top':
-          labelY = py - labelOffset
-          break
-        case 'bottom':
-          labelY = py + labelOffset + 4
-          break
-        case 'left':
-          labelX = px - labelOffset
-          textAnchor = 'end'
-          break
-        case 'right':
-          labelX = px + labelOffset
-          textAnchor = 'start'
-          break
-      }
-
-      // Port label with black background
-      const labelText = this.escapeXml(port.label)
-      const charWidth = 5.5
-      const labelWidth = labelText.length * charWidth + 4
-      const labelHeight = 12
-
-      // Calculate background rect position based on text anchor
-      let bgX = labelX - 2
-      if (textAnchor === 'middle') {
-        bgX = labelX - labelWidth / 2
-      } else if (textAnchor === 'end') {
-        bgX = labelX - labelWidth + 2
-      }
-      const bgY = labelY - labelHeight + 3
-
-      parts.push(
-        `<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.color('portLabelBg')}" />`,
-      )
-      parts.push(
-        `<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.color('portLabelColor')}">${labelText}</text>`,
-      )
-
-      // Wrap in a group with data attributes
-      groups.push(`<g class="port" data-port="${port.id}"${portDeviceAttr}>
-  ${parts.join('\n  ')}
-</g>`)
+    switch (port.side) {
+      case 'top':
+        labelY = py - labelOffset
+        break
+      case 'bottom':
+        labelY = py + labelOffset + 4
+        break
+      case 'left':
+        labelX = px - labelOffset
+        textAnchor = 'end'
+        break
+      case 'right':
+        labelX = px + labelOffset
+        textAnchor = 'start'
+        break
     }
 
-    return groups.join('\n')
+    const labelText = this.escapeXml(port.label)
+    const labelWidth = labelText.length * SMALL_LABEL_CHAR_WIDTH + 4
+    const labelHeight = 12
+
+    let bgX = labelX - 2
+    if (textAnchor === 'middle') bgX = labelX - labelWidth / 2
+    else if (textAnchor === 'end') bgX = labelX - labelWidth + 2
+    const bgY = labelY - labelHeight + 3
+
+    parts.push(
+      `<rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${this.color('portLabelBg')}" />`,
+    )
+    parts.push(
+      `<text class="port-label" x="${labelX}" y="${labelY}" text-anchor="${textAnchor}" font-size="9" fill="${this.color('portLabelColor')}">${labelText}</text>`,
+    )
+
+    return `<g class="port" data-port="${port.id}"${portDeviceAttr}>\n  ${parts.join('\n  ')}\n</g>`
   }
 
   private renderNodeShape(
@@ -1354,12 +1393,11 @@ ${fg}
     if (lines.length === 0) return ''
 
     const lineHeight = 12
-    const charWidth = 5.5
     const paddingX = 4
 
     // Calculate dimensions
     const maxLen = Math.max(...lines.map((l) => l.length))
-    const rectWidth = maxLen * charWidth + paddingX
+    const rectWidth = maxLen * SMALL_LABEL_CHAR_WIDTH + paddingX
     const rectHeight = lines.length * lineHeight
 
     // Adjust rect position based on text anchor
@@ -1471,115 +1509,6 @@ ${linePath}
   }
 
   /**
-   * Simplify orthogonal path by absorbing micro-jogs.
-   * When the layout creates a short segment (< minLen) between two longer segments,
-   * it's typically a micro-offset (e.g., 5px horizontal jog between two long vertical runs).
-   * We absorb these by snapping the short segment's endpoints onto the adjacent segments'
-   * axis, effectively straightening the path.
-   *
-   * Example: ... → (100, 500) → (105, 500) → (105, 800) → ...
-   *   The 5px horizontal jog is absorbed: → (105, 500) → (105, 800) → ...
-   *   (or → (100, 500) → (100, 800) depending on which neighbor is longer)
-   */
-  private simplifyMicroJogs(
-    points: { x: number; y: number }[],
-    minLen: number,
-  ): { x: number; y: number }[] {
-    if (points.length <= 3) return points
-
-    // Iteratively remove micro-jogs until stable
-    let pts = points
-    let changed = true
-    while (changed) {
-      changed = false
-      if (pts.length <= 3) break
-
-      const first = pts[0]
-      if (!first) break
-      const result: { x: number; y: number }[] = [first]
-
-      let i = 1
-      while (i < pts.length - 1) {
-        const prev = result[result.length - 1]
-        const curr = pts[i]
-        const next = pts[i + 1]
-        if (!prev || !curr || !next) {
-          i++
-          continue
-        }
-
-        const distToCurr = Math.hypot(curr.x - prev.x, curr.y - prev.y)
-
-        if (distToCurr < minLen && i + 1 < pts.length - 1) {
-          // This segment is short — it's a micro-jog.
-          // Absorb by skipping curr and adjusting next to align with prev's axis.
-          const distToNext = Math.hypot(next.x - curr.x, next.y - curr.y)
-          const distPrevToCurr = distToCurr
-
-          if (distToNext > distPrevToCurr) {
-            // Next segment is longer: snap curr onto next's line
-            // If the short segment is mostly horizontal, inherit next's x
-            // If mostly vertical, inherit next's y
-            if (Math.abs(curr.x - prev.x) > Math.abs(curr.y - prev.y)) {
-              // Short horizontal jog → snap prev endpoint's x to curr/next's x
-              result[result.length - 1] = { x: next.x, y: prev.y }
-            } else {
-              // Short vertical jog → snap prev endpoint's y to curr/next's y
-              result[result.length - 1] = { x: prev.x, y: next.y }
-            }
-          } else {
-            // Prev segment is longer: snap next onto prev's line
-            if (Math.abs(curr.x - prev.x) > Math.abs(curr.y - prev.y)) {
-              pts[i + 1] = { x: prev.x, y: next.y }
-            } else {
-              pts[i + 1] = { x: next.x, y: prev.y }
-            }
-          }
-          // Skip the micro-jog point
-          changed = true
-          i++
-          continue
-        }
-
-        result.push(curr)
-        i++
-      }
-
-      // Add remaining points
-      for (const pt of pts.slice(i)) {
-        result.push(pt)
-      }
-
-      pts = result
-    }
-
-    // Final pass: remove collinear points
-    if (pts.length <= 2) return pts
-    const firstPt = pts[0]
-    if (!firstPt) return pts
-    const cleaned: { x: number; y: number }[] = [firstPt]
-    let prev = firstPt
-    for (const [i, curr] of pts.slice(1, -1).entries()) {
-      const originalIdx = i + 1
-      const next = pts[originalIdx + 1]
-      if (!next) continue
-      // Check if collinear (same direction)
-      const dx1 = curr.x - prev.x
-      const dy1 = curr.y - prev.y
-      const dx2 = next.x - curr.x
-      const dy2 = next.y - curr.y
-      const cross = dx1 * dy2 - dy1 * dx2
-      if (Math.abs(cross) > 0.01) {
-        cleaned.push(curr)
-        prev = curr
-      }
-    }
-    const lastPt = pts[pts.length - 1]
-    if (lastPt) cleaned.push(lastPt)
-    return cleaned
-  }
-
-  /**
    * Build a filleted centerline: sequence of line segments and arc definitions.
    * Each corner is represented by its arc center, radius, tangent points, and sweep direction.
    */
@@ -1595,8 +1524,10 @@ ${linePath}
       return [{ type: 'line', from: firstPoint, to: lastPoint }]
     }
 
-    // Simplify micro-jogs that the layout engine creates
-    const merged = this.simplifyMicroJogs(points, cornerRadius * 2)
+    // Use points directly — corner radius clamping handles short segments.
+    // simplifyMicroJogs was previously used here but it destructively
+    // altered paths, causing loops and backward segments (#79).
+    const merged = points
 
     const segments: CenterlineSegment[] = []
     let prevEnd = merged[0]

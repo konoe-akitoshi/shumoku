@@ -23,11 +23,12 @@ export const NODE_HORIZONTAL_PADDING = 16
 /** Minimum spacing between ports in pixels (fallback when no labels) */
 export const MIN_PORT_SPACING = 48
 
-/** Port label font size in pixels */
-export const PORT_LABEL_FONT_SIZE = 9
-
-/** Character width ratio relative to font size (for proportional fonts ~0.55, monospace ~0.6) */
-export const CHAR_WIDTH_RATIO = 0.55
+/**
+ * Estimated average character width for port/endpoint labels (font-size: 9px).
+ * Used by both layout engine (spacing calculation) and renderer (background rect sizing).
+ * Derived from empirical measurement of proportional fonts at 9px.
+ */
+export const SMALL_LABEL_CHAR_WIDTH = 5.5
 
 /** Padding around port label for spacing calculation */
 export const PORT_LABEL_PADDING = 16
@@ -35,5 +36,5 @@ export const PORT_LABEL_PADDING = 16
 /** Maximum icon width as percentage of node width (0.0 - 1.0) */
 export const MAX_ICON_WIDTH_RATIO = 0.6
 
-/** Estimated character width for node label width calculation (larger font) */
+/** Estimated character width for node label width calculation (larger font, ~14px) */
 export const ESTIMATED_CHAR_WIDTH = 7

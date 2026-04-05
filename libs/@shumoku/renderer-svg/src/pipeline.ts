@@ -11,11 +11,13 @@
 
 import {
   darkTheme,
-  HierarchicalLayout,
   type HierarchicalLayoutOptions,
   type LayoutResult,
+  layoutNetwork,
   lightTheme,
   type NetworkGraph,
+  type ResolvedLayout,
+  routeEdges,
   type SurfaceToken,
 } from '@shumoku/core'
 import { type ResolvedIconDimensions, resolveIconDimensionsForGraph } from './cdn-icons.js'
@@ -27,8 +29,10 @@ import { collectIconUrls, SVGRenderer } from './svg.js'
 export interface PreparedRender {
   /** Original network graph */
   graph: NetworkGraph
-  /** Computed layout result */
+  /** Computed layout result (legacy format, used by ELK pipeline) */
   layout: LayoutResult
+  /** Resolved layout (new format, used by network pipeline) */
+  resolved?: ResolvedLayout
   /** Resolved icon dimensions (null if no CDN icons used) */
   iconDimensions: ResolvedIconDimensions | null
 }
@@ -102,17 +106,61 @@ export async function prepareRender(
     }
   }
 
-  // 2. Compute layout (skip if already provided)
-  let layout = options?.layout
-  if (!layout) {
-    const layoutEngine = new HierarchicalLayout({
-      ...options?.layoutOptions,
-      iconDimensions: iconDimensions?.byKey,
-    })
-    layout = await layoutEngine.layoutAsync(graph)
+  // 2. Compute layout
+  if (options?.layout) {
+    // Pre-computed legacy layout
+    return { graph, layout: options.layout, iconDimensions }
   }
 
-  return { graph, layout, iconDimensions }
+  // Custom network layout + libavoid routing
+  // 3 steps: place nodes+ports → route edges → done
+  const direction = graph.settings?.direction ?? options?.layoutOptions?.direction ?? 'TB'
+  const edgeStyle = graph.settings?.edgeStyle ?? options?.layoutOptions?.edgeStyle ?? 'orthogonal'
+
+  const { nodes, ports, subgraphs, bounds } = layoutNetwork(graph, { direction })
+  const edges = await routeEdges(nodes, ports, graph.links, {
+    edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
+  })
+
+  const resolved: ResolvedLayout = {
+    nodes,
+    ports,
+    edges,
+    subgraphs,
+    bounds,
+    metadata: { algorithm: 'network-layout+libavoid', duration: 0 },
+  }
+
+  // Also provide legacy layout for backward compatibility
+  const layout: LayoutResult = {
+    nodes: new Map(
+      [...nodes].map(([id, rn]) => [
+        id,
+        { id, position: rn.position, size: rn.size, node: rn.node },
+      ]),
+    ),
+    links: new Map(
+      [...edges].map(([id, re]) => [
+        id,
+        {
+          id,
+          from: re.fromNodeId,
+          to: re.toNodeId,
+          fromEndpoint: re.fromEndpoint,
+          toEndpoint: re.toEndpoint,
+          points: re.points,
+          link: re.link,
+        },
+      ]),
+    ),
+    subgraphs: new Map(
+      [...subgraphs].map(([id, rs]) => [id, { id, bounds: rs.bounds, subgraph: rs.subgraph }]),
+    ),
+    bounds,
+    metadata: resolved.metadata,
+  }
+
+  return { graph, layout, resolved, iconDimensions }
 }
 
 /**
@@ -126,6 +174,10 @@ export async function renderSvg(
     renderMode: options?.renderMode ?? 'static',
     iconDimensions: prepared.iconDimensions?.byUrl,
   })
+  // Use resolved layout directly (no conversion) when available
+  if (prepared.resolved) {
+    return renderer.renderResolved(prepared.graph, prepared.resolved)
+  }
   return renderer.render(prepared.graph, prepared.layout)
 }
 
@@ -160,13 +212,15 @@ export function renderEmbeddable(
     renderMode: 'interactive',
     iconDimensions: prepared.iconDimensions?.byUrl,
   })
-  const svg = renderer.render(prepared.graph, prepared.layout)
+  const svg = prepared.resolved
+    ? renderer.renderResolved(prepared.graph, prepared.resolved)
+    : renderer.render(prepared.graph, prepared.layout)
 
   // Build CSS for interactivity
   const css = generateEmbeddableCSS(options?.toolbar ?? false)
 
   // Compute viewBox from layout bounds with padding
-  const bounds = prepared.layout.bounds
+  const bounds = prepared.resolved?.bounds ?? prepared.layout.bounds
   const padding = 40
   const viewBox = {
     x: bounds.x - padding,
