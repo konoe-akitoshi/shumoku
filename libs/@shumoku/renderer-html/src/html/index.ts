@@ -7,7 +7,12 @@
  * Generates standalone interactive HTML pages from NetworkGraph
  */
 
-import type { HierarchicalNetworkGraph, LayoutResult, NetworkGraph, ResolvedLayout } from '@shumoku/core'
+import type {
+  HierarchicalNetworkGraph,
+  LayoutResult,
+  NetworkGraph,
+  ResolvedLayout,
+} from '@shumoku/core'
 import type { HTMLRendererOptions } from '@shumoku/renderer-svg'
 import { BRANDING_ICON_SVG, SVGRenderer } from '@shumoku/renderer-svg'
 import {

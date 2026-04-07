@@ -11,7 +11,12 @@ import { dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import type { NetworkGraph } from '@shumoku/core'
-import { buildHierarchicalSheets, computeNetworkLayout, createNetworkLayoutEngine, parser } from '@shumoku/core'
+import {
+  buildHierarchicalSheets,
+  computeNetworkLayout,
+  createNetworkLayoutEngine,
+  parser,
+} from '@shumoku/core'
 import {
   render as renderHtml,
   renderHierarchical as renderHtmlHierarchical,
