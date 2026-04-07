@@ -52,8 +52,13 @@ export async function ensureLibavoidLoaded(): Promise<any> {
     const { AvoidLib } = await import('libavoid-js')
     const isBrowser = typeof window !== 'undefined'
     if (isBrowser) {
+      // Browser: fetch from public directory (bypasses i18n rewrites)
       await AvoidLib.load(`${window.location.origin}/libavoid.wasm`)
+    } else if (process.env['LIBAVOID_WASM_PATH']) {
+      // Server/Docker: explicit path via environment variable
+      await AvoidLib.load(process.env['LIBAVOID_WASM_PATH'])
     } else {
+      // Default: libavoid-js resolves from node_modules
       await AvoidLib.load()
     }
     avoidInstance = AvoidLib.getInstance()
