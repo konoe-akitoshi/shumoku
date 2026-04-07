@@ -29,11 +29,8 @@
   "type": "module",
   "dependencies": {
     "@shumoku/core": "workspace:*",
-    "@types/cytoscape": "^3.31.0",
     "bits-ui": "^2.15.4",
     "clsx": "^2.1.1",
-    "cytoscape": "^3.33.1",
-    "cytoscape-elk": "^2.3.0",
     "gridstack": "^11.0.1",
     "panzoom": "^9.4.3",
     "phosphor-svelte": "^3.0.1",

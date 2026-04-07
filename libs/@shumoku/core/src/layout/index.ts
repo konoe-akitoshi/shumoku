@@ -6,9 +6,6 @@
  * Shumoku Layout Engines
  */
 
-// Legacy ELK-based layout (used by server, CLI, renderer-html)
-export type { HierarchicalLayoutOptions } from './hierarchical.js'
-export { HierarchicalLayout } from './hierarchical.js'
 export type { LibavoidRoutingOptions } from './libavoid-router.js'
 export { ensureLibavoidLoaded, routeEdges } from './libavoid-router.js'
 export { getLinkWidth } from './link-utils.js'
