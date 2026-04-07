@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { sampleNetwork } from './fixtures/index.js'
-import { darkTheme, HierarchicalLayout, lightTheme, version } from './index.js'
+import { createNetworkLayoutEngine, darkTheme, lightTheme, version } from './index.js'
 import type { NetworkGraph } from './models/index.js'
 
 describe('@shumoku/core', () => {
@@ -13,8 +13,8 @@ describe('@shumoku/core', () => {
       expect(version).toBeDefined()
     })
 
-    it('should export HierarchicalLayout', () => {
-      expect(HierarchicalLayout).toBeDefined()
+    it('should export createNetworkLayoutEngine', () => {
+      expect(createNetworkLayoutEngine).toBeDefined()
     })
 
     it('should export themes', () => {
@@ -23,26 +23,27 @@ describe('@shumoku/core', () => {
     })
   })
 
-  describe('HierarchicalLayout', () => {
+  describe('NetworkLayoutEngine', () => {
     it('should create instance', () => {
-      const engine = new HierarchicalLayout()
-      expect(engine).toBeInstanceOf(HierarchicalLayout)
+      const engine = createNetworkLayoutEngine()
+      expect(engine).toBeDefined()
+      expect(engine.layoutAsync).toBeDefined()
     })
 
     it('should layout empty graph', async () => {
-      const engine = new HierarchicalLayout()
+      const engine = createNetworkLayoutEngine()
       const graph: NetworkGraph = {
         nodes: [],
         links: [],
       }
-      const result = await engine.layout(graph)
+      const result = await engine.layoutAsync(graph)
       expect(result).toBeDefined()
       expect(result.nodes).toBeDefined()
       expect(result.links).toBeDefined()
     })
 
     it('should layout graph with nodes only', async () => {
-      const engine = new HierarchicalLayout()
+      const engine = createNetworkLayoutEngine()
       const graph: NetworkGraph = {
         nodes: [
           { id: 'router1', label: 'Router 1', type: 'router' },
@@ -50,7 +51,7 @@ describe('@shumoku/core', () => {
         ],
         links: [],
       }
-      const result = await engine.layout(graph)
+      const result = await engine.layoutAsync(graph)
       expect(result.nodes.size).toBe(2)
     })
   })
@@ -77,8 +78,8 @@ describe('@shumoku/core', () => {
     })
 
     it('should have main.yaml as first file', () => {
-      expect(sampleNetwork[0].name).toBe('main.yaml')
-      expect(sampleNetwork[0].content).toContain('Sample Network')
+      expect(sampleNetwork[0]?.name).toBe('main.yaml')
+      expect(sampleNetwork[0]?.content).toContain('Sample Network')
     })
 
     it('should have all required files', () => {

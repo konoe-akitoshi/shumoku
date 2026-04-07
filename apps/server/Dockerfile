@@ -68,6 +68,10 @@ RUN getent group 1000 || groupadd --gid 1000 shumoku \
 # Copy bundled server
 COPY --from=builder /app/apps/server/api/dist/bundle.js ./server.js
 
+# Copy libavoid WASM (needed at runtime for edge routing)
+# bun stores packages in node_modules/.bun/ with versioned directories
+COPY --from=builder /app/libs/@shumoku/core/node_modules/libavoid-js/dist/libavoid.wasm ./libavoid.wasm
+
 # Copy web UI build
 COPY --from=builder /app/apps/server/web/build ./web/build
 
@@ -78,6 +82,7 @@ RUN mkdir -p /data && chown -R 1000:1000 /data /app
 ENV DATA_DIR=/data
 ENV PORT=8080
 ENV HOST=0.0.0.0
+ENV LIBAVOID_WASM_PATH=/app/libavoid.wasm
 
 # Switch to non-root user
 USER 1000

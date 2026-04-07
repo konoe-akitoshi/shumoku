@@ -7,8 +7,9 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import type { IconDimensions, LayoutResult, NetworkGraph } from '@shumoku/core'
+import type { IconDimensions, LayoutResult, NetworkGraph, ResolvedLayout } from '@shumoku/core'
 import {
+  computeNetworkLayout,
   createMemoryFileResolver,
   HierarchicalParser,
   sampleNetwork,
@@ -16,7 +17,6 @@ import {
 } from '@shumoku/core'
 import { collectIconUrls, resolveIconDimensionsForGraph } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
-import { computeLayout } from '../layout.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
 
 interface TopologyRow {
@@ -72,6 +72,7 @@ export interface ParsedTopology {
   name: string
   graph: NetworkGraph
   layout: LayoutResult
+  resolved?: ResolvedLayout
   iconDimensions: ResolvedIconDimensions
   metrics: MetricsData
   topologySourceId?: string
@@ -393,7 +394,7 @@ export class TopologyService {
 
     // Compute layout with icon dimensions for proper node sizing
     // Use byKey (vendor/model format) for layout engine
-    const layoutResult = await computeLayout(graph)
+    const { resolved, layout: layoutResult } = await computeNetworkLayout(graph)
     const metrics = this.createEmptyMetrics(graph)
 
     let mapping: MetricsMapping | undefined
@@ -410,6 +411,7 @@ export class TopologyService {
       name: topology.name,
       graph,
       layout: layoutResult,
+      resolved,
       iconDimensions,
       metrics,
       topologySourceId: topology.topologySourceId,

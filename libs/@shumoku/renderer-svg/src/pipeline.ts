@@ -12,7 +12,6 @@
 import {
   computeNetworkLayout,
   darkTheme,
-  type HierarchicalLayoutOptions,
   type LayoutResult,
   lightTheme,
   type NetworkGraph,
@@ -44,8 +43,6 @@ export interface PrepareOptions {
   layout?: LayoutResult
   /** Pre-resolved icon dimensions. If provided, icon resolution is skipped. */
   iconDimensions?: ResolvedIconDimensions
-  /** Options for HierarchicalLayout (ignored if layout is provided) */
-  layoutOptions?: Omit<HierarchicalLayoutOptions, 'iconDimensions'>
 }
 
 /**

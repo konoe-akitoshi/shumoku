@@ -7,7 +7,12 @@
  * Generates standalone interactive HTML pages from NetworkGraph
  */
 
-import type { HierarchicalNetworkGraph, LayoutResult, NetworkGraph } from '@shumoku/core'
+import type {
+  HierarchicalNetworkGraph,
+  LayoutResult,
+  NetworkGraph,
+  ResolvedLayout,
+} from '@shumoku/core'
 import type { HTMLRendererOptions } from '@shumoku/renderer-svg'
 import { BRANDING_ICON_SVG, SVGRenderer } from '@shumoku/renderer-svg'
 import {
@@ -62,6 +67,11 @@ export interface RenderOptions extends HTMLRendererOptions {
    * Pre-resolved icon dimensions for proper aspect ratio rendering
    */
   iconDimensions?: Map<string, { width: number; height: number }>
+
+  /**
+   * ResolvedLayout for new render path (uses renderResolved)
+   */
+  resolved?: ResolvedLayout
 }
 
 const DEFAULT_OPTIONS = {
@@ -85,7 +95,9 @@ export function render(graph: NetworkGraph, layout: LayoutResult, options?: Rend
     renderMode: 'interactive',
     iconDimensions: options?.iconDimensions,
   })
-  const svg = svgRenderer.render(graph, layout)
+  const svg = options?.resolved
+    ? svgRenderer.renderResolved(graph, options.resolved)
+    : svgRenderer.render(graph, layout)
   const title = options?.title || graph.name || 'Network Diagram'
 
   // Build navigation state if hierarchical
@@ -103,6 +115,7 @@ export function render(graph: NetworkGraph, layout: LayoutResult, options?: Rend
 export interface SheetData {
   graph: NetworkGraph
   layout: LayoutResult
+  resolved?: ResolvedLayout
 }
 
 /**
@@ -128,7 +141,9 @@ export function renderHierarchical(
       sheetId,
       iconDimensions: options?.iconDimensions,
     })
-    const svg = svgRenderer.render(data.graph, data.layout)
+    const svg = data.resolved
+      ? svgRenderer.renderResolved(data.graph, data.resolved)
+      : svgRenderer.render(data.graph, data.layout)
     sheetSvgs.set(sheetId, svg)
     sheetInfos.set(sheetId, {
       id: sheetId,
@@ -144,7 +159,9 @@ export function renderHierarchical(
       sheetId: 'root',
       iconDimensions: options?.iconDimensions,
     })
-    const rootSvg = rootRenderer.render(rootSheet.graph, rootSheet.layout)
+    const rootSvg = rootSheet.resolved
+      ? rootRenderer.renderResolved(rootSheet.graph, rootSheet.resolved)
+      : rootRenderer.render(rootSheet.graph, rootSheet.layout)
     sheetSvgs.set('root', rootSvg)
     sheetInfos.set('root', {
       id: 'root',

@@ -25,6 +25,9 @@ export function createNetworkLayoutEngine(): LayoutEngine {
       const { layout } = await computeNetworkLayout(graph)
       return layout
     },
+    async layoutWithResolved(graph: NetworkGraph) {
+      return computeNetworkLayout(graph)
+    },
   }
 }
 
@@ -53,13 +56,48 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
     metadata: { algorithm: 'network-layout+libavoid', duration: 0 },
   }
 
-  const layout: LayoutResult = {
-    nodes: new Map(
-      [...nodes].map(([id, rn]) => [
+  // Build LayoutResult with ports converted from absolute to center-relative
+  const layoutNodes = new Map(
+    [...nodes].map(([id, rn]) => {
+      // Collect ports for this node, convert absolute → center-relative
+      const nodePorts = new Map<
+        string,
+        {
+          id: string
+          label: string
+          position: { x: number; y: number }
+          size: { width: number; height: number }
+          side: 'top' | 'bottom' | 'left' | 'right'
+        }
+      >()
+      for (const [portId, rp] of ports) {
+        if (rp.nodeId !== id) continue
+        nodePorts.set(portId, {
+          id: portId,
+          label: rp.label,
+          position: {
+            x: rp.absolutePosition.x - rn.position.x,
+            y: rp.absolutePosition.y - rn.position.y,
+          },
+          size: rp.size,
+          side: rp.side,
+        })
+      }
+      return [
         id,
-        { id, position: rn.position, size: rn.size, node: rn.node },
-      ]),
-    ),
+        {
+          id,
+          position: rn.position,
+          size: rn.size,
+          node: rn.node,
+          ...(nodePorts.size > 0 ? { ports: nodePorts } : {}),
+        },
+      ] as const
+    }),
+  )
+
+  const layout: LayoutResult = {
+    nodes: layoutNodes,
     links: new Map(
       [...edges].map(([id, re]) => [
         id,

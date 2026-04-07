@@ -22,12 +22,10 @@
     "shumoku-plugin-prometheus": "workspace:*",
     "shumoku-plugin-zabbix": "workspace:*",
     "adm-zip": "^0.5.16",
-    "elkjs": "^0.11.0",
     "hono": "^4.7.11",
     "js-yaml": "^4.1.0",
     "nanoid": "^5.0.9",
-    "tar": "^7.5.7",
-    "web-worker": "^1.5.0"
+    "tar": "^7.5.7"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",

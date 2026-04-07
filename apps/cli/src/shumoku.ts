@@ -11,7 +11,12 @@ import { dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import type { NetworkGraph } from '@shumoku/core'
-import { buildHierarchicalSheets, createNetworkLayoutEngine, parser } from '@shumoku/core'
+import {
+  buildHierarchicalSheets,
+  computeNetworkLayout,
+  createNetworkLayoutEngine,
+  parser,
+} from '@shumoku/core'
 import {
   render as renderHtml,
   renderHierarchical as renderHtmlHierarchical,
@@ -19,7 +24,7 @@ import {
 } from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 import { png } from '@shumoku/renderer-png'
-import { svg } from '@shumoku/renderer-svg'
+import { SVGRenderer } from '@shumoku/renderer-svg'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'))
@@ -161,15 +166,15 @@ async function main(): Promise<void> {
 
     // Layout
     console.log('Generating layout...')
-    const layout = createNetworkLayoutEngine()
-    const layoutResult = await layout.layoutAsync(graph)
+    const engine = createNetworkLayoutEngine()
+    const { resolved, layout: layoutResult } = await computeNetworkLayout(graph)
 
     // Render
     if (format === 'html') {
       console.log('Rendering HTML...')
       setIIFE(INTERACTIVE_IIFE)
 
-      const sheets = await buildHierarchicalSheets(graph, layoutResult, layout)
+      const sheets = await buildHierarchicalSheets(graph, layoutResult, engine)
 
       if (sheets.size > 1) {
         writeFileSync(outputPath, renderHtmlHierarchical(sheets), 'utf-8')
@@ -183,7 +188,8 @@ async function main(): Promise<void> {
       writeFileSync(outputPath, pngBuffer)
     } else {
       console.log('Rendering SVG...')
-      writeFileSync(outputPath, svg.render(graph, layoutResult), 'utf-8')
+      const renderer = new SVGRenderer({})
+      writeFileSync(outputPath, renderer.renderResolved(graph, resolved), 'utf-8')
     }
 
     console.log(`Output written to: ${outputPath}`)
