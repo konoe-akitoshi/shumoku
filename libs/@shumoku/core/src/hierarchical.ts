@@ -7,6 +7,7 @@
  * Shared logic for building child sheets with export connectors
  */
 
+import type { ResolvedLayout } from './layout/resolved-types.js'
 import type { LayoutResult, Link, NetworkGraph, Node, Subgraph } from './models/types.js'
 
 // ============================================
@@ -23,10 +24,15 @@ const EXPORT_LINK_PREFIX = '__export_link_'
 export interface SheetData {
   graph: NetworkGraph
   layout: LayoutResult
+  resolved?: ResolvedLayout
 }
 
 export interface LayoutEngine {
   layoutAsync(graph: NetworkGraph): Promise<LayoutResult>
+  /** If available, return ResolvedLayout alongside LayoutResult */
+  layoutWithResolved?(
+    graph: NetworkGraph,
+  ): Promise<{ layout: LayoutResult; resolved: ResolvedLayout }>
 }
 
 interface ExportConnection {
@@ -168,9 +174,12 @@ async function buildChildSheet(
       transformedSubgraphs && transformedSubgraphs.length > 0 ? transformedSubgraphs : undefined,
   }
 
-  // Layout child sheet
+  // Layout child sheet (use resolved path if available)
+  if (layoutEngine.layoutWithResolved) {
+    const { layout, resolved } = await layoutEngine.layoutWithResolved(childGraph)
+    return { graph: childGraph, layout, resolved }
+  }
   const childLayout = await layoutEngine.layoutAsync(childGraph)
-
   return { graph: childGraph, layout: childLayout }
 }
 

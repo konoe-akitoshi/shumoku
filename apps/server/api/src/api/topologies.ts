@@ -38,6 +38,7 @@ export async function buildRenderOutput(parsed: import('../services/topology.js'
         {
           graph: sheetData.graph,
           layout: sheetData.layout,
+          resolved: sheetData.resolved,
           iconDimensions: parsed.iconDimensions,
         },
         { hierarchical: true, toolbar: false },
@@ -75,7 +76,12 @@ export async function buildRenderOutput(parsed: import('../services/topology.js'
   }
 
   const output = renderEmbeddable(
-    { graph: parsed.graph, layout: parsed.layout, iconDimensions: parsed.iconDimensions },
+    {
+      graph: parsed.graph,
+      layout: parsed.layout,
+      resolved: parsed.resolved,
+      iconDimensions: parsed.iconDimensions,
+    },
     { hierarchical: false, toolbar: false },
   )
 
