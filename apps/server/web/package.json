@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/server-web",
-  "version": "0.1.1",
+  "version": "0.99.0-test",
   "private": true,
   "scripts": {
     "dev": "vite dev",
