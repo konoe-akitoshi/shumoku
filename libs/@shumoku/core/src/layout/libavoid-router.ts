@@ -418,7 +418,8 @@ function doRoute(
   const pinIds = registerPins(Avoid, shapeRefs, nodes, ports)
   const connRefs = createConnectors(Avoid, router, shapeRefs, pinIds, nodes, ports, links)
   const edges = extractEdges(connRefs, links, edgeStyle)
-  return spreadOverlappingSegments(edges)
+  const spread = spreadOverlappingSegments(edges)
+  return filletEdgeCorners(spread)
 }
 
 // ============================================================================
@@ -547,4 +548,96 @@ function shiftSegment(
     p1.x += delta
     p2.x += delta
   }
+}
+
+// ============================================================================
+// Post-processing: fillet edge corners
+// ============================================================================
+
+/** Default fillet radius */
+const FILLET_RADIUS = 8
+/** Number of line segments to approximate a quarter circle */
+const ARC_SEGMENTS = 6
+
+/**
+ * Replace sharp corners in edge paths with filleted (rounded) corners.
+ * Each corner is approximated as a polyline arc.
+ */
+function filletEdgeCorners(edges: Map<string, ResolvedEdge>): Map<string, ResolvedEdge> {
+  const result = new Map<string, ResolvedEdge>()
+  for (const [id, edge] of edges) {
+    result.set(id, {
+      ...edge,
+      points: filletPoints(edge.points, FILLET_RADIUS),
+    })
+  }
+  return result
+}
+
+/**
+ * Insert arc approximation points at each corner of a polyline.
+ * The radius is clamped to half the shortest adjacent segment.
+ */
+function filletPoints(points: Position[], maxRadius: number): Position[] {
+  if (points.length < 3) return [...points]
+
+  const result: Position[] = []
+  const first = points[0]
+  if (!first) return [...points]
+  result.push({ ...first })
+
+  for (const [i, curr] of points.entries()) {
+    if (i === 0 || i === points.length - 1) continue
+    const prev = points[i - 1]
+    const next = points[i + 1]
+    if (!prev || !next) {
+      result.push({ ...curr })
+      continue
+    }
+
+    const dPrev = Math.hypot(curr.x - prev.x, curr.y - prev.y)
+    const dNext = Math.hypot(next.x - curr.x, next.y - curr.y)
+
+    // Clamp radius to half the shortest adjacent segment
+    const r = Math.min(maxRadius, dPrev / 2, dNext / 2)
+    if (r < 1) {
+      result.push({ ...curr })
+      continue
+    }
+
+    // Direction vectors
+    const d0x = (prev.x - curr.x) / dPrev
+    const d0y = (prev.y - curr.y) / dPrev
+    const d1x = (next.x - curr.x) / dNext
+    const d1y = (next.y - curr.y) / dNext
+
+    // Check if collinear (no corner needed)
+    const cross = d0x * d1y - d0y * d1x
+    if (Math.abs(cross) < 0.001) {
+      result.push({ ...curr })
+      continue
+    }
+
+    // Tangent points (where the arc starts/ends on each segment)
+    const t0x = curr.x + d0x * r
+    const t0y = curr.y + d0y * r
+    const t1x = curr.x + d1x * r
+    const t1y = curr.y + d1y * r
+
+    // Approximate the arc between t0 and t1 with line segments
+    for (let s = 0; s <= ARC_SEGMENTS; s++) {
+      const t = s / ARC_SEGMENTS
+      // Quadratic interpolation through the corner point
+      // B(t) = (1-t)²·T0 + 2(1-t)t·C + t²·T1 where C is the corner
+      const u = 1 - t
+      const px = u * u * t0x + 2 * u * t * curr.x + t * t * t1x
+      const py = u * u * t0y + 2 * u * t * curr.y + t * t * t1y
+      result.push({ x: px, y: py })
+    }
+  }
+
+  const last = points[points.length - 1]
+  if (last) result.push({ ...last })
+
+  return result
 }

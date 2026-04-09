@@ -16,12 +16,5 @@
 </script>
 
 <g class="edge" data-edge-id={edge.id}>
-  <path
-    d={pathD()}
-    fill="none"
-    stroke="#64748b"
-    stroke-width={edge.width}
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+  <path d={pathD()} fill="none" stroke="#64748b" stroke-width={edge.width} stroke-linecap="round" />
 </g>
