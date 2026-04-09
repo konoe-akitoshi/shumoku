@@ -1,0 +1,49 @@
+{
+  "name": "@shumoku/renderer",
+  "version": "0.1.0",
+  "description": "Interactive Svelte-based renderer for Shumoku network diagrams",
+  "license": "AGPL-3.0-only",
+  "author": "konoe-akitoshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/@shumoku/renderer"
+  },
+  "type": "module",
+  "svelte": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "svelte": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./wc": {
+      "types": "./dist/wc.d.ts",
+      "default": "./dist/wc.js"
+    }
+  },
+  "files": ["dist/", "src/"],
+  "scripts": {
+    "dev": "vite dev",
+    "build": "svelte-package",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/package": "^2.3.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "svelte": "^5.17.3",
+    "svelte-check": "^4.1.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.4.1"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  }
+}
