@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ResolvedEdge } from '@shumoku/core'
+  import { pointsToPathD } from '../../lib/svg-coords'
 
   let {
     edge,
@@ -9,22 +10,13 @@
     selected?: boolean
   } = $props()
 
-  const pathD = $derived(() => {
-    if (edge.points.length === 0) return ''
-    const [first, ...rest] = edge.points
-    if (!first) return ''
-    let d = `M ${first.x} ${first.y}`
-    for (const pt of rest) {
-      d += ` L ${pt.x} ${pt.y}`
-    }
-    return d
-  })
+  const pathD = $derived(pointsToPathD(edge.points))
 </script>
 
 <g class="edge" data-edge-id={edge.id}>
-  <!-- Invisible wide hit area for click/hover -->
+  <!-- Wide transparent hit area -->
   <path
-    d={pathD()}
+    d={pathD}
     fill="none"
     stroke="transparent"
     stroke-width={Math.max(edge.width + 12, 16)}
@@ -34,7 +26,7 @@
   />
   <!-- Visible line -->
   <path
-    d={pathD()}
+    d={pathD}
     fill="none"
     stroke={selected ? '#3b82f6' : '#64748b'}
     stroke-width={edge.width}

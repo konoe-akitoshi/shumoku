@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ResolvedNode } from '@shumoku/core'
+  import { getNodeLabel } from '../../lib/svg-coords'
 
   let {
     node,
@@ -11,16 +12,12 @@
     highlighted?: boolean
   } = $props()
 
-  const active = $derived(selected || highlighted)
-
   const cx = $derived(node.position.x)
   const cy = $derived(node.position.y)
   const hw = $derived(node.size.width / 2)
   const hh = $derived(node.size.height / 2)
-
-  const label = $derived(
-    Array.isArray(node.node.label) ? (node.node.label[0] ?? '') : (node.node.label ?? ''),
-  )
+  const active = $derived(selected || highlighted)
+  const label = $derived(getNodeLabel(node.node))
 </script>
 
 <g class="node" data-node-id={node.id}>

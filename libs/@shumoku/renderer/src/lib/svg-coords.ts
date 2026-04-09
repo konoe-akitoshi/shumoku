@@ -1,9 +1,56 @@
 /**
- * SVG ↔ Screen coordinate conversion utilities.
- *
- * Uses getScreenCTM() for bidirectional mapping between
- * SVG user units and screen (client viewport) pixels.
+ * SVG ↔ Screen coordinate conversion and shared rendering utilities.
  */
+
+// ============================================================================
+// Shared rendering helpers
+// ============================================================================
+
+/** Build an SVG path 'd' attribute from an array of points */
+export function pointsToPathD(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return ''
+  const [first, ...rest] = points
+  if (!first) return ''
+  let d = `M ${first.x} ${first.y}`
+  for (const pt of rest) {
+    d += ` L ${pt.x} ${pt.y}`
+  }
+  return d
+}
+
+type Side = 'top' | 'bottom' | 'left' | 'right'
+
+const LABEL_OFFSET = 12
+
+/** Compute port label position and text-anchor based on port side */
+export function computePortLabelPosition(port: {
+  absolutePosition: { x: number; y: number }
+  side?: Side
+}): { x: number; y: number; textAnchor: string } {
+  const px = port.absolutePosition.x
+  const py = port.absolutePosition.y
+  switch (port.side) {
+    case 'top':
+      return { x: px, y: py - LABEL_OFFSET, textAnchor: 'middle' }
+    case 'bottom':
+      return { x: px, y: py + LABEL_OFFSET + 4, textAnchor: 'middle' }
+    case 'left':
+      return { x: px - LABEL_OFFSET, y: py, textAnchor: 'end' }
+    case 'right':
+      return { x: px + LABEL_OFFSET, y: py, textAnchor: 'start' }
+    default:
+      return { x: px, y: py - LABEL_OFFSET, textAnchor: 'middle' }
+  }
+}
+
+/** Extract display label from a node */
+export function getNodeLabel(node: { label?: string | string[] }): string {
+  return Array.isArray(node.label) ? (node.label[0] ?? '') : (node.label ?? '')
+}
+
+// ============================================================================
+// Coordinate conversion
+// ============================================================================
 
 /** Convert SVG coordinates to screen (client) coordinates */
 export function svgToScreen(

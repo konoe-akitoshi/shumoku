@@ -45,7 +45,7 @@
   const portList = $derived([...ports.values()])
 
   // Set of port IDs that have at least one link
-  const linkedPorts = $derived(() => {
+  const linkedPorts = $derived.by(() => {
     const ids = new Set<string>()
     for (const edge of edges.values()) {
       if (edge.fromPortId) ids.add(edge.fromPortId)
@@ -112,10 +112,10 @@
 
   // Listen for clicks on SVG elements (port labels, edges)
   function onSvgClick(e: MouseEvent) {
-    const target = e.target as Element
+    const target = e.target as HTMLElement
 
     // Port label click → edit
-    const portId = target.getAttribute?.('data-port-label')
+    const portId = target.dataset?.['portLabel']
     if (portId) {
       e.stopPropagation()
       const rect = target.getBoundingClientRect()
@@ -129,7 +129,7 @@
     }
 
     // Edge click → select
-    const edgeId = target.getAttribute?.('data-edge-click')
+    const edgeId = target.dataset?.['edgeClick']
     if (edgeId) {
       e.stopPropagation()
       editState.select(edgeId)
@@ -145,13 +145,12 @@
 
   function onSvgContextMenu(e: MouseEvent) {
     e.preventDefault()
-    // If menu is already open, just close it
     if (editState.contextMenu) {
       editState.hideContextMenu()
       return
     }
-    const target = e.target as Element
-    const edgeId = target.getAttribute?.('data-edge-click')
+    const target = e.target as HTMLElement
+    const edgeId = target.dataset?.['edgeClick']
     if (!edgeId) return
     e.stopPropagation()
     editState.select(edgeId)
@@ -212,7 +211,7 @@
       {svg}
       {container}
       {editState}
-      linked={linkedPorts().has(port.id)}
+      linked={linkedPorts.has(port.id)}
       {onlinkstart}
       {onlinkend}
       {onportmove}

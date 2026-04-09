@@ -38,7 +38,7 @@
   const edgeList = $derived([...edges.values()])
   const subgraphList = $derived([...subgraphs.values()])
 
-  const portsByNode = $derived(() => {
+  const portsByNode = $derived.by(() => {
     const map = new Map<string, ResolvedPort[]>()
     for (const port of ports.values()) {
       const list = map.get(port.nodeId)
@@ -68,7 +68,7 @@
 
   {#each nodeList as node (node.id)}
     <SvgNode {node} selected={selection.has(node.id)} highlighted={highlightedNodes.has(node.id)} />
-    {#each portsByNode().get(node.id) ?? [] as port (port.id)}
+    {#each portsByNode.get(node.id) ?? [] as port (port.id)}
       <SvgPort {port} hideLabel={hidePortLabels} selected={selection.has(port.id)} />
     {/each}
   {/each}

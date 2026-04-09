@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ResolvedPort } from '@shumoku/core'
+  import { computePortLabelPosition } from '../../lib/svg-coords'
 
   let {
     port,
@@ -11,31 +12,7 @@
     selected?: boolean
   } = $props()
 
-  const labelOffset = 12
-
-  const labelX = $derived(() => {
-    switch (port.side) {
-      case 'left': return port.absolutePosition.x - labelOffset
-      case 'right': return port.absolutePosition.x + labelOffset
-      default: return port.absolutePosition.x
-    }
-  })
-
-  const labelY = $derived(() => {
-    switch (port.side) {
-      case 'top': return port.absolutePosition.y - labelOffset
-      case 'bottom': return port.absolutePosition.y + labelOffset + 4
-      default: return port.absolutePosition.y
-    }
-  })
-
-  const textAnchor = $derived(() => {
-    switch (port.side) {
-      case 'left': return 'end'
-      case 'right': return 'start'
-      default: return 'middle'
-    }
-  })
+  const labelPos = $derived(computePortLabelPosition(port))
 </script>
 
 <g class="port" data-port-id={port.id}>
@@ -51,9 +28,9 @@
   />
   {#if !hideLabel}
     <text
-      x={labelX()}
-      y={labelY()}
-      text-anchor={textAnchor()}
+      x={labelPos.x}
+      y={labelPos.y}
+      text-anchor={labelPos.textAnchor}
       font-size="9"
       fill="#64748b"
       data-port-label={port.id}
