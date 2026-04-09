@@ -6,6 +6,6 @@ export default createI18nMiddleware(i18n)
 export const config = {
   // Exclude static files and API routes from i18n middleware
   matcher: [
-    '/((?!api|_next/static|_next/image|.*\\.(?:svg|png|ico|jpg|jpeg|gif|webp|wasm|mp4|webm)$|og).*)',
+    '/((?!api|_next/static|_next/image|renderer/|.*\\.(?:svg|png|ico|jpg|jpeg|gif|webp|wasm|js|mp4|webm)$|og).*)',
   ],
 }

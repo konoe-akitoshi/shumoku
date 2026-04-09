@@ -5,15 +5,16 @@
 /**
  * WebComponent wrapper for ShumokuRenderer
  * Usage: <shumoku-renderer></shumoku-renderer>
- * Set layout data via element.layout property or 'layout' attribute (JSON)
+ * Set layout and graph via element properties.
  */
 
-import type { ResolvedLayout } from '@shumoku/core'
-import { hydrate, mount } from 'svelte'
+import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
+import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
 
 class ShumokuRendererElement extends HTMLElement {
   private _layout: ResolvedLayout | null = null
+  private _graph: NetworkGraph | null = null
   private _instance: ReturnType<typeof mount> | null = null
 
   constructor() {
@@ -23,49 +24,49 @@ class ShumokuRendererElement extends HTMLElement {
 
   set layout(value: ResolvedLayout) {
     this._layout = value
-    this._render()
+    this._tryRender()
   }
 
   get layout(): ResolvedLayout | null {
     return this._layout
   }
 
+  set graph(value: NetworkGraph) {
+    this._graph = value
+    this._tryRender()
+  }
+
+  get graph(): NetworkGraph | null {
+    return this._graph
+  }
+
   connectedCallback() {
-    if (this._layout) {
-      this._render()
+    this._tryRender()
+  }
+
+  disconnectedCallback() {
+    if (this._instance) {
+      unmount(this._instance)
+      this._instance = null
     }
   }
 
-  private _render() {
+  private _tryRender() {
     if (!this.shadowRoot || !this._layout) return
 
-    const hasDSD = this.shadowRoot.innerHTML.trim() !== ''
-    const props = {
-      layout: this._layout,
-      onnodemove: (id: string, x: number, y: number) => {
-        this.dispatchEvent(
-          new CustomEvent('nodemove', {
-            detail: { id, x, y },
-            bubbles: true,
-            composed: true,
-          }),
-        )
-      },
+    // Unmount previous instance
+    if (this._instance) {
+      unmount(this._instance)
+      this._instance = null
     }
 
-    if (hasDSD && !this._instance) {
-      // SSR → hydrate
-      this._instance = hydrate(ShumokuRenderer, {
-        target: this.shadowRoot,
-        props,
-      })
-    } else if (!this._instance) {
-      // CSR → mount
-      this._instance = mount(ShumokuRenderer, {
-        target: this.shadowRoot,
-        props,
-      })
-    }
+    this._instance = mount(ShumokuRenderer, {
+      target: this.shadowRoot,
+      props: {
+        layout: this._layout,
+        graph: this._graph ?? undefined,
+      },
+    })
   }
 }
 

@@ -34,6 +34,7 @@
       "name": "@shumoku/docs",
       "version": "0.2.25",
       "dependencies": {
+        "@shumoku/core": "workspace:*",
         "@shumoku/renderer-html": "workspace:*",
         "@shumoku/renderer-svg": "workspace:*",
         "fumadocs-core": "16.4.6",
