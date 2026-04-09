@@ -9,7 +9,6 @@
  * Pins ensure lines exit/enter ports perpendicularly.
  */
 
-import { SMALL_LABEL_CHAR_WIDTH } from '../constants.js'
 import type { Link, LinkEndpoint, Position } from '../models/types.js'
 import { getLinkWidth } from './link-utils.js'
 import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
@@ -41,6 +40,28 @@ function getPortName(ep: string | LinkEndpoint): string | undefined {
 }
 function toEndpoint(ep: string | LinkEndpoint): LinkEndpoint {
   return typeof ep === 'string' ? { node: ep } : ep
+}
+
+/** Check if a point is inside any node's bounding box (with margin) */
+function isInsideAnyNode(
+  x: number,
+  y: number,
+  nodes: Map<string, ResolvedNode>,
+  margin = 2,
+): boolean {
+  for (const node of nodes.values()) {
+    const hw = node.size.width / 2 + margin
+    const hh = node.size.height / 2 + margin
+    if (
+      x > node.position.x - hw &&
+      x < node.position.x + hw &&
+      y > node.position.y - hh &&
+      y < node.position.y + hh
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: libavoid-js types don't match runtime API
@@ -120,7 +141,7 @@ export async function routeEdges(
   router.setRoutingOption(Avoid['RoutingOption']['nudgeSharedPathsWithCommonEndPoint'].value, true)
 
   try {
-    return doRoute(Avoid, router, nodes, ports, links, opts.edgeStyle)
+    return doRoute(Avoid, router, nodes, ports, links, opts.edgeStyle, opts.shapeBufferDistance)
   } finally {
     router.delete()
   }
@@ -209,13 +230,11 @@ function createConnectors(
   nodes: Map<string, ResolvedNode>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
+  shapeBufferDistance: number,
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
 ): Map<string, any> {
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
   const connRefs = new Map<string, any>()
-  // Track whether pin-based ConnEnd works (checked after first route)
-  let pinTestLinkId: string | null = null
-  let pinTestPortId: string | null = null
 
   for (const [i, link] of links.entries()) {
     const linkId = link.id ?? `__link_${i}`
@@ -253,16 +272,12 @@ function createConnectors(
 
     const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
 
-    // Add checkpoint near destination to force perpendicular arrival.
-    // The checkpoint is placed just outside the port in the approach direction.
+    // Add checkpoint to force perpendicular arrival at destination port.
+    // Only set if the checkpoint doesn't land inside any node obstacle.
     const dstPortObj = toPortId ? ports.get(toPortId) : null
-    if (dstPortObj) {
-      // Offset = port size + label extent (label length * char width + padding)
-      // This places the checkpoint just past the port label, ensuring
-      // the line approaches perpendicularly through the label area.
+    if (dstPortObj?.side) {
       const portHalf = Math.max(dstPortObj.size.width, dstPortObj.size.height) / 2
-      const labelExtent = dstPortObj.label.length * SMALL_LABEL_CHAR_WIDTH + 8
-      const offset = portHalf + labelExtent
+      const offset = portHalf + 16
       let cpX = dstPortObj.absolutePosition.x
       let cpY = dstPortObj.absolutePosition.y
       switch (dstPortObj.side) {
@@ -279,80 +294,23 @@ function createConnectors(
           cpX += offset
           break
       }
-      const checkpoints = new Avoid.CheckpointVector()
-      checkpoints.push_back(new Avoid.Checkpoint(new Avoid.Point(cpX, cpY)))
-      conn.setRoutingCheckpoints(checkpoints)
+      // Verify checkpoint is not inside any node obstacle (including buffer)
+      if (!isInsideAnyNode(cpX, cpY, nodes, shapeBufferDistance)) {
+        const checkpoints = new Avoid.CheckpointVector()
+        checkpoints.push_back(new Avoid.Checkpoint(new Avoid.Point(cpX, cpY)))
+        conn.setRoutingCheckpoints(checkpoints)
+      }
     }
 
     connRefs.set(linkId, conn)
-
-    // Track first pin-based link for verification
-    if (pinTestLinkId === null && fromPin !== undefined && fromPortId) {
-      pinTestLinkId = linkId
-      pinTestPortId = fromPortId
-    }
   }
 
-  // Route
+  // Route all connectors
   router.processTransaction()
 
-  // Verify pin-based routing works
-  // If the first pin-based endpoint doesn't match the port position,
-  // fall back to Point-based routing for all connectors.
-  let usePinEndpoints = true
-  if (pinTestLinkId && pinTestPortId) {
-    const testConn = connRefs.get(pinTestLinkId)
-    const testPort = ports.get(pinTestPortId)
-    if (testConn && testPort) {
-      const route = testConn.displayRoute()
-      if (route.size() > 0) {
-        const startPt = route.at(0)
-        const dx = Math.abs(startPt.x - testPort.absolutePosition.x)
-        const dy = Math.abs(startPt.y - testPort.absolutePosition.y)
-        if (dx > 2 || dy > 2) {
-          console.warn(
-            `[libavoid] Pin-based ConnEnd not working (delta=${dx.toFixed(1)},${dy.toFixed(1)}). Falling back to Point-based.`,
-          )
-          usePinEndpoints = false
-        }
-      }
-    }
-  }
-
-  // If pins don't work, redo with Point-based ConnEnd
-  if (!usePinEndpoints) {
-    router.processTransaction() // ensure clean state
-    connRefs.clear()
-
-    for (const [i, link] of links.entries()) {
-      const linkId = link.id ?? `__link_${i}`
-      const fromNodeId = getNodeId(link.from)
-      const toNodeId = getNodeId(link.to)
-      if (!shapeRefs.has(fromNodeId) || !shapeRefs.has(toNodeId)) continue
-
-      const fromPort = getPortName(link.from)
-      const toPort = getPortName(link.to)
-      const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
-      const toPortId = toPort ? `${toNodeId}:${toPort}` : null
-
-      const fromPortObj2 = fromPortId ? ports.get(fromPortId) : undefined
-      const fromNodeObj2 = nodes.get(fromNodeId)
-      const fromPos = fromPortObj2?.absolutePosition ?? fromNodeObj2?.position
-      if (!fromPos) continue
-      const toPortObj2 = toPortId ? ports.get(toPortId) : undefined
-      const toNodeObj2 = nodes.get(toNodeId)
-      const toPos = toPortObj2?.absolutePosition ?? toNodeObj2?.position
-      if (!toPos) continue
-
-      const conn = new Avoid.ConnRef(
-        router,
-        new Avoid.ConnEnd(new Avoid.Point(fromPos.x, fromPos.y)),
-        new Avoid.ConnEnd(new Avoid.Point(toPos.x, toPos.y)),
-      )
-      connRefs.set(linkId, conn)
-    }
-    router.processTransaction()
-  }
+  // Note: pin-based routing endpoints may not exactly match port positions,
+  // but extractEdges snaps route start/end to exact port coordinates.
+  // No global fallback needed — each connector's pin is independent.
 
   return connRefs
 }
@@ -360,6 +318,7 @@ function createConnectors(
 function extractEdges(
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
   connRefs: Map<string, any>,
+  ports: Map<string, ResolvedPort>,
   links: Link[],
   edgeStyle: string,
 ): Map<string, ResolvedEdge> {
@@ -377,15 +336,30 @@ function extractEdges(
       points.push({ x: pt.x, y: pt.y })
     }
 
-    const first = points[0]
-    const last = points[points.length - 1]
-    const finalPoints =
-      edgeStyle === 'straight' && points.length > 2 && first && last ? [first, last] : points
-
     const fromNodeId = getNodeId(link.from)
     const toNodeId = getNodeId(link.to)
     const fromPort = getPortName(link.from)
     const toPort = getPortName(link.to)
+
+    // Snap route endpoints to exact port positions
+    const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
+    const toPortId = toPort ? `${toNodeId}:${toPort}` : null
+    const fromPortObj = fromPortId ? ports.get(fromPortId) : undefined
+    const toPortObj = toPortId ? ports.get(toPortId) : undefined
+    if (fromPortObj && points.length > 0) {
+      points[0] = { x: fromPortObj.absolutePosition.x, y: fromPortObj.absolutePosition.y }
+    }
+    if (toPortObj && points.length > 0) {
+      points[points.length - 1] = {
+        x: toPortObj.absolutePosition.x,
+        y: toPortObj.absolutePosition.y,
+      }
+    }
+
+    const first = points[0]
+    const last = points[points.length - 1]
+    const finalPoints =
+      edgeStyle === 'straight' && points.length > 2 && first && last ? [first, last] : points
 
     edges.set(linkId, {
       id: linkId,
@@ -413,11 +387,21 @@ function doRoute(
   ports: Map<string, ResolvedPort>,
   links: Link[],
   edgeStyle: string,
+  shapeBufferDistance: number,
 ): Map<string, ResolvedEdge> {
   const shapeRefs = registerObstacles(Avoid, router, nodes)
   const pinIds = registerPins(Avoid, shapeRefs, nodes, ports)
-  const connRefs = createConnectors(Avoid, router, shapeRefs, pinIds, nodes, ports, links)
-  const edges = extractEdges(connRefs, links, edgeStyle)
+  const connRefs = createConnectors(
+    Avoid,
+    router,
+    shapeRefs,
+    pinIds,
+    nodes,
+    ports,
+    links,
+    shapeBufferDistance,
+  )
+  const edges = extractEdges(connRefs, ports, links, edgeStyle)
   const spread = spreadOverlappingSegments(edges)
   return filletEdgeCorners(spread)
 }
