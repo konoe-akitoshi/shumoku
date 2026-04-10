@@ -8,10 +8,8 @@
     ResolvedSubgraph,
     Theme,
   } from '@shumoku/core'
-  import { addPort, linkExists, moveNode, movePort, moveSubgraph, removePort, routeEdges } from '@shumoku/core'
-  import { createEditState } from '../lib/edit-state.svelte'
+  import { addPort, linkExists, moveNode, moveSubgraph, removePort, routeEdges } from '@shumoku/core'
   import { themeToColors } from '../lib/render-colors'
-  import EditOverlay from './edit/EditOverlay.svelte'
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
   let {
@@ -19,18 +17,23 @@
     graph: initialGraph,
     theme,
     mode = 'view',
+    viewBox: viewBoxProp,
     onchange,
     onselect,
+    oncontextmenu: onctx,
   }: {
     layout: ResolvedLayout
     graph?: { links: Link[] }
     theme?: Theme
     mode?: 'view' | 'edit'
+    viewBox?: string
     onchange?: (links: Link[]) => void
     onselect?: (id: string | null, type: string | null) => void
+    oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
   } = $props()
 
   const colors = $derived(themeToColors(theme))
+  const interactive = $derived(mode === 'edit')
 
   // Layout state
   let nodes = $state<Map<string, ResolvedNode>>(new Map(initialLayout.nodes))
@@ -41,15 +44,26 @@
   let links = $state<Link[]>(initialGraph?.links ? [...initialGraph.links] : [])
 
   // Edit state
-  const editState = createEditState()
+  let selection = $state(new Set<string>())
+  let linkDrag = $state<{ fromPortId: string; fromX: number; fromY: number; toX: number; toY: number } | null>(null)
+  let svgEl = $state<SVGSVGElement | null>(null)
 
-  // Notify host when selection changes
+  // Linked ports set
+  const linkedPorts = $derived.by(() => {
+    const ids = new Set<string>()
+    for (const edge of edges.values()) {
+      if (edge.fromPortId) ids.add(edge.fromPortId)
+      if (edge.toPortId) ids.add(edge.toPortId)
+    }
+    return ids
+  })
+
+  // Notify selection changes
   $effect(() => {
-    const sel = editState.selection
-    if (sel.size === 0) {
+    if (selection.size === 0) {
       onselect?.(null, null)
     } else {
-      const id = [...sel][0] ?? null
+      const id = [...selection][0] ?? null
       if (!id) return
       let type: string = 'node'
       if (edges.has(id)) type = 'edge'
@@ -58,13 +72,10 @@
     }
   })
 
-  // Element refs
-  let svgEl = $state<SVGSVGElement | null>(null)
-  let containerEl = $state<HTMLDivElement | null>(null)
+  // --- Node handlers ---
+  function handleNodeDragStart(id: string) { selection = new Set([id]) }
 
-  // --- Handlers ---
-
-  async function handleNodeMove(id: string, x: number, y: number) {
+  async function handleNodeDragMove(id: string, x: number, y: number) {
     const result = await moveNode(id, x, y, { nodes, ports, subgraphs }, links)
     if (!result) return
     nodes = result.nodes
@@ -73,6 +84,17 @@
     if (result.subgraphs) subgraphs = result.subgraphs
   }
 
+  function handleNodeDragEnd(_id: string) {}
+
+  async function handleAddPort(nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') {
+    const result = addPort(nodeId, side, nodes, ports, links)
+    if (!result) return
+    nodes = result.nodes
+    ports = result.ports
+    edges = await routeEdges(result.nodes, result.ports, links)
+  }
+
+  // --- Subgraph handler ---
   async function handleSubgraphMove(sgId: string, x: number, y: number) {
     const result = await moveSubgraph(sgId, x, y, { nodes, ports, subgraphs }, links)
     if (!result) return
@@ -82,47 +104,33 @@
     subgraphs = result.subgraphs
   }
 
-  async function handleAddPort(nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') {
-    const node = nodes.get(nodeId)
-    if (!node) return
-
-    const result = addPort(nodeId, side, nodes, ports, links)
-    if (!result) return
-
-    nodes = result.nodes
-    ports = result.ports
-    edges = await routeEdges(result.nodes, result.ports, links)
-  }
-
+  // --- Link handlers ---
   function handleLinkStart(portId: string, x: number, y: number) {
-    editState.startLinkDrag(portId, x, y)
+    linkDrag = { fromPortId: portId, fromX: x, fromY: y, toX: x, toY: y }
+    // Track mouse on SVG for preview line
+    function onmove(e: PointerEvent) {
+      if (!linkDrag || !svgEl) return
+      const ctm = svgEl.getScreenCTM()
+      if (!ctm) return
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
+      linkDrag = { ...linkDrag, toX: p.x, toY: p.y }
+    }
+    svgEl?.addEventListener('pointermove', onmove)
+    svgEl?.addEventListener('pointerup', () => {
+      svgEl?.removeEventListener('pointermove', onmove)
+      if (linkDrag) linkDrag = null
+    }, { once: true })
   }
 
   function handleLinkEnd(portId: string) {
-    if (!editState.linkDrag) return
-    const fromPortId = editState.linkDrag.fromPortId
-    editState.endLinkDrag()
+    if (!linkDrag) return
+    const fromPortId = linkDrag.fromPortId
+    linkDrag = null
     if (fromPortId === portId) return
     const fromPort = ports.get(fromPortId)
     const toPort = ports.get(portId)
     if (fromPort && toPort && fromPort.nodeId === toPort.nodeId) return
     doAddLink(fromPortId, portId)
-  }
-
-  async function handleLinkDropOnNode(nodeId: string) {
-    if (!editState.linkDrag) return
-    const fromPortId = editState.linkDrag.fromPortId
-    editState.endLinkDrag()
-
-    const fromPort = ports.get(fromPortId)
-    if (fromPort && fromPort.nodeId === nodeId) return
-
-    const result = addPort(nodeId, 'top', nodes, ports, links)
-    if (!result) return
-
-    nodes = result.nodes
-    ports = result.ports
-    await doAddLink(fromPortId, result.portId)
   }
 
   async function doAddLink(fromPortId: string, toPortId: string) {
@@ -135,8 +143,6 @@
     if (!fromNode || !fromPort || !toNode || !toPort) return
     if (linkExists(links, fromNode, fromPort, toNode, toPort)) return
 
-    // Normalize direction: upper node = from, lower node = to
-    // This ensures the source pin direction aligns with the natural flow
     const fromNodeObj = nodes.get(fromNode)
     const toNodeObj = nodes.get(toNode)
     if (fromNodeObj && toNodeObj && fromNodeObj.position.y > toNodeObj.position.y) {
@@ -144,88 +150,73 @@
       ;[fromPort, toPort] = [toPort, fromPort]
     }
 
-    const newLink: Link = {
-      id: `link-${Date.now()}`,
-      from: { node: fromNode, port: fromPort },
-      to: { node: toNode, port: toPort },
-    }
-    links = [...links, newLink]
+    links = [...links, { id: `link-${Date.now()}`, from: { node: fromNode, port: fromPort }, to: { node: toNode, port: toPort } }]
     edges = await routeEdges(nodes, ports, links)
     onchange?.(links)
   }
 
-  function handleLabelCommit(portId: string, value: string) {
-    const port = ports.get(portId)
-    if (!port || value === port.label) return
-    const newPorts = new Map(ports)
-    newPorts.set(portId, { ...port, label: value })
-    ports = newPorts
+  // --- Selection handlers ---
+  function handleEdgeSelect(edgeId: string) { selection = new Set([edgeId]) }
+  function handlePortSelect(portId: string) { selection = new Set([portId]) }
+  function handleBackgroundClick() { selection = new Set() }
+
+  // --- Context menu → emit to parent (React handles the menu UI) ---
+  function handleContextMenu(id: string, type: string, e: MouseEvent) {
+    selection = new Set([id])
+    onctx?.(id, type, e.clientX, e.clientY)
   }
 
-  async function handlePortMove(portId: string, svgX: number, svgY: number) {
-    const result = movePort(portId, svgX, svgY, nodes, ports)
-    if (!result) return
-    nodes = result.nodes
-    ports = result.ports
-    edges = await routeEdges(result.nodes, result.ports, links)
-  }
-
-  async function handleDelete(targetId: string, targetType: 'node' | 'port' | 'edge') {
-    if (targetType === 'edge') {
-      const edge = edges.get(targetId)
-      if (!edge) return
-      links = links.filter((l) => l.id !== edge.link?.id)
-      edges = await routeEdges(nodes, ports, links)
+  // --- Delete (keyboard) ---
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      for (const id of selection) {
+        if (edges.has(id)) {
+          const edge = edges.get(id)
+          if (edge?.link?.id) {
+            links = links.filter((l) => l.id !== edge.link?.id)
+          }
+        } else if (ports.has(id)) {
+          const result = removePort(id, nodes, ports, links)
+          if (result) {
+            nodes = result.nodes
+            ports = result.ports
+            links = result.links
+          }
+        }
+      }
+      routeEdges(nodes, ports, links).then((e) => { edges = e })
+      selection = new Set()
       onchange?.(links)
-    } else if (targetType === 'port') {
-      const result = removePort(targetId, nodes, ports, links)
-      if (!result) return
-      nodes = result.nodes
-      ports = result.ports
-      links = result.links
-      edges = await routeEdges(result.nodes, result.ports, result.links)
-      onchange?.(result.links)
+    }
+    if (e.key === 'Escape') {
+      selection = new Set()
+      linkDrag = null
     }
   }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  bind:this={containerEl}
-  style="position: relative; width: 100%; height: 100%;"
+  style="width: 100%; height: 100%; outline: none;"
+  tabindex="-1"
+  onkeydown={interactive ? handleKeyDown : undefined}
 >
   <SvgCanvas
-    {nodes}
-    {ports}
-    {edges}
-    {subgraphs}
-    {bounds}
-    {colors}
-    {theme}
-    selection={editState.selection}
-    highlightedNodes={editState.highlightedNodes}
-    linkPreview={editState.linkDrag}
-    hidePortLabels={false}
+    {nodes} {ports} {edges} {subgraphs} {bounds} {colors} {theme}
+    {interactive} {selection} {linkedPorts}
+    linkPreview={linkDrag}
+    viewBoxOverride={viewBoxProp}
     bind:svgEl
+    onnodedragstart={handleNodeDragStart}
+    onnodedragmove={handleNodeDragMove}
+    onnodedragend={handleNodeDragEnd}
+    onaddport={handleAddPort}
+    onlinkstart={handleLinkStart}
+    onlinkend={handleLinkEnd}
+    onedgeselect={handleEdgeSelect}
+    onportselect={handlePortSelect}
+    onsubgraphmove={handleSubgraphMove}
+    oncontextmenu={handleContextMenu}
+    onbackgroundclick={handleBackgroundClick}
   />
-
-  {#if mode === 'edit' && svgEl && containerEl}
-    <EditOverlay
-      svg={svgEl}
-      container={containerEl}
-      {editState}
-      {nodes}
-      {ports}
-      {edges}
-      subgraphs={subgraphs}
-      ondragmove={handleNodeMove}
-      onsubgraphmove={handleSubgraphMove}
-      onaddport={handleAddPort}
-      onlinkstart={handleLinkStart}
-      onlinkend={handleLinkEnd}
-      onlinkdrop={handleLinkDropOnNode}
-      onlabelcommit={handleLabelCommit}
-      onportmove={handlePortMove}
-      ondelete={handleDelete}
-    />
-  {/if}
 </div>
