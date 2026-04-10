@@ -48,11 +48,12 @@
   // --- Handlers ---
 
   async function handleNodeMove(id: string, x: number, y: number) {
-    const result = await moveNode(id, x, y, { nodes, ports }, links)
+    const result = await moveNode(id, x, y, { nodes, ports, subgraphs }, links)
     if (!result) return
     nodes = result.nodes
     ports = result.ports
     edges = result.edges
+    if (result.subgraphs) subgraphs = result.subgraphs
   }
 
   async function handleAddPort(nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') {

@@ -12,7 +12,12 @@
 
 import type { Link, NetworkGraph } from '../models/types.js'
 import { routeEdges } from './libavoid-router.js'
-import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
+import type {
+  ResolvedEdge,
+  ResolvedNode,
+  ResolvedPort,
+  ResolvedSubgraph,
+} from './resolved-types.js'
 
 /** Minimum gap between nodes during collision resolution */
 const DEFAULT_NODE_GAP = 8
@@ -104,6 +109,144 @@ export function resolveNodePosition(
  *
  * Returns a new partial layout with updated nodes, ports, and edges.
  */
+/** Padding inside subgraph bounds around child nodes */
+const SUBGRAPH_PADDING = 20
+const SUBGRAPH_LABEL_HEIGHT = 28
+
+/** Convert bounds (top-left based) to center-based rect for collision detection */
+function boundsToRect(b: { x: number; y: number; width: number; height: number }) {
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2, w: b.width, h: b.height }
+}
+
+/** Shift all nodes, ports, and child subgraphs within a subgraph by (dx, dy) */
+function shiftContents(
+  sgId: string,
+  dx: number,
+  dy: number,
+  nodes: Map<string, ResolvedNode>,
+  subgraphs: Map<string, ResolvedSubgraph>,
+  ports: Map<string, ResolvedPort>,
+): void {
+  for (const [nodeId, node] of nodes) {
+    if (node.node.parent !== sgId) continue
+    nodes.set(nodeId, { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } })
+    for (const [portId, port] of ports) {
+      if (port.nodeId !== nodeId) continue
+      ports.set(portId, {
+        ...port,
+        absolutePosition: { x: port.absolutePosition.x + dx, y: port.absolutePosition.y + dy },
+      })
+    }
+  }
+  for (const [childId, child] of subgraphs) {
+    if (child.subgraph.parent !== sgId) continue
+    subgraphs.set(childId, {
+      ...child,
+      bounds: { ...child.bounds, x: child.bounds.x + dx, y: child.bounds.y + dy },
+    })
+    shiftContents(childId, dx, dy, nodes, subgraphs, ports)
+  }
+}
+
+/**
+ * Rebalance the entire layout after a node move.
+ * Uniform algorithm for subgraphs at all depths:
+ *   1. Sort subgraphs by depth (deepest first)
+ *   2. Bottom-up: recompute each subgraph's bounds from its children
+ *   3. At each level: resolve sibling collisions (push + shift contents)
+ */
+export function rebalanceSubgraphs(
+  nodes: Map<string, ResolvedNode>,
+  subgraphs: Map<string, ResolvedSubgraph>,
+  ports: Map<string, ResolvedPort>,
+): void {
+  // Build depth map
+  const depthOf = (sgId: string, visited = new Set<string>()): number => {
+    if (visited.has(sgId)) return 0
+    visited.add(sgId)
+    const sg = subgraphs.get(sgId)
+    if (!sg?.subgraph.parent) return 0
+    return 1 + depthOf(sg.subgraph.parent, visited)
+  }
+
+  // Sort subgraphs deepest-first
+  const sorted = [...subgraphs.keys()].sort((a, b) => depthOf(b) - depthOf(a))
+
+  // Bottom-up pass: recompute bounds, then resolve sibling collisions
+  for (const sgId of sorted) {
+    const sg = subgraphs.get(sgId)
+    if (!sg) continue
+
+    // Recompute bounds from children (nodes + child subgraphs)
+    let minX = Number.POSITIVE_INFINITY
+    let minY = Number.POSITIVE_INFINITY
+    let maxX = Number.NEGATIVE_INFINITY
+    let maxY = Number.NEGATIVE_INFINITY
+    let hasChildren = false
+
+    for (const n of nodes.values()) {
+      if (n.node.parent !== sgId) continue
+      hasChildren = true
+      const hw = n.size.width / 2
+      const hh = n.size.height / 2
+      minX = Math.min(minX, n.position.x - hw)
+      minY = Math.min(minY, n.position.y - hh)
+      maxX = Math.max(maxX, n.position.x + hw)
+      maxY = Math.max(maxY, n.position.y + hh)
+    }
+    for (const child of subgraphs.values()) {
+      if (child.subgraph.parent !== sgId) continue
+      hasChildren = true
+      minX = Math.min(minX, child.bounds.x)
+      minY = Math.min(minY, child.bounds.y)
+      maxX = Math.max(maxX, child.bounds.x + child.bounds.width)
+      maxY = Math.max(maxY, child.bounds.y + child.bounds.height)
+    }
+
+    if (!hasChildren) continue
+
+    subgraphs.set(sgId, {
+      ...sg,
+      bounds: {
+        x: minX - SUBGRAPH_PADDING,
+        y: minY - SUBGRAPH_PADDING - SUBGRAPH_LABEL_HEIGHT,
+        width: maxX - minX + SUBGRAPH_PADDING * 2,
+        height: maxY - minY + SUBGRAPH_PADDING * 2 + SUBGRAPH_LABEL_HEIGHT,
+      },
+    })
+  }
+
+  // Second pass: resolve sibling collisions (shallowest first = reverse order)
+  // Using shallowest-first so parent-level collisions are resolved before children
+  for (const sgId of [...sorted].reverse()) {
+    // Re-fetch from map (may have been shifted by earlier iterations)
+    const sg = subgraphs.get(sgId)
+    if (!sg) continue
+    const parentId = sg.subgraph.parent
+
+    for (const [otherId] of subgraphs) {
+      if (otherId === sgId) continue
+      const other = subgraphs.get(otherId)
+      if (!other || other.subgraph.parent !== parentId) continue
+
+      const a = boundsToRect(sg.bounds)
+      const b = boundsToRect(other.bounds)
+      if (!nodesOverlap(a, b, DEFAULT_NODE_GAP)) continue
+
+      const resolved = resolveCollision(b, a, DEFAULT_NODE_GAP)
+      const dx = resolved.x - b.x
+      const dy = resolved.y - b.y
+      if (dx === 0 && dy === 0) continue
+
+      subgraphs.set(otherId, {
+        ...other,
+        bounds: { ...other.bounds, x: other.bounds.x + dx, y: other.bounds.y + dy },
+      })
+      shiftContents(otherId, dx, dy, nodes, subgraphs, ports)
+    }
+  }
+}
+
 export async function moveNode(
   id: string,
   x: number,
@@ -111,6 +254,7 @@ export async function moveNode(
   layout: {
     nodes: Map<string, ResolvedNode>
     ports: Map<string, ResolvedPort>
+    subgraphs?: Map<string, ResolvedSubgraph>
   },
   links: Link[],
   gap = DEFAULT_NODE_GAP,
@@ -118,11 +262,12 @@ export async function moveNode(
   nodes: Map<string, ResolvedNode>
   ports: Map<string, ResolvedPort>
   edges: Map<string, ResolvedEdge>
+  subgraphs?: Map<string, ResolvedSubgraph>
 } | null> {
   const node = layout.nodes.get(id)
   if (!node) return null
 
-  // 1. Resolve collisions
+  // 1. Resolve node-node collisions
   const { x: finalX, y: finalY } = resolveNodePosition(id, x, y, layout.nodes, gap)
 
   const dx = finalX - node.position.x
@@ -146,10 +291,17 @@ export async function moveNode(
     })
   }
 
-  // 4. Re-route edges
+  // 4. Rebalance subgraphs: expand bounds + push siblings
+  let newSubgraphs: Map<string, ResolvedSubgraph> | undefined
+  if (layout.subgraphs) {
+    newSubgraphs = new Map(layout.subgraphs)
+    rebalanceSubgraphs(newNodes, newSubgraphs, newPorts)
+  }
+
+  // 5. Re-route edges
   const edges = await routeEdges(newNodes, newPorts, links)
 
-  return { nodes: newNodes, ports: newPorts, edges }
+  return { nodes: newNodes, ports: newPorts, edges, subgraphs: newSubgraphs }
 }
 
 // ============================================================================
