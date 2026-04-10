@@ -7,7 +7,7 @@ import {
   lightTheme,
   sampleNetwork,
 } from '@shumoku/core'
-import { Info, Layers, MousePointer2, Network } from 'lucide-react'
+import { Box, Info, Layers, MousePointer2, Network, Plus, SquareDashed } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import {
   Tooltip,
@@ -128,6 +128,42 @@ export default function EditorPage() {
             <span>{stats.nodes} nodes</span>
             <span>{stats.links} links</span>
             <span>{stats.subgraphs} groups</span>
+          </div>
+
+          <div className="w-px h-5 bg-slate-200 mx-2" />
+
+          {/* Add buttons */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                  onClick={() => {
+                    wcRef.current?.dispatchEvent(new CustomEvent('shumoku-add-node', { detail: {} }))
+                    setStats((s) => ({ ...s, nodes: s.nodes + 1 }))
+                  }}
+                >
+                  <Box className="w-3.5 h-3.5" />
+                  <Plus className="w-3 h-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Add node</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                  onClick={() => {
+                    wcRef.current?.dispatchEvent(new CustomEvent('shumoku-add-subgraph', { detail: {} }))
+                    setStats((s) => ({ ...s, subgraphs: s.subgraphs + 1 }))
+                  }}
+                >
+                  <SquareDashed className="w-3.5 h-3.5" />
+                  <Plus className="w-3 h-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Add group</TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="flex-1" />

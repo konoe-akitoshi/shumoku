@@ -66,7 +66,59 @@ export function resolveCollision(
 }
 
 /**
- * Apply collision resolution against all other nodes.
+ * Collect all obstacles as center-based rects, excluding entities related to `excludeId`.
+ * Unified: both nodes and subgraphs are treated as rectangles.
+ */
+function collectObstacles(
+  excludeId: string,
+  excludeParent: string | undefined,
+  nodes: Map<string, ResolvedNode>,
+  subgraphs?: Map<string, ResolvedSubgraph>,
+): { x: number; y: number; w: number; h: number }[] {
+  const obstacles: { x: number; y: number; w: number; h: number }[] = []
+
+  for (const [nid, n] of nodes) {
+    if (nid === excludeId) continue
+    obstacles.push({ x: n.position.x, y: n.position.y, w: n.size.width, h: n.size.height })
+  }
+
+  if (subgraphs) {
+    for (const [sgId, sg] of subgraphs) {
+      if (sgId === excludeId) continue
+      // Skip if the moving entity belongs to this subgraph
+      if (excludeParent && isChildOf(excludeParent, sgId, subgraphs)) continue
+      obstacles.push(boundsToRect(sg.bounds))
+    }
+  }
+
+  return obstacles
+}
+
+/**
+ * Resolve position of any rectangle against all obstacles (nodes + subgraphs).
+ * Used for both node placement and subgraph placement.
+ */
+export function resolvePosition(
+  rect: { x: number; y: number; w: number; h: number },
+  obstacles: { x: number; y: number; w: number; h: number }[],
+  gap = DEFAULT_NODE_GAP,
+): { x: number; y: number } {
+  let fx = rect.x
+  let fy = rect.y
+  for (const obs of obstacles) {
+    const moving = { x: fx, y: fy, w: rect.w, h: rect.h }
+    if (nodesOverlap(moving, obs, gap)) {
+      const resolved = resolveCollision(moving, obs, gap)
+      fx = resolved.x
+      fy = resolved.y
+    }
+  }
+  return { x: fx, y: fy }
+}
+
+/**
+ * Resolve a node's position against all other entities.
+ * Wrapper around resolvePosition for backward compatibility.
  */
 export function resolveNodePosition(
   id: string,
@@ -74,30 +126,30 @@ export function resolveNodePosition(
   y: number,
   nodes: Map<string, ResolvedNode>,
   gap = DEFAULT_NODE_GAP,
+  subgraphs?: Map<string, ResolvedSubgraph>,
 ): { x: number; y: number } {
   const node = nodes.get(id)
   if (!node) return { x, y }
+  const obstacles = collectObstacles(id, node.node.parent, nodes, subgraphs)
+  return resolvePosition({ x, y, w: node.size.width, h: node.size.height }, obstacles, gap)
+}
 
-  let finalX = x
-  let finalY = y
-
-  for (const [otherId, other] of nodes) {
-    if (otherId === id) continue
-    const moving = { x: finalX, y: finalY, w: node.size.width, h: node.size.height }
-    const obstacle = {
-      x: other.position.x,
-      y: other.position.y,
-      w: other.size.width,
-      h: other.size.height,
-    }
-    if (nodesOverlap(moving, obstacle, gap)) {
-      const resolved = resolveCollision(moving, obstacle, gap)
-      finalX = resolved.x
-      finalY = resolved.y
-    }
+/** Check if parentId is sgId or a descendant of sgId */
+function isChildOf(
+  parentId: string | undefined,
+  sgId: string,
+  subgraphs: Map<string, ResolvedSubgraph>,
+): boolean {
+  let current = parentId
+  const visited = new Set<string>()
+  while (current) {
+    if (current === sgId) return true
+    if (visited.has(current)) return false
+    visited.add(current)
+    const sg = subgraphs.get(current)
+    current = sg?.subgraph.parent
   }
-
-  return { x: finalX, y: finalY }
+  return false
 }
 
 /**
@@ -149,11 +201,11 @@ function shiftContents(
 }
 
 /**
- * Rebalance the entire layout after a node move.
- * Uniform algorithm for subgraphs at all depths:
- *   1. Sort subgraphs by depth (deepest first)
- *   2. Bottom-up: recompute each subgraph's bounds from its children
- *   3. At each level: resolve sibling collisions (push + shift contents)
+ * Rebalance the entire layout after any mutation.
+ * Uniform algorithm:
+ *   1. Recompute subgraph bounds (bottom-up, deepest first)
+ *   2. Resolve subgraph vs subgraph sibling collisions
+ *   3. Resolve subgraph vs free node collisions (push nodes away)
  */
 export function rebalanceSubgraphs(
   nodes: Map<string, ResolvedNode>,
@@ -245,6 +297,28 @@ export function rebalanceSubgraphs(
       shiftContents(otherId, dx, dy, nodes, subgraphs, ports)
     }
   }
+
+  // Third pass: push free nodes away from subgraphs they don't belong to
+  for (const [nodeId, node] of nodes) {
+    const obstacles = collectObstacles(nodeId, node.node.parent, nodes, subgraphs)
+    const resolved = resolvePosition(
+      { x: node.position.x, y: node.position.y, w: node.size.width, h: node.size.height },
+      obstacles,
+    )
+    if (resolved.x !== node.position.x || resolved.y !== node.position.y) {
+      const dx = resolved.x - node.position.x
+      const dy = resolved.y - node.position.y
+      nodes.set(nodeId, { ...node, position: resolved })
+      // Shift ports
+      for (const [portId, port] of ports) {
+        if (port.nodeId !== nodeId) continue
+        ports.set(portId, {
+          ...port,
+          absolutePosition: { x: port.absolutePosition.x + dx, y: port.absolutePosition.y + dy },
+        })
+      }
+    }
+  }
 }
 
 export async function moveNode(
@@ -267,8 +341,15 @@ export async function moveNode(
   const node = layout.nodes.get(id)
   if (!node) return null
 
-  // 1. Resolve node-node collisions
-  const { x: finalX, y: finalY } = resolveNodePosition(id, x, y, layout.nodes, gap)
+  // 1. Resolve collisions (nodes + subgraphs)
+  const { x: finalX, y: finalY } = resolveNodePosition(
+    id,
+    x,
+    y,
+    layout.nodes,
+    gap,
+    layout.subgraphs,
+  )
 
   const dx = finalX - node.position.x
   const dy = finalY - node.position.y

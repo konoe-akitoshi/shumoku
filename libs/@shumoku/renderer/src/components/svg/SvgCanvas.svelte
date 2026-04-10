@@ -36,6 +36,7 @@
     onlinkend,
     onedgeselect,
     onportselect,
+    onsubgraphselect,
     onsubgraphmove,
     oncontextmenu: onctx,
     onbackgroundclick,
@@ -58,6 +59,7 @@
     onlinkend?: (portId: string) => void
     onedgeselect?: (edgeId: string) => void
     onportselect?: (portId: string) => void
+    onsubgraphselect?: (sgId: string) => void
     onsubgraphmove?: (sgId: string, x: number, y: number) => void
     oncontextmenu?: (id: string, type: string, e: MouseEvent) => void
     onbackgroundclick?: () => void
@@ -115,8 +117,11 @@
     }
   })
 
-  // --- d3-drag: node dragging ---
+  // --- d3-drag: node dragging (re-binds when node/subgraph list changes) ---
   $effect(() => {
+    // Track reactive dependencies so d3-drag rebinds on new elements
+    void nodeList.length
+    void subgraphList.length
     if (!svgEl || !interactive) return
 
     // biome-ignore lint/suspicious/noExplicitAny: d3-drag subject typing
@@ -207,7 +212,9 @@
       onclick={() => onbackgroundclick?.()}
     />
     {#each subgraphList as subgraph (subgraph.id)}
-      <SvgSubgraph {subgraph} {colors} {theme} {interactive} />
+      <SvgSubgraph {subgraph} {colors} {theme} {interactive}
+        selected={selection.has(subgraph.id)}
+        onselect={onsubgraphselect} />
     {/each}
 
     {#each edgeList as edge (edge.id)}

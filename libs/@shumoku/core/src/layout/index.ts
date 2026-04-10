@@ -17,8 +17,10 @@ export {
   movePort,
   moveSubgraph,
   nodesOverlap,
+  rebalanceSubgraphs,
   removePort,
   resolveNodePosition,
+  resolvePosition,
 } from './interaction.js'
 export type { LibavoidRoutingOptions } from './libavoid-router.js'
 export { ensureLibavoidLoaded, routeEdges } from './libavoid-router.js'

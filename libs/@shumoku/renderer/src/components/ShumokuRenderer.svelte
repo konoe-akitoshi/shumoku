@@ -13,7 +13,9 @@
     linkExists,
     moveNode,
     moveSubgraph,
+    rebalanceSubgraphs,
     removePort,
+    resolveNodePosition,
     routeEdges,
   } from '@shumoku/core'
   import { themeToColors } from '../lib/render-colors'
@@ -87,6 +89,7 @@
       let type: string = 'node'
       if (edges.has(id)) type = 'edge'
       else if (ports.has(id)) type = 'port'
+      else if (subgraphs.has(id)) type = 'subgraph'
       onselect?.(id, type)
     }
   })
@@ -192,12 +195,88 @@
     onchange?.(links)
   }
 
+  // --- Add node/subgraph (via custom events from host) ---
+  $effect(() => {
+    if (!svgEl) return
+    const root = svgEl.getRootNode() as ShadowRoot | Document
+    const host = (root as ShadowRoot).host
+
+    function onAddNode(e: Event) {
+      const { label, position } = (e as CustomEvent).detail ?? {}
+      const id = `node-${Date.now()}`
+      const w = 180
+      const h = 80
+
+      // If a subgraph is selected, add node inside it
+      const selectedSgId = [...selection].find((sid) => subgraphs.has(sid))
+      const parentSg = selectedSgId ? subgraphs.get(selectedSgId) : undefined
+      let parent: string | undefined
+      let initial: { x: number; y: number }
+
+      if (parentSg) {
+        parent = selectedSgId
+        initial = position ?? {
+          x: parentSg.bounds.x + parentSg.bounds.width / 2,
+          y: parentSg.bounds.y + parentSg.bounds.height / 2,
+        }
+      } else {
+        initial = position ?? { x: bounds.x + bounds.width + 20 + w / 2, y: bounds.y + bounds.height / 2 }
+      }
+
+      const newNodes = new Map(nodes)
+      newNodes.set(id, {
+        id,
+        position: initial,
+        size: { width: w, height: h },
+        node: { id, label: label ?? 'New Node', shape: 'rounded', parent },
+      })
+      // Collision resolution (nodes + subgraphs)
+      const resolved = resolveNodePosition(id, initial.x, initial.y, newNodes, 8, subgraphs)
+      newNodes.set(id, { ...newNodes.get(id)!, position: resolved })
+      nodes = newNodes
+      // Rebalance subgraphs (parent may need to expand)
+      if (parent) {
+        const newSubgraphs = new Map(subgraphs)
+        rebalanceSubgraphs(newNodes, newSubgraphs, ports)
+        subgraphs = newSubgraphs
+      }
+      selection = new Set([id])
+    }
+
+    function onAddSubgraph(e: Event) {
+      const { label, position } = (e as CustomEvent).detail ?? {}
+      const id = `sg-${Date.now()}`
+      const w = 200
+      const h = 120
+      const center = position ?? { x: bounds.x + bounds.width + 20 + w / 2, y: bounds.y + bounds.height / 2 }
+      const newSubgraphs = new Map(subgraphs)
+      newSubgraphs.set(id, {
+        id,
+        bounds: { x: center.x - w / 2, y: center.y - h / 2, width: w, height: h },
+        subgraph: { id, label: label ?? 'New Group' },
+      })
+      // Rebalance handles subgraph-subgraph collisions
+      rebalanceSubgraphs(nodes, newSubgraphs, ports)
+      subgraphs = newSubgraphs
+    }
+
+    host?.addEventListener('shumoku-add-node', onAddNode)
+    host?.addEventListener('shumoku-add-subgraph', onAddSubgraph)
+    return () => {
+      host?.removeEventListener('shumoku-add-node', onAddNode)
+      host?.removeEventListener('shumoku-add-subgraph', onAddSubgraph)
+    }
+  })
+
   // --- Selection handlers ---
   function handleEdgeSelect(edgeId: string) {
     selection = new Set([edgeId])
   }
   function handlePortSelect(portId: string) {
     selection = new Set([portId])
+  }
+  function handleSubgraphSelect(sgId: string) {
+    selection = new Set([sgId])
   }
   function handleBackgroundClick() {
     selection = new Set()
@@ -261,6 +340,7 @@
     onlinkend={handleLinkEnd}
     onedgeselect={handleEdgeSelect}
     onportselect={handlePortSelect}
+    onsubgraphselect={handleSubgraphSelect}
     onsubgraphmove={handleSubgraphMove}
     oncontextmenu={handleContextMenu}
     onbackgroundclick={handleBackgroundClick}
