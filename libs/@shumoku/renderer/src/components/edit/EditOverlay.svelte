@@ -1,11 +1,12 @@
 <script lang="ts">
-  import type { ResolvedEdge, ResolvedNode, ResolvedPort } from '@shumoku/core'
+  import type { ResolvedEdge, ResolvedNode, ResolvedPort, ResolvedSubgraph } from '@shumoku/core'
   import type { EditState } from '../../lib/edit-state.svelte'
   import { screenToSvg } from '../../lib/svg-coords'
   import ContextMenu from './ContextMenu.svelte'
   import LabelEditor from './LabelEditor.svelte'
   import NodeHandle from './NodeHandle.svelte'
   import PortHandle from './PortHandle.svelte'
+  import SubgraphHandle from './SubgraphHandle.svelte'
 
   let {
     svg,
@@ -14,7 +15,9 @@
     nodes,
     ports,
     edges,
+    subgraphs,
     ondragmove,
+    onsubgraphmove,
     onaddport,
     onlinkstart,
     onlinkend,
@@ -29,7 +32,9 @@
     nodes: Map<string, ResolvedNode>
     ports: Map<string, ResolvedPort>
     edges: Map<string, ResolvedEdge>
+    subgraphs: Map<string, ResolvedSubgraph>
     ondragmove?: (id: string, x: number, y: number) => void
+    onsubgraphmove?: (sgId: string, x: number, y: number) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onlinkstart?: (portId: string, x: number, y: number) => void
     onlinkend?: (portId: string) => void
@@ -193,6 +198,15 @@
   onkeydown={onKeyDown}
   tabindex="-1"
 >
+  {#each [...subgraphs.values()] as sg (sg.id)}
+    <SubgraphHandle
+      subgraph={sg}
+      {svg}
+      {container}
+      onmove={onsubgraphmove}
+    />
+  {/each}
+
   {#each nodeList as node (node.id)}
     <NodeHandle
       {node}

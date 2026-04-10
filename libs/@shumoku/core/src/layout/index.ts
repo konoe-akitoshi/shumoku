@@ -15,6 +15,7 @@ export {
   linkExists,
   moveNode,
   movePort,
+  moveSubgraph,
   nodesOverlap,
   removePort,
   resolveNodePosition,

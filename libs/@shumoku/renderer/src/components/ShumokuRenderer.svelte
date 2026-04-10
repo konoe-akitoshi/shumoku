@@ -8,7 +8,7 @@
     ResolvedSubgraph,
     Theme,
   } from '@shumoku/core'
-  import { addPort, linkExists, moveNode, movePort, removePort, routeEdges } from '@shumoku/core'
+  import { addPort, linkExists, moveNode, movePort, moveSubgraph, removePort, routeEdges } from '@shumoku/core'
   import { createEditState } from '../lib/edit-state.svelte'
   import { themeToColors } from '../lib/render-colors'
   import EditOverlay from './edit/EditOverlay.svelte'
@@ -54,6 +54,15 @@
     ports = result.ports
     edges = result.edges
     if (result.subgraphs) subgraphs = result.subgraphs
+  }
+
+  async function handleSubgraphMove(sgId: string, x: number, y: number) {
+    const result = await moveSubgraph(sgId, x, y, { nodes, ports, subgraphs }, links)
+    if (!result) return
+    nodes = result.nodes
+    ports = result.ports
+    edges = result.edges
+    subgraphs = result.subgraphs
   }
 
   async function handleAddPort(nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') {
@@ -190,7 +199,9 @@
       {nodes}
       {ports}
       {edges}
+      subgraphs={subgraphs}
       ondragmove={handleNodeMove}
+      onsubgraphmove={handleSubgraphMove}
       onaddport={handleAddPort}
       onlinkstart={handleLinkStart}
       onlinkend={handleLinkEnd}

@@ -304,6 +304,52 @@ export async function moveNode(
   return { nodes: newNodes, ports: newPorts, edges, subgraphs: newSubgraphs }
 }
 
+/**
+ * Move an entire subgraph (bounds + all contents) by delta from its current position.
+ * Resolves sibling collisions after the move.
+ */
+export async function moveSubgraph(
+  sgId: string,
+  x: number,
+  y: number,
+  layout: {
+    nodes: Map<string, ResolvedNode>
+    ports: Map<string, ResolvedPort>
+    subgraphs: Map<string, ResolvedSubgraph>
+  },
+  links: Link[],
+): Promise<{
+  nodes: Map<string, ResolvedNode>
+  ports: Map<string, ResolvedPort>
+  edges: Map<string, ResolvedEdge>
+  subgraphs: Map<string, ResolvedSubgraph>
+} | null> {
+  const sg = layout.subgraphs.get(sgId)
+  if (!sg) return null
+
+  const dx = x - sg.bounds.x
+  const dy = y - sg.bounds.y
+  if (dx === 0 && dy === 0) return null
+
+  const newNodes = new Map(layout.nodes)
+  const newPorts = new Map(layout.ports)
+  const newSubgraphs = new Map(layout.subgraphs)
+
+  // Shift the subgraph bounds
+  newSubgraphs.set(sgId, { ...sg, bounds: { ...sg.bounds, x, y } })
+
+  // Shift all contents
+  shiftContents(sgId, dx, dy, newNodes, newSubgraphs, newPorts)
+
+  // Resolve sibling collisions at this level and above
+  rebalanceSubgraphs(newNodes, newSubgraphs, newPorts)
+
+  // Re-route edges
+  const edges = await routeEdges(newNodes, newPorts, links)
+
+  return { nodes: newNodes, ports: newPorts, edges, subgraphs: newSubgraphs }
+}
+
 // ============================================================================
 // Link operations
 // ============================================================================
