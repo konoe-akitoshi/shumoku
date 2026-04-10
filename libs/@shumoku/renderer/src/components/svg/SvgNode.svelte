@@ -120,7 +120,7 @@
   data-id={node.id}
   data-device-type={node.node.type ?? ''}
   filter="url(#{shadowFilterId})"
-  onpointerenter={() => { hovered = true }}
+  onpointerenter={() => { if (interactive) hovered = true }}
   onpointerleave={() => { hovered = false }}
   oncontextmenu={handleContextMenu}
 >
@@ -279,7 +279,7 @@
       width={node.size.width}
       height={zone}
       fill="transparent"
-      style="cursor: pointer; pointer-events: fill;"
+      class="edge-zone"
       onpointermove={(e) => onEdgeMove('top', e)}
       onpointerleave={() => { droplet = null }}
       onpointerdown={onEdgeDown}
@@ -291,7 +291,7 @@
       width={node.size.width}
       height={zone}
       fill="transparent"
-      style="cursor: pointer; pointer-events: fill;"
+      class="edge-zone"
       onpointermove={(e) => onEdgeMove('bottom', e)}
       onpointerleave={() => { droplet = null }}
       onpointerdown={onEdgeDown}
@@ -303,7 +303,7 @@
       width={zone}
       height={node.size.height}
       fill="transparent"
-      style="cursor: pointer; pointer-events: fill;"
+      class="edge-zone"
       onpointermove={(e) => onEdgeMove('left', e)}
       onpointerleave={() => { droplet = null }}
       onpointerdown={onEdgeDown}
@@ -315,7 +315,7 @@
       width={zone}
       height={node.size.height}
       fill="transparent"
-      style="cursor: pointer; pointer-events: fill;"
+      class="edge-zone"
       onpointermove={(e) => onEdgeMove('right', e)}
       onpointerleave={() => { droplet = null }}
       onpointerdown={onEdgeDown}

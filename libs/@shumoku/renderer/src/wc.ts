@@ -28,7 +28,7 @@ class ShumokuRendererElement extends HTMLElement {
 
   set layout(value: ResolvedLayout) {
     this._layout = value
-    this._tryRender()
+    this._tryRender() // Only layout triggers full mount
   }
   get layout(): ResolvedLayout | null {
     return this._layout
@@ -36,7 +36,7 @@ class ShumokuRendererElement extends HTMLElement {
 
   set graph(value: NetworkGraph) {
     this._graph = value
-    this._tryRender()
+    // Don't remount — will be used on next layout set
   }
   get graph(): NetworkGraph | null {
     return this._graph
@@ -44,7 +44,7 @@ class ShumokuRendererElement extends HTMLElement {
 
   set theme(value: Theme) {
     this._theme = value
-    this._tryRender()
+    // Don't remount — will be used on next layout set
   }
   get theme(): Theme | undefined {
     return this._theme
@@ -52,18 +52,10 @@ class ShumokuRendererElement extends HTMLElement {
 
   set mode(value: 'view' | 'edit') {
     this._mode = value
-    this._tryRender()
+    // Don't remount — will be used on next layout set or initial render
   }
   get mode(): 'view' | 'edit' {
     return this._mode
-  }
-
-  set viewBox(value: string | undefined) {
-    this._viewBox = value
-    this._tryRender()
-  }
-  get viewBox(): string | undefined {
-    return this._viewBox
   }
 
   get svgElement(): SVGSVGElement | null {

@@ -87,8 +87,9 @@
   let viewportEl: SVGGElement | undefined = $state()
 
   // --- d3-zoom: pan/zoom on viewport <g> ---
+  // d3-zoom: pan/zoom always active
   $effect(() => {
-    if (!svgEl || !interactive || !viewportEl) return
+    if (!svgEl || !viewportEl) return
 
     const svgSel = select(svgEl)
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
@@ -169,7 +170,8 @@
   bind:this={svgEl}
   xmlns="http://www.w3.org/2000/svg"
   {viewBox}
-  style="width: 100%; height: 100%; user-select: none; background: {interactive ? '#f8fafc' : 'transparent'};"
+  class:interactive
+  style="width: 100%; height: 100%; user-select: none; background: #f8fafc;"
 >
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -178,24 +180,33 @@
     <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
       <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06" />
     </filter>
-    {#if interactive}
-      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" stroke-width="0.5" />
-      </pattern>
-    {/if}
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" stroke-width="0.5" />
+    </pattern>
   </defs>
 
   {@html `<style>
+    /* Typography (always) */
     .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: ${colors.nodeText}; }
     .node-label-bold { font-weight: 700; }
     .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: ${colors.nodeTextSecondary}; }
     .node-icon { color: ${colors.nodeTextSecondary}; }
     .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
     .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: ${colors.textSecondary}; }
-    .node[data-id] { cursor: ${interactive ? 'grab' : 'default'}; }
-    .node[data-id]:active { cursor: grabbing; }
-    [data-sg-drag] { cursor: ${interactive ? 'grab' : 'default'}; }
-    [data-sg-drag]:active { cursor: grabbing; }
+
+    /* Default: all interactive elements disabled */
+    .subgraph-bg, .port-hit, .link-hit, .edge-zone, [data-sg-drag] { pointer-events: none; }
+
+    /* Edit mode: enable all interaction */
+    svg.interactive .node[data-id] { cursor: grab; }
+    svg.interactive .node[data-id]:active { cursor: grabbing; }
+    svg.interactive .subgraph-bg { pointer-events: fill; cursor: pointer; }
+    svg.interactive [data-sg-drag] { pointer-events: fill; cursor: grab; }
+    svg.interactive [data-sg-drag]:active { cursor: grabbing; }
+    svg.interactive .port-hit { pointer-events: fill; cursor: crosshair; }
+    svg.interactive .port-hit.linked { cursor: pointer; }
+    svg.interactive .link-hit { pointer-events: stroke; cursor: pointer; }
+    svg.interactive .edge-zone { pointer-events: fill; cursor: pointer; }
   </style>`}
 
   <!-- Viewport group: d3-zoom applies transform here -->
@@ -207,14 +218,18 @@
       y="-99999"
       width="199998"
       height="199998"
-      fill={interactive ? 'url(#grid)' : 'transparent'}
+      fill="url(#grid)"
       pointer-events={interactive ? 'fill' : 'none'}
       onclick={() => onbackgroundclick?.()}
     />
     {#each subgraphList as subgraph (subgraph.id)}
-      <SvgSubgraph {subgraph} {colors} {theme} {interactive}
+      <SvgSubgraph
+        {subgraph}
+        {colors}
+        {theme}
         selected={selection.has(subgraph.id)}
-        onselect={onsubgraphselect} />
+        onselect={onsubgraphselect}
+      />
     {/each}
 
     {#each edgeList as edge (edge.id)}

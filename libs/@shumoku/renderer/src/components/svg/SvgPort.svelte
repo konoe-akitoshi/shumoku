@@ -74,34 +74,32 @@
   class="port"
   data-port={port.id}
   data-port-device={port.nodeId}
-  onpointerenter={() => { hovered = true }}
+  onpointerenter={() => { hovered = interactive }}
   onpointerleave={() => { hovered = false }}
   oncontextmenu={handleContextMenu}
 >
-  <!-- Hit area -->
-  {#if interactive}
-    <rect
-      x={px - 12}
-      y={py - 12}
-      width={24}
-      height={24}
-      fill="transparent"
-      style="pointer-events: fill; cursor: {linked ? 'pointer' : 'crosshair'};"
-      {onpointerdown}
-      {onpointerup}
-    />
-  {/if}
+  <!-- Hit area (CSS controls pointer-events via .interactive) -->
+  <rect
+    class="port-hit {linked ? 'linked' : ''}"
+    x={px - 12}
+    y={py - 12}
+    width={24}
+    height={24}
+    fill="transparent"
+    {onpointerdown}
+    {onpointerup}
+  />
 
   <!-- Port box -->
   <rect
     class="port-box"
-    x={px - pw / 2 - (selected || (interactive && hovered) ? 2 : 0)}
-    y={py - ph / 2 - (selected || (interactive && hovered) ? 2 : 0)}
-    width={pw + (selected || (interactive && hovered) ? 4 : 0)}
-    height={ph + (selected || (interactive && hovered) ? 4 : 0)}
-    fill={selected ? colors.selection : (interactive && hovered) ? '#3b82f6' : colors.portFill}
-    stroke={selected ? colors.selection : (interactive && hovered) ? '#2563eb' : colors.portStroke}
-    stroke-width={selected || (interactive && hovered) ? 2 : 1}
+    x={px - pw / 2 - (selected || hovered ? 2 : 0)}
+    y={py - ph / 2 - (selected || hovered ? 2 : 0)}
+    width={pw + (selected || hovered ? 4 : 0)}
+    height={ph + (selected || hovered ? 4 : 0)}
+    fill={selected ? colors.selection : hovered ? '#3b82f6' : colors.portFill}
+    stroke={selected ? colors.selection : hovered ? '#2563eb' : colors.portStroke}
+    stroke-width={selected || hovered ? 2 : 1}
     rx="2"
     pointer-events="none"
   />

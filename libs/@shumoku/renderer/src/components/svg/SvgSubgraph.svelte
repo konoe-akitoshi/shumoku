@@ -6,14 +6,12 @@
     subgraph,
     colors,
     theme,
-    interactive = false,
     selected = false,
     onselect,
   }: {
     subgraph: ResolvedSubgraph
     colors: RenderColors
     theme?: Theme
-    interactive?: boolean
     selected?: boolean
     onselect?: (sgId: string) => void
   } = $props()
@@ -51,6 +49,7 @@
 <g class="subgraph" data-id={subgraph.id}>
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <rect
+    class="subgraph-bg"
     x={subgraph.bounds.x}
     y={subgraph.bounds.y}
     width={subgraph.bounds.width}
@@ -61,10 +60,9 @@
     stroke={selected ? '#3b82f6' : resolved().stroke}
     stroke-width={selected ? 3 : strokeWidth}
     stroke-dasharray={selected ? undefined : (strokeDasharray || undefined)}
-    style={interactive ? 'cursor: pointer;' : ''}
-    onclick={(e) => { if (interactive) { e.stopPropagation(); onselect?.(subgraph.id) } }}
+    onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id) }}
   />
-  <!-- Label area: d3-drag attached via data-sg-drag -->
+  <!-- Label area: d3-drag attached via data-sg-drag (CSS controls pointer-events) -->
   <rect
     data-sg-drag={subgraph.id}
     x={subgraph.bounds.x}
@@ -72,7 +70,6 @@
     width={subgraph.bounds.width}
     height={28}
     fill="transparent"
-    pointer-events={interactive ? 'fill' : 'none'}
   />
   <text
     x={subgraph.bounds.x + 10}

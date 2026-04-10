@@ -40,7 +40,8 @@
   } = $props()
 
   const colors = $derived(themeToColors(theme))
-  const interactive = $derived(mode === 'edit')
+  let currentMode = $state(mode)
+  const interactive = $derived(currentMode === 'edit')
 
   // Layout state
   let nodes = $state<Map<string, ResolvedNode>>(new Map(initialLayout.nodes))
@@ -77,6 +78,22 @@
     const el = svgEl
     el.addEventListener('keydown', handleKeyDown)
     return () => el.removeEventListener('keydown', handleKeyDown)
+  })
+
+  // Listen for mode changes from WebComponent (without remount)
+  $effect(() => {
+    if (!svgEl) return
+    const root = svgEl.getRootNode() as ShadowRoot | Document
+    const host = (root as ShadowRoot).host
+    if (!host) return
+    function onModeChange(e: Event) {
+      const newMode = (e as CustomEvent).detail?.mode
+      if (newMode === 'edit' || newMode === 'view') {
+        currentMode = newMode
+      }
+    }
+    host.addEventListener('shumoku-mode-change', onModeChange)
+    return () => host.removeEventListener('shumoku-mode-change', onModeChange)
   })
 
   // Notify selection changes
@@ -220,7 +237,10 @@
           y: parentSg.bounds.y + parentSg.bounds.height / 2,
         }
       } else {
-        initial = position ?? { x: bounds.x + bounds.width + 20 + w / 2, y: bounds.y + bounds.height / 2 }
+        initial = position ?? {
+          x: bounds.x + bounds.width + 20 + w / 2,
+          y: bounds.y + bounds.height / 2,
+        }
       }
 
       const newNodes = new Map(nodes)
@@ -248,7 +268,10 @@
       const id = `sg-${Date.now()}`
       const w = 200
       const h = 120
-      const center = position ?? { x: bounds.x + bounds.width + 20 + w / 2, y: bounds.y + bounds.height / 2 }
+      const center = position ?? {
+        x: bounds.x + bounds.width + 20 + w / 2,
+        y: bounds.y + bounds.height / 2,
+      }
       const newSubgraphs = new Map(subgraphs)
       newSubgraphs.set(id, {
         id,

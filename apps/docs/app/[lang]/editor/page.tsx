@@ -7,14 +7,19 @@ import {
   lightTheme,
   sampleNetwork,
 } from '@shumoku/core'
-import { Box, Info, Layers, MousePointer2, Network, Plus, SquareDashed } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+  Box,
+  Eye,
+  Info,
+  Layers,
+  MousePointer2,
+  Network,
+  Pencil,
+  Plus,
+  SquareDashed,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 // ============================================================================
 // Parse
@@ -46,6 +51,7 @@ export default function EditorPage() {
   const wcRef = useRef<HTMLElement | null>(null)
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState('Loading...')
+  const [mode, setMode] = useState<'edit' | 'view'>('view')
   const [selected, setSelected] = useState<{ id: string; type: string } | null>(null)
   const [stats, setStats] = useState({ nodes: 0, links: 0, subgraphs: 0 })
 
@@ -70,6 +76,14 @@ export default function EditorPage() {
     }
   }, [])
 
+  // --- Mode toggle (event, no remount) ---
+  useEffect(() => {
+    const el = wcRef.current
+    if (el) {
+      el.dispatchEvent(new CustomEvent('shumoku-mode-change', { detail: { mode } }))
+    }
+  }, [mode])
+
   // --- Init ---
 
   useEffect(() => {
@@ -77,7 +91,10 @@ export default function EditorPage() {
       try {
         setStatus('Loading renderer...')
         await new Promise<void>((resolve, reject) => {
-          if (customElements.get('shumoku-renderer')) { resolve(); return }
+          if (customElements.get('shumoku-renderer')) {
+            resolve()
+            return
+          }
           const script = document.createElement('script')
           script.type = 'module'
           script.src = '/renderer/shumoku-renderer.js'
@@ -101,10 +118,11 @@ export default function EditorPage() {
         await customElements.whenDefined('shumoku-renderer')
         const el = wcRef.current
         if (el) {
+          // Set graph, theme, mode BEFORE layout (layout triggers render)
           ;(el as any).graph = graph
-          ;(el as any).layout = resolved
           ;(el as any).theme = lightTheme
-          ;(el as any).mode = 'edit'
+          ;(el as any).mode = mode
+          ;(el as any).layout = resolved
           setStatus('Ready')
         }
       } catch (e) {
@@ -124,6 +142,44 @@ export default function EditorPage() {
 
           <div className="w-px h-5 bg-slate-200 mx-2" />
 
+          {/* Mode toggle */}
+          <div className="flex items-center bg-slate-100 rounded-md p-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    mode === 'edit'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  onClick={() => setMode('edit')}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Edit
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Edit mode — drag, add, delete</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    mode === 'view'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  onClick={() => setMode('view')}
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  View
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>View mode — pan and zoom only</TooltipContent>
+            </Tooltip>
+          </div>
+
+          <div className="w-px h-5 bg-slate-200 mx-2" />
+
           <div className="flex items-center gap-3 text-xs text-slate-500">
             <span>{stats.nodes} nodes</span>
             <span>{stats.links} links</span>
@@ -132,39 +188,45 @@ export default function EditorPage() {
 
           <div className="w-px h-5 bg-slate-200 mx-2" />
 
-          {/* Add buttons */}
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-                  onClick={() => {
-                    wcRef.current?.dispatchEvent(new CustomEvent('shumoku-add-node', { detail: {} }))
-                    setStats((s) => ({ ...s, nodes: s.nodes + 1 }))
-                  }}
-                >
-                  <Box className="w-3.5 h-3.5" />
-                  <Plus className="w-3 h-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Add node</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-                  onClick={() => {
-                    wcRef.current?.dispatchEvent(new CustomEvent('shumoku-add-subgraph', { detail: {} }))
-                    setStats((s) => ({ ...s, subgraphs: s.subgraphs + 1 }))
-                  }}
-                >
-                  <SquareDashed className="w-3.5 h-3.5" />
-                  <Plus className="w-3 h-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Add group</TooltipContent>
-            </Tooltip>
-          </div>
+          {/* Add buttons (edit mode only) */}
+          {mode === 'edit' && (
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                    onClick={() => {
+                      wcRef.current?.dispatchEvent(
+                        new CustomEvent('shumoku-add-node', { detail: {} }),
+                      )
+                      setStats((s) => ({ ...s, nodes: s.nodes + 1 }))
+                    }}
+                  >
+                    <Box className="w-3.5 h-3.5" />
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Add node</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                    onClick={() => {
+                      wcRef.current?.dispatchEvent(
+                        new CustomEvent('shumoku-add-subgraph', { detail: {} }),
+                      )
+                      setStats((s) => ({ ...s, subgraphs: s.subgraphs + 1 }))
+                    }}
+                  >
+                    <SquareDashed className="w-3.5 h-3.5" />
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Add group</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
 
           <div className="flex-1" />
 
@@ -185,7 +247,9 @@ export default function EditorPage() {
           <div className="w-px h-5 bg-slate-200 mx-2" />
 
           <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${status === 'Ready' ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`} />
+            <div
+              className={`w-2 h-2 rounded-full ${status === 'Ready' ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`}
+            />
             <span className="text-xs text-slate-500">{status}</span>
           </div>
         </div>
@@ -193,7 +257,10 @@ export default function EditorPage() {
         {/* Canvas: WebComponent handles grid + pan/zoom internally via d3-zoom */}
         <div className="flex-1 overflow-hidden">
           {/* @ts-expect-error WebComponent */}
-          <shumoku-renderer ref={wcRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+          <shumoku-renderer
+            ref={wcRef}
+            style={{ width: '100%', height: '100%', display: 'block' }}
+          />
         </div>
 
         {/* Bottom help */}
@@ -207,11 +274,28 @@ export default function EditorPage() {
             <TooltipContent side="left" className="max-w-[260px]">
               <div className="text-xs space-y-1.5">
                 <p className="font-semibold">Controls</p>
-                <div className="flex justify-between gap-4"><span>Pan</span><kbd className="px-1 bg-slate-100 rounded text-[10px]">Alt + Drag / Middle Mouse</kbd></div>
-                <div className="flex justify-between gap-4"><span>Zoom</span><kbd className="px-1 bg-slate-100 rounded text-[10px]">Scroll wheel</kbd></div>
-                <div className="flex justify-between gap-4"><span>Reset view</span><span className="text-slate-400">Click zoom %</span></div>
-                <div className="flex justify-between gap-4"><span>Delete</span><kbd className="px-1 bg-slate-100 rounded text-[10px]">Del</kbd></div>
-                <div className="flex justify-between gap-4"><span>Cancel</span><kbd className="px-1 bg-slate-100 rounded text-[10px]">Esc</kbd></div>
+                <div className="flex justify-between gap-4">
+                  <span>Pan</span>
+                  <kbd className="px-1 bg-slate-100 rounded text-[10px]">
+                    Alt + Drag / Middle Mouse
+                  </kbd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>Zoom</span>
+                  <kbd className="px-1 bg-slate-100 rounded text-[10px]">Scroll wheel</kbd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>Reset view</span>
+                  <span className="text-slate-400">Click zoom %</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>Delete</span>
+                  <kbd className="px-1 bg-slate-100 rounded text-[10px]">Del</kbd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>Cancel</span>
+                  <kbd className="px-1 bg-slate-100 rounded text-[10px]">Esc</kbd>
+                </div>
               </div>
             </TooltipContent>
           </Tooltip>

@@ -117,7 +117,7 @@
     stroke="transparent"
     stroke-width={Math.max(edge.width + 12, 16)}
     stroke-linecap="round"
-    style="pointer-events: {interactive ? 'stroke' : 'none'}; cursor: pointer;"
+    class="link-hit"
     {onclick}
     oncontextmenu={handleContextMenu}
   />
