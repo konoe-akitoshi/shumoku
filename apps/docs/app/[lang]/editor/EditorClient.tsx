@@ -3,6 +3,7 @@
 import {
   computeNetworkLayout,
   createMemoryFileResolver,
+  darkTheme,
   HierarchicalParser,
   lightTheme,
   sampleNetwork,
@@ -77,6 +78,18 @@ export default function EditorClient() {
   const [mode, setMode] = useState<'edit' | 'view'>('view')
   const [selected, setSelected] = useState<{ id: string; type: string } | null>(null)
   const [stats, setStats] = useState({ nodes: 0, links: 0, subgraphs: 0 })
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+  )
+
+  // Watch for dark mode changes
+  useEffect(() => {
+    const obs = new MutationObserver(() =>
+      setIsDark(document.documentElement.classList.contains('dark')),
+    )
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => obs.disconnect()
+  }, [])
   const [labelEdit, setLabelEdit] = useState<{
     portId: string
     label: string
@@ -112,6 +125,18 @@ export default function EditorClient() {
       el.removeEventListener('shumoku-label-edit', onLabelEdit)
     }
   }, [])
+
+  // --- Theme sync (event, no remount) ---
+  useEffect(() => {
+    const el = wcRef.current
+    if (el) {
+      el.dispatchEvent(
+        new CustomEvent('shumoku-theme-change', {
+          detail: { theme: isDark ? darkTheme : lightTheme },
+        }),
+      )
+    }
+  }, [isDark])
 
   // --- Mode toggle (event, no remount) ---
   useEffect(() => {
@@ -157,7 +182,7 @@ export default function EditorClient() {
         if (el) {
           // Set graph, theme, mode BEFORE layout (layout triggers render)
           ;(el as any).graph = graph
-          ;(el as any).theme = lightTheme
+          ;(el as any).theme = isDark ? darkTheme : lightTheme
           ;(el as any).mode = mode
           ;(el as any).layout = resolved
           setStatus('Ready')
@@ -173,21 +198,21 @@ export default function EditorClient() {
     <TooltipProvider delayDuration={200}>
       <div className="flex flex-col h-[calc(100vh-64px)]">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-white shadow-sm z-10">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700 shadow-sm z-10">
           <Network className="w-5 h-5 text-blue-500" />
-          <h1 className="text-base font-semibold text-slate-800">Network Editor</h1>
+          <h1 className="text-base font-semibold text-slate-800 dark:text-neutral-100">Network Editor</h1>
 
-          <div className="w-px h-5 bg-slate-200 mx-2" />
+          <div className="w-px h-5 bg-slate-200 dark:bg-neutral-700 mx-2" />
 
           {/* Mode toggle */}
-          <div className="flex items-center bg-slate-100 rounded-md p-0.5">
+          <div className="flex items-center bg-slate-100 dark:bg-neutral-800 rounded-md p-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                     mode === 'edit'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-slate-500 dark:text-neutral-400 hover:text-slate-700 dark:hover:text-neutral-200'
                   }`}
                   onClick={() => setMode('edit')}
                 >
@@ -202,8 +227,8 @@ export default function EditorClient() {
                 <button
                   className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                     mode === 'view'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-slate-500 dark:text-neutral-400 hover:text-slate-700 dark:hover:text-neutral-200'
                   }`}
                   onClick={() => setMode('view')}
                 >
@@ -215,15 +240,15 @@ export default function EditorClient() {
             </Tooltip>
           </div>
 
-          <div className="w-px h-5 bg-slate-200 mx-2" />
+          <div className="w-px h-5 bg-slate-200 dark:bg-neutral-700 mx-2" />
 
-          <div className="flex items-center gap-3 text-xs text-slate-500">
+          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-neutral-400">
             <span>{stats.nodes} nodes</span>
             <span>{stats.links} links</span>
             <span>{stats.subgraphs} groups</span>
           </div>
 
-          <div className="w-px h-5 bg-slate-200 mx-2" />
+          <div className="w-px h-5 bg-slate-200 dark:bg-neutral-700 mx-2" />
 
           {/* Add buttons (edit mode only) */}
           {mode === 'edit' && (
@@ -231,7 +256,7 @@ export default function EditorClient() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                     onClick={() => {
                       wcRef.current?.dispatchEvent(
                         new CustomEvent('shumoku-add-node', { detail: {} }),
@@ -248,7 +273,7 @@ export default function EditorClient() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                     onClick={() => {
                       wcRef.current?.dispatchEvent(
                         new CustomEvent('shumoku-add-subgraph', { detail: {} }),
@@ -265,14 +290,14 @@ export default function EditorClient() {
             </div>
           )}
 
-          <div className="w-px h-5 bg-slate-200 mx-2" />
+          <div className="w-px h-5 bg-slate-200 dark:bg-neutral-700 mx-2" />
 
           {/* Save/Load */}
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                   onClick={() => {
                     const el = wcRef.current
                     if (!el) return
@@ -302,7 +327,7 @@ export default function EditorClient() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                   onClick={() => {
                     const input = document.createElement('input')
                     input.type = 'file'
@@ -351,13 +376,13 @@ export default function EditorClient() {
             </div>
           )}
 
-          <div className="w-px h-5 bg-slate-200 mx-2" />
+          <div className="w-px h-5 bg-slate-200 dark:bg-neutral-700 mx-2" />
 
           <div className="flex items-center gap-1.5">
             <div
               className={`w-2 h-2 rounded-full ${status === 'Ready' ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`}
             />
-            <span className="text-xs text-slate-500">{status}</span>
+            <span className="text-xs text-slate-500 dark:text-neutral-400">{status}</span>
           </div>
         </div>
 
@@ -375,14 +400,14 @@ export default function EditorClient() {
           <>
             <div className="fixed inset-0 z-40" onClick={() => setLabelEdit(null)} />
             <div
-              className="fixed z-50 bg-white border border-slate-200 rounded-lg shadow-lg p-2"
+              className="fixed z-50 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-600 rounded-lg shadow-lg p-2"
               style={{ top: labelEdit.y - 10, left: labelEdit.x - 4 }}
             >
               <input
                 ref={labelInputRef}
                 type="text"
                 defaultValue={labelEdit.label}
-                className="text-sm px-2 py-1 border border-blue-300 rounded outline-none focus:ring-2 focus:ring-blue-200 w-32 text-slate-900 bg-white"
+                className="text-sm px-2 py-1 border border-blue-300 rounded outline-none focus:ring-2 focus:ring-blue-200 w-32 text-slate-900 dark:text-neutral-100 bg-white dark:bg-neutral-700"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const value = (e.target as HTMLInputElement).value.trim()
@@ -417,8 +442,8 @@ export default function EditorClient() {
         <div className="absolute bottom-4 right-4 z-10">
           <Tooltip>
             <TooltipTrigger asChild>
-              <button className="p-2 bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm hover:bg-white transition-colors">
-                <Info className="w-4 h-4 text-slate-500" />
+              <button className="p-2 bg-white/80 dark:bg-neutral-800/80 backdrop-blur-sm rounded-lg border border-slate-200 dark:border-neutral-600 shadow-sm hover:bg-white dark:hover:bg-neutral-700 transition-colors">
+                <Info className="w-4 h-4 text-slate-500 dark:text-neutral-400" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="left" className="max-w-[260px]">
@@ -426,25 +451,25 @@ export default function EditorClient() {
                 <p className="font-semibold">Controls</p>
                 <div className="flex justify-between gap-4">
                   <span>Pan</span>
-                  <kbd className="px-1 bg-slate-100 rounded text-[10px]">
+                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">
                     Alt + Drag / Middle Mouse
                   </kbd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Zoom</span>
-                  <kbd className="px-1 bg-slate-100 rounded text-[10px]">Scroll wheel</kbd>
+                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">Scroll wheel</kbd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Reset view</span>
-                  <span className="text-slate-400">Click zoom %</span>
+                  <span className="text-slate-400 dark:text-neutral-500">Click zoom %</span>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Delete</span>
-                  <kbd className="px-1 bg-slate-100 rounded text-[10px]">Del</kbd>
+                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">Del</kbd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Cancel</span>
-                  <kbd className="px-1 bg-slate-100 rounded text-[10px]">Esc</kbd>
+                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">Esc</kbd>
                 </div>
               </div>
             </TooltipContent>

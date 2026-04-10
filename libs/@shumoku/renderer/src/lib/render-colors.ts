@@ -24,6 +24,7 @@ export interface RenderColors {
   subgraphText: string
   textSecondary: string
   selection: string
+  grid: string
 }
 
 /** Same mapping as svg.ts themeToRenderColors */
@@ -47,5 +48,6 @@ export function themeToColors(theme: Theme = lightTheme): RenderColors {
     subgraphText: surface1.text,
     textSecondary: theme.colors.textSecondary,
     selection: theme.colors.primary,
+    grid: theme.colors.grid ?? (theme.variant === 'dark' ? '#334155' : '#e2e8f0'),
   }
 }

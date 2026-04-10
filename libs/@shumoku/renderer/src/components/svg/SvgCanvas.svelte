@@ -173,7 +173,7 @@
   xmlns="http://www.w3.org/2000/svg"
   {viewBox}
   class:interactive
-  style="width: 100%; height: 100%; user-select: none; background: #f8fafc;"
+  style="width: 100%; height: 100%; user-select: none; background: {colors.background};"
 >
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -183,7 +183,7 @@
       <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06" />
     </filter>
     <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" stroke-width="0.5" />
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke={colors.grid} stroke-width="0.5" />
     </pattern>
   </defs>
 

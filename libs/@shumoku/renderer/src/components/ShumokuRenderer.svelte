@@ -39,7 +39,8 @@
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
   } = $props()
 
-  const colors = $derived(themeToColors(theme))
+  let currentTheme = $state(theme)
+  const colors = $derived(themeToColors(currentTheme))
   let currentMode = $state(mode)
   const interactive = $derived(currentMode === 'edit')
 
@@ -92,8 +93,16 @@
         currentMode = newMode
       }
     }
+    function onThemeChange(e: Event) {
+      const newTheme = (e as CustomEvent).detail?.theme
+      if (newTheme) currentTheme = newTheme
+    }
     host.addEventListener('shumoku-mode-change', onModeChange)
-    return () => host.removeEventListener('shumoku-mode-change', onModeChange)
+    host.addEventListener('shumoku-theme-change', onThemeChange)
+    return () => {
+      host.removeEventListener('shumoku-mode-change', onModeChange)
+      host.removeEventListener('shumoku-theme-change', onThemeChange)
+    }
   })
 
   // Snapshot: export current layout state on request
@@ -400,7 +409,7 @@
     {subgraphs}
     {bounds}
     {colors}
-    {theme}
+    theme={currentTheme}
     {interactive}
     {selection}
     {linkedPorts}
