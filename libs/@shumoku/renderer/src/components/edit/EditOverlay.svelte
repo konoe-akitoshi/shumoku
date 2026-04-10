@@ -149,14 +149,15 @@
   }
 
   function onSvgContextMenu(e: MouseEvent) {
-    e.preventDefault()
     if (editState.contextMenu) {
+      e.preventDefault()
       editState.hideContextMenu()
       return
     }
     const target = e.target as HTMLElement
     const edgeId = target.dataset?.['edgeClick']
-    if (!edgeId) return
+    if (!edgeId) return // No target → let browser show default menu
+    e.preventDefault()
     e.stopPropagation()
     editState.select(edgeId)
     const containerRect = container.getBoundingClientRect()

@@ -85,6 +85,20 @@ class ShumokuRendererElement extends HTMLElement {
         layout: this._layout,
         graph: this._graph ?? undefined,
         theme: this._theme,
+        onselect: (id: string | null, type: string | null) => {
+          this.dispatchEvent(new CustomEvent('shumoku-select', {
+            detail: { id, type },
+            bubbles: true,
+            composed: true,
+          }))
+        },
+        onchange: (links: any[]) => {
+          this.dispatchEvent(new CustomEvent('shumoku-change', {
+            detail: { links },
+            bubbles: true,
+            composed: true,
+          }))
+        },
         mode: this._mode,
       },
     })

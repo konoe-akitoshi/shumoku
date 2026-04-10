@@ -20,12 +20,14 @@
     theme,
     mode = 'view',
     onchange,
+    onselect,
   }: {
     layout: ResolvedLayout
     graph?: { links: Link[] }
     theme?: Theme
     mode?: 'view' | 'edit'
     onchange?: (links: Link[]) => void
+    onselect?: (id: string | null, type: string | null) => void
   } = $props()
 
   const colors = $derived(themeToColors(theme))
@@ -40,6 +42,21 @@
 
   // Edit state
   const editState = createEditState()
+
+  // Notify host when selection changes
+  $effect(() => {
+    const sel = editState.selection
+    if (sel.size === 0) {
+      onselect?.(null, null)
+    } else {
+      const id = [...sel][0] ?? null
+      if (!id) return
+      let type: string = 'node'
+      if (edges.has(id)) type = 'edge'
+      else if (ports.has(id)) type = 'port'
+      onselect?.(id, type)
+    }
+  })
 
   // Element refs
   let svgEl = $state<SVGSVGElement | null>(null)
