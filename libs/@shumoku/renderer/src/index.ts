@@ -6,6 +6,14 @@
 export { default as ShumokuRenderer } from './components/ShumokuRenderer.svelte'
 // Utilities for consuming apps
 export { type RenderColors, themeToColors } from './lib/render-colors'
+// Serialization (save/load layout state)
+export {
+  deserializeLayout,
+  jsonToLayout,
+  layoutToJson,
+  type SerializedLayout,
+  serializeLayout,
+} from './lib/serialization'
 export {
   computePortLabelPosition,
   getNodeLabel,

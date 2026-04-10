@@ -96,6 +96,24 @@
     return () => host.removeEventListener('shumoku-mode-change', onModeChange)
   })
 
+  // Snapshot: export current layout state on request
+  $effect(() => {
+    if (!svgEl) return
+    const root = svgEl.getRootNode() as ShadowRoot | Document
+    const host = (root as ShadowRoot).host
+    if (!host) return
+    function onSnapshot(e: Event) {
+      const layout = { nodes, ports, edges, subgraphs, bounds }
+      host.dispatchEvent(new CustomEvent('shumoku-snapshot', {
+        detail: { layout, links },
+        bubbles: true,
+        composed: true,
+      }))
+    }
+    host.addEventListener('shumoku-get-snapshot', onSnapshot)
+    return () => host.removeEventListener('shumoku-get-snapshot', onSnapshot)
+  })
+
   // Notify selection changes
   $effect(() => {
     if (selection.size === 0) {

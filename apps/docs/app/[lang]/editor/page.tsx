@@ -9,6 +9,7 @@ import {
 } from '@shumoku/core'
 import {
   Box,
+  Download,
   Eye,
   Info,
   Layers,
@@ -17,6 +18,7 @@ import {
   Pencil,
   Plus,
   SquareDashed,
+  Upload,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -37,6 +39,27 @@ async function parseSampleNetwork() {
   const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
   if (!mainFile) throw new Error('main.yaml not found')
   return (await hp.parse(mainFile.content, '/main.yaml')).graph
+}
+
+// Map ↔ plain object conversion for JSON serialization
+function mapToObj(layout: any) {
+  return {
+    nodes: Object.fromEntries(layout.nodes),
+    ports: Object.fromEntries(layout.ports),
+    edges: Object.fromEntries(layout.edges),
+    subgraphs: Object.fromEntries(layout.subgraphs),
+    bounds: layout.bounds,
+  }
+}
+
+function objToMap(data: any) {
+  return {
+    nodes: new Map(Object.entries(data.nodes ?? {})),
+    ports: new Map(Object.entries(data.ports ?? {})),
+    edges: new Map(Object.entries(data.edges ?? {})),
+    subgraphs: new Map(Object.entries(data.subgraphs ?? {})),
+    bounds: data.bounds ?? { x: 0, y: 0, width: 800, height: 600 },
+  }
 }
 
 // ============================================================================
@@ -227,6 +250,76 @@ export default function EditorPage() {
               </Tooltip>
             </div>
           )}
+
+          <div className="w-px h-5 bg-slate-200 mx-2" />
+
+          {/* Save/Load */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                  onClick={() => {
+                    const el = wcRef.current
+                    if (!el) return
+                    // Request snapshot from WebComponent
+                    const handler = (e: Event) => {
+                      el.removeEventListener('shumoku-snapshot', handler)
+                      const { layout, links } = (e as CustomEvent).detail
+                      const data = JSON.stringify({ layout: mapToObj(layout), links }, null, 2)
+                      const blob = new Blob([data], { type: 'application/json' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = 'network-diagram.json'
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    }
+                    el.addEventListener('shumoku-snapshot', handler)
+                    el.dispatchEvent(new CustomEvent('shumoku-get-snapshot'))
+                  }}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Save</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Save diagram as JSON</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                  onClick={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = '.json'
+                    input.onchange = async () => {
+                      const file = input.files?.[0]
+                      if (!file) return
+                      const text = await file.text()
+                      const data = JSON.parse(text)
+                      const layout = objToMap(data.layout)
+                      const el = wcRef.current
+                      if (el) {
+                        ;(el as any).graph = { links: data.links }
+                        ;(el as any).layout = layout
+                        setStats({
+                          nodes: layout.nodes.size,
+                          links: data.links?.length ?? 0,
+                          subgraphs: layout.subgraphs.size,
+                        })
+                      }
+                    }
+                    input.click()
+                  }}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Load</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Load diagram from JSON</TooltipContent>
+            </Tooltip>
+          </div>
 
           <div className="flex-1" />
 
