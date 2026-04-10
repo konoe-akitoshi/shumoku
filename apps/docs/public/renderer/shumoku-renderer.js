@@ -6360,7 +6360,7 @@ function ig(t, e) {
   let h = /* @__PURE__ */ ft(void 0);
   Be(() => {
     if (!s() || !l(h)) return;
-    const I = zt(s()), U = E0().scaleExtent([0.1, 5]).filter((X) => X.type === "wheel" ? !0 : X.type === "mousedown" || X.type === "pointerdown" ? X.button === 1 || X.altKey : !1).on("zoom", (X) => {
+    const I = zt(s()), U = E0().scaleExtent([0.2, 10]).filter((X) => X.type === "wheel" ? !0 : X.type === "mousedown" || X.type === "pointerdown" ? X.button === 1 || X.altKey : !1).on("zoom", (X) => {
       l(h) && l(h).setAttribute("transform", X.transform.toString());
     });
     return I.call(U), I.on("contextmenu.zoom", null), () => {

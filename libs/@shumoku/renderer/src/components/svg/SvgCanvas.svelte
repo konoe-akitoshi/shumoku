@@ -95,7 +95,7 @@
 
     const svgSel = select(svgEl)
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 5])
+      .scaleExtent([0.2, 10])
       .filter((e) => {
         // Allow wheel zoom always, drag only with middle button or space
         if (e.type === 'wheel') return true
