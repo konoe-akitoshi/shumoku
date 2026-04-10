@@ -14,6 +14,7 @@
     onlinkstart,
     onlinkend,
     onselect,
+    onlabeledit,
     oncontextmenu: onctx,
   }: {
     port: ResolvedPort
@@ -25,6 +26,7 @@
     onlinkstart?: (portId: string, x: number, y: number) => void
     onlinkend?: (portId: string) => void
     onselect?: (portId: string) => void
+    onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (portId: string, e: MouseEvent) => void
   } = $props()
 
@@ -115,14 +117,19 @@
       fill={colors.portLabelBg}
       pointer-events="none"
     />
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <text
-      class="port-label"
+      class="port-label-text"
       x={labelPos.x}
       y={labelPos.y}
       text-anchor={labelPos.textAnchor}
       font-size="9"
       fill={colors.portLabelColor}
-      pointer-events="none"
+      onclick={(e: MouseEvent) => {
+        if (!interactive) return
+        e.stopPropagation()
+        onlabeledit?.(port.id, port.label, e.clientX, e.clientY)
+      }}
     >
       {port.label}
     </text>

@@ -36,6 +36,7 @@
     onlinkend,
     onedgeselect,
     onportselect,
+    onlabeledit,
     onsubgraphselect,
     onsubgraphmove,
     oncontextmenu: onctx,
@@ -59,6 +60,7 @@
     onlinkend?: (portId: string) => void
     onedgeselect?: (edgeId: string) => void
     onportselect?: (portId: string) => void
+    onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     onsubgraphselect?: (sgId: string) => void
     onsubgraphmove?: (sgId: string, x: number, y: number) => void
     oncontextmenu?: (id: string, type: string, e: MouseEvent) => void
@@ -207,6 +209,7 @@
     svg.interactive .port-hit.linked { cursor: pointer; }
     svg.interactive .link-hit { pointer-events: stroke; cursor: pointer; }
     svg.interactive .edge-zone { pointer-events: fill; cursor: pointer; }
+    svg.interactive .port-label-text { pointer-events: fill; cursor: text; }
   </style>`}
 
   <!-- Viewport group: d3-zoom applies transform here -->
@@ -267,6 +270,7 @@
           {onlinkstart}
           {onlinkend}
           onselect={onportselect}
+          {onlabeledit}
           oncontextmenu={(id, e) => onctx?.(id, 'port', e)}
         />
       {/each}

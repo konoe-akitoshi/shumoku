@@ -104,11 +104,13 @@
     if (!host) return
     function onSnapshot(e: Event) {
       const layout = { nodes, ports, edges, subgraphs, bounds }
-      host.dispatchEvent(new CustomEvent('shumoku-snapshot', {
-        detail: { layout, links },
-        bubbles: true,
-        composed: true,
-      }))
+      host.dispatchEvent(
+        new CustomEvent('shumoku-snapshot', {
+          detail: { layout, links },
+          bubbles: true,
+          composed: true,
+        }),
+      )
     }
     host.addEventListener('shumoku-get-snapshot', onSnapshot)
     return () => host.removeEventListener('shumoku-get-snapshot', onSnapshot)
@@ -301,11 +303,18 @@
       subgraphs = newSubgraphs
     }
 
+    function onLabelCommit(e: Event) {
+      const { portId, label } = (e as CustomEvent).detail ?? {}
+      if (portId && label) handleLabelCommit(portId, label)
+    }
+
     host?.addEventListener('shumoku-add-node', onAddNode)
     host?.addEventListener('shumoku-add-subgraph', onAddSubgraph)
+    host?.addEventListener('shumoku-label-commit', onLabelCommit)
     return () => {
       host?.removeEventListener('shumoku-add-node', onAddNode)
       host?.removeEventListener('shumoku-add-subgraph', onAddSubgraph)
+      host?.removeEventListener('shumoku-label-commit', onLabelCommit)
     }
   })
 
@@ -319,6 +328,28 @@
   function handleSubgraphSelect(sgId: string) {
     selection = new Set([sgId])
   }
+  function handleLabelEdit(portId: string, label: string, screenX: number, screenY: number) {
+    // Emit to host (React shows the input UI)
+    if (!svgEl) return
+    const root = svgEl.getRootNode() as ShadowRoot | Document
+    const host = (root as ShadowRoot).host
+    host?.dispatchEvent(
+      new CustomEvent('shumoku-label-edit', {
+        detail: { portId, label, screenX, screenY },
+        bubbles: true,
+        composed: true,
+      }),
+    )
+  }
+
+  function handleLabelCommit(portId: string, newLabel: string) {
+    const port = ports.get(portId)
+    if (!port || newLabel === port.label) return
+    const newPorts = new Map(ports)
+    newPorts.set(portId, { ...port, label: newLabel })
+    ports = newPorts
+  }
+
   function handleBackgroundClick() {
     selection = new Set()
   }
@@ -381,6 +412,7 @@
     onlinkend={handleLinkEnd}
     onedgeselect={handleEdgeSelect}
     onportselect={handlePortSelect}
+    onlabeledit={handleLabelEdit}
     onsubgraphselect={handleSubgraphSelect}
     onsubgraphmove={handleSubgraphMove}
     oncontextmenu={handleContextMenu}

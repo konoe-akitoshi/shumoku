@@ -77,6 +77,13 @@ export default function EditorPage() {
   const [mode, setMode] = useState<'edit' | 'view'>('view')
   const [selected, setSelected] = useState<{ id: string; type: string } | null>(null)
   const [stats, setStats] = useState({ nodes: 0, links: 0, subgraphs: 0 })
+  const [labelEdit, setLabelEdit] = useState<{
+    portId: string
+    label: string
+    x: number
+    y: number
+  } | null>(null)
+  const labelInputRef = useRef<HTMLInputElement | null>(null)
 
   // --- WebComponent events ---
 
@@ -91,11 +98,18 @@ export default function EditorPage() {
       const { links } = (e as CustomEvent).detail
       setStats((prev) => ({ ...prev, links: links.length }))
     }
+    function onLabelEdit(e: Event) {
+      const { portId, label, screenX, screenY } = (e as CustomEvent).detail
+      setLabelEdit({ portId, label, x: screenX, y: screenY })
+      setTimeout(() => labelInputRef.current?.focus(), 0)
+    }
     el.addEventListener('shumoku-select', onSelect)
     el.addEventListener('shumoku-change', onChange)
+    el.addEventListener('shumoku-label-edit', onLabelEdit)
     return () => {
       el.removeEventListener('shumoku-select', onSelect)
       el.removeEventListener('shumoku-change', onChange)
+      el.removeEventListener('shumoku-label-edit', onLabelEdit)
     }
   }, [])
 
@@ -355,6 +369,49 @@ export default function EditorPage() {
             style={{ width: '100%', height: '100%', display: 'block' }}
           />
         </div>
+
+        {/* Label edit popover */}
+        {labelEdit && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setLabelEdit(null)} />
+            <div
+              className="fixed z-50 bg-white border border-slate-200 rounded-lg shadow-lg p-2"
+              style={{ top: labelEdit.y - 10, left: labelEdit.x - 4 }}
+            >
+              <input
+                ref={labelInputRef}
+                type="text"
+                defaultValue={labelEdit.label}
+                className="text-sm px-2 py-1 border border-blue-300 rounded outline-none focus:ring-2 focus:ring-blue-200 w-32 text-slate-900 bg-white"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = (e.target as HTMLInputElement).value.trim()
+                    if (value) {
+                      wcRef.current?.dispatchEvent(
+                        new CustomEvent('shumoku-label-commit', {
+                          detail: { portId: labelEdit.portId, label: value },
+                        }),
+                      )
+                    }
+                    setLabelEdit(null)
+                  }
+                  if (e.key === 'Escape') setLabelEdit(null)
+                }}
+                onBlur={(e) => {
+                  const value = e.target.value.trim()
+                  if (value && value !== labelEdit.label) {
+                    wcRef.current?.dispatchEvent(
+                      new CustomEvent('shumoku-label-commit', {
+                        detail: { portId: labelEdit.portId, label: value },
+                      }),
+                    )
+                  }
+                  setLabelEdit(null)
+                }}
+              />
+            </div>
+          </>
+        )}
 
         {/* Bottom help */}
         <div className="absolute bottom-4 right-4 z-10">
