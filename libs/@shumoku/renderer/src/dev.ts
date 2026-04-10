@@ -1,37 +1,37 @@
 /**
- * Dev entry point — test the renderer with sample data
+ * Dev entry point — render full sampleNetwork (same as playground)
  */
 
-import { computeNetworkLayout, DeviceType, type Link, type NetworkGraph } from '@shumoku/core'
+import {
+  computeNetworkLayout,
+  createMemoryFileResolver,
+  HierarchicalParser,
+  type Link,
+  lightTheme,
+  sampleNetwork,
+} from '@shumoku/core'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
-
-const testGraph: NetworkGraph = {
-  version: '1',
-  name: 'Test',
-  nodes: [
-    { id: 'sw1', label: 'Switch 1', type: DeviceType.L2Switch, shape: 'rect' },
-    { id: 'sw2', label: 'Switch 2', type: DeviceType.L2Switch, shape: 'rect' },
-    { id: 'srv1', label: 'Server 1', type: DeviceType.Server, shape: 'rect' },
-  ],
-  links: [
-    {
-      id: 'link1',
-      from: { node: 'sw1', port: 'eth0' },
-      to: { node: 'sw2', port: 'eth0' },
-    },
-    {
-      id: 'link2',
-      from: { node: 'sw2', port: 'eth1' },
-      to: { node: 'srv1', port: 'eth0' },
-    },
-  ],
-}
 
 let currentInstance: ReturnType<typeof mount> | null = null
 let currentMode: 'view' | 'edit' = 'edit'
 
-async function renderGraph(graph: NetworkGraph) {
+async function parseSampleNetwork() {
+  const fileMap = new Map<string, string>()
+  for (const f of sampleNetwork) {
+    fileMap.set(f.name, f.content)
+    fileMap.set(`./${f.name}`, f.content)
+    fileMap.set(`/${f.name}`, f.content)
+  }
+  const resolver = createMemoryFileResolver(fileMap, '/')
+  const hp = new HierarchicalParser(resolver)
+  const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
+  if (!mainFile) throw new Error('main.yaml not found')
+  const result = await hp.parse(mainFile.content, '/main.yaml')
+  return result.graph
+}
+
+async function renderGraph() {
   const target = document.getElementById('app')
   if (!target) return
 
@@ -40,6 +40,7 @@ async function renderGraph(graph: NetworkGraph) {
     currentInstance = null
   }
 
+  const graph = await parseSampleNetwork()
   const { resolved } = await computeNetworkLayout(graph)
 
   currentInstance = mount(ShumokuRenderer, {
@@ -47,6 +48,7 @@ async function renderGraph(graph: NetworkGraph) {
     props: {
       layout: resolved,
       graph,
+      theme: lightTheme,
       mode: currentMode,
       onchange: (links: Link[]) => {
         console.log('Links updated:', links.length)
@@ -74,14 +76,14 @@ Object.assign(btn.style, {
 btn.addEventListener('click', async () => {
   currentMode = currentMode === 'edit' ? 'view' : 'edit'
   btn.textContent = `Mode: ${currentMode}`
-  await renderGraph(testGraph)
+  await renderGraph()
 })
 document.body.appendChild(btn)
 
 // Listen for graph data from parent (iframe embedding)
 window.addEventListener('message', async (event) => {
   if (event.data?.type === 'shumoku:graph') {
-    await renderGraph(event.data.graph as NetworkGraph)
+    await renderGraph()
   }
 })
 
@@ -89,4 +91,4 @@ if (window.parent !== window) {
   window.parent.postMessage({ type: 'shumoku:ready' }, '*')
 }
 
-renderGraph(testGraph)
+renderGraph()

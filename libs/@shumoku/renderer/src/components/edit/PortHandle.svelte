@@ -24,6 +24,7 @@
   } = $props()
 
   let hovered = $state(false)
+  let pointerDown = $state(false)
   let dragging = $state(false)
   let dragStartScreen = $state({ x: 0, y: 0 })
 
@@ -36,12 +37,15 @@
     if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
-    dragStartScreen = { x: e.clientX, y: e.clientY }
+    pointerDown = true
     dragging = false
+    dragStartScreen = { x: e.clientX, y: e.clientY }
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
 
   function onPortMove(e: PointerEvent) {
+    if (!pointerDown) return
+
     const dx = e.clientX - dragStartScreen.x
     const dy = e.clientY - dragStartScreen.y
 
@@ -60,6 +64,7 @@
     e.stopPropagation()
     ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
 
+    pointerDown = false
     if (dragging) {
       dragging = false
       editState.unhighlightNode(port.nodeId)

@@ -6,23 +6,29 @@
     ResolvedNode,
     ResolvedPort,
     ResolvedSubgraph,
+    Theme,
   } from '@shumoku/core'
   import { addPort, linkExists, moveNode, movePort, removePort, routeEdges } from '@shumoku/core'
   import { createEditState } from '../lib/edit-state.svelte'
+  import { themeToColors } from '../lib/render-colors'
   import EditOverlay from './edit/EditOverlay.svelte'
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
   let {
     layout: initialLayout,
     graph: initialGraph,
+    theme,
     mode = 'view',
     onchange,
   }: {
     layout: ResolvedLayout
     graph?: { links: Link[] }
+    theme?: Theme
     mode?: 'view' | 'edit'
     onchange?: (links: Link[]) => void
   } = $props()
+
+  const colors = $derived(themeToColors(theme))
 
   // Layout state
   let nodes = $state<Map<string, ResolvedNode>>(new Map(initialLayout.nodes))
@@ -166,6 +172,8 @@
     {edges}
     {subgraphs}
     {bounds}
+    {colors}
+    {theme}
     selection={editState.selection}
     highlightedNodes={editState.highlightedNodes}
     linkPreview={editState.linkDrag}

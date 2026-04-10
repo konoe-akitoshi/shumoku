@@ -22,6 +22,11 @@
     "./wc": {
       "types": "./dist/wc.d.ts",
       "default": "./dist/wc.js"
+    },
+    "./static": {
+      "svelte": "./src/static.ts",
+      "types": "./dist/static.d.ts",
+      "default": "./dist/static.js"
     }
   },
   "files": ["dist/", "src/"],

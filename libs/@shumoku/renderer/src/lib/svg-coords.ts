@@ -49,6 +49,32 @@ export function getNodeLabel(node: { label?: string | string[] }): string {
 }
 
 // ============================================================================
+// VLAN color (same as svg.ts getVlanStroke)
+// ============================================================================
+
+const VLAN_COLORS = [
+  '#dc2626',
+  '#ea580c',
+  '#ca8a04',
+  '#16a34a',
+  '#0891b2',
+  '#2563eb',
+  '#7c3aed',
+  '#c026d3',
+  '#db2777',
+  '#059669',
+  '#0284c7',
+  '#4f46e5',
+]
+
+/** Get stroke color based on VLAN IDs */
+export function getVlanStroke(vlan?: number[]): string | undefined {
+  if (!vlan || vlan.length === 0) return undefined
+  const hash = vlan.reduce((acc, v) => acc + v, 0)
+  return VLAN_COLORS[hash % VLAN_COLORS.length]
+}
+
+// ============================================================================
 // Coordinate conversion
 // ============================================================================
 

@@ -21,45 +21,66 @@
     onlinkdrop?: (nodeId: string) => void
   } = $props()
 
-  // Droplet tracks mouse position along the hovered edge
   let droplet = $state<{ side: 'top' | 'bottom' | 'left' | 'right'; offset: number } | null>(null)
+  let pointerDown = $state(false)
+  let dragging = $state(false)
+  let dragStartScreen = $state({ x: 0, y: 0 })
+  let dragStartSvg = $state({ x: 0, y: 0 })
+  let dragStartNode = $state({ x: 0, y: 0 })
 
   const rect = $derived(svgRectToContainer(svg, container, node.position, node.size))
-
-  const isDragging = $derived(editState.nodeDrag?.nodeId === node.id)
+  const dragThreshold = 4
 
   function onpointerdown(e: PointerEvent) {
     if (e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
 
-    const svgPt = screenToSvg(svg, e.clientX, e.clientY)
-    editState.startNodeDrag(node.id, svgPt.x, svgPt.y, node.position.x, node.position.y)
-    editState.select(node.id)
+    pointerDown = true
+    dragging = false
+    dragStartScreen = { x: e.clientX, y: e.clientY }
+    dragStartSvg = screenToSvg(svg, e.clientX, e.clientY)
+    dragStartNode = { x: node.position.x, y: node.position.y }
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
 
   function onpointermove(e: PointerEvent) {
-    if (!isDragging) return
-    const drag = editState.nodeDrag
-    if (!drag) return
-    const svgPt = screenToSvg(svg, e.clientX, e.clientY)
-    const newX = drag.startNode.x + (svgPt.x - drag.startSvg.x)
-    const newY = drag.startNode.y + (svgPt.y - drag.startSvg.y)
-    ondragmove?.(node.id, newX, newY)
+    if (!pointerDown) return
+
+    const dx = e.clientX - dragStartScreen.x
+    const dy = e.clientY - dragStartScreen.y
+
+    if (!dragging && (Math.abs(dx) > dragThreshold || Math.abs(dy) > dragThreshold)) {
+      dragging = true
+      editState.startNodeDrag(node.id, dragStartSvg.x, dragStartSvg.y, dragStartNode.x, dragStartNode.y)
+    }
+
+    if (dragging) {
+      const svgPt = screenToSvg(svg, e.clientX, e.clientY)
+      const newX = dragStartNode.x + (svgPt.x - dragStartSvg.x)
+      const newY = dragStartNode.y + (svgPt.y - dragStartSvg.y)
+      ondragmove?.(node.id, newX, newY)
+    }
   }
 
-  function onpointerup() {
-    if (isDragging) {
+  function onpointerup(e: PointerEvent) {
+    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    const wasDragging = dragging
+    pointerDown = false
+    dragging = false
+
+    if (wasDragging) {
       editState.endNodeDrag()
       return
     }
+
+    // Click (no drag)
+    editState.select(node.id)
     if (editState.linkDrag) {
       onlinkdrop?.(node.id)
     }
   }
 
-  /** Track mouse along edge zone using ratio within the zone rect */
   function onEdgeMove(side: 'top' | 'bottom' | 'left' | 'right', e: PointerEvent) {
     const zoneEl = e.currentTarget as HTMLElement
     const zoneRect = zoneEl.getBoundingClientRect()
@@ -82,7 +103,6 @@
     onaddport?.(node.id, side)
   }
 
-  // Droplet position in px relative to the node handle div
   const dropletStyle = $derived(() => {
     if (!droplet) return ''
     const size = 18
@@ -111,7 +131,7 @@
     left: {rect.left}px;
     width: {rect.width}px;
     height: {rect.height}px;
-    cursor: {isDragging ? 'grabbing' : 'grab'};
+    cursor: {dragging ? 'grabbing' : 'grab'};
     pointer-events: auto;
     border-radius: 8px;
   "
@@ -121,7 +141,6 @@
   onpointerenter={() => editState.highlightNode(node.id)}
   onpointerleave={() => editState.unhighlightNode(node.id)}
 >
-  <!-- Edge hover zones -->
   {#each ['top', 'bottom', 'left', 'right'] as side}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -141,8 +160,7 @@
     ></div>
   {/each}
 
-  <!-- Droplet follows mouse along the edge -->
-  {#if droplet && !isDragging}
+  {#if droplet && !dragging}
     <div
       style="
         position: absolute;

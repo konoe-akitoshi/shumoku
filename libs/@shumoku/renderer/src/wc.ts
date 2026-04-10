@@ -5,16 +5,18 @@
 /**
  * WebComponent wrapper for ShumokuRenderer
  * Usage: <shumoku-renderer></shumoku-renderer>
- * Set layout and graph via element properties.
+ * Set layout, graph, theme, and mode via element properties.
  */
 
-import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
+import type { NetworkGraph, ResolvedLayout, Theme } from '@shumoku/core'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
 
 class ShumokuRendererElement extends HTMLElement {
   private _layout: ResolvedLayout | null = null
   private _graph: NetworkGraph | null = null
+  private _theme: Theme | undefined = undefined
+  private _mode: 'view' | 'edit' = 'view'
   private _instance: ReturnType<typeof mount> | null = null
 
   constructor() {
@@ -40,6 +42,24 @@ class ShumokuRendererElement extends HTMLElement {
     return this._graph
   }
 
+  set theme(value: Theme) {
+    this._theme = value
+    this._tryRender()
+  }
+
+  get theme(): Theme | undefined {
+    return this._theme
+  }
+
+  set mode(value: 'view' | 'edit') {
+    this._mode = value
+    this._tryRender()
+  }
+
+  get mode(): 'view' | 'edit' {
+    return this._mode
+  }
+
   connectedCallback() {
     this._tryRender()
   }
@@ -54,7 +74,6 @@ class ShumokuRendererElement extends HTMLElement {
   private _tryRender() {
     if (!this.shadowRoot || !this._layout) return
 
-    // Unmount previous instance
     if (this._instance) {
       unmount(this._instance)
       this._instance = null
@@ -65,6 +84,8 @@ class ShumokuRendererElement extends HTMLElement {
       props: {
         layout: this._layout,
         graph: this._graph ?? undefined,
+        theme: this._theme,
+        mode: this._mode,
       },
     })
   }
