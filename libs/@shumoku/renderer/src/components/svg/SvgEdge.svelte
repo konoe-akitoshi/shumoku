@@ -24,12 +24,16 @@
   const linkType = $derived(link?.type ?? 'solid')
   const dasharray = $derived(() => {
     switch (linkType) {
-      case 'dashed': return '5 3'
-      default: return link?.style?.strokeDasharray ?? ''
+      case 'dashed':
+        return '5 3'
+      default:
+        return link?.style?.strokeDasharray ?? ''
     }
   })
   const strokeColor = $derived(
-    selected ? colors.selection : (link?.style?.stroke ?? getVlanStroke(link?.vlan) ?? colors.linkStroke),
+    selected
+      ? colors.selection
+      : (link?.style?.stroke ?? getVlanStroke(link?.vlan) ?? colors.linkStroke),
   )
   const isDouble = $derived(linkType === 'double')
 
@@ -69,23 +73,52 @@
 <g class="link-group" data-link-id={edge.id}>
   {#if isDouble}
     {@const gap = Math.max(3, Math.round(edge.width * 0.9))}
-    <path d={pathD} fill="none" stroke={strokeColor} stroke-width={edge.width + gap * 2}
-      stroke-linecap="round" pointer-events="none" />
-    <path d={pathD} fill="none" stroke="white" stroke-width={Math.max(1, edge.width)}
-      stroke-linecap="round" pointer-events="none" />
-    <path d={pathD} fill="none" stroke={strokeColor}
+    <path
+      d={pathD}
+      fill="none"
+      stroke={strokeColor}
+      stroke-width={edge.width + gap * 2}
+      stroke-linecap="round"
+      pointer-events="none"
+    />
+    <path
+      d={pathD}
+      fill="none"
+      stroke="white"
+      stroke-width={Math.max(1, edge.width)}
+      stroke-linecap="round"
+      pointer-events="none"
+    />
+    <path
+      d={pathD}
+      fill="none"
+      stroke={strokeColor}
       stroke-width={Math.max(1, edge.width - Math.round(gap * 0.8))}
-      stroke-linecap="round" pointer-events="none" />
+      stroke-linecap="round"
+      pointer-events="none"
+    />
   {:else}
-    <path class="link" d={pathD} fill="none" stroke={strokeColor} stroke-width={edge.width}
-      stroke-linecap="round" stroke-dasharray={dasharray() || undefined} pointer-events="none" />
+    <path
+      class="link"
+      d={pathD}
+      fill="none"
+      stroke={strokeColor}
+      stroke-width={edge.width}
+      stroke-linecap="round"
+      stroke-dasharray={dasharray() || undefined}
+      pointer-events="none"
+    />
   {/if}
 
   <!-- Hit area -->
-  <path d={pathD} fill="none" stroke="transparent"
-    stroke-width={Math.max(edge.width + 12, 16)} stroke-linecap="round"
+  <path
+    d={pathD}
+    fill="none"
+    stroke="transparent"
+    stroke-width={Math.max(edge.width + 12, 16)}
+    stroke-linecap="round"
     style="pointer-events: {interactive ? 'stroke' : 'none'}; cursor: pointer;"
-    onclick={onclick}
+    {onclick}
     oncontextmenu={handleContextMenu}
   />
 
@@ -98,7 +131,9 @@
         <text x={mp.x} y={mp.y - 8 + i * 12} class="link-label" text-anchor="middle">{label}</text>
       {/each}
       {#if vlan}
-        <text x={mp.x} y={mp.y - 8 + labels.length * 12} class="link-label" text-anchor="middle">{vlan}</text>
+        <text x={mp.x} y={mp.y - 8 + labels.length * 12} class="link-label" text-anchor="middle">
+          {vlan}
+        </text>
       {/if}
     {/if}
   {/if}

@@ -4,12 +4,8 @@
 
 // Renderer component (Svelte)
 export { default as ShumokuRenderer } from './components/ShumokuRenderer.svelte'
-
-// Static SVG rendering (CLI, PNG, SSR)
-export { renderGraphToSvg, renderSvgString } from './static'
-
 // Utilities for consuming apps
-export { themeToColors, type RenderColors } from './lib/render-colors'
+export { type RenderColors, themeToColors } from './lib/render-colors'
 export {
   computePortLabelPosition,
   getNodeLabel,
@@ -20,3 +16,5 @@ export {
   svgRectToContainer,
   svgToScreen,
 } from './lib/svg-coords'
+// Static SVG rendering (CLI, PNG, SSR)
+export { renderGraphToSvg, renderSvgString } from './static'

@@ -8,7 +8,7 @@ import {
   sampleNetwork,
 } from '@shumoku/core'
 import { Info, Layers, MousePointer2, Network } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Tooltip,
   TooltipContent,
@@ -38,15 +38,6 @@ async function parseSampleNetwork() {
 // Grid background (CSS)
 // ============================================================================
 
-const gridStyle: React.CSSProperties = {
-  backgroundImage: `
-    linear-gradient(to right, #e2e8f0 1px, transparent 1px),
-    linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)
-  `,
-  backgroundSize: '20px 20px',
-  backgroundPosition: 'center center',
-}
-
 // ============================================================================
 // Editor
 // ============================================================================
@@ -57,62 +48,6 @@ export default function EditorPage() {
   const [status, setStatus] = useState('Loading...')
   const [selected, setSelected] = useState<{ id: string; type: string } | null>(null)
   const [stats, setStats] = useState({ nodes: 0, links: 0, subgraphs: 0 })
-
-  // Pan/zoom state
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const isPanning = useRef(false)
-  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
-
-  // WebComponent transform
-  const wcTransform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`
-
-  // --- Pan/Zoom handlers ---
-
-  const onWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    const newZoom = Math.max(0.1, Math.min(5, zoom * delta))
-
-    // Zoom toward cursor position
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (rect) {
-      const cx = e.clientX - rect.left
-      const cy = e.clientY - rect.top
-      const scale = newZoom / zoom
-      setPan({
-        x: cx - (cx - pan.x) * scale,
-        y: cy - (cy - pan.y) * scale,
-      })
-    }
-
-    setZoom(newZoom)
-  }, [zoom, pan])
-
-  const onCanvasPointerDown = useCallback((e: React.PointerEvent) => {
-    // Middle mouse or Space+left for panning
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
-      e.preventDefault()
-      isPanning.current = true
-      panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
-      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-    }
-  }, [pan])
-
-  const onCanvasPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isPanning.current) return
-    setPan({
-      x: panStart.current.panX + (e.clientX - panStart.current.x),
-      y: panStart.current.panY + (e.clientY - panStart.current.y),
-    })
-  }, [])
-
-  const onCanvasPointerUp = useCallback((e: React.PointerEvent) => {
-    if (isPanning.current) {
-      isPanning.current = false
-      ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
-    }
-  }, [])
 
   // --- WebComponent events ---
 
@@ -213,42 +148,16 @@ export default function EditorPage() {
 
           <div className="w-px h-5 bg-slate-200 mx-2" />
 
-          {/* Zoom indicator */}
-          <button
-            className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded hover:bg-slate-100"
-            onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-
-          <div className="w-px h-5 bg-slate-200 mx-2" />
-
           <div className="flex items-center gap-1.5">
             <div className={`w-2 h-2 rounded-full ${status === 'Ready' ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`} />
             <span className="text-xs text-slate-500">{status}</span>
           </div>
         </div>
 
-        {/* Canvas with grid + pan/zoom */}
-        <div
-          ref={canvasRef}
-          className="flex-1 overflow-hidden relative"
-          style={{
-            ...gridStyle,
-            backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
-            backgroundPosition: `${pan.x}px ${pan.y}px`,
-            cursor: isPanning.current ? 'grabbing' : 'default',
-          }}
-          onWheel={onWheel}
-          onPointerDown={onCanvasPointerDown}
-          onPointerMove={onCanvasPointerMove}
-          onPointerUp={onCanvasPointerUp}
-        >
-          {/* WebComponent with CSS transform for pan/zoom */}
-          <div style={{ transform: wcTransform, transformOrigin: '0 0', width: '100%', height: '100%' }}>
-            {/* @ts-expect-error WebComponent */}
-            <shumoku-renderer ref={wcRef} style={{ width: '100%', height: '100%', display: 'block' }} />
-          </div>
+        {/* Canvas: WebComponent handles grid + pan/zoom internally via d3-zoom */}
+        <div className="flex-1 overflow-hidden">
+          {/* @ts-expect-error WebComponent */}
+          <shumoku-renderer ref={wcRef} style={{ width: '100%', height: '100%', display: 'block' }} />
         </div>
 
         {/* Bottom help */}

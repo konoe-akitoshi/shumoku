@@ -81,11 +81,14 @@
   <!-- Hit area -->
   {#if interactive}
     <rect
-      x={px - 12} y={py - 12} width={24} height={24}
+      x={px - 12}
+      y={py - 12}
+      width={24}
+      height={24}
       fill="transparent"
       style="pointer-events: fill; cursor: {linked ? 'pointer' : 'crosshair'};"
-      onpointerdown={onpointerdown}
-      onpointerup={onpointerup}
+      {onpointerdown}
+      {onpointerup}
     />
   {/if}
 
@@ -104,10 +107,25 @@
   />
 
   {#if !hideLabel}
-    <rect class="port-label-bg" x={bgX()} y={bgY} width={labelWidth} height={labelHeight}
-      rx="2" fill={colors.portLabelBg} pointer-events="none" />
-    <text class="port-label" x={labelPos.x} y={labelPos.y} text-anchor={labelPos.textAnchor}
-      font-size="9" fill={colors.portLabelColor} pointer-events="none">
+    <rect
+      class="port-label-bg"
+      x={bgX()}
+      y={bgY}
+      width={labelWidth}
+      height={labelHeight}
+      rx="2"
+      fill={colors.portLabelBg}
+      pointer-events="none"
+    />
+    <text
+      class="port-label"
+      x={labelPos.x}
+      y={labelPos.y}
+      text-anchor={labelPos.textAnchor}
+      font-size="9"
+      fill={colors.portLabelColor}
+      pointer-events="none"
+    >
       {port.label}
     </text>
   {/if}

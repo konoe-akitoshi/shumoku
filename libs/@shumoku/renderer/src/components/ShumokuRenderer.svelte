@@ -8,7 +8,14 @@
     ResolvedSubgraph,
     Theme,
   } from '@shumoku/core'
-  import { addPort, linkExists, moveNode, moveSubgraph, removePort, routeEdges } from '@shumoku/core'
+  import {
+    addPort,
+    linkExists,
+    moveNode,
+    moveSubgraph,
+    removePort,
+    routeEdges,
+  } from '@shumoku/core'
   import { themeToColors } from '../lib/render-colors'
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
@@ -17,7 +24,6 @@
     graph: initialGraph,
     theme,
     mode = 'view',
-    viewBox: viewBoxProp,
     onchange,
     onselect,
     oncontextmenu: onctx,
@@ -26,7 +32,6 @@
     graph?: { links: Link[] }
     theme?: Theme
     mode?: 'view' | 'edit'
-    viewBox?: string
     onchange?: (links: Link[]) => void
     onselect?: (id: string | null, type: string | null) => void
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
@@ -45,7 +50,13 @@
 
   // Edit state
   let selection = $state(new Set<string>())
-  let linkDrag = $state<{ fromPortId: string; fromX: number; fromY: number; toX: number; toY: number } | null>(null)
+  let linkDrag = $state<{
+    fromPortId: string
+    fromX: number
+    fromY: number
+    toX: number
+    toY: number
+  } | null>(null)
   let svgEl = $state<SVGSVGElement | null>(null)
 
   // Linked ports set
@@ -56,6 +67,14 @@
       if (edge.toPortId) ids.add(edge.toPortId)
     }
     return ids
+  })
+
+  // Keyboard events on SVG (d3-zoom makes it focusable)
+  $effect(() => {
+    if (!interactive || !svgEl) return
+    const el = svgEl
+    el.addEventListener('keydown', handleKeyDown)
+    return () => el.removeEventListener('keydown', handleKeyDown)
   })
 
   // Notify selection changes
@@ -72,9 +91,7 @@
     }
   })
 
-  // --- Node handlers ---
-  function handleNodeDragStart(id: string) { selection = new Set([id]) }
-
+  // --- Node drag (called by d3-drag via SvgCanvas) ---
   async function handleNodeDragMove(id: string, x: number, y: number) {
     const result = await moveNode(id, x, y, { nodes, ports, subgraphs }, links)
     if (!result) return
@@ -83,8 +100,6 @@
     edges = result.edges
     if (result.subgraphs) subgraphs = result.subgraphs
   }
-
-  function handleNodeDragEnd(_id: string) {}
 
   async function handleAddPort(nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') {
     const result = addPort(nodeId, side, nodes, ports, links)
@@ -105,27 +120,42 @@
   }
 
   // --- Link handlers ---
+  let linkCleanup: (() => void) | null = null
+
   function handleLinkStart(portId: string, x: number, y: number) {
     linkDrag = { fromPortId: portId, fromX: x, fromY: y, toX: x, toY: y }
-    // Track mouse on SVG for preview line
+
     function onmove(e: PointerEvent) {
       if (!linkDrag || !svgEl) return
-      const ctm = svgEl.getScreenCTM()
+      const viewport = svgEl.querySelector('.viewport') as SVGGElement | null
+      const ctm = (viewport ?? svgEl).getScreenCTM()
       if (!ctm) return
       const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
       linkDrag = { ...linkDrag, toX: p.x, toY: p.y }
     }
-    svgEl?.addEventListener('pointermove', onmove)
-    svgEl?.addEventListener('pointerup', () => {
+
+    function onup(e: PointerEvent) {
+      const target = e.target as Element
+      if (target.closest('.port')) return // Port handles its own pointerup
+      cleanup()
+    }
+
+    function cleanup() {
       svgEl?.removeEventListener('pointermove', onmove)
-      if (linkDrag) linkDrag = null
-    }, { once: true })
+      svgEl?.removeEventListener('pointerup', onup)
+      linkDrag = null
+      linkCleanup = null
+    }
+
+    linkCleanup = cleanup
+    svgEl?.addEventListener('pointermove', onmove)
+    svgEl?.addEventListener('pointerup', onup)
   }
 
   function handleLinkEnd(portId: string) {
     if (!linkDrag) return
     const fromPortId = linkDrag.fromPortId
-    linkDrag = null
+    linkCleanup?.() // Clean up SVG listeners
     if (fromPortId === portId) return
     const fromPort = ports.get(fromPortId)
     const toPort = ports.get(portId)
@@ -150,15 +180,28 @@
       ;[fromPort, toPort] = [toPort, fromPort]
     }
 
-    links = [...links, { id: `link-${Date.now()}`, from: { node: fromNode, port: fromPort }, to: { node: toNode, port: toPort } }]
+    links = [
+      ...links,
+      {
+        id: `link-${Date.now()}`,
+        from: { node: fromNode, port: fromPort },
+        to: { node: toNode, port: toPort },
+      },
+    ]
     edges = await routeEdges(nodes, ports, links)
     onchange?.(links)
   }
 
   // --- Selection handlers ---
-  function handleEdgeSelect(edgeId: string) { selection = new Set([edgeId]) }
-  function handlePortSelect(portId: string) { selection = new Set([portId]) }
-  function handleBackgroundClick() { selection = new Set() }
+  function handleEdgeSelect(edgeId: string) {
+    selection = new Set([edgeId])
+  }
+  function handlePortSelect(portId: string) {
+    selection = new Set([portId])
+  }
+  function handleBackgroundClick() {
+    selection = new Set()
+  }
 
   // --- Context menu → emit to parent (React handles the menu UI) ---
   function handleContextMenu(id: string, type: string, e: MouseEvent) {
@@ -184,7 +227,9 @@
           }
         }
       }
-      routeEdges(nodes, ports, links).then((e) => { edges = e })
+      routeEdges(nodes, ports, links).then((e) => {
+        edges = e
+      })
       selection = new Set()
       onchange?.(links)
     }
@@ -196,20 +241,21 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  style="width: 100%; height: 100%; outline: none;"
-  tabindex="-1"
-  onkeydown={interactive ? handleKeyDown : undefined}
->
+<div style="width: 100%; height: 100%; outline: none;">
   <SvgCanvas
-    {nodes} {ports} {edges} {subgraphs} {bounds} {colors} {theme}
-    {interactive} {selection} {linkedPorts}
+    {nodes}
+    {ports}
+    {edges}
+    {subgraphs}
+    {bounds}
+    {colors}
+    {theme}
+    {interactive}
+    {selection}
+    {linkedPorts}
     linkPreview={linkDrag}
-    viewBoxOverride={viewBoxProp}
     bind:svgEl
-    onnodedragstart={handleNodeDragStart}
     onnodedragmove={handleNodeDragMove}
-    onnodedragend={handleNodeDragEnd}
     onaddport={handleAddPort}
     onlinkstart={handleLinkStart}
     onlinkend={handleLinkEnd}

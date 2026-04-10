@@ -26,33 +26,66 @@ class ShumokuRendererElement extends HTMLElement {
     this.attachShadow({ mode: 'open' })
   }
 
-  set layout(value: ResolvedLayout) { this._layout = value; this._tryRender() }
-  get layout(): ResolvedLayout | null { return this._layout }
+  set layout(value: ResolvedLayout) {
+    this._layout = value
+    this._tryRender()
+  }
+  get layout(): ResolvedLayout | null {
+    return this._layout
+  }
 
-  set graph(value: NetworkGraph) { this._graph = value; this._tryRender() }
-  get graph(): NetworkGraph | null { return this._graph }
+  set graph(value: NetworkGraph) {
+    this._graph = value
+    this._tryRender()
+  }
+  get graph(): NetworkGraph | null {
+    return this._graph
+  }
 
-  set theme(value: Theme) { this._theme = value; this._tryRender() }
-  get theme(): Theme | undefined { return this._theme }
+  set theme(value: Theme) {
+    this._theme = value
+    this._tryRender()
+  }
+  get theme(): Theme | undefined {
+    return this._theme
+  }
 
-  set mode(value: 'view' | 'edit') { this._mode = value; this._tryRender() }
-  get mode(): 'view' | 'edit' { return this._mode }
+  set mode(value: 'view' | 'edit') {
+    this._mode = value
+    this._tryRender()
+  }
+  get mode(): 'view' | 'edit' {
+    return this._mode
+  }
 
-  set viewBox(value: string | undefined) { this._viewBox = value; this._tryRender() }
-  get viewBox(): string | undefined { return this._viewBox }
+  set viewBox(value: string | undefined) {
+    this._viewBox = value
+    this._tryRender()
+  }
+  get viewBox(): string | undefined {
+    return this._viewBox
+  }
 
   get svgElement(): SVGSVGElement | null {
     return this.shadowRoot?.querySelector('svg') ?? null
   }
 
-  connectedCallback() { this._tryRender() }
+  connectedCallback() {
+    this._tryRender()
+  }
   disconnectedCallback() {
-    if (this._instance) { unmount(this._instance); this._instance = null }
+    if (this._instance) {
+      unmount(this._instance)
+      this._instance = null
+    }
   }
 
   private _tryRender() {
     if (!this.shadowRoot || !this._layout) return
-    if (this._instance) { unmount(this._instance); this._instance = null }
+    if (this._instance) {
+      unmount(this._instance)
+      this._instance = null
+    }
 
     this._instance = mount(ShumokuRenderer, {
       target: this.shadowRoot,
@@ -63,13 +96,27 @@ class ShumokuRendererElement extends HTMLElement {
         mode: this._mode,
         viewBox: this._viewBox,
         onselect: (id: string | null, type: string | null) => {
-          this.dispatchEvent(new CustomEvent('shumoku-select', { detail: { id, type }, bubbles: true, composed: true }))
+          this.dispatchEvent(
+            new CustomEvent('shumoku-select', {
+              detail: { id, type },
+              bubbles: true,
+              composed: true,
+            }),
+          )
         },
         onchange: (links: unknown[]) => {
-          this.dispatchEvent(new CustomEvent('shumoku-change', { detail: { links }, bubbles: true, composed: true }))
+          this.dispatchEvent(
+            new CustomEvent('shumoku-change', { detail: { links }, bubbles: true, composed: true }),
+          )
         },
         oncontextmenu: (id: string, type: string, screenX: number, screenY: number) => {
-          this.dispatchEvent(new CustomEvent('shumoku-contextmenu', { detail: { id, type, screenX, screenY }, bubbles: true, composed: true }))
+          this.dispatchEvent(
+            new CustomEvent('shumoku-contextmenu', {
+              detail: { id, type, screenX, screenY },
+              bubbles: true,
+              composed: true,
+            }),
+          )
         },
       },
     })
