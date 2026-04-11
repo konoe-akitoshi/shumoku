@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [svelte()],
   build: {
     lib: {
-      entry: 'src/wc.ts',
+      entry: 'src/wc.svelte.ts',
       formats: ['es'],
       fileName: 'shumoku-renderer',
     },

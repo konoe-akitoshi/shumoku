@@ -78,8 +78,8 @@ export default function EditorClient() {
   const [mode, setMode] = useState<'edit' | 'view'>('view')
   const [selected, setSelected] = useState<{ id: string; type: string } | null>(null)
   const [stats, setStats] = useState({ nodes: 0, links: 0, subgraphs: 0 })
-  const [isDark, setIsDark] = useState(() =>
-    typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
   )
 
   // Watch for dark mode changes
@@ -98,52 +98,26 @@ export default function EditorClient() {
   } | null>(null)
   const labelInputRef = useRef<HTMLInputElement | null>(null)
 
-  // --- WebComponent events ---
+  // --- WebComponent callbacks (direct property, no events) ---
 
   useEffect(() => {
-    const el = wcRef.current
+    const el = wcRef.current as any
     if (!el) return
-    function onSelect(e: Event) {
-      const { id, type } = (e as CustomEvent).detail
-      setSelected(id ? { id, type } : null)
-    }
-    function onChange(e: Event) {
-      const { links } = (e as CustomEvent).detail
-      setStats((prev) => ({ ...prev, links: links.length }))
-    }
-    function onLabelEdit(e: Event) {
-      const { portId, label, screenX, screenY } = (e as CustomEvent).detail
+    el.onshumokuselect = (id: string | null, type: string | null) =>
+      setSelected(id ? { id, type: type ?? 'node' } : null)
+    el.onshumokuchange = (links: any[]) => setStats((prev) => ({ ...prev, links: links.length }))
+    el.onshumokulabeledit = (portId: string, label: string, screenX: number, screenY: number) => {
       setLabelEdit({ portId, label, x: screenX, y: screenY })
       setTimeout(() => labelInputRef.current?.focus(), 0)
     }
-    el.addEventListener('shumoku-select', onSelect)
-    el.addEventListener('shumoku-change', onChange)
-    el.addEventListener('shumoku-label-edit', onLabelEdit)
-    return () => {
-      el.removeEventListener('shumoku-select', onSelect)
-      el.removeEventListener('shumoku-change', onChange)
-      el.removeEventListener('shumoku-label-edit', onLabelEdit)
-    }
   }, [])
 
-  // --- Theme sync (event, no remount) ---
+  // --- Theme/mode sync (direct property, $state reacts) ---
   useEffect(() => {
-    const el = wcRef.current
-    if (el) {
-      el.dispatchEvent(
-        new CustomEvent('shumoku-theme-change', {
-          detail: { theme: isDark ? darkTheme : lightTheme },
-        }),
-      )
-    }
+    ;(wcRef.current as any).theme = isDark ? darkTheme : lightTheme
   }, [isDark])
-
-  // --- Mode toggle (event, no remount) ---
   useEffect(() => {
-    const el = wcRef.current
-    if (el) {
-      el.dispatchEvent(new CustomEvent('shumoku-mode-change', { detail: { mode } }))
-    }
+    ;(wcRef.current as any).mode = mode
   }, [mode])
 
   // --- Init ---
@@ -200,7 +174,9 @@ export default function EditorClient() {
         {/* Toolbar */}
         <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700 shadow-sm z-10">
           <Network className="w-5 h-5 text-blue-500" />
-          <h1 className="text-base font-semibold text-slate-800 dark:text-neutral-100">Network Editor</h1>
+          <h1 className="text-base font-semibold text-slate-800 dark:text-neutral-100">
+            Network Editor
+          </h1>
 
           <div className="w-px h-5 bg-slate-200 dark:bg-neutral-700 mx-2" />
 
@@ -258,9 +234,7 @@ export default function EditorClient() {
                   <button
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                     onClick={() => {
-                      wcRef.current?.dispatchEvent(
-                        new CustomEvent('shumoku-add-node', { detail: {} }),
-                      )
+                      ;(wcRef.current as any)?.addNewNode?.()
                       setStats((s) => ({ ...s, nodes: s.nodes + 1 }))
                     }}
                   >
@@ -275,9 +249,7 @@ export default function EditorClient() {
                   <button
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                     onClick={() => {
-                      wcRef.current?.dispatchEvent(
-                        new CustomEvent('shumoku-add-subgraph', { detail: {} }),
-                      )
+                      ;(wcRef.current as any)?.addNewSubgraph?.()
                       setStats((s) => ({ ...s, subgraphs: s.subgraphs + 1 }))
                     }}
                   >
@@ -299,23 +271,20 @@ export default function EditorClient() {
                 <button
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                   onClick={() => {
-                    const el = wcRef.current
-                    if (!el) return
-                    // Request snapshot from WebComponent
-                    const handler = (e: Event) => {
-                      el.removeEventListener('shumoku-snapshot', handler)
-                      const { layout, links } = (e as CustomEvent).detail
-                      const data = JSON.stringify({ layout: mapToObj(layout), links }, null, 2)
-                      const blob = new Blob([data], { type: 'application/json' })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = 'network-diagram.json'
-                      a.click()
-                      URL.revokeObjectURL(url)
-                    }
-                    el.addEventListener('shumoku-snapshot', handler)
-                    el.dispatchEvent(new CustomEvent('shumoku-get-snapshot'))
+                    const snap = (wcRef.current as any)?.getSnapshot?.()
+                    if (!snap) return
+                    const data = JSON.stringify(
+                      { layout: mapToObj(snap.layout), links: snap.links },
+                      null,
+                      2,
+                    )
+                    const blob = new Blob([data], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = 'network-diagram.json'
+                    a.click()
+                    URL.revokeObjectURL(url)
                   }}
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -412,11 +381,7 @@ export default function EditorClient() {
                   if (e.key === 'Enter') {
                     const value = (e.target as HTMLInputElement).value.trim()
                     if (value) {
-                      wcRef.current?.dispatchEvent(
-                        new CustomEvent('shumoku-label-commit', {
-                          detail: { portId: labelEdit.portId, label: value },
-                        }),
-                      )
+                      ;(wcRef.current as any)?.commitLabel?.(labelEdit.portId, value)
                     }
                     setLabelEdit(null)
                   }
@@ -425,11 +390,7 @@ export default function EditorClient() {
                 onBlur={(e) => {
                   const value = e.target.value.trim()
                   if (value && value !== labelEdit.label) {
-                    wcRef.current?.dispatchEvent(
-                      new CustomEvent('shumoku-label-commit', {
-                        detail: { portId: labelEdit.portId, label: value },
-                      }),
-                    )
+                    ;(wcRef.current as any)?.commitLabel?.(labelEdit.portId, value)
                   }
                   setLabelEdit(null)
                 }}
@@ -457,7 +418,9 @@ export default function EditorClient() {
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Zoom</span>
-                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">Scroll wheel</kbd>
+                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">
+                    Scroll wheel
+                  </kbd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Reset view</span>
@@ -465,11 +428,15 @@ export default function EditorClient() {
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Delete</span>
-                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">Del</kbd>
+                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">
+                    Del
+                  </kbd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Cancel</span>
-                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">Esc</kbd>
+                  <kbd className="px-1 bg-slate-100 dark:bg-neutral-700 rounded text-[10px]">
+                    Esc
+                  </kbd>
                 </div>
               </div>
             </TooltipContent>
