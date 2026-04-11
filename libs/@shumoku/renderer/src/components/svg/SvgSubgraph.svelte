@@ -1,18 +1,21 @@
 <script lang="ts">
   import type { ResolvedSubgraph, SurfaceToken, Theme } from '@shumoku/core'
   import type { RenderColors } from '../../lib/render-colors'
+  import { subgraphDrag } from '../../lib/use-drag'
 
   let {
     subgraph,
     colors,
     theme,
     selected = false,
+    ondragmove,
     onselect,
   }: {
     subgraph: ResolvedSubgraph
     colors: RenderColors
     theme?: Theme
     selected?: boolean
+    ondragmove?: (sgId: string, x: number, y: number) => void
     onselect?: (sgId: string) => void
   } = $props()
 
@@ -62,7 +65,7 @@
     stroke-dasharray={selected ? undefined : (strokeDasharray || undefined)}
     onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id) }}
   />
-  <!-- Label area: d3-drag attached via data-sg-drag (CSS controls pointer-events) -->
+  <!-- Label area: d3-drag via use: directive -->
   <rect
     data-sg-drag={subgraph.id}
     x={subgraph.bounds.x}
@@ -70,6 +73,9 @@
     width={subgraph.bounds.width}
     height={28}
     fill="transparent"
+    use:subgraphDrag={() => ({
+      onDrag: (dx, dy) => ondragmove?.(subgraph.id, subgraph.bounds.x + dx, subgraph.bounds.y + dy),
+    })}
   />
   <text
     x={subgraph.bounds.x + 10}

@@ -6,7 +6,6 @@
     ResolvedSubgraph,
     Theme,
   } from '@shumoku/core'
-  import { drag } from 'd3-drag'
   import { select } from 'd3-selection'
   import { type D3ZoomEvent, zoom } from 'd3-zoom'
   import type { RenderColors } from '../../lib/render-colors'
@@ -72,18 +71,9 @@
   )
 
   const nodeList = $derived([...nodes.values()])
+  const portList = $derived([...ports.values()])
   const edgeList = $derived([...edges.values()])
   const subgraphList = $derived([...subgraphs.values()])
-
-  const portsByNode = $derived.by(() => {
-    const map = new Map<string, ResolvedPort[]>()
-    for (const port of ports.values()) {
-      const list = map.get(port.nodeId)
-      if (list) list.push(port)
-      else map.set(port.nodeId, [port])
-    }
-    return map
-  })
 
   // Viewport group ref (d3-zoom applies transform to this)
   let viewportEl: SVGGElement | undefined = $state()
@@ -120,52 +110,7 @@
     }
   })
 
-  // --- d3-drag: node dragging (re-binds when node/subgraph list changes) ---
-  $effect(() => {
-    // Track reactive dependencies so d3-drag rebinds on new elements
-    void nodeList.length
-    void subgraphList.length
-    if (!svgEl || !interactive) return
-
-    // biome-ignore lint/suspicious/noExplicitAny: d3-drag subject typing
-    const nodeDrag = drag<SVGGElement, any>()
-      .filter((e) => {
-        // Don't start node drag from port elements
-        const target = e.target as Element
-        if (target.closest('.port')) return false
-        if (target.closest('[data-droplet]')) return false
-        return e.button === 0
-      })
-      .on('drag', function (e) {
-        const nodeId = this.getAttribute('data-id')
-        if (!nodeId) return
-        const node = nodes.get(nodeId)
-        if (!node) return
-        onnodedragmove?.(nodeId, node.position.x + e.dx, node.position.y + e.dy)
-      })
-
-    select(svgEl)
-      .selectAll<SVGGElement, unknown>('.node[data-id]')
-      .call(nodeDrag as any)
-
-    // biome-ignore lint/suspicious/noExplicitAny: d3-drag subject typing
-    const sgDrag = drag<SVGRectElement, any>().on('drag', function (e) {
-      const sgId = this.getAttribute('data-sg-drag')
-      if (!sgId) return
-      const sg = subgraphs.get(sgId)
-      if (!sg) return
-      onsubgraphmove?.(sgId, sg.bounds.x + e.dx, sg.bounds.y + e.dy)
-    })
-
-    select(svgEl)
-      .selectAll<SVGRectElement, unknown>('[data-sg-drag]')
-      .call(sgDrag as any)
-
-    return () => {
-      select(svgEl).selectAll('.node[data-id]').on('.drag', null)
-      select(svgEl).selectAll('[data-sg-drag]').on('.drag', null)
-    }
-  })
+  // d3-drag is now handled per-component via use: directive (no global re-binding)
 </script>
 
 <svg
@@ -231,6 +176,7 @@
         {colors}
         {theme}
         selected={selection.has(subgraph.id)}
+        ondragmove={onsubgraphmove}
         onselect={onsubgraphselect}
       />
     {/each}
@@ -253,27 +199,26 @@
         {colors}
         selected={selection.has(node.id)}
         {interactive}
+        ondragmove={onnodedragmove}
         {onaddport}
         oncontextmenu={(id, e) => onctx?.(id, 'node', e)}
       />
     {/each}
 
     <!-- Ports layer (above nodes so they're always clickable) -->
-    {#each nodeList as node (node.id)}
-      {#each portsByNode.get(node.id) ?? [] as port (port.id)}
-        <SvgPort
-          {port}
-          {colors}
-          selected={selection.has(port.id)}
-          {interactive}
-          linked={linkedPorts.has(port.id)}
-          {onlinkstart}
-          {onlinkend}
-          onselect={onportselect}
-          {onlabeledit}
-          oncontextmenu={(id, e) => onctx?.(id, 'port', e)}
-        />
-      {/each}
+    {#each portList as port (port.id)}
+      <SvgPort
+        {port}
+        {colors}
+        selected={selection.has(port.id)}
+        {interactive}
+        linked={linkedPorts.has(port.id)}
+        {onlinkstart}
+        {onlinkend}
+        onselect={onportselect}
+        {onlabeledit}
+        oncontextmenu={(id, e) => onctx?.(id, 'port', e)}
+      />
     {/each}
 
     {#if linkPreview}

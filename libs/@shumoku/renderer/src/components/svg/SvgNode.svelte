@@ -7,6 +7,7 @@
     LABEL_LINE_HEIGHT,
   } from '@shumoku/core'
   import type { RenderColors } from '../../lib/render-colors'
+  import { nodeDrag } from '../../lib/use-drag'
 
   let {
     node,
@@ -14,6 +15,7 @@
     shadowFilterId = 'node-shadow',
     selected = false,
     interactive = false,
+    ondragmove,
     onaddport,
     oncontextmenu: onctx,
   }: {
@@ -22,6 +24,7 @@
     shadowFilterId?: string
     selected?: boolean
     interactive?: boolean
+    ondragmove?: (id: string, x: number, y: number) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
   } = $props()
@@ -114,12 +117,18 @@
   }
 </script>
 
-<!-- d3-drag is attached by SvgCanvas via data-id selector -->
 <g
   class="node"
   data-id={node.id}
   data-device-type={node.node.type ?? ''}
   filter="url(#{shadowFilterId})"
+  use:nodeDrag={() => ({
+    filter: (e) => {
+      const t = e.target as Element
+      return !t.closest('.port') && !t.closest('.edge-zone') && e.button === 0 && interactive
+    },
+    onDrag: (dx, dy) => ondragmove?.(node.id, node.position.x + dx, node.position.y + dy),
+  })}
   onpointerenter={() => { if (interactive) hovered = true }}
   onpointerleave={() => { hovered = false }}
   oncontextmenu={handleContextMenu}

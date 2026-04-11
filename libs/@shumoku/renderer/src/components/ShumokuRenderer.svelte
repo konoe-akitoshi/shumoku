@@ -21,6 +21,17 @@
   import { themeToColors } from '../lib/render-colors'
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
+  interface RendererProps {
+    layout: ResolvedLayout
+    graph?: { links: Link[] }
+    theme?: Theme
+    mode?: 'view' | 'edit'
+    onchange?: (links: Link[]) => void
+    onselect?: (id: string | null, type: string | null) => void
+    onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
+    oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
+  }
+
   let {
     layout: initialLayout,
     graph: initialGraph,
@@ -30,16 +41,7 @@
     onselect,
     onlabeledit,
     oncontextmenu: onctx,
-  }: {
-    layout: ResolvedLayout
-    graph?: { links: Link[] }
-    theme?: Theme
-    mode?: 'view' | 'edit'
-    onchange?: (links: Link[]) => void
-    onselect?: (id: string | null, type: string | null) => void
-    onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
-    oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
-  } = $props()
+  }: RendererProps = $props()
 
   const colors = $derived(themeToColors(theme))
   const interactive = $derived(mode === 'edit')
@@ -240,7 +242,8 @@
       node: { id, label: opts?.label ?? 'New Node', shape: 'rounded', parent },
     })
     const resolved = resolveNodePosition(id, initial.x, initial.y, newNodes, 8, subgraphs)
-    newNodes.set(id, { ...newNodes.get(id)!, position: resolved })
+    const created = newNodes.get(id)
+    if (created) newNodes.set(id, { ...created, position: resolved })
     nodes = newNodes
     if (parent) {
       const sg = new Map(subgraphs)
