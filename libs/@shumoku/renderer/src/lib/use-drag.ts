@@ -7,6 +7,7 @@ import { drag } from 'd3-drag'
 import { select } from 'd3-selection'
 
 interface NodeDragOptions {
+  // biome-ignore lint/suspicious/noExplicitAny: d3-drag filter signature uses any for event
   filter?: (e: any) => boolean
   onDrag: (dx: number, dy: number) => void
 }
@@ -17,7 +18,7 @@ export function nodeDrag(element: SVGGElement, opts: () => NodeDragOptions) {
     const behavior = drag<SVGGElement, unknown>()
     if (filter) behavior.filter(filter)
     behavior.on('drag', (e) => onDrag(e.dx, e.dy))
-    select(element).call(behavior as any)
+    select<SVGGElement, unknown>(element).call(behavior)
   }
 
   apply()
@@ -39,7 +40,7 @@ export function subgraphDrag(
   function apply() {
     const { onDrag } = opts()
     const behavior = drag<SVGRectElement, unknown>().on('drag', (e) => onDrag(e.dx, e.dy))
-    select(element).call(behavior as any)
+    select<SVGRectElement, unknown>(element).call(behavior)
   }
 
   apply()

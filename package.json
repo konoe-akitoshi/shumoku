@@ -37,6 +37,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",
     "@changesets/cli": "^2.29.8",
+    "@types/d3-drag": "^3.0.7",
     "@types/node": "^25.0.7",
     "lefthook": "^2.1.4",
     "turbo": "^2.7.4",

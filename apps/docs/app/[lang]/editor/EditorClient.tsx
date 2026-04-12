@@ -5,8 +5,11 @@ import {
   createMemoryFileResolver,
   darkTheme,
   HierarchicalParser,
+  type Link,
   lightTheme,
+  type ResolvedLayout,
   sampleNetwork,
+  type Theme,
 } from '@shumoku/core'
 import {
   Box,
@@ -23,6 +26,26 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+
+// ============================================================================
+// WebComponent type (matches ShumokuRendererElement from wc.svelte.ts)
+// ============================================================================
+
+interface ShumokuRendererElement extends HTMLElement {
+  layout: ResolvedLayout
+  graph: { links: Link[] } | undefined
+  theme: Theme | undefined
+  mode: 'view' | 'edit'
+  onshumokuselect: ((id: string | null, type: string | null) => void) | undefined
+  onshumokuchange: ((links: Link[]) => void) | undefined
+  onshumokulabeledit:
+    | ((portId: string, label: string, screenX: number, screenY: number) => void)
+    | undefined
+  addNewNode(opts?: { label?: string; position?: { x: number; y: number } }): string | undefined
+  addNewSubgraph(opts?: { label?: string; position?: { x: number; y: number } }): string | undefined
+  commitLabel(portId: string, label: string): void
+  getSnapshot(): { layout: ResolvedLayout; links: Link[] } | null
+}
 
 // ============================================================================
 // Parse
@@ -43,7 +66,7 @@ async function parseSampleNetwork() {
 }
 
 // Map ↔ plain object conversion for JSON serialization
-function mapToObj(layout: any) {
+function mapToObj(layout: ResolvedLayout) {
   return {
     nodes: Object.fromEntries(layout.nodes),
     ports: Object.fromEntries(layout.ports),
@@ -53,14 +76,23 @@ function mapToObj(layout: any) {
   }
 }
 
-function objToMap(data: any) {
+interface SerializedLayout {
+  nodes?: Record<string, unknown>
+  ports?: Record<string, unknown>
+  edges?: Record<string, unknown>
+  subgraphs?: Record<string, unknown>
+  bounds?: { x: number; y: number; width: number; height: number }
+}
+
+function objToMap(data: SerializedLayout): ResolvedLayout {
   return {
     nodes: new Map(Object.entries(data.nodes ?? {})),
     ports: new Map(Object.entries(data.ports ?? {})),
     edges: new Map(Object.entries(data.edges ?? {})),
     subgraphs: new Map(Object.entries(data.subgraphs ?? {})),
     bounds: data.bounds ?? { x: 0, y: 0, width: 800, height: 600 },
-  }
+    // biome-ignore lint/suspicious/noExplicitAny: JSON deserialization produces untyped maps
+  } as any as ResolvedLayout
 }
 
 // ============================================================================
@@ -72,8 +104,7 @@ function objToMap(data: any) {
 // ============================================================================
 
 export default function EditorClient() {
-  const wcRef = useRef<HTMLElement | null>(null)
-  const canvasRef = useRef<HTMLDivElement | null>(null)
+  const wcRef = useRef<ShumokuRendererElement | null>(null)
   const [status, setStatus] = useState('Loading...')
   const [mode, setMode] = useState<'edit' | 'view'>('view')
   const [selected, setSelected] = useState<{ id: string; type: string } | null>(null)
@@ -101,11 +132,11 @@ export default function EditorClient() {
   // --- WebComponent callbacks (direct property, no events) ---
 
   useEffect(() => {
-    const el = wcRef.current as any
+    const el = wcRef.current
     if (!el) return
     el.onshumokuselect = (id: string | null, type: string | null) =>
       setSelected(id ? { id, type: type ?? 'node' } : null)
-    el.onshumokuchange = (links: any[]) => setStats((prev) => ({ ...prev, links: links.length }))
+    el.onshumokuchange = (links: Link[]) => setStats((prev) => ({ ...prev, links: links.length }))
     el.onshumokulabeledit = (portId: string, label: string, screenX: number, screenY: number) => {
       setLabelEdit({ portId, label, x: screenX, y: screenY })
       setTimeout(() => labelInputRef.current?.focus(), 0)
@@ -114,14 +145,15 @@ export default function EditorClient() {
 
   // --- Theme/mode sync (direct property, $state reacts) ---
   useEffect(() => {
-    ;(wcRef.current as any).theme = isDark ? darkTheme : lightTheme
+    if (wcRef.current) wcRef.current.theme = isDark ? darkTheme : lightTheme
   }, [isDark])
   useEffect(() => {
-    ;(wcRef.current as any).mode = mode
+    if (wcRef.current) wcRef.current.mode = mode
   }, [mode])
 
   // --- Init ---
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: init runs once, theme/mode synced by separate effects
   useEffect(() => {
     async function init() {
       try {
@@ -155,10 +187,10 @@ export default function EditorClient() {
         const el = wcRef.current
         if (el) {
           // Set graph, theme, mode BEFORE layout (layout triggers render)
-          ;(el as any).graph = graph
-          ;(el as any).theme = isDark ? darkTheme : lightTheme
-          ;(el as any).mode = mode
-          ;(el as any).layout = resolved
+          el.graph = { links: graph.links }
+          el.theme = isDark ? darkTheme : lightTheme
+          el.mode = mode
+          el.layout = resolved
           setStatus('Ready')
         }
       } catch (e) {
@@ -234,7 +266,7 @@ export default function EditorClient() {
                   <button
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                     onClick={() => {
-                      ;(wcRef.current as any)?.addNewNode?.()
+                      wcRef.current?.addNewNode()
                       setStats((s) => ({ ...s, nodes: s.nodes + 1 }))
                     }}
                   >
@@ -249,7 +281,7 @@ export default function EditorClient() {
                   <button
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                     onClick={() => {
-                      ;(wcRef.current as any)?.addNewSubgraph?.()
+                      wcRef.current?.addNewSubgraph()
                       setStats((s) => ({ ...s, subgraphs: s.subgraphs + 1 }))
                     }}
                   >
@@ -271,7 +303,7 @@ export default function EditorClient() {
                 <button
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
                   onClick={() => {
-                    const snap = (wcRef.current as any)?.getSnapshot?.()
+                    const snap = wcRef.current?.getSnapshot()
                     if (!snap) return
                     const data = JSON.stringify(
                       { layout: mapToObj(snap.layout), links: snap.links },
@@ -305,12 +337,12 @@ export default function EditorClient() {
                       const file = input.files?.[0]
                       if (!file) return
                       const text = await file.text()
-                      const data = JSON.parse(text)
+                      const data = JSON.parse(text) as { layout: SerializedLayout; links?: Link[] }
                       const layout = objToMap(data.layout)
                       const el = wcRef.current
                       if (el) {
-                        ;(el as any).graph = { links: data.links }
-                        ;(el as any).layout = layout
+                        el.graph = { links: data.links ?? [] }
+                        el.layout = layout
                         setStats({
                           nodes: layout.nodes.size,
                           links: data.links?.length ?? 0,
@@ -367,6 +399,7 @@ export default function EditorClient() {
         {/* Label edit popover */}
         {labelEdit && (
           <>
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop dismiss */}
             <div className="fixed inset-0 z-40" onClick={() => setLabelEdit(null)} />
             <div
               className="fixed z-50 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-600 rounded-lg shadow-lg p-2"
@@ -381,7 +414,7 @@ export default function EditorClient() {
                   if (e.key === 'Enter') {
                     const value = (e.target as HTMLInputElement).value.trim()
                     if (value) {
-                      ;(wcRef.current as any)?.commitLabel?.(labelEdit.portId, value)
+                      wcRef.current?.commitLabel(labelEdit.portId, value)
                     }
                     setLabelEdit(null)
                   }
@@ -390,7 +423,7 @@ export default function EditorClient() {
                 onBlur={(e) => {
                   const value = e.target.value.trim()
                   if (value && value !== labelEdit.label) {
-                    ;(wcRef.current as any)?.commitLabel?.(labelEdit.portId, value)
+                    wcRef.current?.commitLabel(labelEdit.portId, value)
                   }
                   setLabelEdit(null)
                 }}

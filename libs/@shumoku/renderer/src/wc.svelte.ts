@@ -5,7 +5,7 @@
 /**
  * WebComponent wrapper for ShumokuRenderer
  *
- * Module-level $state for reactive props.
+ * Per-instance $state in class fields for reactive props.
  * mount() once — prop changes propagate automatically.
  */
 
@@ -16,18 +16,18 @@ import ShumokuRenderer from './components/ShumokuRenderer.svelte'
 
 type RendererProps = ComponentProps<typeof ShumokuRenderer>
 
-// Module-level $state — verified to work with mount() reactivity
-const props = $state<RendererProps>({
-  layout: {
-    nodes: new Map(),
-    ports: new Map(),
-    edges: new Map(),
-    subgraphs: new Map(),
-    bounds: { x: 0, y: 0, width: 0, height: 0 },
-  },
-})
-
 export class ShumokuRendererElement extends HTMLElement {
+  // Per-instance reactive state (requires .svelte.ts extension)
+  private _props = $state<RendererProps>({
+    layout: {
+      nodes: new Map(),
+      ports: new Map(),
+      edges: new Map(),
+      subgraphs: new Map(),
+      bounds: { x: 0, y: 0, width: 0, height: 0 },
+    },
+  })
+
   private _instance: ReturnType<typeof mount> | null = null
   private _mounted = false
 
@@ -39,78 +39,80 @@ export class ShumokuRendererElement extends HTMLElement {
   // --- Props (setter updates $state, Svelte auto-reacts, no remount) ---
 
   set layout(value: ResolvedLayout) {
-    props.layout = value
+    this._props.layout = value
     if (!this._mounted) this._mount()
   }
   get layout() {
-    return props.layout
+    return this._props.layout
   }
 
   set graph(value: NetworkGraph | undefined) {
-    props.graph = value ? { links: value.links } : undefined
+    this._props.graph = value ? { links: value.links } : undefined
   }
   get graph() {
-    return props.graph as NetworkGraph | undefined
+    return this._props.graph as NetworkGraph | undefined
   }
 
   set theme(value: Theme | undefined) {
-    props.theme = value
+    this._props.theme = value
   }
   get theme() {
-    return props.theme
+    return this._props.theme
   }
 
   set mode(value: 'view' | 'edit') {
-    props.mode = value
+    this._props.mode = value
   }
   get mode() {
-    return props.mode ?? 'view'
+    return this._props.mode ?? 'view'
   }
 
   // --- Callbacks (prefixed to avoid HTMLElement conflicts) ---
 
   set onshumokuselect(fn: RendererProps['onselect']) {
-    props.onselect = fn
+    this._props.onselect = fn
   }
   get onshumokuselect() {
-    return props.onselect
+    return this._props.onselect
   }
 
   set onshumokuchange(fn: RendererProps['onchange']) {
-    props.onchange = fn
+    this._props.onchange = fn
   }
   get onshumokuchange() {
-    return props.onchange
+    return this._props.onchange
   }
 
   set onshumokucontextmenu(fn: RendererProps['oncontextmenu']) {
-    props.oncontextmenu = fn
+    this._props.oncontextmenu = fn
   }
   get onshumokucontextmenu() {
-    return props.oncontextmenu
+    return this._props.oncontextmenu
   }
 
   set onshumokulabeledit(fn: RendererProps['onlabeledit']) {
-    props.onlabeledit = fn
+    this._props.onlabeledit = fn
   }
   get onshumokulabeledit() {
-    return props.onlabeledit
+    return this._props.onlabeledit
   }
 
   // --- Methods (delegate to Svelte component exports) ---
 
-  // biome-ignore lint/suspicious/noExplicitAny: Svelte mount exports
-  addNewNode(opts?: any) {
+  addNewNode(opts?: { label?: string; position?: { x: number; y: number } }) {
+    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
     return (this._instance as any)?.addNewNode?.(opts)
   }
-  // biome-ignore lint/suspicious/noExplicitAny: Svelte mount exports
-  addNewSubgraph(opts?: any) {
+  addNewSubgraph(opts?: { label?: string; position?: { x: number; y: number } }) {
+    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
     return (this._instance as any)?.addNewSubgraph?.(opts)
   }
   commitLabel(portId: string, label: string) {
+    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
     ;(this._instance as any)?.commitLabel?.(portId, label)
   }
   getSnapshot() {
+    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
     return (this._instance as any)?.getSnapshot?.() ?? null
   }
 
@@ -136,12 +138,15 @@ export class ShumokuRendererElement extends HTMLElement {
       'onshumokulabeledit',
     ] as const) {
       if (Object.hasOwn(this, prop)) {
+        // biome-ignore lint/suspicious/noExplicitAny: pre-upgrade property migration requires dynamic access
         const value = (this as any)[prop]
-        delete (this as any)[prop] // Remove plain property, expose class setter
-        ;(this as any)[prop] = value // Re-set via class setter → updates $state
+        // biome-ignore lint/suspicious/noExplicitAny: pre-upgrade property migration requires dynamic access
+        delete (this as any)[prop]
+        // biome-ignore lint/suspicious/noExplicitAny: pre-upgrade property migration requires dynamic access
+        ;(this as any)[prop] = value
       }
     }
-    if (props.layout.nodes.size > 0 && !this._mounted) this._mount()
+    if (this._props.layout.nodes.size > 0 && !this._mounted) this._mount()
   }
 
   disconnectedCallback() {
@@ -157,7 +162,7 @@ export class ShumokuRendererElement extends HTMLElement {
     if (this._instance) unmount(this._instance)
     this._instance = mount(ShumokuRenderer, {
       target: this.shadowRoot,
-      props,
+      props: this._props,
     })
     this._mounted = true
   }

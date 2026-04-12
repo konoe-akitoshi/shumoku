@@ -54,7 +54,16 @@
     "experimentalFullSupportEnabled": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.next", "!**/.turbo"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/.next",
+      "!**/.turbo",
+      "!**/.svelte-kit",
+      "!**/*.webmanifest",
+      "!**/public/renderer"
+    ]
   },
   "overrides": [
     {

@@ -40,7 +40,11 @@ export function ShumokuInteractive({ graph }: { graph: NetworkGraph | null }) {
   useEffect(() => {
     if (!containerRef.current || !layout) return
     // Set layout on WebComponent
-    const el = containerRef.current.querySelector('shumoku-renderer') as any
+    const el = containerRef.current.querySelector('shumoku-renderer') as
+      | (HTMLElement & {
+          layout: unknown
+        })
+      | null
     if (el) {
       el.layout = layout
     }

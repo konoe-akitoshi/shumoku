@@ -70,11 +70,6 @@
     `${bounds.x - 50} ${bounds.y - 50} ${bounds.width + 100} ${bounds.height + 100}`,
   )
 
-  const nodeList = $derived([...nodes.values()])
-  const portList = $derived([...ports.values()])
-  const edgeList = $derived([...edges.values()])
-  const subgraphList = $derived([...subgraphs.values()])
-
   // Viewport group ref (d3-zoom applies transform to this)
   let viewportEl: SVGGElement | undefined = $state()
 
@@ -118,6 +113,8 @@
   xmlns="http://www.w3.org/2000/svg"
   {viewBox}
   class:interactive
+  role="img"
+  aria-label="Network topology diagram"
   style="width: 100%; height: 100%; user-select: none; background: {colors.background};"
 >
   <defs>
@@ -170,7 +167,7 @@
       pointer-events={interactive ? 'fill' : 'none'}
       onclick={() => onbackgroundclick?.()}
     />
-    {#each subgraphList as subgraph (subgraph.id)}
+    {#each subgraphs.values() as subgraph (subgraph.id)}
       <SvgSubgraph
         {subgraph}
         {colors}
@@ -181,7 +178,7 @@
       />
     {/each}
 
-    {#each edgeList as edge (edge.id)}
+    {#each edges.values() as edge (edge.id)}
       <SvgEdge
         {edge}
         {colors}
@@ -193,7 +190,7 @@
     {/each}
 
     <!-- Nodes layer -->
-    {#each nodeList as node (node.id)}
+    {#each nodes.values() as node (node.id)}
       <SvgNode
         {node}
         {colors}
@@ -206,7 +203,7 @@
     {/each}
 
     <!-- Ports layer (above nodes so they're always clickable) -->
-    {#each portList as port (port.id)}
+    {#each ports.values() as port (port.id)}
       <SvgPort
         {port}
         {colors}

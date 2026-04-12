@@ -261,7 +261,14 @@
   <g class="node-fg" pointer-events="none">
     {#if iconPath}
       <g class="node-icon" transform="translate({cx - iconSize / 2}, {contentTop})">
-        <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="currentColor">
+        <svg
+          width={iconSize}
+          height={iconSize}
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          role="img"
+          aria-label={node.node.type ?? 'icon'}
+        >
           {@html iconPath}
         </svg>
       </g>

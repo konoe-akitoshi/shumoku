@@ -29,7 +29,10 @@
       "default": "./dist/static.js"
     }
   },
-  "files": ["dist/", "src/"],
+  "files": [
+    "dist/",
+    "src/"
+  ],
   "scripts": {
     "dev": "vite dev",
     "build": "svelte-package",
