@@ -294,7 +294,17 @@
   }
 
   export function getSnapshot() {
-    return { layout: { nodes, ports, edges, subgraphs, bounds }, links }
+    // Unwrap $state proxies into plain Maps for safe serialization
+    return {
+      layout: {
+        nodes: new Map(nodes),
+        ports: new Map(ports),
+        edges: new Map(edges),
+        subgraphs: new Map(subgraphs),
+        bounds: { ...bounds },
+      },
+      links: [...links],
+    }
   }
 
   // --- Delete ---
