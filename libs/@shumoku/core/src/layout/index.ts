@@ -6,6 +6,22 @@
  * Shumoku Layout Engines
  */
 
+// Interactive operations (node move, collision detection)
+export {
+  addLink,
+  addPort,
+  detectClickSide,
+  generatePortName,
+  linkExists,
+  moveNode,
+  movePort,
+  moveSubgraph,
+  nodesOverlap,
+  rebalanceSubgraphs,
+  removePort,
+  resolveNodePosition,
+  resolvePosition,
+} from './interaction.js'
 export type { LibavoidRoutingOptions } from './libavoid-router.js'
 export { ensureLibavoidLoaded, routeEdges } from './libavoid-router.js'
 export { getLinkWidth } from './link-utils.js'

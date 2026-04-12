@@ -1,0 +1,230 @@
+<script lang="ts">
+  import type {
+    ResolvedEdge,
+    ResolvedNode,
+    ResolvedPort,
+    ResolvedSubgraph,
+    Theme,
+  } from '@shumoku/core'
+  import { select } from 'd3-selection'
+  import { type D3ZoomEvent, zoom } from 'd3-zoom'
+  import type { RenderColors } from '../../lib/render-colors'
+  import SvgEdge from './SvgEdge.svelte'
+  import SvgLinkPreview from './SvgLinkPreview.svelte'
+  import SvgNode from './SvgNode.svelte'
+  import SvgPort from './SvgPort.svelte'
+  import SvgSubgraph from './SvgSubgraph.svelte'
+
+  let {
+    nodes,
+    ports,
+    edges,
+    subgraphs,
+    bounds,
+    colors,
+    theme,
+    interactive = false,
+    selection = new Set<string>(),
+    linkedPorts = new Set<string>(),
+    linkPreview = null,
+    svgEl = $bindable<SVGSVGElement | null>(null),
+    // Callbacks
+    onnodedragmove,
+    onaddport,
+    onlinkstart,
+    onlinkend,
+    onedgeselect,
+    onportselect,
+    onlabeledit,
+    onsubgraphselect,
+    onsubgraphmove,
+    oncontextmenu: onctx,
+    onbackgroundclick,
+  }: {
+    nodes: Map<string, ResolvedNode>
+    ports: Map<string, ResolvedPort>
+    edges: Map<string, ResolvedEdge>
+    subgraphs: Map<string, ResolvedSubgraph>
+    bounds: { x: number; y: number; width: number; height: number }
+    colors: RenderColors
+    theme?: Theme
+    interactive?: boolean
+    selection?: Set<string>
+    linkedPorts?: Set<string>
+    linkPreview?: { fromX: number; fromY: number; toX: number; toY: number } | null
+    svgEl?: SVGSVGElement | null
+    onnodedragmove?: (id: string, x: number, y: number) => void
+    onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
+    onlinkstart?: (portId: string, x: number, y: number) => void
+    onlinkend?: (portId: string) => void
+    onedgeselect?: (edgeId: string) => void
+    onportselect?: (portId: string) => void
+    onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
+    onsubgraphselect?: (sgId: string) => void
+    onsubgraphmove?: (sgId: string, x: number, y: number) => void
+    oncontextmenu?: (id: string, type: string, e: MouseEvent) => void
+    onbackgroundclick?: () => void
+  } = $props()
+
+  const viewBox = $derived(
+    `${bounds.x - 50} ${bounds.y - 50} ${bounds.width + 100} ${bounds.height + 100}`,
+  )
+
+  // Viewport group ref (d3-zoom applies transform to this)
+  let viewportEl: SVGGElement | undefined = $state()
+
+  // --- d3-zoom: pan/zoom on viewport <g> ---
+  // d3-zoom: pan/zoom always active
+  $effect(() => {
+    if (!svgEl || !viewportEl) return
+
+    const svgSel = select(svgEl)
+    const zoomBehavior = zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.2, 10])
+      .filter((e) => {
+        // Allow wheel zoom always, drag only with middle button or space
+        if (e.type === 'wheel') return true
+        if (e.type === 'mousedown' || e.type === 'pointerdown') {
+          return (e as MouseEvent).button === 1 || (e as MouseEvent).altKey
+        }
+        return false
+      })
+      .on('zoom', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
+        if (viewportEl) {
+          viewportEl.setAttribute('transform', e.transform.toString())
+        }
+      })
+
+    svgSel.call(zoomBehavior)
+
+    // Prevent default context menu on SVG background only when nothing is targeted
+    svgSel.on('contextmenu.zoom', null)
+
+    return () => {
+      svgSel.on('.zoom', null)
+    }
+  })
+
+  // d3-drag is now handled per-component via use: directive (no global re-binding)
+</script>
+
+<svg
+  bind:this={svgEl}
+  xmlns="http://www.w3.org/2000/svg"
+  {viewBox}
+  class:interactive
+  role="img"
+  aria-label="Network topology diagram"
+  style="width: 100%; height: 100%; user-select: none; background: {colors.background};"
+>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill={colors.linkStroke} />
+    </marker>
+    <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06" />
+    </filter>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke={colors.grid} stroke-width="0.5" />
+    </pattern>
+  </defs>
+
+  {@html `<style>
+    /* Typography (always) */
+    .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: ${colors.nodeText}; }
+    .node-label-bold { font-weight: 700; }
+    .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: ${colors.nodeTextSecondary}; }
+    .node-icon { color: ${colors.nodeTextSecondary}; }
+    .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: ${colors.textSecondary}; }
+
+    /* Default: all interactive elements disabled */
+    .subgraph-bg, .port-hit, .link-hit, .edge-zone, [data-sg-drag] { pointer-events: none; }
+
+    /* Edit mode: enable all interaction */
+    svg.interactive .node[data-id] { cursor: grab; }
+    svg.interactive .node[data-id]:active { cursor: grabbing; }
+    svg.interactive .subgraph-bg { pointer-events: fill; cursor: pointer; }
+    svg.interactive [data-sg-drag] { pointer-events: fill; cursor: grab; }
+    svg.interactive [data-sg-drag]:active { cursor: grabbing; }
+    svg.interactive .port-hit { pointer-events: fill; cursor: crosshair; }
+    svg.interactive .port-hit.linked { cursor: pointer; }
+    svg.interactive .link-hit { pointer-events: stroke; cursor: pointer; }
+    svg.interactive .edge-zone { pointer-events: fill; cursor: pointer; }
+    svg.interactive .port-label-text { pointer-events: fill; cursor: text; }
+  </style>`}
+
+  <!-- Viewport group: d3-zoom applies transform here -->
+  <g bind:this={viewportEl} class="viewport">
+    <!-- Background: grid in edit mode, transparent in view mode -->
+    <rect
+      class="canvas-bg"
+      x="-99999"
+      y="-99999"
+      width="199998"
+      height="199998"
+      fill="url(#grid)"
+      pointer-events={interactive ? 'fill' : 'none'}
+      onclick={() => onbackgroundclick?.()}
+    />
+    {#each subgraphs.values() as subgraph (subgraph.id)}
+      <SvgSubgraph
+        {subgraph}
+        {colors}
+        {theme}
+        selected={selection.has(subgraph.id)}
+        ondragmove={onsubgraphmove}
+        onselect={onsubgraphselect}
+      />
+    {/each}
+
+    {#each edges.values() as edge (edge.id)}
+      <SvgEdge
+        {edge}
+        {colors}
+        selected={selection.has(edge.id)}
+        {interactive}
+        onselect={onedgeselect}
+        oncontextmenu={(id, e) => onctx?.(id, 'edge', e)}
+      />
+    {/each}
+
+    <!-- Nodes layer -->
+    {#each nodes.values() as node (node.id)}
+      <SvgNode
+        {node}
+        {colors}
+        selected={selection.has(node.id)}
+        {interactive}
+        ondragmove={onnodedragmove}
+        {onaddport}
+        oncontextmenu={(id, e) => onctx?.(id, 'node', e)}
+      />
+    {/each}
+
+    <!-- Ports layer (above nodes so they're always clickable) -->
+    {#each ports.values() as port (port.id)}
+      <SvgPort
+        {port}
+        {colors}
+        selected={selection.has(port.id)}
+        {interactive}
+        linked={linkedPorts.has(port.id)}
+        {onlinkstart}
+        {onlinkend}
+        onselect={onportselect}
+        {onlabeledit}
+        oncontextmenu={(id, e) => onctx?.(id, 'port', e)}
+      />
+    {/each}
+
+    {#if linkPreview}
+      <SvgLinkPreview
+        fromX={linkPreview.fromX}
+        fromY={linkPreview.fromY}
+        toX={linkPreview.toX}
+        toY={linkPreview.toY}
+      />
+    {/if}
+  </g>
+</svg>
