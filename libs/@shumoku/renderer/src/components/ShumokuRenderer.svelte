@@ -33,8 +33,8 @@
   }
 
   let {
-    layout: initialLayout,
-    graph: initialGraph,
+    layout,
+    graph,
     theme = undefined,
     mode = 'view',
     onchange,
@@ -46,13 +46,25 @@
   const colors = $derived(themeToColors(theme))
   const interactive = $derived(mode === 'edit')
 
-  // Layout state (initialized from props, then mutated by interactions)
-  let nodes = $state<Map<string, ResolvedNode>>(new Map(initialLayout.nodes))
-  let ports = $state<Map<string, ResolvedPort>>(new Map(initialLayout.ports))
-  let edges = $state<Map<string, ResolvedEdge>>(new Map(initialLayout.edges))
-  let subgraphs = $state<Map<string, ResolvedSubgraph>>(new Map(initialLayout.subgraphs))
-  let bounds = $state(initialLayout.bounds)
-  let links = $state<Link[]>(initialGraph?.links ? [...initialGraph.links] : [])
+  // Layout state: mutable copies, synced from props via $effect
+  let nodes = $state<Map<string, ResolvedNode>>(new Map())
+  let ports = $state<Map<string, ResolvedPort>>(new Map())
+  let edges = $state<Map<string, ResolvedEdge>>(new Map())
+  let subgraphs = $state<Map<string, ResolvedSubgraph>>(new Map())
+  let bounds = $state({ x: 0, y: 0, width: 0, height: 0 })
+  let links = $state<Link[]>([])
+
+  // Sync from props when layout/graph changes externally (e.g. new layout loaded)
+  $effect(() => {
+    nodes = new Map(layout.nodes)
+    ports = new Map(layout.ports)
+    edges = new Map(layout.edges)
+    subgraphs = new Map(layout.subgraphs)
+    bounds = layout.bounds
+  })
+  $effect(() => {
+    links = graph?.links ? [...graph.links] : []
+  })
 
   // Edit state
   let selection = $state(new Set<string>())
