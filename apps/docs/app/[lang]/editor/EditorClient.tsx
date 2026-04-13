@@ -160,18 +160,7 @@ export default function EditorClient() {
     async function init() {
       try {
         setStatus('Loading renderer...')
-        await new Promise<void>((resolve, reject) => {
-          if (customElements.get('shumoku-renderer')) {
-            resolve()
-            return
-          }
-          const script = document.createElement('script')
-          script.type = 'module'
-          script.src = '/renderer/shumoku-renderer.js'
-          script.onload = () => resolve()
-          script.onerror = () => reject(new Error('Failed to load renderer'))
-          document.head.appendChild(script)
-        })
+        await import('@shumoku/renderer/wc')
 
         setStatus('Parsing network...')
         const graph = await parseSampleNetwork()

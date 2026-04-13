@@ -7,10 +7,20 @@ export default defineConfig({
     lib: {
       entry: 'src/wc.svelte.ts',
       formats: ['es'],
-      fileName: 'shumoku-renderer',
+      fileName: 'wc',
     },
     rollupOptions: {
-      // Don't externalize — bundle everything for standalone WebComponent
+      // External: consumed by the host app's bundler
+      external: [
+        'svelte',
+        'svelte/internal',
+        'svelte/internal/client',
+        'svelte/internal/disclose-version',
+        '@shumoku/core',
+        'd3-drag',
+        'd3-selection',
+        'd3-zoom',
+      ],
     },
   },
 })
