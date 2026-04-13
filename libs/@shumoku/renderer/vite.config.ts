@@ -10,17 +10,9 @@ export default defineConfig({
       fileName: 'wc',
     },
     rollupOptions: {
-      // External: consumed by the host app's bundler
-      external: [
-        'svelte',
-        'svelte/internal',
-        'svelte/internal/client',
-        'svelte/internal/disclose-version',
-        '@shumoku/core',
-        'd3-drag',
-        'd3-selection',
-        'd3-zoom',
-      ],
+      // Only @shumoku/core is external (sibling package).
+      // svelte + d3 are bundled so consumers don't need to install them.
+      external: ['@shumoku/core'],
     },
   },
 })
