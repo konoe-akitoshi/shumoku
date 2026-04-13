@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  computeNetworkLayoutRemote,
+  computeNetworkLayout,
   createMemoryFileResolver,
   darkTheme,
   HierarchicalParser,
@@ -9,7 +9,6 @@ import {
   lightTheme,
   type ResolvedLayout,
   sampleNetwork,
-  setLayoutApiUrl,
   type Theme,
 } from '@shumoku/core'
 import {
@@ -37,7 +36,6 @@ interface ShumokuRendererElement extends HTMLElement {
   graph: { links: Link[] } | undefined
   theme: Theme | undefined
   mode: 'view' | 'edit'
-  apiUrl: string
   onshumokuselect: ((id: string | null, type: string | null) => void) | undefined
   onshumokuchange: ((links: Link[]) => void) | undefined
   onshumokulabeledit:
@@ -166,8 +164,7 @@ export default function EditorClient() {
         const graph = await parseSampleNetwork()
 
         setStatus('Computing layout...')
-        setLayoutApiUrl('')
-        const { resolved } = await computeNetworkLayoutRemote(graph)
+        const { resolved } = await computeNetworkLayout(graph)
 
         setStats({
           nodes: resolved.nodes.size,
@@ -178,8 +175,6 @@ export default function EditorClient() {
         await customElements.whenDefined('shumoku-renderer')
         const el = wcRef.current
         if (el) {
-          // Set apiUrl first (enables server-side routing for interactive editing)
-          el.apiUrl = ''
           el.graph = { links: graph.links }
           el.theme = isDark ? darkTheme : lightTheme
           el.mode = mode

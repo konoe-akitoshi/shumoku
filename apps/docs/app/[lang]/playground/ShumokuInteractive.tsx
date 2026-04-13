@@ -1,7 +1,7 @@
 'use client'
 
 import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
-import { computeNetworkLayoutRemote, setLayoutApiUrl } from '@shumoku/core'
+import { computeNetworkLayout } from '@shumoku/core'
 import { useEffect, useRef, useState } from 'react'
 
 export function ShumokuInteractive({ graph }: { graph: NetworkGraph | null }) {
@@ -18,8 +18,7 @@ export function ShumokuInteractive({ graph }: { graph: NetworkGraph | null }) {
       return
     }
     let cancelled = false
-    setLayoutApiUrl('')
-    computeNetworkLayoutRemote(graph).then(({ resolved }) => {
+    computeNetworkLayout(graph).then(({ resolved }) => {
       if (!cancelled) setLayout(resolved)
     })
     return () => {

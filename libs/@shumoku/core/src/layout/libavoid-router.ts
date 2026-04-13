@@ -67,14 +67,27 @@ function isInsideAnyNode(
 // biome-ignore lint/suspicious/noExplicitAny: libavoid-js types don't match runtime API
 let avoidInstance: any = null
 
+/** Create a blob URL from base64-encoded WASM (browser inline loading) */
+function base64ToBlobUrl(b64: string, mime = 'application/wasm'): string {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (const [i] of bytes.entries()) {
+    bytes[i] = bin.charCodeAt(i)
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: mime }))
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: libavoid-js dynamic WASM API
 export async function ensureLibavoidLoaded(): Promise<any> {
   if (!avoidInstance) {
     const { AvoidLib } = await import('libavoid-js')
     const isBrowser = typeof window !== 'undefined'
     if (isBrowser) {
-      // Browser: fetch from public directory (bypasses i18n rewrites)
-      await AvoidLib.load(`${window.location.origin}/libavoid.wasm`)
+      // Browser: decode inline base64 WASM → blob URL (no file copy needed)
+      const { LIBAVOID_WASM_BASE64 } = await import('./libavoid-wasm-data.js')
+      const blobUrl = base64ToBlobUrl(LIBAVOID_WASM_BASE64)
+      await AvoidLib.load(blobUrl)
+      URL.revokeObjectURL(blobUrl)
     } else if (process.env['LIBAVOID_WASM_PATH']) {
       // Server/Docker: explicit path via environment variable
       await AvoidLib.load(process.env['LIBAVOID_WASM_PATH'])
