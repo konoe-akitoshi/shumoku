@@ -10,6 +10,7 @@
  */
 
 import type { NetworkGraph, ResolvedLayout, Theme } from '@shumoku/core'
+import { routeEdgesRemote, setLayoutApiUrl } from '@shumoku/core'
 import type { ComponentProps } from 'svelte'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
@@ -65,6 +66,13 @@ export class ShumokuRendererElement extends HTMLElement {
   }
   get mode() {
     return this._props.mode ?? 'view'
+  }
+
+  // --- API URL (sets remote routing, removes browser WASM dependency) ---
+
+  set apiUrl(url: string) {
+    setLayoutApiUrl(url)
+    this._props.routeEdgesFn = routeEdgesRemote
   }
 
   // --- Callbacks (prefixed to avoid HTMLElement conflicts) ---
@@ -132,6 +140,7 @@ export class ShumokuRendererElement extends HTMLElement {
       'graph',
       'theme',
       'mode',
+      'apiUrl',
       'onshumokuselect',
       'onshumokuchange',
       'onshumokucontextmenu',

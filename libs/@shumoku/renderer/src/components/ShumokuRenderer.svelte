@@ -21,11 +21,14 @@
   import { themeToColors } from '../lib/render-colors'
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
+  type RouteFn = typeof routeEdges
+
   interface RendererProps {
     layout: ResolvedLayout
     graph?: { links: Link[] }
     theme?: Theme
     mode?: 'view' | 'edit'
+    routeEdgesFn?: RouteFn
     onchange?: (links: Link[]) => void
     onselect?: (id: string | null, type: string | null) => void
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
@@ -37,6 +40,7 @@
     graph,
     theme = undefined,
     mode = 'view',
+    routeEdgesFn = routeEdges,
     onchange,
     onselect,
     onlabeledit,
@@ -111,7 +115,15 @@
 
   // --- Node drag ---
   async function handleNodeDragMove(id: string, x: number, y: number) {
-    const result = await moveNode(id, x, y, { nodes, ports, subgraphs }, links)
+    const result = await moveNode(
+      id,
+      x,
+      y,
+      { nodes, ports, subgraphs },
+      links,
+      undefined,
+      routeEdgesFn,
+    )
     if (!result) return
     nodes = result.nodes
     ports = result.ports
@@ -124,11 +136,11 @@
     if (!result) return
     nodes = result.nodes
     ports = result.ports
-    edges = await routeEdges(result.nodes, result.ports, links)
+    edges = await routeEdgesFn(result.nodes, result.ports, links)
   }
 
   async function handleSubgraphMove(sgId: string, x: number, y: number) {
-    const result = await moveSubgraph(sgId, x, y, { nodes, ports, subgraphs }, links)
+    const result = await moveSubgraph(sgId, x, y, { nodes, ports, subgraphs }, links, routeEdgesFn)
     if (!result) return
     nodes = result.nodes
     ports = result.ports
@@ -198,7 +210,7 @@
         to: { node: toNode, port: toPort },
       },
     ]
-    edges = await routeEdges(nodes, ports, links)
+    edges = await routeEdgesFn(nodes, ports, links)
     onchange?.(links)
   }
 
@@ -323,7 +335,7 @@
           }
         }
       }
-      routeEdges(nodes, ports, links).then((e) => {
+      routeEdgesFn(nodes, ports, links).then((e) => {
         edges = e
       })
       selection = new Set()

@@ -332,6 +332,7 @@ export async function moveNode(
   },
   links: Link[],
   gap = DEFAULT_NODE_GAP,
+  routeFn = routeEdges,
 ): Promise<{
   nodes: Map<string, ResolvedNode>
   ports: Map<string, ResolvedPort>
@@ -380,7 +381,7 @@ export async function moveNode(
   }
 
   // 5. Re-route edges
-  const edges = await routeEdges(newNodes, newPorts, links)
+  const edges = await routeFn(newNodes, newPorts, links)
 
   return { nodes: newNodes, ports: newPorts, edges, subgraphs: newSubgraphs }
 }
@@ -399,6 +400,7 @@ export async function moveSubgraph(
     subgraphs: Map<string, ResolvedSubgraph>
   },
   links: Link[],
+  routeFn = routeEdges,
 ): Promise<{
   nodes: Map<string, ResolvedNode>
   ports: Map<string, ResolvedPort>
@@ -426,7 +428,7 @@ export async function moveSubgraph(
   rebalanceSubgraphs(newNodes, newSubgraphs, newPorts)
 
   // Re-route edges
-  const edges = await routeEdges(newNodes, newPorts, links)
+  const edges = await routeFn(newNodes, newPorts, links)
 
   return { nodes: newNodes, ports: newPorts, edges, subgraphs: newSubgraphs }
 }

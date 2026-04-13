@@ -1,7 +1,7 @@
 'use client'
 
 import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
-import { computeNetworkLayout } from '@shumoku/core'
+import { computeNetworkLayoutRemote, setLayoutApiUrl } from '@shumoku/core'
 import { useEffect, useRef, useState } from 'react'
 
 // Load WebComponent script once
@@ -29,7 +29,8 @@ export function ShumokuInteractive({ graph }: { graph: NetworkGraph | null }) {
       return
     }
     let cancelled = false
-    computeNetworkLayout(graph).then(({ resolved }) => {
+    setLayoutApiUrl('')
+    computeNetworkLayoutRemote(graph).then(({ resolved }) => {
       if (!cancelled) setLayout(resolved)
     })
     return () => {
