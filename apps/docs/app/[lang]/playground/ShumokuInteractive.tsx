@@ -4,23 +4,12 @@ import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
 import { computeNetworkLayout } from '@shumoku/core'
 import { useEffect, useRef, useState } from 'react'
 
-// Load WebComponent script once
-let wcLoaded = false
-function loadWebComponent() {
-  if (wcLoaded) return
-  wcLoaded = true
-  const script = document.createElement('script')
-  script.type = 'module'
-  script.src = '/renderer/shumoku-renderer.js'
-  document.head.appendChild(script)
-}
-
 export function ShumokuInteractive({ graph }: { graph: NetworkGraph | null }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [layout, setLayout] = useState<ResolvedLayout | null>(null)
 
   useEffect(() => {
-    loadWebComponent()
+    import('@shumoku/renderer/wc')
   }, [])
 
   useEffect(() => {

@@ -20,8 +20,8 @@
       "default": "./dist/index.js"
     },
     "./wc": {
-      "types": "./dist/wc.d.ts",
-      "default": "./dist/wc.js"
+      "types": "./dist/wc.svelte.d.ts",
+      "default": "./dist/wc/wc.js"
     },
     "./static": {
       "svelte": "./src/static.ts",
@@ -35,7 +35,7 @@
   ],
   "scripts": {
     "dev": "vite dev",
-    "build": "svelte-package",
+    "build": "svelte-package -i src && vite build --outDir dist/wc --emptyOutDir",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write ."

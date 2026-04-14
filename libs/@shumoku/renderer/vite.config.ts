@@ -7,10 +7,12 @@ export default defineConfig({
     lib: {
       entry: 'src/wc.svelte.ts',
       formats: ['es'],
-      fileName: 'shumoku-renderer',
+      fileName: 'wc',
     },
     rollupOptions: {
-      // Don't externalize — bundle everything for standalone WebComponent
+      // Only @shumoku/core is external (sibling package).
+      // svelte + d3 are bundled so consumers don't need to install them.
+      external: ['@shumoku/core'],
     },
   },
 })

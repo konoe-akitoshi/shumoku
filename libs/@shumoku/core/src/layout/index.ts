@@ -29,6 +29,13 @@ export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout
 // Custom network layout + libavoid routing
 export { layoutNetwork } from './network-layout.js'
 export { placePorts } from './port-placement.js'
+// Remote client (browser → server API, avoids WASM in browser)
+export {
+  computeNetworkLayoutRemote,
+  getLayoutApiUrl,
+  routeEdgesRemote,
+  setLayoutApiUrl,
+} from './remote-client.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
 // Resolved layout model (Node/Port/Edge as independent objects)

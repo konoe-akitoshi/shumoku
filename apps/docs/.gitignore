@@ -1,3 +1,4 @@
 .open-next
 .source
-public/renderer/*.js
+public/renderer/
+public/libavoid.wasm
