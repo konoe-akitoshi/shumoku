@@ -12,6 +12,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
+    "@shumoku/catalog": "workspace:*",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "bits-ui": "^2.15.4",

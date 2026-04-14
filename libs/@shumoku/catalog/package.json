@@ -1,0 +1,49 @@
+{
+  "name": "@shumoku/catalog",
+  "version": "0.1.0",
+  "description": "Device and service catalog for shumoku network diagrams",
+  "license": "AGPL-3.0-only",
+  "author": "konoe-akitoshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/@shumoku/catalog"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "data"
+  ],
+  "scripts": {
+    "build": "tsc --build --force",
+    "build:data": "bun src/build-data.ts",
+    "dev": "tsc --watch",
+    "test": "vitest --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.0.7",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.17"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

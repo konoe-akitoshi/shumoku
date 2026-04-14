@@ -1,0 +1,16 @@
+# Generic IP Phone — PoE-powered VoIP endpoint
+id: generic/ip-phone
+label: IP Phone
+spec:
+  kind: hardware
+  type: cpe
+  vendor: generic
+  model: ip-phone
+tags: [poe-consumer, voip]
+properties:
+  power:
+    max_draw_w: 5
+    poe_in:
+      standard: "802.3af"
+      class: 1
+      max_draw_w: 5

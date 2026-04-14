@@ -347,62 +347,55 @@ nodes:
     model: EX4400-48T
     parent: noc
 
-  # ========== Building A ==========
+  # ========== Building A (Cisco PoE switch + Aruba APs) ==========
   - id: sw-a1
     label: "SW-A1 (Floor 1)"
-    type: l2-switch
-    vendor: juniper
-    model: EX2300-24P
-    parent: building-a
-
-  - id: sw-a2
-    label: "SW-A2 (Floor 2)"
-    type: l2-switch
-    vendor: juniper
-    model: EX2300-24P
+    type: l3-switch
+    vendor: cisco
+    model: ws-c3560cx-8pc-s
     parent: building-a
 
   - id: ap-a1
     label: "AP-A1"
     type: access-point
-    vendor: aruba
-    model: ap500-series
+    vendor: hpe
+    model: aruba-ap-505
     parent: building-a
 
   - id: ap-a2
     label: "AP-A2"
     type: access-point
-    vendor: aruba
-    model: ap500-series
+    vendor: hpe
+    model: aruba-ap-505
     parent: building-a
 
-  # ========== Building B ==========
+  # ========== Building B (Panasonic PoE switch + AP11D passthrough) ==========
   - id: sw-b1
-    label: "SW-B1 (Floor 1)"
+    label: "SW-B1"
     type: l2-switch
-    vendor: yamaha
-    model: swx2310_28gt
-    parent: building-b
-
-  - id: sw-b2
-    label: "SW-B2 (Floor 2)"
-    type: l2-switch
-    vendor: yamaha
-    model: swx2310_28gt
+    vendor: panasonic
+    model: switch-m8egpwr-plus
     parent: building-b
 
   - id: ap-b1
     label: "AP-B1"
     type: access-point
-    vendor: aruba
-    model: ap500-series
+    vendor: hpe
+    model: aruba-ap-505
     parent: building-b
 
   - id: ap-b2
-    label: "AP-B2"
+    label: "AP-B2 (Desk)"
     type: access-point
-    vendor: aruba
-    model: ap500-series
+    vendor: hpe
+    model: aruba-instant-on-ap11d
+    parent: building-b
+
+  - id: ip-phone
+    label: "IP Phone"
+    type: cpe
+    vendor: generic
+    model: ip-phone
     parent: building-b
 
 links:
@@ -443,19 +436,7 @@ links:
     vlan: [10, 30]
     bandwidth: 10G
 
-  # Building A cascade
-  - from:
-      node: sw-a1
-      port: eth24
-      ip: 10.10.1.1/30
-    to:
-      node: sw-a2
-      port: uplink
-      ip: 10.10.1.2/30
-    label: "Cascade"
-    vlan: [10, 20]
-    bandwidth: 10G
-
+  # Building A: PoE switch → APs
   - from:
       node: sw-a1
       port: eth1
@@ -466,27 +447,15 @@ links:
     bandwidth: 1G
 
   - from:
-      node: sw-a2
-      port: eth1
+      node: sw-a1
+      port: eth2
     to:
       node: ap-a2
       port: eth0
     vlan: 20
     bandwidth: 1G
 
-  # Building B cascade
-  - from:
-      node: sw-b1
-      port: eth24
-      ip: 10.20.1.1/30
-    to:
-      node: sw-b2
-      port: uplink
-      ip: 10.20.1.2/30
-    label: "Cascade"
-    vlan: [10, 30]
-    bandwidth: 10G
-
+  # Building B: PoE switch → AP + AP11D passthrough → IP Phone
   - from:
       node: sw-b1
       port: eth1
@@ -497,12 +466,20 @@ links:
     bandwidth: 1G
 
   - from:
-      node: sw-b2
-      port: eth1
+      node: sw-b1
+      port: eth2
     to:
       node: ap-b2
-      port: eth0
+      port: e0
     vlan: 30
+    bandwidth: 1G
+
+  - from:
+      node: ap-b2
+      port: e3
+    to:
+      node: ip-phone
+      port: eth0
     bandwidth: 1G
 `,
   },

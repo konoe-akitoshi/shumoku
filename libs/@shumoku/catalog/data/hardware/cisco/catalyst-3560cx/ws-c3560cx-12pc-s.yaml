@@ -1,0 +1,30 @@
+# Cisco WS-C3560CX-12PC-S — 12-port PoE+ compact switch
+id: cisco/catalyst-3560cx/ws-c3560cx-12pc-s
+label: WS-C3560CX-12PC-S
+extends: cisco/catalyst-3560cx
+spec:
+  kind: hardware
+  type: l3-switch
+  vendor: cisco
+  model: ws-c3560cx-12pc-s
+tags: [poe-source]
+properties:
+  power:
+    max_draw_w: 310
+    poe_out:
+      standard: "802.3at"
+      budget_w: 240
+      max_per_port_w: 30
+      ports: 12
+  switching:
+    capacity_gbps: 28
+    forwarding_rate_mpps: 20.83
+  ports:
+    downlink:
+      - { count: 12, speed: "1g", media: copper, poe: true }
+    uplink:
+      - { count: 2, speed: "1g", media: sfp }
+      - { count: 2, speed: "1g", media: copper }
+  management:
+    layer: 2
+    image: lan-base

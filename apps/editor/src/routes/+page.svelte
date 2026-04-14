@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { builtinEntries, Catalog } from '@shumoku/catalog'
   import {
     computeNetworkLayout,
     createMemoryFileResolver,
@@ -23,6 +24,7 @@
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import { editorState, initDarkMode } from '$lib/context.svelte'
+  import { analyzePoE, type PoEBudget } from '$lib/poe-analysis'
 
   // =========================================================================
   // Layout state — THE source of truth
@@ -54,6 +56,11 @@
   // biome-ignore lint/suspicious/noExplicitAny: mixed element detail data
   let detailData = $state<Record<string, any> | null>(null)
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
+
+  // PoE analysis
+  const catalog = new Catalog()
+  catalog.registerAll(builtinEntries)
+  let poeBudgets = $state<PoEBudget[]>([])
 
   // =========================================================================
   // Derived
@@ -138,6 +145,7 @@
         status = 'Computing layout...'
         const { resolved } = await computeNetworkLayout(g)
         loadFromResolved(resolved, g.links)
+        poeBudgets = analyzePoE(g.nodes, g.links, catalog)
         const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
         if (mainFile) yamlSource = mainFile.content
         status = 'Ready'
@@ -315,6 +323,9 @@
     open={detailData !== null}
     data={detailData}
     mode={editorState.mode}
+    poeBudget={poeBudgets.find((b) => b.nodeId === detailData?.id)}
+    {catalog}
+    {links}
     onclose={() => { detailData = null }}
     onupdate={(id, field, value) => {
       // Update node properties in state

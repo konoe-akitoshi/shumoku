@@ -1,0 +1,28 @@
+# HPE Aruba AP-505 — WiFi 6 indoor access point
+# Source: https://www.arubanetworks.com/products/wireless/access-points/indoor-access-points/500-series/
+id: hpe/aruba-ap-505
+label: Aruba AP-505
+spec:
+  kind: hardware
+  type: access-point
+  vendor: hpe
+  model: aruba-ap-505
+tags: [wifi-6, indoor, ceiling-mount, poe-consumer]
+properties:
+  power:
+    max_draw_w: 11
+    poe_in:
+      standard: "802.3af"
+      class: 3
+      max_draw_w: 16.5  # with USB device attached
+  wireless:
+    standard: wifi-6
+    radios: 2
+    mimo: "2x2"
+    bands: ["2.4ghz", "5ghz"]
+    antenna_type: internal
+  physical:
+    form_factor: ceiling
+    dimensions_mm: { w: 160, d: 161, h: 37 }
+    weight_g: 500
+    mounting: [ceiling, wall]

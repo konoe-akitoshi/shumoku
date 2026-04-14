@@ -1,0 +1,38 @@
+# Aruba Instant On AP11D — WiFi 5 desk/wall AP with PoE passthrough
+# Source: https://www.arubainstanton.com/products/access-points/ap11d/
+# Note: E3 port provides PoE-out (802.3af, 15.4W) only when powered via 802.3at
+id: hpe/aruba-instant-on-ap11d
+label: Aruba Instant On AP11D
+spec:
+  kind: hardware
+  type: access-point
+  vendor: hpe
+  model: aruba-instant-on-ap11d
+tags: [wifi-5, desk, poe-consumer, poe-passthrough]
+properties:
+  power:
+    max_draw_w: 12
+    poe_in:
+      standard: "802.3af"
+      class: 3
+    poe_out:
+      standard: "802.3af"
+      budget_w: 15.4
+      max_per_port_w: 15.4
+      ports: 1  # E3 only
+  wireless:
+    standard: wifi-5
+    radios: 2
+    mimo: "2x2"
+    bands: ["2.4ghz", "5ghz"]
+    antenna_type: internal
+  ports:
+    downlink:
+      - { count: 3, speed: "1g", media: copper }
+    uplink:
+      - { count: 1, speed: "1g", media: copper }
+  physical:
+    form_factor: desktop
+    dimensions_mm: { w: 86, d: 150, h: 40 }
+    weight_g: 313
+    mounting: [desk, wall]
