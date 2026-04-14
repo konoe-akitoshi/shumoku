@@ -6,10 +6,6 @@ const withMDX = createMDX()
 const config = {
   reactStrictMode: true,
   transpilePackages: ['shumoku', '@shumoku/core', '@shumoku/parser-yaml', '@shumoku/renderer'],
-  serverExternalPackages: ['libavoid-js'],
-  outputFileTracingIncludes: {
-    '/api/layout/*': ['./node_modules/**/libavoid-js/**/*.wasm'],
-  },
   async rewrites() {
     return [
       {
