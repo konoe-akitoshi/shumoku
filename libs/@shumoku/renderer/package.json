@@ -23,6 +23,10 @@
       "types": "./dist/wc.svelte.d.ts",
       "default": "./dist/wc/wc.js"
     },
+    "./components/ShumokuRenderer.svelte": {
+      "svelte": "./src/components/ShumokuRenderer.svelte",
+      "default": "./dist/components/ShumokuRenderer.svelte"
+    },
     "./static": {
       "svelte": "./src/static.ts",
       "types": "./dist/static.d.ts",
