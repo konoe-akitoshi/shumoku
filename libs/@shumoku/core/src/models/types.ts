@@ -42,45 +42,71 @@ export interface NodeStyle {
   opacity?: number
 }
 
+// ============================================
+// Node Spec — discriminated union by `kind`
+// ============================================
+
 /**
- * Device/resource identification — shared by Node and Subgraph.
- * Groups vendor, model, service, resource, and icon fields
- * that describe *what* the element represents (as opposed to
- * graph-structural fields like id, label, parent, rank).
+ * Shared fields across all spec kinds.
  */
-export interface DeviceInfo {
-  /**
-   * Device type (for default styling/icons)
-   */
-  type?: DeviceType
-
-  /**
-   * Vendor name for vendor-specific icons (e.g., 'aws', 'azure', 'gcp', 'yamaha')
-   */
-  vendor?: string
-
-  /**
-   * Service name within the vendor (e.g., 'ec2', 'vpc', 'lambda')
-   * Used for cloud providers like AWS
-   */
-  service?: string
-
-  /**
-   * Model name for hardware vendors (e.g., 'rtx3510', 'ex4400')
-   * Alternative to service for equipment vendors
-   */
-  model?: string
-
-  /**
-   * Resource type within the service (e.g., 'instance', 'nat-gateway')
-   */
-  resource?: string
-
-  /**
-   * Custom icon URL (overrides vendor/type icons)
-   * Supports any image URL (PNG, SVG, etc.)
-   */
+export interface SpecBase {
+  /** Custom icon URL (overrides vendor/type icons) */
   icon?: string
+  /** Vendor name for vendor-specific icons (e.g., 'aws', 'azure', 'gcp', 'yamaha') */
+  vendor?: string
+}
+
+/** Physical device (switch, router, AP, server, etc.) */
+export interface HardwareSpec extends SpecBase {
+  kind: 'hardware'
+  /** Device type (for default styling/icons) */
+  type?: DeviceType
+  /** Model name (e.g., 'catalyst-9300', 'rtx3510') */
+  model?: string
+}
+
+/** Virtual machine — on-prem or cloud-based (EC2, ESXi VM, etc.) */
+export interface ComputeSpec extends SpecBase {
+  kind: 'compute'
+  /** Device type (for default styling/icons) */
+  type?: DeviceType
+  /** Platform identifier (e.g., 'ec2', 'esxi', 'proxmox') */
+  platform?: string
+}
+
+/** Managed / cloud service (Lambda, S3, CloudFront, etc.) */
+export interface ServiceSpec extends SpecBase {
+  kind: 'service'
+  /** Service name within the vendor (e.g., 'lambda', 's3', 'rds') */
+  service: string
+  /** Resource type within the service (e.g., 'function', 'bucket') */
+  resource?: string
+}
+
+/**
+ * Node specification — describes *what* the element represents.
+ * Discriminated by `kind` so each variant carries only relevant fields.
+ */
+export type NodeSpec = HardwareSpec | ComputeSpec | ServiceSpec
+
+/** Extract DeviceType from a spec (hardware and compute only). */
+export function specDeviceType(spec: NodeSpec | undefined): DeviceType | undefined {
+  if (!spec || spec.kind === 'service') return undefined
+  return spec.type
+}
+
+/**
+ * Extract the icon lookup key for CDN icons.
+ * Hardware → model, Service → service/resource, Compute → platform.
+ */
+export function specIconKey(spec: NodeSpec | undefined): string | undefined {
+  if (!spec) return undefined
+  if (spec.kind === 'service') {
+    return spec.resource ? `${spec.service}/${spec.resource}` : spec.service
+  }
+  if (spec.kind === 'hardware') return spec.model
+  if (spec.kind === 'compute') return spec.platform
+  return undefined
 }
 
 export interface Node {
@@ -119,9 +145,9 @@ export interface Node {
   metadata?: Record<string, unknown>
 
   /**
-   * Device/resource identification
+   * What this node represents (hardware, compute, or service)
    */
-  device?: DeviceInfo
+  spec?: NodeSpec
 }
 
 // ============================================
@@ -352,9 +378,9 @@ export interface Subgraph {
   style?: SubgraphStyle
 
   /**
-   * Device/resource identification
+   * What this subgraph represents (hardware, compute, or service)
    */
-  device?: DeviceInfo
+  spec?: NodeSpec
 
   /**
    * File reference for external sheet definition (KiCad-style hierarchy)

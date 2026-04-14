@@ -21,6 +21,7 @@
     removePort,
     resolvePosition,
     routeEdges,
+    specDeviceType,
   } from '@shumoku/core'
   import { themeToColors } from '../lib/render-colors'
   import SvgCanvas from './svg/SvgCanvas.svelte'
@@ -227,8 +228,8 @@
   }) {
     const id = `node-${Date.now()}`
     const label = opts?.label ?? 'New Node'
-    const device = opts?.type ? { type: opts.type } : undefined
-    const { width: w, height: h } = computeNodeSize({ label, device })
+    const spec = opts?.type ? { kind: 'hardware' as const, type: opts.type } : undefined
+    const { width: w, height: h } = computeNodeSize({ label, spec })
     const { parent, initial } = resolveParentAndPosition(opts?.position, w)
     const obstacles = collectObstacles(id, parent, nodes, subgraphs)
     const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
@@ -238,7 +239,7 @@
       id,
       position: pos,
       size: { width: w, height: h },
-      node: { id, label, device, shape: opts?.shape ?? 'rounded', parent },
+      node: { id, label, spec, shape: opts?.shape ?? 'rounded', parent },
     })
     nodes = n
     finalizeAdd(id, new Map(subgraphs))
@@ -346,7 +347,7 @@
         kind: 'node' as const,
         label: node.node.label ?? 'Node',
         shape: node.node.shape,
-        type: node.node.device?.type,
+        type: specDeviceType(node.node.spec),
       }
     }
     const sg = subgraphs.get(id)

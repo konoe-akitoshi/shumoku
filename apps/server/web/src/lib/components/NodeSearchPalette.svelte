@@ -4,7 +4,7 @@
   interface NodeEntry {
     id: string
     label: string
-    device?: {
+    spec?: {
       type?: string
       vendor?: string
       model?: string
@@ -33,7 +33,7 @@
       const type = el.getAttribute('data-device-type') || undefined
       const vendor = el.getAttribute('data-device-vendor') || undefined
       const model = el.getAttribute('data-device-model') || undefined
-      nodes.push({ id, label, device: { type, vendor, model } })
+      nodes.push({ id, label, spec: { type, vendor, model } })
     })
     return nodes
   })
@@ -74,13 +74,13 @@
       {#each allNodes as node (node.id)}
         <Command.Item
           value={node.label}
-          keywords={[node.id, node.device?.type ?? '', node.device?.vendor ?? '', node.device?.model ?? '']}
+          keywords={[node.id, node.spec?.type ?? '', node.spec?.vendor ?? '', node.spec?.model ?? '']}
           onSelect={() => handleSelect(node.id)}
         >
           <span>{node.label}</span>
-          {#if node.device?.vendor || node.device?.model || node.device?.type}
+          {#if node.spec?.vendor || node.spec?.model || node.spec?.type}
             <Command.Shortcut>
-              {[node.device?.vendor, node.device?.model, node.device?.type].filter(Boolean).join(' / ')}
+              {[node.spec?.vendor, node.spec?.model, node.spec?.type].filter(Boolean).join(' / ')}
             </Command.Shortcut>
           {/if}
         </Command.Item>

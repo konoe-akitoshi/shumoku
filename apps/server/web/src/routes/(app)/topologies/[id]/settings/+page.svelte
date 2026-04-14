@@ -268,7 +268,7 @@
           nodes: contextData.nodes.map((n) => ({
             id: n.id,
             label: n.label,
-            device: { type: n.type, vendor: n.vendor },
+            spec: { type: n.type, vendor: n.vendor },
           })),
           links: contextData.edges.map((e) => ({
             id: e.id,
@@ -1534,7 +1534,7 @@
                         ></span>
                         {getNodeLabel(node)}
                       </p>
-                      <p class="text-xs text-theme-text-muted">{node.device?.type || 'Unknown'}</p>
+                      <p class="text-xs text-theme-text-muted">{node.spec?.type || 'Unknown'}</p>
                     </div>
                     <select
                       class="input"

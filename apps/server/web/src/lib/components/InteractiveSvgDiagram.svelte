@@ -3,7 +3,7 @@
   export interface NodeInfo {
     id: string
     label: string
-    device?: {
+    spec?: {
       type?: string
       vendor?: string
       model?: string
@@ -561,7 +561,7 @@
         const nodeInfo: NodeInfo = {
           id: nodeId,
           label,
-          device: {
+          spec: {
             type: nodeEl.getAttribute('data-device-type') || undefined,
             vendor: nodeEl.getAttribute('data-device-vendor') || undefined,
             model: nodeEl.getAttribute('data-device-model') || undefined,

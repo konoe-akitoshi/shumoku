@@ -3,6 +3,7 @@
  * Public endpoints for viewing shared topologies and dashboards (no auth required)
  */
 
+import { specDeviceType } from '@shumoku/core'
 import { Hono } from 'hono'
 import { getDashboardService } from './dashboards.js'
 import { buildRenderOutput, getTopologyService } from './topologies.js'
@@ -35,7 +36,7 @@ export function createShareApi(): Hono {
         nodes: parsed.graph.nodes.map((n) => ({
           id: n.id,
           label: n.label || n.id,
-          type: n.device?.type,
+          type: specDeviceType(n.spec),
         })),
         edges: parsed.graph.links.map((l, i) => ({
           id: l.id || `link-${i}`,

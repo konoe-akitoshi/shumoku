@@ -15,6 +15,7 @@ import type {
   Node,
   Subgraph,
 } from '@shumoku/core/models'
+import { specDeviceType } from '@shumoku/core/models'
 
 import type {
   ConnectionData,
@@ -592,7 +593,8 @@ function buildNodes(
       label: labelLines,
       shape: 'rounded',
       rank: tagConfig?.level,
-      device: {
+      spec: {
+        kind: 'hardware' as const,
         type: deviceType as DeviceType,
         model: device.model?.toLowerCase(),
         vendor: device.manufacturer?.toLowerCase(),
@@ -779,7 +781,7 @@ function buildVMNodes(
       id: `vm-${vm.name}`,
       label: labelLines,
       shape: 'rounded',
-      device: { type: 'server' as DeviceType },
+      spec: { kind: 'hardware' as const, type: 'server' as DeviceType },
       style: { ...VM_NODE_STYLE },
       metadata: {
         isVirtualMachine: true,
@@ -902,9 +904,10 @@ function serializeNode(lines: string[], node: Node): void {
     lines.push(`    label: "${node.label}"`)
   }
 
-  if (node.device?.type) lines.push(`    type: ${node.device.type}`)
-  if (node.device?.vendor) lines.push(`    vendor: ${node.device.vendor}`)
-  if (node.device?.model) lines.push(`    model: ${node.device.model}`)
+  const dt = specDeviceType(node.spec)
+  if (dt) lines.push(`    type: ${dt}`)
+  if (node.spec?.vendor) lines.push(`    vendor: ${node.spec.vendor}`)
+  if (node.spec?.kind === 'hardware' && node.spec.model) lines.push(`    model: ${node.spec.model}`)
   if (node.parent) lines.push(`    parent: ${node.parent}`)
   if (node.rank !== undefined) lines.push(`    rank: ${node.rank}`)
 }
@@ -1136,7 +1139,8 @@ function buildLocationGraph(
       label: labelLines,
       shape: 'rounded',
       rank: tagConfig?.level,
-      device: {
+      spec: {
+        kind: 'hardware' as const,
         type: deviceType as DeviceType,
         model: info.model?.toLowerCase(),
         vendor: info.manufacturer?.toLowerCase(),

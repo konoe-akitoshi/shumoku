@@ -23,7 +23,14 @@ import {
   SMALL_LABEL_CHAR_WIDTH,
 } from '../constants.js'
 import { getDeviceIcon } from '../icons/index.js'
-import type { Bounds, LinkEndpoint, NetworkGraph, Node, Subgraph } from '../models/types.js'
+import type {
+  Bounds,
+  LinkEndpoint,
+  NetworkGraph,
+  Node,
+  NodeSpec,
+  Subgraph,
+} from '../models/types.js'
 import type { ResolvedNode, ResolvedPort, ResolvedSubgraph } from './resolved-types.js'
 
 // ============================================================================
@@ -66,11 +73,12 @@ const DEFAULTS: Required<NetworkLayoutOptions> = {
  * Used by both the layout engine and interactive addNewNode.
  */
 export function computeNodeSize(
-  node: { label?: string | string[]; device?: { type?: Parameters<typeof getDeviceIcon>[0] } },
+  node: { label?: string | string[]; spec?: NodeSpec },
   portCount = 0,
 ): { width: number; height: number } {
   const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
-  const hasIcon = !!(node.device?.type && getDeviceIcon(node.device.type))
+  const specType = node.spec?.kind !== 'service' ? node.spec?.type : undefined
+  const hasIcon = !!(specType && getDeviceIcon(specType))
   const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
   const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
   const contentH = iconH + gapH + lines * LABEL_LINE_HEIGHT
@@ -352,7 +360,8 @@ function measureNodeTree(
   const ports = pp.portsByNode.get(id) ?? []
 
   const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
-  const hasIcon = !!(node.device?.type && getDeviceIcon(node.device.type))
+  const specType = node.spec?.kind !== 'service' ? node.spec?.type : undefined
+  const hasIcon = !!(specType && getDeviceIcon(specType))
   const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
   const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
   const contentH = iconH + gapH + lines * LABEL_LINE_HEIGHT

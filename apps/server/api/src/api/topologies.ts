@@ -3,7 +3,12 @@
  * CRUD endpoints for topology management
  */
 
-import { buildHierarchicalSheets, mergeWithOverlays, type OverlayConfig } from '@shumoku/core'
+import {
+  buildHierarchicalSheets,
+  mergeWithOverlays,
+  type OverlayConfig,
+  specDeviceType,
+} from '@shumoku/core'
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
 import { getLayoutEngine } from '../layout.js'
@@ -219,7 +224,7 @@ export function createTopologiesApi(): Hono {
         nodes: parsed.graph.nodes.map((n) => ({
           id: n.id,
           label: n.label || n.id,
-          type: n.device?.type,
+          type: specDeviceType(n.spec),
         })),
         edges: parsed.graph.links.map((l, i) => ({
           id: l.id || `link-${i}`,

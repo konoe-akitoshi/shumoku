@@ -25,6 +25,7 @@ import {
   lightTheme,
   SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
+  specDeviceType,
 } from '@shumoku/core'
 import { type RenderColors, themeToColors } from './lib/render-colors'
 import { computePortLabelPosition, getVlanStroke, pointsToPathD } from './lib/svg-coords'
@@ -154,7 +155,7 @@ function renderNode(node: ResolvedNode, colors: RenderColors): string {
   )
 
   // Icon
-  const iconPath = getDeviceIcon(n.device?.type)
+  const iconPath = getDeviceIcon(specDeviceType(n.spec))
   const iconSize = DEFAULT_ICON_SIZE
   const iconHeight = iconPath ? iconSize : 0
   const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0

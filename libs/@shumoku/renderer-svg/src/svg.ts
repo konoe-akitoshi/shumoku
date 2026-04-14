@@ -32,6 +32,8 @@ import {
   lightTheme,
   SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
+  specDeviceType,
+  specIconKey,
   type Theme,
 } from '@shumoku/core'
 
@@ -515,7 +517,8 @@ export class SVGRenderer {
     // Collect used device types
     const usedDeviceTypes = new Set<string>()
     for (const node of graph.nodes) {
-      if (node.device?.type) usedDeviceTypes.add(node.device.type)
+      const dt = specDeviceType(node.spec)
+      if (dt) usedDeviceTypes.add(dt)
     }
 
     // Build legend items
@@ -660,11 +663,8 @@ export class SVGRenderer {
 
     // Check if subgraph has icon (user-specified or CDN-supported vendor)
     // AWS uses service/resource format (e.g., ec2/instance)
-    const sgDev = subgraph.device
-    const iconKey =
-      sgDev?.service && sgDev.resource
-        ? `${sgDev.service}/${sgDev.resource}`
-        : sgDev?.service || sgDev?.model
+    const sgSpec = subgraph.spec
+    const iconKey = specIconKey(sgSpec)
     let hasIcon = false
     const defaultIconSize = 24
     const iconPadding = 8
@@ -674,10 +674,10 @@ export class SVGRenderer {
     let iconWidth = defaultIconSize
     let iconHeight = defaultIconSize
 
-    if (sgDev?.icon) {
+    if (sgSpec?.icon) {
       hasIcon = true
-      iconUrl = sgDev.icon
-      const dims = this.options.iconDimensions.get(sgDev.icon)
+      iconUrl = sgSpec.icon
+      const dims = this.options.iconDimensions.get(sgSpec.icon)
       if (dims) {
         const aspectRatio = dims.width / dims.height
         if (aspectRatio >= 1) {
@@ -688,8 +688,8 @@ export class SVGRenderer {
           iconWidth = Math.round(defaultIconSize * aspectRatio)
         }
       }
-    } else if (sgDev?.vendor && iconKey && hasCDNIcons(sgDev.vendor)) {
-      const cdnUrl = getCDNIconUrl(sgDev.vendor, iconKey)
+    } else if (sgSpec?.vendor && iconKey && hasCDNIcons(sgSpec.vendor)) {
+      const cdnUrl = getCDNIconUrl(sgSpec.vendor, iconKey)
       const dims = this.options.iconDimensions.get(cdnUrl)
       if (dims) {
         hasIcon = true
@@ -882,12 +882,16 @@ ${fg}
 
     const attrs: string[] = []
 
-    const dev = node.device
-    if (dev?.type) attrs.push(`data-device-type="${this.escapeXml(dev.type)}"`)
-    if (dev?.vendor) attrs.push(`data-device-vendor="${this.escapeXml(dev.vendor)}"`)
-    if (dev?.model) attrs.push(`data-device-model="${this.escapeXml(dev.model)}"`)
-    if (dev?.service) attrs.push(`data-device-service="${this.escapeXml(dev.service)}"`)
-    if (dev?.resource) attrs.push(`data-device-resource="${this.escapeXml(dev.resource)}"`)
+    const spec = node.spec
+    const dt = specDeviceType(spec)
+    if (dt) attrs.push(`data-device-type="${this.escapeXml(dt)}"`)
+    if (spec?.vendor) attrs.push(`data-device-vendor="${this.escapeXml(spec.vendor)}"`)
+    if (spec?.kind === 'hardware' && spec.model)
+      attrs.push(`data-device-model="${this.escapeXml(spec.model)}"`)
+    if (spec?.kind === 'service') {
+      if (spec.service) attrs.push(`data-device-service="${this.escapeXml(spec.service)}"`)
+      if (spec.resource) attrs.push(`data-device-resource="${this.escapeXml(spec.resource)}"`)
+    }
 
     return attrs.length > 0 ? ` ${attrs.join(' ')}` : ''
   }
@@ -1073,26 +1077,25 @@ ${fg}
     // Use full node width as max; layout engine already calculated appropriate size
     const maxIconWidth = w
 
-    const dev = node.device
+    const spec = node.spec
 
     // User-specified icon URL takes highest priority
-    if (dev?.icon) {
-      const dims = this.options.iconDimensions.get(dev.icon)
+    if (spec?.icon) {
+      const dims = this.options.iconDimensions.get(spec.icon)
       const { width, height } = this.calculateIconSize(dims, maxIconWidth)
       return {
         width,
         height,
-        svg: `<image href="${dev.icon}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
+        svg: `<image href="${spec.icon}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
       }
     }
 
     // Try vendor-specific icon first (service for cloud, model for hardware)
     // AWS uses service/resource format (e.g., ec2/instance)
-    const iconKey =
-      dev?.service && dev.resource ? `${dev.service}/${dev.resource}` : dev?.service || dev?.model
+    const iconKey = specIconKey(spec)
     // Use CDN icons for supported vendors (only if dimensions were resolved, i.e. icon exists)
-    if (dev?.vendor && iconKey && hasCDNIcons(dev.vendor)) {
-      const cdnUrl = getCDNIconUrl(dev.vendor, iconKey)
+    if (spec?.vendor && iconKey && hasCDNIcons(spec.vendor)) {
+      const cdnUrl = getCDNIconUrl(spec.vendor, iconKey)
       const dims = this.options.iconDimensions.get(cdnUrl)
       if (dims) {
         const { width, height } = this.calculateIconSize(dims, maxIconWidth)
@@ -1106,7 +1109,7 @@ ${fg}
     }
 
     // Fall back to device type icon
-    const iconPath = getDeviceIcon(dev?.type)
+    const iconPath = getDeviceIcon(specDeviceType(spec))
     if (!iconPath) return null
 
     return {
@@ -1857,22 +1860,21 @@ export function collectIconUrls(graph: NetworkGraph): string[] {
   const urls = new Set<string>()
 
   for (const node of graph.nodes) {
-    const dev = node.device
-    if (dev?.icon) {
-      urls.add(dev.icon)
-    } else if (dev?.vendor && hasCDNIcons(dev.vendor)) {
-      const iconKey =
-        dev.service && dev.resource ? `${dev.service}/${dev.resource}` : dev.service || dev.model
+    const spec = node.spec
+    if (spec?.icon) {
+      urls.add(spec.icon)
+    } else if (spec?.vendor && hasCDNIcons(spec.vendor)) {
+      const iconKey = specIconKey(spec)
       if (iconKey) {
-        urls.add(getCDNIconUrl(dev.vendor, iconKey))
+        urls.add(getCDNIconUrl(spec.vendor, iconKey))
       }
     }
   }
 
   if (graph.subgraphs) {
     for (const sg of graph.subgraphs) {
-      if (sg.device?.icon) {
-        urls.add(sg.device.icon)
+      if (sg.spec?.icon) {
+        urls.add(sg.spec.icon)
       }
     }
   }

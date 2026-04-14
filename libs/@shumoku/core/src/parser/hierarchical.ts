@@ -426,7 +426,7 @@ export class HierarchicalParser {
       id: `${EXPORT_NODE_PREFIX}${exportId}`,
       label: exportPoint.destSubgraphLabel,
       shape: 'stadium',
-      device: { type: 'connector' as DeviceType },
+      spec: { kind: 'hardware' as const, type: 'connector' as DeviceType },
       metadata: {
         _isExport: true,
         _destSubgraph: exportPoint.destSubgraphLabel,

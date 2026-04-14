@@ -16,6 +16,7 @@ import type {
   NetworkGraph,
   Node,
   NodeShape,
+  NodeSpec,
   PaperOrientation,
   PaperSize,
   Pin,
@@ -286,14 +287,7 @@ export class YamlParser {
             }
           : undefined,
         metadata: n.metadata,
-        device: {
-          type: this.parseDeviceType(n.type),
-          vendor: n.vendor?.toLowerCase(),
-          service: n.service?.toLowerCase(),
-          model: n.model?.toLowerCase(),
-          resource: n.resource?.toLowerCase(),
-          icon: n.icon,
-        },
+        spec: this.buildNodeSpec(n),
       }
     })
   }
@@ -447,17 +441,66 @@ export class YamlParser {
               rankSpacing: s.style.rankSpacing,
             }
           : undefined,
-        device: {
-          vendor: s.vendor?.toLowerCase(),
-          service: s.service?.toLowerCase(),
-          model: s.model?.toLowerCase(),
-          resource: s.resource?.toLowerCase(),
-          icon: s.icon,
-        },
+        spec: this.buildSubgraphSpec(s),
         file: s.file,
         pins: s.pins ? this.parsePins(s.pins, warnings) : undefined,
       }
     })
+  }
+
+  // biome-ignore lint/suspicious/noExplicitAny: YAML input is untyped
+  private buildNodeSpec(n: any): NodeSpec | undefined {
+    const hasService = !!n.service
+    const hasType = !!n.type
+    const hasModel = !!n.model
+    const hasVendor = !!n.vendor
+    const hasIcon = !!n.icon
+
+    if (!hasService && !hasType && !hasModel && !hasVendor && !hasIcon) return undefined
+
+    if (hasService) {
+      return {
+        kind: 'service' as const,
+        vendor: n.vendor?.toLowerCase(),
+        service: n.service.toLowerCase(),
+        resource: n.resource?.toLowerCase(),
+        icon: n.icon,
+      }
+    }
+
+    return {
+      kind: 'hardware' as const,
+      type: this.parseDeviceType(n.type),
+      vendor: n.vendor?.toLowerCase(),
+      model: n.model?.toLowerCase(),
+      icon: n.icon,
+    }
+  }
+
+  // biome-ignore lint/suspicious/noExplicitAny: YAML input is untyped
+  private buildSubgraphSpec(s: any): NodeSpec | undefined {
+    const hasService = !!s.service
+    const hasVendor = !!s.vendor
+    const hasIcon = !!s.icon
+
+    if (!hasService && !hasVendor && !hasIcon) return undefined
+
+    if (hasService) {
+      return {
+        kind: 'service' as const,
+        vendor: s.vendor?.toLowerCase(),
+        service: s.service.toLowerCase(),
+        resource: s.resource?.toLowerCase(),
+        icon: s.icon,
+      }
+    }
+
+    return {
+      kind: 'hardware' as const,
+      vendor: s.vendor?.toLowerCase(),
+      model: s.model?.toLowerCase(),
+      icon: s.icon,
+    }
   }
 
   private parseSettings(settings?: YamlGraphSettings): GraphSettings | undefined {

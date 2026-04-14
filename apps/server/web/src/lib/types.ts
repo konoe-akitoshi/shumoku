@@ -404,7 +404,7 @@ export interface NetworkNode {
   label?: string | string[]
   parent?: string
   metadata?: Record<string, unknown>
-  device?: {
+  spec?: {
     type?: string
     vendor?: string
     model?: string
@@ -436,7 +436,7 @@ export interface NetworkSubgraph {
   label?: string
   parent?: string
   file?: string
-  device?: {
+  spec?: {
     vendor?: string
     service?: string
     resource?: string
