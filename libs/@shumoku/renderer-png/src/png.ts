@@ -9,6 +9,7 @@
 
 import { Resvg } from '@resvg/resvg-js'
 import type { LayoutResult, NetworkGraph } from '@shumoku/core'
+import { specIconKey } from '@shumoku/core'
 import {
   type CDNConfig,
   fetchCDNIcon,
@@ -72,16 +73,14 @@ function collectIconUrls(graph: NetworkGraph): string[] {
 
   // Collect from nodes
   for (const node of graph.nodes) {
-    if (node.icon) {
-      urls.add(node.icon)
-    } else if (node.vendor && hasCDNIcons(node.vendor)) {
+    const spec = node.spec
+    if (spec?.icon) {
+      urls.add(spec.icon)
+    } else if (spec?.vendor && hasCDNIcons(spec.vendor)) {
       // Match the same logic as calculateIconInfo in svg.ts
-      const iconKey =
-        node.service && node.resource
-          ? `${node.service}/${node.resource}`
-          : node.service || node.model
+      const iconKey = specIconKey(spec)
       if (iconKey) {
-        urls.add(getCDNIconUrl(node.vendor, iconKey))
+        urls.add(getCDNIconUrl(spec.vendor, iconKey))
       }
     }
   }
@@ -89,8 +88,8 @@ function collectIconUrls(graph: NetworkGraph): string[] {
   // Collect from subgraphs (flat structure)
   if (graph.subgraphs) {
     for (const sg of graph.subgraphs) {
-      if (sg.icon) {
-        urls.add(sg.icon)
+      if (sg.spec?.icon) {
+        urls.add(sg.spec.icon)
       }
     }
   }

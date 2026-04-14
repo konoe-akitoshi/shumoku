@@ -5,6 +5,7 @@
     getDeviceIcon,
     ICON_LABEL_GAP,
     LABEL_LINE_HEIGHT,
+    specDeviceType,
   } from '@shumoku/core'
   import type { RenderColors } from '../../lib/render-colors'
   import { elementDrag } from '../../lib/use-drag'
@@ -51,7 +52,7 @@
   const strokeDasharray = $derived(node.node.style?.strokeDasharray ?? '')
 
   // Icon
-  const iconPath = $derived(getDeviceIcon(node.node.type))
+  const iconPath = $derived(getDeviceIcon(specDeviceType(node.node.spec)))
   const iconSize = DEFAULT_ICON_SIZE
 
   // Labels
@@ -121,7 +122,7 @@
 <g
   class="node"
   data-id={node.id}
-  data-device-type={node.node.type ?? ''}
+  data-device-type={specDeviceType(node.node.spec) ?? ''}
   filter="url(#{shadowFilterId})"
   use:elementDrag={() => ({
     filter: (e) => {
@@ -269,7 +270,7 @@
           viewBox="0 0 24 24"
           fill="currentColor"
           role="img"
-          aria-label={node.node.type ?? 'icon'}
+          aria-label={specDeviceType(node.node.spec) ?? 'icon'}
         >
           {@html iconPath}
         </svg>

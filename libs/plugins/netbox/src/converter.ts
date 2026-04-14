@@ -15,6 +15,7 @@ import type {
   Node,
   Subgraph,
 } from '@shumoku/core/models'
+import { specDeviceType } from '@shumoku/core/models'
 
 import type {
   ConnectionData,
@@ -591,10 +592,13 @@ function buildNodes(
       id: device.name,
       label: labelLines,
       shape: 'rounded',
-      type: deviceType as DeviceType,
       rank: tagConfig?.level,
-      model: device.model?.toLowerCase(),
-      vendor: device.manufacturer?.toLowerCase(),
+      spec: {
+        kind: 'hardware' as const,
+        type: deviceType as DeviceType,
+        model: device.model?.toLowerCase(),
+        vendor: device.manufacturer?.toLowerCase(),
+      },
     }
 
     if (colorByStatus && device.status) {
@@ -777,7 +781,7 @@ function buildVMNodes(
       id: `vm-${vm.name}`,
       label: labelLines,
       shape: 'rounded',
-      type: 'server' as DeviceType,
+      spec: { kind: 'hardware' as const, type: 'server' as DeviceType },
       style: { ...VM_NODE_STYLE },
       metadata: {
         isVirtualMachine: true,
@@ -900,9 +904,10 @@ function serializeNode(lines: string[], node: Node): void {
     lines.push(`    label: "${node.label}"`)
   }
 
-  if (node.type) lines.push(`    type: ${node.type}`)
-  if (node.vendor) lines.push(`    vendor: ${node.vendor}`)
-  if (node.model) lines.push(`    model: ${node.model}`)
+  const dt = specDeviceType(node.spec)
+  if (dt) lines.push(`    type: ${dt}`)
+  if (node.spec?.vendor) lines.push(`    vendor: ${node.spec.vendor}`)
+  if (node.spec?.kind === 'hardware' && node.spec.model) lines.push(`    model: ${node.spec.model}`)
   if (node.parent) lines.push(`    parent: ${node.parent}`)
   if (node.rank !== undefined) lines.push(`    rank: ${node.rank}`)
 }
@@ -1133,10 +1138,13 @@ function buildLocationGraph(
       id: info.name,
       label: labelLines,
       shape: 'rounded',
-      type: deviceType as DeviceType,
       rank: tagConfig?.level,
-      model: info.model?.toLowerCase(),
-      vendor: info.manufacturer?.toLowerCase(),
+      spec: {
+        kind: 'hardware' as const,
+        type: deviceType as DeviceType,
+        model: info.model?.toLowerCase(),
+        vendor: info.manufacturer?.toLowerCase(),
+      },
     }
 
     if (colorByStatus && info.status) {

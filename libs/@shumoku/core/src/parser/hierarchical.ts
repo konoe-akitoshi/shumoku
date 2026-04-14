@@ -8,6 +8,7 @@
  */
 
 import type {
+  DeviceType,
   HierarchicalNetworkGraph,
   Link,
   NetworkGraph,
@@ -425,7 +426,7 @@ export class HierarchicalParser {
       id: `${EXPORT_NODE_PREFIX}${exportId}`,
       label: exportPoint.destSubgraphLabel,
       shape: 'stadium',
-      type: 'connector' as Node['type'],
+      spec: { kind: 'hardware' as const, type: 'connector' as DeviceType },
       metadata: {
         _isExport: true,
         _destSubgraph: exportPoint.destSubgraphLabel,

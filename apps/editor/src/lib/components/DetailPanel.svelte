@@ -33,77 +33,141 @@
     return s.replace(/<[^>]*>/g, '')
   }
 
-  const iconPath = $derived(data?.type ? getDeviceIcon(data.type) : undefined)
+  const iconPath = $derived(data?.spec?.type ? getDeviceIcon(data.spec.type) : undefined)
 
-  // Editable fields for each element kind
-  const editableFields = new Set(['label', 'type', 'vendor', 'model', 'shape'])
-
-  // biome-ignore lint/suspicious/noExplicitAny: mixed data
   function getDisplayFields(
+    // biome-ignore lint/suspicious/noExplicitAny: mixed element data
     d: Record<string, any>,
   ): { key: string; label: string; value: string; editable: boolean }[] {
-    // biome-ignore lint/suspicious/noExplicitAny: mixed data
     const fields: { key: string; label: string; value: string; editable: boolean }[] = []
+    const k = d.kind as string
+    const dev = d.spec ?? {}
 
-    if (d.label) {
-      const raw = Array.isArray(d.label)
-        ? d.label.map(stripHtml).join('\n')
-        : stripHtml(String(d.label))
+    if (k === 'node') {
+      // All Node fields
+      const raw = d.label
+        ? Array.isArray(d.label)
+          ? d.label.map(stripHtml).join('\n')
+          : stripHtml(String(d.label))
+        : ''
       fields.push({ key: 'label', label: 'Label', value: raw, editable: true })
+      fields.push({ key: 'shape', label: 'Shape', value: d.shape ?? '', editable: true })
+      fields.push({ key: 'spec.type', label: 'Type', value: dev.type ?? '', editable: true })
+      fields.push({
+        key: 'spec.vendor',
+        label: 'Vendor',
+        value: dev.vendor ?? '',
+        editable: true,
+      })
+      fields.push({ key: 'spec.model', label: 'Model', value: dev.model ?? '', editable: true })
+      fields.push({
+        key: 'spec.service',
+        label: 'Service',
+        value: dev.service ?? '',
+        editable: true,
+      })
+      fields.push({
+        key: 'spec.resource',
+        label: 'Resource',
+        value: dev.resource ?? '',
+        editable: true,
+      })
+      fields.push({ key: 'spec.icon', label: 'Icon URL', value: dev.icon ?? '', editable: true })
+      fields.push({ key: 'parent', label: 'Parent', value: d.parent ?? '', editable: false })
+      fields.push({
+        key: 'rank',
+        label: 'Rank',
+        value: d.rank != null ? String(d.rank) : '',
+        editable: true,
+      })
+      if (d.position)
+        fields.push({
+          key: 'position',
+          label: 'Position',
+          value: `${d.position.x.toFixed(1)}, ${d.position.y.toFixed(1)}`,
+          editable: false,
+        })
+      if (d.size)
+        fields.push({
+          key: 'size',
+          label: 'Size',
+          value: `${d.size.width} × ${d.size.height}`,
+          editable: false,
+        })
+    } else if (k === 'subgraph') {
+      // All Subgraph fields
+      fields.push({ key: 'label', label: 'Label', value: d.label ?? '', editable: true })
+      fields.push({
+        key: 'spec.vendor',
+        label: 'Vendor',
+        value: dev.vendor ?? '',
+        editable: true,
+      })
+      fields.push({
+        key: 'spec.service',
+        label: 'Service',
+        value: dev.service ?? '',
+        editable: true,
+      })
+      fields.push({
+        key: 'spec.resource',
+        label: 'Resource',
+        value: dev.resource ?? '',
+        editable: true,
+      })
+      fields.push({ key: 'spec.icon', label: 'Icon URL', value: dev.icon ?? '', editable: true })
+      fields.push({
+        key: 'direction',
+        label: 'Direction',
+        value: d.direction ?? '',
+        editable: true,
+      })
+      fields.push({ key: 'parent', label: 'Parent', value: d.parent ?? '', editable: false })
+      if (d.bounds)
+        fields.push({
+          key: 'bounds',
+          label: 'Bounds',
+          value: `${d.bounds.width.toFixed(0)} × ${d.bounds.height.toFixed(0)} at (${d.bounds.x.toFixed(0)}, ${d.bounds.y.toFixed(0)})`,
+          editable: false,
+        })
+      if (d.children)
+        fields.push({
+          key: 'children',
+          label: 'Children',
+          value: `${d.children.nodes} nodes, ${d.children.subgraphs} groups`,
+          editable: false,
+        })
+    } else if (k === 'edge') {
+      if (d.from)
+        fields.push({
+          key: 'from',
+          label: 'From',
+          value: `${d.from.node}:${d.from.port}`,
+          editable: false,
+        })
+      if (d.to)
+        fields.push({ key: 'to', label: 'To', value: `${d.to.node}:${d.to.port}`, editable: false })
+      if (d.width)
+        fields.push({ key: 'width', label: 'Width', value: String(d.width), editable: false })
+      if (d.points)
+        fields.push({
+          key: 'points',
+          label: 'Points',
+          value: `${d.points} waypoints`,
+          editable: false,
+        })
+    } else if (k === 'port') {
+      fields.push({ key: 'label', label: 'Label', value: d.label ?? '', editable: true })
+      if (d.nodeId) fields.push({ key: 'nodeId', label: 'Node', value: d.nodeId, editable: false })
+      if (d.side) fields.push({ key: 'side', label: 'Side', value: d.side, editable: false })
+      if (d.position)
+        fields.push({
+          key: 'position',
+          label: 'Position',
+          value: `${d.position.x.toFixed(1)}, ${d.position.y.toFixed(1)}`,
+          editable: false,
+        })
     }
-    if (d.type) fields.push({ key: 'type', label: 'Type', value: d.type, editable: true })
-    if (d.vendor) fields.push({ key: 'vendor', label: 'Vendor', value: d.vendor, editable: true })
-    if (d.model) fields.push({ key: 'model', label: 'Model', value: d.model, editable: true })
-    if (d.shape) fields.push({ key: 'shape', label: 'Shape', value: d.shape, editable: true })
-    if (d.parent) fields.push({ key: 'parent', label: 'Parent', value: d.parent, editable: false })
-    if (d.position)
-      fields.push({
-        key: 'position',
-        label: 'Position',
-        value: `${d.position.x.toFixed(1)}, ${d.position.y.toFixed(1)}`,
-        editable: false,
-      })
-    if (d.size)
-      fields.push({
-        key: 'size',
-        label: 'Size',
-        value: `${d.size.width} × ${d.size.height}`,
-        editable: false,
-      })
-    if (d.bounds)
-      fields.push({
-        key: 'bounds',
-        label: 'Bounds',
-        value: `${d.bounds.width.toFixed(0)} × ${d.bounds.height.toFixed(0)} at (${d.bounds.x.toFixed(0)}, ${d.bounds.y.toFixed(0)})`,
-        editable: false,
-      })
-    if (d.from)
-      fields.push({
-        key: 'from',
-        label: 'From',
-        value: `${d.from.node}:${d.from.port}`,
-        editable: false,
-      })
-    if (d.to)
-      fields.push({ key: 'to', label: 'To', value: `${d.to.node}:${d.to.port}`, editable: false })
-    if (d.width)
-      fields.push({ key: 'width', label: 'Width', value: String(d.width), editable: false })
-    if (d.points)
-      fields.push({
-        key: 'points',
-        label: 'Points',
-        value: `${d.points} waypoints`,
-        editable: false,
-      })
-    if (d.nodeId) fields.push({ key: 'nodeId', label: 'Node', value: d.nodeId, editable: false })
-    if (d.side) fields.push({ key: 'side', label: 'Side', value: d.side, editable: false })
-    if (d.children)
-      fields.push({
-        key: 'children',
-        label: 'Children',
-        value: `${d.children.nodes} nodes, ${d.children.subgraphs} groups`,
-        editable: false,
-      })
 
     return fields
   }
