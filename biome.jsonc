@@ -61,6 +61,7 @@
       "!**/.next",
       "!**/.turbo",
       "!**/.svelte-kit",
+      "!**/.vercel",
       "!**/*.webmanifest",
       "!**/public/renderer"
     ]

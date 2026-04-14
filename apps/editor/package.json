@@ -1,0 +1,35 @@
+{
+  "name": "@shumoku/editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
+    "bits-ui": "^2.15.4",
+    "phosphor-svelte": "^3.0.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.0",
+    "tailwind-variants": "^1.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^6.0.0",
+    "@sveltejs/kit": "^2.15.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.1.18",
+    "svelte": "^5.17.3",
+    "svelte-check": "^4.1.4",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.6.3",
+    "vite": "^6.4.1",
+    "vite-plugin-wasm": "^3.4.1"
+  }
+}
