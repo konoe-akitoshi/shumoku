@@ -10,6 +10,7 @@
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import AppTitle from '$lib/components/AppTitle.svelte'
+  import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
   import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
@@ -40,6 +41,8 @@
   let stats = $state({ nodes: 0, links: 0, subgraphs: 0 })
   let layout = $state<ResolvedLayout | undefined>(undefined)
   let graph = $state<{ links: Link[] } | undefined>(undefined)
+  // biome-ignore lint/suspicious/noExplicitAny: mixed element detail data
+  let detailData = $state<Record<string, any> | null>(null)
   let labelEdit = $state<{
     portId: string
     label: string
@@ -287,6 +290,9 @@
           stats = { ...stats, nodes: stats.nodes + 1 }
         }
       }}
+      ondetails={(id) => {
+        detailData = renderer?.getElementDetails(id) ?? null
+      }}
       ondelete={(id) => {
         renderer?.deleteById(id)
         stats = { ...stats, nodes: Math.max(0, stats.nodes - 1) }
@@ -296,4 +302,6 @@
       }}
     />
   {/if}
+
+  <DetailPanel open={detailData !== null} data={detailData} onclose={() => { detailData = null }} />
 </div>

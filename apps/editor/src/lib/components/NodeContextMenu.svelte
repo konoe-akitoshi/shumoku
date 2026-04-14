@@ -11,6 +11,7 @@
     oncopy,
     onpaste,
     ondelete,
+    ondetails,
     onclose,
   }: {
     id: string
@@ -22,6 +23,7 @@
     oncopy?: (id: string, type: string) => void
     onpaste?: (x: number, y: number) => void
     ondelete?: (id: string, type: string) => void
+    ondetails?: (id: string) => void
     onclose?: () => void
   } = $props()
 
@@ -57,6 +59,17 @@
       >{id}</span
     >
   </div>
+
+  <!-- Details (always available) -->
+  <button
+    type="button"
+    role="menuitem"
+    class="flex items-center gap-2 w-full px-3 py-1.5 text-left text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+    onclick={() => handleAction(() => ondetails?.(id))}
+  >
+    <Info class="w-4 h-4 text-neutral-400" />
+    Information
+  </button>
 
   <!-- Edit-mode actions -->
   {#if editing}
