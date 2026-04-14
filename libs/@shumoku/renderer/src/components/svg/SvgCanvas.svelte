@@ -171,6 +171,7 @@
         {colors}
         {theme}
         selected={selection.has(subgraph.id)}
+        {interactive}
         {ondragmove}
         {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'subgraph', e)}
