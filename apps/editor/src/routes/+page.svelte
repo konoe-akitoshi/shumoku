@@ -13,6 +13,7 @@
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
+  import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
   import Toolbar from '$lib/components/Toolbar.svelte'
 
   // --- State ---
@@ -21,6 +22,7 @@
   let status = $state('Loading...')
   let mode = $state<'edit' | 'view'>('view')
   let selected = $state<{ id: string; type: string } | null>(null)
+  let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
   let stats = $state({ nodes: 0, links: 0, subgraphs: 0 })
   let layout = $state<ResolvedLayout | undefined>(undefined)
   let graph = $state<{ links: Link[] } | undefined>(undefined)
@@ -175,6 +177,9 @@
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => {
           labelEdit = { portId, label, x: screenX, y: screenY }
         }}
+        oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => {
+          contextMenu = { id, type, x: screenX, y: screenY }
+        }}
       />
     {:else}
       <div class="flex items-center justify-center h-full text-slate-500 dark:text-neutral-400">
@@ -190,6 +195,24 @@
         y={labelEdit.y}
         oncommit={(portId, value) => renderer?.commitLabel(portId, value)}
         onclose={() => { labelEdit = null }}
+      />
+    {/if}
+
+    {#if contextMenu}
+      <NodeContextMenu
+        id={contextMenu.id}
+        type={contextMenu.type}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        ondelete={(id) => {
+          renderer?.deleteById(id)
+          stats = { ...stats, nodes: Math.max(0, stats.nodes - 1) }
+        }}
+        onduplicate={(_id, type) => {
+          if (type === 'node') renderer?.addNewNode()
+          else if (type === 'subgraph') renderer?.addNewSubgraph()
+        }}
+        onclose={() => { contextMenu = null }}
       />
     {/if}
   </div>

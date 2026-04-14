@@ -308,26 +308,50 @@
   }
 
   // --- Delete ---
+  export function deleteById(id: string) {
+    if (nodes.has(id)) {
+      const n = new Map(nodes)
+      n.delete(id)
+      nodes = n
+      // Remove ports belonging to this node
+      const p = new Map(ports)
+      for (const [portId, port] of ports) {
+        if (port.nodeId === id) p.delete(portId)
+      }
+      ports = p
+      // Remove links connected to this node
+      links = links.filter((l) => {
+        const from = typeof l.from === 'string' ? l.from : l.from.node
+        const to = typeof l.to === 'string' ? l.to : l.to.node
+        return from !== id && to !== id
+      })
+    } else if (edges.has(id)) {
+      const edge = edges.get(id)
+      if (edge?.link?.id) links = links.filter((l) => l.id !== edge.link?.id)
+    } else if (ports.has(id)) {
+      const result = removePort(id, nodes, ports, links)
+      if (result) {
+        nodes = result.nodes
+        ports = result.ports
+        links = result.links
+      }
+    } else if (subgraphs.has(id)) {
+      const sg = new Map(subgraphs)
+      sg.delete(id)
+      subgraphs = sg
+    }
+    selection = new Set()
+    routeEdges(nodes, ports, links).then((e) => {
+      edges = e
+    })
+    onchange?.(links)
+  }
+
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       for (const id of selection) {
-        if (edges.has(id)) {
-          const edge = edges.get(id)
-          if (edge?.link?.id) links = links.filter((l) => l.id !== edge.link?.id)
-        } else if (ports.has(id)) {
-          const result = removePort(id, nodes, ports, links)
-          if (result) {
-            nodes = result.nodes
-            ports = result.ports
-            links = result.links
-          }
-        }
+        deleteById(id)
       }
-      routeEdges(nodes, ports, links).then((e) => {
-        edges = e
-      })
-      selection = new Set()
-      onchange?.(links)
     }
     if (e.key === 'Escape') {
       selection = new Set()
