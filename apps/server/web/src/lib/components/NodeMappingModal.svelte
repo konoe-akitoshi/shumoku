@@ -302,16 +302,16 @@
 
             <!-- Device Info -->
             <div class="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {#if nodeData.node.type}
-                <span class="bg-background px-2 py-1 rounded">{nodeData.node.type}</span>
+              {#if nodeData.node.device?.type}
+                <span class="bg-background px-2 py-1 rounded">{nodeData.node.device.type}</span>
               {/if}
-              {#if nodeData.node.vendor}
-                <span class="bg-background px-2 py-1 rounded">{nodeData.node.vendor}</span>
+              {#if nodeData.node.device?.vendor}
+                <span class="bg-background px-2 py-1 rounded">{nodeData.node.device.vendor}</span>
               {/if}
-              {#if nodeData.node.model}
-                <span class="bg-background px-2 py-1 rounded">{nodeData.node.model}</span>
+              {#if nodeData.node.device?.model}
+                <span class="bg-background px-2 py-1 rounded">{nodeData.node.device.model}</span>
               {/if}
-              {#if !nodeData.node.type && !nodeData.node.vendor && !nodeData.node.model}
+              {#if !nodeData.node.device?.type && !nodeData.node.device?.vendor && !nodeData.node.device?.model}
                 <span class="text-muted-foreground italic">No device info</span>
               {/if}
             </div>

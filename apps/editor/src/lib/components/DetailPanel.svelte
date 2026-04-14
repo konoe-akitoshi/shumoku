@@ -33,7 +33,7 @@
     return s.replace(/<[^>]*>/g, '')
   }
 
-  const iconPath = $derived(data?.type ? getDeviceIcon(data.type) : undefined)
+  const iconPath = $derived(data?.device?.type ? getDeviceIcon(data.device.type) : undefined)
 
   function getDisplayFields(
     // biome-ignore lint/suspicious/noExplicitAny: mixed element data
@@ -41,6 +41,7 @@
   ): { key: string; label: string; value: string; editable: boolean }[] {
     const fields: { key: string; label: string; value: string; editable: boolean }[] = []
     const k = d.kind as string
+    const dev = d.device ?? {}
 
     if (k === 'node') {
       // All Node fields
@@ -50,13 +51,28 @@
           : stripHtml(String(d.label))
         : ''
       fields.push({ key: 'label', label: 'Label', value: raw, editable: true })
-      fields.push({ key: 'type', label: 'Type', value: d.type ?? '', editable: true })
       fields.push({ key: 'shape', label: 'Shape', value: d.shape ?? '', editable: true })
-      fields.push({ key: 'vendor', label: 'Vendor', value: d.vendor ?? '', editable: true })
-      fields.push({ key: 'model', label: 'Model', value: d.model ?? '', editable: true })
-      fields.push({ key: 'service', label: 'Service', value: d.service ?? '', editable: true })
-      fields.push({ key: 'resource', label: 'Resource', value: d.resource ?? '', editable: true })
-      fields.push({ key: 'icon', label: 'Icon URL', value: d.icon ?? '', editable: true })
+      fields.push({ key: 'device.type', label: 'Type', value: dev.type ?? '', editable: true })
+      fields.push({
+        key: 'device.vendor',
+        label: 'Vendor',
+        value: dev.vendor ?? '',
+        editable: true,
+      })
+      fields.push({ key: 'device.model', label: 'Model', value: dev.model ?? '', editable: true })
+      fields.push({
+        key: 'device.service',
+        label: 'Service',
+        value: dev.service ?? '',
+        editable: true,
+      })
+      fields.push({
+        key: 'device.resource',
+        label: 'Resource',
+        value: dev.resource ?? '',
+        editable: true,
+      })
+      fields.push({ key: 'device.icon', label: 'Icon URL', value: dev.icon ?? '', editable: true })
       fields.push({ key: 'parent', label: 'Parent', value: d.parent ?? '', editable: false })
       fields.push({
         key: 'rank',
@@ -81,10 +97,25 @@
     } else if (k === 'subgraph') {
       // All Subgraph fields
       fields.push({ key: 'label', label: 'Label', value: d.label ?? '', editable: true })
-      fields.push({ key: 'vendor', label: 'Vendor', value: d.vendor ?? '', editable: true })
-      fields.push({ key: 'service', label: 'Service', value: d.service ?? '', editable: true })
-      fields.push({ key: 'resource', label: 'Resource', value: d.resource ?? '', editable: true })
-      fields.push({ key: 'icon', label: 'Icon URL', value: d.icon ?? '', editable: true })
+      fields.push({
+        key: 'device.vendor',
+        label: 'Vendor',
+        value: dev.vendor ?? '',
+        editable: true,
+      })
+      fields.push({
+        key: 'device.service',
+        label: 'Service',
+        value: dev.service ?? '',
+        editable: true,
+      })
+      fields.push({
+        key: 'device.resource',
+        label: 'Resource',
+        value: dev.resource ?? '',
+        editable: true,
+      })
+      fields.push({ key: 'device.icon', label: 'Icon URL', value: dev.icon ?? '', editable: true })
       fields.push({
         key: 'direction',
         label: 'Direction',

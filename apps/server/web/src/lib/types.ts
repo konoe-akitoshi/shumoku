@@ -402,12 +402,14 @@ export interface TopologyContext {
 export interface NetworkNode {
   id: string
   label?: string | string[]
-  type?: string
-  vendor?: string
-  model?: string
-  icon?: string
   parent?: string
   metadata?: Record<string, unknown>
+  device?: {
+    type?: string
+    vendor?: string
+    model?: string
+    icon?: string
+  }
 }
 
 export interface NetworkLinkEndpoint {
@@ -434,9 +436,11 @@ export interface NetworkSubgraph {
   label?: string
   parent?: string
   file?: string
-  vendor?: string
-  service?: string
-  resource?: string
+  device?: {
+    vendor?: string
+    service?: string
+    resource?: string
+  }
   style?: {
     fill?: string
     stroke?: string

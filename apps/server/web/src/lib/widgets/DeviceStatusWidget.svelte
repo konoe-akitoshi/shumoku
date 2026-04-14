@@ -181,7 +181,7 @@
       { nodes: NetworkNode[]; up: number; down: number; unknown: number }
     >()
     for (const node of nodes) {
-      const type = node.type || 'unknown'
+      const type = node.device?.type || 'unknown'
       const g = groups.get(type) ?? { nodes: [], up: 0, down: 0, unknown: 0 }
       g.nodes.push(node)
       groups.set(type, g)
@@ -320,7 +320,7 @@
     const ids = nodes
       .filter(
         (n) =>
-          (n.type || 'unknown') === type && (nodeMetrics[n.id]?.status || 'unknown') === status,
+          (n.device?.type || 'unknown') === type && (nodeMetrics[n.id]?.status || 'unknown') === status,
       )
       .map((n) => n.id)
     if (ids.length > 0)

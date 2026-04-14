@@ -219,7 +219,7 @@ export function createTopologiesApi(): Hono {
         nodes: parsed.graph.nodes.map((n) => ({
           id: n.id,
           label: n.label || n.id,
-          type: n.type,
+          type: n.device?.type,
         })),
         edges: parsed.graph.links.map((l, i) => ({
           id: l.id || `link-${i}`,

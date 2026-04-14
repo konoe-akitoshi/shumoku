@@ -51,7 +51,7 @@
   const strokeDasharray = $derived(node.node.style?.strokeDasharray ?? '')
 
   // Icon
-  const iconPath = $derived(getDeviceIcon(node.node.type))
+  const iconPath = $derived(getDeviceIcon(node.node.device?.type))
   const iconSize = DEFAULT_ICON_SIZE
 
   // Labels
@@ -121,7 +121,7 @@
 <g
   class="node"
   data-id={node.id}
-  data-device-type={node.node.type ?? ''}
+  data-device-type={node.node.device?.type ?? ''}
   filter="url(#{shadowFilterId})"
   use:elementDrag={() => ({
     filter: (e) => {
@@ -269,7 +269,7 @@
           viewBox="0 0 24 24"
           fill="currentColor"
           role="img"
-          aria-label={node.node.type ?? 'icon'}
+          aria-label={node.node.device?.type ?? 'icon'}
         >
           {@html iconPath}
         </svg>

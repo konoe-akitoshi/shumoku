@@ -227,7 +227,8 @@
   }) {
     const id = `node-${Date.now()}`
     const label = opts?.label ?? 'New Node'
-    const { width: w, height: h } = computeNodeSize({ label, type: opts?.type })
+    const device = opts?.type ? { type: opts.type } : undefined
+    const { width: w, height: h } = computeNodeSize({ label, device })
     const { parent, initial } = resolveParentAndPosition(opts?.position, w)
     const obstacles = collectObstacles(id, parent, nodes, subgraphs)
     const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
@@ -237,7 +238,7 @@
       id,
       position: pos,
       size: { width: w, height: h },
-      node: { id, label, type: opts?.type, shape: opts?.shape ?? 'rounded', parent },
+      node: { id, label, device, shape: opts?.shape ?? 'rounded', parent },
     })
     nodes = n
     finalizeAdd(id, new Map(subgraphs))
@@ -345,7 +346,7 @@
         kind: 'node' as const,
         label: node.node.label ?? 'Node',
         shape: node.node.shape,
-        type: node.node.type,
+        type: node.node.device?.type,
       }
     }
     const sg = subgraphs.get(id)

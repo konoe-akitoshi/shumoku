@@ -4,9 +4,11 @@
   interface NodeEntry {
     id: string
     label: string
-    type?: string
-    vendor?: string
-    model?: string
+    device?: {
+      type?: string
+      vendor?: string
+      model?: string
+    }
   }
 
   interface Props {
@@ -31,7 +33,7 @@
       const type = el.getAttribute('data-device-type') || undefined
       const vendor = el.getAttribute('data-device-vendor') || undefined
       const model = el.getAttribute('data-device-model') || undefined
-      nodes.push({ id, label, type, vendor, model })
+      nodes.push({ id, label, device: { type, vendor, model } })
     })
     return nodes
   })
@@ -72,13 +74,13 @@
       {#each allNodes as node (node.id)}
         <Command.Item
           value={node.label}
-          keywords={[node.id, node.type ?? '', node.vendor ?? '', node.model ?? '']}
+          keywords={[node.id, node.device?.type ?? '', node.device?.vendor ?? '', node.device?.model ?? '']}
           onSelect={() => handleSelect(node.id)}
         >
           <span>{node.label}</span>
-          {#if node.vendor || node.model || node.type}
+          {#if node.device?.vendor || node.device?.model || node.device?.type}
             <Command.Shortcut>
-              {[node.vendor, node.model, node.type].filter(Boolean).join(' / ')}
+              {[node.device?.vendor, node.device?.model, node.device?.type].filter(Boolean).join(' / ')}
             </Command.Shortcut>
           {/if}
         </Command.Item>

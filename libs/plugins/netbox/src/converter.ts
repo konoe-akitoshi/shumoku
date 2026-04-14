@@ -591,10 +591,12 @@ function buildNodes(
       id: device.name,
       label: labelLines,
       shape: 'rounded',
-      type: deviceType as DeviceType,
       rank: tagConfig?.level,
-      model: device.model?.toLowerCase(),
-      vendor: device.manufacturer?.toLowerCase(),
+      device: {
+        type: deviceType as DeviceType,
+        model: device.model?.toLowerCase(),
+        vendor: device.manufacturer?.toLowerCase(),
+      },
     }
 
     if (colorByStatus && device.status) {
@@ -777,7 +779,7 @@ function buildVMNodes(
       id: `vm-${vm.name}`,
       label: labelLines,
       shape: 'rounded',
-      type: 'server' as DeviceType,
+      device: { type: 'server' as DeviceType },
       style: { ...VM_NODE_STYLE },
       metadata: {
         isVirtualMachine: true,
@@ -900,9 +902,9 @@ function serializeNode(lines: string[], node: Node): void {
     lines.push(`    label: "${node.label}"`)
   }
 
-  if (node.type) lines.push(`    type: ${node.type}`)
-  if (node.vendor) lines.push(`    vendor: ${node.vendor}`)
-  if (node.model) lines.push(`    model: ${node.model}`)
+  if (node.device?.type) lines.push(`    type: ${node.device.type}`)
+  if (node.device?.vendor) lines.push(`    vendor: ${node.device.vendor}`)
+  if (node.device?.model) lines.push(`    model: ${node.device.model}`)
   if (node.parent) lines.push(`    parent: ${node.parent}`)
   if (node.rank !== undefined) lines.push(`    rank: ${node.rank}`)
 }
@@ -1133,10 +1135,12 @@ function buildLocationGraph(
       id: info.name,
       label: labelLines,
       shape: 'rounded',
-      type: deviceType as DeviceType,
       rank: tagConfig?.level,
-      model: info.model?.toLowerCase(),
-      vendor: info.manufacturer?.toLowerCase(),
+      device: {
+        type: deviceType as DeviceType,
+        model: info.model?.toLowerCase(),
+        vendor: info.manufacturer?.toLowerCase(),
+      },
     }
 
     if (colorByStatus && info.status) {

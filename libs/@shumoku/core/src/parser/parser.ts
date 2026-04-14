@@ -271,7 +271,6 @@ export class YamlParser {
         id: n.id || `node-${index}`,
         label: n.label || n.id || `Node ${index}`,
         shape: this.parseNodeShape(n.shape),
-        type: this.parseDeviceType(n.type),
         parent: n.parent,
         rank: n.rank,
         style: n.style
@@ -287,11 +286,14 @@ export class YamlParser {
             }
           : undefined,
         metadata: n.metadata,
-        vendor: n.vendor?.toLowerCase(),
-        service: n.service?.toLowerCase(),
-        model: n.model?.toLowerCase(),
-        resource: n.resource?.toLowerCase(),
-        icon: n.icon,
+        device: {
+          type: this.parseDeviceType(n.type),
+          vendor: n.vendor?.toLowerCase(),
+          service: n.service?.toLowerCase(),
+          model: n.model?.toLowerCase(),
+          resource: n.resource?.toLowerCase(),
+          icon: n.icon,
+        },
       }
     })
   }
@@ -445,11 +447,13 @@ export class YamlParser {
               rankSpacing: s.style.rankSpacing,
             }
           : undefined,
-        vendor: s.vendor?.toLowerCase(),
-        service: s.service?.toLowerCase(),
-        model: s.model?.toLowerCase(),
-        resource: s.resource?.toLowerCase(),
-        icon: s.icon,
+        device: {
+          vendor: s.vendor?.toLowerCase(),
+          service: s.service?.toLowerCase(),
+          model: s.model?.toLowerCase(),
+          resource: s.resource?.toLowerCase(),
+          icon: s.icon,
+        },
         file: s.file,
         pins: s.pins ? this.parsePins(s.pins, warnings) : undefined,
       }

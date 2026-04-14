@@ -3,9 +3,11 @@
   export interface NodeInfo {
     id: string
     label: string
-    type?: string
-    vendor?: string
-    model?: string
+    device?: {
+      type?: string
+      vendor?: string
+      model?: string
+    }
   }
 
   export interface NodeSelectEvent {
@@ -559,9 +561,11 @@
         const nodeInfo: NodeInfo = {
           id: nodeId,
           label,
-          type: nodeEl.getAttribute('data-device-type') || undefined,
-          vendor: nodeEl.getAttribute('data-device-vendor') || undefined,
-          model: nodeEl.getAttribute('data-device-model') || undefined,
+          device: {
+            type: nodeEl.getAttribute('data-device-type') || undefined,
+            vendor: nodeEl.getAttribute('data-device-vendor') || undefined,
+            model: nodeEl.getAttribute('data-device-model') || undefined,
+          },
         }
 
         // Find connected links

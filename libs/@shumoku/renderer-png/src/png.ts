@@ -72,16 +72,15 @@ function collectIconUrls(graph: NetworkGraph): string[] {
 
   // Collect from nodes
   for (const node of graph.nodes) {
-    if (node.icon) {
-      urls.add(node.icon)
-    } else if (node.vendor && hasCDNIcons(node.vendor)) {
+    const dev = node.device
+    if (dev?.icon) {
+      urls.add(dev.icon)
+    } else if (dev?.vendor && hasCDNIcons(dev.vendor)) {
       // Match the same logic as calculateIconInfo in svg.ts
       const iconKey =
-        node.service && node.resource
-          ? `${node.service}/${node.resource}`
-          : node.service || node.model
+        dev.service && dev.resource ? `${dev.service}/${dev.resource}` : dev.service || dev.model
       if (iconKey) {
-        urls.add(getCDNIconUrl(node.vendor, iconKey))
+        urls.add(getCDNIconUrl(dev.vendor, iconKey))
       }
     }
   }
@@ -89,8 +88,8 @@ function collectIconUrls(graph: NetworkGraph): string[] {
   // Collect from subgraphs (flat structure)
   if (graph.subgraphs) {
     for (const sg of graph.subgraphs) {
-      if (sg.icon) {
-        urls.add(sg.icon)
+      if (sg.device?.icon) {
+        urls.add(sg.device.icon)
       }
     }
   }

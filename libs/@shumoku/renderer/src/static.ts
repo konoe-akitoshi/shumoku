@@ -154,7 +154,7 @@ function renderNode(node: ResolvedNode, colors: RenderColors): string {
   )
 
   // Icon
-  const iconPath = getDeviceIcon(n.type)
+  const iconPath = getDeviceIcon(n.device?.type)
   const iconSize = DEFAULT_ICON_SIZE
   const iconHeight = iconPath ? iconSize : 0
   const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0

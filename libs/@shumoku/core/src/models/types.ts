@@ -42,45 +42,17 @@ export interface NodeStyle {
   opacity?: number
 }
 
-export interface Node {
-  id: string
-
-  /**
-   * Display label - can be single line or multiple lines
-   * Supports basic HTML: <b>, <i>, <br/>
-   */
-  label: string | string[]
-
-  /**
-   * Node shape
-   */
-  shape: NodeShape
-
+/**
+ * Device/resource identification — shared by Node and Subgraph.
+ * Groups vendor, model, service, resource, and icon fields
+ * that describe *what* the element represents (as opposed to
+ * graph-structural fields like id, label, parent, rank).
+ */
+export interface DeviceInfo {
   /**
    * Device type (for default styling/icons)
    */
   type?: DeviceType
-
-  /**
-   * Parent subgraph ID
-   */
-  parent?: string
-
-  /**
-   * Rank/layer for horizontal alignment
-   * Nodes with the same rank value will be placed on the same horizontal level
-   */
-  rank?: number | string
-
-  /**
-   * Custom style
-   */
-  style?: NodeStyle
-
-  /**
-   * Additional metadata
-   */
-  metadata?: Record<string, unknown>
 
   /**
    * Vendor name for vendor-specific icons (e.g., 'aws', 'azure', 'gcp', 'yamaha')
@@ -109,6 +81,47 @@ export interface Node {
    * Supports any image URL (PNG, SVG, etc.)
    */
   icon?: string
+}
+
+export interface Node {
+  id: string
+
+  /**
+   * Display label - can be single line or multiple lines
+   * Supports basic HTML: <b>, <i>, <br/>
+   */
+  label: string | string[]
+
+  /**
+   * Node shape
+   */
+  shape: NodeShape
+
+  /**
+   * Parent subgraph ID
+   */
+  parent?: string
+
+  /**
+   * Rank/layer for horizontal alignment
+   * Nodes with the same rank value will be placed on the same horizontal level
+   */
+  rank?: number | string
+
+  /**
+   * Custom style
+   */
+  style?: NodeStyle
+
+  /**
+   * Additional metadata
+   */
+  metadata?: Record<string, unknown>
+
+  /**
+   * Device/resource identification
+   */
+  device?: DeviceInfo
 }
 
 // ============================================
@@ -339,32 +352,9 @@ export interface Subgraph {
   style?: SubgraphStyle
 
   /**
-   * Vendor name for vendor-specific icons (e.g., 'aws', 'azure', 'gcp', 'yamaha')
+   * Device/resource identification
    */
-  vendor?: string
-
-  /**
-   * Service name within the vendor (e.g., 'ec2', 'vpc', 'lambda')
-   * Used for cloud providers like AWS
-   */
-  service?: string
-
-  /**
-   * Model name for hardware vendors (e.g., 'rtx3510', 'ex4400')
-   * Alternative to service for equipment vendors
-   */
-  model?: string
-
-  /**
-   * Resource type within the service (e.g., 'instance', 'nat-gateway')
-   */
-  resource?: string
-
-  /**
-   * Custom icon URL (overrides vendor/type icons)
-   * Supports any image URL (PNG, SVG, etc.)
-   */
-  icon?: string
+  device?: DeviceInfo
 
   /**
    * File reference for external sheet definition (KiCad-style hierarchy)

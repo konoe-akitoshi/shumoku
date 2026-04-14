@@ -66,11 +66,11 @@ const DEFAULTS: Required<NetworkLayoutOptions> = {
  * Used by both the layout engine and interactive addNewNode.
  */
 export function computeNodeSize(
-  node: { label?: string | string[]; type?: Parameters<typeof getDeviceIcon>[0] },
+  node: { label?: string | string[]; device?: { type?: Parameters<typeof getDeviceIcon>[0] } },
   portCount = 0,
 ): { width: number; height: number } {
   const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
-  const hasIcon = !!(node.type && getDeviceIcon(node.type))
+  const hasIcon = !!(node.device?.type && getDeviceIcon(node.device.type))
   const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
   const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
   const contentH = iconH + gapH + lines * LABEL_LINE_HEIGHT
@@ -352,7 +352,7 @@ function measureNodeTree(
   const ports = pp.portsByNode.get(id) ?? []
 
   const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
-  const hasIcon = !!(node.type && getDeviceIcon(node.type))
+  const hasIcon = !!(node.device?.type && getDeviceIcon(node.device.type))
   const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
   const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
   const contentH = iconH + gapH + lines * LABEL_LINE_HEIGHT
