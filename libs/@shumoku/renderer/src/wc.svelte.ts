@@ -42,7 +42,7 @@ export class ShumokuRendererElement extends HTMLElement {
     this._props.layout = value
     if (!this._mounted) this._mount()
   }
-  get layout() {
+  get layout(): ResolvedLayout | undefined {
     return this._props.layout
   }
 
@@ -146,7 +146,7 @@ export class ShumokuRendererElement extends HTMLElement {
         ;(this as any)[prop] = value
       }
     }
-    if (this._props.layout.nodes.size > 0 && !this._mounted) this._mount()
+    if (this._props.layout?.nodes?.size && !this._mounted) this._mount()
   }
 
   disconnectedCallback() {
