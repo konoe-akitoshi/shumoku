@@ -13,6 +13,7 @@
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
+  import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
   import Toolbar from '$lib/components/Toolbar.svelte'
 
   // --- State ---
@@ -21,6 +22,13 @@
   let status = $state('Loading...')
   let mode = $state<'edit' | 'view'>('view')
   let selected = $state<{ id: string; type: string } | null>(null)
+  let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
+  let clipboard = $state<{
+    label: string
+    shape?: string
+    type?: string
+    elementKind: 'node' | 'subgraph'
+  } | null>(null)
   let stats = $state({ nodes: 0, links: 0, subgraphs: 0 })
   let layout = $state<ResolvedLayout | undefined>(undefined)
   let graph = $state<{ links: Link[] } | undefined>(undefined)
@@ -175,6 +183,9 @@
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => {
           labelEdit = { portId, label, x: screenX, y: screenY }
         }}
+        oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => {
+          contextMenu = { id, type, x: screenX, y: screenY }
+        }}
       />
     {:else}
       <div class="flex items-center justify-center h-full text-slate-500 dark:text-neutral-400">
@@ -190,6 +201,36 @@
         y={labelEdit.y}
         oncommit={(portId, value) => renderer?.commitLabel(portId, value)}
         onclose={() => { labelEdit = null }}
+      />
+    {/if}
+
+    {#if contextMenu}
+      <NodeContextMenu
+        id={contextMenu.id}
+        type={contextMenu.type}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        hasClipboard={clipboard !== null}
+        oncopy={(id) => {
+          const info = renderer?.getElementInfo(id)
+          clipboard = info ? { label: info.label, shape: info.kind === 'node' ? info.shape : undefined, type: info.kind === 'node' ? info.type : undefined, elementKind: info.kind } : null
+        }}
+        onpaste={() => {
+          if (!clipboard || !contextMenu) return
+          const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
+          if (clipboard.elementKind === 'subgraph') {
+            renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
+            stats = { ...stats, subgraphs: stats.subgraphs + 1 }
+          } else {
+            renderer?.addNewNode({ label: clipboard.label, type: clipboard.type, shape: clipboard.shape, position: svgPos })
+            stats = { ...stats, nodes: stats.nodes + 1 }
+          }
+        }}
+        ondelete={(id) => {
+          renderer?.deleteById(id)
+          stats = { ...stats, nodes: Math.max(0, stats.nodes - 1) }
+        }}
+        onclose={() => { contextMenu = null }}
       />
     {/if}
   </div>

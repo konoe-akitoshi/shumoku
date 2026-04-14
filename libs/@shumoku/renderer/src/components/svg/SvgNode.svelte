@@ -7,7 +7,7 @@
     LABEL_LINE_HEIGHT,
   } from '@shumoku/core'
   import type { RenderColors } from '../../lib/render-colors'
-  import { nodeDrag } from '../../lib/use-drag'
+  import { elementDrag } from '../../lib/use-drag'
 
   let {
     node,
@@ -17,6 +17,7 @@
     interactive = false,
     ondragmove,
     onaddport,
+    onselect,
     oncontextmenu: onctx,
   }: {
     node: ResolvedNode
@@ -26,6 +27,7 @@
     interactive?: boolean
     ondragmove?: (id: string, x: number, y: number) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
+    onselect?: (id: string) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
   } = $props()
 
@@ -122,13 +124,14 @@
   data-id={node.id}
   data-device-type={node.node.type ?? ''}
   filter="url(#{shadowFilterId})"
-  use:nodeDrag={() => ({
+  use:elementDrag={() => ({
     filter: (e) => {
       const t = e.target as Element
       return !t.closest('.port') && !t.closest('.edge-zone') && e.button === 0 && interactive
     },
     onDrag: (dx, dy) => ondragmove?.(node.id, node.position.x + dx, node.position.y + dy),
   })}
+  onclick={(e) => { e.stopPropagation(); onselect?.(node.id) }}
   onpointerenter={() => { if (interactive) hovered = true }}
   onpointerleave={() => { hovered = false }}
   oncontextmenu={handleContextMenu}

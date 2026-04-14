@@ -61,6 +61,32 @@ const DEFAULTS: Required<NetworkLayoutOptions> = {
   portLabelPadding: 8,
 }
 
+/**
+ * Compute the appropriate size for a node based on its content.
+ * Used by both the layout engine and interactive addNewNode.
+ */
+export function computeNodeSize(
+  node: { label?: string | string[]; type?: Parameters<typeof getDeviceIcon>[0] },
+  portCount = 0,
+): { width: number; height: number } {
+  const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
+  const hasIcon = !!(node.type && getDeviceIcon(node.type))
+  const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
+  const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
+  const contentH = iconH + gapH + lines * LABEL_LINE_HEIGHT
+  const labelLines = Array.isArray(node.label) ? node.label : node.label ? [node.label] : []
+  const contentW = Math.max(0, ...labelLines.map((l) => l.length)) * ESTIMATED_CHAR_WIDTH
+
+  const w = Math.max(
+    DEFAULTS.nodeWidth,
+    contentW + NODE_HORIZONTAL_PADDING * 2,
+    portCount * DEFAULTS.minPortSpacing,
+  )
+  const h = Math.max(60, contentH + NODE_VERTICAL_PADDING, portCount * DEFAULTS.minPortSpacing)
+
+  return { width: w, height: h }
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================

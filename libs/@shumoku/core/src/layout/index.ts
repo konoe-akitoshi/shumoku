@@ -10,6 +10,7 @@
 export {
   addLink,
   addPort,
+  collectObstacles,
   detectClickSide,
   generatePortName,
   linkExists,
@@ -27,7 +28,7 @@ export { ensureLibavoidLoaded, routeEdges } from './libavoid-router.js'
 export { getLinkWidth } from './link-utils.js'
 export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
 // Custom network layout + libavoid routing
-export { layoutNetwork } from './network-layout.js'
+export { computeNodeSize, layoutNetwork } from './network-layout.js'
 export { placePorts } from './port-placement.js'
 // Remote client (browser → server API, avoids WASM in browser)
 export {

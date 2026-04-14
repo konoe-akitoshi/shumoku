@@ -69,7 +69,7 @@ export function resolveCollision(
  * Collect all obstacles as center-based rects, excluding entities related to `excludeId`.
  * Unified: both nodes and subgraphs are treated as rectangles.
  */
-function collectObstacles(
+export function collectObstacles(
   excludeId: string,
   excludeParent: string | undefined,
   nodes: Map<string, ResolvedNode>,
