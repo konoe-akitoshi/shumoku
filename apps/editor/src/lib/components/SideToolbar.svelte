@@ -1,17 +1,21 @@
 <script lang="ts">
   import { Tooltip } from 'bits-ui'
-  import { Cube, Eye, Pencil, Plus, SquaresFour } from 'phosphor-svelte'
+  import { Cube, Eye, Moon, Pencil, Plus, SquaresFour, Sun } from 'phosphor-svelte'
 
   let {
     mode = 'view',
+    isDark = false,
     onmodechange,
     onaddnode,
     onaddsubgraph,
+    onthemetoggle,
   }: {
     mode: 'edit' | 'view'
+    isDark?: boolean
     onmodechange?: (mode: 'edit' | 'view') => void
     onaddnode?: () => void
     onaddsubgraph?: () => void
+    onthemetoggle?: () => void
   } = $props()
 
   const editing = $derived(mode === 'edit')
@@ -87,6 +91,29 @@
       class="bg-neutral-800 text-white text-xs px-2 py-1 rounded shadow-lg"
     >
       {editing ? 'Switch to View mode' : 'Switch to Edit mode'}
+    </Tooltip.Content>
+  </Tooltip.Root>
+
+  <!-- Theme toggle -->
+  <Tooltip.Root>
+    <Tooltip.Trigger>
+      <button
+        type="button"
+        class="flex items-center justify-center w-9 h-9 rounded-lg text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+        onclick={() => onthemetoggle?.()}
+      >
+        {#if isDark}
+          <Sun class="w-4.5 h-4.5" />
+        {:else}
+          <Moon class="w-4.5 h-4.5" />
+        {/if}
+      </button>
+    </Tooltip.Trigger>
+    <Tooltip.Content
+      side="left"
+      class="bg-neutral-800 text-white text-xs px-2 py-1 rounded shadow-lg"
+    >
+      {isDark ? 'Light mode' : 'Dark mode'}
     </Tooltip.Content>
   </Tooltip.Root>
 </div>

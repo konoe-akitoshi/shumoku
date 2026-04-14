@@ -132,19 +132,24 @@
     .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
     .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: ${colors.textSecondary}; }
 
-    /* Default: all interactive elements disabled */
-    .subgraph-bg, .port-hit, .link-hit, .edge-zone { pointer-events: none; }
+    /* All elements: clickable for selection in any mode */
+    .node[data-id] { cursor: pointer; }
+    .subgraph-bg { pointer-events: fill; cursor: pointer; }
+    .port-hit { pointer-events: fill; cursor: pointer; }
+    .link-hit { pointer-events: stroke; cursor: pointer; }
 
-    /* Edit mode: enable all interaction */
+    /* Edit-only: override cursors for editing interactions */
     svg.interactive .node[data-id] { cursor: grab; }
     svg.interactive .node[data-id]:active { cursor: grabbing; }
-    svg.interactive .subgraph-bg { pointer-events: fill; cursor: grab; }
+    svg.interactive .subgraph-bg { cursor: grab; }
     svg.interactive .subgraph-bg:active { cursor: grabbing; }
-    svg.interactive .port-hit { pointer-events: fill; cursor: crosshair; }
+    svg.interactive .port-hit { cursor: crosshair; }
     svg.interactive .port-hit.linked { cursor: pointer; }
-    svg.interactive .link-hit { pointer-events: stroke; cursor: pointer; }
     svg.interactive .edge-zone { pointer-events: fill; cursor: pointer; }
     svg.interactive .port-label-text { pointer-events: fill; cursor: text; }
+
+    /* Edit-only UI (hidden in view mode) */
+    .edge-zone { pointer-events: none; }
   </style>`}
 
   <!-- Viewport group: d3-zoom applies transform here -->
@@ -157,7 +162,7 @@
       width="199998"
       height="199998"
       fill="url(#grid)"
-      pointer-events={interactive ? 'fill' : 'none'}
+      pointer-events="fill"
       onclick={() => onbackgroundclick?.()}
     />
     {#each subgraphs.values() as subgraph (subgraph.id)}
@@ -177,7 +182,6 @@
         {edge}
         {colors}
         selected={selection.has(edge.id)}
-        {interactive}
         {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'edge', e)}
       />

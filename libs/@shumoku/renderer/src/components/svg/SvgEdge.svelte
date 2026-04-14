@@ -7,14 +7,12 @@
     edge,
     colors,
     selected = false,
-    interactive = false,
     onselect,
     oncontextmenu: onctx,
   }: {
     edge: ResolvedEdge
     colors: RenderColors
     selected?: boolean
-    interactive?: boolean
     onselect?: (edgeId: string) => void
     oncontextmenu?: (edgeId: string, e: MouseEvent) => void
   } = $props()
@@ -56,13 +54,11 @@
   })
 
   function onclick(e: MouseEvent) {
-    if (!interactive) return
     e.stopPropagation()
     onselect?.(edge.id)
   }
 
   function handleContextMenu(e: MouseEvent) {
-    if (!interactive) return
     e.preventDefault()
     e.stopPropagation()
     onselect?.(edge.id)
