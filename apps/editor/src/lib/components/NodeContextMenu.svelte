@@ -46,7 +46,7 @@
     {type}
   </div>
 
-  {#if type === 'node'}
+  {#if type === 'node' || type === 'subgraph'}
     <button
       type="button"
       role="menuitem"

@@ -7,7 +7,7 @@
     LABEL_LINE_HEIGHT,
   } from '@shumoku/core'
   import type { RenderColors } from '../../lib/render-colors'
-  import { nodeDrag } from '../../lib/use-drag'
+  import { elementDrag } from '../../lib/use-drag'
 
   let {
     node,
@@ -124,7 +124,7 @@
   data-id={node.id}
   data-device-type={node.node.type ?? ''}
   filter="url(#{shadowFilterId})"
-  use:nodeDrag={() => ({
+  use:elementDrag={() => ({
     filter: (e) => {
       const t = e.target as Element
       return !t.closest('.port') && !t.closest('.edge-zone') && e.button === 0 && interactive

@@ -23,7 +23,12 @@
   let mode = $state<'edit' | 'view'>('view')
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
-  let clipboard = $state<{ label: string; shape?: string; type?: string } | null>(null)
+  let clipboard = $state<{
+    label: string
+    shape?: string
+    type?: string
+    elementKind: 'node' | 'subgraph'
+  } | null>(null)
   let stats = $state({ nodes: 0, links: 0, subgraphs: 0 })
   let layout = $state<ResolvedLayout | undefined>(undefined)
   let graph = $state<{ links: Link[] } | undefined>(undefined)
@@ -207,13 +212,19 @@
         y={contextMenu.y}
         hasClipboard={clipboard !== null}
         oncopy={(id) => {
-          clipboard = renderer?.getNodeInfo(id) ?? null
+          const info = renderer?.getElementInfo(id)
+          clipboard = info ? { label: info.label, shape: info.kind === 'node' ? info.shape : undefined, type: info.kind === 'node' ? info.type : undefined, elementKind: info.kind } : null
         }}
         onpaste={() => {
           if (!clipboard || !contextMenu) return
           const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
-          renderer?.addNewNode({ ...clipboard, position: svgPos })
-          stats = { ...stats, nodes: stats.nodes + 1 }
+          if (clipboard.elementKind === 'subgraph') {
+            renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
+            stats = { ...stats, subgraphs: stats.subgraphs + 1 }
+          } else {
+            renderer?.addNewNode({ label: clipboard.label, type: clipboard.type, shape: clipboard.shape, position: svgPos })
+            stats = { ...stats, nodes: stats.nodes + 1 }
+          }
         }}
         ondelete={(id) => {
           renderer?.deleteById(id)

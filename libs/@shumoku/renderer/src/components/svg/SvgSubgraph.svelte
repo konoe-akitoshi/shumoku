@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ResolvedSubgraph, SurfaceToken, Theme } from '@shumoku/core'
   import type { RenderColors } from '../../lib/render-colors'
-  import { subgraphDrag } from '../../lib/use-drag'
+  import { elementDrag } from '../../lib/use-drag'
 
   let {
     subgraph,
@@ -67,16 +67,7 @@
     stroke-dasharray={selected ? undefined : (strokeDasharray || undefined)}
     onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id) }}
     oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); onselect?.(subgraph.id); onctx?.(subgraph.id, e) }}
-  />
-  <!-- Label area: d3-drag via use: directive -->
-  <rect
-    data-sg-drag={subgraph.id}
-    x={subgraph.bounds.x}
-    y={subgraph.bounds.y}
-    width={subgraph.bounds.width}
-    height={28}
-    fill="transparent"
-    use:subgraphDrag={() => ({
+    use:elementDrag={() => ({
       onDrag: (dx, dy) => ondragmove?.(subgraph.id, subgraph.bounds.x + dx, subgraph.bounds.y + dy),
     })}
   />

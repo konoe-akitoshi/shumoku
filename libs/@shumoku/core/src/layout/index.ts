@@ -10,6 +10,7 @@
 export {
   addLink,
   addPort,
+  collectObstacles,
   detectClickSide,
   generatePortName,
   linkExists,

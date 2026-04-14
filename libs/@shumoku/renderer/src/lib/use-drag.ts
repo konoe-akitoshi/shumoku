@@ -6,19 +6,20 @@
 import { drag } from 'd3-drag'
 import { select } from 'd3-selection'
 
-interface NodeDragOptions {
+interface DragOptions {
   // biome-ignore lint/suspicious/noExplicitAny: d3-drag filter signature uses any for event
   filter?: (e: any) => boolean
   onDrag: (dx: number, dy: number) => void
 }
 
-export function nodeDrag(element: SVGGElement, opts: () => NodeDragOptions) {
+/** Generic drag action for any SVG element (nodes, subgraphs, etc.) */
+export function elementDrag(element: SVGElement, opts: () => DragOptions) {
   function apply() {
     const { filter, onDrag } = opts()
-    const behavior = drag<SVGGElement, unknown>()
+    const behavior = drag<SVGElement, unknown>()
     if (filter) behavior.filter(filter)
     behavior.on('drag', (e) => onDrag(e.dx, e.dy))
-    select<SVGGElement, unknown>(element).call(behavior)
+    select<SVGElement, unknown>(element).call(behavior)
   }
 
   apply()
@@ -33,24 +34,7 @@ export function nodeDrag(element: SVGGElement, opts: () => NodeDragOptions) {
   }
 }
 
-export function subgraphDrag(
-  element: SVGRectElement,
-  opts: () => { onDrag: (dx: number, dy: number) => void },
-) {
-  function apply() {
-    const { onDrag } = opts()
-    const behavior = drag<SVGRectElement, unknown>().on('drag', (e) => onDrag(e.dx, e.dy))
-    select<SVGRectElement, unknown>(element).call(behavior)
-  }
-
-  apply()
-
-  return {
-    update() {
-      apply()
-    },
-    destroy() {
-      select(element).on('.drag', null)
-    },
-  }
-}
+/** @deprecated Use elementDrag */
+export const nodeDrag = elementDrag
+/** @deprecated Use elementDrag */
+export const subgraphDrag = elementDrag

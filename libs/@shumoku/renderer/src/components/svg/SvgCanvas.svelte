@@ -28,17 +28,13 @@
     linkedPorts = new Set<string>(),
     linkPreview = null,
     svgEl = $bindable<SVGSVGElement | null>(null),
-    // Callbacks
-    onnodedragmove,
-    onnodeselect,
+    // Callbacks (unified: ondragmove/onselect work for all element types)
+    ondragmove,
+    onselect,
     onaddport,
     onlinkstart,
     onlinkend,
-    onedgeselect,
-    onportselect,
     onlabeledit,
-    onsubgraphselect,
-    onsubgraphmove,
     oncontextmenu: onctx,
     onbackgroundclick,
   }: {
@@ -54,16 +50,12 @@
     linkedPorts?: Set<string>
     linkPreview?: { fromX: number; fromY: number; toX: number; toY: number } | null
     svgEl?: SVGSVGElement | null
-    onnodedragmove?: (id: string, x: number, y: number) => void
-    onnodeselect?: (id: string) => void
+    ondragmove?: (id: string, x: number, y: number) => void
+    onselect?: (id: string) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onlinkstart?: (portId: string, x: number, y: number) => void
     onlinkend?: (portId: string) => void
-    onedgeselect?: (edgeId: string) => void
-    onportselect?: (portId: string) => void
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
-    onsubgraphselect?: (sgId: string) => void
-    onsubgraphmove?: (sgId: string, x: number, y: number) => void
     oncontextmenu?: (id: string, type: string, e: MouseEvent) => void
     onbackgroundclick?: () => void
   } = $props()
@@ -141,14 +133,13 @@
     .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: ${colors.textSecondary}; }
 
     /* Default: all interactive elements disabled */
-    .subgraph-bg, .port-hit, .link-hit, .edge-zone, [data-sg-drag] { pointer-events: none; }
+    .subgraph-bg, .port-hit, .link-hit, .edge-zone { pointer-events: none; }
 
     /* Edit mode: enable all interaction */
     svg.interactive .node[data-id] { cursor: grab; }
     svg.interactive .node[data-id]:active { cursor: grabbing; }
-    svg.interactive .subgraph-bg { pointer-events: fill; cursor: pointer; }
-    svg.interactive [data-sg-drag] { pointer-events: fill; cursor: grab; }
-    svg.interactive [data-sg-drag]:active { cursor: grabbing; }
+    svg.interactive .subgraph-bg { pointer-events: fill; cursor: grab; }
+    svg.interactive .subgraph-bg:active { cursor: grabbing; }
     svg.interactive .port-hit { pointer-events: fill; cursor: crosshair; }
     svg.interactive .port-hit.linked { cursor: pointer; }
     svg.interactive .link-hit { pointer-events: stroke; cursor: pointer; }
@@ -175,8 +166,8 @@
         {colors}
         {theme}
         selected={selection.has(subgraph.id)}
-        ondragmove={onsubgraphmove}
-        onselect={onsubgraphselect}
+        {ondragmove}
+        {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'subgraph', e)}
       />
     {/each}
@@ -187,7 +178,7 @@
         {colors}
         selected={selection.has(edge.id)}
         {interactive}
-        onselect={onedgeselect}
+        {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'edge', e)}
       />
     {/each}
@@ -199,8 +190,8 @@
         {colors}
         selected={selection.has(node.id)}
         {interactive}
-        ondragmove={onnodedragmove}
-        onselect={onnodeselect}
+        {ondragmove}
+        {onselect}
         {onaddport}
         oncontextmenu={(id, e) => onctx?.(id, 'node', e)}
       />
@@ -216,7 +207,7 @@
         linked={linkedPorts.has(port.id)}
         {onlinkstart}
         {onlinkend}
-        onselect={onportselect}
+        {onselect}
         {onlabeledit}
         oncontextmenu={(id, e) => onctx?.(id, 'port', e)}
       />
