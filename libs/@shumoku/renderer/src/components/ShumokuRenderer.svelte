@@ -349,6 +349,65 @@
     return null
   }
 
+  /** Get full details of any element for inspection/detail panel */
+  // biome-ignore lint/suspicious/noExplicitAny: returns mixed element data
+  export function getElementDetails(id: string): Record<string, any> | null {
+    const node = nodes.get(id)
+    if (node) {
+      const nodePorts = [...ports.values()].filter((p) => p.nodeId === id)
+      return {
+        kind: 'node',
+        ...node.node,
+        id: node.id,
+        position: node.position,
+        size: node.size,
+        ports: nodePorts.map((p) => ({
+          id: p.id,
+          label: p.label,
+          side: p.side,
+          position: p.absolutePosition,
+        })),
+      }
+    }
+    const sg = subgraphs.get(id)
+    if (sg) {
+      const childNodes = [...nodes.values()].filter((n) => n.node.parent === id).length
+      const childSgs = [...subgraphs.values()].filter((s) => s.subgraph.parent === id).length
+      return {
+        kind: 'subgraph',
+        ...sg.subgraph,
+        id: sg.id,
+        bounds: sg.bounds,
+        children: { nodes: childNodes, subgraphs: childSgs },
+      }
+    }
+    const edge = edges.get(id)
+    if (edge) {
+      return {
+        kind: 'edge',
+        id: edge.id,
+        from: edge.fromEndpoint,
+        to: edge.toEndpoint,
+        width: edge.width,
+        points: edge.points.length,
+        link: edge.link,
+      }
+    }
+    const port = ports.get(id)
+    if (port) {
+      return {
+        kind: 'port',
+        id: port.id,
+        label: port.label,
+        nodeId: port.nodeId,
+        side: port.side,
+        position: port.absolutePosition,
+        size: port.size,
+      }
+    }
+    return null
+  }
+
   // =========================================================================
   // Port operations
   // =========================================================================
