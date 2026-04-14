@@ -10,6 +10,7 @@
     selected = false,
     ondragmove,
     onselect,
+    oncontextmenu: onctx,
   }: {
     subgraph: ResolvedSubgraph
     colors: RenderColors
@@ -17,6 +18,7 @@
     selected?: boolean
     ondragmove?: (sgId: string, x: number, y: number) => void
     onselect?: (sgId: string) => void
+    oncontextmenu?: (id: string, e: MouseEvent) => void
   } = $props()
 
   const style = $derived(subgraph.subgraph.style ?? {})
@@ -64,6 +66,7 @@
     stroke-width={selected ? 3 : strokeWidth}
     stroke-dasharray={selected ? undefined : (strokeDasharray || undefined)}
     onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id) }}
+    oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); onselect?.(subgraph.id); onctx?.(subgraph.id, e) }}
   />
   <!-- Label area: d3-drag via use: directive -->
   <rect

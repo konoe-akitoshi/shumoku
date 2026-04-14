@@ -30,6 +30,7 @@
     svgEl = $bindable<SVGSVGElement | null>(null),
     // Callbacks
     onnodedragmove,
+    onnodeselect,
     onaddport,
     onlinkstart,
     onlinkend,
@@ -54,6 +55,7 @@
     linkPreview?: { fromX: number; fromY: number; toX: number; toY: number } | null
     svgEl?: SVGSVGElement | null
     onnodedragmove?: (id: string, x: number, y: number) => void
+    onnodeselect?: (id: string) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onlinkstart?: (portId: string, x: number, y: number) => void
     onlinkend?: (portId: string) => void
@@ -175,6 +177,7 @@
         selected={selection.has(subgraph.id)}
         ondragmove={onsubgraphmove}
         onselect={onsubgraphselect}
+        oncontextmenu={(id, e) => onctx?.(id, 'subgraph', e)}
       />
     {/each}
 
@@ -197,6 +200,7 @@
         selected={selection.has(node.id)}
         {interactive}
         ondragmove={onnodedragmove}
+        onselect={onnodeselect}
         {onaddport}
         oncontextmenu={(id, e) => onctx?.(id, 'node', e)}
       />

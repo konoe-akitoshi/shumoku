@@ -17,6 +17,7 @@
     interactive = false,
     ondragmove,
     onaddport,
+    onselect,
     oncontextmenu: onctx,
   }: {
     node: ResolvedNode
@@ -26,6 +27,7 @@
     interactive?: boolean
     ondragmove?: (id: string, x: number, y: number) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
+    onselect?: (id: string) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
   } = $props()
 
@@ -129,6 +131,7 @@
     },
     onDrag: (dx, dy) => ondragmove?.(node.id, node.position.x + dx, node.position.y + dy),
   })}
+  onclick={(e) => { e.stopPropagation(); onselect?.(node.id) }}
   onpointerenter={() => { if (interactive) hovered = true }}
   onpointerleave={() => { hovered = false }}
   oncontextmenu={handleContextMenu}

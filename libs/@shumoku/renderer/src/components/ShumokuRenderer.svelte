@@ -203,14 +203,8 @@
   }
 
   // --- Selection ---
-  function handleEdgeSelect(edgeId: string) {
-    selection = new Set([edgeId])
-  }
-  function handlePortSelect(portId: string) {
-    selection = new Set([portId])
-  }
-  function handleSubgraphSelect(sgId: string) {
-    selection = new Set([sgId])
+  function handleSelect(id: string) {
+    selection = new Set([id])
   }
   function handleBackgroundClick() {
     selection = new Set()
@@ -375,13 +369,14 @@
     linkPreview={linkDrag}
     bind:svgEl
     onnodedragmove={handleNodeDragMove}
+    onnodeselect={handleSelect}
     onaddport={handleAddPort}
     onlinkstart={handleLinkStart}
     onlinkend={handleLinkEnd}
-    onedgeselect={handleEdgeSelect}
-    onportselect={handlePortSelect}
+    onedgeselect={handleSelect}
+    onportselect={handleSelect}
     onlabeledit={handleLabelEdit}
-    onsubgraphselect={handleSubgraphSelect}
+    onsubgraphselect={handleSelect}
     onsubgraphmove={handleSubgraphMove}
     oncontextmenu={handleContextMenu}
     onbackgroundclick={handleBackgroundClick}
