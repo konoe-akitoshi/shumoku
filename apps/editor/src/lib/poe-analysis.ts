@@ -82,10 +82,9 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
       if (!peer) continue
 
       const peerPower = getPower(peer, catalog)
-      if (!peerPower) continue
-      if (!peerPower.poe_in && !peerPower.max_draw_w) continue
+      if (!peerPower?.poe_in) continue // only PoE consumers (PD with poe_in)
 
-      const ownDraw = peerPower.poe_in?.max_draw_w ?? peerPower.max_draw_w ?? 0
+      const ownDraw = peerPower.poe_in.max_draw_w ?? peerPower.max_draw_w ?? 0
       if (ownDraw <= 0) continue
 
       // Passthrough: if peer also has poe_out, add its downstream consumption
@@ -96,8 +95,8 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
           const ds = nodeMap.get(dsId)
           if (!ds) continue
           const dsPower = getPower(ds, catalog)
-          if (dsPower?.poe_in?.max_draw_w ?? dsPower?.max_draw_w) {
-            passthroughDraw += dsPower?.poe_in?.max_draw_w ?? dsPower?.max_draw_w ?? 0
+          if (dsPower?.poe_in) {
+            passthroughDraw += dsPower.poe_in.max_draw_w ?? dsPower.max_draw_w ?? 0
           }
         }
       }

@@ -25,7 +25,7 @@
     "data"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --build --force",
     "build:data": "bun src/build-data.ts",
     "dev": "tsc --watch",
     "test": "vitest --passWithNoTests",

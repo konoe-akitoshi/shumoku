@@ -394,6 +394,8 @@ nodes:
   - id: ip-phone
     label: "IP Phone"
     type: cpe
+    vendor: generic
+    model: ip-phone
     parent: building-b
 
 links:

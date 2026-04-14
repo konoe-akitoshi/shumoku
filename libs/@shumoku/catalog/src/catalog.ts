@@ -15,10 +15,20 @@ import type { CatalogEntry } from './types.js'
  */
 export class Catalog {
   private entries = new Map<string, CatalogEntry>()
+  /** Reverse index: "vendor/model" → entry ID (for shorthand lookup) */
+  private byVendorModel = new Map<string, string>()
 
   /** Register a catalog entry. */
   register(entry: CatalogEntry): void {
     this.entries.set(entry.id, entry)
+    // Build reverse index from vendor+model for shorthand lookup
+    const spec = entry.spec
+    if (spec.kind === 'hardware' || spec.kind === 'compute') {
+      const model = 'model' in spec ? spec.model : 'platform' in spec ? spec.platform : undefined
+      if (spec.vendor && model) {
+        this.byVendorModel.set(`${spec.vendor}/${model}`, entry.id)
+      }
+    }
   }
 
   /** Register multiple entries at once. */
@@ -28,9 +38,14 @@ export class Catalog {
     }
   }
 
-  /** Look up an entry by ID, resolving `extends` inheritance. */
+  /** Look up by ID or vendor/model shorthand, resolving `extends` inheritance. */
   lookup(id: string): CatalogEntry | undefined {
-    const entry = this.entries.get(id)
+    let entry = this.entries.get(id)
+    // Fallback: try vendor/model reverse index (handles 3-level IDs like cisco/catalyst-3560cx/ws-...)
+    if (!entry) {
+      const fullId = this.byVendorModel.get(id)
+      if (fullId) entry = this.entries.get(fullId)
+    }
     if (!entry) return undefined
     if (!entry.extends) return entry
     return this.resolve(entry)
