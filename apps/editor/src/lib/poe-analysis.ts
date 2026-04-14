@@ -9,11 +9,19 @@
 import type { Catalog, HardwareProperties, PowerProperties } from '@shumoku/catalog'
 import type { Link, Node } from '@shumoku/core'
 
+export interface PoEPassthrough {
+  nodeId: string
+  nodeLabel: string
+  draw_w: number
+}
+
 export interface PoELinkDraw {
   linkId: string
   toNodeId: string
   toNodeLabel: string
   draw_w: number
+  /** Downstream devices powered via passthrough */
+  passthrough?: PoEPassthrough[]
 }
 
 export interface PoEBudget {
@@ -87,8 +95,9 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
       const ownDraw = peerPower.poe_in.max_draw_w ?? peerPower.max_draw_w ?? 0
       if (ownDraw <= 0) continue
 
-      // Passthrough: if peer also has poe_out, add its downstream consumption
+      // Passthrough: if peer also has poe_out, collect downstream consumption
       let passthroughDraw = 0
+      const passthroughDevices: PoEPassthrough[] = []
       if (peerPower.poe_out) {
         for (const { peerId: dsId } of adj.get(peerId) ?? []) {
           if (dsId === node.id) continue
@@ -96,14 +105,23 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
           if (!ds) continue
           const dsPower = getPower(ds, catalog)
           if (dsPower?.poe_in) {
-            passthroughDraw += dsPower.poe_in.max_draw_w ?? dsPower.max_draw_w ?? 0
+            const dsDraw = dsPower.poe_in.max_draw_w ?? dsPower.max_draw_w ?? 0
+            passthroughDraw += dsDraw
+            const dsLabel = Array.isArray(ds.label) ? ds.label[0] : ds.label
+            passthroughDevices.push({ nodeId: dsId, nodeLabel: dsLabel, draw_w: dsDraw })
           }
         }
       }
 
       const totalDraw = ownDraw + passthroughDraw
       const peerLabel = Array.isArray(peer.label) ? peer.label[0] : peer.label
-      poeLinks.push({ linkId, toNodeId: peerId, toNodeLabel: peerLabel, draw_w: totalDraw })
+      poeLinks.push({
+        linkId,
+        toNodeId: peerId,
+        toNodeLabel: peerLabel,
+        draw_w: totalDraw,
+        passthrough: passthroughDevices.length > 0 ? passthroughDevices : undefined,
+      })
       totalUsed += totalDraw
     }
 

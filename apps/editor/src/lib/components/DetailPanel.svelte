@@ -324,6 +324,20 @@
                               >{link.draw_w}W</span
                             >
                           </div>
+                          {#if link.passthrough}
+                            {#each link.passthrough as pt}
+                              <div
+                                class="flex justify-between text-[10px] pl-3 border-l border-amber-300 dark:border-amber-700 ml-1"
+                              >
+                                <span class="text-neutral-400 dark:text-neutral-500"
+                                  >{pt.nodeLabel}</span
+                                >
+                                <span class="font-mono text-neutral-400 dark:text-neutral-500"
+                                  >{pt.draw_w}W</span
+                                >
+                              </div>
+                            {/each}
+                          {/if}
                         {/each}
                       </div>
                     </div>
