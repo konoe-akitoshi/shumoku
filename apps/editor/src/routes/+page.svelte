@@ -12,17 +12,28 @@
   } from '@shumoku/core'
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
+  import AppTitle from '$lib/components/AppTitle.svelte'
+  import ExportMenu from '$lib/components/ExportMenu.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
   import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
-  import Toolbar from '$lib/components/Toolbar.svelte'
+  import SheetBar from '$lib/components/SheetBar.svelte'
+  import SideToolbar from '$lib/components/SideToolbar.svelte'
+  import StatusBadge from '$lib/components/StatusBadge.svelte'
 
-  // --- State ---
+  // =========================================================================
+  // State
+  // =========================================================================
 
   let renderer: ShumokuRenderer | undefined = $state()
   let status = $state('Loading...')
   let mode = $state<'edit' | 'view'>('view')
   let selected = $state<{ id: string; type: string } | null>(null)
-  let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
+  let contextMenu = $state<{
+    id: string
+    type: string
+    x: number
+    y: number
+  } | null>(null)
   let clipboard = $state<{
     label: string
     shape?: string
@@ -33,22 +44,34 @@
   let layout = $state<ResolvedLayout | undefined>(undefined)
   let graph = $state<{ links: Link[] } | undefined>(undefined)
   let isDark = $state(false)
-  let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
+  let labelEdit = $state<{
+    portId: string
+    label: string
+    x: number
+    y: number
+  } | null>(null)
 
   const theme: Theme | undefined = $derived(isDark ? darkTheme : lightTheme)
 
-  // --- Dark mode detection ---
+  // =========================================================================
+  // Dark mode detection
+  // =========================================================================
 
   $effect(() => {
     isDark = document.documentElement.classList.contains('dark')
     const obs = new MutationObserver(() => {
       isDark = document.documentElement.classList.contains('dark')
     })
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
     return () => obs.disconnect()
   })
 
-  // --- Init ---
+  // =========================================================================
+  // Init
+  // =========================================================================
 
   async function parseSampleNetwork() {
     const fileMap = new Map<string, string>()
@@ -87,7 +110,9 @@
     })()
   })
 
-  // --- Serialization ---
+  // =========================================================================
+  // Serialization
+  // =========================================================================
 
   function mapToObj(l: ResolvedLayout) {
     return {
@@ -110,7 +135,9 @@
     } as ResolvedLayout
   }
 
-  // --- Handlers ---
+  // =========================================================================
+  // Handlers
+  // =========================================================================
 
   function handleSave() {
     const snap = renderer?.getSnapshot()
@@ -157,81 +184,129 @@
   }
 </script>
 
-<div class="flex flex-col h-screen">
-  <Toolbar
-    {mode}
-    {stats}
-    {selected}
-    {status}
-    onmodechange={(m) => { mode = m }}
-    onaddnode={handleAddNode}
-    onaddsubgraph={handleAddSubgraph}
-    onsave={handleSave}
-    onload={handleLoad}
-  />
+<!-- Full-screen canvas with floating island UI -->
+<div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
+  <!-- Canvas (full screen) -->
+  {#if layout}
+    <ShumokuRenderer
+      bind:this={renderer}
+      {layout}
+      {graph}
+      {theme}
+      {mode}
+      onselect={(id: string | null, type: string | null) => {
+        selected = id ? { id, type: type ?? 'node' } : null
+      }}
+      onchange={(links: Link[]) => {
+        stats = { ...stats, links: links.length }
+      }}
+      onlabeledit={(
+        portId: string,
+        label: string,
+        screenX: number,
+        screenY: number,
+      ) => {
+        labelEdit = { portId, label, x: screenX, y: screenY }
+      }}
+      oncontextmenu={(
+        id: string,
+        type: string,
+        screenX: number,
+        screenY: number,
+      ) => {
+        contextMenu = { id, type, x: screenX, y: screenY }
+      }}
+    />
+  {:else}
+    <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">
+      {status}
+    </div>
+  {/if}
 
-  <div class="flex-1 overflow-hidden relative">
-    {#if layout}
-      <ShumokuRenderer
-        bind:this={renderer}
-        {layout}
-        {graph}
-        {theme}
-        {mode}
-        onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}
-        onchange={(links: Link[]) => { stats = { ...stats, links: links.length } }}
-        onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => {
-          labelEdit = { portId, label, x: screenX, y: screenY }
-        }}
-        oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => {
-          contextMenu = { id, type, x: screenX, y: screenY }
-        }}
-      />
-    {:else}
-      <div class="flex items-center justify-center h-full text-slate-500 dark:text-neutral-400">
-        {status}
-      </div>
-    {/if}
+  <!-- ===== Floating Islands ===== -->
 
-    {#if labelEdit}
-      <LabelEditPopover
-        portId={labelEdit.portId}
-        label={labelEdit.label}
-        x={labelEdit.x}
-        y={labelEdit.y}
-        oncommit={(portId, value) => renderer?.commitLabel(portId, value)}
-        onclose={() => { labelEdit = null }}
-      />
-    {/if}
+  <!-- Top-left: App title -->
+  <div class="absolute top-4 left-4 z-20"><AppTitle /></div>
 
-    {#if contextMenu}
-      <NodeContextMenu
-        id={contextMenu.id}
-        type={contextMenu.type}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        hasClipboard={clipboard !== null}
-        oncopy={(id) => {
-          const info = renderer?.getElementInfo(id)
-          clipboard = info ? { label: info.label, shape: info.kind === 'node' ? info.shape : undefined, type: info.kind === 'node' ? info.type : undefined, elementKind: info.kind } : null
-        }}
-        onpaste={() => {
-          if (!clipboard || !contextMenu) return
-          const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
-          if (clipboard.elementKind === 'subgraph') {
-            renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
-            stats = { ...stats, subgraphs: stats.subgraphs + 1 }
-          } else {
-            renderer?.addNewNode({ label: clipboard.label, type: clipboard.type, shape: clipboard.shape, position: svgPos })
-            stats = { ...stats, nodes: stats.nodes + 1 }
-          }
-        }}
-        ondelete={(id) => {
-          renderer?.deleteById(id)
-          stats = { ...stats, nodes: Math.max(0, stats.nodes - 1) }
-        }}
-        onclose={() => { contextMenu = null }}
-      />
-    {/if}
+  <!-- Top-right: Export menu -->
+  <div class="absolute top-4 right-4 z-20">
+    <ExportMenu onsave={handleSave} onload={handleLoad} />
   </div>
+
+  <!-- Right: Side toolbar -->
+  <div class="absolute right-4 top-1/2 -translate-y-1/2 z-20">
+    <SideToolbar
+      {mode}
+      onmodechange={(m) => {
+        mode = m
+      }}
+      onaddnode={handleAddNode}
+      onaddsubgraph={handleAddSubgraph}
+    />
+  </div>
+
+  <!-- Bottom-left: Status -->
+  <div class="absolute bottom-4 left-4 z-20"><StatusBadge {status} {stats} {selected} /></div>
+
+  <!-- Bottom-center: Sheet bar -->
+  <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-20"><SheetBar /></div>
+
+  <!-- ===== Overlays ===== -->
+
+  {#if labelEdit}
+    <LabelEditPopover
+      portId={labelEdit.portId}
+      label={labelEdit.label}
+      x={labelEdit.x}
+      y={labelEdit.y}
+      oncommit={(portId, value) => renderer?.commitLabel(portId, value)}
+      onclose={() => {
+        labelEdit = null
+      }}
+    />
+  {/if}
+
+  {#if contextMenu}
+    <NodeContextMenu
+      id={contextMenu.id}
+      type={contextMenu.type}
+      x={contextMenu.x}
+      y={contextMenu.y}
+      hasClipboard={clipboard !== null}
+      oncopy={(id) => {
+        const info = renderer?.getElementInfo(id)
+        clipboard = info
+          ? {
+              label: info.label,
+              shape: info.kind === 'node' ? info.shape : undefined,
+              type: info.kind === 'node' ? info.type : undefined,
+              elementKind: info.kind,
+            }
+          : null
+      }}
+      onpaste={() => {
+        if (!clipboard || !contextMenu) return
+        const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
+        if (clipboard.elementKind === 'subgraph') {
+          renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
+          stats = { ...stats, subgraphs: stats.subgraphs + 1 }
+        } else {
+          renderer?.addNewNode({
+            label: clipboard.label,
+            type: clipboard.type,
+            shape: clipboard.shape,
+            position: svgPos,
+          })
+          stats = { ...stats, nodes: stats.nodes + 1 }
+        }
+      }}
+      ondelete={(id) => {
+        renderer?.deleteById(id)
+        stats = { ...stats, nodes: Math.max(0, stats.nodes - 1) }
+      }}
+      onclose={() => {
+        contextMenu = null
+      }}
+    />
+  {/if}
 </div>
