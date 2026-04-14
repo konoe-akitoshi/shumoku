@@ -3,39 +3,8 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Built-in catalog entries loaded from YAML data files.
- * These serve as the initial dataset — community contributions welcome.
+ * Built-in catalog entries — re-exports auto-generated data from YAML files.
+ * To regenerate: bun src/build-data.ts
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { parseCatalogYaml } from './loader.js'
-import type { CatalogEntry } from './types.js'
-
-const dataDir = join(fileURLToPath(import.meta.url), '../../data')
-
-function collectYamlFiles(dir: string): string[] {
-  const files: string[] = []
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry)
-    if (statSync(full).isDirectory()) {
-      files.push(...collectYamlFiles(full))
-    } else if (entry.endsWith('.yaml') || entry.endsWith('.yml')) {
-      files.push(full)
-    }
-  }
-  return files
-}
-
-function loadBuiltinEntries(): CatalogEntry[] {
-  const files = collectYamlFiles(dataDir)
-  const entries: CatalogEntry[] = []
-  for (const file of files) {
-    const content = readFileSync(file, 'utf-8')
-    entries.push(parseCatalogYaml(content))
-  }
-  return entries
-}
-
-export const builtinEntries: CatalogEntry[] = loadBuiltinEntries()
+export { builtinData as builtinEntries } from './builtin-data.js'
