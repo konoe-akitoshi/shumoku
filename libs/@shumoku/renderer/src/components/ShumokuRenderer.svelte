@@ -26,7 +26,15 @@
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
   interface RendererProps {
-    layout: ResolvedLayout
+    // Direct state (preferred — parent owns state)
+    nodes?: Map<string, ResolvedNode>
+    ports?: Map<string, ResolvedPort>
+    edges?: Map<string, ResolvedEdge>
+    subgraphs?: Map<string, ResolvedSubgraph>
+    bounds?: { x: number; y: number; width: number; height: number }
+    links?: Link[]
+    // Legacy: pass layout object (WebComponent compat)
+    layout?: ResolvedLayout
     graph?: { links: Link[] }
     theme?: Theme
     mode?: 'view' | 'edit'
@@ -37,8 +45,14 @@
   }
 
   let {
-    layout,
-    graph,
+    nodes = $bindable(new Map()),
+    ports = $bindable(new Map()),
+    edges = $bindable(new Map()),
+    subgraphs = $bindable(new Map()),
+    bounds = $bindable({ x: 0, y: 0, width: 0, height: 0 }),
+    links = $bindable([]),
+    layout = undefined,
+    graph = undefined,
     theme = undefined,
     mode = 'view',
     onchange,
@@ -50,26 +64,18 @@
   const colors = $derived(themeToColors(theme))
   const interactive = $derived(mode === 'edit')
 
-  // =========================================================================
-  // Layout state (mutable copies, synced from props via $effect)
-  // =========================================================================
-
-  let nodes = $state<Map<string, ResolvedNode>>(new Map())
-  let ports = $state<Map<string, ResolvedPort>>(new Map())
-  let edges = $state<Map<string, ResolvedEdge>>(new Map())
-  let subgraphs = $state<Map<string, ResolvedSubgraph>>(new Map())
-  let bounds = $state({ x: 0, y: 0, width: 0, height: 0 })
-  let links = $state<Link[]>([])
-
+  // Legacy compat: sync from layout/graph props (WebComponent uses these)
   $effect(() => {
-    nodes = new Map(layout.nodes)
-    ports = new Map(layout.ports)
-    edges = new Map(layout.edges)
-    subgraphs = new Map(layout.subgraphs)
-    bounds = layout.bounds
+    if (layout) {
+      nodes = new Map(layout.nodes)
+      ports = new Map(layout.ports)
+      edges = new Map(layout.edges)
+      subgraphs = new Map(layout.subgraphs)
+      bounds = layout.bounds
+    }
   })
   $effect(() => {
-    links = graph?.links ? [...graph.links] : []
+    if (graph?.links) links = [...graph.links]
   })
 
   // =========================================================================
@@ -500,23 +506,6 @@
     ]
     edges = await routeEdges(nodes, ports, links)
     onchange?.(links)
-  }
-
-  // =========================================================================
-  // Snapshot
-  // =========================================================================
-
-  export function getSnapshot() {
-    return {
-      layout: {
-        nodes: new Map(nodes),
-        ports: new Map(ports),
-        edges: new Map(edges),
-        subgraphs: new Map(subgraphs),
-        bounds: { ...bounds },
-      },
-      links: [...links],
-    }
   }
 </script>
 
