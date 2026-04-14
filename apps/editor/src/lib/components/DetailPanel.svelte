@@ -2,11 +2,13 @@
   import { getDeviceIcon } from '@shumoku/core'
   import { Dialog, ScrollArea, Tabs } from 'bits-ui'
   import { X } from 'phosphor-svelte'
+  import type { PoEBudget } from '$lib/poe-analysis'
 
   let {
     open = false,
     data,
     mode = 'view',
+    poeBudget,
     onclose,
     onupdate,
   }: {
@@ -14,6 +16,7 @@
     // biome-ignore lint/suspicious/noExplicitAny: mixed element data
     data: Record<string, any> | null
     mode?: 'edit' | 'view'
+    poeBudget?: PoEBudget
     onclose?: () => void
     onupdate?: (id: string, field: string, value: string) => void
   } = $props()
@@ -282,6 +285,44 @@
                           >
                             <span class="text-blue-500 font-semibold">{port.label}</span>
                             <span class="text-neutral-400">{port.side}</span>
+                          </div>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+                  {#if poeBudget}
+                    <div
+                      class="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40"
+                    >
+                      <div class="flex items-center justify-between mb-2">
+                        <span
+                          class="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400"
+                          >PoE Budget</span
+                        >
+                        <span class="text-[11px] font-mono text-amber-600 dark:text-amber-300"
+                          >{poeBudget.used_w}W / {poeBudget.budget_w}W</span
+                        >
+                      </div>
+                      <div
+                        class="w-full h-2 rounded-full bg-amber-200 dark:bg-amber-900/40 overflow-hidden mb-2"
+                      >
+                        <div
+                          class="h-full rounded-full transition-all {poeBudget.utilization_pct > 80 ? 'bg-red-500' : poeBudget.utilization_pct > 50 ? 'bg-amber-500' : 'bg-green-500'}"
+                          style="width: {Math.min(100, poeBudget.utilization_pct)}%"
+                        ></div>
+                      </div>
+                      <div class="text-[10px] text-amber-600 dark:text-amber-400 mb-2">
+                        {poeBudget.remaining_w}W remaining ({poeBudget.utilization_pct}%)
+                      </div>
+                      <div class="space-y-1">
+                        {#each poeBudget.links as link}
+                          <div class="flex justify-between text-[10px]">
+                            <span class="text-neutral-600 dark:text-neutral-300"
+                              >{link.toNodeLabel}</span
+                            >
+                            <span class="font-mono text-amber-700 dark:text-amber-300"
+                              >{link.draw_w}W</span
+                            >
                           </div>
                         {/each}
                       </div>

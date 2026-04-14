@@ -4,6 +4,7 @@
 
 export { builtinEntries } from './builtin.js'
 export { Catalog } from './catalog.js'
+export { parseCatalogYaml, parseCatalogYamlMulti } from './loader.js'
 export type {
   CatalogEntry,
   ComputeCatalogEntry,

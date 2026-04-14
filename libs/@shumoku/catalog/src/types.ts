@@ -175,24 +175,33 @@ export type PropertiesFor<K extends NodeSpec['kind']> = K extends 'hardware'
 // Catalog Entry
 // ============================================
 
-export interface CatalogEntry<K extends NodeSpec['kind'] = NodeSpec['kind']> {
+export interface CatalogEntry {
   /** Unique ID: "vendor/series/model" or "vendor/model" */
   id: string
   /** Human-readable label */
   label: string
   /** Node specification (identity) */
-  spec: Extract<NodeSpec, { kind: K }>
+  spec: NodeSpec
   /** Parent entry ID for property inheritance */
   extends?: string
   /** Tags for search and filtering */
   tags: string[]
-  /** Detailed properties (type-safe per kind) */
-  properties: PropertiesFor<K>
+  /** Detailed properties — use kind to narrow */
+  properties: HardwareProperties | ComputeProperties | ServiceProperties
 }
 
 /** Type-narrowed entry for hardware */
-export type HardwareCatalogEntry = CatalogEntry<'hardware'>
+export type HardwareCatalogEntry = CatalogEntry & {
+  spec: Extract<NodeSpec, { kind: 'hardware' }>
+  properties: HardwareProperties
+}
 /** Type-narrowed entry for compute */
-export type ComputeCatalogEntry = CatalogEntry<'compute'>
+export type ComputeCatalogEntry = CatalogEntry & {
+  spec: Extract<NodeSpec, { kind: 'compute' }>
+  properties: ComputeProperties
+}
 /** Type-narrowed entry for service */
-export type ServiceCatalogEntry = CatalogEntry<'service'>
+export type ServiceCatalogEntry = CatalogEntry & {
+  spec: Extract<NodeSpec, { kind: 'service' }>
+  properties: ServiceProperties
+}

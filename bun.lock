@@ -71,6 +71,7 @@
       "name": "@shumoku/editor",
       "version": "0.1.0",
       "dependencies": {
+        "@shumoku/catalog": "workspace:*",
         "@shumoku/core": "workspace:*",
         "@shumoku/renderer": "workspace:*",
         "bits-ui": "^2.15.4",

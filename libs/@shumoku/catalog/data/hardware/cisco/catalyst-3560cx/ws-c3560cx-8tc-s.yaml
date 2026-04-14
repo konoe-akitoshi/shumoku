@@ -1,0 +1,25 @@
+# Cisco WS-C3560CX-8TC-S — 8-port non-PoE compact switch
+id: cisco/catalyst-3560cx/ws-c3560cx-8tc-s
+label: WS-C3560CX-8TC-S
+extends: cisco/catalyst-3560cx
+spec:
+  kind: hardware
+  type: l3-switch
+  vendor: cisco
+  model: ws-c3560cx-8tc-s
+tags: []
+properties:
+  power:
+    max_draw_w: 24
+  switching:
+    capacity_gbps: 22
+    forwarding_rate_mpps: 16.07
+  ports:
+    downlink:
+      - { count: 8, speed: "1g", media: copper }
+    uplink:
+      - { count: 2, speed: "1g", media: sfp }
+      - { count: 2, speed: "1g", media: copper }
+  management:
+    layer: 2
+    image: lan-base
