@@ -2,13 +2,10 @@
   import {
     computeNetworkLayout,
     createMemoryFileResolver,
-    darkTheme,
     HierarchicalParser,
     type Link,
-    lightTheme,
     type ResolvedLayout,
     sampleNetwork,
-    type Theme,
   } from '@shumoku/core'
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
@@ -19,14 +16,14 @@
   import SheetBar from '$lib/components/SheetBar.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
+  import { editorState, initDarkMode } from '$lib/context.svelte'
 
   // =========================================================================
-  // State
+  // State (editor-specific, not shared globally)
   // =========================================================================
 
   let renderer: ShumokuRenderer | undefined = $state()
   let status = $state('Loading...')
-  let mode = $state<'edit' | 'view'>('view')
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{
     id: string
@@ -43,7 +40,6 @@
   let stats = $state({ nodes: 0, links: 0, subgraphs: 0 })
   let layout = $state<ResolvedLayout | undefined>(undefined)
   let graph = $state<{ links: Link[] } | undefined>(undefined)
-  let isDark = $state(false)
   let labelEdit = $state<{
     portId: string
     label: string
@@ -51,26 +47,16 @@
     y: number
   } | null>(null)
 
-  const theme: Theme | undefined = $derived(isDark ? darkTheme : lightTheme)
-
   // =========================================================================
-  // Dark mode detection
+  // Init dark mode observer
   // =========================================================================
 
   $effect(() => {
-    isDark = document.documentElement.classList.contains('dark')
-    const obs = new MutationObserver(() => {
-      isDark = document.documentElement.classList.contains('dark')
-    })
-    obs.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class'],
-    })
-    return () => obs.disconnect()
+    return initDarkMode()
   })
 
   // =========================================================================
-  // Init
+  // Init diagram
   // =========================================================================
 
   async function parseSampleNetwork() {
@@ -186,14 +172,14 @@
 
 <!-- Full-screen canvas with floating island UI -->
 <div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
-  <!-- Canvas (full screen) -->
+  <!-- Canvas -->
   {#if layout}
     <ShumokuRenderer
       bind:this={renderer}
       {layout}
       {graph}
-      {theme}
-      {mode}
+      theme={editorState.theme}
+      mode={editorState.mode}
       onselect={(id: string | null, type: string | null) => {
         selected = id ? { id, type: type ?? 'node' } : null
       }}
@@ -225,30 +211,27 @@
 
   <!-- ===== Floating Islands ===== -->
 
-  <!-- Top-left: App title -->
   <div class="absolute top-4 left-4 z-20"><AppTitle /></div>
 
-  <!-- Top-right: Export menu -->
   <div class="absolute top-4 right-4 z-20">
     <ExportMenu onsave={handleSave} onload={handleLoad} />
   </div>
 
-  <!-- Right: Side toolbar -->
   <div class="absolute right-4 top-1/2 -translate-y-1/2 z-20">
     <SideToolbar
-      {mode}
+      mode={editorState.mode}
+      isDark={editorState.isDark}
       onmodechange={(m) => {
-        mode = m
+        editorState.mode = m
       }}
       onaddnode={handleAddNode}
       onaddsubgraph={handleAddSubgraph}
+      onthemetoggle={() => editorState.toggleTheme()}
     />
   </div>
 
-  <!-- Bottom-left: Status -->
   <div class="absolute bottom-4 left-4 z-20"><StatusBadge {status} {stats} {selected} /></div>
 
-  <!-- Bottom-center: Sheet bar -->
   <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-20"><SheetBar /></div>
 
   <!-- ===== Overlays ===== -->
@@ -272,6 +255,7 @@
       type={contextMenu.type}
       x={contextMenu.x}
       y={contextMenu.y}
+      mode={editorState.mode}
       hasClipboard={clipboard !== null}
       oncopy={(id) => {
         const info = renderer?.getElementInfo(id)
@@ -288,7 +272,10 @@
         if (!clipboard || !contextMenu) return
         const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
         if (clipboard.elementKind === 'subgraph') {
-          renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
+          renderer?.addNewSubgraph({
+            label: clipboard.label,
+            position: svgPos,
+          })
           stats = { ...stats, subgraphs: stats.subgraphs + 1 }
         } else {
           renderer?.addNewNode({

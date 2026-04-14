@@ -36,7 +36,11 @@
   },
   "css": {
     "parser": {
-      "cssModules": true
+      "cssModules": true,
+      "allowWrongLineComments": true
+    },
+    "linter": {
+      "enabled": false
     }
   },
   "javascript": {
@@ -63,7 +67,8 @@
       "!**/.svelte-kit",
       "!**/.vercel",
       "!**/*.webmanifest",
-      "!**/public/renderer"
+      "!**/public/renderer",
+      "!**/*.css"
     ]
   },
   "overrides": [

@@ -119,7 +119,7 @@
   // =========================================================================
 
   $effect(() => {
-    if (!interactive || !svgEl) return
+    if (!svgEl) return
     const el = svgEl
     el.addEventListener('keydown', handleKeyDown)
     return () => el.removeEventListener('keydown', handleKeyDown)
@@ -151,12 +151,13 @@
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      for (const id of selection) deleteById(id)
-    }
     if (e.key === 'Escape') {
       selection = new Set()
       linkDrag = null
+    }
+    if (!interactive) return
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      for (const id of selection) deleteById(id)
     }
   }
 

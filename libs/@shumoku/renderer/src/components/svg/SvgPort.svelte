@@ -48,12 +48,12 @@
   let hovered = $state(false)
 
   function onpointerdown(e: PointerEvent) {
-    if (!interactive || e.button !== 0) return
+    if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
-    if (linked) {
-      onselect?.(port.id)
-    } else {
+    // Select always; link-start only in edit mode
+    onselect?.(port.id)
+    if (interactive && !linked) {
       onlinkstart?.(port.id, px, py)
     }
   }
@@ -65,9 +65,9 @@
   }
 
   function handleContextMenu(e: MouseEvent) {
-    if (!interactive) return
     e.preventDefault()
     e.stopPropagation()
+    onselect?.(port.id)
     onctx?.(port.id, e)
   }
 </script>

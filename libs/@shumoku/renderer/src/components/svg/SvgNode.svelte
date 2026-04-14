@@ -112,7 +112,6 @@
   }
 
   function handleContextMenu(ev: MouseEvent) {
-    if (!interactive) return
     ev.preventDefault()
     ev.stopPropagation()
     onctx?.(node.id, ev)
