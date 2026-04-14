@@ -1,21 +1,25 @@
 <script lang="ts">
-  import { ArrowsOutCardinal, Copy, Pencil, Trash } from 'phosphor-svelte'
+  import { ClipboardText, Copy, Trash } from 'phosphor-svelte'
 
   let {
     id,
     type,
     x,
     y,
+    hasClipboard = false,
+    oncopy,
+    onpaste,
     ondelete,
-    onduplicate,
     onclose,
   }: {
     id: string
     type: string
     x: number
     y: number
+    hasClipboard?: boolean
+    oncopy?: (id: string, type: string) => void
+    onpaste?: (x: number, y: number) => void
     ondelete?: (id: string, type: string) => void
-    onduplicate?: (id: string, type: string) => void
     onclose?: () => void
   } = $props()
 
@@ -42,15 +46,29 @@
     {type}
   </div>
 
-  <button
-    type="button"
-    role="menuitem"
-    class="flex items-center gap-2 w-full px-3 py-1.5 text-left text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
-    onclick={() => handleAction(() => onduplicate?.(id, type))}
-  >
-    <Copy class="w-4 h-4 text-neutral-400" />
-    Duplicate
-  </button>
+  {#if type === 'node'}
+    <button
+      type="button"
+      role="menuitem"
+      class="flex items-center gap-2 w-full px-3 py-1.5 text-left text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+      onclick={() => handleAction(() => oncopy?.(id, type))}
+    >
+      <Copy class="w-4 h-4 text-neutral-400" />
+      Copy
+    </button>
+  {/if}
+
+  {#if hasClipboard}
+    <button
+      type="button"
+      role="menuitem"
+      class="flex items-center gap-2 w-full px-3 py-1.5 text-left text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+      onclick={() => handleAction(() => onpaste?.(x, y))}
+    >
+      <ClipboardText class="w-4 h-4 text-neutral-400" />
+      Paste here
+    </button>
+  {/if}
 
   <div class="my-1 border-t border-neutral-200 dark:border-neutral-700"></div>
 

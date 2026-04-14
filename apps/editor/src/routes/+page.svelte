@@ -23,6 +23,7 @@
   let mode = $state<'edit' | 'view'>('view')
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
+  let clipboard = $state<{ label: string; shape?: string; type?: string } | null>(null)
   let stats = $state({ nodes: 0, links: 0, subgraphs: 0 })
   let layout = $state<ResolvedLayout | undefined>(undefined)
   let graph = $state<{ links: Link[] } | undefined>(undefined)
@@ -204,13 +205,19 @@
         type={contextMenu.type}
         x={contextMenu.x}
         y={contextMenu.y}
+        hasClipboard={clipboard !== null}
+        oncopy={(id) => {
+          clipboard = renderer?.getNodeInfo(id) ?? null
+        }}
+        onpaste={() => {
+          if (!clipboard || !contextMenu) return
+          const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
+          renderer?.addNewNode({ ...clipboard, position: svgPos })
+          stats = { ...stats, nodes: stats.nodes + 1 }
+        }}
         ondelete={(id) => {
           renderer?.deleteById(id)
           stats = { ...stats, nodes: Math.max(0, stats.nodes - 1) }
-        }}
-        onduplicate={(_id, type) => {
-          if (type === 'node') renderer?.addNewNode()
-          else if (type === 'subgraph') renderer?.addNewSubgraph()
         }}
         onclose={() => { contextMenu = null }}
       />

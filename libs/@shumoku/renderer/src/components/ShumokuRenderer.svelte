@@ -1,6 +1,8 @@
 <script lang="ts">
   import type {
+    DeviceType,
     Link,
+    NodeShape,
     ResolvedEdge,
     ResolvedLayout,
     ResolvedNode,
@@ -10,6 +12,7 @@
   } from '@shumoku/core'
   import {
     addPort,
+    computeNodeSize,
     linkExists,
     moveNode,
     moveSubgraph,
@@ -220,10 +223,31 @@
   }
 
   // --- Public methods (accessed via mount() return value) ---
-  export function addNewNode(opts?: { label?: string; position?: { x: number; y: number } }) {
+  /** Convert screen (clientX/Y) coordinates to SVG coordinates */
+  export function screenToSvg(screenX: number, screenY: number): { x: number; y: number } {
+    if (!svgEl) return { x: screenX, y: screenY }
+    const pt = svgEl.createSVGPoint()
+    pt.x = screenX
+    pt.y = screenY
+    // Use the viewport group's CTM (includes d3-zoom transform)
+    const viewport = svgEl.querySelector('.viewport') as SVGGraphicsElement | null
+    const ctm = viewport?.getScreenCTM()?.inverse()
+    if (ctm) {
+      const svgPt = pt.matrixTransform(ctm)
+      return { x: svgPt.x, y: svgPt.y }
+    }
+    return { x: screenX, y: screenY }
+  }
+
+  export function addNewNode(opts?: {
+    label?: string
+    type?: DeviceType
+    shape?: NodeShape
+    position?: { x: number; y: number }
+  }) {
     const id = `node-${Date.now()}`
-    const w = 180,
-      h = 80
+    const label = opts?.label ?? 'New Node'
+    const { width: w, height: h } = computeNodeSize({ label, type: opts?.type })
     const selectedSgId = [...selection].find((sid) => subgraphs.has(sid))
     const parentSg = selectedSgId ? subgraphs.get(selectedSgId) : undefined
     let parent: string | undefined
@@ -245,7 +269,7 @@
       id,
       position: initial,
       size: { width: w, height: h },
-      node: { id, label: opts?.label ?? 'New Node', shape: 'rounded', parent },
+      node: { id, label, type: opts?.type, shape: opts?.shape ?? 'rounded', parent },
     })
     const resolved = resolveNodePosition(id, initial.x, initial.y, newNodes, 8, subgraphs)
     const created = newNodes.get(id)
@@ -298,6 +322,17 @@
         bounds: { ...bounds },
       },
       links: [...links],
+    }
+  }
+
+  // --- Get node info (for copy in editor) ---
+  export function getNodeInfo(id: string) {
+    const node = nodes.get(id)
+    if (!node) return null
+    return {
+      label: node.node.label ?? 'Node',
+      shape: node.node.shape,
+      type: node.node.type,
     }
   }
 
