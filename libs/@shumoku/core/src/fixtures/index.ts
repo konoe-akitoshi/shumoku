@@ -120,20 +120,14 @@ links:
 
 nodes:
   - id: cloud-services
-    label:
-      - "<b>Services VPC</b>"
-      - "CIDR: 172.16.0.0/16"
-      - "---"
-      - "DNS / DHCP / Monitoring"
+    label: "Services VPC"
     type: server
     vendor: aws
     service: ec2
     resource: instances
 
   - id: vgw
-    label:
-      - "<b>VPN Gateway</b>"
-      - "Peer: 169.254.x.x"
+    label: "VPN Gateway"
     type: vpn
     vendor: aws
     service: vpc
@@ -168,34 +162,24 @@ subgraphs:
 nodes:
   # ========== Edge Layer ==========
   - id: isp1
-    label:
-      - "<b>ISP Line #1</b>"
-      - "(Primary)"
+    label: "ISP Line #1 (Primary)"
     type: internet
     parent: edge
 
   - id: isp2
-    label:
-      - "<b>ISP Line #2</b>"
-      - "(Secondary)"
+    label: "ISP Line #2 (Secondary)"
     type: internet
     parent: edge
 
   - id: rt1
-    label:
-      - "<b>Edge-RT-1 (Master)</b>"
-      - "Mgmt: 10.0.0.1"
-      - "VRRP VIP: 10.0.0.254"
+    label: "Edge-RT-1 (Master)"
     type: router
     vendor: yamaha
     model: rtx3510
     parent: edge
 
   - id: rt2
-    label:
-      - "<b>Edge-RT-2 (Backup)</b>"
-      - "Mgmt: 10.0.0.2"
-      - "VRRP VIP: 10.0.0.254"
+    label: "Edge-RT-2 (Backup)"
     type: router
     vendor: yamaha
     model: rtx3510
@@ -203,18 +187,14 @@ nodes:
 
   # ========== Security Layer ==========
   - id: fw1
-    label:
-      - "<b>FW-1 (Active)</b>"
-      - "Mgmt: 10.0.100.1"
+    label: "FW-1 (Active)"
     type: firewall
     vendor: juniper
     model: SRX4100
     parent: security
 
   - id: fw2
-    label:
-      - "<b>FW-2 (Standby)</b>"
-      - "Mgmt: 10.0.100.2"
+    label: "FW-2 (Standby)"
     type: firewall
     vendor: juniper
     model: SRX4100
@@ -297,21 +277,15 @@ description: "Demilitarized zone with public-facing servers"
 
 nodes:
   - id: dmz-sw
-    label:
-      - "<b>DMZ-SW</b>"
-      - "Mgmt: 10.100.0.1"
+    label: "DMZ-SW"
     type: l2-switch
 
   - id: web-srv
-    label:
-      - "<b>Web Server</b>"
-      - "10.100.10.10"
+    label: "Web Server"
     type: server
 
   - id: mail-srv
-    label:
-      - "<b>Mail Server</b>"
-      - "10.100.10.20"
+    label: "Mail Server"
     type: server
 
 links:
@@ -360,20 +334,14 @@ subgraphs:
 nodes:
   # ========== NOC ==========
   - id: core-sw
-    label:
-      - "<b>Core-SW</b>"
-      - "Mgmt: 10.1.0.1"
-      - "Inter-VLAN Routing"
+    label: "Core-SW"
     type: l3-switch
     vendor: juniper
     model: QFX5120-48T
     parent: noc
 
   - id: dist-sw
-    label:
-      - "<b>Distribution-SW</b>"
-      - "Mgmt: 10.1.0.2"
-      - "Uplink: 40G"
+    label: "Distribution-SW"
     type: l3-switch
     vendor: juniper
     model: EX4400-48T
@@ -381,18 +349,14 @@ nodes:
 
   # ========== Building A ==========
   - id: sw-a1
-    label:
-      - "<b>SW-A1 (Floor 1)</b>"
-      - "Mgmt: 10.10.0.1"
+    label: "SW-A1 (Floor 1)"
     type: l2-switch
     vendor: juniper
     model: EX2300-24P
     parent: building-a
 
   - id: sw-a2
-    label:
-      - "<b>SW-A2 (Floor 2)</b>"
-      - "Mgmt: 10.10.0.2"
+    label: "SW-A2 (Floor 2)"
     type: l2-switch
     vendor: juniper
     model: EX2300-24P
@@ -414,18 +378,14 @@ nodes:
 
   # ========== Building B ==========
   - id: sw-b1
-    label:
-      - "<b>SW-B1 (Floor 1)</b>"
-      - "Mgmt: 10.20.0.1"
+    label: "SW-B1 (Floor 1)"
     type: l2-switch
     vendor: yamaha
     model: swx2310_28gt
     parent: building-b
 
   - id: sw-b2
-    label:
-      - "<b>SW-B2 (Floor 2)</b>"
-      - "Mgmt: 10.20.0.2"
+    label: "SW-B2 (Floor 2)"
     type: l2-switch
     vendor: yamaha
     model: swx2310_28gt
