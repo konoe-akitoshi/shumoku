@@ -17,8 +17,10 @@ export interface PoEPassthrough {
 
 export interface PoELinkDraw {
   linkId: string
+  fromPort: string
   toNodeId: string
   toNodeLabel: string
+  toPort: string
   draw_w: number
   /** Downstream devices powered via passthrough */
   passthrough?: PoEPassthrough[]
@@ -59,19 +61,27 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
   const nodeMap = new Map<string, Node>()
   for (const node of nodes) nodeMap.set(node.id, node)
 
-  // Build adjacency: nodeId → [{ peerId, linkId }]
-  const adj = new Map<string, { peerId: string; linkId: string }[]>()
+  // Build adjacency: nodeId → [{ peerId, linkId, localPort, peerPort }]
+  interface AdjEntry {
+    peerId: string
+    linkId: string
+    localPort: string
+    peerPort: string
+  }
+  const adj = new Map<string, AdjEntry[]>()
   for (const link of links) {
     const from = linkEndpointNode(link.from)
     const to = linkEndpointNode(link.to)
     const id = link.id ?? `${from}-${to}`
+    const fromPort = typeof link.from === 'object' ? (link.from.port ?? '') : ''
+    const toPort = typeof link.to === 'object' ? (link.to.port ?? '') : ''
 
     const fl = adj.get(from) ?? []
-    fl.push({ peerId: to, linkId: id })
+    fl.push({ peerId: to, linkId: id, localPort: fromPort, peerPort: toPort })
     adj.set(from, fl)
 
     const tl = adj.get(to) ?? []
-    tl.push({ peerId: from, linkId: id })
+    tl.push({ peerId: from, linkId: id, localPort: toPort, peerPort: fromPort })
     adj.set(to, tl)
   }
 
@@ -85,7 +95,7 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
     const poeLinks: PoELinkDraw[] = []
     let totalUsed = 0
 
-    for (const { peerId, linkId } of neighbors) {
+    for (const { peerId, linkId, localPort, peerPort } of neighbors) {
       const peer = nodeMap.get(peerId)
       if (!peer) continue
 
@@ -117,8 +127,10 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
       const peerLabel = Array.isArray(peer.label) ? peer.label[0] : peer.label
       poeLinks.push({
         linkId,
+        fromPort: localPort,
         toNodeId: peerId,
         toNodeLabel: peerLabel,
+        toPort: peerPort,
         draw_w: totalDraw,
         passthrough: passthroughDevices.length > 0 ? passthroughDevices : undefined,
       })

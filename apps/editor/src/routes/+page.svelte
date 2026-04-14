@@ -324,6 +324,8 @@
     data={detailData}
     mode={editorState.mode}
     poeBudget={poeBudgets.find((b) => b.nodeId === detailData?.id)}
+    {catalog}
+    {links}
     onclose={() => { detailData = null }}
     onupdate={(id, field, value) => {
       // Update node properties in state
