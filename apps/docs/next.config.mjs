@@ -10,13 +10,6 @@ const config = {
   outputFileTracingIncludes: {
     '/api/layout/*': ['./node_modules/**/libavoid-js/**/*.wasm'],
   },
-  webpack: (webpackConfig) => {
-    webpackConfig.experiments = {
-      ...webpackConfig.experiments,
-      asyncWebAssembly: true,
-    }
-    return webpackConfig
-  },
   async rewrites() {
     return [
       {
