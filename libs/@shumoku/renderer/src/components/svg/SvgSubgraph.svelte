@@ -8,6 +8,7 @@
     colors,
     theme,
     selected = false,
+    interactive = false,
     ondragmove,
     onselect,
     oncontextmenu: onctx,
@@ -16,6 +17,7 @@
     colors: RenderColors
     theme?: Theme
     selected?: boolean
+    interactive?: boolean
     ondragmove?: (sgId: string, x: number, y: number) => void
     onselect?: (sgId: string) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
@@ -68,6 +70,7 @@
     onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id) }}
     oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); onselect?.(subgraph.id); onctx?.(subgraph.id, e) }}
     use:elementDrag={() => ({
+      filter: (e) => e.button === 0 && interactive,
       onDrag: (dx, dy) => ondragmove?.(subgraph.id, subgraph.bounds.x + dx, subgraph.bounds.y + dy),
     })}
   />
