@@ -311,5 +311,32 @@
     />
   {/if}
 
-  <DetailPanel open={detailData !== null} data={detailData} onclose={() => { detailData = null }} />
+  <DetailPanel
+    open={detailData !== null}
+    data={detailData}
+    mode={editorState.mode}
+    onclose={() => { detailData = null }}
+    onupdate={(id, field, value) => {
+      // Update node properties in state
+      const node = nodes.get(id)
+      if (node) {
+        const updated = { ...node, node: { ...node.node, [field]: value } }
+        const n = new Map(nodes)
+        n.set(id, updated)
+        nodes = n
+        // Refresh detail data
+        detailData = renderer?.getElementDetails(id) ?? null
+        return
+      }
+      // Update subgraph properties
+      const sg = subgraphs.get(id)
+      if (sg) {
+        const updated = { ...sg, subgraph: { ...sg.subgraph, [field]: value } }
+        const s = new Map(subgraphs)
+        s.set(id, updated)
+        subgraphs = s
+        detailData = renderer?.getElementDetails(id) ?? null
+      }
+    }}
+  />
 </div>

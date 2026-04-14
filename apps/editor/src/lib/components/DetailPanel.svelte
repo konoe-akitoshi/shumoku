@@ -6,15 +6,20 @@
   let {
     open = false,
     data,
+    mode = 'view',
     onclose,
+    onupdate,
   }: {
     open?: boolean
     // biome-ignore lint/suspicious/noExplicitAny: mixed element data
     data: Record<string, any> | null
+    mode?: 'edit' | 'view'
     onclose?: () => void
+    onupdate?: (id: string, field: string, value: string) => void
   } = $props()
 
   const kind = $derived((data?.kind as string) ?? 'unknown')
+  const editing = $derived(mode === 'edit')
 
   function kindColor(k: string) {
     if (k === 'node') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
@@ -30,65 +35,89 @@
 
   const iconPath = $derived(data?.type ? getDeviceIcon(data.type) : undefined)
 
-  // biome-ignore lint/suspicious/noExplicitAny: recursive rendering
-  function isObject(v: any): v is Record<string, unknown> {
-    return v !== null && typeof v === 'object' && !Array.isArray(v)
-  }
+  // Editable fields for each element kind
+  const editableFields = new Set(['label', 'type', 'vendor', 'model', 'shape'])
 
-  const overviewFields = $derived.by(() => {
-    if (!data) return []
+  // biome-ignore lint/suspicious/noExplicitAny: mixed data
+  function getDisplayFields(
+    d: Record<string, any>,
+  ): { key: string; label: string; value: string; editable: boolean }[] {
     // biome-ignore lint/suspicious/noExplicitAny: mixed data
-    const fields: { label: string; value: any }[] = []
-    const d = data
+    const fields: { key: string; label: string; value: string; editable: boolean }[] = []
 
-    // Common
     if (d.label) {
       const raw = Array.isArray(d.label)
         ? d.label.map(stripHtml).join('\n')
         : stripHtml(String(d.label))
-      fields.push({ label: 'Label', value: raw })
+      fields.push({ key: 'label', label: 'Label', value: raw, editable: true })
     }
-    if (d.type) fields.push({ label: 'Type', value: d.type })
-    if (d.vendor) fields.push({ label: 'Vendor', value: d.vendor })
-    if (d.model) fields.push({ label: 'Model', value: d.model })
-    if (d.shape) fields.push({ label: 'Shape', value: d.shape })
-    if (d.parent) fields.push({ label: 'Parent', value: d.parent })
-
-    // Position/bounds
+    if (d.type) fields.push({ key: 'type', label: 'Type', value: d.type, editable: true })
+    if (d.vendor) fields.push({ key: 'vendor', label: 'Vendor', value: d.vendor, editable: true })
+    if (d.model) fields.push({ key: 'model', label: 'Model', value: d.model, editable: true })
+    if (d.shape) fields.push({ key: 'shape', label: 'Shape', value: d.shape, editable: true })
+    if (d.parent) fields.push({ key: 'parent', label: 'Parent', value: d.parent, editable: false })
     if (d.position)
       fields.push({
+        key: 'position',
         label: 'Position',
         value: `${d.position.x.toFixed(1)}, ${d.position.y.toFixed(1)}`,
+        editable: false,
       })
-    if (d.size) fields.push({ label: 'Size', value: `${d.size.width} × ${d.size.height}` })
+    if (d.size)
+      fields.push({
+        key: 'size',
+        label: 'Size',
+        value: `${d.size.width} × ${d.size.height}`,
+        editable: false,
+      })
     if (d.bounds)
       fields.push({
+        key: 'bounds',
         label: 'Bounds',
         value: `${d.bounds.width.toFixed(0)} × ${d.bounds.height.toFixed(0)} at (${d.bounds.x.toFixed(0)}, ${d.bounds.y.toFixed(0)})`,
+        editable: false,
       })
-
-    // Edge
-    if (d.from) fields.push({ label: 'From', value: `${d.from.node}:${d.from.port}` })
-    if (d.to) fields.push({ label: 'To', value: `${d.to.node}:${d.to.port}` })
-    if (d.width) fields.push({ label: 'Width', value: d.width })
-    if (d.points) fields.push({ label: 'Points', value: `${d.points} waypoints` })
-
-    // Port
-    if (d.nodeId) fields.push({ label: 'Node', value: d.nodeId })
-    if (d.side) fields.push({ label: 'Side', value: d.side })
-
-    // Children
+    if (d.from)
+      fields.push({
+        key: 'from',
+        label: 'From',
+        value: `${d.from.node}:${d.from.port}`,
+        editable: false,
+      })
+    if (d.to)
+      fields.push({ key: 'to', label: 'To', value: `${d.to.node}:${d.to.port}`, editable: false })
+    if (d.width)
+      fields.push({ key: 'width', label: 'Width', value: String(d.width), editable: false })
+    if (d.points)
+      fields.push({
+        key: 'points',
+        label: 'Points',
+        value: `${d.points} waypoints`,
+        editable: false,
+      })
+    if (d.nodeId) fields.push({ key: 'nodeId', label: 'Node', value: d.nodeId, editable: false })
+    if (d.side) fields.push({ key: 'side', label: 'Side', value: d.side, editable: false })
     if (d.children)
       fields.push({
+        key: 'children',
         label: 'Children',
         value: `${d.children.nodes} nodes, ${d.children.subgraphs} groups`,
+        editable: false,
       })
 
-    // Ports list
-    if (d.ports?.length) fields.push({ label: 'Ports', value: d.ports })
-
     return fields
-  })
+  }
+
+  const displayFields = $derived(data ? getDisplayFields(data) : [])
+  const ports = $derived(data?.ports ?? [])
+
+  function handleFieldChange(key: string, value: string) {
+    if (!data?.id) return
+    onupdate?.(data.id, key, value)
+  }
+
+  const inputClass =
+    'w-full px-1.5 py-0.5 text-[12px] font-mono bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded outline-none focus:ring-1 focus:ring-blue-400 text-neutral-700 dark:text-neutral-200'
 </script>
 
 <Dialog.Root {open} onOpenChange={(o) => { if (!o) onclose?.() }}>
@@ -125,7 +154,6 @@
           Properties of {kind} element {data.id ?? ''}
         </Dialog.Description>
 
-        <!-- Tabs -->
         <Tabs.Root value="overview">
           <!-- Overview tab -->
           <Tabs.Content value="overview">
@@ -147,38 +175,54 @@
                       </svg>
                     </div>
                   {/if}
-                  {#each overviewFields as field}
-                    <div class="flex gap-3">
+                  {#each displayFields as field}
+                    <div class="flex gap-3 items-start">
                       <span
-                        class="shrink-0 w-16 text-right text-neutral-400 dark:text-neutral-500 font-medium pt-0.5"
+                        class="shrink-0 w-16 text-right text-neutral-400 dark:text-neutral-500 font-medium pt-1"
                       >
                         {field.label}
                       </span>
-                      <span
-                        class="text-neutral-700 dark:text-neutral-200 font-mono break-all leading-relaxed"
-                      >
-                        {#if Array.isArray(field.value)}
-                          <!-- Ports list -->
-                          <div class="space-y-1.5">
-                            {#each field.value as port}
-                              <div
-                                class="flex items-center gap-2 pl-2 border-l-2 border-blue-200 dark:border-blue-800 text-[11px]"
-                              >
-                                <span class="text-blue-500 font-semibold">{port.label}</span>
-                                <span class="text-neutral-400">{port.side}</span>
-                              </div>
+                      {#if editing && field.editable}
+                        <input
+                          type="text"
+                          class={inputClass}
+                          value={field.value}
+                          onblur={(e) => handleFieldChange(field.key, (e.target as HTMLInputElement).value)}
+                          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                        >
+                      {:else}
+                        <span
+                          class="text-neutral-700 dark:text-neutral-200 font-mono break-all leading-relaxed pt-0.5"
+                        >
+                          {#if typeof field.value === 'string' && field.value.includes('\n')}
+                            {#each field.value.split('\n') as line}
+                              <div>{line}</div>
                             {/each}
-                          </div>
-                        {:else if typeof field.value === 'string' && field.value.includes('\n')}
-                          {#each field.value.split('\n') as line}
-                            <div>{line}</div>
-                          {/each}
-                        {:else}
-                          {field.value}
-                        {/if}
-                      </span>
+                          {:else}
+                            {field.value}
+                          {/if}
+                        </span>
+                      {/if}
                     </div>
                   {/each}
+                  {#if ports.length > 0}
+                    <div class="flex gap-3 items-start">
+                      <span
+                        class="shrink-0 w-16 text-right text-neutral-400 dark:text-neutral-500 font-medium pt-0.5"
+                        >Ports</span
+                      >
+                      <div class="space-y-1.5">
+                        {#each ports as port}
+                          <div
+                            class="flex items-center gap-2 pl-2 border-l-2 border-blue-200 dark:border-blue-800 text-[11px]"
+                          >
+                            <span class="text-blue-500 font-semibold">{port.label}</span>
+                            <span class="text-neutral-400">{port.side}</span>
+                          </div>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
                 </div>
               </ScrollArea.Viewport>
               <ScrollArea.Scrollbar
@@ -212,6 +256,7 @@
               </ScrollArea.Scrollbar>
             </ScrollArea.Root>
           </Tabs.Content>
+
           <Tabs.List class="flex border-t border-neutral-200 dark:border-neutral-700">
             <Tabs.Trigger
               value="overview"
