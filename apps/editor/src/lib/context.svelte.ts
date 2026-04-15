@@ -1,7 +1,23 @@
-import { darkTheme, lightTheme, type Theme } from '@shumoku/core'
+import { builtinEntries, Catalog } from '@shumoku/catalog'
+import {
+  computeNetworkLayout,
+  createMemoryFileResolver,
+  darkTheme,
+  HierarchicalParser,
+  type Link,
+  lightTheme,
+  type ResolvedEdge,
+  type ResolvedLayout,
+  type ResolvedNode,
+  type ResolvedPort,
+  type ResolvedSubgraph,
+  sampleNetwork,
+  type Theme,
+} from '@shumoku/core'
+import { analyzePoE, type PoEBudget } from './poe-analysis'
 
 // =========================================================================
-// Editor state — module-level $state, importable from any component
+// Editor UI state — mode, theme
 // =========================================================================
 
 let mode = $state<'edit' | 'view'>('view')
@@ -50,4 +66,171 @@ export function initDarkMode() {
     attributeFilter: ['class'],
   })
   return () => obs.disconnect()
+}
+
+// =========================================================================
+// Diagram state — shared across pages
+// =========================================================================
+
+let nodes = $state<Map<string, ResolvedNode>>(new Map())
+let ports = $state<Map<string, ResolvedPort>>(new Map())
+let edges = $state<Map<string, ResolvedEdge>>(new Map())
+let subgraphs = $state<Map<string, ResolvedSubgraph>>(new Map())
+let bounds = $state({ x: 0, y: 0, width: 0, height: 0 })
+let links = $state<Link[]>([])
+let poeBudgets = $state<PoEBudget[]>([])
+let status = $state('Loading...')
+let yamlSource = $state('')
+let initialized = $state(false)
+
+const catalog = new Catalog()
+catalog.registerAll(builtinEntries)
+
+export const diagramState = {
+  get nodes() {
+    return nodes
+  },
+  set nodes(v: Map<string, ResolvedNode>) {
+    nodes = v
+  },
+  get ports() {
+    return ports
+  },
+  set ports(v: Map<string, ResolvedPort>) {
+    ports = v
+  },
+  get edges() {
+    return edges
+  },
+  set edges(v: Map<string, ResolvedEdge>) {
+    edges = v
+  },
+  get subgraphs() {
+    return subgraphs
+  },
+  set subgraphs(v: Map<string, ResolvedSubgraph>) {
+    subgraphs = v
+  },
+  get bounds() {
+    return bounds
+  },
+  set bounds(v: { x: number; y: number; width: number; height: number }) {
+    bounds = v
+  },
+  get links() {
+    return links
+  },
+  set links(v: Link[]) {
+    links = v
+  },
+  get poeBudgets() {
+    return poeBudgets
+  },
+  get catalog() {
+    return catalog
+  },
+  get status() {
+    return status
+  },
+  get yamlSource() {
+    return yamlSource
+  },
+  set yamlSource(v: string) {
+    yamlSource = v
+  },
+  get initialized() {
+    return initialized
+  },
+  get stats() {
+    return { nodes: nodes.size, links: links.length, subgraphs: subgraphs.size }
+  },
+
+  // Serialization
+  stateToJson(): string {
+    return JSON.stringify(
+      {
+        layout: {
+          nodes: Object.fromEntries(new Map(nodes)),
+          ports: Object.fromEntries(new Map(ports)),
+          edges: Object.fromEntries(new Map(edges)),
+          subgraphs: Object.fromEntries(new Map(subgraphs)),
+          bounds: { ...bounds },
+        },
+        links: [...links],
+      },
+      null,
+      2,
+    )
+  },
+
+  loadFromJson(jsonStr: string) {
+    const data = JSON.parse(jsonStr)
+    nodes = new Map(Object.entries(data.layout?.nodes ?? {})) as Map<string, ResolvedNode>
+    ports = new Map(Object.entries(data.layout?.ports ?? {})) as Map<string, ResolvedPort>
+    edges = new Map(Object.entries(data.layout?.edges ?? {})) as Map<string, ResolvedEdge>
+    subgraphs = new Map(Object.entries(data.layout?.subgraphs ?? {})) as Map<
+      string,
+      ResolvedSubgraph
+    >
+    bounds = data.layout?.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
+    links = data.links ?? []
+  },
+
+  loadFromResolved(resolved: ResolvedLayout, graphLinks: Link[]) {
+    nodes = new Map(resolved.nodes)
+    ports = new Map(resolved.ports)
+    edges = new Map(resolved.edges)
+    subgraphs = new Map(resolved.subgraphs)
+    bounds = resolved.bounds
+    links = [...graphLinks]
+  },
+
+  async initialize() {
+    if (initialized) return
+    try {
+      status = 'Parsing network...'
+      const fileMap = new Map<string, string>()
+      for (const f of sampleNetwork) {
+        fileMap.set(f.name, f.content)
+        fileMap.set(`./${f.name}`, f.content)
+        fileMap.set(`/${f.name}`, f.content)
+      }
+      const resolver = createMemoryFileResolver(fileMap, '/')
+      const hp = new HierarchicalParser(resolver)
+      const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
+      if (!mainFile) throw new Error('main.yaml not found')
+      const g = (await hp.parse(mainFile.content, '/main.yaml')).graph
+
+      status = 'Computing layout...'
+      const { resolved } = await computeNetworkLayout(g)
+      diagramState.loadFromResolved(resolved, g.links)
+      poeBudgets = analyzePoE(g.nodes, g.links, catalog)
+      const mf = sampleNetwork.find((f) => f.name === 'main.yaml')
+      if (mf) yamlSource = mf.content
+      status = 'Ready'
+      initialized = true
+    } catch (e) {
+      status = `Error: ${e instanceof Error ? e.message : String(e)}`
+    }
+  },
+
+  async applyYaml(yamlStr: string) {
+    try {
+      status = 'Parsing YAML...'
+      const fileMap = new Map<string, string>()
+      fileMap.set('main.yaml', yamlStr)
+      fileMap.set('./main.yaml', yamlStr)
+      fileMap.set('/main.yaml', yamlStr)
+      const resolver = createMemoryFileResolver(fileMap, '/')
+      const hp = new HierarchicalParser(resolver)
+      const g = (await hp.parse(yamlStr, '/main.yaml')).graph
+      const { resolved } = await computeNetworkLayout(g)
+      diagramState.loadFromResolved(resolved, g.links)
+      poeBudgets = analyzePoE(g.nodes, g.links, catalog)
+      yamlSource = yamlStr
+      status = 'Ready'
+    } catch (e) {
+      status = `Error: ${e instanceof Error ? e.message : String(e)}`
+    }
+  },
 }
