@@ -36,12 +36,8 @@
 
   let jsonSource = $state('{}')
   $effect(() => {
-    jsonSource = diagramState.stateToJson()
+    jsonSource = diagramState.exportProject('Sample Network')
   })
-
-  // =========================================================================
-  // Init — trigger shared state initialization
-  // =========================================================================
 
   // =========================================================================
   // Apply
@@ -49,7 +45,7 @@
 
   function applyJson(jsonStr: string) {
     try {
-      diagramState.loadFromJson(jsonStr)
+      diagramState.importProject(jsonStr)
     } catch (_e) {
       // JSON parse error
     }
@@ -60,11 +56,13 @@
   // =========================================================================
 
   function handleSave() {
-    const blob = new Blob([diagramState.stateToJson()], { type: 'application/json' })
+    const blob = new Blob([diagramState.exportProject('Sample Network')], {
+      type: 'application/json',
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'network-diagram.json'
+    a.download = 'project.neted.json'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -72,7 +70,7 @@
   function handleLoad() {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.json'
+    input.accept = '.json,.neted.json'
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) return

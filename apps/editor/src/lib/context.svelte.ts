@@ -16,7 +16,7 @@ import {
 } from '@shumoku/core'
 import { analyzePoE, type PoEBudget } from './poe-analysis'
 import { sampleBomItems, samplePalette } from './sample-project'
-import type { BomItem, SpecPaletteEntry } from './types'
+import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
 
 // =========================================================================
 // Editor UI state — mode, theme
@@ -200,35 +200,61 @@ export const diagramState = {
       .map((i) => i.nodeId as string)
   },
 
-  // Serialization
-  stateToJson(): string {
-    return JSON.stringify(
-      {
-        layout: {
-          nodes: Object.fromEntries(new Map(nodes)),
-          ports: Object.fromEntries(new Map(ports)),
-          edges: Object.fromEntries(new Map(edges)),
-          subgraphs: Object.fromEntries(new Map(subgraphs)),
-          bounds: { ...bounds },
-        },
-        links: [...links],
+  // Serialization — .neted.json format
+  /** Export project as NetedProject JSON string */
+  exportProject(name = 'Untitled'): string {
+    const project: NetedProject = {
+      version: 1,
+      name,
+      palette: [...palette],
+      bom: [...bomItems],
+      connections: [...links],
+      diagram: {
+        nodes: Object.fromEntries(new Map(nodes)),
+        ports: Object.fromEntries(new Map(ports)),
+        edges: Object.fromEntries(new Map(edges)),
+        subgraphs: Object.fromEntries(new Map(subgraphs)),
+        bounds: { ...bounds },
       },
-      null,
-      2,
-    )
+    }
+    return JSON.stringify(project, null, 2)
   },
 
-  loadFromJson(jsonStr: string) {
+  /** Import project from NetedProject JSON string */
+  importProject(jsonStr: string) {
     const data = JSON.parse(jsonStr)
-    nodes = new Map(Object.entries(data.layout?.nodes ?? {})) as Map<string, ResolvedNode>
-    ports = new Map(Object.entries(data.layout?.ports ?? {})) as Map<string, ResolvedPort>
-    edges = new Map(Object.entries(data.layout?.edges ?? {})) as Map<string, ResolvedEdge>
-    subgraphs = new Map(Object.entries(data.layout?.subgraphs ?? {})) as Map<
-      string,
-      ResolvedSubgraph
-    >
-    bounds = data.layout?.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
-    links = data.links ?? []
+
+    // Support both .neted.json (v1) and legacy diagram.json
+    if (data.version === 1) {
+      // NetedProject format
+      palette = data.palette ?? []
+      bomItems = data.bom ?? []
+      links = data.connections ?? []
+      const d = data.diagram ?? {}
+      nodes = new Map(Object.entries(d.nodes ?? {})) as Map<string, ResolvedNode>
+      ports = new Map(Object.entries(d.ports ?? {})) as Map<string, ResolvedPort>
+      edges = new Map(Object.entries(d.edges ?? {})) as Map<string, ResolvedEdge>
+      subgraphs = new Map(Object.entries(d.subgraphs ?? {})) as Map<string, ResolvedSubgraph>
+      bounds = d.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
+    } else {
+      // Legacy format: { layout: {...}, links: [...] }
+      const layout = data.layout ?? data.diagram ?? {}
+      nodes = new Map(Object.entries(layout.nodes ?? {})) as Map<string, ResolvedNode>
+      ports = new Map(Object.entries(layout.ports ?? {})) as Map<string, ResolvedPort>
+      edges = new Map(Object.entries(layout.edges ?? {})) as Map<string, ResolvedEdge>
+      subgraphs = new Map(Object.entries(layout.subgraphs ?? {})) as Map<string, ResolvedSubgraph>
+      bounds = layout.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
+      links = data.links ?? data.connections ?? []
+      // Legacy: no palette/bom
+      palette = []
+      bomItems = []
+    }
+    poeBudgets = analyzePoE(
+      [...nodes.values()].map((rn) => rn.node),
+      links,
+      catalog,
+    )
+    status = 'Ready'
   },
 
   loadFromResolved(resolved: ResolvedLayout, graphLinks: Link[]) {
