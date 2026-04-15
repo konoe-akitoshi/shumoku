@@ -3,6 +3,7 @@
   import { nanoid } from 'nanoid'
   import { CaretDown, Plus, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
   import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
@@ -153,7 +154,7 @@
                 <button
                   type="button"
                   class="text-xs text-primary hover:underline cursor-pointer"
-                  onclick={() => goto(`/specs/${pal.id}`)}
+                  onclick={() => goto(`/project/${$page.params.id}/specs/${pal.id}`)}
                 >
                   {paletteEntryLabel(pal)}
                 </button>
@@ -229,7 +230,7 @@
               <button
                 type="button"
                 class="text-xs text-primary hover:underline cursor-pointer"
-                onclick={() => goto(`/specs/${s.paletteId}`)}
+                onclick={() => goto(`/project/${$page.params.id}/specs/${s.paletteId}`)}
               >
                 {s.label}
               </button>

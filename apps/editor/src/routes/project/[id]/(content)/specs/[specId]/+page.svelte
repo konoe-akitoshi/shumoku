@@ -9,7 +9,7 @@
   import { diagramState } from '$lib/context.svelte'
   import { paletteEntryLabel, specIdentifier } from '$lib/types'
 
-  const entry = $derived(diagramState.palette.find((e) => e.id === $page.params.id))
+  const entry = $derived(diagramState.palette.find((e) => e.id === $page.params.specId))
 
   const hw = $derived(
     entry?.spec.kind === 'hardware' && entry.properties
@@ -55,7 +55,7 @@
 {#if entry}
   <div class="mb-6">
     <a
-      href="/specs"
+      href={`/project/${$page.params.id}/specs`}
       class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3"
     >
       <ArrowLeft class="w-3.5 h-3.5" />
@@ -164,6 +164,8 @@
 {:else}
   <div class="flex flex-col items-center justify-center py-16 text-muted-foreground">
     <p class="text-sm mb-2">Spec not found.</p>
-    <a href="/specs" class="text-xs text-primary hover:underline">Back to Specs</a>
+    <a href={`/project/${$page.params.id}/specs`} class="text-xs text-primary hover:underline"
+      >Back to Specs</a
+    >
   </div>
 {/if}

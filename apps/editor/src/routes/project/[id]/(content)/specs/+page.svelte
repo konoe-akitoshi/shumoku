@@ -4,6 +4,7 @@
   import { nanoid } from 'nanoid'
   import { CaretDown, Plus, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
   import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
@@ -154,7 +155,10 @@
       </Table.Header>
       <Table.Body>
         {#each diagramState.palette as entry}
-          <Table.Row class="cursor-pointer" onclick={() => goto(`/specs/${entry.id}`)}>
+          <Table.Row
+            class="cursor-pointer"
+            onclick={() => goto(`/project/${$page.params.id}/specs/${entry.id}`)}
+          >
             <Table.Cell> <Badge variant="secondary">{entry.spec.kind}</Badge> </Table.Cell>
             <Table.Cell class="font-mono text-xs">{entry.spec.vendor ?? '—'}</Table.Cell>
             <Table.Cell class="font-mono text-xs">{specIdentifier(entry.spec)}</Table.Cell>
