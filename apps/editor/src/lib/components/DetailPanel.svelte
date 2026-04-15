@@ -1,19 +1,17 @@
 <script lang="ts">
-  import type { Catalog, CatalogEntry, HardwareProperties } from '@shumoku/catalog'
+  import type { HardwareProperties } from '@shumoku/catalog'
   import { getDeviceIcon, type Link } from '@shumoku/core'
   import { Combobox, Dialog, ScrollArea, Tabs } from 'bits-ui'
-  import { ArrowSquareOut, CaretUpDown, X } from 'phosphor-svelte'
+  import { CaretUpDown, X } from 'phosphor-svelte'
   import type { PoEBudget } from '$lib/poe-analysis'
   import type { SpecPaletteEntry } from '$lib/types'
   import { paletteEntryLabel } from '$lib/types'
-  import SpecCatalogDialog from './SpecCatalogDialog.svelte'
 
   let {
     open = false,
     data,
     mode = 'view',
     poeBudget,
-    catalog,
     palette = [],
     links = [],
     onclose,
@@ -25,7 +23,6 @@
     data: Record<string, any> | null
     mode?: 'edit' | 'view'
     poeBudget?: PoEBudget
-    catalog?: Catalog
     palette?: SpecPaletteEntry[]
     links?: Link[]
     onclose?: () => void
@@ -33,7 +30,6 @@
     onbindpalette?: (nodeId: string, paletteId: string) => void
   } = $props()
 
-  let specDialogOpen = $state(false)
   let comboSearchValue = $state('')
 
   const comboResults = $derived.by(() => {
@@ -45,28 +41,16 @@
 
   function handleComboSelect(paletteId: string) {
     if (!data?.id) return
-    const entry = palette.find((e) => e.id === paletteId)
-    if (!entry) return
-    // Update node spec from palette entry
-    const spec = entry.spec
-    const fields: Record<string, string> = { kind: spec.kind }
-    if (spec.vendor) fields.vendor = spec.vendor
-    if ('type' in spec && spec.type) fields.type = String(spec.type)
-    if ('model' in spec && spec.model) fields.model = spec.model
-    if ('service' in spec && spec.service) fields.service = spec.service
-    if ('resource' in spec && spec.resource) fields.resource = spec.resource
-    if (spec.icon) fields.icon = spec.icon
-    for (const [key, value] of Object.entries(fields)) {
-      onupdate?.(data.id, `spec.${key}`, value)
-    }
-    // Bind node to palette via BOM
+    // Bind node to palette via BOM — spec propagation happens in context
     onbindpalette?.(data.id, paletteId)
   }
 
-  // Find bound palette entry for this node (via BOM or direct match)
+  // Bound palette entry for this node (via BOM — single source of truth)
   const boundPalette = $derived.by<SpecPaletteEntry | null>(() => {
     if (!data?.id || !palette.length) return null
-    // Match by spec fingerprint (palette → node spec)
+    // BOM-based lookup: find BomItem with this nodeId → get paletteId → find palette entry
+    // The parent passes `boundPaletteId` via the palette list; here we match by node spec
+    // since the spec is now propagated from palette via BOM binding
     const spec = data.spec
     if (!spec) return null
     for (const pal of palette) {
@@ -93,20 +77,10 @@
     return null
   })
 
-  const catalogEntry = $derived.by<CatalogEntry | null>(() => {
-    if (!catalog || !data?.spec) return null
-    const spec = data.spec
-    if (spec.kind !== 'hardware' && spec.kind !== 'compute') return null
-    if (!spec.vendor || !spec.model) return null
-    return catalog.lookup(`${spec.vendor}/${spec.model}`) ?? null
-  })
-
   const hwProps = $derived(
     boundPalette?.spec.kind === 'hardware' && boundPalette.properties
       ? (boundPalette.properties as HardwareProperties)
-      : catalogEntry?.spec.kind === 'hardware'
-        ? (catalogEntry.properties as HardwareProperties)
-        : null,
+      : null,
   )
 
   const kind = $derived((data?.kind as string) ?? 'unknown')
@@ -377,17 +351,17 @@
                     </div>
                   </div>
 
-                  <!-- Device selector / info -->
+                  <!-- Spec binding (from project Palette) -->
                   {#if kind === 'node' || kind === 'subgraph'}
                     {#if editing}
-                      <div class="flex items-center gap-2">
+                      <div>
                         <Combobox.Root
                           type="single"
                           onValueChange={(v) => { if (v) handleComboSelect(v) }}
                         >
-                          <div class="relative flex-1">
+                          <div class="relative">
                             <Combobox.Input
-                              placeholder="Search products..."
+                              placeholder="Search Spec Palette..."
                               defaultValue={boundPalette ? paletteEntryLabel(boundPalette) : ''}
                               class="w-full pl-3 pr-8 py-1.5 text-[11px] bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-lg outline-none focus:ring-1 focus:ring-blue-400 text-neutral-700 dark:text-neutral-200"
                               oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
@@ -416,35 +390,26 @@
                             {/each}
                           </Combobox.Content>
                         </Combobox.Root>
-                        <button
-                          type="button"
-                          class="shrink-0 p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                          title="Spec Details"
-                          onclick={() => { specDialogOpen = true }}
-                        >
-                          <ArrowSquareOut class="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     {:else if boundPalette}
-                      <button
-                        type="button"
-                        class="flex items-center gap-2 w-full px-2.5 py-1.5 text-left rounded-lg bg-neutral-50 dark:bg-neutral-700/50 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
-                        onclick={() => { specDialogOpen = true }}
-                      >
-                        <div class="flex-1 min-w-0">
-                          <div
-                            class="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
-                          >
-                            {boundPalette.spec.vendor}
-                          </div>
-                          <div
-                            class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
-                          >
-                            {paletteEntryLabel(boundPalette)}
-                          </div>
+                      <div class="px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-700/50">
+                        <div
+                          class="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
+                        >
+                          {boundPalette.spec.vendor}
                         </div>
-                        <ArrowSquareOut class="shrink-0 w-3.5 h-3.5 text-neutral-400" />
-                      </button>
+                        <div
+                          class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
+                        >
+                          {paletteEntryLabel(boundPalette)}
+                        </div>
+                      </div>
+                    {:else}
+                      <div
+                        class="px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-700/30 text-[11px] text-neutral-400 dark:text-neutral-500 italic"
+                      >
+                        No spec bound — assign via Edit mode or BOM page
+                      </div>
                     {/if}
                   {/if}
 
@@ -688,17 +653,3 @@
     </Dialog.Content>
   </Dialog.Portal>
 </Dialog.Root>
-
-<SpecCatalogDialog
-  open={specDialogOpen}
-  {mode}
-  {catalog}
-  currentSpec={data?.spec}
-  onclose={() => { specDialogOpen = false }}
-  onselect={(spec) => {
-    if (!data?.id) return
-    for (const [key, value] of Object.entries(spec)) {
-      onupdate?.(data.id, `spec.${key}`, value)
-    }
-  }}
-/>

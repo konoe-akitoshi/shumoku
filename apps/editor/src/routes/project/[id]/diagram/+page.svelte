@@ -98,6 +98,11 @@
         onchange={() => {}}
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
         oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => { contextMenu = { id, type, x: screenX, y: screenY } }}
+        onnodeadd={(id: string) => {
+          diagramState.addBomItem({ id: nanoid(), nodeId: id })
+          detailData = renderer?.getElementDetails(id) ?? null
+        }}
+        onnodedelete={(ids: string[]) => { diagramState.unbindNodes(ids) }}
       />
     {:else}
       <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">
@@ -185,25 +190,12 @@
     data={detailData}
     mode={editorState.mode}
     poeBudget={diagramState.poeBudgets.find((b) => b.nodeId === detailData?.id)}
-    catalog={diagramState.catalog}
     palette={diagramState.palette}
     links={diagramState.links}
     onclose={() => { detailData = null }}
     onbindpalette={(nodeId, paletteId) => {
-      // Find or create BOM item for this binding
-      const existing = diagramState.bomItems.find((i) => i.nodeId === nodeId)
-      if (existing) {
-        // Re-bind to different palette entry
-        diagramState.updateBomItem(existing.id, { paletteId })
-      } else {
-        // Find unplaced BOM item for this palette entry, or create new
-        const unplaced = diagramState.bomItems.find((i) => i.paletteId === paletteId && !i.nodeId)
-        if (unplaced) {
-          diagramState.bindNodeToBom(unplaced.id, nodeId)
-        } else {
-          diagramState.addBomItem({ id: nanoid(), paletteId, nodeId })
-        }
-      }
+      diagramState.bindNodeToPalette(nodeId, paletteId)
+      detailData = renderer?.getElementDetails(nodeId) ?? null
     }}
     onupdate={(id, field, value) => {
       const node = diagramState.nodes.get(id)

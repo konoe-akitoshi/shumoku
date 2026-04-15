@@ -39,8 +39,8 @@ export interface SpecPaletteEntry {
 export interface BomItem {
   /** Stable unique ID (nanoid) */
   id: string
-  /** Reference to Spec Palette entry */
-  paletteId: string
+  /** Reference to Spec Palette entry (undefined = not yet assigned) */
+  paletteId?: string
   /** Bound diagram node ID (undefined = not yet placed) */
   nodeId?: string
   /** User notes for this specific instance */
