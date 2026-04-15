@@ -2,18 +2,25 @@
   import { Cube, ListBullets, PlugsConnected, Table } from 'phosphor-svelte'
   import { page } from '$app/stores'
 
-  const navItems = [
-    { href: '/', label: 'Diagram', icon: Cube },
-    { href: '/specs', label: 'Specs', icon: ListBullets },
-    { href: '/bom', label: 'BOM', icon: Table },
-    { href: '/connections', label: 'Connections', icon: PlugsConnected },
-  ]
+  // Extract project ID from URL
+  const projectId = $derived($page.params.id ?? '')
+
+  const navItems = $derived([
+    { href: `/project/${projectId}/diagram`, label: 'Diagram', icon: Cube },
+    { href: `/project/${projectId}/specs`, label: 'Specs', icon: ListBullets },
+    { href: `/project/${projectId}/bom`, label: 'BOM', icon: Table },
+    { href: `/project/${projectId}/connections`, label: 'Connections', icon: PlugsConnected },
+  ])
 </script>
 
 <nav
   class="fixed top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1 rounded-xl bg-white/80 dark:bg-neutral-800/80 backdrop-blur-lg border border-neutral-200 dark:border-neutral-700 shadow-lg"
 >
-  <span class="text-[10px] font-bold text-neutral-600 dark:text-neutral-300 px-2">shumoku</span>
+  <a
+    href="/"
+    class="text-[10px] font-bold text-neutral-600 dark:text-neutral-300 px-2 hover:text-primary transition-colors"
+    >shumoku</a
+  >
   <div class="w-px h-4 bg-neutral-200 dark:bg-neutral-600"></div>
   {#each navItems as item}
     <a

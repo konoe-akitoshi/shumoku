@@ -240,37 +240,52 @@ export const diagramState = {
     links = [...graphLinks]
   },
 
-  async initialize() {
-    if (initialized) return
+  /** Load a project by ID. Resets all state first. */
+  async loadProject(projectId: string) {
+    // Reset all state
+    palette = []
+    bomItems = []
+    nodes = new Map()
+    ports = new Map()
+    edges = new Map()
+    subgraphs = new Map()
+    bounds = { x: 0, y: 0, width: 800, height: 600 }
+    links = []
+    poeBudgets = []
+    yamlSource = ''
+    initialized = false
 
-    // Synchronous: project data available immediately
-    palette = [...samplePalette]
-    bomItems = [...sampleBomItems]
+    if (projectId === 'sample') {
+      // Load sample project data
+      palette = [...samplePalette]
+      bomItems = [...sampleBomItems]
 
-    // Async: diagram layout requires parsing + computation
-    try {
-      status = 'Parsing network...'
-      const fileMap = new Map<string, string>()
-      for (const f of sampleNetwork) {
-        fileMap.set(f.name, f.content)
-        fileMap.set(`./${f.name}`, f.content)
-        fileMap.set(`/${f.name}`, f.content)
+      try {
+        status = 'Loading sample...'
+        const fileMap = new Map<string, string>()
+        for (const f of sampleNetwork) {
+          fileMap.set(f.name, f.content)
+          fileMap.set(`./${f.name}`, f.content)
+          fileMap.set(`/${f.name}`, f.content)
+        }
+        const resolver = createMemoryFileResolver(fileMap, '/')
+        const hp = new HierarchicalParser(resolver)
+        const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
+        if (!mainFile) throw new Error('main.yaml not found')
+        const g = (await hp.parse(mainFile.content, '/main.yaml')).graph
+
+        const { resolved } = await computeNetworkLayout(g)
+        diagramState.loadFromResolved(resolved, g.links)
+        poeBudgets = analyzePoE(g.nodes, g.links, catalog)
+        const mf = sampleNetwork.find((f) => f.name === 'main.yaml')
+        if (mf) yamlSource = mf.content
+        status = 'Ready'
+      } catch (e) {
+        status = `Error: ${e instanceof Error ? e.message : String(e)}`
       }
-      const resolver = createMemoryFileResolver(fileMap, '/')
-      const hp = new HierarchicalParser(resolver)
-      const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
-      if (!mainFile) throw new Error('main.yaml not found')
-      const g = (await hp.parse(mainFile.content, '/main.yaml')).graph
-
-      status = 'Computing layout...'
-      const { resolved } = await computeNetworkLayout(g)
-      diagramState.loadFromResolved(resolved, g.links)
-      poeBudgets = analyzePoE(g.nodes, g.links, catalog)
-      const mf = sampleNetwork.find((f) => f.name === 'main.yaml')
-      if (mf) yamlSource = mf.content
+    } else {
+      // Empty project (or future: load from DB by ID)
       status = 'Ready'
-    } catch (e) {
-      status = `Error: ${e instanceof Error ? e.message : String(e)}`
     }
 
     initialized = true
