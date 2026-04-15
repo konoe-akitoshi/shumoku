@@ -8,7 +8,10 @@
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
 
-  // All node IDs for dropdowns
+  // =========================================================================
+  // Derived: nodes, ports, connections
+  // =========================================================================
+
   const nodeOptions = $derived(
     [...diagramState.nodes.values()].map((rn) => ({
       id: rn.id,
@@ -16,7 +19,25 @@
     })),
   )
 
-  // Flattened rows for table display
+  // Ports grouped by node
+  const portsByNode = $derived.by(() => {
+    const groups = new Map<string, { id: string; label: string; side: string }[]>()
+    for (const [_id, port] of diagramState.ports) {
+      const nodeId = port.nodeId
+      if (!nodeId) continue
+      const arr = groups.get(nodeId) ?? []
+      arr.push({ id: _id, label: port.label ?? _id, side: port.side ?? '' })
+      groups.set(nodeId, arr)
+    }
+    return groups
+  })
+
+  // Port options for a given node (for select dropdowns)
+  function getPortOptions(nodeId: string) {
+    return portsByNode.get(nodeId) ?? []
+  }
+
+  // Connection rows
   interface ConnectionRow {
     link: Link
     id: string
@@ -59,7 +80,10 @@
     })
   })
 
-  // Summary
+  // =========================================================================
+  // Summaries
+  // =========================================================================
+
   const bandwidthSummary = $derived.by(() => {
     const counts = new Map<string, number>()
     for (const row of rows) {
@@ -78,20 +102,64 @@
     ),
   )
 
-  // Add new connection
+  // Per-node connection count
+  const nodeConnectionCounts = $derived.by(() => {
+    const counts = new Map<string, number>()
+    for (const row of rows) {
+      counts.set(row.fromNode, (counts.get(row.fromNode) ?? 0) + 1)
+      counts.set(row.toNode, (counts.get(row.toNode) ?? 0) + 1)
+    }
+    return counts
+  })
+
+  // Ports with no connection
+  const unconnectedPorts = $derived.by(() => {
+    const connectedPorts = new Set<string>()
+    for (const row of rows) {
+      if (row.fromPort) connectedPorts.add(`${row.fromNode}:${row.fromPort}`)
+      if (row.toPort) connectedPorts.add(`${row.toNode}:${row.toPort}`)
+    }
+    const result: { nodeId: string; nodeLabel: string; portLabel: string; side: string }[] = []
+    for (const [nodeId, ports] of portsByNode) {
+      const node = nodeOptions.find((n) => n.id === nodeId)
+      for (const port of ports) {
+        if (!connectedPorts.has(`${nodeId}:${port.label}`)) {
+          result.push({
+            nodeId,
+            nodeLabel: node?.label ?? nodeId,
+            portLabel: port.label,
+            side: port.side,
+          })
+        }
+      }
+    }
+    return result
+  })
+
+  // =========================================================================
+  // Add connection
+  // =========================================================================
+
   let addFromNode = $state('')
+  let addFromPort = $state('')
   let addToNode = $state('')
+  let addToPort = $state('')
 
   function handleAdd() {
     if (!addFromNode || !addToNode || addFromNode === addToNode) return
-    const from: LinkEndpoint = { node: addFromNode }
-    const to: LinkEndpoint = { node: addToNode }
+    const from: LinkEndpoint = { node: addFromNode, port: addFromPort || undefined }
+    const to: LinkEndpoint = { node: addToNode, port: addToPort || undefined }
     diagramState.addLink({ id: `link-${nanoid(8)}`, from, to })
     addFromNode = ''
+    addFromPort = ''
     addToNode = ''
+    addToPort = ''
   }
 
-  // Inline edit helpers
+  // =========================================================================
+  // Inline edit
+  // =========================================================================
+
   function updateEndpoint(link: Link, side: 'from' | 'to', field: 'port' | 'ip', value: string) {
     if (!link.id) return
     const current = typeof link[side] === 'object' ? link[side] : { node: link[side] as string }
@@ -125,17 +193,26 @@
     <h1 class="text-lg font-semibold">Connections</h1>
     <p class="text-sm text-muted-foreground">
       {rows.length}
-      links{vlanSet.size > 0 ? `, ${vlanSet.size} VLANs` : ''}
+      links, {diagramState.ports.size} ports{vlanSet.size > 0 ? `, ${vlanSet.size} VLANs` : ''}
     </p>
   </div>
 </div>
 
 <!-- Summary cards -->
-<div class="grid grid-cols-3 gap-3 mb-6">
+<div class="grid grid-cols-4 gap-3 mb-6">
   <Card.Root>
     <Card.Content class="pt-4">
       <div class="text-xs uppercase tracking-wider text-muted-foreground">Links</div>
       <div class="text-2xl font-mono font-bold">{rows.length}</div>
+    </Card.Content>
+  </Card.Root>
+  <Card.Root>
+    <Card.Content class="pt-4">
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">Ports</div>
+      <div class="text-2xl font-mono font-bold">{diagramState.ports.size}</div>
+      {#if unconnectedPorts.length > 0}
+        <div class="text-[10px] text-amber-600 mt-0.5">{unconnectedPorts.length} unused</div>
+      {/if}
     </Card.Content>
   </Card.Root>
   <Card.Root>
@@ -170,39 +247,62 @@
 <!-- Add connection -->
 <Card.Root class="mb-6">
   <Card.Content class="pt-4">
-    <div class="flex items-end gap-3">
+    <div class="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+      New Connection
+    </div>
+    <div class="flex items-end gap-2">
       <div class="flex-1">
-        <label
-          class="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 block"
-          for="add-from"
-          >From</label
-        >
+        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-from-node">From</label>
         <select
-          id="add-from"
+          id="add-from-node"
           class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
           bind:value={addFromNode}
         >
-          <option value="">Select node...</option>
+          <option value="">Node...</option>
           {#each nodeOptions as opt}
-            <option value={opt.id}>{opt.id} ({opt.label})</option>
+            <option value={opt.id}>{opt.label}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="w-24">
+        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-from-port">Port</label>
+        <select
+          id="add-from-port"
+          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
+          bind:value={addFromPort}
+          disabled={!addFromNode}
+        >
+          <option value="">—</option>
+          {#each getPortOptions(addFromNode) as p}
+            <option value={p.label}>{p.label} ({p.side})</option>
           {/each}
         </select>
       </div>
       <span class="text-muted-foreground text-sm pb-1.5">→</span>
       <div class="flex-1">
-        <label
-          class="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 block"
-          for="add-to"
-          >To</label
-        >
+        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-to-node">To</label>
         <select
-          id="add-to"
+          id="add-to-node"
           class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
           bind:value={addToNode}
         >
-          <option value="">Select node...</option>
+          <option value="">Node...</option>
           {#each nodeOptions as opt}
-            <option value={opt.id}>{opt.id} ({opt.label})</option>
+            <option value={opt.id}>{opt.label}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="w-24">
+        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-to-port">Port</label>
+        <select
+          id="add-to-port"
+          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
+          bind:value={addToPort}
+          disabled={!addToNode}
+        >
+          <option value="">—</option>
+          {#each getPortOptions(addToNode) as p}
+            <option value={p.label}>{p.label} ({p.side})</option>
           {/each}
         </select>
       </div>
@@ -220,7 +320,8 @@
 
 <!-- Connection table -->
 {#if rows.length > 0}
-  <Card.Root class="py-0">
+  <h2 class="text-sm font-semibold mb-3">Cables</h2>
+  <Card.Root class="py-0 mb-6">
     <Table.Root>
       <Table.Header>
         <Table.Row>
@@ -333,9 +434,52 @@
     </Table.Root>
   </Card.Root>
 {:else}
-  <Card.Root class="py-16">
+  <Card.Root class="py-12 mb-6">
     <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
       <p class="text-sm">No connections. Add one above or draw links on the diagram.</p>
     </Card.Content>
   </Card.Root>
+{/if}
+
+<!-- Interfaces (ports by node) -->
+{#if portsByNode.size > 0}
+  <h2 class="text-sm font-semibold mb-3">Interfaces</h2>
+  <div class="grid grid-cols-2 gap-3 mb-6">
+    {#each nodeOptions as node}
+      {@const ports = portsByNode.get(node.id) ?? []}
+      {@const connCount = nodeConnectionCounts.get(node.id) ?? 0}
+      {#if ports.length > 0}
+        <Card.Root>
+          <Card.Content class="pt-4">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <div class="text-xs font-semibold font-mono">{node.id}</div>
+                <div class="text-[10px] text-muted-foreground">{node.label}</div>
+              </div>
+              <Badge variant="outline" class="text-[9px]">{connCount} links</Badge>
+            </div>
+            <div class="space-y-1">
+              {#each ports as port}
+                {@const connected = rows.some(
+                  (r) =>
+                    (r.fromNode === node.id && r.fromPort === port.label) ||
+                    (r.toNode === node.id && r.toPort === port.label),
+                )}
+                <div
+                  class="flex items-center justify-between px-2 py-1 rounded text-[10px] {connected ? 'bg-emerald-50 dark:bg-emerald-900/10' : 'bg-neutral-50 dark:bg-neutral-800'}"
+                >
+                  <span
+                    class="font-mono font-medium {connected ? 'text-emerald-700 dark:text-emerald-400' : 'text-neutral-500'}"
+                  >
+                    {port.label}
+                  </span>
+                  <span class="text-muted-foreground">{port.side}</span>
+                </div>
+              {/each}
+            </div>
+          </Card.Content>
+        </Card.Root>
+      {/if}
+    {/each}
+  </div>
 {/if}
