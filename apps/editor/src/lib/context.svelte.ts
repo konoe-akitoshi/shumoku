@@ -15,7 +15,7 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { analyzePoE, type PoEBudget } from './poe-analysis'
-import { samplePalette } from './sample-project'
+import { sampleNodeBindings, samplePalette } from './sample-project'
 import type { SpecPaletteEntry } from './types'
 
 // =========================================================================
@@ -82,6 +82,8 @@ let bounds = $state({ x: 0, y: 0, width: 0, height: 0 })
 let links = $state<Link[]>([])
 let poeBudgets = $state<PoEBudget[]>([])
 let palette = $state<SpecPaletteEntry[]>([])
+/** nodeId → paletteId mapping (explicit binding) */
+let nodeBindings = $state<Map<string, string>>(new Map())
 let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
@@ -162,6 +164,33 @@ export const diagramState = {
     palette = palette.map((e) => (e.id === id ? { ...e, ...updates } : e))
   },
 
+  // Node ↔ Palette bindings
+  get nodeBindings() {
+    return nodeBindings
+  },
+  bindNode(nodeId: string, paletteId: string) {
+    const next = new Map(nodeBindings)
+    next.set(nodeId, paletteId)
+    nodeBindings = next
+  },
+  unbindNode(nodeId: string) {
+    const next = new Map(nodeBindings)
+    next.delete(nodeId)
+    nodeBindings = next
+  },
+  /** Get palette ID for a node */
+  getPaletteIdForNode(nodeId: string): string | undefined {
+    return nodeBindings.get(nodeId)
+  },
+  /** Get all node IDs bound to a palette entry */
+  getNodesForPalette(paletteId: string): string[] {
+    const ids: string[] = []
+    for (const [nodeId, palId] of nodeBindings) {
+      if (palId === paletteId) ids.push(nodeId)
+    }
+    return ids
+  },
+
   // Serialization
   stateToJson(): string {
     return JSON.stringify(
@@ -207,6 +236,7 @@ export const diagramState = {
 
     // Synchronous: project data available immediately
     palette = [...samplePalette]
+    nodeBindings = new Map(sampleNodeBindings)
 
     // Async: diagram layout requires parsing + computation
     try {

@@ -158,3 +158,33 @@ export const samplePalette: SpecPaletteEntry[] = [
     } satisfies HardwareProperties,
   },
 ]
+
+/** Node ID → Palette ID bindings for the sample project */
+export const sampleNodeBindings = new Map<string, string>([
+  // Cloud
+  ['cloud-services', 'pal-aws-ec2'],
+  ['vgw', 'pal-aws-vpn-gw'],
+  // Perimeter
+  ['isp1', 'pal-internet'],
+  ['isp2', 'pal-internet'],
+  ['rt1', 'pal-yamaha-rtx3510'],
+  ['rt2', 'pal-yamaha-rtx3510'],
+  ['fw1', 'pal-juniper-srx4100'],
+  ['fw2', 'pal-juniper-srx4100'],
+  // DMZ
+  ['dmz-sw', 'pal-generic-l2-switch'],
+  ['web-srv', 'pal-generic-server'],
+  ['mail-srv', 'pal-generic-server'],
+  // NOC
+  ['core-sw', 'pal-juniper-qfx5120'],
+  ['dist-sw', 'pal-juniper-ex4400'],
+  // Building A
+  ['sw-a1', 'pal-cisco-3560cx-8pc'],
+  ['ap-a1', 'pal-aruba-ap505'],
+  ['ap-a2', 'pal-aruba-ap505'],
+  // Building B
+  ['sw-b1', 'pal-panasonic-m8egpwr-plus'],
+  ['ap-b1', 'pal-aruba-ap505'],
+  ['ap-b2', 'pal-aruba-ap11d'],
+  ['ip-phone', 'pal-generic-ip-phone'],
+])

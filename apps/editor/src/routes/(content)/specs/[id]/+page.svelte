@@ -7,7 +7,6 @@
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
-  import { specFingerprint } from '$lib/spec-utils'
   import { paletteEntryLabel, specIdentifier } from '$lib/types'
 
   const entry = $derived(diagramState.palette.find((e) => e.id === $page.params.id))
@@ -21,13 +20,7 @@
   // Find nodes using this spec
   const usedByNodes = $derived.by<string[]>(() => {
     if (!entry) return []
-    const fp = specFingerprint(entry.spec)
-    if (!fp) return []
-    const ids: string[] = []
-    for (const [id, rn] of diagramState.nodes) {
-      if (specFingerprint(rn.node.spec) === fp) ids.push(id)
-    }
-    return ids
+    return diagramState.getNodesForPalette(entry.id)
   })
 
   // biome-ignore lint/suspicious/noExplicitAny: flatten unknown property groups
