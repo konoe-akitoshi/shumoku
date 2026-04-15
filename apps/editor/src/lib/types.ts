@@ -2,7 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ComputeProperties, HardwareProperties, ServiceProperties } from '@shumoku/catalog'
-import type { NodeSpec } from '@shumoku/core'
+import type {
+  Link,
+  NodeSpec,
+  ResolvedEdge,
+  ResolvedNode,
+  ResolvedPort,
+  ResolvedSubgraph,
+} from '@shumoku/core'
 
 // =========================================================================
 // Spec Palette — product definitions
@@ -39,6 +46,46 @@ export interface BomItem {
   /** User notes for this specific instance */
   notes?: string
 }
+
+// =========================================================================
+// Diagram — layout data for a single sheet
+// =========================================================================
+
+/** Serialized diagram data (JSON-safe) */
+export interface DiagramData {
+  nodes: Record<string, ResolvedNode>
+  ports: Record<string, ResolvedPort>
+  edges: Record<string, ResolvedEdge>
+  subgraphs: Record<string, ResolvedSubgraph>
+  bounds: { x: number; y: number; width: number; height: number }
+}
+
+// =========================================================================
+// Project file — .neted.json
+// =========================================================================
+
+/** neted project file format */
+export interface NetedProject {
+  /** Format version */
+  version: 1
+  /** Project name */
+  name: string
+  /** Project settings */
+  settings?: {
+    theme?: 'light' | 'dark'
+  }
+  /** Spec Palette — product definitions */
+  palette: SpecPaletteEntry[]
+  /** BOM — device instances with node bindings */
+  bom: BomItem[]
+  /** Connection definitions (logical) */
+  connections: Link[]
+  /** Diagram layout (physical placement) */
+  diagram: DiagramData
+}
+
+/** File extension for neted projects */
+export const NETED_FILE_EXTENSION = '.neted.json'
 
 // =========================================================================
 // Display helpers
