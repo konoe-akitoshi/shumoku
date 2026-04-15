@@ -1,169 +1,214 @@
 <script lang="ts">
+  import { DropdownMenu } from 'bits-ui'
+  import { nanoid } from 'nanoid'
+  import { CaretDown, Plus, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { Badge } from '$lib/components/ui/badge'
+  import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
   import { getPaletteEntryPower } from '$lib/spec-utils'
   import { paletteEntryLabel } from '$lib/types'
 
-  interface BomRow {
-    nodeId: string
-    nodeLabel: string
-    paletteId: string | undefined
-    paletteName: string
-    bound: boolean
-  }
+  const paletteById = $derived(new Map(diagramState.palette.map((e) => [e.id, e])))
+  const items = $derived(diagramState.bomItems)
 
-  const rows = $derived.by<BomRow[]>(() => {
-    const result: BomRow[] = []
-    const paletteById = new Map(diagramState.palette.map((e) => [e.id, e]))
-    const bindings = diagramState.nodeBindings // read the reactive Map directly
+  const placedCount = $derived(items.filter((i) => i.nodeId).length)
+  const unplacedCount = $derived(items.filter((i) => !i.nodeId).length)
 
-    for (const [nodeId, rn] of diagramState.nodes) {
-      const label = Array.isArray(rn.node.label) ? rn.node.label[0] : (rn.node.label ?? nodeId)
-      const paletteId = bindings.get(nodeId)
-      const entry = paletteId ? paletteById.get(paletteId) : undefined
-      result.push({
-        nodeId,
-        nodeLabel: label,
-        paletteId,
-        paletteName: entry ? paletteEntryLabel(entry) : '',
-        bound: !!entry,
-      })
+  // Available (unbound) nodes
+  const boundNodeIds = $derived(new Set(items.filter((i) => i.nodeId).map((i) => i.nodeId)))
+  const unboundNodes = $derived(
+    [...diagramState.nodes.entries()]
+      .filter(([id]) => !boundNodeIds.has(id))
+      .map(([id, rn]) => ({
+        id,
+        label: Array.isArray(rn.node.label) ? rn.node.label[0] : (rn.node.label ?? id),
+      })),
+  )
+
+  // Spec summary
+  const specSummary = $derived.by(() => {
+    const groups = new Map<string, { total: number; placed: number }>()
+    for (const item of items) {
+      const g = groups.get(item.paletteId) ?? { total: 0, placed: 0 }
+      g.total++
+      if (item.nodeId) g.placed++
+      groups.set(item.paletteId, g)
     }
-    return result.sort((a, b) => a.nodeId.localeCompare(b.nodeId))
-  })
-
-  const boundCount = $derived(rows.filter((r) => r.bound).length)
-  const unboundCount = $derived(rows.filter((r) => !r.bound).length)
-
-  // Summary by palette entry
-  interface SpecSummary {
-    paletteId: string
-    label: string
-    count: number
-    power: { maxDraw?: number; poeBudget?: number }
-  }
-
-  const specSummary = $derived.by<SpecSummary[]>(() => {
-    const counts = new Map<string, number>()
-    for (const row of rows) {
-      if (!row.paletteId) continue
-      counts.set(row.paletteId, (counts.get(row.paletteId) ?? 0) + 1)
-    }
-    const paletteById = new Map(diagramState.palette.map((e) => [e.id, e]))
-    return [...counts.entries()].map(([palId, count]) => {
+    return [...groups.entries()].map(([palId, { total, placed }]) => {
       const entry = paletteById.get(palId)
       return {
         paletteId: palId,
         label: entry ? paletteEntryLabel(entry) : palId,
-        count,
+        total,
+        placed,
         power: entry ? getPaletteEntryPower(entry) : {},
       }
     })
   })
 
-  const totalPower = $derived(specSummary.reduce((s, e) => s + (e.power.maxDraw ?? 0) * e.count, 0))
-  const totalPoeBudget = $derived(
-    specSummary.reduce((s, e) => s + (e.power.poeBudget ?? 0) * e.count, 0),
+  const totalPower = $derived(
+    specSummary.reduce((s, e) => s + (e.power.maxDraw ?? 0) * e.placed, 0),
   )
+  const totalPoeBudget = $derived(
+    specSummary.reduce((s, e) => s + (e.power.poeBudget ?? 0) * e.total, 0),
+  )
+
+  function addBomItem(paletteId: string) {
+    diagramState.addBomItem({ id: nanoid(), paletteId })
+  }
 </script>
 
-<div class="mb-6">
-  <h1 class="text-lg font-semibold">Bill of Materials</h1>
-  <p class="text-sm text-muted-foreground">Node ↔ Spec bindings</p>
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-lg font-semibold">Bill of Materials</h1>
+    <p class="text-sm text-muted-foreground">{items.length} items, {placedCount} placed</p>
+  </div>
+  {#if diagramState.palette.length > 0}
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <Button size="sm" {...props}>
+            <Plus class="w-4 h-4 mr-1" />
+            Add
+            <CaretDown class="w-3 h-3 ml-1" />
+          </Button>
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content
+        class="z-50 min-w-48 rounded-lg border bg-popover p-1 shadow-md max-h-64 overflow-auto"
+      >
+        {#each diagramState.palette as pal}
+          <DropdownMenu.Item
+            class="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs cursor-pointer hover:bg-accent"
+            onclick={() => addBomItem(pal.id)}
+          >
+            {paletteEntryLabel(pal)}
+          </DropdownMenu.Item>
+        {/each}
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  {/if}
 </div>
 
-<!-- Summary cards -->
 <div class="grid grid-cols-4 gap-3 mb-6">
   <Card.Root>
     <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">Nodes</div>
-      <div class="text-2xl font-mono font-bold">{rows.length}</div>
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">Total</div>
+      <div class="text-2xl font-mono font-bold">{items.length}</div>
     </Card.Content>
   </Card.Root>
   <Card.Root>
     <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">Bound</div>
-      <div class="text-2xl font-mono font-bold text-green-600">{boundCount}</div>
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">Placed</div>
+      <div class="text-2xl font-mono font-bold text-green-600">{placedCount}</div>
     </Card.Content>
   </Card.Root>
   <Card.Root>
     <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">Total Power</div>
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">Power</div>
       <div class="text-2xl font-mono font-bold">{totalPower}W</div>
     </Card.Content>
   </Card.Root>
   <Card.Root>
     <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">PoE Budget</div>
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">PoE</div>
       <div class="text-2xl font-mono font-bold">{totalPoeBudget}W</div>
     </Card.Content>
   </Card.Root>
 </div>
 
-<!-- Unbound warning -->
-{#if unboundCount > 0}
-  <Card.Root class="mb-6 border-destructive/50 bg-destructive/5">
+{#if unplacedCount > 0}
+  <Card.Root
+    class="mb-6 border-amber-300/50 bg-amber-50/50 dark:border-amber-700/50 dark:bg-amber-900/10"
+  >
     <Card.Content class="pt-4">
-      <div class="text-xs font-semibold text-destructive mb-1">
-        {unboundCount}
-        node(s) not bound to any spec
+      <div class="text-xs font-semibold text-amber-700 dark:text-amber-400">
+        {unplacedCount}
+        item(s) not placed on diagram
       </div>
-      <p class="text-[10px] text-muted-foreground">These nodes have no Palette entry assigned.</p>
     </Card.Content>
   </Card.Root>
 {/if}
 
-<!-- Node binding table -->
-{#if rows.length > 0}
+{#if items.length > 0}
   <Card.Root class="py-0 mb-6">
     <Table.Root>
       <Table.Header>
         <Table.Row>
-          <Table.Head>Node ID</Table.Head>
-          <Table.Head>Label</Table.Head>
           <Table.Head>Spec</Table.Head>
+          <Table.Head>Node</Table.Head>
           <Table.Head>Status</Table.Head>
+          <Table.Head class="w-10"></Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each rows as row (row.nodeId)}
-          <Table.Row class={!row.bound ? 'bg-destructive/5' : ''}>
-            <Table.Cell class="font-mono text-xs">{row.nodeId}</Table.Cell>
-            <Table.Cell class="font-medium">{row.nodeLabel}</Table.Cell>
+        {#each items as item (item.id)}
+          {@const pal = paletteById.get(item.paletteId)}
+          <Table.Row class={!item.nodeId ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}>
             <Table.Cell>
-              <select
-                class="w-full px-2 py-1 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring {!row.bound ? 'border-destructive/50' : ''}"
-                value={row.paletteId ?? ''}
-                onchange={(e) => {
-                  const val = (e.target as HTMLSelectElement).value
-                  if (val) diagramState.bindNode(row.nodeId, val)
-                  else diagramState.unbindNode(row.nodeId)
-                }}
-              >
-                <option value="">-- unbound --</option>
-                {#each diagramState.palette as pal}
-                  <option value={pal.id}>{paletteEntryLabel(pal)}</option>
-                {/each}
-              </select>
+              {#if pal}
+                <button
+                  type="button"
+                  class="text-xs text-primary hover:underline cursor-pointer"
+                  onclick={() => goto(`/specs/${pal.id}`)}
+                >
+                  {paletteEntryLabel(pal)}
+                </button>
+              {:else}
+                <span class="text-xs text-muted-foreground italic">unknown</span>
+              {/if}
             </Table.Cell>
             <Table.Cell>
-              {#if row.bound}
-                <Badge variant="default">bound</Badge>
+              {#if item.nodeId}
+                <span class="font-mono text-xs">{item.nodeId}</span>
               {:else}
-                <Badge variant="destructive">unbound</Badge>
+                <select
+                  class="px-2 py-1 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
+                  value=""
+                  onchange={(e) => {
+                    const val = (e.target as HTMLSelectElement).value
+                    if (val) diagramState.bindNodeToBom(item.id, val)
+                  }}
+                >
+                  <option value="">-- assign node --</option>
+                  {#each unboundNodes as node}
+                    <option value={node.id}>{node.id} ({node.label})</option>
+                  {/each}
+                </select>
               {/if}
+            </Table.Cell>
+            <Table.Cell>
+              {#if item.nodeId}
+                <Badge variant="default">placed</Badge>
+              {:else}
+                <Badge variant="secondary">unplaced</Badge>
+              {/if}
+            </Table.Cell>
+            <Table.Cell>
+              <Button
+                variant="ghost"
+                size="icon"
+                onclick={() => diagramState.removeBomItem(item.id)}
+              >
+                <Trash class="w-3.5 h-3.5 text-destructive" />
+              </Button>
             </Table.Cell>
           </Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>
   </Card.Root>
+{:else}
+  <Card.Root class="py-16 mb-6">
+    <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
+      <p class="text-sm">No items. Click "Add" to add devices from your Spec Palette.</p>
+    </Card.Content>
+  </Card.Root>
 {/if}
 
-<!-- Spec summary -->
 {#if specSummary.length > 0}
   <h2 class="text-sm font-semibold mb-3">Summary by Spec</h2>
   <Card.Root class="py-0">
@@ -171,9 +216,9 @@
       <Table.Header>
         <Table.Row>
           <Table.Head>Spec</Table.Head>
-          <Table.Head class="text-right">Qty</Table.Head>
-          <Table.Head class="text-right">Unit Power</Table.Head>
-          <Table.Head class="text-right">Total Power</Table.Head>
+          <Table.Head class="text-right">Total</Table.Head>
+          <Table.Head class="text-right">Placed</Table.Head>
+          <Table.Head class="text-right">Power (placed)</Table.Head>
           <Table.Head class="text-right">PoE Budget</Table.Head>
         </Table.Row>
       </Table.Header>
@@ -189,28 +234,19 @@
                 {s.label}
               </button>
             </Table.Cell>
-            <Table.Cell class="text-right font-mono font-semibold">{s.count}</Table.Cell>
-            <Table.Cell class="text-right font-mono text-muted-foreground"
-              >{s.power.maxDraw ? `${s.power.maxDraw}W` : '—'}</Table.Cell
+            <Table.Cell class="text-right font-mono font-semibold">{s.total}</Table.Cell>
+            <Table.Cell class="text-right font-mono {s.placed < s.total ? 'text-amber-600' : ''}"
+              >{s.placed}</Table.Cell
             >
             <Table.Cell class="text-right font-mono"
-              >{s.power.maxDraw ? `${s.power.maxDraw * s.count}W` : '—'}</Table.Cell
+              >{s.power.maxDraw ? `${s.power.maxDraw * s.placed}W` : '—'}</Table.Cell
             >
             <Table.Cell class="text-right font-mono"
-              >{s.power.poeBudget ? `${s.power.poeBudget * s.count}W` : '—'}</Table.Cell
+              >{s.power.poeBudget ? `${s.power.poeBudget * s.total}W` : '—'}</Table.Cell
             >
           </Table.Row>
         {/each}
       </Table.Body>
-      <Table.Footer>
-        <Table.Row>
-          <Table.Cell class="font-semibold">Total</Table.Cell>
-          <Table.Cell class="text-right font-mono font-semibold">{boundCount}</Table.Cell>
-          <Table.Cell></Table.Cell>
-          <Table.Cell class="text-right font-mono font-semibold">{totalPower}W</Table.Cell>
-          <Table.Cell class="text-right font-mono font-semibold">{totalPoeBudget}W</Table.Cell>
-        </Table.Row>
-      </Table.Footer>
     </Table.Root>
   </Card.Root>
 {/if}

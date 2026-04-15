@@ -9,7 +9,7 @@
 
 import type { HardwareProperties } from '@shumoku/catalog'
 import { DeviceType } from '@shumoku/core'
-import type { SpecPaletteEntry } from './types'
+import type { BomItem, SpecPaletteEntry } from './types'
 
 export const samplePalette: SpecPaletteEntry[] = [
   // ========== Cloud ==========
@@ -159,32 +159,32 @@ export const samplePalette: SpecPaletteEntry[] = [
   },
 ]
 
-/** Node ID → Palette ID bindings for the sample project */
-export const sampleNodeBindings = new Map<string, string>([
+/** BOM items for the sample project — each row is one device instance */
+export const sampleBomItems: BomItem[] = [
   // Cloud
-  ['cloud-services', 'pal-aws-ec2'],
-  ['vgw', 'pal-aws-vpn-gw'],
+  { id: 'bom-cloud-services', paletteId: 'pal-aws-ec2', nodeId: 'cloud-services' },
+  { id: 'bom-vgw', paletteId: 'pal-aws-vpn-gw', nodeId: 'vgw' },
   // Perimeter
-  ['isp1', 'pal-internet'],
-  ['isp2', 'pal-internet'],
-  ['rt1', 'pal-yamaha-rtx3510'],
-  ['rt2', 'pal-yamaha-rtx3510'],
-  ['fw1', 'pal-juniper-srx4100'],
-  ['fw2', 'pal-juniper-srx4100'],
+  { id: 'bom-isp1', paletteId: 'pal-internet', nodeId: 'isp1' },
+  { id: 'bom-isp2', paletteId: 'pal-internet', nodeId: 'isp2' },
+  { id: 'bom-rt1', paletteId: 'pal-yamaha-rtx3510', nodeId: 'rt1' },
+  { id: 'bom-rt2', paletteId: 'pal-yamaha-rtx3510', nodeId: 'rt2' },
+  { id: 'bom-fw1', paletteId: 'pal-juniper-srx4100', nodeId: 'fw1' },
+  { id: 'bom-fw2', paletteId: 'pal-juniper-srx4100', nodeId: 'fw2' },
   // DMZ
-  ['dmz-sw', 'pal-generic-l2-switch'],
-  ['web-srv', 'pal-generic-server'],
-  ['mail-srv', 'pal-generic-server'],
+  { id: 'bom-dmz-sw', paletteId: 'pal-generic-l2-switch', nodeId: 'dmz-sw' },
+  { id: 'bom-web-srv', paletteId: 'pal-generic-server', nodeId: 'web-srv' },
+  { id: 'bom-mail-srv', paletteId: 'pal-generic-server', nodeId: 'mail-srv' },
   // NOC
-  ['core-sw', 'pal-juniper-qfx5120'],
-  ['dist-sw', 'pal-juniper-ex4400'],
+  { id: 'bom-core-sw', paletteId: 'pal-juniper-qfx5120', nodeId: 'core-sw' },
+  { id: 'bom-dist-sw', paletteId: 'pal-juniper-ex4400', nodeId: 'dist-sw' },
   // Building A
-  ['sw-a1', 'pal-cisco-3560cx-8pc'],
-  ['ap-a1', 'pal-aruba-ap505'],
-  ['ap-a2', 'pal-aruba-ap505'],
+  { id: 'bom-sw-a1', paletteId: 'pal-cisco-3560cx-8pc', nodeId: 'sw-a1' },
+  { id: 'bom-ap-a1', paletteId: 'pal-aruba-ap505', nodeId: 'ap-a1' },
+  { id: 'bom-ap-a2', paletteId: 'pal-aruba-ap505', nodeId: 'ap-a2' },
   // Building B
-  ['sw-b1', 'pal-panasonic-m8egpwr-plus'],
-  ['ap-b1', 'pal-aruba-ap505'],
-  ['ap-b2', 'pal-aruba-ap11d'],
-  ['ip-phone', 'pal-generic-ip-phone'],
-])
+  { id: 'bom-sw-b1', paletteId: 'pal-panasonic-m8egpwr-plus', nodeId: 'sw-b1' },
+  { id: 'bom-ap-b1', paletteId: 'pal-aruba-ap505', nodeId: 'ap-b1' },
+  { id: 'bom-ap-b2', paletteId: 'pal-aruba-ap11d', nodeId: 'ap-b2' },
+  { id: 'bom-ip-phone', paletteId: 'pal-generic-ip-phone', nodeId: 'ip-phone' },
+]

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CatalogEntry, HardwareProperties } from '@shumoku/catalog'
   import { Dialog, DropdownMenu } from 'bits-ui'
+  import { nanoid } from 'nanoid'
   import { CaretDown, Plus, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { Badge } from '$lib/components/ui/badge'
@@ -63,7 +64,7 @@
   function addFromCatalog() {
     const entry = selectedEntry
     if (!entry) return
-    const id = `pal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const id = nanoid()
     const paletteEntry: SpecPaletteEntry = {
       id,
       source: 'catalog',
@@ -78,7 +79,7 @@
 
   function addCustom() {
     if (!customVendor && !customModel) return
-    const id = `pal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const id = nanoid()
     // biome-ignore lint/suspicious/noExplicitAny: build spec dynamically
     const spec: any = { kind: customKind }
     if (customType) spec.type = customType

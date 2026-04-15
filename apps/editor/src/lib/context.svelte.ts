@@ -15,8 +15,8 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { analyzePoE, type PoEBudget } from './poe-analysis'
-import { sampleNodeBindings, samplePalette } from './sample-project'
-import type { SpecPaletteEntry } from './types'
+import { sampleBomItems, samplePalette } from './sample-project'
+import type { BomItem, SpecPaletteEntry } from './types'
 
 // =========================================================================
 // Editor UI state — mode, theme
@@ -82,8 +82,7 @@ let bounds = $state({ x: 0, y: 0, width: 0, height: 0 })
 let links = $state<Link[]>([])
 let poeBudgets = $state<PoEBudget[]>([])
 let palette = $state<SpecPaletteEntry[]>([])
-/** nodeId → paletteId mapping (explicit binding) */
-let nodeBindings = $state<Map<string, string>>(new Map())
+let bomItems = $state<BomItem[]>([])
 let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
@@ -164,31 +163,40 @@ export const diagramState = {
     palette = palette.map((e) => (e.id === id ? { ...e, ...updates } : e))
   },
 
-  // Node ↔ Palette bindings
-  get nodeBindings() {
-    return nodeBindings
+  // BOM items (device instances — master for qty management)
+  get bomItems() {
+    return bomItems
   },
-  bindNode(nodeId: string, paletteId: string) {
-    const next = new Map(nodeBindings)
-    next.set(nodeId, paletteId)
-    nodeBindings = next
+  addBomItem(item: BomItem) {
+    bomItems = [...bomItems, item]
   },
-  unbindNode(nodeId: string) {
-    const next = new Map(nodeBindings)
-    next.delete(nodeId)
-    nodeBindings = next
+  removeBomItem(id: string) {
+    bomItems = bomItems.filter((i) => i.id !== id)
   },
-  /** Get palette ID for a node */
-  getPaletteIdForNode(nodeId: string): string | undefined {
-    return nodeBindings.get(nodeId)
+  updateBomItem(id: string, updates: Partial<BomItem>) {
+    bomItems = bomItems.map((i) => (i.id === id ? { ...i, ...updates } : i))
   },
-  /** Get all node IDs bound to a palette entry */
-  getNodesForPalette(paletteId: string): string[] {
-    const ids: string[] = []
-    for (const [nodeId, palId] of nodeBindings) {
-      if (palId === paletteId) ids.push(nodeId)
+  /** Bind a diagram node to a BOM item */
+  bindNodeToBom(bomId: string, nodeId: string | undefined) {
+    // Unbind from any other BOM item first
+    if (nodeId) {
+      bomItems = bomItems.map((i) => (i.nodeId === nodeId ? { ...i, nodeId: undefined } : i))
     }
-    return ids
+    bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId } : i))
+  },
+  /** Get BOM items for a palette entry */
+  getBomItemsForPalette(paletteId: string): BomItem[] {
+    return bomItems.filter((i) => i.paletteId === paletteId)
+  },
+  /** Get palette ID for a node (via BOM) */
+  getPaletteIdForNode(nodeId: string): string | undefined {
+    return bomItems.find((i) => i.nodeId === nodeId)?.paletteId
+  },
+  /** Get all node IDs bound to a palette entry (via BOM) */
+  getNodesForPalette(paletteId: string): string[] {
+    return bomItems
+      .filter((i) => i.paletteId === paletteId && i.nodeId)
+      .map((i) => i.nodeId as string)
   },
 
   // Serialization
@@ -236,7 +244,7 @@ export const diagramState = {
 
     // Synchronous: project data available immediately
     palette = [...samplePalette]
-    nodeBindings = new Map(sampleNodeBindings)
+    bomItems = [...sampleBomItems]
 
     // Async: diagram layout requires parsing + computation
     try {

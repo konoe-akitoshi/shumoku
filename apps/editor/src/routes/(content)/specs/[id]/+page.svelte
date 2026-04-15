@@ -17,11 +17,11 @@
       : null,
   )
 
-  // Find nodes using this spec
-  const usedByNodes = $derived.by<string[]>(() => {
-    if (!entry) return []
-    return diagramState.getNodesForPalette(entry.id)
-  })
+  // BOM items for this spec
+  const bomItemsForSpec = $derived(entry ? diagramState.getBomItemsForPalette(entry.id) : [])
+  const placedNodes = $derived(
+    bomItemsForSpec.filter((i) => i.nodeId).map((i) => i.nodeId as string),
+  )
 
   // biome-ignore lint/suspicious/noExplicitAny: flatten unknown property groups
   function flattenProps(obj: Record<string, any>, prefix = ''): { key: string; value: string }[] {
@@ -119,11 +119,14 @@
     <Card.Root>
       <Card.Header> <Card.Title>Usage</Card.Title> </Card.Header>
       <Card.Content>
-        <div class="text-2xl font-mono font-bold mb-1">{usedByNodes.length}</div>
-        <div class="text-xs text-muted-foreground mb-3">nodes using this spec</div>
-        {#if usedByNodes.length > 0}
+        <div class="text-2xl font-mono font-bold mb-1">{bomItemsForSpec.length}</div>
+        <div class="text-xs text-muted-foreground mb-3">
+          {placedNodes.length}
+          placed, {bomItemsForSpec.length - placedNodes.length} unplaced
+        </div>
+        {#if placedNodes.length > 0}
           <div class="flex flex-wrap gap-1">
-            {#each usedByNodes as nodeId}
+            {#each placedNodes as nodeId}
               <Badge variant="outline" class="font-mono text-[10px]">{nodeId}</Badge>
             {/each}
           </div>

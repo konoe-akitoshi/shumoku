@@ -4,9 +4,13 @@
 import type { ComputeProperties, HardwareProperties, ServiceProperties } from '@shumoku/catalog'
 import type { NodeSpec } from '@shumoku/core'
 
+// =========================================================================
+// Spec Palette — product definitions
+// =========================================================================
+
 /** Spec Palette entry — a product available for use in this project */
 export interface SpecPaletteEntry {
-  /** Stable unique ID */
+  /** Stable unique ID (nanoid) */
   id: string
   /** Source: catalog (unmodified), modified (catalog + local edits), custom (manual) */
   source: 'catalog' | 'modified' | 'custom'
@@ -19,6 +23,26 @@ export interface SpecPaletteEntry {
   /** User notes */
   notes?: string
 }
+
+// =========================================================================
+// BOM — device instances (master for quantity management)
+// =========================================================================
+
+/** A BOM row = one device instance in the project */
+export interface BomItem {
+  /** Stable unique ID (nanoid) */
+  id: string
+  /** Reference to Spec Palette entry */
+  paletteId: string
+  /** Bound diagram node ID (undefined = not yet placed) */
+  nodeId?: string
+  /** User notes for this specific instance */
+  notes?: string
+}
+
+// =========================================================================
+// Display helpers
+// =========================================================================
 
 /** Display label for a palette entry */
 export function paletteEntryLabel(entry: SpecPaletteEntry): string {
@@ -39,12 +63,4 @@ export function specIdentifier(spec: NodeSpec): string {
   if (spec.kind === 'compute' && 'platform' in spec) return spec.platform ?? '—'
   if (spec.kind === 'service') return spec.service
   return '—'
-}
-
-/** Get the identity column header for a kind */
-export function specIdentifierHeader(kind: string): string {
-  if (kind === 'hardware') return 'Model'
-  if (kind === 'compute') return 'Platform'
-  if (kind === 'service') return 'Service'
-  return 'Identifier'
 }
