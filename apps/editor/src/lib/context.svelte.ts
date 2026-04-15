@@ -111,6 +111,15 @@ function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
   if (changed) nodes = n
 }
 
+/** Strip product details from spec, keep kind/type (role) */
+function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined {
+  if (!spec) return undefined
+  if (spec.kind === 'hardware') return { kind: 'hardware', type: spec.type }
+  if (spec.kind === 'compute') return { kind: 'compute', type: spec.type }
+  if (spec.kind === 'service') return { kind: 'service', service: spec.service }
+  return undefined
+}
+
 export const diagramState = {
   get nodes() {
     return nodes
@@ -178,11 +187,15 @@ export const diagramState = {
     palette = [...palette, entry]
   },
   removeFromPalette(id: string) {
-    // Clear spec on bound nodes before removing
+    // Strip product details but keep role (kind/type) on bound nodes
+    const entry = palette.find((e) => e.id === id)
     const boundNodeIds = bomItems
       .filter((i) => i.paletteId === id && i.nodeId)
       .map((i) => i.nodeId as string)
-    if (boundNodeIds.length > 0) setNodeSpecs(boundNodeIds, undefined)
+    if (boundNodeIds.length > 0) {
+      const roleSpec = stripProductFromSpec(entry?.spec)
+      setNodeSpecs(boundNodeIds, roleSpec)
+    }
     palette = palette.filter((e) => e.id !== id)
     bomItems = bomItems.filter((i) => i.paletteId !== id)
   },
@@ -262,11 +275,18 @@ export const diagramState = {
   /** Unbind node(s) from BOM — sets nodeId to undefined, keeps the BomItem */
   unbindNodes(nodeIds: string[]) {
     const ids = new Set(nodeIds)
+    // Strip product details but keep role (kind/type)
+    const n = new Map(nodes)
+    for (const nodeId of ids) {
+      const rn = n.get(nodeId)
+      if (rn) {
+        n.set(nodeId, { ...rn, node: { ...rn.node, spec: stripProductFromSpec(rn.node.spec) } })
+      }
+    }
+    nodes = n
     bomItems = bomItems.map((i) =>
       i.nodeId && ids.has(i.nodeId) ? { ...i, nodeId: undefined } : i,
     )
-    // Clear spec on unbound nodes
-    setNodeSpecs(nodeIds, undefined)
   },
   /** Remove BomItems for deleted diagram nodes */
   removeNodeBomItems(nodeIds: string[]) {

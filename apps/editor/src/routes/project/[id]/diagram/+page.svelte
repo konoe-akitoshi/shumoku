@@ -100,7 +100,6 @@
         oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => { contextMenu = { id, type, x: screenX, y: screenY } }}
         onnodeadd={(id: string) => {
           diagramState.addBomItem({ id: nanoid(), nodeId: id })
-          detailData = renderer?.getElementDetails(id) ?? null
         }}
         onnodedelete={(ids: string[]) => { diagramState.unbindNodes(ids) }}
       />
@@ -134,7 +133,7 @@
       mode={editorState.mode}
       isDark={editorState.isDark}
       onmodechange={(m) => { editorState.mode = m }}
-      onaddnode={() => renderer?.addNewNode()}
+      onaddnode={(spec) => renderer?.addNewNode(spec ? { spec } : undefined)}
       onaddsubgraph={() => renderer?.addNewSubgraph()}
       onthemetoggle={() => editorState.toggleTheme()}
     />

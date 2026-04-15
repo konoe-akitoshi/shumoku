@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Tooltip } from 'bits-ui'
+  import { DeviceType } from '@shumoku/core'
+  import { DropdownMenu, Tooltip } from 'bits-ui'
   import { Cube, Eye, Moon, Pencil, Plus, SquaresFour, Sun } from 'phosphor-svelte'
 
   let {
@@ -13,12 +14,28 @@
     mode: 'edit' | 'view'
     isDark?: boolean
     onmodechange?: (mode: 'edit' | 'view') => void
-    onaddnode?: () => void
+    onaddnode?: (spec?: { kind: string; type?: string }) => void
     onaddsubgraph?: () => void
     onthemetoggle?: () => void
   } = $props()
 
   const editing = $derived(mode === 'edit')
+
+  const nodeTypes = [
+    { label: 'Generic Node', spec: undefined },
+    { label: '---' },
+    { label: 'Router', spec: { kind: 'hardware', type: DeviceType.Router } },
+    { label: 'Firewall', spec: { kind: 'hardware', type: DeviceType.Firewall } },
+    { label: 'L2 Switch', spec: { kind: 'hardware', type: DeviceType.L2Switch } },
+    { label: 'L3 Switch', spec: { kind: 'hardware', type: DeviceType.L3Switch } },
+    { label: 'Server', spec: { kind: 'hardware', type: DeviceType.Server } },
+    { label: 'Access Point', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+    { label: 'CPE / Phone', spec: { kind: 'hardware', type: DeviceType.CPE } },
+    { label: 'Internet', spec: { kind: 'hardware', type: DeviceType.Internet } },
+    { label: '---' },
+    { label: 'VM / Compute', spec: { kind: 'compute' } },
+    { label: 'Cloud Service', spec: { kind: 'service' } },
+  ] as const
 </script>
 
 <div
@@ -26,26 +43,52 @@
 >
   <!-- Edit tools (show when editing) -->
   {#if editing}
-    <Tooltip.Root>
-      <Tooltip.Trigger>
-        <button
-          type="button"
-          class="flex items-center justify-center w-9 h-9 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
-          onclick={() => onaddnode?.()}
+    <DropdownMenu.Root>
+      <Tooltip.Root>
+        <Tooltip.Trigger>
+          <DropdownMenu.Trigger>
+            {#snippet child({ props })}
+              <button
+                type="button"
+                class="flex items-center justify-center w-9 h-9 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                {...props}
+              >
+                <div class="relative">
+                  <Cube class="w-4.5 h-4.5" />
+                  <Plus
+                    class="w-2.5 h-2.5 absolute -bottom-0.5 -right-0.5 text-blue-500"
+                    weight="bold"
+                  />
+                </div>
+              </button>
+            {/snippet}
+          </DropdownMenu.Trigger>
+        </Tooltip.Trigger>
+        <Tooltip.Content
+          side="left"
+          class="bg-neutral-800 text-white text-xs px-2 py-1 rounded shadow-lg"
         >
-          <div class="relative">
-            <Cube class="w-4.5 h-4.5" />
-            <Plus class="w-2.5 h-2.5 absolute -bottom-0.5 -right-0.5 text-blue-500" weight="bold" />
-          </div>
-        </button>
-      </Tooltip.Trigger>
-      <Tooltip.Content
+          Add node
+        </Tooltip.Content>
+      </Tooltip.Root>
+      <DropdownMenu.Content
         side="left"
-        class="bg-neutral-800 text-white text-xs px-2 py-1 rounded shadow-lg"
+        class="z-50 min-w-40 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-1 shadow-lg"
       >
-        Add node
-      </Tooltip.Content>
-    </Tooltip.Root>
+        {#each nodeTypes as item}
+          {#if item.label === '---'}
+            <DropdownMenu.Separator class="my-1 h-px bg-neutral-200 dark:bg-neutral-700" />
+          {:else}
+            <DropdownMenu.Item
+              class="flex items-center rounded-md px-2.5 py-1.5 text-xs cursor-pointer text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+              onclick={() => onaddnode?.(item.spec)}
+            >
+              {item.label}
+            </DropdownMenu.Item>
+          {/if}
+        {/each}
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
 
     <Tooltip.Root>
       <Tooltip.Trigger>
