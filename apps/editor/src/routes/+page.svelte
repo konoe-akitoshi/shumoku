@@ -1,20 +1,7 @@
 <script lang="ts">
-  import { builtinEntries, Catalog } from '@shumoku/catalog'
-  import {
-    computeNetworkLayout,
-    createMemoryFileResolver,
-    HierarchicalParser,
-    type Link,
-    type ResolvedEdge,
-    type ResolvedLayout,
-    type ResolvedNode,
-    type ResolvedPort,
-    type ResolvedSubgraph,
-    sampleNetwork,
-  } from '@shumoku/core'
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
-  import AppTitle from '$lib/components/AppTitle.svelte'
+  import { nanoid } from 'nanoid'
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
@@ -23,28 +10,14 @@
   import SheetBar from '$lib/components/SheetBar.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
-  import { editorState, initDarkMode } from '$lib/context.svelte'
-  import { analyzePoE, type PoEBudget } from '$lib/poe-analysis'
+  import { diagramState, editorState } from '$lib/context.svelte'
 
   // =========================================================================
-  // Layout state — THE source of truth
-  // =========================================================================
-
-  let nodes = $state<Map<string, ResolvedNode>>(new Map())
-  let ports = $state<Map<string, ResolvedPort>>(new Map())
-  let edges = $state<Map<string, ResolvedEdge>>(new Map())
-  let subgraphs = $state<Map<string, ResolvedSubgraph>>(new Map())
-  let bounds = $state({ x: 0, y: 0, width: 0, height: 0 })
-  let links = $state<Link[]>([])
-
-  // =========================================================================
-  // UI state
+  // Local UI state (page-specific, not shared)
   // =========================================================================
 
   let renderer: ShumokuRenderer | undefined = $state()
-  let status = $state('Loading...')
   let codePanelOpen = $state(false)
-  let yamlSource = $state('')
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
   let clipboard = $state<{
@@ -57,132 +30,28 @@
   let detailData = $state<Record<string, any> | null>(null)
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
 
-  // PoE analysis
-  const catalog = new Catalog()
-  catalog.registerAll(builtinEntries)
-  let poeBudgets = $state<PoEBudget[]>([])
-
   // =========================================================================
-  // Derived
+  // Derived from shared state
   // =========================================================================
 
-  const stats = $derived({ nodes: nodes.size, links: links.length, subgraphs: subgraphs.size })
   let jsonSource = $state('{}')
   $effect(() => {
-    jsonSource = stateToJson()
+    jsonSource = diagramState.stateToJson()
   })
 
   // =========================================================================
-  // Serialization
+  // Init — trigger shared state initialization
   // =========================================================================
-
-  function stateToJson(): string {
-    return JSON.stringify(
-      {
-        layout: {
-          nodes: Object.fromEntries(new Map(nodes)),
-          ports: Object.fromEntries(new Map(ports)),
-          edges: Object.fromEntries(new Map(edges)),
-          subgraphs: Object.fromEntries(new Map(subgraphs)),
-          bounds: { ...bounds },
-        },
-        links: [...links],
-      },
-      null,
-      2,
-    )
-  }
-
-  function loadFromJson(jsonStr: string) {
-    const data = JSON.parse(jsonStr)
-    nodes = new Map(Object.entries(data.layout?.nodes ?? {})) as Map<string, ResolvedNode>
-    ports = new Map(Object.entries(data.layout?.ports ?? {})) as Map<string, ResolvedPort>
-    edges = new Map(Object.entries(data.layout?.edges ?? {})) as Map<string, ResolvedEdge>
-    subgraphs = new Map(Object.entries(data.layout?.subgraphs ?? {})) as Map<
-      string,
-      ResolvedSubgraph
-    >
-    bounds = data.layout?.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
-    links = data.links ?? []
-  }
-
-  function loadFromResolved(resolved: ResolvedLayout, graphLinks: Link[]) {
-    nodes = new Map(resolved.nodes)
-    ports = new Map(resolved.ports)
-    edges = new Map(resolved.edges)
-    subgraphs = new Map(resolved.subgraphs)
-    bounds = resolved.bounds
-    links = [...graphLinks]
-  }
-
-  // =========================================================================
-  // Init
-  // =========================================================================
-
-  $effect(() => {
-    return initDarkMode()
-  })
-
-  async function parseSampleNetwork() {
-    const fileMap = new Map<string, string>()
-    for (const f of sampleNetwork) {
-      fileMap.set(f.name, f.content)
-      fileMap.set(`./${f.name}`, f.content)
-      fileMap.set(`/${f.name}`, f.content)
-    }
-    const resolver = createMemoryFileResolver(fileMap, '/')
-    const hp = new HierarchicalParser(resolver)
-    const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
-    if (!mainFile) throw new Error('main.yaml not found')
-    return (await hp.parse(mainFile.content, '/main.yaml')).graph
-  }
-
-  $effect(() => {
-    ;(async () => {
-      try {
-        status = 'Parsing network...'
-        const g = await parseSampleNetwork()
-        status = 'Computing layout...'
-        const { resolved } = await computeNetworkLayout(g)
-        loadFromResolved(resolved, g.links)
-        poeBudgets = analyzePoE(g.nodes, g.links, catalog)
-        const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
-        if (mainFile) yamlSource = mainFile.content
-        status = 'Ready'
-      } catch (e) {
-        status = `Error: ${e instanceof Error ? e.message : String(e)}`
-      }
-    })()
-  })
 
   // =========================================================================
   // Apply
   // =========================================================================
 
-  async function applyYaml(yamlStr: string) {
-    try {
-      status = 'Parsing YAML...'
-      const fileMap = new Map<string, string>()
-      fileMap.set('main.yaml', yamlStr)
-      fileMap.set('./main.yaml', yamlStr)
-      fileMap.set('/main.yaml', yamlStr)
-      const resolver = createMemoryFileResolver(fileMap, '/')
-      const hp = new HierarchicalParser(resolver)
-      const { graph: g } = await hp.parse(yamlStr, '/main.yaml')
-      const { resolved } = await computeNetworkLayout(g)
-      loadFromResolved(resolved, g.links)
-      status = 'Ready'
-    } catch (_e) {
-      status = 'YAML parse error'
-    }
-  }
-
   function applyJson(jsonStr: string) {
     try {
-      loadFromJson(jsonStr)
-      status = 'Ready'
+      diagramState.loadFromJson(jsonStr)
     } catch (_e) {
-      status = 'JSON parse error'
+      // JSON parse error
     }
   }
 
@@ -191,7 +60,7 @@
   // =========================================================================
 
   function handleSave() {
-    const blob = new Blob([stateToJson()], { type: 'application/json' })
+    const blob = new Blob([diagramState.stateToJson()], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -213,23 +82,18 @@
   }
 </script>
 
-<!--
-  Canvas = full screen, always.
-  UI = fixed overlays, each owns its corner.
-  They don't know about each other. Overlap is fine (same as Miro/Figma).
--->
 <div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
   <!-- Canvas (full screen, z-0) -->
   <div class="absolute inset-0">
-    {#if nodes.size > 0 || status !== 'Loading...'}
+    {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
       <ShumokuRenderer
         bind:this={renderer}
-        bind:nodes
-        bind:ports
-        bind:edges
-        bind:subgraphs
-        bind:bounds
-        bind:links
+        bind:nodes={diagramState.nodes}
+        bind:ports={diagramState.ports}
+        bind:edges={diagramState.edges}
+        bind:subgraphs={diagramState.subgraphs}
+        bind:bounds={diagramState.bounds}
+        bind:links={diagramState.links}
         theme={editorState.theme}
         mode={editorState.mode}
         onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}
@@ -239,27 +103,24 @@
       />
     {:else}
       <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">
-        {status}
+        {diagramState.status}
       </div>
     {/if}
   </div>
 
-  <!-- Top-left: Title -->
-  <div class="fixed top-3 left-3 z-20"><AppTitle /></div>
-
   <!-- Top-right: Export -->
   <div class="fixed top-3 right-3 z-20"><ExportMenu onsave={handleSave} onload={handleLoad} /></div>
 
-  <!-- Left: Code panel (above other islands) -->
+  <!-- Left: Code panel -->
   <div class="fixed top-3 bottom-3 left-3 z-30">
     <CodePanel
       open={codePanelOpen}
-      yaml={yamlSource}
+      yaml={diagramState.yamlSource}
       json={jsonSource}
       ontoggle={() => { codePanelOpen = !codePanelOpen }}
-      onyamlchange={(v) => { yamlSource = v }}
+      onyamlchange={(v) => { diagramState.yamlSource = v }}
       onjsonchange={(v) => { jsonSource = v }}
-      onyamlapply={() => applyYaml(yamlSource)}
+      onyamlapply={() => diagramState.applyYaml(diagramState.yamlSource)}
       onjsonapply={() => applyJson(jsonSource)}
     />
   </div>
@@ -277,12 +138,14 @@
   </div>
 
   <!-- Bottom-left: Status -->
-  <div class="fixed bottom-3 left-3 z-20"><StatusBadge {status} {stats} {selected} /></div>
+  <div class="fixed bottom-3 left-3 z-20">
+    <StatusBadge status={diagramState.status} stats={diagramState.stats} {selected} />
+  </div>
 
   <!-- Bottom-center: Sheet bar -->
   <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"><SheetBar /></div>
 
-  <!-- Overlays (cursor-positioned) -->
+  <!-- Overlays -->
 
   {#if labelEdit}
     <LabelEditPopover
@@ -323,29 +186,43 @@
     open={detailData !== null}
     data={detailData}
     mode={editorState.mode}
-    poeBudget={poeBudgets.find((b) => b.nodeId === detailData?.id)}
-    {catalog}
-    {links}
+    poeBudget={diagramState.poeBudgets.find((b) => b.nodeId === detailData?.id)}
+    catalog={diagramState.catalog}
+    palette={diagramState.palette}
+    links={diagramState.links}
     onclose={() => { detailData = null }}
+    onbindpalette={(nodeId, paletteId) => {
+      // Find or create BOM item for this binding
+      const existing = diagramState.bomItems.find((i) => i.nodeId === nodeId)
+      if (existing) {
+        // Re-bind to different palette entry
+        diagramState.updateBomItem(existing.id, { paletteId })
+      } else {
+        // Find unplaced BOM item for this palette entry, or create new
+        const unplaced = diagramState.bomItems.find((i) => i.paletteId === paletteId && !i.nodeId)
+        if (unplaced) {
+          diagramState.bindNodeToBom(unplaced.id, nodeId)
+        } else {
+          diagramState.addBomItem({ id: nanoid(), paletteId, nodeId })
+        }
+      }
+    }}
     onupdate={(id, field, value) => {
-      // Update node properties in state
-      const node = nodes.get(id)
+      const node = diagramState.nodes.get(id)
       if (node) {
         const updated = { ...node, node: { ...node.node, [field]: value } }
-        const n = new Map(nodes)
+        const n = new Map(diagramState.nodes)
         n.set(id, updated)
-        nodes = n
-        // Refresh detail data
+        diagramState.nodes = n
         detailData = renderer?.getElementDetails(id) ?? null
         return
       }
-      // Update subgraph properties
-      const sg = subgraphs.get(id)
+      const sg = diagramState.subgraphs.get(id)
       if (sg) {
         const updated = { ...sg, subgraph: { ...sg.subgraph, [field]: value } }
-        const s = new Map(subgraphs)
+        const s = new Map(diagramState.subgraphs)
         s.set(id, updated)
-        subgraphs = s
+        diagramState.subgraphs = s
         detailData = renderer?.getElementDetails(id) ?? null
       }
     }}

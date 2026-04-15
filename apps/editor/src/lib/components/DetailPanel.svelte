@@ -4,6 +4,8 @@
   import { Combobox, Dialog, ScrollArea, Tabs } from 'bits-ui'
   import { ArrowSquareOut, CaretUpDown, X } from 'phosphor-svelte'
   import type { PoEBudget } from '$lib/poe-analysis'
+  import type { SpecPaletteEntry } from '$lib/types'
+  import { paletteEntryLabel } from '$lib/types'
   import SpecCatalogDialog from './SpecCatalogDialog.svelte'
 
   let {
@@ -12,9 +14,11 @@
     mode = 'view',
     poeBudget,
     catalog,
+    palette = [],
     links = [],
     onclose,
     onupdate,
+    onbindpalette,
   }: {
     open?: boolean
     // biome-ignore lint/suspicious/noExplicitAny: mixed element data
@@ -22,35 +26,72 @@
     mode?: 'edit' | 'view'
     poeBudget?: PoEBudget
     catalog?: Catalog
+    palette?: SpecPaletteEntry[]
     links?: Link[]
     onclose?: () => void
     onupdate?: (id: string, field: string, value: string) => void
+    onbindpalette?: (nodeId: string, paletteId: string) => void
   } = $props()
 
   let specDialogOpen = $state(false)
   let comboSearchValue = $state('')
 
   const comboResults = $derived.by(() => {
-    if (!catalog) return []
-    if (!comboSearchValue.trim()) return catalog.list().slice(0, 10)
-    return catalog.search(comboSearchValue).slice(0, 10)
+    if (!palette.length) return []
+    if (!comboSearchValue.trim()) return palette.slice(0, 10)
+    const q = comboSearchValue.toLowerCase()
+    return palette.filter((e) => paletteEntryLabel(e).toLowerCase().includes(q)).slice(0, 10)
   })
 
-  function handleComboSelect(entryId: string) {
-    if (!catalog || !data?.id) return
-    const entry = catalog.lookup(entryId)
+  function handleComboSelect(paletteId: string) {
+    if (!data?.id) return
+    const entry = palette.find((e) => e.id === paletteId)
     if (!entry) return
-    const spec: Record<string, string> = { kind: entry.spec.kind }
-    if (entry.spec.vendor) spec.vendor = entry.spec.vendor
-    if ('type' in entry.spec && entry.spec.type) spec.type = String(entry.spec.type)
-    if ('model' in entry.spec && entry.spec.model) spec.model = entry.spec.model
-    if ('service' in entry.spec && entry.spec.service) spec.service = entry.spec.service
-    if ('resource' in entry.spec && entry.spec.resource) spec.resource = entry.spec.resource
-    if (entry.spec.icon) spec.icon = entry.spec.icon
-    for (const [key, value] of Object.entries(spec)) {
+    // Update node spec from palette entry
+    const spec = entry.spec
+    const fields: Record<string, string> = { kind: spec.kind }
+    if (spec.vendor) fields.vendor = spec.vendor
+    if ('type' in spec && spec.type) fields.type = String(spec.type)
+    if ('model' in spec && spec.model) fields.model = spec.model
+    if ('service' in spec && spec.service) fields.service = spec.service
+    if ('resource' in spec && spec.resource) fields.resource = spec.resource
+    if (spec.icon) fields.icon = spec.icon
+    for (const [key, value] of Object.entries(fields)) {
       onupdate?.(data.id, `spec.${key}`, value)
     }
+    // Bind node to palette via BOM
+    onbindpalette?.(data.id, paletteId)
   }
+
+  // Find bound palette entry for this node (via BOM or direct match)
+  const boundPalette = $derived.by<SpecPaletteEntry | null>(() => {
+    if (!data?.id || !palette.length) return null
+    // Match by spec fingerprint (palette → node spec)
+    const spec = data.spec
+    if (!spec) return null
+    for (const pal of palette) {
+      const ps = pal.spec
+      if (ps.kind === spec.kind && ps.vendor === spec.vendor) {
+        if (ps.kind === 'hardware' && 'model' in ps && 'model' in spec && ps.model === spec.model)
+          return pal
+        if (
+          ps.kind === 'service' &&
+          'service' in ps &&
+          'service' in spec &&
+          ps.service === spec.service
+        )
+          return pal
+        if (
+          ps.kind === 'compute' &&
+          'platform' in ps &&
+          'platform' in spec &&
+          ps.platform === spec.platform
+        )
+          return pal
+      }
+    }
+    return null
+  })
 
   const catalogEntry = $derived.by<CatalogEntry | null>(() => {
     if (!catalog || !data?.spec) return null
@@ -61,7 +102,11 @@
   })
 
   const hwProps = $derived(
-    catalogEntry?.spec.kind === 'hardware' ? (catalogEntry.properties as HardwareProperties) : null,
+    boundPalette?.spec.kind === 'hardware' && boundPalette.properties
+      ? (boundPalette.properties as HardwareProperties)
+      : catalogEntry?.spec.kind === 'hardware'
+        ? (catalogEntry.properties as HardwareProperties)
+        : null,
   )
 
   const kind = $derived((data?.kind as string) ?? 'unknown')
@@ -343,7 +388,7 @@
                           <div class="relative flex-1">
                             <Combobox.Input
                               placeholder="Search products..."
-                              defaultValue={catalogEntry?.label ?? ''}
+                              defaultValue={boundPalette ? paletteEntryLabel(boundPalette) : ''}
                               class="w-full pl-3 pr-8 py-1.5 text-[11px] bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-lg outline-none focus:ring-1 focus:ring-blue-400 text-neutral-700 dark:text-neutral-200"
                               oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
                             />
@@ -354,16 +399,19 @@
                           <Combobox.Content
                             class="z-[70] mt-1 max-h-48 w-full overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-lg"
                           >
-                            {#each comboResults as entry}
+                            {#each comboResults as palEntry}
                               <Combobox.Item
-                                value={entry.id}
-                                label={entry.label}
+                                value={palEntry.id}
+                                label={paletteEntryLabel(palEntry)}
                                 class="px-3 py-1.5 text-[11px] cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 data-[highlighted]:bg-neutral-50 dark:data-[highlighted]:bg-neutral-700/50"
                               >
                                 <div class="font-medium text-neutral-800 dark:text-neutral-100">
-                                  {entry.label}
+                                  {paletteEntryLabel(palEntry)}
                                 </div>
-                                <div class="text-[9px] font-mono text-neutral-400">{entry.id}</div>
+                                <div class="text-[9px] font-mono text-neutral-400">
+                                  {palEntry.spec.kind}
+                                  / {palEntry.spec.vendor ?? ''}
+                                </div>
                               </Combobox.Item>
                             {/each}
                           </Combobox.Content>
@@ -377,7 +425,7 @@
                           <ArrowSquareOut class="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    {:else if catalogEntry}
+                    {:else if boundPalette}
                       <button
                         type="button"
                         class="flex items-center gap-2 w-full px-2.5 py-1.5 text-left rounded-lg bg-neutral-50 dark:bg-neutral-700/50 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
@@ -387,12 +435,12 @@
                           <div
                             class="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
                           >
-                            {catalogEntry.spec.vendor}
+                            {boundPalette.spec.vendor}
                           </div>
                           <div
                             class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
                           >
-                            {catalogEntry.label}
+                            {paletteEntryLabel(boundPalette)}
                           </div>
                         </div>
                         <ArrowSquareOut class="shrink-0 w-3.5 h-3.5 text-neutral-400" />
