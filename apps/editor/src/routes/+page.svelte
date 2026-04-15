@@ -1,6 +1,7 @@
 <script lang="ts">
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
+  import { nanoid } from 'nanoid'
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
@@ -187,8 +188,25 @@
     mode={editorState.mode}
     poeBudget={diagramState.poeBudgets.find((b) => b.nodeId === detailData?.id)}
     catalog={diagramState.catalog}
+    palette={diagramState.palette}
     links={diagramState.links}
     onclose={() => { detailData = null }}
+    onbindpalette={(nodeId, paletteId) => {
+      // Find or create BOM item for this binding
+      const existing = diagramState.bomItems.find((i) => i.nodeId === nodeId)
+      if (existing) {
+        // Re-bind to different palette entry
+        diagramState.updateBomItem(existing.id, { paletteId })
+      } else {
+        // Find unplaced BOM item for this palette entry, or create new
+        const unplaced = diagramState.bomItems.find((i) => i.paletteId === paletteId && !i.nodeId)
+        if (unplaced) {
+          diagramState.bindNodeToBom(unplaced.id, nodeId)
+        } else {
+          diagramState.addBomItem({ id: nanoid(), paletteId, nodeId })
+        }
+      }
+    }}
     onupdate={(id, field, value) => {
       const node = diagramState.nodes.get(id)
       if (node) {
