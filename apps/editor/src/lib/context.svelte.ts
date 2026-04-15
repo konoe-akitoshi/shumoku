@@ -208,6 +208,24 @@ export const diagramState = {
     bomItems = [...bomItems, item]
   },
   removeBomItem(id: string) {
+    const item = bomItems.find((i) => i.id === id)
+    if (item?.nodeId) {
+      // Remove diagram node + its ports + connected links
+      const nodeId = item.nodeId
+      const n = new Map(nodes)
+      const p = new Map(ports)
+      n.delete(nodeId)
+      for (const [portId, port] of p) {
+        if (port.nodeId === nodeId) p.delete(portId)
+      }
+      nodes = n
+      ports = p
+      links = links.filter((l) => {
+        const from = typeof l.from === 'string' ? l.from : l.from.node
+        const to = typeof l.to === 'string' ? l.to : l.to.node
+        return from !== nodeId && to !== nodeId
+      })
+    }
     bomItems = bomItems.filter((i) => i.id !== id)
   },
   updateBomItem(id: string, updates: Partial<BomItem>) {
