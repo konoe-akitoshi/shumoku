@@ -15,6 +15,8 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { analyzePoE, type PoEBudget } from './poe-analysis'
+import { samplePalette } from './sample-project'
+import type { SpecPaletteEntry } from './types'
 
 // =========================================================================
 // Editor UI state — mode, theme
@@ -79,6 +81,7 @@ let subgraphs = $state<Map<string, ResolvedSubgraph>>(new Map())
 let bounds = $state({ x: 0, y: 0, width: 0, height: 0 })
 let links = $state<Link[]>([])
 let poeBudgets = $state<PoEBudget[]>([])
+let palette = $state<SpecPaletteEntry[]>([])
 let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
@@ -145,6 +148,20 @@ export const diagramState = {
     return { nodes: nodes.size, links: links.length, subgraphs: subgraphs.size }
   },
 
+  // Palette
+  get palette() {
+    return palette
+  },
+  addToPalette(entry: SpecPaletteEntry) {
+    palette = [...palette, entry]
+  },
+  removeFromPalette(id: string) {
+    palette = palette.filter((e) => e.id !== id)
+  },
+  updatePaletteEntry(id: string, updates: Partial<SpecPaletteEntry>) {
+    palette = palette.map((e) => (e.id === id ? { ...e, ...updates } : e))
+  },
+
   // Serialization
   stateToJson(): string {
     return JSON.stringify(
@@ -187,6 +204,11 @@ export const diagramState = {
 
   async initialize() {
     if (initialized) return
+
+    // Synchronous: project data available immediately
+    palette = [...samplePalette]
+
+    // Async: diagram layout requires parsing + computation
     try {
       status = 'Parsing network...'
       const fileMap = new Map<string, string>()
@@ -208,10 +230,11 @@ export const diagramState = {
       const mf = sampleNetwork.find((f) => f.name === 'main.yaml')
       if (mf) yamlSource = mf.content
       status = 'Ready'
-      initialized = true
     } catch (e) {
       status = `Error: ${e instanceof Error ? e.message : String(e)}`
     }
+
+    initialized = true
   },
 
   async applyYaml(yamlStr: string) {

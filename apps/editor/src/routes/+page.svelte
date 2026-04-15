@@ -1,7 +1,6 @@
 <script lang="ts">
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
-  import AppTitle from '$lib/components/AppTitle.svelte'
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
@@ -43,10 +42,6 @@
   // Init — trigger shared state initialization
   // =========================================================================
 
-  $effect(() => {
-    diagramState.initialize()
-  })
-
   // =========================================================================
   // Apply
   // =========================================================================
@@ -86,9 +81,7 @@
   }
 </script>
 
-<div
-  class="relative h-[calc(100vh-2.5rem)] w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950"
->
+<div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
   <!-- Canvas (full screen, z-0) -->
   <div class="absolute inset-0">
     {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
@@ -113,9 +106,6 @@
       </div>
     {/if}
   </div>
-
-  <!-- Top-left: Title -->
-  <div class="fixed top-3 left-3 z-20"><AppTitle /></div>
 
   <!-- Top-right: Export -->
   <div class="fixed top-3 right-3 z-20"><ExportMenu onsave={handleSave} onload={handleLoad} /></div>
