@@ -1,22 +1,28 @@
 import { builtinEntries, Catalog } from '@shumoku/catalog'
 import {
+  collectObstacles,
   computeNetworkLayout,
+  computeNodeSize,
   createMemoryFileResolver,
   darkTheme,
   HierarchicalParser,
   type Link,
   lightTheme,
+  type NodeSpec,
   type ResolvedEdge,
   type ResolvedLayout,
   type ResolvedNode,
   type ResolvedPort,
   type ResolvedSubgraph,
+  resolvePosition,
   sampleNetwork,
   type Theme,
 } from '@shumoku/core'
+import { nanoid } from 'nanoid'
 import { analyzePoE, type PoEBudget } from './poe-analysis'
 import { sampleBomItems, samplePalette } from './sample-project'
 import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
+import { paletteEntryLabel } from './types'
 
 // =========================================================================
 // Editor UI state — mode, theme
@@ -90,6 +96,21 @@ let initialized = $state(false)
 const catalog = new Catalog()
 catalog.registerAll(builtinEntries)
 
+/** Update spec on multiple nodes at once (Palette → Node propagation) */
+function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
+  const ids = new Set(nodeIds)
+  const n = new Map(nodes)
+  let changed = false
+  for (const id of ids) {
+    const rn = n.get(id)
+    if (rn) {
+      n.set(id, { ...rn, node: { ...rn.node, spec } })
+      changed = true
+    }
+  }
+  if (changed) nodes = n
+}
+
 export const diagramState = {
   get nodes() {
     return nodes
@@ -157,11 +178,26 @@ export const diagramState = {
     palette = [...palette, entry]
   },
   removeFromPalette(id: string) {
+    // Clear spec on bound nodes before removing
+    const boundNodeIds = bomItems
+      .filter((i) => i.paletteId === id && i.nodeId)
+      .map((i) => i.nodeId as string)
+    if (boundNodeIds.length > 0) setNodeSpecs(boundNodeIds, undefined)
     palette = palette.filter((e) => e.id !== id)
     bomItems = bomItems.filter((i) => i.paletteId !== id)
   },
   updatePaletteEntry(id: string, updates: Partial<SpecPaletteEntry>) {
     palette = palette.map((e) => (e.id === id ? { ...e, ...updates } : e))
+    // Propagate spec change to all bound nodes (Figma-style)
+    if (updates.spec) {
+      const entry = palette.find((e) => e.id === id)
+      if (entry) {
+        const boundNodeIds = bomItems
+          .filter((i) => i.paletteId === id && i.nodeId)
+          .map((i) => i.nodeId as string)
+        if (boundNodeIds.length > 0) setNodeSpecs(boundNodeIds, entry.spec)
+      }
+    }
   },
 
   // BOM items (device instances — master for qty management)
@@ -172,6 +208,24 @@ export const diagramState = {
     bomItems = [...bomItems, item]
   },
   removeBomItem(id: string) {
+    const item = bomItems.find((i) => i.id === id)
+    if (item?.nodeId) {
+      // Remove diagram node + its ports + connected links
+      const nodeId = item.nodeId
+      const n = new Map(nodes)
+      const p = new Map(ports)
+      n.delete(nodeId)
+      for (const [portId, port] of p) {
+        if (port.nodeId === nodeId) p.delete(portId)
+      }
+      nodes = n
+      ports = p
+      links = links.filter((l) => {
+        const from = typeof l.from === 'string' ? l.from : l.from.node
+        const to = typeof l.to === 'string' ? l.to : l.to.node
+        return from !== nodeId && to !== nodeId
+      })
+    }
     bomItems = bomItems.filter((i) => i.id !== id)
   },
   updateBomItem(id: string, updates: Partial<BomItem>) {
@@ -184,6 +238,12 @@ export const diagramState = {
       bomItems = bomItems.map((i) => (i.nodeId === nodeId ? { ...i, nodeId: undefined } : i))
     }
     bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId } : i))
+    // Propagate palette spec to node
+    if (nodeId) {
+      const bom = bomItems.find((i) => i.id === bomId)
+      const entry = bom ? palette.find((e) => e.id === bom.paletteId) : undefined
+      setNodeSpecs([nodeId], entry?.spec)
+    }
   },
   /** Get BOM items for a palette entry */
   getBomItemsForPalette(paletteId: string): BomItem[] {
@@ -198,6 +258,70 @@ export const diagramState = {
     return bomItems
       .filter((i) => i.paletteId === paletteId && i.nodeId)
       .map((i) => i.nodeId as string)
+  },
+  /** Unbind node(s) from BOM — sets nodeId to undefined, keeps the BomItem */
+  unbindNodes(nodeIds: string[]) {
+    const ids = new Set(nodeIds)
+    bomItems = bomItems.map((i) =>
+      i.nodeId && ids.has(i.nodeId) ? { ...i, nodeId: undefined } : i,
+    )
+    // Clear spec on unbound nodes
+    setNodeSpecs(nodeIds, undefined)
+  },
+  /** Remove BomItems for deleted diagram nodes */
+  removeNodeBomItems(nodeIds: string[]) {
+    const ids = new Set(nodeIds)
+    bomItems = bomItems.filter((i) => !i.nodeId || !ids.has(i.nodeId))
+  },
+  /** High-level: bind a diagram node to a palette entry (finds/creates BomItem + propagates spec) */
+  bindNodeToPalette(nodeId: string, paletteId: string) {
+    const existing = bomItems.find((i) => i.nodeId === nodeId)
+    if (existing) {
+      // Already bound — re-bind to different palette
+      diagramState.updateBomItem(existing.id, { paletteId })
+      const entry = palette.find((e) => e.id === paletteId)
+      if (entry) setNodeSpecs([nodeId], entry.spec)
+    } else {
+      // Find unplaced BOM item for this palette entry, or create new
+      const unplaced = bomItems.find((i) => i.paletteId === paletteId && !i.nodeId)
+      if (unplaced) {
+        diagramState.bindNodeToBom(unplaced.id, nodeId)
+      } else {
+        const id = nanoid()
+        diagramState.addBomItem({ id, paletteId, nodeId })
+        const entry = palette.find((e) => e.id === paletteId)
+        if (entry) setNodeSpecs([nodeId], entry.spec)
+      }
+    }
+  },
+  /** Create a diagram node for an unplaced BomItem and bind it */
+  placeNodeForBom(bomId: string): string | undefined {
+    const bom = bomItems.find((i) => i.id === bomId)
+    if (!bom || bom.nodeId) return undefined
+    const entry = palette.find((e) => e.id === bom.paletteId)
+    if (!entry) return undefined
+
+    const id = `node-${Date.now()}`
+    const label = paletteEntryLabel(entry)
+    const spec = entry.spec
+    const { width: w, height: h } = computeNodeSize({ label, spec })
+    const obstacles = collectObstacles(id, undefined, nodes, subgraphs)
+    const pos = resolvePosition(
+      { x: bounds.x + bounds.width + 40 + w / 2, y: bounds.y + bounds.height / 2, w, h },
+      obstacles,
+    )
+
+    const n = new Map(nodes)
+    n.set(id, {
+      id,
+      position: pos,
+      size: { width: w, height: h },
+      node: { id, label, spec, shape: 'rounded' },
+    })
+    nodes = n
+    // Bind BomItem to the new node
+    bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId: id } : i))
+    return id
   },
 
   // Serialization — .neted.json format

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { DropdownMenu } from 'bits-ui'
   import { nanoid } from 'nanoid'
-  import { CaretDown, Plus, Trash } from 'phosphor-svelte'
+  import { CaretDown, MapPin, Plus, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { Badge } from '$lib/components/ui/badge'
@@ -29,10 +29,11 @@
       })),
   )
 
-  // Spec summary
+  // Spec summary (only items with a paletteId)
   const specSummary = $derived.by(() => {
     const groups = new Map<string, { total: number; placed: number }>()
     for (const item of items) {
+      if (!item.paletteId) continue
       const g = groups.get(item.paletteId) ?? { total: 0, placed: 0 }
       g.total++
       if (item.nodeId) g.placed++
@@ -147,8 +148,10 @@
       </Table.Header>
       <Table.Body>
         {#each items as item (item.id)}
-          {@const pal = paletteById.get(item.paletteId)}
-          <Table.Row class={!item.nodeId ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}>
+          {@const pal = item.paletteId ? paletteById.get(item.paletteId) : undefined}
+          {@const needsSpec = !item.paletteId}
+          {@const needsNode = item.paletteId && !item.nodeId}
+          <Table.Row class={needsSpec || needsNode ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}>
             <Table.Cell>
               {#if pal}
                 <button
@@ -159,31 +162,61 @@
                   {paletteEntryLabel(pal)}
                 </button>
               {:else}
-                <span class="text-xs text-muted-foreground italic">unknown</span>
-              {/if}
-            </Table.Cell>
-            <Table.Cell>
-              {#if item.nodeId}
-                <span class="font-mono text-xs">{item.nodeId}</span>
-              {:else}
                 <select
                   class="px-2 py-1 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
                   value=""
                   onchange={(e) => {
                     const val = (e.target as HTMLSelectElement).value
-                    if (val) diagramState.bindNodeToBom(item.id, val)
+                    if (val) diagramState.bindNodeToPalette(item.nodeId ?? '', val)
                   }}
                 >
-                  <option value="">-- assign node --</option>
-                  {#each unboundNodes as node}
-                    <option value={node.id}>{node.id} ({node.label})</option>
+                  <option value="">-- assign spec --</option>
+                  {#each diagramState.palette as palEntry}
+                    <option value={palEntry.id}>{paletteEntryLabel(palEntry)}</option>
                   {/each}
                 </select>
               {/if}
             </Table.Cell>
             <Table.Cell>
               {#if item.nodeId}
-                <Badge variant="default">placed</Badge>
+                <span class="font-mono text-xs">{item.nodeId}</span>
+              {:else if item.paletteId}
+                <div class="flex items-center gap-1.5">
+                  <select
+                    class="px-2 py-1 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
+                    value=""
+                    onchange={(e) => {
+                      const val = (e.target as HTMLSelectElement).value
+                      if (val) diagramState.bindNodeToBom(item.id, val)
+                    }}
+                  >
+                    <option value="">-- assign node --</option>
+                    {#each unboundNodes as node}
+                      <option value={node.id}>{node.id} ({node.label})</option>
+                    {/each}
+                  </select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-7 px-2 text-[11px]"
+                    onclick={() => {
+                      diagramState.placeNodeForBom(item.id)
+                      goto(`/project/${$page.params.id}/diagram`)
+                    }}
+                  >
+                    <MapPin class="w-3 h-3 mr-1" />
+                    Place
+                  </Button>
+                </div>
+              {:else}
+                <span class="text-xs text-muted-foreground italic">—</span>
+              {/if}
+            </Table.Cell>
+            <Table.Cell>
+              {#if item.paletteId && item.nodeId}
+                <Badge variant="default">bound</Badge>
+              {:else if !item.paletteId}
+                <Badge variant="outline">unassigned</Badge>
               {:else}
                 <Badge variant="secondary">unplaced</Badge>
               {/if}

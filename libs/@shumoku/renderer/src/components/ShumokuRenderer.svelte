@@ -43,6 +43,8 @@
     onselect?: (id: string | null, type: string | null) => void
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
+    onnodeadd?: (id: string) => void
+    onnodedelete?: (ids: string[]) => void
   }
 
   let {
@@ -60,6 +62,8 @@
     onselect,
     onlabeledit,
     oncontextmenu: onctx,
+    onnodeadd,
+    onnodedelete,
   }: RendererProps = $props()
 
   const colors = $derived(themeToColors(theme))
@@ -243,6 +247,7 @@
     })
     nodes = n
     finalizeAdd(id, new Map(subgraphs))
+    onnodeadd?.(id)
     return id
   }
 
@@ -270,7 +275,10 @@
   // =========================================================================
 
   export function deleteById(id: string) {
+    const deletedNodeIds: string[] = []
+
     if (nodes.has(id)) {
+      deletedNodeIds.push(id)
       const n = new Map(nodes)
       const p = new Map(ports)
       n.delete(id)
@@ -313,6 +321,7 @@
       const p = new Map(ports)
       const sg = new Map(subgraphs)
       for (const nid of toDeleteNodes) {
+        deletedNodeIds.push(nid)
         n.delete(nid)
         for (const [portId, port] of p) {
           if (port.nodeId === nid) p.delete(portId)
@@ -334,6 +343,7 @@
       edges = e
     })
     onchange?.(links)
+    if (deletedNodeIds.length > 0) onnodedelete?.(deletedNodeIds)
   }
 
   // =========================================================================
