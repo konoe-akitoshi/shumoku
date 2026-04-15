@@ -190,6 +190,7 @@
     data={detailData}
     mode={editorState.mode}
     poeBudget={diagramState.poeBudgets.find((b) => b.nodeId === detailData?.id)}
+    boundPaletteId={detailData?.id ? diagramState.getPaletteIdForNode(detailData.id) : undefined}
     palette={diagramState.palette}
     links={diagramState.links}
     onclose={() => { detailData = null }}

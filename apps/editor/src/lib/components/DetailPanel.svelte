@@ -12,6 +12,7 @@
     data,
     mode = 'view',
     poeBudget,
+    boundPaletteId,
     palette = [],
     links = [],
     onclose,
@@ -23,6 +24,7 @@
     data: Record<string, any> | null
     mode?: 'edit' | 'view'
     poeBudget?: PoEBudget
+    boundPaletteId?: string
     palette?: SpecPaletteEntry[]
     links?: Link[]
     onclose?: () => void
@@ -45,37 +47,10 @@
     onbindpalette?.(data.id, paletteId)
   }
 
-  // Bound palette entry for this node (via BOM — single source of truth)
-  const boundPalette = $derived.by<SpecPaletteEntry | null>(() => {
-    if (!data?.id || !palette.length) return null
-    // BOM-based lookup: find BomItem with this nodeId → get paletteId → find palette entry
-    // The parent passes `boundPaletteId` via the palette list; here we match by node spec
-    // since the spec is now propagated from palette via BOM binding
-    const spec = data.spec
-    if (!spec) return null
-    for (const pal of palette) {
-      const ps = pal.spec
-      if (ps.kind === spec.kind && ps.vendor === spec.vendor) {
-        if (ps.kind === 'hardware' && 'model' in ps && 'model' in spec && ps.model === spec.model)
-          return pal
-        if (
-          ps.kind === 'service' &&
-          'service' in ps &&
-          'service' in spec &&
-          ps.service === spec.service
-        )
-          return pal
-        if (
-          ps.kind === 'compute' &&
-          'platform' in ps &&
-          'platform' in spec &&
-          ps.platform === spec.platform
-        )
-          return pal
-      }
-    }
-    return null
-  })
+  // Bound palette entry — looked up via BomItem binding (parent passes boundPaletteId)
+  const boundPalette = $derived(
+    boundPaletteId ? (palette.find((e) => e.id === boundPaletteId) ?? null) : null,
+  )
 
   const hwProps = $derived(
     boundPalette?.spec.kind === 'hardware' && boundPalette.properties
@@ -325,13 +300,15 @@
             <ScrollArea.Root style="height: 45vh;">
               <ScrollArea.Viewport style="height: 100%;">
                 <div class="px-5 py-4 text-xs space-y-3">
-                  <!-- Node identity + device block -->
-                  <div class="flex items-center gap-3">
-                    {#if iconPath}
-                      <div class="shrink-0 p-2 rounded-lg bg-neutral-100 dark:bg-neutral-700">
+                  <!-- Node identity: icon + label + spec -->
+                  <div class="flex items-start gap-3">
+                    <div
+                      class="shrink-0 w-12 h-12 rounded-lg bg-neutral-100 dark:bg-neutral-700 flex items-center justify-center"
+                    >
+                      {#if iconPath}
                         <svg
-                          width="32"
-                          height="32"
+                          width="28"
+                          height="28"
                           viewBox="0 0 24 24"
                           fill="currentColor"
                           role="img"
@@ -340,78 +317,87 @@
                         >
                           {@html iconPath}
                         </svg>
-                      </div>
-                    {/if}
-                    <div class="min-w-0 flex-1">
-                      <div
-                        class="text-sm font-semibold text-neutral-800 dark:text-neutral-100 truncate"
-                      >
-                        {nodeLabel || data.id}
-                      </div>
+                      {:else}
+                        <div
+                          class="w-5 h-5 rounded border-2 border-dashed border-neutral-300 dark:border-neutral-600"
+                        ></div>
+                      {/if}
+                    </div>
+                    <div class="min-w-0 flex-1 space-y-1.5">
+                      <!-- Label -->
+                      {#if editing && (kind === 'node' || kind === 'subgraph')}
+                        <input
+                          type="text"
+                          class="w-full text-sm font-semibold px-2 py-0.5 -ml-2 bg-transparent border border-transparent hover:border-neutral-200 focus:border-neutral-300 dark:hover:border-neutral-600 dark:focus:border-neutral-500 rounded outline-none focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100"
+                          value={nodeLabel || ''}
+                          placeholder="Label"
+                          onblur={(e) => { if (data?.id) onupdate?.(data.id, 'label', (e.target as HTMLInputElement).value) }}
+                          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                        >
+                      {:else}
+                        <div
+                          class="text-sm font-semibold text-neutral-800 dark:text-neutral-100 truncate"
+                        >
+                          {nodeLabel || data.id}
+                        </div>
+                      {/if}
+
+                      <!-- Spec binding -->
+                      {#if kind === 'node' || kind === 'subgraph'}
+                        {#if editing}
+                          <Combobox.Root
+                            type="single"
+                            onValueChange={(v) => { if (v) handleComboSelect(v) }}
+                          >
+                            <div class="relative">
+                              <Combobox.Input
+                                placeholder="Assign spec..."
+                                defaultValue={boundPalette ? paletteEntryLabel(boundPalette) : ''}
+                                class="w-full pl-2 pr-7 py-0.5 -ml-2 text-[11px] bg-transparent border border-transparent hover:border-neutral-200 focus:border-neutral-300 dark:hover:border-neutral-600 dark:focus:border-neutral-500 rounded outline-none focus:ring-1 focus:ring-blue-400 text-neutral-600 dark:text-neutral-300"
+                                oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
+                              />
+                              <CaretUpDown
+                                class="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400"
+                              />
+                            </div>
+                            <Combobox.Content
+                              class="z-[70] mt-1 max-h-48 w-full overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-lg"
+                            >
+                              {#each comboResults as palEntry}
+                                <Combobox.Item
+                                  value={palEntry.id}
+                                  label={paletteEntryLabel(palEntry)}
+                                  class="px-3 py-1.5 text-[11px] cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 data-[highlighted]:bg-neutral-50 dark:data-[highlighted]:bg-neutral-700/50"
+                                >
+                                  <div class="font-medium text-neutral-800 dark:text-neutral-100">
+                                    {paletteEntryLabel(palEntry)}
+                                  </div>
+                                  <div class="text-[9px] font-mono text-neutral-400">
+                                    {palEntry.spec.kind}
+                                    / {palEntry.spec.vendor ?? ''}
+                                  </div>
+                                </Combobox.Item>
+                              {/each}
+                            </Combobox.Content>
+                          </Combobox.Root>
+                        {:else if boundPalette}
+                          <div class="flex items-center gap-1.5 text-[11px]">
+                            <span
+                              class="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-[9px] font-medium uppercase text-neutral-500 dark:text-neutral-400"
+                              >{boundPalette.spec.kind}</span
+                            >
+                            <span class="text-neutral-600 dark:text-neutral-300"
+                              >{paletteEntryLabel(boundPalette)}</span
+                            >
+                          </div>
+                        {:else}
+                          <div class="text-[11px] text-neutral-400 dark:text-neutral-500 italic">
+                            No spec assigned
+                          </div>
+                        {/if}
+                      {/if}
                     </div>
                   </div>
-
-                  <!-- Spec binding (from project Palette) -->
-                  {#if kind === 'node' || kind === 'subgraph'}
-                    {#if editing}
-                      <div>
-                        <Combobox.Root
-                          type="single"
-                          onValueChange={(v) => { if (v) handleComboSelect(v) }}
-                        >
-                          <div class="relative">
-                            <Combobox.Input
-                              placeholder="Search Spec Palette..."
-                              defaultValue={boundPalette ? paletteEntryLabel(boundPalette) : ''}
-                              class="w-full pl-3 pr-8 py-1.5 text-[11px] bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-lg outline-none focus:ring-1 focus:ring-blue-400 text-neutral-700 dark:text-neutral-200"
-                              oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
-                            />
-                            <CaretUpDown
-                              class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400"
-                            />
-                          </div>
-                          <Combobox.Content
-                            class="z-[70] mt-1 max-h-48 w-full overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-lg"
-                          >
-                            {#each comboResults as palEntry}
-                              <Combobox.Item
-                                value={palEntry.id}
-                                label={paletteEntryLabel(palEntry)}
-                                class="px-3 py-1.5 text-[11px] cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 data-[highlighted]:bg-neutral-50 dark:data-[highlighted]:bg-neutral-700/50"
-                              >
-                                <div class="font-medium text-neutral-800 dark:text-neutral-100">
-                                  {paletteEntryLabel(palEntry)}
-                                </div>
-                                <div class="text-[9px] font-mono text-neutral-400">
-                                  {palEntry.spec.kind}
-                                  / {palEntry.spec.vendor ?? ''}
-                                </div>
-                              </Combobox.Item>
-                            {/each}
-                          </Combobox.Content>
-                        </Combobox.Root>
-                      </div>
-                    {:else if boundPalette}
-                      <div class="px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-700/50">
-                        <div
-                          class="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
-                        >
-                          {boundPalette.spec.vendor}
-                        </div>
-                        <div
-                          class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
-                        >
-                          {paletteEntryLabel(boundPalette)}
-                        </div>
-                      </div>
-                    {:else}
-                      <div
-                        class="px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-700/30 text-[11px] text-neutral-400 dark:text-neutral-500 italic"
-                      >
-                        No spec bound — assign via Edit mode or BOM page
-                      </div>
-                    {/if}
-                  {/if}
 
                   <!-- Connections -->
                   {#if portConnections.length > 0}
