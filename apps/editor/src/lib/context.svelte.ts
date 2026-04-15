@@ -158,6 +158,7 @@ export const diagramState = {
   },
   removeFromPalette(id: string) {
     palette = palette.filter((e) => e.id !== id)
+    bomItems = bomItems.filter((i) => i.paletteId !== id)
   },
   updatePaletteEntry(id: string, updates: Partial<SpecPaletteEntry>) {
     palette = palette.map((e) => (e.id === id ? { ...e, ...updates } : e))
