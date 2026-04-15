@@ -1,4 +1,6 @@
 <script lang="ts">
+  import * as Card from '$lib/components/ui/card'
+  import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
   import { deriveSpecsFromNodes, getSpecPower } from '$lib/spec-utils'
 
@@ -12,104 +14,88 @@
   )
 </script>
 
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Bill of Materials</h1>
+<div class="mb-6">
+  <h1 class="text-lg font-semibold">Bill of Materials</h1>
+  <p class="text-sm text-muted-foreground">Auto-generated from diagram nodes</p>
 </div>
 
-<!-- Summary cards -->
 <div class="grid grid-cols-3 gap-3 mb-6">
-  <div
-    class="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
-  >
-    <div class="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-      Devices
-    </div>
-    <div class="text-xl font-mono font-bold text-neutral-800 dark:text-neutral-100">
-      {totalCount}
-    </div>
-    <div class="text-[10px] text-neutral-400">{specs.length} unique specs</div>
-  </div>
-  <div
-    class="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
-  >
-    <div class="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-      Total Power
-    </div>
-    <div class="text-xl font-mono font-bold text-neutral-800 dark:text-neutral-100">
-      {totalPower}W
-    </div>
-    <div class="text-[10px] text-neutral-400">max consumption</div>
-  </div>
-  <div
-    class="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
-  >
-    <div class="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-      PoE Budget
-    </div>
-    <div class="text-xl font-mono font-bold text-neutral-800 dark:text-neutral-100">
-      {totalPoeBudget}W
-    </div>
-    <div class="text-[10px] text-neutral-400">total available</div>
-  </div>
+  <Card.Root>
+    <Card.Content class="pt-4">
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">Devices</div>
+      <div class="text-2xl font-mono font-bold">{totalCount}</div>
+      <div class="text-xs text-muted-foreground">{specs.length} unique specs</div>
+    </Card.Content>
+  </Card.Root>
+  <Card.Root>
+    <Card.Content class="pt-4">
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">Total Power</div>
+      <div class="text-2xl font-mono font-bold">{totalPower}W</div>
+      <div class="text-xs text-muted-foreground">max consumption</div>
+    </Card.Content>
+  </Card.Root>
+  <Card.Root>
+    <Card.Content class="pt-4">
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">PoE Budget</div>
+      <div class="text-2xl font-mono font-bold">{totalPoeBudget}W</div>
+      <div class="text-xs text-muted-foreground">total available</div>
+    </Card.Content>
+  </Card.Root>
 </div>
 
 {#if specs.length > 0}
-  <div class="overflow-x-auto">
-    <table class="w-full text-xs">
-      <thead>
-        <tr
-          class="border-b border-neutral-200 dark:border-neutral-700 text-left text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
-        >
-          <th class="pb-2 pr-4 font-medium">#</th>
-          <th class="pb-2 pr-4 font-medium">Product</th>
-          <th class="pb-2 pr-4 font-medium">Vendor / Model</th>
-          <th class="pb-2 pr-4 font-medium text-right">Qty</th>
-          <th class="pb-2 pr-4 font-medium text-right">Unit Power</th>
-          <th class="pb-2 pr-4 font-medium text-right">Total Power</th>
-          <th class="pb-2 font-medium text-right">PoE Budget</th>
-        </tr>
-      </thead>
-      <tbody>
+  <Card.Root class="py-0">
+    <Table.Root>
+      <Table.Header>
+        <Table.Row>
+          <Table.Head class="w-10">#</Table.Head>
+          <Table.Head>Product</Table.Head>
+          <Table.Head>Vendor / Model</Table.Head>
+          <Table.Head class="text-right">Qty</Table.Head>
+          <Table.Head class="text-right">Unit Power</Table.Head>
+          <Table.Head class="text-right">Total Power</Table.Head>
+          <Table.Head class="text-right">PoE Budget</Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
         {#each specs as entry, i}
           {@const power = getSpecPower(entry.catalogEntry)}
-          <tr class="border-b border-neutral-100 dark:border-neutral-800">
-            <td class="py-2 pr-4 text-neutral-400">{i + 1}</td>
-            <td class="py-2 pr-4 font-medium text-neutral-800 dark:text-neutral-100">
-              {entry.label}
-            </td>
-            <td class="py-2 pr-4 font-mono text-neutral-500 dark:text-neutral-400">
+          <Table.Row>
+            <Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
+            <Table.Cell class="font-medium">{entry.label}</Table.Cell>
+            <Table.Cell class="font-mono text-xs text-muted-foreground">
               {entry.spec.vendor ?? '—'}
               /
               {'model' in entry.spec ? entry.spec.model ?? '—' : 'service' in entry.spec ? entry.spec.service : '—'}
-            </td>
-            <td
-              class="py-2 pr-4 text-right font-mono font-semibold text-neutral-700 dark:text-neutral-200"
+            </Table.Cell>
+            <Table.Cell class="text-right font-mono font-semibold">{entry.count}</Table.Cell>
+            <Table.Cell class="text-right font-mono text-muted-foreground"
+              >{power.maxDraw ? `${power.maxDraw}W` : '—'}</Table.Cell
             >
-              {entry.count}
-            </td>
-            <td class="py-2 pr-4 text-right font-mono text-neutral-600 dark:text-neutral-300">
-              {power.maxDraw ? `${power.maxDraw}W` : '—'}
-            </td>
-            <td class="py-2 pr-4 text-right font-mono text-neutral-600 dark:text-neutral-300">
-              {power.maxDraw ? `${power.maxDraw * entry.count}W` : '—'}
-            </td>
-            <td class="py-2 text-right font-mono text-neutral-600 dark:text-neutral-300">
-              {power.poeBudget ? `${power.poeBudget * entry.count}W` : '—'}
-            </td>
-          </tr>
+            <Table.Cell class="text-right font-mono"
+              >{power.maxDraw ? `${power.maxDraw * entry.count}W` : '—'}</Table.Cell
+            >
+            <Table.Cell class="text-right font-mono"
+              >{power.poeBudget ? `${power.poeBudget * entry.count}W` : '—'}</Table.Cell
+            >
+          </Table.Row>
         {/each}
-      </tbody>
-      <tfoot>
-        <tr class="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
-          <td class="pt-3" colspan="3">Total</td>
-          <td class="pt-3 pr-4 text-right font-mono">{totalCount}</td>
-          <td class="pt-3 pr-4"></td>
-          <td class="pt-3 pr-4 text-right font-mono">{totalPower}W</td>
-          <td class="pt-3 text-right font-mono">{totalPoeBudget}W</td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
+      </Table.Body>
+      <Table.Footer>
+        <Table.Row>
+          <Table.Cell colspan={3} class="font-semibold">Total</Table.Cell>
+          <Table.Cell class="text-right font-mono font-semibold">{totalCount}</Table.Cell>
+          <Table.Cell></Table.Cell>
+          <Table.Cell class="text-right font-mono font-semibold">{totalPower}W</Table.Cell>
+          <Table.Cell class="text-right font-mono font-semibold">{totalPoeBudget}W</Table.Cell>
+        </Table.Row>
+      </Table.Footer>
+    </Table.Root>
+  </Card.Root>
 {:else}
-  <p class="text-sm text-neutral-400 dark:text-neutral-500 italic">No nodes in diagram.</p>
+  <Card.Root class="py-16">
+    <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
+      <p class="text-sm">No nodes in diagram.</p>
+    </Card.Content>
+  </Card.Root>
 {/if}

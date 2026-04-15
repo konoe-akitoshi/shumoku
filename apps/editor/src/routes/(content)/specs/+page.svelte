@@ -1,7 +1,11 @@
 <script lang="ts">
   import type { CatalogEntry, HardwareProperties } from '@shumoku/catalog'
   import { Dialog, Tabs } from 'bits-ui'
-  import { ArrowLeft, Plus, Trash, X } from 'phosphor-svelte'
+  import { Plus, Trash, X } from 'phosphor-svelte'
+  import { Badge } from '$lib/components/ui/badge'
+  import { Button } from '$lib/components/ui/button'
+  import * as Card from '$lib/components/ui/card'
+  import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
   import type { SpecPaletteEntry } from '$lib/types'
 
@@ -43,9 +47,8 @@
   const hasSeries = $derived(seriesEntries.length > 0)
 
   const modelEntries = $derived.by(() => {
-    if (hasSeries && selectedSeries) {
+    if (hasSeries && selectedSeries)
       return vendorEntries.filter((e) => e.extends === selectedSeries)
-    }
     if (!hasSeries) return vendorEntries
     return []
   })
@@ -80,12 +83,7 @@
     if (customType) spec.type = customType
     if (customVendor) spec.vendor = customVendor
     if (customModel) spec.model = customModel
-    const paletteEntry: SpecPaletteEntry = {
-      id,
-      name: customName,
-      source: 'custom',
-      spec,
-    }
+    const paletteEntry: SpecPaletteEntry = { id, name: customName, source: 'custom', spec }
     diagramState.addToPalette(paletteEntry)
     customName = ''
     customType = ''
@@ -109,95 +107,83 @@
     'text-[10px] font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-1'
 </script>
 
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Spec Palette</h1>
-  <button
-    type="button"
-    class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors"
-    onclick={() => { addDialogOpen = true }}
-  >
-    <Plus class="w-3.5 h-3.5" />
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-lg font-semibold">Spec Palette</h1>
+    <p class="text-sm text-muted-foreground">{diagramState.palette.length} specs registered</p>
+  </div>
+  <Button size="sm" onclick={() => { addDialogOpen = true }}>
+    <Plus class="w-4 h-4 mr-1" />
     Add Spec
-  </button>
+  </Button>
 </div>
 
 {#if diagramState.palette.length > 0}
-  <div class="overflow-x-auto">
-    <table class="w-full text-xs">
-      <thead>
-        <tr
-          class="border-b border-neutral-200 dark:border-neutral-700 text-left text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
-        >
-          <th class="pb-2 pr-4 font-medium">Name</th>
-          <th class="pb-2 pr-4 font-medium">Kind</th>
-          <th class="pb-2 pr-4 font-medium">Vendor / Model</th>
-          <th class="pb-2 pr-4 font-medium">Source</th>
-          <th class="pb-2 pr-4 font-medium text-right">Key Specs</th>
-          <th class="pb-2 font-medium w-8"></th>
-        </tr>
-      </thead>
-      <tbody>
+  <Card.Root class="py-0">
+    <Table.Root>
+      <Table.Header>
+        <Table.Row>
+          <Table.Head>Name</Table.Head>
+          <Table.Head>Kind</Table.Head>
+          <Table.Head>Vendor / Model</Table.Head>
+          <Table.Head>Source</Table.Head>
+          <Table.Head class="text-right">Key Specs</Table.Head>
+          <Table.Head class="w-10"></Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
         {#each diagramState.palette as entry}
           {@const hw = entry.properties && entry.spec.kind === 'hardware' ? entry.properties as HardwareProperties : null}
-          <tr
-            class="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors"
-          >
-            <td class="py-2 pr-4 font-medium text-neutral-800 dark:text-neutral-100">
-              {entry.name}
-            </td>
-            <td class="py-2 pr-4">
-              <span
-                class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400"
-                >{entry.spec.kind}</span
-              >
-            </td>
-            <td class="py-2 pr-4 font-mono text-neutral-600 dark:text-neutral-300 text-[10px]">
+          <Table.Row>
+            <Table.Cell class="font-medium">{entry.name}</Table.Cell>
+            <Table.Cell> <Badge variant="secondary">{entry.spec.kind}</Badge> </Table.Cell>
+            <Table.Cell class="font-mono text-xs text-muted-foreground">
               {entry.spec.vendor ?? '—'}
               / {'model' in entry.spec ? entry.spec.model ?? '—' : '—'}
-            </td>
-            <td class="py-2 pr-4">
+            </Table.Cell>
+            <Table.Cell>
               {#if entry.source === 'catalog'}
-                <span class="text-[9px] text-blue-500 dark:text-blue-400">catalog</span>
+                <Badge variant="default">catalog</Badge>
               {:else}
-                <span class="text-[9px] text-neutral-400">custom</span>
+                <Badge variant="outline">custom</Badge>
               {/if}
-            </td>
-            <td class="py-2 pr-4 text-right text-[10px] text-neutral-500 dark:text-neutral-400">
+            </Table.Cell>
+            <Table.Cell class="text-right text-xs text-muted-foreground">
               {#if hw}
                 {#if hw.power?.poe_out}
-                  <span>PoE {hw.power.poe_out.budget_w}W</span>
+                  PoE {hw.power.poe_out.budget_w}W
                 {/if}
                 {#if hw.switching?.capacity_gbps}
-                  <span> · {hw.switching.capacity_gbps}G</span>
+                  · {hw.switching.capacity_gbps}G
                 {/if}
                 {#if hw.wireless?.standard}
-                  <span> · {hw.wireless.standard}</span>
+                  · {hw.wireless.standard}
                 {/if}
               {/if}
-            </td>
-            <td class="py-2">
-              <button
-                type="button"
-                class="p-1 rounded text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            </Table.Cell>
+            <Table.Cell>
+              <Button
+                variant="ghost"
+                size="icon"
                 onclick={() => diagramState.removeFromPalette(entry.id)}
               >
-                <Trash class="w-3 h-3" />
-              </button>
-            </td>
-          </tr>
+                <Trash class="w-3.5 h-3.5 text-destructive" />
+              </Button>
+            </Table.Cell>
+          </Table.Row>
         {/each}
-      </tbody>
-    </table>
-  </div>
+      </Table.Body>
+    </Table.Root>
+  </Card.Root>
 {:else}
-  <div
-    class="flex flex-col items-center justify-center py-16 text-neutral-400 dark:text-neutral-500"
-  >
-    <p class="text-sm mb-2">No specs in palette yet.</p>
-    <p class="text-xs">
-      Click "Add Spec" to add products from the catalog or create custom entries.
-    </p>
-  </div>
+  <Card.Root class="py-16">
+    <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
+      <p class="text-sm mb-1">No specs in palette yet.</p>
+      <p class="text-xs">
+        Click "Add Spec" to add products from the catalog or create custom entries.
+      </p>
+    </Card.Content>
+  </Card.Root>
 {/if}
 
 <!-- Add Spec Dialog -->
@@ -210,11 +196,9 @@
       <div
         class="flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-700"
       >
-        <Dialog.Title class="text-sm font-semibold text-neutral-800 dark:text-neutral-100"
-          >Add Spec</Dialog.Title
-        >
+        <Dialog.Title class="text-sm font-semibold">Add Spec</Dialog.Title>
         <Dialog.Close
-          class="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 dark:hover:text-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+          class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <X class="w-4 h-4" />
         </Dialog.Close>
@@ -276,33 +260,28 @@
               </div>
             {/if}
             {#if selectedEntry}
-              <div
-                class="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-xs text-blue-600 dark:text-blue-400"
-              >
-                {selectedEntry.label}
-                {#if selectedEntry.spec.kind === 'hardware'}
-                  {@const hw = selectedEntry.properties as HardwareProperties}
-                  {#if hw.power?.poe_out || hw.switching?.capacity_gbps}
-                    <span class="text-[9px] ml-2 text-blue-400 dark:text-blue-500">
-                      {#if hw.power?.poe_out}
-                        PoE {hw.power.poe_out.budget_w}W
-                      {/if}
-                      {#if hw.switching?.capacity_gbps}
-                        · {hw.switching.capacity_gbps}G
-                      {/if}
-                    </span>
+              <Card.Root class="bg-primary/5 border-primary/20">
+                <Card.Content class="py-2 px-3 text-xs text-primary">
+                  {selectedEntry.label}
+                  {#if selectedEntry.spec.kind === 'hardware'}
+                    {@const hw = selectedEntry.properties as HardwareProperties}
+                    {#if hw.power?.poe_out || hw.switching?.capacity_gbps}
+                      <span class="ml-2 opacity-60">
+                        {#if hw.power?.poe_out}
+                          PoE {hw.power.poe_out.budget_w}W
+                        {/if}
+                        {#if hw.switching?.capacity_gbps}
+                          · {hw.switching.capacity_gbps}G
+                        {/if}
+                      </span>
+                    {/if}
                   {/if}
-                {/if}
-              </div>
+                </Card.Content>
+              </Card.Root>
             {/if}
-            <button
-              type="button"
-              class="w-full py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50"
-              disabled={!selectedEntry}
-              onclick={addFromCatalog}
-            >
+            <Button class="w-full" disabled={!selectedEntry} onclick={addFromCatalog}>
               Add to Palette
-            </button>
+            </Button>
           </div>
         </Tabs.Content>
 
@@ -352,27 +331,22 @@
                 placeholder="ws-c3560cx-8pc-s..."
               >
             </div>
-            <button
-              type="button"
-              class="w-full py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50"
-              disabled={!customName}
-              onclick={addCustom}
-            >
+            <Button class="w-full" disabled={!customName} onclick={addCustom}>
               Add to Palette
-            </button>
+            </Button>
           </div>
         </Tabs.Content>
 
         <Tabs.List class="flex border-t border-neutral-200 dark:border-neutral-700">
           <Tabs.Trigger
             value="catalog"
-            class="px-3 py-2 text-xs font-medium border-t-2 -mt-px transition-colors data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+            class="px-3 py-2 text-xs font-medium border-t-2 -mt-px transition-colors data-[state=active]:border-primary data-[state=active]:text-primary border-transparent text-muted-foreground hover:text-foreground"
           >
             Catalog
           </Tabs.Trigger>
           <Tabs.Trigger
             value="custom"
-            class="px-3 py-2 text-xs font-medium border-t-2 -mt-px transition-colors data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+            class="px-3 py-2 text-xs font-medium border-t-2 -mt-px transition-colors data-[state=active]:border-primary data-[state=active]:text-primary border-transparent text-muted-foreground hover:text-foreground"
           >
             Custom
           </Tabs.Trigger>

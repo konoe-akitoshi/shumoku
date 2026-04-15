@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { Badge } from '$lib/components/ui/badge'
+  import * as Card from '$lib/components/ui/card'
+  import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
 
   interface ConnectionRow {
@@ -40,69 +43,68 @@
   })
 </script>
 
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Connections</h1>
-  <span class="text-xs text-neutral-400">{rows.length} links</span>
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-lg font-semibold">Connections</h1>
+    <p class="text-sm text-muted-foreground">{rows.length} links</p>
+  </div>
 </div>
 
 {#if rows.length > 0}
-  <div class="overflow-x-auto">
-    <table class="w-full text-xs">
-      <thead>
-        <tr
-          class="border-b border-neutral-200 dark:border-neutral-700 text-left text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
-        >
-          <th class="pb-2 pr-4 font-medium">From</th>
-          <th class="pb-2 pr-4 font-medium">To</th>
-          <th class="pb-2 pr-4 font-medium">Bandwidth</th>
-          <th class="pb-2 pr-4 font-medium">VLAN</th>
-          <th class="pb-2 pr-4 font-medium">From IP</th>
-          <th class="pb-2 pr-4 font-medium">To IP</th>
-          <th class="pb-2 font-medium">Label</th>
-        </tr>
-      </thead>
-      <tbody>
+  <Card.Root class="py-0">
+    <Table.Root>
+      <Table.Header>
+        <Table.Row>
+          <Table.Head>From</Table.Head>
+          <Table.Head>To</Table.Head>
+          <Table.Head>Bandwidth</Table.Head>
+          <Table.Head>VLAN</Table.Head>
+          <Table.Head>From IP</Table.Head>
+          <Table.Head>To IP</Table.Head>
+          <Table.Head>Label</Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
         {#each rows as row}
-          <tr
-            class="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors"
-          >
-            <td class="py-2 pr-4 font-mono">
-              <span class="text-neutral-700 dark:text-neutral-200">{row.fromNode}</span>
+          <Table.Row>
+            <Table.Cell class="font-mono text-xs">
+              <span class="font-medium">{row.fromNode}</span>
               {#if row.fromPort}
-                <span class="text-neutral-400">:{row.fromPort}</span>
+                <span class="text-muted-foreground">:{row.fromPort}</span>
               {/if}
-            </td>
-            <td class="py-2 pr-4 font-mono">
-              <span class="text-neutral-700 dark:text-neutral-200">{row.toNode}</span>
+            </Table.Cell>
+            <Table.Cell class="font-mono text-xs">
+              <span class="font-medium">{row.toNode}</span>
               {#if row.toPort}
-                <span class="text-neutral-400">:{row.toPort}</span>
+                <span class="text-muted-foreground">:{row.toPort}</span>
               {/if}
-            </td>
-            <td class="py-2 pr-4">
+            </Table.Cell>
+            <Table.Cell>
               {#if row.bandwidth}
-                <span
-                  class="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-mono text-[9px]"
-                  >{row.bandwidth}</span
-                >
+                <Badge variant="secondary" class="font-mono text-[10px]">{row.bandwidth}</Badge>
               {:else}
-                <span class="text-neutral-300 dark:text-neutral-600">—</span>
+                <span class="text-muted-foreground">—</span>
               {/if}
-            </td>
-            <td class="py-2 pr-4 font-mono text-neutral-600 dark:text-neutral-300">
-              {row.vlan || '—'}
-            </td>
-            <td class="py-2 pr-4 font-mono text-neutral-500 dark:text-neutral-400 text-[10px]">
-              {row.fromIp || '—'}
-            </td>
-            <td class="py-2 pr-4 font-mono text-neutral-500 dark:text-neutral-400 text-[10px]">
-              {row.toIp || '—'}
-            </td>
-            <td class="py-2 text-neutral-600 dark:text-neutral-300">{row.label || '—'}</td>
-          </tr>
+            </Table.Cell>
+            <Table.Cell class="font-mono text-xs text-muted-foreground"
+              >{row.vlan || '—'}</Table.Cell
+            >
+            <Table.Cell class="font-mono text-[10px] text-muted-foreground"
+              >{row.fromIp || '—'}</Table.Cell
+            >
+            <Table.Cell class="font-mono text-[10px] text-muted-foreground"
+              >{row.toIp || '—'}</Table.Cell
+            >
+            <Table.Cell class="text-muted-foreground">{row.label || '—'}</Table.Cell>
+          </Table.Row>
         {/each}
-      </tbody>
-    </table>
-  </div>
+      </Table.Body>
+    </Table.Root>
+  </Card.Root>
 {:else}
-  <p class="text-sm text-neutral-400 dark:text-neutral-500 italic">No connections in diagram.</p>
+  <Card.Root class="py-16">
+    <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
+      <p class="text-sm">No connections in diagram.</p>
+    </Card.Content>
+  </Card.Root>
 {/if}
