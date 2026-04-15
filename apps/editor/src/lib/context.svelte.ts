@@ -157,6 +157,15 @@ export const diagramState = {
   set links(v: Link[]) {
     links = v
   },
+  addLink(link: Link) {
+    links = [...links, link]
+  },
+  updateLink(id: string, updates: Partial<Link>) {
+    links = links.map((l) => (l.id === id ? { ...l, ...updates } : l))
+  },
+  removeLink(id: string) {
+    links = links.filter((l) => l.id !== id)
+  },
   get poeBudgets() {
     return poeBudgets
   },
