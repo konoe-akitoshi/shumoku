@@ -227,12 +227,17 @@
   export function addNewNode(opts?: {
     label?: string
     type?: DeviceType
+    spec?: { kind: string; type?: string }
     shape?: NodeShape
     position?: { x: number; y: number }
   }) {
     const id = `node-${Date.now()}`
     const label = opts?.label ?? 'New Node'
-    const spec = opts?.type ? { kind: 'hardware' as const, type: opts.type } : undefined
+    const spec = opts?.spec
+      ? (opts.spec as import('@shumoku/core').NodeSpec)
+      : opts?.type
+        ? { kind: 'hardware' as const, type: opts.type }
+        : undefined
     const { width: w, height: h } = computeNodeSize({ label, spec })
     const { parent, initial } = resolveParentAndPosition(opts?.position, w)
     const obstacles = collectObstacles(id, parent, nodes, subgraphs)
