@@ -1,63 +1,45 @@
 <script lang="ts">
-  import type { HardwareProperties } from '@shumoku/catalog'
-  import { getDeviceIcon, type Link } from '@shumoku/core'
-  import { Combobox } from 'bits-ui'
-  import { CaretUpDown } from 'phosphor-svelte'
+  import { getDeviceIcon, type Link, type Node, specDeviceType } from '@shumoku/core'
   import type { PoEBudget } from '$lib/poe-analysis'
-  import type { SpecPaletteEntry } from '$lib/types'
+  import type { BomItem, SpecPaletteEntry } from '$lib/types'
   import { paletteEntryLabel } from '$lib/types'
 
   let {
-    data,
-    editing = false,
+    node,
     poeBudget,
-    boundPaletteId,
     palette = [],
+    bomItems = [],
     links = [],
-    onupdate,
-    onbindpalette,
   }: {
-    // biome-ignore lint/suspicious/noExplicitAny: mixed element data
-    data: Record<string, any>
-    editing?: boolean
+    node: Node
     poeBudget?: PoEBudget
-    boundPaletteId?: string
-    palette?: SpecPaletteEntry[]
-    links?: Link[]
-    onupdate?: (id: string, field: string, value: string) => void
-    onbindpalette?: (nodeId: string, paletteId: string) => void
+    palette: SpecPaletteEntry[]
+    bomItems: BomItem[]
+    links: Link[]
   } = $props()
-
-  let comboSearchValue = $state('')
-
-  const comboResults = $derived.by(() => {
-    if (!palette.length) return []
-    if (!comboSearchValue.trim()) return palette.slice(0, 10)
-    const q = comboSearchValue.toLowerCase()
-    return palette.filter((e) => paletteEntryLabel(e).toLowerCase().includes(q)).slice(0, 10)
-  })
-
-  const boundPalette = $derived(
-    boundPaletteId ? (palette.find((e) => e.id === boundPaletteId) ?? null) : null,
-  )
 
   function stripHtml(s: string): string {
     return s.replace(/<[^>]*>/g, '')
   }
 
-  const iconPath = $derived(data.spec?.type ? getDeviceIcon(data.spec.type) : undefined)
+  const iconPath = $derived(node.spec ? getDeviceIcon(specDeviceType(node.spec)) : undefined)
+
   const nodeLabel = $derived(
-    data.label
-      ? Array.isArray(data.label)
-        ? data.label.map(stripHtml).join(' / ')
-        : stripHtml(String(data.label))
+    node.label
+      ? Array.isArray(node.label)
+        ? node.label.map(stripHtml).join(' / ')
+        : stripHtml(String(node.label))
       : '',
   )
-  const ports = $derived(data.ports ?? [])
+
+  const boundPalette = $derived.by(() => {
+    const bom = bomItems.find((b) => b.nodeId === node.id)
+    if (!bom?.paletteId) return null
+    return palette.find((e) => e.id === bom.paletteId) ?? null
+  })
 
   interface PortConnection {
     portLabel: string
-    side: string
     peerNode: string
     peerPort: string
     ip?: string
@@ -69,13 +51,8 @@
   }
 
   const portConnections = $derived.by<PortConnection[]>(() => {
-    if (!data.id || !links.length || !ports.length) return []
-    const nodeId = data.id as string
+    if (!links.length) return []
     const conns: PortConnection[] = []
-    // biome-ignore lint/suspicious/noExplicitAny: port data untyped
-    const portMap = new Map<string, any>()
-    // biome-ignore lint/suspicious/noExplicitAny: port data untyped
-    for (const p of ports) portMap.set((p as any).label, p)
 
     for (const link of links) {
       const fromNode = typeof link.from === 'string' ? link.from : link.from.node
@@ -94,10 +71,9 @@
       const bw = link.bandwidth ?? undefined
       const label = Array.isArray(link.label) ? link.label.join(', ') : link.label
 
-      if (fromNode === nodeId && fromPort) {
+      if (fromNode === node.id && fromPort) {
         conns.push({
           portLabel: fromPort,
-          side: portMap.get(fromPort)?.side ?? '',
           peerNode: toNode,
           peerPort: toPort ?? '',
           ip: fromIp,
@@ -107,10 +83,9 @@
           linkLabel: label,
           direction: 'out',
         })
-      } else if (toNode === nodeId && toPort) {
+      } else if (toNode === node.id && toPort) {
         conns.push({
           portLabel: toPort,
-          side: portMap.get(toPort)?.side ?? '',
           peerNode: fromNode,
           peerPort: fromPort ?? '',
           ip: toIp,
@@ -123,12 +98,6 @@
       }
     }
     return conns
-  })
-
-  const unconnectedPorts = $derived.by(() => {
-    const connectedLabels = new Set(portConnections.map((c) => c.portLabel))
-    // biome-ignore lint/suspicious/noExplicitAny: port data untyped
-    return ports.filter((p: any) => !connectedLabels.has(p.label))
   })
 </script>
 
@@ -144,7 +113,7 @@
         viewBox="0 0 24 24"
         fill="currentColor"
         role="img"
-        aria-label={data.spec?.type ?? 'icon'}
+        aria-label={node.spec?.kind ?? 'icon'}
         class="text-neutral-500 dark:text-neutral-400"
       >
         {@html iconPath}
@@ -156,56 +125,10 @@
     {/if}
   </div>
   <div class="min-w-0 flex-1 space-y-1.5">
-    {#if editing}
-      <input
-        type="text"
-        class="w-full text-sm font-semibold px-2 py-0.5 -ml-2 bg-transparent border border-transparent hover:border-neutral-200 focus:border-neutral-300 dark:hover:border-neutral-600 dark:focus:border-neutral-500 rounded outline-none focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100"
-        value={nodeLabel || ''}
-        placeholder="Label"
-        onblur={(e) => { if (data.id) onupdate?.(data.id, 'label', (e.target as HTMLInputElement).value) }}
-        onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-      >
-    {:else}
-      <div class="text-sm font-semibold text-neutral-800 dark:text-neutral-100 truncate">
-        {nodeLabel || data.id}
-      </div>
-    {/if}
-
-    {#if editing}
-      <Combobox.Root
-        type="single"
-        onValueChange={(v) => { if (v && data.id) onbindpalette?.(data.id, v) }}
-      >
-        <div class="relative">
-          <Combobox.Input
-            placeholder="Assign spec..."
-            defaultValue={boundPalette ? paletteEntryLabel(boundPalette) : ''}
-            class="w-full pl-2 pr-7 py-0.5 -ml-2 text-[11px] bg-transparent border border-transparent hover:border-neutral-200 focus:border-neutral-300 dark:hover:border-neutral-600 dark:focus:border-neutral-500 rounded outline-none focus:ring-1 focus:ring-blue-400 text-neutral-600 dark:text-neutral-300"
-            oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
-          />
-          <CaretUpDown class="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400" />
-        </div>
-        <Combobox.Content
-          class="z-[70] mt-1 max-h-48 w-full overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-lg"
-        >
-          {#each comboResults as palEntry}
-            <Combobox.Item
-              value={palEntry.id}
-              label={paletteEntryLabel(palEntry)}
-              class="px-3 py-1.5 text-[11px] cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 data-[highlighted]:bg-neutral-50 dark:data-[highlighted]:bg-neutral-700/50"
-            >
-              <div class="font-medium text-neutral-800 dark:text-neutral-100">
-                {paletteEntryLabel(palEntry)}
-              </div>
-              <div class="text-[9px] font-mono text-neutral-400">
-                {palEntry.spec.kind}
-                / {palEntry.spec.vendor ?? ''}
-              </div>
-            </Combobox.Item>
-          {/each}
-        </Combobox.Content>
-      </Combobox.Root>
-    {:else if boundPalette}
+    <div class="text-sm font-semibold text-neutral-800 dark:text-neutral-100 truncate">
+      {nodeLabel || node.id}
+    </div>
+    {#if boundPalette}
       <div class="flex items-center gap-1.5 text-[11px]">
         <span
           class="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-[9px] font-medium uppercase text-neutral-500 dark:text-neutral-400"
@@ -237,7 +160,7 @@
               >{conn.portLabel}</span
             >
             <span class="text-neutral-300 dark:text-neutral-600"
-              >{conn.direction === 'out' ? '→' : '←'}</span
+              >{conn.direction === 'out' ? '\u2192' : '\u2190'}</span
             >
             <span class="font-mono text-neutral-700 dark:text-neutral-200">{conn.peerNode}</span>
             {#if conn.peerPort}
@@ -264,26 +187,6 @@
             </div>
           {/if}
         </div>
-      {/each}
-    </div>
-  </div>
-{/if}
-
-<!-- Unconnected ports -->
-{#if unconnectedPorts.length > 0}
-  <div>
-    <div
-      class="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1.5"
-    >
-      Ports
-    </div>
-    <div class="flex flex-wrap gap-1">
-      {#each unconnectedPorts as port}
-        <span
-          class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400"
-          >{port.label}
-          <span class="text-neutral-300 dark:text-neutral-600">({port.side})</span></span
-        >
       {/each}
     </div>
   </div>
@@ -322,7 +225,7 @@
             <span class="text-neutral-700 dark:text-neutral-200">
               {#if link.fromPort}
                 <span class="font-mono text-blue-500 dark:text-blue-400">{link.fromPort}</span>
-                →
+                {'\u2192'}
               {/if}
               {link.toNodeLabel}
               {#if link.toPort}

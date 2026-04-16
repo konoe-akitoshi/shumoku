@@ -25,9 +25,32 @@
     type?: string
     elementKind: 'node' | 'subgraph'
   } | null>(null)
-  // biome-ignore lint/suspicious/noExplicitAny: mixed element detail data
-  let detailData = $state<Record<string, any> | null>(null)
+  let detailTarget = $state<{ id: string; type: 'node' | 'link' | 'subgraph' } | null>(null)
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
+
+  // =========================================================================
+  // Detail panel — resolve edge/port to their parent types
+  // =========================================================================
+
+  function openDetail(id: string, rawType: string) {
+    if (rawType === 'node') {
+      detailTarget = { id, type: 'node' }
+    } else if (rawType === 'edge') {
+      // Edge → find corresponding Link
+      const edge = diagramState.edges.get(id)
+      if (edge?.link?.id) {
+        detailTarget = { id: edge.link.id, type: 'link' }
+      }
+    } else if (rawType === 'port') {
+      // Port → open parent Node
+      const port = diagramState.ports.get(id)
+      if (port) {
+        detailTarget = { id: port.nodeId, type: 'node' }
+      }
+    } else if (rawType === 'subgraph') {
+      detailTarget = { id, type: 'subgraph' }
+    }
+  }
 
   // =========================================================================
   // Export
@@ -141,43 +164,16 @@
         if (clipboard.elementKind === 'subgraph') renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
         else renderer?.addNewNode({ label: clipboard.label, type: clipboard.type, shape: clipboard.shape, position: svgPos })
       }}
-      ondetails={(id) => { detailData = renderer?.getElementDetails(id) ?? null }}
+      ondetails={(id) => openDetail(id, contextMenu?.type ?? 'node')}
       ondelete={(id) => { renderer?.deleteById(id) }}
       onclose={() => { contextMenu = null }}
     />
   {/if}
 
   <DetailPanel
-    open={detailData !== null}
-    data={detailData}
-    mode={editorState.mode}
-    poeBudget={diagramState.poeBudgets.find((b) => b.nodeId === detailData?.id)}
-    boundPaletteId={detailData?.id ? diagramState.getPaletteIdForNode(detailData.id) : undefined}
-    palette={diagramState.palette}
-    links={diagramState.links}
-    onclose={() => { detailData = null }}
-    onbindpalette={(nodeId, paletteId) => {
-      diagramState.bindNodeToPalette(nodeId, paletteId)
-      detailData = renderer?.getElementDetails(nodeId) ?? null
-    }}
-    onupdate={(id, field, value) => {
-      const node = diagramState.nodes.get(id)
-      if (node) {
-        const updated = { ...node, [field]: value }
-        const n = new Map(diagramState.nodes)
-        n.set(id, updated)
-        diagramState.nodes = n
-        detailData = renderer?.getElementDetails(id) ?? null
-        return
-      }
-      const sg = diagramState.subgraphs.get(id)
-      if (sg) {
-        const updated = { ...sg, [field]: value }
-        const s = new Map(diagramState.subgraphs)
-        s.set(id, updated)
-        diagramState.subgraphs = s
-        detailData = renderer?.getElementDetails(id) ?? null
-      }
-    }}
+    open={detailTarget !== null}
+    elementType={detailTarget?.type ?? null}
+    elementId={detailTarget?.id ?? null}
+    onclose={() => { detailTarget = null }}
   />
 </div>
