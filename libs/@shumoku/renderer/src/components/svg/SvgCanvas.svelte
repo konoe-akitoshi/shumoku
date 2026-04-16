@@ -63,6 +63,7 @@
 
   // --- d3-zoom: pan/zoom on viewport <g> ---
   // d3-zoom: pan/zoom always active
+  // Trackpad-friendly: two-finger scroll → pan, pinch (ctrl+wheel) → zoom
   $effect(() => {
     if (!svgEl || !viewportEl) return
 
@@ -70,8 +71,9 @@
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 10])
       .filter((e) => {
-        // Allow wheel zoom always, drag only with middle button or space
-        if (e.type === 'wheel') return true
+        // Wheel: only zoom on pinch (ctrlKey / metaKey)
+        if (e.type === 'wheel') return (e as WheelEvent).ctrlKey || (e as WheelEvent).metaKey
+        // Drag: middle button or Alt+left-click
         if (e.type === 'mousedown' || e.type === 'pointerdown') {
           return (e as MouseEvent).button === 1 || (e as MouseEvent).altKey
         }
@@ -85,11 +87,20 @@
 
     svgSel.call(zoomBehavior)
 
+    // Two-finger scroll (non-ctrl/meta wheel) → pan
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) return // pinch-to-zoom handled by d3-zoom
+      e.preventDefault()
+      zoomBehavior.translateBy(svgSel, -e.deltaX, -e.deltaY)
+    }
+    svgEl.addEventListener('wheel', handleWheel, { passive: false })
+
     // Prevent default context menu on SVG background only when nothing is targeted
     svgSel.on('contextmenu.zoom', null)
 
     return () => {
       svgSel.on('.zoom', null)
+      svgEl.removeEventListener('wheel', handleWheel)
     }
   })
 
