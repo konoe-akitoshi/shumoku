@@ -15,13 +15,14 @@ import {
   type ResolvedPort,
   type ResolvedSubgraph,
   resolvePosition,
+  routeEdges,
   sampleNetwork,
   type Theme,
 } from '@shumoku/core'
 import { nanoid } from 'nanoid'
 import { analyzePoE, type PoEBudget } from './poe-analysis'
 import { sampleBomItems, samplePalette } from './sample-project'
-import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
+import type { BomItem, DiagramJson, NetedProject, SpecPaletteEntry } from './types'
 import { paletteEntryLabel } from './types'
 
 // =========================================================================
@@ -80,12 +81,16 @@ export function initDarkMode() {
 // Diagram state — shared across pages
 // =========================================================================
 
-let nodes = $state<Map<string, ResolvedNode>>(new Map())
-let ports = $state<Map<string, ResolvedPort>>(new Map())
-let edges = $state<Map<string, ResolvedEdge>>(new Map())
-let subgraphs = $state<Map<string, ResolvedSubgraph>>(new Map())
-let bounds = $state({ x: 0, y: 0, width: 0, height: 0 })
-let links = $state<Link[]>([])
+// The diagram object — single source of truth for the renderer's JSON
+const diagram = $state({
+  nodes: new Map<string, ResolvedNode>(),
+  ports: new Map<string, ResolvedPort>(),
+  edges: new Map<string, ResolvedEdge>(),
+  subgraphs: new Map<string, ResolvedSubgraph>(),
+  bounds: { x: 0, y: 0, width: 0, height: 0 },
+  links: [] as Link[],
+})
+
 let poeBudgets = $state<PoEBudget[]>([])
 let palette = $state<SpecPaletteEntry[]>([])
 let bomItems = $state<BomItem[]>([])
@@ -93,13 +98,25 @@ let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
 
+// Edge routing: generation counter prevents stale async results
+let routeGeneration = 0
+
+/** Recompute edges from current nodes/ports/links (async WASM) */
+async function rerouteEdges() {
+  const gen = ++routeGeneration
+  const result = await routeEdges(diagram.nodes, diagram.ports, diagram.links)
+  if (gen === routeGeneration) {
+    diagram.edges = result
+  }
+}
+
 const catalog = new Catalog()
 catalog.registerAll(builtinEntries)
 
 /** Update spec on multiple nodes at once (Palette → Node propagation) */
 function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
   const ids = new Set(nodeIds)
-  const n = new Map(nodes)
+  const n = new Map(diagram.nodes)
   let changed = false
   for (const id of ids) {
     const rn = n.get(id)
@@ -108,7 +125,7 @@ function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
       changed = true
     }
   }
-  if (changed) nodes = n
+  if (changed) diagram.nodes = n
 }
 
 /** Strip product details from spec, keep kind/type (role) */
@@ -121,50 +138,54 @@ function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined 
 }
 
 export const diagramState = {
+  // Diagram — individual accessors for $bindable compat
   get nodes() {
-    return nodes
+    return diagram.nodes
   },
   set nodes(v: Map<string, ResolvedNode>) {
-    nodes = v
+    diagram.nodes = v
   },
   get ports() {
-    return ports
+    return diagram.ports
   },
   set ports(v: Map<string, ResolvedPort>) {
-    ports = v
+    diagram.ports = v
   },
   get edges() {
-    return edges
+    return diagram.edges
   },
   set edges(v: Map<string, ResolvedEdge>) {
-    edges = v
+    diagram.edges = v
   },
   get subgraphs() {
-    return subgraphs
+    return diagram.subgraphs
   },
   set subgraphs(v: Map<string, ResolvedSubgraph>) {
-    subgraphs = v
+    diagram.subgraphs = v
   },
   get bounds() {
-    return bounds
+    return diagram.bounds
   },
   set bounds(v: { x: number; y: number; width: number; height: number }) {
-    bounds = v
+    diagram.bounds = v
   },
   get links() {
-    return links
+    return diagram.links
   },
   set links(v: Link[]) {
-    links = v
+    diagram.links = v
   },
   addLink(link: Link) {
-    links = [...links, link]
+    diagram.links = [...diagram.links, link]
+    rerouteEdges()
   },
   updateLink(id: string, updates: Partial<Link>) {
-    links = links.map((l) => (l.id === id ? { ...l, ...updates } : l))
+    diagram.links = diagram.links.map((l) => (l.id === id ? { ...l, ...updates } : l))
+    rerouteEdges()
   },
   removeLink(id: string) {
-    links = links.filter((l) => l.id !== id)
+    diagram.links = diagram.links.filter((l) => l.id !== id)
+    rerouteEdges()
   },
   get poeBudgets() {
     return poeBudgets
@@ -185,7 +206,11 @@ export const diagramState = {
     return initialized
   },
   get stats() {
-    return { nodes: nodes.size, links: links.length, subgraphs: subgraphs.size }
+    return {
+      nodes: diagram.nodes.size,
+      links: diagram.links.length,
+      subgraphs: diagram.subgraphs.size,
+    }
   },
 
   // Palette
@@ -234,19 +259,20 @@ export const diagramState = {
     if (item?.nodeId) {
       // Remove diagram node + its ports + connected links
       const nodeId = item.nodeId
-      const n = new Map(nodes)
-      const p = new Map(ports)
+      const n = new Map(diagram.nodes)
+      const p = new Map(diagram.ports)
       n.delete(nodeId)
       for (const [portId, port] of p) {
         if (port.nodeId === nodeId) p.delete(portId)
       }
-      nodes = n
-      ports = p
-      links = links.filter((l) => {
+      diagram.nodes = n
+      diagram.ports = p
+      diagram.links = diagram.links.filter((l) => {
         const from = typeof l.from === 'string' ? l.from : l.from.node
         const to = typeof l.to === 'string' ? l.to : l.to.node
         return from !== nodeId && to !== nodeId
       })
+      rerouteEdges()
     }
     bomItems = bomItems.filter((i) => i.id !== id)
   },
@@ -285,14 +311,14 @@ export const diagramState = {
   unbindNodes(nodeIds: string[]) {
     const ids = new Set(nodeIds)
     // Strip product details but keep role (kind/type)
-    const n = new Map(nodes)
+    const n = new Map(diagram.nodes)
     for (const nodeId of ids) {
       const rn = n.get(nodeId)
       if (rn) {
         n.set(nodeId, { ...rn, node: { ...rn.node, spec: stripProductFromSpec(rn.node.spec) } })
       }
     }
-    nodes = n
+    diagram.nodes = n
     bomItems = bomItems.map((i) =>
       i.nodeId && ids.has(i.nodeId) ? { ...i, nodeId: undefined } : i,
     )
@@ -334,23 +360,53 @@ export const diagramState = {
     const label = paletteEntryLabel(entry)
     const spec = entry.spec
     const { width: w, height: h } = computeNodeSize({ label, spec })
-    const obstacles = collectObstacles(id, undefined, nodes, subgraphs)
+    const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
     const pos = resolvePosition(
-      { x: bounds.x + bounds.width + 40 + w / 2, y: bounds.y + bounds.height / 2, w, h },
+      {
+        x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
+        y: diagram.bounds.y + diagram.bounds.height / 2,
+        w,
+        h,
+      },
       obstacles,
     )
 
-    const n = new Map(nodes)
+    const n = new Map(diagram.nodes)
     n.set(id, {
       id,
       position: pos,
       size: { width: w, height: h },
       node: { id, label, spec, shape: 'rounded' },
     })
-    nodes = n
+    diagram.nodes = n
     // Bind BomItem to the new node
     bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId: id } : i))
     return id
+  },
+
+  // Diagram JSON — standalone export/import
+  /** Export diagram as JSON (Map → Record conversion at save boundary) */
+  exportDiagram(): DiagramJson {
+    return {
+      nodes: Object.fromEntries(diagram.nodes),
+      ports: Object.fromEntries(diagram.ports),
+      edges: Object.fromEntries(diagram.edges),
+      subgraphs: Object.fromEntries(diagram.subgraphs),
+      bounds: { ...diagram.bounds },
+      links: [...diagram.links],
+    }
+  },
+  /** Import diagram from JSON (Record → Map conversion at load boundary) */
+  importDiagram(json: DiagramJson) {
+    diagram.nodes = new Map(Object.entries(json.nodes ?? {})) as Map<string, ResolvedNode>
+    diagram.ports = new Map(Object.entries(json.ports ?? {})) as Map<string, ResolvedPort>
+    diagram.edges = new Map(Object.entries(json.edges ?? {})) as Map<string, ResolvedEdge>
+    diagram.subgraphs = new Map(Object.entries(json.subgraphs ?? {})) as Map<
+      string,
+      ResolvedSubgraph
+    >
+    diagram.bounds = json.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
+    diagram.links = json.links ?? []
   },
 
   // Serialization — .neted.json format
@@ -361,14 +417,7 @@ export const diagramState = {
       name,
       palette: [...palette],
       bom: [...bomItems],
-      connections: [...links],
-      diagram: {
-        nodes: Object.fromEntries(new Map(nodes)),
-        ports: Object.fromEntries(new Map(ports)),
-        edges: Object.fromEntries(new Map(edges)),
-        subgraphs: Object.fromEntries(new Map(subgraphs)),
-        bounds: { ...bounds },
-      },
+      diagram: diagramState.exportDiagram(),
     }
     return JSON.stringify(project, null, 2)
   },
@@ -379,44 +428,43 @@ export const diagramState = {
 
     // Support both .neted.json (v1) and legacy diagram.json
     if (data.version === 1) {
-      // NetedProject format
       palette = data.palette ?? []
       bomItems = data.bom ?? []
-      links = data.connections ?? []
+      // Support both new format (links in diagram) and old (connections at root)
       const d = data.diagram ?? {}
-      nodes = new Map(Object.entries(d.nodes ?? {})) as Map<string, ResolvedNode>
-      ports = new Map(Object.entries(d.ports ?? {})) as Map<string, ResolvedPort>
-      edges = new Map(Object.entries(d.edges ?? {})) as Map<string, ResolvedEdge>
-      subgraphs = new Map(Object.entries(d.subgraphs ?? {})) as Map<string, ResolvedSubgraph>
-      bounds = d.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
+      diagramState.importDiagram({
+        ...d,
+        links: d.links ?? data.connections ?? [],
+      })
     } else {
       // Legacy format: { layout: {...}, links: [...] }
       const layout = data.layout ?? data.diagram ?? {}
-      nodes = new Map(Object.entries(layout.nodes ?? {})) as Map<string, ResolvedNode>
-      ports = new Map(Object.entries(layout.ports ?? {})) as Map<string, ResolvedPort>
-      edges = new Map(Object.entries(layout.edges ?? {})) as Map<string, ResolvedEdge>
-      subgraphs = new Map(Object.entries(layout.subgraphs ?? {})) as Map<string, ResolvedSubgraph>
-      bounds = layout.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
-      links = data.links ?? data.connections ?? []
-      // Legacy: no palette/bom
+      diagramState.importDiagram({
+        nodes: layout.nodes ?? {},
+        ports: layout.ports ?? {},
+        edges: layout.edges ?? {},
+        subgraphs: layout.subgraphs ?? {},
+        bounds: layout.bounds ?? { x: 0, y: 0, width: 800, height: 600 },
+        links: data.links ?? data.connections ?? [],
+      })
       palette = []
       bomItems = []
     }
     poeBudgets = analyzePoE(
-      [...nodes.values()].map((rn) => rn.node),
-      links,
+      [...diagram.nodes.values()].map((rn) => rn.node),
+      diagram.links,
       catalog,
     )
     status = 'Ready'
   },
 
   loadFromResolved(resolved: ResolvedLayout, graphLinks: Link[]) {
-    nodes = new Map(resolved.nodes)
-    ports = new Map(resolved.ports)
-    edges = new Map(resolved.edges)
-    subgraphs = new Map(resolved.subgraphs)
-    bounds = resolved.bounds
-    links = [...graphLinks]
+    diagram.nodes = new Map(resolved.nodes)
+    diagram.ports = new Map(resolved.ports)
+    diagram.edges = new Map(resolved.edges)
+    diagram.subgraphs = new Map(resolved.subgraphs)
+    diagram.bounds = resolved.bounds
+    diagram.links = [...graphLinks]
   },
 
   /** Load a project by ID. Resets all state first. */
@@ -424,12 +472,12 @@ export const diagramState = {
     // Reset all state
     palette = []
     bomItems = []
-    nodes = new Map()
-    ports = new Map()
-    edges = new Map()
-    subgraphs = new Map()
-    bounds = { x: 0, y: 0, width: 800, height: 600 }
-    links = []
+    diagram.nodes = new Map()
+    diagram.ports = new Map()
+    diagram.edges = new Map()
+    diagram.subgraphs = new Map()
+    diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
+    diagram.links = []
     poeBudgets = []
     yamlSource = ''
     initialized = false

@@ -48,16 +48,17 @@ export interface BomItem {
 }
 
 // =========================================================================
-// Diagram — layout data for a single sheet
+// Diagram JSON — renderer I/O format (save, load, render share this)
 // =========================================================================
 
-/** Serialized diagram data (JSON-safe) */
-export interface DiagramData {
+/** Diagram JSON — the renderer's input/output format, also the save format */
+export interface DiagramJson {
   nodes: Record<string, ResolvedNode>
   ports: Record<string, ResolvedPort>
   edges: Record<string, ResolvedEdge>
   subgraphs: Record<string, ResolvedSubgraph>
   bounds: { x: number; y: number; width: number; height: number }
+  links: Link[]
 }
 
 // =========================================================================
@@ -78,10 +79,8 @@ export interface NetedProject {
   palette: SpecPaletteEntry[]
   /** BOM — device instances with node bindings */
   bom: BomItem[]
-  /** Connection definitions (logical) */
-  connections: Link[]
-  /** Diagram layout (physical placement) */
-  diagram: DiagramData
+  /** Diagram — layout + connections (renderer JSON) */
+  diagram: DiagramJson
 }
 
 /** File extension for neted projects */
