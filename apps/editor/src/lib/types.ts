@@ -2,14 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ComputeProperties, HardwareProperties, ServiceProperties } from '@shumoku/catalog'
-import type {
-  Link,
-  NodeSpec,
-  ResolvedEdge,
-  ResolvedNode,
-  ResolvedPort,
-  ResolvedSubgraph,
-} from '@shumoku/core'
+import type { NetworkGraph, NodeSpec } from '@shumoku/core'
 
 // =========================================================================
 // Spec Palette — product definitions
@@ -48,20 +41,6 @@ export interface BomItem {
 }
 
 // =========================================================================
-// Diagram JSON — renderer I/O format (save, load, render share this)
-// =========================================================================
-
-/** Diagram JSON — the renderer's input/output format, also the save format */
-export interface DiagramJson {
-  nodes: Record<string, ResolvedNode>
-  ports: Record<string, ResolvedPort>
-  edges: Record<string, ResolvedEdge>
-  subgraphs: Record<string, ResolvedSubgraph>
-  bounds: { x: number; y: number; width: number; height: number }
-  links: Link[]
-}
-
-// =========================================================================
 // Project file — .neted.json
 // =========================================================================
 
@@ -72,15 +51,13 @@ export interface NetedProject {
   /** Project name */
   name: string
   /** Project settings */
-  settings?: {
-    theme?: 'light' | 'dark'
-  }
+  settings?: Record<string, unknown>
   /** Spec Palette — product definitions */
   palette: SpecPaletteEntry[]
   /** BOM — device instances with node bindings */
   bom: BomItem[]
-  /** Diagram — layout + connections (renderer JSON) */
-  diagram: DiagramJson
+  /** Diagram — NetworkGraph (nodes with positions, links, subgraphs) */
+  diagram: NetworkGraph
 }
 
 /** File extension for neted projects */

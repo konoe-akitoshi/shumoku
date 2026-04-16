@@ -74,6 +74,7 @@
         "@shumoku/catalog": "workspace:*",
         "@shumoku/core": "workspace:*",
         "@shumoku/renderer": "workspace:*",
+        "@shumoku/renderer-svg": "workspace:*",
         "bits-ui": "^2.15.4",
         "clsx": "^2.1.1",
         "nanoid": "^5.1.9",

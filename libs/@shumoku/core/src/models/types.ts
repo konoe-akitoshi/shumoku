@@ -148,6 +148,13 @@ export interface Node {
    * What this node represents (hardware, compute, or service)
    */
   spec?: NodeSpec
+
+  /**
+   * Absolute center position.
+   * Set by the layout engine or the editor.
+   * When absent, the layout engine computes it automatically.
+   */
+  position?: Position
 }
 
 // ============================================

@@ -1,8 +1,8 @@
 <script lang="ts">
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
+  import { renderGraphToSvg } from '@shumoku/renderer-svg'
   import { nanoid } from 'nanoid'
-  import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
@@ -17,7 +17,6 @@
   // =========================================================================
 
   let renderer: ShumokuRenderer | undefined = $state()
-  let codePanelOpen = $state(false)
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
   let clipboard = $state<{
@@ -31,52 +30,28 @@
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
 
   // =========================================================================
-  // Derived from shared state
+  // Export
   // =========================================================================
 
-  let jsonSource = $state('{}')
-  $effect(() => {
-    jsonSource = diagramState.exportProject('Sample Network')
-  })
-
-  // =========================================================================
-  // Apply
-  // =========================================================================
-
-  function applyJson(jsonStr: string) {
-    try {
-      diagramState.importProject(jsonStr)
-    } catch (_e) {
-      // JSON parse error
-    }
-  }
-
-  // =========================================================================
-  // File
-  // =========================================================================
-
-  function handleSave() {
-    const blob = new Blob([diagramState.exportProject('Sample Network')], {
-      type: 'application/json',
-    })
+  function downloadFile(content: string, filename: string, type: string) {
+    const blob = new Blob([content], { type })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'project.neted.json'
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  function handleLoad() {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.json,.neted.json'
-    input.onchange = async () => {
-      const file = input.files?.[0]
-      if (!file) return
-      applyJson(await file.text())
-    }
-    input.click()
+  function handleExportJson() {
+    const graph = diagramState.exportGraph()
+    downloadFile(JSON.stringify(graph, null, 2), 'diagram.json', 'application/json')
+  }
+
+  async function handleExportSvg() {
+    const graph = diagramState.exportGraph()
+    const svg = await renderGraphToSvg(graph)
+    downloadFile(svg, 'diagram.svg', 'image/svg+xml')
   }
 </script>
 
@@ -111,20 +86,8 @@
   </div>
 
   <!-- Top-right: Export -->
-  <div class="fixed top-3 right-3 z-20"><ExportMenu onsave={handleSave} onload={handleLoad} /></div>
-
-  <!-- Left: Code panel -->
-  <div class="fixed top-3 bottom-3 left-3 z-30">
-    <CodePanel
-      open={codePanelOpen}
-      yaml={diagramState.yamlSource}
-      json={jsonSource}
-      ontoggle={() => { codePanelOpen = !codePanelOpen }}
-      onyamlchange={(v) => { diagramState.yamlSource = v }}
-      onjsonchange={(v) => { jsonSource = v }}
-      onyamlapply={() => diagramState.applyYaml(diagramState.yamlSource)}
-      onjsonapply={() => applyJson(jsonSource)}
-    />
+  <div class="fixed top-3 right-3 z-20">
+    <ExportMenu onexportjson={handleExportJson} onexportsvg={handleExportSvg} />
   </div>
 
   <!-- Right: Side toolbar -->

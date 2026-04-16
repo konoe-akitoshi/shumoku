@@ -8,6 +8,8 @@ import {
   HierarchicalParser,
   type Link,
   lightTheme,
+  type NetworkGraph,
+  type Node,
   type NodeSpec,
   type ResolvedEdge,
   type ResolvedLayout,
@@ -16,13 +18,14 @@ import {
   type ResolvedSubgraph,
   resolvePosition,
   routeEdges,
+  type Subgraph,
   sampleNetwork,
   type Theme,
 } from '@shumoku/core'
 import { nanoid } from 'nanoid'
 import { analyzePoE, type PoEBudget } from './poe-analysis'
 import { sampleBomItems, samplePalette } from './sample-project'
-import type { BomItem, DiagramJson, NetedProject, SpecPaletteEntry } from './types'
+import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
 import { paletteEntryLabel } from './types'
 
 // =========================================================================
@@ -384,29 +387,47 @@ export const diagramState = {
     return id
   },
 
-  // Diagram JSON — standalone export/import
-  /** Export diagram as JSON (Map → Record conversion at save boundary) */
-  exportDiagram(): DiagramJson {
+  // NetworkGraph — canonical save/load format
+  /** Export as NetworkGraph (ResolvedNode → Node with position) */
+  exportGraph(): NetworkGraph {
+    const graphNodes: Node[] = [...diagram.nodes.values()].map((rn) => ({
+      ...rn.node,
+      position: rn.position,
+    }))
+    const graphSubgraphs: Subgraph[] = [...diagram.subgraphs.values()].map((rs) => rs.subgraph)
     return {
-      nodes: Object.fromEntries(diagram.nodes),
-      ports: Object.fromEntries(diagram.ports),
-      edges: Object.fromEntries(diagram.edges),
-      subgraphs: Object.fromEntries(diagram.subgraphs),
-      bounds: { ...diagram.bounds },
+      version: '1',
+      nodes: graphNodes,
       links: [...diagram.links],
+      subgraphs: graphSubgraphs,
     }
   },
-  /** Import diagram from JSON (Record → Map conversion at load boundary) */
-  importDiagram(json: DiagramJson) {
-    diagram.nodes = new Map(Object.entries(json.nodes ?? {})) as Map<string, ResolvedNode>
-    diagram.ports = new Map(Object.entries(json.ports ?? {})) as Map<string, ResolvedPort>
-    diagram.edges = new Map(Object.entries(json.edges ?? {})) as Map<string, ResolvedEdge>
-    diagram.subgraphs = new Map(Object.entries(json.subgraphs ?? {})) as Map<
-      string,
-      ResolvedSubgraph
-    >
-    diagram.bounds = json.bounds ?? { x: 0, y: 0, width: 800, height: 600 }
-    diagram.links = json.links ?? []
+  /** Import from NetworkGraph (Node with position → ResolvedNode, recompute ports/edges) */
+  async importGraph(graph: NetworkGraph) {
+    const nodes = new Map<string, ResolvedNode>()
+    for (const node of graph.nodes) {
+      const size = computeNodeSize(node)
+      nodes.set(node.id, {
+        id: node.id,
+        position: node.position ?? { x: 0, y: 0 },
+        size,
+        node,
+      })
+    }
+    const subgraphs = new Map<string, ResolvedSubgraph>()
+    for (const sg of graph.subgraphs ?? []) {
+      subgraphs.set(sg.id, {
+        id: sg.id,
+        bounds: { x: 0, y: 0, width: 200, height: 120 },
+        subgraph: sg,
+      })
+    }
+    diagram.nodes = nodes
+    diagram.subgraphs = subgraphs
+    diagram.links = graph.links ?? []
+    // Ports and edges are derived — recompute
+    diagram.ports = new Map()
+    await rerouteEdges()
   },
 
   // Serialization — .neted.json format
@@ -417,39 +438,17 @@ export const diagramState = {
       name,
       palette: [...palette],
       bom: [...bomItems],
-      diagram: diagramState.exportDiagram(),
+      diagram: diagramState.exportGraph(),
     }
     return JSON.stringify(project, null, 2)
   },
 
   /** Import project from NetedProject JSON string */
-  importProject(jsonStr: string) {
+  async importProject(jsonStr: string) {
     const data = JSON.parse(jsonStr)
-
-    // Support both .neted.json (v1) and legacy diagram.json
-    if (data.version === 1) {
-      palette = data.palette ?? []
-      bomItems = data.bom ?? []
-      // Support both new format (links in diagram) and old (connections at root)
-      const d = data.diagram ?? {}
-      diagramState.importDiagram({
-        ...d,
-        links: d.links ?? data.connections ?? [],
-      })
-    } else {
-      // Legacy format: { layout: {...}, links: [...] }
-      const layout = data.layout ?? data.diagram ?? {}
-      diagramState.importDiagram({
-        nodes: layout.nodes ?? {},
-        ports: layout.ports ?? {},
-        edges: layout.edges ?? {},
-        subgraphs: layout.subgraphs ?? {},
-        bounds: layout.bounds ?? { x: 0, y: 0, width: 800, height: 600 },
-        links: data.links ?? data.connections ?? [],
-      })
-      palette = []
-      bomItems = []
-    }
+    palette = data.palette ?? []
+    bomItems = data.bom ?? []
+    await diagramState.importGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
     poeBudgets = analyzePoE(
       [...diagram.nodes.values()].map((rn) => rn.node),
       diagram.links,
