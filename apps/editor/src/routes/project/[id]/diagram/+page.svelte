@@ -154,6 +154,8 @@
       y={contextMenu.y}
       mode={editorState.mode}
       hasClipboard={clipboard !== null}
+      subgraphs={diagramState.subgraphs}
+      currentParent={contextMenu.type === 'node' ? diagramState.nodes.get(contextMenu.id)?.parent : undefined}
       oncopy={(id) => {
         const info = renderer?.getElementInfo(id)
         clipboard = info ? { label: info.label, shape: info.kind === 'node' ? info.shape : undefined, type: info.kind === 'node' ? info.type : undefined, elementKind: info.kind } : null
@@ -165,6 +167,31 @@
         else renderer?.addNewNode({ label: clipboard.label, type: clipboard.type, shape: clipboard.shape, position: svgPos })
       }}
       ondetails={(id) => openDetail(id, contextMenu?.type ?? 'node')}
+      onmovetogroup={(nodeId, groupId) => {
+        const node = diagramState.nodes.get(nodeId)
+        if (!node) return
+        const n = new Map(diagramState.nodes)
+        if (groupId) {
+          const sg = diagramState.subgraphs.get(groupId)
+          if (sg?.bounds) {
+            // Move node to center of target subgraph
+            n.set(nodeId, {
+              ...node,
+              parent: groupId,
+              position: {
+                x: sg.bounds.x + sg.bounds.width / 2,
+                y: sg.bounds.y + sg.bounds.height / 2,
+              },
+            })
+          } else {
+            n.set(nodeId, { ...node, parent: groupId })
+          }
+        } else {
+          // Remove from group — keep current position
+          n.set(nodeId, { ...node, parent: undefined })
+        }
+        diagramState.nodes = n
+      }}
       ondelete={(id) => { renderer?.deleteById(id) }}
       onclose={() => { contextMenu = null }}
     />
