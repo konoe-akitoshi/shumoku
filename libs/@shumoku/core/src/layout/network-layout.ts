@@ -31,7 +31,7 @@ import type {
   NodeSpec,
   Subgraph,
 } from '../models/types.js'
-import type { ResolvedNode, ResolvedPort, ResolvedSubgraph } from './resolved-types.js'
+import type { ResolvedPort } from './resolved-types.js'
 
 // ============================================================================
 // Options
@@ -50,9 +50,9 @@ export interface NetworkLayoutOptions {
 }
 
 export interface NetworkLayoutResult {
-  nodes: Map<string, ResolvedNode>
+  nodes: Map<string, Node>
   ports: Map<string, ResolvedPort>
-  subgraphs: Map<string, ResolvedSubgraph>
+  subgraphs: Map<string, Subgraph>
   bounds: Bounds
 }
 
@@ -510,8 +510,8 @@ function arrangeTrees(
   gap: number,
   pp: PreProcessed,
   opts: Required<NetworkLayoutOptions>,
-  nodes: Map<string, ResolvedNode>,
-  subgraphs: Map<string, ResolvedSubgraph>,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
   ports: Map<string, ResolvedPort>,
 ): void {
   // Place trees side by side (top-level roots)
@@ -528,8 +528,8 @@ function arrangeTree(
   colY: number,
   pp: PreProcessed,
   opts: Required<NetworkLayoutOptions>,
-  nodes: Map<string, ResolvedNode>,
-  subgraphs: Map<string, ResolvedSubgraph>,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
   ports: Map<string, ResolvedPort>,
 ): void {
   // Center own box within column
@@ -540,18 +540,12 @@ function arrangeTree(
   if (tn.kind === 'node' && tn.node) {
     const nodeCx = bx + tn.ownWidth / 2
     const nodeCy = by + tn.ownHeight / 2
-    nodes.set(tn.id, {
-      id: tn.id,
-      position: { x: nodeCx, y: nodeCy },
-      size: { width: tn.ownWidth, height: tn.ownHeight },
-      node: tn.node,
-    })
+    nodes.set(tn.id, { ...tn.node, position: { x: nodeCx, y: nodeCy } })
     // Ports are placed after children (see below) so connected nodes are available for sorting
   } else if (tn.kind === 'subgraph' && tn.subgraph) {
     subgraphs.set(tn.id, {
-      id: tn.id,
+      ...tn.subgraph,
       bounds: { x: bx, y: by, width: tn.ownWidth, height: tn.ownHeight },
-      subgraph: tn.subgraph,
     })
     // Arrange internal children (reuse trees from measure pass)
     if (tn.internalTrees && tn.internalTrees.length > 0) {
@@ -599,7 +593,7 @@ function placeNodePorts(
   cx: number,
   cy: number,
   ports: Map<string, ResolvedPort>,
-  allNodes: Map<string, ResolvedNode>,
+  allNodes: Map<string, Node>,
   graph: NetworkGraph,
   opts: Required<NetworkLayoutOptions>,
 ): void {
@@ -619,14 +613,14 @@ function placeNodePorts(
     // Sort by connected node's position to match child layout order
     if (side === 'top' || side === 'bottom') {
       sp.sort((a, b) => {
-        const ax = allNodes.get(portTarget.get(a.name) ?? '')?.position.x ?? 0
-        const bx = allNodes.get(portTarget.get(b.name) ?? '')?.position.x ?? 0
+        const ax = allNodes.get(portTarget.get(a.name) ?? '')?.position?.x ?? 0
+        const bx = allNodes.get(portTarget.get(b.name) ?? '')?.position?.x ?? 0
         return ax - bx
       })
     } else {
       sp.sort((a, b) => {
-        const ay = allNodes.get(portTarget.get(a.name) ?? '')?.position.y ?? 0
-        const by = allNodes.get(portTarget.get(b.name) ?? '')?.position.y ?? 0
+        const ay = allNodes.get(portTarget.get(a.name) ?? '')?.position?.y ?? 0
+        const by = allNodes.get(portTarget.get(b.name) ?? '')?.position?.y ?? 0
         return ay - by
       })
     }
@@ -697,8 +691,8 @@ export function layoutNetwork(
   const trees = buildTree(null, pp, opts)
 
   // Arrange
-  const nodes = new Map<string, ResolvedNode>()
-  const subgraphs = new Map<string, ResolvedSubgraph>()
+  const nodes = new Map<string, Node>()
+  const subgraphs = new Map<string, Subgraph>()
   const ports = new Map<string, ResolvedPort>()
   arrangeTrees(trees, 0, 0, opts.topLevelGap, pp, opts, nodes, subgraphs, ports)
 
@@ -707,13 +701,16 @@ export function layoutNetwork(
     minY = Infinity,
     maxX = -Infinity,
     maxY = -Infinity
-  for (const rn of nodes.values()) {
-    minX = Math.min(minX, rn.position.x - rn.size.width / 2)
-    minY = Math.min(minY, rn.position.y - rn.size.height / 2)
-    maxX = Math.max(maxX, rn.position.x + rn.size.width / 2)
-    maxY = Math.max(maxY, rn.position.y + rn.size.height / 2)
+  for (const node of nodes.values()) {
+    if (!node.position) continue
+    const size = computeNodeSize(node)
+    minX = Math.min(minX, node.position.x - size.width / 2)
+    minY = Math.min(minY, node.position.y - size.height / 2)
+    maxX = Math.max(maxX, node.position.x + size.width / 2)
+    maxY = Math.max(maxY, node.position.y + size.height / 2)
   }
   for (const sg of subgraphs.values()) {
+    if (!sg.bounds) continue
     minX = Math.min(minX, sg.bounds.x)
     minY = Math.min(minY, sg.bounds.y)
     maxX = Math.max(maxX, sg.bounds.x + sg.bounds.width)

@@ -39,13 +39,7 @@ export {
 } from './remote-client.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
-// Resolved layout model (Node/Port/Edge as independent objects)
-export type {
-  ResolvedEdge,
-  ResolvedLayout,
-  ResolvedNode,
-  ResolvedPort,
-  ResolvedSubgraph,
-} from './resolved-types.js'
+// Resolved layout model (Port/Edge as computed objects, Node/Subgraph used directly)
+export type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
 // Unified layout engine (wraps network layout + libavoid)
 export { computeNetworkLayout, createNetworkLayoutEngine } from './unified-engine.js'

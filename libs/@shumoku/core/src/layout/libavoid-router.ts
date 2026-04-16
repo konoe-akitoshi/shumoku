@@ -9,9 +9,10 @@
  * Pins ensure lines exit/enter ports perpendicularly.
  */
 
-import type { Link, LinkEndpoint, Position } from '../models/types.js'
+import type { Link, LinkEndpoint, Node, Position } from '../models/types.js'
 import { getLinkWidth } from './link-utils.js'
-import type { ResolvedEdge, ResolvedNode, ResolvedPort } from './resolved-types.js'
+import { computeNodeSize } from './network-layout.js'
+import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
 
 // libavoid ConnDirFlags
 const ConnDirUp = 1
@@ -43,15 +44,12 @@ function toEndpoint(ep: string | LinkEndpoint): LinkEndpoint {
 }
 
 /** Check if a point is inside any node's bounding box (with margin) */
-function isInsideAnyNode(
-  x: number,
-  y: number,
-  nodes: Map<string, ResolvedNode>,
-  margin = 2,
-): boolean {
+function isInsideAnyNode(x: number, y: number, nodes: Map<string, Node>, margin = 2): boolean {
   for (const node of nodes.values()) {
-    const hw = node.size.width / 2 + margin
-    const hh = node.size.height / 2 + margin
+    if (!node.position) continue
+    const size = computeNodeSize(node)
+    const hw = size.width / 2 + margin
+    const hh = size.height / 2 + margin
     if (
       x > node.position.x - hw &&
       x < node.position.x + hw &&
@@ -107,7 +105,7 @@ export interface LibavoidRoutingOptions {
 }
 
 export async function routeEdges(
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
   options?: LibavoidRoutingOptions,
@@ -165,20 +163,22 @@ function registerObstacles(
   Avoid: any,
   // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
   router: any,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
 ): Map<string, any> {
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
   const shapeRefs = new Map<string, any>()
   for (const [id, node] of nodes) {
+    if (!node.position) continue
+    const size = computeNodeSize(node)
     shapeRefs.set(
       id,
       new Avoid.ShapeRef(
         router,
         new Avoid.Rectangle(
           new Avoid.Point(node.position.x, node.position.y),
-          node.size.width,
-          node.size.height,
+          size.width,
+          size.height,
         ),
       ),
     )
@@ -191,7 +191,7 @@ function registerPins(
   Avoid: any,
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
   shapeRefs: Map<string, any>,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
 ): Map<string, number> {
   // Direction = flow direction, not port side.
@@ -203,15 +203,14 @@ function registerPins(
   for (const [portId, port] of ports) {
     const shape = shapeRefs.get(port.nodeId)
     const node = nodes.get(port.nodeId)
-    if (!shape || !node) continue
+    if (!shape || !node?.position) continue
 
+    const size = computeNodeSize(node)
     const classId = nextClassId++
     pinIds.set(portId, classId)
 
-    const xProp =
-      (port.absolutePosition.x - (node.position.x - node.size.width / 2)) / node.size.width
-    const yProp =
-      (port.absolutePosition.y - (node.position.y - node.size.height / 2)) / node.size.height
+    const xProp = (port.absolutePosition.x - (node.position.x - size.width / 2)) / size.width
+    const yProp = (port.absolutePosition.y - (node.position.y - size.height / 2)) / size.height
 
     // Direction = graph flow direction for vertical ports (TB → always down),
     // side direction for horizontal ports (HA).
@@ -240,7 +239,7 @@ function createConnectors(
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
   shapeRefs: Map<string, any>,
   pinIds: Map<string, number>,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
   shapeBufferDistance: number,
@@ -396,7 +395,7 @@ function doRoute(
   Avoid: any,
   // biome-ignore lint/suspicious/noExplicitAny: libavoid-js
   router: any,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
   edgeStyle: string,

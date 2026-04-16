@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ResolvedSubgraph, SurfaceToken, Theme } from '@shumoku/core'
+  import type { Subgraph, SurfaceToken, Theme } from '@shumoku/core'
   import type { RenderColors } from '../../lib/render-colors'
   import { elementDrag } from '../../lib/use-drag'
 
@@ -13,7 +13,7 @@
     onselect,
     oncontextmenu: onctx,
   }: {
-    subgraph: ResolvedSubgraph
+    subgraph: Subgraph
     colors: RenderColors
     theme?: Theme
     selected?: boolean
@@ -23,7 +23,7 @@
     oncontextmenu?: (id: string, e: MouseEvent) => void
   } = $props()
 
-  const style = $derived(subgraph.subgraph.style ?? {})
+  const style = $derived(subgraph.style ?? {})
   const surfaceTokens: readonly string[] = [
     'surface-1',
     'surface-2',
@@ -57,10 +57,10 @@
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <rect
     class="subgraph-bg"
-    x={subgraph.bounds.x}
-    y={subgraph.bounds.y}
-    width={subgraph.bounds.width}
-    height={subgraph.bounds.height}
+    x={subgraph.bounds?.x ?? 0}
+    y={subgraph.bounds?.y ?? 0}
+    width={subgraph.bounds?.width ?? 0}
+    height={subgraph.bounds?.height ?? 0}
     rx="12"
     ry="12"
     fill={resolved().fill}
@@ -71,17 +71,17 @@
     oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); onselect?.(subgraph.id); onctx?.(subgraph.id, e) }}
     use:elementDrag={() => ({
       filter: (e) => e.button === 0 && interactive,
-      onDrag: (dx, dy) => ondragmove?.(subgraph.id, subgraph.bounds.x + dx, subgraph.bounds.y + dy),
+      onDrag: (dx, dy) => ondragmove?.(subgraph.id, (subgraph.bounds?.x ?? 0) + dx, (subgraph.bounds?.y ?? 0) + dy),
     })}
   />
   <text
-    x={subgraph.bounds.x + 10}
-    y={subgraph.bounds.y + 20}
+    x={(subgraph.bounds?.x ?? 0) + 10}
+    y={(subgraph.bounds?.y ?? 0) + 20}
     class="subgraph-label"
     text-anchor="start"
     fill={resolved().text}
     pointer-events="none"
   >
-    {subgraph.subgraph.label}
+    {subgraph.label}
   </text>
 </g>

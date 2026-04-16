@@ -1,8 +1,13 @@
 <script lang="ts">
   import { Tooltip } from 'bits-ui'
+  import { initDarkMode } from '$lib/context.svelte'
   import '../app.css'
 
   let { children } = $props()
+
+  $effect(() => {
+    return initDarkMode()
+  })
 </script>
 
 <svelte:head>

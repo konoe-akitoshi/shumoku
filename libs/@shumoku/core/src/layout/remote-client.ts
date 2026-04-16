@@ -9,15 +9,9 @@
  * The API URL must be set before use via setLayoutApiUrl().
  */
 
-import type { Link, NetworkGraph } from '../models/types.js'
+import type { Link, NetworkGraph, Node, Subgraph } from '../models/types.js'
 import type { LibavoidRoutingOptions } from './libavoid-router.js'
-import type {
-  ResolvedEdge,
-  ResolvedLayout,
-  ResolvedNode,
-  ResolvedPort,
-  ResolvedSubgraph,
-} from './resolved-types.js'
+import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -40,7 +34,7 @@ export function getLayoutApiUrl(): string | null {
 
 /** HTTP-based replacement for routeEdges — same signature, calls server API. */
 export async function routeEdgesRemote(
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
   options?: LibavoidRoutingOptions,
@@ -82,10 +76,10 @@ export async function computeNetworkLayoutRemote(
 
   const data = (await res.json()) as {
     resolved: {
-      nodes: Record<string, ResolvedNode>
+      nodes: Record<string, Node>
       ports: Record<string, ResolvedPort>
       edges: Record<string, ResolvedEdge>
-      subgraphs: Record<string, ResolvedSubgraph>
+      subgraphs: Record<string, Subgraph>
       bounds: ResolvedLayout['bounds']
       metadata?: ResolvedLayout['metadata']
     }

@@ -10,14 +10,15 @@
  */
 
 import type {
+  Node,
   ResolvedEdge,
   ResolvedLayout,
-  ResolvedNode,
   ResolvedPort,
-  ResolvedSubgraph,
+  Subgraph,
   Theme,
 } from '@shumoku/core'
 import {
+  computeNodeSize,
   DEFAULT_ICON_SIZE,
   getDeviceIcon,
   ICON_LABEL_GAP,
@@ -131,16 +132,16 @@ function renderNodeShape(
 // Render functions (mirror Svelte components exactly)
 // ============================================================================
 
-function renderNode(node: ResolvedNode, colors: RenderColors): string {
-  const { position, size, node: n } = node
-  const cx = position.x
-  const cy = position.y
-  const style = n.style ?? {}
+function renderNode(node: Node, colors: RenderColors): string {
+  const cx = node.position?.x ?? 0
+  const cy = node.position?.y ?? 0
+  const size = computeNodeSize(node)
+  const style = node.style ?? {}
   const fill = style.fill ?? colors.nodeFill
   const stroke = style.stroke ?? colors.nodeStroke
   const strokeWidth = style.strokeWidth ?? 1.5
   const dasharray = style.strokeDasharray ?? ''
-  const shape = n.shape ?? 'rounded'
+  const shape = node.shape ?? 'rounded'
 
   const bg = renderNodeShape(
     shape,
@@ -155,13 +156,13 @@ function renderNode(node: ResolvedNode, colors: RenderColors): string {
   )
 
   // Icon
-  const iconPath = getDeviceIcon(specDeviceType(n.spec))
+  const iconPath = getDeviceIcon(specDeviceType(node.spec))
   const iconSize = DEFAULT_ICON_SIZE
   const iconHeight = iconPath ? iconSize : 0
   const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0
 
   // Labels
-  const labels = Array.isArray(n.label) ? n.label : [n.label ?? '']
+  const labels = Array.isArray(node.label) ? node.label : [node.label ?? '']
   const labelHeight = labels.length * LABEL_LINE_HEIGHT
   const totalHeight = iconHeight + gap + labelHeight
   const contentTop = cy - totalHeight / 2
@@ -253,14 +254,18 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
 </g>`
 }
 
-function renderSubgraph(sg: ResolvedSubgraph, theme: Theme, colors: RenderColors): string {
-  const surface = resolveSurface(theme, colors, sg.subgraph.style)
-  const strokeWidth = sg.subgraph.style?.strokeWidth ?? 3
-  const dasharray = sg.subgraph.style?.strokeDasharray ?? ''
+function renderSubgraph(sg: Subgraph, theme: Theme, colors: RenderColors): string {
+  const surface = resolveSurface(theme, colors, sg.style)
+  const strokeWidth = sg.style?.strokeWidth ?? 3
+  const dasharray = sg.style?.strokeDasharray ?? ''
+  const bx = sg.bounds?.x ?? 0
+  const by = sg.bounds?.y ?? 0
+  const bw = sg.bounds?.width ?? 0
+  const bh = sg.bounds?.height ?? 0
 
   return `<g class="subgraph" data-id="${sg.id}">
-  <rect x="${sg.bounds.x}" y="${sg.bounds.y}" width="${sg.bounds.width}" height="${sg.bounds.height}" rx="12" ry="12" fill="${surface.fill}" stroke="${surface.stroke}" stroke-width="${strokeWidth}"${dasharray ? ` stroke-dasharray="${dasharray}"` : ''}/>
-  <text x="${sg.bounds.x + 10}" y="${sg.bounds.y + 20}" class="subgraph-label" text-anchor="start" fill="${surface.text}">${esc(sg.subgraph.label)}</text>
+  <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="12" ry="12" fill="${surface.fill}" stroke="${surface.stroke}" stroke-width="${strokeWidth}"${dasharray ? ` stroke-dasharray="${dasharray}"` : ''}/>
+  <text x="${bx + 10}" y="${by + 20}" class="subgraph-label" text-anchor="start" fill="${surface.text}">${esc(sg.label)}</text>
 </g>`
 }
 

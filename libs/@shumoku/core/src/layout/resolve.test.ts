@@ -137,7 +137,7 @@ describe('resolveLayout', () => {
     const sw1 = resolved.nodes.get('sw1')
     expect(sw1).toBeDefined()
     if (!sw1) return
-    expect(sw1.node.label).toBe('Switch 1')
+    expect(sw1.label).toBe('Switch 1')
     expect(sw1.position).toEqual({ x: 200, y: 100 })
   })
 })
@@ -155,7 +155,6 @@ describe('unresolveLayout', () => {
       expect(rNode).toBeDefined()
       if (!rNode) continue
       expect(rNode.position).toEqual(node.position)
-      expect(rNode.size).toEqual(node.size)
     }
 
     // Port positions (center-relative)

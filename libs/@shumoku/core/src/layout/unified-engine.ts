@@ -12,7 +12,7 @@
 import type { LayoutEngine } from '../hierarchical.js'
 import type { LayoutResult, NetworkGraph } from '../models/types.js'
 import { routeEdges } from './libavoid-router.js'
-import { layoutNetwork } from './network-layout.js'
+import { computeNodeSize, layoutNetwork } from './network-layout.js'
 import type { ResolvedLayout } from './resolved-types.js'
 
 /**
@@ -58,7 +58,7 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
 
   // Build LayoutResult with ports converted from absolute to center-relative
   const layoutNodes = new Map(
-    [...nodes].map(([id, rn]) => {
+    [...nodes].map(([id, node]) => {
       // Collect ports for this node, convert absolute → center-relative
       const nodePorts = new Map<
         string,
@@ -70,14 +70,16 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
           side: 'top' | 'bottom' | 'left' | 'right'
         }
       >()
+      const pos = node.position ?? { x: 0, y: 0 }
+      const size = computeNodeSize(node)
       for (const [portId, rp] of ports) {
         if (rp.nodeId !== id) continue
         nodePorts.set(portId, {
           id: portId,
           label: rp.label,
           position: {
-            x: rp.absolutePosition.x - rn.position.x,
-            y: rp.absolutePosition.y - rn.position.y,
+            x: rp.absolutePosition.x - pos.x,
+            y: rp.absolutePosition.y - pos.y,
           },
           size: rp.size,
           side: rp.side,
@@ -87,9 +89,9 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
         id,
         {
           id,
-          position: rn.position,
-          size: rn.size,
-          node: rn.node,
+          position: pos,
+          size,
+          node,
           ...(nodePorts.size > 0 ? { ports: nodePorts } : {}),
         },
       ] as const
@@ -113,7 +115,10 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
       ]),
     ),
     subgraphs: new Map(
-      [...subgraphs].map(([id, rs]) => [id, { id, bounds: rs.bounds, subgraph: rs.subgraph }]),
+      [...subgraphs].map(([id, sg]) => [
+        id,
+        { id, bounds: sg.bounds ?? { x: 0, y: 0, width: 0, height: 0 }, subgraph: sg },
+      ]),
     ),
     bounds,
     metadata: resolved.metadata,

@@ -24,6 +24,7 @@ import type {
   ThemeType,
 } from '@shumoku/core'
 import {
+  computeNodeSize,
   DEFAULT_ICON_SIZE,
   darkTheme,
   getDeviceIcon,
@@ -322,17 +323,16 @@ export class SVGRenderer {
    * Ports are independent objects with their own position.
    */
   renderResolved(graph: NetworkGraph, resolved: ResolvedLayout): string {
-    // ResolvedLayout → LayoutResult-compatible views (nodes, links, subgraphs share same shape)
-    // Only difference: ports are in a separate Map instead of nested in nodes
+    // ResolvedLayout uses Node/Subgraph directly → map to LayoutResult-compatible views
     const layoutCompat: LayoutResult = {
       nodes: new Map(
-        [...resolved.nodes].map(([id, rn]) => [
+        [...resolved.nodes].map(([id, node]) => [
           id,
           {
             id,
-            position: rn.position,
-            size: rn.size,
-            node: rn.node,
+            position: node.position ?? { x: 0, y: 0 },
+            size: computeNodeSize(node),
+            node,
           },
         ]),
       ),
@@ -351,12 +351,12 @@ export class SVGRenderer {
         ]),
       ),
       subgraphs: new Map(
-        [...resolved.subgraphs].map(([id, rs]) => [
+        [...resolved.subgraphs].map(([id, sg]) => [
           id,
           {
             id,
-            bounds: rs.bounds,
-            subgraph: rs.subgraph,
+            bounds: sg.bounds ?? { x: 0, y: 0, width: 0, height: 0 },
+            subgraph: sg,
           },
         ]),
       ),

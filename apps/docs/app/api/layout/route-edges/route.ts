@@ -1,9 +1,9 @@
-import type { LibavoidRoutingOptions, Link, ResolvedNode, ResolvedPort } from '@shumoku/core'
+import type { LibavoidRoutingOptions, Link, Node, ResolvedPort } from '@shumoku/core'
 import { routeEdges } from '@shumoku/core'
 
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json()) as {
-    nodes: Record<string, ResolvedNode>
+    nodes: Record<string, Node>
     ports: Record<string, ResolvedPort>
     links: Link[]
     options?: LibavoidRoutingOptions
