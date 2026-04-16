@@ -17,8 +17,9 @@
  *   HA → bottom/top
  */
 
-import type { Link, LinkEndpoint, Position } from '../models/types.js'
-import type { ResolvedNode, ResolvedPort } from './resolved-types.js'
+import type { Link, LinkEndpoint, Node, Position } from '../models/types.js'
+import { computeNodeSize } from './network-layout.js'
+import type { ResolvedPort } from './resolved-types.js'
 
 /** Default port visual size */
 const PORT_SIZE = { width: 8, height: 8 }
@@ -133,27 +134,28 @@ function assignPortSides(links: Link[], direction: Direction): PortAssignment[] 
  *   positions at x = 30, 60, 90 (= width * 1/4, 2/4, 3/4)
  */
 function computePortPosition(
-  node: ResolvedNode,
+  node: Node & { position: { x: number; y: number } },
   side: Side,
   index: number,
   total: number,
 ): Position {
+  const size = computeNodeSize(node)
   const { x: cx, y: cy } = node.position
-  const halfW = node.size.width / 2
-  const halfH = node.size.height / 2
+  const halfW = size.width / 2
+  const halfH = size.height / 2
 
   // Distribute evenly: position = (index + 1) / (total + 1)
   const ratio = (index + 1) / (total + 1)
 
   switch (side) {
     case 'top':
-      return { x: cx - halfW + node.size.width * ratio, y: cy - halfH }
+      return { x: cx - halfW + size.width * ratio, y: cy - halfH }
     case 'bottom':
-      return { x: cx - halfW + node.size.width * ratio, y: cy + halfH }
+      return { x: cx - halfW + size.width * ratio, y: cy + halfH }
     case 'left':
-      return { x: cx - halfW, y: cy - halfH + node.size.height * ratio }
+      return { x: cx - halfW, y: cy - halfH + size.height * ratio }
     case 'right':
-      return { x: cx + halfW, y: cy - halfH + node.size.height * ratio }
+      return { x: cx + halfW, y: cy - halfH + size.height * ratio }
   }
 }
 
@@ -166,7 +168,7 @@ function computePortPosition(
  * @returns Map of portId → ResolvedPort with absolute positions
  */
 export function placePorts(
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   links: Link[],
   direction: Direction = 'TB',
 ): Map<string, ResolvedPort> {
@@ -193,11 +195,16 @@ export function placePorts(
     const nodeId = first.nodeId
     const side = first.side
     const node = nodes.get(nodeId)
-    if (!node) continue
+    if (!node?.position) continue
 
     for (const [i, a] of sideAssignments.entries()) {
       const portId = `${a.nodeId}:${a.portName}`
-      const absolutePosition = computePortPosition(node, side, i, sideAssignments.length)
+      const absolutePosition = computePortPosition(
+        node as Node & { position: { x: number; y: number } },
+        side,
+        i,
+        sideAssignments.length,
+      )
 
       ports.set(portId, {
         id: portId,

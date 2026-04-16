@@ -10,14 +10,10 @@
  * - Node move with port tracking and edge re-routing
  */
 
-import type { Link, NetworkGraph } from '../models/types.js'
+import type { Link, NetworkGraph, Node, Subgraph } from '../models/types.js'
 import { routeEdges } from './libavoid-router.js'
-import type {
-  ResolvedEdge,
-  ResolvedNode,
-  ResolvedPort,
-  ResolvedSubgraph,
-} from './resolved-types.js'
+import { computeNodeSize } from './network-layout.js'
+import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
 
 /** Minimum gap between nodes during collision resolution */
 const DEFAULT_NODE_GAP = 8
@@ -72,19 +68,22 @@ export function resolveCollision(
 export function collectObstacles(
   excludeId: string,
   excludeParent: string | undefined,
-  nodes: Map<string, ResolvedNode>,
-  subgraphs?: Map<string, ResolvedSubgraph>,
+  nodes: Map<string, Node>,
+  subgraphs?: Map<string, Subgraph>,
 ): { x: number; y: number; w: number; h: number }[] {
   const obstacles: { x: number; y: number; w: number; h: number }[] = []
 
   for (const [nid, n] of nodes) {
     if (nid === excludeId) continue
-    obstacles.push({ x: n.position.x, y: n.position.y, w: n.size.width, h: n.size.height })
+    if (!n.position) continue
+    const size = computeNodeSize(n)
+    obstacles.push({ x: n.position.x, y: n.position.y, w: size.width, h: size.height })
   }
 
   if (subgraphs) {
     for (const [sgId, sg] of subgraphs) {
       if (sgId === excludeId) continue
+      if (!sg.bounds) continue
       // Skip if the moving entity belongs to this subgraph
       if (excludeParent && isChildOf(excludeParent, sgId, subgraphs)) continue
       obstacles.push(boundsToRect(sg.bounds))
@@ -124,21 +123,22 @@ export function resolveNodePosition(
   id: string,
   x: number,
   y: number,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   gap = DEFAULT_NODE_GAP,
-  subgraphs?: Map<string, ResolvedSubgraph>,
+  subgraphs?: Map<string, Subgraph>,
 ): { x: number; y: number } {
   const node = nodes.get(id)
   if (!node) return { x, y }
-  const obstacles = collectObstacles(id, node.node.parent, nodes, subgraphs)
-  return resolvePosition({ x, y, w: node.size.width, h: node.size.height }, obstacles, gap)
+  const size = computeNodeSize(node)
+  const obstacles = collectObstacles(id, node.parent, nodes, subgraphs)
+  return resolvePosition({ x, y, w: size.width, h: size.height }, obstacles, gap)
 }
 
 /** Check if parentId is sgId or a descendant of sgId */
 function isChildOf(
   parentId: string | undefined,
   sgId: string,
-  subgraphs: Map<string, ResolvedSubgraph>,
+  subgraphs: Map<string, Subgraph>,
 ): boolean {
   let current = parentId
   const visited = new Set<string>()
@@ -147,7 +147,7 @@ function isChildOf(
     if (visited.has(current)) return false
     visited.add(current)
     const sg = subgraphs.get(current)
-    current = sg?.subgraph.parent
+    current = sg?.parent
   }
   return false
 }
@@ -175,12 +175,13 @@ function shiftContents(
   sgId: string,
   dx: number,
   dy: number,
-  nodes: Map<string, ResolvedNode>,
-  subgraphs: Map<string, ResolvedSubgraph>,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
   ports: Map<string, ResolvedPort>,
 ): void {
   for (const [nodeId, node] of nodes) {
-    if (node.node.parent !== sgId) continue
+    if (node.parent !== sgId) continue
+    if (!node.position) continue
     nodes.set(nodeId, { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } })
     for (const [portId, port] of ports) {
       if (port.nodeId !== nodeId) continue
@@ -191,7 +192,8 @@ function shiftContents(
     }
   }
   for (const [childId, child] of subgraphs) {
-    if (child.subgraph.parent !== sgId) continue
+    if (child.parent !== sgId) continue
+    if (!child.bounds) continue
     subgraphs.set(childId, {
       ...child,
       bounds: { ...child.bounds, x: child.bounds.x + dx, y: child.bounds.y + dy },
@@ -208,8 +210,8 @@ function shiftContents(
  *   3. Resolve subgraph vs free node collisions (push nodes away)
  */
 export function rebalanceSubgraphs(
-  nodes: Map<string, ResolvedNode>,
-  subgraphs: Map<string, ResolvedSubgraph>,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
   ports: Map<string, ResolvedPort>,
 ): void {
   // Build depth map
@@ -217,8 +219,8 @@ export function rebalanceSubgraphs(
     if (visited.has(sgId)) return 0
     visited.add(sgId)
     const sg = subgraphs.get(sgId)
-    if (!sg?.subgraph.parent) return 0
-    return 1 + depthOf(sg.subgraph.parent, visited)
+    if (!sg?.parent) return 0
+    return 1 + depthOf(sg.parent, visited)
   }
 
   // Sort subgraphs deepest-first
@@ -237,17 +239,20 @@ export function rebalanceSubgraphs(
     let hasChildren = false
 
     for (const n of nodes.values()) {
-      if (n.node.parent !== sgId) continue
+      if (n.parent !== sgId) continue
+      if (!n.position) continue
       hasChildren = true
-      const hw = n.size.width / 2
-      const hh = n.size.height / 2
+      const size = computeNodeSize(n)
+      const hw = size.width / 2
+      const hh = size.height / 2
       minX = Math.min(minX, n.position.x - hw)
       minY = Math.min(minY, n.position.y - hh)
       maxX = Math.max(maxX, n.position.x + hw)
       maxY = Math.max(maxY, n.position.y + hh)
     }
     for (const child of subgraphs.values()) {
-      if (child.subgraph.parent !== sgId) continue
+      if (child.parent !== sgId) continue
+      if (!child.bounds) continue
       hasChildren = true
       minX = Math.min(minX, child.bounds.x)
       minY = Math.min(minY, child.bounds.y)
@@ -273,13 +278,13 @@ export function rebalanceSubgraphs(
   for (const sgId of [...sorted].reverse()) {
     // Re-fetch from map (may have been shifted by earlier iterations)
     const sg = subgraphs.get(sgId)
-    if (!sg) continue
-    const parentId = sg.subgraph.parent
+    if (!sg?.bounds) continue
+    const parentId = sg.parent
 
     for (const [otherId] of subgraphs) {
       if (otherId === sgId) continue
       const other = subgraphs.get(otherId)
-      if (!other || other.subgraph.parent !== parentId) continue
+      if (!other?.bounds || other.parent !== parentId) continue
 
       const a = boundsToRect(sg.bounds)
       const b = boundsToRect(other.bounds)
@@ -300,9 +305,11 @@ export function rebalanceSubgraphs(
 
   // Third pass: push free nodes away from subgraphs they don't belong to
   for (const [nodeId, node] of nodes) {
-    const obstacles = collectObstacles(nodeId, node.node.parent, nodes, subgraphs)
+    if (!node.position) continue
+    const size = computeNodeSize(node)
+    const obstacles = collectObstacles(nodeId, node.parent, nodes, subgraphs)
     const resolved = resolvePosition(
-      { x: node.position.x, y: node.position.y, w: node.size.width, h: node.size.height },
+      { x: node.position.x, y: node.position.y, w: size.width, h: size.height },
       obstacles,
     )
     if (resolved.x !== node.position.x || resolved.y !== node.position.y) {
@@ -326,21 +333,21 @@ export async function moveNode(
   x: number,
   y: number,
   layout: {
-    nodes: Map<string, ResolvedNode>
+    nodes: Map<string, Node>
     ports: Map<string, ResolvedPort>
-    subgraphs?: Map<string, ResolvedSubgraph>
+    subgraphs?: Map<string, Subgraph>
   },
   links: Link[],
   gap = DEFAULT_NODE_GAP,
   routeFn = routeEdges,
 ): Promise<{
-  nodes: Map<string, ResolvedNode>
+  nodes: Map<string, Node>
   ports: Map<string, ResolvedPort>
   edges: Map<string, ResolvedEdge>
-  subgraphs?: Map<string, ResolvedSubgraph>
+  subgraphs?: Map<string, Subgraph>
 } | null> {
   const node = layout.nodes.get(id)
-  if (!node) return null
+  if (!node?.position) return null
 
   // 1. Resolve collisions (nodes + subgraphs)
   const { x: finalX, y: finalY } = resolveNodePosition(
@@ -374,7 +381,7 @@ export async function moveNode(
   }
 
   // 4. Rebalance subgraphs: expand bounds + push siblings
-  let newSubgraphs: Map<string, ResolvedSubgraph> | undefined
+  let newSubgraphs: Map<string, Subgraph> | undefined
   if (layout.subgraphs) {
     newSubgraphs = new Map(layout.subgraphs)
     rebalanceSubgraphs(newNodes, newSubgraphs, newPorts)
@@ -395,20 +402,20 @@ export async function moveSubgraph(
   x: number,
   y: number,
   layout: {
-    nodes: Map<string, ResolvedNode>
+    nodes: Map<string, Node>
     ports: Map<string, ResolvedPort>
-    subgraphs: Map<string, ResolvedSubgraph>
+    subgraphs: Map<string, Subgraph>
   },
   links: Link[],
   routeFn = routeEdges,
 ): Promise<{
-  nodes: Map<string, ResolvedNode>
+  nodes: Map<string, Node>
   ports: Map<string, ResolvedPort>
   edges: Map<string, ResolvedEdge>
-  subgraphs: Map<string, ResolvedSubgraph>
+  subgraphs: Map<string, Subgraph>
 } | null> {
   const sg = layout.subgraphs.get(sgId)
-  if (!sg) return null
+  if (!sg?.bounds) return null
 
   const dx = x - sg.bounds.x
   const dy = y - sg.bounds.y
@@ -549,11 +556,16 @@ const PORT_SIZE = 8
 /**
  * Determine which side of a node was clicked based on click position.
  */
-export function detectClickSide(clickX: number, clickY: number, node: ResolvedNode): Side {
+export function detectClickSide(
+  clickX: number,
+  clickY: number,
+  node: Node & { position: { x: number; y: number } },
+): Side {
+  const size = computeNodeSize(node)
   const cx = node.position.x
   const cy = node.position.y
-  const hw = node.size.width / 2
-  const hh = node.size.height / 2
+  const hw = size.width / 2
+  const hh = size.height / 2
 
   // Distance to each edge
   const dTop = Math.abs(clickY - (cy - hh))
@@ -605,13 +617,14 @@ function computeMinSize(
 function redistributePorts(
   nodeId: string,
   side: Side,
-  node: ResolvedNode,
+  node: Node & { position: { x: number; y: number } },
   ports: Map<string, ResolvedPort>,
 ): void {
+  const size = computeNodeSize(node)
   const cx = node.position.x
   const cy = node.position.y
-  const hw = node.size.width / 2
-  const hh = node.size.height / 2
+  const hw = size.width / 2
+  const hh = size.height / 2
 
   const sidePorts: ResolvedPort[] = []
   for (const port of ports.values()) {
@@ -625,20 +638,20 @@ function redistributePorts(
     let ay: number
     switch (side) {
       case 'top':
-        ax = cx - hw + node.size.width * ratio
+        ax = cx - hw + size.width * ratio
         ay = cy - hh
         break
       case 'bottom':
-        ax = cx - hw + node.size.width * ratio
+        ax = cx - hw + size.width * ratio
         ay = cy + hh
         break
       case 'left':
         ax = cx - hw
-        ay = cy - hh + node.size.height * ratio
+        ay = cy - hh + size.height * ratio
         break
       case 'right':
         ax = cx + hw
-        ay = cy - hh + node.size.height * ratio
+        ay = cy - hh + size.height * ratio
         break
     }
     ports.set(port.id, { ...port, absolutePosition: { x: ax, y: ay } })
@@ -651,30 +664,25 @@ function redistributePorts(
  */
 function rebalanceNode(
   nodeId: string,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
 ): void {
   const node = nodes.get(nodeId)
-  if (!node) return
+  if (!node?.position) return
 
+  const size = computeNodeSize(node)
   const counts = countPortsPerSide(nodeId, ports)
-  const minSize = computeMinSize(counts, node.size)
+  const minSize = computeMinSize(counts, size)
 
-  let updatedNode = node
-  if (minSize.width !== node.size.width || minSize.height !== node.size.height) {
-    updatedNode = {
-      ...node,
-      size: {
-        width: Math.max(node.size.width, minSize.width),
-        height: Math.max(node.size.height, minSize.height),
-      },
-    }
-    nodes.set(nodeId, updatedNode)
+  if (minSize.width !== size.width || minSize.height !== size.height) {
+    // Node size is computed from content; if ports require more space,
+    // we cannot directly enlarge it (it's derived). The port layout
+    // already uses computeNodeSize, so just redistribute.
   }
 
   const sides: Side[] = ['top', 'bottom', 'left', 'right']
   for (const s of sides) {
-    redistributePorts(nodeId, s, updatedNode, ports)
+    redistributePorts(nodeId, s, node as Node & { position: { x: number; y: number } }, ports)
   }
 }
 
@@ -685,10 +693,10 @@ function rebalanceNode(
 export function addPort(
   nodeId: string,
   side: Side,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   existingLinks: Link[],
-): { nodes: Map<string, ResolvedNode>; ports: Map<string, ResolvedPort>; portId: string } | null {
+): { nodes: Map<string, Node>; ports: Map<string, ResolvedPort>; portId: string } | null {
   const node = nodes.get(nodeId)
   if (!node) return null
 
@@ -718,10 +726,10 @@ export function addPort(
  */
 export function removePort(
   portId: string,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
-): { nodes: Map<string, ResolvedNode>; ports: Map<string, ResolvedPort>; links: Link[] } | null {
+): { nodes: Map<string, Node>; ports: Map<string, ResolvedPort>; links: Link[] } | null {
   const port = ports.get(portId)
   if (!port) return null
 
@@ -756,16 +764,16 @@ export function movePort(
   portId: string,
   svgX: number,
   svgY: number,
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
-): { nodes: Map<string, ResolvedNode>; ports: Map<string, ResolvedPort> } | null {
+): { nodes: Map<string, Node>; ports: Map<string, ResolvedPort> } | null {
   const port = ports.get(portId)
   if (!port) return null
 
   const node = nodes.get(port.nodeId)
-  if (!node) return null
+  if (!node?.position) return null
 
-  const newSide = detectClickSide(svgX, svgY, node)
+  const newSide = detectClickSide(svgX, svgY, node as Node & { position: { x: number; y: number } })
   if (newSide === port.side) return null
 
   const newPorts = new Map(ports)

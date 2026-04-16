@@ -25,7 +25,7 @@
       .filter(([id]) => !boundNodeIds.has(id))
       .map(([id, rn]) => ({
         id,
-        label: Array.isArray(rn.node.label) ? rn.node.label[0] : (rn.node.label ?? id),
+        label: Array.isArray(rn.label) ? rn.label[0] : (rn.label ?? id),
       })),
   )
 

@@ -1,11 +1,5 @@
 <script lang="ts">
-  import type {
-    ResolvedEdge,
-    ResolvedNode,
-    ResolvedPort,
-    ResolvedSubgraph,
-    Theme,
-  } from '@shumoku/core'
+  import type { Node, ResolvedEdge, ResolvedPort, Subgraph, Theme } from '@shumoku/core'
   import { select } from 'd3-selection'
   import { type D3ZoomEvent, zoom } from 'd3-zoom'
   import type { RenderColors } from '../../lib/render-colors'
@@ -38,10 +32,10 @@
     oncontextmenu: onctx,
     onbackgroundclick,
   }: {
-    nodes: Map<string, ResolvedNode>
+    nodes: Map<string, Node>
     ports: Map<string, ResolvedPort>
     edges: Map<string, ResolvedEdge>
-    subgraphs: Map<string, ResolvedSubgraph>
+    subgraphs: Map<string, Subgraph>
     bounds: { x: number; y: number; width: number; height: number }
     colors: RenderColors
     theme?: Theme

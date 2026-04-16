@@ -15,7 +15,7 @@
   const nodeOptions = $derived(
     [...diagramState.nodes.values()].map((rn) => ({
       id: rn.id,
-      label: Array.isArray(rn.node.label) ? rn.node.label[0] : (rn.node.label ?? rn.id),
+      label: Array.isArray(rn.label) ? rn.label[0] : (rn.label ?? rn.id),
     })),
   )
 

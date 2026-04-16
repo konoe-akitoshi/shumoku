@@ -1,36 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import type { Link } from '../models/types.js'
+import type { Link, Node } from '../models/types.js'
 import { placePorts } from './port-placement.js'
-import type { ResolvedNode } from './resolved-types.js'
 
-function makeNodes(): Map<string, ResolvedNode> {
+function makeNodes(): Map<string, Node> {
   return new Map([
     [
       'sw1',
-      {
-        id: 'sw1',
-        position: { x: 200, y: 100 },
-        size: { width: 120, height: 80 },
-        node: { id: 'sw1', label: 'Switch 1' },
-      },
+      { id: 'sw1', label: 'Switch 1', shape: 'rounded' as const, position: { x: 200, y: 100 } },
     ],
     [
       'sw2',
-      {
-        id: 'sw2',
-        position: { x: 200, y: 300 },
-        size: { width: 120, height: 80 },
-        node: { id: 'sw2', label: 'Switch 2' },
-      },
+      { id: 'sw2', label: 'Switch 2', shape: 'rounded' as const, position: { x: 200, y: 300 } },
     ],
     [
       'sw3',
-      {
-        id: 'sw3',
-        position: { x: 400, y: 100 },
-        size: { width: 120, height: 80 },
-        node: { id: 'sw3', label: 'Switch 3' },
-      },
+      { id: 'sw3', label: 'Switch 3', shape: 'rounded' as const, position: { x: 400, y: 100 } },
     ],
   ])
 }
@@ -48,16 +32,16 @@ describe('placePorts', () => {
     const p1 = ports.get('sw1:eth0')
     expect(p1.side).toBe('bottom')
     expect(p1.nodeId).toBe('sw1')
-    // Bottom center of sw1: y = 100 + 40 = 140
-    expect(p1.absolutePosition.y).toBe(140)
-    // Single port centered: x = 200 - 60 + 120 * 0.5 = 200
+    // Bottom center of sw1 (size 180x60): y = 100 + 30 = 130
+    expect(p1.absolutePosition.y).toBe(130)
+    // Single port centered: x = 200 - 90 + 180 * 0.5 = 200
     expect(p1.absolutePosition.x).toBe(200)
 
     // sw2:eth0 should be on top (destination in TB)
     const p2 = ports.get('sw2:eth0')
     expect(p2.side).toBe('top')
-    // Top center of sw2: y = 300 - 40 = 260
-    expect(p2.absolutePosition.y).toBe(260)
+    // Top center of sw2 (size 180x60): y = 300 - 30 = 270
+    expect(p2.absolutePosition.y).toBe(270)
   })
 
   it('distributes multiple ports evenly', () => {
@@ -70,20 +54,20 @@ describe('placePorts', () => {
 
     const ports = placePorts(nodes, links, 'TB')
 
-    // 3 ports on bottom of sw1 (width=120, center x=200)
-    // Positions: 200-60 + 120*(1/4) = 170, 200-60 + 120*(2/4) = 200, 200-60 + 120*(3/4) = 230
+    // 3 ports on bottom of sw1 (size 180x60, center x=200)
+    // Positions: 200-90 + 180*(1/4) = 155, 200-90 + 180*(2/4) = 200, 200-90 + 180*(3/4) = 245
     const p0 = ports.get('sw1:eth0')
     const p1 = ports.get('sw1:eth1')
     const p2 = ports.get('sw1:eth2')
 
-    expect(p0.absolutePosition.x).toBe(170)
+    expect(p0.absolutePosition.x).toBe(155)
     expect(p1.absolutePosition.x).toBe(200)
-    expect(p2.absolutePosition.x).toBe(230)
+    expect(p2.absolutePosition.x).toBe(245)
 
-    // All on bottom
-    expect(p0.absolutePosition.y).toBe(140)
-    expect(p1.absolutePosition.y).toBe(140)
-    expect(p2.absolutePosition.y).toBe(140)
+    // All on bottom (y = 100 + 30 = 130)
+    expect(p0.absolutePosition.y).toBe(130)
+    expect(p1.absolutePosition.y).toBe(130)
+    expect(p2.absolutePosition.y).toBe(130)
   })
 
   it('assigns HA ports to perpendicular sides', () => {

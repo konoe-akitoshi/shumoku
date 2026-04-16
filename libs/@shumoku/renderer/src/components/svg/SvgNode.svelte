@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { ResolvedNode } from '@shumoku/core'
+  import type { Node } from '@shumoku/core'
   import {
+    computeNodeSize,
     DEFAULT_ICON_SIZE,
     getDeviceIcon,
     ICON_LABEL_GAP,
@@ -21,7 +22,7 @@
     onselect,
     oncontextmenu: onctx,
   }: {
-    node: ResolvedNode
+    node: Node
     colors: RenderColors
     shadowFilterId?: string
     selected?: boolean
@@ -32,33 +33,30 @@
     oncontextmenu?: (id: string, e: MouseEvent) => void
   } = $props()
 
-  const cx = $derived(node.position.x)
-  const cy = $derived(node.position.y)
-  const hw = $derived(node.size.width / 2)
-  const hh = $derived(node.size.height / 2)
-  const shape = $derived(node.node.shape ?? 'rounded')
+  const cx = $derived(node.position?.x ?? 0)
+  const cy = $derived(node.position?.y ?? 0)
+  const size = $derived(computeNodeSize(node))
+  const hw = $derived(size.width / 2)
+  const hh = $derived(size.height / 2)
+  const shape = $derived(node.shape ?? 'rounded')
 
   let hovered = $state(false)
   const active = $derived(selected || hovered)
-  const fill = $derived(node.node.style?.fill ?? (active ? colors.nodeHoverFill : colors.nodeFill))
+  const fill = $derived(node.style?.fill ?? (active ? colors.nodeHoverFill : colors.nodeFill))
   const stroke = $derived(
     selected
       ? colors.selection
-      : (node.node.style?.stroke ?? (hovered ? colors.nodeHoverStroke : colors.nodeStroke)),
+      : (node.style?.stroke ?? (hovered ? colors.nodeHoverStroke : colors.nodeStroke)),
   )
-  const strokeWidth = $derived(
-    selected ? 2.5 : (node.node.style?.strokeWidth ?? (hovered ? 2 : 1.5)),
-  )
-  const strokeDasharray = $derived(node.node.style?.strokeDasharray ?? '')
+  const strokeWidth = $derived(selected ? 2.5 : (node.style?.strokeWidth ?? (hovered ? 2 : 1.5)))
+  const strokeDasharray = $derived(node.style?.strokeDasharray ?? '')
 
   // Icon
-  const iconPath = $derived(getDeviceIcon(specDeviceType(node.node.spec)))
+  const iconPath = $derived(getDeviceIcon(specDeviceType(node.spec)))
   const iconSize = DEFAULT_ICON_SIZE
 
   // Labels
-  const labels = $derived(
-    Array.isArray(node.node.label) ? node.node.label : [node.node.label ?? ''],
-  )
+  const labels = $derived(Array.isArray(node.label) ? node.label : [node.label ?? ''])
   const parsedLabels = $derived(
     labels.map((line, i) => {
       const isBold = line.includes('<b>') || line.includes('<strong>')
@@ -92,7 +90,7 @@
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
       droplet = {
         side,
-        x: cx - hw + ratio * node.size.width,
+        x: cx - hw + ratio * size.width,
         y: side === 'top' ? cy - hh : cy + hh,
       }
     } else {
@@ -100,7 +98,7 @@
       droplet = {
         side,
         x: side === 'left' ? cx - hw : cx + hw,
-        y: cy - hh + ratio * node.size.height,
+        y: cy - hh + ratio * size.height,
       }
     }
   }
@@ -122,14 +120,14 @@
 <g
   class="node"
   data-id={node.id}
-  data-device-type={specDeviceType(node.node.spec) ?? ''}
+  data-device-type={specDeviceType(node.spec) ?? ''}
   filter="url(#{shadowFilterId})"
   use:elementDrag={() => ({
     filter: (e) => {
       const t = e.target as Element
       return !t.closest('.port') && !t.closest('.edge-zone') && e.button === 0 && interactive
     },
-    onDrag: (dx, dy) => ondragmove?.(node.id, node.position.x + dx, node.position.y + dy),
+    onDrag: (dx, dy) => ondragmove?.(node.id, (node.position?.x ?? 0) + dx, (node.position?.y ?? 0) + dy),
   })}
   onclick={(e) => { e.stopPropagation(); onselect?.(node.id) }}
   onpointerenter={() => { if (interactive) hovered = true }}
@@ -142,8 +140,8 @@
       <rect
         x={cx - hw}
         y={cy - hh}
-        width={node.size.width}
-        height={node.size.height}
+        width={size.width}
+        height={size.height}
         rx="8"
         ry="8"
         {fill}
@@ -155,8 +153,8 @@
       <rect
         x={cx - hw}
         y={cy - hh}
-        width={node.size.width}
-        height={node.size.height}
+        width={size.width}
+        height={size.height}
         {fill}
         {stroke}
         stroke-width={strokeWidth}
@@ -180,7 +178,7 @@
         stroke-width={strokeWidth}
       />
     {:else if shape === 'cylinder'}
-      {@const eh = node.size.height * 0.15}
+      {@const eh = size.height * 0.15}
       <g>
         <ellipse
           {cx}
@@ -194,8 +192,8 @@
         <rect
           x={cx - hw}
           y={cy - hh + eh}
-          width={node.size.width}
-          height={node.size.height - eh * 2}
+          width={size.width}
+          height={size.height - eh * 2}
           {fill}
           stroke="none"
         />
@@ -229,8 +227,8 @@
       <rect
         x={cx - hw}
         y={cy - hh}
-        width={node.size.width}
-        height={node.size.height}
+        width={size.width}
+        height={size.height}
         rx={hh}
         ry={hh}
         {fill}
@@ -238,7 +236,7 @@
         stroke-width={strokeWidth}
       />
     {:else if shape === 'trapezoid'}
-      {@const indent = node.size.width * 0.15}
+      {@const indent = size.width * 0.15}
       <polygon
         points="{cx - hw + indent},{cy - hh} {cx + hw - indent},{cy - hh} {cx + hw},{cy + hh} {cx - hw},{cy + hh}"
         {fill}
@@ -249,8 +247,8 @@
       <rect
         x={cx - hw}
         y={cy - hh}
-        width={node.size.width}
-        height={node.size.height}
+        width={size.width}
+        height={size.height}
         rx="8"
         ry="8"
         {fill}
@@ -270,7 +268,7 @@
           viewBox="0 0 24 24"
           fill="currentColor"
           role="img"
-          aria-label={specDeviceType(node.node.spec) ?? 'icon'}
+          aria-label={specDeviceType(node.spec) ?? 'icon'}
         >
           {@html iconPath}
         </svg>
@@ -295,7 +293,7 @@
     <rect
       x={cx - hw}
       y={cy - hh - zone / 2}
-      width={node.size.width}
+      width={size.width}
       height={zone}
       fill="transparent"
       class="edge-zone"
@@ -307,7 +305,7 @@
     <rect
       x={cx - hw}
       y={cy + hh - zone / 2}
-      width={node.size.width}
+      width={size.width}
       height={zone}
       fill="transparent"
       class="edge-zone"
@@ -320,7 +318,7 @@
       x={cx - hw - zone / 2}
       y={cy - hh}
       width={zone}
-      height={node.size.height}
+      height={size.height}
       fill="transparent"
       class="edge-zone"
       onpointermove={(e) => onEdgeMove('left', e)}
@@ -332,7 +330,7 @@
       x={cx + hw - zone / 2}
       y={cy - hh}
       width={zone}
-      height={node.size.height}
+      height={size.height}
       fill="transparent"
       class="edge-zone"
       onpointermove={(e) => onEdgeMove('right', e)}

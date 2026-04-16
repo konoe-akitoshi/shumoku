@@ -399,6 +399,12 @@ export interface Subgraph {
    * Defines connection points between this subgraph and parent/siblings
    */
   pins?: Pin[]
+
+  /**
+   * Absolute bounds (set by layout engine at runtime).
+   * Derived from child node positions — not persisted.
+   */
+  bounds?: Bounds
 }
 
 // ============================================

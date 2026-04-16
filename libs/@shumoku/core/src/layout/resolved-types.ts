@@ -3,41 +3,21 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Resolved layout model — Node, Port, and Edge as independent objects
- * with absolute coordinates.
+ * Resolved layout model — absolute coordinates for rendering.
  *
  * Design principles:
- * - Each object owns its absolute position (no relative coordinates)
- * - Objects reference each other by ID (no coordinate conversion needed)
+ * - Node and Subgraph are used directly (with position/bounds set)
+ * - Port and Edge are computed types with absolute coordinates
  * - libavoid, SVG renderer, and any other consumer use the same coordinates
- * - Single source of truth for port positions
  *
  * Processing pipeline:
- * 1. Node placement → ResolvedNode[] (position + size confirmed)
- * 2. Port placement → ResolvedPort[] (absolute position confirmed, using node position + connection info)
+ * 1. Node placement → Node[] with position set
+ * 2. Port placement → ResolvedPort[] (absolute position, using node position + link info)
  * 3. Edge routing  → ResolvedEdge[] (routed through port absolute positions)
- * 4. Rendering     → draw each object independently using absolute coordinates
+ * 4. Rendering     → draw each object using absolute coordinates
  */
 
 import type { Bounds, Link, LinkEndpoint, Node, Position, Size, Subgraph } from '../models/types.js'
-
-// ============================================================================
-// Resolved Node
-// ============================================================================
-
-/**
- * A node with confirmed absolute position and size.
- * Position is the center of the node.
- */
-export interface ResolvedNode {
-  id: string
-  /** Absolute center position */
-  position: Position
-  /** Node dimensions */
-  size: Size
-  /** Original node data (type, label, vendor, etc.) */
-  node: Node
-}
 
 // ============================================================================
 // Resolved Port
@@ -96,35 +76,21 @@ export interface ResolvedEdge {
 }
 
 // ============================================================================
-// Resolved Subgraph
-// ============================================================================
-
-/**
- * A subgraph/zone with confirmed bounds.
- */
-export interface ResolvedSubgraph {
-  id: string
-  /** Absolute bounds */
-  bounds: Bounds
-  /** Original subgraph data */
-  subgraph: Subgraph
-  /** Boundary ports (for hierarchical connections) */
-  ports?: ResolvedPort[]
-}
-
-// ============================================================================
 // Complete Resolved Layout
 // ============================================================================
 
 /**
  * Complete resolved layout — all objects with absolute coordinates.
  * This is the output of the full layout pipeline and the input to rendering.
+ *
+ * Node and Subgraph are the core model types with position/bounds set.
+ * ResolvedPort and ResolvedEdge are computed types for rendering.
  */
 export interface ResolvedLayout {
-  nodes: Map<string, ResolvedNode>
+  nodes: Map<string, Node>
   ports: Map<string, ResolvedPort>
   edges: Map<string, ResolvedEdge>
-  subgraphs: Map<string, ResolvedSubgraph>
+  subgraphs: Map<string, Subgraph>
   bounds: Bounds
   metadata?: {
     algorithm: string

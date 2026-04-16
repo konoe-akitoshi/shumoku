@@ -163,7 +163,7 @@
     onupdate={(id, field, value) => {
       const node = diagramState.nodes.get(id)
       if (node) {
-        const updated = { ...node, node: { ...node.node, [field]: value } }
+        const updated = { ...node, [field]: value }
         const n = new Map(diagramState.nodes)
         n.set(id, updated)
         diagramState.nodes = n
@@ -172,7 +172,7 @@
       }
       const sg = diagramState.subgraphs.get(id)
       if (sg) {
-        const updated = { ...sg, subgraph: { ...sg.subgraph, [field]: value } }
+        const updated = { ...sg, [field]: value }
         const s = new Map(diagramState.subgraphs)
         s.set(id, updated)
         diagramState.subgraphs = s

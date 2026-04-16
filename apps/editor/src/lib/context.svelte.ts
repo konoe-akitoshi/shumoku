@@ -13,9 +13,7 @@ import {
   type NodeSpec,
   type ResolvedEdge,
   type ResolvedLayout,
-  type ResolvedNode,
   type ResolvedPort,
-  type ResolvedSubgraph,
   resolvePosition,
   routeEdges,
   type Subgraph,
@@ -86,10 +84,10 @@ export function initDarkMode() {
 
 // The diagram object — single source of truth for the renderer's JSON
 const diagram = $state({
-  nodes: new Map<string, ResolvedNode>(),
+  nodes: new Map<string, Node>(),
   ports: new Map<string, ResolvedPort>(),
   edges: new Map<string, ResolvedEdge>(),
-  subgraphs: new Map<string, ResolvedSubgraph>(),
+  subgraphs: new Map<string, Subgraph>(),
   bounds: { x: 0, y: 0, width: 0, height: 0 },
   links: [] as Link[],
 })
@@ -124,7 +122,7 @@ function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
   for (const id of ids) {
     const rn = n.get(id)
     if (rn) {
-      n.set(id, { ...rn, node: { ...rn.node, spec } })
+      n.set(id, { ...rn, spec })
       changed = true
     }
   }
@@ -145,7 +143,7 @@ export const diagramState = {
   get nodes() {
     return diagram.nodes
   },
-  set nodes(v: Map<string, ResolvedNode>) {
+  set nodes(v: Map<string, Node>) {
     diagram.nodes = v
   },
   get ports() {
@@ -163,7 +161,7 @@ export const diagramState = {
   get subgraphs() {
     return diagram.subgraphs
   },
-  set subgraphs(v: Map<string, ResolvedSubgraph>) {
+  set subgraphs(v: Map<string, Subgraph>) {
     diagram.subgraphs = v
   },
   get bounds() {
@@ -318,7 +316,7 @@ export const diagramState = {
     for (const nodeId of ids) {
       const rn = n.get(nodeId)
       if (rn) {
-        n.set(nodeId, { ...rn, node: { ...rn.node, spec: stripProductFromSpec(rn.node.spec) } })
+        n.set(nodeId, { ...rn, spec: stripProductFromSpec(rn.spec) })
       }
     }
     diagram.nodes = n
@@ -375,12 +373,7 @@ export const diagramState = {
     )
 
     const n = new Map(diagram.nodes)
-    n.set(id, {
-      id,
-      position: pos,
-      size: { width: w, height: h },
-      node: { id, label, spec, shape: 'rounded' },
-    })
+    n.set(id, { id, label, spec, shape: 'rounded', position: pos })
     diagram.nodes = n
     // Bind BomItem to the new node
     bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId: id } : i))
@@ -388,44 +381,26 @@ export const diagramState = {
   },
 
   // NetworkGraph — canonical save/load format
-  /** Export as NetworkGraph (ResolvedNode → Node with position) */
   exportGraph(): NetworkGraph {
-    const graphNodes: Node[] = [...diagram.nodes.values()].map((rn) => ({
-      ...rn.node,
-      position: rn.position,
-    }))
-    const graphSubgraphs: Subgraph[] = [...diagram.subgraphs.values()].map((rs) => rs.subgraph)
     return {
       version: '1',
-      nodes: graphNodes,
+      nodes: [...diagram.nodes.values()],
       links: [...diagram.links],
-      subgraphs: graphSubgraphs,
+      subgraphs: [...diagram.subgraphs.values()],
     }
   },
-  /** Import from NetworkGraph (Node with position → ResolvedNode, recompute ports/edges) */
   async importGraph(graph: NetworkGraph) {
-    const nodes = new Map<string, ResolvedNode>()
+    const nodes = new Map<string, Node>()
     for (const node of graph.nodes) {
-      const size = computeNodeSize(node)
-      nodes.set(node.id, {
-        id: node.id,
-        position: node.position ?? { x: 0, y: 0 },
-        size,
-        node,
-      })
+      nodes.set(node.id, node)
     }
-    const subgraphs = new Map<string, ResolvedSubgraph>()
+    const subgraphs = new Map<string, Subgraph>()
     for (const sg of graph.subgraphs ?? []) {
-      subgraphs.set(sg.id, {
-        id: sg.id,
-        bounds: { x: 0, y: 0, width: 200, height: 120 },
-        subgraph: sg,
-      })
+      subgraphs.set(sg.id, sg)
     }
     diagram.nodes = nodes
     diagram.subgraphs = subgraphs
     diagram.links = graph.links ?? []
-    // Ports and edges are derived — recompute
     diagram.ports = new Map()
     await rerouteEdges()
   },
@@ -449,11 +424,7 @@ export const diagramState = {
     palette = data.palette ?? []
     bomItems = data.bom ?? []
     await diagramState.importGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
-    poeBudgets = analyzePoE(
-      [...diagram.nodes.values()].map((rn) => rn.node),
-      diagram.links,
-      catalog,
-    )
+    poeBudgets = analyzePoE([...diagram.nodes.values()], diagram.links, catalog)
     status = 'Ready'
   },
 
@@ -462,7 +433,7 @@ export const diagramState = {
     diagram.ports = new Map(resolved.ports)
     diagram.edges = new Map(resolved.edges)
     diagram.subgraphs = new Map(resolved.subgraphs)
-    diagram.bounds = resolved.bounds
+    diagram.bounds = { ...resolved.bounds }
     diagram.links = [...graphLinks]
   },
 

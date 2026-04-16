@@ -5,21 +5,15 @@
  * and restores Maps from the plain object format.
  */
 
-import type {
-  ResolvedEdge,
-  ResolvedLayout,
-  ResolvedNode,
-  ResolvedPort,
-  ResolvedSubgraph,
-} from '@shumoku/core'
+import type { Node, ResolvedEdge, ResolvedLayout, ResolvedPort, Subgraph } from '@shumoku/core'
 
 /** JSON-serializable layout format */
 export interface SerializedLayout {
   version: 1
-  nodes: Record<string, ResolvedNode>
+  nodes: Record<string, Node>
   ports: Record<string, ResolvedPort>
   edges: Record<string, ResolvedEdge>
-  subgraphs: Record<string, ResolvedSubgraph>
+  subgraphs: Record<string, Subgraph>
   bounds: { x: number; y: number; width: number; height: number }
 }
 

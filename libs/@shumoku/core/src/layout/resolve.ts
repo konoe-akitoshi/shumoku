@@ -16,15 +16,12 @@ import type {
   LayoutResult,
   LayoutSubgraph,
   LinkEndpoint,
+  Node,
+  Subgraph,
 } from '../models/types.js'
 import { getLinkWidth } from './link-utils.js'
-import type {
-  ResolvedEdge,
-  ResolvedLayout,
-  ResolvedNode,
-  ResolvedPort,
-  ResolvedSubgraph,
-} from './resolved-types.js'
+import { computeNodeSize } from './network-layout.js'
+import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
 
 // ============================================================================
 // LayoutResult → ResolvedLayout
@@ -35,19 +32,14 @@ import type {
  * Port positions are converted from center-relative to absolute.
  */
 export function resolveLayout(result: LayoutResult): ResolvedLayout {
-  const nodes = new Map<string, ResolvedNode>()
+  const nodes = new Map<string, Node>()
   const ports = new Map<string, ResolvedPort>()
   const edges = new Map<string, ResolvedEdge>()
-  const subgraphs = new Map<string, ResolvedSubgraph>()
+  const subgraphs = new Map<string, Subgraph>()
 
   // Resolve nodes
   for (const [id, ln] of result.nodes) {
-    nodes.set(id, {
-      id,
-      position: ln.position,
-      size: ln.size,
-      node: ln.node,
-    })
+    nodes.set(id, { ...ln.node, position: ln.position })
 
     // Resolve ports — convert center-relative to absolute
     if (ln.ports) {
@@ -88,7 +80,6 @@ export function resolveLayout(result: LayoutResult): ResolvedLayout {
 
   // Resolve subgraphs
   for (const [id, ls] of result.subgraphs) {
-    const resolvedPorts: ResolvedPort[] = []
     if (ls.ports) {
       for (const [portId, lp] of ls.ports) {
         const rp: ResolvedPort = {
@@ -102,17 +93,11 @@ export function resolveLayout(result: LayoutResult): ResolvedLayout {
           side: lp.side,
           size: lp.size,
         }
-        resolvedPorts.push(rp)
         ports.set(portId, rp)
       }
     }
 
-    subgraphs.set(id, {
-      id,
-      bounds: ls.bounds,
-      subgraph: ls.subgraph,
-      ports: resolvedPorts.length > 0 ? resolvedPorts : undefined,
-    })
+    subgraphs.set(id, { ...ls.subgraph, bounds: ls.bounds })
   }
 
   return {
@@ -151,7 +136,9 @@ export function unresolveLayout(resolved: ResolvedLayout): LayoutResult {
   const subgraphs = new Map<string, LayoutSubgraph>()
 
   // Convert nodes — collect ports back into center-relative format
-  for (const [id, rn] of resolved.nodes) {
+  for (const [id, node] of resolved.nodes) {
+    if (!node.position) continue
+    const size = computeNodeSize(node)
     const nodePorts = new Map<string, LayoutPort>()
     for (const [portId, rp] of resolved.ports) {
       if (rp.nodeId !== id) continue
@@ -159,8 +146,8 @@ export function unresolveLayout(resolved: ResolvedLayout): LayoutResult {
         id: portId,
         label: rp.label,
         position: {
-          x: rp.absolutePosition.x - rn.position.x,
-          y: rp.absolutePosition.y - rn.position.y,
+          x: rp.absolutePosition.x - node.position.x,
+          y: rp.absolutePosition.y - node.position.y,
         },
         size: rp.size,
         side: rp.side,
@@ -169,9 +156,9 @@ export function unresolveLayout(resolved: ResolvedLayout): LayoutResult {
 
     nodes.set(id, {
       id,
-      position: rn.position,
-      size: rn.size,
-      node: rn.node,
+      position: node.position,
+      size,
+      node,
       ports: nodePorts.size > 0 ? nodePorts : undefined,
     })
   }
@@ -190,28 +177,12 @@ export function unresolveLayout(resolved: ResolvedLayout): LayoutResult {
   }
 
   // Convert subgraphs
-  for (const [id, rs] of resolved.subgraphs) {
-    const sgPorts = new Map<string, LayoutPort>()
-    if (rs.ports) {
-      for (const rp of rs.ports) {
-        sgPorts.set(rp.id, {
-          id: rp.id,
-          label: rp.label,
-          position: {
-            x: rp.absolutePosition.x - (rs.bounds.x + rs.bounds.width / 2),
-            y: rp.absolutePosition.y - (rs.bounds.y + rs.bounds.height / 2),
-          },
-          size: rp.size,
-          side: rp.side,
-        })
-      }
-    }
-
+  for (const [id, sg] of resolved.subgraphs) {
+    if (!sg.bounds) continue
     subgraphs.set(id, {
       id,
-      bounds: rs.bounds,
-      subgraph: rs.subgraph,
-      ports: sgPorts.size > 0 ? sgPorts : undefined,
+      bounds: sg.bounds,
+      subgraph: sg,
     })
   }
 

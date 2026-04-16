@@ -2,12 +2,12 @@
   import type {
     DeviceType,
     Link,
+    Node,
     NodeShape,
     ResolvedEdge,
     ResolvedLayout,
-    ResolvedNode,
     ResolvedPort,
-    ResolvedSubgraph,
+    Subgraph,
     Theme,
   } from '@shumoku/core'
   import {
@@ -28,10 +28,10 @@
 
   interface RendererProps {
     // Direct state (preferred — parent owns state)
-    nodes?: Map<string, ResolvedNode>
+    nodes?: Map<string, Node>
     ports?: Map<string, ResolvedPort>
     edges?: Map<string, ResolvedEdge>
-    subgraphs?: Map<string, ResolvedSubgraph>
+    subgraphs?: Map<string, Subgraph>
     bounds?: { x: number; y: number; width: number; height: number }
     links?: Link[]
     // Legacy: pass layout object (WebComponent compat)
@@ -204,8 +204,8 @@
       return {
         parent: selectedSgId,
         initial: position ?? {
-          x: parentSg.bounds.x + parentSg.bounds.width / 2,
-          y: parentSg.bounds.y + parentSg.bounds.height / 2,
+          x: (parentSg.bounds?.x ?? 0) + (parentSg.bounds?.width ?? 0) / 2,
+          y: (parentSg.bounds?.y ?? 0) + (parentSg.bounds?.height ?? 0) / 2,
         },
       }
     }
@@ -218,7 +218,7 @@
     }
   }
 
-  function finalizeAdd(id: string, updatedSubgraphs: Map<string, ResolvedSubgraph>) {
+  function finalizeAdd(id: string, updatedSubgraphs: Map<string, Subgraph>) {
     rebalanceSubgraphs(nodes, updatedSubgraphs, ports)
     subgraphs = updatedSubgraphs
     selection = new Set([id])
@@ -246,9 +246,11 @@
     const n = new Map(nodes)
     n.set(id, {
       id,
+      label,
+      spec,
+      shape: opts?.shape ?? 'rounded',
+      parent,
       position: pos,
-      size: { width: w, height: h },
-      node: { id, label, spec, shape: opts?.shape ?? 'rounded', parent },
     })
     nodes = n
     finalizeAdd(id, new Map(subgraphs))
@@ -267,8 +269,9 @@
     const sg = new Map(subgraphs)
     sg.set(id, {
       id,
+      label: opts?.label ?? 'New Group',
+      parent,
       bounds: { x: pos.x - w / 2, y: pos.y - h / 2, width: w, height: h },
-      subgraph: { id, label: opts?.label ?? 'New Group', parent },
     })
     nodes = new Map(nodes) // trigger reactivity for rebalance
     finalizeAdd(id, sg)
@@ -314,10 +317,10 @@
       function collect(sgId: string) {
         toDeleteSgs.add(sgId)
         for (const [nid, n] of nodes) {
-          if (n.node.parent === sgId) toDeleteNodes.add(nid)
+          if (n.parent === sgId) toDeleteNodes.add(nid)
         }
         for (const [cid, c] of subgraphs) {
-          if (c.subgraph.parent === sgId) collect(cid)
+          if (c.parent === sgId) collect(cid)
         }
       }
       collect(id)
@@ -360,14 +363,14 @@
     if (node) {
       return {
         kind: 'node' as const,
-        label: node.node.label ?? 'Node',
-        shape: node.node.shape,
-        type: specDeviceType(node.node.spec),
+        label: node.label ?? 'Node',
+        shape: node.shape,
+        type: specDeviceType(node.spec),
       }
     }
     const sg = subgraphs.get(id)
     if (sg) {
-      return { kind: 'subgraph' as const, label: sg.subgraph.label ?? 'Group' }
+      return { kind: 'subgraph' as const, label: sg.label ?? 'Group' }
     }
     return null
   }
@@ -380,10 +383,8 @@
       const nodePorts = [...ports.values()].filter((p) => p.nodeId === id)
       return {
         kind: 'node',
-        ...node.node,
-        id: node.id,
-        position: node.position,
-        size: node.size,
+        ...node,
+        size: computeNodeSize(node),
         ports: nodePorts.map((p) => ({
           id: p.id,
           label: p.label,
@@ -394,13 +395,11 @@
     }
     const sg = subgraphs.get(id)
     if (sg) {
-      const childNodes = [...nodes.values()].filter((n) => n.node.parent === id).length
-      const childSgs = [...subgraphs.values()].filter((s) => s.subgraph.parent === id).length
+      const childNodes = [...nodes.values()].filter((n) => n.parent === id).length
+      const childSgs = [...subgraphs.values()].filter((s) => s.parent === id).length
       return {
         kind: 'subgraph',
-        ...sg.subgraph,
-        id: sg.id,
-        bounds: sg.bounds,
+        ...sg,
         children: { nodes: childNodes, subgraphs: childSgs },
       }
     }
@@ -509,7 +508,7 @@
     if (linkExists(links, fromNode, fromPort, toNode, toPort)) return
     const fromNodeObj = nodes.get(fromNode)
     const toNodeObj = nodes.get(toNode)
-    if (fromNodeObj && toNodeObj && fromNodeObj.position.y > toNodeObj.position.y) {
+    if (fromNodeObj && toNodeObj && (fromNodeObj.position?.y ?? 0) > (toNodeObj.position?.y ?? 0)) {
       ;[fromNode, toNode] = [toNode, fromNode]
       ;[fromPort, toPort] = [toPort, fromPort]
     }

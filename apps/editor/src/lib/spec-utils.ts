@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Catalog, CatalogEntry, HardwareProperties } from '@shumoku/catalog'
-import type { NodeSpec, ResolvedNode } from '@shumoku/core'
+import type { Node, NodeSpec } from '@shumoku/core'
 import type { SpecPaletteEntry } from './types'
 
 /** Fingerprint for grouping nodes by spec identity */
@@ -52,7 +52,7 @@ export interface BomResult {
 /** Build BOM from explicit node→palette bindings */
 export function buildBom(
   palette: SpecPaletteEntry[],
-  nodes: Map<string, ResolvedNode>,
+  nodes: Map<string, Node>,
   bindings: Map<string, string>,
 ): BomResult {
   const paletteById = new Map<string, SpecPaletteEntry>()
@@ -65,8 +65,8 @@ export function buildBom(
   for (const [nodeId] of nodes) {
     const paletteId = bindings.get(nodeId)
     if (!paletteId || !paletteById.has(paletteId)) {
-      const rn = nodes.get(nodeId)
-      orphans.push({ nodeId, spec: rn?.node.spec, fingerprint: specFingerprint(rn?.node.spec) })
+      const node = nodes.get(nodeId)
+      orphans.push({ nodeId, spec: node?.spec, fingerprint: specFingerprint(node?.spec) })
       continue
     }
     const existing = boundNodes.get(paletteId)
@@ -123,20 +123,17 @@ export interface DerivedSpec {
   label: string
 }
 
-export function deriveSpecsFromNodes(
-  nodes: Map<string, ResolvedNode>,
-  catalog: Catalog,
-): DerivedSpec[] {
+export function deriveSpecsFromNodes(nodes: Map<string, Node>, catalog: Catalog): DerivedSpec[] {
   const groups = new Map<string, { spec: NodeSpec; nodeIds: string[] }>()
 
-  for (const [id, rn] of nodes) {
-    const fp = specFingerprint(rn.node.spec)
+  for (const [id, node] of nodes) {
+    const fp = specFingerprint(node.spec)
     if (!fp) continue
     const existing = groups.get(fp)
     if (existing) {
       existing.nodeIds.push(id)
     } else {
-      groups.set(fp, { spec: rn.node.spec as NodeSpec, nodeIds: [id] })
+      groups.set(fp, { spec: node.spec as NodeSpec, nodeIds: [id] })
     }
   }
 
