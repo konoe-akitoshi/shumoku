@@ -66,8 +66,9 @@
   // Trackpad-friendly: two-finger scroll → pan, pinch (ctrl+wheel) → zoom
   $effect(() => {
     if (!svgEl || !viewportEl) return
+    const svg = svgEl
 
-    const svgSel = select(svgEl)
+    const svgSel = select(svg)
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 10])
       .filter((e) => {
@@ -93,14 +94,14 @@
       e.preventDefault()
       zoomBehavior.translateBy(svgSel, -e.deltaX, -e.deltaY)
     }
-    svgEl.addEventListener('wheel', handleWheel, { passive: false })
+    svg.addEventListener('wheel', handleWheel, { passive: false })
 
     // Prevent default context menu on SVG background only when nothing is targeted
     svgSel.on('contextmenu.zoom', null)
 
     return () => {
       svgSel.on('.zoom', null)
-      svgEl.removeEventListener('wheel', handleWheel)
+      svg.removeEventListener('wheel', handleWheel)
     }
   })
 

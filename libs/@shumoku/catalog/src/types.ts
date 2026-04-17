@@ -8,14 +8,35 @@ import type { NodeSpec } from '@shumoku/core'
 // Properties — grouped by concern
 // ============================================
 
+/** Per-class profile for a multi-class PD (e.g. AP that runs degraded on lower classes). */
+export interface PoEInClassProfile {
+  /** PoE standard at this class ("802.3af" | "802.3at" | "802.3bt") */
+  standard?: string
+  /** Actual device power consumption when operating at this class (watts) */
+  max_draw_w?: number
+  /** Human-readable note (e.g. "1x1 radio, no USB/LLDP") */
+  note?: string
+}
+
 /** PoE consumer (Powered Device) */
 export interface PoEIn {
-  /** PoE standard: "802.3af", "802.3at", "802.3bt" */
+  /** Highest PoE standard supported ("802.3af" | "802.3at" | "802.3bt") */
   standard?: string
-  /** PoE class (0–8) */
+  /** Highest PoE class the device can negotiate (0–8) */
   class?: number
-  /** Max power draw via PoE (watts) */
+  /**
+   * Minimum PoE class required to boot. If omitted, the device is assumed to
+   * gracefully degrade on any lower class it negotiates.
+   */
+  min_class?: number
+  /** Max power draw via PoE at the highest class (watts, informational) */
   max_draw_w?: number
+  /**
+   * Per-class capability matrix for multi-class devices. Optional.
+   * Keyed by class number. Used when a device draws materially different power
+   * and exposes different features at each class it supports.
+   */
+  by_class?: Record<number, PoEInClassProfile>
 }
 
 /** PoE source (Power Sourcing Equipment) */

@@ -203,7 +203,7 @@ export const builtinData = [
         max_draw_w: 5,
         poe_in: {
           standard: '802.3af',
-          class: 1,
+          class: 2,
           max_draw_w: 5,
         },
       },
@@ -221,11 +221,23 @@ export const builtinData = [
     tags: ['wifi-6', 'indoor', 'ceiling-mount', 'poe-consumer'],
     properties: {
       power: {
-        max_draw_w: 11,
+        max_draw_w: 16.5,
         poe_in: {
-          standard: '802.3af',
-          class: 3,
+          standard: '802.3at',
+          class: 4,
+          min_class: 3,
           max_draw_w: 16.5,
+          by_class: {
+            '3': {
+              standard: '802.3af',
+              max_draw_w: 11,
+              note: 'Reduced mode — USB disabled, reduced radio capability',
+            },
+            '4': {
+              standard: '802.3at',
+              max_draw_w: 16.5,
+            },
+          },
         },
       },
       wireless: {
@@ -259,10 +271,11 @@ export const builtinData = [
     tags: ['wifi-5', 'desk', 'poe-consumer', 'poe-passthrough'],
     properties: {
       power: {
-        max_draw_w: 12,
+        max_draw_w: 27.4,
         poe_in: {
-          standard: '802.3af',
-          class: 3,
+          standard: '802.3at',
+          class: 4,
+          max_draw_w: 27.4,
         },
         poe_out: {
           standard: '802.3af',

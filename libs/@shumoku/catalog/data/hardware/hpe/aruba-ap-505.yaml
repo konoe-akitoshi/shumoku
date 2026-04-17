@@ -10,11 +10,20 @@ spec:
 tags: [wifi-6, indoor, ceiling-mount, poe-consumer]
 properties:
   power:
-    max_draw_w: 11
+    max_draw_w: 16.5  # worst-case with USB device attached
     poe_in:
-      standard: "802.3af"
-      class: 3
-      max_draw_w: 16.5  # with USB device attached
+      standard: "802.3at"
+      class: 4
+      min_class: 3
+      max_draw_w: 16.5
+      by_class:
+        3:
+          standard: "802.3af"
+          max_draw_w: 11
+          note: "Reduced mode — USB disabled, reduced radio capability"
+        4:
+          standard: "802.3at"
+          max_draw_w: 16.5
   wireless:
     standard: wifi-6
     radios: 2

@@ -12,5 +12,5 @@ properties:
     max_draw_w: 5
     poe_in:
       standard: "802.3af"
-      class: 1
+      class: 2
       max_draw_w: 5

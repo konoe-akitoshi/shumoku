@@ -11,10 +11,11 @@ spec:
 tags: [wifi-5, desk, poe-consumer, poe-passthrough]
 properties:
   power:
-    max_draw_w: 12
+    max_draw_w: 27.4  # own 12W + passthrough 15.4W (within 802.3at 30W input)
     poe_in:
-      standard: "802.3af"
-      class: 3
+      standard: "802.3at"  # E3 PoE-out only works when fed 802.3at
+      class: 4
+      max_draw_w: 27.4
     poe_out:
       standard: "802.3af"
       budget_w: 15.4
