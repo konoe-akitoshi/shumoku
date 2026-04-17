@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { NodeSpec } from '@shumoku/core'
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
@@ -22,7 +23,8 @@
   let clipboard = $state<{
     label: string
     shape?: string
-    type?: string
+    spec?: NodeSpec
+    paletteId?: string
     elementKind: 'node' | 'subgraph'
   } | null>(null)
   let detailTarget = $state<{ id: string; type: 'node' | 'link' | 'subgraph' } | null>(null)
@@ -158,13 +160,34 @@
       currentParent={contextMenu.type === 'node' ? diagramState.nodes.get(contextMenu.id)?.parent : undefined}
       oncopy={(id) => {
         const info = renderer?.getElementInfo(id)
-        clipboard = info ? { label: info.label, shape: info.kind === 'node' ? info.shape : undefined, type: info.kind === 'node' ? info.type : undefined, elementKind: info.kind } : null
+        if (!info) { clipboard = null; return }
+        const paletteId = info.kind === 'node'
+          ? diagramState.bomItems.find((b) => b.nodeId === id)?.paletteId
+          : undefined
+        clipboard = {
+          label: info.label,
+          shape: info.kind === 'node' ? info.shape : undefined,
+          spec: info.kind === 'node' ? info.spec : undefined,
+          paletteId,
+          elementKind: info.kind,
+        }
       }}
       onpaste={() => {
         if (!clipboard || !contextMenu) return
         const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
-        if (clipboard.elementKind === 'subgraph') renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
-        else renderer?.addNewNode({ label: clipboard.label, type: clipboard.type, shape: clipboard.shape, position: svgPos })
+        if (clipboard.elementKind === 'subgraph') {
+          renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
+        } else {
+          const newId = renderer?.addNewNode({
+            label: clipboard.label,
+            spec: clipboard.spec,
+            shape: clipboard.shape,
+            position: svgPos,
+          })
+          if (newId && clipboard.paletteId) {
+            diagramState.bindNodeToPalette(newId, clipboard.paletteId)
+          }
+        }
       }}
       ondetails={(id) => openDetail(id, contextMenu?.type ?? 'node')}
       onmovetogroup={(nodeId, groupId) => {

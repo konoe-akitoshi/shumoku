@@ -4,6 +4,7 @@
     Link,
     Node,
     NodeShape,
+    NodeSpec,
     ResolvedEdge,
     ResolvedLayout,
     ResolvedPort,
@@ -227,16 +228,16 @@
   export function addNewNode(opts?: {
     label?: string
     type?: DeviceType
-    spec?: { kind: string; type?: string }
+    spec?: NodeSpec
     shape?: NodeShape
     position?: { x: number; y: number }
   }) {
     const id = `node-${Date.now()}`
     const label = opts?.label ?? 'New Node'
     const spec = opts?.spec
-      ? (opts.spec as import('@shumoku/core').NodeSpec)
+      ? opts.spec
       : opts?.type
-        ? { kind: 'hardware' as const, type: opts.type }
+        ? ({ kind: 'hardware' as const, type: opts.type } satisfies NodeSpec)
         : undefined
     const { width: w, height: h } = computeNodeSize({ label, spec })
     const { parent, initial } = resolveParentAndPosition(opts?.position, w)
@@ -365,6 +366,7 @@
         kind: 'node' as const,
         label: node.label ?? 'Node',
         shape: node.shape,
+        spec: node.spec,
         type: specDeviceType(node.spec),
       }
     }
