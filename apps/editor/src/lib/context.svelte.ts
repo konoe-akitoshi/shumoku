@@ -21,7 +21,7 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { nanoid } from 'nanoid'
-import { analyzePoE, type PoEBudget } from './poe-analysis'
+import { analyzePoE } from './poe-analysis'
 import { sampleBomItems, samplePalette } from './sample-project'
 import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
 import { paletteEntryLabel } from './types'
@@ -92,7 +92,6 @@ const diagram = $state({
   links: [] as Link[],
 })
 
-let poeBudgets = $state<PoEBudget[]>([])
 let palette = $state<SpecPaletteEntry[]>([])
 let bomItems = $state<BomItem[]>([])
 let status = $state('Loading...')
@@ -113,6 +112,10 @@ async function rerouteEdges() {
 
 const catalog = new Catalog()
 catalog.registerAll(builtinEntries)
+
+// Reactive: recompute whenever nodes or links change. Avoids stale budget
+// display when users add/remove nodes, rebind specs, or edit links.
+const poeBudgets = $derived(analyzePoE([...diagram.nodes.values()], diagram.links, catalog))
 
 /** Update spec on multiple nodes at once (Palette → Node propagation) */
 function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
@@ -424,7 +427,6 @@ export const diagramState = {
     palette = data.palette ?? []
     bomItems = data.bom ?? []
     await diagramState.importGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
-    poeBudgets = analyzePoE([...diagram.nodes.values()], diagram.links, catalog)
     status = 'Ready'
   },
 
@@ -448,7 +450,6 @@ export const diagramState = {
     diagram.subgraphs = new Map()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
-    poeBudgets = []
     yamlSource = ''
     initialized = false
 
@@ -473,7 +474,6 @@ export const diagramState = {
 
         const { resolved } = await computeNetworkLayout(g)
         diagramState.loadFromResolved(resolved, g.links)
-        poeBudgets = analyzePoE(g.nodes, g.links, catalog)
         const mf = sampleNetwork.find((f) => f.name === 'main.yaml')
         if (mf) yamlSource = mf.content
         status = 'Ready'
@@ -500,7 +500,6 @@ export const diagramState = {
       const g = (await hp.parse(yamlStr, '/main.yaml')).graph
       const { resolved } = await computeNetworkLayout(g)
       diagramState.loadFromResolved(resolved, g.links)
-      poeBudgets = analyzePoE(g.nodes, g.links, catalog)
       yamlSource = yamlStr
       status = 'Ready'
     } catch (e) {

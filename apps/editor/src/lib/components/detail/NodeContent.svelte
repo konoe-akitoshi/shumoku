@@ -194,30 +194,68 @@
 
 <!-- PoE Budget -->
 {#if poeBudget}
+  {@const drawPct = Math.min(100, Math.round((poeBudget.draw_w / poeBudget.budget_w) * 1000) / 10)}
+  {@const reservedPct = Math.min(100, poeBudget.utilization_pct)}
+  {@const barColor =
+    reservedPct > 100
+      ? 'bg-red-500'
+      : reservedPct > 80
+        ? 'bg-red-500'
+        : reservedPct > 50
+          ? 'bg-amber-500'
+          : 'bg-green-500'}
+  {@const drawColor =
+    reservedPct > 100
+      ? 'bg-red-700'
+      : reservedPct > 80
+        ? 'bg-red-700'
+        : reservedPct > 50
+          ? 'bg-amber-700'
+          : 'bg-green-700'}
   <div>
     <div class="flex items-center justify-between mb-1.5">
       <span
         class="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
         >PoE Budget</span
       >
-      <span class="text-[10px] font-mono text-amber-600 dark:text-amber-300"
-        >{poeBudget.used_w}W / {poeBudget.budget_w}W</span
-      >
+      <span class="text-[10px] font-mono text-neutral-600 dark:text-neutral-300">
+        <span class="text-emerald-600 dark:text-emerald-400">{poeBudget.draw_w}W</span>
+        <span class="text-neutral-400 dark:text-neutral-500"> / </span>
+        <span class="text-amber-600 dark:text-amber-300">{poeBudget.reserved_w}W</span>
+        <span class="text-neutral-400 dark:text-neutral-500"> / {poeBudget.budget_w}W</span>
+      </span>
     </div>
     <div
-      class="w-full h-2 rounded-full bg-neutral-200 dark:bg-neutral-700 overflow-hidden mb-1.5"
+      class="relative w-full h-2 rounded-full bg-neutral-200 dark:bg-neutral-700 overflow-hidden mb-1"
       role="meter"
-      aria-valuenow={poeBudget.used_w}
+      aria-valuenow={poeBudget.reserved_w}
       aria-valuemax={poeBudget.budget_w}
     >
       <div
-        class="h-full rounded-full transition-all {poeBudget.utilization_pct > 80 ? 'bg-red-500' : poeBudget.utilization_pct > 50 ? 'bg-amber-500' : 'bg-green-500'}"
-        style="width: {Math.min(100, poeBudget.utilization_pct)}%"
+        class="absolute inset-y-0 left-0 {barColor} opacity-60 transition-all"
+        style="width: {reservedPct}%"
+      ></div>
+      <div
+        class="absolute inset-y-0 left-0 {drawColor} transition-all"
+        style="width: {drawPct}%"
       ></div>
     </div>
-    <div class="text-[9px] text-neutral-400 dark:text-neutral-500 mb-2">
-      {poeBudget.remaining_w}W remaining ({poeBudget.utilization_pct}%)
+    <div class="flex justify-between text-[9px] text-neutral-400 dark:text-neutral-500 mb-2">
+      <span>draw · reserved · budget</span>
+      <span>{poeBudget.remaining_w}W free ({reservedPct}%)</span>
     </div>
+    {#if poeBudget.violations.length > 0}
+      <div class="space-y-0.5 mb-2">
+        {#each poeBudget.violations as v}
+          <div
+            class="flex items-start gap-1 text-[10px] text-red-600 dark:text-red-400 px-2 py-1 rounded bg-red-50 dark:bg-red-950/30"
+          >
+            <span class="font-bold">!</span>
+            <span>{v.message}</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
     <div class="space-y-1">
       {#each poeBudget.links as link}
         <div class="px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-700/30 text-[10px]">
@@ -231,16 +269,35 @@
               {#if link.toPort}
                 <span class="text-neutral-400">:{link.toPort}</span>
               {/if}
+              {#if link.effective_class !== undefined}
+                <span
+                  class="ml-1 px-1 py-0 rounded bg-neutral-200 dark:bg-neutral-600 text-[8px] text-neutral-600 dark:text-neutral-300"
+                  >C{link.effective_class}</span
+                >
+              {/if}
             </span>
-            <span class="font-mono text-amber-600 dark:text-amber-400">{link.draw_w}W</span>
+            <span class="font-mono">
+              <span class="text-emerald-600 dark:text-emerald-400">{link.draw_w}W</span>
+              <span class="text-neutral-400"> / </span>
+              <span class="text-amber-600 dark:text-amber-400">{link.reserved_w}W</span>
+            </span>
           </div>
+          {#if link.violations}
+            {#each link.violations as v}
+              <div class="mt-0.5 text-[9px] text-red-500 dark:text-red-400">! {v.message}</div>
+            {/each}
+          {/if}
           {#if link.passthrough}
             {#each link.passthrough as pt}
               <div
                 class="flex justify-between mt-0.5 pl-3 border-l border-neutral-200 dark:border-neutral-600 ml-1 text-[9px] text-neutral-400 dark:text-neutral-500"
               >
                 <span>{pt.nodeLabel}</span>
-                <span class="font-mono">{pt.draw_w}W</span>
+                <span class="font-mono">
+                  <span class="text-emerald-500 dark:text-emerald-500">{pt.draw_w}W</span>
+                  <span> / </span>
+                  <span>{pt.reserved_w}W</span>
+                </span>
               </div>
             {/each}
           {/if}
