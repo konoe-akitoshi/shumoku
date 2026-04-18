@@ -10,7 +10,6 @@ export { NetBoxPlugin } from 'shumoku-plugin-netbox'
 export { PrometheusPlugin } from 'shumoku-plugin-prometheus'
 export { ZabbixPlugin } from 'shumoku-plugin-zabbix'
 export {
-  type AddPluginResult,
   addPlugin,
   getAllPlugins,
   getConfigPath,
@@ -21,12 +20,8 @@ export {
   installPluginFromZip,
   isBundledPlugin,
   isExternalPlugin,
-  type LoadedPluginInfo,
-  // Functions
   loadPluginsFromConfig,
   markBundledPlugins,
-  // Types
-  type PluginEntry,
   reloadPlugins,
   removePlugin,
   setPluginEnabled,

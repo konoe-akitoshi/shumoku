@@ -16,14 +16,14 @@
 // Types
 // ============================================
 
-export interface Bounds {
+interface Bounds {
   x: number
   y: number
   width: number
   height: number
 }
 
-export interface SheetViewBox {
+interface SheetViewBox {
   x: number
   y: number
   w: number
@@ -34,13 +34,13 @@ export interface SheetViewBox {
   origH: number
 }
 
-export interface ZoomNavigationTarget {
+interface ZoomNavigationTarget {
   sheetId: string
   bounds: Bounds
   element: Element
 }
 
-export interface ZoomNavigationOptions {
+interface ZoomNavigationOptions {
   container: HTMLElement
   getCurrentSheetId: () => string
   getSheetViewBox: (sheetId: string) => SheetViewBox | undefined

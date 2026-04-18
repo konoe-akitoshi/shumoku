@@ -22,7 +22,7 @@ import type { PluginManifest } from './types.js'
 /**
  * Entry in plugins.yaml
  */
-export interface PluginEntry {
+interface PluginEntry {
   /** Unique plugin identifier */
   id: string
   /** Path to plugin directory (absolute or relative to config file) */
@@ -41,7 +41,7 @@ interface PluginsConfig {
 /**
  * Loaded plugin info (runtime state)
  */
-export interface LoadedPluginInfo {
+interface LoadedPluginInfo {
   id: string
   name: string
   version: string
@@ -56,7 +56,7 @@ export interface LoadedPluginInfo {
 /**
  * Result of adding a plugin
  */
-export interface AddPluginResult {
+interface AddPluginResult {
   success: boolean
   plugin?: LoadedPluginInfo
   error?: string

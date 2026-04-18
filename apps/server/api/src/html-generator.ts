@@ -6,7 +6,7 @@
 import { svg as svgRenderer } from '@shumoku/renderer-svg'
 import type { TopologyInstance, WeathermapConfig } from './types.js'
 
-export interface HtmlGeneratorOptions {
+interface HtmlGeneratorOptions {
   wsUrl: string
   weathermap: WeathermapConfig
 }

@@ -1,0 +1,55 @@
+{
+  "$schema": "node_modules/knip/schema.json",
+  "ignore": ["libs/@shumoku/core/src/icons/build-icons.ts"],
+  "workspaces": {
+    ".": {},
+    "libs/@shumoku/core": {},
+    "libs/@shumoku/renderer-svg": {},
+    "libs/@shumoku/renderer-png": {},
+    "libs/@shumoku/renderer-html": {
+      "entry": ["src/html/iife-entry.ts"]
+    },
+    "libs/@shumoku/renderer": {},
+    "libs/shumoku": {},
+    "libs/plugins/grafana": {},
+    "libs/plugins/netbox": {},
+    "libs/plugins/prometheus": {},
+    "libs/plugins/zabbix": {},
+    "apps/cli": {},
+    "apps/docs": {
+      "entry": ["source.config.ts"]
+    },
+    "apps/editor": {
+      "paths": {
+        "$lib/*": ["src/lib/*"]
+      }
+    },
+    "apps/server": {
+      "ignoreDependencies": ["@shumoku/server-api", "@shumoku/server-web"]
+    },
+    "apps/server/api": {
+      "entry": ["src/index.ts", "esbuild.config.js"],
+      "ignoreDependencies": ["@types/tar"]
+    },
+    "apps/server/web": {
+      "ignore": ["src/routes/**/+*.ts"],
+      "paths": {
+        "$lib/*": ["src/lib/*"]
+      }
+    }
+  },
+  "rules": {
+    "files": "error",
+    "dependencies": "error",
+    "devDependencies": "error",
+    "unlisted": "error",
+    "binaries": "error",
+    "unresolved": "error",
+    "exports": "off",
+    "types": "off",
+    "duplicates": "off",
+    "enumMembers": "off",
+    "nsExports": "off",
+    "nsTypes": "off"
+  }
+}

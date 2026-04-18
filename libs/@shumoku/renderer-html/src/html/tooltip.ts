@@ -70,7 +70,7 @@ export function destroyTooltip(): void {
   }
 }
 
-export interface TooltipInfo {
+interface TooltipInfo {
   text: string
   element: Element
 }
