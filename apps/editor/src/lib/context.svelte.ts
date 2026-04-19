@@ -9,6 +9,7 @@ import {
   HierarchicalParser,
   type Link,
   lightTheme,
+  moveNode,
   type NetworkGraph,
   type Node,
   type NodeSpec,
@@ -16,6 +17,7 @@ import {
   type ResolvedEdge,
   type ResolvedLayout,
   type ResolvedPort,
+  rebalanceSubgraphs,
   resolvePosition,
   routeEdges,
   type Subgraph,
@@ -361,19 +363,47 @@ export const diagramState = {
    * the target subgraph so it's visible inside the new container. When
    * removing from a group (groupId = undefined), the current position is
    * preserved.
+   *
+   * Delegates position/port/edge recomputation to core's moveNode so ports
+   * stick to the node and edges re-route through libavoid — the same path
+   * used by interactive drag. A plain parent+position update on the node
+   * record alone leaves ports at their stale absolute positions and leaves
+   * edges routed to the old location.
    */
-  moveNodeToGroup(nodeId: string, groupId: string | undefined) {
+  async moveNodeToGroup(nodeId: string, groupId: string | undefined) {
     const node = diagram.nodes.get(nodeId)
-    if (!node) return
+    if (!node?.position) return
+    if (node.parent === groupId) return
+
+    // Set parent first so moveNode's obstacle filter excludes the new parent
+    diagram.nodes.set(nodeId, { ...node, parent: groupId })
+
     if (groupId) {
       const sg = diagram.subgraphs.get(groupId)
-      const position = sg?.bounds
-        ? { x: sg.bounds.x + sg.bounds.width / 2, y: sg.bounds.y + sg.bounds.height / 2 }
-        : node.position
-      diagramState.updateNode(nodeId, { parent: groupId, position })
-    } else {
-      diagramState.updateNode(nodeId, { parent: undefined })
+      if (sg?.bounds) {
+        const targetX = sg.bounds.x + sg.bounds.width / 2
+        const targetY = sg.bounds.y + sg.bounds.height / 2
+        const result = await moveNode(
+          nodeId,
+          targetX,
+          targetY,
+          { nodes: diagram.nodes, ports: diagram.ports, subgraphs: diagram.subgraphs },
+          diagram.links,
+        )
+        if (result) {
+          replaceMap(diagram.nodes, result.nodes)
+          replaceMap(diagram.ports, result.ports)
+          replaceMap(diagram.edges, result.edges)
+          if (result.subgraphs) replaceMap(diagram.subgraphs, result.subgraphs)
+          return
+        }
+      }
     }
+
+    // No-op position delta (or removing from a group): parent changed but
+    // node didn't move — still rebalance subgraph bounds and re-route edges.
+    rebalanceSubgraphs(diagram.nodes, diagram.subgraphs, diagram.ports)
+    await rerouteEdges()
   },
   get poeBudgets() {
     return poeBudgets
