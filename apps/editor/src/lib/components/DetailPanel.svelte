@@ -62,9 +62,7 @@
   // Node update helpers
   function updateNode(field: string, value: unknown) {
     if (!node) return
-    const n = new Map(diagramState.nodes)
-    n.set(node.id, { ...node, [field]: value })
-    diagramState.nodes = n
+    diagramState.updateNode(node.id, { [field]: value })
   }
 
   function bindPalette(paletteId: string) {
@@ -81,9 +79,7 @@
   // Subgraph update helper
   function updateSubgraph(field: string, value: unknown) {
     if (!subgraph) return
-    const s = new Map(diagramState.subgraphs)
-    s.set(subgraph.id, { ...subgraph, [field]: value })
-    diagramState.subgraphs = s
+    diagramState.updateSubgraph(subgraph.id, { [field]: value })
   }
 </script>
 

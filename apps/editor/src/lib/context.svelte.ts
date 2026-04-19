@@ -191,6 +191,39 @@ export const diagramState = {
     diagram.links = diagram.links.filter((l) => l.id !== id)
     rerouteEdges()
   },
+  updateNode(id: string, updates: Partial<Node>) {
+    const rn = diagram.nodes.get(id)
+    if (!rn) return
+    const n = new Map(diagram.nodes)
+    n.set(id, { ...rn, ...updates })
+    diagram.nodes = n
+  },
+  updateSubgraph(id: string, updates: Partial<Subgraph>) {
+    const sg = diagram.subgraphs.get(id)
+    if (!sg) return
+    const s = new Map(diagram.subgraphs)
+    s.set(id, { ...sg, ...updates })
+    diagram.subgraphs = s
+  },
+  /**
+   * Re-parent a node. When moving INTO a group, the node is recentered on
+   * the target subgraph so it's visible inside the new container. When
+   * removing from a group (groupId = undefined), the current position is
+   * preserved.
+   */
+  moveNodeToGroup(nodeId: string, groupId: string | undefined) {
+    const node = diagram.nodes.get(nodeId)
+    if (!node) return
+    if (groupId) {
+      const sg = diagram.subgraphs.get(groupId)
+      const position = sg?.bounds
+        ? { x: sg.bounds.x + sg.bounds.width / 2, y: sg.bounds.y + sg.bounds.height / 2 }
+        : node.position
+      diagramState.updateNode(nodeId, { parent: groupId, position })
+    } else {
+      diagramState.updateNode(nodeId, { parent: undefined })
+    }
+  },
   get poeBudgets() {
     return poeBudgets
   },

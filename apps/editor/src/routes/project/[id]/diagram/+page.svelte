@@ -194,31 +194,7 @@
         }
       }}
       ondetails={(id) => openDetail(id, contextMenu?.type ?? 'node')}
-      onmovetogroup={(nodeId, groupId) => {
-        const node = diagramState.nodes.get(nodeId)
-        if (!node) return
-        const n = new Map(diagramState.nodes)
-        if (groupId) {
-          const sg = diagramState.subgraphs.get(groupId)
-          if (sg?.bounds) {
-            // Move node to center of target subgraph
-            n.set(nodeId, {
-              ...node,
-              parent: groupId,
-              position: {
-                x: sg.bounds.x + sg.bounds.width / 2,
-                y: sg.bounds.y + sg.bounds.height / 2,
-              },
-            })
-          } else {
-            n.set(nodeId, { ...node, parent: groupId })
-          }
-        } else {
-          // Remove from group — keep current position
-          n.set(nodeId, { ...node, parent: undefined })
-        }
-        diagramState.nodes = n
-      }}
+      onmovetogroup={(nodeId, groupId) => diagramState.moveNodeToGroup(nodeId, groupId)}
       ondelete={(id) => { renderer?.deleteById(id) }}
       onclose={() => { contextMenu = null }}
     />
