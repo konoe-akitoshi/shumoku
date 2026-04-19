@@ -5,6 +5,7 @@ import {
   computeNodeSize,
   createMemoryFileResolver,
   darkTheme,
+  getNodeId,
   HierarchicalParser,
   type Link,
   lightTheme,
@@ -139,6 +140,141 @@ function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined 
   if (spec.kind === 'compute') return { kind: 'compute', type: spec.type }
   if (spec.kind === 'service') return { kind: 'service', service: spec.service }
   return undefined
+}
+
+/**
+ * Drop malformed entries from an imported graph so the app never renders
+ * orphan references. Fixes are best-effort with a console warning per
+ * category — we favor loading *something* over rejecting the whole file.
+ */
+function sanitizeGraph(graph: NetworkGraph): {
+  nodes: Map<string, Node>
+  subgraphs: Map<string, Subgraph>
+  links: Link[]
+} {
+  const nodes = new Map<string, Node>()
+  let duplicateNodes = 0
+  for (const node of graph.nodes ?? []) {
+    if (nodes.has(node.id)) {
+      duplicateNodes++
+      continue
+    }
+    nodes.set(node.id, node)
+  }
+  if (duplicateNodes > 0) {
+    console.warn(`[import] dropped ${duplicateNodes} duplicate node id(s)`)
+  }
+
+  const subgraphs = new Map<string, Subgraph>()
+  let duplicateSubgraphs = 0
+  for (const sg of graph.subgraphs ?? []) {
+    if (subgraphs.has(sg.id) || nodes.has(sg.id)) {
+      duplicateSubgraphs++
+      continue
+    }
+    subgraphs.set(sg.id, sg)
+  }
+  if (duplicateSubgraphs > 0) {
+    console.warn(`[import] dropped ${duplicateSubgraphs} duplicate/conflicting subgraph id(s)`)
+  }
+
+  // Strip parent pointers that reference a missing subgraph
+  let strippedNodeParents = 0
+  for (const [id, node] of nodes) {
+    if (node.parent && !subgraphs.has(node.parent)) {
+      nodes.set(id, { ...node, parent: undefined })
+      strippedNodeParents++
+    }
+  }
+  if (strippedNodeParents > 0) {
+    console.warn(`[import] cleared ${strippedNodeParents} node(s) with unknown parent`)
+  }
+
+  let strippedSgParents = 0
+  for (const [id, sg] of subgraphs) {
+    if (sg.parent && !subgraphs.has(sg.parent)) {
+      subgraphs.set(id, { ...sg, parent: undefined })
+      strippedSgParents++
+    }
+  }
+  if (strippedSgParents > 0) {
+    console.warn(`[import] cleared ${strippedSgParents} subgraph(s) with unknown parent`)
+  }
+
+  // Drop links whose endpoints reference missing nodes
+  const validLinks: Link[] = []
+  let droppedLinks = 0
+  for (const link of graph.links ?? []) {
+    const from = getNodeId(link.from)
+    const to = getNodeId(link.to)
+    if (nodes.has(from) && nodes.has(to)) {
+      validLinks.push(link)
+    } else {
+      droppedLinks++
+    }
+  }
+  if (droppedLinks > 0) {
+    console.warn(`[import] dropped ${droppedLinks} link(s) with unknown endpoints`)
+  }
+
+  return { nodes, subgraphs, links: validLinks }
+}
+
+/**
+ * Reconcile palette/bom against the (already-sanitized) set of node IDs.
+ * BOM items whose palette is gone are dropped; items whose node is gone
+ * are unbound but kept, so the user sees an "unplaced" entry rather than
+ * silently losing a purchased device.
+ */
+function sanitizePaletteAndBom(
+  rawPalette: SpecPaletteEntry[],
+  rawBom: BomItem[],
+  nodes: Map<string, Node>,
+): { palette: SpecPaletteEntry[]; bom: BomItem[] } {
+  const paletteIds = new Set<string>()
+  const cleanPalette: SpecPaletteEntry[] = []
+  let duplicatePalette = 0
+  for (const entry of rawPalette) {
+    if (paletteIds.has(entry.id)) {
+      duplicatePalette++
+      continue
+    }
+    paletteIds.add(entry.id)
+    cleanPalette.push(entry)
+  }
+  if (duplicatePalette > 0) {
+    console.warn(`[import] dropped ${duplicatePalette} duplicate palette id(s)`)
+  }
+
+  const cleanBom: BomItem[] = []
+  let droppedBom = 0
+  let unboundBom = 0
+  const bomIds = new Set<string>()
+  for (const item of rawBom) {
+    if (bomIds.has(item.id)) {
+      droppedBom++
+      continue
+    }
+    if (item.paletteId && !paletteIds.has(item.paletteId)) {
+      droppedBom++
+      continue
+    }
+    bomIds.add(item.id)
+    if (item.nodeId && !nodes.has(item.nodeId)) {
+      cleanBom.push({ ...item, nodeId: undefined })
+      unboundBom++
+    } else {
+      cleanBom.push(item)
+    }
+  }
+  if (droppedBom > 0) {
+    console.warn(`[import] dropped ${droppedBom} orphan/duplicate bom item(s)`)
+  }
+  if (unboundBom > 0) {
+    console.warn(`[import] unbound ${unboundBom} bom item(s) whose node was missing`)
+  }
+
+  return { palette: cleanPalette, bom: cleanBom }
 }
 
 export const diagramState = {
@@ -426,17 +562,10 @@ export const diagramState = {
     }
   },
   async importGraph(graph: NetworkGraph) {
-    const nodes = new Map<string, Node>()
-    for (const node of graph.nodes) {
-      nodes.set(node.id, node)
-    }
-    const subgraphs = new Map<string, Subgraph>()
-    for (const sg of graph.subgraphs ?? []) {
-      subgraphs.set(sg.id, sg)
-    }
+    const { nodes, subgraphs, links } = sanitizeGraph(graph)
     diagram.nodes = nodes
     diagram.subgraphs = subgraphs
-    diagram.links = graph.links ?? []
+    diagram.links = links
     diagram.ports = new Map()
     await rerouteEdges()
   },
@@ -457,9 +586,16 @@ export const diagramState = {
   /** Import project from NetedProject JSON string */
   async importProject(jsonStr: string) {
     const data = JSON.parse(jsonStr)
-    palette = data.palette ?? []
-    bomItems = data.bom ?? []
+    // Load graph first so we know which node IDs exist, then clean up
+    // palette/bom references against that.
     await diagramState.importGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
+    const { palette: cleanPalette, bom: cleanBom } = sanitizePaletteAndBom(
+      data.palette ?? [],
+      data.bom ?? [],
+      diagram.nodes,
+    )
+    palette = cleanPalette
+    bomItems = cleanBom
     status = 'Ready'
   },
 
