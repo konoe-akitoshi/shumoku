@@ -25,8 +25,18 @@
     routeEdges,
     specDeviceType,
   } from '@shumoku/core'
+  import { SvelteMap } from 'svelte/reactivity'
   import { themeToColors } from '../lib/render-colors'
   import SvgCanvas from './svg/SvgCanvas.svelte'
+
+  /**
+   * Replace the contents of a Map in place (used when core helpers return
+   * fresh Maps but we want to keep our reactive SvelteMap identity).
+   */
+  function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
+    target.clear()
+    for (const [k, v] of source) target.set(k, v)
+  }
 
   interface RendererProps {
     // Direct state (preferred — parent owns state)
@@ -56,10 +66,10 @@
   }
 
   let {
-    nodes = $bindable(new Map()),
-    ports = $bindable(new Map()),
-    edges = $bindable(new Map()),
-    subgraphs = $bindable(new Map()),
+    nodes = $bindable(new SvelteMap()),
+    ports = $bindable(new SvelteMap()),
+    edges = $bindable(new SvelteMap()),
+    subgraphs = $bindable(new SvelteMap()),
     bounds = $bindable({ x: 0, y: 0, width: 0, height: 0 }),
     links = $bindable([]),
     layout = undefined,
@@ -81,10 +91,10 @@
   // Legacy compat: sync from layout/graph props (WebComponent uses these)
   $effect(() => {
     if (layout) {
-      nodes = new Map(layout.nodes)
-      ports = new Map(layout.ports)
-      edges = new Map(layout.edges)
-      subgraphs = new Map(layout.subgraphs)
+      replaceMap(nodes, layout.nodes)
+      replaceMap(ports, layout.ports)
+      replaceMap(edges, layout.edges)
+      replaceMap(subgraphs, layout.subgraphs)
       bounds = layout.bounds
     }
   })
@@ -193,10 +203,10 @@
         ? await moveSubgraph(id, x, y, state, links)
         : null
     if (!result) return
-    nodes = result.nodes
-    ports = result.ports
-    edges = result.edges
-    if (result.subgraphs) subgraphs = result.subgraphs
+    replaceMap(nodes, result.nodes)
+    replaceMap(ports, result.ports)
+    replaceMap(edges, result.edges)
+    if (result.subgraphs) replaceMap(subgraphs, result.subgraphs)
   }
 
   // =========================================================================
@@ -227,9 +237,10 @@
     }
   }
 
-  function finalizeAdd(id: string, updatedSubgraphs: Map<string, Subgraph>) {
-    rebalanceSubgraphs(nodes, updatedSubgraphs, ports)
-    subgraphs = updatedSubgraphs
+  function finalizeAdd(id: string) {
+    // rebalanceSubgraphs mutates the subgraphs map's entries in place; since
+    // we now use a SvelteMap the mutations are picked up without any reassign.
+    rebalanceSubgraphs(nodes, subgraphs, ports)
     selection = new Set([id])
   }
 
@@ -253,8 +264,7 @@
     const obstacles = collectObstacles(id, parent, nodes, subgraphs)
     const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
 
-    const n = new Map(nodes)
-    n.set(id, {
+    nodes.set(id, {
       id,
       label,
       spec,
@@ -262,8 +272,7 @@
       parent,
       position: pos,
     })
-    nodes = n
-    finalizeAdd(id, new Map(subgraphs))
+    finalizeAdd(id)
     onnodeadd?.(id)
     return id
   }
@@ -280,15 +289,13 @@
     const obstacles = collectObstacles(id, parent, nodes, subgraphs)
     const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
 
-    const sg = new Map(subgraphs)
-    sg.set(id, {
+    subgraphs.set(id, {
       id,
       label: opts.label ?? 'New Group',
       parent,
       bounds: { x: pos.x - w / 2, y: pos.y - h / 2, width: w, height: h },
     })
-    nodes = new Map(nodes) // trigger reactivity for rebalance
-    finalizeAdd(id, sg)
+    finalizeAdd(id)
     return id
   }
 
@@ -301,14 +308,10 @@
 
     if (nodes.has(id)) {
       deletedNodeIds.push(id)
-      const n = new Map(nodes)
-      const p = new Map(ports)
-      n.delete(id)
-      for (const [portId, port] of p) {
-        if (port.nodeId === id) p.delete(portId)
+      nodes.delete(id)
+      for (const [portId, port] of ports) {
+        if (port.nodeId === id) ports.delete(portId)
       }
-      nodes = n
-      ports = p
       links = links.filter((l) => {
         const from = typeof l.from === 'string' ? l.from : l.from.node
         const to = typeof l.to === 'string' ? l.to : l.to.node
@@ -320,8 +323,8 @@
     } else if (ports.has(id)) {
       const result = removePort(id, nodes, ports, links)
       if (result) {
-        nodes = result.nodes
-        ports = result.ports
+        replaceMap(nodes, result.nodes)
+        replaceMap(ports, result.ports)
         links = result.links
       }
     } else if (subgraphs.has(id)) {
@@ -339,20 +342,14 @@
       }
       collect(id)
 
-      const n = new Map(nodes)
-      const p = new Map(ports)
-      const sg = new Map(subgraphs)
       for (const nid of toDeleteNodes) {
         deletedNodeIds.push(nid)
-        n.delete(nid)
-        for (const [portId, port] of p) {
-          if (port.nodeId === nid) p.delete(portId)
+        nodes.delete(nid)
+        for (const [portId, port] of ports) {
+          if (port.nodeId === nid) ports.delete(portId)
         }
       }
-      for (const sgId of toDeleteSgs) sg.delete(sgId)
-      nodes = n
-      ports = p
-      subgraphs = sg
+      for (const sgId of toDeleteSgs) subgraphs.delete(sgId)
       links = links.filter((l) => {
         const from = typeof l.from === 'string' ? l.from : l.from.node
         const to = typeof l.to === 'string' ? l.to : l.to.node
@@ -362,7 +359,7 @@
 
     selection = new Set()
     routeEdges(nodes, ports, links).then((e) => {
-      edges = e
+      replaceMap(edges, e)
     })
     onchange?.(links)
     if (deletedNodeIds.length > 0) onnodedelete?.(deletedNodeIds)
@@ -452,17 +449,15 @@
   async function handleAddPort(nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') {
     const result = addPort(nodeId, side, nodes, ports, links)
     if (!result) return
-    nodes = result.nodes
-    ports = result.ports
-    edges = await routeEdges(result.nodes, result.ports, links)
+    replaceMap(nodes, result.nodes)
+    replaceMap(ports, result.ports)
+    replaceMap(edges, await routeEdges(result.nodes, result.ports, links))
   }
 
   export function commitLabel(portId: string, newLabel: string) {
     const port = ports.get(portId)
     if (!port || newLabel === port.label) return
-    const p = new Map(ports)
-    p.set(portId, { ...port, label: newLabel })
-    ports = p
+    ports.set(portId, { ...port, label: newLabel })
   }
 
   // =========================================================================
@@ -548,7 +543,7 @@
     )
       return
     links = [...links, link]
-    edges = await routeEdges(nodes, ports, links)
+    replaceMap(edges, await routeEdges(nodes, ports, links))
     onchange?.(links)
   }
 
