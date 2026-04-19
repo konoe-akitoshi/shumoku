@@ -5,12 +5,14 @@ import {
   computeNodeSize,
   createMemoryFileResolver,
   darkTheme,
+  getNodeId,
   HierarchicalParser,
   type Link,
   lightTheme,
   type NetworkGraph,
   type Node,
   type NodeSpec,
+  newId,
   type ResolvedEdge,
   type ResolvedLayout,
   type ResolvedPort,
@@ -20,7 +22,7 @@ import {
   sampleNetwork,
   type Theme,
 } from '@shumoku/core'
-import { nanoid } from 'nanoid'
+import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleBomItems, samplePalette } from './sample-project'
 import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
@@ -82,15 +84,29 @@ export function initDarkMode() {
 // Diagram state — shared across pages
 // =========================================================================
 
-// The diagram object — single source of truth for the renderer's JSON
+// The diagram object — single source of truth for the renderer's JSON.
+// The four Map slots are SvelteMap instances so that `.set()`/`.delete()`
+// mutations trigger reactivity directly, without the copy-on-write
+// (`const n = new Map(...); ...; diagram.nodes = n`) dance that Svelte 4
+// required.
 const diagram = $state({
-  nodes: new Map<string, Node>(),
-  ports: new Map<string, ResolvedPort>(),
-  edges: new Map<string, ResolvedEdge>(),
-  subgraphs: new Map<string, Subgraph>(),
+  nodes: new SvelteMap<string, Node>(),
+  ports: new SvelteMap<string, ResolvedPort>(),
+  edges: new SvelteMap<string, ResolvedEdge>(),
+  subgraphs: new SvelteMap<string, Subgraph>(),
   bounds: { x: 0, y: 0, width: 0, height: 0 },
   links: [] as Link[],
 })
+
+/**
+ * Replace the contents of a SvelteMap in place, preserving its identity
+ * so bindings and downstream reactivity stay attached. Used whenever we
+ * would otherwise reassign `diagram.nodes = new Map(...)`.
+ */
+function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
+  target.clear()
+  for (const [k, v] of source) target.set(k, v)
+}
 
 let palette = $state<SpecPaletteEntry[]>([])
 let bomItems = $state<BomItem[]>([])
@@ -106,7 +122,7 @@ async function rerouteEdges() {
   const gen = ++routeGeneration
   const result = await routeEdges(diagram.nodes, diagram.ports, diagram.links)
   if (gen === routeGeneration) {
-    diagram.edges = result
+    replaceMap(diagram.edges, result)
   }
 }
 
@@ -119,17 +135,10 @@ const poeBudgets = $derived(analyzePoE([...diagram.nodes.values()], diagram.link
 
 /** Update spec on multiple nodes at once (Palette → Node propagation) */
 function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
-  const ids = new Set(nodeIds)
-  const n = new Map(diagram.nodes)
-  let changed = false
-  for (const id of ids) {
-    const rn = n.get(id)
-    if (rn) {
-      n.set(id, { ...rn, spec })
-      changed = true
-    }
+  for (const id of new Set(nodeIds)) {
+    const rn = diagram.nodes.get(id)
+    if (rn) diagram.nodes.set(id, { ...rn, spec })
   }
-  if (changed) diagram.nodes = n
 }
 
 /** Strip product details from spec, keep kind/type (role) */
@@ -141,31 +150,177 @@ function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined 
   return undefined
 }
 
+/**
+ * Drop malformed entries from an imported graph so the app never renders
+ * orphan references. Fixes are best-effort with a console warning per
+ * category — we favor loading *something* over rejecting the whole file.
+ */
+function sanitizeGraph(graph: NetworkGraph): {
+  nodes: Map<string, Node>
+  subgraphs: Map<string, Subgraph>
+  links: Link[]
+} {
+  const nodes = new Map<string, Node>()
+  let duplicateNodes = 0
+  for (const node of graph.nodes ?? []) {
+    if (nodes.has(node.id)) {
+      duplicateNodes++
+      continue
+    }
+    nodes.set(node.id, node)
+  }
+  if (duplicateNodes > 0) {
+    console.warn(`[import] dropped ${duplicateNodes} duplicate node id(s)`)
+  }
+
+  const subgraphs = new Map<string, Subgraph>()
+  let duplicateSubgraphs = 0
+  for (const sg of graph.subgraphs ?? []) {
+    if (subgraphs.has(sg.id) || nodes.has(sg.id)) {
+      duplicateSubgraphs++
+      continue
+    }
+    subgraphs.set(sg.id, sg)
+  }
+  if (duplicateSubgraphs > 0) {
+    console.warn(`[import] dropped ${duplicateSubgraphs} duplicate/conflicting subgraph id(s)`)
+  }
+
+  // Strip parent pointers that reference a missing subgraph
+  let strippedNodeParents = 0
+  for (const [id, node] of nodes) {
+    if (node.parent && !subgraphs.has(node.parent)) {
+      nodes.set(id, { ...node, parent: undefined })
+      strippedNodeParents++
+    }
+  }
+  if (strippedNodeParents > 0) {
+    console.warn(`[import] cleared ${strippedNodeParents} node(s) with unknown parent`)
+  }
+
+  let strippedSgParents = 0
+  for (const [id, sg] of subgraphs) {
+    if (sg.parent && !subgraphs.has(sg.parent)) {
+      subgraphs.set(id, { ...sg, parent: undefined })
+      strippedSgParents++
+    }
+  }
+  if (strippedSgParents > 0) {
+    console.warn(`[import] cleared ${strippedSgParents} subgraph(s) with unknown parent`)
+  }
+
+  // Drop links whose endpoints reference missing nodes
+  const validLinks: Link[] = []
+  let droppedLinks = 0
+  for (const link of graph.links ?? []) {
+    const from = getNodeId(link.from)
+    const to = getNodeId(link.to)
+    if (nodes.has(from) && nodes.has(to)) {
+      validLinks.push(link)
+    } else {
+      droppedLinks++
+    }
+  }
+  if (droppedLinks > 0) {
+    console.warn(`[import] dropped ${droppedLinks} link(s) with unknown endpoints`)
+  }
+
+  return { nodes, subgraphs, links: validLinks }
+}
+
+/**
+ * Reconcile palette/bom against the (already-sanitized) set of node IDs.
+ * BOM items whose palette is gone are dropped; items whose node is gone
+ * are unbound but kept, so the user sees an "unplaced" entry rather than
+ * silently losing a purchased device.
+ */
+function sanitizePaletteAndBom(
+  rawPalette: SpecPaletteEntry[],
+  rawBom: BomItem[],
+  nodes: Map<string, Node>,
+): { palette: SpecPaletteEntry[]; bom: BomItem[] } {
+  const paletteIds = new Set<string>()
+  const cleanPalette: SpecPaletteEntry[] = []
+  let duplicatePalette = 0
+  for (const entry of rawPalette) {
+    if (paletteIds.has(entry.id)) {
+      duplicatePalette++
+      continue
+    }
+    paletteIds.add(entry.id)
+    cleanPalette.push(entry)
+  }
+  if (duplicatePalette > 0) {
+    console.warn(`[import] dropped ${duplicatePalette} duplicate palette id(s)`)
+  }
+
+  const cleanBom: BomItem[] = []
+  let droppedBom = 0
+  let unboundBom = 0
+  const bomIds = new Set<string>()
+  for (const item of rawBom) {
+    if (bomIds.has(item.id)) {
+      droppedBom++
+      continue
+    }
+    if (item.paletteId && !paletteIds.has(item.paletteId)) {
+      droppedBom++
+      continue
+    }
+    bomIds.add(item.id)
+    if (item.nodeId && !nodes.has(item.nodeId)) {
+      cleanBom.push({ ...item, nodeId: undefined })
+      unboundBom++
+    } else {
+      cleanBom.push(item)
+    }
+  }
+  if (droppedBom > 0) {
+    console.warn(`[import] dropped ${droppedBom} orphan/duplicate bom item(s)`)
+  }
+  if (unboundBom > 0) {
+    console.warn(`[import] unbound ${unboundBom} bom item(s) whose node was missing`)
+  }
+
+  return { palette: cleanPalette, bom: cleanBom }
+}
+
 export const diagramState = {
-  // Diagram — individual accessors for $bindable compat
+  // Diagram — individual accessors for $bindable compat.
+  // Setters defensively fold plain-Map assignments back into our existing
+  // SvelteMap so an accidental `bind:` write-back can't silently downgrade
+  // the reactive identity.
   get nodes() {
     return diagram.nodes
   },
   set nodes(v: Map<string, Node>) {
-    diagram.nodes = v
+    if (v === diagram.nodes) return
+    if (v instanceof SvelteMap) diagram.nodes = v
+    else replaceMap(diagram.nodes, v)
   },
   get ports() {
     return diagram.ports
   },
   set ports(v: Map<string, ResolvedPort>) {
-    diagram.ports = v
+    if (v === diagram.ports) return
+    if (v instanceof SvelteMap) diagram.ports = v
+    else replaceMap(diagram.ports, v)
   },
   get edges() {
     return diagram.edges
   },
   set edges(v: Map<string, ResolvedEdge>) {
-    diagram.edges = v
+    if (v === diagram.edges) return
+    if (v instanceof SvelteMap) diagram.edges = v
+    else replaceMap(diagram.edges, v)
   },
   get subgraphs() {
     return diagram.subgraphs
   },
   set subgraphs(v: Map<string, Subgraph>) {
-    diagram.subgraphs = v
+    if (v === diagram.subgraphs) return
+    if (v instanceof SvelteMap) diagram.subgraphs = v
+    else replaceMap(diagram.subgraphs, v)
   },
   get bounds() {
     return diagram.bounds
@@ -190,6 +345,35 @@ export const diagramState = {
   removeLink(id: string) {
     diagram.links = diagram.links.filter((l) => l.id !== id)
     rerouteEdges()
+  },
+  updateNode(id: string, updates: Partial<Node>) {
+    const rn = diagram.nodes.get(id)
+    if (!rn) return
+    diagram.nodes.set(id, { ...rn, ...updates })
+  },
+  updateSubgraph(id: string, updates: Partial<Subgraph>) {
+    const sg = diagram.subgraphs.get(id)
+    if (!sg) return
+    diagram.subgraphs.set(id, { ...sg, ...updates })
+  },
+  /**
+   * Re-parent a node. When moving INTO a group, the node is recentered on
+   * the target subgraph so it's visible inside the new container. When
+   * removing from a group (groupId = undefined), the current position is
+   * preserved.
+   */
+  moveNodeToGroup(nodeId: string, groupId: string | undefined) {
+    const node = diagram.nodes.get(nodeId)
+    if (!node) return
+    if (groupId) {
+      const sg = diagram.subgraphs.get(groupId)
+      const position = sg?.bounds
+        ? { x: sg.bounds.x + sg.bounds.width / 2, y: sg.bounds.y + sg.bounds.height / 2 }
+        : node.position
+      diagramState.updateNode(nodeId, { parent: groupId, position })
+    } else {
+      diagramState.updateNode(nodeId, { parent: undefined })
+    }
   },
   get poeBudgets() {
     return poeBudgets
@@ -263,14 +447,10 @@ export const diagramState = {
     if (item?.nodeId) {
       // Remove diagram node + its ports + connected links
       const nodeId = item.nodeId
-      const n = new Map(diagram.nodes)
-      const p = new Map(diagram.ports)
-      n.delete(nodeId)
-      for (const [portId, port] of p) {
-        if (port.nodeId === nodeId) p.delete(portId)
+      diagram.nodes.delete(nodeId)
+      for (const [portId, port] of diagram.ports) {
+        if (port.nodeId === nodeId) diagram.ports.delete(portId)
       }
-      diagram.nodes = n
-      diagram.ports = p
       diagram.links = diagram.links.filter((l) => {
         const from = typeof l.from === 'string' ? l.from : l.from.node
         const to = typeof l.to === 'string' ? l.to : l.to.node
@@ -315,14 +495,12 @@ export const diagramState = {
   unbindNodes(nodeIds: string[]) {
     const ids = new Set(nodeIds)
     // Strip product details but keep role (kind/type)
-    const n = new Map(diagram.nodes)
     for (const nodeId of ids) {
-      const rn = n.get(nodeId)
+      const rn = diagram.nodes.get(nodeId)
       if (rn) {
-        n.set(nodeId, { ...rn, spec: stripProductFromSpec(rn.spec) })
+        diagram.nodes.set(nodeId, { ...rn, spec: stripProductFromSpec(rn.spec) })
       }
     }
-    diagram.nodes = n
     bomItems = bomItems.map((i) =>
       i.nodeId && ids.has(i.nodeId) ? { ...i, nodeId: undefined } : i,
     )
@@ -346,7 +524,7 @@ export const diagramState = {
       if (unplaced) {
         diagramState.bindNodeToBom(unplaced.id, nodeId)
       } else {
-        const id = nanoid()
+        const id = newId('bom')
         diagramState.addBomItem({ id, paletteId, nodeId })
         const entry = palette.find((e) => e.id === paletteId)
         if (entry) setNodeSpecs([nodeId], entry.spec)
@@ -360,7 +538,7 @@ export const diagramState = {
     const entry = palette.find((e) => e.id === bom.paletteId)
     if (!entry) return undefined
 
-    const id = `node-${Date.now()}`
+    const id = newId('node')
     const label = paletteEntryLabel(entry)
     const spec = entry.spec
     const { width: w, height: h } = computeNodeSize({ label, spec })
@@ -375,9 +553,7 @@ export const diagramState = {
       obstacles,
     )
 
-    const n = new Map(diagram.nodes)
-    n.set(id, { id, label, spec, shape: 'rounded', position: pos })
-    diagram.nodes = n
+    diagram.nodes.set(id, { id, label, spec, shape: 'rounded', position: pos })
     // Bind BomItem to the new node
     bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId: id } : i))
     return id
@@ -393,18 +569,11 @@ export const diagramState = {
     }
   },
   async importGraph(graph: NetworkGraph) {
-    const nodes = new Map<string, Node>()
-    for (const node of graph.nodes) {
-      nodes.set(node.id, node)
-    }
-    const subgraphs = new Map<string, Subgraph>()
-    for (const sg of graph.subgraphs ?? []) {
-      subgraphs.set(sg.id, sg)
-    }
-    diagram.nodes = nodes
-    diagram.subgraphs = subgraphs
-    diagram.links = graph.links ?? []
-    diagram.ports = new Map()
+    const { nodes, subgraphs, links } = sanitizeGraph(graph)
+    replaceMap(diagram.nodes, nodes)
+    replaceMap(diagram.subgraphs, subgraphs)
+    diagram.links = links
+    diagram.ports.clear()
     await rerouteEdges()
   },
 
@@ -424,17 +593,24 @@ export const diagramState = {
   /** Import project from NetedProject JSON string */
   async importProject(jsonStr: string) {
     const data = JSON.parse(jsonStr)
-    palette = data.palette ?? []
-    bomItems = data.bom ?? []
+    // Load graph first so we know which node IDs exist, then clean up
+    // palette/bom references against that.
     await diagramState.importGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
+    const { palette: cleanPalette, bom: cleanBom } = sanitizePaletteAndBom(
+      data.palette ?? [],
+      data.bom ?? [],
+      diagram.nodes,
+    )
+    palette = cleanPalette
+    bomItems = cleanBom
     status = 'Ready'
   },
 
   loadFromResolved(resolved: ResolvedLayout, graphLinks: Link[]) {
-    diagram.nodes = new Map(resolved.nodes)
-    diagram.ports = new Map(resolved.ports)
-    diagram.edges = new Map(resolved.edges)
-    diagram.subgraphs = new Map(resolved.subgraphs)
+    replaceMap(diagram.nodes, resolved.nodes)
+    replaceMap(diagram.ports, resolved.ports)
+    replaceMap(diagram.edges, resolved.edges)
+    replaceMap(diagram.subgraphs, resolved.subgraphs)
     diagram.bounds = { ...resolved.bounds }
     diagram.links = [...graphLinks]
   },
@@ -444,10 +620,10 @@ export const diagramState = {
     // Reset all state
     palette = []
     bomItems = []
-    diagram.nodes = new Map()
-    diagram.ports = new Map()
-    diagram.edges = new Map()
-    diagram.subgraphs = new Map()
+    diagram.nodes.clear()
+    diagram.ports.clear()
+    diagram.edges.clear()
+    diagram.subgraphs.clear()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
     yamlSource = ''
