@@ -2,6 +2,7 @@
   import type {
     DeviceType,
     Link,
+    LinkEndpoint,
     Node,
     NodeShape,
     NodeSpec,
@@ -46,6 +47,12 @@
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
     onnodeadd?: (id: string) => void
     onnodedelete?: (ids: string[]) => void
+    /**
+     * Fired when the user drags between two ports to request a new link.
+     * The parent owns link identity — it must create the link (with an ID of
+     * its choosing) and either push it via `bind:links` or call `appendLink()`.
+     */
+    oncreatelink?: (from: LinkEndpoint, to: LinkEndpoint) => void
   }
 
   let {
@@ -65,6 +72,7 @@
     oncontextmenu: onctx,
     onnodeadd,
     onnodedelete,
+    oncreatelink,
   }: RendererProps = $props()
 
   const colors = $derived(themeToColors(theme))
@@ -225,22 +233,23 @@
     selection = new Set([id])
   }
 
-  export function addNewNode(opts?: {
+  export function addNewNode(opts: {
+    id: string
     label?: string
     type?: DeviceType
     spec?: NodeSpec
     shape?: NodeShape
     position?: { x: number; y: number }
   }) {
-    const id = `node-${Date.now()}`
-    const label = opts?.label ?? 'New Node'
-    const spec = opts?.spec
+    const { id } = opts
+    const label = opts.label ?? 'New Node'
+    const spec = opts.spec
       ? opts.spec
-      : opts?.type
+      : opts.type
         ? ({ kind: 'hardware' as const, type: opts.type } satisfies NodeSpec)
         : undefined
     const { width: w, height: h } = computeNodeSize({ label, spec })
-    const { parent, initial } = resolveParentAndPosition(opts?.position, w)
+    const { parent, initial } = resolveParentAndPosition(opts.position, w)
     const obstacles = collectObstacles(id, parent, nodes, subgraphs)
     const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
 
@@ -249,7 +258,7 @@
       id,
       label,
       spec,
-      shape: opts?.shape ?? 'rounded',
+      shape: opts.shape ?? 'rounded',
       parent,
       position: pos,
     })
@@ -259,18 +268,22 @@
     return id
   }
 
-  export function addNewSubgraph(opts?: { label?: string; position?: { x: number; y: number } }) {
-    const id = `sg-${Date.now()}`
+  export function addNewSubgraph(opts: {
+    id: string
+    label?: string
+    position?: { x: number; y: number }
+  }) {
+    const { id } = opts
     const w = 200
     const h = 120
-    const { parent, initial } = resolveParentAndPosition(opts?.position, w)
+    const { parent, initial } = resolveParentAndPosition(opts.position, w)
     const obstacles = collectObstacles(id, parent, nodes, subgraphs)
     const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
 
     const sg = new Map(subgraphs)
     sg.set(id, {
       id,
-      label: opts?.label ?? 'New Group',
+      label: opts.label ?? 'New Group',
       parent,
       bounds: { x: pos.x - w / 2, y: pos.y - h / 2, width: w, height: h },
     })
@@ -499,7 +512,7 @@
     doAddLink(fromPortId, portId)
   }
 
-  async function doAddLink(fromPortId: string, toPortId: string) {
+  function doAddLink(fromPortId: string, toPortId: string) {
     const fromParts = fromPortId.split(':')
     const toParts = toPortId.split(':')
     let fromNode = fromParts[0] ?? ''
@@ -514,16 +527,36 @@
       ;[fromNode, toNode] = [toNode, fromNode]
       ;[fromPort, toPort] = [toPort, fromPort]
     }
-    links = [
-      ...links,
-      {
-        id: `link-${Date.now()}`,
-        from: { node: fromNode, port: fromPort },
-        to: { node: toNode, port: toPort },
-      },
-    ]
+    // Emit event — parent owns link identity and state mutation.
+    oncreatelink?.({ node: fromNode, port: fromPort }, { node: toNode, port: toPort })
+  }
+
+  /**
+   * Imperatively append a link (with caller-supplied id) to internal state.
+   * Used by the WebComponent wrapper, which owns its link state internally.
+   * Editor apps should prefer mutating their own state via `bind:links`.
+   */
+  export async function appendLink(link: Link) {
+    if (
+      linkExists(
+        links,
+        getLinkNode(link.from),
+        getLinkPort(link.from),
+        getLinkNode(link.to),
+        getLinkPort(link.to),
+      )
+    )
+      return
+    links = [...links, link]
     edges = await routeEdges(nodes, ports, links)
     onchange?.(links)
+  }
+
+  function getLinkNode(e: Link['from']): string {
+    return typeof e === 'string' ? (e.split(':')[0] ?? '') : e.node
+  }
+  function getLinkPort(e: Link['from']): string {
+    return typeof e === 'string' ? e.split(':').slice(1).join(':') : (e.port ?? '')
   }
 </script>
 

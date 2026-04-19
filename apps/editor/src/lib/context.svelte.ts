@@ -11,6 +11,7 @@ import {
   type NetworkGraph,
   type Node,
   type NodeSpec,
+  newId,
   type ResolvedEdge,
   type ResolvedLayout,
   type ResolvedPort,
@@ -20,7 +21,6 @@ import {
   sampleNetwork,
   type Theme,
 } from '@shumoku/core'
-import { nanoid } from 'nanoid'
 import { analyzePoE } from './poe-analysis'
 import { sampleBomItems, samplePalette } from './sample-project'
 import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
@@ -346,7 +346,7 @@ export const diagramState = {
       if (unplaced) {
         diagramState.bindNodeToBom(unplaced.id, nodeId)
       } else {
-        const id = nanoid()
+        const id = newId('bom')
         diagramState.addBomItem({ id, paletteId, nodeId })
         const entry = palette.find((e) => e.id === paletteId)
         if (entry) setNodeSpecs([nodeId], entry.spec)
@@ -360,7 +360,7 @@ export const diagramState = {
     const entry = palette.find((e) => e.id === bom.paletteId)
     if (!entry) return undefined
 
-    const id = `node-${Date.now()}`
+    const id = newId('node')
     const label = paletteEntryLabel(entry)
     const spec = entry.spec
     const { width: w, height: h } = computeNodeSize({ label, spec })

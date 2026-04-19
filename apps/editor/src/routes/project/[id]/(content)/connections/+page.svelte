@@ -1,6 +1,5 @@
 <script lang="ts">
-  import type { Link, LinkEndpoint } from '@shumoku/core'
-  import { nanoid } from 'nanoid'
+  import { type Link, type LinkEndpoint, newId } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
   import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
@@ -149,7 +148,7 @@
     if (!addFromNode || !addToNode || addFromNode === addToNode) return
     const from: LinkEndpoint = { node: addFromNode, port: addFromPort || undefined }
     const to: LinkEndpoint = { node: addToNode, port: addToPort || undefined }
-    diagramState.addLink({ id: `link-${nanoid(8)}`, from, to })
+    diagramState.addLink({ id: newId('link'), from, to })
     addFromNode = ''
     addFromPort = ''
     addToNode = ''
