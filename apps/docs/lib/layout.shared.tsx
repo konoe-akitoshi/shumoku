@@ -24,7 +24,8 @@ export function baseOptions(locale: string): BaseLayoutProps {
       },
       {
         text: 'Editor',
-        url: `/${locale}/editor`,
+        url: 'https://editor.shumoku.dev/',
+        external: true,
       },
     ],
     githubUrl: 'https://github.com/konoe-akitoshi/shumoku',
