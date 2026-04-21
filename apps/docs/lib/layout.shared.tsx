@@ -22,6 +22,10 @@ export function baseOptions(locale: string): BaseLayoutProps {
         text: 'Playground',
         url: `/${locale}/playground`,
       },
+      {
+        text: 'Editor',
+        url: `/${locale}/editor`,
+      },
     ],
     githubUrl: 'https://github.com/konoe-akitoshi/shumoku',
     i18n: true,
