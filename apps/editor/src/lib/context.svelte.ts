@@ -647,6 +647,9 @@ export const diagramState = {
 
   /** Load a project by ID. Resets all state first. */
   async loadProject(projectId: string) {
+    // Skip load if project was imported via importProject()
+    if (projectId === 'imported' && initialized) return
+
     // Reset all state
     palette = []
     bomItems = []

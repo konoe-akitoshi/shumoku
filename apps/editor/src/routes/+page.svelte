@@ -20,7 +20,7 @@
       if (!file) return
       const text = await file.text()
       await diagramState.importProject(text)
-      goto('/project/sample/diagram')
+      goto('/project/imported/diagram')
     }
     input.click()
   }
