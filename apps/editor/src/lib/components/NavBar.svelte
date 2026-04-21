@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Cube, ListBullets, PlugsConnected, Table } from 'phosphor-svelte'
+  import { Cube, GearSix, ListBullets, PlugsConnected, Table } from 'phosphor-svelte'
   import { page } from '$app/stores'
 
   // Extract project ID from URL
@@ -10,6 +10,7 @@
     { href: `/project/${projectId}/specs`, label: 'Specs', icon: ListBullets },
     { href: `/project/${projectId}/bom`, label: 'BOM', icon: Table },
     { href: `/project/${projectId}/connections`, label: 'Connections', icon: PlugsConnected },
+    { href: `/project/${projectId}/settings`, label: 'Settings', icon: GearSix },
   ])
 </script>
 
