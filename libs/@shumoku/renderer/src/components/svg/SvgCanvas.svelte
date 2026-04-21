@@ -88,11 +88,20 @@
 
     svgSel.call(zoomBehavior)
 
-    // Two-finger scroll (non-ctrl/meta wheel) → pan
+    // Auto-detect input device (Miro-style):
+    // - deltaX !== 0 → trackpad two-finger scroll → pan
+    // - deltaX === 0 → mouse wheel → zoom at cursor
+    // - Ctrl/Cmd+wheel / pinch → zoom (d3-zoom filter above)
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) return // pinch-to-zoom handled by d3-zoom
       e.preventDefault()
-      zoomBehavior.translateBy(svgSel, -e.deltaX, -e.deltaY)
+      if (e.deltaX !== 0) {
+        zoomBehavior.translateBy(svgSel, -e.deltaX, -e.deltaY)
+      } else {
+        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
+        const rect = svg.getBoundingClientRect()
+        zoomBehavior.scaleBy(svgSel, factor, [e.clientX - rect.left, e.clientY - rect.top])
+      }
     }
     svg.addEventListener('wheel', handleWheel, { passive: false })
 
