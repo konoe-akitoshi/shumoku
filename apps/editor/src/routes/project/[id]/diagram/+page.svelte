@@ -81,7 +81,11 @@
 
 <div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
   <!-- Canvas (full screen, z-0) -->
-  <div class="absolute inset-0">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="absolute inset-0"
+    ondblclick={() => { if (selected) openDetail(selected.id, selected.type) }}
+  >
     {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
       <ShumokuRenderer
         bind:this={renderer}
