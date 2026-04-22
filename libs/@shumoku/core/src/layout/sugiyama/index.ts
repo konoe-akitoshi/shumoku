@@ -11,8 +11,17 @@
  * and remove the legacy implementation.
  */
 
+export type {
+  AssignCoordinatesOptions,
+  Direction,
+  NodeSize,
+  Position,
+} from './coords.js'
+export { assignCoordinates } from './coords.js'
 export { removeCycles } from './cycles.js'
 export { assignLayers } from './layers.js'
+export type { ReduceCrossingsOptions } from './ordering.js'
+export { reduceCrossings } from './ordering.js'
 export type {
   CycleRemovalResult,
   Edge,
