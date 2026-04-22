@@ -11,6 +11,16 @@
  * and remove the legacy implementation.
  */
 
+export type { LayoutFlatOptions, LayoutFlatResult } from './compose.js'
+export { layoutFlat } from './compose.js'
+export type {
+  Bounds,
+  CompoundLayoutOptions,
+  CompoundLayoutResult,
+  CompoundNode,
+  CompoundSubgraph,
+} from './compound.js'
+export { layoutCompound } from './compound.js'
 export type {
   AssignCoordinatesOptions,
   Direction,
