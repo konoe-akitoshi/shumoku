@@ -129,6 +129,7 @@
       onmodechange={(m) => { editorState.mode = m }}
       onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
       onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
+      onautoarrange={() => diagramState.autoArrange()}
       onthemetoggle={() => editorState.toggleTheme()}
     />
   </div>
