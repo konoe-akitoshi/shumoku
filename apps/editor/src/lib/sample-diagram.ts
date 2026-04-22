@@ -51,7 +51,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 695,
-        y: 278,
+        y: 248,
       },
     },
     {
@@ -64,8 +64,22 @@ export const sampleDiagram = {
         type: 'internet',
       },
       position: {
-        x: 575,
-        y: 574,
+        x: 583.5,
+        y: 544,
+      },
+    },
+    {
+      id: 'isp2',
+      label: 'ISP Line #2 (Secondary)',
+      shape: 'rounded',
+      parent: 'perimeter/edge',
+      spec: {
+        kind: 'hardware',
+        type: 'internet',
+      },
+      position: {
+        x: 800,
+        y: 544,
       },
     },
     {
@@ -80,22 +94,8 @@ export const sampleDiagram = {
         model: 'rtx3510',
       },
       position: {
-        x: 575,
-        y: 794,
-      },
-    },
-    {
-      id: 'isp2',
-      label: 'ISP Line #2 (Secondary)',
-      shape: 'rounded',
-      parent: 'perimeter/edge',
-      spec: {
-        kind: 'hardware',
-        type: 'internet',
-      },
-      position: {
-        x: 815,
-        y: 574,
+        x: 590,
+        y: 744,
       },
     },
     {
@@ -110,8 +110,8 @@ export const sampleDiagram = {
         model: 'rtx3510',
       },
       position: {
-        x: 815,
-        y: 794,
+        x: 800,
+        y: 744,
       },
     },
     {
@@ -126,8 +126,8 @@ export const sampleDiagram = {
         model: 'srx4100',
       },
       position: {
-        x: 566.75,
-        y: 1098.5,
+        x: 590,
+        y: 1052,
       },
     },
     {
@@ -142,8 +142,8 @@ export const sampleDiagram = {
         model: 'srx4100',
       },
       position: {
-        x: 823.25,
-        y: 1098.5,
+        x: 800,
+        y: 1052,
       },
     },
     {
@@ -157,7 +157,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 215,
-        y: 1434,
+        y: 1708,
       },
     },
     {
@@ -171,7 +171,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 110,
-        y: 1665,
+        y: 1888,
       },
     },
     {
@@ -185,7 +185,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 320,
-        y: 1665,
+        y: 1888,
       },
     },
     {
@@ -201,7 +201,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 925,
-        y: 1471,
+        y: 1408,
       },
     },
     {
@@ -217,7 +217,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 925,
-        y: 1696.5,
+        y: 1608,
       },
     },
     {
@@ -233,7 +233,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 695,
-        y: 2001,
+        y: 1956,
       },
     },
     {
@@ -249,7 +249,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 590,
-        y: 2232,
+        y: 2136,
       },
     },
     {
@@ -265,7 +265,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 800,
-        y: 2232,
+        y: 2136,
       },
     },
     {
@@ -281,7 +281,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 1155,
-        y: 2001,
+        y: 1876,
       },
     },
     {
@@ -297,7 +297,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 1050,
-        y: 2232,
+        y: 2056,
       },
     },
     {
@@ -313,7 +313,7 @@ export const sampleDiagram = {
       },
       position: {
         x: 1260,
-        y: 2221,
+        y: 2056,
       },
     },
     {
@@ -328,8 +328,8 @@ export const sampleDiagram = {
         model: 'ip-phone',
       },
       position: {
-        x: 1260,
-        y: 2430,
+        x: 1155,
+        y: 2216,
       },
     },
   ],
@@ -690,7 +690,7 @@ export const sampleDiagram = {
         x: 585,
         y: 0,
         width: 220,
-        height: 358,
+        height: 328,
       },
     },
     {
@@ -702,40 +702,10 @@ export const sampleDiagram = {
       },
       file: './perimeter.yaml',
       bounds: {
-        x: 413.5,
-        y: 438,
-        width: 563,
-        height: 787,
-      },
-    },
-    {
-      id: 'perimeter/edge',
-      label: 'Edge (HA Routers)',
-      children: [],
-      parent: 'perimeter',
-      style: {
-        fill: 'surface-2',
-      },
-      bounds: {
-        x: 450,
-        y: 486,
-        width: 490,
-        height: 398,
-      },
-    },
-    {
-      id: 'perimeter/security',
-      label: 'Security',
-      children: [],
-      parent: 'perimeter',
-      style: {
-        fill: 'accent-red',
-      },
-      bounds: {
-        x: 433.5,
-        y: 964,
-        width: 523,
-        height: 241,
+        x: 453.5,
+        y: 408,
+        width: 483,
+        height: 764,
       },
     },
     {
@@ -748,9 +718,9 @@ export const sampleDiagram = {
       file: './dmz.yaml',
       bounds: {
         x: 0,
-        y: 1305,
+        y: 1600,
         width: 430,
-        height: 420,
+        height: 348,
       },
     },
     {
@@ -763,9 +733,39 @@ export const sampleDiagram = {
       file: './campus.yaml',
       bounds: {
         x: 460,
-        y: 1305,
+        y: 1252,
         width: 930,
-        height: 1205,
+        height: 1044,
+      },
+    },
+    {
+      id: 'perimeter/edge',
+      label: 'Edge (HA Routers)',
+      children: [],
+      parent: 'perimeter',
+      style: {
+        fill: 'surface-2',
+      },
+      bounds: {
+        x: 473.5,
+        y: 456,
+        width: 443,
+        height: 388,
+      },
+    },
+    {
+      id: 'perimeter/security',
+      label: 'Security',
+      children: [],
+      parent: 'perimeter',
+      style: {
+        fill: 'accent-red',
+      },
+      bounds: {
+        x: 480,
+        y: 924,
+        width: 430,
+        height: 228,
       },
     },
     {
@@ -778,9 +778,9 @@ export const sampleDiagram = {
       },
       bounds: {
         x: 815,
-        y: 1353,
+        y: 1300,
         width: 220,
-        height: 439,
+        height: 388,
       },
     },
     {
@@ -794,9 +794,9 @@ export const sampleDiagram = {
       },
       bounds: {
         x: 480,
-        y: 1872,
+        y: 1848,
         width: 430,
-        height: 420,
+        height: 348,
       },
     },
     {
@@ -810,9 +810,9 @@ export const sampleDiagram = {
       },
       bounds: {
         x: 940,
-        y: 1872,
+        y: 1768,
         width: 430,
-        height: 618,
+        height: 508,
       },
     },
   ],
