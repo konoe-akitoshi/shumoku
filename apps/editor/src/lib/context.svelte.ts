@@ -16,7 +16,6 @@ import {
   newId,
   placePorts,
   type ResolvedEdge,
-  type ResolvedLayout,
   type ResolvedPort,
   rebalanceSubgraphs,
   resolvePosition,
@@ -598,16 +597,43 @@ export const diagramState = {
       subgraphs: [...diagram.subgraphs.values()],
     }
   },
+  /**
+   * Single entry point for loading a NetworkGraph into runtime state.
+   * Handles both positioned inputs (saved JSON) and unpositioned ones
+   * (parsed YAML) — the former derives ports/edges directly from saved
+   * positions; the latter falls back to the full layoutNetwork pass.
+   * Replaces the former `loadFromResolved` path.
+   */
   async importGraph(graph: NetworkGraph) {
     const { nodes, subgraphs, links } = sanitizeGraph(graph)
+    const direction = graph.settings?.direction ?? 'TB'
+    const hasAnyNode = nodes.size > 0
+    const allPositioned = hasAnyNode && [...nodes.values()].every((n) => n.position)
+
+    if (hasAnyNode && !allPositioned) {
+      // YAML-shaped (or partially authored) graph — let layoutNetwork
+      // position every node and rebuild subgraph bounds from the result.
+      const reconstructed: NetworkGraph = {
+        ...graph,
+        nodes: [...nodes.values()],
+        subgraphs: [...subgraphs.values()],
+        links,
+      }
+      const { resolved } = await computeNetworkLayout(reconstructed)
+      replaceMap(diagram.nodes, resolved.nodes)
+      replaceMap(diagram.subgraphs, resolved.subgraphs)
+      replaceMap(diagram.ports, resolved.ports)
+      replaceMap(diagram.edges, resolved.edges)
+      diagram.bounds = { ...resolved.bounds }
+      diagram.links = links
+      return
+    }
+
+    // Positioned (saved JSON, sample, or empty graph): derive ports and
+    // edges from positions without touching node placement.
     replaceMap(diagram.nodes, nodes)
     replaceMap(diagram.subgraphs, subgraphs)
     diagram.links = links
-    // Ports are derived from node positions + link endpoints. placePorts is
-    // what YAML/sample loads get via computeNetworkLayout; without it,
-    // rerouteEdges runs on an empty ports map and the diagram renders with
-    // no ports or edges.
-    const direction = graph.settings?.direction ?? 'TB'
     replaceMap(diagram.ports, placePorts(nodes, links, direction))
     await rerouteEdges()
   },
@@ -643,15 +669,6 @@ export const diagramState = {
     palette = cleanPalette
     bomItems = cleanBom
     status = 'Ready'
-  },
-
-  loadFromResolved(resolved: ResolvedLayout, graphLinks: Link[]) {
-    replaceMap(diagram.nodes, resolved.nodes)
-    replaceMap(diagram.ports, resolved.ports)
-    replaceMap(diagram.edges, resolved.edges)
-    replaceMap(diagram.subgraphs, resolved.subgraphs)
-    diagram.bounds = { ...resolved.bounds }
-    diagram.links = [...graphLinks]
   },
 
   /** Load a project by ID. Resets all state first. */
@@ -696,8 +713,7 @@ export const diagramState = {
       const resolver = createMemoryFileResolver(fileMap, '/')
       const hp = new HierarchicalParser(resolver)
       const g = (await hp.parse(yamlStr, '/main.yaml')).graph
-      const { resolved } = await computeNetworkLayout(g)
-      diagramState.loadFromResolved(resolved, g.links)
+      await diagramState.importGraph(g)
       yamlSource = yamlStr
       status = 'Ready'
     } catch (e) {

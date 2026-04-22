@@ -18,6 +18,7 @@ export {
   movePort,
   moveSubgraph,
   nodesOverlap,
+  placeNode,
   rebalanceSubgraphs,
   removePort,
   resolveNodePosition,
