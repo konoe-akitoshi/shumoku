@@ -1,9 +1,8 @@
 <script lang="ts">
-  import type { NodeSpec } from '@shumoku/core'
+  import { type LinkEndpoint, type NodeSpec, newId } from '@shumoku/core'
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
-  import { nanoid } from 'nanoid'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
@@ -82,7 +81,11 @@
 
 <div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
   <!-- Canvas (full screen, z-0) -->
-  <div class="absolute inset-0">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="absolute inset-0"
+    ondblclick={() => { if (selected) openDetail(selected.id, selected.type) }}
+  >
     {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
       <ShumokuRenderer
         bind:this={renderer}
@@ -99,9 +102,12 @@
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
         oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => { contextMenu = { id, type, x: screenX, y: screenY } }}
         onnodeadd={(id: string) => {
-          diagramState.addBomItem({ id: nanoid(), nodeId: id })
+          diagramState.addBomItem({ id: newId('bom'), nodeId: id })
         }}
         onnodedelete={(ids: string[]) => { diagramState.unbindNodes(ids) }}
+        oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
+          diagramState.addLink({ id: newId('link'), from, to })
+        }}
       />
     {:else}
       <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">
@@ -121,8 +127,8 @@
       mode={editorState.mode}
       isDark={editorState.isDark}
       onmodechange={(m) => { editorState.mode = m }}
-      onaddnode={(spec) => renderer?.addNewNode(spec ? { spec } : undefined)}
-      onaddsubgraph={() => renderer?.addNewSubgraph()}
+      onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
+      onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
       onthemetoggle={() => editorState.toggleTheme()}
     />
   </div>
@@ -176,45 +182,23 @@
         if (!clipboard || !contextMenu) return
         const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
         if (clipboard.elementKind === 'subgraph') {
-          renderer?.addNewSubgraph({ label: clipboard.label, position: svgPos })
+          renderer?.addNewSubgraph({ id: newId('sg'), label: clipboard.label, position: svgPos })
         } else {
-          const newId = renderer?.addNewNode({
+          const pastedId = newId('node')
+          renderer?.addNewNode({
+            id: pastedId,
             label: clipboard.label,
             spec: clipboard.spec,
             shape: clipboard.shape,
             position: svgPos,
           })
-          if (newId && clipboard.paletteId) {
-            diagramState.bindNodeToPalette(newId, clipboard.paletteId)
+          if (clipboard.paletteId) {
+            diagramState.bindNodeToPalette(pastedId, clipboard.paletteId)
           }
         }
       }}
       ondetails={(id) => openDetail(id, contextMenu?.type ?? 'node')}
-      onmovetogroup={(nodeId, groupId) => {
-        const node = diagramState.nodes.get(nodeId)
-        if (!node) return
-        const n = new Map(diagramState.nodes)
-        if (groupId) {
-          const sg = diagramState.subgraphs.get(groupId)
-          if (sg?.bounds) {
-            // Move node to center of target subgraph
-            n.set(nodeId, {
-              ...node,
-              parent: groupId,
-              position: {
-                x: sg.bounds.x + sg.bounds.width / 2,
-                y: sg.bounds.y + sg.bounds.height / 2,
-              },
-            })
-          } else {
-            n.set(nodeId, { ...node, parent: groupId })
-          }
-        } else {
-          // Remove from group — keep current position
-          n.set(nodeId, { ...node, parent: undefined })
-        }
-        diagramState.nodes = n
-      }}
+      onmovetogroup={(nodeId, groupId) => diagramState.moveNodeToGroup(nodeId, groupId)}
       ondelete={(id) => { renderer?.deleteById(id) }}
       onclose={() => { contextMenu = null }}
     />

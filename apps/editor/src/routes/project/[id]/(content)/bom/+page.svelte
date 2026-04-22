@@ -1,6 +1,6 @@
 <script lang="ts">
+  import { newId } from '@shumoku/core'
   import { DropdownMenu } from 'bits-ui'
-  import { nanoid } from 'nanoid'
   import { CaretDown, MapPin, Plus, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
@@ -59,7 +59,7 @@
   )
 
   function addBomItem(paletteId: string) {
-    diagramState.addBomItem({ id: nanoid(), paletteId })
+    diagramState.addBomItem({ id: newId('bom'), paletteId })
   }
 </script>
 

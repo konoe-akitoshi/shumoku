@@ -9,7 +9,7 @@
  * mount() once — prop changes propagate automatically.
  */
 
-import type { NetworkGraph, ResolvedLayout, Theme } from '@shumoku/core'
+import { type Link, type NetworkGraph, newId, type ResolvedLayout, type Theme } from '@shumoku/core'
 import type { ComponentProps } from 'svelte'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
@@ -101,11 +101,11 @@ export class ShumokuRendererElement extends HTMLElement {
 
   addNewNode(opts?: { label?: string; position?: { x: number; y: number } }) {
     // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
-    return (this._instance as any)?.addNewNode?.(opts)
+    return (this._instance as any)?.addNewNode?.({ id: newId('node'), ...opts })
   }
   addNewSubgraph(opts?: { label?: string; position?: { x: number; y: number } }) {
     // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
-    return (this._instance as any)?.addNewSubgraph?.(opts)
+    return (this._instance as any)?.addNewSubgraph?.({ id: newId('sg'), ...opts })
   }
   commitLabel(portId: string, label: string) {
     // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
@@ -114,6 +114,10 @@ export class ShumokuRendererElement extends HTMLElement {
   getSnapshot() {
     // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
     return (this._instance as any)?.getSnapshot?.() ?? null
+  }
+  appendLink(link: Link) {
+    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
+    ;(this._instance as any)?.appendLink?.(link)
   }
 
   // --- SVG ---
@@ -160,6 +164,15 @@ export class ShumokuRendererElement extends HTMLElement {
   private _mount() {
     if (!this.shadowRoot) return
     if (this._instance) unmount(this._instance)
+    // Provide a default link-creation handler so external consumers get
+    // port-drag → new link behavior without wiring anything up. Editor-style
+    // callers that supply their own `oncreatelink` win via the user override
+    // path (they'd never mount through this wrapper anyway).
+    if (!this._props.oncreatelink) {
+      this._props.oncreatelink = (from, to) => {
+        this.appendLink({ id: newId('link'), from, to })
+      }
+    }
     this._instance = mount(ShumokuRenderer, {
       target: this.shadowRoot,
       props: this._props,

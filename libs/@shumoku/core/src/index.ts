@@ -16,6 +16,8 @@ export * from './fixtures/index.js'
 export * from './hierarchical.js'
 // Icons
 export * from './icons/index.js'
+// IDs
+export * from './ids.js'
 // Layout
 export * from './layout/index.js'
 // Merge
