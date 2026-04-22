@@ -597,47 +597,6 @@ export const diagramState = {
       subgraphs: [...diagram.subgraphs.values()],
     }
   },
-  /**
-   * Single entry point for loading a NetworkGraph into runtime state.
-   * Handles both positioned inputs (saved JSON) and unpositioned ones
-   * (parsed YAML) — the former derives ports/edges directly from saved
-   * positions; the latter falls back to the full layoutNetwork pass.
-   * Replaces the former `loadFromResolved` path.
-   */
-  async importGraph(graph: NetworkGraph) {
-    const { nodes, subgraphs, links } = sanitizeGraph(graph)
-    const direction = graph.settings?.direction ?? 'TB'
-    const hasAnyNode = nodes.size > 0
-    const allPositioned = hasAnyNode && [...nodes.values()].every((n) => n.position)
-
-    if (hasAnyNode && !allPositioned) {
-      // YAML-shaped (or partially authored) graph — let layoutNetwork
-      // position every node and rebuild subgraph bounds from the result.
-      const reconstructed: NetworkGraph = {
-        ...graph,
-        nodes: [...nodes.values()],
-        subgraphs: [...subgraphs.values()],
-        links,
-      }
-      const { resolved } = await computeNetworkLayout(reconstructed)
-      replaceMap(diagram.nodes, resolved.nodes)
-      replaceMap(diagram.subgraphs, resolved.subgraphs)
-      replaceMap(diagram.ports, resolved.ports)
-      replaceMap(diagram.edges, resolved.edges)
-      diagram.bounds = { ...resolved.bounds }
-      diagram.links = links
-      return
-    }
-
-    // Positioned (saved JSON, sample, or empty graph): derive ports and
-    // edges from positions without touching node placement.
-    replaceMap(diagram.nodes, nodes)
-    replaceMap(diagram.subgraphs, subgraphs)
-    diagram.links = links
-    replaceMap(diagram.ports, placePorts(nodes, links, direction))
-    await rerouteEdges()
-  },
-
   // Serialization — .neted.json format
   /** Export project as NetedProject JSON string */
   exportProject(name = 'Untitled'): string {
@@ -651,32 +610,59 @@ export const diagramState = {
     return JSON.stringify(project, null, 2)
   },
 
-  /** Import project from NetedProject JSON string */
-  async importProject(jsonStr: string) {
-    await diagramState.loadProjectData(JSON.parse(jsonStr))
+  // =====================================================================
+  // Linear load pipeline:   applyYaml → importProject → loadProject
+  //
+  // Each step converts its input one level up and forwards to the next.
+  // loadProject is the terminal: it owns state reset, `initialized`, and
+  // status. Everything above is a thin adapter.
+  // =====================================================================
+
+  /** YAML text → NetedProject (current palette/bom preserved) → importProject. */
+  async applyYaml(yamlStr: string) {
+    try {
+      status = 'Parsing YAML...'
+      const fileMap = new Map<string, string>()
+      fileMap.set('main.yaml', yamlStr)
+      fileMap.set('./main.yaml', yamlStr)
+      fileMap.set('/main.yaml', yamlStr)
+      const resolver = createMemoryFileResolver(fileMap, '/')
+      const hp = new HierarchicalParser(resolver)
+      const diagram = (await hp.parse(yamlStr, '/main.yaml')).graph
+      await diagramState.importProject({
+        version: 1,
+        name: 'YAML Import',
+        palette: [...palette],
+        bom: [...bomItems],
+        diagram,
+      })
+      yamlSource = yamlStr
+    } catch (e) {
+      status = `Error: ${e instanceof Error ? e.message : String(e)}`
+    }
   },
 
-  /** Load a NetedProject object directly (shared impl for JSON import + sample) */
-  async loadProjectData(data: Partial<NetedProject>) {
-    // Load graph first so we know which node IDs exist, then clean up
-    // palette/bom references against that.
-    await diagramState.importGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
-    const { palette: cleanPalette, bom: cleanBom } = sanitizePaletteAndBom(
-      data.palette ?? [],
-      data.bom ?? [],
-      diagram.nodes,
-    )
-    palette = cleanPalette
-    bomItems = cleanBom
-    status = 'Ready'
+  /** JSON string or parsed NetedProject → loadProject('imported', data). */
+  async importProject(input: string | NetedProject) {
+    const data = typeof input === 'string' ? JSON.parse(input) : input
+    await diagramState.loadProject('imported', data)
   },
 
-  /** Load a project by ID. Resets all state first. */
-  async loadProject(projectId: string) {
-    // Skip load if project was imported via importProject()
-    if (projectId === 'imported' && initialized) return
+  /**
+   * Terminal: reset state, apply project data, set status.
+   *
+   * - `projectId`: 'sample' / 'imported' / 'empty' / other (= empty)
+   * - `data`: optional — when provided (e.g. via importProject) it's used
+   *   directly instead of the built-in lookup.
+   */
+  async loadProject(projectId: string, data?: Partial<NetedProject>) {
+    // When importProject routed us to /project/imported/diagram it has
+    // already populated state; the follow-up route-triggered loadProject
+    // with no data would otherwise wipe what was just imported.
+    if (projectId === 'imported' && initialized && !data) return
 
-    // Reset all state
+    // Reset all state unconditionally — every path through the terminal
+    // gets a clean slate before apply.
     palette = []
     bomItems = []
     diagram.nodes.clear()
@@ -688,36 +674,75 @@ export const diagramState = {
     yamlSource = ''
     initialized = false
 
-    if (projectId === 'sample') {
-      try {
-        status = 'Loading sample...'
-        await diagramState.loadProjectData(sampleProject)
-      } catch (e) {
-        status = `Error: ${e instanceof Error ? e.message : String(e)}`
-      }
-    } else {
-      // Empty project (or future: load from DB by ID)
-      status = 'Ready'
-    }
-
-    initialized = true
-  },
-
-  async applyYaml(yamlStr: string) {
     try {
-      status = 'Parsing YAML...'
-      const fileMap = new Map<string, string>()
-      fileMap.set('main.yaml', yamlStr)
-      fileMap.set('./main.yaml', yamlStr)
-      fileMap.set('/main.yaml', yamlStr)
-      const resolver = createMemoryFileResolver(fileMap, '/')
-      const hp = new HierarchicalParser(resolver)
-      const g = (await hp.parse(yamlStr, '/main.yaml')).graph
-      await diagramState.importGraph(g)
-      yamlSource = yamlStr
+      const project = data ?? (projectId === 'sample' ? sampleProject : null)
+      if (project) {
+        status =
+          projectId === 'sample'
+            ? 'Loading sample...'
+            : projectId === 'imported'
+              ? 'Loading project...'
+              : 'Loading...'
+        await applyProject(project)
+      }
       status = 'Ready'
+      initialized = true
     } catch (e) {
       status = `Error: ${e instanceof Error ? e.message : String(e)}`
     }
   },
+}
+
+/**
+ * Apply a NetedProject (diagram + palette + bom) to runtime state.
+ * Assumes state has already been reset by the caller (loadProject).
+ *
+ * Private to this module — the pipeline entry points (applyYaml,
+ * importProject, loadProject) are the only public way to populate state.
+ */
+async function applyProject(data: Partial<NetedProject>) {
+  await applyGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
+  const { palette: cleanPalette, bom: cleanBom } = sanitizePaletteAndBom(
+    data.palette ?? [],
+    data.bom ?? [],
+    diagram.nodes,
+  )
+  palette = cleanPalette
+  bomItems = cleanBom
+}
+
+/**
+ * Populate runtime state from a NetworkGraph. Handles both positioned
+ * inputs (saved JSON/sample) and unpositioned ones (parsed YAML): the
+ * former derives ports/edges from the saved positions; the latter falls
+ * back to the full layoutNetwork pass.
+ */
+async function applyGraph(graph: NetworkGraph) {
+  const { nodes, subgraphs, links } = sanitizeGraph(graph)
+  const direction = graph.settings?.direction ?? 'TB'
+  const hasAnyNode = nodes.size > 0
+  const allPositioned = hasAnyNode && [...nodes.values()].every((n) => n.position)
+
+  if (hasAnyNode && !allPositioned) {
+    const reconstructed: NetworkGraph = {
+      ...graph,
+      nodes: [...nodes.values()],
+      subgraphs: [...subgraphs.values()],
+      links,
+    }
+    const { resolved } = await computeNetworkLayout(reconstructed)
+    replaceMap(diagram.nodes, resolved.nodes)
+    replaceMap(diagram.subgraphs, resolved.subgraphs)
+    replaceMap(diagram.ports, resolved.ports)
+    replaceMap(diagram.edges, resolved.edges)
+    diagram.bounds = { ...resolved.bounds }
+    diagram.links = links
+    return
+  }
+
+  replaceMap(diagram.nodes, nodes)
+  replaceMap(diagram.subgraphs, subgraphs)
+  diagram.links = links
+  replaceMap(diagram.ports, placePorts(nodes, links, direction))
+  await rerouteEdges()
 }

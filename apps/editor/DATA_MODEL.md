@@ -67,15 +67,26 @@ load:  NetworkGraph  ->  importGraph()  ->  state + placePorts + routeEdges
        └─ if any node lacks position → falls back to computeNetworkLayout (full layoutNetwork pass)
 ```
 
-### Load entry points
+### Load pipeline
 
-All runtime loads go through `diagramState.importGraph(NetworkGraph)`:
+Loads follow a linear pipeline — each step converts its input one level
+up and forwards to the next. `loadProject` is the terminal: it owns
+state reset, the `initialized` flag, and status.
 
-- `loadProjectData(NetedProject)` — sample + JSON project import
-- `applyYaml(yaml)` — parses YAML to NetworkGraph, then forwards
+```
+applyYaml(yaml)          YAML  →  NetedProject (current palette/bom preserved)
+     │
+     ▼
+importProject(input)     NetedProject (string or object)  →  loadProject('imported', data)
+     │
+     ▼
+loadProject(id, data?)   reset state + applyProject(data or builtin)
+```
 
-The single-entry design means any fix to load-time derivation (port
-placement, edge routing, bounds) benefits every load path.
+The two adapters (`applyYaml`, `importProject`) are thin: conversion +
+forward. Private helpers `applyProject` / `applyGraph` live module-scoped
+and handle sanitize + `placePorts` + `routeEdges`. Every load — sample,
+YAML paste, JSON drop — passes through the same terminal.
 
 ### Individual node placement
 
