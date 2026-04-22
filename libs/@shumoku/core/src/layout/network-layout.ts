@@ -31,6 +31,7 @@ import type {
   NodeSpec,
   Subgraph,
 } from '../models/types.js'
+import { rebalanceSubgraphs } from './interaction.js'
 import type { ResolvedPort } from './resolved-types.js'
 
 // ============================================================================
@@ -47,6 +48,15 @@ export interface NetworkLayoutOptions {
   minPortSpacing?: number
   portSize?: number
   portLabelPadding?: number
+  /**
+   * Nodes whose input `position` is a hard constraint. The tree-based
+   * arrangement runs as usual, then each fixed node is snapped back to
+   * its input position (with its ports shifted by the same delta) and
+   * subgraph bounds are recomputed to fit the actual positions.
+   *
+   * Empty set (default) keeps the legacy "re-layout everything" behavior.
+   */
+  fixed?: Set<string>
 }
 
 export interface NetworkLayoutResult {
@@ -66,6 +76,7 @@ const DEFAULTS: Required<NetworkLayoutOptions> = {
   minPortSpacing: 40,
   portSize: 8,
   portLabelPadding: 8,
+  fixed: new Set(),
 }
 
 /**
@@ -695,6 +706,40 @@ export function layoutNetwork(
   const subgraphs = new Map<string, Subgraph>()
   const ports = new Map<string, ResolvedPort>()
   arrangeTrees(trees, 0, 0, opts.topLevelGap, pp, opts, nodes, subgraphs, ports)
+
+  // Fixed-position enforcement: the tree-based pass places every node by
+  // its column; for nodes the caller marked as fixed we snap back to the
+  // input coordinate and shift their ports by the same delta so they
+  // stay stuck to the node. Subgraph bounds are then recomputed from
+  // actual children via rebalanceSubgraphs, which also resolves sibling
+  // collisions introduced by the override.
+  if (opts.fixed.size > 0) {
+    const inputPositions = new Map<string, { x: number; y: number }>()
+    for (const n of graph.nodes) {
+      if (n.position && opts.fixed.has(n.id)) inputPositions.set(n.id, n.position)
+    }
+    let anyMoved = false
+    for (const [id, target] of inputPositions) {
+      const arranged = nodes.get(id)
+      if (!arranged?.position) continue
+      const dx = target.x - arranged.position.x
+      const dy = target.y - arranged.position.y
+      if (dx === 0 && dy === 0) continue
+      anyMoved = true
+      nodes.set(id, { ...arranged, position: { x: target.x, y: target.y } })
+      for (const [pid, port] of ports) {
+        if (port.nodeId !== id) continue
+        ports.set(pid, {
+          ...port,
+          absolutePosition: {
+            x: port.absolutePosition.x + dx,
+            y: port.absolutePosition.y + dy,
+          },
+        })
+      }
+    }
+    if (anyMoved) rebalanceSubgraphs(nodes, subgraphs, ports)
+  }
 
   // Bounds
   let minX = Infinity,
