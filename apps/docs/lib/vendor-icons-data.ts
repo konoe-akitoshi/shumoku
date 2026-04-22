@@ -3,7 +3,7 @@
  * Icons are served from CDN: https://icons.shumoku.packof.me
  */
 
-export const CDN_BASE_URL = 'https://icons.shumoku.packof.me/v1'
+const CDN_BASE_URL = 'https://icons.shumoku.packof.me/v1'
 
 export type VendorKey = 'yamaha' | 'aruba' | 'juniper' | 'aws'
 

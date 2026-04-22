@@ -37,7 +37,7 @@ export function nodesOverlap(
 /**
  * Resolve a collision by pushing the moving node to the nearest escape direction.
  */
-export function resolveCollision(
+function resolveCollision(
   moving: { x: number; y: number; w: number; h: number },
   obstacle: { x: number; y: number; w: number; h: number },
   gap = DEFAULT_NODE_GAP,

@@ -32,3 +32,6 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: Unused code detection (knip)
+        run: bun run knip

@@ -56,7 +56,7 @@ export interface ResolvedIconDimensions {
 /**
  * Error information when a topology fails to parse or layout
  */
-export interface TopologyParseError {
+interface TopologyParseError {
   id: string
   name: string
   phase: 'parse' | 'layout'

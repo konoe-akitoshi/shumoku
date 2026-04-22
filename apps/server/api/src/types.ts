@@ -192,8 +192,6 @@ export interface FilterMessage {
 
 export type ClientMessage = SubscribeMessage | SetIntervalMessage | FilterMessage
 
-export type ServerMessage = MetricsMessage
-
 // ============================================
 // Topology Types
 // ============================================
