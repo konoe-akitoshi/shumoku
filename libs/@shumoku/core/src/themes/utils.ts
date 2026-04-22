@@ -108,7 +108,7 @@ function hexToRgba(hex: string, alpha = 1): string {
   if (hex === 'transparent') return 'transparent'
 
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result || !result[1] || !result[2] || !result[3]) return hex
+  if (!result?.[1] || !result[2] || !result[3]) return hex
 
   const r = Number.parseInt(result[1], 16)
   const g = Number.parseInt(result[2], 16)

@@ -292,7 +292,7 @@
     const cx = (minX + maxX) / 2
     const cy = (minY + maxY) / 2
 
-    if (!vb || !vb.width || !vb.height) return
+    if (!vb?.width || !vb.height) return
 
     // How much we'd need to scale the original viewBox to fit content at 70%
     const fillRatio = 0.7
