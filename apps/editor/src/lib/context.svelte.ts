@@ -14,6 +14,7 @@ import {
   type Node,
   type NodeSpec,
   newId,
+  placePorts,
   type ResolvedEdge,
   type ResolvedLayout,
   type ResolvedPort,
@@ -21,12 +22,11 @@ import {
   resolvePosition,
   routeEdges,
   type Subgraph,
-  sampleNetwork,
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
-import { sampleBomItems, samplePalette } from './sample-project'
+import { sampleProject } from './sample-project'
 import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
 import { paletteEntryLabel } from './types'
 
@@ -603,7 +603,12 @@ export const diagramState = {
     replaceMap(diagram.nodes, nodes)
     replaceMap(diagram.subgraphs, subgraphs)
     diagram.links = links
-    diagram.ports.clear()
+    // Ports are derived from node positions + link endpoints. placePorts is
+    // what YAML/sample loads get via computeNetworkLayout; without it,
+    // rerouteEdges runs on an empty ports map and the diagram renders with
+    // no ports or edges.
+    const direction = graph.settings?.direction ?? 'TB'
+    replaceMap(diagram.ports, placePorts(nodes, links, direction))
     await rerouteEdges()
   },
 
@@ -622,7 +627,11 @@ export const diagramState = {
 
   /** Import project from NetedProject JSON string */
   async importProject(jsonStr: string) {
-    const data = JSON.parse(jsonStr)
+    await diagramState.loadProjectData(JSON.parse(jsonStr))
+  },
+
+  /** Load a NetedProject object directly (shared impl for JSON import + sample) */
+  async loadProjectData(data: Partial<NetedProject>) {
     // Load graph first so we know which node IDs exist, then clean up
     // palette/bom references against that.
     await diagramState.importGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
@@ -663,29 +672,9 @@ export const diagramState = {
     initialized = false
 
     if (projectId === 'sample') {
-      // Load sample project data
-      palette = [...samplePalette]
-      bomItems = [...sampleBomItems]
-
       try {
         status = 'Loading sample...'
-        const fileMap = new Map<string, string>()
-        for (const f of sampleNetwork) {
-          fileMap.set(f.name, f.content)
-          fileMap.set(`./${f.name}`, f.content)
-          fileMap.set(`/${f.name}`, f.content)
-        }
-        const resolver = createMemoryFileResolver(fileMap, '/')
-        const hp = new HierarchicalParser(resolver)
-        const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
-        if (!mainFile) throw new Error('main.yaml not found')
-        const g = (await hp.parse(mainFile.content, '/main.yaml')).graph
-
-        const { resolved } = await computeNetworkLayout(g)
-        diagramState.loadFromResolved(resolved, g.links)
-        const mf = sampleNetwork.find((f) => f.name === 'main.yaml')
-        if (mf) yamlSource = mf.content
-        status = 'Ready'
+        await diagramState.loadProjectData(sampleProject)
       } catch (e) {
         status = `Error: ${e instanceof Error ? e.message : String(e)}`
       }

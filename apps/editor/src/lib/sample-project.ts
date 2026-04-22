@@ -9,7 +9,8 @@
 
 import type { HardwareProperties } from '@shumoku/catalog'
 import { DeviceType } from '@shumoku/core'
-import type { BomItem, SpecPaletteEntry } from './types'
+import { sampleDiagram } from './sample-diagram'
+import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
 
 export const samplePalette: SpecPaletteEntry[] = [
   // ========== Cloud ==========
@@ -188,3 +189,12 @@ export const sampleBomItems: BomItem[] = [
   { id: 'bom-ap-b2', paletteId: 'pal-aruba-ap11d', nodeId: 'ap-b2' },
   { id: 'bom-ip-phone', paletteId: 'pal-generic-ip-phone', nodeId: 'ip-phone' },
 ]
+
+/** Sample project — bundled palette, bom, and positioned diagram */
+export const sampleProject: NetedProject = {
+  version: 1,
+  name: 'Sample Network',
+  palette: samplePalette,
+  bom: sampleBomItems,
+  diagram: sampleDiagram,
+}
