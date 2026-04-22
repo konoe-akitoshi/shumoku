@@ -597,6 +597,27 @@ export const diagramState = {
       subgraphs: [...diagram.subgraphs.values()],
     }
   },
+  /**
+   * Re-run the layout engine across the whole diagram, discarding every
+   * manual position. Intended for a user-invoked "Auto-arrange" command
+   * after manual edits have left the graph visually messy.
+   *
+   * Stripping positions (not pinning) means the result matches what a
+   * fresh YAML import would produce; palette and BOM are untouched.
+   */
+  async autoArrange() {
+    const graph: NetworkGraph = {
+      ...diagramState.exportGraph(),
+      nodes: [...diagram.nodes.values()].map((n) => ({ ...n, position: undefined })),
+      subgraphs: [...diagram.subgraphs.values()].map((s) => ({ ...s, bounds: undefined })),
+    }
+    const { resolved } = await computeNetworkLayout(graph)
+    replaceMap(diagram.nodes, resolved.nodes)
+    replaceMap(diagram.subgraphs, resolved.subgraphs)
+    replaceMap(diagram.ports, resolved.ports)
+    replaceMap(diagram.edges, resolved.edges)
+    diagram.bounds = { ...resolved.bounds }
+  },
   // Serialization — .neted.json format
   /** Export project as NetedProject JSON string */
   exportProject(name = 'Untitled'): string {

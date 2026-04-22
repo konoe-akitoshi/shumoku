@@ -1,7 +1,16 @@
 <script lang="ts">
   import { DeviceType } from '@shumoku/core'
   import { DropdownMenu, Tooltip } from 'bits-ui'
-  import { Cube, Eye, Moon, Pencil, Plus, SquaresFour, Sun } from 'phosphor-svelte'
+  import {
+    ArrowsOutCardinal,
+    Cube,
+    Eye,
+    Moon,
+    Pencil,
+    Plus,
+    SquaresFour,
+    Sun,
+  } from 'phosphor-svelte'
 
   let {
     mode = 'view',
@@ -9,6 +18,7 @@
     onmodechange,
     onaddnode,
     onaddsubgraph,
+    onautoarrange,
     onthemetoggle,
   }: {
     mode: 'edit' | 'view'
@@ -16,6 +26,7 @@
     onmodechange?: (mode: 'edit' | 'view') => void
     onaddnode?: (spec?: { kind: string; type?: string }) => void
     onaddsubgraph?: () => void
+    onautoarrange?: () => void
     onthemetoggle?: () => void
   } = $props()
 
@@ -108,6 +119,24 @@
         class="bg-neutral-800 text-white text-xs px-2 py-1 rounded shadow-lg"
       >
         Add group
+      </Tooltip.Content>
+    </Tooltip.Root>
+
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <button
+          type="button"
+          class="flex items-center justify-center w-9 h-9 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+          onclick={() => onautoarrange?.()}
+        >
+          <ArrowsOutCardinal class="w-4.5 h-4.5" />
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Content
+        side="left"
+        class="bg-neutral-800 text-white text-xs px-2 py-1 rounded shadow-lg"
+      >
+        Auto-arrange
       </Tooltip.Content>
     </Tooltip.Root>
 
