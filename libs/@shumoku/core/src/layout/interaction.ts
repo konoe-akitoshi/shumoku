@@ -134,6 +134,27 @@ export function resolveNodePosition(
   return resolvePosition({ x, y, w: size.width, h: size.height }, obstacles, gap)
 }
 
+/**
+ * Place a single unpositioned node into an existing graph with collision
+ * avoidance. Thin wrapper around resolvePosition/collectObstacles — the
+ * primitive used when loading a partially-positioned graph or adding a
+ * node at runtime, without having to re-run the full layout pass.
+ */
+export function placeNode(
+  node: Node,
+  graph: { nodes: Map<string, Node>; subgraphs?: Map<string, Subgraph> },
+  initial: { x: number; y: number },
+  gap = DEFAULT_NODE_GAP,
+): { x: number; y: number } {
+  const size = computeNodeSize(node)
+  const obstacles = collectObstacles(node.id, node.parent, graph.nodes, graph.subgraphs)
+  return resolvePosition(
+    { x: initial.x, y: initial.y, w: size.width, h: size.height },
+    obstacles,
+    gap,
+  )
+}
+
 /** Check if parentId is sgId or a descendant of sgId */
 function isChildOf(
   parentId: string | undefined,
