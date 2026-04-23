@@ -103,8 +103,14 @@
         oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => { contextMenu = { id, type, x: screenX, y: screenY } }}
         onnodeadd={(id: string) => {
           diagramState.addBomItem({ id: newId('bom'), nodeId: id })
+          // The renderer mutated diagram.nodes directly (via $bindable)
+          // before emitting this event — invalidate cached sheets now.
+          diagramState.invalidateSheetCache()
         }}
-        onnodedelete={(ids: string[]) => { diagramState.unbindNodes(ids) }}
+        onnodedelete={(ids: string[]) => {
+          diagramState.unbindNodes(ids)
+          diagramState.invalidateSheetCache()
+        }}
         oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
           diagramState.addLink({ id: newId('link'), from, to })
         }}

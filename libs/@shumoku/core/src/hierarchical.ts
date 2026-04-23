@@ -108,11 +108,26 @@ export async function buildHierarchicalSheets(
 // Internal Functions
 // ============================================
 
-async function buildChildSheet(
+/**
+ * Build a sub-sheet `NetworkGraph` for the given subgraph id — the
+ * filtered nodes/subgraphs/links plus export-connector nodes that
+ * represent cross-boundary links.
+ *
+ * This is the layout-free half of what `buildHierarchicalSheets`
+ * does per subgraph. Callers that want to run their own layout
+ * engine (e.g. the interactive editor, which already owns a
+ * `computeNetworkLayout` path) can use this directly and skip the
+ * `LayoutEngine` indirection.
+ *
+ * Returns `null` when the requested subgraph isn't in `rootGraph`.
+ */
+export function buildChildSheetGraph(
   rootGraph: NetworkGraph,
-  subgraph: Subgraph,
-  layoutEngine: LayoutEngine,
-): Promise<SheetData> {
+  subgraphId: string,
+): NetworkGraph | null {
+  const subgraph = rootGraph.subgraphs?.find((s) => s.id === subgraphId)
+  if (!subgraph) return null
+
   // Get nodes belonging to this subgraph or any descendant
   // A node belongs if its parent is this subgraph or starts with `subgraph.id/`
   const childNodes = rootGraph.nodes.filter((n) => {
@@ -152,7 +167,10 @@ async function buildChildSheet(
     } else if (newParent === subgraph.id) {
       newParent = undefined
     }
-    return { ...n, parent: newParent }
+    // Clear the cached position so the caller's layout engine is free
+    // to place the node at the sheet's local origin — the root
+    // coordinate makes no sense inside a child sheet.
+    return { ...n, parent: newParent, position: undefined }
   })
 
   // Transform nested subgraph IDs: remove the parent prefix
@@ -162,10 +180,10 @@ async function buildChildSheet(
     parent: sg.parent?.startsWith(`${subgraph.id}/`)
       ? sg.parent.slice(subgraph.id.length + 1)
       : undefined,
+    bounds: undefined,
   }))
 
-  // Build child graph
-  const childGraph: NetworkGraph = {
+  return {
     ...rootGraph,
     name: subgraph.label,
     nodes: [...transformedNodes, ...exportNodes],
@@ -173,6 +191,18 @@ async function buildChildSheet(
     subgraphs:
       transformedSubgraphs && transformedSubgraphs.length > 0 ? transformedSubgraphs : undefined,
   }
+}
+
+async function buildChildSheet(
+  rootGraph: NetworkGraph,
+  subgraph: Subgraph,
+  layoutEngine: LayoutEngine,
+): Promise<SheetData> {
+  const childGraph = buildChildSheetGraph(rootGraph, subgraph.id)
+  // `buildHierarchicalSheets` already filtered to a known subgraph, so
+  // this null-check is defensive — only reached if someone called
+  // buildChildSheet directly with a bogus subgraph.
+  if (!childGraph) throw new Error(`Subgraph not found: ${subgraph.id}`)
 
   // Layout child sheet (use resolved path if available)
   if (layoutEngine.layoutWithResolved) {
