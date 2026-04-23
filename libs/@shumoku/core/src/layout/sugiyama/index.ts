@@ -13,14 +13,9 @@
  * live in `@shumoku/core/models` rather than being redefined here.
  */
 
-export type { LayoutFlatOptions, LayoutFlatResult } from './compose.js'
+export type { LayoutFlatResult, SugiyamaOptions } from './compose.js'
 export { layoutFlat } from './compose.js'
-export type {
-  CompoundLayoutOptions,
-  CompoundLayoutResult,
-  CompoundNode,
-  CompoundSubgraph,
-} from './compound.js'
+export type { CompoundLayoutResult, CompoundNode, CompoundSubgraph } from './compound.js'
 export { layoutCompound } from './compound.js'
 export type { AssignCoordinatesOptions } from './coords.js'
 export { assignCoordinates } from './coords.js'
