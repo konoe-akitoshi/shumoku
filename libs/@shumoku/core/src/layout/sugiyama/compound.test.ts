@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest'
+import type { Size } from '../../models/types.js'
 import { type CompoundNode, type CompoundSubgraph, layoutCompound } from './compound.js'
-import type { NodeSize } from './coords.js'
 import type { Edge } from './types.js'
 
-function nodes(ids: [string, string | null, NodeSize?][]): CompoundNode[] {
+function nodes(ids: [string, string | null, Size?][]): CompoundNode[] {
   return ids.map(([id, parent, size]) => ({ id, parent, ...(size && { size }) }))
 }
 
@@ -18,7 +18,7 @@ function edges(pairs: [string, string, string][]): Edge[] {
   return pairs.map(([s, t, id]) => ({ id, source: s, target: t }))
 }
 
-const uniformSize: NodeSize = { width: 100, height: 50 }
+const uniformSize: Size = { width: 100, height: 50 }
 
 describe('layoutCompound', () => {
   it('lays out top-level-only nodes (no subgraphs) like flat layout', () => {

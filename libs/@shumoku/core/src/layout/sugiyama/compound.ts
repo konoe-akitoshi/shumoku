@@ -29,8 +29,8 @@
  * our stack) after this function returns positioned nodes/subgraphs.
  */
 
+import type { Bounds, Position, Size } from '../../models/types.js'
 import { type LayoutFlatOptions, layoutFlat } from './compose.js'
-import type { NodeSize, Position } from './coords.js'
 import type { Edge, NodeId } from './types.js'
 
 export interface CompoundNode {
@@ -41,7 +41,7 @@ export interface CompoundNode {
    * Intrinsic size for *leaf* nodes. Ignored for subgraphs, which get
    * their size computed from their children's bounds.
    */
-  size?: NodeSize
+  size?: Size
 }
 
 export interface CompoundSubgraph {
@@ -55,7 +55,7 @@ export interface CompoundLayoutOptions extends LayoutFlatOptions {
   /** Extra vertical space reserved for a subgraph's label. */
   subgraphLabelHeight?: number
   /** Default size for leaf nodes without a size entry. */
-  defaultSize?: NodeSize
+  defaultSize?: Size
 }
 
 export interface CompoundLayoutResult {
@@ -65,13 +65,6 @@ export interface CompoundLayoutResult {
   subgraphBounds: Map<NodeId, Bounds>
   /** Overall bounding rectangle containing every element. */
   rootBounds: Bounds
-}
-
-export interface Bounds {
-  x: number
-  y: number
-  width: number
-  height: number
 }
 
 export function layoutCompound(
@@ -111,7 +104,7 @@ export function layoutCompound(
 
   // Per-subgraph computed size (starts as a placeholder, filled in
   // bottom-up). Top-level entry keyed by `null` is ignored.
-  const subgraphSize = new Map<NodeId, NodeSize>()
+  const subgraphSize = new Map<NodeId, Size>()
 
   // Filter edges to only those with both endpoints in the given child set.
   const filterEdges = (childIds: Set<NodeId>) =>
@@ -138,7 +131,7 @@ export function layoutCompound(
 
     // Size map: leaves use their intrinsic size, subgraphs use
     // previously-computed bounds expanded by padding + label.
-    const sizes = new Map<NodeId, NodeSize>()
+    const sizes = new Map<NodeId, Size>()
     for (const c of children) {
       const sg = subgraphById.get(c.id)
       if (sg) {

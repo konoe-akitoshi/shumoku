@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest'
+import type { Size } from '../../models/types.js'
 import { layoutFlat } from './compose.js'
-import type { NodeSize } from './coords.js'
 import type { Edge } from './types.js'
 
 function edges(pairs: [string, string, string][]): Edge[] {
   return pairs.map(([s, t, id]) => ({ id, source: s, target: t }))
 }
 
-const uniformSize: NodeSize = { width: 100, height: 50 }
+const uniformSize: Size = { width: 100, height: 50 }
 
 describe('layoutFlat', () => {
   it('lays out a simple chain with each node in its own layer', () => {
@@ -102,7 +102,7 @@ describe('layoutFlat', () => {
   })
 
   it('respects node sizes when assigning coordinates', () => {
-    const sizes = new Map<string, NodeSize>([
+    const sizes = new Map<string, Size>([
       ['a', { width: 200, height: 50 }],
       ['b', { width: 80, height: 50 }],
     ])

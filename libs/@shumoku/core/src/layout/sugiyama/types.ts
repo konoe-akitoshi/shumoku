@@ -14,6 +14,11 @@
  * intermediate structure (Edge[] → LayerAssignment → LayerOrder → Positions).
  */
 
+/**
+ * String id aliases kept for self-documentation inside the algorithm
+ * modules. Values are plain `string` — callers can pass a raw string
+ * and TypeScript will accept it.
+ */
 export type NodeId = string
 export type EdgeId = string
 
