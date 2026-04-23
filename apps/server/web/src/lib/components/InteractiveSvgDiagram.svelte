@@ -351,7 +351,6 @@
       theme={currentTheme}
       mode="view"
       sheetCacheStrategy="eager"
-      autoFit="initial"
       onselect={handleSelect}
     >
       {#snippet children({ svgElement, graph: activeGraph })}

@@ -16,7 +16,7 @@
     type ResolvedLayout,
     type Theme,
   } from '@shumoku/core'
-  import { ShumokuRenderer } from '@shumoku/renderer'
+  import { attachCamera, type Camera, type CameraOptions, ShumokuRenderer } from '@shumoku/renderer'
   import type { Snippet } from 'svelte'
 
   export interface ViewerContext {
@@ -72,17 +72,20 @@
     interaction?: InteractionOptions
 
     /**
-     * When to reset the user's zoom/pan transform:
-     * - 'initial' (default): once, when the graph/sheet first lays out
-     * - 'off': never (keep any previous transform, or whatever d3-zoom has set)
-     *
-     * The SVG's viewBox already covers the layout bounds, so 'initial'
-     * simply strips any viewport transform; preserveAspectRatio handles
-     * container resize naturally.
+     * Camera (pan/zoom) behaviour. Leave undefined to disable camera
+     * entirely (e.g. static preview). The shared SVG always renders a
+     * `<g class="viewport">`; passing options here attaches a d3-zoom
+     * camera from `@shumoku/renderer`.
      */
-    autoFit?: 'initial' | 'off'
+    camera?: CameraOptions | false
+    /**
+     * Reset the camera transform whenever the active sheet changes.
+     * Default true. Set false to preserve user pan/zoom across sheet
+     * switches.
+     */
+    resetCameraOnSheetChange?: boolean
 
-    // --- LOD (not yet wired into renderer internals — exposed for future use) ---
+    // --- LOD ---
     detail?: DetailOptions
 
     // --- Events (forwarded from ShumokuRenderer) ---
@@ -103,7 +106,8 @@
     theme,
     mode = 'view',
     interaction = {},
-    autoFit = 'initial',
+    camera: cameraOptions = {},
+    resetCameraOnSheetChange = true,
     detail = {},
     onselect,
     oncontextmenu,
@@ -177,10 +181,9 @@
   // --- React to graph / sheet changes ---
   //
   // Only tracked reads here are `graph`, `sheetId`, `layoutOverride`,
-  // `sheetCacheStrategy` (props) and `activeLayout` (for the override
-  // short-circuit). Everything else (the cache Maps, last-seen refs,
-  // hasFitted) is a plain `let`, so this effect runs exactly once per
-  // actual change.
+  // `sheetCacheStrategy` (props). Everything else (the cache Maps,
+  // last-seen refs) is a plain `let`, so this effect runs exactly
+  // once per actual change.
 
   $effect(() => {
     if (layoutOverride) {
@@ -199,12 +202,10 @@
       cachedGraphRef = graph
       layoutsBySheet = {}
       activeLayout = null
-      hasFitted = false
       if (sheetCacheStrategy === 'eager') void prewarmEagerSheets(graph)
     }
     if (sheetKey !== activeSheetKey) {
       activeSheetKey = sheetKey
-      hasFitted = false
     }
 
     void ensureSheetLayout(graph, sheetKey)
@@ -260,23 +261,32 @@
   })
   const showNodeShadow = $derived(detail.nodeShadow ?? true)
 
-  // --- Auto-fit on initial layout ---
-  //
-  // `hasFitted` is a plain `let` (not $state): writing it inside the
-  // effect below must not re-trigger the effect. The graph/sheet
-  // effect above resets it when the data changes.
+  // --- Camera (pan/zoom) — attach d3-zoom via @shumoku/renderer's
+  // attachCamera utility once the svg mounts. `camera={false}` opts out
+  // entirely (static preview). Re-attaches if the consumer swaps in a
+  // new `cameraOptions` reference.
 
-  let hasFitted = false
+  let camera = $state<Camera | null>(null)
   $effect(() => {
-    if (autoFit === 'off' || hasFitted) return
-    const svg = svgElement
-    if (!svg || !activeLayout) return
-    // ShumokuRenderer already chooses a viewBox covering the layout
-    // bounds; we just need to reset any user-applied zoom transform.
-    // d3-zoom transforms are on `.viewport` — clearing the attribute
-    // restores identity.
-    svg.querySelector<SVGGElement>('.viewport')?.removeAttribute('transform')
-    hasFitted = true
+    if (cameraOptions === false || !svgElement) {
+      camera = null
+      return
+    }
+    const c = attachCamera(svgElement, cameraOptions)
+    camera = c
+    return () => {
+      c.detach()
+      camera = null
+    }
+  })
+
+  // Reset camera transform when the active sheet (or graph) changes,
+  // so each sheet opens at 1:1 rather than inheriting the previous
+  // sheet's pan/zoom. Opt-out via `resetCameraOnSheetChange={false}`.
+  $effect(() => {
+    sheetId // track
+    graph // track
+    if (resetCameraOnSheetChange) camera?.reset()
   })
 
   function handleSelect(id: string | null, type: string | null) {
@@ -290,87 +300,29 @@
   }
 
   // =========================================================================
-  // Imperative viewport helpers
-  //
-  // @shumoku/renderer wraps d3-zoom internally; for programmatic control
-  // (zoom buttons, pan-to-node from a search palette, etc.) we expose a
-  // small helper API that manipulates the `.viewport` transform directly.
-  // This is compatible with d3-zoom's attribute-based state since both
-  // reflect changes through the same DOM.
+  // Imperative viewport API — delegates to the attached camera so
+  // d3-zoom's internal state stays consistent with what the consumer
+  // requests. Returns no-op silently if the camera is disabled.
   // =========================================================================
 
-  interface Transform {
-    x: number
-    y: number
-    k: number
-  }
-
-  function parseTransform(value: string | null): Transform {
-    if (!value) return { x: 0, y: 0, k: 1 }
-    const translateMatch = value.match(/translate\(([^,]+),\s*([^)]+)\)/)
-    const scaleMatch = value.match(/scale\(([^)]+)\)/)
-    return {
-      x: translateMatch ? Number(translateMatch[1]) : 0,
-      y: translateMatch ? Number(translateMatch[2]) : 0,
-      k: scaleMatch ? Number(scaleMatch[1]) : 1,
-    }
-  }
-
-  function setTransform(viewport: SVGGElement, t: Transform) {
-    viewport.setAttribute('transform', `translate(${t.x}, ${t.y}) scale(${t.k})`)
-  }
-
-  function getViewport(): SVGGElement | null {
-    return svgElement?.querySelector<SVGGElement>('.viewport') ?? null
-  }
-
   export function zoomBy(factor: number): void {
-    const viewport = getViewport()
-    if (!viewport || !svgElement) return
-    const t = parseTransform(viewport.getAttribute('transform'))
-    const rect = svgElement.getBoundingClientRect()
-    const cx = rect.width / 2
-    const cy = rect.height / 2
-    const newK = Math.max(0.1, Math.min(10, t.k * factor))
-    // Keep (cx, cy) fixed during scale (standard zoom-toward-center)
-    const newX = cx - ((cx - t.x) / t.k) * newK
-    const newY = cy - ((cy - t.y) / t.k) * newK
-    setTransform(viewport, { x: newX, y: newY, k: newK })
+    camera?.zoomBy(factor)
   }
 
   export function resetZoom(): void {
-    const viewport = getViewport()
-    viewport?.removeAttribute('transform')
+    camera?.reset()
   }
 
-  /** Pan + zoom so that the node with `nodeId` lands centered at ~5% area. */
+  /**
+   * Pan + zoom so the given node is focused (~5% of viewport area),
+   * plus a brief pulse-highlight animation on the node itself.
+   */
   export function panToNode(nodeId: string): void {
-    const svg = svgElement
-    if (!svg) return
-    const node = svg.querySelector<SVGGElement>(`g.node[data-id="${CSS.escape(nodeId)}"]`)
+    if (!svgElement) return
+    const found = camera?.panToNode(nodeId) ?? false
+    if (!found) return
+    const node = svgElement.querySelector<SVGGElement>(`g.node[data-id="${CSS.escape(nodeId)}"]`)
     if (!node) return
-    const viewport = getViewport()
-    if (!viewport) return
-
-    const rect = svg.getBoundingClientRect()
-    const nrect = node.getBoundingClientRect()
-    const t = parseTransform(viewport.getAttribute('transform'))
-
-    // Area-ratio based zoom (same idea as the old panzoom-based impl)
-    const areaRatio = Math.sqrt((rect.width * rect.height * 0.05) / (nrect.width * nrect.height))
-    const targetK = Math.max(2, Math.min(50, t.k * areaRatio))
-
-    // Translate so the node ends up at viewport center
-    const ncx = nrect.left + nrect.width / 2 - rect.left
-    const ncy = nrect.top + nrect.height / 2 - rect.top
-    const cx = rect.width / 2
-    const cy = rect.height / 2
-    const newX = cx - ((ncx - t.x) / t.k) * targetK
-    const newY = cy - ((ncy - t.y) / t.k) * targetK
-
-    setTransform(viewport, { x: newX, y: newY, k: targetK })
-
-    // Brief pulse highlight
     node.classList.add('node-highlighted')
     setTimeout(() => node.classList.remove('node-highlighted'), 3000)
   }
@@ -434,16 +386,16 @@
   }
 
   /* Interaction gating via pointer-events on specific element types.
-         Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
-         propagation on the canvas background. d3-zoom's filter already
-         handles wheel requiring ctrl/meta, but we also kill the background
-         grid's clickability when selection is off. */
+           Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
+           propagation on the canvas background. d3-zoom's filter already
+           handles wheel requiring ctrl/meta, but we also kill the background
+           grid's clickability when selection is off. */
   .topology-viewer.no-panzoom :global(.canvas-bg) {
     pointer-events: none;
   }
 
   /* LOD: toggleable ornament classes. Rules match @shumoku/renderer's
-         output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
+           output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
   .topology-viewer.hide-port-labels :global(.port-label),
   .topology-viewer.hide-port-labels :global(.port-label-bg) {
     display: none;

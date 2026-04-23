@@ -1,5 +1,6 @@
 <script lang="ts">
   import { type LinkEndpoint, type NodeSpec, newId } from '@shumoku/core'
+  import { attachCamera } from '@shumoku/renderer'
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
@@ -18,6 +19,15 @@
   // =========================================================================
 
   let renderer: ShumokuRenderer | undefined = $state()
+  let rendererSvg: SVGSVGElement | null = $state(null)
+
+  // Editor camera: Miro-style Alt/middle-click pan, trackpad pan +
+  // mouse wheel zoom. Attached as soon as the renderer mounts its svg.
+  $effect(() => {
+    if (!rendererSvg) return
+    const camera = attachCamera(rendererSvg)
+    return () => camera.detach()
+  })
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
   let clipboard = $state<{
@@ -91,6 +101,7 @@
     {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
       <ShumokuRenderer
         bind:this={renderer}
+        bind:svgElement={rendererSvg}
         bind:nodes={diagramState.activeView.nodes}
         bind:ports={diagramState.activeView.ports}
         bind:edges={diagramState.activeView.edges}

@@ -1,7 +1,5 @@
 <script lang="ts">
   import type { Node, ResolvedEdge, ResolvedPort, Subgraph, Theme } from '@shumoku/core'
-  import { select } from 'd3-selection'
-  import { type D3ZoomEvent, zoom } from 'd3-zoom'
   import type { RenderColors } from '../../lib/render-colors'
   import SvgEdge from './SvgEdge.svelte'
   import SvgLinkPreview from './SvgLinkPreview.svelte'
@@ -58,63 +56,15 @@
     `${bounds.x - 50} ${bounds.y - 50} ${bounds.width + 100} ${bounds.height + 100}`,
   )
 
-  // Viewport group ref (d3-zoom applies transform to this)
-  let viewportEl: SVGGElement | undefined = $state()
-
-  // --- d3-zoom: pan/zoom on viewport <g> ---
-  // d3-zoom: pan/zoom always active
-  // Trackpad-friendly: two-finger scroll → pan, pinch (ctrl+wheel) → zoom
-  $effect(() => {
-    if (!svgEl || !viewportEl) return
-    const svg = svgEl
-
-    const svgSel = select(svg)
-    const zoomBehavior = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 10])
-      .filter((e) => {
-        // Wheel: only zoom on pinch (ctrlKey / metaKey)
-        if (e.type === 'wheel') return (e as WheelEvent).ctrlKey || (e as WheelEvent).metaKey
-        // Drag: middle button or Alt+left-click
-        if (e.type === 'mousedown' || e.type === 'pointerdown') {
-          return (e as MouseEvent).button === 1 || (e as MouseEvent).altKey
-        }
-        return false
-      })
-      .on('zoom', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
-        if (viewportEl) {
-          viewportEl.setAttribute('transform', e.transform.toString())
-        }
-      })
-
-    svgSel.call(zoomBehavior)
-
-    // Auto-detect input device (Miro-style):
-    // - deltaX !== 0 → trackpad two-finger scroll → pan
-    // - deltaX === 0 → mouse wheel → zoom at cursor
-    // - Ctrl/Cmd+wheel / pinch → zoom (d3-zoom filter above)
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) return // pinch-to-zoom handled by d3-zoom
-      e.preventDefault()
-      if (e.deltaX !== 0) {
-        zoomBehavior.translateBy(svgSel, -e.deltaX, -e.deltaY)
-      } else {
-        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
-        const rect = svg.getBoundingClientRect()
-        zoomBehavior.scaleBy(svgSel, factor, [e.clientX - rect.left, e.clientY - rect.top])
-      }
-    }
-    svg.addEventListener('wheel', handleWheel, { passive: false })
-
-    // Prevent default context menu on SVG background only when nothing is targeted
-    svgSel.on('contextmenu.zoom', null)
-
-    return () => {
-      svgSel.on('.zoom', null)
-      svg.removeEventListener('wheel', handleWheel)
-    }
-  })
-
-  // d3-drag is now handled per-component via use: directive (no global re-binding)
+  // Camera (pan/zoom) is intentionally NOT attached here. Different host
+  // apps have different pan/zoom requirements, so the canvas only
+  // provides a stable `<g class="viewport">` target; apps call
+  // `attachCamera(svgEl, options)` from `@shumoku/renderer/camera` when
+  // they want interactive pan/zoom.
+  //
+  // Per-node d3-drag still lives inside each SvgNode/SvgSubgraph via
+  // the `use:elementDrag` directive — it only fires in edit mode and
+  // concerns element manipulation rather than viewport camera.
 </script>
 
 <svg
@@ -168,7 +118,7 @@
   </style>`}
 
   <!-- Viewport group: d3-zoom applies transform here -->
-  <g bind:this={viewportEl} class="viewport">
+  <g class="viewport">
     <!-- Background: grid in edit mode, transparent in view mode -->
     <rect
       class="canvas-bg"

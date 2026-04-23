@@ -36,6 +36,7 @@ interface ShumokuRendererElement extends HTMLElement {
   graph: { links: Link[] } | undefined
   theme: Theme | undefined
   mode: 'view' | 'edit'
+  readonly svgElement: SVGSVGElement | null
   onshumokuselect: ((id: string | null, type: string | null) => void) | undefined
   onshumokuchange: ((links: Link[]) => void) | undefined
   onshumokulabeledit:
@@ -180,6 +181,17 @@ export default function EditorClient() {
           el.mode = mode
           el.layout = resolved
           setStatus('Ready')
+
+          // Attach a Miro-style pan/zoom camera to the rendered svg
+          // once it's mounted inside the web component's shadow root.
+          const { attachCamera } = await import('@shumoku/renderer')
+          // Defer one frame — WC mounts the svg synchronously on first
+          // `layout` assignment, but querySelector through shadowRoot
+          // needs the svg to be in the DOM.
+          requestAnimationFrame(() => {
+            const svg = el.svgElement
+            if (svg) attachCamera(svg)
+          })
         }
       } catch (e) {
         setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`)

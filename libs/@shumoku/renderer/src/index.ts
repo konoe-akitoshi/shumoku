@@ -4,6 +4,14 @@
 
 // Renderer component (Svelte)
 export { default as ShumokuRenderer } from './components/ShumokuRenderer.svelte'
+// Camera (pan/zoom) — opt-in for host apps
+export {
+  attachCamera,
+  type Camera,
+  type CameraOptions,
+  type PanFilter,
+  type WheelMode,
+} from './lib/camera'
 // Utilities for consuming apps
 export { type RenderColors, themeToColors } from './lib/render-colors'
 // Serialization (save/load layout state)

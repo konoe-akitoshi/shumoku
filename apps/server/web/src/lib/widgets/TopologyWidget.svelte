@@ -275,7 +275,6 @@
             keyboard: false,
             dragEdit: false,
           }}
-          autoFit="initial"
           detail={{
             portLabels: 'auto',
             linkLabels: 'auto',
