@@ -34,7 +34,7 @@ export const sampleDiagram = {
         resource: 'instances',
       },
       position: {
-        x: 695,
+        x: 570,
         y: 78,
       },
     },
@@ -50,7 +50,7 @@ export const sampleDiagram = {
         resource: 'vpn-gateway',
       },
       position: {
-        x: 695,
+        x: 570,
         y: 248,
       },
     },
@@ -64,7 +64,7 @@ export const sampleDiagram = {
         type: 'internet',
       },
       position: {
-        x: 583.5,
+        x: 458.5,
         y: 544,
       },
     },
@@ -78,7 +78,7 @@ export const sampleDiagram = {
         type: 'internet',
       },
       position: {
-        x: 800,
+        x: 675,
         y: 544,
       },
     },
@@ -94,7 +94,7 @@ export const sampleDiagram = {
         model: 'rtx3510',
       },
       position: {
-        x: 590,
+        x: 458.5,
         y: 744,
       },
     },
@@ -110,7 +110,7 @@ export const sampleDiagram = {
         model: 'rtx3510',
       },
       position: {
-        x: 800,
+        x: 675,
         y: 744,
       },
     },
@@ -126,7 +126,7 @@ export const sampleDiagram = {
         model: 'srx4100',
       },
       position: {
-        x: 590,
+        x: 465,
         y: 1052,
       },
     },
@@ -142,7 +142,7 @@ export const sampleDiagram = {
         model: 'srx4100',
       },
       position: {
-        x: 800,
+        x: 675,
         y: 1052,
       },
     },
@@ -328,7 +328,7 @@ export const sampleDiagram = {
         model: 'ip-phone',
       },
       position: {
-        x: 1155,
+        x: 1260,
         y: 2216,
       },
     },
@@ -687,7 +687,7 @@ export const sampleDiagram = {
       },
       file: './cloud.yaml',
       bounds: {
-        x: 585,
+        x: 460,
         y: 0,
         width: 220,
         height: 328,
@@ -702,7 +702,7 @@ export const sampleDiagram = {
       },
       file: './perimeter.yaml',
       bounds: {
-        x: 453.5,
+        x: 328.5,
         y: 408,
         width: 483,
         height: 764,
@@ -747,7 +747,7 @@ export const sampleDiagram = {
         fill: 'surface-2',
       },
       bounds: {
-        x: 473.5,
+        x: 348.5,
         y: 456,
         width: 443,
         height: 388,
@@ -762,7 +762,7 @@ export const sampleDiagram = {
         fill: 'accent-red',
       },
       bounds: {
-        x: 480,
+        x: 355,
         y: 924,
         width: 430,
         height: 228,

@@ -67,8 +67,10 @@ export function layoutFlat(
     iterations: options.iterations,
   })
 
-  // Phase 4: layers + order → absolute coordinates.
-  const positions = assignCoordinates(ordered, options)
+  // Phase 4: layers + order → absolute coordinates. Pass the DAG so
+  // `assignCoordinates` can do barycenter alignment (child tracks the
+  // mean x of its predecessors) instead of naively centring each layer.
+  const positions = assignCoordinates(ordered, { ...options, edges: dag })
 
   // Optional post-process: override positions for fixed nodes. The
   // caller owns the tradeoff — fixed positions aren't fed back into
