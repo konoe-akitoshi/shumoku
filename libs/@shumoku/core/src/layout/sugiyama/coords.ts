@@ -40,14 +40,8 @@
  * keeps the core layout code as a single implementation.
  */
 
+import type { Direction, Position, Size } from '../../models/types.js'
 import type { Edge, LayerAssignment, NodeId } from './types.js'
-
-export type Direction = 'TB' | 'BT' | 'LR' | 'RL'
-
-export interface NodeSize {
-  width: number
-  height: number
-}
 
 export interface AssignCoordinatesOptions {
   /** Gap between adjacent layers. */
@@ -55,9 +49,9 @@ export interface AssignCoordinatesOptions {
   /** Gap between sibling nodes in the same layer. */
   nodeGap?: number
   /** Per-node sizes. Missing entries fall back to `defaultSize`. */
-  sizes?: Map<NodeId, NodeSize>
+  sizes?: Map<NodeId, Size>
   /** Fallback size when `sizes` is absent or lacks an entry. */
-  defaultSize?: NodeSize
+  defaultSize?: Size
   /** Which way the edges flow. Defaults to TB. */
   direction?: Direction
   /**
@@ -68,11 +62,6 @@ export interface AssignCoordinatesOptions {
    * layer unchanged.
    */
   edges?: Edge[]
-}
-
-export interface Position {
-  x: number
-  y: number
 }
 
 /**
@@ -86,7 +75,7 @@ export function assignCoordinates(
 ): Map<NodeId, Position> {
   const layerGap = options.layerGap ?? 60
   const nodeGap = options.nodeGap ?? 40
-  const sizes = options.sizes ?? new Map<NodeId, NodeSize>()
+  const sizes = options.sizes ?? new Map<NodeId, Size>()
   const defaultSize = options.defaultSize ?? { width: 160, height: 60 }
   const direction: Direction = options.direction ?? 'TB'
   const sizeOf = (n: NodeId) => sizes.get(n) ?? defaultSize
@@ -180,7 +169,7 @@ export function assignCoordinates(
  * centred on x = 0. Returns the per-node centre x, in the same order
  * as `layer`.
  */
-function centredLayer(layer: NodeId[], sizeOf: (n: NodeId) => NodeSize, nodeGap: number): number[] {
+function centredLayer(layer: NodeId[], sizeOf: (n: NodeId) => Size, nodeGap: number): number[] {
   const xs: number[] = []
   let xCursor = 0
   for (const n of layer) {
@@ -232,7 +221,7 @@ function forwardPack(
   layer: NodeId[],
   preds: Map<NodeId, NodeId[]>,
   previousLayers: Map<NodeId, number>[],
-  sizeOf: (n: NodeId) => NodeSize,
+  sizeOf: (n: NodeId) => Size,
   nodeGap: number,
 ): Map<NodeId, number> {
   const out = new Map<NodeId, number>()
@@ -259,7 +248,7 @@ function backwardPack(
   layer: NodeId[],
   preds: Map<NodeId, NodeId[]>,
   previousLayers: Map<NodeId, number>[],
-  sizeOf: (n: NodeId) => NodeSize,
+  sizeOf: (n: NodeId) => Size,
   nodeGap: number,
 ): Map<NodeId, number> {
   const out = new Map<NodeId, number>()

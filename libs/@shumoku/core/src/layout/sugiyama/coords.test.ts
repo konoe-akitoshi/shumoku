@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest'
-import { assignCoordinates, type NodeSize } from './coords.js'
+import type { Size } from '../../models/types.js'
+import { assignCoordinates } from './coords.js'
 import type { LayerAssignment } from './types.js'
 
 function makeLayers(layers: string[][]): LayerAssignment {
@@ -13,7 +14,7 @@ function makeLayers(layers: string[][]): LayerAssignment {
   return { layers, layerOf }
 }
 
-const uniformSize: NodeSize = { width: 100, height: 50 }
+const uniformSize: Size = { width: 100, height: 50 }
 
 describe('assignCoordinates', () => {
   it('places a single node at origin', () => {
@@ -52,7 +53,7 @@ describe('assignCoordinates', () => {
 
   it('accommodates nodes of different widths without overlap', () => {
     const layers = makeLayers([['a', 'b']])
-    const sizes = new Map<string, NodeSize>([
+    const sizes = new Map<string, Size>([
       ['a', { width: 200, height: 50 }],
       ['b', { width: 80, height: 50 }],
     ])
@@ -71,7 +72,7 @@ describe('assignCoordinates', () => {
 
   it('uses the tallest node as layer thickness', () => {
     const layers = makeLayers([['a', 'b'], ['c']])
-    const sizes = new Map<string, NodeSize>([
+    const sizes = new Map<string, Size>([
       ['a', { width: 100, height: 100 }],
       ['b', { width: 100, height: 50 }],
       ['c', { width: 100, height: 50 }],
@@ -215,7 +216,7 @@ describe('assignCoordinates', () => {
 
   it('falls back to defaultSize when sizes map is missing a node', () => {
     const layers = makeLayers([['a', 'b']])
-    const sizes = new Map<string, NodeSize>([['a', { width: 100, height: 50 }]])
+    const sizes = new Map<string, Size>([['a', { width: 100, height: 50 }]])
     const positions = assignCoordinates(layers, {
       sizes,
       defaultSize: { width: 80, height: 60 },

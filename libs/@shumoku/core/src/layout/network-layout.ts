@@ -34,6 +34,7 @@ import {
 import { getDeviceIcon } from '../icons/index.js'
 import type {
   Bounds,
+  Direction,
   LinkEndpoint,
   NetworkGraph,
   Node,
@@ -55,7 +56,7 @@ import {
 // ============================================================================
 
 export interface NetworkLayoutOptions {
-  direction?: 'TB' | 'BT' | 'LR' | 'RL'
+  direction?: Direction
   gap?: number
   topLevelGap?: number
   subgraphPadding?: number

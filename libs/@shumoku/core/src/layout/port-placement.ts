@@ -17,7 +17,7 @@
  *   HA → bottom/top
  */
 
-import type { Link, LinkEndpoint, Node, Position } from '../models/types.js'
+import type { Direction, Link, LinkEndpoint, Node, Position } from '../models/types.js'
 import { computeNodeSize } from './network-layout.js'
 import type { ResolvedPort } from './resolved-types.js'
 
@@ -25,7 +25,6 @@ import type { ResolvedPort } from './resolved-types.js'
 const PORT_SIZE = { width: 8, height: 8 }
 
 type Side = 'top' | 'bottom' | 'left' | 'right'
-type Direction = 'TB' | 'BT' | 'LR' | 'RL'
 
 interface PortAssignment {
   nodeId: string

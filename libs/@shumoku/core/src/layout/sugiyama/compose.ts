@@ -23,7 +23,8 @@
  * need arises.
  */
 
-import { type AssignCoordinatesOptions, assignCoordinates, type Position } from './coords.js'
+import type { Position } from '../../models/types.js'
+import { type AssignCoordinatesOptions, assignCoordinates } from './coords.js'
 import { removeCycles } from './cycles.js'
 import { assignLayers } from './layers.js'
 import { reduceCrossings } from './ordering.js'

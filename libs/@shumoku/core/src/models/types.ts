@@ -295,8 +295,6 @@ export function getNodeId(endpoint: string | LinkEndpoint): string {
 // Subgraph Types
 // ============================================
 
-export type LayoutDirection = 'TB' | 'BT' | 'LR' | 'RL'
-
 export interface SubgraphStyle {
   /**
    * Fill color - can be a hex color or a surface token (e.g., "surface-1", "accent-blue")
@@ -377,7 +375,7 @@ export interface Subgraph {
   /**
    * Layout direction within this subgraph
    */
-  direction?: LayoutDirection
+  direction?: Direction
 
   /**
    * Custom style
@@ -563,7 +561,7 @@ export interface GraphSettings {
   /**
    * Default layout direction
    */
-  direction?: LayoutDirection
+  direction?: Direction
 
   /**
    * Theme for diagram appearance (light or dark)
@@ -706,6 +704,16 @@ export interface Bounds {
   width: number
   height: number
 }
+
+/**
+ * Layout flow direction. Used by every engine and option type that
+ * produces directional diagrams.
+ *   - `TB` top→bottom (default)
+ *   - `BT` bottom→top
+ *   - `LR` left→right
+ *   - `RL` right→left
+ */
+export type Direction = 'TB' | 'BT' | 'LR' | 'RL'
 
 /**
  * Port position on a node edge
