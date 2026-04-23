@@ -115,6 +115,18 @@ let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
 
+/**
+ * Active sheet for hierarchical / multi-sheet editing.
+ *
+ * `null` = the root sheet (the whole diagram, as today).
+ * Any non-null id = a top-level subgraph being viewed "as its own sheet".
+ *
+ * Layer 0: state only. Sheet switching is tracked here; the renderer
+ * does not yet filter based on this value. Layer 1 (separate PR) adds
+ * the filtered view and boundary-pin rendering.
+ */
+let currentSheetId = $state<string | null>(null)
+
 // Edge routing: generation counter prevents stale async results
 let routeGeneration = 0
 
@@ -430,6 +442,57 @@ export const diagramState = {
     }
   },
 
+  // =====================================================================
+  // Sheets — hierarchical / multi-sheet editing state
+  //
+  // Layer 0 of the sheet feature: we track which sheet is active and
+  // expose the list of available sheets. Filtering the renderer based
+  // on the active sheet is a separate follow-up (see ARCHITECTURE.md
+  // "Known gaps / hierarchical sheets").
+  // =====================================================================
+
+  /**
+   * Current active sheet id. `null` means the root sheet (full
+   * diagram). A non-null value is the id of a top-level subgraph
+   * being viewed as its own sheet.
+   */
+  get currentSheetId() {
+    return currentSheetId
+  },
+
+  /**
+   * Available sheets, derived from the current diagram.
+   *
+   * The root sheet always exists; it's joined by one entry per
+   * top-level subgraph (those whose `parent` is undefined). Deeper
+   * subgraphs aren't promoted to tabs here — they're accessible by
+   * drilling further once Layer 1 filtering lands.
+   */
+  get availableSheets(): Array<{ id: string | null; label: string }> {
+    const sheets: Array<{ id: string | null; label: string }> = [{ id: null, label: 'Root' }]
+    for (const sg of diagram.subgraphs.values()) {
+      if (sg.parent) continue
+      sheets.push({ id: sg.id, label: sg.label ?? sg.id })
+    }
+    return sheets
+  },
+
+  /**
+   * Switch to a different sheet. `null` switches back to the root.
+   *
+   * Layer 0 behaviour: the state flips; downstream rendering does not
+   * yet re-filter. Callers can rely on the state to be accurate for
+   * UI highlighting. Actual view filtering will ship in a follow-up.
+   */
+  switchSheet(id: string | null) {
+    if (id !== null && !diagram.subgraphs.has(id)) {
+      // Silently fall back to root rather than entering a ghost sheet.
+      currentSheetId = null
+      return
+    }
+    currentSheetId = id
+  },
+
   // Palette
   get palette() {
     return palette
@@ -693,6 +756,7 @@ export const diagramState = {
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
     yamlSource = ''
+    currentSheetId = null
     initialized = false
 
     try {

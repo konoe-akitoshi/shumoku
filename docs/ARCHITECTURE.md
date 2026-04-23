@@ -14,6 +14,7 @@ focuses on the flows that span packages.
 - [Placement APIs — when to use which](#placement-apis--when-to-use-which)
 - [End-to-end use cases](#end-to-end-use-cases)
 - [Package boundaries](#package-boundaries)
+- [Known gaps](#known-gaps)
 
 ---
 
@@ -523,3 +524,46 @@ The **canonical data shape** at every boundary is `NetworkGraph`
 (core's type). YAML and the project JSON (`NetedProject`, which wraps
 `NetworkGraph`) are boundary formats; everything inside the system
 speaks `NetworkGraph`.
+
+---
+
+## Known gaps
+
+### Hierarchical / multi-sheet editing
+
+`@shumoku/core` ships a `buildHierarchicalSheets()` function that
+generates one sheet per top-level subgraph with boundary pins for
+cross-sheet links. `@shumoku/renderer-html` uses this for static
+multi-page export with click-through navigation.
+
+**The editor does not yet drive the interactive flavour.** The Svelte
+renderer (`@shumoku/renderer`) has no concept of "active sheet"; it
+always renders the whole graph. The editor's runtime state now tracks
+`currentSheetId` and the `SheetBar` lets users switch between the
+root and each top-level subgraph, but the renderer keeps showing the
+full graph regardless.
+
+**Landed (Layer 0 — state plumbing):**
+- `diagramState.currentSheetId: string | null`
+- `diagramState.availableSheets` — root + top-level subgraphs
+- `diagramState.switchSheet(id | null)`
+- `SheetBar` renders the real tabs, click changes state, active is
+  highlighted
+
+**Not yet landed:**
+- **Layer 1 — filtered rendering.** When `currentSheetId !== null`,
+  pass a filtered `NetworkGraph` (just that subgraph's direct
+  children plus boundary pins) to the renderer. Requires the
+  renderer to stop relying on `$bindable` writes for state
+  mutations — it needs to be a pure view that emits events, which
+  the editor routes back to the canonical root state.
+- **Layer 2 — editing UX.** "Add node" on a sub-sheet should default
+  to that subgraph as the parent. Drill into nested subgraphs.
+  Sheet-specific autoarrange. Possibly sheet-specific positions
+  (a node could sit differently when viewed as a root sheet
+  children vs. as an internal of the root view).
+
+Why this wasn't finished earlier: the editor's MVP was a single
+diagram, `SheetBar` was a UI placeholder during early iteration, and
+subsequent refactors (#130-#142) focused on the single-diagram happy
+path. No principled decision to defer — it's plain technical debt.
