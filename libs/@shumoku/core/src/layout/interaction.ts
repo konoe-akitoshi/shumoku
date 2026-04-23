@@ -135,10 +135,19 @@ export function resolveNodePosition(
 }
 
 /**
- * Place a single unpositioned node into an existing graph with collision
- * avoidance. Thin wrapper around resolvePosition/collectObstacles — the
- * primitive used when loading a partially-positioned graph or adding a
- * node at runtime, without having to re-run the full layout pass.
+ * **Geometric** placement for a single unpositioned node: find the
+ * point nearest `initial` that doesn't overlap any existing node or
+ * subgraph. The graph's link structure is deliberately ignored — this
+ * is the primitive for "drop the node exactly where the user clicked",
+ * "paste at cursor", "convert BOM item to diagram node at the canvas
+ * edge", i.e. user-driven placement where the surrounding topology
+ * should not influence the outcome.
+ *
+ * For **structural** placement (re-layout based on link flow, pin a
+ * set of nodes, arrange a selection), use `layoutNetwork` with its
+ * `fixed` / `hints` options instead. The two APIs stay separate
+ * because their intents differ: `placeNode` is O(existing obstacles)
+ * geometry, `layoutNetwork` is a full Sugiyama run.
  */
 export function placeNode(
   node: Node,

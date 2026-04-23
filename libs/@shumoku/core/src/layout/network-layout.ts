@@ -66,14 +66,25 @@ export interface NetworkLayoutOptions {
   portSize?: number
   portLabelPadding?: number
   /**
-   * Nodes whose input `position` is a hard constraint. Sugiyama runs
-   * as usual, then each fixed node is snapped back to its input
+   * Nodes whose input `position` is a **hard constraint**. Sugiyama
+   * runs as usual, then each fixed node is snapped back to its input
    * position (with its ports shifted by the same delta); subgraph
    * bounds are recomputed via rebalanceSubgraphs.
    *
-   * Empty set keeps the legacy "re-layout everything" behavior.
+   * Empty set keeps the legacy "re-layout everything" behaviour.
    */
   fixed?: Set<string>
+  /**
+   * Soft per-node x-coord hints. For any node listed here, the
+   * Sugiyama coordinate pass uses the hint as the preferred x instead
+   * of the barycenter of its predecessors — packing still prevents
+   * overlap, so the final x may drift if the neighbourhood is tight.
+   * y comes from the node's layer as usual (hints are x-only).
+   *
+   * Use hints for "nudge these nodes toward this x" scenarios; use
+   * `fixed` when the position must be exact.
+   */
+  hints?: Map<string, { x: number }>
 }
 
 export interface NetworkLayoutResult {
@@ -94,6 +105,7 @@ const DEFAULTS: Required<NetworkLayoutOptions> = {
   portSize: 8,
   portLabelPadding: 8,
   fixed: new Set(),
+  hints: new Map(),
 }
 
 // ============================================================================
@@ -287,6 +299,23 @@ function applyFixedOverride(
 // Main entry
 // ============================================================================
 
+/**
+ * **Structural** full-graph layout. Runs the Sugiyama pipeline over
+ * the entire `NetworkGraph` (cycle-breaking → layer assignment →
+ * crossing reduction → coordinate assignment), then places ports and
+ * applies `fixed` / `hints` post-processing. Use this for:
+ *
+ *   - initial layout of a freshly-parsed graph (YAML import)
+ *   - "Auto-arrange" / re-layout after heavy editing
+ *   - "Arrange selection": pass `fixed` for the nodes you want kept,
+ *     let the algorithm reposition the rest
+ *   - "Nudge these nodes toward these x values": use `hints`
+ *
+ * For **geometric** placement of one node at a specific point without
+ * disturbing the rest (user drop, paste at cursor), use `placeNode`.
+ * That's deliberately a separate, cheaper primitive — this function
+ * is O(V + E) with libavoid-class constants.
+ */
 export function layoutNetwork(
   graph: NetworkGraph,
   options?: NetworkLayoutOptions,
@@ -314,6 +343,7 @@ export function layoutNetwork(
     layerGap: opts.topLevelGap,
     subgraphPadding: opts.subgraphPadding,
     subgraphLabelHeight: opts.subgraphLabelHeight,
+    hints: opts.hints.size > 0 ? opts.hints : undefined,
   })
 
   // Fold positions back onto Node / Subgraph records.
