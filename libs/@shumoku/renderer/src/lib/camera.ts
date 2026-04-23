@@ -22,13 +22,14 @@ export type PanFilter = (event: PointerEvent | MouseEvent) => boolean
 
 export type WheelMode =
   /**
-   * Trackpad two-finger scroll pans (deltaX !== 0), pure vertical wheel
-   * zooms at cursor. Pinch (ctrl/meta + wheel) always zooms.
+   * Every wheel event zooms at the cursor (mouse-wheel-friendly).
+   * Trackpad pinch still zooms independently via ctrl/meta detection.
    */
-  | 'pan-and-zoom'
-  /** Every wheel tick zooms at cursor. */
   | 'zoom'
-  /** Every wheel tick pans. */
+  /**
+   * Every wheel event pans (trackpad-friendly; two-finger scroll pans
+   * the canvas in both axes). Pinch (ctrl/meta + wheel) zooms.
+   */
   | 'pan'
 
 export interface CameraOptions {
@@ -40,10 +41,20 @@ export interface CameraOptions {
    * selection handlers in the renderer.
    */
   panFilter?: PanFilter
-  /** Wheel behaviour when no modifier is held. Default: 'pan-and-zoom'. */
-  wheelMode?: WheelMode
-  /** Zoom step factor per wheel tick. Default 1.1. */
-  wheelZoomStep?: number
+  /**
+   * What the mouse wheel does when no modifier is held. No default —
+   * caller must pick `'zoom'` (mouse-centric apps) or `'pan'`
+   * (trackpad-centric / infinite-canvas apps). Pinch (ctrl/meta +
+   * wheel) always zooms regardless of `wheelMode`.
+   */
+  wheelMode: WheelMode
+  /**
+   * Zoom sensitivity exponent. The per-event scale factor is
+   * `Math.pow(wheelZoomSensitivity, -deltaY)`. Higher = faster zoom.
+   * Default 1.0015 — tuned so one mouse-wheel tick (`deltaY ≈ 100`)
+   * ≈ 14% zoom, and trackpad pinches (`deltaY ≈ 3–5`) feel smooth.
+   */
+  wheelZoomSensitivity?: number
 }
 
 export interface Camera {
@@ -73,12 +84,12 @@ const DEFAULT_PAN_FILTER: PanFilter = (e) =>
  * Attach a pan+zoom camera to an svg with a `<g class="viewport">` child.
  * Returns a handle with imperative controls + a `detach()` cleanup.
  */
-export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): Camera {
+export function attachCamera(svg: SVGSVGElement, options: CameraOptions): Camera {
   const {
     scaleExtent = [0.2, 10],
     panFilter = DEFAULT_PAN_FILTER,
-    wheelMode = 'pan-and-zoom',
-    wheelZoomStep = 1.1,
+    wheelMode,
+    wheelZoomSensitivity = 1.0015,
   } = options
 
   const viewportEl = svg.querySelector<SVGGElement>('.viewport')
@@ -88,12 +99,55 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     )
   }
 
+  // The renderer uses a viewBox sized to the layout bounds; the svg
+  // element itself is CSS-sized 100% of its container. That means the
+  // viewBox user-space unit is NOT one CSS pixel: content inside the
+  // svg (and our `.viewport` <g>) lives in user-space coordinates.
+  // d3-zoom stores its transform in whatever coordinate system we feed
+  // it, and applies that transform as an SVG `transform` attribute on
+  // the viewport <g> — which is interpreted in user-space. So we
+  // standardise everything in user-space: set the zoom's `extent` to
+  // the viewBox bounds, and convert wheel-event cursor positions from
+  // screen pixels to user-space before passing to d3-zoom.
+  //
+  // Without this, the "fixed point" d3-zoom is asked to preserve during
+  // a scale operation is in a different coordinate system than the
+  // transform actually applied, so the cursor drifts away from the
+  // zoom focus by a factor of viewBoxScale.
+
+  const cursorToUserCoords = (clientX: number, clientY: number): [number, number] | null => {
+    const ctm = svg.getScreenCTM()?.inverse()
+    if (!ctm) return null
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = clientY
+    const p = pt.matrixTransform(ctm)
+    return [p.x, p.y]
+  }
+
   const svgSel = select(svg)
   const zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> = zoom<SVGSVGElement, unknown>()
     .scaleExtent(scaleExtent)
+    .extent((): [[number, number], [number, number]] => {
+      const vb = svg.viewBox.baseVal
+      // When no viewBox is set, fall back to clientSize (pixel-equivalent).
+      if (vb.width === 0 || vb.height === 0) {
+        return [
+          [0, 0],
+          [svg.clientWidth, svg.clientHeight],
+        ]
+      }
+      return [
+        [vb.x, vb.y],
+        [vb.x + vb.width, vb.y + vb.height],
+      ]
+    })
     .filter((e) => {
       if (e.type === 'wheel') {
-        return (e as WheelEvent).ctrlKey || (e as WheelEvent).metaKey
+        // d3-zoom's own wheel handling is disabled — we drive it via
+        // the custom wheel listener below to route cursor points
+        // through user-space coords.
+        return false
       }
       if (e.type === 'mousedown' || e.type === 'pointerdown') {
         return panFilter(e as PointerEvent | MouseEvent)
@@ -105,36 +159,38 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     })
 
   svgSel.call(zoomBehavior)
-  // Prevent default context menu on the svg background (d3-zoom installs
-  // its own; we want that suppressed so right-click falls through to
-  // oncontextmenu handlers on specific elements).
+  // Suppress d3-zoom's default contextmenu handler so element-level
+  // oncontextmenu handlers can fire.
   svgSel.on('contextmenu.zoom', null)
 
   const handleWheel = (e: WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) return // pinch — d3-zoom handles via its filter
     e.preventDefault()
-    switch (wheelMode) {
-      case 'zoom': {
-        const factor = e.deltaY < 0 ? wheelZoomStep : 1 / wheelZoomStep
-        const rect = svg.getBoundingClientRect()
-        zoomBehavior.scaleBy(svgSel, factor, [e.clientX - rect.left, e.clientY - rect.top])
-        break
-      }
-      case 'pan':
-        zoomBehavior.translateBy(svgSel, -e.deltaX, -e.deltaY)
-        break
-      case 'pan-and-zoom':
-        if (e.deltaX !== 0) {
-          zoomBehavior.translateBy(svgSel, -e.deltaX, -e.deltaY)
-        } else {
-          const factor = e.deltaY < 0 ? wheelZoomStep : 1 / wheelZoomStep
-          const rect = svg.getBoundingClientRect()
-          zoomBehavior.scaleBy(svgSel, factor, [e.clientX - rect.left, e.clientY - rect.top])
-        }
-        break
+    const point = cursorToUserCoords(e.clientX, e.clientY)
+    if (!point) return
+
+    // Pinch (ctrl/meta + wheel) always zooms, regardless of wheelMode.
+    // Browsers synthesise ctrlKey=true on trackpad pinch, so this
+    // handles both explicit ctrl+wheel and pinch gestures.
+    if (e.ctrlKey || e.metaKey || wheelMode === 'zoom') {
+      const factor = wheelZoomSensitivity ** -e.deltaY
+      zoomBehavior.scaleBy(svgSel, factor, point)
+      return
     }
+    // wheelMode === 'pan' — pan both axes as emitted. Two-finger
+    // trackpad scroll works naturally; mouse wheel pans vertically.
+    // Pan uses user-space units too (consistent with extent).
+    const current = zoomTransform(svg)
+    zoomBehavior.translateBy(svgSel, -e.deltaX / current.k, -e.deltaY / current.k)
   }
   svg.addEventListener('wheel', handleWheel, { passive: false })
+
+  const viewBoxCenter = (): [number, number] => {
+    const vb = svg.viewBox.baseVal
+    if (vb.width === 0 || vb.height === 0) {
+      return [svg.clientWidth / 2, svg.clientHeight / 2]
+    }
+    return [vb.x + vb.width / 2, vb.y + vb.height / 2]
+  }
 
   return {
     getTransform() {
@@ -143,12 +199,11 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     },
 
     zoomBy(factor: number) {
-      const rect = svg.getBoundingClientRect()
-      zoomBehavior.scaleBy(svgSel, factor, [rect.width / 2, rect.height / 2])
+      zoomBehavior.scaleBy(svgSel, factor, viewBoxCenter())
     },
 
     zoomTo(scale: number, point?: [number, number]) {
-      zoomBehavior.scaleTo(svgSel, scale, point)
+      zoomBehavior.scaleTo(svgSel, scale, point ?? viewBoxCenter())
     },
 
     panTo(x: number, y: number) {
@@ -162,31 +217,26 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       const node = svg.querySelector<SVGGElement>(`g.node[data-id="${cssEscapedId}"]`)
       if (!node) return false
 
-      const svgRect = svg.getBoundingClientRect()
-      const nodeRect = node.getBoundingClientRect()
-      const current = zoomTransform(svg)
+      // Work entirely in user-space: use getBBox() for node bounds in
+      // the viewport's local coords, then translate to put its centre
+      // at the viewBox centre under the target scale.
+      const bbox = node.getBBox()
+      const vb = svg.viewBox.baseVal
+      const vbCx = vb.x + vb.width / 2
+      const vbCy = vb.y + vb.height / 2
 
-      // Target scale so node ≈ sqrt(areaRatio) * viewport-dim on the larger axis.
       const targetK = Math.max(
         scaleExtent[0],
         Math.min(
           scaleExtent[1],
-          current.k *
-            Math.sqrt(
-              (svgRect.width * svgRect.height * areaRatio) / (nodeRect.width * nodeRect.height),
-            ),
+          Math.sqrt((vb.width * vb.height * areaRatio) / (bbox.width * bbox.height)),
         ),
       )
 
-      // Node centre in the screen-space of the svg, then in content-space.
-      const screenCx = nodeRect.left + nodeRect.width / 2 - svgRect.left
-      const screenCy = nodeRect.top + nodeRect.height / 2 - svgRect.top
-      const contentCx = (screenCx - current.x) / current.k
-      const contentCy = (screenCy - current.y) / current.k
-
-      // Translate so (contentCx, contentCy) lands at the svg centre under targetK.
-      const tx = svgRect.width / 2 - contentCx * targetK
-      const ty = svgRect.height / 2 - contentCy * targetK
+      const nodeCx = bbox.x + bbox.width / 2
+      const nodeCy = bbox.y + bbox.height / 2
+      const tx = vbCx - nodeCx * targetK
+      const ty = vbCy - nodeCy * targetK
 
       zoomBehavior.transform(svgSel, zoomIdentity.translate(tx, ty).scale(targetK))
       return true

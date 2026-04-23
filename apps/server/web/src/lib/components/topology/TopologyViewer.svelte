@@ -72,12 +72,13 @@
     interaction?: InteractionOptions
 
     /**
-     * Camera (pan/zoom) behaviour. Leave undefined to disable camera
-     * entirely (e.g. static preview). The shared SVG always renders a
-     * `<g class="viewport">`; passing options here attaches a d3-zoom
-     * camera from `@shumoku/renderer`.
+     * Camera (pan/zoom) behaviour. Defaults to `{ wheelMode: 'pan' }`
+     * — trackpad-friendly pan + pinch zoom — which suits dashboard
+     * widgets and the detail page. Pass a full `CameraOptions` to
+     * override, or `false` to disable camera entirely (e.g. static
+     * preview snapshots).
      */
-    camera?: CameraOptions | false
+    camera?: Partial<CameraOptions> | false
     /**
      * Reset the camera transform whenever the active sheet changes.
      * Default true. Set false to preserve user pan/zoom across sheet
@@ -272,7 +273,9 @@
       camera = null
       return
     }
-    const c = attachCamera(svgElement, cameraOptions)
+    // Trackpad-friendly default for dashboard-style usage; callers can
+    // override any field by passing a `Partial<CameraOptions>`.
+    const c = attachCamera(svgElement, { wheelMode: 'pan', ...cameraOptions })
     camera = c
     return () => {
       c.detach()
@@ -386,16 +389,16 @@
   }
 
   /* Interaction gating via pointer-events on specific element types.
-           Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
-           propagation on the canvas background. d3-zoom's filter already
-           handles wheel requiring ctrl/meta, but we also kill the background
-           grid's clickability when selection is off. */
+             Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
+             propagation on the canvas background. d3-zoom's filter already
+             handles wheel requiring ctrl/meta, but we also kill the background
+             grid's clickability when selection is off. */
   .topology-viewer.no-panzoom :global(.canvas-bg) {
     pointer-events: none;
   }
 
   /* LOD: toggleable ornament classes. Rules match @shumoku/renderer's
-           output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
+             output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
   .topology-viewer.hide-port-labels :global(.port-label),
   .topology-viewer.hide-port-labels :global(.port-label-bg) {
     display: none;

@@ -21,11 +21,12 @@
   let renderer: ShumokuRenderer | undefined = $state()
   let rendererSvg: SVGSVGElement | null = $state(null)
 
-  // Editor camera: Miro-style Alt/middle-click pan, trackpad pan +
-  // mouse wheel zoom. Attached as soon as the renderer mounts its svg.
+  // Editor camera: mouse-wheel zooms, Alt+left-click (or middle-click)
+  // pans, pinch always zooms. Trackpad users can still two-finger pan
+  // by holding Alt.
   $effect(() => {
     if (!rendererSvg) return
-    const camera = attachCamera(rendererSvg)
+    const camera = attachCamera(rendererSvg, { wheelMode: 'zoom' })
     return () => camera.detach()
   })
   let selected = $state<{ id: string; type: string } | null>(null)

@@ -182,15 +182,15 @@ export default function EditorClient() {
           el.layout = resolved
           setStatus('Ready')
 
-          // Attach a Miro-style pan/zoom camera to the rendered svg
-          // once it's mounted inside the web component's shadow root.
+          // Attach a mouse-wheel-zoom camera to the rendered svg once
+          // it's mounted inside the web component's shadow root.
           const { attachCamera } = await import('@shumoku/renderer')
           // Defer one frame — WC mounts the svg synchronously on first
           // `layout` assignment, but querySelector through shadowRoot
           // needs the svg to be in the DOM.
           requestAnimationFrame(() => {
             const svg = el.svgElement
-            if (svg) attachCamera(svg)
+            if (svg) attachCamera(svg, { wheelMode: 'zoom' })
           })
         }
       } catch (e) {
