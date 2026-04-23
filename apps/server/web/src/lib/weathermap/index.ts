@@ -219,11 +219,14 @@ export class WeathermapController {
 
   private ensureLayer(): SVGGElement | null {
     if (this.layer?.isConnected) return this.layer
-    const viewport = this.svg.querySelector('.viewport')
-    if (!viewport) return null
+    // Prefer `.viewport` (@shumoku/renderer's d3-zoom-transformed group),
+    // so overlays follow pan/zoom. Fall back to the svg root for the
+    // older renderer-svg pipeline used by InteractiveSvgDiagram
+    // (panzoom transforms the svg itself, not a child `.viewport`).
+    const parent = this.svg.querySelector('.viewport') ?? this.svg
     this.layer = document.createElementNS(SVG_NS, 'g')
     this.layer.setAttribute('class', 'wm-overlay-layer')
-    viewport.appendChild(this.layer)
+    parent.appendChild(this.layer)
     return this.layer
   }
 
