@@ -141,6 +141,7 @@ npx shumoku render network.yaml -f html -o diagram.html
 - [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) — Full YAML syntax
 - [Vendor Icons](https://www.shumoku.dev/docs/npm/vendor-icons) — Available icons
 - [Playground](https://www.shumoku.dev/) — Try without installation
+- [Architecture](docs/ARCHITECTURE.md) — Monorepo overview, load pipeline, layout engine (Mermaid diagrams)
 
 ## Development
 

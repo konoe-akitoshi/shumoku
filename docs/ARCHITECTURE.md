@@ -1,0 +1,525 @@
+# Architecture
+
+Cross-cutting overview of how the shumoku monorepo fits together.
+Editor-specific data model details live in
+[`apps/editor/DATA_MODEL.md`](../apps/editor/DATA_MODEL.md); this doc
+focuses on the flows that span packages.
+
+## Contents
+
+- [Bird's-eye view](#birds-eye-view)
+- [Load pipeline (editor)](#load-pipeline-editor)
+- [Layout engine (core)](#layout-engine-core)
+- [Runtime state and mutations](#runtime-state-and-mutations)
+- [Placement APIs — when to use which](#placement-apis--when-to-use-which)
+- [End-to-end use cases](#end-to-end-use-cases)
+- [Package boundaries](#package-boundaries)
+
+---
+
+## Bird's-eye view
+
+```mermaid
+flowchart LR
+  subgraph IN[External inputs]
+    YT[YAML text]
+    JF[.neted.json file]
+    CLK[User click / paste]
+    DRG[User drag]
+    BTN[SideToolbar buttons]
+  end
+
+  subgraph EDITOR[@shumoku/editor]
+    LP[Load pipeline]
+    RT[Runtime state]
+    UI[Diagram UI]
+  end
+
+  subgraph CORE[@shumoku/core]
+    LN[layoutNetwork<br/>Sugiyama]
+    PN[placeNode<br/>collision]
+    PP[placePorts]
+    RE[routeEdges<br/>libavoid WASM]
+  end
+
+  subgraph RNDR[@shumoku/renderer]
+    SR[ShumokuRenderer<br/>SVG]
+  end
+
+  YT --> LP
+  JF --> LP
+  LP --> RT
+  RT --> SR
+  SR --> UI
+
+  CLK --> PN
+  DRG --> SR
+  BTN --> LN
+
+  PN --> RT
+  LN --> RT
+  PP --> RT
+  RE --> RT
+
+  RT -->|export| JF
+```
+
+**Reading guide:**
+
+- User input flows in from the left (YAML text, JSON file, direct UI
+  interactions).
+- The editor's load pipeline converts external input into runtime
+  state; runtime state is also the sink for every interactive edit.
+- Core exposes the pure-function primitives (layout, placement, port
+  placement, edge routing) that the editor calls into.
+- The renderer reads runtime state via `$bindable` and emits events
+  back when the user drags or clicks.
+
+---
+
+## Load pipeline (editor)
+
+Every route to runtime state is a linear pipeline — conversion on each
+step, `loadProject` as the single terminal that resets state and
+applies project data.
+
+```mermaid
+flowchart TD
+  subgraph EXT[External inputs]
+    YT[YAML text]
+    JSTR[JSON string]
+    JOBJ[NetedProject object]
+    SPF[sampleProject const]
+  end
+
+  YT -->|HierarchicalParser.parse| NG1[NetworkGraph<br/>unpositioned]
+  NG1 --> APY[applyYaml]
+  APY -->|wrap w/ current palette + bom| NP1[NetedProject]
+  NP1 --> IPJ[importProject]
+
+  JSTR -->|JSON.parse| JOBJ
+  JOBJ --> IPJ
+
+  IPJ -->|loadProject 'imported' data| LP
+  SPF -->|loadProject 'sample'| LP
+
+  LP[loadProject<br/>TERMINAL]
+  LP -->|1 reset state| RST[reset everything<br/>maps / arrays / status / initialized]
+  LP -->|2 apply| APP[applyProject]
+  LP -->|3 status 'Ready'| READY((Ready))
+
+  APP --> APG[applyGraph]
+  APP --> SPB[sanitizePaletteAndBom]
+
+  APG --> SG[sanitizeGraph<br/>drop orphan refs + dups]
+  SG --> BR{any node<br/>unpositioned?}
+  BR -->|yes YAML case| FULL[computeNetworkLayout<br/>full layoutNetwork pass]
+  BR -->|no all positioned| PPS[placePorts]
+  FULL --> STT
+  PPS --> REE[rerouteEdges<br/>libavoid WASM]
+  REE --> STT
+  SPB --> STT[Runtime state<br/>nodes / subgraphs / links / ports / edges / palette / bom]
+```
+
+**Key properties:**
+
+- One entry point per input shape, never multiple (`applyYaml` is the
+  only YAML entry; `importProject` the only JSON entry).
+- State reset happens exactly once per load, inside `loadProject`.
+- Any fix to load-time derivation (port placement, edge routing,
+  bounds) lands in `applyGraph` and benefits every path.
+
+---
+
+## Layout engine (core)
+
+`layoutNetwork` is a thin adapter around the Sugiyama-style layered
+pipeline. It converts `NetworkGraph` into the shape Sugiyama wants,
+delegates, then folds the result back onto `Node` / `Subgraph`
+records.
+
+```mermaid
+flowchart TD
+  IN[NetworkGraph input] --> LN[layoutNetwork]
+
+  LN --> CP[countPortsPerNode<br/>size wide nodes for port banks]
+  LN --> BPO[buildParentOf<br/>node/subgraph → container]
+  LN --> BCE[buildCompoundEdges]
+
+  BCE -->|common ancestor promotion<br/>HA redundancy skip| EDG[Edge list per container level]
+
+  CP --> SZ[Size per node via computeNodeSize]
+  BPO --> PAR[parent map]
+  SZ --> LC
+  PAR --> LC
+  EDG --> LC
+
+  LC[layoutCompound]
+  LC -->|bottom-up recursion<br/>deepest subgraph first| LF[layoutFlat]
+
+  subgraph SUG[Sugiyama 4 phases]
+    direction TB
+    P1["1. removeCycles<br/>DFS back-edge reversal → DAG"]
+    P2["2. assignLayers<br/>Kahn + longest-path"]
+    P3["3. reduceCrossings<br/>barycenter heuristic × 4 iter"]
+    P4["4. assignCoordinates<br/>forward + backward + average"]
+    P1 --> P2 --> P3 --> P4
+  end
+
+  LF --> SUG
+  SUG --> POS[positioned children per container]
+  POS --> FLT[flatten container coords<br/>translate local → global]
+  FLT --> PPO[placePorts<br/>direction-aware + HA pairs]
+  PPO --> FIX{opts.fixed<br/>non-empty?}
+  FIX -->|yes| OV[override fixed positions<br/>shift ports by delta<br/>rebalanceSubgraphs]
+  FIX -->|no| BND[padded rootBounds]
+  OV --> BND
+  BND --> RES[NetworkLayoutResult<br/>nodes / ports / subgraphs / bounds]
+```
+
+**Highlights:**
+
+- **Cross-container link promotion** — an edge between nodes in
+  different subgraphs is raised to an edge between their direct
+  children-of-common-ancestor subgraphs, so subgraphs at each level
+  are laid out with awareness of inter-container connectivity.
+- **Barycenter-aligned coords** — in phase 4, each non-source node's
+  preferred x is the mean of its predecessors' x; a forward and a
+  backward pack are averaged so siblings sharing a parent sit
+  symmetrically around it, while single-parent children land exactly
+  under their parent. This is a simplified Brandes-Köpf.
+- **`fixed` is a post-process** — not fed back into layer/order
+  assignment. For big disagreements between algorithm and pin, use
+  smaller `fixed` sets or accept that the neighbourhood may look
+  off.
+
+---
+
+## Runtime state and mutations
+
+The editor's diagram state is intentionally reactive-friendly. Nodes,
+subgraphs, ports, and edges live in `SvelteMap`s inside a single
+`$state` object; ports and edges are treated as derived and rebuilt
+via `rerouteEdges`.
+
+```mermaid
+flowchart LR
+  subgraph STATE["Runtime state (context.svelte.ts / diagram object)"]
+    direction TB
+    N[SvelteMap&lt;id, Node&gt;]
+    SG[SvelteMap&lt;id, Subgraph&gt;]
+    L[Link array]
+    P[SvelteMap&lt;id, ResolvedPort&gt;<br/>DERIVED]
+    E[SvelteMap&lt;id, ResolvedEdge&gt;<br/>DERIVED]
+    B[bounds]
+  end
+
+  subgraph AUX["Separate $state"]
+    PAL[palette array]
+    BOM[bomItems array]
+    POE[poeBudgets<br/>$derived]
+  end
+
+  subgraph MUT[Mutation API]
+    direction TB
+    AL[addLink]
+    UL[updateLink]
+    RL[removeLink]
+    UN[updateNode]
+    US[updateSubgraph]
+    MG[moveNodeToGroup]
+    UB[unbindNodes]
+    RB[removeBomItem]
+    AA[autoArrange]
+  end
+
+  subgraph RE[Re-derivation]
+    REJ[rerouteEdges<br/>async libavoid WASM]
+  end
+
+  subgraph RND[Rendering]
+    SR[ShumokuRenderer SVG]
+  end
+
+  AL --> L
+  UL --> L
+  RL --> L
+  UN --> N
+  US --> SG
+  MG --> N
+  MG --> REJ
+  UB --> N
+  RB --> BOM
+  RB --> N
+  AA -->|layoutNetwork| N
+  AA --> SG
+  AA --> P
+  AA --> E
+  AA --> B
+
+  AL --> REJ
+  UL --> REJ
+  RL --> REJ
+  REJ --> E
+
+  N <-->|$bindable| SR
+  SG <-->|$bindable| SR
+  P <-->|$bindable| SR
+  E <-->|$bindable| SR
+  B <-->|$bindable| SR
+
+  N --> POE
+  L --> POE
+  BOM --> POE
+  PAL --> POE
+```
+
+**Notes:**
+
+- `SvelteMap.set()` / `.delete()` trigger Svelte 5 reactivity
+  directly — no copy-on-write needed.
+- Ports and edges are "derived" conceptually; operationally they're
+  rebuilt by explicit calls. A future PR could move this to `$effect`
+  once the drag-path's atomicity concerns are resolved.
+- `$bindable` on the renderer is bidirectional: the canvas writes
+  back directly when the user drags or creates a link.
+
+---
+
+## Placement APIs — when to use which
+
+Two primitives, different intents, deliberately kept separate:
+
+```mermaid
+flowchart TD
+  NEED{What do you need?}
+
+  NEED -->|place one node at a specific point| PN_CASE
+  NEED -->|re-layout the whole diagram| LN_AUTO
+  NEED -->|re-layout but keep some nodes pinned| LN_FIXED
+  NEED -->|nudge some nodes toward specific x| LN_HINTS
+
+  subgraph PN_CASE[Geometric]
+    PN[placeNode node, graph, initial, gap]
+    PN --> PNR[Returns collision-free position<br/>near initial, ignores link flow]
+  end
+
+  subgraph LN_AUTO[Structural — auto-arrange]
+    LN1[layoutNetwork graph]
+    LN1 --> LN1R[Full Sugiyama pass,<br/>all positions recomputed]
+  end
+
+  subgraph LN_FIXED[Structural — partial]
+    LN2[layoutNetwork graph, fixed Set]
+    LN2 --> LN2R[Sugiyama + post-process snap<br/>hard pin listed nodes]
+  end
+
+  subgraph LN_HINTS[Structural — guided]
+    LN3[layoutNetwork graph, hints Map]
+    LN3 --> LN3R[Sugiyama with preferred x<br/>soft nudge, packing wins on overlap]
+  end
+
+  subgraph USE_PN[Typical callers of placeNode]
+    ANN[ShumokuRenderer.addNewNode<br/>SideToolbar Add button]
+    PST[context menu Paste]
+    PNB[placeNodeForBom<br/>BOM → diagram]
+  end
+
+  subgraph USE_LN[Typical callers of layoutNetwork]
+    AUA[autoArrange<br/>SideToolbar button]
+    YML[YAML import fallback]
+    ASL[Future: arrange-selection]
+  end
+
+  USE_PN --> PN
+  USE_LN --> LN1
+```
+
+**Rule of thumb:**
+
+- Does the user know *exactly* where they want the node? → `placeNode`.
+- Do you want the algorithm to decide based on graph topology? →
+  `layoutNetwork`.
+- Somewhere in between? Use `layoutNetwork` with `fixed` (hard) or
+  `hints` (soft).
+
+---
+
+## End-to-end use cases
+
+### Add node via SideToolbar
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant STB as SideToolbar
+  participant Page as diagram/+page.svelte
+  participant SR as ShumokuRenderer
+  participant DS as diagramState
+  participant Core as @shumoku/core
+
+  User->>STB: click "Add Router"
+  STB->>Page: onaddnode({kind:'hardware', type:'router'})
+  Page->>SR: addNewNode({id:newId('node'), spec})
+  SR->>Core: placeNode(node, graph, initial, gap)
+  Core-->>SR: { x, y }
+  SR->>DS: diagram.nodes.set(id, {...node, position})
+  DS-->>SR: reactive update
+  SR-->>User: node appears on canvas
+  SR->>Page: onnodeadd(id)
+  Page->>DS: addBomItem({id:newId('bom'), nodeId:id})
+```
+
+### Drag node
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant SR as ShumokuRenderer
+  participant Core as @shumoku/core
+  participant DS as diagramState
+
+  User->>SR: drag node
+  SR->>Core: moveNode(id, x, y, {nodes, ports, subgraphs}, links)
+  Core->>Core: resolve collisions, shift ports, rebalance, routeEdges
+  Core-->>SR: {nodes, ports, edges, subgraphs}
+  SR->>DS: replaceMap nodes/ports/edges/subgraphs
+  DS-->>SR: $bindable update
+  SR-->>User: diagram re-renders
+```
+
+### Save to JSON
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Menu as ExportMenu
+  participant DS as diagramState
+  participant Blob as BrowserBlob/Download
+
+  User->>Menu: click "Export JSON"
+  Menu->>DS: exportProject('diagram-name')
+  DS->>DS: exportGraph() → NetworkGraph
+  DS->>DS: wrap w/ palette + bom → NetedProject
+  DS-->>Menu: JSON string
+  Menu->>Blob: URL.createObjectURL + download
+  Blob-->>User: .neted.json file
+```
+
+### Import JSON
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Top as Top page
+  participant DS as diagramState
+  participant Route as route layout
+
+  User->>Top: drop .neted.json
+  Top->>DS: importProject(jsonString)
+  DS->>DS: JSON.parse
+  DS->>DS: loadProject('imported', data)
+  DS->>DS: reset all state
+  DS->>DS: applyProject(data)
+  DS->>DS: applyGraph + sanitizePaletteAndBom
+  DS-->>Top: state populated, status='Ready'
+  Top->>Route: goto('/project/imported/diagram')
+  Route->>DS: loadProject('imported')<br/>sees initialized=true, skips
+```
+
+### Auto-arrange
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant STB as SideToolbar
+  participant Page as diagram/+page.svelte
+  participant DS as diagramState
+  participant Core as @shumoku/core
+
+  User->>STB: click Auto-arrange
+  STB->>Page: onautoarrange()
+  Page->>DS: autoArrange()
+  DS->>DS: exportGraph() and strip all positions
+  DS->>Core: computeNetworkLayout(strippedGraph)
+  Core->>Core: layoutCompound → Sugiyama 4 phases
+  Core->>Core: placePorts + routeEdges
+  Core-->>DS: { nodes, ports, edges, subgraphs, bounds }
+  DS->>DS: replaceMap everything
+  DS-->>User: diagram re-rendered with fresh layout
+```
+
+---
+
+## Package boundaries
+
+What each package owns, and what it doesn't:
+
+```mermaid
+flowchart TB
+  subgraph apps[apps/]
+    ED[editor<br/>SvelteKit UI, state, routes]
+    DOC[docs<br/>Next.js, playground]
+    CLI[cli<br/>shumoku render]
+    SRV[server<br/>topology API]
+  end
+
+  subgraph libs[libs/@shumoku/]
+    COR[core<br/>models, layout, parser]
+    RND[renderer<br/>Svelte SVG]
+    RSV[renderer-svg<br/>SSR SVG]
+    RHT[renderer-html<br/>embeddable]
+    RPN[renderer-png<br/>resvg]
+    SHU[shumoku<br/>umbrella]
+  end
+
+  subgraph libp[libs/plugins/]
+    PGF[grafana]
+    PNB[netbox]
+    PPR[prometheus]
+    PZB[zabbix]
+  end
+
+  ED --> COR
+  ED --> RND
+  ED --> RSV
+
+  DOC --> COR
+  DOC --> RSV
+  DOC --> RHT
+
+  CLI --> COR
+  CLI --> RSV
+  CLI --> RPN
+  CLI --> RHT
+
+  SRV --> COR
+
+  RND --> COR
+  RSV --> COR
+  RHT --> RSV
+  RPN --> RSV
+  SHU --> COR
+  SHU --> RSV
+  SHU --> RHT
+
+  PGF --> COR
+  PNB --> COR
+  PPR --> COR
+  PZB --> COR
+```
+
+**Invariants:**
+
+- **Plugins depend only on `core`** — never on renderers, never on
+  editor. Keeps them embeddable anywhere.
+- **Renderers depend on `core`** — never on editor. Core models are
+  the lingua franca.
+- **Editor depends on core + renderer** — plus optional `renderer-svg`
+  for SVG export.
+- **Apps don't cross-depend** — editor doesn't import from docs, etc.
+
+The **canonical data shape** at every boundary is `NetworkGraph`
+(core's type). YAML and the project JSON (`NetedProject`, which wraps
+`NetworkGraph`) are boundary formats; everything inside the system
+speaks `NetworkGraph`.
