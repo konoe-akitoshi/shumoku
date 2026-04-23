@@ -112,6 +112,107 @@ describe('assignCoordinates', () => {
     expect(bt.get('a')?.x).toBe(tb.get('a')?.x)
   })
 
+  it('aligns a single-parent child directly under its parent (barycenter)', () => {
+    // a  b            ← layer 0
+    //    ↓
+    //    c            ← layer 1, only parent is b
+    // Without barycenter alignment, c would be centred at 0 (the only
+    // node in its layer), sitting between a and b. With alignment, c
+    // sits at b's x exactly.
+    const layers: LayerAssignment = {
+      layers: [['a', 'b'], ['c']],
+      layerOf: new Map([
+        ['a', 0],
+        ['b', 0],
+        ['c', 1],
+      ]),
+    }
+    const positions = assignCoordinates(layers, {
+      defaultSize: uniformSize,
+      edges: [{ id: 'e1', source: 'b', target: 'c' }],
+    })
+    expect(positions.get('c')?.x).toBe(positions.get('b')?.x)
+  })
+
+  it('places a multi-parent child at the mean x of its parents', () => {
+    // a  b            ← layer 0
+    //  \ |
+    //   c             ← layer 1, parents: a and b → x should be between
+    const layers: LayerAssignment = {
+      layers: [['a', 'b'], ['c']],
+      layerOf: new Map([
+        ['a', 0],
+        ['b', 0],
+        ['c', 1],
+      ]),
+    }
+    const positions = assignCoordinates(layers, {
+      defaultSize: uniformSize,
+      edges: [
+        { id: 'e1', source: 'a', target: 'c' },
+        { id: 'e2', source: 'b', target: 'c' },
+      ],
+    })
+    const ax = positions.get('a')?.x ?? 0
+    const bx = positions.get('b')?.x ?? 0
+    const cx = positions.get('c')?.x ?? 0
+    expect(cx).toBeCloseTo((ax + bx) / 2)
+  })
+
+  it('centres siblings around their shared parent (two-pass average)', () => {
+    // Two siblings of the same parent should sit symmetrically around
+    // it, not one under the parent with the other pushed off to the
+    // side (which a forward-only pack would produce). The forward pass
+    // places [a=parent.x, b=parent.x+width+gap]; the backward pass
+    // places [b=parent.x, a=parent.x-width-gap]; averaging gives the
+    // symmetric layout.
+    const layers: LayerAssignment = {
+      layers: [['p'], ['a', 'b']],
+      layerOf: new Map([
+        ['p', 0],
+        ['a', 1],
+        ['b', 1],
+      ]),
+    }
+    const positions = assignCoordinates(layers, {
+      defaultSize: uniformSize,
+      nodeGap: 20,
+      edges: [
+        { id: 'e1', source: 'p', target: 'a' },
+        { id: 'e2', source: 'p', target: 'b' },
+      ],
+    })
+    const px = positions.get('p')?.x ?? 0
+    const ax = positions.get('a')?.x ?? 0
+    const bx = positions.get('b')?.x ?? 0
+    // a and b straddle p with equal offset
+    expect(ax + bx).toBeCloseTo(2 * px)
+    expect(ax).toBeLessThan(px)
+    expect(bx).toBeGreaterThan(px)
+    // No overlap: b's left edge is gap+width to the right of a's right edge
+    expect(bx - ax).toBeGreaterThanOrEqual(uniformSize.width + 20 - 0.001)
+  })
+
+  it('falls back to centred layout when no edges are provided', () => {
+    // Regression guard: callers that don't supply edges (e.g. unit
+    // tests that only care about a single layer) keep the centred
+    // behaviour.
+    const layers: LayerAssignment = {
+      layers: [['a', 'b', 'c']],
+      layerOf: new Map([
+        ['a', 0],
+        ['b', 0],
+        ['c', 0],
+      ]),
+    }
+    const positions = assignCoordinates(layers, {
+      defaultSize: uniformSize,
+      nodeGap: 20,
+    })
+    const xs = ['a', 'b', 'c'].map((n) => positions.get(n)?.x ?? 0)
+    expect(xs).toEqual([-120, 0, 120])
+  })
+
   it('falls back to defaultSize when sizes map is missing a node', () => {
     const layers = makeLayers([['a', 'b']])
     const sizes = new Map<string, NodeSize>([['a', { width: 100, height: 50 }]])
