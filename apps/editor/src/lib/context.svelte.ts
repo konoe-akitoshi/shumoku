@@ -1,5 +1,6 @@
 import { builtinEntries, Catalog } from '@shumoku/catalog'
 import {
+  buildChildSheetGraph,
   collectObstacles,
   computeNetworkLayout,
   computeNodeSize,
@@ -16,6 +17,7 @@ import {
   newId,
   placePorts,
   type ResolvedEdge,
+  type ResolvedLayout,
   type ResolvedPort,
   rebalanceSubgraphs,
   resolvePosition,
@@ -114,6 +116,90 @@ let bomItems = $state<BomItem[]>([])
 let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
+
+/**
+ * Active sheet for hierarchical / multi-sheet editing.
+ *
+ * `null` = the root sheet (the whole diagram, as today).
+ * Any non-null id = a top-level subgraph being viewed "as its own sheet".
+ *
+ * Layer 1 behaviour: switching to a non-null sheet drills into that
+ * subgraph KiCad-style. The renderer binds to `sheetView` (a cached
+ * `ResolvedLayout` built via `buildHierarchicalSheets` from core)
+ * instead of the root maps. Cross-boundary links are represented as
+ * stadium-shaped "export connector" nodes on the sheet edge.
+ *
+ * The sub-sheet view is **read-only** for now — the editor forces
+ * View mode while drilled in, because the renderer's `$bindable`
+ * writes would land on the sheet's ephemeral maps rather than on the
+ * root canonical state. Write-through is deferred (Layer 2).
+ */
+let currentSheetId = $state<string | null>(null)
+
+/**
+ * Runtime state used by the renderer when drilled into a sub-sheet.
+ * Structurally mirrors `diagram` so the renderer can bind the same
+ * way. Populated by `switchSheet` via `buildChildSheetGraph` +
+ * `computeNetworkLayout`.
+ *
+ * SvelteMap identity is preserved across switches: we `replaceMap()`
+ * into these containers rather than assigning new instances, so
+ * reactive bindings in the renderer stay attached.
+ */
+const sheetView = $state({
+  nodes: new SvelteMap<string, Node>(),
+  ports: new SvelteMap<string, ResolvedPort>(),
+  edges: new SvelteMap<string, ResolvedEdge>(),
+  subgraphs: new SvelteMap<string, Subgraph>(),
+  bounds: { x: 0, y: 0, width: 400, height: 300 },
+  links: [] as Link[],
+})
+
+/**
+ * Per-sheet layout cache. Entries are invalidated any time the root
+ * graph's structure changes (nodes/subgraphs/links added/removed,
+ * parents reparented). Purely-visual root edits (position, label,
+ * spec, link bandwidth, …) don't affect child-sheet content, so
+ * we're careful to only clear on structural changes — bouncing
+ * between tabs stays instant in the common case.
+ *
+ * The `generation` counter lets an in-flight `switchSheet` abandon
+ * a stale layout result when the graph has changed underneath it.
+ */
+const sheetCache = new Map<string, ResolvedLayout>()
+const sheetLinkCache = new Map<string, Link[]>()
+let sheetCacheGeneration = 0
+
+function invalidateSheetCache() {
+  sheetCache.clear()
+  sheetLinkCache.clear()
+  sheetCacheGeneration++
+}
+
+/**
+ * Assign a `ResolvedLayout` into the given mirror state, preserving
+ * SvelteMap identity (so the renderer's bindings stay attached).
+ * Shared by both sheet load and sheet cache hits.
+ */
+function applyResolvedLayout(
+  target: {
+    nodes: SvelteMap<string, Node>
+    ports: SvelteMap<string, ResolvedPort>
+    edges: SvelteMap<string, ResolvedEdge>
+    subgraphs: SvelteMap<string, Subgraph>
+    bounds: { x: number; y: number; width: number; height: number }
+    links: Link[]
+  },
+  resolved: ResolvedLayout,
+  links: Link[],
+) {
+  replaceMap(target.nodes, resolved.nodes)
+  replaceMap(target.ports, resolved.ports)
+  replaceMap(target.edges, resolved.edges)
+  replaceMap(target.subgraphs, resolved.subgraphs)
+  target.bounds = { ...resolved.bounds }
+  target.links = [...links]
+}
 
 // Edge routing: generation counter prevents stale async results
 let routeGeneration = 0
@@ -337,24 +423,33 @@ export const diagramState = {
   },
   addLink(link: Link) {
     diagram.links = [...diagram.links, link]
+    invalidateSheetCache()
     rerouteEdges()
   },
   updateLink(id: string, updates: Partial<Link>) {
+    // Endpoints may have moved into / out of a child sheet's scope.
     diagram.links = diagram.links.map((l) => (l.id === id ? { ...l, ...updates } : l))
+    invalidateSheetCache()
     rerouteEdges()
   },
   removeLink(id: string) {
     diagram.links = diagram.links.filter((l) => l.id !== id)
+    invalidateSheetCache()
     rerouteEdges()
   },
   updateNode(id: string, updates: Partial<Node>) {
     const rn = diagram.nodes.get(id)
     if (!rn) return
+    // Only a `parent` change moves the node between sheets; purely-
+    // visual updates (label, spec, position, style) leave sheet
+    // membership untouched so we skip the cache invalidation there.
+    if ('parent' in updates && updates.parent !== rn.parent) invalidateSheetCache()
     diagram.nodes.set(id, { ...rn, ...updates })
   },
   updateSubgraph(id: string, updates: Partial<Subgraph>) {
     const sg = diagram.subgraphs.get(id)
     if (!sg) return
+    if ('parent' in updates && updates.parent !== sg.parent) invalidateSheetCache()
     diagram.subgraphs.set(id, { ...sg, ...updates })
   },
   /**
@@ -374,6 +469,8 @@ export const diagramState = {
     if (!node?.position) return
     if (node.parent === groupId) return
 
+    // Parent change → sheet membership change → invalidate caches.
+    invalidateSheetCache()
     // Set parent first so moveNode's obstacle filter excludes the new parent
     diagram.nodes.set(nodeId, { ...node, parent: groupId })
 
@@ -430,6 +527,141 @@ export const diagramState = {
     }
   },
 
+  // =====================================================================
+  // Sheets — hierarchical / multi-sheet editing state
+  //
+  // Layer 0 of the sheet feature: we track which sheet is active and
+  // expose the list of available sheets. Filtering the renderer based
+  // on the active sheet is a separate follow-up (see ARCHITECTURE.md
+  // "Known gaps / hierarchical sheets").
+  // =====================================================================
+
+  /**
+   * Current active sheet id. `null` means the root sheet (full
+   * diagram). A non-null value is the id of a top-level subgraph
+   * being viewed as its own sheet.
+   */
+  get currentSheetId() {
+    return currentSheetId
+  },
+
+  /**
+   * Available sheets, derived from the current diagram.
+   *
+   * The root sheet always exists; it's joined by one entry per
+   * top-level subgraph (those whose `parent` is undefined). Deeper
+   * subgraphs aren't promoted to tabs here — they're accessible by
+   * drilling further once Layer 1 filtering lands.
+   */
+  get availableSheets(): Array<{ id: string | null; label: string }> {
+    const sheets: Array<{ id: string | null; label: string }> = [{ id: null, label: 'Root' }]
+    for (const sg of diagram.subgraphs.values()) {
+      if (sg.parent) continue
+      sheets.push({ id: sg.id, label: sg.label ?? sg.id })
+    }
+    return sheets
+  },
+
+  /**
+   * Switch to a different sheet. `null` switches back to the root.
+   *
+   * Non-null switches drill KiCad-style: the subgraph's filtered
+   * graph (with export connectors for cross-boundary links) is fed
+   * into `computeNetworkLayout` and the result is mirrored into
+   * `sheetView` so the renderer can bind to it. Layouts are cached
+   * per sheet-id and reused until a structural root-graph change
+   * invalidates them — rapid back-and-forth between tabs stays
+   * instant.
+   *
+   * Read-only: edits while drilled in land on `sheetView`, not on
+   * the root canonical state. Switching back to root discards any
+   * such edits (Layer 2 will add write-through). `currentSheetId`
+   * changes synchronously so UI highlighting is instantaneous; the
+   * layout call runs asynchronously and updates `sheetView` when
+   * it completes.
+   */
+  async switchSheet(id: string | null) {
+    if (id !== null && !diagram.subgraphs.has(id)) {
+      // Silently fall back to root rather than entering a ghost sheet.
+      currentSheetId = null
+      return
+    }
+    currentSheetId = id
+
+    if (id === null) {
+      // Back to root: no async work, clear the sheet view so any next
+      // drill-down starts from a clean slate.
+      sheetView.nodes.clear()
+      sheetView.ports.clear()
+      sheetView.edges.clear()
+      sheetView.subgraphs.clear()
+      sheetView.links = []
+      return
+    }
+
+    // Cache hit: apply the stored layout and we're done.
+    const cached = sheetCache.get(id)
+    if (cached) {
+      applyResolvedLayout(sheetView, cached, sheetView.links)
+      // Cache hit still needs the links array — stored separately so
+      // the renderer has the connections list for its port routing.
+      const cachedLinks = sheetLinkCache.get(id)
+      if (cachedLinks) sheetView.links = [...cachedLinks]
+      return
+    }
+
+    // Cache miss: build the filtered sub-graph and lay it out. We
+    // sanitize the root graph first so the sub-sheet inherits the
+    // same orphan-safe invariants `applyGraph` enforces.
+    const generation = sheetCacheGeneration
+    const rootGraph = diagramState.exportGraph()
+    const { nodes: sanNodes, subgraphs: sanSubgraphs, links: sanLinks } = sanitizeGraph(rootGraph)
+    const sanitized: NetworkGraph = {
+      ...rootGraph,
+      nodes: [...sanNodes.values()],
+      subgraphs: [...sanSubgraphs.values()],
+      links: sanLinks,
+    }
+    const childGraph = buildChildSheetGraph(sanitized, id)
+    if (!childGraph) {
+      // Subgraph disappeared between the tab render and our read —
+      // bounce back to root rather than showing an empty sheet.
+      currentSheetId = null
+      return
+    }
+    const { resolved } = await computeNetworkLayout(childGraph)
+
+    // Bail if either (a) the user has switched away while we were
+    // computing, or (b) the root graph has been mutated underneath us
+    // (generation counter bumped) and our result is stale.
+    if (currentSheetId !== id || generation !== sheetCacheGeneration) return
+
+    sheetCache.set(id, resolved)
+    sheetLinkCache.set(id, childGraph.links)
+    applyResolvedLayout(sheetView, resolved, childGraph.links)
+  },
+
+  /**
+   * Current visible diagram — either the root state or the cached
+   * sub-sheet view. The renderer binds to this via `+page.svelte`.
+   */
+  get activeView() {
+    if (currentSheetId === null) return diagram
+    return sheetView
+  },
+
+  /**
+   * Invalidate every cached sub-sheet layout. Exposed for the cases
+   * where a structural mutation happens outside `diagramState` (e.g.
+   * the renderer adds a node directly via its internal `addNewNode`
+   * and emits `onnodeadd`). Methods inside `diagramState` that
+   * already mutate root structure call this internally — callers of
+   * those don't need to repeat.
+   */
+  invalidateSheetCache() {
+    invalidateSheetCache()
+  },
+
   // Palette
   get palette() {
     return palette
@@ -474,6 +706,9 @@ export const diagramState = {
   removeBomItem(id: string) {
     const item = bomItems.find((i) => i.id === id)
     if (item?.nodeId) {
+      // Removing a diagram node is structural — clear any cached
+      // sub-sheets before the rerouteEdges call runs.
+      invalidateSheetCache()
       // Remove diagram node + its ports + connected links
       const nodeId = item.nodeId
       diagram.nodes.delete(nodeId)
@@ -693,6 +928,7 @@ export const diagramState = {
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
     yamlSource = ''
+    currentSheetId = null
     initialized = false
 
     try {
@@ -739,6 +975,9 @@ async function applyProject(data: Partial<NetedProject>) {
  * back to the full layoutNetwork pass.
  */
 async function applyGraph(graph: NetworkGraph) {
+  // Any root structural change invalidates every cached sheet layout.
+  // Load replaces the graph wholesale, so this is always the right call.
+  invalidateSheetCache()
   const { nodes, subgraphs, links } = sanitizeGraph(graph)
   const direction = graph.settings?.direction ?? 'TB'
   const hasAnyNode = nodes.size > 0

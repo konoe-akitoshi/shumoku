@@ -89,22 +89,28 @@
     {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
       <ShumokuRenderer
         bind:this={renderer}
-        bind:nodes={diagramState.nodes}
-        bind:ports={diagramState.ports}
-        bind:edges={diagramState.edges}
-        bind:subgraphs={diagramState.subgraphs}
-        bind:bounds={diagramState.bounds}
-        bind:links={diagramState.links}
+        bind:nodes={diagramState.activeView.nodes}
+        bind:ports={diagramState.activeView.ports}
+        bind:edges={diagramState.activeView.edges}
+        bind:subgraphs={diagramState.activeView.subgraphs}
+        bind:bounds={diagramState.activeView.bounds}
+        bind:links={diagramState.activeView.links}
         theme={editorState.theme}
-        mode={editorState.mode}
+        mode={diagramState.currentSheetId === null ? editorState.mode : 'view'}
         onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}
         onchange={() => {}}
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
         oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => { contextMenu = { id, type, x: screenX, y: screenY } }}
         onnodeadd={(id: string) => {
           diagramState.addBomItem({ id: newId('bom'), nodeId: id })
+          // The renderer mutated diagram.nodes directly (via $bindable)
+          // before emitting this event — invalidate cached sheets now.
+          diagramState.invalidateSheetCache()
         }}
-        onnodedelete={(ids: string[]) => { diagramState.unbindNodes(ids) }}
+        onnodedelete={(ids: string[]) => {
+          diagramState.unbindNodes(ids)
+          diagramState.invalidateSheetCache()
+        }}
         oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
           diagramState.addLink({ id: newId('link'), from, to })
         }}
