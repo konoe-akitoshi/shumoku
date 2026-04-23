@@ -88,9 +88,31 @@ forward. Private helpers `applyProject` / `applyGraph` live module-scoped
 and handle sanitize + `placePorts` + `routeEdges`. Every load — sample,
 YAML paste, JSON drop — passes through the same terminal.
 
-### Individual node placement
+### Placement APIs — two primitives, two intents
 
-`placeNode(node, graph, initial, gap?)` in `@shumoku/core` is the
-primitive for placing one unpositioned node with collision avoidance
-against the existing graph. It is the lightweight counterpart to
-`layoutNetwork`, which rebuilds the entire layout from scratch.
+`@shumoku/core` exposes two placement functions. They cover different
+use cases and are intentionally kept separate rather than collapsed
+into one:
+
+| | `placeNode` | `layoutNetwork` |
+|---|---|---|
+| Intent | **Geometric** (put it at this point) | **Structural** (arrange by link flow) |
+| Input | One node + initial (x, y) | Whole graph |
+| Algorithm | Collision-avoidance around initial | Sugiyama: cycles → layers → ordering → coords |
+| Honours structure | No — links ignored | Yes — layers follow flow direction |
+| Cost | O(existing obstacles) | O(V + E), libavoid-class |
+| Use for | User drop / paste / "add here" | Auto-arrange / re-layout / YAML import |
+
+`layoutNetwork` accepts two knobs for selective placement:
+
+  - **`fixed: Set<string>`** — hard constraint. Listed nodes are snapped
+    back to their input positions after Sugiyama; their ports shift
+    with them and subgraph bounds are recomputed.
+  - **`hints: Map<string, { x }>`** — soft constraint. Listed nodes
+    use the hint as their preferred x in the coord pass; packing
+    still prevents overlap, so the final x may drift in tight
+    neighbourhoods.
+
+"Arrange selection" = `layoutNetwork({ fixed: nonSelectedIds })`;
+"Nudge these nodes toward this x" = `layoutNetwork({ hints })`.
+Click-to-drop = `placeNode`.

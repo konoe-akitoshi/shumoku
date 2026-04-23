@@ -113,6 +113,52 @@ describe('assignCoordinates', () => {
     expect(bt.get('a')?.x).toBe(tb.get('a')?.x)
   })
 
+  it('honours hints over barycenter', () => {
+    // Without a hint, c would align under its parent b (barycenter).
+    // With a hint, c snaps to the hinted x instead.
+    const layers: LayerAssignment = {
+      layers: [['a', 'b'], ['c']],
+      layerOf: new Map([
+        ['a', 0],
+        ['b', 0],
+        ['c', 1],
+      ]),
+    }
+    const positions = assignCoordinates(layers, {
+      defaultSize: uniformSize,
+      edges: [{ id: 'e1', source: 'b', target: 'c' }],
+      hints: new Map([['c', { x: 999 }]]),
+    })
+    expect(positions.get('c')?.x).toBe(999)
+  })
+
+  it('hint is still packed against siblings', () => {
+    // Two siblings in the same layer: hint on one, barycenter on the
+    // other. The hint wins for its node, packing still prevents overlap.
+    const layers: LayerAssignment = {
+      layers: [['p'], ['a', 'b']],
+      layerOf: new Map([
+        ['p', 0],
+        ['a', 1],
+        ['b', 1],
+      ]),
+    }
+    const positions = assignCoordinates(layers, {
+      defaultSize: uniformSize,
+      nodeGap: 20,
+      edges: [
+        { id: 'e1', source: 'p', target: 'a' },
+        { id: 'e2', source: 'p', target: 'b' },
+      ],
+      // a wants x=1000 (far right); b has no hint so barycenter=p.x
+      hints: new Map([['a', { x: 1000 }]]),
+    })
+    const ax = positions.get('a')?.x ?? 0
+    const bx = positions.get('b')?.x ?? 0
+    // b must not overlap a; the two are at least (width + gap) apart
+    expect(Math.abs(bx - ax)).toBeGreaterThanOrEqual(uniformSize.width + 20 - 0.001)
+  })
+
   it('aligns a single-parent child directly under its parent (barycenter)', () => {
     // a  b            ← layer 0
     //    ↓

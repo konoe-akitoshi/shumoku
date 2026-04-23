@@ -62,6 +62,20 @@ export interface AssignCoordinatesOptions {
    * layer unchanged.
    */
   edges?: Edge[]
+  /**
+   * Soft per-node x hints. When a node has an entry, the forward and
+   * backward packs both treat it as the node's preferred x — packed
+   * against neighbours in the usual way but anchored at the hint
+   * instead of the barycenter of its parents. Hints win over parent-
+   * derived preferences when both exist. The `y` field of the hint is
+   * **ignored**: layer assignment already owns the secondary axis.
+   *
+   * Hints are interpreted in whatever coordinate system the caller
+   * supplied; inside `layoutCompound` that's each container's local
+   * frame, so global-coord hints for deeply nested nodes won't land
+   * where you'd expect. Use hard-pinning (`fixed`) for that case.
+   */
+  hints?: Map<NodeId, { x: number }>
 }
 
 /**
@@ -132,8 +146,8 @@ export function assignCoordinates(
         continue
       }
 
-      const forwardX = forwardPack(layer, preds, forwardByLayer, sizeOf, nodeGap)
-      const backwardX = backwardPack(layer, preds, backwardByLayer, sizeOf, nodeGap)
+      const forwardX = forwardPack(layer, preds, forwardByLayer, sizeOf, nodeGap, options.hints)
+      const backwardX = backwardPack(layer, preds, backwardByLayer, sizeOf, nodeGap, options.hints)
       forwardByLayer.push(forwardX)
       backwardByLayer.push(backwardX)
       for (const n of layer) {
@@ -182,12 +196,21 @@ function centredLayer(layer: NodeId[], sizeOf: (n: NodeId) => Size, nodeGap: num
   return xs.map((x) => x + shiftX)
 }
 
-/** Mean x of a node's predecessors across a layered pass, or undefined. */
+/**
+ * Preferred x for a node, priority:
+ *   1. Hint (explicit caller override)
+ *   2. Barycenter of its predecessors in the layers above
+ *   3. undefined (packing fallback takes over)
+ */
 function preferredX(
   node: NodeId,
   preds: Map<NodeId, NodeId[]>,
   layerX: Map<NodeId, number>[],
+  hints: Map<NodeId, { x: number }> | undefined,
 ): number | undefined {
+  const hint = hints?.get(node)
+  if (hint !== undefined) return hint.x
+
   const parents = preds.get(node) ?? []
   if (parents.length === 0) return undefined
   let sum = 0
@@ -223,12 +246,13 @@ function forwardPack(
   previousLayers: Map<NodeId, number>[],
   sizeOf: (n: NodeId) => Size,
   nodeGap: number,
+  hints: Map<NodeId, { x: number }> | undefined,
 ): Map<NodeId, number> {
   const out = new Map<NodeId, number>()
   let prevRight = Number.NEGATIVE_INFINITY
   for (const [j, n] of layer.entries()) {
     const { width } = sizeOf(n)
-    const pref = preferredX(n, preds, previousLayers)
+    const pref = preferredX(n, preds, previousLayers, hints)
     const minX = j === 0 ? Number.NEGATIVE_INFINITY : prevRight + nodeGap + width / 2
     const desired = pref ?? minX
     const x = desired < minX ? minX : desired
@@ -250,6 +274,7 @@ function backwardPack(
   previousLayers: Map<NodeId, number>[],
   sizeOf: (n: NodeId) => Size,
   nodeGap: number,
+  hints: Map<NodeId, { x: number }> | undefined,
 ): Map<NodeId, number> {
   const out = new Map<NodeId, number>()
   let nextLeft = Number.POSITIVE_INFINITY
@@ -257,7 +282,7 @@ function backwardPack(
     const n = layer[j]
     if (n === undefined) continue
     const { width } = sizeOf(n)
-    const pref = preferredX(n, preds, previousLayers)
+    const pref = preferredX(n, preds, previousLayers, hints)
     const maxX = j === layer.length - 1 ? Number.POSITIVE_INFINITY : nextLeft - nodeGap - width / 2
     const desired = pref ?? maxX
     const x = desired > maxX ? maxX : desired
