@@ -30,7 +30,7 @@
  */
 
 import type { Bounds, Position, Size } from '../../models/types.js'
-import { type LayoutFlatOptions, layoutFlat } from './compose.js'
+import { layoutFlat, type SugiyamaOptions } from './compose.js'
 import type { Edge, NodeId } from './types.js'
 
 export interface CompoundNode {
@@ -49,15 +49,6 @@ export interface CompoundSubgraph {
   parent?: NodeId | null
 }
 
-export interface CompoundLayoutOptions extends LayoutFlatOptions {
-  /** Padding around the inside of every subgraph. */
-  subgraphPadding?: number
-  /** Extra vertical space reserved for a subgraph's label. */
-  subgraphLabelHeight?: number
-  /** Default size for leaf nodes without a size entry. */
-  defaultSize?: Size
-}
-
 export interface CompoundLayoutResult {
   /** Centre position of every leaf node, keyed by node id. */
   nodePositions: Map<NodeId, Position>
@@ -71,7 +62,7 @@ export function layoutCompound(
   nodes: CompoundNode[],
   subgraphs: CompoundSubgraph[],
   edges: Edge[],
-  options: CompoundLayoutOptions = {},
+  options: SugiyamaOptions = {},
 ): CompoundLayoutResult {
   const padding = options.subgraphPadding ?? 20
   const labelHeight = options.subgraphLabelHeight ?? 28

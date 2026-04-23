@@ -30,7 +30,15 @@ import { assignLayers } from './layers.js'
 import { reduceCrossings } from './ordering.js'
 import type { Edge, NodeId } from './types.js'
 
-export interface LayoutFlatOptions extends AssignCoordinatesOptions {
+/**
+ * All Sugiyama-pipeline knobs in one type. `layoutFlat` and
+ * `layoutCompound` both accept this shape; fields only meaningful at
+ * the compound level (`subgraphPadding`, `subgraphLabelHeight`) are
+ * ignored by `layoutFlat`, which keeps the two entry points calling
+ * each other with a single options object rather than shuttling
+ * subsets.
+ */
+export interface SugiyamaOptions extends AssignCoordinatesOptions {
   /** Barycenter iterations for crossing reduction. */
   iterations?: number
   /**
@@ -40,6 +48,10 @@ export interface LayoutFlatOptions extends AssignCoordinatesOptions {
    * repositioned.
    */
   fixed?: Map<NodeId, Position>
+  /** Padding inside a subgraph's border (compound-only). */
+  subgraphPadding?: number
+  /** Vertical space reserved for the subgraph label (compound-only). */
+  subgraphLabelHeight?: number
 }
 
 export interface LayoutFlatResult {
@@ -55,7 +67,7 @@ export interface LayoutFlatResult {
 export function layoutFlat(
   nodes: NodeId[],
   edges: Edge[],
-  options: LayoutFlatOptions = {},
+  options: SugiyamaOptions = {},
 ): LayoutFlatResult {
   // Phase 1: break cycles so subsequent phases can assume a DAG.
   const { dag, reversed } = removeCycles(nodes, edges)
