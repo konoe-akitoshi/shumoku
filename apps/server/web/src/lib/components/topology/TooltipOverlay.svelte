@@ -182,9 +182,9 @@
     position: fixed;
     z-index: 10000;
     pointer-events: none;
-    background: var(--theme-bg-elevated, #1f2937);
-    color: var(--theme-text, #f9fafb);
-    border: 1px solid var(--theme-border, #374151);
+    background: var(--color-bg-elevated, #1f2937);
+    color: var(--color-text, #f9fafb);
+    border: 1px solid var(--border, #374151);
     border-radius: 6px;
     padding: 8px 12px;
     font-size: 12px;

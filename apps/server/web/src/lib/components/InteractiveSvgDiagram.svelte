@@ -76,33 +76,45 @@
   import { formatTraffic } from '$lib/utils/format'
   import { getUtilizationColor } from '$lib/weathermap'
 
-  // --- Props ---
-  export let topologyId: string = ''
-  export let readOnly = false
-  export let onToggleSettings: (() => void) | undefined = undefined
-  export let onSearchOpen: (() => void) | undefined = undefined
-  export let settingsOpen = false
-  export let onNodeSelect: ((event: NodeSelectEvent) => void) | undefined = undefined
-  export let onSubgraphSelect: ((event: SubgraphSelectEvent) => void) | undefined = undefined
-  /**
-   * Override how the underlying NetworkGraph is fetched. Detail page
-   * uses `topologyId` and the default fetcher. Share page passes a
-   * token-scoped fetcher via this prop.
-   */
-  export let graphLoader: (() => Promise<{ graph: NetworkGraph }>) | undefined = undefined
+  // --- Props (Svelte 5 runes) ---
+  interface Props {
+    topologyId?: string
+    readOnly?: boolean
+    onToggleSettings?: () => void
+    onSearchOpen?: () => void
+    settingsOpen?: boolean
+    onNodeSelect?: (event: NodeSelectEvent) => void
+    onSubgraphSelect?: (event: SubgraphSelectEvent) => void
+    /**
+     * Override how the underlying NetworkGraph is fetched. Detail page
+     * uses `topologyId` and the default fetcher. Share page passes a
+     * token-scoped fetcher via this prop.
+     */
+    graphLoader?: () => Promise<{ graph: NetworkGraph }>
+  }
+  let {
+    topologyId = '',
+    readOnly = false,
+    onToggleSettings,
+    onSearchOpen,
+    settingsOpen = false,
+    onNodeSelect,
+    onSubgraphSelect,
+    graphLoader,
+  }: Props = $props()
 
   // --- State ---
-  let graph: NetworkGraph | undefined
-  let loading = true
-  let error = ''
+  let graph = $state<NetworkGraph | undefined>(undefined)
+  let loading = $state(true)
+  let error = $state('')
 
   // Drill-down navigation stack. `currentSheetId === null` means root.
-  let currentSheetId: string | null = null
-  let navigationStack: string[] = []
+  let currentSheetId = $state<string | null>(null)
+  let navigationStack = $state<string[]>([])
 
-  let viewer: TopologyViewer
+  let viewer: ReturnType<typeof TopologyViewer> | undefined = $state()
 
-  $: currentTheme = $resolvedTheme === 'dark' ? darkTheme : lightTheme
+  const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
 
   // --- Data loading ---
 
@@ -120,20 +132,20 @@
     }
   }
 
-  $: sheetsAvailable = (() => {
+  const sheetsAvailable = $derived.by(() => {
     if (!graph?.subgraphs) return new Map<string, string>()
     const m = new Map<string, string>()
     for (const sg of graph.subgraphs) {
       if (!sg.parent) m.set(sg.id, sg.label ?? sg.id)
     }
     return m
-  })()
+  })
 
-  $: isHierarchical = sheetsAvailable.size > 0
+  const isHierarchical = $derived(sheetsAvailable.size > 0)
 
-  $: currentSheetLabel = currentSheetId
-    ? (sheetsAvailable.get(currentSheetId) ?? currentSheetId)
-    : 'Root'
+  const currentSheetLabel = $derived(
+    currentSheetId ? (sheetsAvailable.get(currentSheetId) ?? currentSheetId) : 'Root',
+  )
 
   // --- External imperative API (preserved from old implementation) ---
 
@@ -302,7 +314,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="diagram-container">
   {#if loading}
@@ -318,7 +330,7 @@
   {:else if graph}
     {#if isHierarchical && currentSheetId !== null}
       <div class="breadcrumb">
-        <button class="breadcrumb-back" on:click={navigateBack} title="Go back">
+        <button class="breadcrumb-back" onclick={navigateBack} title="Go back">
           <ArrowLeftIcon size={14} />
         </button>
         <span class="breadcrumb-current">{currentSheetLabel}</span>
@@ -363,27 +375,27 @@
   <!-- Zoom / utility controls -->
   <div class="controls">
     <div class="control-group">
-      <button on:click={() => viewer?.zoomBy(1.5)} title="Zoom In">
+      <button onclick={() => viewer?.zoomBy(1.5)} title="Zoom In">
         <MagnifyingGlassPlusIcon size={18} />
       </button>
-      <button on:click={() => viewer?.zoomBy(1 / 1.5)} title="Zoom Out">
+      <button onclick={() => viewer?.zoomBy(1 / 1.5)} title="Zoom Out">
         <MagnifyingGlassMinusIcon size={18} />
       </button>
     </div>
     <div class="control-group">
-      <button on:click={() => viewer?.resetZoom()} title="Fit to View">
+      <button onclick={() => viewer?.resetZoom()} title="Fit to View">
         <CornersOutIcon size={18} />
       </button>
-      <button on:click={() => viewer?.resetZoom()} title="Reset View">
+      <button onclick={() => viewer?.resetZoom()} title="Reset View">
         <ArrowCounterClockwiseIcon size={18} />
       </button>
       {#if onSearchOpen}
-        <button on:click={onSearchOpen} title="Search Nodes (Cmd/Ctrl+K)">
+        <button onclick={onSearchOpen} title="Search Nodes (Cmd/Ctrl+K)">
           <MagnifyingGlassIcon size={18} />
         </button>
       {/if}
       {#if onToggleSettings}
-        <button on:click={onToggleSettings} title="Settings" class:active={settingsOpen}>
+        <button onclick={onToggleSettings} title="Settings" class:active={settingsOpen}>
           <GearSixIcon size={18} />
         </button>
       {/if}
@@ -422,7 +434,7 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: var(--theme-bg-canvas, #fafafa);
+    background: var(--color-bg-canvas, #fafafa);
   }
 
   .loading,
@@ -434,7 +446,7 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    color: var(--theme-text-muted, #6b7280);
+    color: var(--color-text-muted, #6b7280);
   }
 
   .error-icon {
@@ -446,7 +458,7 @@
   .spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid var(--theme-border, #e5e7eb);
+    border: 3px solid var(--border, #e5e7eb);
     border-top-color: var(--primary, #3b82f6);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -467,8 +479,8 @@
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
-    background: var(--theme-bg-elevated, #ffffff);
-    border: 1px solid var(--theme-border, #e5e7eb);
+    background: var(--color-bg-elevated, #ffffff);
+    border: 1px solid var(--border, #e5e7eb);
     border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     z-index: 5;
@@ -485,17 +497,17 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    color: var(--theme-text-muted, #6b7280);
+    color: var(--color-text-muted, #6b7280);
   }
 
   .breadcrumb-back:hover {
-    background: var(--theme-bg, #f3f4f6);
-    color: var(--theme-text, #111827);
+    background: var(--color-bg, #f3f4f6);
+    color: var(--color-text, #111827);
   }
 
   .breadcrumb-current {
     font-weight: 500;
-    color: var(--theme-text, #111827);
+    color: var(--color-text, #111827);
   }
 
   .warnings-banner {
@@ -529,8 +541,8 @@
   .control-group {
     display: flex;
     flex-direction: column;
-    background: var(--theme-bg-elevated, #ffffff);
-    border: 1px solid var(--theme-border, #e5e7eb);
+    background: var(--color-bg-elevated, #ffffff);
+    border: 1px solid var(--border, #e5e7eb);
     border-radius: 6px;
     overflow: hidden;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -545,12 +557,12 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    color: var(--theme-text, #111827);
+    color: var(--color-text, #111827);
     transition: background 0.15s;
   }
 
   .control-group button:hover {
-    background: var(--theme-bg, #f3f4f6);
+    background: var(--color-bg, #f3f4f6);
   }
 
   .control-group button.active {
@@ -563,8 +575,8 @@
     bottom: 16px;
     left: 16px;
     padding: 8px 12px;
-    background: var(--theme-bg-elevated, #ffffff);
-    border: 1px solid var(--theme-border, #e5e7eb);
+    background: var(--color-bg-elevated, #ffffff);
+    border: 1px solid var(--border, #e5e7eb);
     border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     z-index: 5;
@@ -575,7 +587,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--theme-text-muted, #6b7280);
+    color: var(--color-text-muted, #6b7280);
     margin-bottom: 6px;
   }
 

@@ -136,7 +136,12 @@
       activeLayout = resolved
       onlayoutready?.(resolved, id)
     } catch (err) {
-      onerror?.(err instanceof Error ? err : new Error(String(err)))
+      // Always surface the error — silent catching made debugging
+      // "empty canvas" extremely painful. Callers can still hook
+      // `onerror` for UI-level handling.
+      const e = err instanceof Error ? err : new Error(String(err))
+      console.error('[TopologyViewer] layout computation failed:', e)
+      onerror?.(e)
     }
   }
 
@@ -150,8 +155,10 @@
         const { resolved } = await computeNetworkLayout(child)
         if (cachedGraphRef !== g) return
         layoutsBySheet[sg.id] = resolved
-      } catch {
-        // swallow — sheet tab just stays uncached, will retry on click
+      } catch (err) {
+        // Prewarm failures aren't fatal — the sheet tab just stays
+        // uncached and will retry on click — but log so we see them.
+        console.warn(`[TopologyViewer] prewarm failed for sheet '${sg.id}':`, err)
       }
     }
   }
