@@ -139,11 +139,23 @@
       console.log('[TopologyViewer] computeNetworkLayout done', {
         nodes: resolved.nodes.size,
         edges: resolved.edges.size,
+        cachedGraphRefStillSame: cachedGraphRef === g,
+        activeSheetKeyStillSame: activeSheetKey === key,
       })
       // Bail if graph/sheet changed while we were computing
-      if (cachedGraphRef !== g || activeSheetKey !== key) return
+      if (cachedGraphRef !== g || activeSheetKey !== key) {
+        console.warn('[TopologyViewer] staleCheck bailed', {
+          cachedGraphRefMatch: cachedGraphRef === g,
+          activeSheetKeyMatch: activeSheetKey === key,
+        })
+        return
+      }
       layoutsBySheet[key] = resolved
       activeLayout = resolved
+      console.log('[TopologyViewer] activeLayout assigned', {
+        isNonNull: activeLayout !== null,
+        nodeSize: activeLayout.nodes.size,
+      })
       onlayoutready?.(resolved, id)
     } catch (err) {
       // Always surface the error — silent catching made debugging
