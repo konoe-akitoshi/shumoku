@@ -3,6 +3,7 @@
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
+  import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
@@ -28,6 +29,7 @@
   } | null>(null)
   let detailTarget = $state<{ id: string; type: 'node' | 'link' | 'subgraph' } | null>(null)
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
+  let codePanelOpen = $state(false)
 
   // =========================================================================
   // Detail panel — resolve edge/port to their parent types
@@ -143,6 +145,11 @@
   <!-- Bottom-left: Status -->
   <div class="fixed bottom-3 left-3 z-20">
     <StatusBadge status={diagramState.status} stats={diagramState.stats} {selected} />
+  </div>
+
+  <!-- Left side: Code panel (slide-out) -->
+  <div class="fixed left-3 top-1/2 -translate-y-1/2 z-20 h-[80vh] flex">
+    <CodePanel bind:isOpen={codePanelOpen} />
   </div>
 
   <!-- Bottom-center: Sheet bar -->
