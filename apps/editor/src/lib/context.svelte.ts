@@ -1004,5 +1004,56 @@ async function applyGraph(graph: NetworkGraph) {
   replaceMap(diagram.subgraphs, subgraphs)
   diagram.links = links
   replaceMap(diagram.ports, placePorts(nodes, links, direction))
+  // Positioned path skips layoutNetwork, so nobody else computes
+  // bounds from the saved coordinates. Mirror the same union + 50-pad
+  // formula `layoutNetwork` uses internally so the renderer's viewBox
+  // matches the actual extent of the loaded diagram. Without this the
+  // initial viewBox stays at the `loadProject` reset default
+  // (800×600) and large saved diagrams render clipped to the top-left.
+  diagram.bounds = boundsOfPositionedGraph(nodes, subgraphs)
   await rerouteEdges()
+}
+
+/**
+ * Compute a padded bounding box over positioned nodes and subgraphs.
+ * Matches the fallback in `layoutNetwork` (50-unit margin around the
+ * tight union), and falls back to the same empty-graph placeholder so
+ * the runtime `diagram.bounds` shape is consistent whichever path set
+ * it.
+ */
+function boundsOfPositionedGraph(
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
+): { x: number; y: number; width: number; height: number } {
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+
+  for (const n of nodes.values()) {
+    if (!n.position) continue
+    const size = computeNodeSize(n)
+    minX = Math.min(minX, n.position.x - size.width / 2)
+    minY = Math.min(minY, n.position.y - size.height / 2)
+    maxX = Math.max(maxX, n.position.x + size.width / 2)
+    maxY = Math.max(maxY, n.position.y + size.height / 2)
+  }
+  for (const sg of subgraphs.values()) {
+    if (!sg.bounds) continue
+    minX = Math.min(minX, sg.bounds.x)
+    minY = Math.min(minY, sg.bounds.y)
+    maxX = Math.max(maxX, sg.bounds.x + sg.bounds.width)
+    maxY = Math.max(maxY, sg.bounds.y + sg.bounds.height)
+  }
+
+  if (minX === Number.POSITIVE_INFINITY) {
+    return { x: 0, y: 0, width: 400, height: 300 }
+  }
+  const pad = 50
+  return {
+    x: minX - pad,
+    y: minY - pad,
+    width: maxX - minX + pad * 2,
+    height: maxY - minY + pad * 2,
+  }
 }
