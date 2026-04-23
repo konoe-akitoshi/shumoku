@@ -9,7 +9,11 @@
   let error = ''
 
   $: token = $page.params.token
-  $: renderUrl = `/api/share/topologies/${token}/render`
+  $: loadShared = async () => {
+    const res = await fetch(`/api/share/topologies/${token}/graph`)
+    if (!res.ok) throw new Error(`Failed to load shared topology: ${res.status}`)
+    return res.json()
+  }
 
   onMount(async () => {
     try {
@@ -57,7 +61,9 @@
         <p class="text-theme-text-muted">{error}</p>
       </div>
     {:else}
-      <div class="absolute inset-0"><InteractiveSvgDiagram {renderUrl} readOnly={true} /></div>
+      <div class="absolute inset-0">
+        <InteractiveSvgDiagram graphLoader={loadShared} readOnly={true} />
+      </div>
     {/if}
   </div>
 </div>

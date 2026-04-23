@@ -46,6 +46,12 @@ const FLOW_CSS = `
   }
   .wm-overlay[data-direction="in"]  { animation-name: wm-flow-in; }
   .wm-overlay[data-direction="out"] { animation-name: wm-flow-out; }
+  /* 'reduced' mode: solid lane at reduced opacity, no animated dots */
+  .wm-overlay.wm-static {
+    stroke-dasharray: none;
+    animation: none;
+    opacity: 0.6;
+  }
   .wm-dimmed > path.link { opacity: 0.3; }
   @keyframes wm-flow-in  { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
   @keyframes wm-flow-out { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -24; } }
@@ -134,14 +140,33 @@ interface OverlayEntry {
   group: Element
 }
 
+export type WeathermapAnimationMode = 'full' | 'reduced'
+
 export class WeathermapController {
   private svg: SVGSVGElement
   private layer: SVGGElement | null = null
   private entries = new Map<string, OverlayEntry>()
+  private animationMode: WeathermapAnimationMode = 'full'
 
   constructor(svg: SVGSVGElement) {
     this.svg = svg
     ensureStyle()
+  }
+
+  /**
+   * Control animation fidelity. 'reduced' drops the dotted flow
+   * animation and shows only solid utilization-colored lanes — useful
+   * for small widgets where the animation is more noise than signal.
+   */
+  setAnimationMode(mode: WeathermapAnimationMode): void {
+    if (this.animationMode === mode) return
+    this.animationMode = mode
+    // Re-apply styling on existing overlays so the mode switch takes
+    // effect immediately without waiting for the next metrics update.
+    for (const entry of this.entries.values()) {
+      entry.in.classList.toggle('wm-static', mode === 'reduced')
+      entry.out.classList.toggle('wm-static', mode === 'reduced')
+    }
   }
 
   apply(links: Record<string, LinkFlowMetrics> | undefined): void {
@@ -232,7 +257,7 @@ export class WeathermapController {
 
   private createPath(d: string, direction: 'in' | 'out', strokeWidth: number): SVGPathElement {
     const p = document.createElementNS(SVG_NS, 'path')
-    p.setAttribute('class', 'wm-overlay')
+    p.setAttribute('class', `wm-overlay${this.animationMode === 'reduced' ? ' wm-static' : ''}`)
     p.setAttribute('data-direction', direction)
     p.setAttribute('d', d)
     p.style.setProperty('--wm-width', String(Math.max(strokeWidth, 3)))
