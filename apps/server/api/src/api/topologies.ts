@@ -182,6 +182,31 @@ export function createTopologiesApi(): Hono {
     }
   })
 
+  // Get raw NetworkGraph for client-side rendering via @shumoku/renderer.
+  // Layout is computed in the browser (computeNetworkLayout) so sheet
+  // switching stays local to the client — matches the editor pattern.
+  app.get('/:id/graph', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const parsed = await service.getParsed(id)
+      if (!parsed) {
+        const parseError = service.getParseError(id)
+        if (parseError) {
+          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+        }
+        return c.json({ error: 'Topology not found' }, 404)
+      }
+      return c.json({
+        id: parsed.id,
+        name: parsed.name,
+        graph: parsed.graph,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
   // Render topology as embeddable output (SVG + CSS + metadata)
   // Supports hierarchical topologies with multiple sheets
   app.get('/:id/render', async (c) => {

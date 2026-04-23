@@ -56,7 +56,35 @@ export function createShareApi(): Hono {
     }
   })
 
-  // Get shared topology render output
+  // Get shared topology as raw NetworkGraph (used by the new renderer).
+  app.get('/topologies/:token/graph', async (c) => {
+    const token = c.req.param('token')
+    const service = getTopologyService()
+    const topology = service.getByShareToken(token)
+    if (!topology) {
+      return c.json({ error: 'Not found' }, 404)
+    }
+    try {
+      const parsed = await service.getParsed(topology.id)
+      if (!parsed) {
+        const parseError = service.getParseError(topology.id)
+        if (parseError) {
+          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+        }
+        return c.json({ error: 'Failed to parse topology' }, 500)
+      }
+      return c.json({
+        id: parsed.id,
+        name: parsed.name,
+        graph: parsed.graph,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
+  // Get shared topology render output (legacy SVG-string pipeline).
   app.get('/topologies/:token/render', async (c) => {
     const token = c.req.param('token')
     const service = getTopologyService()

@@ -3,6 +3,7 @@
  * Handles all communication with the Shumoku server API
  */
 
+import type { NetworkGraph } from '@shumoku/core'
 import type {
   Alert,
   AlertQueryOptions,
@@ -188,6 +189,9 @@ export const topologies = {
     }
     return response.text()
   },
+
+  getGraph: (id: string) =>
+    request<{ id: string; name: string; graph: NetworkGraph }>(`/topologies/${id}/graph`),
 
   getContext: (id: string, theme?: 'light' | 'dark') => {
     const params = theme ? `?theme=${theme}` : ''
