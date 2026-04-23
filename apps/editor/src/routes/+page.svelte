@@ -1,6 +1,6 @@
 <script lang="ts">
   import { DropdownMenu } from 'bits-ui'
-  import { CaretDown, Cube, FolderOpen, Plus } from 'phosphor-svelte'
+  import { CaretDown, Cube, FileJs, FolderOpen, Plus } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
@@ -11,18 +11,62 @@
     { id: 'empty', name: 'Empty Project', description: 'Start from scratch' },
   ]
 
-  function handleImport() {
+  /**
+   * Prompt for a local file and stream its contents through `onLoad`.
+   * The file picker's `accept` is a hint to the OS dialog — we still
+   * check the file name to keep wrong-format imports from silently
+   * feeding JSON.parse something that would only fail later.
+   */
+  function promptFile(opts: {
+    accept: string
+    expectedSuffix: string
+    formatLabel: string
+    onLoad: (text: string) => Promise<void>
+  }) {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.json,.neted.json'
+    input.accept = opts.accept
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) return
+      if (!file.name.toLowerCase().endsWith(opts.expectedSuffix.toLowerCase())) {
+        alert(
+          `This looks like the wrong file — expected ${opts.formatLabel} (${opts.expectedSuffix}).`,
+        )
+        return
+      }
       const text = await file.text()
-      await diagramState.importProject(text)
-      goto('/project/imported/diagram')
+      try {
+        await opts.onLoad(text)
+      } catch (e) {
+        alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`)
+      }
     }
     input.click()
+  }
+
+  function handleImportProject() {
+    promptFile({
+      accept: '.neted.json',
+      expectedSuffix: '.neted.json',
+      formatLabel: 'neted project',
+      onLoad: async (text) => {
+        await diagramState.importProject(text)
+        goto('/project/imported/diagram')
+      },
+    })
+  }
+
+  function handleImportDiagram() {
+    promptFile({
+      accept: '.json',
+      expectedSuffix: '.json',
+      formatLabel: 'diagram JSON (NetworkGraph)',
+      onLoad: async (text) => {
+        await diagramState.importDiagram(text)
+        goto('/project/imported/diagram')
+      },
+    })
   }
 
   const itemClass =
@@ -46,7 +90,7 @@
         {/snippet}
       </DropdownMenu.Trigger>
       <DropdownMenu.Content
-        class="min-w-[180px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg py-1 z-50"
+        class="min-w-[200px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg py-1 z-50"
         sideOffset={4}
         align="end"
       >
@@ -54,9 +98,24 @@
           <Plus class="w-4 h-4 text-neutral-400" />
           New Project
         </DropdownMenu.Item>
-        <DropdownMenu.Item class={itemClass} onSelect={handleImport}>
+        <DropdownMenu.Separator class="my-1 h-px bg-neutral-200 dark:bg-neutral-700" />
+        <DropdownMenu.Item class={itemClass} onSelect={handleImportProject}>
           <FolderOpen class="w-4 h-4 text-neutral-400" />
-          Import .neted.json
+          <div class="flex flex-col items-start gap-0.5">
+            <span>Import Project</span>
+            <span class="text-[10px] text-neutral-400 dark:text-neutral-500"
+              >.neted.json (palette + BOM + diagram)</span
+            >
+          </div>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item class={itemClass} onSelect={handleImportDiagram}>
+          <FileJs class="w-4 h-4 text-neutral-400" />
+          <div class="flex flex-col items-start gap-0.5">
+            <span>Import Diagram</span>
+            <span class="text-[10px] text-neutral-400 dark:text-neutral-500"
+              >.json (diagram only — NetworkGraph)</span
+            >
+          </div>
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>

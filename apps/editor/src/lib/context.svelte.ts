@@ -905,6 +905,28 @@ export const diagramState = {
   },
 
   /**
+   * Diagram-only import: accepts a NetworkGraph (parsed or JSON
+   * string) and replaces just the diagram while preserving the
+   * current palette and BOM. Wraps the input in a synthetic
+   * NetedProject and forwards to `importProject`, so the linear
+   * pipeline stays uniform regardless of what format came in.
+   *
+   * Use this when the user drops a standalone diagram JSON
+   * (`NetworkGraph`) — the `.neted.json` project container is for
+   * full project import which overwrites palette/BOM.
+   */
+  async importDiagram(input: string | NetworkGraph) {
+    const diagram: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
+    await diagramState.importProject({
+      version: 1,
+      name: 'Diagram Import',
+      palette: [...palette],
+      bom: [...bomItems],
+      diagram,
+    })
+  },
+
+  /**
    * Terminal: reset state, apply project data, set status.
    *
    * - `projectId`: 'sample' / 'imported' / 'empty' / other (= empty)
