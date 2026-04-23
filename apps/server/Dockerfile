@@ -11,6 +11,7 @@ WORKDIR /app
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
 COPY assets/ ./assets/
 COPY libs/@shumoku/core/ ./libs/@shumoku/core/
+COPY libs/@shumoku/renderer/ ./libs/@shumoku/renderer/
 COPY libs/@shumoku/renderer-svg/ ./libs/@shumoku/renderer-svg/
 COPY libs/@shumoku/renderer-html/ ./libs/@shumoku/renderer-html/
 COPY libs/plugins/ ./libs/plugins/
@@ -25,11 +26,12 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install
 
 # Build library packages (turborepo handles dependency order)
-RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter='./libs/plugins/**'
+RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/renderer --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter='./libs/plugins/**'
 
 # Create workspace symlinks for server packages (bun may skip these when some workspace dirs are missing)
 RUN mkdir -p /app/apps/server/node_modules/@shumoku && \
     ln -s /app/libs/@shumoku/core /app/apps/server/node_modules/@shumoku/core && \
+    ln -s /app/libs/@shumoku/renderer /app/apps/server/node_modules/@shumoku/renderer && \
     ln -s /app/libs/@shumoku/renderer-svg /app/apps/server/node_modules/@shumoku/renderer-svg && \
     ln -s /app/libs/@shumoku/renderer-html /app/apps/server/node_modules/@shumoku/renderer-html
 
