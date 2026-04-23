@@ -121,6 +121,7 @@
 
   async function ensureSheetLayout(g: NetworkGraph, id: string | null): Promise<void> {
     const key = id ?? 'root'
+    console.log('[TopologyViewer] ensureSheetLayout start', { key, cached: !!layoutsBySheet[key] })
     const cached = layoutsBySheet[key]
     if (cached) {
       activeLayout = cached
@@ -129,7 +130,16 @@
     }
     try {
       const target = id ? (buildChildSheetGraph(g, id) ?? g) : g
+      console.log('[TopologyViewer] computeNetworkLayout start', {
+        nodes: target.nodes.length,
+        links: target.links.length,
+        subgraphs: target.subgraphs?.length ?? 0,
+      })
       const { resolved } = await computeNetworkLayout(target)
+      console.log('[TopologyViewer] computeNetworkLayout done', {
+        nodes: resolved.nodes.size,
+        edges: resolved.edges.size,
+      })
       // Bail if graph/sheet changed while we were computing
       if (cachedGraphRef !== g || activeSheetKey !== key) return
       layoutsBySheet[key] = resolved
@@ -172,6 +182,13 @@
   // actual change.
 
   $effect(() => {
+    console.log('[TopologyViewer] effect run', {
+      hasLayoutOverride: !!layoutOverride,
+      hasGraph: !!graph,
+      graphNodes: graph?.nodes?.length,
+      sheetId,
+      cachedGraphRefSame: graph === cachedGraphRef,
+    })
     if (layoutOverride) {
       activeLayout = layoutOverride
       return
@@ -196,6 +213,7 @@
       hasFitted = false
     }
 
+    console.log('[TopologyViewer] calling ensureSheetLayout', sheetKey)
     void ensureSheetLayout(graph, sheetKey)
   })
 
