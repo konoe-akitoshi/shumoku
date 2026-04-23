@@ -106,14 +106,15 @@
 
   // --- Layout cache (editor pattern) ---
   //
-  // `layoutsBySheet` and `activeLayout` are $state because the template
-  // (and downstream overlays) read them. The "last seen" refs used to
-  // detect graph/sheet identity changes and to cancel stale async
-  // layouts are plain `let` vars on purpose — writing them must NOT
-  // re-trigger the effect that wrote them, which is exactly what would
-  // happen if they were $state. See the comment block on the effect.
+  // Only `activeLayout` is $state — it's the single value the template
+  // reads (`{#if activeLayout}` + `<ShumokuRenderer layout={...}>`).
+  // Everything else (the per-sheet cache, the "last seen" markers used
+  // for identity diffing) is a plain `let`: writing them must NOT
+  // re-trigger the effect that wrote them, and no downstream code
+  // needs to react to cache mutations — the effect promotes a cache
+  // hit into `activeLayout` explicitly when appropriate.
 
-  let layoutsBySheet = $state<Record<string, ResolvedLayout>>({})
+  let layoutsBySheet: Record<string, ResolvedLayout> = {}
   let activeLayout = $state<ResolvedLayout | null>(null)
   let cachedGraphRef: NetworkGraph | null = null
   let activeSheetKey: string | null = null
@@ -131,7 +132,7 @@
       const { resolved } = await computeNetworkLayout(target)
       // Bail if graph/sheet changed while we were computing
       if (cachedGraphRef !== g || activeSheetKey !== key) return
-      layoutsBySheet = { ...layoutsBySheet, [key]: resolved }
+      layoutsBySheet[key] = resolved
       activeLayout = resolved
       onlayoutready?.(resolved, id)
     } catch (err) {
@@ -148,7 +149,7 @@
       try {
         const { resolved } = await computeNetworkLayout(child)
         if (cachedGraphRef !== g) return
-        layoutsBySheet = { ...layoutsBySheet, [sg.id]: resolved }
+        layoutsBySheet[sg.id] = resolved
       } catch {
         // swallow — sheet tab just stays uncached, will retry on click
       }
@@ -157,12 +158,11 @@
 
   // --- React to graph / sheet changes ---
   //
-  // Only $state reads (via tracked props `graph` / `sheetId` /
-  // `layoutOverride` / `sheetCacheStrategy`) should drive re-runs.
-  // Writing `cachedGraphRef` / `activeSheetKey` is deliberately to
-  // plain `let` to avoid the effect re-triggering on its own writes
-  // (which, with $state, would kick off `computeNetworkLayout` twice
-  // per change — a concurrency hazard for the WASM layout engine).
+  // Only tracked reads here are `graph`, `sheetId`, `layoutOverride`,
+  // `sheetCacheStrategy` (props) and `activeLayout` (for the override
+  // short-circuit). Everything else (the cache Maps, last-seen refs,
+  // hasFitted) is a plain `let`, so this effect runs exactly once per
+  // actual change.
 
   $effect(() => {
     if (layoutOverride) {
@@ -176,24 +176,19 @@
       return
     }
     const sheetKey = sheetId ?? null
-    const graphChanged = graph !== cachedGraphRef
-    const sheetChanged = sheetKey !== activeSheetKey
 
-    if (graphChanged) {
+    if (graph !== cachedGraphRef) {
       cachedGraphRef = graph
       layoutsBySheet = {}
       activeLayout = null
       hasFitted = false
       if (sheetCacheStrategy === 'eager') void prewarmEagerSheets(graph)
     }
-    if (sheetChanged) {
+    if (sheetKey !== activeSheetKey) {
       activeSheetKey = sheetKey
       hasFitted = false
     }
 
-    // Idempotent: if nothing changed, ensureSheetLayout is a no-op
-    // because the requested layout is already cached and `activeLayout`
-    // already reflects it. Still cheap to call.
     void ensureSheetLayout(graph, sheetKey)
   })
 
