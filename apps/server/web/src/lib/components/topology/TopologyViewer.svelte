@@ -121,7 +121,6 @@
 
   async function ensureSheetLayout(g: NetworkGraph, id: string | null): Promise<void> {
     const key = id ?? 'root'
-    console.log('[TopologyViewer] ensureSheetLayout start', { key, cached: !!layoutsBySheet[key] })
     const cached = layoutsBySheet[key]
     if (cached) {
       activeLayout = cached
@@ -130,32 +129,14 @@
     }
     try {
       const target = id ? (buildChildSheetGraph(g, id) ?? g) : g
-      console.log('[TopologyViewer] computeNetworkLayout start', {
-        nodes: target.nodes.length,
-        links: target.links.length,
-        subgraphs: target.subgraphs?.length ?? 0,
-      })
       const { resolved } = await computeNetworkLayout(target)
-      console.log('[TopologyViewer] computeNetworkLayout done', {
-        nodes: resolved.nodes.size,
-        edges: resolved.edges.size,
-        cachedGraphRefStillSame: cachedGraphRef === g,
-        activeSheetKeyStillSame: activeSheetKey === key,
-      })
-      // Bail if graph/sheet changed while we were computing
-      if (cachedGraphRef !== g || activeSheetKey !== key) {
-        console.warn('[TopologyViewer] staleCheck bailed', {
-          cachedGraphRefMatch: cachedGraphRef === g,
-          activeSheetKeyMatch: activeSheetKey === key,
-        })
-        return
-      }
+      // Bail if graph/sheet changed while we were computing. Compare
+      // against `id` (the nullable sheet id), not `key` (the
+      // 'root'-normalized cache key) — `activeSheetKey` stores the
+      // nullable form so they must match on that axis.
+      if (cachedGraphRef !== g || activeSheetKey !== id) return
       layoutsBySheet[key] = resolved
       activeLayout = resolved
-      console.log('[TopologyViewer] activeLayout assigned', {
-        isNonNull: activeLayout !== null,
-        nodeSize: activeLayout.nodes.size,
-      })
       onlayoutready?.(resolved, id)
     } catch (err) {
       // Always surface the error — silent catching made debugging
@@ -194,13 +175,6 @@
   // actual change.
 
   $effect(() => {
-    console.log('[TopologyViewer] effect run', {
-      hasLayoutOverride: !!layoutOverride,
-      hasGraph: !!graph,
-      graphNodes: graph?.nodes?.length,
-      sheetId,
-      cachedGraphRefSame: graph === cachedGraphRef,
-    })
     if (layoutOverride) {
       activeLayout = layoutOverride
       return
@@ -225,7 +199,6 @@
       hasFitted = false
     }
 
-    console.log('[TopologyViewer] calling ensureSheetLayout', sheetKey)
     void ensureSheetLayout(graph, sheetKey)
   })
 
