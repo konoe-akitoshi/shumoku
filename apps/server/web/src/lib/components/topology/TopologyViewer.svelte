@@ -71,8 +71,16 @@
     // --- Interaction ---
     interaction?: InteractionOptions
 
-    // --- Initial view ---
-    autoFit?: 'initial' | 'on-resize' | 'off'
+    /**
+     * When to reset the user's zoom/pan transform:
+     * - 'initial' (default): once, when the graph/sheet first lays out
+     * - 'off': never (keep any previous transform, or whatever d3-zoom has set)
+     *
+     * The SVG's viewBox already covers the layout bounds, so 'initial'
+     * simply strips any viewport transform; preserveAspectRatio handles
+     * container resize naturally.
+     */
+    autoFit?: 'initial' | 'off'
 
     // --- LOD (not yet wired into renderer internals — exposed for future use) ---
     detail?: DetailOptions
@@ -260,16 +268,14 @@
 
   let hasFitted = false
   $effect(() => {
+    if (autoFit === 'off' || hasFitted) return
     const svg = svgElement
     if (!svg || !activeLayout) return
-    if (autoFit === 'off') return
-    if (autoFit === 'initial' && hasFitted) return
     // ShumokuRenderer already chooses a viewBox covering the layout
     // bounds; we just need to reset any user-applied zoom transform.
     // d3-zoom transforms are on `.viewport` — clearing the attribute
     // restores identity.
-    const viewport = svg.querySelector<SVGGElement>('.viewport')
-    if (viewport) viewport.removeAttribute('transform')
+    svg.querySelector<SVGGElement>('.viewport')?.removeAttribute('transform')
     hasFitted = true
   })
 
@@ -428,16 +434,16 @@
   }
 
   /* Interaction gating via pointer-events on specific element types.
-       Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
-       propagation on the canvas background. d3-zoom's filter already
-       handles wheel requiring ctrl/meta, but we also kill the background
-       grid's clickability when selection is off. */
+         Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
+         propagation on the canvas background. d3-zoom's filter already
+         handles wheel requiring ctrl/meta, but we also kill the background
+         grid's clickability when selection is off. */
   .topology-viewer.no-panzoom :global(.canvas-bg) {
     pointer-events: none;
   }
 
   /* LOD: toggleable ornament classes. Rules match @shumoku/renderer's
-       output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
+         output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
   .topology-viewer.hide-port-labels :global(.port-label),
   .topology-viewer.hide-port-labels :global(.port-label-bg) {
     display: none;

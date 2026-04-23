@@ -46,7 +46,6 @@
    */
   import { darkTheme, lightTheme, type NetworkGraph } from '@shumoku/core'
   import {
-    ArrowCounterClockwiseIcon,
     ArrowLeftIcon,
     CornersOutIcon,
     GearSixIcon,
@@ -385,9 +384,6 @@
     <div class="control-group">
       <button onclick={() => viewer?.resetZoom()} title="Fit to View">
         <CornersOutIcon size={18} />
-      </button>
-      <button onclick={() => viewer?.resetZoom()} title="Reset View">
-        <ArrowCounterClockwiseIcon size={18} />
       </button>
       {#if onSearchOpen}
         <button onclick={onSearchOpen} title="Search Nodes (Cmd/Ctrl+K)">

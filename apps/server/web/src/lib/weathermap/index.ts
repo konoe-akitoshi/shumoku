@@ -236,22 +236,16 @@ export class WeathermapController {
     this.reset()
   }
 
-  /**
-   * Historical API — the CSS approach doesn't need pause-on-interact,
-   * but callers may still invoke this. No-op.
-   */
-  setInteracting(_isInteracting: boolean): void {}
-
   private ensureLayer(): SVGGElement | null {
     if (this.layer?.isConnected) return this.layer
-    // Prefer `.viewport` (@shumoku/renderer's d3-zoom-transformed group),
-    // so overlays follow pan/zoom. Fall back to the svg root for the
-    // older renderer-svg pipeline used by InteractiveSvgDiagram
-    // (panzoom transforms the svg itself, not a child `.viewport`).
-    const parent = this.svg.querySelector('.viewport') ?? this.svg
+    // `.viewport` is the d3-zoom-transformed group that @shumoku/renderer
+    // renders inside its <svg>. Appending overlays here ensures they
+    // follow pan/zoom with the rest of the diagram.
+    const viewport = this.svg.querySelector('.viewport')
+    if (!viewport) return null
     this.layer = document.createElementNS(SVG_NS, 'g')
     this.layer.setAttribute('class', 'wm-overlay-layer')
-    parent.appendChild(this.layer)
+    viewport.appendChild(this.layer)
     return this.layer
   }
 
