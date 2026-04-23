@@ -543,27 +543,35 @@ always renders the whole graph. The editor's runtime state now tracks
 root and each top-level subgraph, but the renderer keeps showing the
 full graph regardless.
 
-**Landed (Layer 0 — state plumbing):**
+**Landed:**
 - `diagramState.currentSheetId: string | null`
 - `diagramState.availableSheets` — root + top-level subgraphs
-- `diagramState.switchSheet(id | null)`
-- `SheetBar` renders the real tabs, click changes state, active is
-  highlighted
+- `diagramState.switchSheet(id | null)` — runs
+  `buildHierarchicalSheets` for non-null ids, populates `sheetView`
+- `diagramState.activeView` — root state or `sheetView`, bound by
+  the editor's diagram page
+- `SheetBar` renders the real tabs, click drills KiCad-style
+
+When drilled in, the renderer sees the subgraph's filtered graph
+with export-connector nodes for cross-boundary links. The editor
+forces View mode while drilled in so the renderer's `$bindable`
+writes don't land on the ephemeral sheet maps — edits stay on the
+root sheet only for now.
 
 **Not yet landed:**
-- **Layer 1 — filtered rendering.** When `currentSheetId !== null`,
-  pass a filtered `NetworkGraph` (just that subgraph's direct
-  children plus boundary pins) to the renderer. Requires the
-  renderer to stop relying on `$bindable` writes for state
-  mutations — it needs to be a pure view that emits events, which
-  the editor routes back to the canonical root state.
-- **Layer 2 — editing UX.** "Add node" on a sub-sheet should default
-  to that subgraph as the parent. Drill into nested subgraphs.
-  Sheet-specific autoarrange. Possibly sheet-specific positions
-  (a node could sit differently when viewed as a root sheet
-  children vs. as an internal of the root view).
+- **Write-through editing on a sub-sheet.** Requires the renderer to
+  stop relying on `$bindable` writes and become a pure view that
+  emits events, which the editor then routes to the canonical root
+  state (tracked under #98 "operations separation"). Until then,
+  edits happen on the root sheet; sub-sheets are read-only.
+- **Nested drill-down.** Clicking into a subgraph that is itself
+  inside a sub-sheet would require another level of
+  `buildHierarchicalSheets` or equivalent. Top-level only for now.
+- **Sheet-specific autoarrange / add-node defaults / sheet-local
+  positions.** Polish once write-through lands.
 
 Why this wasn't finished earlier: the editor's MVP was a single
 diagram, `SheetBar` was a UI placeholder during early iteration, and
 subsequent refactors (#130-#142) focused on the single-diagram happy
-path. No principled decision to defer — it's plain technical debt.
+path. No principled decision to defer — it was plain technical debt,
+now partly paid down.

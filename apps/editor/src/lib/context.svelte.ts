@@ -1,9 +1,11 @@
 import { builtinEntries, Catalog } from '@shumoku/catalog'
 import {
+  buildHierarchicalSheets,
   collectObstacles,
   computeNetworkLayout,
   computeNodeSize,
   createMemoryFileResolver,
+  createNetworkLayoutEngine,
   darkTheme,
   getNodeId,
   HierarchicalParser,
@@ -121,11 +123,36 @@ let initialized = $state(false)
  * `null` = the root sheet (the whole diagram, as today).
  * Any non-null id = a top-level subgraph being viewed "as its own sheet".
  *
- * Layer 0: state only. Sheet switching is tracked here; the renderer
- * does not yet filter based on this value. Layer 1 (separate PR) adds
- * the filtered view and boundary-pin rendering.
+ * Layer 1 behaviour: switching to a non-null sheet drills into that
+ * subgraph KiCad-style. The renderer binds to `sheetView` (a cached
+ * `ResolvedLayout` built via `buildHierarchicalSheets` from core)
+ * instead of the root maps. Cross-boundary links are represented as
+ * stadium-shaped "export connector" nodes on the sheet edge.
+ *
+ * The sub-sheet view is **read-only** for now — the editor forces
+ * View mode while drilled in, because the renderer's `$bindable`
+ * writes would land on the sheet's ephemeral maps rather than on the
+ * root canonical state. Write-through is deferred (Layer 2).
  */
 let currentSheetId = $state<string | null>(null)
+
+/**
+ * Runtime state used by the renderer when drilled into a sub-sheet.
+ * Structurally mirrors `diagram` so the renderer can bind the same
+ * way. Populated by `switchSheet` via `buildHierarchicalSheets`.
+ *
+ * SvelteMap identity is preserved across switches: we `replaceMap()`
+ * into these containers rather than assigning new instances, so
+ * reactive bindings in the renderer stay attached.
+ */
+const sheetView = $state({
+  nodes: new SvelteMap<string, Node>(),
+  ports: new SvelteMap<string, ResolvedPort>(),
+  edges: new SvelteMap<string, ResolvedEdge>(),
+  subgraphs: new SvelteMap<string, Subgraph>(),
+  bounds: { x: 0, y: 0, width: 400, height: 300 },
+  links: [] as Link[],
+})
 
 // Edge routing: generation counter prevents stale async results
 let routeGeneration = 0
@@ -480,17 +507,69 @@ export const diagramState = {
   /**
    * Switch to a different sheet. `null` switches back to the root.
    *
-   * Layer 0 behaviour: the state flips; downstream rendering does not
-   * yet re-filter. Callers can rely on the state to be accurate for
-   * UI highlighting. Actual view filtering will ship in a follow-up.
+   * Non-null switch drills KiCad-style: runs the root graph through
+   * `buildHierarchicalSheets` to get the subgraph's filtered graph
+   * (with export connectors for cross-boundary links), lays it out,
+   * and populates `sheetView` so the renderer can bind to it.
+   *
+   * Read-only: edits while drilled in land on `sheetView` maps, not
+   * the root. Switching back to root discards those edits (Layer 2
+   * will add write-through). `currentSheetId` changes synchronously
+   * so UI highlighting is instantaneous; the heavy layout call runs
+   * asynchronously and updates `sheetView` when it completes.
    */
-  switchSheet(id: string | null) {
+  async switchSheet(id: string | null) {
     if (id !== null && !diagram.subgraphs.has(id)) {
       // Silently fall back to root rather than entering a ghost sheet.
       currentSheetId = null
       return
     }
     currentSheetId = id
+
+    if (id === null) {
+      // Back to root: no async work, clear the sheet view so any next
+      // drill-down starts from a clean slate.
+      sheetView.nodes.clear()
+      sheetView.ports.clear()
+      sheetView.edges.clear()
+      sheetView.subgraphs.clear()
+      sheetView.links = []
+      return
+    }
+
+    // Build the sub-sheet graph + layout via core's hierarchical helper.
+    const rootGraph = diagramState.exportGraph()
+    const engine = createNetworkLayoutEngine()
+    const rootLayout = await engine.layoutAsync(rootGraph)
+    const sheets = await buildHierarchicalSheets(rootGraph, rootLayout, engine)
+    const sheet = sheets.get(id)
+    if (!sheet?.resolved) {
+      // Guard: `buildHierarchicalSheets` should have produced the sheet,
+      // but if anything went sideways (e.g. empty subgraph), bounce back
+      // to root instead of leaving a half-populated view.
+      currentSheetId = null
+      return
+    }
+
+    // Skip stale result if the user has switched again while we were
+    // building (e.g. clicked through tabs quickly).
+    if (currentSheetId !== id) return
+
+    replaceMap(sheetView.nodes, sheet.resolved.nodes)
+    replaceMap(sheetView.ports, sheet.resolved.ports)
+    replaceMap(sheetView.edges, sheet.resolved.edges)
+    replaceMap(sheetView.subgraphs, sheet.resolved.subgraphs)
+    sheetView.bounds = { ...sheet.resolved.bounds }
+    sheetView.links = [...sheet.graph.links]
+  },
+
+  /**
+   * Current visible diagram — either the root state or the cached
+   * sub-sheet view. The renderer binds to this via `+page.svelte`.
+   */
+  get activeView() {
+    if (currentSheetId === null) return diagram
+    return sheetView
   },
 
   // Palette
