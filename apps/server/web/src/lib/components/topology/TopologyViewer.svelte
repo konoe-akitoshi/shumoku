@@ -105,11 +105,18 @@
   }: Props = $props()
 
   // --- Layout cache (editor pattern) ---
+  //
+  // `layoutsBySheet` and `activeLayout` are $state because the template
+  // (and downstream overlays) read them. The "last seen" refs used to
+  // detect graph/sheet identity changes and to cancel stale async
+  // layouts are plain `let` vars on purpose — writing them must NOT
+  // re-trigger the effect that wrote them, which is exactly what would
+  // happen if they were $state. See the comment block on the effect.
 
   let layoutsBySheet = $state<Record<string, ResolvedLayout>>({})
   let activeLayout = $state<ResolvedLayout | null>(null)
-  let lastGraphRef = $state<NetworkGraph | null>(null)
-  let lastSheetId = $state<string | null>(null)
+  let cachedGraphRef: NetworkGraph | null = null
+  let activeSheetKey: string | null = null
 
   async function ensureSheetLayout(g: NetworkGraph, id: string | null): Promise<void> {
     const key = id ?? 'root'
@@ -123,7 +130,7 @@
       const target = id ? (buildChildSheetGraph(g, id) ?? g) : g
       const { resolved } = await computeNetworkLayout(target)
       // Bail if graph/sheet changed while we were computing
-      if (lastGraphRef !== g || lastSheetId !== id) return
+      if (cachedGraphRef !== g || activeSheetKey !== key) return
       layoutsBySheet = { ...layoutsBySheet, [key]: resolved }
       activeLayout = resolved
       onlayoutready?.(resolved, id)
@@ -135,21 +142,27 @@
   async function prewarmEagerSheets(g: NetworkGraph): Promise<void> {
     const topLevel = (g.subgraphs ?? []).filter((sg) => !sg.parent)
     for (const sg of topLevel) {
-      if (!layoutsBySheet[sg.id]) {
-        const child = buildChildSheetGraph(g, sg.id)
-        if (!child) continue
-        try {
-          const { resolved } = await computeNetworkLayout(child)
-          if (lastGraphRef !== g) return
-          layoutsBySheet = { ...layoutsBySheet, [sg.id]: resolved }
-        } catch {
-          // swallow — sheet tab just stays uncached, will retry on click
-        }
+      if (layoutsBySheet[sg.id]) continue
+      const child = buildChildSheetGraph(g, sg.id)
+      if (!child) continue
+      try {
+        const { resolved } = await computeNetworkLayout(child)
+        if (cachedGraphRef !== g) return
+        layoutsBySheet = { ...layoutsBySheet, [sg.id]: resolved }
+      } catch {
+        // swallow — sheet tab just stays uncached, will retry on click
       }
     }
   }
 
   // --- React to graph / sheet changes ---
+  //
+  // Only $state reads (via tracked props `graph` / `sheetId` /
+  // `layoutOverride` / `sheetCacheStrategy`) should drive re-runs.
+  // Writing `cachedGraphRef` / `activeSheetKey` is deliberately to
+  // plain `let` to avoid the effect re-triggering on its own writes
+  // (which, with $state, would kick off `computeNetworkLayout` twice
+  // per change — a concurrency hazard for the WASM layout engine).
 
   $effect(() => {
     if (layoutOverride) {
@@ -158,17 +171,30 @@
     }
     if (!graph) {
       activeLayout = null
+      cachedGraphRef = null
+      activeSheetKey = null
       return
     }
-    // Graph identity change invalidates the entire cache.
-    if (lastGraphRef !== graph) {
-      lastGraphRef = graph
+    const sheetKey = sheetId ?? null
+    const graphChanged = graph !== cachedGraphRef
+    const sheetChanged = sheetKey !== activeSheetKey
+
+    if (graphChanged) {
+      cachedGraphRef = graph
       layoutsBySheet = {}
       activeLayout = null
+      hasFitted = false
       if (sheetCacheStrategy === 'eager') void prewarmEagerSheets(graph)
     }
-    lastSheetId = sheetId ?? null
-    void ensureSheetLayout(graph, sheetId ?? null)
+    if (sheetChanged) {
+      activeSheetKey = sheetKey
+      hasFitted = false
+    }
+
+    // Idempotent: if nothing changed, ensureSheetLayout is a no-op
+    // because the requested layout is already cached and `activeLayout`
+    // already reflects it. Still cheap to call.
+    void ensureSheetLayout(graph, sheetKey)
   })
 
   // --- Viewport size tracking (passed to overlays so they can dynamically
@@ -221,9 +247,13 @@
   })
   const showNodeShadow = $derived(detail.nodeShadow ?? true)
 
-  // --- Auto-fit on initial layout / resize ---
+  // --- Auto-fit on initial layout ---
+  //
+  // `hasFitted` is a plain `let` (not $state): writing it inside the
+  // effect below must not re-trigger the effect. The graph/sheet
+  // effect above resets it when the data changes.
 
-  let hasFitted = $state(false)
+  let hasFitted = false
   $effect(() => {
     const svg = svgElement
     if (!svg || !activeLayout) return
@@ -232,17 +262,10 @@
     // ShumokuRenderer already chooses a viewBox covering the layout
     // bounds; we just need to reset any user-applied zoom transform.
     // d3-zoom transforms are on `.viewport` — clearing the attribute
-    // restores identity. Guarded by !hasFitted for 'initial' mode.
+    // restores identity.
     const viewport = svg.querySelector<SVGGElement>('.viewport')
     if (viewport) viewport.removeAttribute('transform')
     hasFitted = true
-  })
-
-  // Reset auto-fit tracker when graph or sheet changes
-  $effect(() => {
-    lastGraphRef
-    lastSheetId
-    hasFitted = false
   })
 
   function handleSelect(id: string | null, type: string | null) {
