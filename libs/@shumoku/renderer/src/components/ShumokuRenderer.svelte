@@ -51,6 +51,12 @@
     graph?: { links: Link[] }
     theme?: Theme
     mode?: 'view' | 'edit'
+    /**
+     * The rendered <svg> root. Bindable so host apps can reach into the
+     * DOM for overlay effects (e.g. traffic-flow animation, imperative
+     * highlight) without going through the WebComponent wrapper.
+     */
+    svgElement?: SVGSVGElement | null
     onchange?: (links: Link[]) => void
     onselect?: (id: string | null, type: string | null) => void
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
@@ -76,6 +82,7 @@
     graph = undefined,
     theme = undefined,
     mode = 'view',
+    svgElement = $bindable<SVGSVGElement | null>(null),
     onchange,
     onselect,
     onlabeledit,
@@ -114,7 +121,6 @@
     toX: number
     toY: number
   } | null>(null)
-  let svgEl = $state<SVGSVGElement | null>(null)
 
   const linkedPorts = $derived.by(() => {
     const ids = new Set<string>()
@@ -131,9 +137,9 @@
 
   /** Get the SVG viewport's inverse screen CTM (for screen → SVG conversion) */
   function getViewportInverseCTM(): DOMMatrix | null {
-    if (!svgEl) return null
-    const viewport = svgEl.querySelector('.viewport') as SVGGraphicsElement | null
-    return (viewport ?? svgEl).getScreenCTM()?.inverse() ?? null
+    if (!svgElement) return null
+    const viewport = svgElement.querySelector('.viewport') as SVGGraphicsElement | null
+    return (viewport ?? svgElement).getScreenCTM()?.inverse() ?? null
   }
 
   /** Convert screen (clientX/Y) coordinates to SVG coordinates */
@@ -149,8 +155,8 @@
   // =========================================================================
 
   $effect(() => {
-    if (!svgEl) return
-    const el = svgEl
+    if (!svgElement) return
+    const el = svgElement
     el.addEventListener('keydown', handleKeyDown)
     return () => el.removeEventListener('keydown', handleKeyDown)
   })
@@ -486,14 +492,14 @@
       cleanup()
     }
     function cleanup() {
-      svgEl?.removeEventListener('pointermove', onmove)
-      svgEl?.removeEventListener('pointerup', onup)
+      svgElement?.removeEventListener('pointermove', onmove)
+      svgElement?.removeEventListener('pointerup', onup)
       linkDrag = null
       linkCleanup = null
     }
     linkCleanup = cleanup
-    svgEl?.addEventListener('pointermove', onmove)
-    svgEl?.addEventListener('pointerup', onup)
+    svgElement?.addEventListener('pointermove', onmove)
+    svgElement?.addEventListener('pointerup', onup)
   }
 
   function handleLinkEnd(portId: string) {
@@ -568,7 +574,7 @@
     {selection}
     {linkedPorts}
     linkPreview={linkDrag}
-    bind:svgEl
+    bind:svgEl={svgElement}
     ondragmove={handleDragMove}
     onselect={handleSelect}
     onaddport={handleAddPort}

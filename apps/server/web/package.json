@@ -29,6 +29,7 @@
   "type": "module",
   "dependencies": {
     "@shumoku/core": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
     "bits-ui": "^2.15.4",
     "clsx": "^2.1.1",
     "gridstack": "^11.0.1",
