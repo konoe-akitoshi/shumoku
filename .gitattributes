@@ -1,0 +1,14 @@
+# Normalize all text files to LF line endings on commit and checkout.
+# biome (our formatter) writes LF; without this, Windows users with
+# core.autocrlf=true get CRLF in working tree → biome lint fails.
+* text=auto eol=lf
+
+# Keep binary files intact
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.wasm binary
