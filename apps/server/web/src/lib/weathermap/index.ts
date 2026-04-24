@@ -53,8 +53,12 @@ const FLOW_CSS = `
     opacity: 0.6;
   }
   .wm-dimmed > path.link { opacity: 0.3; }
-  @keyframes wm-flow-in  { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
-  @keyframes wm-flow-out { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -24; } }
+  /* "in" animates forward along the path (source → destination);
+     "out" animates the opposite way. SVG stroke-dashoffset decreases
+     to shift the dash pattern forward along the drawn direction, and
+     increases to shift it backward. */
+  @keyframes wm-flow-in  { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -24; } }
+  @keyframes wm-flow-out { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 24; } }
   @media (prefers-reduced-motion: reduce) {
     .wm-overlay { animation: none !important; }
   }
@@ -207,16 +211,24 @@ export class WeathermapController {
       const down = metrics.status === 'down'
       const inUtil = metrics.inUtilization ?? metrics.utilization ?? 0
       const outUtil = metrics.outUtilization ?? metrics.utilization ?? 0
+      // Base width tracks the underlying link's stroke-width (which
+      // already encodes bandwidth/link type). Utilization scales it
+      // so each lane fattens under heavier load.
+      const baseWidth = Math.max(strokeWidth, 3)
       applyDirection(
         entry.in,
         down ? DOWN_COLOR : getUtilizationColor(inUtil),
         metrics.inBps ?? 0,
+        inUtil,
+        baseWidth,
         down,
       )
       applyDirection(
         entry.out,
         down ? DOWN_COLOR : getUtilizationColor(outUtil),
         metrics.outBps ?? 0,
+        outUtil,
+        baseWidth,
         down,
       )
     }
@@ -245,7 +257,18 @@ export class WeathermapController {
     if (!viewport) return null
     this.layer = document.createElementNS(SVG_NS, 'g')
     this.layer.setAttribute('class', 'wm-overlay-layer')
-    viewport.appendChild(this.layer)
+    // Place overlays between base edges and nodes so animated flow
+    // sits on the link lane, not on top of nodes / ports / labels.
+    // ShumokuRenderer draws children in this order inside .viewport:
+    //   canvas-bg → subgraphs → edges (link-groups) → nodes → ports
+    // We insert before the first node so we end up right after the
+    // last edge in stacking order.
+    const firstNode = viewport.querySelector('g.node')
+    if (firstNode) {
+      viewport.insertBefore(this.layer, firstNode)
+    } else {
+      viewport.appendChild(this.layer)
+    }
     return this.layer
   }
 
@@ -266,8 +289,21 @@ export class WeathermapController {
   }
 }
 
-function applyDirection(path: SVGPathElement, color: string, bps: number, down: boolean): void {
+function applyDirection(
+  path: SVGPathElement,
+  color: string,
+  bps: number,
+  utilization: number,
+  baseWidth: number,
+  down: boolean,
+): void {
   path.style.setProperty('--wm-color', color)
+  // Width scales linearly with utilization (0-100%): 0.5x at idle,
+  // 2.0x at saturation. Clamped so a runaway utilization value can't
+  // produce a huge stroke.
+  const clampedUtil = Math.max(0, Math.min(100, utilization))
+  const widthScale = down ? 1 : 0.5 + (clampedUtil / 100) * 1.5
+  path.style.setProperty('--wm-width', String(baseWidth * widthScale))
   if (down) {
     path.style.setProperty('--wm-dash', '8 4')
     path.style.setProperty('--wm-play', 'paused')
