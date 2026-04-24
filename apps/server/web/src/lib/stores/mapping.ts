@@ -136,14 +136,14 @@ function createMappingStore() {
       linkMapping: {
         monitoredNodeId?: string
         interface?: string
-        capacity?: number
+        bandwidth?: number
       } | null,
     ) => {
       update((s) => {
         const links = { ...s.mapping.links }
         if (
           linkMapping &&
-          (linkMapping.monitoredNodeId || linkMapping.interface || linkMapping.capacity)
+          (linkMapping.monitoredNodeId || linkMapping.interface || linkMapping.bandwidth)
         ) {
           links[linkId] = { ...links[linkId], ...linkMapping }
         } else {

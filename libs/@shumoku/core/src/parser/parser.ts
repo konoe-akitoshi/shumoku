@@ -12,6 +12,7 @@ import type {
   CanvasSettings,
   GraphSettings,
   Link,
+  LinkBandwidth,
   LinkType,
   NetworkGraph,
   Node,
@@ -99,7 +100,7 @@ interface YamlLink {
   label?: string | string[]
   type?: string
   arrow?: string
-  bandwidth?: string
+  bandwidth?: string | number
   redundancy?: string
   /** Single VLAN ID or array of VLANs for trunk */
   vlan?: number | number[]
@@ -361,29 +362,17 @@ export class YamlParser {
     return typeMap[redundancy.toLowerCase()]
   }
 
-  private parseBandwidth(bandwidth?: string): '1G' | '10G' | '25G' | '40G' | '100G' | undefined {
-    if (!bandwidth) return undefined
-
-    const normalized = bandwidth.toUpperCase().replace(/\s/g, '')
-    const bandwidthMap: Record<string, '1G' | '10G' | '25G' | '40G' | '100G'> = {
-      '1G': '1G',
-      '1GBE': '1G',
-      '1GBIT': '1G',
-      '10G': '10G',
-      '10GBE': '10G',
-      '10GBIT': '10G',
-      '25G': '25G',
-      '25GBE': '25G',
-      '25GBIT': '25G',
-      '40G': '40G',
-      '40GBE': '40G',
-      '40GBIT': '40G',
-      '100G': '100G',
-      '100GBE': '100G',
-      '100GBIT': '100G',
+  private parseBandwidth(bandwidth?: string | number): LinkBandwidth | undefined {
+    if (bandwidth === undefined || bandwidth === null || bandwidth === '') return undefined
+    if (typeof bandwidth === 'number') {
+      return Number.isFinite(bandwidth) && bandwidth > 0 ? bandwidth : undefined
     }
-
-    return bandwidthMap[normalized]
+    // Pass the normalized string straight through. `resolveBandwidthBps`
+    // at the rendering/metrics layer accepts any well-formed label
+    // ("10G", "2.5Gbps", "500M") plus plain numeric strings, so we
+    // don't need to collapse to a fixed enum here anymore.
+    const normalized = bandwidth.toUpperCase().replace(/\s/g, '')
+    return normalized || undefined
   }
 
   private parsePins(yamlPins: YamlPin[], warnings: ParseWarning[]): Pin[] {

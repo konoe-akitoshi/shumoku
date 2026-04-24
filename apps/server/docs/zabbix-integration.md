@@ -168,7 +168,7 @@ links:
     in: "28336"           # item ID (受信)
     out: "28337"          # item ID (送信)
     interface: "eth0"     # または interface名で検索
-    capacity: 1000000000  # 回線容量 (bps)
+    bandwidth: 1000000000 # 回線容量 (bps) — topology の link.bandwidth を上書き
 ```
 
 **自動マッピング**: `link.from.port` でインターフェース名を推測

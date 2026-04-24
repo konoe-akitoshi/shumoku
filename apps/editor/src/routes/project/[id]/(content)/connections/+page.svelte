@@ -65,7 +65,7 @@
         fromPort: 'port' in from ? (from.port ?? '') : '',
         toNode: to.node,
         toPort: 'port' in to ? (to.port ?? '') : '',
-        bandwidth: link.bandwidth ?? '',
+        bandwidth: link.bandwidth !== undefined ? String(link.bandwidth) : '',
         vlan: link.vlan
           ? Array.isArray(link.vlan)
             ? link.vlan.join(', ')

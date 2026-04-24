@@ -21,12 +21,14 @@ links:
   link-0:
     in: "12345"      # Item ID for incoming traffic
     out: "12346"     # Item ID for outgoing traffic
-    capacity: 10000000000  # Link capacity in bps (10Gbps)
+    bandwidth: 10000000000  # Per-link bandwidth in bps (10Gbps).
+                            # Overrides the topology's link.bandwidth
+                            # for stroke-width and utilization.
 
   # Map by interface name (will auto-discover items)
   link-1:
     interface: "eth0"  # Interface name on the source host
-    # capacity will be inferred from link bandwidth if not specified
+    # bandwidth falls back to the topology's link.bandwidth if unset.
 
   # Links without explicit mapping will:
   # 1. Use interface name from link definition (e.g., "router1:eth0")

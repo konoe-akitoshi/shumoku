@@ -6,6 +6,7 @@
 import {
   buildHierarchicalSheets,
   mergeWithOverlays,
+  type NetworkGraph,
   type OverlayConfig,
   specDeviceType,
 } from '@shumoku/core'
@@ -16,6 +17,26 @@ import { DataSourceService } from '../services/datasource.js'
 import { TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { MetricsMapping, TopologyInput, TopologySourceMergeConfig } from '../types.js'
+
+/**
+ * Overlay per-link bandwidth from the metrics mapping onto the graph.
+ * When the operator has set `mapping.links[id].bandwidth`, that value
+ * wins over the topology's `link.bandwidth` for everything downstream
+ * (stroke-width rendering, layout width, metrics capacity). Returns
+ * a shallow-copied graph so callers don't mutate the service's cache.
+ */
+export function applyMappingBandwidth(graph: NetworkGraph, mapping?: MetricsMapping): NetworkGraph {
+  if (!mapping?.links || Object.keys(mapping.links).length === 0) return graph
+  let changed = false
+  const links = graph.links.map((link, i) => {
+    const linkId = link.id || `link-${i}`
+    const override = mapping.links[linkId]?.bandwidth
+    if (override === undefined) return link
+    changed = true
+    return { ...link, bandwidth: override }
+  })
+  return changed ? { ...graph, links } : graph
+}
 
 /**
  * Build render output from a parsed topology
@@ -166,7 +187,7 @@ export function createTopologiesApi(): Hono {
       return c.json({
         id: parsed.id,
         name: parsed.name,
-        graph: parsed.graph,
+        graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
         layout: {
           nodes: layoutNodes,
           bounds: parsed.layout.bounds,
@@ -199,7 +220,7 @@ export function createTopologiesApi(): Hono {
       return c.json({
         id: parsed.id,
         name: parsed.name,
-        graph: parsed.graph,
+        graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

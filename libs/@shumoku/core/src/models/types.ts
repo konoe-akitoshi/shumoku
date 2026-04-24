@@ -217,10 +217,38 @@ export interface LinkEndpoint {
 }
 
 /**
- * Link bandwidth/speed type
- * Controls line thickness for visual distinction
+ * Recognized bandwidth labels. These are the forms the YAML parser
+ * and UI present as presets, but `LinkBandwidth` itself also accepts
+ * any other parseable string (e.g. "2.5G", "500Mbit") and raw
+ * numbers (bps) from monitoring.
  */
-export type LinkBandwidth = '1G' | '10G' | '25G' | '40G' | '100G'
+export type LinkBandwidthLabel =
+  | '10M'
+  | '100M'
+  | '1G'
+  | '2.5G'
+  | '5G'
+  | '10G'
+  | '25G'
+  | '40G'
+  | '50G'
+  | '100G'
+  | '200G'
+  | '400G'
+
+/**
+ * Link bandwidth/speed. Controls line thickness and utilization
+ * baseline.
+ *
+ * - `number`: bits per second — the canonical form, typically from
+ *   monitoring or metrics mapping.
+ * - string label: human-readable form like `"10G"`, `"100M"`, or a
+ *   bps-suffixed string like `"2.5Gbps"`. Labels listed in
+ *   `LinkBandwidthLabel` are recognized as presets (IDE
+ *   autocomplete), but `resolveBandwidthBps` accepts any
+ *   well-formed string at runtime.
+ */
+export type LinkBandwidth = number | LinkBandwidthLabel | (string & {})
 
 export interface Link {
   id?: string

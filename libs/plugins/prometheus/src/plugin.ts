@@ -202,7 +202,7 @@ export class PrometheusPlugin
       if (instance && interfaceName) {
         try {
           const traffic = await this.getInterfaceTraffic(instance, interfaceName)
-          const capacity = linkMapping.capacity || 1_000_000_000 // Default 1Gbps
+          const capacity = linkMapping.bandwidth || 1_000_000_000 // Default 1Gbps
 
           // Calculate utilization (traffic is in bytes/sec, convert to bits)
           const inBps = traffic.inBytesPerSec * 8

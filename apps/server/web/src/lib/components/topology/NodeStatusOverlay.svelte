@@ -54,3 +54,51 @@
     return () => clearAll(svg)
   })
 </script>
+
+<!-- Status-class styling is co-located here so any consumer that mounts
+     this overlay gets the visuals automatically. The selectors target
+     the renderer's `g.node > g.node-bg > rect` structure; CSS beats the
+     bare `stroke`/`stroke-width` SVG attributes the renderer writes,
+     so no inline-style mutation or !important is required here. -->
+<svelte:head>
+  {@html `<style id="shumoku-node-status-css">
+    g.node.status-up .node-bg rect {
+      stroke: #22c55e;
+      stroke-width: 2px;
+    }
+    g.node.status-down .node-bg rect {
+      stroke: #ef4444;
+      stroke-width: 2.5px;
+      filter: drop-shadow(0 0 6px color-mix(in srgb, #ef4444 60%, transparent));
+      animation: shumoku-status-down-pulse 1.6s ease-in-out infinite alternate;
+    }
+    g.node.status-warning .node-bg rect {
+      stroke: #f97316;
+      stroke-width: 2px;
+    }
+    g.node.status-degraded .node-bg rect {
+      stroke: #eab308;
+      stroke-width: 2px;
+    }
+    g.node.status-unknown .node-bg rect {
+      stroke: #6b7280;
+      stroke-width: 2px;
+      stroke-dasharray: 4 3;
+    }
+    @keyframes shumoku-status-down-pulse {
+      from { opacity: 1; }
+      to   { opacity: 0.55; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      g.node.status-down .node-bg rect { animation: none; }
+    }
+    @media print {
+      g.node[class*="status-"] .node-bg rect {
+        stroke: unset !important;
+        stroke-width: unset !important;
+        filter: none !important;
+        animation: none !important;
+      }
+    }
+  </style>`}
+</svelte:head>

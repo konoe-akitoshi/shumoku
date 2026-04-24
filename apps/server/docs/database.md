@@ -122,7 +122,7 @@ Network topology definitions with optional metrics mapping.
     "link-0": {
       "monitoredNodeId": "router1",
       "interface": "ge-0/0/1",
-      "capacity": 1000000000
+      "bandwidth": 1000000000
     }
   }
 }

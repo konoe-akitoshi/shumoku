@@ -6,7 +6,7 @@
 import { specDeviceType } from '@shumoku/core'
 import { Hono } from 'hono'
 import { getDashboardService } from './dashboards.js'
-import { buildRenderOutput, getTopologyService } from './topologies.js'
+import { applyMappingBandwidth, buildRenderOutput, getTopologyService } from './topologies.js'
 
 export function createShareApi(): Hono {
   const app = new Hono()
@@ -76,7 +76,7 @@ export function createShareApi(): Hono {
       return c.json({
         id: parsed.id,
         name: parsed.name,
-        graph: parsed.graph,
+        graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

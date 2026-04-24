@@ -35,10 +35,9 @@ const FLOW_CSS = `
     fill: none;
     stroke: var(--wm-color, currentColor);
     stroke-width: var(--wm-width, 2);
-    stroke-linecap: round;
+    stroke-linecap: butt;
     stroke-dasharray: var(--wm-dash, 3 21);
-    opacity: var(--wm-opacity, 0.9);
-    filter: drop-shadow(0 0 2px currentColor);
+    opacity: var(--wm-opacity, 0.95);
     animation-duration: var(--wm-duration, 2s);
     animation-timing-function: linear;
     animation-iteration-count: infinite;
@@ -50,11 +49,24 @@ const FLOW_CSS = `
   .wm-overlay.wm-static {
     stroke-dasharray: none;
     animation: none;
-    opacity: 0.6;
+    opacity: 0.7;
   }
-  .wm-dimmed > path.link { opacity: 0.3; }
-  @keyframes wm-flow-in  { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
-  @keyframes wm-flow-out { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -24; } }
+  /* When a link has live metrics, tint the base pipe with the same
+     utilization color used by its flow lanes. The CSS variable is
+     set by WeathermapController on the link-group at apply() time.
+     SVG attribute 'stroke' is overridable by CSS, so no !important
+     or inline-style mutation is needed. */
+  .wm-active > path.link {
+    stroke: var(--wm-base-color, currentColor);
+    opacity: 0.55;
+    transition: stroke 200ms ease, opacity 200ms ease;
+  }
+  /* "in" animates forward along the path (source → destination);
+     "out" animates the opposite way. SVG stroke-dashoffset decreases
+     to shift the dash pattern forward along the drawn direction, and
+     increases to shift it backward. */
+  @keyframes wm-flow-in  { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -24; } }
+  @keyframes wm-flow-out { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 24; } }
   @media (prefers-reduced-motion: reduce) {
     .wm-overlay { animation: none !important; }
   }
@@ -188,35 +200,48 @@ export class WeathermapController {
       seen.add(linkId)
 
       const pathD = origPath.getAttribute('d') ?? ''
-      const strokeWidth = Number(origPath.getAttribute('stroke-width') ?? '2')
-      const offset = strokeWidth / 2
+      const baseWidth = Number(origPath.getAttribute('stroke-width') ?? '2')
+      // Both flow lanes live *inside* the base pipe: centered at
+      // ±(base/4) with thickness base/2 each, so the two lanes
+      // together span exactly the pipe's stroke range. The 2px
+      // floor keeps very thin links (default/type='thick') visible.
+      const laneWidth = Math.max(baseWidth / 2, 2)
+      const laneOffset = baseWidth / 4
 
       let entry = this.entries.get(linkId)
       if (!entry || entry.pathD !== pathD) {
         entry?.in.remove()
         entry?.out.remove()
-        const inPath = this.createPath(createOffsetPathD(origPath, offset), 'in', strokeWidth)
-        const outPath = this.createPath(createOffsetPathD(origPath, -offset), 'out', strokeWidth)
+        const inPath = this.createPath(createOffsetPathD(origPath, laneOffset), 'in', laneWidth)
+        const outPath = this.createPath(createOffsetPathD(origPath, -laneOffset), 'out', laneWidth)
         layer.appendChild(inPath)
         layer.appendChild(outPath)
         entry = { in: inPath, out: outPath, pathD, group }
         this.entries.set(linkId, entry)
       }
-      group.classList.add('wm-dimmed')
 
       const down = metrics.status === 'down'
       const inUtil = metrics.inUtilization ?? metrics.utilization ?? 0
       const outUtil = metrics.outUtilization ?? metrics.utilization ?? 0
+      // Tint the base pipe with the heavier direction's utilization
+      // color so the line itself signals load at a glance — the
+      // animated dots inside then carry the direction + volume.
+      const baseColor = down ? DOWN_COLOR : getUtilizationColor(Math.max(inUtil, outUtil))
+      group.classList.add('wm-active')
+      ;(group as SVGGElement).style.setProperty('--wm-base-color', baseColor)
+
       applyDirection(
         entry.in,
         down ? DOWN_COLOR : getUtilizationColor(inUtil),
         metrics.inBps ?? 0,
+        laneWidth,
         down,
       )
       applyDirection(
         entry.out,
         down ? DOWN_COLOR : getUtilizationColor(outUtil),
         metrics.outBps ?? 0,
+        laneWidth,
         down,
       )
     }
@@ -245,29 +270,48 @@ export class WeathermapController {
     if (!viewport) return null
     this.layer = document.createElementNS(SVG_NS, 'g')
     this.layer.setAttribute('class', 'wm-overlay-layer')
-    viewport.appendChild(this.layer)
+    // Place overlays between base edges and nodes so animated flow
+    // sits on the link lane, not on top of nodes / ports / labels.
+    // ShumokuRenderer draws children in this order inside .viewport:
+    //   canvas-bg → subgraphs → edges (link-groups) → nodes → ports
+    // We insert before the first node so we end up right after the
+    // last edge in stacking order.
+    const firstNode = viewport.querySelector('g.node')
+    if (firstNode) {
+      viewport.insertBefore(this.layer, firstNode)
+    } else {
+      viewport.appendChild(this.layer)
+    }
     return this.layer
   }
 
-  private createPath(d: string, direction: 'in' | 'out', strokeWidth: number): SVGPathElement {
+  private createPath(d: string, direction: 'in' | 'out', laneWidth: number): SVGPathElement {
     const p = document.createElementNS(SVG_NS, 'path')
     p.setAttribute('class', `wm-overlay${this.animationMode === 'reduced' ? ' wm-static' : ''}`)
     p.setAttribute('data-direction', direction)
     p.setAttribute('d', d)
-    p.style.setProperty('--wm-width', String(Math.max(strokeWidth, 3)))
+    p.style.setProperty('--wm-width', String(laneWidth))
     return p
   }
 
   private removeEntry(linkId: string, entry: OverlayEntry): void {
     entry.in.remove()
     entry.out.remove()
-    entry.group.classList.remove('wm-dimmed')
+    entry.group.classList.remove('wm-active')
+    ;(entry.group as SVGGElement).style.removeProperty('--wm-base-color')
     this.entries.delete(linkId)
   }
 }
 
-function applyDirection(path: SVGPathElement, color: string, bps: number, down: boolean): void {
+function applyDirection(
+  path: SVGPathElement,
+  color: string,
+  bps: number,
+  width: number,
+  down: boolean,
+): void {
   path.style.setProperty('--wm-color', color)
+  path.style.setProperty('--wm-width', String(width))
   if (down) {
     path.style.setProperty('--wm-dash', '8 4')
     path.style.setProperty('--wm-play', 'paused')

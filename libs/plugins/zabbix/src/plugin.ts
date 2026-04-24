@@ -141,7 +141,7 @@ export class ZabbixPlugin
             }
           }
 
-          const capacity = linkMapping.capacity || 1_000_000_000
+          const capacity = linkMapping.bandwidth || 1_000_000_000
           const inUtil = (inBps / capacity) * 100
           const outUtil = (outBps / capacity) * 100
           const maxUtil = Math.max(inUtil, outUtil)
