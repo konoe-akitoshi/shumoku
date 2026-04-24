@@ -6,31 +6,38 @@
  * Camera (pan + zoom) attachment utility for Shumoku's rendered SVG.
  *
  * Intentionally NOT bundled into `<ShumokuRenderer>` itself — camera
- * requirements differ per host app (Miro-style for the editor, plain
- * left-drag for dashboards, read-only for share pages, etc.). Consumers
- * call `attachCamera(svg, options)` on the rendered svg element when
- * they want pan/zoom, and pass in a policy that fits their UX.
+ * requirements differ per host app, so apps call `attachCamera(svg)`
+ * when they want pan/zoom.
  *
- * Attaches d3-zoom to the svg; transforms the child `<g class="viewport">`
- * produced by ShumokuRenderer.
+ * Wheel handling delegates to the `wheel-gestures` library. It
+ * contributes two things the hand-rolled version couldn't nail:
+ *
+ * 1. A reliable `isStart` flag for the first event of a gesture. We
+ *    use it to pick mouse vs trackpad exactly once per gesture, so
+ *    subsequent ambiguous events (fractional deltaY from Chrome's
+ *    smooth-scroll, mid-gesture dropped ctrlKey, etc.) can't flip the
+ *    verdict.
+ * 2. `isMomentum` identifies post-gesture inertia events so we can
+ *    ignore them — the biggest source of "zoom flipped to pan
+ *    mid-gesture" in the original implementation was a pinch's
+ *    momentum tail arriving without ctrlKey.
+ *
+ * UX policy (Figma/Miro-style, common for canvas editors):
+ * - **Mouse wheel** (plain)        → zoom at cursor
+ * - **Mouse ctrl+wheel**           → zoom at cursor (explicit)
+ * - **Trackpad two-finger**        → pan
+ * - **Trackpad pinch**             → zoom at cursor
+ *     (browsers synthesise ctrlKey=true on trackpad pinch)
+ *
+ * Device detection runs at `isStart` only. Once picked, the gesture
+ * stays in that mode even if individual events look ambiguous.
  */
 
 import { select } from 'd3-selection'
 import { type D3ZoomEvent, type ZoomBehavior, zoom, zoomIdentity, zoomTransform } from 'd3-zoom'
+import { type WheelEventState, WheelGestures } from 'wheel-gestures'
 
 export type PanFilter = (event: PointerEvent | MouseEvent) => boolean
-
-export type WheelMode =
-  /**
-   * Every wheel event zooms at the cursor (mouse-wheel-friendly).
-   * Trackpad pinch still zooms independently via ctrl/meta detection.
-   */
-  | 'zoom'
-  /**
-   * Every wheel event pans (trackpad-friendly; two-finger scroll pans
-   * the canvas in both axes). Pinch (ctrl/meta + wheel) zooms.
-   */
-  | 'pan'
 
 export interface CameraOptions {
   /** Zoom scale bounds. Default: [0.2, 10]. */
@@ -42,33 +49,30 @@ export interface CameraOptions {
    */
   panFilter?: PanFilter
   /**
-   * What the mouse wheel does when no modifier is held. No default —
-   * caller must pick `'zoom'` (mouse-centric apps) or `'pan'`
-   * (trackpad-centric / infinite-canvas apps). Pinch (ctrl/meta +
-   * wheel) always zooms regardless of `wheelMode`.
-   */
-  wheelMode: WheelMode
-  /**
-   * Zoom sensitivity exponent. The per-event scale factor is
-   * `Math.pow(wheelZoomSensitivity, -deltaY)`. Higher = faster zoom.
-   * Default 1.0015 — tuned so one mouse-wheel tick (`deltaY ≈ 100`)
-   * ≈ 14% zoom, and trackpad pinches (`deltaY ≈ 3–5`) feel smooth.
+   * Zoom sensitivity for mouse wheel and mouse ctrl+wheel (one big
+   * discrete deltaY per tick). Default 1.0015 — a typical mouse tick
+   * (deltaY ≈ 100) → ~14% zoom.
    */
   wheelZoomSensitivity?: number
+  /**
+   * Zoom sensitivity for trackpad pinches (many small ctrlKey-wheel
+   * events per frame). Default 1.01 — deltaY ≈ 10 → ~10% per event.
+   */
+  pinchZoomSensitivity?: number
 }
 
 export interface Camera {
   /** The current transform applied to the viewport. */
   getTransform(): { x: number; y: number; k: number }
-  /** Scale by a factor, centred on the svg. */
+  /** Scale by a factor, centred on the viewBox. */
   zoomBy(factor: number): void
   /** Set the absolute scale, optionally focused on a screen-space point. */
   zoomTo(scale: number, point?: [number, number]): void
   /** Set the absolute translation (viewport-space). */
   panTo(x: number, y: number): void
   /**
-   * Pan+zoom so a node with `data-id=nodeId` fills roughly `areaRatio` of
-   * the viewport (default 5%). Returns true if the node was found.
+   * Pan+zoom so a node with `data-id=nodeId` fills roughly `areaRatio`
+   * of the viewport (default 5%). Returns true if the node was found.
    */
   panToNode(nodeId: string, areaRatio?: number): boolean
   /** Reset to identity transform. */
@@ -81,15 +85,40 @@ const DEFAULT_PAN_FILTER: PanFilter = (e) =>
   ('button' in e && e.button === 1) || ('altKey' in e && e.altKey === true)
 
 /**
+ * Magnitude above which a single wheel event is considered a mouse
+ * wheel tick (vs. a trackpad scroll frame). Chrome's smooth-scroll
+ * emits fractional deltaY even for mouse ticks, so we can't rely on
+ * `Number.isInteger(deltaY)` — magnitude is the practical signal.
+ */
+const MOUSE_TICK_THRESHOLD = 50
+
+/**
+ * Classify the very first event of a gesture. Only called at
+ * `state.isStart === true`, so the verdict doesn't flip within the
+ * gesture no matter what individual frames look like.
+ */
+function detectDevice(e: WheelEvent, axisDeltaX: number, axisDeltaY: number): 'mouse' | 'trackpad' {
+  // Firefox's LINE/PAGE deltaMode is only ever produced by mouse wheels.
+  if (e.deltaMode !== 0) return 'mouse'
+  // A trackpad is the only device that routinely emits horizontal
+  // scroll on the wheel event stream.
+  if (Math.abs(axisDeltaX) > 0) return 'trackpad'
+  // Otherwise the only reliable signal left is magnitude: a mouse
+  // wheel tick is large (≥ 50 after normalisation), a trackpad frame
+  // during an active gesture is small.
+  return Math.abs(axisDeltaY) >= MOUSE_TICK_THRESHOLD ? 'mouse' : 'trackpad'
+}
+
+/**
  * Attach a pan+zoom camera to an svg with a `<g class="viewport">` child.
  * Returns a handle with imperative controls + a `detach()` cleanup.
  */
-export function attachCamera(svg: SVGSVGElement, options: CameraOptions): Camera {
+export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): Camera {
   const {
     scaleExtent = [0.2, 10],
     panFilter = DEFAULT_PAN_FILTER,
-    wheelMode,
     wheelZoomSensitivity = 1.0015,
+    pinchZoomSensitivity = 1.01,
   } = options
 
   const viewportEl = svg.querySelector<SVGGElement>('.viewport')
@@ -101,19 +130,12 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions): Camera
 
   // The renderer uses a viewBox sized to the layout bounds; the svg
   // element itself is CSS-sized 100% of its container. That means the
-  // viewBox user-space unit is NOT one CSS pixel: content inside the
-  // svg (and our `.viewport` <g>) lives in user-space coordinates.
-  // d3-zoom stores its transform in whatever coordinate system we feed
-  // it, and applies that transform as an SVG `transform` attribute on
-  // the viewport <g> — which is interpreted in user-space. So we
-  // standardise everything in user-space: set the zoom's `extent` to
-  // the viewBox bounds, and convert wheel-event cursor positions from
-  // screen pixels to user-space before passing to d3-zoom.
-  //
-  // Without this, the "fixed point" d3-zoom is asked to preserve during
-  // a scale operation is in a different coordinate system than the
-  // transform actually applied, so the cursor drifts away from the
-  // zoom focus by a factor of viewBoxScale.
+  // viewBox user-space unit is NOT one CSS pixel. d3-zoom applies its
+  // transform as an SVG `transform` attribute on the viewport <g>,
+  // which is interpreted in user-space — so we feed d3-zoom user-space
+  // everywhere (extent = viewBox, wheel points converted via
+  // `svg.getScreenCTM().inverse()`). Otherwise the cursor drifts from
+  // the zoom focus by a factor of the viewBox scale.
 
   const cursorToUserCoords = (clientX: number, clientY: number): [number, number] | null => {
     const ctm = svg.getScreenCTM()?.inverse()
@@ -130,7 +152,6 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions): Camera
     .scaleExtent(scaleExtent)
     .extent((): [[number, number], [number, number]] => {
       const vb = svg.viewBox.baseVal
-      // When no viewBox is set, fall back to clientSize (pixel-equivalent).
       if (vb.width === 0 || vb.height === 0) {
         return [
           [0, 0],
@@ -143,12 +164,9 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions): Camera
       ]
     })
     .filter((e) => {
-      if (e.type === 'wheel') {
-        // d3-zoom's own wheel handling is disabled — we drive it via
-        // the custom wheel listener below to route cursor points
-        // through user-space coords.
-        return false
-      }
+      // wheel-gestures drives wheel handling; d3-zoom's own wheel
+      // path is disabled so the two don't both respond to one event.
+      if (e.type === 'wheel') return false
       if (e.type === 'mousedown' || e.type === 'pointerdown') {
         return panFilter(e as PointerEvent | MouseEvent)
       }
@@ -159,30 +177,53 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions): Camera
     })
 
   svgSel.call(zoomBehavior)
-  // Suppress d3-zoom's default contextmenu handler so element-level
-  // oncontextmenu handlers can fire.
   svgSel.on('contextmenu.zoom', null)
 
-  const handleWheel = (e: WheelEvent) => {
-    e.preventDefault()
-    const point = cursorToUserCoords(e.clientX, e.clientY)
+  // Sticky per-gesture device verdict — set at `isStart`, read on
+  // every subsequent event in the same gesture.
+  let gestureDevice: 'mouse' | 'trackpad' = 'mouse'
+
+  const wg = WheelGestures({ preventWheelAction: true })
+  const unobserve = wg.observe(svg)
+  const offWheel = wg.on('wheel', (state: WheelEventState) => {
+    const rawEvent = state.event as WheelEvent
+
+    // Detect device only on the first event of a gesture — `isStart`
+    // is reliable thanks to wheel-gestures' momentum tracking.
+    if (state.isStart) {
+      gestureDevice = detectDevice(rawEvent, rawEvent.deltaX, rawEvent.deltaY)
+    }
+
+    const point = cursorToUserCoords(rawEvent.clientX, rawEvent.clientY)
     if (!point) return
 
-    // Pinch (ctrl/meta + wheel) always zooms, regardless of wheelMode.
-    // Browsers synthesise ctrlKey=true on trackpad pinch, so this
-    // handles both explicit ctrl+wheel and pinch gestures.
-    if (e.ctrlKey || e.metaKey || wheelMode === 'zoom') {
-      const factor = wheelZoomSensitivity ** -e.deltaY
-      zoomBehavior.scaleBy(svgSel, factor, point)
+    // Zoom: ctrl/meta active + NOT momentum. Skipping momentum here
+    // prevents a post-pinch inertia tail from continuing to zoom
+    // after the user's fingers have lifted.
+    if ((rawEvent.ctrlKey || rawEvent.metaKey) && !state.isMomentum) {
+      const sensitivity = gestureDevice === 'mouse' ? wheelZoomSensitivity : pinchZoomSensitivity
+      zoomBehavior.scaleBy(svgSel, sensitivity ** -rawEvent.deltaY, point)
       return
     }
-    // wheelMode === 'pan' — pan both axes as emitted. Two-finger
-    // trackpad scroll works naturally; mouse wheel pans vertically.
-    // Pan uses user-space units too (consistent with extent).
+
+    // For mouse wheel (no ctrl): zoom. Mouse wheels don't emit
+    // OS-level momentum so `isMomentum` is effectively always false
+    // here; guarding on it anyway means if some system does emit
+    // momentum-like events, we don't double-fire a zoom step.
+    if (gestureDevice === 'mouse') {
+      if (state.isMomentum) return
+      zoomBehavior.scaleBy(svgSel, wheelZoomSensitivity ** -rawEvent.deltaY, point)
+      return
+    }
+
+    // Trackpad two-finger → pan. We deliberately do NOT skip momentum
+    // here: it's the inertia after a flick, and users expect a
+    // trackpad pan to decelerate naturally instead of snapping to a
+    // stop. Divide by k so on-screen pan distance matches the wheel
+    // delta regardless of current zoom level.
     const current = zoomTransform(svg)
-    zoomBehavior.translateBy(svgSel, -e.deltaX / current.k, -e.deltaY / current.k)
-  }
-  svg.addEventListener('wheel', handleWheel, { passive: false })
+    zoomBehavior.translateBy(svgSel, -rawEvent.deltaX / current.k, -rawEvent.deltaY / current.k)
+  })
 
   const viewBoxCenter = (): [number, number] => {
     const vb = svg.viewBox.baseVal
@@ -217,9 +258,9 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions): Camera
       const node = svg.querySelector<SVGGElement>(`g.node[data-id="${cssEscapedId}"]`)
       if (!node) return false
 
-      // Work entirely in user-space: use getBBox() for node bounds in
-      // the viewport's local coords, then translate to put its centre
-      // at the viewBox centre under the target scale.
+      // Work entirely in user-space: getBBox() returns bounds in the
+      // viewport's local coords, then translate to centre it in the
+      // viewBox at the target scale.
       const bbox = node.getBBox()
       const vb = svg.viewBox.baseVal
       const vbCx = vb.x + vb.width / 2
@@ -247,8 +288,9 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions): Camera
     },
 
     detach() {
+      offWheel()
+      unobserve()
       svgSel.on('.zoom', null)
-      svg.removeEventListener('wheel', handleWheel)
       viewportEl.removeAttribute('transform')
     },
   }

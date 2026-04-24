@@ -190,7 +190,7 @@ export default function EditorClient() {
           // needs the svg to be in the DOM.
           requestAnimationFrame(() => {
             const svg = el.svgElement
-            if (svg) attachCamera(svg, { wheelMode: 'zoom' })
+            if (svg) attachCamera(svg)
           })
         }
       } catch (e) {

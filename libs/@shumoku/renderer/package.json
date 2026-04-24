@@ -48,7 +48,8 @@
     "@shumoku/core": "workspace:*",
     "d3-drag": "^3.0.0",
     "d3-selection": "^3.0.0",
-    "d3-zoom": "^3.0.0"
+    "d3-zoom": "^3.0.0",
+    "wheel-gestures": "^2.2.48"
   },
   "devDependencies": {
     "@sveltejs/package": "^2.3.2",

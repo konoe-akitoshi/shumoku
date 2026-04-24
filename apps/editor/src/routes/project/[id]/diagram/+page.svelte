@@ -21,12 +21,12 @@
   let renderer: ShumokuRenderer | undefined = $state()
   let rendererSvg: SVGSVGElement | null = $state(null)
 
-  // Editor camera: mouse-wheel zooms, Alt+left-click (or middle-click)
-  // pans, pinch always zooms. Trackpad users can still two-finger pan
-  // by holding Alt.
+  // Editor camera: auto-detects mouse (wheel → zoom) vs trackpad
+  // (two-finger → pan). Pinch always zooms. Alt+left or middle-click
+  // drags the viewport.
   $effect(() => {
     if (!rendererSvg) return
-    const camera = attachCamera(rendererSvg, { wheelMode: 'zoom' })
+    const camera = attachCamera(rendererSvg)
     return () => camera.detach()
   })
   let selected = $state<{ id: string; type: string } | null>(null)
