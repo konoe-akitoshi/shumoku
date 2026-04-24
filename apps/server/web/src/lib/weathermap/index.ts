@@ -211,24 +211,24 @@ export class WeathermapController {
       const down = metrics.status === 'down'
       const inUtil = metrics.inUtilization ?? metrics.utilization ?? 0
       const outUtil = metrics.outUtilization ?? metrics.utilization ?? 0
-      // Base width tracks the underlying link's stroke-width (which
-      // already encodes bandwidth/link type). Utilization scales it
-      // so each lane fattens under heavier load.
-      const baseWidth = Math.max(strokeWidth, 3)
+      // Overlay lane width tracks the underlying link's stroke-width,
+      // which the renderer already derives from the link's bandwidth
+      // metadata. Copying it through (rather than clamping to a
+      // minimum) preserves the relative-thickness story the diagram
+      // already tells — a 10G link's lanes stay visibly fatter than
+      // a 100M link's, instead of both collapsing to the same width.
       applyDirection(
         entry.in,
         down ? DOWN_COLOR : getUtilizationColor(inUtil),
         metrics.inBps ?? 0,
-        inUtil,
-        baseWidth,
+        strokeWidth,
         down,
       )
       applyDirection(
         entry.out,
         down ? DOWN_COLOR : getUtilizationColor(outUtil),
         metrics.outBps ?? 0,
-        outUtil,
-        baseWidth,
+        strokeWidth,
         down,
       )
     }
@@ -277,7 +277,7 @@ export class WeathermapController {
     p.setAttribute('class', `wm-overlay${this.animationMode === 'reduced' ? ' wm-static' : ''}`)
     p.setAttribute('data-direction', direction)
     p.setAttribute('d', d)
-    p.style.setProperty('--wm-width', String(Math.max(strokeWidth, 3)))
+    p.style.setProperty('--wm-width', String(strokeWidth))
     return p
   }
 
@@ -293,17 +293,11 @@ function applyDirection(
   path: SVGPathElement,
   color: string,
   bps: number,
-  utilization: number,
-  baseWidth: number,
+  width: number,
   down: boolean,
 ): void {
   path.style.setProperty('--wm-color', color)
-  // Width scales linearly with utilization (0-100%): 0.5x at idle,
-  // 2.0x at saturation. Clamped so a runaway utilization value can't
-  // produce a huge stroke.
-  const clampedUtil = Math.max(0, Math.min(100, utilization))
-  const widthScale = down ? 1 : 0.5 + (clampedUtil / 100) * 1.5
-  path.style.setProperty('--wm-width', String(baseWidth * widthScale))
+  path.style.setProperty('--wm-width', String(width))
   if (down) {
     path.style.setProperty('--wm-dash', '8 4')
     path.style.setProperty('--wm-play', 'paused')
