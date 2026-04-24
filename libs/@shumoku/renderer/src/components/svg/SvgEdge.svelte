@@ -1,18 +1,21 @@
 <script lang="ts">
   import type { ResolvedEdge } from '@shumoku/core'
+  import type { LinkOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
-  import { getVlanStroke, pointsToPathD } from '../../lib/svg-coords'
+  import { computePortLabelPosition, getVlanStroke, pointsToPathD } from '../../lib/svg-coords'
 
   let {
     edge,
     colors,
     selected = false,
+    overlay,
     onselect,
     oncontextmenu: onctx,
   }: {
     edge: ResolvedEdge
     colors: RenderColors
     selected?: boolean
+    overlay?: LinkOverlaySnippet
     onselect?: (edgeId: string) => void
     oncontextmenu?: (edgeId: string, e: MouseEvent) => void
   } = $props()
@@ -52,6 +55,19 @@
     if (!a || !b) return null
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
   })
+  let basePathElement = $state<SVGPathElement | null>(null)
+  const overlayContext = $derived({
+    selected,
+    pathElement: basePathElement,
+    pathD,
+    width: edge.width,
+    fromPort: edge.fromPort,
+    toPort: edge.toPort,
+    fromPortPosition: edge.fromPort?.absolutePosition ?? null,
+    toPortPosition: edge.toPort?.absolutePosition ?? null,
+    fromPortLabelPosition: edge.fromPort ? computePortLabelPosition(edge.fromPort) : null,
+    toPortLabelPosition: edge.toPort ? computePortLabelPosition(edge.toPort) : null,
+  })
 
   function onclick(e: MouseEvent) {
     e.stopPropagation()
@@ -70,6 +86,7 @@
   {#if isDouble}
     {@const gap = Math.max(3, Math.round(edge.width * 0.9))}
     <path
+      bind:this={basePathElement}
       d={pathD}
       fill="none"
       stroke={strokeColor}
@@ -95,6 +112,7 @@
     />
   {:else}
     <path
+      bind:this={basePathElement}
       class="link"
       d={pathD}
       fill="none"
@@ -105,6 +123,8 @@
       pointer-events="none"
     />
   {/if}
+
+  {@render overlay?.(edge, overlayContext)}
 
   <!-- Hit area -->
   <path

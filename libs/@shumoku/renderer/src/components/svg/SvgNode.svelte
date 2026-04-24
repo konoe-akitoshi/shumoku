@@ -8,6 +8,7 @@
     LABEL_LINE_HEIGHT,
     specDeviceType,
   } from '@shumoku/core'
+  import type { NodeOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
   import { elementDrag } from '../../lib/use-drag'
 
@@ -17,6 +18,7 @@
     shadowFilterId = 'node-shadow',
     selected = false,
     interactive = false,
+    overlay,
     ondragmove,
     onaddport,
     onselect,
@@ -27,6 +29,7 @@
     shadowFilterId?: string
     selected?: boolean
     interactive?: boolean
+    overlay?: NodeOverlaySnippet
     ondragmove?: (id: string, x: number, y: number) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onselect?: (id: string) => void
@@ -50,6 +53,14 @@
   )
   const strokeWidth = $derived(selected ? 2.5 : (node.style?.strokeWidth ?? (hovered ? 2 : 1.5)))
   const strokeDasharray = $derived(node.style?.strokeDasharray ?? '')
+  const overlayContext = $derived({
+    selected,
+    interactive,
+    cx,
+    cy,
+    width: size.width,
+    height: size.height,
+  })
 
   // Icon
   const iconPath = $derived(getDeviceIcon(specDeviceType(node.spec)))
@@ -257,6 +268,8 @@
       />
     {/if}
   </g>
+
+  {@render overlay?.(node, overlayContext)}
 
   <!-- Content -->
   <g class="node-fg" pointer-events="none">

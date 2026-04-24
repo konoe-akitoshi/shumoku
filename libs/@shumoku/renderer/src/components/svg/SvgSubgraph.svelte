@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Subgraph, SurfaceToken, Theme } from '@shumoku/core'
+  import type { SubgraphOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
   import { elementDrag } from '../../lib/use-drag'
 
@@ -9,6 +10,7 @@
     theme,
     selected = false,
     interactive = false,
+    overlay,
     ondragmove,
     onselect,
     oncontextmenu: onctx,
@@ -18,6 +20,7 @@
     theme?: Theme
     selected?: boolean
     interactive?: boolean
+    overlay?: SubgraphOverlaySnippet
     ondragmove?: (sgId: string, x: number, y: number) => void
     onselect?: (sgId: string) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
@@ -51,6 +54,16 @@
 
   const strokeWidth = $derived(style.strokeWidth ?? 3)
   const strokeDasharray = $derived(style.strokeDasharray ?? '')
+  const overlayContext = $derived({
+    selected,
+    interactive,
+    bounds: {
+      x: subgraph.bounds?.x ?? 0,
+      y: subgraph.bounds?.y ?? 0,
+      width: subgraph.bounds?.width ?? 0,
+      height: subgraph.bounds?.height ?? 0,
+    },
+  })
 </script>
 
 <g class="subgraph" data-id={subgraph.id}>
@@ -74,6 +87,7 @@
       onDrag: (dx, dy) => ondragmove?.(subgraph.id, (subgraph.bounds?.x ?? 0) + dx, (subgraph.bounds?.y ?? 0) + dy),
     })}
   />
+  {@render overlay?.(subgraph, overlayContext)}
   <text
     x={(subgraph.bounds?.x ?? 0) + 10}
     y={(subgraph.bounds?.y ?? 0) + 20}

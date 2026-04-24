@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ResolvedPort } from '@shumoku/core'
   import { SMALL_LABEL_CHAR_WIDTH } from '@shumoku/core'
+  import type { PortOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
   import { computePortLabelPosition } from '../../lib/svg-coords'
 
@@ -11,6 +12,7 @@
     selected = false,
     interactive = false,
     linked = false,
+    overlay,
     onlinkstart,
     onlinkend,
     onselect,
@@ -23,6 +25,7 @@
     selected?: boolean
     interactive?: boolean
     linked?: boolean
+    overlay?: PortOverlaySnippet
     onlinkstart?: (portId: string, x: number, y: number) => void
     onlinkend?: (portId: string) => void
     onselect?: (portId: string) => void
@@ -44,6 +47,15 @@
     return labelPos.x - 2
   })
   const bgY = $derived(labelPos.y - labelHeight + 3)
+  const overlayContext = $derived({
+    selected,
+    interactive,
+    linked,
+    px,
+    py,
+    width: pw,
+    height: ph,
+  })
 
   let hovered = $state(false)
 
@@ -105,6 +117,8 @@
     rx="2"
     pointer-events="none"
   />
+
+  {@render overlay?.(port, overlayContext)}
 
   {#if !hideLabel}
     <rect

@@ -26,6 +26,7 @@
     specDeviceType,
   } from '@shumoku/core'
   import { SvelteMap } from 'svelte/reactivity'
+  import type { RendererOverlaySnippets } from '../lib/overlays'
   import { themeToColors } from '../lib/render-colors'
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
@@ -38,7 +39,7 @@
     for (const [k, v] of source) target.set(k, v)
   }
 
-  interface RendererProps {
+  interface RendererProps extends RendererOverlaySnippets {
     // Direct state (preferred — parent owns state)
     nodes?: Map<string, Node>
     ports?: Map<string, ResolvedPort>
@@ -90,6 +91,10 @@
     onnodeadd,
     onnodedelete,
     oncreatelink,
+    subgraphOverlay,
+    linkOverlay,
+    nodeOverlay,
+    portOverlay,
   }: RendererProps = $props()
 
   const colors = $derived(themeToColors(theme))
@@ -573,6 +578,10 @@
     {interactive}
     {selection}
     {linkedPorts}
+    {subgraphOverlay}
+    {linkOverlay}
+    {nodeOverlay}
+    {portOverlay}
     linkPreview={linkDrag}
     bind:svgEl={svgElement}
     ondragmove={handleDragMove}
