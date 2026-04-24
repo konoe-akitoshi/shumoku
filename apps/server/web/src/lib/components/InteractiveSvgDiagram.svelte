@@ -197,7 +197,7 @@
           id: l.id ?? `${from}->${to}`,
           from,
           to,
-          bandwidth: l.bandwidth,
+          bandwidth: l.bandwidth !== undefined ? String(l.bandwidth) : undefined,
         }
       })
     const nodeLabel = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
@@ -262,7 +262,7 @@
     const to = typeof link.to === 'string' ? link.to : link.to.node
     let out = `<strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong>`
     if (link.bandwidth)
-      out += `<br><span class="muted">Bandwidth: ${escapeHtml(link.bandwidth)}</span>`
+      out += `<br><span class="muted">Bandwidth: ${escapeHtml(String(link.bandwidth))}</span>`
 
     const m = $metricsData?.links?.[hovered.id]
     if (m) {

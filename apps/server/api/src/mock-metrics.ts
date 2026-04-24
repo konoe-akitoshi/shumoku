@@ -3,9 +3,10 @@
  * Generates simulated metrics for development and testing
  */
 
-import type { Link, NetworkGraph } from '@shumoku/core'
-import { getBandwidthCapacity } from './bandwidth.js'
+import { type Link, type NetworkGraph, resolveBandwidthBps } from '@shumoku/core'
 import type { MetricsData } from './types.js'
+
+const DEFAULT_BANDWIDTH_BPS = 1_000_000_000 // 1 Gbps — fallback when link.bandwidth is unset
 
 /**
  * Extract node ID from a link endpoint (can be string or object)
@@ -63,7 +64,7 @@ export class MockMetricsProvider {
         status === 'up' ? this.generateSmoothValue(`link:${linkId}:out`, 0, 95, 10) : 0
 
       // Calculate bandwidth in bps based on link bandwidth setting
-      const capacity = getBandwidthCapacity(link.bandwidth)
+      const capacity = resolveBandwidthBps(link.bandwidth) ?? DEFAULT_BANDWIDTH_BPS
       const inBps = status === 'up' ? Math.round((inUtilization / 100) * capacity) : 0
       const outBps = status === 'up' ? Math.round((outUtilization / 100) * capacity) : 0
 
@@ -107,8 +108,4 @@ export class MockMetricsProvider {
     this.lastValues.set(key, current)
     return current
   }
-
-  /**
-   * Get bandwidth capacity in bps
-   */
 }

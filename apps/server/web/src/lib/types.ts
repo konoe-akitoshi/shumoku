@@ -152,7 +152,10 @@ export interface NodeMetricsMapping {
 export interface LinkMetricsMapping {
   monitoredNodeId?: string
   interface?: string
-  capacity?: number
+  /** Per-link bandwidth override in bits per second. Wins over
+   * the topology's `link.bandwidth` for both stroke-width and
+   * utilization calculation. */
+  bandwidth?: number
 }
 
 export interface MetricsMapping {

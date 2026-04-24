@@ -143,7 +143,12 @@ export interface NodeMetricsMapping {
 export interface LinkMetricsMapping {
   monitoredNodeId?: string
   interface?: string
-  capacity?: number
+  /**
+   * Override for the link's bandwidth (bits per second). When set,
+   * this value wins over the topology's `link.bandwidth` for both
+   * stroke-width rendering and utilization calculation.
+   */
+  bandwidth?: number
 }
 
 export interface MetricsMapping {

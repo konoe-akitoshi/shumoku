@@ -4,13 +4,13 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { resolveBandwidthBps } from '@shumoku/core'
 import type { Server as BunServer, ServerWebSocket } from 'bun'
 import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { cors } from 'hono/cors'
 import { createApiRouter } from './api/index.js'
 import { getTopologyService } from './api/topologies.js'
-import { parseBandwidthCapacity } from './bandwidth.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { generateMetricsHtml } from './html-generator.js'
 import { MockMetricsProvider } from './mock-metrics.js'
@@ -361,14 +361,17 @@ export class Server {
                 }
               }
 
-              // Enrich mapping with bandwidth-derived capacity from graph
+              // Backfill mapping.bandwidth from the topology's
+              // link.bandwidth when the operator hasn't set an
+              // explicit override. The plugin sees a single
+              // authoritative bps number per link.
               if (parsed?.graph?.links) {
-                for (const link of parsed.graph.links) {
-                  const linkId = link.id || `link-${parsed.graph.links.indexOf(link)}`
+                for (const [i, link] of parsed.graph.links.entries()) {
+                  const linkId = link.id || `link-${i}`
                   const linkMapping = mapping.links?.[linkId]
-                  if (linkMapping && !linkMapping.capacity && link.bandwidth) {
-                    const cap = parseBandwidthCapacity(link.bandwidth)
-                    if (cap) linkMapping.capacity = cap
+                  if (linkMapping && linkMapping.bandwidth === undefined) {
+                    const bps = resolveBandwidthBps(link.bandwidth)
+                    if (bps !== undefined) linkMapping.bandwidth = bps
                   }
                 }
               }

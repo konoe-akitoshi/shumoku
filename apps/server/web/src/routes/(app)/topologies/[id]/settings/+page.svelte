@@ -670,7 +670,7 @@
     mappingStore.updateLink(linkId, { ...existing, interface: interfaceName || undefined })
   }
 
-  const standardCapacities = new Set([
+  const standardBandwidths = new Set([
     '100000000',
     '1000000000',
     '10000000000',
@@ -678,21 +678,21 @@
     '40000000000',
     '100000000000',
   ])
-  let customCapacityLinks = $state(new Set<string>())
+  let customBandwidthLinks = $state(new Set<string>())
 
-  function capacityToSelectValue(linkId: string, capacity?: number): string {
-    if (customCapacityLinks.has(linkId)) return 'custom'
-    if (!capacity) return ''
-    const s = String(capacity)
-    return standardCapacities.has(s) ? s : 'custom'
+  function bandwidthToSelectValue(linkId: string, bandwidth?: number): string {
+    if (customBandwidthLinks.has(linkId)) return 'custom'
+    if (!bandwidth) return ''
+    const s = String(bandwidth)
+    return standardBandwidths.has(s) ? s : 'custom'
   }
 
-  function handleLinkCapacityChange(linkId: string, capacityBps: number | undefined) {
+  function handleLinkBandwidthChange(linkId: string, bandwidthBps: number | undefined) {
     const existing = $linkMapping[linkId] || {}
-    if (capacityBps !== undefined) {
-      mappingStore.updateLink(linkId, { ...existing, capacity: capacityBps })
+    if (bandwidthBps !== undefined) {
+      mappingStore.updateLink(linkId, { ...existing, bandwidth: bandwidthBps })
     } else {
-      const { capacity: _, ...rest } = existing
+      const { bandwidth: _, ...rest } = existing
       if (Object.keys(rest).length > 0) {
         mappingStore.updateLink(linkId, rest)
       } else {
@@ -1645,21 +1645,21 @@
                         <select
                           class="input text-sm"
                           style="width: 6rem;"
-                          value={capacityToSelectValue(edge.id, currentMapping.capacity)}
+                          value={bandwidthToSelectValue(edge.id, currentMapping.bandwidth)}
                           onchange={(e) => {
                             const val = e.currentTarget.value
                             if (val === '') {
-                              customCapacityLinks.delete(edge.id)
-                              customCapacityLinks = new Set(customCapacityLinks)
-                              handleLinkCapacityChange(edge.id, undefined)
+                              customBandwidthLinks.delete(edge.id)
+                              customBandwidthLinks = new Set(customBandwidthLinks)
+                              handleLinkBandwidthChange(edge.id, undefined)
                             } else if (val === 'custom') {
-                              customCapacityLinks.add(edge.id)
-                              customCapacityLinks = new Set(customCapacityLinks)
-                              handleLinkCapacityChange(edge.id, 1_000_000_000)
+                              customBandwidthLinks.add(edge.id)
+                              customBandwidthLinks = new Set(customBandwidthLinks)
+                              handleLinkBandwidthChange(edge.id, 1_000_000_000)
                             } else {
-                              customCapacityLinks.delete(edge.id)
-                              customCapacityLinks = new Set(customCapacityLinks)
-                              handleLinkCapacityChange(edge.id, parseInt(val, 10))
+                              customBandwidthLinks.delete(edge.id)
+                              customBandwidthLinks = new Set(customBandwidthLinks)
+                              handleLinkBandwidthChange(edge.id, parseInt(val, 10))
                             }
                           }}
                         >

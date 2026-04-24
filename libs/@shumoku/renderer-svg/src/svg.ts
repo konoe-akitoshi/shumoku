@@ -27,6 +27,7 @@ import {
   computeNodeSize,
   DEFAULT_ICON_SIZE,
   darkTheme,
+  getBandwidthWidth,
   getDeviceIcon,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
@@ -523,9 +524,13 @@ export class SVGRenderer {
 
     // Build legend items
     if (settings.showBandwidth && usedBandwidths.size > 0) {
-      const sortedBandwidths: LinkBandwidth[] = ['1G', '10G', '25G', '40G', '100G'].filter((b) =>
+      // The legend only surfaces the known preset labels. Arbitrary
+      // numeric bandwidths (e.g. mapping overrides from monitoring)
+      // still render correctly but are omitted from the legend to
+      // keep it tidy.
+      const sortedBandwidths = ['1G', '10G', '25G', '40G', '100G'].filter((b) =>
         usedBandwidths.has(b as LinkBandwidth),
-      ) as LinkBandwidth[]
+      )
 
       for (const bw of sortedBandwidths) {
         const sw = this.getBandwidthStrokeWidth(bw)
@@ -1271,7 +1276,8 @@ ${fg}
     const attrs: string[] = []
 
     // Basic link attributes
-    if (link.bandwidth) attrs.push(`data-link-bandwidth="${this.escapeXml(link.bandwidth)}"`)
+    if (link.bandwidth)
+      attrs.push(`data-link-bandwidth="${this.escapeXml(String(link.bandwidth))}"`)
     if (link.vlan && link.vlan.length > 0) {
       attrs.push(`data-link-vlan="${link.vlan.join(',')}"`)
     }
@@ -1445,21 +1451,8 @@ ${fg}
    * 40G  → 18px
    * 100G → 24px
    */
-  private getBandwidthStrokeWidth(bandwidth?: string): number {
-    switch (bandwidth) {
-      case '1G':
-        return 6
-      case '10G':
-        return 10
-      case '25G':
-        return 14
-      case '40G':
-        return 18
-      case '100G':
-        return 24
-      default:
-        return 0
-    }
+  private getBandwidthStrokeWidth(bandwidth?: LinkBandwidth): number {
+    return getBandwidthWidth(bandwidth)
   }
 
   /**
