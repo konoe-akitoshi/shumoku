@@ -1435,21 +1435,19 @@ ${fg}
   private getLinkStrokeWidth(type: LinkType): number {
     switch (type) {
       case 'thick':
-        return 3
+        return 4
       case 'double':
-        return 2
+        return 3
       default:
-        return 2
+        return 3
     }
   }
 
   /**
-   * Bandwidth rendering configuration - stroke width represents speed
-   * 1G   → 6px
-   * 10G  → 10px
-   * 25G  → 14px
-   * 40G  → 18px
-   * 100G → 24px
+   * Delegates to core's shared bandwidth→width curve. See
+   * `getBandwidthWidth` / `WIDTH_ANCHORS` in @shumoku/core for the
+   * calibration; tune there so every surface (renderer-svg, the
+   * reactive Svelte renderer, weathermap) stays in lockstep.
    */
   private getBandwidthStrokeWidth(bandwidth?: LinkBandwidth): number {
     return getBandwidthWidth(bandwidth)

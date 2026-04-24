@@ -58,18 +58,19 @@ export function resolveBandwidthBps(bw: LinkBandwidth | null | undefined): numbe
 }
 
 /**
- * Width anchors in (log10(bps), pixel-width) form. Chosen so the
- * historical presets render at the same widths they always have —
- * 1G→6, 10G→10, 25G→14, 40G→18, 100G→24 — while in-between values
- * (2.5G, 50G, 500M, …) get a smoothly interpolated width.
+ * Width anchors in (log10(bps), pixel-width) form. Calibration bumped
+ * from the original 1G→6…100G→24 curve by ~40% so diagrams read as
+ * "pipes" rather than hairlines, and so the weathermap flow (which
+ * now lives inside the stroke) has enough room for its two lanes.
+ * In-between values (2.5G, 50G, 500M, …) are smoothly interpolated.
  */
 const WIDTH_ANCHORS: readonly (readonly [number, number])[] = [
-  [Math.log10(100_000_000), 3], // 100M
-  [Math.log10(1_000_000_000), 6], // 1G
-  [Math.log10(10_000_000_000), 10], // 10G
-  [Math.log10(25_000_000_000), 14], // 25G
-  [Math.log10(40_000_000_000), 18], // 40G
-  [Math.log10(100_000_000_000), 24], // 100G
+  [Math.log10(100_000_000), 5], // 100M
+  [Math.log10(1_000_000_000), 8], // 1G
+  [Math.log10(10_000_000_000), 14], // 10G
+  [Math.log10(25_000_000_000), 20], // 25G
+  [Math.log10(40_000_000_000), 26], // 40G
+  [Math.log10(100_000_000_000), 34], // 100G
 ]
 
 /**
@@ -122,8 +123,8 @@ export function getLinkWidth(link: Link): number {
   if (bps !== undefined) return bpsToWidth(bps)
 
   // Link type
-  if (link.type === 'thick') return 3
+  if (link.type === 'thick') return 4
 
   // Default
-  return 2
+  return 3
 }
