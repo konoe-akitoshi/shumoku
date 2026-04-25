@@ -224,7 +224,7 @@
 <!-- Node Search Palette -->
 <NodeSearchPalette
   bind:open={searchPaletteOpen}
-  getSvgElement={() => diagramComponent?.getSvgElement() ?? null}
+  getGraph={() => diagramComponent?.getGraph() ?? null}
   onSelect={handleSearchSelect}
 />
 

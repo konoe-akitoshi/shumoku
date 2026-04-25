@@ -152,6 +152,10 @@
     return viewer?.getSvgElement() ?? null
   }
 
+  export function getGraph(): NetworkGraph | undefined {
+    return graph
+  }
+
   export function panToNode(nodeId: string): void {
     viewer?.panToNode(nodeId)
   }
