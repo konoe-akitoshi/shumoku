@@ -1,36 +1,42 @@
 # Topology 描画アーキテクチャ
 
 サーバー Web アプリのトポロジー描画スタック — `@shumoku/renderer` を
-中核に、renderer が公開する構造化オーバーレイ(link / node / port /
-subgraph snippet)と、従来型のサイドカー(node-status / highlight /
-tooltip / camera)を組み合わせる構造 — を **アーキテクチャ
-・構造・相関・フロー** の4軸で説明する。
+中核に、その上に複数のオーバーレイ(weathermap / node-status /
+highlight / tooltip / camera)が乗る構造 — を **アーキテクチャ・
+構造・相関・フロー** の4軸で説明する。
 
-本書の主要な具体例は **weathermap**(各リンク上をドットが流れる
-ライブトラフィック可視化)だが、ほとんどの設計原則は他のオーバーレイ
-にも共通して当てはまる。
+オーバーレイは大きく **2 種類** に分かれる:
+
+- **構造化 overlay**: renderer の `linkOverlay` / `nodeOverlay` 等の
+  snippet で、各 SVG エンティティの中に直接 render される
+- **サイドカー overlay**: renderer から `svgElement` だけを受け取って、
+  自前で DOM 操作(class 付与、event listener、tooltip 配置等)する
 
 実装の中核:
-- `libs/@shumoku/renderer/` — 描画中核(Svelte / Web Component)
-- `apps/server/web/src/lib/components/topology/` — サーバ専用 Svelte オーバーレイ
+- `libs/@shumoku/renderer/` — 描画中核(Svelte / Web Component / camera)
+- `apps/server/web/src/lib/components/topology/` — サーバ専用 Svelte オーバーレイ群
 - `apps/server/web/src/lib/weathermap/` — weathermap 用の色 / duration / ジオメトリ helper
 
 ---
 
 ## 1. 概要
 
-weathermap は数十〜数百のリンクを同時にアニメーションさせつつ、
-ページはパン/ズーム、ツールチップ、WebSocket メトリクス更新も
-同時に処理する。2つの設計判断でこれを軽くしている。
+トポロジー描画は数十〜数百のリンクを同時に表示しつつ、ページは
+パン/ズーム、ホバー、WebSocket メトリクス更新も並行して処理する。
+3 つの設計原則でこれを軽くしている。
 
-1. **毎フレームのアニメは CSS が動かす、JS ではない。** ブラウザが
-   `stroke-dashoffset` の keyframe ループを所有するので、JS 側は
-   per-frame の処理を持たない。
-2. **weathermap は link の内側に描く。** renderer の `linkOverlay`
-   snippet で `g.link-group` の中へ flow lane を差し込むため、別
-   レイヤーを DOM 順で後から動かす必要がない。
-3. **tick ごとの更新は Svelte の差分と CSS 変数に寄せる。** メトリクス
-   が来たら、該当リンクの overlay path と `--wm-*` 変数だけが更新される。
+1. **renderer がドメイン構造を所有する。** subgraph / link / node /
+   port の DOM 順は renderer が決め、外側からは触らない。z-order は
+   この宣言順だけで決まる。
+2. **オーバーレイは 2 つの形に揃える。**
+   - 各エンティティの中に何かを描き足したい → renderer が公開する
+     `linkOverlay` / `nodeOverlay` / `subgraphOverlay` / `portOverlay`
+     snippet を使う
+   - エンティティ横断 / DOM event / グローバル装飾 → svgElement を
+     受け取るサイドカーとして書く
+3. **毎フレームのアニメは CSS が動かす。** ブラウザが
+   `stroke-dashoffset` / pulse / transition の keyframe ループを
+   所有し、JS は値の更新だけを担う。
 
 ---
 
@@ -38,14 +44,13 @@ weathermap は数十〜数百のリンクを同時にアニメーションさせ
 
 ### 2.1 消費モード
 
-`@shumoku/renderer` は 2 つのモードで使える。weathermap を含む
-全オーバーレイは、どちらでも動くようになっている(Shadow DOM の
-注意点は 8 節参照)。
+`@shumoku/renderer` は 2 つのモードで使える。サイドカー overlay は
+どちらでも動くが、構造化 overlay (snippet 方式) は Svelte 限定。
 
-| モード | 形 | 使用場所 | DOM |
-|---|---|---|---|
-| **Svelte component** | `<ShumokuRenderer>` | `apps/editor`, `apps/server/web` | light DOM |
-| **Web Component** | `<shumoku-renderer>` カスタム要素 | 任意の HTML/他フレームワーク | Shadow DOM(`mode: 'open'`) |
+| モード | 形 | 使用場所 | DOM | snippet |
+|---|---|---|---|---|
+| **Svelte component** | `<ShumokuRenderer>` | `apps/editor`, `apps/server/web` | light DOM | ✓ |
+| **Web Component** | `<shumoku-renderer>` カスタム要素 | 任意の HTML/他フレームワーク | Shadow DOM(`mode: 'open'`) | ✗(代替案は 7 節)|
 
 WC 版は `libs/@shumoku/renderer/src/wc.svelte.ts` で `vite` が
 `dist/wc/wc.js` にバンドルし、`customElements.define('shumoku-renderer', ...)`
@@ -59,54 +64,70 @@ libs/@shumoku/renderer/           ← 描画の中核(外部パッケージ)
 │   ├── ShumokuRenderer.svelte    ← 外向き Svelte component
 │   └── svg/
 │       ├── SvgCanvas.svelte
-│       ├── SvgEdge.svelte        ← path.link に stroke-width を書く
-│       └── SvgNode.svelte        ← g.node.node-bg rect 等を出す
-├── lib/camera.ts                 ← attachCamera 関数
+│       ├── SvgEdge.svelte        ← path.link + linkOverlay snippet host
+│       ├── SvgNode.svelte        ← g.node + nodeOverlay snippet host
+│       └── SvgPort.svelte        ← port box + portOverlay snippet host
+├── lib/
+│   ├── camera.ts                 ← attachCamera 関数(d3-zoom + wheel-gestures)
+│   └── overlays.ts               ← snippet の型定義(LinkOverlayContext 等)
 ├── wc.svelte.ts                  ← Web Component ラッパー
 └── index.ts                      ← 公開 API
 
 apps/server/web/src/lib/
 ├── components/topology/          ← server-web 専用 Svelte
 │   ├── TopologyViewer.svelte     ← renderer を mount + sidecar を呼ぶ
-│   ├── WeathermapLinkOverlay.svelte
-│   ├── NodeStatusOverlay.svelte
-│   ├── HighlightOverlay.svelte
-│   └── TooltipOverlay.svelte
+│   ├── WeathermapLinkOverlay.svelte   (構造化, linkOverlay snippet)
+│   ├── NodeStatusOverlay.svelte  (サイドカー)
+│   ├── HighlightOverlay.svelte   (サイドカー、imperative API もあり)
+│   └── TooltipOverlay.svelte     (サイドカー、DOM event)
 └── weathermap/
-    └── index.ts                  ← weathermap helper(素の TS)
+    └── index.ts                  ← weathermap helper(色 / duration / 幾何)
 ```
 
 **依存の向きは常に上向き**(server-web は renderer に依存するが、
-renderer は server-web を知らない)。そのおかげで renderer は単体で
-editor/docs/CLI で動く。
+renderer は server-web を知らない)。renderer 単体で editor / docs /
+CLI でも動く。
 
-### 2.3 構造化 overlay とサイドカー
+### 2.3 オーバーレイの2分類
 
-renderer は描画順を所有したまま、各ドメイン要素の内側に Svelte
-snippet の拡張点を公開する。
+#### 構造化 overlay(snippet)
 
-| snippet | 挿入位置 | 主な用途 |
-|---|---|---|
-| `subgraphOverlay(subgraph, ctx)` | `g.subgraph` の背景 rect 後、label 前 | group 背景装飾 |
-| `linkOverlay(edge, ctx)` | `g.link-group` の base link 後、hit path / label 前 | weathermap lane、link 装飾 |
-| `nodeOverlay(node, ctx)` | `g.node-bg` 後、`g.node-fg` 前 | node 内バッジ、状態装飾 |
-| `portOverlay(port, ctx)` | port box 後、label 前 | port 内状態、利用率表示 |
+renderer が描画順を所有したまま、各ドメイン要素の **中** に Svelte
+snippet で拡張点を公開する。snippet は domain object と context を
+受け取り、その position に直接 render される。
 
-weathermap は `linkOverlay` を使う。したがって flow lane は個々の
-`g.link-group` の子として描かれ、z-order は renderer の通常の
-描画順に従う。
+| snippet | 挿入位置 | 主な用途 | 実装例 |
+|---|---|---|---|
+| `subgraphOverlay(subgraph, ctx)` | `g.subgraph` 背景 rect 後、label 前 | group 背景装飾 | (未使用) |
+| `linkOverlay(edge, ctx)` | `g.link-group` の base link 後、hit path / label 前 | weathermap lane、link 装飾 | **WeathermapLinkOverlay** |
+| `nodeOverlay(node, ctx)` | `g.node-bg` 後、`g.node-fg` 前 | node 内バッジ、状態装飾 | (未使用) |
+| `portOverlay(port, ctx)` | port box 後、label 前 | port 内状態、利用率表示 | (未使用) |
 
-`ResolvedEdge` は `fromPortId` / `toPortId` だけでなく、resolve 済みの
-`fromPort` / `toPort` も持つ。Port の実体所有者は Node だが、Link は
-endpoint として Port 参照を持つ、という構造にしている。
+context には **domain object 参照** と **DOM 参照** の両方が入る:
 
-一方、node-status / highlight / tooltip / camera は、複数要素を横断
-する挙動や DOM event が中心なので、従来通り `svgElement` を受け取る
-サイドカーとして動く。
+```ts
+// libs/@shumoku/renderer/src/lib/overlays.ts
+export interface LinkOverlayContext {
+  selected: boolean
+  groupElement: SVGGElement | null      // ← 親 g.link-group
+  pathElement: SVGPathElement | null    // ← base path.link
+  pathD: string
+  width: number                         // ← getLinkWidth(link)
+  fromPort: ResolvedPort | null
+  toPort: ResolvedPort | null
+  ...
+}
+```
 
-サイドカー型オーバーレイは **renderer 本体を直接 import しない**。
-受け取るのは `svgElement: SVGSVGElement` だけで、そこから下だけで
-DOM 操作する。
+これにより overlay は `closest('g.link-group')` のような class 名逆引き
+を一切しない。renderer が DOM 構造を refactor しても snippet 契約だけ
+保てば壊れない。
+
+#### サイドカー overlay
+
+renderer 本体を直接 import せず、`svgElement: SVGSVGElement` だけ
+受け取って、その中で DOM 操作する。複数エンティティを横断する処理 /
+DOM event ハンドリング / グローバル装飾はこちら。
 
 ```mermaid
 flowchart LR
@@ -114,19 +135,18 @@ flowchart LR
   RND["@shumoku/renderer"]
   SVG["SVG element<br/>(svgElement)"]
 
-  subgraph SIDECARS["Overlay sidecars"]
+  subgraph SIDECARS["Sidecar overlays"]
     direction TB
-    WML["WeathermapLinkOverlay"]
     NSO["NodeStatusOverlay"]
     HLO["HighlightOverlay"]
+    TTO["TooltipOverlay"]
     CAM["attachCamera"]
   end
 
   HOST -->|graph prop| RND
-  HOST -->|linkOverlay snippet| WML
   RND -->|svgElement 公開| HOST
   HOST -->|svgElement 手渡し| SIDECARS
-  SIDECARS -->|DOM mutation<br/>CSS var 書込<br/>listener 追加| SVG
+  SIDECARS -->|class 付与<br/>event listener<br/>tooltip 配置| SVG
 ```
 
 **サイドカーの契約**:
@@ -134,9 +154,12 @@ flowchart LR
 1. 入力は `svgElement` のみ。renderer 内部に依存しない
 2. DOM 操作は渡された svg 配下に閉じる(`document.querySelector` は使わない)
 3. `destroy()` / `detach()` で自分が付けたものを全部クリーンアップ
-4. renderer の DOM 属性は**読むだけ**、書き換えない(e.g. `stroke-width`
-   を読むが、`stroke` を直書きしない — CSS 変数経由で上書きする)
-5. CSS 注入は `svg.getRootNode()` で判別(現状 light DOM 前提、詳細は 8 節)
+4. renderer の DOM 属性は**読むだけ**、書き換えない
+5. CSS 注入は `svelte:head` または scoped style(現状 light DOM 前提、詳細は 7 節)
+
+サイドカーは現状 **renderer の class 名 / data-attribute に依存する**
+(e.g. `g.node[data-id]`、`g.link-group[data-link-id]`)。これらは
+renderer の "public DOM contract" として安定扱い。
 
 ---
 
@@ -150,30 +173,34 @@ flowchart TD
   TV["TopologyViewer.svelte<br/>layout キャッシュ / attachCamera / ViewerContext 出力"]
   SR["ShumokuRenderer.svelte<br/>(from @shumoku/renderer)"]
   SC["SvgCanvas.svelte"]
-  SE["SvgEdge.svelte<br/>path.link stroke-width"]
-  SN["SvgNode.svelte<br/>g.node + rect"]
-    WML["WeathermapLinkOverlay.svelte"]
-  NSO["NodeStatusOverlay.svelte"]
-  HLO["HighlightOverlay.svelte"]
-  TTO["TooltipOverlay.svelte"]
+  SE["SvgEdge.svelte<br/>+ linkOverlay snippet host"]
+  SN["SvgNode.svelte<br/>+ nodeOverlay snippet host"]
+  SP["SvgPort.svelte<br/>+ portOverlay snippet host"]
+  WML["WeathermapLinkOverlay<br/>(構造化)"]
+  NSO["NodeStatusOverlay<br/>(sidecar)"]
+  HLO["HighlightOverlay<br/>(sidecar)"]
+  TTO["TooltipOverlay<br/>(sidecar)"]
 
   PAGE -->|graph / metrics| TV
   TV -->|layout / theme<br/>bind:svgElement| SR
   SR --> SC
   SC --> SE
   SC --> SN
+  SC --> SP
   TV -.linkOverlay snippet.-> WML
-  TV -.ViewerContext snippet.-> NSO
-  TV -.ViewerContext snippet.-> HLO
-  TV -.ViewerContext snippet.-> TTO
+  TV -.svgElement.-> NSO
+  TV -.svgElement.-> HLO
+  TV -.svgElement.-> TTO
 
   classDef renderer fill:#eef6ff,stroke:#6aa0ff
-  classDef overlay fill:#fff5e6,stroke:#f0a040
-  class SR,SC,SE,SN renderer
-  class WML,NSO,HLO,TTO overlay
+  classDef structured fill:#fff5e6,stroke:#f0a040
+  classDef sidecar fill:#e6ffe6,stroke:#50b050
+  class SR,SC,SE,SN,SP renderer
+  class WML structured
+  class NSO,HLO,TTO sidecar
 ```
 
-青 = `@shumoku/renderer` パッケージ(描画中核) / 橙 = server-web ローカルのオーバーレイ
+青 = renderer 内部 / 橙 = 構造化 overlay / 緑 = サイドカー overlay
 
 ### 3.2 描画後の SVG DOM ツリー
 
@@ -182,57 +209,33 @@ flowchart TD
   SVG["svg"]
   VP["g.viewport<br/>(d3-zoom が transform)"]
   CBG["g.canvas-bg"]
-  SGS["g.subgraphs"]
+  SGS["g.subgraph"]
   LG["g.link-group<br/>active 時に .wm-active"]
-  LK["path.link<br/>stroke-width = getLinkWidth"]
-  LH["path.link-hit<br/>不可視のホバー判定"]
-  IN["path.wm-overlay<br/>direction: in"]
-  OUT["path.wm-overlay<br/>direction: out"]
-  N["g.node<br/>+ .status-up/down/..."]
+  LK["path.link"]
+  WMI["path.wm-overlay direction=in<br/>(WeathermapLinkOverlay)"]
+  WMO["path.wm-overlay direction=out<br/>(WeathermapLinkOverlay)"]
+  LH["path.link-hit"]
+  N["g.node<br/>+ .status-up/down/...<br/>+ .node-highlighted/dimmed"]
   NB["g.node-bg rect"]
+  NF["g.node-fg<br/>(icon, label, ports)"]
 
   SVG --> VP
   VP --> CBG
   VP --> SGS
   VP --> LG
   LG --> LK
-  LG --> IN
-  LG --> OUT
+  LG --> WMI
+  LG --> WMO
   LG --> LH
   VP --> N
   N --> NB
+  N --> NF
 ```
 
 **z-order の不変条件**: renderer が `.viewport` 内の大枠順序
-`subgraphs → edges → nodes → ports` を所有する。weathermap は
-`g.link-group` の中で `path.link` の後、`path.link-hit` / label の前
-に入るため、base pipe の**上**、ノード/ポートの**下**という順序が
-DOM 挿入操作なしで決まる。
-
-### 3.3 レーンのジオメトリ — パイプの中
-
-2本のフローレーンは base リンクの stroke の **内側** に収まる。
-`baseWidth = path.link の stroke-width` として:
-
-```
-laneWidth  = max(baseWidth / 2, 2)
-laneOffset = baseWidth / 4
-in  lane:  offset = +laneOffset  (stroke の上半分)
-out lane:  offset = -laneOffset  (stroke の下半分)
-```
-
-10G リンク(baseWidth 14)の例:
-
-```
-┌───── baseWidth 14 ─────┐
-│  ═══ ═  ═══  ═══  ═══ │  ← out lane (width 7, offset -3.5)
-│───────── base ──────── │  ← path.link (stroke は --wm-base-color で tint)
-│    ═══  ═══  ═══ ═    │  ← in  lane (width 7, offset +3.5)
-└────────────────────────┘
-```
-
-2本合わせてちょうど `[-baseWidth/2, +baseWidth/2]` をカバーするので、
-パイプの視覚幅を超えてはみ出ず、ポート/ラベルにも被らない。
+`subgraphs → edges → nodes` を所有する。各エンティティの内部順序
+(base → overlay snippet → hit area / label)も renderer が固定する。
+overlay 側で DOM 挿入位置を弄る必要は無い。
 
 ---
 
@@ -240,54 +243,58 @@ out lane:  offset = -laneOffset  (stroke の下半分)
 
 ### 4.1 Svelte ↔ TS 実装の wrap 関係
 
-オーバーレイの Svelte コンポーネントは、実際の DOM 操作を持つ
-**ブラウザ側の素の TS**(class or function)を薄く wrap して、
-Svelte のライフサイクル(`$effect`)に合わせるだけの役割。
+オーバーレイの実装パターンは 3 種類:
+
+| パターン | 例 | DOM 操作 | 状態管理 |
+|---|---|---|---|
+| **構造化 overlay**(.svelte 単独) | WeathermapLinkOverlay | template の `<path>` を Svelte が render | `$derived` / `$effect` |
+| **サイドカー(.svelte 単独)** | NodeStatusOverlay / HighlightOverlay / TooltipOverlay | `svgElement.querySelectorAll(...)` + classList 操作 | `$effect` |
+| **サイドカー(関数)** | attachCamera | svgElement に listener 追加 + d3-zoom | closure |
 
 ```mermaid
 flowchart LR
   subgraph SVELTE["Svelte コンポーネント層"]
     direction TB
-    WML["WeathermapLinkOverlay<br/>(.svelte)"]
-    NSO["NodeStatusOverlay<br/>(.svelte)"]
-    HLO["HighlightOverlay<br/>(.svelte)"]
-    TV_CAM["TopologyViewer<br/>camera 部分"]
+    WML["WeathermapLinkOverlay<br/>構造化 .svelte"]
+    NSO["NodeStatusOverlay<br/>sidecar .svelte"]
+    HLO["HighlightOverlay<br/>sidecar .svelte"]
+    TTO["TooltipOverlay<br/>sidecar .svelte"]
   end
 
-  subgraph TS["ブラウザ側 TS 実装"]
+  subgraph HELPERS["TS 実装"]
     direction TB
-    WMG["weathermap geometry helpers<br/>lib/weathermap/index.ts"]
-    NSF["classList 管理関数<br/>(inline in .svelte)"]
-    HLF["classList + CSS 注入<br/>(inline in .svelte)"]
-    CAM["attachCamera 関数<br/>@shumoku/renderer/lib/camera"]
+    WMG["weathermap helpers<br/>lib/weathermap/index.ts<br/>(色 / duration / 幾何)"]
+    CAM["attachCamera 関数<br/>renderer/lib/camera.ts"]
   end
 
-  WML -->|createOffsetPathD / color / duration| WMG
-  NSO -->|直接 classList 操作| NSF
-  HLO -->|svelte:head + classList| HLF
-  TV_CAM -->|attach / detach| CAM
+  WML -->|createOffsetPathD<br/>getUtilizationColor<br/>bpsToDurationMs| WMG
+  TTO -. addEventListener .-> SVG[svgElement]
+  HLO -. classList + querySelector .-> SVG
+  NSO -. classList + querySelector .-> SVG
+  TVCAM[TopologyViewer<br/>camera 部分] -->|attach / detach| CAM
 
   classDef svelte fill:#fff5e6,stroke:#f0a040
   classDef ts fill:#e6ffe6,stroke:#50b050
-  class WML,NSO,HLO,TV_CAM svelte
-  class WMG,NSF,HLF,CAM ts
+  class WML,NSO,HLO,TTO svelte
+  class WMG,CAM ts
 ```
-
-`WeathermapLinkOverlay` は renderer の `linkOverlay` snippet で各リンク
-内に直接描画し、差分管理は Svelte の keyed render に任せる。
 
 ### 4.2 ライフサイクルの手綱
 
-各オーバーレイは Svelte 5 runes の標準パターンで書かれている:
+各オーバーレイは Svelte 5 runes(`$props` / `$effect` / `$derived`)
+の標準パターン:
 
 ```ts
-// WeathermapLinkOverlay.svelte の骨格
+// 構造化 overlay の骨格 (WeathermapLinkOverlay.svelte)
 let { context, metrics, enabled, animation }: Props = $props()
+const baseColor = $derived(/* ... */)
 
 $effect(() => {
-  // context.pathElement / metrics / enabled / animation のいずれかが変わったら再実行
-  const group = context.pathElement?.closest('g.link-group')
-  if (!group || !enabled || animation === 'off' || !metrics) return
+  const group = context.groupElement
+  if (!group || !active) {
+    group?.classList.remove('wm-active')
+    return
+  }
   group.classList.add('wm-active')
   group.style.setProperty('--wm-base-color', baseColor)
   return () => {
@@ -297,29 +304,28 @@ $effect(() => {
 })
 ```
 
-**重要な不変条件**:
+```ts
+// サイドカー overlay の骨格 (NodeStatusOverlay.svelte)
+let { svgElement, status, enabled }: Props = $props()
 
-- **link ごとに Svelte の keyed render が寿命を管理する。**
-  layout / sheet が変わって edge が消えれば、対応する
-  `WeathermapLinkOverlay` も unmount される。
-- **metrics だけが変わった場合は該当 link の path と CSS 変数だけが
-  更新される。** 外側の SVG レイヤー作成や DOM 探索は走らない。
-- **base tint は cleanup で戻る。** `wm-active` と `--wm-base-color`
-  は `$effect` の return で確実に剥がす。
+$effect(() => {
+  if (!svgElement || !enabled) return
+  const svg = svgElement
+  for (const [id, meta] of Object.entries(status ?? {})) {
+    svg.querySelector(`g.node[data-id="${CSS.escape(id)}"]`)
+      ?.classList.add(`status-${meta.status}`)
+  }
+  return () => {
+    /* clear classes on cleanup */
+  }
+})
+```
 
-### 4.3 図 ↔ ファイル対応表
+**共通の不変条件**:
 
-| 図のノード | ファイル |
-|---|---|
-| `TopologyViewer.svelte` | `apps/server/web/src/lib/components/topology/TopologyViewer.svelte` |
-| `ShumokuRenderer.svelte` | `libs/@shumoku/renderer/src/components/ShumokuRenderer.svelte` |
-| `SvgCanvas / SvgEdge / SvgNode` | `libs/@shumoku/renderer/src/components/svg/` |
-| `WeathermapLinkOverlay.svelte` | `apps/server/web/src/lib/components/topology/WeathermapLinkOverlay.svelte` |
-| `Weathermap helpers` | `apps/server/web/src/lib/weathermap/index.ts` |
-| `attachCamera` | `libs/@shumoku/renderer/src/lib/camera.ts` |
-| `NodeStatusOverlay.svelte` | `apps/server/web/src/lib/components/topology/NodeStatusOverlay.svelte` |
-| `HighlightOverlay.svelte` | `apps/server/web/src/lib/components/topology/HighlightOverlay.svelte` |
-| `TooltipOverlay.svelte` | `apps/server/web/src/lib/components/topology/TooltipOverlay.svelte` |
+- **svgElement / context が変わったら自動的に reset**(`$effect` 依存追跡)
+- **小さい props 変更だけでは再構築しない**(必要な計算は `$derived` で memoize)
+- **unmount で必ず cleanup**
 
 ---
 
@@ -332,190 +338,310 @@ flowchart LR
   subgraph STORE["Svelte store (ページ保持)"]
     G[graph]
     M[metricsData]
+    HID[highlightedIds]
   end
 
-  subgraph COMP["コンポーネント"]
-    TV[TopologyViewer]
+  TV[TopologyViewer]
+  SVG["svgElement"]
+
+  subgraph OV["オーバーレイ"]
     WML[WeathermapLinkOverlay]
     NSO[NodeStatusOverlay]
+    HLO[HighlightOverlay]
+    TTO[TooltipOverlay]
   end
-
-  SVG["svgElement"]
 
   G -->|graph prop| TV
   TV -->|bind:svgElement| SVG
   TV -->|linkOverlay snippet| WML
-  SVG -->|svgElement prop| NSO
-  M -->|metrics prop| WML
-  M -->|status prop| NSO
+  M -->|metrics| WML
+  SVG -->|svgElement| NSO
+  M -->|status| NSO
+  SVG -->|svgElement| HLO
+  HID -->|highlightedIds| HLO
+  SVG -->|svgElement| TTO
+  G -->|graph| TTO
 
   classDef store fill:#e6f0ff,stroke:#5080c0
-  class G,M store
+  class G,M,HID store
 ```
 
 - **graph は上から props で流れ下る**(page → TopologyViewer → ShumokuRenderer)
-- **weathermap は renderer の `linkOverlay` snippet で link 内に入る**
-  (TopologyViewer → ShumokuRenderer → SvgEdge → WeathermapLinkOverlay)
-- **svgElement は下から `bind:` で吸い上げて、サイドカーに配る**
-  (ShumokuRenderer → TopologyViewer → ViewerContext → node-status 等)
-- **metrics も上から props で流れ下るだけ**。オーバーレイは store に
-  触らない(テスタビリティと WC 対応のため)
+- **構造化 overlay は renderer の snippet で各エンティティ内に入る**
+- **サイドカー overlay は svgElement を受け取って自前で DOM 操作**
+- **オーバーレイは store に直接触らない**(props 経由のみ — テスタビリティと WC 対応のため)
 
 ### 5.2 時間軸 — one-shot と per-tick
 
 ```mermaid
 flowchart LR
-  subgraph GRF["Graph レイヤー (one-shot)"]
+  subgraph ONESHOT["One-shot (page mount / sheet 切替)"]
     direction TB
     G1["サーバ /graph で<br/>mapping.bandwidth を<br/>link.bandwidth に合流"]
-    G2["renderer: getLinkWidth<br/>→ edge.width"]
-    G3["SvgEdge が<br/>stroke-width 属性を書込"]
-    G1 --> G2 --> G3
+    G2["renderer: layout 計算<br/>(libavoid + custom Sugiyama)"]
+    G3["SvgEdge / SvgNode が<br/>SVG 出力"]
+    G4["camera attach"]
+    G1 --> G2 --> G3 --> G4
   end
 
-  subgraph TICK["メトリクス tick (N 秒おき)"]
+  subgraph TICK["Per-tick (WS metrics 更新)"]
     direction TB
     T1["WS broadcast<br/>→ metricsData store"]
-    T2["WeathermapLinkOverlay<br/>の reactive render"]
-    T3["link ごとの path / CSS 変数更新"]
-    T1 --> T2 --> T3
+    T2A["WeathermapLinkOverlay<br/>reactive render"]
+    T2B["NodeStatusOverlay<br/>$effect"]
+    T1 --> T2A
+    T1 --> T2B
   end
 
-  subgraph JS_OPS["JS 側 DOM 操作"]
+  subgraph EVENT["Event-driven"]
     direction TB
-    J1["edge.fromPort/toPort と<br/>ctx.pathElement を使う"]
-    J2["レーン 2 本を<br/>link-group 内に render"]
-    J3["レーンに --wm-* を<br/>反映"]
-    J4["link-group に<br/>--wm-base-color と<br/>.wm-active を付与"]
-    J1 --> J2 --> J3 --> J4
+    E1["mouse hover"] --> E2["TooltipOverlay<br/>分類 + 配置"]
+    E3["highlight 要求"] --> E4["HighlightOverlay<br/>classList 切替"]
+    E5["wheel/drag"] --> E6["attachCamera<br/>d3-zoom transform"]
   end
-
-  subgraph CSS_ENGINE["CSS エンジン"]
-    direction TB
-    C1[".wm-overlay ルール適用<br/>stroke-width / opacity / dasharray"]
-    C2[".wm-active の子 path.link に<br/>stroke を適用<br/>transition 200ms"]
-    C3["keyframes wm-flow-in/out<br/>stroke-dashoffset を移動"]
-    C4["ブラウザが<br/>keyframe を回す"]
-    C3 --> C4
-  end
-
-  G3 -. stroke-width は J1 の入力 .-> J1
-  T3 --> J1
-  J3 --> C1
-  J3 --> C3
-  J4 --> C2
 ```
 
-- **one-shot の列** はページロード時に1回だけ走る(mapping 保存時も
-  サーバ側で `parsed.graph` キャッシュが invalidate されて再取得)
-- **tick の列** は毎メトリクス tick(数秒ごと)で走る
-- JS は tick あたり **表示中 link の reactive 更新** に閉じる
+- **One-shot** は page mount / sheet 切替時に 1 回。重い layout 計算が
+  ここに集中
+- **Per-tick** は数秒おき。表示中エンティティの差分更新だけ走る
+- **Event-driven** はユーザー操作毎。debounce / throttle は各 overlay
+  内で必要に応じて
 
 ---
 
-## 6. CSS の契約
+## 6. オーバーレイ詳細
 
-アニメーションと色のツマミは全部 CSS 変数。JS はこれを書くだけで、
-`ensureStyle()` が document(将来は shadow root)に 1 回だけ注入する
-`<style>` がそれを読む。
+各オーバーレイの入力 / 出力 / DOM 操作 / カスタマイズ点をまとめる。
 
-### 6.1 `path.wm-overlay` (各レーン) 上の変数
+### 6.1 Weathermap(構造化、`linkOverlay` snippet)
 
-| 変数 | セットする側 | 消費する側 | 用途 |
-|---|---|---|---|
-| `--wm-color` | `applyDirection` | `.wm-overlay { stroke }` | レーンの色(利用率マップ or down 時赤) |
-| `--wm-width` | `applyDirection` | `.wm-overlay { stroke-width }` | レーンの太さ = `max(baseWidth / 2, 2)` |
-| `--wm-dash` | `applyDirection` | `.wm-overlay { stroke-dasharray }` | 通常 `"3 21"`、down 時 `"8 4"` |
-| `--wm-opacity` | `applyDirection` | `.wm-overlay { opacity }` | 通常 `0.9`、down 時 `0.5` |
-| `--wm-duration` | `applyDirection` | `.wm-overlay { animation-duration }` | bps から `bpsToDurationMs` で決定(300ms–2s) |
-| `--wm-play` | `applyDirection` | `.wm-overlay { animation-play-state }` | `running` / `paused` |
+**用途**: 各リンク上に流量を 2 レーンのドットで可視化、利用率に応じて
+base pipe を tint する。
 
-### 6.2 `g.link-group` (active なリンク) 上の変数
+**入力**:
+- `context: LinkOverlayContext`(renderer から)
+- `metrics: LinkFlowMetrics`(in/out 利用率と bps)
+- `enabled` / `animation`(`'full'` / `'reduced'` / `'off'`)
 
-| 変数 | セットする側 | 消費する側 | 用途 |
-|---|---|---|---|
-| `--wm-base-color` | `apply` | `.wm-active > path.link { stroke }` | base パイプの色付け(両方向のうち重い方の利用率色) |
+**DOM 出力**(`g.link-group` の中):
+- `path.wm-overlay[data-direction="in"]`
+- `path.wm-overlay[data-direction="out"]`
+- 親 `g.link-group` に `.wm-active` クラス + `--wm-base-color` 変数
 
-### 6.3 クラス
+**CSS 契約**(WeathermapLinkOverlay.svelte の `<style>`):
 
-| クラス | セットする側 | 消費する側 | 用途 |
-|---|---|---|---|
-| `.wm-active` on `g.link-group` | `apply` | `.wm-active > path.link` | base tint + opacity dim を有効化 |
-| `.wm-static` on `path.wm-overlay` | `setAnimationMode('reduced')` | `.wm-overlay.wm-static` | 流れない solid lane(小さいウィジェット向け) |
+| 変数 | スコープ | 用途 |
+|---|---|---|
+| `--wm-color` | レーン path | 色(利用率マップ or down 時赤) |
+| `--wm-width` | レーン path | 太さ = `max(baseWidth / 2, 2)` |
+| `--wm-dash` | レーン path | dash パターン(通常 `"3 21"`、down `"8 4"`) |
+| `--wm-opacity` | レーン path | 透明度(通常 `0.9`、down `0.5`) |
+| `--wm-duration` | レーン path | 周期(`bpsToDurationMs(bps)`、300ms–2s) |
+| `--wm-play` | レーン path | `running` / `paused` |
+| `--wm-base-color` | `g.link-group` | base pipe の tint 色 |
 
-### 6.4 JS と CSS の責任分界
+**レーン幾何**(stroke の内側に 2 本):
 
 ```
-┌─────────── JS / Svelte 側 (linkOverlay render) ────┐
-│ メトリクス tick ごとに実行                         │
-│ - どのリンクにオーバーレイを出すか(Svelte diff) │
-│ - CSS 変数の値(color, width, duration, …)       │
-│ - クラス切替(.wm-active, .wm-static)            │
-└────────────────────────────────────────────────────┘
-                          ↕ CSS カスタムプロパティ
-┌─────────── CSS 側 (ブラウザ) ──────────────────────┐
-│ 毎フレーム CSS animation として実行               │
-│ - stroke-dashoffset の keyframe                 │
-│ - stroke / opacity の transition(200ms)          │
-│ - dasharray / stroke-width のレンダリング         │
-└────────────────────────────────────────────────────┘
+laneWidth  = max(baseWidth / 2, 2)
+laneOffset = baseWidth / 4
+in  lane:  offset = +laneOffset  (stroke 上半分)
+out lane:  offset = -laneOffset  (stroke 下半分)
 ```
 
-この分担が、リンク数が増えても重くなりにくい理由。JS は tick あたり
-表示中 link の差分更新に閉じ、毎フレームの流れ表現は CSS animation に
-任せる。
+10G リンク(baseWidth 14)の例:
 
----
+```
+┌───── baseWidth 14 ─────┐
+│  ═══ ═  ═══  ═══  ═══ │  ← out lane (width 7, offset -3.5)
+│───────── base ──────── │  ← path.link (stroke は --wm-base-color で tint)
+│    ═══  ═══  ═══ ═    │  ← in  lane (width 7, offset +3.5)
+└────────────────────────┘
+```
 
-## 7. 実装詳細
-
-### 7.1 `stroke-dashoffset` の行進
-
-レーンの stroke は dash パターン(`--wm-dash`)で分断されている。
-keyframe が `stroke-dashoffset` を1周期分動かすと、dash がスライド
-しているように見える。
+**アニメ**(`stroke-dashoffset` の keyframe):
 
 ```css
 @keyframes wm-flow-in  { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -24; } }
 @keyframes wm-flow-out { from { stroke-dashoffset: 0; } to { stroke-dashoffset:  24; } }
 ```
 
-`-24` / `+24` は `dash (3) + gap (21) = 24` px に一致するので、
-1 iteration で dash+gap 1単位進み、パターンが連続して見える。
-周期は `--wm-duration`(bps が高いほど短周期 = 速い)。
+`-24` / `+24` は `dash (3) + gap (21) = 24` px 。1 周期で dash+gap 1 単位
+進む。
 
-### 7.2 base パイプの tint
+**Base tint**(SVG 属性を CSS で上書き):
 
 ```css
-.wm-active > path.link {
+:global(.wm-active > path.link) {
   stroke: var(--wm-base-color, currentColor);
   opacity: 0.55;
   transition: stroke 200ms ease, opacity 200ms ease;
 }
 ```
 
-renderer は `stroke="#94a3b8"` を SVG 属性として書く。CSS の
-`stroke: var(--wm-base-color)` はカスケードで上書きする — SVG 属性
-は CSS ルールより優先順位が低いので `!important` 不要。200ms の
-transition で色バンド跨ぎが滑らかに。
+`:global()` は同コンポーネントで定義した変数を、外側 (`g.link-group` /
+`path.link` は SvgEdge.svelte が出してる) のスコープに当てるため。
 
-### 7.3 モード切替
+**モード**:
 
-| モード | トリガー | 効果 |
-|---|---|---|
-| `'full'` (default) | `setAnimationMode('full')` | ドットの keyframe アニメが動く |
-| `'reduced'` | `setAnimationMode('reduced')` | `.wm-static` → solid lane、keyframe 停止 |
-| Reduced motion | `@media (prefers-reduced-motion: reduce)` | OS 設定、全レーンの keyframe を停止 |
-| 印刷 | `@media print` (`app.css` 側) | オーバーレイを完全に非表示、`path.link` の opacity を戻す |
+| モード | 動作 |
+|---|---|
+| `'full'` | ドットアニメ + tint |
+| `'reduced'` | `.wm-static` で keyframe 停止、solid lane |
+| `'off'` | render 自体スキップ |
+| `prefers-reduced-motion` | `@media` で keyframe 強制停止(tint は残す) |
+| `@media print` | `app.css` 側でオーバーレイ非表示、tint 解除 |
+
+### 6.2 Node Status(サイドカー、`<svelte:head>` で CSS 注入)
+
+**用途**: ノードに up/down/warning/degraded/unknown の状態色を反映。
+
+**入力**:
+- `svgElement: SVGSVGElement`
+- `status: Record<nodeId, { status: string }>`
+- `allowedStatuses?` (default: `['up', 'down', 'unknown', 'warning', 'degraded']`)
+
+**DOM 操作**: 各 `g.node[data-id]` に `status-up` / `status-down` 等の
+クラスを付与。要素自体は作らない、classList 操作だけ。
+
+**CSS**(`<svelte:head>` で `<style id="shumoku-node-status-css">` を注入):
+
+```css
+g.node.status-up    .node-bg rect { stroke: #22c55e; stroke-width: 2px; }
+g.node.status-down  .node-bg rect {
+  stroke: #ef4444; stroke-width: 2.5px;
+  filter: drop-shadow(0 0 6px ...);
+  animation: shumoku-status-down-pulse 1.6s infinite alternate;
+}
+g.node.status-warning  .node-bg rect { stroke: #f97316; ... }
+g.node.status-degraded .node-bg rect { stroke: #eab308; ... }
+g.node.status-unknown  .node-bg rect { stroke: #6b7280; stroke-dasharray: 4 3; }
+```
+
+`<svelte:head>` 注入を使う理由は、複数の Svelte コンポーネントが
+同じ rule 集合を共有するため(scoped style だと各コンポーネントで
+重複定義になる)。
+
+`@media print` と `prefers-reduced-motion` も同じ block で扱う。
+
+### 6.3 Highlight(サイドカー、reactive + imperative)
+
+**用途**: 検索結果や選択フィルタで、特定ノードを強調(pulse + drop-shadow)、
+他を dim する。
+
+**入力**:
+- `svgElement`
+- `highlightedIds?: ReadonlySet<string> | string[]`(reactive)
+- `attributeMatch?: { key, value }`(reactive、属性ベースマッチ)
+- `dimOthers?: boolean` — 非マッチを暗くする
+- `highlightColor?: string` — `--highlight-color` に流す
+- `pulseAnimation?: boolean`
+
+**imperative API**(`bind:this` で取って使える):
+- `apply(ids: Iterable<string>): void`
+- `applyByAttribute(key, value): void`
+- `clearHighlight(): void`
+
+reactive と imperative が共存してるのは、ダッシュボードからの
+クエリ駆動(reactive)と event 駆動(`onhover` callback など)の
+両方に対応するため。
+
+**DOM 操作**: マッチした `g.node[data-id]` に `.node-highlighted`、
+`dimOthers=true` なら他全ての node + link-group に `.node-dimmed`。
+
+**CSS**(`<svelte:head>` で `<style id="shumoku-highlight-css">`):
+
+```css
+g.node.node-highlighted {
+  animation: var(--highlight-pulse, node-pulse) 0.5s ease-in-out infinite alternate;
+}
+g.node.node-highlighted rect,
+g.node.node-highlighted circle,
+g.node.node-highlighted path {
+  stroke: var(--highlight-color, #f59e0b) !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 8px ...);
+}
+g.node.node-dimmed,
+g.link-group.node-dimmed {
+  opacity: 0.15;
+  transition: opacity 0.2s ease;
+}
+```
+
+色とアニメは `--highlight-color` / `--highlight-pulse` 変数で外から
+上書き可能。SVG element 側に `style.setProperty` で書き込む。
+
+### 6.4 Tooltip(サイドカー、DOM event)
+
+**用途**: ホバー時のツールチップ。何が hover されたか(node /
+subgraph / link)を分類して、カスタマイズ可能な内容を浮かべる。
+
+**入力**:
+- `svgElement` / `graph` / `enabled` / `delay` / `maxWidth`
+- `content?: Snippet<{ hovered, graph }>` — Svelte snippet で本体を描く
+- `contentBuilder?: (hovered, graph) => string` — 文字列で本体を返す関数
+
+**DOM 操作**:
+- `mouseover` / `mouseout` / `mousemove` を `svgElement` に直接 attach
+  (`AbortController` で cleanup)
+- ツールチップ本体は **コンポーネントが直接 `<div>` を render**(SVG
+  外、`position: fixed`)
+- DOM 改変は無し(svg 配下は読み取りのみ)
+
+**hit detection**:
+
+```ts
+function classify(target: EventTarget): HoveredElement | null {
+  if (target.closest('g.node[data-id]'))      return { kind: 'node', ... }
+  if (target.closest('g.subgraph[data-id]'))  return { kind: 'subgraph', ... }
+  if (target.closest('g.link-group[data-link-id]')) return { kind: 'link', ... }
+  return null
+}
+```
+
+`closest()` で renderer の class 名 / data-attribute を逆引きしてる。
+これはサイドカー特有の "public DOM contract" 依存(2.3 節参照)。
+
+### 6.5 Camera(関数 utility、`@shumoku/renderer` 提供)
+
+**用途**: pan / zoom。マウスホイール = ズーム、トラックパッド 2 本指 =
+パン、ピンチ = ズーム、Alt+左 / 中ボタンドラッグ = パン。
+
+**API**(関数1個):
+
+```ts
+const camera = attachCamera(svgElement, {
+  wheelMode: 'auto',          // 'auto' | 'zoom' | 'pan'
+  panFilter: ...,
+  ...
+})
+camera.zoomBy(factor)
+camera.reset()
+camera.panToNode(nodeId)
+camera.detach()
+```
+
+**実装**: d3-zoom + wheel-gestures。マウスホイールとトラックパッドを
+gesture 開始時に "sticky" に判別し、gesture 中は同じ扱いを維持
+(zoom と pan が混ざらない)。詳しくは `docs/ARCHITECTURE.md` の
+Camera 節 と `libs/@shumoku/renderer/src/lib/camera.ts` を参照。
+
+**DOM 操作**: svgElement 上の wheel / pointerdown / pointermove
+listener と、`g.viewport` の `transform` 属性。renderer の class 名
+には依存しない(`g.viewport` は renderer が常に出す唯一の zoom 対象)。
+
+`TopologyViewer.svelte` がこの関数を呼んで camera を attach し、
+sheet 切替時に `camera.reset()` する。
 
 ---
 
-## 8. Web Component 対応状況
+## 7. Web Component 対応状況
 
-### 8.1 公開 API 対応表
+### 7.1 公開 API 対応表
 
-WC も Svelte 版も **svgElement を外に出す契約** になっている。
-オーバーレイは入力として受け取り、その中で完結する。
+WC も Svelte 版も **svgElement を外に出す契約**。サイドカーはこの
+svgElement を受け取って動く。
 
 | 面 | WC (`<shumoku-renderer>`) | Svelte (`<ShumokuRenderer>`) |
 |---|---|---|
@@ -525,6 +651,7 @@ WC も Svelte 版も **svgElement を外に出す契約** になっている。
 | SVG 取得 | `el.svgElement` getter | `bind:svgElement` |
 | イベント | `el.onshumokuselect = fn` | `onselect={fn}` |
 | 命令的操作 | `el.addNewNode(...)` | `renderer.addNewNode(...)` |
+| **構造化 overlay (snippet)** | ✗ 未対応 | ✓ |
 
 WC 版からの利用例(他フレームワーク / 素 HTML):
 
@@ -533,94 +660,124 @@ WC 版からの利用例(他フレームワーク / 素 HTML):
 <script>
   const el = document.querySelector('#topo')
   el.graph = myGraph
-  // 同じ関数が Svelte でも素 HTML でも動く
+  // サイドカーは同じ関数で動く
   const camera = attachCamera(el.svgElement)
-  // WC では Svelte snippet が使えないため、構造化 weathermap は未提供。
-  // camera / tooltip 等の svgElement sidecar は同じ形で利用できる。
+  // 構造化 overlay は WC では未提供(後述)
 </script>
 ```
 
-### 8.2 Shadow DOM での CSS 注入問題(既知の設計債務)
+### 7.2 Shadow DOM での CSS 注入問題
 
-WC 版は **Shadow DOM 内** に SVG を描く。オーバーレイの DOM 操作は
-svgElement 配下で完結するので問題ないが、**CSS 注入先** だけは
-対応が必要。
+WC 版は **Shadow DOM 内** に SVG を描く。サイドカーの DOM 操作は
+svgElement 配下で完結するので問題ないが、**CSS 注入** は経路によって
+shadow に届く / 届かないが分かれる。
+
+| 注入方式 | 使用しているオーバーレイ | Shadow DOM への到達 |
+|---|---|---|
+| Svelte コンポーネントの `<style>`(scoped) | WeathermapLinkOverlay | 微妙 — Svelte ランタイムが生成する `<style>` は document.head 行き。`:global()` 内の rule は shadow に届かない |
+| `<svelte:head>` で `<style>` 注入 | NodeStatusOverlay / HighlightOverlay | ✗ — 常に document.head 行き、shadow に届かない |
+| 要素の `style.setProperty('--var', ...)` | 全 overlay | ✓ — 要素自体に書くので shadow も関係なし |
+| `attachCamera` の SVG transform 操作 | Camera | ✓ — CSS 不使用 |
+
+**現状**: Svelte 版しか使ってないので実害なし。WC 外部配布を始める
+タイミングで、`<svelte:head>` の代わりに **shadow root に注入** する
+ヘルパーが必要:
 
 ```ts
-// 現状: document.head に <style> を入れる
-function ensureStyle(): void {
-  document.head.appendChild(style)  // Shadow DOM には届かない!
-}
-```
-
-Svelte 版(light DOM)では問題なし。WC 版では `.wm-overlay` や
-`.wm-active > path.link` のルールが shadow に届かず無効化される。
-
-**将来の対応案**: `svg.getRootNode()` で shadow root か判別:
-
-```ts
-function ensureStyle(svg: SVGSVGElement): void {
+function ensureStyleInRoot(svg: SVGSVGElement, id: string, css: string): void {
   const root = svg.getRootNode()
   const target = root instanceof ShadowRoot ? root : document.head
-  if (target.querySelector(`#${STYLE_ID}`)) return
+  if (target.querySelector(`#${id}`)) return
+  const style = document.createElement('style')
+  style.id = id
+  style.textContent = css
   target.appendChild(style)
 }
 ```
 
-同じ問題は `NodeStatusOverlay` の `<svelte:head>` 注入
-(= 常に document.head 行き)、`HighlightOverlay` も同様。
-**今は** Svelte 版しか使ってないので実害なし。WC 外部配布を始める
-タイミングで "inject into root" 方式に切り替える。
+これを各 overlay の `$effect` 開始時に呼ぶように変える(現状 NodeStatus
+/ Highlight の `<svelte:head>` 部分を置き換える)。
 
-`attachCamera` は SVG の transform を弄るだけで CSS 注入しない
-ので、WC/Svelte 両対応で今すぐ動く。
+**構造化 overlay の WC 対応**: snippet は Svelte 限定なので、WC では
+`linkOverlay` 等の機能が使えない。代替案は以下のいずれか:
 
----
-
-## 9. 不変条件・注意点
-
-**構造化 overlay**:
-
-1. renderer が描画順を所有する
-2. overlay は `linkOverlay` / `nodeOverlay` / `portOverlay` /
-   `subgraphOverlay` の中だけに描く
-3. class 名の逆引きではなく、snippet 引数の domain object と context
-   を使う
-4. endpoint 情報は `edge.fromPort` / `edge.toPort` を使う
-5. DOM element が必要な場合は `ctx.pathElement` のように renderer から
-   渡された要素を使う
-
-**Weathermap 固有**:
-
-- **ジオメトリ入力**: endpoint は `edge.fromPort` / `edge.toPort`、
-  path は `linkOverlay` の `ctx.pathElement` / `ctx.pathD` /
-  `ctx.width` を使う。`querySelector('path.link')` は不要。
-- **base の stroke 属性は触らない**: `path.link` の `stroke` SVG 属性
-  は renderer の所有物。CSS が `--wm-base-color` でカスケード上書き
-  する。unmount / disabled 時にクラスと変数を消せば元に戻る。
-- **オフセットパスのサンプリング**: 曲線(libavoid が出した多セグ
-  メントの折れ線)は、`createOffsetPathD` が法線方向に 30+ 点を
-  サンプリングする。直線は fast path でサンプリング不要。
-- **パン/ズームに自動追従**: flow lane は `g.link-group` の中にあり、
-  その親である `.viewport` が d3-zoom で transform される。毎フレーム
-  の transform 同期は不要。
-- **`prefers-reduced-motion` は keyframe だけ止める** — base tint と
-  色のバンド分類は残るので、利用率のシグナルは消えない。
+- HTML `<slot>` で「リンクごとに複製」を実現(MutationObserver が必要)
+- imperative callback API(`el.onRenderLink = (link, group) => {...}`)
+- 構造化 overlay は Svelte 専用と割り切り、WC は visual-only(camera
+  + tooltip)で運用
 
 ---
 
-## 付録: 関連ファイル
+## 8. 不変条件・注意点
+
+### 8.1 共通(全オーバーレイ)
+
+1. **入力は受け取った参照のみで完結**(`svgElement` / `context`)。
+   `document.querySelector` などグローバルアクセスは使わない
+2. **renderer の DOM 属性は読むだけ、書き換えない**(必要なら CSS 変数
+   や class 経由で上書き)
+3. **unmount で必ず cleanup**(class 削除 / CSS 変数削除 / listener
+   abort / timer clear)
+4. **渡された domain object が変われば自動 reset**(`$effect` 依存追跡
+   に任せる)
+5. **store には触らない**(props 経由)
+
+### 8.2 構造化 overlay
+
+- snippet 内で `closest('g.link-group')` 等の class 名逆引きは禁止 —
+  必要な参照は context 経由で受け取る
+- snippet の return 直前に追加要素を render するだけで済むよう設計する
+  (DOM 並び替えは不可)
+
+### 8.3 サイドカー overlay
+
+- renderer の **public DOM contract**(class 名 / data-attribute)に
+  依存する。ここは renderer 側の breaking change 扱い:
+  - `g.viewport`、`g.node[data-id]`、`g.link-group[data-link-id]`、
+    `g.subgraph[data-id]`、`g.node-bg`、`path.link`、port box
+- DOM event の listener は `AbortController` で必ず cleanup
+
+### 8.4 Weathermap 固有
+
+- レーン path のサンプリング: 直線は fast path、曲線は法線方向に 30+ 点
+- pan/zoom 追従: `g.viewport` の transform に乗るので毎フレーム同期不要
+- `prefers-reduced-motion` は keyframe だけ止める(色 / 太さ情報は残す)
+
+---
+
+## 付録 A: 関連ファイル
+
+### Renderer 中核
 
 | ファイル | 役割 |
 |---|---|
-| `apps/server/web/src/lib/weathermap/index.ts` | Weathermap の色 / duration / ジオメトリヘルパー |
-| `apps/server/web/src/lib/components/topology/WeathermapLinkOverlay.svelte` | `linkOverlay` snippet 内で flow lane を描く Svelte コンポーネント |
-| `apps/server/web/src/lib/components/topology/TopologyViewer.svelte` | renderer を mount し、オーバーレイに `svgElement` を渡すホスト composable |
-| `apps/server/web/src/lib/components/topology/NodeStatusOverlay.svelte` | `status-up/down/...` クラスと CSS(svelte:head) |
-| `apps/server/web/src/lib/components/topology/HighlightOverlay.svelte` | ノード強調のクラスと CSS |
-| `apps/server/api/src/api/topologies.ts` (`applyMappingBandwidth`) | mapping の override を `link.bandwidth` に合流させるサーバ側ロジック |
-| `libs/@shumoku/core/src/layout/link-utils.ts` (`getLinkWidth`) | bandwidth → stroke-width の校正(single source of truth) |
-| `libs/@shumoku/renderer/src/components/svg/SvgEdge.svelte` | `path.link` に `stroke-width={edge.width}` を書き込む |
 | `libs/@shumoku/renderer/src/components/ShumokuRenderer.svelte` | 描画中核の Svelte コンポーネント |
+| `libs/@shumoku/renderer/src/components/svg/SvgEdge.svelte` | `path.link` + `linkOverlay` snippet host |
+| `libs/@shumoku/renderer/src/components/svg/SvgNode.svelte` | `g.node` + `nodeOverlay` snippet host |
+| `libs/@shumoku/renderer/src/components/svg/SvgPort.svelte` | port box + `portOverlay` snippet host |
+| `libs/@shumoku/renderer/src/lib/overlays.ts` | snippet の型定義(LinkOverlayContext 等) |
 | `libs/@shumoku/renderer/src/lib/camera.ts` | `attachCamera` (pan/zoom) |
 | `libs/@shumoku/renderer/src/wc.svelte.ts` | `<shumoku-renderer>` Web Component ラッパー |
+
+### 構造化 overlay
+
+| ファイル | 役割 |
+|---|---|
+| `apps/server/web/src/lib/components/topology/WeathermapLinkOverlay.svelte` | `linkOverlay` snippet 内で flow lane を描く |
+| `apps/server/web/src/lib/weathermap/index.ts` | weathermap の色 / duration / 幾何ヘルパー |
+
+### サイドカー overlay
+
+| ファイル | 役割 |
+|---|---|
+| `apps/server/web/src/lib/components/topology/NodeStatusOverlay.svelte` | `status-up/down/...` クラスと CSS(svelte:head) |
+| `apps/server/web/src/lib/components/topology/HighlightOverlay.svelte` | ノード強調(reactive + imperative)とその CSS |
+| `apps/server/web/src/lib/components/topology/TooltipOverlay.svelte` | hover ツールチップ |
+
+### ホスト + サーバ側
+
+| ファイル | 役割 |
+|---|---|
+| `apps/server/web/src/lib/components/topology/TopologyViewer.svelte` | renderer mount + `attachCamera` + ViewerContext 出力 |
+| `apps/server/api/src/api/topologies.ts` (`applyMappingBandwidth`) | mapping の override を `link.bandwidth` に合流させるサーバ側ロジック |
+| `libs/@shumoku/core/src/layout/link-utils.ts` (`getLinkWidth`) | bandwidth → stroke-width の校正(single source of truth) |
