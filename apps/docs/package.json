@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
+    "@shumoku/interactive": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/mdx": "^2.0.13",

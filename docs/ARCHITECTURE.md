@@ -582,7 +582,7 @@ flowchart LR
 ### API shape
 
 ```ts
-import { attachCamera } from '@shumoku/renderer'
+import { attachCamera } from '@shumoku/interactive'
 
 const camera = attachCamera(svgEl, {
   scaleExtent: [0.2, 10],           // zoom bounds

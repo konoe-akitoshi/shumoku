@@ -16,13 +16,8 @@
     type ResolvedLayout,
     type Theme,
   } from '@shumoku/core'
-  import {
-    attachCamera,
-    type Camera,
-    type CameraOptions,
-    type RendererOverlaySnippets,
-    ShumokuRenderer,
-  } from '@shumoku/renderer'
+  import { attachCamera, type Camera, type CameraOptions } from '@shumoku/interactive'
+  import { type RendererOverlaySnippets, ShumokuRenderer } from '@shumoku/renderer'
   import type { Snippet } from 'svelte'
 
   export interface ViewerContext {

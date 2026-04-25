@@ -10,6 +10,7 @@
       "entry": ["src/html/iife-entry.ts"]
     },
     "libs/@shumoku/renderer": {},
+    "libs/@shumoku/interactive": {},
     "libs/shumoku": {},
     "libs/plugins/grafana": {},
     "libs/plugins/netbox": {},

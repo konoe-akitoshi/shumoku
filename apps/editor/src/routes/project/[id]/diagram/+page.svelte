@@ -1,6 +1,6 @@
 <script lang="ts">
   import { type LinkEndpoint, type NodeSpec, newId } from '@shumoku/core'
-  import { attachCamera } from '@shumoku/renderer'
+  import { attachCamera } from '@shumoku/interactive'
   // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'

@@ -184,7 +184,10 @@ export default function EditorClient() {
 
           // Attach a mouse-wheel-zoom camera to the rendered svg once
           // it's mounted inside the web component's shadow root.
-          const { attachCamera } = await import('@shumoku/renderer')
+          // `@shumoku/interactive` is pure JS (no Svelte), so Turbopack
+          // can resolve it without going through the Svelte component
+          // re-export in `@shumoku/renderer`.
+          const { attachCamera } = await import('@shumoku/interactive')
           // Defer one frame — WC mounts the svg synchronously on first
           // `layout` assignment, but querySelector through shadowRoot
           // needs the svg to be in the DOM.
