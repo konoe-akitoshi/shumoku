@@ -1,12 +1,8 @@
 pre-commit:
   jobs:
-    - name: biome format
+    - name: biome
       glob: "*.{js,ts,mjs,mts,jsx,tsx,svelte,json,jsonc}"
-      run: bunx biome check --write {staged_files}; git add {staged_files}
-
-    - name: biome lint
-      glob: "*.{js,ts,mjs,mts,jsx,tsx,svelte,json,jsonc}"
-      run: bun run lint
+      run: bunx biome check --write {staged_files}
 
     - name: typecheck
       glob: "*.{ts,mts,tsx,svelte}"
