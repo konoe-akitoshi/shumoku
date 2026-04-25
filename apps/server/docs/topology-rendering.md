@@ -271,6 +271,70 @@ interface LinkOverlayContext {
 知る必要がない。class 名に依存するのは、複数要素を横断するサイドカー
 overlay に限定する。
 
+### 2.5 Renderer boundary
+
+renderer は **リッチなブラウザ機能を内蔵する場所ではない**。renderer の
+責務は、core の topology domain を安定した SVG 構造へ落とし、外側の
+ブラウザ層が安全に拡張できる場所と型を提供すること。
+
+言い換えると、renderer は「何を意味するか」ではなく **「どこに、どの
+構造で描けるか」** を所有する。
+
+```txt
+renderer = stable structure provider
+host layer = semantic behavior provider
+overlay = typed bridge between them
+```
+
+#### renderer が所有するもの
+
+| 責務 | 理由 |
+|---|---|
+| `NetworkGraph` / `ResolvedLayout` を SVG DOM に落とす | renderer の本分 |
+| `subgraph → link → node → port` の z-order | SVG の描画順は DOM 順で決まるため |
+| 各 entity 内の基本 DOM 構造 | overlay が安全に乗る土台 |
+| hit target / selection の基本イベント | editor / server-web / docs で共通 |
+| `linkOverlay` 等の typed extension point | 外側の機能を renderer に混ぜないため |
+| `svgElement` の公開 | camera / tooltip 等の sidecar を可能にするため |
+| 汎用的な `mode` / `theme` | topology renderer として横断的に意味があるため |
+
+#### renderer が所有しないもの
+
+| 責務 | 所有者 |
+|---|---|
+| live metrics / WebSocket / polling | host app / store |
+| traffic flow / weathermap の意味論 | server-web overlay |
+| node status の解釈(up/down/degraded 等) | server-web overlay |
+| highlight のルール / spotlight / dashboard event | host app / overlay |
+| tooltip の内容生成 | host app / overlay |
+| utilization color map / alert threshold | domain-specific layer |
+| dashboard widget の状態 / config | server-web |
+| API fetch / auth / tenant context | server-web |
+
+これらを renderer に入れ始めると、renderer が `@shumoku/core` の汎用描画
+ではなく server-web dashboard 専用 UI になってしまう。たとえば
+`metrics` / `nodeStatus` / `showTrafficFlow` / `tooltipBuilder` のような
+props は renderer に追加しない。
+
+#### 判断基準
+
+新しい機能を renderer に入れるか overlay / host layer に置くか迷ったら、
+以下で判断する。
+
+| 問い | yes なら |
+|---|---|
+| `NetworkGraph` / `ResolvedLayout` だけで説明できるか？ | renderer 候補 |
+| editor / docs / WC / server-web のどれでも同じ意味があるか？ | renderer 候補 |
+| SVG 構造、z-order、hit area、汎用 event に関するものか？ | renderer 候補 |
+| server-web の store / API / live metrics を知る必要があるか？ | host / overlay |
+| 状態の意味解釈(status, utilization, alert 等)を含むか？ | host / overlay |
+| 見た目の効果は汎用だが、発火条件が業務固有か？ | renderer は拡張点だけ提供 |
+
+基本方針は、renderer には **拡張点と型** を足し、意味論は外側に置くこと。
+今回の weathermap も renderer に traffic 機能を入れたのではなく、
+`linkOverlay(edge, ctx)` という link 内拡張点を公開し、server-web 側が
+その上に traffic 表現を載せている。
+
 ---
 
 ## 3. 構造
