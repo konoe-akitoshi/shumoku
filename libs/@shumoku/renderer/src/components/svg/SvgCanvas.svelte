@@ -64,7 +64,7 @@
   // Camera (pan/zoom) is intentionally NOT attached here. Different host
   // apps have different pan/zoom requirements, so the canvas only
   // provides a stable `<g class="viewport">` target; apps call
-  // `attachCamera(svgEl, options)` from `@shumoku/renderer/camera` when
+  // `attachCamera(svgEl, options)` from `@shumoku/interactive` when
   // they want interactive pan/zoom.
   //
   // Per-node d3-drag still lives inside each SvgNode/SvgSubgraph via

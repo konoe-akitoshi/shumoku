@@ -47,16 +47,13 @@
   "dependencies": {
     "@shumoku/core": "workspace:*",
     "d3-drag": "^3.0.0",
-    "d3-selection": "^3.0.0",
-    "d3-zoom": "^3.0.0",
-    "wheel-gestures": "^2.2.48"
+    "d3-selection": "^3.0.0"
   },
   "devDependencies": {
     "@sveltejs/package": "^2.3.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@types/d3-drag": "^3.0.7",
     "@types/d3-selection": "^3.0.11",
-    "@types/d3-zoom": "^3.0.8",
     "svelte": "^5.17.3",
     "svelte-check": "^4.1.4",
     "typescript": "^5.6.3",

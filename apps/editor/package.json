@@ -15,6 +15,7 @@
   "dependencies": {
     "@shumoku/catalog": "workspace:*",
     "@shumoku/core": "workspace:*",
+    "@shumoku/interactive": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-svg": "workspace:*",
     "bits-ui": "^2.15.4",

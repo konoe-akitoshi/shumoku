@@ -13,7 +13,8 @@ highlight / tooltip / camera)が乗る構造 — を **アーキテクチャ・
   自前で DOM 操作(class 付与、event listener、tooltip 配置等)する
 
 実装の中核:
-- `libs/@shumoku/renderer/` — 描画中核(Svelte / Web Component / camera)
+- `libs/@shumoku/renderer/` — 描画中核(Svelte / Web Component)
+- `libs/@shumoku/interactive/` — ブラウザ相互作用 sidecars(camera 等、framework agnostic)
 - `apps/server/web/src/lib/components/topology/` — サーバ専用 Svelte オーバーレイ群
 - `apps/server/web/src/lib/weathermap/` — weathermap 用の色 / duration / ジオメトリ helper
 
@@ -59,7 +60,7 @@ WC 版は `libs/@shumoku/renderer/src/wc.svelte.ts` で `vite` が
 ### 2.2 パッケージ境界
 
 ```
-libs/@shumoku/renderer/           ← 描画の中核(外部パッケージ)
+libs/@shumoku/renderer/           ← Svelte 描画の中核(外部パッケージ)
 ├── components/
 │   ├── ShumokuRenderer.svelte    ← 外向き Svelte component
 │   └── svg/
@@ -68,10 +69,14 @@ libs/@shumoku/renderer/           ← 描画の中核(外部パッケージ)
 │       ├── SvgNode.svelte        ← g.node + nodeOverlay snippet host
 │       └── SvgPort.svelte        ← port box + portOverlay snippet host
 ├── lib/
-│   ├── camera.ts                 ← attachCamera 関数(d3-zoom + wheel-gestures)
 │   └── overlays.ts               ← snippet の型定義(LinkOverlayContext 等)
 ├── wc.svelte.ts                  ← Web Component ラッパー
 └── index.ts                      ← 公開 API
+
+libs/@shumoku/interactive/        ← ブラウザ相互作用 sidecars(framework agnostic)
+└── src/
+    ├── camera.ts                 ← attachCamera 関数(d3-zoom + wheel-gestures)
+    └── index.ts                  ← 公開 API
 
 apps/server/web/src/lib/
 ├── components/topology/          ← server-web 専用 Svelte
@@ -440,7 +445,7 @@ flowchart LR
   subgraph HELPERS["TS 実装"]
     direction TB
     WMG["weathermap helpers<br/>lib/weathermap/index.ts<br/>(色 / duration / 幾何)"]
-    CAM["attachCamera 関数<br/>renderer/lib/camera.ts"]
+    CAM["attachCamera 関数<br/>@shumoku/interactive"]
   end
 
   WML -->|createOffsetPathD<br/>getUtilizationColor<br/>bpsToDurationMs| WMG
@@ -801,7 +806,7 @@ camera.detach()
 **実装**: d3-zoom + wheel-gestures。マウスホイールとトラックパッドを
 gesture 開始時に "sticky" に判別し、gesture 中は同じ扱いを維持
 (zoom と pan が混ざらない)。詳しくは `docs/ARCHITECTURE.md` の
-Camera 節 と `libs/@shumoku/renderer/src/lib/camera.ts` を参照。
+Camera 節 と `libs/@shumoku/interactive/src/camera.ts` を参照。
 
 **DOM 操作**: svgElement 上の wheel / pointerdown / pointermove
 listener と、`g.viewport` の `transform` 属性。renderer の class 名
@@ -932,7 +937,7 @@ function ensureStyleInRoot(svg: SVGSVGElement, id: string, css: string): void {
 | `libs/@shumoku/renderer/src/components/svg/SvgNode.svelte` | `g.node` + `nodeOverlay` snippet host |
 | `libs/@shumoku/renderer/src/components/svg/SvgPort.svelte` | port box + `portOverlay` snippet host |
 | `libs/@shumoku/renderer/src/lib/overlays.ts` | snippet の型定義(LinkOverlayContext 等) |
-| `libs/@shumoku/renderer/src/lib/camera.ts` | `attachCamera` (pan/zoom) |
+| `libs/@shumoku/interactive/src/camera.ts` | `attachCamera` (pan/zoom)、framework-agnostic な browser sidecar |
 | `libs/@shumoku/renderer/src/wc.svelte.ts` | `<shumoku-renderer>` Web Component ラッパー |
 
 ### 構造化 overlay
