@@ -61,7 +61,7 @@
     NodeStatusOverlay,
     TooltipOverlay,
     TopologyViewer,
-    WeathermapOverlay,
+    WeathermapLinkOverlay,
   } from '$lib/components/topology'
   import {
     liveUpdatesEnabled,
@@ -150,6 +150,10 @@
 
   export function getSvgElement(): SVGSVGElement | null {
     return viewer?.getSvgElement() ?? null
+  }
+
+  export function getGraph(): NetworkGraph | undefined {
+    return graph
   }
 
   export function panToNode(nodeId: string): void {
@@ -353,12 +357,14 @@
       sheetCacheStrategy="eager"
       onselect={handleSelect}
     >
-      {#snippet children({ svgElement, graph: activeGraph })}
-        <WeathermapOverlay
-          {svgElement}
-          metrics={$metricsData?.links}
+      {#snippet linkOverlay(edge, context)}
+        <WeathermapLinkOverlay
+          {context}
+          metrics={$metricsData?.links?.[edge.id]}
           enabled={$liveUpdatesEnabled && $showTrafficFlow}
         />
+      {/snippet}
+      {#snippet children({ svgElement, graph: activeGraph })}
         <NodeStatusOverlay
           {svgElement}
           status={$metricsData?.nodes}

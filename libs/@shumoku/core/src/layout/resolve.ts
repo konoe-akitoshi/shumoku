@@ -63,11 +63,15 @@ export function resolveLayout(result: LayoutResult): ResolvedLayout {
   for (const [id, ll] of result.links) {
     const fromPortId = resolvePortId(ll.fromEndpoint, result.nodes)
     const toPortId = resolvePortId(ll.toEndpoint, result.nodes)
+    const fromPort = fromPortId ? (ports.get(fromPortId) ?? null) : null
+    const toPort = toPortId ? (ports.get(toPortId) ?? null) : null
 
     edges.set(id, {
       id,
       fromPortId,
       toPortId,
+      fromPort,
+      toPort,
       fromNodeId: ll.from,
       toNodeId: ll.to,
       fromEndpoint: ll.fromEndpoint,

@@ -59,6 +59,10 @@ export interface ResolvedEdge {
   fromPortId: string | null
   /** Destination port ID (or node ID for portless connections) */
   toPortId: string | null
+  /** Resolved source port, when this edge starts at a port */
+  fromPort: ResolvedPort | null
+  /** Resolved destination port, when this edge ends at a port */
+  toPort: ResolvedPort | null
   /** Source node ID */
   fromNodeId: string
   /** Destination node ID */

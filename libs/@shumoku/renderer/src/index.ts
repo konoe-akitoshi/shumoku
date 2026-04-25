@@ -7,6 +7,17 @@ export { default as ShumokuRenderer } from './components/ShumokuRenderer.svelte'
 // Camera (pan/zoom) — opt-in for host apps
 export { attachCamera, type Camera, type CameraOptions, type PanFilter } from './lib/camera'
 // Utilities for consuming apps
+export type {
+  LinkOverlayContext,
+  LinkOverlaySnippet,
+  NodeOverlayContext,
+  NodeOverlaySnippet,
+  PortOverlayContext,
+  PortOverlaySnippet,
+  RendererOverlaySnippets,
+  SubgraphOverlayContext,
+  SubgraphOverlaySnippet,
+} from './lib/overlays'
 export { type RenderColors, themeToColors } from './lib/render-colors'
 // Serialization (save/load layout state)
 export {

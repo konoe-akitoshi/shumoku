@@ -15,6 +15,10 @@ services:
       - PORT=8080
       - HOST=0.0.0.0
       - DATA_DIR=/data
+      # Set DEMO_MODE=true to seed the sample-network topology and stream
+      # mock metrics on first start (no Prometheus/Zabbix needed).
+      # Defaults to "false" so production deployments stay clean.
+      - DEMO_MODE=${DEMO_MODE:-false}
     restart: unless-stopped
 
     # Process management

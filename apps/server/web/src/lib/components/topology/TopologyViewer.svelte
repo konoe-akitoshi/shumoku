@@ -16,7 +16,13 @@
     type ResolvedLayout,
     type Theme,
   } from '@shumoku/core'
-  import { attachCamera, type Camera, type CameraOptions, ShumokuRenderer } from '@shumoku/renderer'
+  import {
+    attachCamera,
+    type Camera,
+    type CameraOptions,
+    type RendererOverlaySnippets,
+    ShumokuRenderer,
+  } from '@shumoku/renderer'
   import type { Snippet } from 'svelte'
 
   export interface ViewerContext {
@@ -48,7 +54,7 @@
     nodeShadow?: boolean
   }
 
-  interface Props {
+  interface Props extends RendererOverlaySnippets {
     // --- Data ---
     graph: NetworkGraph | undefined
     sheetId?: string | null
@@ -114,6 +120,10 @@
     onlayoutready,
     onerror,
     children,
+    subgraphOverlay,
+    linkOverlay,
+    nodeOverlay,
+    portOverlay,
   }: Props = $props()
 
   // --- Layout cache (editor pattern) ---
@@ -361,6 +371,10 @@
       layout={activeLayout}
       {theme}
       mode={effectiveMode}
+      {subgraphOverlay}
+      {linkOverlay}
+      {nodeOverlay}
+      {portOverlay}
       bind:svgElement
       onselect={handleSelect}
       oncontextmenu={handleContextMenu}

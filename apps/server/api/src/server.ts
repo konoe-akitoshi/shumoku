@@ -10,7 +10,7 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { cors } from 'hono/cors'
 import { createApiRouter } from './api/index.js'
-import { getTopologyService } from './api/topologies.js'
+import { applyMappingBandwidth, getTopologyService } from './api/topologies.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { generateMetricsHtml } from './html-generator.js'
 import { MockMetricsProvider } from './mock-metrics.js'
@@ -391,7 +391,16 @@ export class Server {
         }
       }
 
-      // Only update if we got real metrics (no mock fallback)
+      // DEMO mode fallback: when no real metrics source is wired up
+      // (sample-network in DEMO_MODE has none), generate mock metrics
+      // so every overlay (weathermap flow, node status, etc.) actually
+      // shows live values in the UI. The mock sees the merged
+      // bandwidth so its bps numbers match what the renderer draws.
+      if (!metrics && process.env['DEMO_MODE'] === 'true') {
+        const mergedGraph = applyMappingBandwidth(parsed.graph, parsed.mapping)
+        metrics = this.metricsProvider.generateMetrics(mergedGraph)
+      }
+
       if (metrics) {
         this.dbTopologyMetrics.set(topology.id, metrics)
         this.topologyService.updateMetrics(topology.id, metrics)

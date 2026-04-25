@@ -375,8 +375,10 @@ function extractEdges(
 
     edges.set(linkId, {
       id: linkId,
-      fromPortId: fromPort ? `${fromNodeId}:${fromPort}` : null,
-      toPortId: toPort ? `${toNodeId}:${toPort}` : null,
+      fromPortId,
+      toPortId,
+      fromPort: fromPortObj ?? null,
+      toPort: toPortObj ?? null,
       fromNodeId,
       toNodeId,
       fromEndpoint: toEndpoint(link.from),

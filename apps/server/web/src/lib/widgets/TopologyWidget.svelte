@@ -7,7 +7,7 @@
     HighlightOverlay,
     NodeStatusOverlay,
     TopologyViewer,
-    WeathermapOverlay,
+    WeathermapLinkOverlay,
   } from '$lib/components/topology'
   import {
     liveUpdatesEnabled,
@@ -281,13 +281,14 @@
             nodeShadow: false,
           }}
         >
-          {#snippet children({ svgElement, viewport })}
-            <WeathermapOverlay
-              {svgElement}
-              metrics={$metricsData?.links}
+          {#snippet linkOverlay(edge, context)}
+            <WeathermapLinkOverlay
+              {context}
+              metrics={$metricsData?.links?.[edge.id]}
               enabled={$liveUpdatesEnabled && $showTrafficFlow}
-              animation={viewport.width < 300 ? 'reduced' : 'full'}
             />
+          {/snippet}
+          {#snippet children({ svgElement })}
             <NodeStatusOverlay
               {svgElement}
               status={$metricsData?.nodes}

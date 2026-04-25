@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Node, ResolvedEdge, ResolvedPort, Subgraph, Theme } from '@shumoku/core'
+  import type { RendererOverlaySnippets } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
   import SvgEdge from './SvgEdge.svelte'
   import SvgLinkPreview from './SvgLinkPreview.svelte'
@@ -18,6 +19,10 @@
     interactive = false,
     selection = new Set<string>(),
     linkedPorts = new Set<string>(),
+    subgraphOverlay,
+    linkOverlay,
+    nodeOverlay,
+    portOverlay,
     linkPreview = null,
     svgEl = $bindable<SVGSVGElement | null>(null),
     // Callbacks (unified: ondragmove/onselect work for all element types)
@@ -29,7 +34,7 @@
     onlabeledit,
     oncontextmenu: onctx,
     onbackgroundclick,
-  }: {
+  }: RendererOverlaySnippets & {
     nodes: Map<string, Node>
     ports: Map<string, ResolvedPort>
     edges: Map<string, ResolvedEdge>
@@ -137,6 +142,7 @@
         {theme}
         selected={selection.has(subgraph.id)}
         {interactive}
+        overlay={subgraphOverlay}
         {ondragmove}
         {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'subgraph', e)}
@@ -148,6 +154,7 @@
         {edge}
         {colors}
         selected={selection.has(edge.id)}
+        overlay={linkOverlay}
         {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'edge', e)}
       />
@@ -160,6 +167,7 @@
         {colors}
         selected={selection.has(node.id)}
         {interactive}
+        overlay={nodeOverlay}
         {ondragmove}
         {onselect}
         {onaddport}
@@ -175,6 +183,7 @@
         selected={selection.has(port.id)}
         {interactive}
         linked={linkedPorts.has(port.id)}
+        overlay={portOverlay}
         {onlinkstart}
         {onlinkend}
         {onselect}

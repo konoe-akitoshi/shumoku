@@ -283,6 +283,11 @@ flowchart LR
 - Ports and edges are "derived" conceptually; operationally they're
   rebuilt by explicit calls. A future PR could move this to `$effect`
   once the drag-path's atomicity concerns are resolved.
+- `ResolvedPort` remains node-owned, while `ResolvedEdge` carries
+  `fromPort` / `toPort` endpoint references. This keeps Port ownership
+  canonical on the node side, but lets link rendering and link-level
+  overlays consume the resolved endpoint ports without reverse-looking
+  them up from the ports map.
 - `$bindable` on the renderer is bidirectional: the canvas writes
   back directly when the user drags or creates a link.
 

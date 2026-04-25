@@ -8,7 +8,9 @@
  *
  *   <TopologyViewer graph sheetId theme mode interaction detail ...>
  *     {#snippet children({ svgElement, graph, sheetId, viewport })}
- *       <WeathermapOverlay {svgElement} metrics ... />
+ *       {#snippet linkOverlay(edge, context)}
+ *         <WeathermapLinkOverlay {context} metrics={metrics?.links?.[edge.id]} />
+ *       {/snippet}
  *       <NodeStatusOverlay {svgElement} status />
  *       <HighlightOverlay  {svgElement} bind:this={highlight} />
  *       <TooltipOverlay    {svgElement} {graph} />
@@ -30,5 +32,5 @@ export type {
   ViewerContext,
 } from './TopologyViewer.svelte'
 export { default as TopologyViewer } from './TopologyViewer.svelte'
-export type { WeathermapAnimation } from './WeathermapOverlay.svelte'
-export { default as WeathermapOverlay } from './WeathermapOverlay.svelte'
+export type { WeathermapAnimation } from './WeathermapLinkOverlay.svelte'
+export { default as WeathermapLinkOverlay } from './WeathermapLinkOverlay.svelte'

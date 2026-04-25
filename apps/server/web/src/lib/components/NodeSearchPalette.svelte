@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { type NetworkGraph, specDeviceType } from '@shumoku/core'
   import * as Command from '$lib/components/ui/command'
 
   interface NodeEntry {
@@ -13,29 +14,39 @@
 
   interface Props {
     open: boolean
-    getSvgElement: () => SVGSVGElement | null
+    /**
+     * Returns the current graph. Reads from the domain model so the
+     * palette doesn't have to scrape the rendered SVG (which would
+     * re-leak the renderer's class names + DOM structure into a
+     * UI component that has no business knowing them).
+     */
+    getGraph: () => NetworkGraph | null | undefined
     onSelect?: (nodeId: string) => void
   }
 
-  let { open = $bindable(false), getSvgElement, onSelect }: Props = $props()
+  let { open = $bindable(false), getGraph, onSelect }: Props = $props()
 
-  // Collect nodes from SVG each time palette opens
+  // Collect node entries from the graph each time the palette opens.
   let allNodes = $derived.by(() => {
     if (!open) return []
-    const svgElement = getSvgElement()
-    if (!svgElement) return []
-    const nodes: NodeEntry[] = []
-    const nodeEls = svgElement.querySelectorAll('g.node')
-    nodeEls.forEach((el) => {
-      const id = el.getAttribute('data-id') || ''
-      const labelEl = el.querySelector('text.node-label, text')
-      const label = labelEl?.textContent?.trim() || id
-      const type = el.getAttribute('data-device-type') || undefined
-      const vendor = el.getAttribute('data-device-vendor') || undefined
-      const model = el.getAttribute('data-device-model') || undefined
-      nodes.push({ id, label, spec: { type, vendor, model } })
+    const graph = getGraph()
+    if (!graph) return []
+    return graph.nodes.map<NodeEntry>((node) => {
+      const label = Array.isArray(node.label)
+        ? node.label.join(' ').trim() || node.id
+        : node.label?.trim() || node.id
+      const type = specDeviceType(node.spec)
+      const hardware = node.spec?.kind === 'hardware' ? node.spec : undefined
+      return {
+        id: node.id,
+        label,
+        spec: {
+          type,
+          vendor: hardware?.vendor,
+          model: hardware?.model,
+        },
+      }
     })
-    return nodes
   })
 
   // Custom filter: match label/id/type, prioritize label-starts-with
