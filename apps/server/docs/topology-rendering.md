@@ -161,6 +161,116 @@ flowchart LR
 (e.g. `g.node[data-id]`、`g.link-group[data-link-id]`)。これらは
 renderer の "public DOM contract" として安定扱い。
 
+### 2.4 描画型モデルと設計思想
+
+トポロジーの概念構造はグラフであり、SVG DOM は木構造である。特に
+`Port` は「Node の所有物」である一方、「Link の端点」でもあるため、
+DOM の親子だけで概念を表そうとすると破綻しやすい。
+
+このため、描画型モデルは **所有(ownership)** と **参照(reference)**
+を分けている。
+
+```txt
+Node owns Port
+Link references endpoint Ports
+ResolvedEdge owns resolved endpoint references
+Renderer owns SVG order
+Overlay receives typed context
+```
+
+#### Core model
+
+core の生モデルでは、`Node` / `Subgraph` / `Link` がユーザー入力に近い
+ドメインオブジェクト。`Port` は Node に属するインターフェースであり、
+`Link` は `from` / `to` endpoint で node/port を参照する。
+
+```txt
+Node
+  └─ Port definition
+
+Link
+  ├─ from: { node, port? }
+  └─ to:   { node, port? }
+```
+
+ここで Link が Port の実体コピーを持たないのは、ラベル変更、ポート
+サイズ、位置、削除時の正本を Node 側に一本化するため。Port を Node と
+Link の両方が実体所有すると、同期問題が発生する。
+
+#### Resolved layout model
+
+layout 後は、描画に必要な座標と関係を `Resolved*` 型に落とす。
+
+| 型 | 役割 |
+|---|---|
+| `Node` | position 済みの node 本体 |
+| `Subgraph` | bounds 済みの group |
+| `ResolvedPort` | Node 所有の port を絶対座標に解決したもの |
+| `ResolvedEdge` | Link の routing 結果 + endpoint port 参照 |
+
+`ResolvedEdge` は `fromPortId` / `toPortId` だけでなく、
+`fromPort` / `toPort` も持つ。
+
+```ts
+interface ResolvedEdge {
+  id: string
+  fromPortId: string | null
+  toPortId: string | null
+  fromPort: ResolvedPort | null
+  toPort: ResolvedPort | null
+  points: Position[]
+  width: number
+  link: Link
+}
+```
+
+これは「Port の所有者は Node」という原則を保ったまま、Link 側の描画
+や overlay が endpoint port を型付きで直接扱えるようにするため。
+renderer 側で `ports.get(edge.fromPortId)` のように逆引きしない。
+
+#### Renderer model
+
+renderer は `ResolvedLayout` を SVG DOM に落とす責務を持つ。描画順は
+renderer が所有し、overlay はこの順序を変更しない。
+
+```txt
+g.viewport
+  g.subgraph
+  g.link-group
+  g.node
+  g.port
+```
+
+この順序は z-order そのものでもある。SVG は後に出た要素ほど上に描かれる
+ため、z-order を CSS や overlay 側 DOM 操作で調整しない。
+
+#### Overlay context model
+
+構造化 overlay は、DOM を query して必要情報を探すのではなく、renderer
+から typed context として受け取る。
+
+```ts
+linkOverlay(edge, ctx)
+```
+
+`edge` には routing 済みの path と endpoint port 参照があり、`ctx` には
+renderer が生成した DOM 参照が入る。
+
+```ts
+interface LinkOverlayContext {
+  groupElement: SVGGElement | null
+  pathElement: SVGPathElement | null
+  pathD: string
+  width: number
+  fromPort: ResolvedPort | null
+  toPort: ResolvedPort | null
+}
+```
+
+この分担により、overlay は `.link-group` や `path.link` という class 名を
+知る必要がない。class 名に依存するのは、複数要素を横断するサイドカー
+overlay に限定する。
+
 ---
 
 ## 3. 構造
