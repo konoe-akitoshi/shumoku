@@ -23,8 +23,7 @@ const UTILIZATION_COLORS: readonly (readonly [number, string])[] = [
   [90, '#ef4444'],
   [100, '#dc2626'],
 ]
-const DOWN_COLOR = '#ef4444'
-export { DOWN_COLOR }
+export const DOWN_COLOR = '#ef4444'
 
 export function getUtilizationColor(utilization: number): string {
   for (const [max, color] of UTILIZATION_COLORS) {
