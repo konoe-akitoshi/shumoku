@@ -9,6 +9,21 @@ import type { MetricsData } from './types.js'
 const DEFAULT_BANDWIDTH_BPS = 1_000_000_000 // 1 Gbps — fallback when link.bandwidth is unset
 
 /**
+ * Pick a node status with a realistic distribution that exercises every
+ * status the renderer's NodeStatusOverlay knows about. This way DEMO
+ * mode actually surfaces warning/degraded/unknown visuals, not just
+ * up/down.
+ */
+function pickNodeStatus(): 'up' | 'down' | 'warning' | 'degraded' | 'unknown' {
+  const r = Math.random()
+  if (r < 0.85) return 'up' // 85%
+  if (r < 0.92) return 'warning' // 7%
+  if (r < 0.96) return 'degraded' // 4%
+  if (r < 0.99) return 'down' // 3%
+  return 'unknown' // 1%
+}
+
+/**
  * Extract node ID from a link endpoint (can be string or object)
  */
 function getNodeId(endpoint: Link['from'] | Link['to']): string {
@@ -36,15 +51,13 @@ export class MockMetricsProvider {
 
     // Generate node metrics
     for (const node of graph.nodes) {
-      // 95% chance of being up
-      const status = Math.random() > 0.05 ? 'up' : 'down'
+      const status = pickNodeStatus()
+      const healthy = status === 'up' || status === 'warning' || status === 'degraded'
       nodes[node.id] = {
         status,
-        cpu:
-          status === 'up' ? this.generateSmoothValue(`node:${node.id}:cpu`, 5, 80, 5) : undefined,
-        memory:
-          status === 'up' ? this.generateSmoothValue(`node:${node.id}:mem`, 20, 90, 3) : undefined,
-        lastSeen: status === 'up' ? Date.now() : Date.now() - 60000,
+        cpu: healthy ? this.generateSmoothValue(`node:${node.id}:cpu`, 5, 80, 5) : undefined,
+        memory: healthy ? this.generateSmoothValue(`node:${node.id}:mem`, 20, 90, 3) : undefined,
+        lastSeen: healthy ? Date.now() : Date.now() - 60000,
       }
     }
 
@@ -54,8 +67,12 @@ export class MockMetricsProvider {
       const fromNode = nodes[getNodeId(link.from)]
       const toNode = nodes[getNodeId(link.to)]
 
-      // Link is down if either node is down
-      const status = fromNode?.status === 'up' && toNode?.status === 'up' ? 'up' : 'down'
+      // Link is down only if either endpoint is hard-down or unknown.
+      // warning/degraded nodes still carry traffic.
+      const endpointAlive = (s: string | undefined) =>
+        s === 'up' || s === 'warning' || s === 'degraded'
+      const status =
+        endpointAlive(fromNode?.status) && endpointAlive(toNode?.status) ? 'up' : 'down'
 
       // Generate separate utilization for each direction (0-100)
       const inUtilization =

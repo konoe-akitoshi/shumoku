@@ -112,15 +112,22 @@ export interface DataSourcePlugin {
 // Metrics Types
 // ============================================
 
+/**
+ * Recognized node / link status values. Plugins are encouraged to map
+ * their native states onto these so the renderer's NodeStatusOverlay
+ * (which has CSS for all five) can light up the right indicator.
+ */
+export type MetricsStatus = 'up' | 'down' | 'unknown' | 'warning' | 'degraded'
+
 export interface NodeMetrics {
-  status: 'up' | 'down' | 'unknown'
+  status: MetricsStatus
   cpu?: number
   memory?: number
   lastSeen?: number
 }
 
 export interface LinkMetrics {
-  status: 'up' | 'down' | 'unknown'
+  status: MetricsStatus
   utilization?: number // Legacy: max of in/out for backward compatibility
   inUtilization?: number // Incoming direction utilization (0-100)
   outUtilization?: number // Outgoing direction utilization (0-100)
