@@ -56,8 +56,10 @@
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
   })
   let basePathElement = $state<SVGPathElement | null>(null)
+  let groupElement = $state<SVGGElement | null>(null)
   const overlayContext = $derived({
     selected,
+    groupElement,
     pathElement: basePathElement,
     pathD,
     width: edge.width,
@@ -82,7 +84,7 @@
   }
 </script>
 
-<g class="link-group" data-link-id={edge.id}>
+<g class="link-group" data-link-id={edge.id} bind:this={groupElement}>
   {#if isDouble}
     {@const gap = Math.max(3, Math.round(edge.width * 0.9))}
     <path

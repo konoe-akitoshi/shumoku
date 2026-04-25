@@ -9,6 +9,13 @@ export interface SubgraphOverlayContext {
 
 export interface LinkOverlayContext {
   selected: boolean
+  /**
+   * The `<g class="link-group">` that wraps this edge. Provided so
+   * overlays can attach classes / CSS variables to the group without
+   * having to walk the DOM (e.g. `closest('g.link-group')`), which
+   * would re-leak the renderer's class names back into overlays.
+   */
+  groupElement: SVGGElement | null
   pathElement: SVGPathElement | null
   pathD: string
   width: number

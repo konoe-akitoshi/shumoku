@@ -25,9 +25,7 @@
   const outUtil = $derived(metrics?.outUtilization ?? metrics?.utilization ?? 0)
   const laneWidth = $derived(Math.max(context.width / 2, 2))
   const laneOffset = $derived(context.width / 4)
-  const baseColor = $derived(
-    down ? DOWN_COLOR : getUtilizationColor(Math.max(inUtil, outUtil)),
-  )
+  const baseColor = $derived(down ? DOWN_COLOR : getUtilizationColor(Math.max(inUtil, outUtil)))
   const inColor = $derived(down ? DOWN_COLOR : getUtilizationColor(inUtil))
   const outColor = $derived(down ? DOWN_COLOR : getUtilizationColor(outUtil))
   const inDuration = $derived(bpsToDurationMs(metrics?.inBps ?? 0))
@@ -40,7 +38,10 @@
   )
 
   $effect(() => {
-    const group = context.pathElement?.closest('g.link-group') as SVGGElement | null
+    // The renderer hands us the link-group element via context, so
+    // we don't have to walk the DOM (`closest('g.link-group')`) and
+    // re-leak the renderer's class names back into this overlay.
+    const group = context.groupElement
     if (!group) return
     if (!active) {
       group.classList.remove('wm-active')
@@ -98,11 +99,11 @@
     animation-play-state: var(--wm-play, paused);
   }
 
-  .wm-overlay[data-direction='in'] {
+  .wm-overlay[data-direction="in"] {
     animation-name: wm-flow-in;
   }
 
-  .wm-overlay[data-direction='out'] {
+  .wm-overlay[data-direction="out"] {
     animation-name: wm-flow-out;
   }
 
