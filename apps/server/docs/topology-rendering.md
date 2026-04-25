@@ -217,7 +217,8 @@ flowchart TD
   LH["path.link-hit"]
   N["g.node<br/>+ .status-up/down/...<br/>+ .node-highlighted/dimmed"]
   NB["g.node-bg rect"]
-  NF["g.node-fg<br/>(icon, label, ports)"]
+  NF["g.node-fg<br/>(icon, label)"]
+  P["g.port<br/>(port box + label)"]
 
   SVG --> VP
   VP --> CBG
@@ -230,10 +231,11 @@ flowchart TD
   VP --> N
   N --> NB
   N --> NF
+  VP --> P
 ```
 
 **z-order の不変条件**: renderer が `.viewport` 内の大枠順序
-`subgraphs → edges → nodes` を所有する。各エンティティの内部順序
+`subgraphs → edges → nodes → ports` を所有する。各エンティティの内部順序
 (base → overlay snippet → hit area / label)も renderer が固定する。
 overlay 側で DOM 挿入位置を弄る必要は無い。
 
