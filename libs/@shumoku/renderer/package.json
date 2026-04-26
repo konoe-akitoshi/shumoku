@@ -25,6 +25,7 @@
     },
     "./components/ShumokuRenderer.svelte": {
       "svelte": "./src/components/ShumokuRenderer.svelte",
+      "types": "./dist/components/ShumokuRenderer.svelte.d.ts",
       "default": "./dist/components/ShumokuRenderer.svelte"
     },
     "./static": {

@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { type LinkEndpoint, type NodeSpec, newId } from '@shumoku/core'
+  import { type LinkEndpoint, type NodeShape, type NodeSpec, newId } from '@shumoku/core'
   import { attachCamera } from '@shumoku/renderer'
-  // @ts-expect-error — SvelteKit resolves the svelte condition from package.json exports
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
   import CodePanel from '$lib/components/CodePanel.svelte'
@@ -33,7 +32,7 @@
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
   let clipboard = $state<{
     label: string
-    shape?: string
+    shape?: NodeShape
     spec?: NodeSpec
     paletteId?: string
     elementKind: 'node' | 'subgraph'
@@ -197,7 +196,7 @@
           ? diagramState.bomItems.find((b) => b.nodeId === id)?.paletteId
           : undefined
         clipboard = {
-          label: info.label,
+          label: Array.isArray(info.label) ? info.label.join(', ') : info.label,
           shape: info.kind === 'node' ? info.shape : undefined,
           spec: info.kind === 'node' ? info.spec : undefined,
           paletteId,
