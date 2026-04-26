@@ -59,7 +59,6 @@
     "@types/d3-zoom": "^3.0.8",
     "svelte": "^5.17.3",
     "svelte-check": "^4.1.4",
-    "typescript": "^5.6.3",
     "vite": "^6.4.1"
   },
   "peerDependencies": {

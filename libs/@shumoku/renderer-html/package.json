@@ -45,8 +45,7 @@
     "@shumoku/renderer-svg": "^0.2.25"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "typescript": "^5.6.3"
+    "@types/node": "^20.11.0"
   },
   "publishConfig": {
     "access": "public"
