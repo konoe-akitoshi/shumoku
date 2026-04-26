@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-// Renderer component (Svelte)
-export { default as ShumokuRenderer } from './components/ShumokuRenderer.svelte'
 // Camera (pan/zoom) — opt-in for host apps
 export { attachCamera, type Camera, type CameraOptions, type PanFilter } from './lib/camera'
 // Utilities for consuming apps
