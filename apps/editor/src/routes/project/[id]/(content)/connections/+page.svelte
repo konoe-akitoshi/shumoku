@@ -1,13 +1,15 @@
 <script lang="ts">
   import {
-    defaultMediumForLink,
+    defaultStandardForCages,
+    type EthernetStandard,
+    KNOWN_STANDARDS,
     type Link,
     type LinkEndpoint,
     newId,
-    type PlugSpec,
     validateLinkCompatibility,
   } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
+  import PortPicker from '$lib/components/PortPicker.svelte'
   import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
@@ -61,11 +63,6 @@
     return groups
   })
 
-  // Port options for a given node (for select dropdowns)
-  function getPortOptions(nodeId: string) {
-    return portsByNode.get(nodeId) ?? []
-  }
-
   function getPortLabel(p: PortOption) {
     const label = p.label || p.cage || 'unnamed port'
     const attrs = [
@@ -80,16 +77,6 @@
     return attrs ? `${label} (${attrs})` : label
   }
 
-  function hasPortOption(nodeId: string, portId: string) {
-    if (!portId) return true
-    return getPortOptions(nodeId).some((p) => p.id === portId)
-  }
-
-  function displayPort(nodeId: string, portId: string) {
-    const port = getPortOptions(nodeId).find((p) => p.id === portId)
-    return port ? getPortLabel(port) : portId
-  }
-
   // Connection rows
   interface ConnectionRow {
     link: Link
@@ -98,10 +85,10 @@
     fromPort: string
     toNode: string
     toPort: string
-    bandwidth: string
+    standard: string
+    standardIssue: string
+    cableLength: string
     vlan: string
-    medium: string
-    mediumIssue: string
     fromIp: string
     toIp: string
     label: string
@@ -120,14 +107,14 @@
         fromPort: from.port,
         toNode: to.node,
         toPort: to.port,
-        bandwidth: link.bandwidth !== undefined ? String(link.bandwidth) : '',
+        standard: link.standard ?? '',
+        standardIssue: getLinkIssue(link),
+        cableLength: link.cable?.length_m !== undefined ? String(link.cable.length_m) : '',
         vlan: link.vlan
           ? Array.isArray(link.vlan)
             ? link.vlan.join(', ')
             : String(link.vlan)
           : '',
-        medium: formatMedium(link.medium),
-        mediumIssue: getMediumIssue(link),
         fromIp: rawFromIp ? (Array.isArray(rawFromIp) ? rawFromIp.join(', ') : rawFromIp) : '',
         toIp: rawToIp ? (Array.isArray(rawToIp) ? rawToIp.join(', ') : rawToIp) : '',
         label: Array.isArray(link.label) ? link.label.join(', ') : (link.label ?? ''),
@@ -140,11 +127,11 @@
   // Summaries
   // =========================================================================
 
-  const bandwidthSummary = $derived.by(() => {
+  const standardSummary = $derived.by(() => {
     const counts = new Map<string, number>()
     for (const row of rows) {
-      if (row.bandwidth) {
-        counts.set(row.bandwidth, (counts.get(row.bandwidth) ?? 0) + 1)
+      if (row.standard) {
+        counts.set(row.standard, (counts.get(row.standard) ?? 0) + 1)
       }
     }
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]))
@@ -195,100 +182,75 @@
   // Add connection
   // =========================================================================
 
+  // Add-form state. PortPicker creates a NodePort eagerly when the user
+  // picks/types in the dropdown, so we always carry a real port id (or
+  // empty when not yet picked). Standard is auto-suggested from the cage
+  // pair once both ports are chosen, but the user can override.
   let addFromNode = $state('')
-  let addFromPort = $state('')
+  let addFromPortId = $state('')
   let addToNode = $state('')
-  let addToPort = $state('')
-  let addMedium = $state('')
+  let addToPortId = $state('')
+  let addStandard = $state<EthernetStandard | ''>('')
 
-  const newPortOptions = [
-    ['__new:rj45:1g', 'New unnamed RJ45 1G'],
-    ['__new:sfp:1g', 'New unnamed SFP 1G'],
-    ['__new:sfp+:10g', 'New unnamed SFP+ 10G'],
-    ['__new:sfp28:25g', 'New unnamed SFP28 25G'],
-    ['__new:qsfp+:40g', 'New unnamed QSFP+ 40G'],
-    ['__new:qsfp28:100g', 'New unnamed QSFP28 100G'],
-  ] as const
-
-  /**
-   * Resolve the form's port-select value to (port id, plug spec). For
-   * "__new:..." sentinels we materialize a port on the node first; the
-   * resulting LinkEndpoint always references a real port.
-   */
-  function resolveSelectedPort(
-    nodeId: string,
-    value: string,
-  ): { portId: string; plug: PlugSpec } | null {
-    if (!value) {
-      // No selection — create a generic blank port with no cage hint.
-      const portId = diagramState.addNodePort(nodeId, { label: '', source: 'custom' })
-      return portId ? { portId, plug: {} } : null
-    }
-    if (!value.startsWith('__new:')) {
-      const port = diagramState.nodes.get(nodeId)?.ports?.find((p) => p.id === value)
-      return { portId: value, plug: { connector: port?.cage, speed: port?.speed } }
-    }
-    const [, cage, speed] = value.split(':')
-    const portId = diagramState.addNodePort(nodeId, {
-      label: '',
-      cage,
-      speed,
-      poe: cage === 'rj45' ? undefined : false,
-      source: 'custom',
-    })
-    return portId ? { portId, plug: { connector: cage, speed } } : null
-  }
+  // Auto-default the standard once both ports are picked, unless the
+  // user has explicitly set one.
+  $effect(() => {
+    if (addStandard) return
+    if (!addFromPortId || !addToPortId) return
+    const fromCage = getPort(addFromNode, addFromPortId)?.cage
+    const toCage = getPort(addToNode, addToPortId)?.cage
+    const proposed = defaultStandardForCages(fromCage, toCage)
+    if (proposed) addStandard = proposed
+  })
 
   function handleAdd() {
     if (!addFromNode || !addToNode || addFromNode === addToNode) return
-    const fromResolved = resolveSelectedPort(addFromNode, addFromPort)
-    const toResolved = resolveSelectedPort(addToNode, addToPort)
-    if (!fromResolved || !toResolved) return
-    const from: LinkEndpoint = {
-      node: addFromNode,
-      port: fromResolved.portId,
-      plug: fromResolved.plug,
-    }
-    const to: LinkEndpoint = { node: addToNode, port: toResolved.portId, plug: toResolved.plug }
+    if (!addFromPortId || !addToPortId) return
+    const from: LinkEndpoint = { node: addFromNode, port: addFromPortId }
+    const to: LinkEndpoint = { node: addToNode, port: addToPortId }
     diagramState.addLink({
       id: newId('link'),
       from,
       to,
-      medium: parseMedium(addMedium) ?? inferMedium(from, to),
+      standard: addStandard || undefined,
     })
     addFromNode = ''
-    addFromPort = ''
+    addFromPortId = ''
     addToNode = ''
-    addToPort = ''
-    addMedium = ''
+    addToPortId = ''
+    addStandard = ''
   }
 
   // =========================================================================
   // Inline edit
   // =========================================================================
 
-  function updateEndpoint(link: Link, side: 'from' | 'to', field: 'port' | 'ip', value: string) {
+  function updateEndpointPort(link: Link, side: 'from' | 'to', portId: string) {
     if (!link.id) return
     const current = link[side]
-    if (field === 'port' && !value) {
-      // Clearing a port is not a legal state — synthesize a fresh one
-      // on the same node so the invariant survives.
-      const newPortId = diagramState.addNodePort(current.node, { label: '', source: 'custom' })
-      if (!newPortId) return
-      diagramState.updateLink(link.id, { [side]: { ...current, port: newPortId } })
-      return
-    }
-    const updated: LinkEndpoint = {
-      ...current,
-      [field]: field === 'port' ? value : value || undefined,
-    }
-    diagramState.updateLink(link.id, { [side]: updated })
+    diagramState.updateLink(link.id, { [side]: { ...current, port: portId } })
+  }
+
+  function updateEndpointIp(link: Link, side: 'from' | 'to', value: string) {
+    if (!link.id) return
+    const current = link[side]
+    diagramState.updateLink(link.id, { [side]: { ...current, ip: value || undefined } })
   }
 
   function updateField(link: Link, field: string, value: string) {
     if (!link.id) return
-    if (field === 'bandwidth') {
-      diagramState.updateLink(link.id, { bandwidth: (value || undefined) as Link['bandwidth'] })
+    if (field === 'standard') {
+      diagramState.updateLink(link.id, {
+        standard: (value || undefined) as EthernetStandard | undefined,
+      })
+    } else if (field === 'cableLength') {
+      const length = value ? Number.parseFloat(value) : undefined
+      const next = { ...(link.cable ?? {}) }
+      if (length === undefined || !Number.isFinite(length)) delete next.length_m
+      else next.length_m = length
+      diagramState.updateLink(link.id, {
+        cable: Object.keys(next).length > 0 ? next : undefined,
+      })
     } else if (field === 'vlan') {
       const vlans = value
         .split(',')
@@ -299,8 +261,6 @@
       diagramState.updateLink(link.id, { label: value || undefined })
     } else if (field === 'type') {
       diagramState.updateLink(link.id, { type: (value || undefined) as Link['type'] })
-    } else if (field === 'medium') {
-      diagramState.updateLink(link.id, { medium: parseMedium(value) })
     }
   }
 
@@ -308,43 +268,11 @@
     return diagramState.nodes.get(nodeId)?.ports?.find((port) => port.id === portId)
   }
 
-  function inferMedium(from: LinkEndpoint, to: LinkEndpoint) {
-    const medium = defaultMediumForLink(
-      getPort(from.node, from.port),
-      getPort(to.node, to.port),
-      from.plug,
-      to.plug,
-    )
-    return Object.keys(medium).length > 0 ? medium : undefined
-  }
-
-  function parseMedium(value: string): Link['medium'] {
-    if (!value) return undefined
-    if (value === 'twisted-pair') return { kind: 'twisted-pair' }
-    if (value === 'cat5e' || value === 'cat6' || value === 'cat6a') {
-      return { kind: 'twisted-pair', cableCategory: value }
-    }
-    if (value === 'fiber-sm') return { kind: 'fiber', fiberMode: 'singlemode' }
-    if (value === 'fiber-mm') return { kind: 'fiber', fiberMode: 'multimode' }
-    if (value === 'dac' || value === 'aoc' || value === 'fiber') return { kind: value }
-    return { kind: value }
-  }
-
-  function formatMedium(medium: Link['medium']) {
-    if (!medium?.kind) return ''
-    if (medium.kind === 'twisted-pair') return medium.cableCategory ?? 'twisted-pair'
-    if (medium.kind === 'fiber' && medium.fiberMode === 'singlemode') return 'fiber-sm'
-    if (medium.kind === 'fiber' && medium.fiberMode === 'multimode') return 'fiber-mm'
-    return medium.kind
-  }
-
-  function getMediumIssue(link: Link) {
+  function getLinkIssue(link: Link) {
     const issues = validateLinkCompatibility(
       getPort(link.from.node, link.from.port),
       getPort(link.to.node, link.to.port),
-      link.from.plug,
-      link.to.plug,
-      link.medium,
+      link,
     )
     return issues[0]?.message ?? ''
   }
@@ -352,16 +280,7 @@
   const cellInput =
     'w-full px-1.5 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring'
 
-  const mediumOptions = [
-    ['', 'Auto'],
-    ['cat5e', 'Cat5e'],
-    ['cat6', 'Cat6'],
-    ['cat6a', 'Cat6A'],
-    ['fiber-mm', 'Fiber MM'],
-    ['fiber-sm', 'Fiber SM'],
-    ['dac', 'DAC'],
-    ['aoc', 'AOC'],
-  ] as const
+  const standardOptions = ['', ...KNOWN_STANDARDS] as const
 </script>
 
 <div class="flex items-center justify-between mb-6">
@@ -406,11 +325,11 @@
   </Card.Root>
   <Card.Root>
     <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">Bandwidth</div>
-      {#if bandwidthSummary.length > 0}
+      <div class="text-xs uppercase tracking-wider text-muted-foreground">Standards</div>
+      {#if standardSummary.length > 0}
         <div class="flex flex-wrap gap-1.5 mt-1">
-          {#each bandwidthSummary as [ bw, count ]}
-            <Badge variant="secondary" class="font-mono text-[10px]">{bw} x{count}</Badge>
+          {#each standardSummary as [ s, count ]}
+            <Badge variant="secondary" class="font-mono text-[10px]">{s} x{count}</Badge>
           {/each}
         </div>
       {:else}
@@ -440,22 +359,16 @@
           {/each}
         </select>
       </div>
-      <div class="w-24">
-        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-from-port">Port</label>
-        <select
-          id="add-from-port"
-          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          bind:value={addFromPort}
+      <div class="w-44">
+        <span class="text-[10px] text-muted-foreground mb-1 block">Port</span>
+        <PortPicker
+          nodeId={addFromNode}
+          value={addFromPortId}
           disabled={!addFromNode}
-        >
-          <option value="">New unnamed port</option>
-          {#each getPortOptions(addFromNode) as p}
-            <option value={p.id} disabled={p.disabled}>{getPortLabel(p)}</option>
-          {/each}
-          {#each newPortOptions as [ value, label ]}
-            <option {value}>{label}</option>
-          {/each}
-        </select>
+          onchange={(portId) => {
+            addFromPortId = portId
+          }}
+        />
       </div>
       <span class="text-muted-foreground text-sm pb-1.5">→</span>
       <div class="flex-1">
@@ -471,32 +384,28 @@
           {/each}
         </select>
       </div>
-      <div class="w-24">
-        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-to-port">Port</label>
-        <select
-          id="add-to-port"
-          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          bind:value={addToPort}
+      <div class="w-44">
+        <span class="text-[10px] text-muted-foreground mb-1 block">Port</span>
+        <PortPicker
+          nodeId={addToNode}
+          value={addToPortId}
           disabled={!addToNode}
-        >
-          <option value="">New unnamed port</option>
-          {#each getPortOptions(addToNode) as p}
-            <option value={p.id} disabled={p.disabled}>{getPortLabel(p)}</option>
-          {/each}
-          {#each newPortOptions as [ value, label ]}
-            <option {value}>{label}</option>
-          {/each}
-        </select>
+          onchange={(portId) => {
+            addToPortId = portId
+          }}
+        />
       </div>
-      <div class="w-28">
-        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-medium">Medium</label>
-        <select
-          id="add-medium"
-          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          bind:value={addMedium}
+      <div class="w-36">
+        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-standard"
+          >Standard</label
         >
-          {#each mediumOptions as [ value, label ]}
-            <option {value}>{label}</option>
+        <select
+          id="add-standard"
+          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
+          bind:value={addStandard}
+        >
+          {#each standardOptions as s}
+            <option value={s}>{s || '—'}</option>
           {/each}
         </select>
       </div>
@@ -521,8 +430,8 @@
         <Table.Row>
           <Table.Head>From</Table.Head>
           <Table.Head>To</Table.Head>
-          <Table.Head class="w-28">Medium</Table.Head>
-          <Table.Head class="w-20">BW</Table.Head>
+          <Table.Head class="w-36">Standard</Table.Head>
+          <Table.Head class="w-20">Length</Table.Head>
           <Table.Head class="w-24">VLAN</Table.Head>
           <Table.Head>From IP</Table.Head>
           <Table.Head>To IP</Table.Head>
@@ -534,99 +443,52 @@
         {#each rows as row (row.id)}
           <Table.Row>
             <Table.Cell>
-              <div class="font-mono text-xs">
-                <span class="font-medium">{row.fromNode}</span>
-                {#if getPortOptions(row.fromNode).length > 0}
-                  <select
-                    class={cellInput}
-                    value={row.fromPort}
-                    onchange={(e) => updateEndpoint(row.link, 'from', 'port', (e.target as HTMLSelectElement).value)}
-                  >
-                    <option value="">New unnamed port</option>
-                    {#if row.fromPort && !hasPortOption(row.fromNode, row.fromPort)}
-                      <option value={row.fromPort}>
-                        {displayPort(row.fromNode, row.fromPort)}
-                        (custom)
-                      </option>
-                    {/if}
-                    {#each getPortOptions(row.fromNode) as p}
-                      <option value={p.id} disabled={p.disabled}>{getPortLabel(p)}</option>
-                    {/each}
-                  </select>
-                {:else}
-                  <input
-                    type="text"
-                    class={cellInput}
-                    value={row.fromPort}
-                    placeholder="port"
-                    onblur={(e) => updateEndpoint(row.link, 'from', 'port', (e.target as HTMLInputElement).value)}
-                    onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  >
-                {/if}
+              <div class="font-mono text-xs space-y-1">
+                <div class="font-medium">{row.fromNode}</div>
+                <PortPicker
+                  nodeId={row.fromNode}
+                  value={row.fromPort}
+                  onchange={(portId) => updateEndpointPort(row.link, 'from', portId)}
+                />
               </div>
             </Table.Cell>
             <Table.Cell>
-              <div class="font-mono text-xs">
-                <span class="font-medium">{row.toNode}</span>
-                {#if getPortOptions(row.toNode).length > 0}
-                  <select
-                    class={cellInput}
-                    value={row.toPort}
-                    onchange={(e) => updateEndpoint(row.link, 'to', 'port', (e.target as HTMLSelectElement).value)}
-                  >
-                    <option value="">New unnamed port</option>
-                    {#if row.toPort && !hasPortOption(row.toNode, row.toPort)}
-                      <option value={row.toPort}>
-                        {displayPort(row.toNode, row.toPort)}
-                        (custom)
-                      </option>
-                    {/if}
-                    {#each getPortOptions(row.toNode) as p}
-                      <option value={p.id} disabled={p.disabled}>{getPortLabel(p)}</option>
-                    {/each}
-                  </select>
-                {:else}
-                  <input
-                    type="text"
-                    class={cellInput}
-                    value={row.toPort}
-                    placeholder="port"
-                    onblur={(e) => updateEndpoint(row.link, 'to', 'port', (e.target as HTMLInputElement).value)}
-                    onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  >
-                {/if}
+              <div class="font-mono text-xs space-y-1">
+                <div class="font-medium">{row.toNode}</div>
+                <PortPicker
+                  nodeId={row.toNode}
+                  value={row.toPort}
+                  onchange={(portId) => updateEndpointPort(row.link, 'to', portId)}
+                />
               </div>
             </Table.Cell>
             <Table.Cell>
               <select
                 class="px-1 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring"
-                value={row.medium}
-                title={row.mediumIssue}
-                onchange={(e) => updateField(row.link, 'medium', (e.target as HTMLSelectElement).value)}
+                value={row.standard}
+                title={row.standardIssue}
+                onchange={(e) => updateField(row.link, 'standard', (e.target as HTMLSelectElement).value)}
               >
-                {#each mediumOptions as [ value, label ]}
-                  <option {value}>{label}</option>
+                {#each standardOptions as s}
+                  <option value={s}>{s || '—'}</option>
                 {/each}
               </select>
-              {#if row.mediumIssue}
-                <div class="text-[9px] text-amber-600 max-w-36 truncate" title={row.mediumIssue}>
-                  {row.mediumIssue}
+              {#if row.standardIssue}
+                <div class="text-[9px] text-amber-600 max-w-36 truncate" title={row.standardIssue}>
+                  {row.standardIssue}
                 </div>
               {/if}
             </Table.Cell>
             <Table.Cell>
-              <select
-                class="px-1 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring"
-                value={row.bandwidth}
-                onchange={(e) => updateField(row.link, 'bandwidth', (e.target as HTMLSelectElement).value)}
+              <input
+                type="number"
+                min="0"
+                class={cellInput}
+                value={row.cableLength}
+                placeholder="—"
+                onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
+                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
               >
-                <option value="">—</option>
-                <option value="1G">1G</option>
-                <option value="10G">10G</option>
-                <option value="25G">25G</option>
-                <option value="40G">40G</option>
-                <option value="100G">100G</option>
-              </select>
             </Table.Cell>
             <Table.Cell>
               <input
@@ -644,7 +506,7 @@
                 class={cellInput}
                 value={row.fromIp}
                 placeholder="—"
-                onblur={(e) => updateEndpoint(row.link, 'from', 'ip', (e.target as HTMLInputElement).value)}
+                onblur={(e) => updateEndpointIp(row.link, 'from', (e.target as HTMLInputElement).value)}
                 onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
               >
             </Table.Cell>
@@ -654,7 +516,7 @@
                 class={cellInput}
                 value={row.toIp}
                 placeholder="—"
-                onblur={(e) => updateEndpoint(row.link, 'to', 'ip', (e.target as HTMLInputElement).value)}
+                onblur={(e) => updateEndpointIp(row.link, 'to', (e.target as HTMLInputElement).value)}
                 onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
               >
             </Table.Cell>

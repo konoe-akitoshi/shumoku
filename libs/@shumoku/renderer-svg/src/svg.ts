@@ -14,7 +14,7 @@ import type {
   LayoutResult,
   LayoutSubgraph,
   LegendSettings,
-  LinkBandwidth,
+  Link,
   LinkType,
   NetworkGraph,
   Node,
@@ -24,14 +24,15 @@ import type {
   ThemeType,
 } from '@shumoku/core'
 import {
+  bpsToLinkWidth,
   computeNodeSize,
   DEFAULT_ICON_SIZE,
   darkTheme,
-  getBandwidthWidth,
   getDeviceIcon,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
+  linkSpeedBps,
   SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   specDeviceType,
@@ -447,11 +448,11 @@ export class SVGRenderer {
     let itemCount = 0
 
     if (settings.showBandwidth) {
-      const usedBandwidths = new Set<LinkBandwidth>()
+      const usedStandards = new Set<string>()
       for (const link of graph.links) {
-        if (link.bandwidth) usedBandwidths.add(link.bandwidth)
+        if (link.standard) usedStandards.add(link.standard)
       }
-      itemCount += usedBandwidths.size
+      itemCount += usedStandards.size
     }
 
     if (itemCount === 0) {
@@ -509,10 +510,10 @@ export class SVGRenderer {
     const iconWidth = 30
     const maxLabelWidth = 100
 
-    // Collect used bandwidths
-    const usedBandwidths = new Set<LinkBandwidth>()
+    // Collect used standards
+    const usedStandards = new Set<string>()
     for (const link of graph.links) {
-      if (link.bandwidth) usedBandwidths.add(link.bandwidth)
+      if (link.standard) usedStandards.add(link.standard)
     }
 
     // Collect used device types
@@ -523,20 +524,14 @@ export class SVGRenderer {
     }
 
     // Build legend items
-    if (settings.showBandwidth && usedBandwidths.size > 0) {
-      // The legend only surfaces the known preset labels. Arbitrary
-      // numeric bandwidths (e.g. mapping overrides from monitoring)
-      // still render correctly but are omitted from the legend to
-      // keep it tidy.
-      const sortedBandwidths = ['1G', '10G', '25G', '40G', '100G'].filter((b) =>
-        usedBandwidths.has(b as LinkBandwidth),
-      )
-
-      for (const bw of sortedBandwidths) {
-        const sw = this.getBandwidthStrokeWidth(bw)
+    if (settings.showBandwidth && usedStandards.size > 0) {
+      const sortedStandards = [...usedStandards].sort()
+      for (const std of sortedStandards) {
+        const speed = linkSpeedBps({ standard: std } as Link)
+        const sw = bpsToLinkWidth(speed)
         items.push({
           icon: this.renderBandwidthLegendIcon(sw),
-          label: bw,
+          label: std,
         })
       }
     }
@@ -1201,10 +1196,10 @@ ${fg}
     const dasharray = link.style?.strokeDasharray || this.getLinkDasharray(type)
     const markerEnd = arrow !== 'none' ? `url(#${this.arrowId})` : ''
 
-    // Bandwidth determines stroke width
-    const bandwidthStrokeWidth = this.getBandwidthStrokeWidth(link.bandwidth)
+    // Standard determines stroke width via the registry's speed mapping.
+    const standardStrokeWidth = bpsToLinkWidth(linkSpeedBps(link))
     const strokeWidth =
-      link.style?.strokeWidth || bandwidthStrokeWidth || this.getLinkStrokeWidth(type)
+      link.style?.strokeWidth || standardStrokeWidth || this.getLinkStrokeWidth(type)
 
     // Render link line
     let result = this.renderLinkLine(id, points, stroke, strokeWidth, dasharray, markerEnd, type)
@@ -1276,8 +1271,7 @@ ${fg}
     const attrs: string[] = []
 
     // Basic link attributes
-    if (link.bandwidth)
-      attrs.push(`data-link-bandwidth="${this.escapeXml(String(link.bandwidth))}"`)
+    if (link.standard) attrs.push(`data-link-standard="${this.escapeXml(link.standard)}"`)
     if (link.vlan && link.vlan.length > 0) {
       attrs.push(`data-link-vlan="${link.vlan.join(',')}"`)
     }
@@ -1441,16 +1435,6 @@ ${fg}
       default:
         return 3
     }
-  }
-
-  /**
-   * Delegates to core's shared bandwidth→width curve. See
-   * `getBandwidthWidth` / `WIDTH_ANCHORS` in @shumoku/core for the
-   * calibration; tune there so every surface (renderer-svg, the
-   * reactive Svelte renderer, weathermap) stays in lockstep.
-   */
-  private getBandwidthStrokeWidth(bandwidth?: LinkBandwidth): number {
-    return getBandwidthWidth(bandwidth)
   }
 
   /**

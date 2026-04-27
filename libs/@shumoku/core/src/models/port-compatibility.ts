@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { LinkMedium, NodePort, PlugSpec, PortConnector } from './types.js'
+import { getStandardSpec } from './standards.js'
+import type { EthernetStandard, Link, NodePort, PortConnector } from './types.js'
 
-const PLUGGABLE_CONNECTORS = new Set(['sfp', 'sfp+', 'sfp28', 'qsfp+', 'qsfp28'])
+const PLUGGABLE_CONNECTORS = new Set<PortConnector>(['sfp', 'sfp+', 'sfp28', 'qsfp+', 'qsfp28'])
 
 export type PortCompatibilitySeverity = 'error' | 'warning'
 
@@ -29,101 +30,86 @@ export function isPoeCapableConnector(connector: string | undefined): boolean {
   return normalizePortConnector(connector) === 'rj45'
 }
 
+/** "combo" cages accept either copper or fiber pluggables. */
+function cageAccepts(cage: PortConnector | undefined, required: PortConnector): boolean {
+  const c = normalizePortConnector(cage)
+  if (!c) return true // unknown cage — be permissive
+  if (c === required) return true
+  if (c === 'combo') {
+    // Combo ports accept SFP and RJ45 commonly; we treat any common cage as ok.
+    return true
+  }
+  return false
+}
+
 /**
- * The "effective connector" we use for a connection point. Prefer the plug
- * (it's the cable end actually carrying signal) and fall back to the port's
- * cage when the plug is unspecified — typical for just-drawn links where
- * we know the receptacle but the user has not picked a transceiver yet.
+ * Validate a link against its endpoint cages and the chosen standard.
+ *
+ * Most physical attributes (speed, required cage, cable medium, reach)
+ * are implied by `link.standard` via `STANDARD_SPECS`. We only need to
+ * verify that the actual port cages on each side accept the cage the
+ * standard demands, plus a few sanity checks (PoE on RJ45 only,
+ * cable length within reach).
  */
-function effectiveConnector(
-  port: NodePort | undefined,
-  plug: PlugSpec | undefined,
-): PortConnector | undefined {
-  return normalizePortConnector(plug?.connector ?? port?.cage)
-}
-
-export function defaultMediumForLink(
-  fromPort: NodePort | undefined,
-  toPort: NodePort | undefined,
-  fromPlug: PlugSpec | undefined,
-  toPlug: PlugSpec | undefined,
-): LinkMedium {
-  const a = effectiveConnector(fromPort, fromPlug)
-  const b = effectiveConnector(toPort, toPlug)
-  if (a === 'rj45' && b === 'rj45') return { kind: 'twisted-pair' }
-  if (isPluggableConnector(a) && isPluggableConnector(b)) return { kind: 'fiber' }
-  return {}
-}
-
 export function validateLinkCompatibility(
   fromPort: NodePort | undefined,
   toPort: NodePort | undefined,
-  fromPlug: PlugSpec | undefined,
-  toPlug: PlugSpec | undefined,
-  medium: LinkMedium | undefined,
+  link: Pick<Link, 'standard' | 'cable'>,
 ): PortCompatibilityIssue[] {
   const issues: PortCompatibilityIssue[] = []
-  const a = effectiveConnector(fromPort, fromPlug)
-  const b = effectiveConnector(toPort, toPlug)
-  const kind = medium?.kind
+  const spec = getStandardSpec(link.standard)
 
-  for (const [port, plug] of [
-    [fromPort, fromPlug],
-    [toPort, toPlug],
+  // PoE flag sanity — even without a standard, a non-RJ45 cage marked PoE
+  // is a misconfiguration we can flag.
+  for (const port of [fromPort, toPort]) {
+    if (port?.poe && !isPoeCapableConnector(port.cage)) {
+      issues.push({
+        severity: 'error',
+        message: `${port.label || port.id} is marked PoE but ${port.cage ?? 'unknown'} cages cannot source PoE`,
+      })
+    }
+  }
+
+  if (!spec) return issues
+
+  // Cage compatibility — each end must accept the cage the standard requires.
+  for (const [side, port] of [
+    ['source', fromPort],
+    ['target', toPort],
   ] as const) {
-    const connector = effectiveConnector(port, plug)
-    if (port?.poe && !isPoeCapableConnector(connector)) {
+    if (!port?.cage) continue // unknown cage — skip
+    if (!cageAccepts(port.cage, spec.cage)) {
       issues.push({
         severity: 'error',
-        message: `${port.label || port.id} is marked PoE but ${connector ?? 'unknown'} cages cannot source PoE`,
+        message: `${side} cage ${port.cage} cannot host ${link.standard} (requires ${spec.cage})`,
       })
     }
   }
 
-  // Plug/cage mismatch — a 10G SFP+ transceiver doesn't fit an RJ45 receptacle.
-  for (const [port, plug, side] of [
-    [fromPort, fromPlug, 'source'],
-    [toPort, toPlug, 'target'],
-  ] as const) {
-    const cage = normalizePortConnector(port?.cage)
-    const plugConnector = normalizePortConnector(plug?.connector)
-    if (cage && plugConnector && cage !== plugConnector && cage !== 'combo') {
-      issues.push({
-        severity: 'warning',
-        message: `${side} plug ${plugConnector} does not match cage ${cage}; a transceiver/adapter is required`,
-      })
-    }
-  }
-
-  if (!a || !b || !kind) return issues
-
-  if (a === 'rj45' && b === 'rj45') {
-    if (kind !== 'twisted-pair') {
-      issues.push({
-        severity: 'error',
-        message: 'RJ45-to-RJ45 links should use twisted-pair cabling',
-      })
-    }
-    return issues
-  }
-
-  if (isPluggableConnector(a) && isPluggableConnector(b)) {
-    if (!['fiber', 'dac', 'aoc'].includes(kind)) {
-      issues.push({
-        severity: 'error',
-        message: 'SFP/QSFP links should use fiber, DAC, or AOC media',
-      })
-    }
-    return issues
-  }
-
-  if ((a === 'rj45' && isPluggableConnector(b)) || (b === 'rj45' && isPluggableConnector(a))) {
+  // Reach check (informational warning).
+  if (link.cable?.length_m && link.cable.length_m > spec.maxReach_m) {
     issues.push({
       severity: 'warning',
-      message:
-        'RJ45-to-SFP links require an RJ45 transceiver on the pluggable side and normally do not carry PoE',
+      message: `cable length ${link.cable.length_m} m exceeds ${link.standard} max reach ${spec.maxReach_m} m`,
     })
   }
 
   return issues
+}
+
+/** Propose a sensible default standard given the cages on both ends. */
+export function defaultStandardForCages(
+  fromCage: PortConnector | undefined,
+  toCage: PortConnector | undefined,
+): EthernetStandard | undefined {
+  const a = normalizePortConnector(fromCage)
+  const b = normalizePortConnector(toCage)
+  if (!a || !b) return undefined
+  if (a === 'rj45' && b === 'rj45') return '1000BASE-T'
+  if (a === 'sfp+' && b === 'sfp+') return '10GBASE-SR'
+  if (a === 'sfp28' && b === 'sfp28') return '25GBASE-SR'
+  if (a === 'qsfp+' && b === 'qsfp+') return '40GBASE-SR4'
+  if (a === 'qsfp28' && b === 'qsfp28') return '100GBASE-SR4'
+  if (a === 'sfp' && b === 'sfp') return '1000BASE-SX'
+  return undefined
 }

@@ -534,8 +534,8 @@ export function addLink(
 
   const newLink: Link = {
     id: `link-${Date.now()}`,
-    from: { node: fromNode, port: fromPort, plug: {} },
-    to: { node: toNode, port: toPort, plug: {} },
+    from: { node: fromNode, port: fromPort },
+    to: { node: toNode, port: toPort },
   }
 
   return {

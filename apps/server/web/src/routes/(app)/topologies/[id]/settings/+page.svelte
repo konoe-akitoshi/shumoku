@@ -104,7 +104,7 @@
     id: string
     from: { nodeId: string; port?: string }
     to: { nodeId: string; port?: string }
-    bandwidth?: string
+    standard?: string
   }
   let edges = $state<EdgeData[]>([])
 
@@ -274,7 +274,7 @@
             id: e.id,
             from: e.from.nodeId,
             to: e.to.nodeId,
-            bandwidth: e.bandwidth,
+            standard: e.standard,
           })),
         },
         layout: { nodes: {} },

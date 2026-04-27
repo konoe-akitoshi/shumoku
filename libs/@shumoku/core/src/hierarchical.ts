@@ -8,7 +8,7 @@
  */
 
 import type { ResolvedLayout } from './layout/resolved-types.js'
-import { ensurePortAndPlug } from './models/migrate.js'
+import { ensurePorts } from './models/migrate.js'
 import type {
   LayoutResult,
   Link,
@@ -192,7 +192,7 @@ export function buildChildSheetGraph(
   // Newly synthesized export-connector links don't have ports yet — let the
   // shared migration helper materialize them so the invariant still holds
   // when the child sheet is handed to the layout engine.
-  return ensurePortAndPlug({
+  return ensurePorts({
     ...rootGraph,
     name: subgraph.label,
     nodes: [...transformedNodes, ...exportNodes],
@@ -307,11 +307,11 @@ function generateExportConnectors(
       },
     })
 
-    // Export links (one per connection). Plug stays empty here — the
-    // post-pass `ensurePortAndPlug` fills it in from medium/bandwidth.
+    // Export links (one per connection). The export-side port is left
+    // blank; `ensurePorts` materializes a stub NodePort on the export node.
     for (const [i, conn] of exportPoint.connections.entries()) {
-      const deviceEndpoint: LinkEndpoint = { node: conn.device, port: conn.port, plug: {} }
-      const exportEndpoint: LinkEndpoint = { node: exportNodeId, port: '', plug: {} }
+      const deviceEndpoint: LinkEndpoint = { node: conn.device, port: conn.port }
+      const exportEndpoint: LinkEndpoint = { node: exportNodeId, port: '' }
 
       exportLinks.push({
         id: `${EXPORT_LINK_PREFIX}${exportId}_${i}`,

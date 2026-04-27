@@ -3,7 +3,7 @@
  * Generates simulated metrics for development and testing
  */
 
-import { type Link, type NetworkGraph, resolveBandwidthBps } from '@shumoku/core'
+import { type Link, linkSpeedBps, type NetworkGraph } from '@shumoku/core'
 import type { MetricsData } from './types.js'
 
 const DEFAULT_BANDWIDTH_BPS = 1_000_000_000 // 1 Gbps — fallback when link.bandwidth is unset
@@ -68,8 +68,8 @@ export class MockMetricsProvider {
       const outUtilization =
         status === 'up' ? this.generateSmoothValue(`link:${linkId}:out`, 0, 95, 10) : 0
 
-      // Calculate bandwidth in bps based on link bandwidth setting
-      const capacity = resolveBandwidthBps(link.bandwidth) ?? DEFAULT_BANDWIDTH_BPS
+      // Capacity from the link's standard (or override rateBps if set).
+      const capacity = linkSpeedBps(link) ?? DEFAULT_BANDWIDTH_BPS
       const inBps = status === 'up' ? Math.round((inUtilization / 100) * capacity) : 0
       const outBps = status === 'up' ? Math.round((outUtilization / 100) * capacity) : 0
 

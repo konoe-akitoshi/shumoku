@@ -1,5 +1,12 @@
 <script lang="ts">
-  import type { Link, LinkEndpoint, Node } from '@shumoku/core'
+  import {
+    type EthernetStandard,
+    KNOWN_STANDARDS,
+    type Link,
+    type LinkEndpoint,
+    type Node,
+  } from '@shumoku/core'
+  import PortPicker from '$lib/components/PortPicker.svelte'
 
   let {
     link,
@@ -68,18 +75,18 @@
     return port ? portOptionLabel(port) : portId
   }
 
-  function updateEndpointField(side: 'from' | 'to', field: 'node' | 'port' | 'ip', value: string) {
+  function updateEndpointField(side: 'from' | 'to', field: 'node' | 'ip', value: string) {
     const current = link[side]
     if (field === 'ip') {
       onupdate?.({ [side]: { ...current, ip: value || undefined } })
-    } else if (field === 'port' && !value) {
-      // Empty port not allowed — caller's onupdate handler is responsible
-      // for materializing a fresh port. We forward the empty string and
-      // let it decide.
-      onupdate?.({ [side]: { ...current, port: '' } })
     } else {
       onupdate?.({ [side]: { ...current, [field]: value } })
     }
+  }
+
+  function updateEndpointPort(side: 'from' | 'to', portId: string) {
+    const current = link[side]
+    onupdate?.({ [side]: { ...current, port: portId } })
   }
 
   function handleVlanBlur(value: string) {
@@ -101,7 +108,7 @@
   const sectionClass =
     'text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1.5'
 
-  const bandwidthOptions = ['', '1G', '10G', '25G', '40G', '100G']
+  const standardOptions = ['', ...KNOWN_STANDARDS] as const
   const typeOptions = ['solid', 'dashed', 'thick', 'double', 'invisible']
   const redundancyOptions = ['', 'ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']
   const arrowOptions = ['none', 'forward', 'back', 'both']
@@ -130,34 +137,15 @@
     </dd>
   </div>
 
-  <div class="flex items-center justify-between">
+  <div class="flex items-center justify-between gap-2">
     <dt class={labelClass}>Port</dt>
-    <dd>
+    <dd class="flex-1 min-w-0">
       {#if editing}
-        {#if getPortOptions(from.node).length > 0}
-          <select
-            class={selectClass}
-            value={from.port}
-            onchange={(e) => updateEndpointField('from', 'port', (e.target as HTMLSelectElement).value)}
-          >
-            <option value="">New unnamed port</option>
-            {#if from.port && !hasPortOption(from.node, from.port)}
-              <option value={from.port}>{displayPort(from.node, from.port)} (custom)</option>
-            {/if}
-            {#each getPortOptions(from.node) as port}
-              <option value={port.id} disabled={port.disabled}>{portOptionLabel(port)}</option>
-            {/each}
-          </select>
-        {:else}
-          <input
-            type="text"
-            class={inputClass}
-            value={from.port}
-            placeholder="Port"
-            onblur={(e) => updateEndpointField('from', 'port', (e.target as HTMLInputElement).value)}
-            onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-          >
-        {/if}
+        <PortPicker
+          nodeId={from.node}
+          value={from.port}
+          onchange={(portId) => updateEndpointPort('from', portId)}
+        />
       {:else}
         <span class={valueClass}>{from.port ? displayPort(from.node, from.port) : '—'}</span>
       {/if}
@@ -206,34 +194,15 @@
     </dd>
   </div>
 
-  <div class="flex items-center justify-between">
+  <div class="flex items-center justify-between gap-2">
     <dt class={labelClass}>Port</dt>
-    <dd>
+    <dd class="flex-1 min-w-0">
       {#if editing}
-        {#if getPortOptions(to.node).length > 0}
-          <select
-            class={selectClass}
-            value={to.port}
-            onchange={(e) => updateEndpointField('to', 'port', (e.target as HTMLSelectElement).value)}
-          >
-            <option value="">New unnamed port</option>
-            {#if to.port && !hasPortOption(to.node, to.port)}
-              <option value={to.port}>{displayPort(to.node, to.port)} (custom)</option>
-            {/if}
-            {#each getPortOptions(to.node) as port}
-              <option value={port.id} disabled={port.disabled}>{portOptionLabel(port)}</option>
-            {/each}
-          </select>
-        {:else}
-          <input
-            type="text"
-            class={inputClass}
-            value={to.port}
-            placeholder="Port"
-            onblur={(e) => updateEndpointField('to', 'port', (e.target as HTMLInputElement).value)}
-            onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-          >
-        {/if}
+        <PortPicker
+          nodeId={to.node}
+          value={to.port}
+          onchange={(portId) => updateEndpointPort('to', portId)}
+        />
       {:else}
         <span class={valueClass}>{to.port ? displayPort(to.node, to.port) : '—'}</span>
       {/if}
@@ -263,20 +232,83 @@
 <div class={sectionClass}>Properties</div>
 <dl class="space-y-2.5">
   <div class="flex items-center justify-between">
-    <dt class={labelClass}>Bandwidth</dt>
+    <dt class={labelClass}>Standard</dt>
     <dd>
       {#if editing}
         <select
           class={selectClass}
-          value={link.bandwidth ?? ''}
-          onchange={(e) => onupdate?.({ bandwidth: ((e.target as HTMLSelectElement).value || undefined) as Link['bandwidth'] })}
+          value={link.standard ?? ''}
+          onchange={(e) =>
+            onupdate?.({
+              standard: ((e.target as HTMLSelectElement).value || undefined) as
+                | EthernetStandard
+                | undefined,
+            })}
         >
-          {#each bandwidthOptions as bw}
-            <option value={bw}>{bw || '—'}</option>
+          {#each standardOptions as s}
+            <option value={s}>{s || '—'}</option>
           {/each}
         </select>
       {:else}
-        <span class={valueClass}>{link.bandwidth ?? '—'}</span>
+        <span class={valueClass}>{link.standard ?? '—'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>Cable length (m)</dt>
+    <dd>
+      {#if editing}
+        <input
+          type="number"
+          min="0"
+          class={inputClass}
+          value={link.cable?.length_m ?? ''}
+          onblur={(e) => {
+            const raw = (e.target as HTMLInputElement).value
+            const length = raw ? Number.parseFloat(raw) : undefined
+            const nextCable = { ...(link.cable ?? {}) }
+            if (length === undefined || !Number.isFinite(length)) delete nextCable.length_m
+            else nextCable.length_m = length
+            onupdate?.({ cable: Object.keys(nextCable).length > 0 ? nextCable : undefined })
+          }}
+        >
+      {:else}
+        <span class={valueClass}>{link.cable?.length_m ?? '—'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>From transceiver</dt>
+    <dd>
+      {#if editing}
+        <input
+          type="text"
+          class={inputClass}
+          value={link.fromTransceiver ?? ''}
+          placeholder="SKU"
+          onblur={(e) => onupdate?.({ fromTransceiver: (e.target as HTMLInputElement).value || undefined })}
+        >
+      {:else}
+        <span class={valueClass}>{link.fromTransceiver ?? '—'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>To transceiver</dt>
+    <dd>
+      {#if editing}
+        <input
+          type="text"
+          class={inputClass}
+          value={link.toTransceiver ?? ''}
+          placeholder="SKU"
+          onblur={(e) => onupdate?.({ toTransceiver: (e.target as HTMLInputElement).value || undefined })}
+        >
+      {:else}
+        <span class={valueClass}>{link.toTransceiver ?? '—'}</span>
       {/if}
     </dd>
   </div>

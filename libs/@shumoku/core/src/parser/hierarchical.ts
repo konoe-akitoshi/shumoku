@@ -7,7 +7,7 @@
  * Resolves file references and builds a complete hierarchical graph
  */
 
-import { ensurePortAndPlug } from '../models/migrate.js'
+import { ensurePorts } from '../models/migrate.js'
 import type {
   DeviceType,
   HierarchicalNetworkGraph,
@@ -160,13 +160,13 @@ export class HierarchicalParser {
     this.generateExportConnectors(crossLinks, sheets)
 
     // Export-connector synthesis added new links/nodes; re-normalize so the
-    // port/plug invariant still holds on the resulting graphs.
-    const normalizedGraph = ensurePortAndPlug(graph) as HierarchicalNetworkGraph
+    // port invariant still holds on the resulting graphs.
+    const normalizedGraph = ensurePorts(graph) as HierarchicalNetworkGraph
     normalizedGraph.sheets = sheets
     normalizedGraph.breadcrumb = graph.breadcrumb
     normalizedGraph.parentSheet = graph.parentSheet
     for (const [id, sheet] of sheets) {
-      sheets.set(id, ensurePortAndPlug(sheet))
+      sheets.set(id, ensurePorts(sheet))
     }
 
     return {
@@ -460,17 +460,16 @@ export class HierarchicalParser {
     const exportNodeId = `${EXPORT_NODE_PREFIX}${exportId}`
 
     for (const [i, conn] of exportPoint.connections.entries()) {
-      // Raw endpoints — port/plug invariants get filled by the post-pass
-      // ensurePortAndPlug() in HierarchicalParser.parse().
+      // Raw endpoints — `ensurePorts` in HierarchicalParser.parse() will
+      // materialize the corresponding `NodePort` entries on the export
+      // node afterwards, so we can leave the export-side port id blank.
       const deviceEndpoint: LinkEndpoint = {
         node: conn.device,
         port: conn.port,
-        plug: {},
       }
       const exportEndpoint: LinkEndpoint = {
         node: exportNodeId,
         port: '',
-        plug: {},
       }
       const linkId = `${EXPORT_LINK_PREFIX}${exportId}_${i}`
 
@@ -493,7 +492,7 @@ export class HierarchicalParser {
    * Clone endpoint for merged child links
    */
   private cloneEndpoint(endpoint: LinkEndpoint): LinkEndpoint {
-    return { ...endpoint, plug: { ...endpoint.plug } }
+    return { ...endpoint }
   }
 
   /**

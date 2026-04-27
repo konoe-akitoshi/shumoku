@@ -6,7 +6,6 @@
     Node,
     NodeShape,
     NodeSpec,
-    PlugSpec,
     ResolvedEdge,
     ResolvedLayout,
     ResolvedPort,
@@ -33,9 +32,7 @@
 
   /**
    * Renderer link endpoint — `port` is required because the renderer
-   * never deals with portless connections (the model invariant). `plug`
-   * is the cable-side connector, also required (may be `{}` when the
-   * user hasn't picked a transceiver yet).
+   * never deals with portless connections (the model invariant).
    */
   export type RendererLinkEndpoint = LinkEndpoint
 
@@ -543,21 +540,7 @@
       ;[fromPort, toPort] = [toPort, fromPort]
     }
     // Emit event — parent owns link identity and state mutation.
-    // Both endpoints reference existing ports (drag is port-to-port). Plug
-    // attributes are inferred from the target ports' cages, leaving any
-    // transceiver detail for the user to fill in later.
-    const fromCage = ports.get(fromPortId)
-    const toCage = ports.get(toPortId)
-    const fromPlug: PlugSpec = fromCage
-      ? { connector: nodes.get(fromNode)?.ports?.find((p) => p.id === fromPort)?.cage }
-      : {}
-    const toPlug: PlugSpec = toCage
-      ? { connector: nodes.get(toNode)?.ports?.find((p) => p.id === toPort)?.cage }
-      : {}
-    oncreatelink?.(
-      { node: fromNode, port: fromPort, plug: fromPlug },
-      { node: toNode, port: toPort, plug: toPlug },
-    )
+    oncreatelink?.({ node: fromNode, port: fromPort }, { node: toNode, port: toPort })
   }
 
   /**

@@ -75,10 +75,10 @@
     Properties
   </div>
   <dl class="space-y-1.5 text-[11px]">
-    {#if link.bandwidth}
+    {#if link.standard}
       <div class="flex justify-between">
-        <dt class="text-neutral-400 dark:text-neutral-500">Bandwidth</dt>
-        <dd><Badge variant="secondary" class="font-mono text-[10px]">{link.bandwidth}</Badge></dd>
+        <dt class="text-neutral-400 dark:text-neutral-500">Standard</dt>
+        <dd><Badge variant="secondary" class="font-mono text-[10px]">{link.standard}</Badge></dd>
       </div>
     {/if}
     {#if vlanDisplay}

@@ -15,18 +15,18 @@
   let formSubmitting = $state(false)
 
   const sampleYaml = `name: My Network
-nodes:
-  - id: router1
-    label: Core Router
-    type: router
-  - id: switch1
-    label: Switch 1
-    type: switch
-links:
-  - from: router1
-    to: switch1
-    bandwidth: 1G
-`
+  nodes:
+    - id: router1
+      label: Core Router
+      type: router
+    - id: switch1
+      label: Switch 1
+      type: switch
+  links:
+    - from: router1
+      to: switch1
+      bandwidth: 1G
+  `
 
   onMount(() => {
     topologies.load()

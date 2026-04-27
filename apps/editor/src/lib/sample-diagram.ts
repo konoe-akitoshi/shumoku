@@ -601,13 +601,11 @@ export const sampleDiagram = {
       from: {
         node: 'vgw',
         port: 'tun0',
-        plug: {},
         ip: '169.254.100.1/30',
       },
       to: {
         node: 'rt1',
         port: 'tun1',
-        plug: {},
         ip: '169.254.100.2/30',
       },
       label: 'IPsec VPN',
@@ -618,13 +616,11 @@ export const sampleDiagram = {
       from: {
         node: 'vgw',
         port: 'tun1',
-        plug: {},
         ip: '169.254.101.1/30',
       },
       to: {
         node: 'rt2',
         port: 'tun1',
-        plug: {},
         ip: '169.254.101.2/30',
       },
       label: 'IPsec VPN',
@@ -635,22 +631,16 @@ export const sampleDiagram = {
       from: {
         node: 'fw1',
         port: 'dmz',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.100.0.2/24',
       },
       to: {
         node: 'dmz-sw',
         port: 'uplink',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.100.0.1/24',
       },
       label: 'DMZ',
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
       vlan: [100],
     },
     {
@@ -658,56 +648,42 @@ export const sampleDiagram = {
       from: {
         node: 'fw1',
         port: 'inside',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.0.2.1/30',
       },
       to: {
         node: 'core-sw',
         port: 'eth1',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.0.2.2/30',
       },
       label: 'Active',
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
     },
     {
       id: 'link-4',
       from: {
         node: 'fw2',
         port: 'inside',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.0.2.5/30',
       },
       to: {
         node: 'core-sw',
         port: 'eth2',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.0.2.6/30',
       },
       label: 'Standby',
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
     },
     {
       id: 'cloud/link-0',
       from: {
         node: 'cloud-services',
         port: 'eth0',
-        plug: {},
       },
       to: {
         node: 'vgw',
         port: 'vpc',
-        plug: {},
       },
       label: 'Internal',
       type: 'solid',
@@ -717,55 +693,41 @@ export const sampleDiagram = {
       from: {
         node: 'isp1',
         port: 'eth0',
-        plug: {
-          speed: '10g',
-        },
         ip: '203.0.113.2/30',
       },
       to: {
         node: 'rt1',
         port: 'wan1',
-        plug: {
-          speed: '10g',
-        },
         ip: '203.0.113.1/30',
       },
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
     },
     {
       id: 'perimeter/link-1',
       from: {
         node: 'isp2',
         port: 'eth0',
-        plug: {
-          speed: '10g',
-        },
         ip: '198.51.100.2/30',
       },
       to: {
         node: 'rt2',
         port: 'wan1',
-        plug: {
-          speed: '10g',
-        },
         ip: '198.51.100.1/30',
       },
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
     },
     {
       id: 'perimeter/link-2',
       from: {
         node: 'rt1',
         port: 'ha0',
-        plug: {},
         ip: '10.255.0.1/30',
       },
       to: {
         node: 'rt2',
         port: 'ha0',
-        plug: {},
         ip: '10.255.0.2/30',
       },
       label: 'Keepalive',
@@ -780,54 +742,40 @@ export const sampleDiagram = {
       from: {
         node: 'rt1',
         port: 'lan1',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.0.1.1/30',
       },
       to: {
         node: 'fw1',
         port: 'outside',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.0.1.2/30',
       },
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
     },
     {
       id: 'perimeter/link-4',
       from: {
         node: 'rt2',
         port: 'lan1',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.0.1.5/30',
       },
       to: {
         node: 'fw2',
         port: 'outside',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.0.1.6/30',
       },
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
     },
     {
       id: 'perimeter/link-5',
       from: {
         node: 'fw1',
         port: 'ha',
-        plug: {},
       },
       to: {
         node: 'fw2',
         port: 'ha',
-        plug: {},
       },
       label: 'HA Sync',
       type: 'solid',
@@ -841,19 +789,13 @@ export const sampleDiagram = {
       from: {
         node: 'dmz-sw',
         port: 'eth1',
-        plug: {
-          speed: '1g',
-        },
       },
       to: {
         node: 'web-srv',
         port: 'eth0',
-        plug: {
-          speed: '1g',
-        },
       },
       type: 'solid',
-      bandwidth: '1G',
+      standard: '1000BASE-T',
       vlan: [100],
     },
     {
@@ -861,19 +803,13 @@ export const sampleDiagram = {
       from: {
         node: 'dmz-sw',
         port: 'eth2',
-        plug: {
-          speed: '1g',
-        },
       },
       to: {
         node: 'mail-srv',
         port: 'eth0',
-        plug: {
-          speed: '1g',
-        },
       },
       type: 'solid',
-      bandwidth: '1G',
+      standard: '1000BASE-T',
       vlan: [100],
     },
     {
@@ -881,44 +817,32 @@ export const sampleDiagram = {
       from: {
         node: 'core-sw',
         port: 'ae0',
-        plug: {
-          speed: '40g',
-        },
         ip: '10.0.3.1/30',
       },
       to: {
         node: 'dist-sw',
         port: 'ae0',
-        plug: {
-          speed: '40g',
-        },
         ip: '10.0.3.2/30',
       },
       label: '40G LACP',
       type: 'solid',
-      bandwidth: '40G',
+      standard: '40GBASE-SR4',
     },
     {
       id: 'campus/link-1',
       from: {
         node: 'dist-sw',
         port: 'eth10',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.10.0.254/24',
       },
       to: {
         node: 'sw-a1',
         port: 'uplink',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.10.0.1/24',
       },
       label: 'Trunk',
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
       vlan: [10, 20],
     },
     {
@@ -926,22 +850,16 @@ export const sampleDiagram = {
       from: {
         node: 'dist-sw',
         port: 'eth20',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.20.0.254/24',
       },
       to: {
         node: 'sw-b1',
         port: 'uplink',
-        plug: {
-          speed: '10g',
-        },
         ip: '10.20.0.1/24',
       },
       label: 'Trunk',
       type: 'solid',
-      bandwidth: '10G',
+      standard: '10GBASE-SR',
       vlan: [10, 30],
     },
     {
@@ -949,19 +867,13 @@ export const sampleDiagram = {
       from: {
         node: 'sw-a1',
         port: 'eth1',
-        plug: {
-          speed: '1g',
-        },
       },
       to: {
         node: 'ap-a1',
         port: 'eth0',
-        plug: {
-          speed: '1g',
-        },
       },
       type: 'solid',
-      bandwidth: '1G',
+      standard: '1000BASE-T',
       vlan: [20],
     },
     {
@@ -969,19 +881,13 @@ export const sampleDiagram = {
       from: {
         node: 'sw-a1',
         port: 'eth2',
-        plug: {
-          speed: '1g',
-        },
       },
       to: {
         node: 'ap-a2',
         port: 'eth0',
-        plug: {
-          speed: '1g',
-        },
       },
       type: 'solid',
-      bandwidth: '1G',
+      standard: '1000BASE-T',
       vlan: [20],
     },
     {
@@ -989,19 +895,13 @@ export const sampleDiagram = {
       from: {
         node: 'sw-b1',
         port: 'eth1',
-        plug: {
-          speed: '1g',
-        },
       },
       to: {
         node: 'ap-b1',
         port: 'eth0',
-        plug: {
-          speed: '1g',
-        },
       },
       type: 'solid',
-      bandwidth: '1G',
+      standard: '1000BASE-T',
       vlan: [30],
     },
     {
@@ -1009,19 +909,13 @@ export const sampleDiagram = {
       from: {
         node: 'sw-b1',
         port: 'eth2',
-        plug: {
-          speed: '1g',
-        },
       },
       to: {
         node: 'ap-b2',
         port: 'e0',
-        plug: {
-          speed: '1g',
-        },
       },
       type: 'solid',
-      bandwidth: '1G',
+      standard: '1000BASE-T',
       vlan: [30],
     },
     {
@@ -1029,19 +923,13 @@ export const sampleDiagram = {
       from: {
         node: 'ap-b2',
         port: 'e3',
-        plug: {
-          speed: '1g',
-        },
       },
       to: {
         node: 'ip-phone',
         port: 'eth0',
-        plug: {
-          speed: '1g',
-        },
       },
       type: 'solid',
-      bandwidth: '1G',
+      standard: '1000BASE-T',
     },
   ],
   subgraphs: [

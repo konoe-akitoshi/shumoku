@@ -7,15 +7,15 @@
  */
 
 import yaml from 'js-yaml'
-import { ensurePortAndPlug } from '../models/migrate.js'
+import { ensurePorts } from '../models/migrate.js'
 import type {
   ArrowType,
   CanvasSettings,
+  EthernetStandard,
   GraphSettings,
   Link,
-  LinkBandwidth,
+  LinkCable,
   LinkEndpoint,
-  LinkMedium,
   LinkType,
   NetworkGraph,
   Node,
@@ -25,7 +25,6 @@ import type {
   PaperOrientation,
   PaperSize,
   Pin,
-  PlugSpec,
   Subgraph,
   ThemeType,
 } from '../models/types.js'
@@ -95,8 +94,6 @@ interface YamlLinkStyle {
 interface YamlLinkEndpoint {
   node: string
   port?: string
-  /** Optional cable-side plug (transceiver / connector). */
-  plug?: PlugSpec
   ip?: string
   pin?: string
 }
@@ -108,15 +105,16 @@ interface YamlLink {
   label?: string | string[]
   type?: string
   arrow?: string
-  bandwidth?: string | number
+  /** IEEE Ethernet standard, e.g. "10GBASE-SR". */
+  standard?: string
+  cable?: LinkCable & {
+    cable_category?: LinkCable['category']
+  }
+  fromTransceiver?: string
+  toTransceiver?: string
   redundancy?: string
   /** Single VLAN ID or array of VLANs for trunk */
   vlan?: number | number[]
-  medium?: LinkMedium & {
-    cable_category?: LinkMedium['cableCategory']
-    fiber_mode?: LinkMedium['fiberMode']
-    optic_standard?: LinkMedium['opticStandard']
-  }
   style?: YamlLinkStyle
 }
 
@@ -253,8 +251,9 @@ export class YamlParser {
       // Auto-assign nodes to subgraphs based on parent field
       this.assignNodesToSubgraphs(rawGraph)
 
-      // Materialize port + plug for endpoints that came in without them.
-      const graph = ensurePortAndPlug(rawGraph)
+      // Materialize NodePort entries for endpoints that referenced port
+      // ids without declaring them on the node.
+      const graph = ensurePorts(rawGraph)
 
       return { graph, warnings: warnings.length > 0 ? warnings : undefined }
     } catch (error) {
@@ -318,10 +317,12 @@ export class YamlParser {
       label: l.label,
       type: this.parseLinkType(l.type),
       arrow: this.parseArrowType(l.arrow),
-      bandwidth: this.parseBandwidth(l.bandwidth),
+      standard: l.standard ? (l.standard as EthernetStandard) : undefined,
+      cable: this.parseLinkCable(l.cable),
+      fromTransceiver: l.fromTransceiver,
+      toTransceiver: l.toTransceiver,
       redundancy: this.parseRedundancyType(l.redundancy),
       vlan: this.parseVlan(l.vlan),
-      medium: this.parseLinkMedium(l.medium),
       style: l.style
         ? {
             stroke: l.style.stroke,
@@ -341,34 +342,31 @@ export class YamlParser {
     return Array.isArray(vlan) ? vlan : [vlan]
   }
 
-  private parseLinkMedium(medium: YamlLink['medium']): LinkMedium | undefined {
-    if (!medium) return undefined
-    return {
-      kind: medium.kind,
-      cableCategory: medium.cableCategory ?? medium.cable_category,
-      fiberMode: medium.fiberMode ?? medium.fiber_mode,
-      opticStandard: medium.opticStandard ?? medium.optic_standard,
-      connector: medium.connector,
-    }
+  private parseLinkCable(cable: YamlLink['cable']): LinkCable | undefined {
+    if (!cable) return undefined
+    const result: LinkCable = {}
+    const category = cable.category ?? cable.cable_category
+    if (category) result.category = category
+    if (cable.length_m !== undefined) result.length_m = cable.length_m
+    if (cable.connector) result.connector = cable.connector
+    return Object.keys(result).length > 0 ? result : undefined
   }
 
   /**
    * Normalize YAML endpoint (string shorthand or object) into a draft
-   * LinkEndpoint. The `port` and `plug` invariants are filled in afterwards
-   * by `ensurePortAndPlug` in the parse() entry point.
+   * LinkEndpoint. NodePort materialization happens in `ensurePorts`
+   * after parseLinks.
    */
   private parseLinkEndpoint(endpoint: string | YamlLinkEndpoint): LinkEndpoint {
     if (typeof endpoint === 'string') {
-      // YAML shorthand "nodeId" or "nodeId:portId" → minimum draft.
       const colon = endpoint.indexOf(':')
       const node = colon >= 0 ? endpoint.slice(0, colon) : endpoint
       const port = colon >= 0 ? endpoint.slice(colon + 1) : ''
-      return { node, port, plug: {} }
+      return { node, port }
     }
     return {
       node: endpoint.node,
       port: endpoint.port != null ? String(endpoint.port) : '',
-      plug: endpoint.plug ?? {},
       ip: endpoint.ip,
       pin: endpoint.pin,
     }
@@ -397,19 +395,6 @@ export class YamlParser {
     }
 
     return typeMap[redundancy.toLowerCase()]
-  }
-
-  private parseBandwidth(bandwidth?: string | number): LinkBandwidth | undefined {
-    if (bandwidth === undefined || bandwidth === null || bandwidth === '') return undefined
-    if (typeof bandwidth === 'number') {
-      return Number.isFinite(bandwidth) && bandwidth > 0 ? bandwidth : undefined
-    }
-    // Pass the normalized string straight through. `resolveBandwidthBps`
-    // at the rendering/metrics layer accepts any well-formed label
-    // ("10G", "2.5Gbps", "500M") plus plain numeric strings, so we
-    // don't need to collapse to a fixed enum here anymore.
-    const normalized = bandwidth.toUpperCase().replace(/\s/g, '')
-    return normalized || undefined
   }
 
   private parsePins(yamlPins: YamlPin[], warnings: ParseWarning[]): Pin[] {

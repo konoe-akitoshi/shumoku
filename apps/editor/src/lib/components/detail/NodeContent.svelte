@@ -77,7 +77,7 @@
           ? link.vlan.join(', ')
           : String(link.vlan)
         : undefined
-      const bw = link.bandwidth !== undefined ? String(link.bandwidth) : undefined
+      const bw = link.standard ?? undefined
       const label = Array.isArray(link.label) ? link.label.join(', ') : link.label
 
       if (fromNode === node.id && fromPort) {

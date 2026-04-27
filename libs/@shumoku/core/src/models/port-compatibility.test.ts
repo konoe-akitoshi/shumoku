@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest'
 import {
-  defaultMediumForLink,
+  defaultStandardForCages,
   isPoeCapableConnector,
   validateLinkCompatibility,
 } from './port-compatibility.js'
-import type { NodePort, PlugSpec } from './types.js'
+import type { Link, NodePort } from './types.js'
 
 const port = (label: string, cage: string, poe = false): NodePort => ({
   id: label,
@@ -13,61 +13,68 @@ const port = (label: string, cage: string, poe = false): NodePort => ({
   poe,
 })
 
-const plug = (connector: string): PlugSpec => ({ connector })
+const link = (overrides: Partial<Link>): Link => ({
+  from: { node: 'a', port: 'p1' },
+  to: { node: 'b', port: 'p2' },
+  ...overrides,
+})
 
 describe('link compatibility', () => {
-  test('defaults RJ45 links to twisted pair', () => {
+  test('1000BASE-T fits two RJ45 cages', () => {
     expect(
-      defaultMediumForLink(port('1', 'rj45'), port('2', 'rj45'), plug('rj45'), plug('rj45')),
-    ).toEqual({ kind: 'twisted-pair' })
-  })
-
-  test('defaults SFP/QSFP links to fiber', () => {
-    expect(
-      defaultMediumForLink(
-        port('Te1/0/1', 'sfp+'),
-        port('Te1/0/2', 'sfp+'),
-        plug('sfp+'),
-        plug('sfp+'),
+      validateLinkCompatibility(
+        port('1', 'rj45'),
+        port('2', 'rj45'),
+        link({ standard: '1000BASE-T' }),
       ),
-    ).toEqual({ kind: 'fiber' })
+    ).toEqual([])
   })
 
-  test('rejects PoE on pluggable cages', () => {
+  test('rejects 10GBASE-SR on RJ45 cage', () => {
     const issues = validateLinkCompatibility(
-      port('Te1/0/1', 'sfp+', true),
-      port('Te1/0/2', 'sfp+'),
-      plug('sfp+'),
-      plug('sfp+'),
-      { kind: 'fiber' },
+      port('1', 'rj45'),
+      port('2', 'sfp+'),
+      link({ standard: '10GBASE-SR' }),
     )
-    expect(issues.some((issue) => issue.severity === 'error')).toBe(true)
+    expect(issues.some((i) => i.severity === 'error')).toBe(true)
   })
 
-  test('warns when plug does not match cage (transceiver needed)', () => {
+  test('flags PoE on a pluggable cage as misconfig', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'sfp+', true),
+      port('2', 'sfp+'),
+      link({ standard: '10GBASE-SR' }),
+    )
+    expect(issues.some((i) => i.severity === 'error')).toBe(true)
+  })
+
+  test('warns when cable length exceeds standard reach', () => {
     const issues = validateLinkCompatibility(
       port('1', 'sfp+'),
       port('2', 'sfp+'),
-      plug('rj45'),
-      plug('sfp+'),
-      { kind: 'fiber' },
+      link({ standard: '10GBASE-SR', cable: { length_m: 1000 } }),
     )
-    expect(issues.some((issue) => issue.severity === 'warning')).toBe(true)
+    expect(issues.some((i) => i.severity === 'warning')).toBe(true)
   })
 
-  test('warns for RJ45-to-SFP links by effective connector', () => {
-    const issues = validateLinkCompatibility(
-      port('Gi1/0/1', 'rj45'),
-      port('Te1/0/1', 'sfp+'),
-      plug('rj45'),
-      plug('sfp+'),
-      { kind: 'twisted-pair' },
-    )
-    expect(issues.some((issue) => issue.severity === 'warning')).toBe(true)
+  test('combo cage accepts any standard', () => {
+    expect(
+      validateLinkCompatibility(
+        port('1', 'combo'),
+        port('2', 'rj45'),
+        link({ standard: '1000BASE-T' }),
+      ),
+    ).toEqual([])
   })
 
-  test('only RJ45 is PoE-capable by connector', () => {
+  test('only RJ45 is PoE-capable', () => {
     expect(isPoeCapableConnector('rj45')).toBe(true)
     expect(isPoeCapableConnector('sfp+')).toBe(false)
+  })
+
+  test('proposes default standard from cage pair', () => {
+    expect(defaultStandardForCages('rj45', 'rj45')).toBe('1000BASE-T')
+    expect(defaultStandardForCages('sfp+', 'sfp+')).toBe('10GBASE-SR')
+    expect(defaultStandardForCages('sfp+', 'rj45')).toBeUndefined()
   })
 })
