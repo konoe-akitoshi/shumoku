@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { NodeSpec } from '@shumoku/core'
+import type { NodeSpec, PortConnector, PortRole } from '@shumoku/core'
 
 // ============================================
 // Properties — grouped by concern
@@ -63,18 +63,42 @@ export interface PowerProperties {
 }
 
 export interface PortGroup {
-  count: number
+  count?: number
+  /** Explicit canonical port IDs. Takes precedence over count/name_pattern. */
+  names?: string[]
+  /** Physical faceplate labels aligned by index with names/count. */
+  faceplate_labels?: string[]
+  /** Full OS/API interface names aligned by index with names/count. */
+  interface_names?: string[]
+  /** Alternative names aligned by index with names/count. */
+  aliases?: string[][]
+  /** Name template for counted ports. Supports {n}, {n0}, and {role}. */
+  name_pattern?: string
+  /** camelCase alias for programmatic catalog construction. */
+  namePattern?: string
+  /** Faceplate-label template. Supports {n}, {n0}, {role}, and {name}. */
+  faceplate_label_pattern?: string
+  /** OS/API interface-name template. Supports {n}, {n0}, {role}, and {name}. */
+  interface_name_pattern?: string
+  /** Logical role for the ports in this group. */
+  role?: PortRole | (string & {})
   /** Port speed: "100m", "1g", "2.5g", "5g", "10g", "25g", "40g", "100g" */
   speed: string
-  /** Media type: "copper", "sfp", "sfp+", "qsfp+", "qsfp28" */
-  media: string
+  /** Physical port/cage type: "rj45", "sfp", "sfp+", "qsfp+", "qsfp28", "combo" */
+  connector: PortConnector
+  /** Deprecated: use connector. */
+  media?: string
   /** Whether these ports support PoE */
   poe?: boolean
 }
 
 export interface PortProperties {
+  groups?: PortGroup[]
   downlink?: PortGroup[]
   uplink?: PortGroup[]
+  wan?: PortGroup[]
+  lan?: PortGroup[]
+  management?: PortGroup[]
 }
 
 export interface SwitchingProperties {

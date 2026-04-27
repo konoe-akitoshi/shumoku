@@ -28,7 +28,7 @@ type Side = 'top' | 'bottom' | 'left' | 'right'
 
 interface PortAssignment {
   nodeId: string
-  portName: string
+  portId: string
   side: Side
 }
 
@@ -38,6 +38,11 @@ function getNodeId(endpoint: string | LinkEndpoint): string {
 
 function getPortName(endpoint: string | LinkEndpoint): string | undefined {
   return typeof endpoint === 'string' ? undefined : endpoint.port
+}
+
+function getNodePortLabel(node: Node | undefined, portId: string): string {
+  const port = node?.ports?.find((p) => p.id === portId)
+  return port?.label ?? portId
 }
 
 /**
@@ -109,7 +114,11 @@ function assignPortSides(links: Link[], direction: Direction): PortAssignment[] 
       const key = `${fromNode}:${fromPort}`
       if (!seen.has(key)) {
         seen.add(key)
-        assignments.push({ nodeId: fromNode, portName: fromPort, side: sides.sourceSide })
+        assignments.push({
+          nodeId: fromNode,
+          portId: fromPort,
+          side: sides.sourceSide,
+        })
       }
     }
 
@@ -117,7 +126,7 @@ function assignPortSides(links: Link[], direction: Direction): PortAssignment[] 
       const key = `${toNode}:${toPort}`
       if (!seen.has(key)) {
         seen.add(key)
-        assignments.push({ nodeId: toNode, portName: toPort, side: sides.destSide })
+        assignments.push({ nodeId: toNode, portId: toPort, side: sides.destSide })
       }
     }
   }
@@ -197,7 +206,7 @@ export function placePorts(
     if (!node?.position) continue
 
     for (const [i, a] of sideAssignments.entries()) {
-      const portId = `${a.nodeId}:${a.portName}`
+      const portId = `${a.nodeId}:${a.portId}`
       const absolutePosition = computePortPosition(
         node as Node & { position: { x: number; y: number } },
         side,
@@ -208,7 +217,7 @@ export function placePorts(
       ports.set(portId, {
         id: portId,
         nodeId: a.nodeId,
-        label: a.portName,
+        label: getNodePortLabel(node, a.portId),
         absolutePosition,
         side,
         size: PORT_SIZE,

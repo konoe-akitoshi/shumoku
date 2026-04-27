@@ -13,14 +13,17 @@ import type {
   GraphSettings,
   Link,
   LinkBandwidth,
+  LinkMedium,
   LinkType,
   NetworkGraph,
   Node,
+  NodePort,
   NodeShape,
   NodeSpec,
   PaperOrientation,
   PaperSize,
   Pin,
+  PortIntent,
   Subgraph,
   ThemeType,
 } from '../models/types.js'
@@ -76,6 +79,7 @@ interface YamlNode {
   resource?: string
   /** Custom icon URL (overrides vendor/type icons) */
   icon?: string
+  ports?: NodePort[]
 }
 
 interface YamlLinkStyle {
@@ -89,6 +93,8 @@ interface YamlLinkStyle {
 interface YamlLinkEndpoint {
   node: string
   port?: string
+  portIntent?: PortIntent
+  port_intent?: PortIntent
   ip?: string
   pin?: string
 }
@@ -104,6 +110,11 @@ interface YamlLink {
   redundancy?: string
   /** Single VLAN ID or array of VLANs for trunk */
   vlan?: number | number[]
+  medium?: LinkMedium & {
+    cable_category?: LinkMedium['cableCategory']
+    fiber_mode?: LinkMedium['fiberMode']
+    optic_standard?: LinkMedium['opticStandard']
+  }
   style?: YamlLinkStyle
 }
 
@@ -289,6 +300,7 @@ export class YamlParser {
           : undefined,
         metadata: n.metadata,
         spec: this.buildNodeSpec(n),
+        ports: n.ports,
       }
     })
   }
@@ -304,6 +316,7 @@ export class YamlParser {
       bandwidth: this.parseBandwidth(l.bandwidth),
       redundancy: this.parseRedundancyType(l.redundancy),
       vlan: this.parseVlan(l.vlan),
+      medium: this.parseLinkMedium(l.medium),
       style: l.style
         ? {
             stroke: l.style.stroke,
@@ -323,15 +336,27 @@ export class YamlParser {
     return Array.isArray(vlan) ? vlan : [vlan]
   }
 
+  private parseLinkMedium(medium: YamlLink['medium']): LinkMedium | undefined {
+    if (!medium) return undefined
+    return {
+      kind: medium.kind,
+      cableCategory: medium.cableCategory ?? medium.cable_category,
+      fiberMode: medium.fiberMode ?? medium.fiber_mode,
+      opticStandard: medium.opticStandard ?? medium.optic_standard,
+      connector: medium.connector,
+    }
+  }
+
   private parseLinkEndpoint(
     endpoint: string | YamlLinkEndpoint,
-  ): string | { node: string; port?: string; ip?: string; pin?: string } {
+  ): string | { node: string; port?: string; portIntent?: PortIntent; ip?: string; pin?: string } {
     if (typeof endpoint === 'string') {
       return endpoint
     }
     return {
       node: endpoint.node,
       port: endpoint.port != null ? String(endpoint.port) : undefined,
+      portIntent: endpoint.portIntent ?? endpoint.port_intent,
       ip: endpoint.ip,
       pin: endpoint.pin,
     }

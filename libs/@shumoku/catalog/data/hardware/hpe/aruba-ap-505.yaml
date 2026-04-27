@@ -30,6 +30,9 @@ properties:
     mimo: "2x2"
     bands: ["2.4ghz", "5ghz"]
     antenna_type: internal
+  ports:
+    uplink:
+      - { names: ["E0"], speed: "1g", connector: rj45 }
   physical:
     form_factor: ceiling
     dimensions_mm: { w: 160, d: 161, h: 37 }

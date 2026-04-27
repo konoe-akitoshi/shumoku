@@ -111,6 +111,11 @@ function linkEndpointPort(ep: string | { node: string; port?: string }): string 
   return typeof ep === 'object' ? (ep.port ?? '') : ''
 }
 
+function displayPort(nodeMap: Map<string, Node>, nodeId: string, portId: string): string {
+  if (!portId) return ''
+  return nodeMap.get(nodeId)?.ports?.find((p) => p.id === portId)?.label ?? portId
+}
+
 /**
  * Compute the watts the PSE reserves for a port given both sides' capabilities,
  * and the PD's informational draw. Returns undefined if the PD is not a PoE consumer.
@@ -238,10 +243,10 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
 
       poeLinks.push({
         linkId,
-        fromPort: localPort,
+        fromPort: displayPort(nodeMap, node.id, localPort),
         toNodeId: peerId,
         toNodeLabel: nodeLabelOf(peer, peerId),
-        toPort: peerPort,
+        toPort: displayPort(nodeMap, peerId, peerPort),
         reserved_w: round1(port.reserved_w),
         draw_w: round1(port.draw_w),
         effective_class: port.effective_class,

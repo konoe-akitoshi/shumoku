@@ -1,11 +1,13 @@
 <script lang="ts">
-  import type { Link } from '@shumoku/core'
+  import type { Link, Node } from '@shumoku/core'
   import { Badge } from '$lib/components/ui/badge'
 
   let {
     link,
+    nodes = new Map(),
   }: {
     link: Link
+    nodes?: Map<string, Node>
   } = $props()
 
   const fromNode = $derived(typeof link.from === 'string' ? link.from : link.from.node)
@@ -20,6 +22,11 @@
   const labelDisplay = $derived(
     link.label ? (Array.isArray(link.label) ? link.label.join(', ') : link.label) : undefined,
   )
+
+  function displayPort(nodeId: string, portId: string | undefined) {
+    if (!portId) return ''
+    return nodes.get(nodeId)?.ports?.find((p) => p.id === portId)?.label ?? portId
+  }
 </script>
 
 <!-- Endpoints -->
@@ -34,7 +41,9 @@
       <div class="text-[9px] uppercase text-neutral-400 dark:text-neutral-500 mb-0.5">From</div>
       <div class="font-mono font-medium text-neutral-800 dark:text-neutral-100">{fromNode}</div>
       {#if fromPort}
-        <div class="font-mono text-[10px] text-blue-600 dark:text-blue-400">{fromPort}</div>
+        <div class="font-mono text-[10px] text-blue-600 dark:text-blue-400">
+          {displayPort(fromNode, fromPort)}
+        </div>
       {/if}
       {#if fromIp}
         <div class="font-mono text-[10px] text-neutral-400">{fromIp}</div>
@@ -45,7 +54,9 @@
       <div class="text-[9px] uppercase text-neutral-400 dark:text-neutral-500 mb-0.5">To</div>
       <div class="font-mono font-medium text-neutral-800 dark:text-neutral-100">{toNode}</div>
       {#if toPort}
-        <div class="font-mono text-[10px] text-blue-600 dark:text-blue-400">{toPort}</div>
+        <div class="font-mono text-[10px] text-blue-600 dark:text-blue-400">
+          {displayPort(toNode, toPort)}
+        </div>
       {/if}
       {#if toIp}
         <div class="font-mono text-[10px] text-neutral-400">{toIp}</div>

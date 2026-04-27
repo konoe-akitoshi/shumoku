@@ -6,4 +6,5 @@
  * Shumoku Models
  */
 
+export * from './port-compatibility.js'
 export * from './types.js'

@@ -1,4 +1,4 @@
-import { builtinEntries, Catalog } from '@shumoku/catalog'
+import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   buildChildSheetGraph,
   collectObstacles,
@@ -9,10 +9,12 @@ import {
   getNodeId,
   HierarchicalParser,
   type Link,
+  type LinkEndpoint,
   lightTheme,
   moveNode,
   type NetworkGraph,
   type Node,
+  type NodePort,
   type NodeSpec,
   newId,
   placePorts,
@@ -213,6 +215,15 @@ async function rerouteEdges() {
   }
 }
 
+function replaceDerivedPorts() {
+  replaceMap(diagram.ports, placePorts(diagram.nodes, diagram.links))
+}
+
+async function rebuildPortsAndEdges() {
+  replaceDerivedPorts()
+  await rerouteEdges()
+}
+
 const catalog = new Catalog()
 catalog.registerAll(builtinEntries)
 
@@ -235,6 +246,84 @@ function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined 
   if (spec.kind === 'compute') return { kind: 'compute', type: spec.type }
   if (spec.kind === 'service') return { kind: 'service', service: spec.service }
   return undefined
+}
+
+function nodePortsFromPaletteEntry(entry: SpecPaletteEntry | undefined): NodePort[] | undefined {
+  if (!entry) return undefined
+  const catalogEntry = entry.catalogId ? catalog.lookup(entry.catalogId) : undefined
+  const ports = expandCatalogPorts(
+    catalogEntry ?? {
+      id: entry.id,
+      label: paletteEntryLabel(entry),
+      spec: entry.spec,
+      tags: [],
+      properties: entry.properties ?? {},
+    },
+  )
+  return ports.length > 0
+    ? ports.map((port) => ({
+        id: newId('port'),
+        ...port,
+      }))
+    : undefined
+}
+
+function setNodePortsFromPalette(
+  nodeId: string,
+  entry: SpecPaletteEntry | undefined,
+  options: { preserveExisting?: boolean; reroute?: boolean } = {},
+) {
+  const node = diagram.nodes.get(nodeId)
+  if (!node) return
+  if (options.preserveExisting && node.ports) return
+  const ports = nodePortsFromPaletteEntry(entry)
+  diagram.nodes.set(nodeId, { ...node, ports })
+  const migrated = migrateLinkEndpointPortsForNode(nodeId, ports)
+  if (migrated && options.reroute !== false) rebuildPortsAndEdges()
+}
+
+function getEndpointNodeId(endpoint: string | LinkEndpoint): string {
+  return typeof endpoint === 'string' ? endpoint : endpoint.node
+}
+
+function getEndpointPort(endpoint: string | LinkEndpoint): string | undefined {
+  return typeof endpoint === 'string' ? undefined : endpoint.port
+}
+
+function findNodePortId(
+  ports: NodePort[] | undefined,
+  value: string | undefined,
+): string | undefined {
+  if (!ports || !value) return value
+  const match = ports.find(
+    (port) =>
+      port.id === value ||
+      port.label === value ||
+      port.faceplateLabel === value ||
+      port.interfaceName === value ||
+      port.aliases?.includes(value),
+  )
+  return match?.id ?? value
+}
+
+function migrateLinkEndpointPortsForNode(nodeId: string, ports: NodePort[] | undefined): boolean {
+  if (!ports?.length) return false
+  let changed = false
+  const links = diagram.links.map((link) => {
+    let next = link
+    for (const side of ['from', 'to'] as const) {
+      const endpoint = next[side]
+      if (typeof endpoint === 'string' || endpoint.node !== nodeId || !endpoint.port) continue
+      const resolved = findNodePortId(ports, endpoint.port)
+      if (resolved !== endpoint.port) {
+        next = { ...next, [side]: { ...endpoint, port: resolved } }
+        changed = true
+      }
+    }
+    return next
+  })
+  if (changed) diagram.links = links
+  return changed
 }
 
 /**
@@ -424,18 +513,18 @@ export const diagramState = {
   addLink(link: Link) {
     diagram.links = [...diagram.links, link]
     invalidateSheetCache()
-    rerouteEdges()
+    rebuildPortsAndEdges()
   },
   updateLink(id: string, updates: Partial<Link>) {
     // Endpoints may have moved into / out of a child sheet's scope.
     diagram.links = diagram.links.map((l) => (l.id === id ? { ...l, ...updates } : l))
     invalidateSheetCache()
-    rerouteEdges()
+    rebuildPortsAndEdges()
   },
   removeLink(id: string) {
     diagram.links = diagram.links.filter((l) => l.id !== id)
     invalidateSheetCache()
-    rerouteEdges()
+    rebuildPortsAndEdges()
   },
   updateNode(id: string, updates: Partial<Node>) {
     const rn = diagram.nodes.get(id)
@@ -525,6 +614,30 @@ export const diagramState = {
       links: diagram.links.length,
       subgraphs: diagram.subgraphs.size,
     }
+  },
+  getNodePorts(nodeId: string): NodePort[] {
+    return diagram.nodes.get(nodeId)?.ports ?? []
+  },
+  getPortUsage(nodeId: string): Map<string, string[]> {
+    const usage = new Map<string, string[]>()
+    for (const [i, link] of diagram.links.entries()) {
+      const linkId = link.id ?? `link-${i}`
+      const fromNode = getEndpointNodeId(link.from)
+      const toNode = getEndpointNodeId(link.to)
+      const fromPort = getEndpointPort(link.from)
+      const toPort = getEndpointPort(link.to)
+      if (fromNode === nodeId && fromPort) {
+        const links = usage.get(fromPort) ?? []
+        links.push(linkId)
+        usage.set(fromPort, links)
+      }
+      if (toNode === nodeId && toPort) {
+        const links = usage.get(toPort) ?? []
+        links.push(linkId)
+        usage.set(toPort, links)
+      }
+    }
+    return usage
   },
 
   // =====================================================================
@@ -678,20 +791,27 @@ export const diagramState = {
     if (boundNodeIds.length > 0) {
       const roleSpec = stripProductFromSpec(entry?.spec)
       setNodeSpecs(boundNodeIds, roleSpec)
+      for (const nodeId of boundNodeIds) {
+        const node = diagram.nodes.get(nodeId)
+        if (node) diagram.nodes.set(nodeId, { ...node, ports: undefined })
+      }
     }
     palette = palette.filter((e) => e.id !== id)
     bomItems = bomItems.filter((i) => i.paletteId !== id)
   },
   updatePaletteEntry(id: string, updates: Partial<SpecPaletteEntry>) {
     palette = palette.map((e) => (e.id === id ? { ...e, ...updates } : e))
-    // Propagate spec change to all bound nodes (Figma-style)
-    if (updates.spec) {
+    // Propagate product changes to all bound nodes (Figma-style)
+    if (updates.spec || updates.properties || updates.catalogId) {
       const entry = palette.find((e) => e.id === id)
       if (entry) {
         const boundNodeIds = bomItems
           .filter((i) => i.paletteId === id && i.nodeId)
           .map((i) => i.nodeId as string)
-        if (boundNodeIds.length > 0) setNodeSpecs(boundNodeIds, entry.spec)
+        if (boundNodeIds.length > 0) {
+          if (updates.spec) setNodeSpecs(boundNodeIds, entry.spec)
+          for (const nodeId of boundNodeIds) setNodePortsFromPalette(nodeId, entry)
+        }
       }
     }
   },
@@ -739,6 +859,7 @@ export const diagramState = {
       const bom = bomItems.find((i) => i.id === bomId)
       const entry = bom ? palette.find((e) => e.id === bom.paletteId) : undefined
       setNodeSpecs([nodeId], entry?.spec)
+      setNodePortsFromPalette(nodeId, entry)
     }
   },
   /** Get BOM items for a palette entry */
@@ -762,7 +883,7 @@ export const diagramState = {
     for (const nodeId of ids) {
       const rn = diagram.nodes.get(nodeId)
       if (rn) {
-        diagram.nodes.set(nodeId, { ...rn, spec: stripProductFromSpec(rn.spec) })
+        diagram.nodes.set(nodeId, { ...rn, spec: stripProductFromSpec(rn.spec), ports: undefined })
       }
     }
     bomItems = bomItems.map((i) =>
@@ -781,7 +902,10 @@ export const diagramState = {
       // Already bound — re-bind to different palette
       diagramState.updateBomItem(existing.id, { paletteId })
       const entry = palette.find((e) => e.id === paletteId)
-      if (entry) setNodeSpecs([nodeId], entry.spec)
+      if (entry) {
+        setNodeSpecs([nodeId], entry.spec)
+        setNodePortsFromPalette(nodeId, entry)
+      }
     } else {
       // Find unplaced BOM item for this palette entry, or create new
       const unplaced = bomItems.find((i) => i.paletteId === paletteId && !i.nodeId)
@@ -791,7 +915,10 @@ export const diagramState = {
         const id = newId('bom')
         diagramState.addBomItem({ id, paletteId, nodeId })
         const entry = palette.find((e) => e.id === paletteId)
-        if (entry) setNodeSpecs([nodeId], entry.spec)
+        if (entry) {
+          setNodeSpecs([nodeId], entry.spec)
+          setNodePortsFromPalette(nodeId, entry)
+        }
       }
     }
   },
@@ -817,7 +944,14 @@ export const diagramState = {
       obstacles,
     )
 
-    diagram.nodes.set(id, { id, label, spec, shape: 'rounded', position: pos })
+    diagram.nodes.set(id, {
+      id,
+      label,
+      spec,
+      ports: nodePortsFromPaletteEntry(entry),
+      shape: 'rounded',
+      position: pos,
+    })
     // Bind BomItem to the new node
     bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId: id } : i))
     return id
@@ -988,6 +1122,19 @@ async function applyProject(data: Partial<NetedProject>) {
   )
   palette = cleanPalette
   bomItems = cleanBom
+  for (const item of bomItems) {
+    if (!item.nodeId || !item.paletteId) continue
+    setNodePortsFromPalette(
+      item.nodeId,
+      palette.find((entry) => entry.id === item.paletteId),
+      { preserveExisting: true, reroute: false },
+    )
+  }
+  replaceMap(
+    diagram.ports,
+    placePorts(diagram.nodes, diagram.links, data.diagram?.settings?.direction ?? 'TB'),
+  )
+  await rerouteEdges()
 }
 
 /**

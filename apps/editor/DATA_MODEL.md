@@ -17,10 +17,11 @@ NetedProject
 │   └── { id, paletteId?, nodeId?, notes? }
 └── diagram: NetworkGraph                   ← library type directly
     ├── nodes: Node[]                       ← position set on save
-    │   └── { id, label, shape, spec?, position?, parent?, rank?, style? }
+    │   └── { id, label, shape, spec?, ports?, position?, parent?, rank?, style? }
+    │       └── ports = NodePort[]  ← concrete device/interface snapshot
     ├── links: Link[]
-    │   └── { id, from, to, bandwidth?, type?, vlan?, arrow?, redundancy? }
-    │       └── from/to = string | LinkEndpoint { node, port?, ip? }
+    │   └── { id, from, to, bandwidth?, medium?, type?, vlan?, arrow?, redundancy? }
+    │       └── from/to = string | LinkEndpoint { node, port?, portIntent?, ip? }
     ├── subgraphs?: Subgraph[]              ← bounds set on save
     │   └── { id, label, children?, parent?, bounds?, direction?, pins? }
     └── settings?: GraphSettings
@@ -28,8 +29,16 @@ NetedProject
 
 Derived values (not stored on the NetworkGraph save wire):
 - Node size — computed by `computeNodeSize()` from label/spec/shape
-- Ports (`absolutePosition`, `side`) — computed by `placePorts()` from node positions + link endpoints
+- Resolved ports (`absolutePosition`, `side`) — computed by `placePorts()` from node positions + assigned link endpoints
 - Edges (routed paths) — computed by `routeEdges()` (libavoid WASM) from nodes/ports/links
+
+Port and cable modeling:
+- `NodePort.id` is the internal stable reference used by `LinkEndpoint.port`.
+- `NodePort.label` is the user-facing interface label, e.g. `Gi1/0/1`, `ge-0/0/0`, `E0`.
+- `NodePort.connector` is the physical port/cage type, e.g. `rj45`, `sfp+`, `qsfp28`.
+- `NodePort.poe` is only valid for PoE-capable copper ports, normally `rj45`.
+- `Link.medium` describes what is actually installed between ports: twisted pair, fiber, DAC, or AOC. Fiber mode (`singlemode`/`multimode`) belongs here, not on the port.
+- `faceplateLabel` and `interfaceName` are optional metadata for physical markings and OS/API names.
 
 ## Runtime State (context.svelte.ts)
 

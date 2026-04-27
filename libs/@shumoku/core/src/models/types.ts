@@ -43,6 +43,73 @@ export interface NodeStyle {
 }
 
 // ============================================
+// Physical / logical node ports
+// ============================================
+
+export type PortRole = 'downlink' | 'uplink' | 'wan' | 'lan' | 'management' | 'power' | 'console'
+
+export type PortConnector =
+  | 'rj45'
+  | 'sfp'
+  | 'sfp+'
+  | 'sfp28'
+  | 'qsfp+'
+  | 'qsfp28'
+  | 'combo'
+  | (string & {})
+
+export type LinkMediumKind = 'twisted-pair' | 'fiber' | 'dac' | 'aoc' | (string & {})
+
+export type FiberMode = 'singlemode' | 'multimode' | (string & {})
+
+export interface LinkMedium {
+  /** Actual cable/module family used on this link. */
+  kind?: LinkMediumKind
+  /** Copper cable category for twisted-pair runs. */
+  cableCategory?: 'cat5e' | 'cat6' | 'cat6a' | 'cat7' | 'cat8' | (string & {})
+  /** Fiber strand type. Only meaningful when kind is "fiber". */
+  fiberMode?: FiberMode
+  /** Optical/Ethernet module standard, e.g. "10GBASE-SR", "100GBASE-LR4". */
+  opticStandard?: string
+  /** Cable-side connector, e.g. "lc", "sc", "mpo", "rj45". */
+  connector?: string
+}
+
+export interface NodePort {
+  /** Stable generated ID, e.g. "port-...". Links should reference this. */
+  id: string
+  /** Display/canonical port label, e.g. "Gi1/0/1", "ge-0/0/0", "wan". */
+  label: string
+  /** Physical faceplate marking, e.g. "1". Defaults to `label`. */
+  faceplateLabel?: string
+  /** Full OS/API interface name, e.g. "GigabitEthernet1/0/1". */
+  interfaceName?: string
+  /** Alternative names accepted for matching/search. */
+  aliases?: string[]
+  role?: PortRole | (string & {})
+  /** Link speed/capability label, e.g. "1g", "10g". */
+  speed?: string
+  /** Physical port/cage type, e.g. "rj45", "sfp+", "qsfp28". */
+  connector?: PortConnector
+  /** Deprecated: use connector for port shape and Link.medium for cable/module media. */
+  media?: string
+  /** Whether this port can source PoE. */
+  poe?: boolean
+  source?: 'catalog' | 'custom'
+  disabled?: boolean
+  notes?: string
+}
+
+export interface PortIntent {
+  role?: PortRole | (string & {})
+  minSpeed?: string
+  connector?: PortConnector
+  /** Deprecated: use connector. */
+  media?: string
+  poe?: boolean
+}
+
+// ============================================
 // Node Spec — discriminated union by `kind`
 // ============================================
 
@@ -150,6 +217,13 @@ export interface Node {
   spec?: NodeSpec
 
   /**
+   * Concrete ports owned by this node. Catalog-backed nodes snapshot
+   * their port list here so saved diagrams do not change when catalog
+   * definitions are updated later.
+   */
+  ports?: NodePort[]
+
+  /**
    * Absolute center position.
    * Set by the layout engine or the editor.
    * When absent, the layout engine computes it automatically.
@@ -207,7 +281,10 @@ export interface LinkStyle {
  */
 export interface LinkEndpoint {
   node: string
+  /** Concrete NodePort.id on the endpoint node. */
   port?: string
+  /** Desired port class while a concrete port is not assigned yet. */
+  portIntent?: PortIntent
   ip?: string // e.g., "10.57.0.1/30"
   /**
    * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id")
@@ -300,6 +377,12 @@ export interface Link {
    * Single VLAN for access ports, multiple for trunk ports
    */
   vlan?: number[]
+
+  /**
+   * Actual cable/module used for the connection. This is separate from
+   * endpoint port connector types (RJ45/SFP/QSFP cages).
+   */
+  medium?: LinkMedium
 
   /**
    * Custom style

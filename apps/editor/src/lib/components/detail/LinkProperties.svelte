@@ -40,6 +40,33 @@
     })),
   )
 
+  function getPortOptions(nodeId: string) {
+    return nodes.get(nodeId)?.ports ?? []
+  }
+
+  function hasPortOption(nodeId: string, portId: string) {
+    if (!portId) return true
+    return getPortOptions(nodeId).some((p) => p.id === portId)
+  }
+
+  function portOptionLabel(port: NonNullable<Node['ports']>[number]) {
+    const attrs = [
+      port.faceplateLabel && port.faceplateLabel !== port.label
+        ? `panel ${port.faceplateLabel}`
+        : '',
+      port.speed,
+      port.connector ?? port.media,
+      port.poe ? 'PoE' : '',
+    ]
+      .filter(Boolean)
+      .join(', ')
+    return attrs ? `${port.label} (${attrs})` : port.label
+  }
+
+  function displayPort(nodeId: string, portId: string) {
+    return getPortOptions(nodeId).find((p) => p.id === portId)?.label ?? portId
+  }
+
   function updateEndpointField(side: 'from' | 'to', field: 'node' | 'port' | 'ip', value: string) {
     const current = typeof link[side] === 'object' ? link[side] : { node: link[side] as string }
     if (field === 'node') {
@@ -103,16 +130,32 @@
     <dt class={labelClass}>Port</dt>
     <dd>
       {#if editing}
-        <input
-          type="text"
-          class={inputClass}
-          value={from.port}
-          placeholder="Port"
-          onblur={(e) => updateEndpointField('from', 'port', (e.target as HTMLInputElement).value)}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-        >
+        {#if getPortOptions(from.node).length > 0}
+          <select
+            class={selectClass}
+            value={from.port}
+            onchange={(e) => updateEndpointField('from', 'port', (e.target as HTMLSelectElement).value)}
+          >
+            <option value="">Unassigned</option>
+            {#if from.port && !hasPortOption(from.node, from.port)}
+              <option value={from.port}>{displayPort(from.node, from.port)} (custom)</option>
+            {/if}
+            {#each getPortOptions(from.node) as port}
+              <option value={port.id} disabled={port.disabled}>{portOptionLabel(port)}</option>
+            {/each}
+          </select>
+        {:else}
+          <input
+            type="text"
+            class={inputClass}
+            value={from.port}
+            placeholder="Port"
+            onblur={(e) => updateEndpointField('from', 'port', (e.target as HTMLInputElement).value)}
+            onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          >
+        {/if}
       {:else}
-        <span class={valueClass}>{from.port || '—'}</span>
+        <span class={valueClass}>{from.port ? displayPort(from.node, from.port) : '—'}</span>
       {/if}
     </dd>
   </div>
@@ -163,16 +206,32 @@
     <dt class={labelClass}>Port</dt>
     <dd>
       {#if editing}
-        <input
-          type="text"
-          class={inputClass}
-          value={to.port}
-          placeholder="Port"
-          onblur={(e) => updateEndpointField('to', 'port', (e.target as HTMLInputElement).value)}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-        >
+        {#if getPortOptions(to.node).length > 0}
+          <select
+            class={selectClass}
+            value={to.port}
+            onchange={(e) => updateEndpointField('to', 'port', (e.target as HTMLSelectElement).value)}
+          >
+            <option value="">Unassigned</option>
+            {#if to.port && !hasPortOption(to.node, to.port)}
+              <option value={to.port}>{displayPort(to.node, to.port)} (custom)</option>
+            {/if}
+            {#each getPortOptions(to.node) as port}
+              <option value={port.id} disabled={port.disabled}>{portOptionLabel(port)}</option>
+            {/each}
+          </select>
+        {:else}
+          <input
+            type="text"
+            class={inputClass}
+            value={to.port}
+            placeholder="Port"
+            onblur={(e) => updateEndpointField('to', 'port', (e.target as HTMLInputElement).value)}
+            onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          >
+        {/if}
       {:else}
-        <span class={valueClass}>{to.port || '—'}</span>
+        <span class={valueClass}>{to.port ? displayPort(to.node, to.port) : '—'}</span>
       {/if}
     </dd>
   </div>

@@ -10,12 +10,14 @@
     palette = [],
     bomItems = [],
     links = [],
+    nodes = new Map(),
   }: {
     node: Node
     poeBudget?: PoEBudget
     palette: SpecPaletteEntry[]
     bomItems: BomItem[]
     links: Link[]
+    nodes?: Map<string, Node>
   } = $props()
 
   function stripHtml(s: string): string {
@@ -23,6 +25,11 @@
   }
 
   const iconPath = $derived(node.spec ? getDeviceIcon(specDeviceType(node.spec)) : undefined)
+
+  function displayPort(nodeId: string, portId: string | undefined) {
+    if (!portId) return ''
+    return nodes.get(nodeId)?.ports?.find((p) => p.id === portId)?.label ?? portId
+  }
 
   const nodeLabel = $derived(
     node.label
@@ -73,9 +80,9 @@
 
       if (fromNode === node.id && fromPort) {
         conns.push({
-          portLabel: fromPort,
+          portLabel: displayPort(fromNode, fromPort),
           peerNode: toNode,
-          peerPort: toPort ?? '',
+          peerPort: displayPort(toNode, toPort),
           ip: fromIp,
           peerIp: toIp,
           bandwidth: bw,
@@ -85,9 +92,9 @@
         })
       } else if (toNode === node.id && toPort) {
         conns.push({
-          portLabel: toPort,
+          portLabel: displayPort(toNode, toPort),
           peerNode: fromNode,
-          peerPort: fromPort ?? '',
+          peerPort: displayPort(fromNode, fromPort),
           ip: toIp,
           peerIp: fromIp,
           bandwidth: bw,
