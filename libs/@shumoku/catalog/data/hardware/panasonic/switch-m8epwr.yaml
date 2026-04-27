@@ -25,9 +25,9 @@ properties:
     buffer_mb: 1.5
   ports:
     downlink:
-      - { names: ["1", "2", "3", "4", "5", "6", "7", "8"], speed: "100m", connector: rj45, poe: true }
+      - { names: ["1", "2", "3", "4", "5", "6", "7", "8"], speed: "100m", cage: rj45, poe: true }
     uplink:
-      - { names: ["9", "10"], speed: "1g", connector: combo }
+      - { names: ["9", "10"], speed: "1g", cage: combo }
   physical:
     form_factor: "1U"
     dimensions_mm: { w: 210, d: 280, h: 44 }

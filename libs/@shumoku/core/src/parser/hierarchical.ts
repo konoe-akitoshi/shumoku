@@ -7,10 +7,12 @@
  * Resolves file references and builds a complete hierarchical graph
  */
 
+import { ensurePortAndPlug } from '../models/migrate.js'
 import type {
   DeviceType,
   HierarchicalNetworkGraph,
   Link,
+  LinkEndpoint,
   NetworkGraph,
   Node,
   Subgraph,
@@ -76,11 +78,11 @@ interface CrossSubgraphLink {
   fromSubgraph: string
   fromSubgraphLabel: string
   fromDevice: string
-  fromPort?: string
+  fromPort: string
   toSubgraph: string
   toSubgraphLabel: string
   toDevice: string
-  toPort?: string
+  toPort: string
 }
 
 /**
@@ -95,9 +97,9 @@ interface ExportPoint {
   /** All device connections for this export point */
   connections: Array<{
     device: string
-    port?: string
+    port: string
     destDevice: string
-    destPort?: string
+    destPort: string
   }>
 }
 
@@ -157,8 +159,18 @@ export class HierarchicalParser {
     const crossLinks = this.detectCrossSubgraphLinks(graph.links, deviceToSubgraph, subgraphLabels)
     this.generateExportConnectors(crossLinks, sheets)
 
+    // Export-connector synthesis added new links/nodes; re-normalize so the
+    // port/plug invariant still holds on the resulting graphs.
+    const normalizedGraph = ensurePortAndPlug(graph) as HierarchicalNetworkGraph
+    normalizedGraph.sheets = sheets
+    normalizedGraph.breadcrumb = graph.breadcrumb
+    normalizedGraph.parentSheet = graph.parentSheet
+    for (const [id, sheet] of sheets) {
+      sheets.set(id, ensurePortAndPlug(sheet))
+    }
+
     return {
-      graph,
+      graph: normalizedGraph,
       sheets,
       warnings: warnings.length > 0 ? warnings : undefined,
     }
@@ -320,8 +332,8 @@ export class HierarchicalParser {
     const crossLinks: CrossSubgraphLink[] = []
 
     for (const link of links) {
-      const from = typeof link.from === 'string' ? { node: link.from } : link.from
-      const to = typeof link.to === 'string' ? { node: link.to } : link.to
+      const from = link.from
+      const to = link.to
 
       const fromSubgraph = deviceToSubgraph.get(from.node)
       const toSubgraph = deviceToSubgraph.get(to.node)
@@ -448,13 +460,24 @@ export class HierarchicalParser {
     const exportNodeId = `${EXPORT_NODE_PREFIX}${exportId}`
 
     for (const [i, conn] of exportPoint.connections.entries()) {
-      const deviceEndpoint = conn.port ? { node: conn.device, port: conn.port } : conn.device
+      // Raw endpoints — port/plug invariants get filled by the post-pass
+      // ensurePortAndPlug() in HierarchicalParser.parse().
+      const deviceEndpoint: LinkEndpoint = {
+        node: conn.device,
+        port: conn.port,
+        plug: {},
+      }
+      const exportEndpoint: LinkEndpoint = {
+        node: exportNodeId,
+        port: '',
+        plug: {},
+      }
       const linkId = `${EXPORT_LINK_PREFIX}${exportId}_${i}`
 
       sheetGraph.links.push({
         id: linkId,
-        from: exportPoint.isSource ? deviceEndpoint : exportNodeId,
-        to: exportPoint.isSource ? exportNodeId : deviceEndpoint,
+        from: exportPoint.isSource ? deviceEndpoint : exportEndpoint,
+        to: exportPoint.isSource ? exportEndpoint : deviceEndpoint,
         type: 'dashed',
         arrow: 'forward',
         metadata: {
@@ -469,10 +492,8 @@ export class HierarchicalParser {
   /**
    * Clone endpoint for merged child links
    */
-  private cloneEndpoint(
-    endpoint: string | { node: string; port?: string; ip?: string },
-  ): string | { node: string; port?: string; ip?: string } {
-    return typeof endpoint === 'string' ? endpoint : { ...endpoint }
+  private cloneEndpoint(endpoint: LinkEndpoint): LinkEndpoint {
+    return { ...endpoint, plug: { ...endpoint.plug } }
   }
 
   /**

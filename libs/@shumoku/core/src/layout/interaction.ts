@@ -485,8 +485,7 @@ export function linkExists(
   toPort: string,
 ): boolean {
   return links.some((link) => {
-    const from = typeof link.from === 'string' ? { node: link.from } : link.from
-    const to = typeof link.to === 'string' ? { node: link.to } : link.to
+    const { from, to } = link
     // Check both directions
     return (
       (from.node === fromNodeId &&
@@ -534,8 +533,8 @@ export function addLink(
 
   const newLink: Link = {
     id: `link-${Date.now()}`,
-    from: { node: fromNode, port: fromPort },
-    to: { node: toNode, port: toPort },
+    from: { node: fromNode, port: fromPort, plug: {} },
+    to: { node: toNode, port: toPort, plug: {} },
   }
 
   return {
@@ -554,8 +553,7 @@ export function generatePortName(
 ): string {
   const usedPorts = new Set<string>()
   for (const link of existingLinks) {
-    const from = typeof link.from === 'string' ? { node: link.from } : link.from
-    const to = typeof link.to === 'string' ? { node: link.to } : link.to
+    const { from, to } = link
     if (from.node === nodeId && from.port) usedPorts.add(from.port)
     if (to.node === nodeId && to.port) usedPorts.add(to.port)
   }
@@ -768,11 +766,9 @@ export function removePort(
 
   // Remove links referencing this port
   const newLinks = links.filter((l) => {
-    const from = typeof l.from === 'string' ? { node: l.from } : l.from
-    const to = typeof l.to === 'string' ? { node: l.to } : l.to
     return !(
-      (from.node === nodeId && from.port === portName) ||
-      (to.node === nodeId && to.port === portName)
+      (l.from.node === nodeId && l.from.port === portName) ||
+      (l.to.node === nodeId && l.to.port === portName)
     )
   })
 

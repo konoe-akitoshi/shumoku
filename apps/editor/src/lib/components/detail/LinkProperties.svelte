@@ -13,11 +13,10 @@
     onupdate?: (updates: Partial<Link>) => void
   } = $props()
 
-  function getEndpoint(ep: string | LinkEndpoint) {
-    if (typeof ep === 'string') return { node: ep, port: '', ip: '' }
+  function getEndpoint(ep: LinkEndpoint) {
     return {
       node: ep.node,
-      port: ep.port ?? '',
+      port: ep.port,
       ip: Array.isArray(ep.ip) ? ep.ip.join(', ') : (ep.ip ?? ''),
     }
   }
@@ -50,31 +49,36 @@
   }
 
   function portOptionLabel(port: NonNullable<Node['ports']>[number]) {
+    const label = port.label || port.cage || 'unnamed port'
     const attrs = [
       port.faceplateLabel && port.faceplateLabel !== port.label
         ? `panel ${port.faceplateLabel}`
         : '',
       port.speed,
-      port.connector ?? port.media,
+      port.cage,
       port.poe ? 'PoE' : '',
     ]
       .filter(Boolean)
       .join(', ')
-    return attrs ? `${port.label} (${attrs})` : port.label
+    return attrs ? `${label} (${attrs})` : label
   }
 
   function displayPort(nodeId: string, portId: string) {
-    return getPortOptions(nodeId).find((p) => p.id === portId)?.label ?? portId
+    const port = getPortOptions(nodeId).find((p) => p.id === portId)
+    return port ? portOptionLabel(port) : portId
   }
 
   function updateEndpointField(side: 'from' | 'to', field: 'node' | 'port' | 'ip', value: string) {
-    const current = typeof link[side] === 'object' ? link[side] : { node: link[side] as string }
-    if (field === 'node') {
-      onupdate?.({ [side]: { ...current, node: value } })
-    } else if (field === 'ip') {
-      onupdate?.({ [side]: { ...current, [field]: value || undefined } })
+    const current = link[side]
+    if (field === 'ip') {
+      onupdate?.({ [side]: { ...current, ip: value || undefined } })
+    } else if (field === 'port' && !value) {
+      // Empty port not allowed — caller's onupdate handler is responsible
+      // for materializing a fresh port. We forward the empty string and
+      // let it decide.
+      onupdate?.({ [side]: { ...current, port: '' } })
     } else {
-      onupdate?.({ [side]: { ...current, [field]: value || undefined } })
+      onupdate?.({ [side]: { ...current, [field]: value } })
     }
   }
 
@@ -136,7 +140,7 @@
             value={from.port}
             onchange={(e) => updateEndpointField('from', 'port', (e.target as HTMLSelectElement).value)}
           >
-            <option value="">Unassigned</option>
+            <option value="">New unnamed port</option>
             {#if from.port && !hasPortOption(from.node, from.port)}
               <option value={from.port}>{displayPort(from.node, from.port)} (custom)</option>
             {/if}
@@ -212,7 +216,7 @@
             value={to.port}
             onchange={(e) => updateEndpointField('to', 'port', (e.target as HTMLSelectElement).value)}
           >
-            <option value="">Unassigned</option>
+            <option value="">New unnamed port</option>
             {#if to.port && !hasPortOption(to.node, to.port)}
               <option value={to.port}>{displayPort(to.node, to.port)} (custom)</option>
             {/if}

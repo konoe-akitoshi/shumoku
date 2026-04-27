@@ -12,9 +12,8 @@ export interface CatalogPortTemplate {
   aliases?: string[]
   role?: PortRole | (string & {})
   speed?: string
-  connector?: PortConnector
-  /** Deprecated: use connector. */
-  media?: string
+  /** Physical receptacle (cage) type the catalog declares for this port. */
+  cage?: PortConnector
   poe?: boolean
   source?: 'catalog'
 }
@@ -53,8 +52,7 @@ export function expandCatalogPorts(entry: CatalogEntry | undefined): CatalogPort
         aliases: group.aliases?.[index],
         role: group.role,
         speed: group.speed,
-        connector: group.connector ?? mediaToConnector(group.media),
-        media: group.media,
+        cage: group.cage,
         poe: group.poe,
         source: 'catalog',
       })
@@ -102,10 +100,4 @@ function defaultPattern(role: PortGroup['role']): string {
   if (role === 'wan') return 'wan{n}'
   if (role === 'lan') return 'lan{n}'
   return '{n}'
-}
-
-function mediaToConnector(media: string | undefined): PortConnector | undefined {
-  if (!media) return undefined
-  if (media === 'copper') return 'rj45'
-  return media
 }

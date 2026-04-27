@@ -29,10 +29,10 @@ properties:
     antenna_type: internal
   ports:
     downlink:
-      - { names: ["E1", "E2"], speed: "1g", connector: rj45 }
-      - { names: ["E3"], speed: "1g", connector: rj45, poe: true }
+      - { names: ["E1", "E2"], speed: "1g", cage: rj45 }
+      - { names: ["E3"], speed: "1g", cage: rj45, poe: true }
     uplink:
-      - { names: ["E0/PT"], speed: "1g", connector: rj45 }
+      - { names: ["E0/PT"], speed: "1g", cage: rj45 }
   physical:
     form_factor: desktop
     dimensions_mm: { w: 86, d: 150, h: 40 }

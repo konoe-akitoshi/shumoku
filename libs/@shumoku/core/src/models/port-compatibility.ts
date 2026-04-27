@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { LinkMedium, NodePort, PortConnector } from './types.js'
+import type { LinkMedium, NodePort, PlugSpec, PortConnector } from './types.js'
 
 const PLUGGABLE_CONNECTORS = new Set(['sfp', 'sfp+', 'sfp28', 'qsfp+', 'qsfp28'])
 
@@ -29,40 +29,75 @@ export function isPoeCapableConnector(connector: string | undefined): boolean {
   return normalizePortConnector(connector) === 'rj45'
 }
 
-export function defaultMediumForPorts(
-  a: NodePort | undefined,
-  b: NodePort | undefined,
+/**
+ * The "effective connector" we use for a connection point. Prefer the plug
+ * (it's the cable end actually carrying signal) and fall back to the port's
+ * cage when the plug is unspecified — typical for just-drawn links where
+ * we know the receptacle but the user has not picked a transceiver yet.
+ */
+function effectiveConnector(
+  port: NodePort | undefined,
+  plug: PlugSpec | undefined,
+): PortConnector | undefined {
+  return normalizePortConnector(plug?.connector ?? port?.cage)
+}
+
+export function defaultMediumForLink(
+  fromPort: NodePort | undefined,
+  toPort: NodePort | undefined,
+  fromPlug: PlugSpec | undefined,
+  toPlug: PlugSpec | undefined,
 ): LinkMedium {
-  const aConnector = normalizePortConnector(a?.connector ?? a?.media)
-  const bConnector = normalizePortConnector(b?.connector ?? b?.media)
-  if (aConnector === 'rj45' && bConnector === 'rj45') return { kind: 'twisted-pair' }
-  if (isPluggableConnector(aConnector) && isPluggableConnector(bConnector)) return { kind: 'fiber' }
+  const a = effectiveConnector(fromPort, fromPlug)
+  const b = effectiveConnector(toPort, toPlug)
+  if (a === 'rj45' && b === 'rj45') return { kind: 'twisted-pair' }
+  if (isPluggableConnector(a) && isPluggableConnector(b)) return { kind: 'fiber' }
   return {}
 }
 
-export function validatePortMediumCompatibility(
-  a: NodePort | undefined,
-  b: NodePort | undefined,
+export function validateLinkCompatibility(
+  fromPort: NodePort | undefined,
+  toPort: NodePort | undefined,
+  fromPlug: PlugSpec | undefined,
+  toPlug: PlugSpec | undefined,
   medium: LinkMedium | undefined,
 ): PortCompatibilityIssue[] {
   const issues: PortCompatibilityIssue[] = []
-  const aConnector = normalizePortConnector(a?.connector ?? a?.media)
-  const bConnector = normalizePortConnector(b?.connector ?? b?.media)
+  const a = effectiveConnector(fromPort, fromPlug)
+  const b = effectiveConnector(toPort, toPlug)
   const kind = medium?.kind
 
-  for (const port of [a, b]) {
-    const connector = normalizePortConnector(port?.connector ?? port?.media)
+  for (const [port, plug] of [
+    [fromPort, fromPlug],
+    [toPort, toPlug],
+  ] as const) {
+    const connector = effectiveConnector(port, plug)
     if (port?.poe && !isPoeCapableConnector(connector)) {
       issues.push({
         severity: 'error',
-        message: `${port.label} is marked PoE but ${connector ?? 'unknown'} ports cannot source PoE`,
+        message: `${port.label || port.id} is marked PoE but ${connector ?? 'unknown'} cages cannot source PoE`,
       })
     }
   }
 
-  if (!aConnector || !bConnector || !kind) return issues
+  // Plug/cage mismatch — a 10G SFP+ transceiver doesn't fit an RJ45 receptacle.
+  for (const [port, plug, side] of [
+    [fromPort, fromPlug, 'source'],
+    [toPort, toPlug, 'target'],
+  ] as const) {
+    const cage = normalizePortConnector(port?.cage)
+    const plugConnector = normalizePortConnector(plug?.connector)
+    if (cage && plugConnector && cage !== plugConnector && cage !== 'combo') {
+      issues.push({
+        severity: 'warning',
+        message: `${side} plug ${plugConnector} does not match cage ${cage}; a transceiver/adapter is required`,
+      })
+    }
+  }
 
-  if (aConnector === 'rj45' && bConnector === 'rj45') {
+  if (!a || !b || !kind) return issues
+
+  if (a === 'rj45' && b === 'rj45') {
     if (kind !== 'twisted-pair') {
       issues.push({
         severity: 'error',
@@ -72,7 +107,7 @@ export function validatePortMediumCompatibility(
     return issues
   }
 
-  if (isPluggableConnector(aConnector) && isPluggableConnector(bConnector)) {
+  if (isPluggableConnector(a) && isPluggableConnector(b)) {
     if (!['fiber', 'dac', 'aoc'].includes(kind)) {
       issues.push({
         severity: 'error',
@@ -82,10 +117,7 @@ export function validatePortMediumCompatibility(
     return issues
   }
 
-  if (
-    (aConnector === 'rj45' && isPluggableConnector(bConnector)) ||
-    (bConnector === 'rj45' && isPluggableConnector(aConnector))
-  ) {
+  if ((a === 'rj45' && isPluggableConnector(b)) || (b === 'rj45' && isPluggableConnector(a))) {
     issues.push({
       severity: 'warning',
       message:

@@ -6,10 +6,8 @@ import {
   computeNodeSize,
   createMemoryFileResolver,
   darkTheme,
-  getNodeId,
   HierarchicalParser,
   type Link,
-  type LinkEndpoint,
   lightTheme,
   moveNode,
   type NetworkGraph,
@@ -282,14 +280,6 @@ function setNodePortsFromPalette(
   if (migrated && options.reroute !== false) rebuildPortsAndEdges()
 }
 
-function getEndpointNodeId(endpoint: string | LinkEndpoint): string {
-  return typeof endpoint === 'string' ? endpoint : endpoint.node
-}
-
-function getEndpointPort(endpoint: string | LinkEndpoint): string | undefined {
-  return typeof endpoint === 'string' ? undefined : endpoint.port
-}
-
 function findNodePortId(
   ports: NodePort[] | undefined,
   value: string | undefined,
@@ -306,6 +296,29 @@ function findNodePortId(
   return match?.id ?? value
 }
 
+/**
+ * Append a port to a node's `ports` array. Returns the new port's ID, or
+ * undefined when the target node is missing. This is the single explicit
+ * port-creation operation for the editor — link-creation paths must call
+ * this themselves before constructing the LinkEndpoint, never afterward.
+ */
+function appendPortToNode(
+  nodes: Map<string, Node>,
+  nodeId: string,
+  init: Partial<NodePort> = {},
+): string | undefined {
+  const node = nodes.get(nodeId)
+  if (!node) return undefined
+  const port: NodePort = {
+    id: init.id ?? newId('port'),
+    label: init.label ?? '',
+    source: init.source ?? 'custom',
+    ...init,
+  }
+  nodes.set(nodeId, { ...node, ports: [...(node.ports ?? []), port] })
+  return port.id
+}
+
 function migrateLinkEndpointPortsForNode(nodeId: string, ports: NodePort[] | undefined): boolean {
   if (!ports?.length) return false
   let changed = false
@@ -313,9 +326,9 @@ function migrateLinkEndpointPortsForNode(nodeId: string, ports: NodePort[] | und
     let next = link
     for (const side of ['from', 'to'] as const) {
       const endpoint = next[side]
-      if (typeof endpoint === 'string' || endpoint.node !== nodeId || !endpoint.port) continue
+      if (endpoint.node !== nodeId || !endpoint.port) continue
       const resolved = findNodePortId(ports, endpoint.port)
-      if (resolved !== endpoint.port) {
+      if (resolved && resolved !== endpoint.port) {
         next = { ...next, [side]: { ...endpoint, port: resolved } }
         changed = true
       }
@@ -389,9 +402,7 @@ function sanitizeGraph(graph: NetworkGraph): {
   const validLinks: Link[] = []
   let droppedLinks = 0
   for (const link of graph.links ?? []) {
-    const from = getNodeId(link.from)
-    const to = getNodeId(link.to)
-    if (nodes.has(from) && nodes.has(to)) {
+    if (nodes.has(link.from.node) && nodes.has(link.to.node)) {
       validLinks.push(link)
     } else {
       droppedLinks++
@@ -521,6 +532,17 @@ export const diagramState = {
     invalidateSheetCache()
     rebuildPortsAndEdges()
   },
+  /**
+   * Append a port to a node and trigger a port/edge rebuild. Used by
+   * forms (and other UI) that need to materialize a port *before*
+   * constructing the link endpoint. The `port` field of any LinkEndpoint
+   * we append to `links` must already point at an existing port.
+   */
+  addNodePort(nodeId: string, init: Partial<NodePort> = {}) {
+    const portId = appendPortToNode(diagram.nodes, nodeId, init)
+    if (portId) rebuildPortsAndEdges()
+    return portId
+  },
   removeLink(id: string) {
     diagram.links = diagram.links.filter((l) => l.id !== id)
     invalidateSheetCache()
@@ -622,10 +644,10 @@ export const diagramState = {
     const usage = new Map<string, string[]>()
     for (const [i, link] of diagram.links.entries()) {
       const linkId = link.id ?? `link-${i}`
-      const fromNode = getEndpointNodeId(link.from)
-      const toNode = getEndpointNodeId(link.to)
-      const fromPort = getEndpointPort(link.from)
-      const toPort = getEndpointPort(link.to)
+      const fromNode = link.from.node
+      const toNode = link.to.node
+      const fromPort = link.from.port
+      const toPort = link.to.port
       if (fromNode === nodeId && fromPort) {
         const links = usage.get(fromPort) ?? []
         links.push(linkId)

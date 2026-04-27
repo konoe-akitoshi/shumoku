@@ -1,10 +1,11 @@
 <script lang="ts">
   import {
-    defaultMediumForPorts,
+    defaultMediumForLink,
     type Link,
     type LinkEndpoint,
     newId,
-    validatePortMediumCompatibility,
+    type PlugSpec,
+    validateLinkCompatibility,
   } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
   import { Badge } from '$lib/components/ui/badge'
@@ -30,7 +31,7 @@
     faceplateLabel: string
     role: string
     speed: string
-    connector: string
+    cage: string
     interfaceName: string
     poe: boolean
     disabled: boolean
@@ -49,7 +50,7 @@
         faceplateLabel: port.faceplateLabel ?? '',
         role: String(port.role ?? ''),
         speed: port.speed ?? '',
-        connector: port.connector ?? port.media ?? '',
+        cage: port.cage ?? '',
         interfaceName: port.interfaceName ?? '',
         poe: port.poe ?? false,
         disabled: port.disabled ?? false,
@@ -66,16 +67,17 @@
   }
 
   function getPortLabel(p: PortOption) {
+    const label = p.label || p.cage || 'unnamed port'
     const attrs = [
       p.faceplateLabel && p.faceplateLabel !== p.label ? `panel ${p.faceplateLabel}` : '',
       p.speed,
-      p.connector,
+      p.cage,
       p.poe ? 'PoE' : '',
       p.usage.length > 0 ? 'used' : '',
     ]
       .filter(Boolean)
       .join(', ')
-    return attrs ? `${p.label} (${attrs})` : p.label
+    return attrs ? `${label} (${attrs})` : label
   }
 
   function hasPortOption(nodeId: string, portId: string) {
@@ -84,7 +86,8 @@
   }
 
   function displayPort(nodeId: string, portId: string) {
-    return getPortOptions(nodeId).find((p) => p.id === portId)?.label ?? portId
+    const port = getPortOptions(nodeId).find((p) => p.id === portId)
+    return port ? getPortLabel(port) : portId
   }
 
   // Connection rows
@@ -107,17 +110,16 @@
 
   const rows = $derived.by<ConnectionRow[]>(() => {
     return diagramState.links.map((link, i) => {
-      const from = typeof link.from === 'object' ? link.from : { node: link.from }
-      const to = typeof link.to === 'object' ? link.to : { node: link.to }
-      const rawFromIp = 'ip' in from ? from.ip : undefined
-      const rawToIp = 'ip' in to ? to.ip : undefined
+      const { from, to } = link
+      const rawFromIp = from.ip
+      const rawToIp = to.ip
       return {
         link,
         id: link.id ?? `link-${i}`,
         fromNode: from.node,
-        fromPort: 'port' in from ? (from.port ?? '') : '',
+        fromPort: from.port,
         toNode: to.node,
-        toPort: 'port' in to ? (to.port ?? '') : '',
+        toPort: to.port,
         bandwidth: link.bandwidth !== undefined ? String(link.bandwidth) : '',
         vlan: link.vlan
           ? Array.isArray(link.vlan)
@@ -199,15 +201,60 @@
   let addToPort = $state('')
   let addMedium = $state('')
 
+  const newPortOptions = [
+    ['__new:rj45:1g', 'New unnamed RJ45 1G'],
+    ['__new:sfp:1g', 'New unnamed SFP 1G'],
+    ['__new:sfp+:10g', 'New unnamed SFP+ 10G'],
+    ['__new:sfp28:25g', 'New unnamed SFP28 25G'],
+    ['__new:qsfp+:40g', 'New unnamed QSFP+ 40G'],
+    ['__new:qsfp28:100g', 'New unnamed QSFP28 100G'],
+  ] as const
+
+  /**
+   * Resolve the form's port-select value to (port id, plug spec). For
+   * "__new:..." sentinels we materialize a port on the node first; the
+   * resulting LinkEndpoint always references a real port.
+   */
+  function resolveSelectedPort(
+    nodeId: string,
+    value: string,
+  ): { portId: string; plug: PlugSpec } | null {
+    if (!value) {
+      // No selection — create a generic blank port with no cage hint.
+      const portId = diagramState.addNodePort(nodeId, { label: '', source: 'custom' })
+      return portId ? { portId, plug: {} } : null
+    }
+    if (!value.startsWith('__new:')) {
+      const port = diagramState.nodes.get(nodeId)?.ports?.find((p) => p.id === value)
+      return { portId: value, plug: { connector: port?.cage, speed: port?.speed } }
+    }
+    const [, cage, speed] = value.split(':')
+    const portId = diagramState.addNodePort(nodeId, {
+      label: '',
+      cage,
+      speed,
+      poe: cage === 'rj45' ? undefined : false,
+      source: 'custom',
+    })
+    return portId ? { portId, plug: { connector: cage, speed } } : null
+  }
+
   function handleAdd() {
     if (!addFromNode || !addToNode || addFromNode === addToNode) return
-    const from: LinkEndpoint = { node: addFromNode, port: addFromPort || undefined }
-    const to: LinkEndpoint = { node: addToNode, port: addToPort || undefined }
+    const fromResolved = resolveSelectedPort(addFromNode, addFromPort)
+    const toResolved = resolveSelectedPort(addToNode, addToPort)
+    if (!fromResolved || !toResolved) return
+    const from: LinkEndpoint = {
+      node: addFromNode,
+      port: fromResolved.portId,
+      plug: fromResolved.plug,
+    }
+    const to: LinkEndpoint = { node: addToNode, port: toResolved.portId, plug: toResolved.plug }
     diagramState.addLink({
       id: newId('link'),
       from,
       to,
-      medium: parseMedium(addMedium) ?? inferMedium(addFromNode, addFromPort, addToNode, addToPort),
+      medium: parseMedium(addMedium) ?? inferMedium(from, to),
     })
     addFromNode = ''
     addFromPort = ''
@@ -222,8 +269,19 @@
 
   function updateEndpoint(link: Link, side: 'from' | 'to', field: 'port' | 'ip', value: string) {
     if (!link.id) return
-    const current = typeof link[side] === 'object' ? link[side] : { node: link[side] as string }
-    const updated = { ...current, [field]: value || undefined }
+    const current = link[side]
+    if (field === 'port' && !value) {
+      // Clearing a port is not a legal state — synthesize a fresh one
+      // on the same node so the invariant survives.
+      const newPortId = diagramState.addNodePort(current.node, { label: '', source: 'custom' })
+      if (!newPortId) return
+      diagramState.updateLink(link.id, { [side]: { ...current, port: newPortId } })
+      return
+    }
+    const updated: LinkEndpoint = {
+      ...current,
+      [field]: field === 'port' ? value : value || undefined,
+    }
     diagramState.updateLink(link.id, { [side]: updated })
   }
 
@@ -250,8 +308,13 @@
     return diagramState.nodes.get(nodeId)?.ports?.find((port) => port.id === portId)
   }
 
-  function inferMedium(fromNode: string, fromPort: string, toNode: string, toPort: string) {
-    const medium = defaultMediumForPorts(getPort(fromNode, fromPort), getPort(toNode, toPort))
+  function inferMedium(from: LinkEndpoint, to: LinkEndpoint) {
+    const medium = defaultMediumForLink(
+      getPort(from.node, from.port),
+      getPort(to.node, to.port),
+      from.plug,
+      to.plug,
+    )
     return Object.keys(medium).length > 0 ? medium : undefined
   }
 
@@ -276,11 +339,11 @@
   }
 
   function getMediumIssue(link: Link) {
-    const from = typeof link.from === 'object' ? link.from : { node: link.from }
-    const to = typeof link.to === 'object' ? link.to : { node: link.to }
-    const issues = validatePortMediumCompatibility(
-      getPort(from.node, from.port ?? ''),
-      getPort(to.node, to.port ?? ''),
+    const issues = validateLinkCompatibility(
+      getPort(link.from.node, link.from.port),
+      getPort(link.to.node, link.to.port),
+      link.from.plug,
+      link.to.plug,
       link.medium,
     )
     return issues[0]?.message ?? ''
@@ -385,9 +448,12 @@
           bind:value={addFromPort}
           disabled={!addFromNode}
         >
-          <option value="">—</option>
+          <option value="">New unnamed port</option>
           {#each getPortOptions(addFromNode) as p}
             <option value={p.id} disabled={p.disabled}>{getPortLabel(p)}</option>
+          {/each}
+          {#each newPortOptions as [ value, label ]}
+            <option {value}>{label}</option>
           {/each}
         </select>
       </div>
@@ -413,9 +479,12 @@
           bind:value={addToPort}
           disabled={!addToNode}
         >
-          <option value="">—</option>
+          <option value="">New unnamed port</option>
           {#each getPortOptions(addToNode) as p}
             <option value={p.id} disabled={p.disabled}>{getPortLabel(p)}</option>
+          {/each}
+          {#each newPortOptions as [ value, label ]}
+            <option {value}>{label}</option>
           {/each}
         </select>
       </div>
@@ -473,7 +542,7 @@
                     value={row.fromPort}
                     onchange={(e) => updateEndpoint(row.link, 'from', 'port', (e.target as HTMLSelectElement).value)}
                   >
-                    <option value="">—</option>
+                    <option value="">New unnamed port</option>
                     {#if row.fromPort && !hasPortOption(row.fromNode, row.fromPort)}
                       <option value={row.fromPort}>
                         {displayPort(row.fromNode, row.fromPort)}
@@ -505,7 +574,7 @@
                     value={row.toPort}
                     onchange={(e) => updateEndpoint(row.link, 'to', 'port', (e.target as HTMLSelectElement).value)}
                   >
-                    <option value="">—</option>
+                    <option value="">New unnamed port</option>
                     {#if row.toPort && !hasPortOption(row.toNode, row.toPort)}
                       <option value={row.toPort}>
                         {displayPort(row.toNode, row.toPort)}
@@ -652,9 +721,9 @@
                   <span
                     class="font-mono font-medium {connected ? 'text-emerald-700 dark:text-emerald-400' : 'text-neutral-500'}"
                   >
-                    {port.label}
+                    {getPortLabel(port)}
                   </span>
-                  <span class="text-muted-foreground">{port.role || port.speed || 'port'}</span>
+                  <span class="text-muted-foreground">{port.cage || port.speed || 'port'}</span>
                 </div>
               {/each}
             </div>

@@ -7,12 +7,14 @@
  */
 
 import yaml from 'js-yaml'
+import { ensurePortAndPlug } from '../models/migrate.js'
 import type {
   ArrowType,
   CanvasSettings,
   GraphSettings,
   Link,
   LinkBandwidth,
+  LinkEndpoint,
   LinkMedium,
   LinkType,
   NetworkGraph,
@@ -23,7 +25,7 @@ import type {
   PaperOrientation,
   PaperSize,
   Pin,
-  PortIntent,
+  PlugSpec,
   Subgraph,
   ThemeType,
 } from '../models/types.js'
@@ -93,8 +95,8 @@ interface YamlLinkStyle {
 interface YamlLinkEndpoint {
   node: string
   port?: string
-  portIntent?: PortIntent
-  port_intent?: PortIntent
+  /** Optional cable-side plug (transceiver / connector). */
+  plug?: PlugSpec
   ip?: string
   pin?: string
 }
@@ -237,7 +239,7 @@ export class YamlParser {
         throw new Error('Invalid YAML: expected object')
       }
 
-      const graph: NetworkGraph = {
+      const rawGraph: NetworkGraph = {
         version: data.version || '2.0.0',
         name: data.name,
         description: data.description,
@@ -249,7 +251,10 @@ export class YamlParser {
       }
 
       // Auto-assign nodes to subgraphs based on parent field
-      this.assignNodesToSubgraphs(graph)
+      this.assignNodesToSubgraphs(rawGraph)
+
+      // Materialize port + plug for endpoints that came in without them.
+      const graph = ensurePortAndPlug(rawGraph)
 
       return { graph, warnings: warnings.length > 0 ? warnings : undefined }
     } catch (error) {
@@ -347,16 +352,23 @@ export class YamlParser {
     }
   }
 
-  private parseLinkEndpoint(
-    endpoint: string | YamlLinkEndpoint,
-  ): string | { node: string; port?: string; portIntent?: PortIntent; ip?: string; pin?: string } {
+  /**
+   * Normalize YAML endpoint (string shorthand or object) into a draft
+   * LinkEndpoint. The `port` and `plug` invariants are filled in afterwards
+   * by `ensurePortAndPlug` in the parse() entry point.
+   */
+  private parseLinkEndpoint(endpoint: string | YamlLinkEndpoint): LinkEndpoint {
     if (typeof endpoint === 'string') {
-      return endpoint
+      // YAML shorthand "nodeId" or "nodeId:portId" → minimum draft.
+      const colon = endpoint.indexOf(':')
+      const node = colon >= 0 ? endpoint.slice(0, colon) : endpoint
+      const port = colon >= 0 ? endpoint.slice(colon + 1) : ''
+      return { node, port, plug: {} }
     }
     return {
       node: endpoint.node,
-      port: endpoint.port != null ? String(endpoint.port) : undefined,
-      portIntent: endpoint.portIntent ?? endpoint.port_intent,
+      port: endpoint.port != null ? String(endpoint.port) : '',
+      plug: endpoint.plug ?? {},
       ip: endpoint.ip,
       pin: endpoint.pin,
     }

@@ -28,7 +28,9 @@
 
   function displayPort(nodeId: string, portId: string | undefined) {
     if (!portId) return ''
-    return nodes.get(nodeId)?.ports?.find((p) => p.id === portId)?.label ?? portId
+    const port = nodes.get(nodeId)?.ports?.find((p) => p.id === portId)
+    if (!port) return portId
+    return port.label || port.cage || 'unnamed port'
   }
 
   const nodeLabel = $derived(
@@ -62,12 +64,12 @@
     const conns: PortConnection[] = []
 
     for (const link of links) {
-      const fromNode = typeof link.from === 'string' ? link.from : link.from.node
-      const toNode = typeof link.to === 'string' ? link.to : link.to.node
-      const fromPort = typeof link.from === 'object' ? link.from.port : undefined
-      const toPort = typeof link.to === 'object' ? link.to.port : undefined
-      const rawFromIp = typeof link.from === 'object' ? link.from.ip : undefined
-      const rawToIp = typeof link.to === 'object' ? link.to.ip : undefined
+      const fromNode = link.from.node
+      const toNode = link.to.node
+      const fromPort = link.from.port
+      const toPort = link.to.port
+      const rawFromIp = link.from.ip
+      const rawToIp = link.to.ip
       const fromIp = Array.isArray(rawFromIp) ? rawFromIp.join(', ') : rawFromIp
       const toIp = Array.isArray(rawToIp) ? rawToIp.join(', ') : rawToIp
       const vlan = link.vlan

@@ -146,12 +146,12 @@ export function computeNodeSize(
 // Link-endpoint helpers
 // ============================================================================
 
-function epId(ep: string | LinkEndpoint) {
-  return typeof ep === 'string' ? ep : ep.node
+function epId(ep: LinkEndpoint) {
+  return ep.node
 }
 
-function epPort(ep: string | LinkEndpoint) {
-  return typeof ep === 'string' ? undefined : ep.port
+function epPort(ep: LinkEndpoint) {
+  return ep.port
 }
 
 // ============================================================================

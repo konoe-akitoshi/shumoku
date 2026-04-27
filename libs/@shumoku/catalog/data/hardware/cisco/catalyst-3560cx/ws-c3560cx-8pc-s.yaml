@@ -21,10 +21,10 @@ properties:
     forwarding_rate_mpps: 16.07
   ports:
     downlink:
-      - { count: 8, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "1g", connector: rj45, poe: true }
+      - { count: 8, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "1g", cage: rj45, poe: true }
     uplink:
-      - { names: ["Gi1/0/9", "Gi1/0/10"], faceplate_labels: ["9", "10"], interface_names: ["GigabitEthernet1/0/9", "GigabitEthernet1/0/10"], speed: "1g", connector: rj45 }
-      - { names: ["Gi1/0/11", "Gi1/0/12"], faceplate_labels: ["11", "12"], interface_names: ["GigabitEthernet1/0/11", "GigabitEthernet1/0/12"], speed: "1g", connector: sfp }
+      - { names: ["Gi1/0/9", "Gi1/0/10"], faceplate_labels: ["9", "10"], interface_names: ["GigabitEthernet1/0/9", "GigabitEthernet1/0/10"], speed: "1g", cage: rj45 }
+      - { names: ["Gi1/0/11", "Gi1/0/12"], faceplate_labels: ["11", "12"], interface_names: ["GigabitEthernet1/0/11", "GigabitEthernet1/0/12"], speed: "1g", cage: sfp }
   management:
     layer: 2
     image: lan-base

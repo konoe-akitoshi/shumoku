@@ -39,6 +39,7 @@
   const ph = $derived(port.size.height)
   const labelPos = $derived(computePortLabelPosition(port))
 
+  const hasLabel = $derived(port.label.trim().length > 0)
   const labelWidth = $derived(port.label.length * SMALL_LABEL_CHAR_WIDTH + 4)
   const labelHeight = 12
   const bgX = $derived(() => {
@@ -120,7 +121,7 @@
 
   {@render overlay?.(port, overlayContext)}
 
-  {#if !hideLabel}
+  {#if !hideLabel && hasLabel}
     <rect
       class="port-label-bg"
       x={bgX()}

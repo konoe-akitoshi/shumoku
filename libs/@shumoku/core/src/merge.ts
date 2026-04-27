@@ -9,7 +9,7 @@
  * Supports configurable match strategies, merge strategies, and unmatched node handling.
  */
 
-import type { Link, NetworkGraph, Node, Subgraph } from './models/types.js'
+import type { Link, LinkEndpoint, NetworkGraph, Node, Subgraph } from './models/types.js'
 
 // ============================================
 // Match Strategies
@@ -148,20 +148,14 @@ export interface MergeResult {
 /**
  * Get node ID from link endpoint
  */
-function getEndpointNodeId(endpoint: string | { node: string }): string {
-  return typeof endpoint === 'string' ? endpoint : endpoint.node
+function getEndpointNodeId(endpoint: LinkEndpoint): string {
+  return endpoint.node
 }
 
 /**
  * Update endpoint with new node ID
  */
-function updateEndpoint(
-  endpoint: string | { node: string; port?: string; ip?: string; pin?: string },
-  newNodeId: string,
-): string | { node: string; port?: string; ip?: string; pin?: string } {
-  if (typeof endpoint === 'string') {
-    return newNodeId
-  }
+function updateEndpoint(endpoint: LinkEndpoint, newNodeId: string): LinkEndpoint {
   return { ...endpoint, node: newNodeId }
 }
 

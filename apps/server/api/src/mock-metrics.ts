@@ -23,20 +23,8 @@ function pickNodeStatus(): 'up' | 'down' | 'warning' | 'degraded' | 'unknown' {
   return 'unknown' // 1%
 }
 
-/**
- * Extract node ID from a link endpoint (can be string or object)
- */
 function getNodeId(endpoint: Link['from'] | Link['to']): string {
-  if (typeof endpoint === 'string') {
-    const id = endpoint.split(':')[0]
-    if (id) {
-      return id
-    } else {
-      throw new Error('failed to get id')
-    }
-  } else {
-    return endpoint.node
-  }
+  return endpoint.node
 }
 
 export class MockMetricsProvider {

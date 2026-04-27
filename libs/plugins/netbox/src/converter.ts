@@ -666,12 +666,15 @@ function buildLinks(
   colorByCableType: boolean,
 ): Link[] {
   return connections.map((conn, index) => {
-    const from: LinkEndpoint = { node: conn.srcDev }
-    const to: LinkEndpoint = { node: conn.dstDev }
-
-    if (showPorts) {
-      from.port = conn.srcPort
-      to.port = conn.dstPort
+    const from: LinkEndpoint = {
+      node: conn.srcDev,
+      port: showPorts ? conn.srcPort : '',
+      plug: {},
+    }
+    const to: LinkEndpoint = {
+      node: conn.dstDev,
+      port: showPorts ? conn.dstPort : '',
+      plug: {},
     }
 
     const link: Link = {

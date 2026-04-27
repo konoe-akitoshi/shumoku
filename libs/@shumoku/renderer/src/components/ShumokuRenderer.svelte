@@ -6,6 +6,7 @@
     Node,
     NodeShape,
     NodeSpec,
+    PlugSpec,
     ResolvedEdge,
     ResolvedLayout,
     ResolvedPort,
@@ -29,6 +30,14 @@
   import type { RendererOverlaySnippets } from '../lib/overlays'
   import { themeToColors } from '../lib/render-colors'
   import SvgCanvas from './svg/SvgCanvas.svelte'
+
+  /**
+   * Renderer link endpoint — `port` is required because the renderer
+   * never deals with portless connections (the model invariant). `plug`
+   * is the cable-side connector, also required (may be `{}` when the
+   * user hasn't picked a transceiver yet).
+   */
+  export type RendererLinkEndpoint = LinkEndpoint
 
   /**
    * Replace the contents of a Map in place (used when core helpers return
@@ -534,7 +543,21 @@
       ;[fromPort, toPort] = [toPort, fromPort]
     }
     // Emit event — parent owns link identity and state mutation.
-    oncreatelink?.({ node: fromNode, port: fromPort }, { node: toNode, port: toPort })
+    // Both endpoints reference existing ports (drag is port-to-port). Plug
+    // attributes are inferred from the target ports' cages, leaving any
+    // transceiver detail for the user to fill in later.
+    const fromCage = ports.get(fromPortId)
+    const toCage = ports.get(toPortId)
+    const fromPlug: PlugSpec = fromCage
+      ? { connector: nodes.get(fromNode)?.ports?.find((p) => p.id === fromPort)?.cage }
+      : {}
+    const toPlug: PlugSpec = toCage
+      ? { connector: nodes.get(toNode)?.ports?.find((p) => p.id === toPort)?.cage }
+      : {}
+    oncreatelink?.(
+      { node: fromNode, port: fromPort, plug: fromPlug },
+      { node: toNode, port: toPort, plug: toPlug },
+    )
   }
 
   /**
@@ -543,26 +566,10 @@
    * Editor apps should prefer mutating their own state via `bind:links`.
    */
   export async function appendLink(link: Link) {
-    if (
-      linkExists(
-        links,
-        getLinkNode(link.from),
-        getLinkPort(link.from),
-        getLinkNode(link.to),
-        getLinkPort(link.to),
-      )
-    )
-      return
+    if (linkExists(links, link.from.node, link.from.port, link.to.node, link.to.port)) return
     links = [...links, link]
     replaceMap(edges, await routeEdges(nodes, ports, links))
     onchange?.(links)
-  }
-
-  function getLinkNode(e: Link['from']): string {
-    return typeof e === 'string' ? (e.split(':')[0] ?? '') : e.node
-  }
-  function getLinkPort(e: Link['from']): string {
-    return typeof e === 'string' ? e.split(':').slice(1).join(':') : (e.port ?? '')
   }
 </script>
 

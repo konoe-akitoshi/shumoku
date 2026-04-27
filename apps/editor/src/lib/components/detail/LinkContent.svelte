@@ -10,12 +10,12 @@
     nodes?: Map<string, Node>
   } = $props()
 
-  const fromNode = $derived(typeof link.from === 'string' ? link.from : link.from.node)
-  const toNode = $derived(typeof link.to === 'string' ? link.to : link.to.node)
-  const fromPort = $derived(typeof link.from === 'object' ? link.from.port : undefined)
-  const toPort = $derived(typeof link.to === 'object' ? link.to.port : undefined)
-  const fromIp = $derived(typeof link.from === 'object' ? link.from.ip : undefined)
-  const toIp = $derived(typeof link.to === 'object' ? link.to.ip : undefined)
+  const fromNode = $derived(link.from.node)
+  const toNode = $derived(link.to.node)
+  const fromPort = $derived(link.from.port)
+  const toPort = $derived(link.to.port)
+  const fromIp = $derived(link.from.ip)
+  const toIp = $derived(link.to.ip)
   const vlanDisplay = $derived(
     link.vlan ? (Array.isArray(link.vlan) ? link.vlan.join(', ') : String(link.vlan)) : undefined,
   )
@@ -25,7 +25,9 @@
 
   function displayPort(nodeId: string, portId: string | undefined) {
     if (!portId) return ''
-    return nodes.get(nodeId)?.ports?.find((p) => p.id === portId)?.label ?? portId
+    const port = nodes.get(nodeId)?.ports?.find((p) => p.id === portId)
+    if (!port) return portId
+    return port.label || port.cage || 'unnamed port'
   }
 </script>
 

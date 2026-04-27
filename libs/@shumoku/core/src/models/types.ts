@@ -75,10 +75,16 @@ export interface LinkMedium {
   connector?: string
 }
 
+/**
+ * A node-side receptacle (cage). Ports belong to a Node and define the
+ * physical slot a cable plug can be inserted into. The cage type
+ * (e.g. "sfp+") describes what kind of plug is accepted; the actual
+ * plug carrying the connection is owned by the Link endpoint.
+ */
 export interface NodePort {
   /** Stable generated ID, e.g. "port-...". Links should reference this. */
   id: string
-  /** Display/canonical port label, e.g. "Gi1/0/1", "ge-0/0/0", "wan". */
+  /** Display/canonical port label, e.g. "Gi1/0/1", "ge-0/0/0", "wan". May be empty. */
   label: string
   /** Physical faceplate marking, e.g. "1". Defaults to `label`. */
   faceplateLabel?: string
@@ -87,26 +93,30 @@ export interface NodePort {
   /** Alternative names accepted for matching/search. */
   aliases?: string[]
   role?: PortRole | (string & {})
-  /** Link speed/capability label, e.g. "1g", "10g". */
+  /** Cage's nominal max speed label, e.g. "1g", "10g". */
   speed?: string
-  /** Physical port/cage type, e.g. "rj45", "sfp+", "qsfp28". */
-  connector?: PortConnector
-  /** Deprecated: use connector for port shape and Link.medium for cable/module media. */
-  media?: string
-  /** Whether this port can source PoE. */
+  /** Physical receptacle (cage) type, e.g. "rj45", "sfp+", "qsfp28". */
+  cage?: PortConnector
+  /** Whether this cage can source PoE (RJ45 only). */
   poe?: boolean
   source?: 'catalog' | 'custom'
   disabled?: boolean
   notes?: string
 }
 
-export interface PortIntent {
-  role?: PortRole | (string & {})
-  minSpeed?: string
+/**
+ * A cable-side plug (transceiver / RJ45 connector / DAC end) that lives on
+ * a Link endpoint. When a link exists, both endpoints have a plug —
+ * conceptually the cable cannot terminate without one. Individual fields
+ * may be unknown ({} is valid), but the plug object itself is required.
+ */
+export interface PlugSpec {
+  /** Plug connector type, e.g. "rj45", "sfp+", "qsfp28". */
   connector?: PortConnector
-  /** Deprecated: use connector. */
-  media?: string
-  poe?: boolean
+  /** Plug speed label, e.g. "1g", "10g". */
+  speed?: string
+  /** Specific transceiver model when known, e.g. "10GBASE-SR". */
+  transceiver?: string
 }
 
 // ============================================
@@ -277,18 +287,24 @@ export interface LinkStyle {
 }
 
 /**
- * Link endpoint with optional port/IP details
+ * Link endpoint. Conceptually a cable end — it always has a plug
+ * (transceiver / connector) and is plugged into a port on a node.
+ *
+ * Both `port` and `plug` are required: a link exists ⇒ both endpoints
+ * are plugged into something. If port/plug attributes are unknown
+ * (e.g. just-drawn link), use empty strings / empty plug spec.
  */
 export interface LinkEndpoint {
   node: string
-  /** Concrete NodePort.id on the endpoint node. */
-  port?: string
-  /** Desired port class while a concrete port is not assigned yet. */
-  portIntent?: PortIntent
+  /** NodePort.id on the endpoint node — must reference an existing port. */
+  port: string
+  /** Cable-side plug (transceiver / connector) for this endpoint. */
+  plug: PlugSpec
   ip?: string // e.g., "10.57.0.1/30"
   /**
-   * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id")
-   * When set, this endpoint connects to a subgraph's boundary pin
+   * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id").
+   * When set, this endpoint connects through a subgraph boundary pin.
+   * The `port` field still references the underlying node port.
    */
   pin?: string
 }
@@ -331,14 +347,16 @@ export interface Link {
   id?: string
 
   /**
-   * Source endpoint - can be simple node ID or detailed endpoint
+   * Source endpoint. Always a structured LinkEndpoint at runtime —
+   * the parser normalizes any YAML shorthand.
    */
-  from: string | LinkEndpoint
+  from: LinkEndpoint
 
   /**
-   * Target endpoint - can be simple node ID or detailed endpoint
+   * Target endpoint. Always a structured LinkEndpoint at runtime —
+   * the parser normalizes any YAML shorthand.
    */
-  to: string | LinkEndpoint
+  to: LinkEndpoint
 
   /**
    * Link label - can be multiple lines (displayed at center)
@@ -396,10 +414,11 @@ export interface Link {
 }
 
 /**
- * Helper to get node ID from endpoint
+ * Helper to get node ID from endpoint. Kept as a tiny accessor so callers
+ * read intent ("the link's source node") rather than reaching into shape.
  */
-export function getNodeId(endpoint: string | LinkEndpoint): string {
-  return typeof endpoint === 'string' ? endpoint : endpoint.node
+export function getNodeId(endpoint: LinkEndpoint): string {
+  return endpoint.node
 }
 
 // ============================================

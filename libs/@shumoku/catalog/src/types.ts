@@ -84,10 +84,8 @@ export interface PortGroup {
   role?: PortRole | (string & {})
   /** Port speed: "100m", "1g", "2.5g", "5g", "10g", "25g", "40g", "100g" */
   speed: string
-  /** Physical port/cage type: "rj45", "sfp", "sfp+", "qsfp+", "qsfp28", "combo" */
-  connector: PortConnector
-  /** Deprecated: use connector. */
-  media?: string
+  /** Physical receptacle (cage) type: "rj45", "sfp", "sfp+", "qsfp+", "qsfp28", "combo" */
+  cage: PortConnector
   /** Whether these ports support PoE */
   poe?: boolean
 }
