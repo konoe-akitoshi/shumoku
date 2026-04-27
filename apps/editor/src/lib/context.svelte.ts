@@ -83,6 +83,22 @@ export function initDarkMode() {
   return () => obs.disconnect()
 }
 
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  // Devtools convenience: poke at editor state from the console.
+  // biome-ignore lint/suspicious/noExplicitAny: dev-only window augmentation
+  ;(window as any).diagramState = new Proxy(
+    {},
+    {
+      get(_t, prop) {
+        // biome-ignore lint/suspicious/noExplicitAny: lazy proxy
+        return (diagramState as any)[prop]
+      },
+    },
+  )
+  // biome-ignore lint/suspicious/noExplicitAny: dev-only window augmentation
+  ;(window as any).editorState = editorState
+}
+
 // =========================================================================
 // Diagram state — shared across pages
 // =========================================================================
@@ -639,6 +655,48 @@ export const diagramState = {
   },
   getNodePorts(nodeId: string): NodePort[] {
     return diagram.nodes.get(nodeId)?.ports ?? []
+  },
+  /**
+   * Update a port's label and propagate to the resolved-port map. The
+   * renderer's `commitLabel` only updates `ResolvedPort`, which is not
+   * persisted — `Node.ports[i].label` is the source of truth.
+   *
+   * `portId` is the resolved-port id (`${nodeId}:${nodePortId}`).
+   */
+  updatePortLabel(portId: string, label: string) {
+    const colon = portId.indexOf(':')
+    if (colon < 0) return
+    const nodeId = portId.slice(0, colon)
+    const portKey = portId.slice(colon + 1)
+    const node = diagram.nodes.get(nodeId)
+    if (!node?.ports) return
+    const idx = node.ports.findIndex((p) => p.id === portKey)
+    if (idx < 0) return
+    if (node.ports[idx]?.label === label) return
+    const next = [...node.ports]
+    const target = next[idx]
+    if (!target) return
+    next[idx] = { ...target, label }
+    diagram.nodes.set(nodeId, { ...node, ports: next })
+    const resolved = diagram.ports.get(portId)
+    if (resolved) diagram.ports.set(portId, { ...resolved, label })
+  },
+  /**
+   * Catalog-defined port names for the node's bound device, e.g.
+   * `["Gi1/0/1", "Gi1/0/2", ...]` for a Cisco WS-C3560CX. Surfaced as
+   * suggestions when the user renames a port. We don't filter by "already
+   * used" — a 24-port switch's full template list is more useful than a
+   * filtered subset, and label uniqueness isn't enforced by the model
+   * anyway (links reference NodePort.id, not label).
+   */
+  getPortLabelSuggestions(nodeId: string): string[] {
+    const spec = diagram.nodes.get(nodeId)?.spec
+    if (spec?.kind !== 'hardware' || !spec.vendor || !spec.model) return []
+    const entry = catalog.lookup(`${spec.vendor}/${spec.model}`)
+    if (!entry) return []
+    return expandCatalogPorts(entry)
+      .map((t) => t.label)
+      .filter(Boolean)
   },
   getPortUsage(nodeId: string): Map<string, string[]> {
     const usage = new Map<string, string[]>()
