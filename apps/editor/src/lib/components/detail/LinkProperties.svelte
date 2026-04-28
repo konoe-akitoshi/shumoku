@@ -235,10 +235,17 @@
       {#if editing}
         <PlugCablePicker
           class={selectClass}
-          value={link.standard}
+          standard={link.standard}
+          cableCategory={link.cable?.category}
           {fromCage}
           {toCage}
-          onchange={(v) => onupdate?.({ standard: v })}
+          onstandardchange={(v) => onupdate?.({ standard: v })}
+          oncategorychange={(v) => {
+            const next = { ...(link.cable ?? {}) }
+            if (v) next.category = v
+            else delete next.category
+            onupdate?.({ cable: Object.keys(next).length > 0 ? next : undefined })
+          }}
         />
       {:else}
         <span class={valueClass}>{link.standard ?? '—'}</span>

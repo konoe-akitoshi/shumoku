@@ -1,48 +1,67 @@
 <script lang="ts">
   import {
+    cableGradesForStandard,
     cableVariantsForPlug,
+    defaultCableGrade,
     type EthernetStandard,
     plugProfileForStandard,
     plugProfilesForCages,
   } from '@shumoku/core'
 
   let {
-    value,
+    standard,
+    cableCategory,
     fromCage,
     toCage,
-    onchange,
+    onstandardchange,
+    oncategorychange,
     class: className = '',
     disabled = false,
   }: {
-    value: EthernetStandard | undefined
+    standard: EthernetStandard | undefined
+    cableCategory: string | undefined
     fromCage?: string
     toCage?: string
-    onchange: (v: EthernetStandard | undefined) => void
+    onstandardchange: (v: EthernetStandard | undefined) => void
+    oncategorychange: (v: string | undefined) => void
     class?: string
     disabled?: boolean
   } = $props()
 
-  // Step 1: derive the plug profile from the current standard, fall back
-  // to the first profile compatible with both port cages so the cable
-  // select isn't empty when the link has no standard yet.
+  // Step 1: plug profile = cage + speed (e.g. "SFP+ 10G").
   const plugs = $derived(plugProfilesForCages(fromCage, toCage))
-  const currentPlug = $derived(plugProfileForStandard(value) ?? plugs[0])
+  const currentPlug = $derived(plugProfileForStandard(standard) ?? plugs[0])
 
-  // Step 2: cable variants live within a plug profile. Only standards
-  // matching the picked plug's (cage, speed) appear here.
+  // Step 2: cable variants share the same plug profile but differ by
+  // medium kind (MM fiber / SM fiber / DAC / AOC for SFP+ 10G, etc.).
   const cables = $derived(currentPlug ? cableVariantsForPlug(currentPlug) : [])
+
+  // Step 3: media grade — Cat5e/6/6a/8 for twisted-pair, OM3/4/5 for
+  // multimode, OS1/2 for single-mode. Empty for DAC/AOC.
+  const grades = $derived(cableGradesForStandard(standard))
+  const showGrades = $derived(grades.length > 0)
 
   function onPlugSelect(plugId: string) {
     const next = plugs.find((p) => p.id === plugId)
     if (!next) return
-    // Switching plug: default to the first cable variant under the new
-    // plug so the standard stays valid.
+    // Switching plug: default to the first cable variant + its grade so
+    // the link spec stays consistent end-to-end.
     const variants = cableVariantsForPlug(next)
-    onchange(variants[0]?.standard)
+    const newStandard = variants[0]?.standard
+    onstandardchange(newStandard)
+    oncategorychange(defaultCableGrade(newStandard))
   }
 
-  function onCableSelect(standard: string) {
-    onchange((standard || undefined) as EthernetStandard | undefined)
+  function onCableSelect(value: string) {
+    const newStandard = (value || undefined) as EthernetStandard | undefined
+    onstandardchange(newStandard)
+    // Reset grade to the default for the new cable kind; let the user
+    // override afterwards.
+    oncategorychange(defaultCableGrade(newStandard))
+  }
+
+  function onGradeSelect(value: string) {
+    oncategorychange(value || undefined)
   }
 </script>
 
@@ -56,7 +75,7 @@
   >
     {#if plugs.length === 0}
       <option value="" disabled>— no compatible plug —</option>
-    {:else if !value}
+    {:else if !standard}
       <option value="" disabled>— pick a plug —</option>
     {/if}
     {#each plugs as plug}
@@ -68,16 +87,31 @@
   <select
     class={className}
     disabled={disabled || !currentPlug || cables.length === 0}
-    value={value ?? ''}
+    value={standard ?? ''}
     onchange={(e) => onCableSelect((e.target as HTMLSelectElement).value)}
   >
     {#if cables.length === 0}
       <option value="" disabled>— pick a plug first —</option>
-    {:else if !value}
+    {:else if !standard}
       <option value="">— pick a cable —</option>
     {/if}
     {#each cables as cable}
       <option value={cable.standard}>{cable.label}</option>
     {/each}
   </select>
+
+  {#if showGrades}
+    <label class="mt-1 text-[9px] uppercase tracking-wider text-neutral-400">Cable grade</label>
+    <select
+      class={className}
+      {disabled}
+      value={cableCategory ?? ''}
+      onchange={(e) => onGradeSelect((e.target as HTMLSelectElement).value)}
+    >
+      <option value="">— unspecified —</option>
+      {#each grades as g}
+        <option value={g.value}>{g.label}</option>
+      {/each}
+    </select>
+  {/if}
 </div>

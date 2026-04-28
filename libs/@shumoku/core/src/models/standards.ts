@@ -499,3 +499,69 @@ export function plugProfileForStandard(
   if (!spec) return undefined
   return makePlugProfile(spec.cage, spec.speedBps)
 }
+
+/**
+ * Cable grade option — the third step of the cascade. For twisted-pair
+ * this is the cable category (Cat5e/6/6a/…), for fiber it's the OM/OS
+ * grade. DAC/AOC are passive cable assemblies with no separate grade.
+ */
+export interface CableGradeOption {
+  /** Stored in `Link.cable.category`. */
+  value: string
+  /** Display label. */
+  label: string
+}
+
+/**
+ * Cable grades available given the link's standard. Returns an empty
+ * array when grade isn't a meaningful axis (DAC / AOC) — the UI hides
+ * the third select in that case.
+ */
+export function cableGradesForStandard(standard: EthernetStandard | undefined): CableGradeOption[] {
+  const spec = getStandardSpec(standard)
+  if (!spec) return []
+  if (spec.cableKind === 'twisted-pair') {
+    return [
+      { value: 'cat5e', label: 'Cat5e' },
+      { value: 'cat6', label: 'Cat6' },
+      { value: 'cat6a', label: 'Cat6a' },
+      { value: 'cat7', label: 'Cat7' },
+      { value: 'cat8', label: 'Cat8' },
+    ]
+  }
+  if (spec.cableKind === 'fiber') {
+    if (spec.fiberMode === 'multimode') {
+      return [
+        { value: 'om3', label: 'OM3 (300m @ 10G)' },
+        { value: 'om4', label: 'OM4 (400m @ 10G)' },
+        { value: 'om5', label: 'OM5 (wideband MM)' },
+      ]
+    }
+    if (spec.fiberMode === 'singlemode') {
+      return [
+        { value: 'os1', label: 'OS1 (indoor)' },
+        { value: 'os2', label: 'OS2 (long haul)' },
+      ]
+    }
+  }
+  // DAC / AOC are passive assemblies — no grade axis.
+  return []
+}
+
+/**
+ * Default grade for a freshly-picked standard. Used when the user
+ * picks/changes the cable medium and we want the third select to land
+ * on a sensible value rather than empty.
+ */
+export function defaultCableGrade(standard: EthernetStandard | undefined): string | undefined {
+  const spec = getStandardSpec(standard)
+  if (!spec) return undefined
+  if (spec.cableKind === 'twisted-pair') {
+    if (spec.speedBps >= 10_000_000_000) return 'cat6a'
+    if (spec.speedBps >= 2_500_000_000) return 'cat6'
+    return 'cat5e'
+  }
+  if (spec.cableKind === 'fiber' && spec.fiberMode === 'multimode') return 'om3'
+  if (spec.cableKind === 'fiber' && spec.fiberMode === 'singlemode') return 'os2'
+  return undefined
+}

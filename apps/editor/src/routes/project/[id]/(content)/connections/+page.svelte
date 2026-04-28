@@ -192,6 +192,7 @@
   let addToNode = $state('')
   let addToPortId = $state('')
   let addStandard = $state<EthernetStandard | ''>('')
+  let addCableCategory = $state<string | undefined>(undefined)
 
   // Auto-default the standard once both ports are picked, unless the
   // user has explicitly set one.
@@ -214,12 +215,14 @@
       from,
       to,
       standard: addStandard || undefined,
+      cable: addCableCategory ? { category: addCableCategory } : undefined,
     })
     addFromNode = ''
     addFromPortId = ''
     addToNode = ''
     addToPortId = ''
     addStandard = ''
+    addCableCategory = undefined
   }
 
   // =========================================================================
@@ -398,11 +401,15 @@
         <span class="text-[10px] text-muted-foreground mb-1 block">Link spec</span>
         <PlugCablePicker
           class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          value={addStandard || undefined}
+          standard={addStandard || undefined}
+          cableCategory={addCableCategory}
           fromCage={getPort(addFromNode, addFromPortId)?.cage}
           toCage={getPort(addToNode, addToPortId)?.cage}
-          onchange={(v) => {
+          onstandardchange={(v) => {
             addStandard = (v ?? '') as EthernetStandard | ''
+          }}
+          oncategorychange={(v) => {
+            addCableCategory = v
           }}
         />
       </div>
@@ -471,10 +478,20 @@
             <Table.Cell class="min-w-44">
               <PlugCablePicker
                 class="px-1 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring w-full"
-                value={row.standard ? (row.standard as EthernetStandard) : undefined}
+                standard={row.standard ? (row.standard as EthernetStandard) : undefined}
+                cableCategory={row.link.cable?.category}
                 fromCage={getPort(row.fromNode, row.fromPort)?.cage}
                 toCage={getPort(row.toNode, row.toPort)?.cage}
-                onchange={(v) => updateField(row.link, 'standard', v ?? '')}
+                onstandardchange={(v) => updateField(row.link, 'standard', v ?? '')}
+                oncategorychange={(v) => {
+                  if (!row.link.id) return
+                  const next = { ...(row.link.cable ?? {}) }
+                  if (v) next.category = v
+                  else delete next.category
+                  diagramState.updateLink(row.link.id, {
+                    cable: Object.keys(next).length > 0 ? next : undefined,
+                  })
+                }}
               />
               {#if row.standardIssue}
                 <div class="text-[9px] text-amber-600 max-w-36 truncate" title={row.standardIssue}>
