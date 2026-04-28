@@ -126,9 +126,11 @@ classDiagram
 
 どのフローも Module は **optional** で、Plug が pluggable（SFP / SFP+ / SFP28 / QSFP+ / QSFP28）なら **経由**（Plug → Module → Cable）、integrated（RJ45 直結 / DAC / AOC）なら **直結**（Plug → Cable）と分岐する。実線が経由経路、点線が直結経路。
 
-### A. 接続ページ・ポート起点
+A と B はどちらも **Node 選択から始まる**点は共通で、その後の絞り込み順だけが違う。
 
-機材が先に決まっているケース（既存ノードに後から線を足す等）。Node → Port を選ぶと port.cage が決まり、そこから Plug → (Module) → Cable grade が絞り込まれる。
+### A. 接続ページ・ポート起点（Node → Port から）
+
+機材が先に決まっているケース。Node を選んでから Port を指定し、port.cage が Plug を決め、Plug が Module / Cable を絞る。
 
 ```mermaid
 flowchart LR
@@ -142,20 +144,19 @@ flowchart LR
   PU -. integrated .-> CG
 ```
 
-### B. 接続ページ・ケーブル起点
+### B. 接続ページ・ケーブル起点（Node → Module/Cable から）
 
-「この種類のケーブルで繋ぎたい」が先に決まっているケース。pluggable のときは Module から、integrated のときは Cable kind から入り、適合する Plug → Port → Node を逆向きに辿る。
+「このノードを SFP+ 10G で繋ぎたい」のように、ノードは決まっていて使うケーブル種別が先にあるケース。Node 選択後、Module / Cable kind を起点にして Plug を派生させ、その plug に合う Port を絞る。
 
 ```mermaid
 flowchart LR
-  S{起点}
+  N[Node 選択] --> S{ケーブル指定}
   S --> M[Module 起点<br/>例: 10GBASE-SR]
   S -.-> CK[Cable kind 起点<br/>例: RJ45 cat / DAC / AOC]
   M --> PL1[Plug 派生<br/>module.spec.cage]
   CK -.-> PL2[Plug 派生<br/>integrated form factor]
-  PL1 --> P[Port 候補<br/>plug と一致する cage]
+  PL1 --> P[Port 候補<br/>node 内で plug に一致するもの]
   PL2 -.-> P
-  P --> N[Node 候補]
   M --> CG[Cable grade]
   CK -.-> CG
 ```
