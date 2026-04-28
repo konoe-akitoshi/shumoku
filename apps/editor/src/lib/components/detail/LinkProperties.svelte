@@ -226,7 +226,7 @@
   </div>
 
   <div class="flex items-center justify-between gap-2">
-    <dt class={labelClass}>Module</dt>
+    <dt class={labelClass}>Plug / Module</dt>
     <dd class="flex-1 min-w-0">
       {#if editing}
         <EndpointModulePicker
@@ -316,7 +316,7 @@
   </div>
 
   <div class="flex items-center justify-between gap-2">
-    <dt class={labelClass}>Module</dt>
+    <dt class={labelClass}>Plug / Module</dt>
     <dd class="flex-1 min-w-0">
       {#if editing}
         <EndpointModulePicker
