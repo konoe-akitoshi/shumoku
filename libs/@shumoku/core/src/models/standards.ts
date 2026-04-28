@@ -270,11 +270,11 @@ export type StandardCableGroup = 'twisted-pair' | 'fiber-mm' | 'fiber-sm' | 'dac
 
 /** Human-friendly group labels for the cascading standard picker. */
 export const STANDARD_GROUP_LABELS: Record<StandardCableGroup, string> = {
-  'twisted-pair': 'Twisted-pair (RJ45)',
-  'fiber-mm': 'Fiber multimode',
-  'fiber-sm': 'Fiber single-mode',
-  dac: 'DAC (passive twinax)',
-  aoc: 'AOC (active optical)',
+  'twisted-pair': 'Twisted-pair',
+  'fiber-mm': 'Multimode fiber',
+  'fiber-sm': 'Single-mode fiber',
+  dac: 'DAC',
+  aoc: 'AOC',
   other: 'Other',
 }
 
@@ -402,15 +402,6 @@ export interface PlugProfile {
   label: string
 }
 
-function speedLabel(bps: number): string {
-  if (bps >= 1_000_000_000) {
-    const g = bps / 1_000_000_000
-    return `${Number.isInteger(g) ? g : g.toFixed(1)}G`
-  }
-  if (bps >= 1_000_000) return `${bps / 1_000_000}M`
-  return `${bps} bps`
-}
-
 function makePlugProfile(cage: PortConnector): PlugProfile {
   return {
     id: cage,
@@ -443,29 +434,18 @@ export function plugProfilesForCages(
 }
 
 /**
- * A cable variant — the actual IEEE standard plus a media-friendly
- * label that includes speed, since speed is now part of the cable
- * decision (e.g. "Twisted-pair 10G — 10GBASE-T, reach 100 m").
+ * A cable variant — the IEEE standard plus a short label. Speed and
+ * medium are already readable from the standard name (10GBASE-SR =
+ * SFP+ multimode 10G); the optgroup conveys medium kind. So the label
+ * just appends reach as the differentiator.
  */
 export interface CableVariant {
   standard: EthernetStandard
   spec: StandardSpec
-  /** Display label, e.g. "Multimode (LC) 10G — 10GBASE-SR, reach 400 m". */
+  /** Display label, e.g. "10GBASE-SR — 400 m". */
   label: string
   /** Cable kind grouping (for sectioned dropdown). */
   group: StandardCableGroup
-}
-
-function cableMediumLabel(spec: StandardSpec): string {
-  if (spec.cableKind === 'twisted-pair') return 'Twisted-pair'
-  if (spec.cableKind === 'fiber') {
-    const mode = spec.fiberMode === 'singlemode' ? 'single-mode' : 'multimode'
-    const conn = spec.cableConnector ? ` (${spec.cableConnector.toUpperCase()})` : ''
-    return `Fiber ${mode}${conn}`
-  }
-  if (spec.cableKind === 'dac') return 'DAC'
-  if (spec.cableKind === 'aoc') return 'AOC'
-  return spec.cableKind
 }
 
 /**
@@ -479,10 +459,12 @@ export function cableVariantsForPlug(plug: PlugProfile): CableVariant[] {
     const spec = STANDARD_SPECS[name]
     if (!spec) continue
     if (spec.cage !== plug.cage) continue
+    // Standard name encodes speed already; the optgroup encodes medium.
+    // Reach is the only differentiator that isn't readable from the name.
     result.push({
       standard: name,
       spec,
-      label: `${cableMediumLabel(spec)} ${speedLabel(spec.speedBps)} — ${name}, reach ${formatReachMeters(spec.maxReach_m)}`,
+      label: `${name} — ${formatReachMeters(spec.maxReach_m)}`,
       group: classifyStandardGroup(spec),
     })
   }
@@ -551,15 +533,15 @@ export function cableGradesForStandard(standard: EthernetStandard | undefined): 
   if (spec.cableKind === 'fiber') {
     if (spec.fiberMode === 'multimode') {
       return [
-        { value: 'om3', label: 'OM3 (300m @ 10G)' },
-        { value: 'om4', label: 'OM4 (400m @ 10G)' },
-        { value: 'om5', label: 'OM5 (wideband MM)' },
+        { value: 'om3', label: 'OM3' },
+        { value: 'om4', label: 'OM4' },
+        { value: 'om5', label: 'OM5' },
       ]
     }
     if (spec.fiberMode === 'singlemode') {
       return [
-        { value: 'os1', label: 'OS1 (indoor)' },
-        { value: 'os2', label: 'OS2 (long haul)' },
+        { value: 'os1', label: 'OS1' },
+        { value: 'os2', label: 'OS2' },
       ]
     }
   }
