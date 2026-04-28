@@ -261,3 +261,121 @@ export function getStandardSpec(standard: EthernetStandard | undefined): Standar
 export const KNOWN_STANDARDS: readonly EthernetStandard[] = Object.keys(
   STANDARD_SPECS,
 ) as EthernetStandard[]
+
+// ============================================================================
+// Cascading-select helpers (UI consumers — connections form / LinkProperties)
+// ============================================================================
+
+export type StandardCableGroup = 'twisted-pair' | 'fiber-mm' | 'fiber-sm' | 'dac' | 'aoc' | 'other'
+
+/** Human-friendly group labels for the cascading standard picker. */
+export const STANDARD_GROUP_LABELS: Record<StandardCableGroup, string> = {
+  'twisted-pair': 'Twisted-pair (RJ45)',
+  'fiber-mm': 'Fiber multimode',
+  'fiber-sm': 'Fiber single-mode',
+  dac: 'DAC (passive twinax)',
+  aoc: 'AOC (active optical)',
+  other: 'Other',
+}
+
+/** Display order for the groups (top → bottom). */
+export const STANDARD_GROUP_ORDER: readonly StandardCableGroup[] = [
+  'twisted-pair',
+  'fiber-mm',
+  'fiber-sm',
+  'dac',
+  'aoc',
+  'other',
+]
+
+export function classifyStandardGroup(spec: StandardSpec): StandardCableGroup {
+  if (spec.cableKind === 'twisted-pair') return 'twisted-pair'
+  if (spec.cableKind === 'fiber') {
+    return spec.fiberMode === 'singlemode' ? 'fiber-sm' : 'fiber-mm'
+  }
+  if (spec.cableKind === 'dac') return 'dac'
+  if (spec.cableKind === 'aoc') return 'aoc'
+  return 'other'
+}
+
+/** Format a meters value for UI display (1000+ → km). */
+export function formatReachMeters(m: number): string {
+  if (m >= 1000) {
+    const km = m / 1000
+    return `${Number.isInteger(km) ? km : km.toFixed(1)} km`
+  }
+  return `${m} m`
+}
+
+function cageAcceptsRequired(cage: string | undefined, required: string): boolean {
+  if (!cage) return true // unknown cage — be permissive
+  const c = cage.toLowerCase()
+  if (c === required) return true
+  if (c === 'combo') return true
+  return false
+}
+
+export interface StandardOption {
+  /** IEEE standard id, e.g. "10GBASE-SR". */
+  name: EthernetStandard
+  spec: StandardSpec
+  /** Pretty label suitable for select options, e.g. "10GBASE-SR — reach 400 m". */
+  label: string
+  /** Cage required at each port for this standard. */
+  cage: string
+  /** Cable end connector convention (LC / RJ45 / MPO / …). */
+  cableConnector?: string
+  /** Cable kind grouping for UI dropdown sections. */
+  group: StandardCableGroup
+}
+
+/**
+ * Standards available given the cages on each port. Used by the editor's
+ * cascading "Standard" picker so the dropdown only offers links that
+ * physically fit. Unknown cages (`undefined`) are treated permissively —
+ * we'd rather show too many than none.
+ *
+ * Returned as one flat list; group via `option.group` if the UI wants to
+ * split into sections.
+ */
+export function standardsForCages(
+  fromCage: string | undefined,
+  toCage: string | undefined,
+): StandardOption[] {
+  const result: StandardOption[] = []
+  for (const name of KNOWN_STANDARDS) {
+    const spec = STANDARD_SPECS[name]
+    if (!spec) continue
+    if (!cageAcceptsRequired(fromCage, spec.cage)) continue
+    if (!cageAcceptsRequired(toCage, spec.cage)) continue
+    result.push({
+      name,
+      spec,
+      label: `${name} — reach ${formatReachMeters(spec.maxReach_m)}`,
+      cage: spec.cage,
+      cableConnector: spec.cableConnector,
+      group: classifyStandardGroup(spec),
+    })
+  }
+  return result
+}
+
+/** Group a list of `StandardOption`s by their `group` for sectioned dropdowns. */
+export function groupStandards(
+  options: readonly StandardOption[],
+): Array<{ group: StandardCableGroup; label: string; options: StandardOption[] }> {
+  const buckets = new Map<StandardCableGroup, StandardOption[]>()
+  for (const opt of options) {
+    const list = buckets.get(opt.group) ?? []
+    list.push(opt)
+    buckets.set(opt.group, list)
+  }
+  const result: Array<{ group: StandardCableGroup; label: string; options: StandardOption[] }> = []
+  for (const group of STANDARD_GROUP_ORDER) {
+    const opts = buckets.get(group)
+    if (opts && opts.length > 0) {
+      result.push({ group, label: STANDARD_GROUP_LABELS[group], options: opts })
+    }
+  }
+  return result
+}

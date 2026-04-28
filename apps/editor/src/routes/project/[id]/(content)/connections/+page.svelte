@@ -2,7 +2,6 @@
   import {
     defaultStandardForCages,
     type EthernetStandard,
-    KNOWN_STANDARDS,
     type Link,
     type LinkEndpoint,
     newId,
@@ -10,6 +9,8 @@
   } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
+  import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
+  import StandardPicker from '$lib/components/StandardPicker.svelte'
   import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
@@ -279,8 +280,6 @@
 
   const cellInput =
     'w-full px-1.5 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring'
-
-  const standardOptions = ['', ...KNOWN_STANDARDS] as const
 </script>
 
 <div class="flex items-center justify-between mb-6">
@@ -395,19 +394,17 @@
           }}
         />
       </div>
-      <div class="w-36">
-        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-standard"
-          >Standard</label
-        >
-        <select
-          id="add-standard"
+      <div class="w-56">
+        <span class="text-[10px] text-muted-foreground mb-1 block">Standard</span>
+        <StandardPicker
           class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          bind:value={addStandard}
-        >
-          {#each standardOptions as s}
-            <option value={s}>{s || '—'}</option>
-          {/each}
-        </select>
+          value={addStandard || undefined}
+          fromCage={getPort(addFromNode, addFromPortId)?.cage}
+          toCage={getPort(addToNode, addToPortId)?.cage}
+          onchange={(v) => {
+            addStandard = (v ?? '') as EthernetStandard | ''
+          }}
+        />
       </div>
       <Button
         size="sm"
@@ -418,6 +415,15 @@
         Add
       </Button>
     </div>
+    {#if addStandard}
+      <div class="mt-3 max-w-md">
+        <StandardImpliedBlock
+          standard={addStandard}
+          fromCage={getPort(addFromNode, addFromPortId)?.cage}
+          toCage={getPort(addToNode, addToPortId)?.cage}
+        />
+      </div>
+    {/if}
   </Card.Content>
 </Card.Root>
 
@@ -463,16 +469,13 @@
               </div>
             </Table.Cell>
             <Table.Cell>
-              <select
-                class="px-1 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring"
-                value={row.standard}
-                title={row.standardIssue}
-                onchange={(e) => updateField(row.link, 'standard', (e.target as HTMLSelectElement).value)}
-              >
-                {#each standardOptions as s}
-                  <option value={s}>{s || '—'}</option>
-                {/each}
-              </select>
+              <StandardPicker
+                class="px-1 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring w-full"
+                value={row.standard ? (row.standard as EthernetStandard) : undefined}
+                fromCage={getPort(row.fromNode, row.fromPort)?.cage}
+                toCage={getPort(row.toNode, row.toPort)?.cage}
+                onchange={(v) => updateField(row.link, 'standard', v ?? '')}
+              />
               {#if row.standardIssue}
                 <div class="text-[9px] text-amber-600 max-w-36 truncate" title={row.standardIssue}>
                   {row.standardIssue}

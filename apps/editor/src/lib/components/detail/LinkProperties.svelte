@@ -1,12 +1,8 @@
 <script lang="ts">
-  import {
-    type EthernetStandard,
-    KNOWN_STANDARDS,
-    type Link,
-    type LinkEndpoint,
-    type Node,
-  } from '@shumoku/core'
+  import { type EthernetStandard, type Link, type LinkEndpoint, type Node } from '@shumoku/core'
   import PortPicker from '$lib/components/PortPicker.svelte'
+  import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
+  import StandardPicker from '$lib/components/StandardPicker.svelte'
 
   let {
     link,
@@ -108,7 +104,9 @@
   const sectionClass =
     'text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1.5'
 
-  const standardOptions = ['', ...KNOWN_STANDARDS] as const
+  const fromCage = $derived(getPortOptions(from.node).find((p) => p.id === from.port)?.cage)
+  const toCage = $derived(getPortOptions(to.node).find((p) => p.id === to.port)?.cage)
+
   const typeOptions = ['solid', 'dashed', 'thick', 'double', 'invisible']
   const redundancyOptions = ['', 'ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']
   const arrowOptions = ['none', 'forward', 'back', 'both']
@@ -231,29 +229,28 @@
 <!-- Link properties -->
 <div class={sectionClass}>Properties</div>
 <dl class="space-y-2.5">
-  <div class="flex items-center justify-between">
+  <div class="flex items-center justify-between gap-2">
     <dt class={labelClass}>Standard</dt>
-    <dd>
+    <dd class="flex-1 min-w-0">
       {#if editing}
-        <select
+        <StandardPicker
           class={selectClass}
-          value={link.standard ?? ''}
-          onchange={(e) =>
-            onupdate?.({
-              standard: ((e.target as HTMLSelectElement).value || undefined) as
-                | EthernetStandard
-                | undefined,
-            })}
-        >
-          {#each standardOptions as s}
-            <option value={s}>{s || '—'}</option>
-          {/each}
-        </select>
+          value={link.standard}
+          {fromCage}
+          {toCage}
+          onchange={(v) => onupdate?.({ standard: v })}
+        />
       {:else}
         <span class={valueClass}>{link.standard ?? '—'}</span>
       {/if}
     </dd>
   </div>
+
+  {#if link.standard}
+    <div>
+      <StandardImpliedBlock standard={link.standard} cable={link.cable} {fromCage} {toCage} />
+    </div>
+  {/if}
 
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Cable length (m)</dt>
@@ -280,14 +277,37 @@
   </div>
 
   <div class="flex items-center justify-between">
-    <dt class={labelClass}>From transceiver</dt>
+    <dt class={labelClass}>Cable connector</dt>
+    <dd>
+      {#if editing}
+        <input
+          type="text"
+          class={inputClass}
+          value={link.cable?.connector ?? ''}
+          placeholder="auto (LC/RJ45/MPO…)"
+          onblur={(e) => {
+            const raw = (e.target as HTMLInputElement).value.trim()
+            const nextCable = { ...(link.cable ?? {}) }
+            if (raw) nextCable.connector = raw
+            else delete nextCable.connector
+            onupdate?.({ cable: Object.keys(nextCable).length > 0 ? nextCable : undefined })
+          }}
+        >
+      {:else}
+        <span class={valueClass}>{link.cable?.connector ?? '—'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>From plug (SKU)</dt>
     <dd>
       {#if editing}
         <input
           type="text"
           class={inputClass}
           value={link.fromTransceiver ?? ''}
-          placeholder="SKU"
+          placeholder="transceiver SKU"
           onblur={(e) => onupdate?.({ fromTransceiver: (e.target as HTMLInputElement).value || undefined })}
         >
       {:else}
@@ -297,14 +317,14 @@
   </div>
 
   <div class="flex items-center justify-between">
-    <dt class={labelClass}>To transceiver</dt>
+    <dt class={labelClass}>To plug (SKU)</dt>
     <dd>
       {#if editing}
         <input
           type="text"
           class={inputClass}
           value={link.toTransceiver ?? ''}
-          placeholder="SKU"
+          placeholder="transceiver SKU"
           onblur={(e) => onupdate?.({ toTransceiver: (e.target as HTMLInputElement).value || undefined })}
         >
       {:else}
