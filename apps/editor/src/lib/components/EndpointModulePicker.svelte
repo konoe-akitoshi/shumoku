@@ -4,6 +4,7 @@
     type EthernetStandard,
     groupCableVariants,
     type PortConnector,
+    plugProfilesForCages,
   } from '@shumoku/core'
 
   let {
@@ -22,12 +23,14 @@
     placeholder?: string
   } = $props()
 
-  // The port's cage determines which modules can plug in. We reuse
-  // `cableVariantsForPlug` (which lists every standard sharing a cage)
-  // and group by medium so the dropdown surfaces the natural sections.
-  const variants = $derived(
-    cage ? cableVariantsForPlug({ id: cage, cage, label: cage.toUpperCase() }) : [],
-  )
+  // The port's cage determines which modules can plug in. When the cage
+  // is set, we constrain the list to that cage's variants. When it isn't
+  // (legacy ports without explicit cage info), fall back to listing every
+  // known cage's variants so the user is never stuck on an empty dropdown.
+  const variants = $derived.by(() => {
+    if (cage) return cableVariantsForPlug({ id: cage, cage, label: cage.toUpperCase() })
+    return plugProfilesForCages(undefined, undefined).flatMap((p) => cableVariantsForPlug(p))
+  })
   const groups = $derived(groupCableVariants(variants))
 </script>
 
