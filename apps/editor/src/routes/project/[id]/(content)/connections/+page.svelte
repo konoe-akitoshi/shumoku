@@ -1,5 +1,7 @@
 <script lang="ts">
   import {
+    cableGradesForStandard,
+    defaultCableGrade,
     defaultStandardForCages,
     type EthernetStandard,
     type Link,
@@ -8,7 +10,7 @@
     validateLinkCompatibility,
   } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
-  import PlugCablePicker from '$lib/components/PlugCablePicker.svelte'
+  import EndpointModulePicker from '$lib/components/EndpointModulePicker.svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
   import { Badge } from '$lib/components/ui/badge'
@@ -185,33 +187,56 @@
 
   // Add-form state. PortPicker creates a NodePort eagerly when the user
   // picks/types in the dropdown, so we always carry a real port id (or
-  // empty when not yet picked). Standard is auto-suggested from the cage
-  // pair once both ports are chosen, but the user can override.
+  // empty when not yet picked). Modules are per-endpoint; default
+  // symmetric — once both ports are chosen we pre-fill both sides with
+  // the suggested standard, and any user edit on one side mirrors to
+  // the other while it's still empty or matched.
   let addFromNode = $state('')
   let addFromPortId = $state('')
   let addToNode = $state('')
   let addToPortId = $state('')
-  let addStandard = $state<EthernetStandard | ''>('')
+  let addFromStandard = $state<EthernetStandard | ''>('')
+  let addToStandard = $state<EthernetStandard | ''>('')
   let addCableCategory = $state<string | undefined>(undefined)
 
-  // Auto-default the standard once both ports are picked, unless the
-  // user has explicitly set one.
+  const addFromCage = $derived(getPort(addFromNode, addFromPortId)?.cage)
+  const addToCage = $derived(getPort(addToNode, addToPortId)?.cage)
+  const addReferenceStandard = $derived<EthernetStandard | undefined>(
+    (addFromStandard || addToStandard || undefined) as EthernetStandard | undefined,
+  )
+  const addGradeOptions = $derived(cableGradesForStandard(addReferenceStandard))
+
+  // Auto-default both endpoints once both ports are picked, unless the
+  // user has already set at least one side.
   $effect(() => {
-    if (addStandard) return
+    if (addFromStandard || addToStandard) return
     if (!addFromPortId || !addToPortId) return
-    const fromCage = getPort(addFromNode, addFromPortId)?.cage
-    const toCage = getPort(addToNode, addToPortId)?.cage
-    const proposed = defaultStandardForCages(fromCage, toCage)
-    if (proposed) addStandard = proposed
+    const proposed = defaultStandardForCages(addFromCage, addToCage)
+    if (proposed) {
+      addFromStandard = proposed
+      addToStandard = proposed
+    }
   })
+
+  function setAddStandard(side: 'from' | 'to', value: EthernetStandard | undefined) {
+    if (side === 'from') {
+      const wasSymmetric = !addToStandard || addToStandard === addFromStandard
+      addFromStandard = (value ?? '') as EthernetStandard | ''
+      if (wasSymmetric) addToStandard = addFromStandard
+    } else {
+      const wasSymmetric = !addFromStandard || addFromStandard === addToStandard
+      addToStandard = (value ?? '') as EthernetStandard | ''
+      if (wasSymmetric) addFromStandard = addToStandard
+    }
+  }
 
   function handleAdd() {
     if (!addFromNode || !addToNode || addFromNode === addToNode) return
     if (!addFromPortId || !addToPortId) return
-    // Symmetric default — both endpoints get the same module standard.
-    const module = addStandard ? { standard: addStandard } : undefined
-    const from: LinkEndpoint = { node: addFromNode, port: addFromPortId, module }
-    const to: LinkEndpoint = { node: addToNode, port: addToPortId, module }
+    const fromModule = addFromStandard ? { standard: addFromStandard } : undefined
+    const toModule = addToStandard ? { standard: addToStandard } : undefined
+    const from: LinkEndpoint = { node: addFromNode, port: addFromPortId, module: fromModule }
+    const to: LinkEndpoint = { node: addToNode, port: addToPortId, module: toModule }
     diagramState.addLink({
       id: newId('link'),
       from,
@@ -222,7 +247,8 @@
     addFromPortId = ''
     addToNode = ''
     addToPortId = ''
-    addStandard = ''
+    addFromStandard = ''
+    addToStandard = ''
     addCableCategory = undefined
   }
 
@@ -242,18 +268,63 @@
     diagramState.updateLink(link.id, { [side]: { ...current, ip: value || undefined } })
   }
 
+  /**
+   * Per-endpoint module standard. Mirrors symmetrically by default —
+   * picking on one side updates the other when the other end was empty
+   * or already matched the previous value. Once the user has explicitly
+   * diverged (asymmetric BiDi etc.), each side is independent.
+   */
+  function updateEndpointModuleStandard(
+    link: Link,
+    side: 'from' | 'to',
+    standard: EthernetStandard | undefined,
+  ) {
+    if (!link.id) return
+    const other = side === 'from' ? 'to' : 'from'
+    const current = link[side]
+    const otherEp = link[other]
+    const wasSymmetric =
+      !otherEp.module?.standard || otherEp.module.standard === current.module?.standard
+    const newModule = standard
+      ? { ...(current.module ?? {}), standard }
+      : current.module?.sku
+        ? { standard: '', sku: current.module.sku }
+        : undefined
+    const updates: Partial<Link> = { [side]: { ...current, module: newModule } }
+    if (wasSymmetric) {
+      const newOther = standard
+        ? { ...(otherEp.module ?? {}), standard }
+        : otherEp.module?.sku
+          ? { standard: '', sku: otherEp.module.sku }
+          : undefined
+      updates[other] = { ...otherEp, module: newOther }
+    }
+    const grades = cableGradesForStandard(standard)
+    const currentGrade = link.cable?.category
+    const gradeFits = currentGrade && grades.some((g) => g.value === currentGrade)
+    if (!gradeFits) {
+      const next = { ...(link.cable ?? {}) }
+      const def = defaultCableGrade(standard)
+      if (def) next.category = def
+      else delete next.category
+      updates.cable = Object.keys(next).length > 0 ? next : undefined
+    }
+    diagramState.updateLink(link.id, updates)
+  }
+
+  function updateCableCategory(link: Link, category: string | undefined) {
+    if (!link.id) return
+    const next = { ...(link.cable ?? {}) }
+    if (category) next.category = category
+    else delete next.category
+    diagramState.updateLink(link.id, {
+      cable: Object.keys(next).length > 0 ? next : undefined,
+    })
+  }
+
   function updateField(link: Link, field: string, value: string) {
     if (!link.id) return
-    if (field === 'standard') {
-      // Apply symmetrically to both endpoints.
-      const std = (value || undefined) as EthernetStandard | undefined
-      const fromModule = std ? { ...(link.from.module ?? {}), standard: std } : undefined
-      const toModule = std ? { ...(link.to.module ?? {}), standard: std } : undefined
-      diagramState.updateLink(link.id, {
-        from: { ...link.from, module: fromModule },
-        to: { ...link.to, module: toModule },
-      })
-    } else if (field === 'cableLength') {
+    if (field === 'cableLength') {
       const length = value ? Number.parseFloat(value) : undefined
       const next = { ...(link.cable ?? {}) }
       if (length === undefined || !Number.isFinite(length)) delete next.length_m
@@ -353,8 +424,8 @@
     <div class="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
       New Connection
     </div>
-    <div class="flex items-end gap-2">
-      <div class="flex-1">
+    <div class="grid grid-cols-[1fr_1fr_1fr_auto_1fr_1fr_1fr_auto_auto] items-end gap-2">
+      <div>
         <label class="text-[10px] text-muted-foreground mb-1 block" for="add-from-node">From</label>
         <select
           id="add-from-node"
@@ -367,7 +438,7 @@
           {/each}
         </select>
       </div>
-      <div class="w-44">
+      <div>
         <span class="text-[10px] text-muted-foreground mb-1 block">Port</span>
         <PortPicker
           nodeId={addFromNode}
@@ -378,8 +449,18 @@
           }}
         />
       </div>
+      <div>
+        <span class="text-[10px] text-muted-foreground mb-1 block">Module</span>
+        <EndpointModulePicker
+          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
+          cage={addFromCage}
+          standard={addFromStandard || undefined}
+          disabled={!addFromPortId}
+          onchange={(v) => setAddStandard('from', v)}
+        />
+      </div>
       <span class="text-muted-foreground text-sm pb-1.5">→</span>
-      <div class="flex-1">
+      <div>
         <label class="text-[10px] text-muted-foreground mb-1 block" for="add-to-node">To</label>
         <select
           id="add-to-node"
@@ -392,7 +473,7 @@
           {/each}
         </select>
       </div>
-      <div class="w-44">
+      <div>
         <span class="text-[10px] text-muted-foreground mb-1 block">Port</span>
         <PortPicker
           nodeId={addToNode}
@@ -403,21 +484,32 @@
           }}
         />
       </div>
-      <div class="w-64">
-        <span class="text-[10px] text-muted-foreground mb-1 block">Link spec</span>
-        <PlugCablePicker
+      <div>
+        <span class="text-[10px] text-muted-foreground mb-1 block">Module</span>
+        <EndpointModulePicker
           class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          standard={addStandard || undefined}
-          cableCategory={addCableCategory}
-          fromCage={getPort(addFromNode, addFromPortId)?.cage}
-          toCage={getPort(addToNode, addToPortId)?.cage}
-          onstandardchange={(v) => {
-            addStandard = (v ?? '') as EthernetStandard | ''
-          }}
-          oncategorychange={(v) => {
-            addCableCategory = v
-          }}
+          cage={addToCage}
+          standard={addToStandard || undefined}
+          disabled={!addToPortId}
+          onchange={(v) => setAddStandard('to', v)}
         />
+      </div>
+      <div>
+        <span class="text-[10px] text-muted-foreground mb-1 block">Cable</span>
+        <select
+          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
+          disabled={addGradeOptions.length === 0}
+          value={addCableCategory ?? ''}
+          onchange={(e) => {
+            const v = (e.target as HTMLSelectElement).value
+            addCableCategory = v || undefined
+          }}
+        >
+          <option value="">—</option>
+          {#each addGradeOptions as g}
+            <option value={g.value}>{g.label}</option>
+          {/each}
+        </select>
       </div>
       <Button
         size="sm"
@@ -428,13 +520,19 @@
         Add
       </Button>
     </div>
-    {#if addStandard}
+    {#if addReferenceStandard}
       <div class="mt-3 max-w-md">
         <StandardImpliedBlock
-          standard={addStandard}
-          fromCage={getPort(addFromNode, addFromPortId)?.cage}
-          toCage={getPort(addToNode, addToPortId)?.cage}
+          standard={addReferenceStandard}
+          cable={addCableCategory ? { category: addCableCategory } : undefined}
+          fromCage={addFromCage}
+          toCage={addToCage}
         />
+        {#if addFromStandard && addToStandard && addFromStandard !== addToStandard}
+          <div class="mt-1 text-[10px] text-amber-600">
+            ⚠ Asymmetric: {addFromStandard} ↔ {addToStandard}
+          </div>
+        {/if}
       </div>
     {/if}
   </Card.Content>
@@ -449,7 +547,7 @@
         <Table.Row>
           <Table.Head>From</Table.Head>
           <Table.Head>To</Table.Head>
-          <Table.Head class="w-36">Standard</Table.Head>
+          <Table.Head class="w-32">Cable</Table.Head>
           <Table.Head class="w-20">Length</Table.Head>
           <Table.Head class="w-24">VLAN</Table.Head>
           <Table.Head>From IP</Table.Head>
@@ -460,6 +558,10 @@
       </Table.Header>
       <Table.Body>
         {#each rows as row (row.id)}
+          {@const fromCage = getPort(row.fromNode, row.fromPort)?.cage}
+          {@const toCage = getPort(row.toNode, row.toPort)?.cage}
+          {@const referenceStandard = row.link.from.module?.standard ?? row.link.to.module?.standard}
+          {@const gradeOptions = cableGradesForStandard(referenceStandard)}
           <Table.Row>
             <Table.Cell>
               <div class="font-mono text-xs space-y-1">
@@ -468,6 +570,12 @@
                   nodeId={row.fromNode}
                   value={row.fromPort}
                   onchange={(portId) => updateEndpointPort(row.link, 'from', portId)}
+                />
+                <EndpointModulePicker
+                  class={cellInput}
+                  cage={fromCage}
+                  standard={row.link.from.module?.standard}
+                  onchange={(v) => updateEndpointModuleStandard(row.link, 'from', v)}
                 />
               </div>
             </Table.Cell>
@@ -479,28 +587,31 @@
                   value={row.toPort}
                   onchange={(portId) => updateEndpointPort(row.link, 'to', portId)}
                 />
+                <EndpointModulePicker
+                  class={cellInput}
+                  cage={toCage}
+                  standard={row.link.to.module?.standard}
+                  onchange={(v) => updateEndpointModuleStandard(row.link, 'to', v)}
+                />
               </div>
             </Table.Cell>
-            <Table.Cell class="min-w-44">
-              <PlugCablePicker
-                class="px-1 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring w-full"
-                standard={row.standard ? (row.standard as EthernetStandard) : undefined}
-                cableCategory={row.link.cable?.category}
-                fromCage={getPort(row.fromNode, row.fromPort)?.cage}
-                toCage={getPort(row.toNode, row.toPort)?.cage}
-                onstandardchange={(v) => updateField(row.link, 'standard', v ?? '')}
-                oncategorychange={(v) => {
-                  if (!row.link.id) return
-                  const next = { ...(row.link.cable ?? {}) }
-                  if (v) next.category = v
-                  else delete next.category
-                  diagramState.updateLink(row.link.id, {
-                    cable: Object.keys(next).length > 0 ? next : undefined,
-                  })
-                }}
-              />
+            <Table.Cell class="min-w-32">
+              <select
+                class={cellInput}
+                disabled={gradeOptions.length === 0}
+                value={row.link.cable?.category ?? ''}
+                onchange={(e) => updateCableCategory(row.link, (e.target as HTMLSelectElement).value || undefined)}
+              >
+                <option value="">—</option>
+                {#each gradeOptions as g}
+                  <option value={g.value}>{g.label}</option>
+                {/each}
+              </select>
               {#if row.standardIssue}
-                <div class="text-[9px] text-amber-600 max-w-36 truncate" title={row.standardIssue}>
+                <div
+                  class="text-[9px] text-amber-600 max-w-32 truncate mt-0.5"
+                  title={row.standardIssue}
+                >
                   {row.standardIssue}
                 </div>
               {/if}
