@@ -12,7 +12,7 @@ UI ロジック（カスケード絞り込み、cage ロック、バリデーシ
 
 ## 関係図（ざっくり）
 
-「何が何を持っていて、どこで噛み合うか」だけの粗い図。フィールドは省略。
+物理的な構造のみ。両端それぞれが **Plug → Module（あれば）→ Cable 端** のチェーンを持ち、Cable 本体はその末端で結ばれる。Port に繋がるのは Plug。
 
 ```mermaid
 flowchart LR
@@ -26,30 +26,28 @@ flowchart LR
   subgraph LS[リンク側]
     direction TB
     Link["Link"]
-    EpA["Endpoint (from)"]
-    EpB["Endpoint (to)"]
-    Cable["Cable<br/>(grade · 長さ · 端コネクタ)"]
-    PlugA["Plug<br/>(form factor)"]
-    PlugB["Plug<br/>(form factor)"]
-    ModA["Module?<br/>(transceiver)"]
-    ModB["Module?<br/>(transceiver)"]
+    PA["Plug (from)<br/>(form factor)"]
+    PB["Plug (to)<br/>(form factor)"]
+    MA["Module?<br/>(transceiver)"]
+    MB["Module?<br/>(transceiver)"]
+    C["Cable<br/>(wire / fiber)"]
 
-    Link -- from --> EpA
-    Link -- to --> EpB
-    Link -- has --> Cable
-    EpA -- has --> PlugA
-    EpB -- has --> PlugB
-    PlugA -- contains --> ModA
-    PlugB -- contains --> ModB
+    Link -- 端 A --> PA
+    Link -- 端 B --> PB
+    PA -- houses --> MA
+    PB -- houses --> MB
+    MA -- terminates at --> C
+    MB -- terminates at --> C
   end
 
-  PlugA -. plug fits cage .- Port
-  EpA -. refs by id .- Node
+  PA -. fits cage .- Port
+  PA -. refs by id .- Node
 ```
 
-- ノード側は **Node が Port を所有**してそこで閉じる。
-- リンク側は **Link → Endpoint → Plug → Module（あれば）** という入れ子。Cable は Link の直下で per-link 一本。
-- 両側は **「Plug が Port の cage に挿さる」「Endpoint が Node/Port を id で参照する」** の二点でだけつながる（Node/Port は Link の所有物にはならない）。
+- ノード側は **Node が Port を所有**して閉じる。
+- リンク側は両端それぞれが **Plug → Module?（pluggable のときだけ）→ Cable** のチェーン。Cable は両端から終端されて一本。
+- Plug が Port の cage に物理的に噛み合う。
+- 「from / to の端点」を実コードでは `LinkEndpoint` という構造でまとめている（Plug + Module + node/port の id 参照を持つ容器）。物理的な実体ではなくプログラム上の都合の名前。
 
 ## データモデル
 
