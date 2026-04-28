@@ -1,6 +1,13 @@
 <script lang="ts">
-  import type { Link, LinkEndpoint, Node } from '@shumoku/core'
-  import PlugCablePicker from '$lib/components/PlugCablePicker.svelte'
+  import {
+    cableGradesForStandard,
+    defaultCableGrade,
+    type EthernetStandard,
+    type Link,
+    type LinkEndpoint,
+    type Node,
+  } from '@shumoku/core'
+  import EndpointModulePicker from '$lib/components/EndpointModulePicker.svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
 
@@ -46,11 +53,6 @@
     return nodes.get(nodeId)?.ports ?? []
   }
 
-  function hasPortOption(nodeId: string, portId: string) {
-    if (!portId) return true
-    return getPortOptions(nodeId).some((p) => p.id === portId)
-  }
-
   function portOptionLabel(port: NonNullable<Node['ports']>[number]) {
     const label = port.label || port.cage || 'unnamed port'
     const attrs = [
@@ -85,6 +87,74 @@
     onupdate?.({ [side]: { ...current, port: portId } })
   }
 
+  /**
+   * Per-endpoint module standard. Symmetric is the default — picking on
+   * one side mirrors to the other when the other end is empty or already
+   * matched the previous value. Once the user has explicitly diverged
+   * (asymmetric BiDi etc.), each side is independent.
+   */
+  function updateEndpointModuleStandard(
+    side: 'from' | 'to',
+    standard: EthernetStandard | undefined,
+  ) {
+    const other = side === 'from' ? 'to' : 'from'
+    const current = link[side]
+    const otherEp = link[other]
+    const wasSymmetric =
+      !otherEp.module?.standard || otherEp.module.standard === current.module?.standard
+    const newModule = standard
+      ? { ...(current.module ?? {}), standard }
+      : current.module?.sku
+        ? { standard: '', sku: current.module.sku }
+        : undefined
+    const updates: Partial<Link> = { [side]: { ...current, module: newModule } }
+    if (wasSymmetric) {
+      const newOther = standard
+        ? { ...(otherEp.module ?? {}), standard }
+        : otherEp.module?.sku
+          ? { standard: '', sku: otherEp.module.sku }
+          : undefined
+      updates[other] = { ...otherEp, module: newOther }
+    }
+    // Reset cable grade to the new standard's default when it was empty
+    // or no longer fits the new cable kind.
+    const grades = cableGradesForStandard(standard)
+    const currentGrade = link.cable?.category
+    const gradeFits = currentGrade && grades.some((g) => g.value === currentGrade)
+    if (!gradeFits) {
+      const next = { ...(link.cable ?? {}) }
+      const def = defaultCableGrade(standard)
+      if (def) next.category = def
+      else delete next.category
+      updates.cable = Object.keys(next).length > 0 ? next : undefined
+    }
+    onupdate?.(updates)
+  }
+
+  function updateEndpointModuleSku(side: 'from' | 'to', sku: string | undefined) {
+    const current = link[side]
+    const std = current.module?.standard
+    const next = std || sku ? { standard: std ?? '', sku } : undefined
+    onupdate?.({ [side]: { ...current, module: next } })
+  }
+
+  function updateCableField(field: 'category' | 'connector' | 'length_m', value: string) {
+    const next = { ...(link.cable ?? {}) }
+    if (field === 'length_m') {
+      const length = value ? Number.parseFloat(value) : undefined
+      if (length === undefined || !Number.isFinite(length)) delete next.length_m
+      else next.length_m = length
+    } else if (field === 'category') {
+      if (value) next.category = value
+      else delete next.category
+    } else if (field === 'connector') {
+      const trimmed = value.trim()
+      if (trimmed) next.connector = trimmed
+      else delete next.connector
+    }
+    onupdate?.({ cable: Object.keys(next).length > 0 ? next : undefined })
+  }
+
   function handleVlanBlur(value: string) {
     const numbers = value
       .split(',')
@@ -106,6 +176,11 @@
 
   const fromCage = $derived(getPortOptions(from.node).find((p) => p.id === from.port)?.cage)
   const toCage = $derived(getPortOptions(to.node).find((p) => p.id === to.port)?.cage)
+
+  // Cable grade options follow whichever endpoint has a module set
+  // (symmetric → both agree, asymmetric → BiDi pairs still share medium).
+  const referenceStandard = $derived(link.from.module?.standard ?? link.to.module?.standard)
+  const gradeOptions = $derived(cableGradesForStandard(referenceStandard))
 
   const typeOptions = ['solid', 'dashed', 'thick', 'double', 'invisible']
   const redundancyOptions = ['', 'ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']
@@ -146,6 +221,39 @@
         />
       {:else}
         <span class={valueClass}>{from.port ? displayPort(from.node, from.port) : '—'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <div class="flex items-center justify-between gap-2">
+    <dt class={labelClass}>Module</dt>
+    <dd class="flex-1 min-w-0">
+      {#if editing}
+        <EndpointModulePicker
+          class={selectClass}
+          cage={fromCage}
+          standard={link.from.module?.standard}
+          onchange={(v) => updateEndpointModuleStandard('from', v)}
+        />
+      {:else}
+        <span class={valueClass}>{link.from.module?.standard ?? '—'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>SKU</dt>
+    <dd>
+      {#if editing}
+        <input
+          type="text"
+          class={inputClass}
+          value={link.from.module?.sku ?? ''}
+          placeholder="transceiver SKU"
+          onblur={(e) => updateEndpointModuleSku('from', (e.target as HTMLInputElement).value || undefined)}
+        >
+      {:else}
+        <span class={valueClass}>{link.from.module?.sku ?? '—'}</span>
       {/if}
     </dd>
   </div>
@@ -207,6 +315,39 @@
     </dd>
   </div>
 
+  <div class="flex items-center justify-between gap-2">
+    <dt class={labelClass}>Module</dt>
+    <dd class="flex-1 min-w-0">
+      {#if editing}
+        <EndpointModulePicker
+          class={selectClass}
+          cage={toCage}
+          standard={link.to.module?.standard}
+          onchange={(v) => updateEndpointModuleStandard('to', v)}
+        />
+      {:else}
+        <span class={valueClass}>{link.to.module?.standard ?? '—'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>SKU</dt>
+    <dd>
+      {#if editing}
+        <input
+          type="text"
+          class={inputClass}
+          value={link.to.module?.sku ?? ''}
+          placeholder="transceiver SKU"
+          onblur={(e) => updateEndpointModuleSku('to', (e.target as HTMLInputElement).value || undefined)}
+        >
+      {:else}
+        <span class={valueClass}>{link.to.module?.sku ?? '—'}</span>
+      {/if}
+    </dd>
+  </div>
+
   <div class="flex items-center justify-between">
     <dt class={labelClass}>IP</dt>
     <dd>
@@ -226,58 +367,31 @@
   </div>
 </dl>
 
-<!-- Link properties -->
-<div class={sectionClass}>Properties</div>
-<dl class="space-y-2.5">
-  <div class="flex items-center justify-between gap-2">
-    <dt class={labelClass}>Link spec</dt>
-    <dd class="flex-1 min-w-0">
-      {#if editing}
-        <PlugCablePicker
+<!-- Cable (per-link) -->
+<div class={sectionClass}>Cable</div>
+<dl class="space-y-2.5 mb-4">
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>Grade</dt>
+    <dd>
+      {#if editing && gradeOptions.length > 0}
+        <select
           class={selectClass}
-          standard={link.from.module?.standard ?? link.to.module?.standard}
-          cableCategory={link.cable?.category}
-          {fromCage}
-          {toCage}
-          onstandardchange={(v) => {
-            // Symmetric default — both endpoints get the same module
-            // standard. Asymmetric BiDi pairs are an advanced override
-            // that's not surfaced here yet.
-            const fromModule = v ? { ...(link.from.module ?? {}), standard: v } : undefined
-            const toModule = v ? { ...(link.to.module ?? {}), standard: v } : undefined
-            onupdate?.({
-              from: { ...link.from, module: fromModule },
-              to: { ...link.to, module: toModule },
-            })
-          }}
-          oncategorychange={(v) => {
-            const next = { ...(link.cable ?? {}) }
-            if (v) next.category = v
-            else delete next.category
-            onupdate?.({ cable: Object.keys(next).length > 0 ? next : undefined })
-          }}
-        />
-      {:else}
-        <span class={valueClass}
-          >{link.from.module?.standard ?? link.to.module?.standard ?? '—'}</span
+          value={link.cable?.category ?? ''}
+          onchange={(e) => updateCableField('category', (e.target as HTMLSelectElement).value)}
         >
+          <option value="">— unspecified —</option>
+          {#each gradeOptions as g}
+            <option value={g.value}>{g.label}</option>
+          {/each}
+        </select>
+      {:else}
+        <span class={valueClass}>{link.cable?.category ?? '—'}</span>
       {/if}
     </dd>
   </div>
 
-  {#if link.from.module?.standard || link.to.module?.standard}
-    <div>
-      <StandardImpliedBlock
-        standard={link.from.module?.standard ?? link.to.module?.standard}
-        cable={link.cable}
-        {fromCage}
-        {toCage}
-      />
-    </div>
-  {/if}
-
   <div class="flex items-center justify-between">
-    <dt class={labelClass}>Cable length (m)</dt>
+    <dt class={labelClass}>Length (m)</dt>
     <dd>
       {#if editing}
         <input
@@ -285,14 +399,7 @@
           min="0"
           class={inputClass}
           value={link.cable?.length_m ?? ''}
-          onblur={(e) => {
-            const raw = (e.target as HTMLInputElement).value
-            const length = raw ? Number.parseFloat(raw) : undefined
-            const nextCable = { ...(link.cable ?? {}) }
-            if (length === undefined || !Number.isFinite(length)) delete nextCable.length_m
-            else nextCable.length_m = length
-            onupdate?.({ cable: Object.keys(nextCable).length > 0 ? nextCable : undefined })
-          }}
+          onblur={(e) => updateCableField('length_m', (e.target as HTMLInputElement).value)}
         >
       {:else}
         <span class={valueClass}>{link.cable?.length_m ?? '—'}</span>
@@ -301,7 +408,7 @@
   </div>
 
   <div class="flex items-center justify-between">
-    <dt class={labelClass}>Cable connector</dt>
+    <dt class={labelClass}>Connector</dt>
     <dd>
       {#if editing}
         <input
@@ -309,64 +416,29 @@
           class={inputClass}
           value={link.cable?.connector ?? ''}
           placeholder="auto (LC/RJ45/MPO…)"
-          onblur={(e) => {
-            const raw = (e.target as HTMLInputElement).value.trim()
-            const nextCable = { ...(link.cable ?? {}) }
-            if (raw) nextCable.connector = raw
-            else delete nextCable.connector
-            onupdate?.({ cable: Object.keys(nextCable).length > 0 ? nextCable : undefined })
-          }}
+          onblur={(e) => updateCableField('connector', (e.target as HTMLInputElement).value)}
         >
       {:else}
         <span class={valueClass}>{link.cable?.connector ?? '—'}</span>
       {/if}
     </dd>
   </div>
+</dl>
 
-  <div class="flex items-center justify-between">
-    <dt class={labelClass}>From plug (SKU)</dt>
-    <dd>
-      {#if editing}
-        <input
-          type="text"
-          class={inputClass}
-          value={link.from.module?.sku ?? ''}
-          placeholder="transceiver SKU"
-          onblur={(e) => {
-            const sku = (e.target as HTMLInputElement).value || undefined
-            const std = link.from.module?.standard
-            const nextModule = std || sku ? { standard: std ?? '', sku } : undefined
-            onupdate?.({ from: { ...link.from, module: nextModule } })
-          }}
-        >
-      {:else}
-        <span class={valueClass}>{link.from.module?.sku ?? '—'}</span>
-      {/if}
-    </dd>
+{#if referenceStandard}
+  <div class="mb-4">
+    <StandardImpliedBlock standard={referenceStandard} cable={link.cable} {fromCage} {toCage} />
+    {#if link.from.module?.standard && link.to.module?.standard && link.from.module.standard !== link.to.module.standard}
+      <div class="mt-1 text-[10px] text-amber-600">
+        ⚠ Asymmetric: {link.from.module.standard} ↔ {link.to.module.standard}
+      </div>
+    {/if}
   </div>
+{/if}
 
-  <div class="flex items-center justify-between">
-    <dt class={labelClass}>To plug (SKU)</dt>
-    <dd>
-      {#if editing}
-        <input
-          type="text"
-          class={inputClass}
-          value={link.to.module?.sku ?? ''}
-          placeholder="transceiver SKU"
-          onblur={(e) => {
-            const sku = (e.target as HTMLInputElement).value || undefined
-            const std = link.to.module?.standard
-            const nextModule = std || sku ? { standard: std ?? '', sku } : undefined
-            onupdate?.({ to: { ...link.to, module: nextModule } })
-          }}
-        >
-      {:else}
-        <span class={valueClass}>{link.to.module?.sku ?? '—'}</span>
-      {/if}
-    </dd>
-  </div>
-
+<!-- Other link properties -->
+<div class={sectionClass}>Properties</div>
+<dl class="space-y-2.5">
   <div class="flex items-center justify-between">
     <dt class={labelClass}>VLAN</dt>
     <dd>
@@ -377,7 +449,9 @@
           value={vlanDisplay}
           placeholder="e.g. 10, 20, 30"
           onblur={(e) => handleVlanBlur((e.target as HTMLInputElement).value)}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
         >
       {:else}
         <span class={valueClass}>{vlanDisplay || '—'}</span>
@@ -395,7 +469,9 @@
           value={labelDisplay}
           placeholder="Label"
           onblur={(e) => onupdate?.({ label: (e.target as HTMLInputElement).value || undefined })}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
         >
       {:else}
         <span class={valueClass}>{labelDisplay || '—'}</span>
@@ -410,7 +486,10 @@
         <select
           class={selectClass}
           value={link.type ?? 'solid'}
-          onchange={(e) => onupdate?.({ type: ((e.target as HTMLSelectElement).value || undefined) as Link['type'] })}
+          onchange={(e) =>
+            onupdate?.({
+              type: ((e.target as HTMLSelectElement).value || undefined) as Link['type'],
+            })}
         >
           {#each typeOptions as t}
             <option value={t}>{t}</option>
@@ -429,7 +508,10 @@
         <select
           class={selectClass}
           value={link.redundancy ?? ''}
-          onchange={(e) => onupdate?.({ redundancy: ((e.target as HTMLSelectElement).value || undefined) as Link['redundancy'] })}
+          onchange={(e) =>
+            onupdate?.({
+              redundancy: ((e.target as HTMLSelectElement).value || undefined) as Link['redundancy'],
+            })}
         >
           {#each redundancyOptions as r}
             <option value={r}>{r || '—'}</option>
@@ -448,7 +530,8 @@
         <select
           class={selectClass}
           value={link.arrow ?? 'none'}
-          onchange={(e) => onupdate?.({ arrow: ((e.target as HTMLSelectElement).value) as Link['arrow'] })}
+          onchange={(e) =>
+            onupdate?.({ arrow: (e.target as HTMLSelectElement).value as Link['arrow'] })}
         >
           {#each arrowOptions as a}
             <option value={a}>{a}</option>
