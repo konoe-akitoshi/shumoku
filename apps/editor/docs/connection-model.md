@@ -122,7 +122,12 @@ classDiagram
     id: string
     label?: string
     cage?: PortConnector
-    poe?: boolean
+    poe?: boolean | PortPoe
+  }
+  class PortPoe {
+    class?: 'af' | 'at' | 'bt'
+    role?: 'pse' | 'pd'
+    watts?: number
   }
   class Link {
     id: string
@@ -138,7 +143,7 @@ classDiagram
     ip?: string | string[]
   }
   class LinkPlug {
-    cage: PortConnector
+    cage?: PortConnector
     module?: LinkModule
   }
   class LinkModule {
@@ -146,11 +151,13 @@ classDiagram
     sku?: string
   }
   class LinkCable {
+    medium?: CableMedium
     category?: CableGrade
     length_m?: number
   }
 
   Node *-- "ports *" NodePort : owns
+  NodePort *-- "0..1" PortPoe
   Link *-- "from 1" LinkEndpoint
   Link *-- "to 1" LinkEndpoint
   Link *-- "0..1" LinkCable
@@ -164,23 +171,26 @@ classDiagram
 
 設計の要点：
 
-- **Plug は明示フィールド**。関係図と 1:1 で対応する `LinkPlug` を持ち、`cage` は always set、`module` は optional。「プラグだけ決まってモジュール未決」状態が表現できる（B / C 導線の中間状態）。
-- **invariant**: `plug.module.standard` の要求 cage と `plug.cage` は一致しなければならない。`validateLinkCompatibility` が違反を error で出す。
+- **Plug は明示フィールド、cage は optional**。`LinkPlug.cage` は派生可能（`port.cage` か `module.standard` の `spec.cage`）なので、明示するのは「**両方とも未設定の中間状態**」のときだけ。validator が plug.cage と port.cage / module.standard の整合をチェックする。
 - **モデルは導線に対して中立**。A / B / C どの順序でも、最終的に保存されるのは同じ `Link` 構造で、フィールドが埋まる順番だけが違う。
 - **Module は per-endpoint で optional**。`LinkPlug.module` が optional であることが、関係図の「経由 / 直結」二経路に対応する。
 - **Endpoint は Node を所有しない**。`node` / `port` を id で参照するだけで、Link 側に Node を複製しない。
 - **Cable は per-link**。両端で grade / 長さが食い違うことは物理的に無いため、片端に偏らせず Link 直下に置く。
+- **`cable.medium` を field 化**。category 未確定でも「fiber 配線である」みたいな段階的入力ができる。`mediumFromGrade()` で category と整合チェック。
 - **`cable.connector` は持たない**。LC / MPO / RJ45 plug 等の端コネクタは `module.standard` の `spec.cableConnector` から派生。表示時は `cableConnectorForStandard()` ヘルパで取得。
-- **`cable.category` は型強化**。`CableGrade` ユニオン（`'cat5e' | 'cat6' | 'cat6a' | 'cat7' | 'cat8' | 'om3' | 'om4' | 'om5' | 'os1' | 'os2' | 'dac' | 'aoc'`）で、壊れた値の侵入を型で防ぐ。
+- **`cable.category` は型強化**。`CableGrade` ユニオン（`'cat5e' | 'cat6' | 'cat6a' | 'cat7' | 'cat8' | 'om3' | 'om4' | 'om5' | 'os1' | 'os2' | 'dac' | 'aoc'`）で、壊れた値の侵入を型で防ぐ。parser 側も `normalizeCableGrade` で外部入力を境界で正規化。
+- **`port.poe` を構造化**。`boolean | PortPoe`（class / role / watts）で legacy `poe: true` も保ちつつ、PoE クラス・PSE/PD ロール・電力量を表現可能。`portPoeConfig()` ヘルパでオブジェクト形に正規化。
 
 ### フィールド対応
 
 | 物理レイヤ          | モデル位置                              | 型                     | 例               |
 | ------------------- | --------------------------------------- | ---------------------- | ---------------- |
 | Port レセプタクル   | `Node.ports[].cage`                     | `PortConnector`        | `sfp+`、`rj45`   |
-| Endpoint プラグ     | `Link.from/to.plug.cage`                | `PortConnector`        | `sfp+`、`rj45`   |
+| Port PoE 構成       | `Node.ports[].poe`                      | `boolean \| PortPoe`   | `{ class: 'at', role: 'pse' }` |
+| Endpoint プラグ cage | `Link.from/to.plug.cage` (optional)    | `PortConnector`        | `sfp+`（中間状態のみ）|
 | Endpoint モジュール | `Link.from/to.plug.module.standard`     | `EthernetStandard`     | `10GBASE-SR`     |
 | モジュール SKU      | `Link.from/to.plug.module.sku`          | `string`               | `FTLX8571D3BCL`  |
+| ケーブル媒体 kind   | `Link.cable.medium`                     | `CableMedium`          | `fiber-mm`、`twisted-pair`|
 | ケーブル媒体 grade  | `Link.cable.category`                   | `CableGrade`           | `om4`、`cat6a`   |
 | ケーブル長          | `Link.cable.length_m`                   | `number`               | `30`             |
 | ケーブル端コネクタ  | （派生）`cableConnectorForStandard(std)`| `CableConnector`       | `LC`、`MPO`      |
@@ -217,6 +227,8 @@ classDiagram
 | ----------------------------------------------------------------- | ------- | ----- |
 | `port.cage` が `module.standard` の要求 cage を受け入れるか       | error   | ✅    |
 | `plug.cage` と `module.standard` の要求 cage が一致するか         | error   | ✅    |
+| `plug.cage` と `port.cage` が一致するか（combo 除く）             | error   | ✅    |
+| `cable.medium` と `cable.category` の整合（grade が implies medium）| error | ✅    |
 | `from.standard` と `to.standard` が異なる（非対称リンク）         | warning | ✅    |
 | `cable.length_m` が grade 補正後の reach を超えている             | warning | ✅    |
 | `port.poe` が non-RJ45 cage に立っている                          | error   | ✅    |

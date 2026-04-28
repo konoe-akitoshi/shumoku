@@ -60,7 +60,7 @@
         speed: port.speed ?? '',
         cage: port.cage ?? '',
         interfaceName: port.interfaceName ?? '',
-        poe: port.poe ?? false,
+        poe: Boolean(port.poe),
         disabled: port.disabled ?? false,
         usage: usage.get(port.id) ?? [],
       }))

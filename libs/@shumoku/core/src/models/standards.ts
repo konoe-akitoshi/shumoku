@@ -22,6 +22,7 @@
 import type {
   CableConnector,
   CableGrade,
+  CableMedium,
   EthernetStandard,
   FiberMode,
   LinkMediumKind,
@@ -617,4 +618,49 @@ export function cableConnectorForStandard(
   standard: EthernetStandard | undefined,
 ): CableConnector | undefined {
   return getStandardSpec(standard)?.cableConnector
+}
+
+/**
+ * Derive the cable medium kind from a `CableGrade`. Twisted-pair
+ * categories map to twisted-pair, OM3/4/5 → multi-mode fiber, OS1/2 →
+ * single-mode fiber, DAC and AOC are their own mediums.
+ */
+export function mediumFromGrade(grade: CableGrade | undefined): CableMedium | undefined {
+  if (!grade) return undefined
+  switch (grade) {
+    case 'cat5e':
+    case 'cat6':
+    case 'cat6a':
+    case 'cat7':
+    case 'cat8':
+      return 'twisted-pair'
+    case 'om3':
+    case 'om4':
+    case 'om5':
+      return 'fiber-mm'
+    case 'os1':
+    case 'os2':
+      return 'fiber-sm'
+    case 'dac':
+      return 'dac'
+    case 'aoc':
+      return 'aoc'
+  }
+}
+
+/**
+ * Derive the cable medium implied by an Ethernet standard. Resolves
+ * the standard via `STANDARD_SPECS` and maps `cableKind` + `fiberMode`
+ * onto the unified `CableMedium` enum.
+ */
+export function mediumFromStandard(
+  standard: EthernetStandard | undefined,
+): CableMedium | undefined {
+  const spec = getStandardSpec(standard)
+  if (!spec) return undefined
+  if (spec.cableKind === 'twisted-pair') return 'twisted-pair'
+  if (spec.cableKind === 'fiber') return spec.fiberMode === 'singlemode' ? 'fiber-sm' : 'fiber-mm'
+  if (spec.cableKind === 'dac') return 'dac'
+  if (spec.cableKind === 'aoc') return 'aoc'
+  return undefined
 }

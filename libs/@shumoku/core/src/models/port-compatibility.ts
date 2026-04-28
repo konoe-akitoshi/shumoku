@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { getStandardSpec, reachForLink } from './standards.js'
+import { getStandardSpec, mediumFromGrade, reachForLink } from './standards.js'
 import type {
   EthernetStandard,
   Link,
@@ -11,6 +11,7 @@ import type {
   LinkPlug,
   NodePort,
   PortConnector,
+  PortPoe,
 } from './types.js'
 
 const PLUGGABLE_CONNECTORS = new Set<PortConnector>(['sfp', 'sfp+', 'sfp28', 'qsfp+', 'qsfp28'])
@@ -59,15 +60,24 @@ export function effectiveLinkStandard(
 }
 
 /**
- * Build a plug from a chosen module standard. The plug's `cage` is
- * derived from `STANDARD_SPECS[standard].cage`; the module is set on
- * the plug. Returns `undefined` if the standard is unknown.
+ * Build a plug from a chosen module standard. The plug carries only
+ * the `module` — `cage` is intentionally omitted because it's derivable
+ * from `module.standard` via `STANDARD_SPECS[std].cage`. Returns
+ * `undefined` if the standard is unknown.
  */
 export function plugFromStandard(standard: EthernetStandard, sku?: string): LinkPlug | undefined {
   const spec = getStandardSpec(standard)
   if (!spec) return undefined
   const module: LinkModule = sku ? { standard, sku } : { standard }
-  return { cage: spec.cage as PortConnector, module }
+  return { module }
+}
+
+/**
+ * Build a cage-only plug — the user picked the form factor but hasn't
+ * picked a module yet. The intermediate state of B / C entry flows.
+ */
+export function plugFromCage(cage: PortConnector): LinkPlug {
+  return { cage }
 }
 
 /**
@@ -92,19 +102,40 @@ export function validateLinkCompatibility(
   const fromSpec = getStandardSpec(fromStd)
   const toSpec = getStandardSpec(toStd)
 
-  // Plug.cage / module.standard consistency: when both are set, the
-  // module's required cage must match the plug's declared cage.
-  for (const [side, ep] of [
-    ['source', link.from],
-    ['target', link.to],
+  // Per-endpoint plug consistency. plug.cage must agree with both the
+  // module's required cage (when a module is set) and the port's cage
+  // (when the port carries one).
+  for (const [side, ep, port] of [
+    ['source', link.from, fromPort],
+    ['target', link.to, toPort],
   ] as const) {
     const plug = ep.plug
-    const std = plug?.module?.standard
+    if (!plug) continue
+    const std = plug.module?.standard
     const stdCage = getStandardSpec(std)?.cage
-    if (plug?.cage && stdCage && plug.cage !== stdCage) {
+    if (plug.cage && stdCage && plug.cage !== stdCage) {
       issues.push({
         severity: 'error',
         message: `${side} plug.cage ${plug.cage} disagrees with module ${std} (requires ${stdCage})`,
+      })
+    }
+    if (plug.cage && port?.cage && plug.cage !== port.cage && port.cage !== 'combo') {
+      issues.push({
+        severity: 'error',
+        message: `${side} plug.cage ${plug.cage} disagrees with port.cage ${port.cage}`,
+      })
+    }
+  }
+
+  // Cable medium ↔ category consistency: when both are set, the
+  // category's medium (derived from CableGrade) must match the
+  // declared medium.
+  if (link.cable?.medium && link.cable?.category) {
+    const expected = mediumFromGrade(link.cable.category)
+    if (expected && expected !== link.cable.medium) {
+      issues.push({
+        severity: 'error',
+        message: `cable.medium ${link.cable.medium} disagrees with category ${link.cable.category} (implies ${expected})`,
       })
     }
   }
@@ -206,4 +237,36 @@ export function endpointStandard(ep: LinkEndpoint): EthernetStandard | undefined
 /** Convenience: type-narrowed accessor for the endpoint plug cage. */
 export function endpointPlugCage(ep: LinkEndpoint): PortConnector | undefined {
   return ep.plug?.cage
+}
+
+/**
+ * Resolve the effective plug cage for an endpoint with the canonical
+ * priority: explicit `plug.cage` → module's required cage → port.cage.
+ * Returns undefined when none are known. Useful from UI cascade code
+ * that needs a single answer.
+ */
+export function effectivePlugCage(ep: LinkEndpoint, port?: NodePort): PortConnector | undefined {
+  if (ep.plug?.cage) return ep.plug.cage
+  const stdCage = getStandardSpec(ep.plug?.module?.standard)?.cage as PortConnector | undefined
+  if (stdCage) return stdCage
+  return port?.cage
+}
+
+/**
+ * Normalize `NodePort.poe` (which accepts `boolean | PortPoe` for
+ * convenience) to the object form. `true` maps to an empty PortPoe,
+ * `false` / undefined to undefined.
+ */
+export function portPoeConfig(port: NodePort | undefined): PortPoe | undefined {
+  if (!port?.poe) return undefined
+  if (port.poe === true) return {}
+  return port.poe
+}
+
+/**
+ * Convenience predicate: does the port have any PoE capability set?
+ * Treats truthy `poe` (boolean true or any PortPoe object) as enabled.
+ */
+export function isPortPoeEnabled(port: NodePort | undefined): boolean {
+  return Boolean(port?.poe)
 }

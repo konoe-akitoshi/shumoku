@@ -83,6 +83,14 @@ export type CableGrade =
   | 'aoc'
 
 /**
+ * Cable medium kind, split to distinguish multi-mode and single-mode
+ * fiber (they have different reach characteristics and connector
+ * conventions). Stored explicitly on `LinkCable.medium` so the user
+ * can declare "fiber multi-mode" before picking a specific OM grade.
+ */
+export type CableMedium = 'twisted-pair' | 'fiber-mm' | 'fiber-sm' | 'dac' | 'aoc'
+
+/**
  * Cable-end connector (the physical thing at the cable's tip), e.g.
  * "lc" / "sc" / "mpo" for fiber, "rj45" for twisted-pair.
  *
@@ -91,6 +99,20 @@ export type CableGrade =
  * type for derivation helpers and display logic.
  */
 export type CableConnector = 'rj45' | 'lc' | 'sc' | 'mpo' | (string & {})
+
+/**
+ * PoE capability of a port. `class` is the IEEE 802.3 power class
+ * tier the cage supports (af = 15.4W, at = 30W, bt = 60W or 90W).
+ * `role` distinguishes power-sourcing (PSE — typical of switch ports)
+ * from powered-device (PD — APs, IP phones, cameras). `watts` is an
+ * override for non-standard or fine-grained budgets. All optional —
+ * an empty `PortPoe` (`{}`) means "PoE capable, details unspecified".
+ */
+export interface PortPoe {
+  class?: 'af' | 'at' | 'bt'
+  role?: 'pse' | 'pd'
+  watts?: number
+}
 
 /**
  * A node-side receptacle (cage). Ports belong to a Node and define the
@@ -114,8 +136,12 @@ export interface NodePort {
   speed?: string
   /** Physical receptacle (cage) type, e.g. "rj45", "sfp+", "qsfp28". */
   cage?: PortConnector
-  /** Whether this cage can source PoE (RJ45 only). */
-  poe?: boolean
+  /**
+   * PoE capability. `true` = capable, no further details (legacy /
+   * convenience YAML form); object form carries class / role / watts.
+   * Use `portPoeConfig(port)` to normalize.
+   */
+  poe?: boolean | PortPoe
   source?: 'catalog' | 'custom'
   disabled?: boolean
   notes?: string
@@ -371,17 +397,23 @@ export interface LinkModule {
 /**
  * The cable-side plug at one end of a link — what's mechanically
  * inserted into a port's cage. `cage` is the form factor (RJ45 / SFP+
- * / etc.) and is the structural anchor: it's required whenever a plug
- * exists. `module` is the transceiver inside the plug for pluggable
- * form factors (SFP / SFP+ / SFP28 / QSFP+ / QSFP28); RJ45 direct,
- * DAC, and AOC have no separate module so it stays undefined.
+ * / etc.) and is the structural anchor; **optional** because it's
+ * derivable from `port.cage` (when set) or `module.standard` (via
+ * `STANDARD_SPECS[std].cage`). Store explicit `cage` only when neither
+ * source has it (e.g. user picked a plug form factor before picking a
+ * module, on a port without catalog cage info). `module` is the
+ * transceiver inside the plug for pluggable form factors (SFP /
+ * SFP+ / SFP28 / QSFP+ / QSFP28); RJ45 direct, DAC, and AOC have no
+ * separate module so it stays undefined.
  *
- * Invariant: when both are set, `module.standard`'s required cage
- * must equal `plug.cage`. The validator surfaces violations.
+ * Invariants (validator-enforced):
+ * - If both `cage` and `module.standard` are set, `module`'s required
+ *   cage must equal `plug.cage`.
+ * - If both `plug.cage` and `port.cage` are set, they must agree.
  */
 export interface LinkPlug {
-  /** Form factor the plug presents. Required whenever the plug exists. */
-  cage: PortConnector
+  /** Form factor the plug presents. Optional when derivable. */
+  cage?: PortConnector
   /** Transceiver inside the plug. Absent for RJ45 direct / DAC / AOC. */
   module?: LinkModule
 }
@@ -410,13 +442,20 @@ export interface LinkEndpoint {
 
 /**
  * Physical cable details that aren't fully implied by the link's standard.
- * `category` (the installed cable grade) and `length_m` are the two
- * fields that vary independently of the chosen standard. The cable-end
- * connector is *not* stored — it's derived from `module.standard` via
- * `STANDARD_SPECS[std].cableConnector` to keep the model normalized.
+ * `medium` is the cable kind (twisted-pair / fiber-mm / fiber-sm / dac /
+ * aoc), stored explicitly so the user can declare "this is fiber" before
+ * picking a specific OM grade. `category` is the installed grade within
+ * that medium. `length_m` is informational (reach validation). The
+ * cable-end connector is *not* stored — derived from `module.standard`
+ * via `STANDARD_SPECS[std].cableConnector` to keep the model normalized.
+ *
+ * Invariant (validator-enforced): when both `medium` and `category` are
+ * set, the category's medium must agree with `medium`.
  */
 export interface LinkCable {
-  /** Installed cable grade. Different domains for twisted-pair / fiber / DAC / AOC. */
+  /** Cable medium kind. Optional when not yet decided / not relevant. */
+  medium?: CableMedium
+  /** Installed cable grade within the medium. */
   category?: CableGrade
   /** Run length in meters. Used for reach warnings. */
   length_m?: number

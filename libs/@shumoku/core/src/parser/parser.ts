@@ -11,6 +11,8 @@ import { ensurePorts } from '../models/migrate.js'
 import { plugFromStandard } from '../models/port-compatibility.js'
 import type {
   ArrowType,
+  CableGrade,
+  CableMedium,
   CanvasSettings,
   EthernetStandard,
   GraphSettings,
@@ -29,6 +31,46 @@ import type {
   Subgraph,
   ThemeType,
 } from '../models/types.js'
+
+const KNOWN_CABLE_GRADES: ReadonlySet<CableGrade> = new Set([
+  'cat5e',
+  'cat6',
+  'cat6a',
+  'cat7',
+  'cat8',
+  'om3',
+  'om4',
+  'om5',
+  'os1',
+  'os2',
+  'dac',
+  'aoc',
+])
+
+const KNOWN_CABLE_MEDIA: ReadonlySet<CableMedium> = new Set([
+  'twisted-pair',
+  'fiber-mm',
+  'fiber-sm',
+  'dac',
+  'aoc',
+])
+
+/**
+ * Normalize an arbitrary YAML value into a CableGrade. Lower-cases and
+ * checks against the known set; returns undefined for unknown / malformed
+ * input so bad YAML doesn't pollute the model.
+ */
+function normalizeCableGrade(value: unknown): CableGrade | undefined {
+  if (typeof value !== 'string') return undefined
+  const v = value.toLowerCase().replace(/\s+/g, '') as CableGrade
+  return KNOWN_CABLE_GRADES.has(v) ? v : undefined
+}
+
+function normalizeCableMedium(value: unknown): CableMedium | undefined {
+  if (typeof value !== 'string') return undefined
+  const v = value.toLowerCase().replace(/\s+/g, '') as CableMedium
+  return KNOWN_CABLE_MEDIA.has(v) ? v : undefined
+}
 
 // Re-define DeviceType enum locally (same as v2.DeviceType)
 enum DeviceType {
@@ -355,8 +397,11 @@ export class YamlParser {
   private parseLinkCable(cable: YamlLink['cable']): LinkCable | undefined {
     if (!cable) return undefined
     const result: LinkCable = {}
-    const category = cable.category ?? cable.cable_category
+    const rawCategory = cable.category ?? cable.cable_category
+    const category = normalizeCableGrade(rawCategory)
     if (category) result.category = category
+    const medium = normalizeCableMedium((cable as { medium?: unknown }).medium)
+    if (medium) result.medium = medium
     if (cable.length_m !== undefined) result.length_m = cable.length_m
     return Object.keys(result).length > 0 ? result : undefined
   }
