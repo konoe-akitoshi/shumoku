@@ -10,92 +10,50 @@
 
 UI ロジック（カスケード絞り込み、cage ロック、バリデーション）は**この構造の中**ではなく、**この構造の上**に乗っています。
 
-## 概念レイヤ
+## 関係図（ざっくり）
+
+「何が何を持っていて、どこで噛み合うか」だけの粗い図。フィールドは省略。
 
 ```mermaid
 flowchart LR
-  subgraph A[Node A]
+  subgraph NS[ノード側]
     direction TB
-    PA[Port<br/>cage = sfp+]
+    Node["Node"]
+    Port["Port<br/>(cage)"]
+    Node -- owns --> Port
   end
-  subgraph CABLE[Cable<br/>category · length · connector]
-    direction LR
-    EA[Endpoint A<br/>Plug · Module]
-    EB[Endpoint B<br/>Plug · Module]
-    EA --- EB
-  end
-  subgraph B[Node B]
+
+  subgraph LS[リンク側]
     direction TB
-    PB[Port<br/>cage = sfp+]
+    Link["Link"]
+    EpA["Endpoint (from)"]
+    EpB["Endpoint (to)"]
+    Cable["Cable<br/>(grade · 長さ · 端コネクタ)"]
+    PlugA["Plug<br/>(form factor)"]
+    PlugB["Plug<br/>(form factor)"]
+    ModA["Module?<br/>(transceiver)"]
+    ModB["Module?<br/>(transceiver)"]
+
+    Link -- from --> EpA
+    Link -- to --> EpB
+    Link -- has --> Cable
+    EpA -- has --> PlugA
+    EpB -- has --> PlugB
+    PlugA -- contains --> ModA
+    PlugB -- contains --> ModB
   end
-  PA -. plug fits cage .- EA
-  EB -. plug fits cage .- PB
+
+  PlugA -. plug fits cage .- Port
+  EpA -. refs by id .- Node
 ```
 
-- Plug と cage は機械的に一致する必要がある（standard の `spec.cage` が、`port.cage` が既知ならそれと一致する）。
-- Module とケーブル媒体は、その制約の中でユーザーが選ぶ。
-- `cable.connector`（LC / MPO / RJ45 plug）はケーブル端の終端形状で、Plug の form factor とは別軸。
+- ノード側は **Node が Port を所有**してそこで閉じる。
+- リンク側は **Link → Endpoint → Plug → Module（あれば）** という入れ子。Cable は Link の直下で per-link 一本。
+- 両側は **「Plug が Port の cage に挿さる」「Endpoint が Node/Port を id で参照する」** の二点でだけつながる（Node/Port は Link の所有物にはならない）。
 
 ## データモデル
 
-「ノード側に入っているもの」と「リンク側に入っているもの」を分けて、入れ子のまま示します。Endpoint は Link の中に二つ（from / to）あり、それぞれが Node と Port を id で参照しつつ、自分の属性として Module を保持する点に注意。
-
-### ノード側
-
-```
-Node
-├── id: string
-├── label?: string
-├── ports: NodePort[]
-│   └── NodePort
-│       ├── id: string
-│       ├── label?: string
-│       ├── cage?: PortConnector       ← rj45 / sfp+ / sfp28 …
-│       ├── poe?: boolean
-│       └── faceplateLabel?, interfaceName?, role?, …
-└── (position, parent, shape, spec などレイアウト系)
-```
-
-Port は完全に Node の所有物。Link 側からは `LinkEndpoint.node` + `LinkEndpoint.port` の id ペアで参照されるだけで、複製はしない。
-
-### リンク側
-
-物理的な階層は **Plug ＞ Module（あれば）＞ Cable**。プラグは「ケーブル端の差し込み形状」で常に存在し、その中にトランシーバ（Module）が入るかどうかは構成次第（RJ45 直結なら無し、SFP+ なら有り）。両端それぞれにこのプラグ／モジュール構造があり、Cable はリンク全体で一本。
-
-```
-Link
-├── id: string
-├── from: LinkEndpoint                          ← 端点 A
-│   ├── node, port                              │ Node / NodePort を id 参照
-│   ├── Plug (form factor)                      ← 派生: module.standard → spec.cage
-│   │                                           │       なければ port.cage にフォールバック
-│   │                                           │       例: sfp+ / rj45 / qsfp28
-│   │   └── module?: LinkModule                 ← ★ optional
-│   │       ├── standard: EthernetStandard      │   10GBASE-SR / 10GBASE-T …
-│   │       └── sku?: string                    │   FTLX8571D3BCL …
-│   │     ※ RJ45 直結など pluggable でないときは module を持たない
-│   └── ip?: string | string[]
-├── to: LinkEndpoint                            ← 端点 B（from と同型）
-│   ├── node, port
-│   ├── Plug
-│   │   └── module?
-│   └── ip?
-├── cable?: LinkCable                           ← ケーブル全体の属性（per-link で一本）
-│   ├── category?: string                       │ om4 / cat6a / …
-│   ├── length_m?: number
-│   └── connector?: string                      │ LC / MPO / RJ45 plug …
-└── label?, type?, vlan?, redundancy?, arrow?, …
-```
-
-要点：
-
-- **Plug は常に概念として存在する**が、データ上は独立フィールドではなく**派生**。`module.standard` が決まればそれが要求する `spec.cage` がプラグ、未決なら `port.cage` を借りる。
-- **Module は Plug の中に optional に入る**。SFP / SFP+ / SFP28 / QSFP+ / QSFP28 など pluggable のときだけ有り、RJ45 直結のような integrated 形態では無し。
-- **Module は per-endpoint**。BiDi ペアやメディアコンバータで非対称になるため、各端が独立した standard を持てる必要がある。
-- **Cable は per-link**。grade / 長さ / 端コネクタは「ケーブル全体」の属性で、どちらか一端に偏らせない。
-- **Endpoint は Link の中の構造**で、Node を所有しない（id で参照するだけ）。
-
-### 関係図
+実装上のフィールドと composition / id 参照を含めた詳細。
 
 ```mermaid
 classDiagram
@@ -115,12 +73,13 @@ classDiagram
     from: LinkEndpoint
     to: LinkEndpoint
     cable?: LinkCable
+    label?, type?, vlan?, redundancy?, arrow?
   }
   class LinkEndpoint {
     node: string
     port: string
     module?: LinkModule
-    ip?: string
+    ip?: string | string[]
   }
   class LinkModule {
     standard: EthernetStandard
@@ -141,7 +100,14 @@ classDiagram
   LinkEndpoint ..> NodePort : refs port id
 ```
 
-実線（◆）は所有（compose）、破線（..>）は id 参照。Node と NodePort はノード側で閉じていて、Link 側から id で指されるだけ。
+実線（◆）は所有（compose）、破線（..>）は id 参照。
+
+要点：
+
+- **Plug は独立フィールドではない**。`LinkModule` が決まれば `STANDARD_SPECS[std].cage` で逆引き、未決なら `port.cage` を借りる。関係図では構造的に `Plug` ノードを置いているが、データ上は `LinkEndpoint` と `LinkModule` の間に入る派生概念。
+- **Module は per-endpoint で optional**。RJ45 直結のような integrated 形態では持たない。BiDi ペアやメディアコンバータで両端の standard が非対称になり得るので各端独立。
+- **Cable は per-link**。grade / 長さ / 端コネクタは「ケーブル全体」の属性で、どちらかの端に偏らせない。
+- **Endpoint は Node を所有しない**。`node` / `port` を id で参照するだけ。
 
 ### フィールド対応
 
