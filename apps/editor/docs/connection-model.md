@@ -122,6 +122,12 @@ classDiagram
 
 ## UI カスケード
 
+接続を作る入口は複数あり、出発点ごとに違う絞り込み順を辿る。データ的に決まる項目は同じだが「次に何を選ぶか」がパターンごとに変わる。
+
+### A. 接続ページ・ポート起点
+
+機材が先に決まっているケース（既存ノードに後から線を足す等）。Node → Port を選ぶと port.cage が決まり、そこから Plug → Module → Cable grade が絞り込まれる。
+
 ```mermaid
 flowchart LR
   N[Node 選択] --> P[Port 選択]
@@ -132,9 +138,30 @@ flowchart LR
   M --> CG[Cable grade<br/>module で絞り込み]
 ```
 
-Plug select は Port と Module の間に置く。port にカタログ由来の cage が乗っているときは Plug select を disabled にしてその値で固定する（ハードウェアが決めるため）。port に cage 情報がないときは Plug select がユーザーの最初の明示的な選択になり、Module 一覧を絞る。
+### B. 接続ページ・ケーブル起点
 
-Plug の値の解決順位：
+「この種類のケーブルで繋ぎたい」が先に決まっているケース。Cable kind / Module から入り、適合する Plug → 適合する Port → Node を逆向きに辿る。
+
+```mermaid
+flowchart LR
+  CK[Cable kind / Module<br/>選択] --> PL[Plug 候補<br/>module.spec.cage で決まる]
+  PL --> P[Port 候補<br/>port.cage が plug と一致するもの]
+  P --> N[Node 候補<br/>該当 port を持つもの]
+  CK --> CG[Cable grade<br/>module で絞り込み]
+```
+
+### C. ダイヤグラム起点
+
+canvas 上で線を引いて先に「繋がっている」事実だけ作り、後から詳細パネルで Plug / Module / Cable を埋めていくケース。発見的・スケッチ的な入力に向く。
+
+```mermaid
+flowchart LR
+  D[ダイヤグラム上で<br/>2 ノード間に線を引く] --> S[Link skeleton 生成<br/>node/port のみ確定]
+  S --> DP[詳細パネルで<br/>Plug / Module / Cable 入力]
+  DP --> A1[A: ポート起点と同じ<br/>カスケードで残りを埋める]
+```
+
+### Plug の値の解決順位（共通）
 
 1. `port.cage`（ハードウェア制約 — 他より優先される）
 2. `module.standard` から推論される plug（モジュールが既に選ばれているとき）
