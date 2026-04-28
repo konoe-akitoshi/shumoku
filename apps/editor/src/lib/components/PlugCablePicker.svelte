@@ -4,6 +4,7 @@
     cableVariantsForPlug,
     defaultCableGrade,
     type EthernetStandard,
+    groupCableVariants,
     plugProfileForStandard,
     plugProfilesForCages,
   } from '@shumoku/core'
@@ -32,9 +33,11 @@
   const plugs = $derived(plugProfilesForCages(fromCage, toCage))
   const currentPlug = $derived(plugProfileForStandard(standard) ?? plugs[0])
 
-  // Step 2: cable variants share the same plug profile but differ by
-  // medium kind (MM fiber / SM fiber / DAC / AOC for SFP+ 10G, etc.).
+  // Step 2: cable variants share the same cage. For RJ45 that's all the
+  // twisted-pair speeds; for SFP+ that's SR / LR / CR / AOC. We bucket
+  // them by cable kind so the dropdown surfaces the medium boundary.
   const cables = $derived(currentPlug ? cableVariantsForPlug(currentPlug) : [])
+  const cableGroups = $derived(groupCableVariants(cables))
 
   // Step 3: media grade — Cat5e/6/6a/8 for twisted-pair, OM3/4/5 for
   // multimode, OS1/2 for single-mode. Empty for DAC/AOC.
@@ -44,8 +47,9 @@
   function onPlugSelect(plugId: string) {
     const next = plugs.find((p) => p.id === plugId)
     if (!next) return
-    // Switching plug: default to the first cable variant + its grade so
-    // the link spec stays consistent end-to-end.
+    // Switching plug: default to the slowest cable variant under the new
+    // plug (typically the most common baseline — 1000BASE-T for RJ45,
+    // 10GBASE-SR for SFP+) so the link spec stays valid end-to-end.
     const variants = cableVariantsForPlug(next)
     const newStandard = variants[0]?.standard
     onstandardchange(newStandard)
@@ -95,8 +99,12 @@
     {:else if !standard}
       <option value="">— pick a cable —</option>
     {/if}
-    {#each cables as cable}
-      <option value={cable.standard}>{cable.label}</option>
+    {#each cableGroups as group}
+      <optgroup label={group.label}>
+        {#each group.variants as cable}
+          <option value={cable.standard}>{cable.label}</option>
+        {/each}
+      </optgroup>
     {/each}
   </select>
 

@@ -385,17 +385,20 @@ export function groupStandards(
 // ============================================================================
 
 /**
- * A "plug profile" is the cage + speed combination — what the user picks
- * conceptually before deciding cable medium (e.g. "SFP+ 10G", "RJ45 1G").
- * Multiple IEEE standards can share a plug profile when they only differ
- * by cable kind (e.g. SFP+ 10G covers SR / LR / CR / AOC).
+ * A "plug profile" is the cage form factor — RJ45 / SFP / SFP+ / etc.
+ * It's purely the *shape* the cable plugs into. Speed lives downstream
+ * (in the cable choice) because:
+ *   - For RJ45, speed is decided by the cable category and link
+ *     auto-negotiation; the plug itself doesn't pin it.
+ *   - For SFP-family cages, the same physical cage hosts multiple
+ *     transceiver speeds (e.g. SFP+ slot accepts SFP+ at 10G but is
+ *     backward-compatible with SFP 1G modules).
  */
 export interface PlugProfile {
-  /** Stable id, e.g. "sfp+:10000000000". Used as select value. */
+  /** Stable id (= cage value). Used as select value. */
   id: string
   cage: PortConnector
-  speedBps: number
-  /** Display label, e.g. "SFP+ 10G". */
+  /** Display label, e.g. "RJ45" or "SFP+". */
   label: string
 }
 
@@ -408,16 +411,11 @@ function speedLabel(bps: number): string {
   return `${bps} bps`
 }
 
-function makePlugId(cage: PortConnector, speedBps: number): string {
-  return `${cage}:${speedBps}`
-}
-
-function makePlugProfile(cage: PortConnector, speedBps: number): PlugProfile {
+function makePlugProfile(cage: PortConnector): PlugProfile {
   return {
-    id: makePlugId(cage, speedBps),
+    id: cage,
     cage,
-    speedBps,
-    label: `${cage.toUpperCase()} ${speedLabel(speedBps)}`,
+    label: cage.toUpperCase(),
   }
 }
 
@@ -430,31 +428,31 @@ export function plugProfilesForCages(
   fromCage: string | undefined,
   toCage: string | undefined,
 ): PlugProfile[] {
-  const seen = new Map<string, PlugProfile>()
+  const seen = new Set<string>()
+  const out: PlugProfile[] = []
   for (const name of KNOWN_STANDARDS) {
     const spec = STANDARD_SPECS[name]
     if (!spec) continue
     if (!cageAcceptsRequired(fromCage, spec.cage)) continue
     if (!cageAcceptsRequired(toCage, spec.cage)) continue
-    const id = makePlugId(spec.cage, spec.speedBps)
-    if (!seen.has(id)) seen.set(id, makePlugProfile(spec.cage, spec.speedBps))
+    if (seen.has(spec.cage)) continue
+    seen.add(spec.cage)
+    out.push(makePlugProfile(spec.cage))
   }
-  // Sort by speed asc, then cage name for stable ordering.
-  return [...seen.values()].sort((a, b) =>
-    a.speedBps !== b.speedBps ? a.speedBps - b.speedBps : a.cage.localeCompare(b.cage),
-  )
+  return out
 }
 
 /**
- * A cable variant within a plug profile — the actual IEEE standard plus
- * a media-friendly label ("Multimode fiber LC, reach 400 m").
+ * A cable variant — the actual IEEE standard plus a media-friendly
+ * label that includes speed, since speed is now part of the cable
+ * decision (e.g. "Twisted-pair 10G — 10GBASE-T, reach 100 m").
  */
 export interface CableVariant {
   standard: EthernetStandard
   spec: StandardSpec
-  /** Display label, e.g. "Multimode fiber (LC) — reach 400 m". */
+  /** Display label, e.g. "Multimode (LC) 10G — 10GBASE-SR, reach 400 m". */
   label: string
-  /** Cable kind grouping (for color coding / icons in UI if desired). */
+  /** Cable kind grouping (for sectioned dropdown). */
   group: StandardCableGroup
 }
 
@@ -465,28 +463,49 @@ function cableMediumLabel(spec: StandardSpec): string {
     const conn = spec.cableConnector ? ` (${spec.cableConnector.toUpperCase()})` : ''
     return `Fiber ${mode}${conn}`
   }
-  if (spec.cableKind === 'dac') return 'DAC (passive twinax)'
-  if (spec.cableKind === 'aoc') return 'AOC (active optical)'
+  if (spec.cableKind === 'dac') return 'DAC'
+  if (spec.cableKind === 'aoc') return 'AOC'
   return spec.cableKind
 }
 
 /**
- * Cable variants within a plug profile — i.e. all standards that share
- * the same (cage, speed) but differ by cable medium. The variants are
- * what the user picks at the second step of the cascade.
+ * Cable variants for a plug — all standards reachable through that
+ * cage form factor, ordered by speed. For RJ45 this includes 10M /
+ * 100M / 1G / 2.5G / 5G / 10G; for SFP+ it includes SR / LR / CR / AOC.
  */
 export function cableVariantsForPlug(plug: PlugProfile): CableVariant[] {
   const result: CableVariant[] = []
   for (const name of KNOWN_STANDARDS) {
     const spec = STANDARD_SPECS[name]
     if (!spec) continue
-    if (spec.cage !== plug.cage || spec.speedBps !== plug.speedBps) continue
+    if (spec.cage !== plug.cage) continue
     result.push({
       standard: name,
       spec,
-      label: `${cableMediumLabel(spec)} — ${name}, reach ${formatReachMeters(spec.maxReach_m)}`,
+      label: `${cableMediumLabel(spec)} ${speedLabel(spec.speedBps)} — ${name}, reach ${formatReachMeters(spec.maxReach_m)}`,
       group: classifyStandardGroup(spec),
     })
+  }
+  result.sort((a, b) => a.spec.speedBps - b.spec.speedBps)
+  return result
+}
+
+/** Group cable variants by `cableKind` for sectioned `<optgroup>` rendering. */
+export function groupCableVariants(
+  variants: readonly CableVariant[],
+): Array<{ group: StandardCableGroup; label: string; variants: CableVariant[] }> {
+  const buckets = new Map<StandardCableGroup, CableVariant[]>()
+  for (const v of variants) {
+    const list = buckets.get(v.group) ?? []
+    list.push(v)
+    buckets.set(v.group, list)
+  }
+  const result: Array<{ group: StandardCableGroup; label: string; variants: CableVariant[] }> = []
+  for (const group of STANDARD_GROUP_ORDER) {
+    const bucket = buckets.get(group)
+    if (bucket && bucket.length > 0) {
+      result.push({ group, label: STANDARD_GROUP_LABELS[group], variants: bucket })
+    }
   }
   return result
 }
@@ -497,7 +516,7 @@ export function plugProfileForStandard(
 ): PlugProfile | undefined {
   const spec = getStandardSpec(standard)
   if (!spec) return undefined
-  return makePlugProfile(spec.cage, spec.speedBps)
+  return makePlugProfile(spec.cage)
 }
 
 /**
