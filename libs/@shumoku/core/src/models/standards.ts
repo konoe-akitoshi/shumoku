@@ -21,6 +21,7 @@
 
 import type {
   CableConnector,
+  CableGrade,
   EthernetStandard,
   FiberMode,
   LinkMediumKind,
@@ -548,7 +549,7 @@ export function plugProfileForStandard(
  */
 export interface CableGradeOption {
   /** Stored in `Link.cable.category`. */
-  value: string
+  value: CableGrade
   /** Display label. */
   label: string
 }
@@ -594,7 +595,7 @@ export function cableGradesForStandard(standard: EthernetStandard | undefined): 
  * picks/changes the cable medium and we want the third select to land
  * on a sensible value rather than empty.
  */
-export function defaultCableGrade(standard: EthernetStandard | undefined): string | undefined {
+export function defaultCableGrade(standard: EthernetStandard | undefined): CableGrade | undefined {
   const spec = getStandardSpec(standard)
   if (!spec) return undefined
   if (spec.cableKind === 'twisted-pair') {
@@ -605,4 +606,15 @@ export function defaultCableGrade(standard: EthernetStandard | undefined): strin
   if (spec.cableKind === 'fiber' && spec.fiberMode === 'multimode') return 'om3'
   if (spec.cableKind === 'fiber' && spec.fiberMode === 'singlemode') return 'os2'
   return undefined
+}
+
+/**
+ * Derive the cable-end connector from the link's effective standard.
+ * The model no longer stores `cable.connector` explicitly — call this
+ * from display / validation code that needs the connector value.
+ */
+export function cableConnectorForStandard(
+  standard: EthernetStandard | undefined,
+): CableConnector | undefined {
+  return getStandardSpec(standard)?.cableConnector
 }

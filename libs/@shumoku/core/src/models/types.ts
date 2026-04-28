@@ -62,16 +62,33 @@ export type LinkMediumKind = 'twisted-pair' | 'fiber' | 'dac' | 'aoc' | (string 
 
 export type FiberMode = 'singlemode' | 'multimode' | (string & {})
 
-export type CableCategory = 'cat5e' | 'cat6' | 'cat6a' | 'cat7' | 'cat8' | (string & {})
+/**
+ * Installed cable grade. Twisted-pair gets cat5e/6/6a/7/8; multi-mode
+ * fiber gets OM3/4/5; single-mode gets OS1/2; DAC and AOC are passive
+ * cable assemblies that don't have a separate grade axis but get their
+ * own values so the field is one source of truth.
+ */
+export type CableGrade =
+  | 'cat5e'
+  | 'cat6'
+  | 'cat6a'
+  | 'cat7'
+  | 'cat8'
+  | 'om3'
+  | 'om4'
+  | 'om5'
+  | 'os1'
+  | 'os2'
+  | 'dac'
+  | 'aoc'
 
 /**
  * Cable-end connector (the physical thing at the cable's tip), e.g.
  * "lc" / "sc" / "mpo" for fiber, "rj45" for twisted-pair.
  *
- * Distinct from `PortConnector` (the cage on the node) and
- * `EthernetStandard` (the IEEE link spec) — the same standard can be
- * delivered with different cable-end connectors (e.g. 10GBASE-SR via
- * LC duplex or via MPO breakout).
+ * Not stored on `LinkCable` directly — it's derived from
+ * `module.standard` via `STANDARD_SPECS[std].cableConnector`. Kept as a
+ * type for derivation helpers and display logic.
  */
 export type CableConnector = 'rj45' | 'lc' | 'sc' | 'mpo' | (string & {})
 
@@ -342,9 +359,9 @@ export interface LinkStyle {
  */
 export interface LinkModule {
   /**
-   * IEEE / industry standard the module implements. Picking this also
-   * pins the cage form factor and cable medium kind via the
-   * `STANDARD_SPECS` registry.
+   * IEEE / industry standard the module implements. Picking this pins
+   * the cage form factor and cable medium kind via the `STANDARD_SPECS`
+   * registry.
    */
   standard: EthernetStandard
   /** Vendor SKU for inventory, e.g. "SFP-10G-SR-S". Optional. */
@@ -352,17 +369,36 @@ export interface LinkModule {
 }
 
 /**
+ * The cable-side plug at one end of a link — what's mechanically
+ * inserted into a port's cage. `cage` is the form factor (RJ45 / SFP+
+ * / etc.) and is the structural anchor: it's required whenever a plug
+ * exists. `module` is the transceiver inside the plug for pluggable
+ * form factors (SFP / SFP+ / SFP28 / QSFP+ / QSFP28); RJ45 direct,
+ * DAC, and AOC have no separate module so it stays undefined.
+ *
+ * Invariant: when both are set, `module.standard`'s required cage
+ * must equal `plug.cage`. The validator surfaces violations.
+ */
+export interface LinkPlug {
+  /** Form factor the plug presents. Required whenever the plug exists. */
+  cage: PortConnector
+  /** Transceiver inside the plug. Absent for RJ45 direct / DAC / AOC. */
+  module?: LinkModule
+}
+
+/**
  * Link endpoint. Conceptually a cable end plugged into a port on a node.
- * The endpoint owns the per-end module (transceiver) — symmetric links
- * have the same `module.standard` on both ends; asymmetric links (BiDi
- * pairs, copper-fiber adapters) carry different module standards per end.
+ * The endpoint references its node and port by id and owns its per-end
+ * `plug` — symmetric links share the same plug shape on both ends;
+ * asymmetric ones (BiDi pairs, BiDi-pair etc.) carry different plug
+ * configs per end.
  */
 export interface LinkEndpoint {
   node: string
   /** NodePort.id on the endpoint node — must reference an existing port. */
   port: string
-  /** Transceiver / module attached at this end. */
-  module?: LinkModule
+  /** Cable-side plug at this end (form factor + optional module). */
+  plug?: LinkPlug
   ip?: string // e.g., "10.57.0.1/30"
   /**
    * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id").
@@ -374,20 +410,16 @@ export interface LinkEndpoint {
 
 /**
  * Physical cable details that aren't fully implied by the link's standard.
- * The standard fixes "cat6 or better is fine for 1000BASE-T", but the
- * actual installed cable may be Cat6 or Cat6A — that's what `category`
- * captures. `length_m` is purely informational (reach validation).
+ * `category` (the installed cable grade) and `length_m` are the two
+ * fields that vary independently of the chosen standard. The cable-end
+ * connector is *not* stored — it's derived from `module.standard` via
+ * `STANDARD_SPECS[std].cableConnector` to keep the model normalized.
  */
 export interface LinkCable {
-  /** Twisted-pair installed cable category. Ignored for fiber/DAC/AOC. */
-  category?: CableCategory
+  /** Installed cable grade. Different domains for twisted-pair / fiber / DAC / AOC. */
+  category?: CableGrade
   /** Run length in meters. Used for reach warnings. */
   length_m?: number
-  /**
-   * Cable-end connector override. Most fiber standards default to LC
-   * duplex; set this when the install uses MPO breakouts, SC, etc.
-   */
-  connector?: CableConnector
 }
 
 export interface Link {

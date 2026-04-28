@@ -55,7 +55,7 @@
     return spec.cableKind
   })
 
-  const cableConnector = $derived(cable?.connector ?? spec?.cableConnector)
+  const cableConnector = $derived(spec?.cableConnector)
 </script>
 
 {#if spec}

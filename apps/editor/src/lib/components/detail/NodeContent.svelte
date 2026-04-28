@@ -77,7 +77,7 @@
           ? link.vlan.join(', ')
           : String(link.vlan)
         : undefined
-      const bw = link.from.module?.standard ?? link.to.module?.standard ?? undefined
+      const bw = link.from.plug?.module?.standard ?? link.to.plug?.module?.standard ?? undefined
       const label = Array.isArray(link.label) ? link.label.join(', ') : link.label
 
       if (fromNode === node.id && fromPort) {

@@ -8,6 +8,7 @@
 
 import yaml from 'js-yaml'
 import { ensurePorts } from '../models/migrate.js'
+import { plugFromStandard } from '../models/port-compatibility.js'
 import type {
   ArrowType,
   CanvasSettings,
@@ -357,7 +358,6 @@ export class YamlParser {
     const category = cable.category ?? cable.cable_category
     if (category) result.category = category
     if (cable.length_m !== undefined) result.length_m = cable.length_m
-    if (cable.connector) result.connector = cable.connector
     return Object.keys(result).length > 0 ? result : undefined
   }
 
@@ -377,7 +377,10 @@ export class YamlParser {
       const node = colon >= 0 ? endpoint.slice(0, colon) : endpoint
       const port = colon >= 0 ? endpoint.slice(colon + 1) : ''
       const result: LinkEndpoint = { node, port }
-      if (linkStandard) result.module = { standard: linkStandard }
+      if (linkStandard) {
+        const plug = plugFromStandard(linkStandard)
+        if (plug) result.plug = plug
+      }
       return result
     }
     const standard = (endpoint.module?.standard as EthernetStandard | undefined) ?? linkStandard
@@ -388,7 +391,10 @@ export class YamlParser {
       ip: endpoint.ip,
       pin: endpoint.pin,
     }
-    if (standard || sku) result.module = { standard: standard ?? '', sku }
+    if (standard) {
+      const plug = plugFromStandard(standard, sku)
+      if (plug) result.plug = plug
+    }
     return result
   }
 

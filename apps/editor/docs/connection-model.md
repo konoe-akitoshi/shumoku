@@ -109,7 +109,7 @@ Plug を変更すると、既存モジュールの要求 plug が新しい plug 
 
 ## データモデル
 
-導線図で見た「Plug」「Module（optional）」「Cable」のうち、データとして persist されるのは **Module** と **Cable** だけ。Plug は派生で、`module.standard` か `port.cage` から逆引きされる。
+導線図の **Plug → Module?（optional）→ Cable** という入れ子をデータでも素直に表現する。`LinkEndpoint.plug` が構造の anchor で、その中に optional な `module` が入る。Cable は Link 直下で per-link 一本。`cable.connector` のような派生可能な情報は持たず、`module.standard` から都度導出する（ヘルパ `cableConnectorForStandard`）。
 
 ```mermaid
 classDiagram
@@ -134,49 +134,56 @@ classDiagram
   class LinkEndpoint {
     node: string
     port: string
-    module?: LinkModule
+    plug?: LinkPlug
     ip?: string | string[]
+  }
+  class LinkPlug {
+    cage: PortConnector
+    module?: LinkModule
   }
   class LinkModule {
     standard: EthernetStandard
     sku?: string
   }
   class LinkCable {
-    category?: string
+    category?: CableGrade
     length_m?: number
-    connector?: string
   }
 
   Node *-- "ports *" NodePort : owns
   Link *-- "from 1" LinkEndpoint
   Link *-- "to 1" LinkEndpoint
   Link *-- "0..1" LinkCable
-  LinkEndpoint *-- "0..1" LinkModule
+  LinkEndpoint *-- "0..1" LinkPlug
+  LinkPlug *-- "0..1" LinkModule
   LinkEndpoint ..> Node : refs node id
   LinkEndpoint ..> NodePort : refs port id
 ```
 
 実線（◆）は所有（compose）、破線（..>）は id 参照。
 
-導線図に対する位置づけ：
+設計の要点：
 
-- **モデルは導線に対して中立**。A / B / C どの順序でも、最終的に保存されるのは同じ `Link` 構造で、フィールドが埋まる順番だけが違う。導線ごとに別形を持たせる必要はない。
-- **Plug は永続化されない**。導線で「Plug を選ぶ」UI を出していても、保存する瞬間には `module.standard`（pluggable のとき）か `port.cage`（integrated のとき）に吸収される。
-- **Module の optionality はモデルにそのまま現れる**。`LinkEndpoint.module` が optional であることが、関係図の「経由 / 直結」二経路に対応する。
+- **Plug は明示フィールド**。関係図と 1:1 で対応する `LinkPlug` を持ち、`cage` は always set、`module` は optional。「プラグだけ決まってモジュール未決」状態が表現できる（B / C 導線の中間状態）。
+- **invariant**: `plug.module.standard` の要求 cage と `plug.cage` は一致しなければならない。`validateLinkCompatibility` が違反を error で出す。
+- **モデルは導線に対して中立**。A / B / C どの順序でも、最終的に保存されるのは同じ `Link` 構造で、フィールドが埋まる順番だけが違う。
+- **Module は per-endpoint で optional**。`LinkPlug.module` が optional であることが、関係図の「経由 / 直結」二経路に対応する。
 - **Endpoint は Node を所有しない**。`node` / `port` を id で参照するだけで、Link 側に Node を複製しない。
 - **Cable は per-link**。両端で grade / 長さが食い違うことは物理的に無いため、片端に偏らせず Link 直下に置く。
+- **`cable.connector` は持たない**。LC / MPO / RJ45 plug 等の端コネクタは `module.standard` の `spec.cableConnector` から派生。表示時は `cableConnectorForStandard()` ヘルパで取得。
+- **`cable.category` は型強化**。`CableGrade` ユニオン（`'cat5e' | 'cat6' | 'cat6a' | 'cat7' | 'cat8' | 'om3' | 'om4' | 'om5' | 'os1' | 'os2' | 'dac' | 'aoc'`）で、壊れた値の侵入を型で防ぐ。
 
 ### フィールド対応
 
-| 物理レイヤ          | モデル位置                       | 型                     | 例               |
-| ------------------- | -------------------------------- | ---------------------- | ---------------- |
-| Port レセプタクル   | `Node.ports[].cage`              | `PortConnector`        | `sfp+`、`rj45`   |
-| Endpoint モジュール | `Link.from/to.module.standard`   | `EthernetStandard`     | `10GBASE-SR`     |
-| モジュール SKU      | `Link.from/to.module.sku`        | `string`               | `FTLX8571D3BCL`  |
-| ケーブル媒体 grade  | `Link.cable.category`            | `string`               | `om4`、`cat6a`   |
-| ケーブル長          | `Link.cable.length_m`            | `number`               | `30`             |
-| ケーブル端コネクタ  | `Link.cable.connector`           | `string`（freeform）   | `LC`、`MPO`      |
-| Plug form factor    | `module.standard` から派生       | （フィールドなし）     | `sfp+`           |
+| 物理レイヤ          | モデル位置                              | 型                     | 例               |
+| ------------------- | --------------------------------------- | ---------------------- | ---------------- |
+| Port レセプタクル   | `Node.ports[].cage`                     | `PortConnector`        | `sfp+`、`rj45`   |
+| Endpoint プラグ     | `Link.from/to.plug.cage`                | `PortConnector`        | `sfp+`、`rj45`   |
+| Endpoint モジュール | `Link.from/to.plug.module.standard`     | `EthernetStandard`     | `10GBASE-SR`     |
+| モジュール SKU      | `Link.from/to.plug.module.sku`          | `string`               | `FTLX8571D3BCL`  |
+| ケーブル媒体 grade  | `Link.cable.category`                   | `CableGrade`           | `om4`、`cat6a`   |
+| ケーブル長          | `Link.cable.length_m`                   | `number`               | `30`             |
+| ケーブル端コネクタ  | （派生）`cableConnectorForStandard(std)`| `CableConnector`       | `LC`、`MPO`      |
 
 ## UI 設計
 
@@ -186,7 +193,7 @@ classDiagram
 
 | 画面                                            | Plug + Module               | Cable grade   | 長さ          | Cable connector  |
 | ----------------------------------------------- | --------------------------- | ------------- | ------------- | ---------------- |
-| `LinkProperties.svelte`（詳細パネル）           | per-endpoint セクション     | per-link 行   | per-link 行   | per-link 行（テキスト） |
+| `LinkProperties.svelte`（詳細パネル）           | per-endpoint セクション     | per-link 行   | per-link 行   | （派生表示のみ） |
 | `connections/+page.svelte` テーブル             | per-endpoint セル内縦並び   | Cable 列      | Length 列     | （なし）         |
 | `connections/+page.svelte` 追加フォーム         | per-endpoint ピッカー       | Cable 列      | —             | —                |
 
@@ -209,10 +216,10 @@ classDiagram
 | チェック                                                          | 重大度  | 状態  |
 | ----------------------------------------------------------------- | ------- | ----- |
 | `port.cage` が `module.standard` の要求 cage を受け入れるか       | error   | ✅    |
+| `plug.cage` と `module.standard` の要求 cage が一致するか         | error   | ✅    |
 | `from.standard` と `to.standard` が異なる（非対称リンク）         | warning | ✅    |
 | `cable.length_m` が grade 補正後の reach を超えている             | warning | ✅    |
 | `port.poe` が non-RJ45 cage に立っている                          | error   | ✅    |
-| `cable.connector` が `spec.cableConnector` と一致するか           | —       | ❌ 未実装 |
 
 非対称 standard は警告するだけで許容する — BiDi ペア（例: `10GBASE-BX10-D` ↔ `10GBASE-BX10-U`）やメディアコンバータリンクで意図的に発生するため。
 

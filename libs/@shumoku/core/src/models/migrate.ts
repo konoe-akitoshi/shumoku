@@ -57,7 +57,7 @@ function normalizeEndpoint(ep: LinkEndpoint, nodes: Map<string, Node>): LinkEndp
   return {
     node: ep.node,
     port: portId ?? '',
-    module: ep.module,
+    plug: ep.plug,
     ip: ep.ip,
     pin: ep.pin,
   }

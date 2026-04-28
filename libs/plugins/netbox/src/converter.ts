@@ -933,8 +933,8 @@ function serializeLink(lines: string[], link: Link): void {
   // (the symmetric case). Asymmetric per-endpoint module standards
   // would need a richer YAML output; netbox import only produces
   // symmetric links so we don't need to handle that here.
-  const fromStd = link.from.module?.standard
-  const toStd = link.to.module?.standard
+  const fromStd = link.from.plug?.module?.standard
+  const toStd = link.to.plug?.module?.standard
   if (fromStd && fromStd === toStd) {
     lines.push(`    standard: ${fromStd}`)
   }

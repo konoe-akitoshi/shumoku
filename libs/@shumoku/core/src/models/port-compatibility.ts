@@ -3,7 +3,15 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { getStandardSpec, reachForLink } from './standards.js'
-import type { EthernetStandard, Link, LinkEndpoint, NodePort, PortConnector } from './types.js'
+import type {
+  EthernetStandard,
+  Link,
+  LinkEndpoint,
+  LinkModule,
+  LinkPlug,
+  NodePort,
+  PortConnector,
+} from './types.js'
 
 const PLUGGABLE_CONNECTORS = new Set<PortConnector>(['sfp', 'sfp+', 'sfp28', 'qsfp+', 'qsfp28'])
 
@@ -47,7 +55,19 @@ function cageAccepts(cage: PortConnector | undefined, required: PortConnector): 
 export function effectiveLinkStandard(
   link: Pick<Link, 'from' | 'to'>,
 ): EthernetStandard | undefined {
-  return link.from.module?.standard || link.to.module?.standard
+  return endpointStandard(link.from) ?? endpointStandard(link.to)
+}
+
+/**
+ * Build a plug from a chosen module standard. The plug's `cage` is
+ * derived from `STANDARD_SPECS[standard].cage`; the module is set on
+ * the plug. Returns `undefined` if the standard is unknown.
+ */
+export function plugFromStandard(standard: EthernetStandard, sku?: string): LinkPlug | undefined {
+  const spec = getStandardSpec(standard)
+  if (!spec) return undefined
+  const module: LinkModule = sku ? { standard, sku } : { standard }
+  return { cage: spec.cage as PortConnector, module }
 }
 
 /**
@@ -67,10 +87,27 @@ export function validateLinkCompatibility(
   link: Pick<Link, 'from' | 'to' | 'cable'>,
 ): PortCompatibilityIssue[] {
   const issues: PortCompatibilityIssue[] = []
-  const fromStd = link.from.module?.standard
-  const toStd = link.to.module?.standard
+  const fromStd = endpointStandard(link.from)
+  const toStd = endpointStandard(link.to)
   const fromSpec = getStandardSpec(fromStd)
   const toSpec = getStandardSpec(toStd)
+
+  // Plug.cage / module.standard consistency: when both are set, the
+  // module's required cage must match the plug's declared cage.
+  for (const [side, ep] of [
+    ['source', link.from],
+    ['target', link.to],
+  ] as const) {
+    const plug = ep.plug
+    const std = plug?.module?.standard
+    const stdCage = getStandardSpec(std)?.cage
+    if (plug?.cage && stdCage && plug.cage !== stdCage) {
+      issues.push({
+        severity: 'error',
+        message: `${side} plug.cage ${plug.cage} disagrees with module ${std} (requires ${stdCage})`,
+      })
+    }
+  }
 
   // PoE flag sanity — even without a standard, a non-RJ45 cage marked PoE
   // is a misconfiguration we can flag.
@@ -148,15 +185,25 @@ export function defaultStandardForCages(
 }
 
 /**
- * Produce a symmetric module spec for a link — both endpoints get the
- * same standard. Used by editor flows that default to symmetric links
- * (the 99% case).
+ * Produce a symmetric plug spec for a link — both endpoints get the
+ * same plug+module. Used by editor flows that default to symmetric
+ * links (the 99% case).
  */
-export function symmetricModule(standard: EthernetStandard): { standard: EthernetStandard } {
-  return { standard }
+export function symmetricPlug(standard: EthernetStandard): LinkPlug | undefined {
+  return plugFromStandard(standard)
+}
+
+/** Convenience: type-narrowed accessor for the endpoint module. */
+export function endpointModule(ep: LinkEndpoint): LinkModule | undefined {
+  return ep.plug?.module
 }
 
 /** Convenience: type-narrowed accessor for endpoint module standard. */
 export function endpointStandard(ep: LinkEndpoint): EthernetStandard | undefined {
-  return ep.module?.standard
+  return ep.plug?.module?.standard
+}
+
+/** Convenience: type-narrowed accessor for the endpoint plug cage. */
+export function endpointPlugCage(ep: LinkEndpoint): PortConnector | undefined {
+  return ep.plug?.cage
 }

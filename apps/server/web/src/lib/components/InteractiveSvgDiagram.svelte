@@ -201,7 +201,7 @@
           id: l.id ?? `${from}->${to}`,
           from,
           to,
-          standard: l.from.module?.standard ?? l.to.module?.standard,
+          standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
         }
       })
     const nodeLabel = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
@@ -265,7 +265,7 @@
     const from = link.from.node
     const to = link.to.node
     let out = `<strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong>`
-    const std = link.from.module?.standard ?? link.to.module?.standard
+    const std = link.from.plug?.module?.standard ?? link.to.plug?.module?.standard
     if (std) out += `<br><span class="muted">Standard: ${escapeHtml(String(std))}</span>`
 
     const m = $metricsData?.links?.[hovered.id]

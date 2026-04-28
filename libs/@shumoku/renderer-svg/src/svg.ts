@@ -451,8 +451,8 @@ export class SVGRenderer {
     if (settings.showBandwidth) {
       const usedStandards = new Set<string>()
       for (const link of graph.links) {
-        if (link.from.module?.standard) usedStandards.add(link.from.module.standard)
-        if (link.to.module?.standard) usedStandards.add(link.to.module.standard)
+        if (link.from.plug?.module?.standard) usedStandards.add(link.from.plug?.module?.standard)
+        if (link.to.plug?.module?.standard) usedStandards.add(link.to.plug?.module?.standard)
       }
       itemCount += usedStandards.size
     }
@@ -516,8 +516,8 @@ export class SVGRenderer {
     // have a different standard at each end — both should appear).
     const usedStandards = new Set<string>()
     for (const link of graph.links) {
-      if (link.from.module?.standard) usedStandards.add(link.from.module.standard)
-      if (link.to.module?.standard) usedStandards.add(link.to.module.standard)
+      if (link.from.plug?.module?.standard) usedStandards.add(link.from.plug?.module?.standard)
+      if (link.to.plug?.module?.standard) usedStandards.add(link.to.plug?.module?.standard)
     }
 
     // Collect used device types
@@ -1280,8 +1280,8 @@ ${fg}
     // Basic link attributes — surface both endpoint standards so consumers
     // can see asymmetric configs (BiDi etc.). For symmetric the value is
     // the same on both data attributes.
-    const fromStd = link.from.module?.standard
-    const toStd = link.to.module?.standard
+    const fromStd = link.from.plug?.module?.standard
+    const toStd = link.to.plug?.module?.standard
     if (fromStd) attrs.push(`data-link-from-standard="${this.escapeXml(fromStd)}"`)
     if (toStd) attrs.push(`data-link-to-standard="${this.escapeXml(toStd)}"`)
     if (link.vlan && link.vlan.length > 0) {

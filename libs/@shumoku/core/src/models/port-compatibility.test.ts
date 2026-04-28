@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   defaultStandardForCages,
   isPoeCapableConnector,
+  plugFromStandard,
   validateLinkCompatibility,
 } from './port-compatibility.js'
 import type { EthernetStandard, Link, LinkCable, NodePort } from './types.js'
@@ -18,8 +19,8 @@ const link = (
   toStd?: EthernetStandard,
   cable?: LinkCable,
 ): Pick<Link, 'from' | 'to' | 'cable'> => ({
-  from: { node: 'a', port: 'p1', module: fromStd ? { standard: fromStd } : undefined },
-  to: { node: 'b', port: 'p2', module: toStd ? { standard: toStd } : undefined },
+  from: { node: 'a', port: 'p1', plug: fromStd ? plugFromStandard(fromStd) : undefined },
+  to: { node: 'b', port: 'p2', plug: toStd ? plugFromStandard(toStd) : undefined },
   cable,
 })
 

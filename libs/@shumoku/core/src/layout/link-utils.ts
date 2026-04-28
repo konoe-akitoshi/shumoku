@@ -72,8 +72,8 @@ const WIDTH_ANCHORS: readonly (readonly [number, number])[] = [
  */
 export function linkSpeedBps(link: Link | null | undefined): number | undefined {
   if (!link) return undefined
-  const fromBps = getStandardSpec(link.from?.module?.standard)?.speedBps
-  const toBps = getStandardSpec(link.to?.module?.standard)?.speedBps
+  const fromBps = getStandardSpec(link.from?.plug?.module?.standard)?.speedBps
+  const toBps = getStandardSpec(link.to?.plug?.module?.standard)?.speedBps
   if (fromBps !== undefined && toBps !== undefined) return Math.min(fromBps, toBps)
   if (fromBps !== undefined) return fromBps
   if (toBps !== undefined) return toBps

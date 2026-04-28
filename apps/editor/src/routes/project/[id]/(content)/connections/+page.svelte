@@ -1,12 +1,15 @@
 <script lang="ts">
   import {
+    type CableGrade,
     cableGradesForStandard,
     defaultCableGrade,
     defaultStandardForCages,
     type EthernetStandard,
+    endpointStandard,
     type Link,
     type LinkEndpoint,
     newId,
+    plugFromStandard,
     validateLinkCompatibility,
   } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
@@ -110,7 +113,7 @@
         fromPort: from.port,
         toNode: to.node,
         toPort: to.port,
-        standard: link.from.module?.standard ?? link.to.module?.standard ?? '',
+        standard: endpointStandard(link.from) ?? endpointStandard(link.to) ?? '',
         standardIssue: getLinkIssue(link),
         cableLength: link.cable?.length_m !== undefined ? String(link.cable.length_m) : '',
         vlan: link.vlan
@@ -197,7 +200,7 @@
   let addToPortId = $state('')
   let addFromStandard = $state<EthernetStandard | ''>('')
   let addToStandard = $state<EthernetStandard | ''>('')
-  let addCableCategory = $state<string | undefined>(undefined)
+  let addCableCategory = $state<CableGrade | undefined>(undefined)
 
   const addFromCage = $derived(getPort(addFromNode, addFromPortId)?.cage)
   const addToCage = $derived(getPort(addToNode, addToPortId)?.cage)
@@ -233,10 +236,10 @@
   function handleAdd() {
     if (!addFromNode || !addToNode || addFromNode === addToNode) return
     if (!addFromPortId || !addToPortId) return
-    const fromModule = addFromStandard ? { standard: addFromStandard } : undefined
-    const toModule = addToStandard ? { standard: addToStandard } : undefined
-    const from: LinkEndpoint = { node: addFromNode, port: addFromPortId, module: fromModule }
-    const to: LinkEndpoint = { node: addToNode, port: addToPortId, module: toModule }
+    const fromPlug = addFromStandard ? plugFromStandard(addFromStandard) : undefined
+    const toPlug = addToStandard ? plugFromStandard(addToStandard) : undefined
+    const from: LinkEndpoint = { node: addFromNode, port: addFromPortId, plug: fromPlug }
+    const to: LinkEndpoint = { node: addToNode, port: addToPortId, plug: toPlug }
     diagramState.addLink({
       id: newId('link'),
       from,
@@ -283,21 +286,16 @@
     const other = side === 'from' ? 'to' : 'from'
     const current = link[side]
     const otherEp = link[other]
-    const wasSymmetric =
-      !otherEp.module?.standard || otherEp.module.standard === current.module?.standard
-    const newModule = standard
-      ? { ...(current.module ?? {}), standard }
-      : current.module?.sku
-        ? { standard: '', sku: current.module.sku }
-        : undefined
-    const updates: Partial<Link> = { [side]: { ...current, module: newModule } }
+    const currentStd = endpointStandard(current)
+    const otherStd = endpointStandard(otherEp)
+    const wasSymmetric = !otherStd || otherStd === currentStd
+    const newPlug = standard ? plugFromStandard(standard, current.plug?.module?.sku) : undefined
+    const updates: Partial<Link> = { [side]: { ...current, plug: newPlug } }
     if (wasSymmetric) {
-      const newOther = standard
-        ? { ...(otherEp.module ?? {}), standard }
-        : otherEp.module?.sku
-          ? { standard: '', sku: otherEp.module.sku }
-          : undefined
-      updates[other] = { ...otherEp, module: newOther }
+      const newOtherPlug = standard
+        ? plugFromStandard(standard, otherEp.plug?.module?.sku)
+        : undefined
+      updates[other] = { ...otherEp, plug: newOtherPlug }
     }
     const grades = cableGradesForStandard(standard)
     const currentGrade = link.cable?.category
@@ -312,7 +310,7 @@
     diagramState.updateLink(link.id, updates)
   }
 
-  function updateCableCategory(link: Link, category: string | undefined) {
+  function updateCableCategory(link: Link, category: CableGrade | undefined) {
     if (!link.id) return
     const next = { ...(link.cable ?? {}) }
     if (category) next.category = category
@@ -502,7 +500,7 @@
           value={addCableCategory ?? ''}
           onchange={(e) => {
             const v = (e.target as HTMLSelectElement).value
-            addCableCategory = v || undefined
+            addCableCategory = v ? (v as CableGrade) : undefined
           }}
         >
           <option value="">—</option>
@@ -560,7 +558,7 @@
         {#each rows as row (row.id)}
           {@const fromCage = getPort(row.fromNode, row.fromPort)?.cage}
           {@const toCage = getPort(row.toNode, row.toPort)?.cage}
-          {@const referenceStandard = row.link.from.module?.standard ?? row.link.to.module?.standard}
+          {@const referenceStandard = row.link.from.plug?.module?.standard ?? row.link.to.plug?.module?.standard}
           {@const gradeOptions = cableGradesForStandard(referenceStandard)}
           <Table.Row>
             <Table.Cell>
@@ -574,7 +572,7 @@
                 <EndpointModulePicker
                   class={cellInput}
                   cage={fromCage}
-                  standard={row.link.from.module?.standard}
+                  standard={row.link.from.plug?.module?.standard}
                   onchange={(v) => updateEndpointModuleStandard(row.link, 'from', v)}
                 />
               </div>
@@ -590,7 +588,7 @@
                 <EndpointModulePicker
                   class={cellInput}
                   cage={toCage}
-                  standard={row.link.to.module?.standard}
+                  standard={row.link.to.plug?.module?.standard}
                   onchange={(v) => updateEndpointModuleStandard(row.link, 'to', v)}
                 />
               </div>
@@ -600,7 +598,10 @@
                 class={cellInput}
                 disabled={gradeOptions.length === 0}
                 value={row.link.cable?.category ?? ''}
-                onchange={(e) => updateCableCategory(row.link, (e.target as HTMLSelectElement).value || undefined)}
+                onchange={(e) => {
+                  const v = (e.target as HTMLSelectElement).value
+                  updateCableCategory(row.link, v ? (v as CableGrade) : undefined)
+                }}
               >
                 <option value="">—</option>
                 {#each gradeOptions as g}
