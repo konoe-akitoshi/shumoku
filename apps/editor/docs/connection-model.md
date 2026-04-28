@@ -230,6 +230,25 @@ classDiagram
 
 非対称 standard は警告するだけで許容する — BiDi ペア（例: `10GBASE-BX10-D` ↔ `10GBASE-BX10-U`）やメディアコンバータリンクで意図的に発生するため。
 
+## 設計のステータス
+
+主要な構造的問題は解消済み。以下は**残る subjective な点**で、好み次第。
+
+1. **`Link` 内で物理 / プレゼンテーションが flat に混在**  
+   `from / to / cable` が物理、`type / arrow / style / label / redundancy / vlan` が表示・論理。  
+   分離派なら `Link.physical` / `Link.presentation` への入れ子化。  
+   現状は **flat の方が ergonomic**（`link.type` で素直に参照できる）で実用最適。
+
+2. **`Link.rateBps` が runtime 値だけ Link 直下にある**  
+   診断・モニタリング系の値で、本来は別スコープ。気になるなら `Link.metrics?: { rateBps }` にラップ。  
+   単独 1 フィールドなのでオーバーエンジニアリング感が出るため**現状維持**。
+
+3. **`from` / `to` 命名 vs `ends: [LinkEnd, LinkEnd]` 配列**  
+   対称性を素直に書きたいなら配列、書き味で勝つのは `from` / `to`。Arrow 等の方向性付き機能とも噛み合う。  
+   **据え置き正解**。
+
+これらは「もっと厳格にネストするか ergonomics を取るか」レベルの好みで、構造的・正規化的な不備は無い。
+
 ## コード上の場所
 
 - `libs/@shumoku/core/src/models/types.ts` — `NodePort` / `Link` / `LinkEndpoint` / `LinkModule` / `LinkCable` / `PortConnector` / `EthernetStandard`。
