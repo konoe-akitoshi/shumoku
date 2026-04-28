@@ -122,12 +122,7 @@ classDiagram
     id: string
     label?: string
     cage?: PortConnector
-    poe?: boolean | PortPoe
-  }
-  class PortPoe {
-    class?: 'af' | 'at' | 'bt'
-    role?: 'pse' | 'pd'
-    watts?: number
+    poe?: boolean
   }
   class Link {
     id: string
@@ -157,7 +152,6 @@ classDiagram
   }
 
   Node *-- "ports *" NodePort : owns
-  NodePort *-- "0..1" PortPoe
   Link *-- "from 1" LinkEndpoint
   Link *-- "to 1" LinkEndpoint
   Link *-- "0..1" LinkCable
@@ -179,14 +173,15 @@ classDiagram
 - **`cable.medium` を field 化**。category 未確定でも「fiber 配線である」みたいな段階的入力ができる。`mediumFromGrade()` で category と整合チェック。
 - **`cable.connector` は持たない**。LC / MPO / RJ45 plug 等の端コネクタは `module.standard` の `spec.cableConnector` から派生。表示時は `cableConnectorForStandard()` ヘルパで取得。
 - **`cable.category` は型強化**。`CableGrade` ユニオン（`'cat5e' | 'cat6' | 'cat6a' | 'cat7' | 'cat8' | 'om3' | 'om4' | 'om5' | 'os1' | 'os2' | 'dac' | 'aoc'`）で、壊れた値の侵入を型で防ぐ。parser 側も `normalizeCableGrade` で外部入力を境界で正規化。
-- **`port.poe` を構造化**。`boolean | PortPoe`（class / role / watts）で legacy `poe: true` も保ちつつ、PoE クラス・PSE/PD ロール・電力量を表現可能。`portPoeConfig()` ヘルパでオブジェクト形に正規化。
+- **`port.poe` は capability flag のみ**。boolean のまま。PoE の詳細（クラス・PSE/PD ロール・電力量・予算）は **catalog の `PowerProperties.poe_in` / `poe_out`** に既にあり、port instance に重複して持たない（poe-analysis.ts 参照）。
 
 ### フィールド対応
 
 | 物理レイヤ          | モデル位置                              | 型                     | 例               |
 | ------------------- | --------------------------------------- | ---------------------- | ---------------- |
 | Port レセプタクル   | `Node.ports[].cage`                     | `PortConnector`        | `sfp+`、`rj45`   |
-| Port PoE 構成       | `Node.ports[].poe`                      | `boolean \| PortPoe`   | `{ class: 'at', role: 'pse' }` |
+| Port PoE 対応      | `Node.ports[].poe`                      | `boolean`              | `true`           |
+| PoE 詳細（class 等）| catalog `PowerProperties.poe_in/out`    | `PoEIn` / `PoEOut`     | （catalog 側）   |
 | Endpoint プラグ cage | `Link.from/to.plug.cage` (optional)    | `PortConnector`        | `sfp+`（中間状態のみ）|
 | Endpoint モジュール | `Link.from/to.plug.module.standard`     | `EthernetStandard`     | `10GBASE-SR`     |
 | モジュール SKU      | `Link.from/to.plug.module.sku`          | `string`               | `FTLX8571D3BCL`  |

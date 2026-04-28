@@ -101,24 +101,15 @@ export type CableMedium = 'twisted-pair' | 'fiber-mm' | 'fiber-sm' | 'dac' | 'ao
 export type CableConnector = 'rj45' | 'lc' | 'sc' | 'mpo' | (string & {})
 
 /**
- * PoE capability of a port. `class` is the IEEE 802.3 power class
- * tier the cage supports (af = 15.4W, at = 30W, bt = 60W or 90W).
- * `role` distinguishes power-sourcing (PSE — typical of switch ports)
- * from powered-device (PD — APs, IP phones, cameras). `watts` is an
- * override for non-standard or fine-grained budgets. All optional —
- * an empty `PortPoe` (`{}`) means "PoE capable, details unspecified".
- */
-export interface PortPoe {
-  class?: 'af' | 'at' | 'bt'
-  role?: 'pse' | 'pd'
-  watts?: number
-}
-
-/**
  * A node-side receptacle (cage). Ports belong to a Node and define the
  * physical slot a cable plug can be inserted into. The cage type
  * (e.g. "sfp+") describes what kind of plug is accepted; the actual
  * plug carrying the connection is owned by the Link endpoint.
+ *
+ * Detailed PoE info (class, budget, per-port wattage, PSE/PD role)
+ * lives on the catalog's `PowerProperties.poe_in` / `poe_out`, not
+ * here — `NodePort.poe` is just the per-port capability flag derived
+ * from the catalog's `PortGroup.poe`.
  */
 export interface NodePort {
   /** Stable generated ID, e.g. "port-...". Links should reference this. */
@@ -136,12 +127,10 @@ export interface NodePort {
   speed?: string
   /** Physical receptacle (cage) type, e.g. "rj45", "sfp+", "qsfp28". */
   cage?: PortConnector
-  /**
-   * PoE capability. `true` = capable, no further details (legacy /
-   * convenience YAML form); object form carries class / role / watts.
-   * Use `portPoeConfig(port)` to normalize.
-   */
-  poe?: boolean | PortPoe
+  /** Whether this cage can source PoE (RJ45 only). Capability flag only —
+   * detailed class / wattage / role lives on the device's catalog
+   * `PowerProperties` (poe_in / poe_out). */
+  poe?: boolean
   source?: 'catalog' | 'custom'
   disabled?: boolean
   notes?: string

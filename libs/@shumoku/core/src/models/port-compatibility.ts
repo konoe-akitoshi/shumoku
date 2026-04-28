@@ -11,7 +11,6 @@ import type {
   LinkPlug,
   NodePort,
   PortConnector,
-  PortPoe,
 } from './types.js'
 
 const PLUGGABLE_CONNECTORS = new Set<PortConnector>(['sfp', 'sfp+', 'sfp28', 'qsfp+', 'qsfp28'])
@@ -250,23 +249,4 @@ export function effectivePlugCage(ep: LinkEndpoint, port?: NodePort): PortConnec
   const stdCage = getStandardSpec(ep.plug?.module?.standard)?.cage as PortConnector | undefined
   if (stdCage) return stdCage
   return port?.cage
-}
-
-/**
- * Normalize `NodePort.poe` (which accepts `boolean | PortPoe` for
- * convenience) to the object form. `true` maps to an empty PortPoe,
- * `false` / undefined to undefined.
- */
-export function portPoeConfig(port: NodePort | undefined): PortPoe | undefined {
-  if (!port?.poe) return undefined
-  if (port.poe === true) return {}
-  return port.poe
-}
-
-/**
- * Convenience predicate: does the port have any PoE capability set?
- * Treats truthy `poe` (boolean true or any PortPoe object) as enabled.
- */
-export function isPortPoeEnabled(port: NodePort | undefined): boolean {
-  return Boolean(port?.poe)
 }
