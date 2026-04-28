@@ -12,42 +12,32 @@ UI ロジック（カスケード絞り込み、cage ロック、バリデーシ
 
 ## 関係図（ざっくり）
 
-物理的な構造のみ。両端それぞれが **Plug → Module（あれば）→ Cable 端** のチェーンを持ち、Cable 本体はその末端で結ばれる。Port に繋がるのは Plug。
+横並びで `Node A | Link | Node B`。両端の Node はそれぞれ Port を持ち、Link の中央には両端の **Plug → Module?（あれば）→ Cable → Module? → Plug** という物理チェーン。Plug が Port の cage に噛み合うことで Link と Node が物理的に繋がる。
 
 ```mermaid
 flowchart LR
-  subgraph NS[ノード側]
+  subgraph A[Node A]
     direction TB
-    Node["Node"]
-    Port["Port<br/>(cage)"]
-    Node -- owns --> Port
+    PA["Port<br/>(cage)"]
   end
 
-  subgraph LS[リンク側]
-    direction TB
-    Link["Link"]
-    PA["Plug (from)<br/>(form factor)"]
-    PB["Plug (to)<br/>(form factor)"]
-    MA["Module?<br/>(transceiver)"]
-    MB["Module?<br/>(transceiver)"]
-    C["Cable<br/>(wire / fiber)"]
-
-    Link -- 端 A --> PA
-    Link -- 端 B --> PB
-    PA -- houses --> MA
-    PB -- houses --> MB
-    MA -- terminates at --> C
-    MB -- terminates at --> C
+  subgraph L[Link]
+    direction LR
+    PlA["Plug"] --- MA["Module?"] --- C["Cable<br/>(wire / fiber)"] --- MB["Module?"] --- PlB["Plug"]
   end
 
-  PA -. fits cage .- Port
-  PA -. refs by id .- Node
+  subgraph B[Node B]
+    direction TB
+    PB["Port<br/>(cage)"]
+  end
+
+  PA <-. plug fits cage .-> PlA
+  PlB <-. plug fits cage .-> PB
 ```
 
-- ノード側は **Node が Port を所有**して閉じる。
-- リンク側は両端それぞれが **Plug → Module?（pluggable のときだけ）→ Cable** のチェーン。Cable は両端から終端されて一本。
-- Plug が Port の cage に物理的に噛み合う。
-- 「from / to の端点」を実コードでは `LinkEndpoint` という構造でまとめている（Plug + Module + node/port の id 参照を持つ容器）。物理的な実体ではなくプログラム上の都合の名前。
+- 両端の Node は Port を所有して閉じる（Link 側からは id 参照のみ）。
+- Link の中身は物理チェーン：Plug → Module?（pluggable なときだけ）→ Cable → Module? → Plug。RJ45 直結なら Module はスキップされ Plug がそのまま Cable に繋がる。
+- Link と Node が交わるのは **Plug ↔ cage** の点のみ。データ上は `LinkEndpoint` がこの「片端ぶんの Plug + Module + node/port id 参照」を一つにまとめた容器（プログラム上の都合の名前で、物理実体ではない）。
 
 ## データモデル
 
