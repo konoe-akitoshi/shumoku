@@ -1,18 +1,18 @@
 # 接続モデル
 
-ネットワークリンクをどう表現しているか — 物理ハードウェアからエディタに保存するフィールド、そしてそれらをつなぐカスケード UI までを記述します。
+ネットワークリンクをどう表現しているか — 物理ハードウェア、ユーザがそれを編集する導線、そしてその下のデータモデルまでを、上から順に記述します。
 
-メンタルモデルは「ノード側」「リンク側」と、その**接続点**の三つで成り立っています。
+メンタルモデルは「ノード側」「リンク側」とその**接続点**の三つで成り立ちます。
 
-- **ノード側** — Device には Port が生えていて、Port は `cage`（物理レセプタクル: RJ45 / SFP+ / QSFP28…）を持つ。カタログから提供されている場合もあれば、ない場合もある。
-- **リンク側** — Cable が一本あり、両端に Endpoint。各 Endpoint は **Plug**（ケーブル側 form factor）と **Module**（IEEE standard / トランシーバ）を保持する。ケーブル単位の属性（grade / 長さ / 端コネクタ）は per-link に置く。
-- **接続点** — Endpoint の Plug と Port の cage は機械的に同じ form factor。これが噛み合っていることが物理的に成立する条件。
+- **ノード側** — Device に Port が生えていて、Port は `cage`（物理レセプタクル: RJ45 / SFP+ / QSFP28 …）を持つ。カタログから提供されている場合もあれば、ない場合もある。
+- **リンク側** — Cable が一本あり、両端それぞれに **Plug** と、構成によっては **Module**（トランシーバ）が付く。ケーブル単位の属性（grade / 長さ / 端コネクタ）は per-link。
+- **接続点** — 端点の Plug と Port の cage は機械的に同じ form factor。これが噛み合っていることが物理的に成立する条件。
 
-UI ロジック（カスケード絞り込み、cage ロック、バリデーション）は**この構造の中**ではなく、**この構造の上**に乗っています。
+UI ロジック（カスケード絞り込み、cage ロック、バリデーション）はこの構造の**上**に乗っていて、データモデル自体は導線に依存しない。
 
 ## 関係図（ざっくり）
 
-横並びで `Node A | Link | Node B`。両端の Node はそれぞれ Port を持ち、Link の中央には両端の **Plug → Module?（あれば）→ Cable → Module? → Plug** という物理チェーン。Plug が Port の cage に噛み合うことで Link と Node が物理的に繋がる。
+横並びで `Node A | Link | Node B`。両端の Node が Port を持ち、Link の中央に物理チェーン。Plug が Port の cage に噛み合うことで Link と Node が物理的に繋がる。
 
 ```mermaid
 flowchart LR
@@ -44,15 +44,72 @@ flowchart LR
   PlB <-. plug fits cage .-> PB
 ```
 
-- 両端の Node は Port を所有して閉じる（Link 側からは id 参照のみ）。
 - Link 内は両端で**二経路**ある：
   - **経由（実線）**: Plug → Module → Cable。SFP / SFP+ / SFP28 / QSFP+ / QSFP28 などの **pluggable** な構成。
-  - **直結（点線）**: Plug → Cable。RJ45 銅線直結や DAC / AOC のように **integrated** な構成（モジュールが介在しない）。
-- Link と Node が交わるのは **Plug ↔ cage** の点のみ。データ上は `LinkEndpoint` がこの「片端ぶんの Plug + Module + node/port id 参照」を一つにまとめた容器（プログラム上の都合の名前で、物理実体ではない）。
+  - **直結（点線）**: Plug → Cable。RJ45 銅線直結や DAC / AOC のように **integrated** な構成（Module 無し）。
+- Link と Node が交わるのは **Plug ↔ cage** の点のみ。それ以外は id 参照の関係。
+
+## UI 導線
+
+接続を作る入口は複数あり、出発点ごとに違う絞り込み順を辿る。データ的に決まる項目はどの導線でも同じだが「次に何を選ぶか」が変わる。Module の optionality は関係図と同じ実線（経由）/ 点線（直結）の表記で示す。
+
+A と B はどちらも **Node 選択から始まる**点が共通。C は canvas 起点で、Link skeleton ができた後は A か B に収束する。
+
+### A. 接続ページ・ポート起点（Node → Port から）
+
+機材が先に決まっているケース。Port が決まれば port.cage が Plug を pin し、Module → Cable と絞り込まれる。
+
+```mermaid
+flowchart LR
+  N[Node 選択] --> P[Port 選択]
+  P -- cage 既知 --> PL[Plug<br/>port.cage でロック]
+  P -- cage 未知 --> PU[Plug<br/>ユーザー選択]
+  PL --> M[Module 選択<br/>plug で絞り込み]
+  PU --> M
+  M --> CG[Cable grade<br/>module で絞り込み]
+  PL -. integrated .-> CG
+  PU -. integrated .-> CG
+```
+
+### B. 接続ページ・ケーブル起点（Node → Module/Cable から）
+
+「このノードを SFP+ 10G で繋ぎたい」のように、ノードは決まっていて使うケーブル種別が先にあるケース。Module / Cable kind から Plug を派生させ、その plug に合う Port を node 内で絞る。
+
+```mermaid
+flowchart LR
+  N[Node 選択] --> S{ケーブル指定}
+  S --> M[Module 起点<br/>例: 10GBASE-SR]
+  S -.-> CK[Cable kind 起点<br/>例: RJ45 cat / DAC / AOC]
+  M --> PL1[Plug 派生<br/>module.spec.cage]
+  CK -.-> PL2[Plug 派生<br/>integrated form factor]
+  PL1 --> P[Port 候補<br/>node 内で plug に一致するもの]
+  PL2 -.-> P
+  M --> CG[Cable grade]
+  CK -.-> CG
+```
+
+### C. ダイヤグラム起点
+
+canvas 上で線を引いて Link skeleton を作り、後から詳細パネルで埋める。発見的・スケッチ的な入力に向く。**C は単独完結ではなく、skeleton 生成後は A か B に収束する**。
+
+```mermaid
+flowchart LR
+  D[ダイヤグラムで<br/>2 ノード/ポート間に線を引く] --> S[Link skeleton 生成<br/>node, port のみ確定]
+  S --> A[→ A の流れ<br/>Port 起点で<br/>Plug → Module → Cable]
+  S --> B[→ B の流れ<br/>Module/Cable 起点で<br/>Plug 派生 → Port 絞り込み]
+```
+
+### Plug の値の解決順位（共通）
+
+1. `port.cage`（ハードウェア制約 — 他より優先される）
+2. `module.standard` から推論される plug（モジュールが既に選ばれているとき）
+3. ユーザーの明示的な plug 選択（上記 1, 2 のどちらも無いときだけ意味を持つ）
+
+Plug を変更すると、既存モジュールの要求 plug が新しい plug と一致しないときは Module を自動クリアする。
 
 ## データモデル
 
-実装上のフィールドと composition / id 参照を含めた詳細。
+導線図で見た「Plug」「Module（optional）」「Cable」のうち、データとして persist されるのは **Module** と **Cable** だけ。Plug は派生で、`module.standard` か `port.cage` から逆引きされる。
 
 ```mermaid
 classDiagram
@@ -101,12 +158,13 @@ classDiagram
 
 実線（◆）は所有（compose）、破線（..>）は id 参照。
 
-要点：
+導線図に対する位置づけ：
 
-- **Plug は独立フィールドではない**。`LinkModule` が決まれば `STANDARD_SPECS[std].cage` で逆引き、未決なら `port.cage` を借りる。関係図では構造的に `Plug` ノードを置いているが、データ上は `LinkEndpoint` と `LinkModule` の間に入る派生概念。
-- **Module は per-endpoint で optional**。RJ45 直結のような integrated 形態では持たない。BiDi ペアやメディアコンバータで両端の standard が非対称になり得るので各端独立。
-- **Cable は per-link**。grade / 長さ / 端コネクタは「ケーブル全体」の属性で、どちらかの端に偏らせない。
-- **Endpoint は Node を所有しない**。`node` / `port` を id で参照するだけ。
+- **モデルは導線に対して中立**。A / B / C どの順序でも、最終的に保存されるのは同じ `Link` 構造で、フィールドが埋まる順番だけが違う。導線ごとに別形を持たせる必要はない。
+- **Plug は永続化されない**。導線で「Plug を選ぶ」UI を出していても、保存する瞬間には `module.standard`（pluggable のとき）か `port.cage`（integrated のとき）に吸収される。
+- **Module の optionality はモデルにそのまま現れる**。`LinkEndpoint.module` が optional であることが、関係図の「経由 / 直結」二経路に対応する。
+- **Endpoint は Node を所有しない**。`node` / `port` を id で参照するだけで、Link 側に Node を複製しない。
+- **Cable は per-link**。両端で grade / 長さが食い違うことは物理的に無いため、片端に偏らせず Link 直下に置く。
 
 ### フィールド対応
 
@@ -120,69 +178,33 @@ classDiagram
 | ケーブル端コネクタ  | `Link.cable.connector`           | `string`（freeform）   | `LC`、`MPO`      |
 | Plug form factor    | `module.standard` から派生       | （フィールドなし）     | `sfp+`           |
 
-## UI カスケード
+## UI 設計
 
-接続を作る入口は複数あり、出発点ごとに違う絞り込み順を辿る。データ的に決まる項目は同じだが「次に何を選ぶか」がパターンごとに変わる。
+導線を支える UI 要素・配置・バリデーション・実装状況。
 
-どのフローも Module は **optional** で、Plug が pluggable（SFP / SFP+ / SFP28 / QSFP+ / QSFP28）なら **経由**（Plug → Module → Cable）、integrated（RJ45 直結 / DAC / AOC）なら **直結**（Plug → Cable）と分岐する。実線が経由経路、点線が直結経路。
+### 画面別の配置
 
-A と B はどちらも **Node 選択から始まる**点は共通で、その後の絞り込み順だけが違う。
+| 画面                                            | Plug + Module               | Cable grade   | 長さ          | Cable connector  |
+| ----------------------------------------------- | --------------------------- | ------------- | ------------- | ---------------- |
+| `LinkProperties.svelte`（詳細パネル）           | per-endpoint セクション     | per-link 行   | per-link 行   | per-link 行（テキスト） |
+| `connections/+page.svelte` テーブル             | per-endpoint セル内縦並び   | Cable 列      | Length 列     | （なし）         |
+| `connections/+page.svelte` 追加フォーム         | per-endpoint ピッカー       | Cable 列      | —             | —                |
 
-### A. 接続ページ・ポート起点（Node → Port から）
+### 共有コンポーネント
 
-機材が先に決まっているケース。Node を選んでから Port を指定し、port.cage が Plug を決め、Plug が Module / Cable を絞る。
+- `EndpointModulePicker.svelte` — Plug + Module の二段 select。port.cage の有無で Plug select の disabled / enabled を切り替える。上記 3 画面すべてが利用する。
 
-```mermaid
-flowchart LR
-  N[Node 選択] --> P[Port 選択]
-  P -- cage 既知 --> PL[Plug<br/>port.cage でロック]
-  P -- cage 未知 --> PU[Plug<br/>ユーザー選択]
-  PL --> M[Module 選択<br/>plug で絞り込み]
-  PU --> M
-  M --> CG[Cable grade<br/>module で絞り込み]
-  PL -. integrated .-> CG
-  PU -. integrated .-> CG
-```
+### 導線の実装状況
 
-### B. 接続ページ・ケーブル起点（Node → Module/Cable から）
+| 導線                          | 実装                                                                | 備考                                              |
+| ----------------------------- | ------------------------------------------------------------------- | ------------------------------------------------- |
+| **A. ポート起点**             | ✅ 実装済み — 接続ページ追加フォーム / テーブル / 詳細パネル        | メイン導線                                        |
+| **B. ケーブル起点**           | ❌ 未実装                                                            | 起点を切り替える UI（Module や Cable kind 先選択）が無い |
+| **C. ダイヤグラム起点**       | ⚠️ 部分的 — canvas で線を引くと skeleton 生成。詳細パネルでは A の流れに収束 | B 経由の収束はまだ無い                              |
 
-「このノードを SFP+ 10G で繋ぎたい」のように、ノードは決まっていて使うケーブル種別が先にあるケース。Node 選択後、Module / Cable kind を起点にして Plug を派生させ、その plug に合う Port を絞る。
+### バリデーション
 
-```mermaid
-flowchart LR
-  N[Node 選択] --> S{ケーブル指定}
-  S --> M[Module 起点<br/>例: 10GBASE-SR]
-  S -.-> CK[Cable kind 起点<br/>例: RJ45 cat / DAC / AOC]
-  M --> PL1[Plug 派生<br/>module.spec.cage]
-  CK -.-> PL2[Plug 派生<br/>integrated form factor]
-  PL1 --> P[Port 候補<br/>node 内で plug に一致するもの]
-  PL2 -.-> P
-  M --> CG[Cable grade]
-  CK -.-> CG
-```
-
-### C. ダイヤグラム起点
-
-canvas 上で線を引いて先に「繋がっている」事実だけ作り、後から詳細パネルで埋めていくケース。発見的・スケッチ的な入力に向く。**C はそれ自体が完結したフローではなく、Link skeleton を作った後は A か B に収束する**。線を引いた時点で node/port が確定していれば自然と A の流れに、ケーブル種別から決めたければ B の流れに合流する。
-
-```mermaid
-flowchart LR
-  D[ダイヤグラムで<br/>2 ノード/ポート間に線を引く] --> S[Link skeleton 生成<br/>node, port のみ確定]
-  S --> A[→ A の流れ<br/>Port 起点で<br/>Plug → Module → Cable]
-  S --> B[→ B の流れ<br/>Module/Cable 起点で<br/>Plug 派生 → Port 絞り込み]
-```
-
-### Plug の値の解決順位（共通）
-
-1. `port.cage`（ハードウェア制約 — 他より優先される）
-2. `module.standard` から推論される plug（モジュールが既に選ばれているとき）
-3. ユーザーの明示的な plug 選択（上記 1, 2 のどちらも無いときだけ意味を持つ）
-
-Plug を変更すると、既存モジュールの要求 plug が新しい plug と一致しないときは Module を自動クリアする — Module 一覧が再フィルタされ、ユーザーは選び直す。
-
-## バリデーション
-
-`validateLinkCompatibility`（`port-compatibility.ts`）は各端点を独立して、その端の port と module に対して検証する。
+`validateLinkCompatibility`（`port-compatibility.ts`）は各端点を独立に検証する。
 
 | チェック                                                          | 重大度  | 状態  |
 | ----------------------------------------------------------------- | ------- | ----- |
@@ -194,20 +216,10 @@ Plug を変更すると、既存モジュールの要求 plug が新しい plug 
 
 非対称 standard は警告するだけで許容する — BiDi ペア（例: `10GBASE-BX10-D` ↔ `10GBASE-BX10-U`）やメディアコンバータリンクで意図的に発生するため。
 
-## UI 配置
-
-| 画面                                            | Plug + Module               | Cable grade   | 長さ          | Cable connector  |
-| ----------------------------------------------- | --------------------------- | ------------- | ------------- | ---------------- |
-| `LinkProperties.svelte`（詳細パネル）           | per-endpoint セクション     | per-link 行   | per-link 行   | per-link 行（テキスト） |
-| `connections/+page.svelte` テーブル             | per-endpoint セル内縦並び   | Cable 列      | Length 列     | （なし）         |
-| `connections/+page.svelte` 追加フォーム         | per-endpoint ピッカー       | Cable 列      | —             | —                |
-
-`EndpointModulePicker.svelte` が共有コンポーネント — Plug + Module の二段 select で、上記 3 画面すべてが利用する。
-
 ## コード上の場所
 
 - `libs/@shumoku/core/src/models/types.ts` — `NodePort` / `Link` / `LinkEndpoint` / `LinkModule` / `LinkCable` / `PortConnector` / `EthernetStandard`。
-- `libs/@shumoku/core/src/models/standards.ts` — `STANDARD_SPECS` レジストリ（standard が何を意味するかの真実の源）、`cableVariantsForPlug`、`cableGradesForStandard`、`plugProfilesForCages`、`plugProfileForStandard`。
+- `libs/@shumoku/core/src/models/standards.ts` — `STANDARD_SPECS` レジストリ（standard の真実の源）、`cableVariantsForPlug`、`cableGradesForStandard`、`plugProfilesForCages`、`plugProfileForStandard`。
 - `libs/@shumoku/core/src/models/port-compatibility.ts` — `validateLinkCompatibility`、`defaultStandardForCages`。
 - `apps/editor/src/lib/components/EndpointModulePicker.svelte` — 共通の二段 select ピッカー。
 - `apps/editor/src/lib/components/detail/LinkProperties.svelte` — ピッカーを使う詳細パネル。
