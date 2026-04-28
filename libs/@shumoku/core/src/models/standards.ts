@@ -38,8 +38,19 @@ export interface StandardSpec {
   fiberMode?: FiberMode
   /** Conventional cable-end connector (LC duplex unless overridden). */
   cableConnector?: CableConnector
-  /** Practical maximum reach in meters (typical install). */
+  /**
+   * Best-case practical reach in meters. Used when no cable grade is set
+   * (or when the grade isn't in `reachByGrade`). Set this to the highest
+   * grade's reach so the unannotated UI shows the spec maximum.
+   */
   maxReach_m: number
+  /**
+   * Per-grade reach overrides. Reach actually depends on the installed
+   * cable: 10GBASE-T runs 100 m on Cat6a but only 55 m on Cat6, and
+   * 10GBASE-SR is 300 m on OM3 vs 400 m on OM4. The grade key matches
+   * `Link.cable.category` (lowercase: "cat6a", "om3" …).
+   */
+  reachByGrade?: Record<string, number>
   /** Whether this standard's cage can source/sink PoE (RJ45 only). */
   poeCapable: boolean
 }
@@ -92,6 +103,12 @@ const _: Record<string, StandardSpec> = {
     cableKind: 'twisted-pair',
     cableConnector: 'rj45',
     maxReach_m: 100,
+    reachByGrade: {
+      cat6: 55, // partial reach — 10G only up to ~55m on Cat6
+      cat6a: 100,
+      cat7: 100,
+      cat8: 100,
+    },
     poeCapable: true,
   },
 
@@ -111,7 +128,8 @@ const _: Record<string, StandardSpec> = {
     cableKind: 'fiber',
     fiberMode: 'multimode',
     cableConnector: 'lc',
-    maxReach_m: 400, // OM4 spec; OM3 ~300m
+    maxReach_m: 400,
+    reachByGrade: { om3: 300, om4: 400, om5: 400 },
     poeCapable: false,
   },
   '25GBASE-SR': {
@@ -121,6 +139,7 @@ const _: Record<string, StandardSpec> = {
     fiberMode: 'multimode',
     cableConnector: 'lc',
     maxReach_m: 100,
+    reachByGrade: { om3: 70, om4: 100, om5: 100 },
     poeCapable: false,
   },
   '40GBASE-SR4': {
@@ -130,6 +149,7 @@ const _: Record<string, StandardSpec> = {
     fiberMode: 'multimode',
     cableConnector: 'mpo',
     maxReach_m: 150,
+    reachByGrade: { om3: 100, om4: 150, om5: 150 },
     poeCapable: false,
   },
   '100GBASE-SR4': {
@@ -139,6 +159,7 @@ const _: Record<string, StandardSpec> = {
     fiberMode: 'multimode',
     cableConnector: 'mpo',
     maxReach_m: 100,
+    reachByGrade: { om3: 70, om4: 100, om5: 100 },
     poeCapable: false,
   },
 
@@ -255,6 +276,24 @@ export const STANDARD_SPECS: Readonly<Record<string, StandardSpec>> = _
 export function getStandardSpec(standard: EthernetStandard | undefined): StandardSpec | undefined {
   if (!standard) return undefined
   return STANDARD_SPECS[standard]
+}
+
+/**
+ * Effective reach in meters for a link, accounting for the cable grade.
+ * Falls back to the standard's `maxReach_m` when the grade isn't set or
+ * isn't in the registry's per-grade table.
+ */
+export function reachForLink(
+  standard: EthernetStandard | undefined,
+  cableCategory: string | undefined,
+): number | undefined {
+  const spec = getStandardSpec(standard)
+  if (!spec) return undefined
+  if (cableCategory) {
+    const override = spec.reachByGrade?.[cableCategory.toLowerCase()]
+    if (override !== undefined) return override
+  }
+  return spec.maxReach_m
 }
 
 /** Ordered list of recognized standard ids — useful for UI dropdowns. */

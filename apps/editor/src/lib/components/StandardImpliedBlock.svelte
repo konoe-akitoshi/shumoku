@@ -4,6 +4,7 @@
     getStandardSpec,
     type LinkCable,
     type PortConnector,
+    reachForLink,
   } from '@shumoku/core'
 
   let {
@@ -28,8 +29,14 @@
   const cageOk = $derived(
     spec ? cageMatches(fromCage, spec.cage) && cageMatches(toCage, spec.cage) : true,
   )
+
+  // Grade-adjusted reach — e.g. 10GBASE-T is 100 m on Cat6a but only 55 m
+  // on Cat6, and 10GBASE-SR drops from 400 m on OM4 to 300 m on OM3.
+  const effectiveReach = $derived(reachForLink(standard, cable?.category) ?? spec?.maxReach_m)
   const reachExceeded = $derived(
-    spec && cable?.length_m !== undefined && cable.length_m > spec.maxReach_m,
+    effectiveReach !== undefined &&
+      cable?.length_m !== undefined &&
+      cable.length_m > effectiveReach,
   )
 
   const cableKindLabel = $derived.by(() => {
@@ -67,7 +74,7 @@
       {cableKindLabel}{cableConnector ? ` · ${cableConnector.toUpperCase()}` : ''}
       ·
       <span class={reachExceeded ? 'text-amber-600' : ''}
-        >≤ {formatReachMeters(spec.maxReach_m)}</span
+        >≤ {effectiveReach !== undefined ? formatReachMeters(effectiveReach) : '—'}</span
       >
       {#if reachExceeded}
         <span class="text-amber-600 ml-1" title="Cable length exceeds standard reach">⚠</span>

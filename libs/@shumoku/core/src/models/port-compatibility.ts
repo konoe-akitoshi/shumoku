@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { getStandardSpec } from './standards.js'
+import { getStandardSpec, reachForLink } from './standards.js'
 import type { EthernetStandard, Link, NodePort, PortConnector } from './types.js'
 
 const PLUGGABLE_CONNECTORS = new Set<PortConnector>(['sfp', 'sfp+', 'sfp28', 'qsfp+', 'qsfp28'])
@@ -86,11 +86,15 @@ export function validateLinkCompatibility(
     }
   }
 
-  // Reach check (informational warning).
-  if (link.cable?.length_m && link.cable.length_m > spec.maxReach_m) {
+  // Reach check (informational warning) — uses the grade-adjusted reach
+  // so e.g. 10GBASE-T over Cat6 caps at 55 m, not the spec's best case.
+  const effectiveReach = reachForLink(link.standard, link.cable?.category) ?? spec.maxReach_m
+  if (link.cable?.length_m && link.cable.length_m > effectiveReach) {
     issues.push({
       severity: 'warning',
-      message: `cable length ${link.cable.length_m} m exceeds ${link.standard} max reach ${spec.maxReach_m} m`,
+      message: `cable length ${link.cable.length_m} m exceeds ${link.standard}${
+        link.cable?.category ? ` over ${link.cable.category}` : ''
+      } max reach ${effectiveReach} m`,
     })
   }
 

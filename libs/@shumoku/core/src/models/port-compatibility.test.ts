@@ -57,6 +57,27 @@ describe('link compatibility', () => {
     expect(issues.some((i) => i.severity === 'warning')).toBe(true)
   })
 
+  test('reach drops with weaker cable grade (10GBASE-T over Cat6)', () => {
+    // 10GBASE-T spec max is 100m on Cat6a; Cat6 caps it at 55m.
+    // 70m on Cat6 should warn even though it fits the spec maximum.
+    const issues = validateLinkCompatibility(
+      port('1', 'rj45'),
+      port('2', 'rj45'),
+      link({ standard: '10GBASE-T', cable: { category: 'cat6', length_m: 70 } }),
+    )
+    expect(issues.some((i) => i.severity === 'warning')).toBe(true)
+  })
+
+  test('reach drops on OM3 fiber for 10GBASE-SR', () => {
+    // 10GBASE-SR is 400m on OM4 but only 300m on OM3.
+    const issues = validateLinkCompatibility(
+      port('1', 'sfp+'),
+      port('2', 'sfp+'),
+      link({ standard: '10GBASE-SR', cable: { category: 'om3', length_m: 350 } }),
+    )
+    expect(issues.some((i) => i.severity === 'warning')).toBe(true)
+  })
+
   test('combo cage accepts any standard', () => {
     expect(
       validateLinkCompatibility(
