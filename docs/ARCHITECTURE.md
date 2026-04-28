@@ -2,8 +2,8 @@
 
 Cross-cutting overview of how the shumoku monorepo fits together.
 Editor-specific data model details live in
-[`apps/editor/DATA_MODEL.md`](../apps/editor/DATA_MODEL.md); link
-composition (port / plug / module / cable) is in
+[`apps/editor/docs/data-model.md`](../apps/editor/docs/data-model.md);
+link composition (port / plug / module / cable) is in
 [`apps/editor/docs/connection-model.md`](../apps/editor/docs/connection-model.md);
 this doc focuses on the flows that span packages.
 
