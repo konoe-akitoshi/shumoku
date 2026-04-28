@@ -163,14 +163,13 @@ flowchart LR
 
 ### C. ダイヤグラム起点
 
-canvas 上で線を引いて先に「繋がっている」事実だけ作り、後から詳細パネルで Plug / (Module) / Cable を埋めていくケース。発見的・スケッチ的な入力に向く。
+canvas 上で線を引いて先に「繋がっている」事実だけ作り、後から詳細パネルで埋めていくケース。発見的・スケッチ的な入力に向く。**C はそれ自体が完結したフローではなく、Link skeleton を作った後は A か B に収束する**。線を引いた時点で node/port が確定していれば自然と A の流れに、ケーブル種別から決めたければ B の流れに合流する。
 
 ```mermaid
 flowchart LR
-  D[ダイヤグラム上で<br/>2 ノード間に線を引く] --> S[Link skeleton 生成<br/>node/port のみ確定]
-  S --> DP[詳細パネル]
-  DP --> M[Plug → Module → Cable<br/>pluggable のとき]
-  DP -. integrated .-> NM[Plug → Cable<br/>Module 無し]
+  D[ダイヤグラムで<br/>2 ノード/ポート間に線を引く] --> S[Link skeleton 生成<br/>node, port のみ確定]
+  S --> A[→ A の流れ<br/>Port 起点で<br/>Plug → Module → Cable]
+  S --> B[→ B の流れ<br/>Module/Cable 起点で<br/>Plug 派生 → Port 絞り込み]
 ```
 
 ### Plug の値の解決順位（共通）
