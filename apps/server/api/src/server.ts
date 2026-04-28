@@ -4,7 +4,7 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { resolveBandwidthBps } from '@shumoku/core'
+import { linkSpeedBps } from '@shumoku/core'
 import type { Server as BunServer, ServerWebSocket } from 'bun'
 import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
@@ -361,16 +361,15 @@ export class Server {
                 }
               }
 
-              // Backfill mapping.bandwidth from the topology's
-              // link.bandwidth when the operator hasn't set an
-              // explicit override. The plugin sees a single
-              // authoritative bps number per link.
+              // Backfill mapping.bandwidth from the topology's link spec
+              // (Ethernet standard) when the operator hasn't set an explicit
+              // override. The plugin sees a single authoritative bps per link.
               if (parsed?.graph?.links) {
                 for (const [i, link] of parsed.graph.links.entries()) {
                   const linkId = link.id || `link-${i}`
                   const linkMapping = mapping.links?.[linkId]
                   if (linkMapping && linkMapping.bandwidth === undefined) {
-                    const bps = resolveBandwidthBps(link.bandwidth)
+                    const bps = linkSpeedBps(link)
                     if (bps !== undefined) linkMapping.bandwidth = bps
                   }
                 }

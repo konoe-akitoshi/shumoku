@@ -43,6 +43,163 @@ export interface NodeStyle {
 }
 
 // ============================================
+// Physical / logical node ports
+// ============================================
+
+export type PortRole = 'downlink' | 'uplink' | 'wan' | 'lan' | 'management' | 'power' | 'console'
+
+export type PortConnector =
+  | 'rj45'
+  | 'sfp'
+  | 'sfp+'
+  | 'sfp28'
+  | 'qsfp+'
+  | 'qsfp28'
+  | 'combo'
+  | (string & {})
+
+export type LinkMediumKind = 'twisted-pair' | 'fiber' | 'dac' | 'aoc' | (string & {})
+
+export type FiberMode = 'singlemode' | 'multimode' | (string & {})
+
+/**
+ * Installed cable grade. Twisted-pair gets cat5e/6/6a/7/8; multi-mode
+ * fiber gets OM3/4/5; single-mode gets OS1/2; DAC and AOC are passive
+ * cable assemblies that don't have a separate grade axis but get their
+ * own values so the field is one source of truth.
+ */
+export type CableGrade =
+  | 'cat5e'
+  | 'cat6'
+  | 'cat6a'
+  | 'cat7'
+  | 'cat8'
+  | 'om3'
+  | 'om4'
+  | 'om5'
+  | 'os1'
+  | 'os2'
+  | 'dac'
+  | 'aoc'
+
+/**
+ * Cable medium kind, split to distinguish multi-mode and single-mode
+ * fiber (they have different reach characteristics and connector
+ * conventions). Stored explicitly on `LinkCable.medium` so the user
+ * can declare "fiber multi-mode" before picking a specific OM grade.
+ */
+export type CableMedium = 'twisted-pair' | 'fiber-mm' | 'fiber-sm' | 'dac' | 'aoc'
+
+/**
+ * Cable-end connector (the physical thing at the cable's tip), e.g.
+ * "lc" / "sc" / "mpo" for fiber, "rj45" for twisted-pair.
+ *
+ * Not stored on `LinkCable` directly — it's derived from
+ * `module.standard` via `STANDARD_SPECS[std].cableConnector`. Kept as a
+ * type for derivation helpers and display logic.
+ */
+export type CableConnector = 'rj45' | 'lc' | 'sc' | 'mpo' | (string & {})
+
+/**
+ * A node-side receptacle (cage). Ports belong to a Node and define the
+ * physical slot a cable plug can be inserted into. The cage type
+ * (e.g. "sfp+") describes what kind of plug is accepted; the actual
+ * plug carrying the connection is owned by the Link endpoint.
+ *
+ * Detailed PoE info (class, budget, per-port wattage, PSE/PD role)
+ * lives on the catalog's `PowerProperties.poe_in` / `poe_out`, not
+ * here — `NodePort.poe` is just the per-port capability flag derived
+ * from the catalog's `PortGroup.poe`.
+ */
+export interface NodePort {
+  /** Stable generated ID, e.g. "port-...". Links should reference this. */
+  id: string
+  /** Display/canonical port label, e.g. "Gi1/0/1", "ge-0/0/0", "wan". May be empty. */
+  label: string
+  /** Physical faceplate marking, e.g. "1". Defaults to `label`. */
+  faceplateLabel?: string
+  /** Full OS/API interface name, e.g. "GigabitEthernet1/0/1". */
+  interfaceName?: string
+  /** Alternative names accepted for matching/search. */
+  aliases?: string[]
+  role?: PortRole | (string & {})
+  /** Cage's nominal max speed label, e.g. "1g", "10g". */
+  speed?: string
+  /** Physical receptacle (cage) type, e.g. "rj45", "sfp+", "qsfp28". */
+  cage?: PortConnector
+  /** Whether this cage can source PoE (RJ45 only). Capability flag only —
+   * detailed class / wattage / role lives on the device's catalog
+   * `PowerProperties` (poe_in / poe_out). */
+  poe?: boolean
+  source?: 'catalog' | 'custom'
+  disabled?: boolean
+  notes?: string
+}
+
+/**
+ * Bandwidth label/value used by plugin configs and metric overrides.
+ * Distinct from `Link.standard` — this is just a parseable bandwidth
+ * string ("10G", "2.5Gbps") or raw bps number, suitable wherever a
+ * single capacity number is expected (e.g. plugin overrides, runtime
+ * metrics). Use `resolveBandwidthBps` to convert to bits/sec.
+ */
+export type LinkBandwidthLabel =
+  | '10M'
+  | '100M'
+  | '1G'
+  | '2.5G'
+  | '5G'
+  | '10G'
+  | '25G'
+  | '40G'
+  | '50G'
+  | '100G'
+  | '200G'
+  | '400G'
+
+export type LinkBandwidth = number | LinkBandwidthLabel | (string & {})
+
+/**
+ * IEEE 802.3 / industry standard identifying the link spec. Picking one
+ * cascades down to speed, required cage, cable medium, and reach via the
+ * `STANDARD_SPECS` registry — see `core/models/standards.ts`. Unknown /
+ * vendor-proprietary values are accepted as plain strings; the registry
+ * lookup just returns undefined and downstream code falls back to neutral
+ * defaults.
+ */
+export type EthernetStandard =
+  // Twisted-pair (RJ45 cage)
+  | '10BASE-T'
+  | '100BASE-TX'
+  | '1000BASE-T'
+  | '2.5GBASE-T'
+  | '5GBASE-T'
+  | '10GBASE-T'
+  // Fiber multi-mode (short reach, OM3/OM4)
+  | '1000BASE-SX'
+  | '10GBASE-SR'
+  | '25GBASE-SR'
+  | '40GBASE-SR4'
+  | '100GBASE-SR4'
+  // Fiber single-mode (long reach)
+  | '1000BASE-LX'
+  | '10GBASE-LR'
+  | '25GBASE-LR'
+  | '40GBASE-LR4'
+  | '100GBASE-LR4'
+  // Direct attach copper (passive twinax cable assemblies)
+  | '10GBASE-CR'
+  | '25GBASE-CR'
+  | '40GBASE-CR4'
+  | '100GBASE-CR4'
+  // Active optical cable assemblies (SFP/QSFP cage, integrated optics)
+  | '10G-AOC'
+  | '25G-AOC'
+  | '40G-AOC'
+  | '100G-AOC'
+  | (string & {})
+
+// ============================================
 // Node Spec — discriminated union by `kind`
 // ============================================
 
@@ -150,6 +307,13 @@ export interface Node {
   spec?: NodeSpec
 
   /**
+   * Concrete ports owned by this node. Catalog-backed nodes snapshot
+   * their port list here so saved diagrams do not change when catalog
+   * definitions are updated later.
+   */
+  ports?: NodePort[]
+
+  /**
    * Absolute center position.
    * Set by the layout engine or the editor.
    * When absent, the layout engine computes it automatically.
@@ -203,65 +367,103 @@ export interface LinkStyle {
 }
 
 /**
- * Link endpoint with optional port/IP details
+ * Module / transceiver attached to one end of a link. Each endpoint owns
+ * its own module instance — the cable runs between two modules. For
+ * RJ45 ports the module is the port's built-in PHY (no swappable
+ * transceiver), but the standard it speaks still belongs here.
+ */
+export interface LinkModule {
+  /**
+   * IEEE / industry standard the module implements. Picking this pins
+   * the cage form factor and cable medium kind via the `STANDARD_SPECS`
+   * registry.
+   */
+  standard: EthernetStandard
+  /** Vendor SKU for inventory, e.g. "SFP-10G-SR-S". Optional. */
+  sku?: string
+}
+
+/**
+ * The cable-side plug at one end of a link — what's mechanically
+ * inserted into a port's cage. `cage` is the form factor (RJ45 / SFP+
+ * / etc.) and is the structural anchor; **optional** because it's
+ * derivable from `port.cage` (when set) or `module.standard` (via
+ * `STANDARD_SPECS[std].cage`). Store explicit `cage` only when neither
+ * source has it (e.g. user picked a plug form factor before picking a
+ * module, on a port without catalog cage info). `module` is the
+ * transceiver inside the plug for pluggable form factors (SFP /
+ * SFP+ / SFP28 / QSFP+ / QSFP28); RJ45 direct, DAC, and AOC have no
+ * separate module so it stays undefined.
+ *
+ * Invariants (validator-enforced):
+ * - If both `cage` and `module.standard` are set, `module`'s required
+ *   cage must equal `plug.cage`.
+ * - If both `plug.cage` and `port.cage` are set, they must agree.
+ */
+export interface LinkPlug {
+  /** Form factor the plug presents. Optional when derivable. */
+  cage?: PortConnector
+  /** Transceiver inside the plug. Absent for RJ45 direct / DAC / AOC. */
+  module?: LinkModule
+}
+
+/**
+ * Link endpoint. Conceptually a cable end plugged into a port on a node.
+ * The endpoint references its node and port by id and owns its per-end
+ * `plug` — symmetric links share the same plug shape on both ends;
+ * asymmetric ones (BiDi pairs, BiDi-pair etc.) carry different plug
+ * configs per end.
  */
 export interface LinkEndpoint {
   node: string
-  port?: string
+  /** NodePort.id on the endpoint node — must reference an existing port. */
+  port: string
+  /** Cable-side plug at this end (form factor + optional module). */
+  plug?: LinkPlug
   ip?: string // e.g., "10.57.0.1/30"
   /**
-   * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id")
-   * When set, this endpoint connects to a subgraph's boundary pin
+   * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id").
+   * When set, this endpoint connects through a subgraph boundary pin.
+   * The `port` field still references the underlying node port.
    */
   pin?: string
 }
 
 /**
- * Recognized bandwidth labels. These are the forms the YAML parser
- * and UI present as presets, but `LinkBandwidth` itself also accepts
- * any other parseable string (e.g. "2.5G", "500Mbit") and raw
- * numbers (bps) from monitoring.
- */
-export type LinkBandwidthLabel =
-  | '10M'
-  | '100M'
-  | '1G'
-  | '2.5G'
-  | '5G'
-  | '10G'
-  | '25G'
-  | '40G'
-  | '50G'
-  | '100G'
-  | '200G'
-  | '400G'
-
-/**
- * Link bandwidth/speed. Controls line thickness and utilization
- * baseline.
+ * Physical cable details that aren't fully implied by the link's standard.
+ * `medium` is the cable kind (twisted-pair / fiber-mm / fiber-sm / dac /
+ * aoc), stored explicitly so the user can declare "this is fiber" before
+ * picking a specific OM grade. `category` is the installed grade within
+ * that medium. `length_m` is informational (reach validation). The
+ * cable-end connector is *not* stored — derived from `module.standard`
+ * via `STANDARD_SPECS[std].cableConnector` to keep the model normalized.
  *
- * - `number`: bits per second — the canonical form, typically from
- *   monitoring or metrics mapping.
- * - string label: human-readable form like `"10G"`, `"100M"`, or a
- *   bps-suffixed string like `"2.5Gbps"`. Labels listed in
- *   `LinkBandwidthLabel` are recognized as presets (IDE
- *   autocomplete), but `resolveBandwidthBps` accepts any
- *   well-formed string at runtime.
+ * Invariant (validator-enforced): when both `medium` and `category` are
+ * set, the category's medium must agree with `medium`.
  */
-export type LinkBandwidth = number | LinkBandwidthLabel | (string & {})
+export interface LinkCable {
+  /** Cable medium kind. Optional when not yet decided / not relevant. */
+  medium?: CableMedium
+  /** Installed cable grade within the medium. */
+  category?: CableGrade
+  /** Run length in meters. Used for reach warnings. */
+  length_m?: number
+}
 
 export interface Link {
   id?: string
 
   /**
-   * Source endpoint - can be simple node ID or detailed endpoint
+   * Source endpoint. Always a structured LinkEndpoint at runtime —
+   * the parser normalizes any YAML shorthand.
    */
-  from: string | LinkEndpoint
+  from: LinkEndpoint
 
   /**
-   * Target endpoint - can be simple node ID or detailed endpoint
+   * Target endpoint. Always a structured LinkEndpoint at runtime —
+   * the parser normalizes any YAML shorthand.
    */
-  to: string | LinkEndpoint
+  to: LinkEndpoint
 
   /**
    * Link label - can be multiple lines (displayed at center)
@@ -279,10 +481,17 @@ export interface Link {
   arrow?: ArrowType
 
   /**
-   * Bandwidth/speed - affects line thickness
-   * 1G: thin, 10G: normal, 25G: medium, 40G: thick, 100G: extra thick
+   * Cable details that don't follow from the standard. Optional — the
+   * standard's defaults are sufficient for most diagrams.
    */
-  bandwidth?: LinkBandwidth
+  cable?: LinkCable
+
+  /**
+   * Runtime / monitoring: instantaneous link rate in bits/sec, set by
+   * metrics providers. Optional and orthogonal to module.standard (which
+   * encodes the link's spec, not its current utilization).
+   */
+  rateBps?: number
 
   /**
    * Redundancy/clustering type - nodes connected with this will be placed on the same layer
@@ -313,10 +522,11 @@ export interface Link {
 }
 
 /**
- * Helper to get node ID from endpoint
+ * Helper to get node ID from endpoint. Kept as a tiny accessor so callers
+ * read intent ("the link's source node") rather than reaching into shape.
  */
-export function getNodeId(endpoint: string | LinkEndpoint): string {
-  return typeof endpoint === 'string' ? endpoint : endpoint.node
+export function getNodeId(endpoint: LinkEndpoint): string {
+  return endpoint.node
 }
 
 // ============================================

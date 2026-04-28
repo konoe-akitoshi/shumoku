@@ -9,7 +9,7 @@
  * Pins ensure lines exit/enter ports perpendicularly.
  */
 
-import type { Link, LinkEndpoint, Node, Position } from '../models/types.js'
+import type { Link, Node, Position } from '../models/types.js'
 import { getLinkWidth } from './link-utils.js'
 import { computeNodeSize } from './network-layout.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
@@ -31,16 +31,6 @@ function sideToDir(side: 'top' | 'bottom' | 'left' | 'right'): number {
     case 'right':
       return ConnDirRight
   }
-}
-
-function getNodeId(ep: string | LinkEndpoint): string {
-  return typeof ep === 'string' ? ep : ep.node
-}
-function getPortName(ep: string | LinkEndpoint): string | undefined {
-  return typeof ep === 'string' ? undefined : ep.port
-}
-function toEndpoint(ep: string | LinkEndpoint): LinkEndpoint {
-  return typeof ep === 'string' ? { node: ep } : ep
 }
 
 /** Check if a point is inside any node's bounding box (with margin) */
@@ -250,15 +240,16 @@ function createConnectors(
 
   for (const [i, link] of links.entries()) {
     const linkId = link.id ?? `__link_${i}`
-    const fromNodeId = getNodeId(link.from)
-    const toNodeId = getNodeId(link.to)
+    const fromNodeId = link.from.node
+    const toNodeId = link.to.node
     if (!shapeRefs.has(fromNodeId) || !shapeRefs.has(toNodeId)) continue
 
-    const fromPort = getPortName(link.from)
-    const toPort = getPortName(link.to)
-    const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
-    const toPortId = toPort ? `${toNodeId}:${toPort}` : null
-    const fromPin = fromPortId ? pinIds.get(fromPortId) : undefined
+    const fromPortId = `${fromNodeId}:${link.from.port}`
+    const toPortId = `${toNodeId}:${link.to.port}`
+    const fromPortObj = ports.get(fromPortId)
+    const toPortObj = ports.get(toPortId)
+    if (!fromPortObj || !toPortObj) continue
+    const fromPin = pinIds.get(fromPortId)
 
     // Source: use pin (direction constraint → perpendicular exit)
     // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnEnd
@@ -266,27 +257,21 @@ function createConnectors(
     if (fromPin !== undefined) {
       srcEnd = new Avoid.ConnEnd(shapeRefs.get(fromNodeId), fromPin)
     } else {
-      const fromPortObj = fromPortId ? ports.get(fromPortId) : undefined
-      const fromNodeObj = nodes.get(fromNodeId)
-      const pos = fromPortObj?.absolutePosition ?? fromNodeObj?.position
-      if (!pos) continue
+      const pos = fromPortObj.absolutePosition
       srcEnd = new Avoid.ConnEnd(new Avoid.Point(pos.x, pos.y))
     }
 
     // Destination: use Point (no direction constraint → natural arrival)
     // Pin direction must be outward, but for destination ports the line
     // approaches from outside → inward direction needed → libavoid rejects it.
-    const toPortObj = toPortId ? ports.get(toPortId) : undefined
-    const toNodeObj = nodes.get(toNodeId)
-    const dstPos = toPortObj?.absolutePosition ?? toNodeObj?.position
-    if (!dstPos) continue
+    const dstPos = toPortObj.absolutePosition
     const dstEnd = new Avoid.ConnEnd(new Avoid.Point(dstPos.x, dstPos.y))
 
     const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
 
     // Add checkpoint to force perpendicular arrival at destination port.
     // Only set if the checkpoint doesn't land inside any node obstacle.
-    const dstPortObj = toPortId ? ports.get(toPortId) : null
+    const dstPortObj = toPortObj
     if (dstPortObj?.side) {
       const portHalf = Math.max(dstPortObj.size.width, dstPortObj.size.height) / 2
       const offset = portHalf + 16
@@ -348,20 +333,19 @@ function extractEdges(
       points.push({ x: pt.x, y: pt.y })
     }
 
-    const fromNodeId = getNodeId(link.from)
-    const toNodeId = getNodeId(link.to)
-    const fromPort = getPortName(link.from)
-    const toPort = getPortName(link.to)
+    const fromNodeId = link.from.node
+    const toNodeId = link.to.node
+    const fromPortId = `${fromNodeId}:${link.from.port}`
+    const toPortId = `${toNodeId}:${link.to.port}`
+    const fromPortObj = ports.get(fromPortId)
+    const toPortObj = ports.get(toPortId)
+    // Should not happen in practice — connectors only get created when both
+    // ports resolve. Skip defensively if a route survived without them.
+    if (!fromPortObj || !toPortObj) continue
 
     // Snap route endpoints to exact port positions
-    const fromPortId = fromPort ? `${fromNodeId}:${fromPort}` : null
-    const toPortId = toPort ? `${toNodeId}:${toPort}` : null
-    const fromPortObj = fromPortId ? ports.get(fromPortId) : undefined
-    const toPortObj = toPortId ? ports.get(toPortId) : undefined
-    if (fromPortObj && points.length > 0) {
+    if (points.length > 0) {
       points[0] = { x: fromPortObj.absolutePosition.x, y: fromPortObj.absolutePosition.y }
-    }
-    if (toPortObj && points.length > 0) {
       points[points.length - 1] = {
         x: toPortObj.absolutePosition.x,
         y: toPortObj.absolutePosition.y,
@@ -377,12 +361,12 @@ function extractEdges(
       id: linkId,
       fromPortId,
       toPortId,
-      fromPort: fromPortObj ?? null,
-      toPort: toPortObj ?? null,
+      fromPort: fromPortObj,
+      toPort: toPortObj,
       fromNodeId,
       toNodeId,
-      fromEndpoint: toEndpoint(link.from),
-      toEndpoint: toEndpoint(link.to),
+      fromEndpoint: link.from,
+      toEndpoint: link.to,
       points: finalPoints,
       width: getLinkWidth(link),
       link,

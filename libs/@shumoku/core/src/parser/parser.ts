@@ -7,15 +7,22 @@
  */
 
 import yaml from 'js-yaml'
+import { ensurePorts } from '../models/migrate.js'
+import { plugFromStandard } from '../models/port-compatibility.js'
 import type {
   ArrowType,
+  CableGrade,
+  CableMedium,
   CanvasSettings,
+  EthernetStandard,
   GraphSettings,
   Link,
-  LinkBandwidth,
+  LinkCable,
+  LinkEndpoint,
   LinkType,
   NetworkGraph,
   Node,
+  NodePort,
   NodeShape,
   NodeSpec,
   PaperOrientation,
@@ -24,6 +31,46 @@ import type {
   Subgraph,
   ThemeType,
 } from '../models/types.js'
+
+const KNOWN_CABLE_GRADES: ReadonlySet<CableGrade> = new Set([
+  'cat5e',
+  'cat6',
+  'cat6a',
+  'cat7',
+  'cat8',
+  'om3',
+  'om4',
+  'om5',
+  'os1',
+  'os2',
+  'dac',
+  'aoc',
+])
+
+const KNOWN_CABLE_MEDIA: ReadonlySet<CableMedium> = new Set([
+  'twisted-pair',
+  'fiber-mm',
+  'fiber-sm',
+  'dac',
+  'aoc',
+])
+
+/**
+ * Normalize an arbitrary YAML value into a CableGrade. Lower-cases and
+ * checks against the known set; returns undefined for unknown / malformed
+ * input so bad YAML doesn't pollute the model.
+ */
+function normalizeCableGrade(value: unknown): CableGrade | undefined {
+  if (typeof value !== 'string') return undefined
+  const v = value.toLowerCase().replace(/\s+/g, '') as CableGrade
+  return KNOWN_CABLE_GRADES.has(v) ? v : undefined
+}
+
+function normalizeCableMedium(value: unknown): CableMedium | undefined {
+  if (typeof value !== 'string') return undefined
+  const v = value.toLowerCase().replace(/\s+/g, '') as CableMedium
+  return KNOWN_CABLE_MEDIA.has(v) ? v : undefined
+}
 
 // Re-define DeviceType enum locally (same as v2.DeviceType)
 enum DeviceType {
@@ -76,6 +123,7 @@ interface YamlNode {
   resource?: string
   /** Custom icon URL (overrides vendor/type icons) */
   icon?: string
+  ports?: NodePort[]
 }
 
 interface YamlLinkStyle {
@@ -86,9 +134,15 @@ interface YamlLinkStyle {
   minLength?: number
 }
 
+interface YamlLinkModule {
+  standard?: string
+  sku?: string
+}
+
 interface YamlLinkEndpoint {
   node: string
   port?: string
+  module?: YamlLinkModule
   ip?: string
   pin?: string
 }
@@ -100,7 +154,16 @@ interface YamlLink {
   label?: string | string[]
   type?: string
   arrow?: string
-  bandwidth?: string | number
+  /**
+   * Convenience YAML shorthand: when a single `standard` is set at the
+   * link level we copy it onto both endpoint modules. Endpoint-level
+   * `module.standard` overrides this for asymmetric links (BiDi, copper-
+   * fiber adapters, etc.).
+   */
+  standard?: string
+  cable?: LinkCable & {
+    cable_category?: LinkCable['category']
+  }
   redundancy?: string
   /** Single VLAN ID or array of VLANs for trunk */
   vlan?: number | number[]
@@ -226,7 +289,7 @@ export class YamlParser {
         throw new Error('Invalid YAML: expected object')
       }
 
-      const graph: NetworkGraph = {
+      const rawGraph: NetworkGraph = {
         version: data.version || '2.0.0',
         name: data.name,
         description: data.description,
@@ -238,7 +301,11 @@ export class YamlParser {
       }
 
       // Auto-assign nodes to subgraphs based on parent field
-      this.assignNodesToSubgraphs(graph)
+      this.assignNodesToSubgraphs(rawGraph)
+
+      // Materialize NodePort entries for endpoints that referenced port
+      // ids without declaring them on the node.
+      const graph = ensurePorts(rawGraph)
 
       return { graph, warnings: warnings.length > 0 ? warnings : undefined }
     } catch (error) {
@@ -289,31 +356,35 @@ export class YamlParser {
           : undefined,
         metadata: n.metadata,
         spec: this.buildNodeSpec(n),
+        ports: n.ports,
       }
     })
   }
 
   private parseLinks(yamlLinks: YamlLink[], _warnings: ParseWarning[]): Link[] {
-    return yamlLinks.map((l, index) => ({
-      id: l.id || `link-${index}`,
-      from: this.parseLinkEndpoint(l.from),
-      to: this.parseLinkEndpoint(l.to),
-      label: l.label,
-      type: this.parseLinkType(l.type),
-      arrow: this.parseArrowType(l.arrow),
-      bandwidth: this.parseBandwidth(l.bandwidth),
-      redundancy: this.parseRedundancyType(l.redundancy),
-      vlan: this.parseVlan(l.vlan),
-      style: l.style
-        ? {
-            stroke: l.style.stroke,
-            strokeWidth: l.style.strokeWidth,
-            strokeDasharray: l.style.strokeDasharray,
-            opacity: l.style.opacity,
-            minLength: l.style.minLength,
-          }
-        : undefined,
-    }))
+    return yamlLinks.map((l, index) => {
+      const linkStandard = l.standard ? (l.standard as EthernetStandard) : undefined
+      return {
+        id: l.id || `link-${index}`,
+        from: this.parseLinkEndpoint(l.from, linkStandard),
+        to: this.parseLinkEndpoint(l.to, linkStandard),
+        label: l.label,
+        type: this.parseLinkType(l.type),
+        arrow: this.parseArrowType(l.arrow),
+        cable: this.parseLinkCable(l.cable),
+        redundancy: this.parseRedundancyType(l.redundancy),
+        vlan: this.parseVlan(l.vlan),
+        style: l.style
+          ? {
+              stroke: l.style.stroke,
+              strokeWidth: l.style.strokeWidth,
+              strokeDasharray: l.style.strokeDasharray,
+              opacity: l.style.opacity,
+              minLength: l.style.minLength,
+            }
+          : undefined,
+      }
+    })
   }
 
   private parseVlan(vlan?: number | number[]): number[] | undefined {
@@ -323,18 +394,53 @@ export class YamlParser {
     return Array.isArray(vlan) ? vlan : [vlan]
   }
 
+  private parseLinkCable(cable: YamlLink['cable']): LinkCable | undefined {
+    if (!cable) return undefined
+    const result: LinkCable = {}
+    const rawCategory = cable.category ?? cable.cable_category
+    const category = normalizeCableGrade(rawCategory)
+    if (category) result.category = category
+    const medium = normalizeCableMedium((cable as { medium?: unknown }).medium)
+    if (medium) result.medium = medium
+    if (cable.length_m !== undefined) result.length_m = cable.length_m
+    return Object.keys(result).length > 0 ? result : undefined
+  }
+
+  /**
+   * Normalize YAML endpoint (string shorthand or object) into a draft
+   * LinkEndpoint. NodePort materialization happens in `ensurePorts`
+   * after parseLinks. The optional `linkStandard` argument is the link-
+   * level shorthand standard — if the endpoint doesn't carry its own
+   * `module.standard`, we copy this onto the endpoint module.
+   */
   private parseLinkEndpoint(
     endpoint: string | YamlLinkEndpoint,
-  ): string | { node: string; port?: string; ip?: string; pin?: string } {
+    linkStandard: EthernetStandard | undefined,
+  ): LinkEndpoint {
     if (typeof endpoint === 'string') {
-      return endpoint
+      const colon = endpoint.indexOf(':')
+      const node = colon >= 0 ? endpoint.slice(0, colon) : endpoint
+      const port = colon >= 0 ? endpoint.slice(colon + 1) : ''
+      const result: LinkEndpoint = { node, port }
+      if (linkStandard) {
+        const plug = plugFromStandard(linkStandard)
+        if (plug) result.plug = plug
+      }
+      return result
     }
-    return {
+    const standard = (endpoint.module?.standard as EthernetStandard | undefined) ?? linkStandard
+    const sku = endpoint.module?.sku
+    const result: LinkEndpoint = {
       node: endpoint.node,
-      port: endpoint.port != null ? String(endpoint.port) : undefined,
+      port: endpoint.port != null ? String(endpoint.port) : '',
       ip: endpoint.ip,
       pin: endpoint.pin,
     }
+    if (standard) {
+      const plug = plugFromStandard(standard, sku)
+      if (plug) result.plug = plug
+    }
+    return result
   }
 
   private parseRedundancyType(
@@ -360,19 +466,6 @@ export class YamlParser {
     }
 
     return typeMap[redundancy.toLowerCase()]
-  }
-
-  private parseBandwidth(bandwidth?: string | number): LinkBandwidth | undefined {
-    if (bandwidth === undefined || bandwidth === null || bandwidth === '') return undefined
-    if (typeof bandwidth === 'number') {
-      return Number.isFinite(bandwidth) && bandwidth > 0 ? bandwidth : undefined
-    }
-    // Pass the normalized string straight through. `resolveBandwidthBps`
-    // at the rendering/metrics layer accepts any well-formed label
-    // ("10G", "2.5Gbps", "500M") plus plain numeric strings, so we
-    // don't need to collapse to a fixed enum here anymore.
-    const normalized = bandwidth.toUpperCase().replace(/\s/g, '')
-    return normalized || undefined
   }
 
   private parsePins(yamlPins: YamlPin[], warnings: ParseWarning[]): Pin[] {

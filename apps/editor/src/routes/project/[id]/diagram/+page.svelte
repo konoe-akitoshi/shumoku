@@ -175,7 +175,10 @@
       label={labelEdit.label}
       x={labelEdit.x}
       y={labelEdit.y}
-      oncommit={(portId, value) => renderer?.commitLabel(portId, value)}
+      oncommit={(portId, value) => {
+        diagramState.updatePortLabel(portId, value)
+        renderer?.commitLabel(portId, value)
+      }}
       onclose={() => { labelEdit = null }}
     />
   {/if}

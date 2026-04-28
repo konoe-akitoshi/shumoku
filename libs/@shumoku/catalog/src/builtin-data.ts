@@ -33,21 +33,28 @@ export const builtinData = [
         downlink: [
           {
             count: 12,
+            name_pattern: 'Gi1/0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet1/0/{n}',
             speed: '1g',
-            media: 'copper',
+            cage: 'rj45',
             poe: true,
           },
         ],
         uplink: [
           {
-            count: 2,
+            names: ['Gi1/0/13', 'Gi1/0/14'],
+            faceplate_labels: ['13', '14'],
+            interface_names: ['GigabitEthernet1/0/13', 'GigabitEthernet1/0/14'],
             speed: '1g',
-            media: 'sfp',
+            cage: 'rj45',
           },
           {
-            count: 2,
+            names: ['Gi1/0/15', 'Gi1/0/16'],
+            faceplate_labels: ['15', '16'],
+            interface_names: ['GigabitEthernet1/0/15', 'GigabitEthernet1/0/16'],
             speed: '1g',
-            media: 'copper',
+            cage: 'sfp',
           },
         ],
       },
@@ -86,21 +93,28 @@ export const builtinData = [
         downlink: [
           {
             count: 8,
+            name_pattern: 'Gi1/0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet1/0/{n}',
             speed: '1g',
-            media: 'copper',
+            cage: 'rj45',
             poe: true,
           },
         ],
         uplink: [
           {
-            count: 2,
+            names: ['Gi1/0/9', 'Gi1/0/10'],
+            faceplate_labels: ['9', '10'],
+            interface_names: ['GigabitEthernet1/0/9', 'GigabitEthernet1/0/10'],
             speed: '1g',
-            media: 'sfp',
+            cage: 'rj45',
           },
           {
-            count: 2,
+            names: ['Gi1/0/11', 'Gi1/0/12'],
+            faceplate_labels: ['11', '12'],
+            interface_names: ['GigabitEthernet1/0/11', 'GigabitEthernet1/0/12'],
             speed: '1g',
-            media: 'copper',
+            cage: 'sfp',
           },
         ],
       },
@@ -133,20 +147,27 @@ export const builtinData = [
         downlink: [
           {
             count: 8,
+            name_pattern: 'Gi1/0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet1/0/{n}',
             speed: '1g',
-            media: 'copper',
+            cage: 'rj45',
           },
         ],
         uplink: [
           {
-            count: 2,
+            names: ['Gi1/0/9', 'Gi1/0/10'],
+            faceplate_labels: ['9', '10'],
+            interface_names: ['GigabitEthernet1/0/9', 'GigabitEthernet1/0/10'],
             speed: '1g',
-            media: 'sfp',
+            cage: 'rj45',
           },
           {
-            count: 2,
+            names: ['Gi1/0/11', 'Gi1/0/12'],
+            faceplate_labels: ['11', '12'],
+            interface_names: ['GigabitEthernet1/0/11', 'GigabitEthernet1/0/12'],
             speed: '1g',
-            media: 'copper',
+            cage: 'sfp',
           },
         ],
       },
@@ -247,6 +268,15 @@ export const builtinData = [
         bands: ['2.4ghz', '5ghz'],
         antenna_type: 'internal',
       },
+      ports: {
+        uplink: [
+          {
+            names: ['E0'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
       physical: {
         form_factor: 'ceiling',
         dimensions_mm: {
@@ -294,16 +324,22 @@ export const builtinData = [
       ports: {
         downlink: [
           {
-            count: 3,
+            names: ['E1', 'E2'],
             speed: '1g',
-            media: 'copper',
+            cage: 'rj45',
+          },
+          {
+            names: ['E3'],
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
           },
         ],
         uplink: [
           {
-            count: 1,
+            names: ['E0/PT'],
             speed: '1g',
-            media: 'copper',
+            cage: 'rj45',
           },
         ],
       },
@@ -348,17 +384,17 @@ export const builtinData = [
       ports: {
         downlink: [
           {
-            count: 8,
+            names: ['1', '2', '3', '4', '5', '6', '7', '8'],
             speed: '1g',
-            media: 'copper',
+            cage: 'rj45',
             poe: true,
           },
         ],
         uplink: [
           {
-            count: 2,
+            names: ['9', '10'],
             speed: '1g',
-            media: 'sfp',
+            cage: 'combo',
           },
         ],
       },
@@ -408,22 +444,17 @@ export const builtinData = [
       ports: {
         downlink: [
           {
-            count: 8,
+            names: ['1', '2', '3', '4', '5', '6', '7', '8'],
             speed: '100m',
-            media: 'copper',
+            cage: 'rj45',
             poe: true,
           },
         ],
         uplink: [
           {
-            count: 2,
+            names: ['9', '10'],
             speed: '1g',
-            media: 'copper',
-          },
-          {
-            count: 2,
-            speed: '1g',
-            media: 'sfp',
+            cage: 'combo',
           },
         ],
       },

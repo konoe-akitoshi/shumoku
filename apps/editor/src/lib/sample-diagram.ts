@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /**
- * Positioned NetworkGraph for the sample project.
- * Generated from sampleNetwork YAML by scripts/generate-sample-diagram.ts —
- * run that script to regenerate after editing the YAML fixtures.
+ * Editor-owned sample diagram. This is the canonical source for the
+ * "Open sample" feature — hand-edit this file directly to evolve the
+ * demo. It is intentionally NOT derived from `@shumoku/core`'s YAML
+ * fixture: the YAML side is for parser testing and is allowed to use
+ * terse forms that this editor sample wouldn't.
  *
  * Cast via `as unknown as NetworkGraph`: DeviceType is a string enum and
- * the serialized JSON has raw string literals where the type wants enum
- * references. The runtime values match — the cast only papers over the
+ * the JSON-shaped literal carries raw string values where the type wants
+ * enum references. Runtime values match — the cast only papers over the
  * nominal type check.
  */
 
@@ -33,6 +35,13 @@ export const sampleDiagram = {
         service: 'ec2',
         resource: 'instances',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 570,
         y: 78,
@@ -49,6 +58,23 @@ export const sampleDiagram = {
         service: 'vpc',
         resource: 'vpn-gateway',
       },
+      ports: [
+        {
+          id: 'vpc',
+          label: 'vpc',
+          source: 'custom',
+        },
+        {
+          id: 'tun0',
+          label: 'tun0',
+          source: 'custom',
+        },
+        {
+          id: 'tun1',
+          label: 'tun1',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 570,
         y: 248,
@@ -63,6 +89,13 @@ export const sampleDiagram = {
         kind: 'hardware',
         type: 'internet',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 458.5,
         y: 544,
@@ -77,6 +110,13 @@ export const sampleDiagram = {
         kind: 'hardware',
         type: 'internet',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 675,
         y: 544,
@@ -93,6 +133,28 @@ export const sampleDiagram = {
         vendor: 'yamaha',
         model: 'rtx3510',
       },
+      ports: [
+        {
+          id: 'wan1',
+          label: 'wan1',
+          source: 'custom',
+        },
+        {
+          id: 'ha0',
+          label: 'ha0',
+          source: 'custom',
+        },
+        {
+          id: 'lan1',
+          label: 'lan1',
+          source: 'custom',
+        },
+        {
+          id: 'tun1',
+          label: 'tun1',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 458.5,
         y: 744,
@@ -109,6 +171,28 @@ export const sampleDiagram = {
         vendor: 'yamaha',
         model: 'rtx3510',
       },
+      ports: [
+        {
+          id: 'wan1',
+          label: 'wan1',
+          source: 'custom',
+        },
+        {
+          id: 'ha0',
+          label: 'ha0',
+          source: 'custom',
+        },
+        {
+          id: 'lan1',
+          label: 'lan1',
+          source: 'custom',
+        },
+        {
+          id: 'tun1',
+          label: 'tun1',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 675,
         y: 744,
@@ -125,6 +209,28 @@ export const sampleDiagram = {
         vendor: 'juniper',
         model: 'srx4100',
       },
+      ports: [
+        {
+          id: 'outside',
+          label: 'outside',
+          source: 'custom',
+        },
+        {
+          id: 'ha',
+          label: 'ha',
+          source: 'custom',
+        },
+        {
+          id: 'dmz',
+          label: 'dmz',
+          source: 'custom',
+        },
+        {
+          id: 'inside',
+          label: 'inside',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 465,
         y: 1052,
@@ -141,6 +247,23 @@ export const sampleDiagram = {
         vendor: 'juniper',
         model: 'srx4100',
       },
+      ports: [
+        {
+          id: 'outside',
+          label: 'outside',
+          source: 'custom',
+        },
+        {
+          id: 'ha',
+          label: 'ha',
+          source: 'custom',
+        },
+        {
+          id: 'inside',
+          label: 'inside',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 675,
         y: 1052,
@@ -155,6 +278,23 @@ export const sampleDiagram = {
         kind: 'hardware',
         type: 'l2-switch',
       },
+      ports: [
+        {
+          id: 'eth1',
+          label: 'eth1',
+          source: 'custom',
+        },
+        {
+          id: 'eth2',
+          label: 'eth2',
+          source: 'custom',
+        },
+        {
+          id: 'uplink',
+          label: 'uplink',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 215,
         y: 1708,
@@ -169,6 +309,13 @@ export const sampleDiagram = {
         kind: 'hardware',
         type: 'server',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 110,
         y: 1888,
@@ -183,6 +330,13 @@ export const sampleDiagram = {
         kind: 'hardware',
         type: 'server',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 320,
         y: 1888,
@@ -199,6 +353,23 @@ export const sampleDiagram = {
         vendor: 'juniper',
         model: 'qfx5120-48t',
       },
+      ports: [
+        {
+          id: 'ae0',
+          label: 'ae0',
+          source: 'custom',
+        },
+        {
+          id: 'eth1',
+          label: 'eth1',
+          source: 'custom',
+        },
+        {
+          id: 'eth2',
+          label: 'eth2',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 925,
         y: 1408,
@@ -215,6 +386,23 @@ export const sampleDiagram = {
         vendor: 'juniper',
         model: 'ex4400-48t',
       },
+      ports: [
+        {
+          id: 'ae0',
+          label: 'ae0',
+          source: 'custom',
+        },
+        {
+          id: 'eth10',
+          label: 'eth10',
+          source: 'custom',
+        },
+        {
+          id: 'eth20',
+          label: 'eth20',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 925,
         y: 1608,
@@ -231,6 +419,23 @@ export const sampleDiagram = {
         vendor: 'cisco',
         model: 'ws-c3560cx-8pc-s',
       },
+      ports: [
+        {
+          id: 'uplink',
+          label: 'uplink',
+          source: 'custom',
+        },
+        {
+          id: 'eth1',
+          label: 'eth1',
+          source: 'custom',
+        },
+        {
+          id: 'eth2',
+          label: 'eth2',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 695,
         y: 1956,
@@ -247,6 +452,13 @@ export const sampleDiagram = {
         vendor: 'hpe',
         model: 'aruba-ap-505',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 590,
         y: 2136,
@@ -263,6 +475,13 @@ export const sampleDiagram = {
         vendor: 'hpe',
         model: 'aruba-ap-505',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 800,
         y: 2136,
@@ -279,6 +498,23 @@ export const sampleDiagram = {
         vendor: 'panasonic',
         model: 'switch-m8egpwr-plus',
       },
+      ports: [
+        {
+          id: 'uplink',
+          label: 'uplink',
+          source: 'custom',
+        },
+        {
+          id: 'eth1',
+          label: 'eth1',
+          source: 'custom',
+        },
+        {
+          id: 'eth2',
+          label: 'eth2',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 1155,
         y: 1876,
@@ -295,6 +531,13 @@ export const sampleDiagram = {
         vendor: 'hpe',
         model: 'aruba-ap-505',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 1050,
         y: 2056,
@@ -311,6 +554,18 @@ export const sampleDiagram = {
         vendor: 'hpe',
         model: 'aruba-instant-on-ap11d',
       },
+      ports: [
+        {
+          id: 'e0',
+          label: 'e0',
+          source: 'custom',
+        },
+        {
+          id: 'e3',
+          label: 'e3',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 1260,
         y: 2056,
@@ -327,6 +582,13 @@ export const sampleDiagram = {
         vendor: 'generic',
         model: 'ip-phone',
       },
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          source: 'custom',
+        },
+      ],
       position: {
         x: 1260,
         y: 2216,
@@ -340,11 +602,14 @@ export const sampleDiagram = {
         node: 'vgw',
         port: 'tun0',
         ip: '169.254.100.1/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
+
       to: {
         node: 'rt1',
         port: 'tun1',
         ip: '169.254.100.2/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       label: 'IPsec VPN',
       type: 'dashed',
@@ -356,6 +621,7 @@ export const sampleDiagram = {
         port: 'tun1',
         ip: '169.254.101.1/30',
       },
+
       to: {
         node: 'rt2',
         port: 'tun1',
@@ -370,15 +636,17 @@ export const sampleDiagram = {
         node: 'fw1',
         port: 'dmz',
         ip: '10.100.0.2/24',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
+
       to: {
         node: 'dmz-sw',
         port: 'uplink',
         ip: '10.100.0.1/24',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       label: 'DMZ',
       type: 'solid',
-      bandwidth: '10G',
       vlan: [100],
     },
     {
@@ -387,15 +655,17 @@ export const sampleDiagram = {
         node: 'fw1',
         port: 'inside',
         ip: '10.0.2.1/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
+
       to: {
         node: 'core-sw',
         port: 'eth1',
         ip: '10.0.2.2/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       label: 'Active',
       type: 'solid',
-      bandwidth: '10G',
     },
     {
       id: 'link-4',
@@ -403,15 +673,17 @@ export const sampleDiagram = {
         node: 'fw2',
         port: 'inside',
         ip: '10.0.2.5/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
+
       to: {
         node: 'core-sw',
         port: 'eth2',
         ip: '10.0.2.6/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       label: 'Standby',
       type: 'solid',
-      bandwidth: '10G',
     },
     {
       id: 'cloud/link-0',
@@ -439,7 +711,6 @@ export const sampleDiagram = {
         ip: '203.0.113.1/30',
       },
       type: 'solid',
-      bandwidth: '10G',
     },
     {
       id: 'perimeter/link-1',
@@ -447,14 +718,15 @@ export const sampleDiagram = {
         node: 'isp2',
         port: 'eth0',
         ip: '198.51.100.2/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       to: {
         node: 'rt2',
         port: 'wan1',
         ip: '198.51.100.1/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       type: 'solid',
-      bandwidth: '10G',
     },
     {
       id: 'perimeter/link-2',
@@ -481,14 +753,15 @@ export const sampleDiagram = {
         node: 'rt1',
         port: 'lan1',
         ip: '10.0.1.1/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       to: {
         node: 'fw1',
         port: 'outside',
         ip: '10.0.1.2/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       type: 'solid',
-      bandwidth: '10G',
     },
     {
       id: 'perimeter/link-4',
@@ -496,14 +769,15 @@ export const sampleDiagram = {
         node: 'rt2',
         port: 'lan1',
         ip: '10.0.1.5/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       to: {
         node: 'fw2',
         port: 'outside',
         ip: '10.0.1.6/30',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       type: 'solid',
-      bandwidth: '10G',
     },
     {
       id: 'perimeter/link-5',
@@ -527,13 +801,14 @@ export const sampleDiagram = {
       from: {
         node: 'dmz-sw',
         port: 'eth1',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       to: {
         node: 'web-srv',
         port: 'eth0',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       type: 'solid',
-      bandwidth: '1G',
       vlan: [100],
     },
     {
@@ -541,13 +816,14 @@ export const sampleDiagram = {
       from: {
         node: 'dmz-sw',
         port: 'eth2',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       to: {
         node: 'mail-srv',
         port: 'eth0',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       type: 'solid',
-      bandwidth: '1G',
       vlan: [100],
     },
     {
@@ -556,15 +832,16 @@ export const sampleDiagram = {
         node: 'core-sw',
         port: 'ae0',
         ip: '10.0.3.1/30',
+        plug: { module: { standard: '40GBASE-SR4' } },
       },
       to: {
         node: 'dist-sw',
         port: 'ae0',
         ip: '10.0.3.2/30',
+        plug: { module: { standard: '40GBASE-SR4' } },
       },
       label: '40G LACP',
       type: 'solid',
-      bandwidth: '40G',
     },
     {
       id: 'campus/link-1',
@@ -572,15 +849,16 @@ export const sampleDiagram = {
         node: 'dist-sw',
         port: 'eth10',
         ip: '10.10.0.254/24',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       to: {
         node: 'sw-a1',
         port: 'uplink',
         ip: '10.10.0.1/24',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       label: 'Trunk',
       type: 'solid',
-      bandwidth: '10G',
       vlan: [10, 20],
     },
     {
@@ -589,15 +867,16 @@ export const sampleDiagram = {
         node: 'dist-sw',
         port: 'eth20',
         ip: '10.20.0.254/24',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       to: {
         node: 'sw-b1',
         port: 'uplink',
         ip: '10.20.0.1/24',
+        plug: { module: { standard: '10GBASE-SR' } },
       },
       label: 'Trunk',
       type: 'solid',
-      bandwidth: '10G',
       vlan: [10, 30],
     },
     {
@@ -605,13 +884,14 @@ export const sampleDiagram = {
       from: {
         node: 'sw-a1',
         port: 'eth1',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       to: {
         node: 'ap-a1',
         port: 'eth0',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       type: 'solid',
-      bandwidth: '1G',
       vlan: [20],
     },
     {
@@ -619,13 +899,14 @@ export const sampleDiagram = {
       from: {
         node: 'sw-a1',
         port: 'eth2',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       to: {
         node: 'ap-a2',
         port: 'eth0',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       type: 'solid',
-      bandwidth: '1G',
       vlan: [20],
     },
     {
@@ -633,13 +914,14 @@ export const sampleDiagram = {
       from: {
         node: 'sw-b1',
         port: 'eth1',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       to: {
         node: 'ap-b1',
         port: 'eth0',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       type: 'solid',
-      bandwidth: '1G',
       vlan: [30],
     },
     {
@@ -647,13 +929,14 @@ export const sampleDiagram = {
       from: {
         node: 'sw-b1',
         port: 'eth2',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       to: {
         node: 'ap-b2',
         port: 'e0',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       type: 'solid',
-      bandwidth: '1G',
       vlan: [30],
     },
     {
@@ -661,13 +944,14 @@ export const sampleDiagram = {
       from: {
         node: 'ap-b2',
         port: 'e3',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       to: {
         node: 'ip-phone',
         port: 'eth0',
+        plug: { module: { standard: '1000BASE-T' } },
       },
       type: 'solid',
-      bandwidth: '1G',
     },
   ],
   subgraphs: [

@@ -137,9 +137,10 @@
                       palette={diagramState.palette}
                       bomItems={diagramState.bomItems}
                       links={diagramState.links}
+                      nodes={diagramState.nodes}
                     />
                   {:else if link}
-                    <LinkContent {link} />
+                    <LinkContent {link} nodes={diagramState.nodes} />
                   {:else if subgraph}
                     <SubgraphContent
                       {subgraph}

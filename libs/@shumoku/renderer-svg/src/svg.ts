@@ -9,12 +9,13 @@
 
 import type {
   EdgeStyle,
+  EthernetStandard,
   LayoutLink,
   LayoutNode,
   LayoutResult,
   LayoutSubgraph,
   LegendSettings,
-  LinkBandwidth,
+  Link,
   LinkType,
   NetworkGraph,
   Node,
@@ -24,14 +25,15 @@ import type {
   ThemeType,
 } from '@shumoku/core'
 import {
+  bpsToLinkWidth,
   computeNodeSize,
   DEFAULT_ICON_SIZE,
   darkTheme,
-  getBandwidthWidth,
   getDeviceIcon,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
+  linkSpeedBps,
   SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   specDeviceType,
@@ -447,11 +449,12 @@ export class SVGRenderer {
     let itemCount = 0
 
     if (settings.showBandwidth) {
-      const usedBandwidths = new Set<LinkBandwidth>()
+      const usedStandards = new Set<string>()
       for (const link of graph.links) {
-        if (link.bandwidth) usedBandwidths.add(link.bandwidth)
+        if (link.from.plug?.module?.standard) usedStandards.add(link.from.plug?.module?.standard)
+        if (link.to.plug?.module?.standard) usedStandards.add(link.to.plug?.module?.standard)
       }
-      itemCount += usedBandwidths.size
+      itemCount += usedStandards.size
     }
 
     if (itemCount === 0) {
@@ -509,10 +512,12 @@ export class SVGRenderer {
     const iconWidth = 30
     const maxLabelWidth = 100
 
-    // Collect used bandwidths
-    const usedBandwidths = new Set<LinkBandwidth>()
+    // Collect used standards across both endpoints (asymmetric links may
+    // have a different standard at each end — both should appear).
+    const usedStandards = new Set<string>()
     for (const link of graph.links) {
-      if (link.bandwidth) usedBandwidths.add(link.bandwidth)
+      if (link.from.plug?.module?.standard) usedStandards.add(link.from.plug?.module?.standard)
+      if (link.to.plug?.module?.standard) usedStandards.add(link.to.plug?.module?.standard)
     }
 
     // Collect used device types
@@ -523,20 +528,17 @@ export class SVGRenderer {
     }
 
     // Build legend items
-    if (settings.showBandwidth && usedBandwidths.size > 0) {
-      // The legend only surfaces the known preset labels. Arbitrary
-      // numeric bandwidths (e.g. mapping overrides from monitoring)
-      // still render correctly but are omitted from the legend to
-      // keep it tidy.
-      const sortedBandwidths = ['1G', '10G', '25G', '40G', '100G'].filter((b) =>
-        usedBandwidths.has(b as LinkBandwidth),
-      )
-
-      for (const bw of sortedBandwidths) {
-        const sw = this.getBandwidthStrokeWidth(bw)
+    if (settings.showBandwidth && usedStandards.size > 0) {
+      const sortedStandards = [...usedStandards].sort()
+      for (const std of sortedStandards) {
+        const speed = linkSpeedBps({
+          from: { node: '', port: '', module: { standard: std as EthernetStandard } },
+          to: { node: '', port: '', module: { standard: std as EthernetStandard } },
+        } as Link)
+        const sw = bpsToLinkWidth(speed)
         items.push({
           icon: this.renderBandwidthLegendIcon(sw),
-          label: bw,
+          label: std,
         })
       }
     }
@@ -1201,10 +1203,10 @@ ${fg}
     const dasharray = link.style?.strokeDasharray || this.getLinkDasharray(type)
     const markerEnd = arrow !== 'none' ? `url(#${this.arrowId})` : ''
 
-    // Bandwidth determines stroke width
-    const bandwidthStrokeWidth = this.getBandwidthStrokeWidth(link.bandwidth)
+    // Standard determines stroke width via the registry's speed mapping.
+    const standardStrokeWidth = bpsToLinkWidth(linkSpeedBps(link))
     const strokeWidth =
-      link.style?.strokeWidth || bandwidthStrokeWidth || this.getLinkStrokeWidth(type)
+      link.style?.strokeWidth || standardStrokeWidth || this.getLinkStrokeWidth(type)
 
     // Render link line
     let result = this.renderLinkLine(id, points, stroke, strokeWidth, dasharray, markerEnd, type)
@@ -1275,9 +1277,13 @@ ${fg}
     const { link, fromEndpoint, toEndpoint } = layoutLink
     const attrs: string[] = []
 
-    // Basic link attributes
-    if (link.bandwidth)
-      attrs.push(`data-link-bandwidth="${this.escapeXml(String(link.bandwidth))}"`)
+    // Basic link attributes — surface both endpoint standards so consumers
+    // can see asymmetric configs (BiDi etc.). For symmetric the value is
+    // the same on both data attributes.
+    const fromStd = link.from.plug?.module?.standard
+    const toStd = link.to.plug?.module?.standard
+    if (fromStd) attrs.push(`data-link-from-standard="${this.escapeXml(fromStd)}"`)
+    if (toStd) attrs.push(`data-link-to-standard="${this.escapeXml(toStd)}"`)
     if (link.vlan && link.vlan.length > 0) {
       attrs.push(`data-link-vlan="${link.vlan.join(',')}"`)
     }
@@ -1441,16 +1447,6 @@ ${fg}
       default:
         return 3
     }
-  }
-
-  /**
-   * Delegates to core's shared bandwidth→width curve. See
-   * `getBandwidthWidth` / `WIDTH_ANCHORS` in @shumoku/core for the
-   * calibration; tune there so every surface (renderer-svg, the
-   * reactive Svelte renderer, weathermap) stays in lockstep.
-   */
-  private getBandwidthStrokeWidth(bandwidth?: LinkBandwidth): number {
-    return getBandwidthWidth(bandwidth)
   }
 
   /**

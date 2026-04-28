@@ -12,7 +12,6 @@ export {
   addPort,
   collectObstacles,
   detectClickSide,
-  generatePortName,
   linkExists,
   moveNode,
   movePort,
@@ -26,7 +25,13 @@ export {
 } from './interaction.js'
 export type { LibavoidRoutingOptions } from './libavoid-router.js'
 export { ensureLibavoidLoaded, routeEdges } from './libavoid-router.js'
-export { getBandwidthWidth, getLinkWidth, resolveBandwidthBps } from './link-utils.js'
+export {
+  bpsToLinkWidth,
+  getBandwidthWidth,
+  getLinkWidth,
+  linkSpeedBps,
+  resolveBandwidthBps,
+} from './link-utils.js'
 export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
 // Custom network layout + libavoid routing
 export { computeNodeSize, layoutNetwork } from './network-layout.js'

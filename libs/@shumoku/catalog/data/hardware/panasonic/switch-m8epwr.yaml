@@ -25,10 +25,9 @@ properties:
     buffer_mb: 1.5
   ports:
     downlink:
-      - { count: 8, speed: "100m", media: copper, poe: true }
+      - { names: ["1", "2", "3", "4", "5", "6", "7", "8"], speed: "100m", cage: rj45, poe: true }
     uplink:
-      - { count: 2, speed: "1g", media: copper }
-      - { count: 2, speed: "1g", media: sfp }
+      - { names: ["9", "10"], speed: "1g", cage: combo }
   physical:
     form_factor: "1U"
     dimensions_mm: { w: 210, d: 280, h: 44 }

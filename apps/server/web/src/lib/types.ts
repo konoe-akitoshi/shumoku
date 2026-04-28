@@ -334,7 +334,7 @@ export interface EdgeContext {
   to: EdgeEndpoint
   path: string
   points: Position[]
-  bandwidth?: string
+  standard?: string
   vlan?: number[]
   redundancy?: string
   label?: string | string[]
@@ -426,7 +426,7 @@ export interface NetworkLink {
   from: string | NetworkLinkEndpoint
   to: string | NetworkLinkEndpoint
   label?: string
-  bandwidth?: string
+  standard?: string
   vlan?: number | number[]
   type?: 'solid' | 'dashed'
   arrow?: 'forward' | 'backward' | 'both' | 'none'

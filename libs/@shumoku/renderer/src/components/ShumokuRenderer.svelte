@@ -31,6 +31,12 @@
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
   /**
+   * Renderer link endpoint — `port` is required because the renderer
+   * never deals with portless connections (the model invariant).
+   */
+  export type RendererLinkEndpoint = LinkEndpoint
+
+  /**
    * Replace the contents of a Map in place (used when core helpers return
    * fresh Maps but we want to keep our reactive SvelteMap identity).
    */
@@ -543,26 +549,10 @@
    * Editor apps should prefer mutating their own state via `bind:links`.
    */
   export async function appendLink(link: Link) {
-    if (
-      linkExists(
-        links,
-        getLinkNode(link.from),
-        getLinkPort(link.from),
-        getLinkNode(link.to),
-        getLinkPort(link.to),
-      )
-    )
-      return
+    if (linkExists(links, link.from.node, link.from.port, link.to.node, link.to.port)) return
     links = [...links, link]
     replaceMap(edges, await routeEdges(nodes, ports, links))
     onchange?.(links)
-  }
-
-  function getLinkNode(e: Link['from']): string {
-    return typeof e === 'string' ? (e.split(':')[0] ?? '') : e.node
-  }
-  function getLinkPort(e: Link['from']): string {
-    return typeof e === 'string' ? e.split(':').slice(1).join(':') : (e.port ?? '')
   }
 </script>
 

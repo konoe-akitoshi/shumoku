@@ -17,7 +17,7 @@
  *   HA → bottom/top
  */
 
-import type { Direction, Link, LinkEndpoint, Node, Position } from '../models/types.js'
+import type { Direction, Link, Node, Position } from '../models/types.js'
 import { computeNodeSize } from './network-layout.js'
 import type { ResolvedPort } from './resolved-types.js'
 
@@ -28,16 +28,13 @@ type Side = 'top' | 'bottom' | 'left' | 'right'
 
 interface PortAssignment {
   nodeId: string
-  portName: string
+  portId: string
   side: Side
 }
 
-function getNodeId(endpoint: string | LinkEndpoint): string {
-  return typeof endpoint === 'string' ? endpoint : endpoint.node
-}
-
-function getPortName(endpoint: string | LinkEndpoint): string | undefined {
-  return typeof endpoint === 'string' ? undefined : endpoint.port
+function getNodePortLabel(node: Node | undefined, portId: string): string {
+  const port = node?.ports?.find((p) => p.id === portId)
+  return port?.label ?? portId
 }
 
 /**
@@ -47,9 +44,7 @@ function detectHAPairs(links: Link[]): Set<string> {
   const pairs = new Set<string>()
   for (const link of links) {
     if (!link.redundancy) continue
-    const from = getNodeId(link.from)
-    const to = getNodeId(link.to)
-    pairs.add([from, to].sort().join(':'))
+    pairs.add([link.from.node, link.to.node].sort().join(':'))
   }
   return pairs
 }
@@ -97,28 +92,26 @@ function assignPortSides(links: Link[], direction: Direction): PortAssignment[] 
   const haSides = getHASides(direction)
 
   for (const link of links) {
-    const fromNode = getNodeId(link.from)
-    const toNode = getNodeId(link.to)
-    const fromPort = getPortName(link.from)
-    const toPort = getPortName(link.to)
+    const fromNode = link.from.node
+    const toNode = link.to.node
 
     const isHA = haPairs.has([fromNode, toNode].sort().join(':'))
     const sides = isHA ? haSides : normalSides
 
-    if (fromPort) {
-      const key = `${fromNode}:${fromPort}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        assignments.push({ nodeId: fromNode, portName: fromPort, side: sides.sourceSide })
-      }
+    const fromKey = `${fromNode}:${link.from.port}`
+    if (!seen.has(fromKey)) {
+      seen.add(fromKey)
+      assignments.push({
+        nodeId: fromNode,
+        portId: link.from.port,
+        side: sides.sourceSide,
+      })
     }
 
-    if (toPort) {
-      const key = `${toNode}:${toPort}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        assignments.push({ nodeId: toNode, portName: toPort, side: sides.destSide })
-      }
+    const toKey = `${toNode}:${link.to.port}`
+    if (!seen.has(toKey)) {
+      seen.add(toKey)
+      assignments.push({ nodeId: toNode, portId: link.to.port, side: sides.destSide })
     }
   }
 
@@ -197,7 +190,7 @@ export function placePorts(
     if (!node?.position) continue
 
     for (const [i, a] of sideAssignments.entries()) {
-      const portId = `${a.nodeId}:${a.portName}`
+      const portId = `${a.nodeId}:${a.portId}`
       const absolutePosition = computePortPosition(
         node as Node & { position: { x: number; y: number } },
         side,
@@ -208,7 +201,7 @@ export function placePorts(
       ports.set(portId, {
         id: portId,
         nodeId: a.nodeId,
-        label: a.portName,
+        label: getNodePortLabel(node, a.portId),
         absolutePosition,
         side,
         size: PORT_SIZE,

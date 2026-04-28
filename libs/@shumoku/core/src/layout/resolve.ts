@@ -15,7 +15,6 @@ import type {
   LayoutPort,
   LayoutResult,
   LayoutSubgraph,
-  LinkEndpoint,
   Node,
   Subgraph,
 } from '../models/types.js'
@@ -59,12 +58,15 @@ export function resolveLayout(result: LayoutResult): ResolvedLayout {
     }
   }
 
-  // Resolve edges
+  // Resolve edges. Skip any edge whose ports didn't make it into the
+  // resolved layout — ResolvedEdge guarantees both ports exist, so we
+  // refuse to fabricate stubs here.
   for (const [id, ll] of result.links) {
-    const fromPortId = resolvePortId(ll.fromEndpoint, result.nodes)
-    const toPortId = resolvePortId(ll.toEndpoint, result.nodes)
-    const fromPort = fromPortId ? (ports.get(fromPortId) ?? null) : null
-    const toPort = toPortId ? (ports.get(toPortId) ?? null) : null
+    const fromPortId = `${ll.fromEndpoint.node}:${ll.fromEndpoint.port}`
+    const toPortId = `${ll.toEndpoint.node}:${ll.toEndpoint.port}`
+    const fromPort = ports.get(fromPortId)
+    const toPort = ports.get(toPortId)
+    if (!fromPort || !toPort) continue
 
     edges.set(id, {
       id,
@@ -112,18 +114,6 @@ export function resolveLayout(result: LayoutResult): ResolvedLayout {
     bounds: result.bounds,
     metadata: result.metadata,
   }
-}
-
-/**
- * Find the port ID for a link endpoint, if the port exists in the layout.
- */
-function resolvePortId(endpoint: LinkEndpoint, nodes: Map<string, LayoutNode>): string | null {
-  if (!endpoint.port) return null
-  const node = nodes.get(endpoint.node)
-  if (!node?.ports) return null
-  // Port map key is typically "nodeId:portName"
-  const portId = `${endpoint.node}:${endpoint.port}`
-  return node.ports.has(portId) ? portId : null
 }
 
 // ============================================================================

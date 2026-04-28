@@ -10,7 +10,8 @@
  * - Node move with port tracking and edge re-routing
  */
 
-import type { Link, NetworkGraph, Node, Subgraph } from '../models/types.js'
+import { newId } from '../ids.js'
+import type { Link, NetworkGraph, Node, NodePort, Subgraph } from '../models/types.js'
 import { routeEdges } from './libavoid-router.js'
 import { computeNodeSize } from './network-layout.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
@@ -485,8 +486,7 @@ export function linkExists(
   toPort: string,
 ): boolean {
   return links.some((link) => {
-    const from = typeof link.from === 'string' ? { node: link.from } : link.from
-    const to = typeof link.to === 'string' ? { node: link.to } : link.to
+    const { from, to } = link
     // Check both directions
     return (
       (from.node === fromNodeId &&
@@ -541,36 +541,6 @@ export function addLink(
   return {
     ...graph,
     links: [...graph.links, newLink],
-  }
-}
-
-/**
- * Generate a new port name for a node that doesn't conflict with existing ports.
- */
-export function generatePortName(
-  nodeId: string,
-  existingLinks: Link[],
-  existingPorts?: Map<string, ResolvedPort>,
-): string {
-  const usedPorts = new Set<string>()
-  for (const link of existingLinks) {
-    const from = typeof link.from === 'string' ? { node: link.from } : link.from
-    const to = typeof link.to === 'string' ? { node: link.to } : link.to
-    if (from.node === nodeId && from.port) usedPorts.add(from.port)
-    if (to.node === nodeId && to.port) usedPorts.add(to.port)
-  }
-  // Also check ports already in the layout (may not be linked yet)
-  if (existingPorts) {
-    for (const port of existingPorts.values()) {
-      if (port.nodeId === nodeId) usedPorts.add(port.label)
-    }
-  }
-
-  let i = 0
-  while (true) {
-    const name = `eth${i}`
-    if (!usedPorts.has(name)) return name
-    i++
   }
 }
 
@@ -717,33 +687,39 @@ function rebalanceNode(
 }
 
 /**
- * Add an empty port to a node on the specified side.
- * Expands the node if needed and redistributes all ports on affected sides.
+ * Add an unnamed port to a node on the specified side. The port is appended
+ * to `Node.ports` (the data model) and to the resolved-port map (layout).
+ * Label stays empty — the renderer hides labelless ports' label rectangle,
+ * and the user can name it later from the detail panel.
  */
 export function addPort(
   nodeId: string,
   side: Side,
   nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
-  existingLinks: Link[],
+  _existingLinks: Link[],
 ): { nodes: Map<string, Node>; ports: Map<string, ResolvedPort>; portId: string } | null {
   const node = nodes.get(nodeId)
   if (!node) return null
 
-  const portName = generatePortName(nodeId, existingLinks, ports)
-  const portId = `${nodeId}:${portName}`
+  const portKey = newId('port')
+  const portId = `${nodeId}:${portKey}`
+
+  const nodePort: NodePort = { id: portKey, label: '', source: 'custom' }
+
+  const newNodes = new Map(nodes)
+  newNodes.set(nodeId, { ...node, ports: [...(node.ports ?? []), nodePort] })
 
   const newPorts = new Map(ports)
   newPorts.set(portId, {
     id: portId,
     nodeId,
-    label: portName,
+    label: '',
     absolutePosition: { x: 0, y: 0 },
     side,
     size: { width: PORT_SIZE, height: PORT_SIZE },
   })
 
-  const newNodes = new Map(nodes)
   rebalanceNode(nodeId, newNodes, newPorts)
 
   return { nodes: newNodes, ports: newPorts, portId }
@@ -764,22 +740,31 @@ export function removePort(
   if (!port) return null
 
   const nodeId = port.nodeId
-  const portName = port.label
+  // ResolvedPort.id is `${nodeId}:${nodePort.id}` — strip the prefix to
+  // get the underlying NodePort.id (which is what link endpoints reference
+  // and what we need to drop from `Node.ports`).
+  const portKey = portId.startsWith(`${nodeId}:`) ? portId.slice(nodeId.length + 1) : portId
 
   // Remove links referencing this port
   const newLinks = links.filter((l) => {
-    const from = typeof l.from === 'string' ? { node: l.from } : l.from
-    const to = typeof l.to === 'string' ? { node: l.to } : l.to
     return !(
-      (from.node === nodeId && from.port === portName) ||
-      (to.node === nodeId && to.port === portName)
+      (l.from.node === nodeId && l.from.port === portKey) ||
+      (l.to.node === nodeId && l.to.port === portKey)
     )
   })
+
+  const node = nodes.get(nodeId)
+  const newNodes = new Map(nodes)
+  if (node) {
+    newNodes.set(nodeId, {
+      ...node,
+      ports: node.ports?.filter((p) => p.id !== portKey),
+    })
+  }
 
   const newPorts = new Map(ports)
   newPorts.delete(portId)
 
-  const newNodes = new Map(nodes)
   rebalanceNode(nodeId, newNodes, newPorts)
 
   return { nodes: newNodes, ports: newPorts, links: newLinks }

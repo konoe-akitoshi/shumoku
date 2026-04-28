@@ -352,8 +352,8 @@
                         {isFrom ? '→' : '←'}
                         {otherNode}
                       </span>
-                      {#if link.bandwidth}
-                        <span class="text-xs text-muted-foreground">{link.bandwidth}</span>
+                      {#if link.standard}
+                        <span class="text-xs text-muted-foreground">{link.standard}</span>
                       {/if}
                     </div>
                     {#if metrics?.inBps !== undefined || metrics?.outBps !== undefined}
