@@ -1,25 +1,16 @@
-# Connection Model
+# 接続モデル
 
-How a network link is modeled — from physical hardware down to the
-fields the editor stores, and the cascading UI that wires them together.
+ネットワークリンクをどう表現しているか — 物理ハードウェアからエディタに保存するフィールド、そしてそれらをつなぐカスケード UI までを記述します。
 
-The mental model has two sides plus their connection point:
+メンタルモデルは「ノード側」「リンク側」と、その**接続点**の三つで成り立っています。
 
-- **Node side** — devices with Ports. Each Port has a `cage` (the
-  physical receptacle: RJ45, SFP+, QSFP28…). Catalog data may or may
-  not provide it.
-- **Link side** — a Cable with two Endpoints. Each Endpoint carries a
-  Plug (cable-side form factor) and a Module (the IEEE standard /
-  transceiver). Cable-level attributes (grade, length, end connector)
-  are per-link.
-- **Connection point** — the Endpoint's Plug is mechanically the same
-  form factor as the Port's cage. That match is what makes the
-  connection physically valid.
+- **ノード側** — Device には Port が生えていて、Port は `cage`（物理レセプタクル: RJ45 / SFP+ / QSFP28…）を持つ。カタログから提供されている場合もあれば、ない場合もある。
+- **リンク側** — Cable が一本あり、両端に Endpoint。各 Endpoint は **Plug**（ケーブル側 form factor）と **Module**（IEEE standard / トランシーバ）を保持する。ケーブル単位の属性（grade / 長さ / 端コネクタ）は per-link に置く。
+- **接続点** — Endpoint の Plug と Port の cage は機械的に同じ form factor。これが噛み合っていることが物理的に成立する条件。
 
-UI logic (cascading selects, cage-locking, validation) sits on top of
-this structure rather than inside it.
+UI ロジック（カスケード絞り込み、cage ロック、バリデーション）は**この構造の中**ではなく、**この構造の上**に乗っています。
 
-## Conceptual layers
+## 概念レイヤ
 
 ```mermaid
 flowchart LR
@@ -41,13 +32,11 @@ flowchart LR
   EB -. plug fits cage .- PB
 ```
 
-- Plug and cage must agree mechanically (`spec.cage` of the chosen
-  standard must match the port's cage when known).
-- Module and cable medium are the user's choice within that constraint.
-- `cable.connector` (LC, MPO, RJ45 plug) describes the cable end
-  termination — separate from the plug form factor.
+- Plug と cage は機械的に一致する必要がある（standard の `spec.cage` が、`port.cage` が既知ならそれと一致する）。
+- Module とケーブル媒体は、その制約の中でユーザーが選ぶ。
+- `cable.connector`（LC / MPO / RJ45 plug）はケーブル端の終端形状で、Plug の form factor とは別軸。
 
-## Data model
+## データモデル
 
 ```mermaid
 classDiagram
@@ -91,95 +80,71 @@ classDiagram
   LinkEndpoint ..> NodePort : refs by id
 ```
 
-- **Plug is implicit.** No standalone field — it's derived from
-  `module.standard` via `STANDARD_SPECS[std].cage` (and falls back to
-  `port.cage` when the module isn't picked yet).
-- **Module is per-endpoint.** Cables can be asymmetric (BiDi pairs,
-  media converters), so each endpoint owns its own standard.
-- **Cable is per-link.** Grade, length, and end connector belong to
-  the cable as a whole, not to either endpoint.
+- **Plug は implicit**。独立フィールドはない — `module.standard` から `STANDARD_SPECS[std].cage` 経由で派生（モジュール未選択時は `port.cage` にフォールバック）。
+- **Module は per-endpoint**。BiDi ペアやメディアコンバータなど非対称ケーブルがあるため、各端点が独自に standard を持つ。
+- **Cable は per-link**。grade / 長さ / 端コネクタは「ケーブル全体」の属性で、どちらかの端に偏らせない。
 
-| Physical layer       | Model location                          | Field                  | Example          |
-| -------------------- | --------------------------------------- | ---------------------- | ---------------- |
-| Port receptacle      | `Node.ports[].cage`                     | `PortConnector`        | `sfp+`, `rj45`   |
-| Endpoint module      | `LinkEndpoint.module.standard`          | `EthernetStandard`     | `10GBASE-SR`     |
-| Endpoint module SKU  | `LinkEndpoint.module.sku`               | `string`               | `FTLX8571D3BCL`  |
-| Cable medium grade   | `Link.cable.category`                   | `string`               | `om4`, `cat6a`   |
-| Cable length         | `Link.cable.length_m`                   | `number`               | `30`             |
-| Cable end connector  | `Link.cable.connector`                  | `string` (freeform)    | `LC`, `MPO`      |
-| Plug form factor     | derived from `module.standard`          | (no field)             | `sfp+`           |
+| 物理レイヤ          | モデル位置                       | 型                     | 例               |
+| ------------------- | -------------------------------- | ---------------------- | ---------------- |
+| Port レセプタクル   | `Node.ports[].cage`              | `PortConnector`        | `sfp+`、`rj45`   |
+| Endpoint モジュール | `LinkEndpoint.module.standard`   | `EthernetStandard`     | `10GBASE-SR`     |
+| モジュール SKU      | `LinkEndpoint.module.sku`        | `string`               | `FTLX8571D3BCL`  |
+| ケーブル媒体 grade  | `Link.cable.category`            | `string`               | `om4`、`cat6a`   |
+| ケーブル長          | `Link.cable.length_m`            | `number`               | `30`             |
+| ケーブル端コネクタ  | `Link.cable.connector`           | `string`（freeform）   | `LC`、`MPO`      |
+| Plug form factor    | `module.standard` から派生       | （フィールドなし）     | `sfp+`           |
 
-## UI cascade
+## UI カスケード
 
 ```mermaid
 flowchart LR
-  N[Node select] --> P[Port select]
-  P -- cage known --> PL[Plug<br/>locked = port.cage]
-  P -- cage unknown --> PU[Plug<br/>user picks]
-  PL --> M[Module select<br/>filtered by plug]
+  N[Node 選択] --> P[Port 選択]
+  P -- cage 既知 --> PL[Plug<br/>port.cage でロック]
+  P -- cage 未知 --> PU[Plug<br/>ユーザー選択]
+  PL --> M[Module 選択<br/>plug で絞り込み]
   PU --> M
-  M --> CG[Cable grade<br/>filtered by module]
+  M --> CG[Cable grade<br/>module で絞り込み]
 ```
 
-The plug select sits between Port and Module. When the port carries a
-cage from catalog data, the plug select is disabled and pinned to that
-value (the port hardware fixes it). When the port has no cage info,
-the plug select is the user's first explicit choice and constrains the
-module list.
+Plug select は Port と Module の間に置く。port にカタログ由来の cage が乗っているときは Plug select を disabled にしてその値で固定する（ハードウェアが決めるため）。port に cage 情報がないときは Plug select がユーザーの最初の明示的な選択になり、Module 一覧を絞る。
 
-Plug priority when resolving the value displayed:
+Plug の値の解決順位：
 
-1. `port.cage` (hardware constraint — wins over everything else)
-2. plug implied by `module.standard` (when a module is already picked)
-3. user's explicit plug pick (only meaningful when neither of the
-   above is set)
+1. `port.cage`（ハードウェア制約 — 他より優先される）
+2. `module.standard` から推論される plug（モジュールが既に選ばれているとき）
+3. ユーザーの明示的な plug 選択（上記 1, 2 のどちらも無いときだけ意味を持つ）
 
-Changing the plug clears the module if the previous module's required
-plug doesn't match the new pick — the module list will refilter and
-the user can pick again.
+Plug を変更すると、既存モジュールの要求 plug が新しい plug と一致しないときは Module を自動クリアする — Module 一覧が再フィルタされ、ユーザーは選び直す。
 
-## Validation
+## バリデーション
 
-`validateLinkCompatibility` (in `port-compatibility.ts`) checks each
-endpoint independently against its own port and module.
+`validateLinkCompatibility`（`port-compatibility.ts`）は各端点を独立して、その端の port と module に対して検証する。
 
-| Check                                                        | Severity | Status |
-| ------------------------------------------------------------ | -------- | ------ |
-| `port.cage` accepts the cage required by `module.standard`   | error    | ✅     |
-| `from.standard` and `to.standard` differ (asymmetric link)   | warning  | ✅     |
-| `cable.length_m` exceeds grade-adjusted reach                | warning  | ✅     |
-| `port.poe` set on a non-RJ45 cage                            | error    | ✅     |
-| `cable.connector` matches `spec.cableConnector`              | —        | ❌ TODO |
+| チェック                                                          | 重大度  | 状態  |
+| ----------------------------------------------------------------- | ------- | ----- |
+| `port.cage` が `module.standard` の要求 cage を受け入れるか       | error   | ✅    |
+| `from.standard` と `to.standard` が異なる（非対称リンク）         | warning | ✅    |
+| `cable.length_m` が grade 補正後の reach を超えている             | warning | ✅    |
+| `port.poe` が non-RJ45 cage に立っている                          | error   | ✅    |
+| `cable.connector` が `spec.cableConnector` と一致するか           | —       | ❌ 未実装 |
 
-Asymmetric standards are flagged but allowed — they are intentional
-for BiDi pairs (e.g. `10GBASE-BX10-D` ↔ `10GBASE-BX10-U`) and media
-converter links.
+非対称 standard は警告するだけで許容する — BiDi ペア（例: `10GBASE-BX10-D` ↔ `10GBASE-BX10-U`）やメディアコンバータリンクで意図的に発生するため。
 
-## UI placement
+## UI 配置
 
-| Surface                                  | Plug + Module           | Cable grade  | Length   | Cable connector |
-| ---------------------------------------- | ----------------------- | ------------ | -------- | --------------- |
-| `LinkProperties.svelte` (detail panel)   | per-endpoint sections   | per-link row | per-link row | per-link row (text) |
-| `connections/+page.svelte` table         | per-endpoint cell stack | Cable column | Length column | (none)        |
-| `connections/+page.svelte` add form      | per-endpoint pickers    | Cable column | —        | —               |
+| 画面                                            | Plug + Module               | Cable grade   | 長さ          | Cable connector  |
+| ----------------------------------------------- | --------------------------- | ------------- | ------------- | ---------------- |
+| `LinkProperties.svelte`（詳細パネル）           | per-endpoint セクション     | per-link 行   | per-link 行   | per-link 行（テキスト） |
+| `connections/+page.svelte` テーブル             | per-endpoint セル内縦並び   | Cable 列      | Length 列     | （なし）         |
+| `connections/+page.svelte` 追加フォーム         | per-endpoint ピッカー       | Cable 列      | —             | —                |
 
-`EndpointModulePicker.svelte` is the shared component — two stacked
-selects (plug + module) used by all three surfaces.
+`EndpointModulePicker.svelte` が共有コンポーネント — Plug + Module の二段 select で、上記 3 画面すべてが利用する。
 
-## Where to look in code
+## コード上の場所
 
-- `libs/@shumoku/core/src/models/types.ts` — `NodePort`, `Link`,
-  `LinkEndpoint`, `LinkModule`, `LinkCable`, `PortConnector`,
-  `EthernetStandard`.
-- `libs/@shumoku/core/src/models/standards.ts` — `STANDARD_SPECS`
-  registry (the source of truth for what a standard implies),
-  `cableVariantsForPlug`, `cableGradesForStandard`,
-  `plugProfilesForCages`, `plugProfileForStandard`.
-- `libs/@shumoku/core/src/models/port-compatibility.ts` —
-  `validateLinkCompatibility`, `defaultStandardForCages`.
-- `apps/editor/src/lib/components/EndpointModulePicker.svelte` — the
-  shared two-select picker.
-- `apps/editor/src/lib/components/detail/LinkProperties.svelte` —
-  detail panel using the picker.
-- `apps/editor/src/routes/project/[id]/(content)/connections/+page.svelte`
-  — connections table and add form.
+- `libs/@shumoku/core/src/models/types.ts` — `NodePort` / `Link` / `LinkEndpoint` / `LinkModule` / `LinkCable` / `PortConnector` / `EthernetStandard`。
+- `libs/@shumoku/core/src/models/standards.ts` — `STANDARD_SPECS` レジストリ（standard が何を意味するかの真実の源）、`cableVariantsForPlug`、`cableGradesForStandard`、`plugProfilesForCages`、`plugProfileForStandard`。
+- `libs/@shumoku/core/src/models/port-compatibility.ts` — `validateLinkCompatibility`、`defaultStandardForCages`。
+- `apps/editor/src/lib/components/EndpointModulePicker.svelte` — 共通の二段 select ピッカー。
+- `apps/editor/src/lib/components/detail/LinkProperties.svelte` — ピッカーを使う詳細パネル。
+- `apps/editor/src/routes/project/[id]/(content)/connections/+page.svelte` — 接続テーブルと追加フォーム。
