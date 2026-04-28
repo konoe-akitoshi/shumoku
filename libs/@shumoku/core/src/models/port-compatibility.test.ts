@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   defaultStandardForCages,
   isPoeCapableConnector,
+  issuesForTarget,
   plugFromStandard,
   validateLinkCompatibility,
 } from './port-compatibility.js'
@@ -120,5 +121,66 @@ describe('link compatibility', () => {
     )
     // from cage RJ45 cannot host 10GBASE-SR (requires SFP+).
     expect(issues.some((i) => i.severity === 'error')).toBe(true)
+  })
+})
+
+describe('issue targets', () => {
+  test('cage mismatch issue targets the source endpoint plug.module', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'rj45'),
+      port('2', 'sfp+'),
+      link('10GBASE-SR', '10GBASE-SR'),
+    )
+    const matching = issuesForTarget(issues, {
+      kind: 'endpoint',
+      side: 'source',
+      field: 'plug.module',
+    })
+    expect(matching.length).toBeGreaterThan(0)
+    expect(matching[0]?.code).toBe('port-cage-cannot-host-module')
+  })
+
+  test('reach warning targets cable.length_m', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'sfp+'),
+      port('2', 'sfp+'),
+      link('10GBASE-SR', '10GBASE-SR', { length_m: 1000 }),
+    )
+    const matching = issuesForTarget(issues, { kind: 'cable', field: 'length_m' })
+    expect(matching).toHaveLength(1)
+    expect(matching[0]?.code).toBe('cable-length-exceeds-reach')
+    expect(matching[0]?.severity).toBe('warning')
+  })
+
+  test('asymmetric warning targets the link as a whole', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'sfp+'),
+      port('2', 'sfp+'),
+      link('10GBASE-SR', '10GBASE-LR'),
+    )
+    const matching = issuesForTarget(issues, { kind: 'link' })
+    expect(matching.some((i) => i.code === 'endpoints-standards-asymmetric')).toBe(true)
+  })
+
+  test('PoE flag on non-RJ45 cage targets port.poe', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'sfp+', true),
+      port('2', 'sfp+'),
+      link('10GBASE-SR', '10GBASE-SR'),
+    )
+    const matching = issuesForTarget(issues, { kind: 'port', side: 'source', field: 'poe' })
+    expect(matching).toHaveLength(1)
+    expect(matching[0]?.code).toBe('poe-flag-on-non-rj45')
+  })
+
+  test('cable medium / category mismatch targets cable.medium', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'rj45'),
+      port('2', 'rj45'),
+      link('1000BASE-T', '1000BASE-T', { medium: 'fiber-mm', category: 'cat6a' }),
+    )
+    const matching = issuesForTarget(issues, { kind: 'cable', field: 'medium' })
+    expect(matching).toHaveLength(1)
+    expect(matching[0]?.code).toBe('cable-medium-category-mismatch')
   })
 })

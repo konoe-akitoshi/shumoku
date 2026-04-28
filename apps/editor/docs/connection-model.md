@@ -216,19 +216,44 @@ classDiagram
 
 ### バリデーション
 
-`validateLinkCompatibility`（`port-compatibility.ts`）は各端点を独立に検証する。
+`validateLinkCompatibility`（`port-compatibility.ts`）は VS Code の Diagnostics 風に診断レコード `ValidationIssue[]` を返す。各 issue は **rule id**（`code`）、**重大度**（`severity`）、**メッセージ**、そして **target**（どのフィールドに紐づくか）を持つ。UI 側は `issuesForTarget(issues, target)` で当該フィールド近傍に inline マーカーを出せる。
 
-| チェック                                                          | 重大度  | 状態  |
-| ----------------------------------------------------------------- | ------- | ----- |
-| `port.cage` が `module.standard` の要求 cage を受け入れるか       | error   | ✅    |
-| `plug.cage` と `module.standard` の要求 cage が一致するか         | error   | ✅    |
-| `plug.cage` と `port.cage` が一致するか（combo 除く）             | error   | ✅    |
-| `cable.medium` と `cable.category` の整合（grade が implies medium）| error | ✅    |
-| `from.standard` と `to.standard` が異なる（非対称リンク）         | warning | ✅    |
-| `cable.length_m` が grade 補正後の reach を超えている             | warning | ✅    |
-| `port.poe` が non-RJ45 cage に立っている                          | error   | ✅    |
+#### Issue 構造
 
-非対称 standard は警告するだけで許容する — BiDi ペア（例: `10GBASE-BX10-D` ↔ `10GBASE-BX10-U`）やメディアコンバータリンクで意図的に発生するため。
+```ts
+type IssueSeverity = 'error' | 'warning' | 'info'
+
+type IssueTarget =
+  | { kind: 'endpoint'; side: 'source' | 'target'; field: 'port' | 'plug.cage' | 'plug.module' | 'ip' }
+  | { kind: 'cable'; field: 'medium' | 'category' | 'length_m' }
+  | { kind: 'port'; side: 'source' | 'target'; field: 'cage' | 'poe' }
+  | { kind: 'link' }
+
+interface ValidationIssue {
+  code: string
+  severity: IssueSeverity
+  message: string
+  target: IssueTarget
+}
+```
+
+#### 実装：チェック関数 + レジストリ
+
+各チェックは小さな純粋関数（`(ctx) => ValidationIssue | undefined`）で、`ENDPOINT_CHECKS` / `LINK_CHECKS` の二つのレジストリに登録される。`validateLinkCompatibility` 本体は両端をループしてレジストリのチェックを順に走らせるだけ。新しいチェック追加 = 関数を書いて配列に append、本体は触らない。
+
+#### 登録済みチェック
+
+| code                              | scope     | target                                | 重大度  |
+| --------------------------------- | --------- | ------------------------------------- | ------- |
+| `plug-cage-module-mismatch`       | endpoint  | `endpoint.plug.cage`                  | error   |
+| `plug-cage-port-mismatch`         | endpoint  | `endpoint.plug.cage`                  | error   |
+| `port-cage-cannot-host-module`    | endpoint  | `endpoint.plug.module`                | error   |
+| `poe-flag-on-non-rj45`            | endpoint  | `port.poe`                            | error   |
+| `cable-medium-category-mismatch`  | link      | `cable.medium`                        | error   |
+| `endpoints-standards-asymmetric`  | link      | `link`                                | warning |
+| `cable-length-exceeds-reach`      | link      | `cable.length_m`                      | warning |
+
+非対称 standard（`endpoints-standards-asymmetric`）は警告するだけで許容する — BiDi ペア（例: `10GBASE-BX10-D` ↔ `10GBASE-BX10-U`）やメディアコンバータリンクで意図的に発生するため。
 
 ## 設計のステータス
 
