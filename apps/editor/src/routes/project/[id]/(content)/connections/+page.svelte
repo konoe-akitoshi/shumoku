@@ -16,6 +16,7 @@
   } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
   import EndpointModulePicker from '$lib/components/EndpointModulePicker.svelte'
+  import IssuesBanner, { type RowIssue } from '$lib/components/IssuesBanner.svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
   import { Badge } from '$lib/components/ui/badge'
@@ -171,6 +172,32 @@
   const totalPorts = $derived(
     [...portsByNode.values()].reduce((sum, ports) => sum + ports.length, 0),
   )
+
+  // All issues flattened with link context — drives the issues banner.
+  const allRowIssues = $derived<RowIssue[]>(
+    rows.flatMap((row) =>
+      row.issues.map((issue) => ({
+        rowId: row.id,
+        from: row.fromNode,
+        to: row.toNode,
+        issue,
+      })),
+    ),
+  )
+
+  // Jump to a specific row in the connections table — scroll into view
+  // and briefly highlight to draw the eye.
+  let highlightedRowId = $state<string | null>(null)
+
+  function jumpToRow(rowId: string) {
+    const el = document.getElementById(`connection-row-${rowId}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    highlightedRowId = rowId
+    setTimeout(() => {
+      if (highlightedRowId === rowId) highlightedRowId = null
+    }, 1500)
+  }
 
   // Ports with no connection
   const unconnectedPorts = $derived.by(() => {
@@ -537,6 +564,7 @@
 <!-- Connection table -->
 {#if rows.length > 0}
   <h2 class="text-sm font-semibold mb-3">Cables</h2>
+  <IssuesBanner issues={allRowIssues} onjump={jumpToRow} />
   <Card.Root class="py-0 mb-6">
     <Table.Root>
       <Table.Header>
@@ -561,11 +589,14 @@
           {@const rowSeverity = row.issues.find((i) => i.severity === 'error')?.severity
             ?? row.issues.find((i) => i.severity === 'warning')?.severity}
           <Table.Row
-            class={rowSeverity === 'error'
-              ? 'border-l-2 border-red-400'
-              : rowSeverity === 'warning'
-                ? 'border-l-2 border-amber-400'
-                : ''}
+            id={`connection-row-${row.id}`}
+            class={`transition-colors ${
+              rowSeverity === 'error'
+                ? 'border-l-2 border-red-400'
+                : rowSeverity === 'warning'
+                  ? 'border-l-2 border-amber-400'
+                  : ''
+            } ${highlightedRowId === row.id ? 'bg-amber-100 dark:bg-amber-900/40' : ''}`}
           >
             <Table.Cell>
               <div class="font-mono text-xs space-y-1">
