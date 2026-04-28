@@ -498,12 +498,13 @@ export function cableVariantsForPlug(plug: PlugProfile): CableVariant[] {
     const spec = STANDARD_SPECS[name]
     if (!spec) continue
     if (spec.cage !== plug.cage) continue
-    // Standard name encodes speed already; the optgroup encodes medium.
-    // Reach is the only differentiator that isn't readable from the name.
+    // Standard name encodes speed and medium already; the optgroup
+    // groups by cable kind. Reach is shown in StandardImpliedBlock
+    // after selection — keep the dropdown label tight.
     result.push({
       standard: name,
       spec,
-      label: `${name} — ${formatReachMeters(spec.maxReach_m)}`,
+      label: name,
       group: classifyStandardGroup(spec),
     })
   }
