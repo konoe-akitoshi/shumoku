@@ -60,33 +60,40 @@ Port は完全に Node の所有物。Link 側からは `LinkEndpoint.node` + `L
 
 ### リンク側
 
+物理的な階層は **Plug ＞ Module（あれば）＞ Cable**。プラグは「ケーブル端の差し込み形状」で常に存在し、その中にトランシーバ（Module）が入るかどうかは構成次第（RJ45 直結なら無し、SFP+ なら有り）。両端それぞれにこのプラグ／モジュール構造があり、Cable はリンク全体で一本。
+
 ```
 Link
 ├── id: string
-├── from: LinkEndpoint                  ← 端点 A
-│   ├── node: string                    │ Node を id で参照
-│   ├── port: string                    │ NodePort を id で参照
-│   ├── module?: LinkModule             │ ← ★ A 端のモジュール
-│   │   ├── standard: EthernetStandard  │   10GBASE-SR / 10GBASE-T …
-│   │   └── sku?: string                │   FTLX8571D3BCL …
+├── from: LinkEndpoint                          ← 端点 A
+│   ├── node, port                              │ Node / NodePort を id 参照
+│   ├── Plug (form factor)                      ← 派生: module.standard → spec.cage
+│   │                                           │       なければ port.cage にフォールバック
+│   │                                           │       例: sfp+ / rj45 / qsfp28
+│   │   └── module?: LinkModule                 ← ★ optional
+│   │       ├── standard: EthernetStandard      │   10GBASE-SR / 10GBASE-T …
+│   │       └── sku?: string                    │   FTLX8571D3BCL …
+│   │     ※ RJ45 直結など pluggable でないときは module を持たない
 │   └── ip?: string | string[]
-├── to: LinkEndpoint                    ← 端点 B（from と同型）
+├── to: LinkEndpoint                            ← 端点 B（from と同型）
 │   ├── node, port
-│   ├── module?: LinkModule             ← ★ B 端のモジュール（A と独立）
+│   ├── Plug
+│   │   └── module?
 │   └── ip?
-├── cable?: LinkCable                   ← ケーブル全体の属性
-│   ├── category?: string               │ om4 / cat6a / …
+├── cable?: LinkCable                           ← ケーブル全体の属性（per-link で一本）
+│   ├── category?: string                       │ om4 / cat6a / …
 │   ├── length_m?: number
-│   └── connector?: string              │ LC / MPO / RJ45 plug …
+│   └── connector?: string                      │ LC / MPO / RJ45 plug …
 └── label?, type?, vlan?, redundancy?, arrow?, …
 ```
 
 要点：
 
+- **Plug は常に概念として存在する**が、データ上は独立フィールドではなく**派生**。`module.standard` が決まればそれが要求する `spec.cage` がプラグ、未決なら `port.cage` を借りる。
+- **Module は Plug の中に optional に入る**。SFP / SFP+ / SFP28 / QSFP+ / QSFP28 など pluggable のときだけ有り、RJ45 直結のような integrated 形態では無し。
+- **Module は per-endpoint**。BiDi ペアやメディアコンバータで非対称になるため、各端が独立した standard を持てる必要がある。
+- **Cable は per-link**。grade / 長さ / 端コネクタは「ケーブル全体」の属性で、どちらか一端に偏らせない。
 - **Endpoint は Link の中の構造**で、Node を所有しない（id で参照するだけ）。
-- **Module は Endpoint の中**にある（per-endpoint）。BiDi ペアやメディアコンバータで非対称になるため、各端が独立した standard を持てる必要がある。
-- **Cable は Link の中**にある（per-link）。grade / 長さ / 端コネクタは「ケーブル全体」の属性で、どちらか一端に偏らせない。
-- **Plug は implicit**。独立フィールドはない — `module.standard` から `STANDARD_SPECS[std].cage` で派生（モジュール未選択時は `port.cage` にフォールバック）。
 
 ### 関係図
 
