@@ -14,7 +14,7 @@
     type ValidationIssue,
     validateLinkCompatibility,
   } from '@shumoku/core'
-  import { Plus, Trash } from 'phosphor-svelte'
+  import { MagnifyingGlass, Plus, Trash } from 'phosphor-svelte'
   import EndpointModulePicker from '$lib/components/EndpointModulePicker.svelte'
   import IssuesBanner, { type RowIssue } from '$lib/components/IssuesBanner.svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
@@ -185,6 +185,56 @@
     ),
   )
 
+  const issueCounts = $derived.by(() => {
+    let errors = 0
+    let warnings = 0
+    let info = 0
+    for (const row of rows) {
+      for (const issue of row.issues) {
+        if (issue.severity === 'error') errors++
+        else if (issue.severity === 'warning') warnings++
+        else info++
+      }
+    }
+    return { errors, warnings, info, total: errors + warnings + info }
+  })
+
+  let searchQuery = $state('')
+  let showOnlyIssues = $state(false)
+
+  function rowMatchesSearch(row: ConnectionRow, query: string) {
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    const fromPort = getPort(row.fromNode, row.fromPort)
+    const toPort = getPort(row.toNode, row.toPort)
+    return [
+      row.id,
+      row.fromNode,
+      row.toNode,
+      row.fromPort,
+      row.toPort,
+      fromPort?.label,
+      fromPort?.interfaceName,
+      fromPort?.cage,
+      toPort?.label,
+      toPort?.interfaceName,
+      toPort?.cage,
+      row.standard,
+      row.vlan,
+      row.fromIp,
+      row.toIp,
+      row.label,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(q))
+  }
+
+  const visibleRows = $derived(
+    rows.filter(
+      (row) => (!showOnlyIssues || row.issues.length > 0) && rowMatchesSearch(row, searchQuery),
+    ),
+  )
+
   // Jump to a specific row in the connections table — scroll into view
   // and briefly highlight to draw the eye.
   let highlightedRowId = $state<string | null>(null)
@@ -242,6 +292,33 @@
     (addFromStandard || addToStandard || undefined) as EthernetStandard | undefined,
   )
   const addGradeOptions = $derived(cableGradesForStandard(addReferenceStandard))
+
+  const addDraftLink = $derived.by<Link | undefined>(() => {
+    if (!addFromNode || !addToNode || !addFromPortId || !addToPortId) return undefined
+    return {
+      from: {
+        node: addFromNode,
+        port: addFromPortId,
+        plug: addFromStandard ? plugFromStandard(addFromStandard) : undefined,
+      },
+      to: {
+        node: addToNode,
+        port: addToPortId,
+        plug: addToStandard ? plugFromStandard(addToStandard) : undefined,
+      },
+      cable: addCableCategory ? { category: addCableCategory } : undefined,
+    }
+  })
+
+  const addDraftIssues = $derived(
+    addDraftLink
+      ? validateLinkCompatibility(
+          getPort(addDraftLink.from.node, addDraftLink.from.port),
+          getPort(addDraftLink.to.node, addDraftLink.to.port),
+          addDraftLink,
+        )
+      : [],
+  )
 
   // Auto-default both endpoints once both ports are picked, unless the
   // user has already set at least one side.
@@ -385,187 +462,241 @@
     'w-full px-1.5 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring'
 </script>
 
-<div class="flex items-center justify-between mb-6">
-  <div>
-    <h1 class="text-lg font-semibold">Connections</h1>
-    <p class="text-sm text-muted-foreground">
-      {rows.length}
-      links, {totalPorts} ports{vlanSet.size > 0 ? `, ${vlanSet.size} VLANs` : ''}
-    </p>
+<div class="mb-4 space-y-3">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-lg font-semibold">Connections</h1>
+      <p class="text-sm text-muted-foreground">Cable inventory and endpoint assignment</p>
+    </div>
+    <div class="relative w-full max-w-sm">
+      <MagnifyingGlass
+        class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        class="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+        placeholder="Search node, port, VLAN, standard..."
+        bind:value={searchQuery}
+      >
+    </div>
   </div>
-</div>
 
-<!-- Summary cards -->
-<div class="grid grid-cols-4 gap-3 mb-6">
-  <Card.Root>
-    <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">Links</div>
-      <div class="text-2xl font-mono font-bold">{rows.length}</div>
-    </Card.Content>
-  </Card.Root>
-  <Card.Root>
-    <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">Ports</div>
-      <div class="text-2xl font-mono font-bold">{totalPorts}</div>
-      {#if unconnectedPorts.length > 0}
-        <div class="text-[10px] text-amber-600 mt-0.5">{unconnectedPorts.length} unused</div>
-      {/if}
-    </Card.Content>
-  </Card.Root>
-  <Card.Root>
-    <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">VLANs</div>
-      <div class="text-2xl font-mono font-bold">{vlanSet.size}</div>
-      {#if vlanSet.size > 0}
-        <div class="flex flex-wrap gap-1 mt-1">
-          {#each [...vlanSet].sort((a, b) => a - b) as v}
-            <Badge variant="outline" class="text-[9px] font-mono">{v}</Badge>
-          {/each}
-        </div>
-      {/if}
-    </Card.Content>
-  </Card.Root>
-  <Card.Root>
-    <Card.Content class="pt-4">
-      <div class="text-xs uppercase tracking-wider text-muted-foreground">Standards</div>
-      {#if standardSummary.length > 0}
-        <div class="flex flex-wrap gap-1.5 mt-1">
-          {#each standardSummary as [ s, count ]}
-            <Badge variant="secondary" class="font-mono text-[10px]">{s} x{count}</Badge>
-          {/each}
-        </div>
-      {:else}
-        <div class="text-2xl font-mono font-bold text-muted-foreground">—</div>
-      {/if}
-    </Card.Content>
-  </Card.Root>
+  <div class="flex flex-wrap items-center gap-2 text-xs">
+    <Badge variant="secondary" class="font-mono">{rows.length} links</Badge>
+    <Badge variant="outline" class="font-mono">{totalPorts} ports</Badge>
+    {#if issueCounts.errors > 0}
+      <Badge variant="destructive" class="font-mono">{issueCounts.errors} errors</Badge>
+    {/if}
+    {#if issueCounts.warnings > 0}
+      <Badge
+        variant="outline"
+        class="border-amber-300 text-amber-700 dark:text-amber-300 font-mono"
+      >
+        {issueCounts.warnings}
+        warnings
+      </Badge>
+    {/if}
+    {#if unconnectedPorts.length > 0}
+      <Badge variant="outline" class="font-mono">{unconnectedPorts.length} unused ports</Badge>
+    {/if}
+    {#if vlanSet.size > 0}
+      <Badge variant="outline" class="font-mono">{vlanSet.size} VLANs</Badge>
+    {/if}
+    {#each standardSummary.slice(0, 4) as [ s, count ]}
+      <Badge variant="secondary" class="font-mono">{s} x{count}</Badge>
+    {/each}
+    {#if standardSummary.length > 4}
+      <Badge variant="outline" class="font-mono">+{standardSummary.length - 4} standards</Badge>
+    {/if}
+    <Button
+      variant={showOnlyIssues ? 'default' : 'outline'}
+      size="sm"
+      class="ml-auto h-7 text-xs"
+      onclick={() => {
+        showOnlyIssues = !showOnlyIssues
+      }}
+    >
+      Issues only
+    </Button>
+  </div>
 </div>
 
 <!-- Add connection -->
 <Card.Root class="mb-6">
   <Card.Content class="pt-4">
-    <div class="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
-      New Connection
-    </div>
-    <div class="grid grid-cols-[1fr_1fr_1fr_auto_1fr_1fr_1fr_auto_auto] items-end gap-2">
+    <div class="mb-3 flex items-center justify-between">
       <div>
-        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-from-node">From</label>
-        <select
-          id="add-from-node"
-          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          bind:value={addFromNode}
-        >
-          <option value="">Node...</option>
-          {#each nodeOptions as opt}
-            <option value={opt.id}>{opt.label}</option>
-          {/each}
-        </select>
-      </div>
-      <div>
-        <span class="text-[10px] text-muted-foreground mb-1 block">Port</span>
-        <PortPicker
-          nodeId={addFromNode}
-          value={addFromPortId}
-          disabled={!addFromNode}
-          onchange={(portId) => {
-            addFromPortId = portId
-          }}
-        />
-      </div>
-      <div>
-        <span class="text-[10px] text-muted-foreground mb-1 block">Module</span>
-        <EndpointModulePicker
-          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          cage={addFromCage}
-          standard={addFromStandard || undefined}
-          disabled={!addFromPortId}
-          onchange={(v) => setAddStandard('from', v)}
-        />
-      </div>
-      <span class="text-muted-foreground text-sm pb-1.5">→</span>
-      <div>
-        <label class="text-[10px] text-muted-foreground mb-1 block" for="add-to-node">To</label>
-        <select
-          id="add-to-node"
-          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          bind:value={addToNode}
-        >
-          <option value="">Node...</option>
-          {#each nodeOptions as opt}
-            <option value={opt.id}>{opt.label}</option>
-          {/each}
-        </select>
-      </div>
-      <div>
-        <span class="text-[10px] text-muted-foreground mb-1 block">Port</span>
-        <PortPicker
-          nodeId={addToNode}
-          value={addToPortId}
-          disabled={!addToNode}
-          onchange={(portId) => {
-            addToPortId = portId
-          }}
-        />
-      </div>
-      <div>
-        <span class="text-[10px] text-muted-foreground mb-1 block">Module</span>
-        <EndpointModulePicker
-          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          cage={addToCage}
-          standard={addToStandard || undefined}
-          disabled={!addToPortId}
-          onchange={(v) => setAddStandard('to', v)}
-        />
-      </div>
-      <div>
-        <span class="text-[10px] text-muted-foreground mb-1 block">Cable</span>
-        <select
-          class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
-          disabled={addGradeOptions.length === 0}
-          value={addCableCategory ?? ''}
-          onchange={(e) => {
-            const v = (e.target as HTMLSelectElement).value
-            addCableCategory = v ? (v as CableGrade) : undefined
-          }}
-        >
-          <option value="">—</option>
-          {#each addGradeOptions as g}
-            <option value={g.value}>{g.label}</option>
-          {/each}
-        </select>
+        <div class="text-[10px] uppercase tracking-wider text-muted-foreground">New Connection</div>
+        <div class="text-xs text-muted-foreground">
+          Pick endpoints or link type first; the rest stays constrained by the current selection.
+        </div>
       </div>
       <Button
         size="sm"
-        disabled={!addFromNode || !addToNode || addFromNode === addToNode}
+        disabled={!addFromNode || !addToNode || addFromNode === addToNode || !addFromPortId || !addToPortId}
         onclick={handleAdd}
       >
         <Plus class="w-4 h-4 mr-1" />
         Add
       </Button>
     </div>
-    {#if addReferenceStandard}
-      <div class="mt-3 max-w-md">
-        <StandardImpliedBlock
-          standard={addReferenceStandard}
-          cable={addCableCategory ? { category: addCableCategory } : undefined}
-          fromCage={addFromCage}
-          toCage={addToCage}
-        />
+
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.85fr)_minmax(0,1fr)]">
+      <div class="rounded-md border border-border bg-muted/20 p-3">
+        <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          A end
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label class="text-[10px] text-muted-foreground mb-1 block" for="add-from-node">
+              Node
+            </label>
+            <select
+              id="add-from-node"
+              class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
+              bind:value={addFromNode}
+            >
+              <option value="">Node...</option>
+              {#each nodeOptions as opt}
+                <option value={opt.id}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+          <div>
+            <span class="text-[10px] text-muted-foreground mb-1 block">Port</span>
+            <PortPicker
+              nodeId={addFromNode}
+              value={addFromPortId}
+              disabled={!addFromNode}
+              onchange={(portId) => {
+                addFromPortId = portId
+              }}
+            />
+          </div>
+        </div>
+        <div class="mt-2">
+          <span class="text-[10px] text-muted-foreground mb-1 block">Plug / Module</span>
+          <EndpointModulePicker
+            class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
+            cage={addFromCage}
+            standard={addFromStandard || undefined}
+            disabled={!addFromPortId}
+            onchange={(v) => setAddStandard('from', v)}
+          />
+        </div>
+      </div>
+
+      <div class="rounded-md border border-border bg-background p-3">
+        <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Link
+        </div>
+        <div>
+          <span class="text-[10px] text-muted-foreground mb-1 block">Cable</span>
+          <select
+            class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
+            disabled={addGradeOptions.length === 0}
+            value={addCableCategory ?? ''}
+            onchange={(e) => {
+              const v = (e.target as HTMLSelectElement).value
+              addCableCategory = v ? (v as CableGrade) : undefined
+            }}
+          >
+            <option value="">—</option>
+            {#each addGradeOptions as g}
+              <option value={g.value}>{g.label}</option>
+            {/each}
+          </select>
+        </div>
+        {#if addReferenceStandard}
+          <div class="mt-3">
+            <StandardImpliedBlock
+              standard={addReferenceStandard}
+              cable={addCableCategory ? { category: addCableCategory } : undefined}
+              fromCage={addFromCage}
+              toCage={addToCage}
+            />
+          </div>
+        {:else}
+          <div
+            class="mt-3 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
+          >
+            Select ports or modules to infer the physical link.
+          </div>
+        {/if}
         {#if addFromStandard && addToStandard && addFromStandard !== addToStandard}
-          <div class="mt-1 text-[10px] text-amber-600">
-            ⚠ Asymmetric: {addFromStandard} ↔ {addToStandard}
+          <div class="mt-2 text-[10px] text-amber-600">
+            Asymmetric: {addFromStandard} ↔ {addToStandard}
+          </div>
+        {/if}
+        {#if addDraftIssues.length > 0}
+          <div class="mt-2 space-y-1">
+            {#each addDraftIssues as issue}
+              <div
+                class="rounded border px-2 py-1 text-[10px] {issue.severity === 'error'
+                  ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300'
+                  : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'}"
+              >
+                {issue.message}
+              </div>
+            {/each}
           </div>
         {/if}
       </div>
-    {/if}
+
+      <div class="rounded-md border border-border bg-muted/20 p-3">
+        <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Z end
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label class="text-[10px] text-muted-foreground mb-1 block" for="add-to-node">
+              Node
+            </label>
+            <select
+              id="add-to-node"
+              class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
+              bind:value={addToNode}
+            >
+              <option value="">Node...</option>
+              {#each nodeOptions as opt}
+                <option value={opt.id}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+          <div>
+            <span class="text-[10px] text-muted-foreground mb-1 block">Port</span>
+            <PortPicker
+              nodeId={addToNode}
+              value={addToPortId}
+              disabled={!addToNode}
+              onchange={(portId) => {
+                addToPortId = portId
+              }}
+            />
+          </div>
+        </div>
+        <div class="mt-2">
+          <span class="text-[10px] text-muted-foreground mb-1 block">Plug / Module</span>
+          <EndpointModulePicker
+            class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
+            cage={addToCage}
+            standard={addToStandard || undefined}
+            disabled={!addToPortId}
+            onchange={(v) => setAddStandard('to', v)}
+          />
+        </div>
+      </div>
+    </div>
   </Card.Content>
 </Card.Root>
 
 <!-- Connection table -->
 {#if rows.length > 0}
-  <h2 class="text-sm font-semibold mb-3">Cables</h2>
+  <div class="mb-3 flex items-center justify-between">
+    <h2 class="text-sm font-semibold">Cables</h2>
+    <div class="text-xs text-muted-foreground">Showing {visibleRows.length} of {rows.length}</div>
+  </div>
   <IssuesBanner issues={allRowIssues} onjump={jumpToRow} />
-  <Card.Root class="py-0 mb-6">
+  <Card.Root class="py-0 mb-6 overflow-hidden">
     <Table.Root>
       <Table.Header>
         <Table.Row>
@@ -581,7 +712,7 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each rows as row (row.id)}
+        {#each visibleRows as row (row.id)}
           {@const fromCage = getPort(row.fromNode, row.fromPort)?.cage}
           {@const toCage = getPort(row.toNode, row.toPort)?.cage}
           {@const referenceStandard = row.link.from.plug?.module?.standard ?? row.link.to.plug?.module?.standard}
@@ -736,6 +867,13 @@
             </Table.Cell>
           </Table.Row>
         {/each}
+        {#if visibleRows.length === 0}
+          <Table.Row>
+            <Table.Cell colspan={9} class="py-10 text-center text-sm text-muted-foreground">
+              No connections match the current filters.
+            </Table.Cell>
+          </Table.Row>
+        {/if}
       </Table.Body>
     </Table.Root>
   </Card.Root>
