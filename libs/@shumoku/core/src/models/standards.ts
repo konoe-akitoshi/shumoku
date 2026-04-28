@@ -379,3 +379,123 @@ export function groupStandards(
   }
   return result
 }
+
+// ============================================================================
+// Two-step cascade: Plug profile → Cable variant
+// ============================================================================
+
+/**
+ * A "plug profile" is the cage + speed combination — what the user picks
+ * conceptually before deciding cable medium (e.g. "SFP+ 10G", "RJ45 1G").
+ * Multiple IEEE standards can share a plug profile when they only differ
+ * by cable kind (e.g. SFP+ 10G covers SR / LR / CR / AOC).
+ */
+export interface PlugProfile {
+  /** Stable id, e.g. "sfp+:10000000000". Used as select value. */
+  id: string
+  cage: PortConnector
+  speedBps: number
+  /** Display label, e.g. "SFP+ 10G". */
+  label: string
+}
+
+function speedLabel(bps: number): string {
+  if (bps >= 1_000_000_000) {
+    const g = bps / 1_000_000_000
+    return `${Number.isInteger(g) ? g : g.toFixed(1)}G`
+  }
+  if (bps >= 1_000_000) return `${bps / 1_000_000}M`
+  return `${bps} bps`
+}
+
+function makePlugId(cage: PortConnector, speedBps: number): string {
+  return `${cage}:${speedBps}`
+}
+
+function makePlugProfile(cage: PortConnector, speedBps: number): PlugProfile {
+  return {
+    id: makePlugId(cage, speedBps),
+    cage,
+    speedBps,
+    label: `${cage.toUpperCase()} ${speedLabel(speedBps)}`,
+  }
+}
+
+/**
+ * Plug profiles compatible with the given port cages. Same permissive
+ * behavior as `standardsForCages`: unknown cages → all plugs, `combo`
+ * cage → all plugs.
+ */
+export function plugProfilesForCages(
+  fromCage: string | undefined,
+  toCage: string | undefined,
+): PlugProfile[] {
+  const seen = new Map<string, PlugProfile>()
+  for (const name of KNOWN_STANDARDS) {
+    const spec = STANDARD_SPECS[name]
+    if (!spec) continue
+    if (!cageAcceptsRequired(fromCage, spec.cage)) continue
+    if (!cageAcceptsRequired(toCage, spec.cage)) continue
+    const id = makePlugId(spec.cage, spec.speedBps)
+    if (!seen.has(id)) seen.set(id, makePlugProfile(spec.cage, spec.speedBps))
+  }
+  // Sort by speed asc, then cage name for stable ordering.
+  return [...seen.values()].sort((a, b) =>
+    a.speedBps !== b.speedBps ? a.speedBps - b.speedBps : a.cage.localeCompare(b.cage),
+  )
+}
+
+/**
+ * A cable variant within a plug profile — the actual IEEE standard plus
+ * a media-friendly label ("Multimode fiber LC, reach 400 m").
+ */
+export interface CableVariant {
+  standard: EthernetStandard
+  spec: StandardSpec
+  /** Display label, e.g. "Multimode fiber (LC) — reach 400 m". */
+  label: string
+  /** Cable kind grouping (for color coding / icons in UI if desired). */
+  group: StandardCableGroup
+}
+
+function cableMediumLabel(spec: StandardSpec): string {
+  if (spec.cableKind === 'twisted-pair') return 'Twisted-pair'
+  if (spec.cableKind === 'fiber') {
+    const mode = spec.fiberMode === 'singlemode' ? 'single-mode' : 'multimode'
+    const conn = spec.cableConnector ? ` (${spec.cableConnector.toUpperCase()})` : ''
+    return `Fiber ${mode}${conn}`
+  }
+  if (spec.cableKind === 'dac') return 'DAC (passive twinax)'
+  if (spec.cableKind === 'aoc') return 'AOC (active optical)'
+  return spec.cableKind
+}
+
+/**
+ * Cable variants within a plug profile — i.e. all standards that share
+ * the same (cage, speed) but differ by cable medium. The variants are
+ * what the user picks at the second step of the cascade.
+ */
+export function cableVariantsForPlug(plug: PlugProfile): CableVariant[] {
+  const result: CableVariant[] = []
+  for (const name of KNOWN_STANDARDS) {
+    const spec = STANDARD_SPECS[name]
+    if (!spec) continue
+    if (spec.cage !== plug.cage || spec.speedBps !== plug.speedBps) continue
+    result.push({
+      standard: name,
+      spec,
+      label: `${cableMediumLabel(spec)} — ${name}, reach ${formatReachMeters(spec.maxReach_m)}`,
+      group: classifyStandardGroup(spec),
+    })
+  }
+  return result
+}
+
+/** Resolve a standard to its plug profile (for prefilling the plug select). */
+export function plugProfileForStandard(
+  standard: EthernetStandard | undefined,
+): PlugProfile | undefined {
+  const spec = getStandardSpec(standard)
+  if (!spec) return undefined
+  return makePlugProfile(spec.cage, spec.speedBps)
+}

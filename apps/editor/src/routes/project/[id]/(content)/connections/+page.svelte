@@ -8,9 +8,9 @@
     validateLinkCompatibility,
   } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
+  import PlugCablePicker from '$lib/components/PlugCablePicker.svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
-  import StandardPicker from '$lib/components/StandardPicker.svelte'
   import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
@@ -394,9 +394,9 @@
           }}
         />
       </div>
-      <div class="w-56">
-        <span class="text-[10px] text-muted-foreground mb-1 block">Standard</span>
-        <StandardPicker
+      <div class="w-64">
+        <span class="text-[10px] text-muted-foreground mb-1 block">Link spec</span>
+        <PlugCablePicker
           class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-lg outline-none focus:ring-1 focus:ring-ring"
           value={addStandard || undefined}
           fromCage={getPort(addFromNode, addFromPortId)?.cage}
@@ -468,8 +468,8 @@
                 />
               </div>
             </Table.Cell>
-            <Table.Cell>
-              <StandardPicker
+            <Table.Cell class="min-w-44">
+              <PlugCablePicker
                 class="px-1 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring w-full"
                 value={row.standard ? (row.standard as EthernetStandard) : undefined}
                 fromCage={getPort(row.fromNode, row.fromPort)?.cage}

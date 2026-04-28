@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { type EthernetStandard, type Link, type LinkEndpoint, type Node } from '@shumoku/core'
+  import type { Link, LinkEndpoint, Node } from '@shumoku/core'
+  import PlugCablePicker from '$lib/components/PlugCablePicker.svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
-  import StandardPicker from '$lib/components/StandardPicker.svelte'
 
   let {
     link,
@@ -230,10 +230,10 @@
 <div class={sectionClass}>Properties</div>
 <dl class="space-y-2.5">
   <div class="flex items-center justify-between gap-2">
-    <dt class={labelClass}>Standard</dt>
+    <dt class={labelClass}>Link spec</dt>
     <dd class="flex-1 min-w-0">
       {#if editing}
-        <StandardPicker
+        <PlugCablePicker
           class={selectClass}
           value={link.standard}
           {fromCage}
