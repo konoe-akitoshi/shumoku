@@ -124,9 +124,11 @@ classDiagram
 
 接続を作る入口は複数あり、出発点ごとに違う絞り込み順を辿る。データ的に決まる項目は同じだが「次に何を選ぶか」がパターンごとに変わる。
 
+どのフローも Module は **optional** で、Plug が pluggable（SFP / SFP+ / SFP28 / QSFP+ / QSFP28）なら **経由**（Plug → Module → Cable）、integrated（RJ45 直結 / DAC / AOC）なら **直結**（Plug → Cable）と分岐する。実線が経由経路、点線が直結経路。
+
 ### A. 接続ページ・ポート起点
 
-機材が先に決まっているケース（既存ノードに後から線を足す等）。Node → Port を選ぶと port.cage が決まり、そこから Plug → Module → Cable grade が絞り込まれる。
+機材が先に決まっているケース（既存ノードに後から線を足す等）。Node → Port を選ぶと port.cage が決まり、そこから Plug → (Module) → Cable grade が絞り込まれる。
 
 ```mermaid
 flowchart LR
@@ -136,29 +138,38 @@ flowchart LR
   PL --> M[Module 選択<br/>plug で絞り込み]
   PU --> M
   M --> CG[Cable grade<br/>module で絞り込み]
+  PL -. integrated .-> CG
+  PU -. integrated .-> CG
 ```
 
 ### B. 接続ページ・ケーブル起点
 
-「この種類のケーブルで繋ぎたい」が先に決まっているケース。Cable kind / Module から入り、適合する Plug → 適合する Port → Node を逆向きに辿る。
+「この種類のケーブルで繋ぎたい」が先に決まっているケース。pluggable のときは Module から、integrated のときは Cable kind から入り、適合する Plug → Port → Node を逆向きに辿る。
 
 ```mermaid
 flowchart LR
-  CK[Cable kind / Module<br/>選択] --> PL[Plug 候補<br/>module.spec.cage で決まる]
-  PL --> P[Port 候補<br/>port.cage が plug と一致するもの]
-  P --> N[Node 候補<br/>該当 port を持つもの]
-  CK --> CG[Cable grade<br/>module で絞り込み]
+  S{起点}
+  S --> M[Module 起点<br/>例: 10GBASE-SR]
+  S -.-> CK[Cable kind 起点<br/>例: RJ45 cat / DAC / AOC]
+  M --> PL1[Plug 派生<br/>module.spec.cage]
+  CK -.-> PL2[Plug 派生<br/>integrated form factor]
+  PL1 --> P[Port 候補<br/>plug と一致する cage]
+  PL2 -.-> P
+  P --> N[Node 候補]
+  M --> CG[Cable grade]
+  CK -.-> CG
 ```
 
 ### C. ダイヤグラム起点
 
-canvas 上で線を引いて先に「繋がっている」事実だけ作り、後から詳細パネルで Plug / Module / Cable を埋めていくケース。発見的・スケッチ的な入力に向く。
+canvas 上で線を引いて先に「繋がっている」事実だけ作り、後から詳細パネルで Plug / (Module) / Cable を埋めていくケース。発見的・スケッチ的な入力に向く。
 
 ```mermaid
 flowchart LR
   D[ダイヤグラム上で<br/>2 ノード間に線を引く] --> S[Link skeleton 生成<br/>node/port のみ確定]
-  S --> DP[詳細パネルで<br/>Plug / Module / Cable 入力]
-  DP --> A1[A: ポート起点と同じ<br/>カスケードで残りを埋める]
+  S --> DP[詳細パネル]
+  DP --> M[Plug → Module → Cable<br/>pluggable のとき]
+  DP -. integrated .-> NM[Plug → Cable<br/>Module 無し]
 ```
 
 ### Plug の値の解決順位（共通）
