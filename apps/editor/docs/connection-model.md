@@ -38,10 +38,63 @@ flowchart LR
 
 ## データモデル
 
+「ノード側に入っているもの」と「リンク側に入っているもの」を分けて、入れ子のまま示します。Endpoint は Link の中に二つ（from / to）あり、それぞれが Node と Port を id で参照しつつ、自分の属性として Module を保持する点に注意。
+
+### ノード側
+
+```
+Node
+├── id: string
+├── label?: string
+├── ports: NodePort[]
+│   └── NodePort
+│       ├── id: string
+│       ├── label?: string
+│       ├── cage?: PortConnector       ← rj45 / sfp+ / sfp28 …
+│       ├── poe?: boolean
+│       └── faceplateLabel?, interfaceName?, role?, …
+└── (position, parent, shape, spec などレイアウト系)
+```
+
+Port は完全に Node の所有物。Link 側からは `LinkEndpoint.node` + `LinkEndpoint.port` の id ペアで参照されるだけで、複製はしない。
+
+### リンク側
+
+```
+Link
+├── id: string
+├── from: LinkEndpoint                  ← 端点 A
+│   ├── node: string                    │ Node を id で参照
+│   ├── port: string                    │ NodePort を id で参照
+│   ├── module?: LinkModule             │ ← ★ A 端のモジュール
+│   │   ├── standard: EthernetStandard  │   10GBASE-SR / 10GBASE-T …
+│   │   └── sku?: string                │   FTLX8571D3BCL …
+│   └── ip?: string | string[]
+├── to: LinkEndpoint                    ← 端点 B（from と同型）
+│   ├── node, port
+│   ├── module?: LinkModule             ← ★ B 端のモジュール（A と独立）
+│   └── ip?
+├── cable?: LinkCable                   ← ケーブル全体の属性
+│   ├── category?: string               │ om4 / cat6a / …
+│   ├── length_m?: number
+│   └── connector?: string              │ LC / MPO / RJ45 plug …
+└── label?, type?, vlan?, redundancy?, arrow?, …
+```
+
+要点：
+
+- **Endpoint は Link の中の構造**で、Node を所有しない（id で参照するだけ）。
+- **Module は Endpoint の中**にある（per-endpoint）。BiDi ペアやメディアコンバータで非対称になるため、各端が独立した standard を持てる必要がある。
+- **Cable は Link の中**にある（per-link）。grade / 長さ / 端コネクタは「ケーブル全体」の属性で、どちらか一端に偏らせない。
+- **Plug は implicit**。独立フィールドはない — `module.standard` から `STANDARD_SPECS[std].cage` で派生（モジュール未選択時は `port.cage` にフォールバック）。
+
+### 関係図
+
 ```mermaid
 classDiagram
   class Node {
     id: string
+    label?: string
     ports: NodePort[]
   }
   class NodePort {
@@ -72,23 +125,24 @@ classDiagram
     connector?: string
   }
 
-  Node "1" o-- "*" NodePort
-  Link "1" --> "1" LinkEndpoint : from
-  Link "1" --> "1" LinkEndpoint : to
-  Link "1" --> "0..1" LinkCable
-  LinkEndpoint "1" --> "0..1" LinkModule
-  LinkEndpoint ..> NodePort : refs by id
+  Node *-- "ports *" NodePort : owns
+  Link *-- "from 1" LinkEndpoint
+  Link *-- "to 1" LinkEndpoint
+  Link *-- "0..1" LinkCable
+  LinkEndpoint *-- "0..1" LinkModule
+  LinkEndpoint ..> Node : refs node id
+  LinkEndpoint ..> NodePort : refs port id
 ```
 
-- **Plug は implicit**。独立フィールドはない — `module.standard` から `STANDARD_SPECS[std].cage` 経由で派生（モジュール未選択時は `port.cage` にフォールバック）。
-- **Module は per-endpoint**。BiDi ペアやメディアコンバータなど非対称ケーブルがあるため、各端点が独自に standard を持つ。
-- **Cable は per-link**。grade / 長さ / 端コネクタは「ケーブル全体」の属性で、どちらかの端に偏らせない。
+実線（◆）は所有（compose）、破線（..>）は id 参照。Node と NodePort はノード側で閉じていて、Link 側から id で指されるだけ。
+
+### フィールド対応
 
 | 物理レイヤ          | モデル位置                       | 型                     | 例               |
 | ------------------- | -------------------------------- | ---------------------- | ---------------- |
 | Port レセプタクル   | `Node.ports[].cage`              | `PortConnector`        | `sfp+`、`rj45`   |
-| Endpoint モジュール | `LinkEndpoint.module.standard`   | `EthernetStandard`     | `10GBASE-SR`     |
-| モジュール SKU      | `LinkEndpoint.module.sku`        | `string`               | `FTLX8571D3BCL`  |
+| Endpoint モジュール | `Link.from/to.module.standard`   | `EthernetStandard`     | `10GBASE-SR`     |
+| モジュール SKU      | `Link.from/to.module.sku`        | `string`               | `FTLX8571D3BCL`  |
 | ケーブル媒体 grade  | `Link.cable.category`            | `string`               | `om4`、`cat6a`   |
 | ケーブル長          | `Link.cable.length_m`            | `number`               | `30`             |
 | ケーブル端コネクタ  | `Link.cable.connector`           | `string`（freeform）   | `LC`、`MPO`      |
