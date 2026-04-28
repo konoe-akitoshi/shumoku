@@ -4,15 +4,18 @@
     defaultCableGrade,
     type EthernetStandard,
     endpointStandard,
+    issuesForTarget,
     type Link,
     type LinkEndpoint,
     type LinkPlug,
     type Node,
     plugFromStandard,
+    validateLinkCompatibility,
   } from '@shumoku/core'
   import EndpointModulePicker from '$lib/components/EndpointModulePicker.svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
+  import ValidationCell from '$lib/components/ValidationCell.svelte'
 
   let {
     link,
@@ -185,6 +188,11 @@
   const fromCage = $derived(getPortOptions(from.node).find((p) => p.id === from.port)?.cage)
   const toCage = $derived(getPortOptions(to.node).find((p) => p.id === to.port)?.cage)
 
+  const fromPort = $derived(getPortOptions(from.node).find((p) => p.id === from.port))
+  const toPort = $derived(getPortOptions(to.node).find((p) => p.id === to.port))
+
+  const issues = $derived(validateLinkCompatibility(fromPort, toPort, link))
+
   // Cable grade options follow whichever endpoint has a module set
   // (symmetric → both agree, asymmetric → BiDi pairs still share medium).
   const referenceStandard = $derived(endpointStandard(link.from) ?? endpointStandard(link.to))
@@ -236,16 +244,24 @@
   <div class="flex items-center justify-between gap-2">
     <dt class={labelClass}>Plug / Module</dt>
     <dd class="flex-1 min-w-0">
-      {#if editing}
-        <EndpointModulePicker
-          class={selectClass}
-          cage={fromCage}
-          standard={link.from.plug?.module?.standard}
-          onchange={(v) => updateEndpointModuleStandard('from', v)}
-        />
-      {:else}
-        <span class={valueClass}>{link.from.plug?.module?.standard ?? '—'}</span>
-      {/if}
+      <ValidationCell
+        issues={[
+          ...issuesForTarget(issues, { kind: 'endpoint', side: 'source', field: 'plug.cage' }),
+          ...issuesForTarget(issues, { kind: 'endpoint', side: 'source', field: 'plug.module' }),
+          ...issuesForTarget(issues, { kind: 'port', side: 'source', field: 'poe' }),
+        ]}
+      >
+        {#if editing}
+          <EndpointModulePicker
+            class={selectClass}
+            cage={fromCage}
+            standard={link.from.plug?.module?.standard}
+            onchange={(v) => updateEndpointModuleStandard('from', v)}
+          />
+        {:else}
+          <span class={valueClass}>{link.from.plug?.module?.standard ?? '—'}</span>
+        {/if}
+      </ValidationCell>
     </dd>
   </div>
 
@@ -326,16 +342,24 @@
   <div class="flex items-center justify-between gap-2">
     <dt class={labelClass}>Plug / Module</dt>
     <dd class="flex-1 min-w-0">
-      {#if editing}
-        <EndpointModulePicker
-          class={selectClass}
-          cage={toCage}
-          standard={link.to.plug?.module?.standard}
-          onchange={(v) => updateEndpointModuleStandard('to', v)}
-        />
-      {:else}
-        <span class={valueClass}>{link.to.plug?.module?.standard ?? '—'}</span>
-      {/if}
+      <ValidationCell
+        issues={[
+          ...issuesForTarget(issues, { kind: 'endpoint', side: 'target', field: 'plug.cage' }),
+          ...issuesForTarget(issues, { kind: 'endpoint', side: 'target', field: 'plug.module' }),
+          ...issuesForTarget(issues, { kind: 'port', side: 'target', field: 'poe' }),
+        ]}
+      >
+        {#if editing}
+          <EndpointModulePicker
+            class={selectClass}
+            cage={toCage}
+            standard={link.to.plug?.module?.standard}
+            onchange={(v) => updateEndpointModuleStandard('to', v)}
+          />
+        {:else}
+          <span class={valueClass}>{link.to.plug?.module?.standard ?? '—'}</span>
+        {/if}
+      </ValidationCell>
     </dd>
   </div>
 
@@ -381,37 +405,46 @@
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Grade</dt>
     <dd>
-      {#if editing && gradeOptions.length > 0}
-        <select
-          class={selectClass}
-          value={link.cable?.category ?? ''}
-          onchange={(e) => updateCableField('category', (e.target as HTMLSelectElement).value)}
-        >
-          <option value="">— unspecified —</option>
-          {#each gradeOptions as g}
-            <option value={g.value}>{g.label}</option>
-          {/each}
-        </select>
-      {:else}
-        <span class={valueClass}>{link.cable?.category ?? '—'}</span>
-      {/if}
+      <ValidationCell
+        issues={[
+          ...issuesForTarget(issues, { kind: 'cable', field: 'medium' }),
+          ...issuesForTarget(issues, { kind: 'cable', field: 'category' }),
+        ]}
+      >
+        {#if editing && gradeOptions.length > 0}
+          <select
+            class={selectClass}
+            value={link.cable?.category ?? ''}
+            onchange={(e) => updateCableField('category', (e.target as HTMLSelectElement).value)}
+          >
+            <option value="">— unspecified —</option>
+            {#each gradeOptions as g}
+              <option value={g.value}>{g.label}</option>
+            {/each}
+          </select>
+        {:else}
+          <span class={valueClass}>{link.cable?.category ?? '—'}</span>
+        {/if}
+      </ValidationCell>
     </dd>
   </div>
 
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Length (m)</dt>
     <dd>
-      {#if editing}
-        <input
-          type="number"
-          min="0"
-          class={inputClass}
-          value={link.cable?.length_m ?? ''}
-          onblur={(e) => updateCableField('length_m', (e.target as HTMLInputElement).value)}
-        >
-      {:else}
-        <span class={valueClass}>{link.cable?.length_m ?? '—'}</span>
-      {/if}
+      <ValidationCell issues={issuesForTarget(issues, { kind: 'cable', field: 'length_m' })}>
+        {#if editing}
+          <input
+            type="number"
+            min="0"
+            class={inputClass}
+            value={link.cable?.length_m ?? ''}
+            onblur={(e) => updateCableField('length_m', (e.target as HTMLInputElement).value)}
+          >
+        {:else}
+          <span class={valueClass}>{link.cable?.length_m ?? '—'}</span>
+        {/if}
+      </ValidationCell>
     </dd>
   </div>
 </dl>

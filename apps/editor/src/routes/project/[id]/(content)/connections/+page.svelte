@@ -6,10 +6,12 @@
     defaultStandardForCages,
     type EthernetStandard,
     endpointStandard,
+    issuesForTarget,
     type Link,
     type LinkEndpoint,
     newId,
     plugFromStandard,
+    type ValidationIssue,
     validateLinkCompatibility,
   } from '@shumoku/core'
   import { Plus, Trash } from 'phosphor-svelte'
@@ -20,6 +22,7 @@
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
+  import ValidationCell from '$lib/components/ValidationCell.svelte'
   import { diagramState } from '$lib/context.svelte'
 
   // =========================================================================
@@ -92,7 +95,7 @@
     toNode: string
     toPort: string
     standard: string
-    standardIssue: string
+    issues: ValidationIssue[]
     cableLength: string
     vlan: string
     fromIp: string
@@ -114,7 +117,11 @@
         toNode: to.node,
         toPort: to.port,
         standard: endpointStandard(link.from) ?? endpointStandard(link.to) ?? '',
-        standardIssue: getLinkIssue(link),
+        issues: validateLinkCompatibility(
+          getPort(link.from.node, link.from.port),
+          getPort(link.to.node, link.to.port),
+          link,
+        ),
         cableLength: link.cable?.length_m !== undefined ? String(link.cable.length_m) : '',
         vlan: link.vlan
           ? Array.isArray(link.vlan)
@@ -347,15 +354,6 @@
     return diagramState.nodes.get(nodeId)?.ports?.find((port) => port.id === portId)
   }
 
-  function getLinkIssue(link: Link) {
-    const issues = validateLinkCompatibility(
-      getPort(link.from.node, link.from.port),
-      getPort(link.to.node, link.to.port),
-      link,
-    )
-    return issues[0]?.message ?? ''
-  }
-
   const cellInput =
     'w-full px-1.5 py-0.5 text-[11px] font-mono bg-transparent border border-transparent hover:border-input focus:border-input rounded outline-none focus:ring-1 focus:ring-ring'
 </script>
@@ -560,7 +558,15 @@
           {@const toCage = getPort(row.toNode, row.toPort)?.cage}
           {@const referenceStandard = row.link.from.plug?.module?.standard ?? row.link.to.plug?.module?.standard}
           {@const gradeOptions = cableGradesForStandard(referenceStandard)}
-          <Table.Row>
+          {@const rowSeverity = row.issues.find((i) => i.severity === 'error')?.severity
+            ?? row.issues.find((i) => i.severity === 'warning')?.severity}
+          <Table.Row
+            class={rowSeverity === 'error'
+              ? 'border-l-2 border-red-400'
+              : rowSeverity === 'warning'
+                ? 'border-l-2 border-amber-400'
+                : ''}
+          >
             <Table.Cell>
               <div class="font-mono text-xs space-y-1">
                 <div class="font-medium">{row.fromNode}</div>
@@ -569,12 +575,20 @@
                   value={row.fromPort}
                   onchange={(portId) => updateEndpointPort(row.link, 'from', portId)}
                 />
-                <EndpointModulePicker
-                  class={cellInput}
-                  cage={fromCage}
-                  standard={row.link.from.plug?.module?.standard}
-                  onchange={(v) => updateEndpointModuleStandard(row.link, 'from', v)}
-                />
+                <ValidationCell
+                  issues={[
+                    ...issuesForTarget(row.issues, { kind: 'endpoint', side: 'source', field: 'plug.cage' }),
+                    ...issuesForTarget(row.issues, { kind: 'endpoint', side: 'source', field: 'plug.module' }),
+                    ...issuesForTarget(row.issues, { kind: 'port', side: 'source', field: 'poe' }),
+                  ]}
+                >
+                  <EndpointModulePicker
+                    class={cellInput}
+                    cage={fromCage}
+                    standard={row.link.from.plug?.module?.standard}
+                    onchange={(v) => updateEndpointModuleStandard(row.link, 'from', v)}
+                  />
+                </ValidationCell>
               </div>
             </Table.Cell>
             <Table.Cell>
@@ -585,48 +599,59 @@
                   value={row.toPort}
                   onchange={(portId) => updateEndpointPort(row.link, 'to', portId)}
                 />
-                <EndpointModulePicker
-                  class={cellInput}
-                  cage={toCage}
-                  standard={row.link.to.plug?.module?.standard}
-                  onchange={(v) => updateEndpointModuleStandard(row.link, 'to', v)}
-                />
+                <ValidationCell
+                  issues={[
+                    ...issuesForTarget(row.issues, { kind: 'endpoint', side: 'target', field: 'plug.cage' }),
+                    ...issuesForTarget(row.issues, { kind: 'endpoint', side: 'target', field: 'plug.module' }),
+                    ...issuesForTarget(row.issues, { kind: 'port', side: 'target', field: 'poe' }),
+                  ]}
+                >
+                  <EndpointModulePicker
+                    class={cellInput}
+                    cage={toCage}
+                    standard={row.link.to.plug?.module?.standard}
+                    onchange={(v) => updateEndpointModuleStandard(row.link, 'to', v)}
+                  />
+                </ValidationCell>
               </div>
             </Table.Cell>
             <Table.Cell class="min-w-32">
-              <select
-                class={cellInput}
-                disabled={gradeOptions.length === 0}
-                value={row.link.cable?.category ?? ''}
-                onchange={(e) => {
-                  const v = (e.target as HTMLSelectElement).value
-                  updateCableCategory(row.link, v ? (v as CableGrade) : undefined)
-                }}
+              <ValidationCell
+                issues={[
+                  ...issuesForTarget(row.issues, { kind: 'cable', field: 'medium' }),
+                  ...issuesForTarget(row.issues, { kind: 'cable', field: 'category' }),
+                ]}
               >
-                <option value="">—</option>
-                {#each gradeOptions as g}
-                  <option value={g.value}>{g.label}</option>
-                {/each}
-              </select>
-              {#if row.standardIssue}
-                <div
-                  class="text-[9px] text-amber-600 max-w-32 truncate mt-0.5"
-                  title={row.standardIssue}
+                <select
+                  class={cellInput}
+                  disabled={gradeOptions.length === 0}
+                  value={row.link.cable?.category ?? ''}
+                  onchange={(e) => {
+                    const v = (e.target as HTMLSelectElement).value
+                    updateCableCategory(row.link, v ? (v as CableGrade) : undefined)
+                  }}
                 >
-                  {row.standardIssue}
-                </div>
-              {/if}
+                  <option value="">—</option>
+                  {#each gradeOptions as g}
+                    <option value={g.value}>{g.label}</option>
+                  {/each}
+                </select>
+              </ValidationCell>
             </Table.Cell>
             <Table.Cell>
-              <input
-                type="number"
-                min="0"
-                class={cellInput}
-                value={row.cableLength}
-                placeholder="—"
-                onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+              <ValidationCell
+                issues={issuesForTarget(row.issues, { kind: 'cable', field: 'length_m' })}
               >
+                <input
+                  type="number"
+                  min="0"
+                  class={cellInput}
+                  value={row.cableLength}
+                  placeholder="—"
+                  onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
+                  onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                >
+              </ValidationCell>
             </Table.Cell>
             <Table.Cell>
               <input
