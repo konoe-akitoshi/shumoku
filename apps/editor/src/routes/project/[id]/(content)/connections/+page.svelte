@@ -14,7 +14,7 @@
     type ValidationIssue,
     validateLinkCompatibility,
   } from '@shumoku/core'
-  import { MagnifyingGlass, Plus, Trash } from 'phosphor-svelte'
+  import { Info, MagnifyingGlass, Plus, Trash, Warning, WarningCircle } from 'phosphor-svelte'
   import EndpointModulePicker from '$lib/components/EndpointModulePicker.svelte'
   import IssuesBanner, { type RowIssue } from '$lib/components/IssuesBanner.svelte'
   import PortPicker from '$lib/components/PortPicker.svelte'
@@ -468,16 +468,6 @@
       <h1 class="text-lg font-semibold">Connections</h1>
       <p class="text-sm text-muted-foreground">Cable inventory and endpoint assignment</p>
     </div>
-    <div class="relative w-full max-w-sm">
-      <MagnifyingGlass
-        class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-      />
-      <input
-        class="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm outline-none focus:ring-1 focus:ring-ring"
-        placeholder="Search node, port, VLAN, standard..."
-        bind:value={searchQuery}
-      >
-    </div>
   </div>
 
   <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -507,23 +497,13 @@
     {#if standardSummary.length > 4}
       <Badge variant="outline" class="font-mono">+{standardSummary.length - 4} standards</Badge>
     {/if}
-    <Button
-      variant={showOnlyIssues ? 'default' : 'outline'}
-      size="sm"
-      class="ml-auto h-7 text-xs"
-      onclick={() => {
-        showOnlyIssues = !showOnlyIssues
-      }}
-    >
-      Issues only
-    </Button>
   </div>
 </div>
 
 <!-- Add connection -->
-<Card.Root class="mb-6">
+<Card.Root class="mb-5">
   <Card.Content class="pt-4">
-    <div class="mb-3 flex items-center justify-between">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
       <div>
         <div class="text-[10px] uppercase tracking-wider text-muted-foreground">New Connection</div>
         <div class="text-xs text-muted-foreground">
@@ -540,12 +520,12 @@
       </Button>
     </div>
 
-    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.85fr)_minmax(0,1fr)]">
-      <div class="rounded-md border border-border bg-muted/20 p-3">
-        <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)_minmax(0,1fr)]">
+      <div class="space-y-2">
+        <div class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           A end
         </div>
-        <div class="grid gap-2 sm:grid-cols-2">
+        <div class="grid gap-2 md:grid-cols-[minmax(8rem,0.9fr)_minmax(8rem,1fr)]">
           <div>
             <label class="text-[10px] text-muted-foreground mb-1 block" for="add-from-node">
               Node
@@ -573,7 +553,7 @@
             />
           </div>
         </div>
-        <div class="mt-2">
+        <div>
           <span class="text-[10px] text-muted-foreground mb-1 block">Plug / Module</span>
           <EndpointModulePicker
             class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
@@ -585,8 +565,8 @@
         </div>
       </div>
 
-      <div class="rounded-md border border-border bg-background p-3">
-        <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div class="space-y-2 border-y border-border py-3 xl:border-x xl:border-y-0 xl:px-3 xl:py-0">
+        <div class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Link
         </div>
         <div>
@@ -628,25 +608,38 @@
           </div>
         {/if}
         {#if addDraftIssues.length > 0}
-          <div class="mt-2 space-y-1">
+          <div class="mt-2 space-y-1.5">
             {#each addDraftIssues as issue}
               <div
-                class="rounded border px-2 py-1 text-[10px] {issue.severity === 'error'
-                  ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300'
-                  : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'}"
+                class="flex items-start gap-2 rounded-md border bg-muted/20 px-2 py-1.5 text-[10px] {issue.severity ===
+                'error'
+                  ? 'border-destructive/25 text-destructive'
+                  : issue.severity === 'warning'
+                    ? 'border-amber-500/25 text-amber-700 dark:text-amber-300'
+                    : 'border-blue-500/25 text-blue-700 dark:text-blue-300'}"
               >
-                {issue.message}
+                {#if issue.severity === 'error'}
+                  <WarningCircle weight="fill" class="mt-0.5 h-3 w-3 shrink-0" />
+                {:else if issue.severity === 'warning'}
+                  <Warning weight="fill" class="mt-0.5 h-3 w-3 shrink-0" />
+                {:else}
+                  <Info weight="fill" class="mt-0.5 h-3 w-3 shrink-0" />
+                {/if}
+                <div class="min-w-0">
+                  <div class="font-mono text-[9px] opacity-70">{issue.code}</div>
+                  <div class="text-foreground/80 dark:text-foreground/75">{issue.message}</div>
+                </div>
               </div>
             {/each}
           </div>
         {/if}
       </div>
 
-      <div class="rounded-md border border-border bg-muted/20 p-3">
-        <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div class="space-y-2">
+        <div class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Z end
         </div>
-        <div class="grid gap-2 sm:grid-cols-2">
+        <div class="grid gap-2 md:grid-cols-[minmax(8rem,0.9fr)_minmax(8rem,1fr)]">
           <div>
             <label class="text-[10px] text-muted-foreground mb-1 block" for="add-to-node">
               Node
@@ -674,7 +667,7 @@
             />
           </div>
         </div>
-        <div class="mt-2">
+        <div>
           <span class="text-[10px] text-muted-foreground mb-1 block">Plug / Module</span>
           <EndpointModulePicker
             class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
@@ -691,9 +684,33 @@
 
 <!-- Connection table -->
 {#if rows.length > 0}
-  <div class="mb-3 flex items-center justify-between">
-    <h2 class="text-sm font-semibold">Cables</h2>
-    <div class="text-xs text-muted-foreground">Showing {visibleRows.length} of {rows.length}</div>
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-sm font-semibold">Cables</h2>
+      <div class="text-xs text-muted-foreground">Showing {visibleRows.length} of {rows.length}</div>
+    </div>
+    <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
+      <div class="relative w-full max-w-sm">
+        <MagnifyingGlass
+          class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+        />
+        <input
+          class="h-8 w-full rounded-md border border-input bg-background pl-8 pr-3 text-xs outline-none focus:ring-1 focus:ring-ring"
+          placeholder="Search node, port, VLAN, standard..."
+          bind:value={searchQuery}
+        >
+      </div>
+      <Button
+        variant={showOnlyIssues ? 'default' : 'outline'}
+        size="sm"
+        class="h-8 text-xs"
+        onclick={() => {
+          showOnlyIssues = !showOnlyIssues
+        }}
+      >
+        Issues only
+      </Button>
+    </div>
   </div>
   <IssuesBanner issues={allRowIssues} onjump={jumpToRow} />
   <Card.Root class="py-0 mb-6 overflow-hidden">
@@ -723,9 +740,9 @@
             id={`connection-row-${row.id}`}
             class={`transition-colors ${
               rowSeverity === 'error'
-                ? 'border-l-2 border-red-400'
+                ? 'bg-destructive/[0.025]'
                 : rowSeverity === 'warning'
-                  ? 'border-l-2 border-amber-400'
+                  ? 'bg-amber-500/[0.025]'
                   : ''
             } ${highlightedRowId === row.id ? 'bg-amber-100 dark:bg-amber-900/40' : ''}`}
           >
