@@ -24,8 +24,11 @@
 
   // Pull catalog port-name suggestions for the node owning this port.
   // Reactive so the list updates if the node's spec changes mid-edit.
-  const nodeId = $derived(portId.includes(':') ? portId.slice(0, portId.indexOf(':')) : portId)
-  const suggestions = $derived(diagramState.getPortLabelSuggestions(nodeId))
+  // Look up nodeId via the resolved-ports map — port ids became opaque
+  // ("port-<random>") in #124 so the previous "split on ':'" trick no
+  // longer works.
+  const nodeId = $derived(diagramState.ports.get(portId)?.nodeId ?? '')
+  const suggestions = $derived(nodeId ? diagramState.getPortLabelSuggestions(nodeId) : [])
 
   // Filter against typed text. When the field still holds the original
   // label (initial state), we show the full list so the user can browse.
