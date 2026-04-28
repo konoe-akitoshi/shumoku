@@ -23,7 +23,16 @@ flowchart LR
 
   subgraph L[Link]
     direction LR
-    PlA["Plug"] --- MA["Module?"] --- C["Cable<br/>(wire / fiber)"] --- MB["Module?"] --- PlB["Plug"]
+    PlA["Plug"]
+    MA["Module<br/>(transceiver)"]
+    C["Cable<br/>(wire / fiber)"]
+    MB["Module<br/>(transceiver)"]
+    PlB["Plug"]
+
+    PlA -- 経由 --> MA --> C
+    PlA -. 直結 .-> C
+    C --> MB -- 経由 --> PlB
+    C -. 直結 .-> PlB
   end
 
   subgraph B[Node B]
@@ -36,7 +45,9 @@ flowchart LR
 ```
 
 - 両端の Node は Port を所有して閉じる（Link 側からは id 参照のみ）。
-- Link の中身は物理チェーン：Plug → Module?（pluggable なときだけ）→ Cable → Module? → Plug。RJ45 直結なら Module はスキップされ Plug がそのまま Cable に繋がる。
+- Link 内は両端で**二経路**ある：
+  - **経由（実線）**: Plug → Module → Cable。SFP / SFP+ / SFP28 / QSFP+ / QSFP28 などの **pluggable** な構成。
+  - **直結（点線）**: Plug → Cable。RJ45 銅線直結や DAC / AOC のように **integrated** な構成（モジュールが介在しない）。
 - Link と Node が交わるのは **Plug ↔ cage** の点のみ。データ上は `LinkEndpoint` がこの「片端ぶんの Plug + Module + node/port id 参照」を一つにまとめた容器（プログラム上の都合の名前で、物理実体ではない）。
 
 ## データモデル
