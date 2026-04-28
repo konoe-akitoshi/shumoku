@@ -602,11 +602,14 @@ export const sampleDiagram = {
         node: 'vgw',
         port: 'tun0',
         ip: '169.254.100.1/30',
+        module: { standard: '10GBASE-SR' },
       },
+
       to: {
         node: 'rt1',
         port: 'tun1',
         ip: '169.254.100.2/30',
+        module: { standard: '10GBASE-SR' },
       },
       label: 'IPsec VPN',
       type: 'dashed',
@@ -618,6 +621,7 @@ export const sampleDiagram = {
         port: 'tun1',
         ip: '169.254.101.1/30',
       },
+
       to: {
         node: 'rt2',
         port: 'tun1',
@@ -632,15 +636,17 @@ export const sampleDiagram = {
         node: 'fw1',
         port: 'dmz',
         ip: '10.100.0.2/24',
+        module: { standard: '10GBASE-SR' },
       },
+
       to: {
         node: 'dmz-sw',
         port: 'uplink',
         ip: '10.100.0.1/24',
+        module: { standard: '10GBASE-SR' },
       },
       label: 'DMZ',
       type: 'solid',
-      standard: '10GBASE-SR',
       vlan: [100],
     },
     {
@@ -649,15 +655,17 @@ export const sampleDiagram = {
         node: 'fw1',
         port: 'inside',
         ip: '10.0.2.1/30',
+        module: { standard: '10GBASE-SR' },
       },
+
       to: {
         node: 'core-sw',
         port: 'eth1',
         ip: '10.0.2.2/30',
+        module: { standard: '10GBASE-SR' },
       },
       label: 'Active',
       type: 'solid',
-      standard: '10GBASE-SR',
     },
     {
       id: 'link-4',
@@ -665,15 +673,17 @@ export const sampleDiagram = {
         node: 'fw2',
         port: 'inside',
         ip: '10.0.2.5/30',
+        module: { standard: '10GBASE-SR' },
       },
+
       to: {
         node: 'core-sw',
         port: 'eth2',
         ip: '10.0.2.6/30',
+        module: { standard: '10GBASE-SR' },
       },
       label: 'Standby',
       type: 'solid',
-      standard: '10GBASE-SR',
     },
     {
       id: 'cloud/link-0',
@@ -701,7 +711,6 @@ export const sampleDiagram = {
         ip: '203.0.113.1/30',
       },
       type: 'solid',
-      standard: '10GBASE-SR',
     },
     {
       id: 'perimeter/link-1',
@@ -709,14 +718,15 @@ export const sampleDiagram = {
         node: 'isp2',
         port: 'eth0',
         ip: '198.51.100.2/30',
+        module: { standard: '10GBASE-SR' },
       },
       to: {
         node: 'rt2',
         port: 'wan1',
         ip: '198.51.100.1/30',
+        module: { standard: '10GBASE-SR' },
       },
       type: 'solid',
-      standard: '10GBASE-SR',
     },
     {
       id: 'perimeter/link-2',
@@ -743,14 +753,15 @@ export const sampleDiagram = {
         node: 'rt1',
         port: 'lan1',
         ip: '10.0.1.1/30',
+        module: { standard: '10GBASE-SR' },
       },
       to: {
         node: 'fw1',
         port: 'outside',
         ip: '10.0.1.2/30',
+        module: { standard: '10GBASE-SR' },
       },
       type: 'solid',
-      standard: '10GBASE-SR',
     },
     {
       id: 'perimeter/link-4',
@@ -758,14 +769,15 @@ export const sampleDiagram = {
         node: 'rt2',
         port: 'lan1',
         ip: '10.0.1.5/30',
+        module: { standard: '10GBASE-SR' },
       },
       to: {
         node: 'fw2',
         port: 'outside',
         ip: '10.0.1.6/30',
+        module: { standard: '10GBASE-SR' },
       },
       type: 'solid',
-      standard: '10GBASE-SR',
     },
     {
       id: 'perimeter/link-5',
@@ -789,13 +801,14 @@ export const sampleDiagram = {
       from: {
         node: 'dmz-sw',
         port: 'eth1',
+        module: { standard: '1000BASE-T' },
       },
       to: {
         node: 'web-srv',
         port: 'eth0',
+        module: { standard: '1000BASE-T' },
       },
       type: 'solid',
-      standard: '1000BASE-T',
       vlan: [100],
     },
     {
@@ -803,13 +816,14 @@ export const sampleDiagram = {
       from: {
         node: 'dmz-sw',
         port: 'eth2',
+        module: { standard: '1000BASE-T' },
       },
       to: {
         node: 'mail-srv',
         port: 'eth0',
+        module: { standard: '1000BASE-T' },
       },
       type: 'solid',
-      standard: '1000BASE-T',
       vlan: [100],
     },
     {
@@ -818,15 +832,16 @@ export const sampleDiagram = {
         node: 'core-sw',
         port: 'ae0',
         ip: '10.0.3.1/30',
+        module: { standard: '40GBASE-SR4' },
       },
       to: {
         node: 'dist-sw',
         port: 'ae0',
         ip: '10.0.3.2/30',
+        module: { standard: '40GBASE-SR4' },
       },
       label: '40G LACP',
       type: 'solid',
-      standard: '40GBASE-SR4',
     },
     {
       id: 'campus/link-1',
@@ -834,15 +849,16 @@ export const sampleDiagram = {
         node: 'dist-sw',
         port: 'eth10',
         ip: '10.10.0.254/24',
+        module: { standard: '10GBASE-SR' },
       },
       to: {
         node: 'sw-a1',
         port: 'uplink',
         ip: '10.10.0.1/24',
+        module: { standard: '10GBASE-SR' },
       },
       label: 'Trunk',
       type: 'solid',
-      standard: '10GBASE-SR',
       vlan: [10, 20],
     },
     {
@@ -851,15 +867,16 @@ export const sampleDiagram = {
         node: 'dist-sw',
         port: 'eth20',
         ip: '10.20.0.254/24',
+        module: { standard: '10GBASE-SR' },
       },
       to: {
         node: 'sw-b1',
         port: 'uplink',
         ip: '10.20.0.1/24',
+        module: { standard: '10GBASE-SR' },
       },
       label: 'Trunk',
       type: 'solid',
-      standard: '10GBASE-SR',
       vlan: [10, 30],
     },
     {
@@ -867,13 +884,14 @@ export const sampleDiagram = {
       from: {
         node: 'sw-a1',
         port: 'eth1',
+        module: { standard: '1000BASE-T' },
       },
       to: {
         node: 'ap-a1',
         port: 'eth0',
+        module: { standard: '1000BASE-T' },
       },
       type: 'solid',
-      standard: '1000BASE-T',
       vlan: [20],
     },
     {
@@ -881,13 +899,14 @@ export const sampleDiagram = {
       from: {
         node: 'sw-a1',
         port: 'eth2',
+        module: { standard: '1000BASE-T' },
       },
       to: {
         node: 'ap-a2',
         port: 'eth0',
+        module: { standard: '1000BASE-T' },
       },
       type: 'solid',
-      standard: '1000BASE-T',
       vlan: [20],
     },
     {
@@ -895,13 +914,14 @@ export const sampleDiagram = {
       from: {
         node: 'sw-b1',
         port: 'eth1',
+        module: { standard: '1000BASE-T' },
       },
       to: {
         node: 'ap-b1',
         port: 'eth0',
+        module: { standard: '1000BASE-T' },
       },
       type: 'solid',
-      standard: '1000BASE-T',
       vlan: [30],
     },
     {
@@ -909,13 +929,14 @@ export const sampleDiagram = {
       from: {
         node: 'sw-b1',
         port: 'eth2',
+        module: { standard: '1000BASE-T' },
       },
       to: {
         node: 'ap-b2',
         port: 'e0',
+        module: { standard: '1000BASE-T' },
       },
       type: 'solid',
-      standard: '1000BASE-T',
       vlan: [30],
     },
     {
@@ -923,13 +944,14 @@ export const sampleDiagram = {
       from: {
         node: 'ap-b2',
         port: 'e3',
+        module: { standard: '1000BASE-T' },
       },
       to: {
         node: 'ip-phone',
         port: 'eth0',
+        module: { standard: '1000BASE-T' },
       },
       type: 'solid',
-      standard: '1000BASE-T',
     },
   ],
   subgraphs: [

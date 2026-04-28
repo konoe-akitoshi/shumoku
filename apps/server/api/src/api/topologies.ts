@@ -276,7 +276,7 @@ export function createTopologiesApi(): Hono {
           id: l.id || `link-${i}`,
           from: { nodeId: l.from.node, port: l.from.port },
           to: { nodeId: l.to.node, port: l.to.port },
-          standard: l.standard,
+          standard: l.from.module?.standard ?? l.to.module?.standard,
         })),
         subgraphs: parsed.graph.subgraphs || [],
         metrics: parsed.metrics,

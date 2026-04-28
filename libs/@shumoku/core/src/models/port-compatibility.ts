@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { getStandardSpec, reachForLink } from './standards.js'
-import type { EthernetStandard, Link, NodePort, PortConnector } from './types.js'
+import type { EthernetStandard, Link, LinkEndpoint, NodePort, PortConnector } from './types.js'
 
 const PLUGGABLE_CONNECTORS = new Set<PortConnector>(['sfp', 'sfp+', 'sfp28', 'qsfp+', 'qsfp28'])
 
@@ -35,29 +35,42 @@ function cageAccepts(cage: PortConnector | undefined, required: PortConnector): 
   const c = normalizePortConnector(cage)
   if (!c) return true // unknown cage — be permissive
   if (c === required) return true
-  if (c === 'combo') {
-    // Combo ports accept SFP and RJ45 commonly; we treat any common cage as ok.
-    return true
-  }
+  if (c === 'combo') return true
   return false
 }
 
 /**
- * Validate a link against its endpoint cages and the chosen standard.
+ * Pick a representative standard for a link — typically both endpoints
+ * agree, in which case either works. If they disagree (BiDi pair, copper-
+ * fiber adapter), return whichever is set.
+ */
+export function effectiveLinkStandard(
+  link: Pick<Link, 'from' | 'to'>,
+): EthernetStandard | undefined {
+  return link.from.module?.standard || link.to.module?.standard
+}
+
+/**
+ * Validate a link against its endpoint cages and the per-end module
+ * standards. Most attributes (cage requirement, cable medium, reach)
+ * are implied by `endpoint.module.standard` via `STANDARD_SPECS`.
  *
- * Most physical attributes (speed, required cage, cable medium, reach)
- * are implied by `link.standard` via `STANDARD_SPECS`. We only need to
- * verify that the actual port cages on each side accept the cage the
- * standard demands, plus a few sanity checks (PoE on RJ45 only,
- * cable length within reach).
+ * Per-endpoint is the source of truth: from.module and to.module are
+ * checked against from.port and to.port respectively. We also flag
+ * when the two endpoints' standards disagree (asymmetric link) — most
+ * links should be symmetric, asymmetry is intentional only for BiDi /
+ * adapter cases.
  */
 export function validateLinkCompatibility(
   fromPort: NodePort | undefined,
   toPort: NodePort | undefined,
-  link: Pick<Link, 'standard' | 'cable'>,
+  link: Pick<Link, 'from' | 'to' | 'cable'>,
 ): PortCompatibilityIssue[] {
   const issues: PortCompatibilityIssue[] = []
-  const spec = getStandardSpec(link.standard)
+  const fromStd = link.from.module?.standard
+  const toStd = link.to.module?.standard
+  const fromSpec = getStandardSpec(fromStd)
+  const toSpec = getStandardSpec(toStd)
 
   // PoE flag sanity — even without a standard, a non-RJ45 cage marked PoE
   // is a misconfiguration we can flag.
@@ -70,32 +83,48 @@ export function validateLinkCompatibility(
     }
   }
 
-  if (!spec) return issues
-
-  // Cage compatibility — each end must accept the cage the standard requires.
-  for (const [side, port] of [
-    ['source', fromPort],
-    ['target', toPort],
+  // Per-endpoint cage compatibility.
+  for (const [side, port, spec, std] of [
+    ['source', fromPort, fromSpec, fromStd],
+    ['target', toPort, toSpec, toStd],
   ] as const) {
-    if (!port?.cage) continue // unknown cage — skip
+    if (!spec || !port?.cage) continue
     if (!cageAccepts(port.cage, spec.cage)) {
       issues.push({
         severity: 'error',
-        message: `${side} cage ${port.cage} cannot host ${link.standard} (requires ${spec.cage})`,
+        message: `${side} cage ${port.cage} cannot host ${std} (requires ${spec.cage})`,
       })
     }
   }
 
-  // Reach check (informational warning) — uses the grade-adjusted reach
-  // so e.g. 10GBASE-T over Cat6 caps at 55 m, not the spec's best case.
-  const effectiveReach = reachForLink(link.standard, link.cable?.category) ?? spec.maxReach_m
-  if (link.cable?.length_m && link.cable.length_m > effectiveReach) {
+  // Asymmetric link — both sides set, different standards. Common only
+  // for BiDi pairs (e.g. 10GBASE-BX10-D ↔ 10GBASE-BX10-U); flag as a
+  // soft warning so the user notices accidental mismatches.
+  if (fromStd && toStd && fromStd !== toStd) {
     issues.push({
       severity: 'warning',
-      message: `cable length ${link.cable.length_m} m exceeds ${link.standard}${
-        link.cable?.category ? ` over ${link.cable.category}` : ''
-      } max reach ${effectiveReach} m`,
+      message: `endpoints have different standards (${fromStd} ↔ ${toStd}); intentional only for BiDi or media-converter links`,
     })
+  }
+
+  // Reach check (informational warning) — uses the grade-adjusted reach.
+  // We pick whichever endpoint has a standard set; if both, prefer
+  // matching one. For asymmetric links, take the worst-reach end.
+  const referenceStd = fromStd ?? toStd
+  if (referenceStd && link.cable?.length_m) {
+    const referenceSpec = getStandardSpec(referenceStd)
+    if (referenceSpec) {
+      const effectiveReach =
+        reachForLink(referenceStd, link.cable.category) ?? referenceSpec.maxReach_m
+      if (link.cable.length_m > effectiveReach) {
+        issues.push({
+          severity: 'warning',
+          message: `cable length ${link.cable.length_m} m exceeds ${referenceStd}${
+            link.cable.category ? ` over ${link.cable.category}` : ''
+          } max reach ${effectiveReach} m`,
+        })
+      }
+    }
   }
 
   return issues
@@ -116,4 +145,18 @@ export function defaultStandardForCages(
   if (a === 'qsfp28' && b === 'qsfp28') return '100GBASE-SR4'
   if (a === 'sfp' && b === 'sfp') return '1000BASE-SX'
   return undefined
+}
+
+/**
+ * Produce a symmetric module spec for a link — both endpoints get the
+ * same standard. Used by editor flows that default to symmetric links
+ * (the 99% case).
+ */
+export function symmetricModule(standard: EthernetStandard): { standard: EthernetStandard } {
+  return { standard }
+}
+
+/** Convenience: type-narrowed accessor for endpoint module standard. */
+export function endpointStandard(ep: LinkEndpoint): EthernetStandard | undefined {
+  return ep.module?.standard
 }

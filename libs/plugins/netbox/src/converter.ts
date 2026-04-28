@@ -929,7 +929,15 @@ function serializeLink(lines: string[], link: Link): void {
     lines.push(`    to: ${to}`)
   }
 
-  if (link.standard) lines.push(`    standard: ${link.standard}`)
+  // Emit the link-level standard shorthand when both endpoints agree
+  // (the symmetric case). Asymmetric per-endpoint module standards
+  // would need a richer YAML output; netbox import only produces
+  // symmetric links so we don't need to handle that here.
+  const fromStd = link.from.module?.standard
+  const toStd = link.to.module?.standard
+  if (fromStd && fromStd === toStd) {
+    lines.push(`    standard: ${fromStd}`)
+  }
   if (link.type) lines.push(`    type: ${link.type}`)
   if (link.vlan?.length) lines.push(`    vlan: [${link.vlan.join(', ')}]`)
   if (link.style?.stroke) {

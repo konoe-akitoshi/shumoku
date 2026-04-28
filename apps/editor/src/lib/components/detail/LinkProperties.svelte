@@ -235,11 +235,21 @@
       {#if editing}
         <PlugCablePicker
           class={selectClass}
-          standard={link.standard}
+          standard={link.from.module?.standard ?? link.to.module?.standard}
           cableCategory={link.cable?.category}
           {fromCage}
           {toCage}
-          onstandardchange={(v) => onupdate?.({ standard: v })}
+          onstandardchange={(v) => {
+            // Symmetric default — both endpoints get the same module
+            // standard. Asymmetric BiDi pairs are an advanced override
+            // that's not surfaced here yet.
+            const fromModule = v ? { ...(link.from.module ?? {}), standard: v } : undefined
+            const toModule = v ? { ...(link.to.module ?? {}), standard: v } : undefined
+            onupdate?.({
+              from: { ...link.from, module: fromModule },
+              to: { ...link.to, module: toModule },
+            })
+          }}
           oncategorychange={(v) => {
             const next = { ...(link.cable ?? {}) }
             if (v) next.category = v
@@ -248,14 +258,21 @@
           }}
         />
       {:else}
-        <span class={valueClass}>{link.standard ?? '—'}</span>
+        <span class={valueClass}
+          >{link.from.module?.standard ?? link.to.module?.standard ?? '—'}</span
+        >
       {/if}
     </dd>
   </div>
 
-  {#if link.standard}
+  {#if link.from.module?.standard || link.to.module?.standard}
     <div>
-      <StandardImpliedBlock standard={link.standard} cable={link.cable} {fromCage} {toCage} />
+      <StandardImpliedBlock
+        standard={link.from.module?.standard ?? link.to.module?.standard}
+        cable={link.cable}
+        {fromCage}
+        {toCage}
+      />
     </div>
   {/if}
 
@@ -313,12 +330,17 @@
         <input
           type="text"
           class={inputClass}
-          value={link.fromTransceiver ?? ''}
+          value={link.from.module?.sku ?? ''}
           placeholder="transceiver SKU"
-          onblur={(e) => onupdate?.({ fromTransceiver: (e.target as HTMLInputElement).value || undefined })}
+          onblur={(e) => {
+            const sku = (e.target as HTMLInputElement).value || undefined
+            const std = link.from.module?.standard
+            const nextModule = std || sku ? { standard: std ?? '', sku } : undefined
+            onupdate?.({ from: { ...link.from, module: nextModule } })
+          }}
         >
       {:else}
-        <span class={valueClass}>{link.fromTransceiver ?? '—'}</span>
+        <span class={valueClass}>{link.from.module?.sku ?? '—'}</span>
       {/if}
     </dd>
   </div>
@@ -330,12 +352,17 @@
         <input
           type="text"
           class={inputClass}
-          value={link.toTransceiver ?? ''}
+          value={link.to.module?.sku ?? ''}
           placeholder="transceiver SKU"
-          onblur={(e) => onupdate?.({ toTransceiver: (e.target as HTMLInputElement).value || undefined })}
+          onblur={(e) => {
+            const sku = (e.target as HTMLInputElement).value || undefined
+            const std = link.to.module?.standard
+            const nextModule = std || sku ? { standard: std ?? '', sku } : undefined
+            onupdate?.({ to: { ...link.to, module: nextModule } })
+          }}
         >
       {:else}
-        <span class={valueClass}>{link.toTransceiver ?? '—'}</span>
+        <span class={valueClass}>{link.to.module?.sku ?? '—'}</span>
       {/if}
     </dd>
   </div>

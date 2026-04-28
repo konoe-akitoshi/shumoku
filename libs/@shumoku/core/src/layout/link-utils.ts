@@ -64,15 +64,19 @@ const WIDTH_ANCHORS: readonly (readonly [number, number])[] = [
 ]
 
 /**
- * Resolve a link's nominal speed (bits/sec). Picks `link.standard` first
- * (via the standards registry — single source of truth), then falls back
- * to `link.rateBps` when only runtime metrics are available. Returns
- * undefined when neither is set.
+ * Resolve a link's nominal speed (bits/sec). Reads per-endpoint module
+ * standards (the canonical source) and falls back to runtime `rateBps`
+ * when neither end has a module set. For symmetric links both endpoints
+ * return the same speed; for asymmetric links (BiDi etc.) we pick the
+ * lower of the two (conservative for utilization math).
  */
 export function linkSpeedBps(link: Link | null | undefined): number | undefined {
   if (!link) return undefined
-  const fromStandard = getStandardSpec(link.standard)?.speedBps
-  if (fromStandard !== undefined) return fromStandard
+  const fromBps = getStandardSpec(link.from?.module?.standard)?.speedBps
+  const toBps = getStandardSpec(link.to?.module?.standard)?.speedBps
+  if (fromBps !== undefined && toBps !== undefined) return Math.min(fromBps, toBps)
+  if (fromBps !== undefined) return fromBps
+  if (toBps !== undefined) return toBps
   if (typeof link.rateBps === 'number' && link.rateBps > 0 && Number.isFinite(link.rateBps)) {
     return link.rateBps
   }

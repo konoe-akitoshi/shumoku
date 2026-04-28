@@ -75,10 +75,17 @@
     Properties
   </div>
   <dl class="space-y-1.5 text-[11px]">
-    {#if link.standard}
+    {#if link.from.module?.standard || link.to.module?.standard}
       <div class="flex justify-between">
         <dt class="text-neutral-400 dark:text-neutral-500">Standard</dt>
-        <dd><Badge variant="secondary" class="font-mono text-[10px]">{link.standard}</Badge></dd>
+        <dd>
+          <Badge variant="secondary" class="font-mono text-[10px]">
+            {link.from.module?.standard ?? link.to.module?.standard}
+            {#if link.from.module?.standard && link.to.module?.standard && link.from.module.standard !== link.to.module.standard}
+              ↔ {link.to.module.standard}
+            {/if}
+          </Badge>
+        </dd>
       </div>
     {/if}
     {#if vlanDisplay}

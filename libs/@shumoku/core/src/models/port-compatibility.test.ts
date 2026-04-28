@@ -4,7 +4,7 @@ import {
   isPoeCapableConnector,
   validateLinkCompatibility,
 } from './port-compatibility.js'
-import type { Link, NodePort } from './types.js'
+import type { EthernetStandard, Link, LinkCable, NodePort } from './types.js'
 
 const port = (label: string, cage: string, poe = false): NodePort => ({
   id: label,
@@ -13,19 +13,23 @@ const port = (label: string, cage: string, poe = false): NodePort => ({
   poe,
 })
 
-const link = (overrides: Partial<Link>): Link => ({
-  from: { node: 'a', port: 'p1' },
-  to: { node: 'b', port: 'p2' },
-  ...overrides,
+const link = (
+  fromStd?: EthernetStandard,
+  toStd?: EthernetStandard,
+  cable?: LinkCable,
+): Pick<Link, 'from' | 'to' | 'cable'> => ({
+  from: { node: 'a', port: 'p1', module: fromStd ? { standard: fromStd } : undefined },
+  to: { node: 'b', port: 'p2', module: toStd ? { standard: toStd } : undefined },
+  cable,
 })
 
 describe('link compatibility', () => {
-  test('1000BASE-T fits two RJ45 cages', () => {
+  test('1000BASE-T fits two RJ45 cages (symmetric)', () => {
     expect(
       validateLinkCompatibility(
         port('1', 'rj45'),
         port('2', 'rj45'),
-        link({ standard: '1000BASE-T' }),
+        link('1000BASE-T', '1000BASE-T'),
       ),
     ).toEqual([])
   })
@@ -34,7 +38,7 @@ describe('link compatibility', () => {
     const issues = validateLinkCompatibility(
       port('1', 'rj45'),
       port('2', 'sfp+'),
-      link({ standard: '10GBASE-SR' }),
+      link('10GBASE-SR', '10GBASE-SR'),
     )
     expect(issues.some((i) => i.severity === 'error')).toBe(true)
   })
@@ -43,7 +47,7 @@ describe('link compatibility', () => {
     const issues = validateLinkCompatibility(
       port('1', 'sfp+', true),
       port('2', 'sfp+'),
-      link({ standard: '10GBASE-SR' }),
+      link('10GBASE-SR', '10GBASE-SR'),
     )
     expect(issues.some((i) => i.severity === 'error')).toBe(true)
   })
@@ -52,28 +56,7 @@ describe('link compatibility', () => {
     const issues = validateLinkCompatibility(
       port('1', 'sfp+'),
       port('2', 'sfp+'),
-      link({ standard: '10GBASE-SR', cable: { length_m: 1000 } }),
-    )
-    expect(issues.some((i) => i.severity === 'warning')).toBe(true)
-  })
-
-  test('reach drops with weaker cable grade (10GBASE-T over Cat6)', () => {
-    // 10GBASE-T spec max is 100m on Cat6a; Cat6 caps it at 55m.
-    // 70m on Cat6 should warn even though it fits the spec maximum.
-    const issues = validateLinkCompatibility(
-      port('1', 'rj45'),
-      port('2', 'rj45'),
-      link({ standard: '10GBASE-T', cable: { category: 'cat6', length_m: 70 } }),
-    )
-    expect(issues.some((i) => i.severity === 'warning')).toBe(true)
-  })
-
-  test('reach drops on OM3 fiber for 10GBASE-SR', () => {
-    // 10GBASE-SR is 400m on OM4 but only 300m on OM3.
-    const issues = validateLinkCompatibility(
-      port('1', 'sfp+'),
-      port('2', 'sfp+'),
-      link({ standard: '10GBASE-SR', cable: { category: 'om3', length_m: 350 } }),
+      link('10GBASE-SR', '10GBASE-SR', { length_m: 1000 }),
     )
     expect(issues.some((i) => i.severity === 'warning')).toBe(true)
   })
@@ -83,7 +66,7 @@ describe('link compatibility', () => {
       validateLinkCompatibility(
         port('1', 'combo'),
         port('2', 'rj45'),
-        link({ standard: '1000BASE-T' }),
+        link('1000BASE-T', '1000BASE-T'),
       ),
     ).toEqual([])
   })
@@ -97,5 +80,44 @@ describe('link compatibility', () => {
     expect(defaultStandardForCages('rj45', 'rj45')).toBe('1000BASE-T')
     expect(defaultStandardForCages('sfp+', 'sfp+')).toBe('10GBASE-SR')
     expect(defaultStandardForCages('sfp+', 'rj45')).toBeUndefined()
+  })
+
+  test('reach drops with weaker cable grade (10GBASE-T over Cat6)', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'rj45'),
+      port('2', 'rj45'),
+      link('10GBASE-T', '10GBASE-T', { category: 'cat6', length_m: 70 }),
+    )
+    expect(issues.some((i) => i.severity === 'warning')).toBe(true)
+  })
+
+  test('reach drops on OM3 fiber for 10GBASE-SR', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'sfp+'),
+      port('2', 'sfp+'),
+      link('10GBASE-SR', '10GBASE-SR', { category: 'om3', length_m: 350 }),
+    )
+    expect(issues.some((i) => i.severity === 'warning')).toBe(true)
+  })
+
+  test('warns on asymmetric per-endpoint standards', () => {
+    // Both ends have a standard but they differ — typical BiDi pair, but
+    // we surface a soft warning so accidental mismatches are visible.
+    const issues = validateLinkCompatibility(
+      port('1', 'sfp+'),
+      port('2', 'sfp+'),
+      link('10GBASE-SR' as EthernetStandard, '10GBASE-LR' as EthernetStandard),
+    )
+    expect(issues.some((i) => i.severity === 'warning')).toBe(true)
+  })
+
+  test('one-sided standard (only fromTransceiver set) still validates cage', () => {
+    const issues = validateLinkCompatibility(
+      port('1', 'rj45'),
+      port('2', 'sfp+'),
+      link('10GBASE-SR' as EthernetStandard, undefined),
+    )
+    // from cage RJ45 cannot host 10GBASE-SR (requires SFP+).
+    expect(issues.some((i) => i.severity === 'error')).toBe(true)
   })
 })

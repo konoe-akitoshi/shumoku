@@ -9,6 +9,7 @@
 
 import type {
   EdgeStyle,
+  EthernetStandard,
   LayoutLink,
   LayoutNode,
   LayoutResult,
@@ -450,7 +451,8 @@ export class SVGRenderer {
     if (settings.showBandwidth) {
       const usedStandards = new Set<string>()
       for (const link of graph.links) {
-        if (link.standard) usedStandards.add(link.standard)
+        if (link.from.module?.standard) usedStandards.add(link.from.module.standard)
+        if (link.to.module?.standard) usedStandards.add(link.to.module.standard)
       }
       itemCount += usedStandards.size
     }
@@ -510,10 +512,12 @@ export class SVGRenderer {
     const iconWidth = 30
     const maxLabelWidth = 100
 
-    // Collect used standards
+    // Collect used standards across both endpoints (asymmetric links may
+    // have a different standard at each end — both should appear).
     const usedStandards = new Set<string>()
     for (const link of graph.links) {
-      if (link.standard) usedStandards.add(link.standard)
+      if (link.from.module?.standard) usedStandards.add(link.from.module.standard)
+      if (link.to.module?.standard) usedStandards.add(link.to.module.standard)
     }
 
     // Collect used device types
@@ -527,7 +531,10 @@ export class SVGRenderer {
     if (settings.showBandwidth && usedStandards.size > 0) {
       const sortedStandards = [...usedStandards].sort()
       for (const std of sortedStandards) {
-        const speed = linkSpeedBps({ standard: std } as Link)
+        const speed = linkSpeedBps({
+          from: { node: '', port: '', module: { standard: std as EthernetStandard } },
+          to: { node: '', port: '', module: { standard: std as EthernetStandard } },
+        } as Link)
         const sw = bpsToLinkWidth(speed)
         items.push({
           icon: this.renderBandwidthLegendIcon(sw),
@@ -1270,8 +1277,13 @@ ${fg}
     const { link, fromEndpoint, toEndpoint } = layoutLink
     const attrs: string[] = []
 
-    // Basic link attributes
-    if (link.standard) attrs.push(`data-link-standard="${this.escapeXml(link.standard)}"`)
+    // Basic link attributes — surface both endpoint standards so consumers
+    // can see asymmetric configs (BiDi etc.). For symmetric the value is
+    // the same on both data attributes.
+    const fromStd = link.from.module?.standard
+    const toStd = link.to.module?.standard
+    if (fromStd) attrs.push(`data-link-from-standard="${this.escapeXml(fromStd)}"`)
+    if (toStd) attrs.push(`data-link-to-standard="${this.escapeXml(toStd)}"`)
     if (link.vlan && link.vlan.length > 0) {
       attrs.push(`data-link-vlan="${link.vlan.join(',')}"`)
     }

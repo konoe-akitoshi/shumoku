@@ -108,7 +108,7 @@
         fromPort: from.port,
         toNode: to.node,
         toPort: to.port,
-        standard: link.standard ?? '',
+        standard: link.from.module?.standard ?? link.to.module?.standard ?? '',
         standardIssue: getLinkIssue(link),
         cableLength: link.cable?.length_m !== undefined ? String(link.cable.length_m) : '',
         vlan: link.vlan
@@ -208,13 +208,14 @@
   function handleAdd() {
     if (!addFromNode || !addToNode || addFromNode === addToNode) return
     if (!addFromPortId || !addToPortId) return
-    const from: LinkEndpoint = { node: addFromNode, port: addFromPortId }
-    const to: LinkEndpoint = { node: addToNode, port: addToPortId }
+    // Symmetric default — both endpoints get the same module standard.
+    const module = addStandard ? { standard: addStandard } : undefined
+    const from: LinkEndpoint = { node: addFromNode, port: addFromPortId, module }
+    const to: LinkEndpoint = { node: addToNode, port: addToPortId, module }
     diagramState.addLink({
       id: newId('link'),
       from,
       to,
-      standard: addStandard || undefined,
       cable: addCableCategory ? { category: addCableCategory } : undefined,
     })
     addFromNode = ''
@@ -244,8 +245,13 @@
   function updateField(link: Link, field: string, value: string) {
     if (!link.id) return
     if (field === 'standard') {
+      // Apply symmetrically to both endpoints.
+      const std = (value || undefined) as EthernetStandard | undefined
+      const fromModule = std ? { ...(link.from.module ?? {}), standard: std } : undefined
+      const toModule = std ? { ...(link.to.module ?? {}), standard: std } : undefined
       diagramState.updateLink(link.id, {
-        standard: (value || undefined) as EthernetStandard | undefined,
+        from: { ...link.from, module: fromModule },
+        to: { ...link.to, module: toModule },
       })
     } else if (field === 'cableLength') {
       const length = value ? Number.parseFloat(value) : undefined

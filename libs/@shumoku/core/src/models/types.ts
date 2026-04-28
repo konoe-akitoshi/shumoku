@@ -335,15 +335,34 @@ export interface LinkStyle {
 }
 
 /**
+ * Module / transceiver attached to one end of a link. Each endpoint owns
+ * its own module instance — the cable runs between two modules. For
+ * RJ45 ports the module is the port's built-in PHY (no swappable
+ * transceiver), but the standard it speaks still belongs here.
+ */
+export interface LinkModule {
+  /**
+   * IEEE / industry standard the module implements. Picking this also
+   * pins the cage form factor and cable medium kind via the
+   * `STANDARD_SPECS` registry.
+   */
+  standard: EthernetStandard
+  /** Vendor SKU for inventory, e.g. "SFP-10G-SR-S". Optional. */
+  sku?: string
+}
+
+/**
  * Link endpoint. Conceptually a cable end plugged into a port on a node.
- * Plug-side attributes (transceiver type, speed) are not stored here —
- * they're derived from the link's `standard`, since picking an Ethernet
- * standard determines what transceiver/cable-end is required at each side.
+ * The endpoint owns the per-end module (transceiver) — symmetric links
+ * have the same `module.standard` on both ends; asymmetric links (BiDi
+ * pairs, copper-fiber adapters) carry different module standards per end.
  */
 export interface LinkEndpoint {
   node: string
   /** NodePort.id on the endpoint node — must reference an existing port. */
   port: string
+  /** Transceiver / module attached at this end. */
+  module?: LinkModule
   ip?: string // e.g., "10.57.0.1/30"
   /**
    * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id").
@@ -402,27 +421,14 @@ export interface Link {
   arrow?: ArrowType
 
   /**
-   * IEEE Ethernet standard for this link (e.g. "10GBASE-SR"). The single
-   * authoritative source for speed, required cage at each port, cable
-   * medium kind, fiber mode, and reach. Use the `STANDARD_SPECS` registry
-   * to derive concrete attributes; unknown values fall back to neutral
-   * defaults so vendor-proprietary strings don't break rendering.
-   */
-  standard?: EthernetStandard
-
-  /**
    * Cable details that don't follow from the standard. Optional — the
    * standard's defaults are sufficient for most diagrams.
    */
   cable?: LinkCable
 
-  /** Inventory: per-end transceiver SKU (e.g. "SFP-10G-SR-S"). */
-  fromTransceiver?: string
-  toTransceiver?: string
-
   /**
    * Runtime / monitoring: instantaneous link rate in bits/sec, set by
-   * metrics providers. Optional and orthogonal to `standard` (which
+   * metrics providers. Optional and orthogonal to module.standard (which
    * encodes the link's spec, not its current utilization).
    */
   rateBps?: number

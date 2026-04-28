@@ -91,9 +91,15 @@ interface YamlLinkStyle {
   minLength?: number
 }
 
+interface YamlLinkModule {
+  standard?: string
+  sku?: string
+}
+
 interface YamlLinkEndpoint {
   node: string
   port?: string
+  module?: YamlLinkModule
   ip?: string
   pin?: string
 }
@@ -105,13 +111,16 @@ interface YamlLink {
   label?: string | string[]
   type?: string
   arrow?: string
-  /** IEEE Ethernet standard, e.g. "10GBASE-SR". */
+  /**
+   * Convenience YAML shorthand: when a single `standard` is set at the
+   * link level we copy it onto both endpoint modules. Endpoint-level
+   * `module.standard` overrides this for asymmetric links (BiDi, copper-
+   * fiber adapters, etc.).
+   */
   standard?: string
   cable?: LinkCable & {
     cable_category?: LinkCable['category']
   }
-  fromTransceiver?: string
-  toTransceiver?: string
   redundancy?: string
   /** Single VLAN ID or array of VLANs for trunk */
   vlan?: number | number[]
@@ -310,29 +319,29 @@ export class YamlParser {
   }
 
   private parseLinks(yamlLinks: YamlLink[], _warnings: ParseWarning[]): Link[] {
-    return yamlLinks.map((l, index) => ({
-      id: l.id || `link-${index}`,
-      from: this.parseLinkEndpoint(l.from),
-      to: this.parseLinkEndpoint(l.to),
-      label: l.label,
-      type: this.parseLinkType(l.type),
-      arrow: this.parseArrowType(l.arrow),
-      standard: l.standard ? (l.standard as EthernetStandard) : undefined,
-      cable: this.parseLinkCable(l.cable),
-      fromTransceiver: l.fromTransceiver,
-      toTransceiver: l.toTransceiver,
-      redundancy: this.parseRedundancyType(l.redundancy),
-      vlan: this.parseVlan(l.vlan),
-      style: l.style
-        ? {
-            stroke: l.style.stroke,
-            strokeWidth: l.style.strokeWidth,
-            strokeDasharray: l.style.strokeDasharray,
-            opacity: l.style.opacity,
-            minLength: l.style.minLength,
-          }
-        : undefined,
-    }))
+    return yamlLinks.map((l, index) => {
+      const linkStandard = l.standard ? (l.standard as EthernetStandard) : undefined
+      return {
+        id: l.id || `link-${index}`,
+        from: this.parseLinkEndpoint(l.from, linkStandard),
+        to: this.parseLinkEndpoint(l.to, linkStandard),
+        label: l.label,
+        type: this.parseLinkType(l.type),
+        arrow: this.parseArrowType(l.arrow),
+        cable: this.parseLinkCable(l.cable),
+        redundancy: this.parseRedundancyType(l.redundancy),
+        vlan: this.parseVlan(l.vlan),
+        style: l.style
+          ? {
+              stroke: l.style.stroke,
+              strokeWidth: l.style.strokeWidth,
+              strokeDasharray: l.style.strokeDasharray,
+              opacity: l.style.opacity,
+              minLength: l.style.minLength,
+            }
+          : undefined,
+      }
+    })
   }
 
   private parseVlan(vlan?: number | number[]): number[] | undefined {
@@ -355,21 +364,32 @@ export class YamlParser {
   /**
    * Normalize YAML endpoint (string shorthand or object) into a draft
    * LinkEndpoint. NodePort materialization happens in `ensurePorts`
-   * after parseLinks.
+   * after parseLinks. The optional `linkStandard` argument is the link-
+   * level shorthand standard — if the endpoint doesn't carry its own
+   * `module.standard`, we copy this onto the endpoint module.
    */
-  private parseLinkEndpoint(endpoint: string | YamlLinkEndpoint): LinkEndpoint {
+  private parseLinkEndpoint(
+    endpoint: string | YamlLinkEndpoint,
+    linkStandard: EthernetStandard | undefined,
+  ): LinkEndpoint {
     if (typeof endpoint === 'string') {
       const colon = endpoint.indexOf(':')
       const node = colon >= 0 ? endpoint.slice(0, colon) : endpoint
       const port = colon >= 0 ? endpoint.slice(colon + 1) : ''
-      return { node, port }
+      const result: LinkEndpoint = { node, port }
+      if (linkStandard) result.module = { standard: linkStandard }
+      return result
     }
-    return {
+    const standard = (endpoint.module?.standard as EthernetStandard | undefined) ?? linkStandard
+    const sku = endpoint.module?.sku
+    const result: LinkEndpoint = {
       node: endpoint.node,
       port: endpoint.port != null ? String(endpoint.port) : '',
       ip: endpoint.ip,
       pin: endpoint.pin,
     }
+    if (standard || sku) result.module = { standard: standard ?? '', sku }
+    return result
   }
 
   private parseRedundancyType(
