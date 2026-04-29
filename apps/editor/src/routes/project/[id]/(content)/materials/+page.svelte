@@ -26,12 +26,6 @@
         nodeId: string
         nodeLabel: string
       }
-    | {
-        kind: 'inventory'
-        id: string
-        inventoryId: string
-        productId: string
-      }
 
   let tab = $state('assignments')
   let catalogDialogOpen = $state(false)
@@ -78,14 +72,6 @@
           nodeLabel: displayNodeLabel(node),
         })
       }
-    }
-    for (const item of diagramState.inventory) {
-      out.push({
-        kind: 'inventory',
-        id: `inv:${item.id}`,
-        inventoryId: item.id,
-        productId: item.productId,
-      })
     }
     return out
   })
@@ -167,22 +153,21 @@
     selectedModelId = ''
   }
 
-  function addInventoryFor(productId: string) {
-    diagramState.addInventoryItem({ id: newId('inv'), productId })
-    tab = 'assignments'
-  }
-
   function bindNodeOnly(nodeId: string, productId: string | undefined) {
     if (productId) diagramState.bindNodeToProduct(nodeId, productId)
     else diagramState.unbindNodes([nodeId])
   }
 
-  function changeInventoryProduct(inventoryId: string, productId: string | undefined) {
-    if (!productId) {
-      diagramState.removeInventoryItem(inventoryId)
+  function setRequiredQty(productId: string, value: string) {
+    const trimmed = value.trim()
+    if (trimmed === '') {
+      // Empty input clears the explicit target; required falls back to placed.
+      diagramState.updateProduct(productId, { requiredQty: undefined })
       return
     }
-    diagramState.updateInventoryItem(inventoryId, { productId })
+    const n = Number(trimmed)
+    if (!Number.isFinite(n) || n < 0) return
+    diagramState.updateProduct(productId, { requiredQty: Math.floor(n) })
   }
 
   // Project-level health metrics (principle: status visibility / soft constraints)
@@ -195,18 +180,16 @@
       else if (node.spec) nodeOnly++
       else incomplete++
     }
-    return {
-      products: products.length,
-      placed,
-      stock: diagramState.inventory.length,
-      nodeOnly,
-      incomplete,
+    let required = 0
+    for (const product of products) {
+      required += diagramState.requiredCount(product.id)
     }
+    return { products: products.length, placed, required, nodeOnly, incomplete }
   })
 
   // Impact preview for Product removal (principle: explicit consequences)
   const removeImpact = $derived.by(() => {
-    if (!removeTarget) return { placed: 0, stock: 0, links: 0 }
+    if (!removeTarget) return { placed: 0, links: 0 }
     const id = removeTarget.id
     let placed = 0
     let links = 0
@@ -218,21 +201,13 @@
       if (link.to.plug?.module?.productId === id) links++
       if (link.cable?.productId === id) links++
     }
-    return { placed, stock: diagramState.inventoryCount(id), links }
+    return { placed, links }
   })
 
   function confirmRemoveProduct() {
     if (!removeTarget) return
     diagramState.removeProduct(removeTarget.id)
     removeTarget = null
-  }
-
-  function placeInventory(inventoryId: string, productId: string) {
-    const newNodeId = diagramState.placeProductAsNode(productId)
-    if (newNodeId) {
-      diagramState.removeInventoryItem(inventoryId)
-      goto(`/project/${$page.params.id}/diagram`)
-    }
   }
 
   const selectClass =
@@ -245,7 +220,7 @@
 <div class="mb-4">
   <h1 class="text-lg font-semibold">Materials</h1>
   <p class="text-sm text-muted-foreground">
-    Project-local products and inventory; assign to diagram nodes.
+    Project-local products with required counts; bind to diagram nodes.
   </p>
 </div>
 
@@ -265,8 +240,8 @@
   </Card.Root>
   <Card.Root class="py-0">
     <Card.Content class="px-3 py-2.5">
-      <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Stock</div>
-      <div class="font-mono text-lg font-semibold">{stats.stock}</div>
+      <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Required</div>
+      <div class="font-mono text-lg font-semibold">{stats.required}</div>
     </Card.Content>
   </Card.Root>
   <Card.Root class="py-0" data-warn={stats.nodeOnly > 0}>
@@ -348,12 +323,16 @@
               <Table.Head>Identifier</Table.Head>
               <Table.Head>Origin</Table.Head>
               <Table.Head class="text-right">Placed</Table.Head>
-              <Table.Head class="w-28 text-right">Stock</Table.Head>
+              <Table.Head class="w-28 text-right">Required</Table.Head>
+              <Table.Head class="w-16 text-right">Diff</Table.Head>
               <Table.Head class="w-10"></Table.Head>
             </Table.Row>
           </Table.Header>
           <Table.Body>
             {#each products as product}
+              {@const placed = diagramState.placedCount(product.id)}
+              {@const required = diagramState.requiredCount(product.id)}
+              {@const diff = required - placed}
               <Table.Row>
                 <Table.Cell
                   ><Badge variant="secondary">{productKindLabel(product)}</Badge></Table.Cell
@@ -373,21 +352,26 @@
                     <Badge variant="outline">custom</Badge>
                   {/if}
                 </Table.Cell>
-                <Table.Cell class="text-right font-mono text-xs"
-                  >{diagramState.placedCount(product.id)}</Table.Cell
-                >
+                <Table.Cell class="text-right font-mono text-xs">{placed}</Table.Cell>
                 <Table.Cell class="text-right">
                   <input
                     type="number"
                     min="0"
                     inputmode="numeric"
+                    placeholder={String(placed)}
                     class="w-16 rounded border border-input bg-background px-1.5 py-0.5 text-right font-mono text-xs outline-none focus:ring-1 focus:ring-ring"
-                    value={diagramState.inventoryCount(product.id)}
-                    onchange={(e) => {
-                      const n = Number((e.target as HTMLInputElement).value)
-                      diagramState.setInventoryCount(product.id, Number.isFinite(n) ? n : 0)
-                    }}
+                    value={product.requiredQty ?? ''}
+                    onchange={(e) => setRequiredQty(product.id, (e.target as HTMLInputElement).value)}
                   >
+                </Table.Cell>
+                <Table.Cell class="text-right font-mono text-xs">
+                  {#if diff > 0}
+                    <span class="text-amber-600">+{diff}</span>
+                  {:else if diff < 0}
+                    <span class="text-rose-600">{diff}</span>
+                  {:else}
+                    <span class="text-muted-foreground">0</span>
+                  {/if}
                 </Table.Cell>
                 <Table.Cell>
                   <Button variant="ghost" size="icon" onclick={() => { removeTarget = product }}>
@@ -418,34 +402,12 @@
   </Tabs.Content>
 
   <Tabs.Content value="assignments">
-    <div class="mb-3 flex items-center justify-between">
-      <div>
-        <h2 class="text-sm font-semibold">Node assignments &amp; inventory</h2>
-        <p class="text-xs text-muted-foreground">
-          Bind diagram nodes to products. Unplaced inventory rows can be placed onto the canvas.
-        </p>
-      </div>
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger>
-          {#snippet child({ props })}
-            <Button variant="outline" size="sm" disabled={deviceProducts.length === 0} {...props}>
-              <Plus class="mr-1 h-3.5 w-3.5" />
-              Add Stock
-              <CaretDown class="ml-1 h-3 w-3" />
-            </Button>
-          {/snippet}
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content class="z-50 min-w-56 rounded-lg border bg-popover p-1 shadow-md">
-          {#each deviceProducts as product}
-            <DropdownMenu.Item
-              class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-              onclick={() => addInventoryFor(product.id)}
-            >
-              {productLabel(product)}
-            </DropdownMenu.Item>
-          {/each}
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
+    <div class="mb-3">
+      <h2 class="text-sm font-semibold">Node assignments</h2>
+      <p class="text-xs text-muted-foreground">
+        Each diagram node and the product it is bound to. Edit `Required` in the Library tab to
+        adjust procurement targets.
+      </p>
     </div>
 
     {#if rows.length > 0}
@@ -463,98 +425,54 @@
             {#each rows as row (row.id)}
               <Table.Row>
                 <Table.Cell>
-                  {#if row.kind === 'inventory'}
-                    <span class="text-xs italic text-muted-foreground">unplaced stock</span>
-                  {:else}
-                    <div class="flex items-center gap-1 text-xs">
-                      <GitBranch class="h-3 w-3 text-muted-foreground" />
-                      <span class="font-mono">{row.nodeLabel}</span>
-                    </div>
-                  {/if}
+                  <div class="flex items-center gap-1 text-xs">
+                    <GitBranch class="h-3 w-3 text-muted-foreground" />
+                    <span class="font-mono">{row.nodeLabel}</span>
+                  </div>
                 </Table.Cell>
                 <Table.Cell>
-                  {#if row.kind === 'inventory'}
-                    <select
-                      class={selectClass}
-                      value={row.productId}
-                      onchange={(e) => {
-                        const v = (e.target as HTMLSelectElement).value || undefined
-                        changeInventoryProduct(row.inventoryId, v)
-                      }}
-                    >
-                      {#each deviceProducts as product}
-                        <option value={product.id}>{productLabel(product)}</option>
-                      {/each}
-                    </select>
-                  {:else}
-                    <select
-                      class={selectClass}
-                      value={row.kind === 'placed' ? row.productId : ''}
-                      onchange={(e) => {
-                        const v = (e.target as HTMLSelectElement).value || undefined
-                        bindNodeOnly(row.nodeId, v)
-                      }}
-                    >
-                      <option value="">-- unassigned --</option>
-                      {#each deviceProducts as product}
-                        <option value={product.id}>{productLabel(product)}</option>
-                      {/each}
-                    </select>
-                    {#if row.kind === 'placed' && productsById.get(row.productId)}
-                      <div class="mt-1 text-[11px] text-muted-foreground">
-                        {productKindLabel(productsById.get(row.productId) as Product)}
-                      </div>
-                    {/if}
+                  <select
+                    class={selectClass}
+                    value={row.kind === 'placed' ? row.productId : ''}
+                    onchange={(e) => {
+                      const v = (e.target as HTMLSelectElement).value || undefined
+                      bindNodeOnly(row.nodeId, v)
+                    }}
+                  >
+                    <option value="">-- unassigned --</option>
+                    {#each deviceProducts as product}
+                      <option value={product.id}>{productLabel(product)}</option>
+                    {/each}
+                  </select>
+                  {#if row.kind === 'placed' && productsById.get(row.productId)}
+                    <div class="mt-1 text-[11px] text-muted-foreground">
+                      {productKindLabel(productsById.get(row.productId) as Product)}
+                    </div>
                   {/if}
                 </Table.Cell>
                 <Table.Cell>
                   {#if row.kind === 'placed'}
                     <Badge variant="default">placed</Badge>
-                  {:else if row.kind === 'inventory'}
-                    <Badge variant="secondary">stock</Badge>
                   {:else}
                     <Badge variant="outline">node only</Badge>
                   {/if}
                 </Table.Cell>
                 <Table.Cell>
                   <div class="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onclick={() => goto(`/project/${$page.params.id}/diagram`)}
+                    >
+                      Open
+                    </Button>
                     {#if row.kind === 'placed'}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onclick={() => goto(`/project/${$page.params.id}/diagram`)}
-                      >
-                        Open
-                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onclick={() => diagramState.unbindNodes([row.nodeId])}
                       >
                         Unbind
-                      </Button>
-                    {:else if row.kind === 'inventory'}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onclick={() => placeInventory(row.inventoryId, row.productId)}
-                      >
-                        Place
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onclick={() => diagramState.removeInventoryItem(row.inventoryId)}
-                      >
-                        <Trash class="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    {:else}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onclick={() => goto(`/project/${$page.params.id}/diagram`)}
-                      >
-                        Open
                       </Button>
                     {/if}
                   </div>
@@ -574,7 +492,7 @@
               Go to Library
             </Button>
           {:else}
-            <p class="text-xs">Create nodes in the diagram or stock a product to start placing.</p>
+            <p class="text-xs">Create nodes in the diagram to start binding products.</p>
             <Button
               size="sm"
               variant="outline"
@@ -771,15 +689,8 @@
                 will lose their product
               </div>
             {/if}
-            {#if removeImpact.stock > 0}
-              <div>
-                <span class="font-mono font-semibold text-destructive">{removeImpact.stock}</span>
-                stock item{removeImpact.stock === 1 ? "" : "s"}
-                will be discarded
-              </div>
-            {/if}
-            {#if removeImpact.placed === 0 && removeImpact.links === 0 && removeImpact.stock === 0}
-              <div class="text-muted-foreground">No diagram or stock impact.</div>
+            {#if removeImpact.placed === 0 && removeImpact.links === 0}
+              <div class="text-muted-foreground">No diagram impact.</div>
             {/if}
           </div>
         {/if}
