@@ -36,6 +36,7 @@
   let tab = $state('assignments')
   let catalogDialogOpen = $state(false)
   let customDialogOpen = $state(false)
+  let removeTarget = $state<Product | null>(null)
 
   let selectedKind = $state('hardware')
   let selectedVendor = $state('')
@@ -136,7 +137,6 @@
     diagramState.addProduct({
       id: newId('product'),
       kind: 'device',
-      source: 'catalog',
       catalogId: entry.id,
       spec: entry.spec,
       properties: entry.properties,
@@ -152,7 +152,7 @@
     if (customType) spec.type = customType
     if (customVendor) spec.vendor = customVendor
     if (customModel) spec.model = customModel
-    diagramState.addProduct({ id: newId('product'), kind: 'device', source: 'custom', spec })
+    diagramState.addProduct({ id: newId('product'), kind: 'device', spec })
     customKind = 'hardware'
     customType = ''
     customVendor = ''
@@ -185,6 +185,48 @@
     diagramState.updateInventoryItem(inventoryId, { productId })
   }
 
+  // Project-level health metrics (principle: status visibility / soft constraints)
+  const stats = $derived.by(() => {
+    let placed = 0
+    let nodeOnly = 0
+    let incomplete = 0
+    for (const node of diagramState.nodes.values()) {
+      if (node.productId) placed++
+      else if (node.spec) nodeOnly++
+      else incomplete++
+    }
+    return {
+      products: products.length,
+      placed,
+      stock: diagramState.inventory.length,
+      nodeOnly,
+      incomplete,
+    }
+  })
+
+  // Impact preview for Product removal (principle: explicit consequences)
+  const removeImpact = $derived.by(() => {
+    if (!removeTarget) return { placed: 0, stock: 0, links: 0 }
+    const id = removeTarget.id
+    let placed = 0
+    let links = 0
+    for (const node of diagramState.nodes.values()) {
+      if (node.productId === id) placed++
+    }
+    for (const link of diagramState.links) {
+      if (link.from.plug?.module?.productId === id) links++
+      if (link.to.plug?.module?.productId === id) links++
+      if (link.cable?.productId === id) links++
+    }
+    return { placed, stock: diagramState.inventoryCount(id), links }
+  })
+
+  function confirmRemoveProduct() {
+    if (!removeTarget) return
+    diagramState.removeProduct(removeTarget.id)
+    removeTarget = null
+  }
+
   function placeInventory(inventoryId: string, productId: string) {
     const newNodeId = diagramState.placeProductAsNode(productId)
     if (newNodeId) {
@@ -200,38 +242,49 @@
   const labelClass = 'text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1'
 </script>
 
-<div class="mb-6 flex items-center justify-between">
-  <div>
-    <h1 class="text-lg font-semibold">Materials</h1>
-    <p class="text-sm text-muted-foreground">
-      Project-local products and inventory; assign to diagram nodes.
-    </p>
-  </div>
-  <DropdownMenu.Root>
-    <DropdownMenu.Trigger>
-      {#snippet child({ props })}
-        <Button size="sm" {...props}>
-          <Plus class="mr-1 h-4 w-4" />
-          Add Product
-          <CaretDown class="ml-1 h-3 w-3" />
-        </Button>
-      {/snippet}
-    </DropdownMenu.Trigger>
-    <DropdownMenu.Content class="z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-md">
-      <DropdownMenu.Item
-        class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-        onclick={() => { catalogDialogOpen = true }}
-      >
-        From external catalog
-      </DropdownMenu.Item>
-      <DropdownMenu.Item
-        class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-        onclick={() => { customDialogOpen = true }}
-      >
-        Custom product
-      </DropdownMenu.Item>
-    </DropdownMenu.Content>
-  </DropdownMenu.Root>
+<div class="mb-4">
+  <h1 class="text-lg font-semibold">Materials</h1>
+  <p class="text-sm text-muted-foreground">
+    Project-local products and inventory; assign to diagram nodes.
+  </p>
+</div>
+
+<!-- Project status banner — single-glance health view -->
+<div class="mb-6 grid grid-cols-5 gap-2">
+  <Card.Root class="py-0">
+    <Card.Content class="px-3 py-2.5">
+      <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Products</div>
+      <div class="font-mono text-lg font-semibold">{stats.products}</div>
+    </Card.Content>
+  </Card.Root>
+  <Card.Root class="py-0">
+    <Card.Content class="px-3 py-2.5">
+      <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Placed</div>
+      <div class="font-mono text-lg font-semibold">{stats.placed}</div>
+    </Card.Content>
+  </Card.Root>
+  <Card.Root class="py-0">
+    <Card.Content class="px-3 py-2.5">
+      <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Stock</div>
+      <div class="font-mono text-lg font-semibold">{stats.stock}</div>
+    </Card.Content>
+  </Card.Root>
+  <Card.Root class="py-0" data-warn={stats.nodeOnly > 0}>
+    <Card.Content class="px-3 py-2.5">
+      <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Node-only</div>
+      <div class="font-mono text-lg font-semibold {stats.nodeOnly > 0 ? 'text-amber-600' : ''}">
+        {stats.nodeOnly}
+      </div>
+    </Card.Content>
+  </Card.Root>
+  <Card.Root class="py-0">
+    <Card.Content class="px-3 py-2.5">
+      <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Incomplete</div>
+      <div class="font-mono text-lg font-semibold {stats.incomplete > 0 ? 'text-amber-600' : ''}">
+        {stats.incomplete}
+      </div>
+    </Card.Content>
+  </Card.Root>
 </div>
 
 <Tabs.Root bind:value={tab} class="space-y-4">
@@ -251,6 +304,40 @@
   </Tabs.List>
 
   <Tabs.Content value="library">
+    <div class="mb-3 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-semibold">Product library</h2>
+        <p class="text-xs text-muted-foreground">
+          Devices, modules, cables you reference in this project.
+        </p>
+      </div>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}
+            <Button size="sm" {...props}>
+              <Plus class="mr-1 h-4 w-4" />
+              Add Product
+              <CaretDown class="ml-1 h-3 w-3" />
+            </Button>
+          {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content class="z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-md">
+          <DropdownMenu.Item
+            class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+            onclick={() => { catalogDialogOpen = true }}
+          >
+            From external catalog
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+            onclick={() => { customDialogOpen = true }}
+          >
+            Custom product
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </div>
+
     {#if products.length > 0}
       <Card.Root class="py-0">
         <Table.Root>
@@ -259,9 +346,9 @@
               <Table.Head>Kind</Table.Head>
               <Table.Head>Vendor</Table.Head>
               <Table.Head>Identifier</Table.Head>
-              <Table.Head>Source</Table.Head>
+              <Table.Head>Origin</Table.Head>
               <Table.Head class="text-right">Placed</Table.Head>
-              <Table.Head class="text-right">Stock</Table.Head>
+              <Table.Head class="w-28 text-right">Stock</Table.Head>
               <Table.Head class="w-10"></Table.Head>
             </Table.Row>
           </Table.Header>
@@ -271,9 +358,7 @@
                 <Table.Cell
                   ><Badge variant="secondary">{productKindLabel(product)}</Badge></Table.Cell
                 >
-                <Table.Cell class="font-mono text-xs">
-                  {product.kind === 'device' ? (product.spec.vendor ?? '-') : (product.spec.vendor ?? '-')}
-                </Table.Cell>
+                <Table.Cell class="font-mono text-xs">{product.spec.vendor ?? '-'}</Table.Cell>
                 <Table.Cell class="font-mono text-xs">
                   {product.kind === 'device'
                     ? specIdentifier(product.spec)
@@ -282,10 +367,8 @@
                       : (product.spec.mpn ?? product.spec.medium)}
                 </Table.Cell>
                 <Table.Cell>
-                  {#if product.source === 'catalog'}
-                    <Badge variant="default">catalog</Badge>
-                  {:else if product.source === 'modified'}
-                    <Badge variant="secondary">modified</Badge>
+                  {#if product.catalogId}
+                    <Badge variant="default" title={product.catalogId}>catalog</Badge>
                   {:else}
                     <Badge variant="outline">custom</Badge>
                   {/if}
@@ -293,23 +376,21 @@
                 <Table.Cell class="text-right font-mono text-xs"
                   >{diagramState.placedCount(product.id)}</Table.Cell
                 >
-                <Table.Cell class="text-right font-mono text-xs">
-                  <button
-                    type="button"
-                    class="hover:underline"
-                    onclick={() => addInventoryFor(product.id)}
-                    title="Add stock"
+                <Table.Cell class="text-right">
+                  <input
+                    type="number"
+                    min="0"
+                    inputmode="numeric"
+                    class="w-16 rounded border border-input bg-background px-1.5 py-0.5 text-right font-mono text-xs outline-none focus:ring-1 focus:ring-ring"
+                    value={diagramState.inventoryCount(product.id)}
+                    onchange={(e) => {
+                      const n = Number((e.target as HTMLInputElement).value)
+                      diagramState.setInventoryCount(product.id, Number.isFinite(n) ? n : 0)
+                    }}
                   >
-                    {diagramState.inventoryCount(product.id)}
-                    <span class="ml-1 text-muted-foreground">+</span>
-                  </button>
                 </Table.Cell>
                 <Table.Cell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onclick={() => diagramState.removeProduct(product.id)}
-                  >
+                  <Button variant="ghost" size="icon" onclick={() => { removeTarget = product }}>
                     <Trash class="h-3.5 w-3.5 text-destructive" />
                   </Button>
                 </Table.Cell>
@@ -320,9 +401,17 @@
       </Card.Root>
     {:else}
       <Card.Root class="py-16">
-        <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
-          <p class="mb-1 text-sm">No products in Materials yet.</p>
-          <p class="text-xs">Add from the external catalog or create a custom product.</p>
+        <Card.Content class="flex flex-col items-center gap-2 text-center text-muted-foreground">
+          <p class="text-sm">No products yet.</p>
+          <p class="text-xs">
+            Add a known device from the catalog, or create a custom product to start.
+          </p>
+          <div class="mt-2 flex gap-2">
+            <Button size="sm" onclick={() => { catalogDialogOpen = true }}> From catalog </Button>
+            <Button size="sm" variant="outline" onclick={() => { customDialogOpen = true }}>
+              Custom
+            </Button>
+          </div>
         </Card.Content>
       </Card.Root>
     {/if}
@@ -477,9 +566,24 @@
       </Card.Root>
     {:else}
       <Card.Root class="py-16">
-        <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
-          <p class="mb-1 text-sm">No assignments yet.</p>
-          <p class="text-xs">Create nodes in the diagram or add inventory.</p>
+        <Card.Content class="flex flex-col items-center gap-2 text-center text-muted-foreground">
+          <p class="text-sm">No assignments yet.</p>
+          {#if products.length === 0}
+            <p class="text-xs">Add a Product first to start tracking assignments.</p>
+            <Button size="sm" variant="outline" class="mt-2" onclick={() => { tab = 'library' }}>
+              Go to Library
+            </Button>
+          {:else}
+            <p class="text-xs">Create nodes in the diagram or stock a product to start placing.</p>
+            <Button
+              size="sm"
+              variant="outline"
+              class="mt-2"
+              onclick={() => goto(`/project/${$page.params.id}/diagram`)}
+            >
+              Open Diagram
+            </Button>
+          {/if}
         </Card.Content>
       </Card.Root>
     {/if}
@@ -625,6 +729,66 @@
         <Button class="w-full" disabled={!customVendor && !customModel} onclick={addCustom}
           >Create Product</Button
         >
+      </div>
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
+
+<!-- Remove product confirm — explicit consequences -->
+<Dialog.Root open={removeTarget !== null} onOpenChange={(o) => { if (!o) removeTarget = null }}>
+  <Dialog.Portal>
+    <Dialog.Overlay class="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] dark:bg-black/40" />
+    <Dialog.Content
+      class="fixed left-1/2 top-1/2 z-50 w-[460px] -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-popover shadow-2xl focus:outline-none"
+    >
+      <div class="flex items-center justify-between border-b px-5 py-4">
+        <Dialog.Title class="text-sm font-semibold">Remove product?</Dialog.Title>
+        <Dialog.Close
+          class="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <X class="h-4 w-4" />
+        </Dialog.Close>
+      </div>
+      <Dialog.Description class="sr-only">Confirm product removal</Dialog.Description>
+      <div class="space-y-3 px-5 py-4 text-sm">
+        {#if removeTarget}
+          <p>Remove <span class="font-mono">{productLabel(removeTarget)}</span>?</p>
+          <div class="rounded-md bg-muted/40 p-3 text-xs space-y-1">
+            <div class="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Impact preview
+            </div>
+            {#if removeImpact.placed > 0}
+              <div>
+                <span class="font-mono font-semibold text-amber-600">{removeImpact.placed}</span>
+                placed node{removeImpact.placed === 1 ? "" : "s"}
+                will lose their product binding (spec reduced to role-only)
+              </div>
+            {/if}
+            {#if removeImpact.links > 0}
+              <div>
+                <span class="font-mono font-semibold text-amber-600">{removeImpact.links}</span>
+                link endpoint{removeImpact.links === 1 ? "" : "s"}
+                will lose their product
+              </div>
+            {/if}
+            {#if removeImpact.stock > 0}
+              <div>
+                <span class="font-mono font-semibold text-destructive">{removeImpact.stock}</span>
+                stock item{removeImpact.stock === 1 ? "" : "s"}
+                will be discarded
+              </div>
+            {/if}
+            {#if removeImpact.placed === 0 && removeImpact.links === 0 && removeImpact.stock === 0}
+              <div class="text-muted-foreground">No diagram or stock impact.</div>
+            {/if}
+          </div>
+        {/if}
+        <div class="flex justify-end gap-2 pt-2">
+          <Button variant="outline" size="sm" onclick={() => { removeTarget = null }}
+            >Cancel</Button
+          >
+          <Button variant="destructive" size="sm" onclick={confirmRemoveProduct}>Remove</Button>
+        </div>
       </div>
     </Dialog.Content>
   </Dialog.Portal>
