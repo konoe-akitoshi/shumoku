@@ -104,7 +104,7 @@
           <div class="flex flex-col items-start gap-0.5">
             <span>Import Project</span>
             <span class="text-[10px] text-neutral-400 dark:text-neutral-500"
-              >.neted.json (palette + BOM + diagram)</span
+              >.neted.json (products + diagram)</span
             >
           </div>
         </DropdownMenu.Item>

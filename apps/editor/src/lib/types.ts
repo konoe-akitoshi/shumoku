@@ -5,11 +5,11 @@ import type { ComputeProperties, HardwareProperties, ServiceProperties } from '@
 import type { NetworkGraph, NodeSpec } from '@shumoku/core'
 
 // =========================================================================
-// Spec Palette — product definitions
+// Materials / Library — product definitions
 // =========================================================================
 
-/** Spec Palette entry — a product available for use in this project */
-export interface SpecPaletteEntry {
+/** Product — a project-local material definition available for use in this design */
+export interface Product {
   /** Stable unique ID (nanoid) */
   id: string
   /** Source: catalog (unmodified), modified (catalog + local edits), custom (manual) */
@@ -24,8 +24,30 @@ export interface SpecPaletteEntry {
   notes?: string
 }
 
+/** @deprecated Use Product. Kept while old routes/components are migrated. */
+export type SpecPaletteEntry = Product
+
 // =========================================================================
-// BOM — device instances (master for quantity management)
+// Materials / Assignments — design element to Product binding view
+// =========================================================================
+
+export type AssignmentTarget =
+  | { kind: 'node'; nodeId: string }
+  | { kind: 'link-module'; linkId: string; side: 'from' | 'to' }
+  | { kind: 'link-cable'; linkId: string }
+
+export interface AssignmentRow {
+  id: string
+  target: AssignmentTarget
+  label: string
+  source: string
+  productId?: string
+  requirementKey?: string
+  status: 'resolved' | 'generic' | 'incomplete'
+}
+
+// =========================================================================
+// Legacy BOM — previous device-instance binding rows
 // =========================================================================
 
 /** A BOM row = one device instance in the project */
@@ -54,6 +76,8 @@ export interface NetedProject {
   settings?: Record<string, unknown>
   /** Spec Palette — product definitions */
   palette: SpecPaletteEntry[]
+  /** Future project-local product field. When present it supersedes palette. */
+  products?: Product[]
   /** BOM — device instances with node bindings */
   bom: BomItem[]
   /** Diagram — NetworkGraph (nodes with positions, links, subgraphs) */
@@ -68,7 +92,7 @@ export const NETED_FILE_EXTENSION = '.neted.json'
 // =========================================================================
 
 /** Display label for a palette entry */
-export function paletteEntryLabel(entry: SpecPaletteEntry): string {
+export function productLabel(entry: Product): string {
   const s = entry.spec
   if (s.kind === 'hardware' || s.kind === 'compute') {
     const model = 'model' in s ? s.model : 'platform' in s ? s.platform : undefined
@@ -79,6 +103,9 @@ export function paletteEntryLabel(entry: SpecPaletteEntry): string {
   }
   return 'unknown'
 }
+
+/** @deprecated Use productLabel. */
+export const paletteEntryLabel = productLabel
 
 /** Get the identity column value (model, platform, or service depending on kind) */
 export function specIdentifier(spec: NodeSpec): string {
