@@ -7,7 +7,7 @@
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
-  import { paletteEntryLabel } from '$lib/types'
+  import { productLabel } from '$lib/types'
 
   type BomLine = {
     key: string
@@ -98,8 +98,12 @@
       const product = row.productId ? productsById.get(row.productId) : undefined
       const category = categoryForTarget(row.target.kind)
       const key = `${category}:${row.productId ?? row.requirementKey ?? row.id}`
-      const label = product ? paletteEntryLabel(product) : (row.requirementKey ?? row.label)
-      const kind = product?.spec.kind ?? row.target.kind
+      const label = product ? productLabel(product) : (row.requirementKey ?? row.label)
+      const kind = product
+        ? product.kind === 'device'
+          ? product.spec.kind
+          : product.kind
+        : row.target.kind
       const existing = groups.get(key)
       if (existing) {
         existing.requiredQty += 1
