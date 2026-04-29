@@ -16,13 +16,11 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-aws-ec2',
     kind: 'device',
-    source: 'custom',
     spec: { kind: 'service', vendor: 'aws', service: 'ec2', resource: 'instances' },
   },
   {
     id: 'product-aws-vpn-gw',
     kind: 'device',
-    source: 'custom',
     spec: { kind: 'service', vendor: 'aws', service: 'vpc', resource: 'vpn-gateway' },
   },
 
@@ -30,19 +28,16 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-internet',
     kind: 'device',
-    source: 'custom',
     spec: { kind: 'hardware', type: DeviceType.Internet, vendor: undefined },
   },
   {
     id: 'product-yamaha-rtx3510',
     kind: 'device',
-    source: 'custom',
     spec: { kind: 'hardware', type: DeviceType.Router, vendor: 'yamaha', model: 'rtx3510' },
   },
   {
     id: 'product-juniper-srx4100',
     kind: 'device',
-    source: 'custom',
     spec: { kind: 'hardware', type: DeviceType.Firewall, vendor: 'juniper', model: 'SRX4100' },
   },
 
@@ -50,13 +45,11 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-generic-l2-switch',
     kind: 'device',
-    source: 'custom',
     spec: { kind: 'hardware', type: DeviceType.L2Switch },
   },
   {
     id: 'product-generic-server',
     kind: 'device',
-    source: 'custom',
     spec: { kind: 'hardware', type: DeviceType.Server },
   },
 
@@ -64,7 +57,6 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-juniper-qfx5120',
     kind: 'device',
-    source: 'custom',
     spec: {
       kind: 'hardware',
       type: DeviceType.L3Switch,
@@ -75,7 +67,6 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-juniper-ex4400',
     kind: 'device',
-    source: 'custom',
     spec: {
       kind: 'hardware',
       type: DeviceType.L3Switch,
@@ -88,7 +79,6 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-cisco-3560cx-8pc',
     kind: 'device',
-    source: 'catalog',
     catalogId: 'cisco/catalyst-3560cx/ws-c3560cx-8pc-s',
     spec: {
       kind: 'hardware',
@@ -107,7 +97,6 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-aruba-ap505',
     kind: 'device',
-    source: 'catalog',
     catalogId: 'hpe/aruba-ap-505',
     spec: {
       kind: 'hardware',
@@ -125,7 +114,6 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-panasonic-m8egpwr-plus',
     kind: 'device',
-    source: 'catalog',
     catalogId: 'panasonic/switch-m8egpwr-plus',
     spec: {
       kind: 'hardware',
@@ -144,7 +132,6 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-aruba-ap11d',
     kind: 'device',
-    source: 'catalog',
     catalogId: 'hpe/aruba-instant-on-ap11d',
     spec: {
       kind: 'hardware',
@@ -164,7 +151,6 @@ export const sampleProducts: DeviceProduct[] = [
   {
     id: 'product-generic-ip-phone',
     kind: 'device',
-    source: 'catalog',
     catalogId: 'generic/ip-phone',
     spec: { kind: 'hardware', type: DeviceType.CPE, vendor: 'generic', model: 'ip-phone' },
     properties: {

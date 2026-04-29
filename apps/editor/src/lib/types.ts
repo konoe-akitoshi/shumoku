@@ -28,9 +28,7 @@ export type Product = DeviceProduct | ModuleProduct | CableProduct
 interface ProductBase {
   /** Stable unique ID (nanoid) */
   id: string
-  /** Source: catalog (unmodified), modified (catalog + local edits), custom (manual) */
-  source: 'catalog' | 'modified' | 'custom'
-  /** Catalog entry ID if from catalog */
+  /** Catalog entry ID if linked to an external catalog. Absence = manually authored. */
   catalogId?: string
   /** User notes */
   notes?: string

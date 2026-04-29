@@ -1056,6 +1056,27 @@ export const diagramState = {
   updateInventoryItem(id: string, updates: Partial<InventoryItem>) {
     inventoryItems = inventoryItems.map((i) => (i.id === id ? { ...i, ...updates } : i))
   },
+  /**
+   * Set the inventory row count for a product to exactly `count`. Adds
+   * fresh rows or drops the most-recent rows as needed. Negative values
+   * are clamped to 0. Used for direct quantity editing in Materials.
+   */
+  setInventoryCount(productId: string, count: number) {
+    const target = Math.max(0, Math.floor(count))
+    const matching = inventoryItems.filter((i) => i.productId === productId)
+    if (matching.length === target) return
+    if (matching.length < target) {
+      const additions: InventoryItem[] = []
+      for (let i = matching.length; i < target; i++) {
+        additions.push({ id: newId('inv'), productId })
+      }
+      inventoryItems = [...inventoryItems, ...additions]
+      return
+    }
+    // Trim from the end: keep the first `target` matching rows, drop the rest
+    const keepIds = new Set(matching.slice(0, target).map((i) => i.id))
+    inventoryItems = inventoryItems.filter((i) => i.productId !== productId || keepIds.has(i.id))
+  },
   /** Count of unplaced units for a product. */
   inventoryCount(productId: string): number {
     return inventoryItems.filter((i) => i.productId === productId).length
