@@ -6,6 +6,8 @@
 
 **スコープ**: 本 doc は **device（Node）軸** に限定する。Link の Module / Cable に Product を紐付けるフローは Connections ページ側の責務で別 doc 扱い（atomic 操作 §3 にだけ参考で残す）。
 
+**数量モデル**: 個体（Inventory）は持たず、**Product ごとの `requiredQty`（procurement target）** と diagram から派生する `placedCount` の 2 値で扱う。`requiredQty` は手動編集、`placedCount` は read-only。「数量を減らす」操作で diagram のノードが消えることは構造的に発生しない。
+
 ---
 
 ## 1. 入口（Entry points）
@@ -15,7 +17,7 @@
 | 入口                                       | 触る対象              | きっかけ                  |
 | ------------------------------------------ | --------------------- | ------------------------- |
 | Materials ページで Product 追加            | Product               | カタログ閲覧 / 仕様確定   |
-| Materials ページで Stock 追加              | Inventory             | 数量決定 / 発注情報       |
+| Materials ページで Required 編集           | Product.requiredQty   | 数量決定 / 発注情報       |
 | ダイヤグラムに空ノード追加                 | Node (productId なし) | トポロジー設計            |
 | ダイヤグラムに Library から drop / Place   | Node + Product 紐付け | 1 個サクッと置きたい      |
 | 既存ノードのコピペ                         | Node 増加             | 同構成の複製              |
@@ -29,27 +31,22 @@
 
 プロジェクトの状態を **3 軸** で表現：
 
-| 軸             | 値の例                              |
-| -------------- | ----------------------------------- |
-| Products       | なし / あり（種類数 N）             |
-| Node.productId | 全 set / 一部 set / 全 undefined    |
-| Inventory      | 0 / 1 以上                          |
-
-組み合わせは多いが、典型的に経由する状態は限られる：
+| 軸                  | 値の例                              |
+| ------------------- | ----------------------------------- |
+| Products            | なし / あり（種類数 N）             |
+| Node.productId      | 全 set / 一部 set / 全 undefined    |
+| requiredQty / placed| 一致 / 不足 / 過剰（製品ごとの差分） |
 
 ```mermaid
 flowchart LR
-  Z[空プロジェクト<br/>products=0, nodes=0, inv=0] --> P[Product のみ<br/>products>0]
+  Z[空プロジェクト<br/>products=0, nodes=0] --> P[Product のみ<br/>products>0]
   Z --> N[Node のみ<br/>nodes>0, productId=∅]
-  P --> PI[Product + Stock<br/>inv>0]
-  P --> PN[Product + 紐付き Node<br/>nodes>0, productId set]
+  P --> PN[Product + 紐付き Node<br/>productId set]
   N --> PN
-  PI --> PN
-  PN --> Mix[混在<br/>node-only と placed が混ざる]
-  PI --> Mix
+  PN --> Mix[混在<br/>node-only と placed と<br/>required≠placed が混ざる]
 ```
 
-ゴールは「全 Node に productId が set」「Inventory は欲しい在庫だけ」「BOM 派生表が完成」の状態。中間はどう経由しても良い。
+ゴール: 「全 Node に productId が set」「製品ごとに required = placed（または許容できる差）」「BOM 派生表が完成」。
 
 ---
 
@@ -57,23 +54,19 @@ flowchart LR
 
 任意のタイミングで実行できる単位操作。各操作が状態軸をどう動かすか：
 
-| 操作                          | Products | Node    | Inventory | 実装                                |
-| ----------------------------- | -------- | ------- | --------- | ----------------------------------- |
-| Product 登録（catalog/custom）| +1       | -       | -         | `addProduct`                        |
-| Product 削除                  | -1       | spec strip | -1〜0    | `removeProduct`                     |
-| Product 更新                  | mod      | spec 同期 | -        | `updateProduct`                     |
-| Inventory 追加（stock）       | -        | -       | +1        | `addInventoryItem`                  |
-| Inventory 削除                | -        | -       | -1        | `removeInventoryItem`               |
-| Inventory の Product 切替     | -        | -       | mod       | `updateInventoryItem`               |
-| 空ノード追加                  | -        | +1（productId=∅）| -  | renderer の addNewNode             |
-| ノード削除                    | -        | -1      | -         | renderer 経由                       |
-| Node に Product 紐付け（bind）| -        | productId set | -1（あれば消費）| `bindNodeToProduct`        |
-| Node から Product を外す      | -        | productId clear | -    | `unbindNodes`                       |
-| Inventory を Node 化（place） | -        | +1      | -1        | `placeProductAsNode`                |
-| ノードコピペ                  | -        | +N      | -         | renderer の clipboard               |
-| Module / Cable に Product 紐付け | -     | link 内 productId set | -1（あれば） | `bindAssignment`             |
-
-「bind」と「place」はどちらも Inventory を 1 消費する（matching があれば）— Inventory の消費ルールは現状一貫している。
+| 操作                          | Products | Node                  | requiredQty | 実装                       |
+| ----------------------------- | -------- | --------------------- | ----------- | -------------------------- |
+| Product 登録（catalog/custom）| +1       | -                     | -           | `addProduct`               |
+| Product 削除                  | -1       | spec strip / unbind   | -           | `removeProduct`            |
+| Product 更新                  | mod      | spec 同期             | mod 可      | `updateProduct`            |
+| requiredQty 編集              | -        | -                     | mod         | `updateProduct`            |
+| 空ノード追加                  | -        | +1（productId=∅）     | -           | renderer の addNewNode     |
+| ノード削除                    | -        | -1                    | -           | renderer 経由              |
+| Node に Product 紐付け（bind）| -        | productId set         | -           | `bindNodeToProduct`        |
+| Node から Product を外す      | -        | productId clear       | -           | `unbindNodes`              |
+| Product を Node 化（place）   | -        | +1（productId set）   | -           | `placeProductAsNode`       |
+| ノードコピペ                  | -        | +N（productId 継承）  | -           | renderer の clipboard      |
+| Module / Cable に Product 紐付け | -     | link 内 productId set | -           | `bindAssignment`           |
 
 ---
 
@@ -84,7 +77,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   E1[Materials: Product 追加] --> O1[addProduct]
-  E2[Materials: Stock 追加] --> O2[addInventoryItem]
+  E2[Materials: Required 編集] --> O2[updateProduct]
   E3[空ノード追加] --> O3[Node 追加]
   E4[Library から drop] --> O4[placeProductAsNode]
   E5[コピペ] --> O5[Node 増殖]
@@ -98,22 +91,20 @@ flowchart LR
   Oall --> Loop
 ```
 
-ゴール（BOM 完成）に達するまで、ユーザは Loop 内を歩き回る。
-
 ---
 
 ## 5. 典型的なナラティブ（参考）
 
-「こう歩く人が多い」の例。これらは正解ではなく、**入口と歩き方の癖** のラベル。
+「こう歩く人が多い」の例。線形フローではなく **入口と歩き方の癖** のラベル。
 
-| ラベル              | 入口                          | 主な歩き方                                     |
-| ------------------- | ----------------------------- | ---------------------------------------------- |
-| 設計先行・在庫経由  | Materials Product 追加        | Product 揃える → Stock 積む → 1 個ずつ Place   |
-| 設計先行・直 drop   | Materials Product 追加        | Product 追加 → Library から drop で都度配置    |
-| 設計先行・図先描き  | Materials Product 追加        | Product 追加 → 空ノード散らす → 後から bind    |
-| ダイヤグラム先行    | 空ノード追加                  | トポロジー描く → 後で Product 登録 → bind      |
-| テンプレ展開        | コピペ                        | 1 ブロック完成 → 範囲コピーで他拠点に展開      |
-| BOM 逆引き          | Import                        | 既存発注書 → Product + Stock → 図に配置        |
+| ラベル              | 入口                     | 主な歩き方                                            |
+| ------------------- | ------------------------ | ----------------------------------------------------- |
+| 設計先行・数量計画  | Materials Product 追加   | Product 揃える → Required 入力 → 1 個ずつ Place        |
+| 設計先行・直 drop   | Materials Product 追加   | Product 追加 → Library から drop で都度配置           |
+| 設計先行・図先描き  | Materials Product 追加   | Product 追加 → 空ノード散らす → 後から bind           |
+| ダイヤグラム先行    | 空ノード追加             | トポロジー描く → 後で Product 登録 → bind             |
+| テンプレ展開        | コピペ                   | 1 ブロック完成 → コピペで他拠点に展開（required は手動更新） |
+| BOM 逆引き          | Import                   | 既存発注書 → Product + Required → 図に配置            |
 
 各ラベル内でも `bind` の起点は 2 通り（Materials ページ / DetailPanel）あり、ユーザは混ぜる。
 
@@ -121,12 +112,10 @@ flowchart LR
 
 ## 6. 直交軸まとめ
 
-操作の癖を表現する軸：
-
 | 軸                  | 値                                            |
 | ------------------- | --------------------------------------------- |
 | 機材登録の順番      | 先 / ノード作成と同時 / 後                    |
-| Inventory 経由      | 経由する / 経由しない                         |
+| 数量編集の順番      | 先（Required 計画）/ 後（Placed に追従）      |
 | ノード作成の起点    | 機材から / 図のレイアウトから / import / コピペ |
 | bind UI 起点        | Materials ページ / ダイヤグラム DetailPanel   |
 
@@ -139,79 +128,81 @@ flowchart LR
 ```mermaid
 flowchart LR
   N[Node with productId] -->|unbind| N0[Node spec=role only]
-  N -->|delete node| INV{在庫に戻す？}
-  INV -->|yes| I[InventoryItem 1 増]
-  INV -->|no| X[消える]
+  N -->|delete node| X[消える]
 ```
+
+unbind は Node.productId をクリアするのみ。delete node は figment（diagram）から消えるだけ。**どちらも Product / requiredQty には触らない**。`placedCount` が減って `requiredQty - placedCount` の差が出るので、BOM ページで Diff として可視化される。
 
 ### 7.2 製品差し替え（rebind）
 
 ```mermaid
 flowchart LR
   N[Node: Product A] -->|change to B| N2[Node: Product B]
-  N2 -.->|return A| IA[Inventory A +1]
-  N2 -.->|consume B| IB[Inventory B -1]
+  Note[Product A の placed -1<br/>Product B の placed +1<br/>requiredQty は触らない]
 ```
 
 ### 7.3 BOM 派生
 
 ```mermaid
 flowchart TD
-  P[Products] --> BOM
-  D[Diagram nodes] -->|placedCount| BOM
-  I[Inventory] -->|stockCount| BOM
+  P[Products<br/>requiredQty?] --> BOM
+  D[Diagram nodes<br/>productId] -->|placedCount| BOM
   L[Link Module/Cable<br/>productId] -->|placedCount| BOM
-  BOM[BOM ページ<br/>required = placed + stock]
+  BOM[BOM ページ<br/>Required = requiredQty ?? placedCount<br/>Placed = derived<br/>Diff = Required - Placed]
 ```
 
 ---
 
-## 8. 引っかかっている / 未決の論点
+## 8. 安全性の保証
 
-### Q1. 「数量入力」UI
+「数量を減らすと意図せずノードが消える」を防ぐため：
 
-「Add Stock を N 回」が UX ダサい。Materials Library のセルに **数量フィールド** を置くか、Inventory 行で `qty` を許すか。
+- **`requiredQty` 編集は diagram に絶対影響しない**（Product update のみ）
+- **ノード削除は diagram での明示操作のみ**（renderer 経由）
+- **placedCount は read-only**。BOM や Library 表で表示するだけで編集 UI を持たない
+- 「ノード追加 / 削除」と「Required 編集」は **完全に独立した操作**
 
-### Q2. Inventory 経由 / 不経由の区別
+ユーザが BOM の数値を編集して困ることはない。困りたいなら Diagram を直接触る。
 
-`bindNodeToProduct` は matching Inventory があれば消費する。しかし UI 上「在庫から place する」と「直接 bind」が同じ画面に混ざっていて、ユーザが在庫の動きを意識できない。残数表示だけで足りるか、明示的に分けるか。
+---
 
-### Q3. ノード削除時の在庫戻し
+## 9. 引っかかっている / 未決の論点
 
-コピペで増えたノード（Inventory を消費していない）を削除するとき、在庫に戻すと数が壊れる。一方 unbind は戻すのが自然。**lifecycle 起点**（在庫から来たか、コピペで生まれたか）を Node に持つかどうか。
+### Q1. Required 入力の UX
+
+Library 行に number input を置く案で実装。空欄なら placedCount 追従、数値入力でその値に固定。clear するには空欄に戻す。これで十分か。
+
+### Q2. 過剰 / 不足の警告レベル
+
+Diff > 0（足りない）/ Diff < 0（過剰）どちらも amber / rose で色分け。**banner レベルで警告するか**、**詳細表示は Library のみで OK か**。
+
+### Q3. コピペで増えた Node の扱い
+
+コピペで placed が増えたとき、required は連動しない（手動更新が必要）。これは想定通りだが、「コピペしたら required も自動増加」を期待する人もいるかも。
+
+- 案 A: 連動しない（現状）
+- 案 B: コピペで required を自動 +N
 
 ### Q4. 多数配置の効率
 
 24 ポート AP を一気に置くなど。
 
-- 案 1: 「N 個まとめて配置」ボタン（自動グリッド）
-- 案 2: 連続クリック配置モード
+- 案 1: Diagram で「N 個まとめて配置」
+- 案 2: Library から drop の連続クリックモード
 - 案 3: import で済ませる
 
-### Q5. 未紐付きノードの種類
+### Q5. 「使う機材は決まっているが Product 未登録」状態
 
-`productId=undefined` のノードには現状 3 種類が混在しうる：
+Pattern「ダイヤグラム先行」の途中状態。Node.spec.type だけ持って productId は undefined。BOM では `incomplete` 行になる。Q5 の結論（doc 5 系で確定済み）: 区別しない、spec 欠損度のみで運用。
 
-| spec 状態                  | productId | 解釈                              |
-| -------------------------- | --------- | --------------------------------- |
-| undefined                  | undefined | 空ノード                          |
-| `kind+type` のみ           | undefined | 役割だけ決まってる                |
-| 完備（vendor/model）       | undefined | 仕様は埋まってるが Product 未登録 |
+### Q6. Module / Cable Product の作成導線
 
-「データの欠損度」は spec から分かる。一方 **ユーザの意図**（作業途中 vs 意図的に model TBD）は持っていないので区別不可能。
-
-**結論（現状）**: 区別しない。spec の欠損度のみで運用し、BOM ページは `incomplete` / `generic` ラベルでフィードバックする。「意図的に未確定」フラグは必要性が見えてから検討。
-
-### Q6. `Product.source` フィールドの要否
-
-`source: 'catalog' | 'modified' | 'custom'` は UI の badge 色程度の意味しかない。プロジェクトに取り込んだ時点で「うちのもの」になる以上、由来追跡の意義は薄い。
-
-**結論**: フィールド削除予定。`catalogId` の有無＝カタログ由来か手起こしか、で十分。Library 表示の badge は `catalogId` 有無で出し分ける。
+Connections ページから直接 Module/Cable Product を追加できる UI がまだない。当面は Materials から手動。Phase B で対応。
 
 ---
 
-## 9. 関連 doc
+## 10. 関連 doc
 
-- `data-architecture-review.md` — データ構造のスナップショット
+- `data-architecture-review.md` — データ構造のスナップショット（要更新）
 - `project-workflow-model.md` — 上位の workflow 設計
 - `bom-model.md` — BOM 派生ロジック（要更新）
