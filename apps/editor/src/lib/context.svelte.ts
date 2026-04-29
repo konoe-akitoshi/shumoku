@@ -28,14 +28,7 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
-import type {
-  AssignmentRow,
-  AssignmentTarget,
-  DeviceProduct,
-  InventoryItem,
-  NetedProject,
-  Product,
-} from './types'
+import type { AssignmentRow, AssignmentTarget, DeviceProduct, NetedProject, Product } from './types'
 import { productLabel } from './types'
 
 // =========================================================================
@@ -135,7 +128,6 @@ function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
 }
 
 let products = $state<Product[]>([])
-let inventoryItems = $state<InventoryItem[]>([])
 let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
@@ -519,17 +511,15 @@ function sanitizeGraph(graph: NetworkGraph): {
 }
 
 /**
- * Reconcile products / inventory against the loaded diagram. Inventory
- * rows referring to a missing product are dropped; the diagram side
- * (Node/LinkModule/LinkCable.productId) is also cleared when the
- * referenced product is gone.
+ * Reconcile products against the loaded diagram. Diagram-side
+ * `productId` references (Node / LinkModule / LinkCable) are cleared
+ * when the referenced product is gone.
  */
-function sanitizeProductsAndInventory(
+function sanitizeProducts(
   rawProducts: Product[],
-  rawInventory: InventoryItem[],
   nodes: Map<string, Node>,
   links: Link[],
-): { products: Product[]; inventory: InventoryItem[]; links: Link[] } {
+): { products: Product[]; links: Link[] } {
   const productIds = new Set<string>()
   const cleanProducts: Product[] = []
   let duplicates = 0
@@ -543,21 +533,6 @@ function sanitizeProductsAndInventory(
   }
   if (duplicates > 0) {
     console.warn(`[import] dropped ${duplicates} duplicate product id(s)`)
-  }
-
-  const cleanInventory: InventoryItem[] = []
-  let droppedInv = 0
-  const invIds = new Set<string>()
-  for (const item of rawInventory) {
-    if (invIds.has(item.id) || !productIds.has(item.productId)) {
-      droppedInv++
-      continue
-    }
-    invIds.add(item.id)
-    cleanInventory.push(item)
-  }
-  if (droppedInv > 0) {
-    console.warn(`[import] dropped ${droppedInv} orphan/duplicate inventory item(s)`)
   }
 
   // Clear stale productId references on diagram side
@@ -597,7 +572,7 @@ function sanitizeProductsAndInventory(
     console.warn(`[import] cleared ${clearedLinks} link product reference(s)`)
   }
 
-  return { products: cleanProducts, inventory: cleanInventory, links: cleanLinks }
+  return { products: cleanProducts, links: cleanLinks }
 }
 
 export const diagramState = {
@@ -1022,7 +997,6 @@ export const diagramState = {
     }
 
     products = products.filter((p) => p.id !== id)
-    inventoryItems = inventoryItems.filter((i) => i.productId !== id)
   },
   updateProduct(id: string, updates: Partial<Product>) {
     products = products.map((p) => (p.id === id ? ({ ...p, ...updates } as Product) : p))
@@ -1043,44 +1017,6 @@ export const diagramState = {
     }
   },
 
-  // Inventory — unplaced stock pool
-  get inventory() {
-    return inventoryItems
-  },
-  addInventoryItem(item: InventoryItem) {
-    inventoryItems = [...inventoryItems, item]
-  },
-  removeInventoryItem(id: string) {
-    inventoryItems = inventoryItems.filter((i) => i.id !== id)
-  },
-  updateInventoryItem(id: string, updates: Partial<InventoryItem>) {
-    inventoryItems = inventoryItems.map((i) => (i.id === id ? { ...i, ...updates } : i))
-  },
-  /**
-   * Set the inventory row count for a product to exactly `count`. Adds
-   * fresh rows or drops the most-recent rows as needed. Negative values
-   * are clamped to 0. Used for direct quantity editing in Materials.
-   */
-  setInventoryCount(productId: string, count: number) {
-    const target = Math.max(0, Math.floor(count))
-    const matching = inventoryItems.filter((i) => i.productId === productId)
-    if (matching.length === target) return
-    if (matching.length < target) {
-      const additions: InventoryItem[] = []
-      for (let i = matching.length; i < target; i++) {
-        additions.push({ id: newId('inv'), productId })
-      }
-      inventoryItems = [...inventoryItems, ...additions]
-      return
-    }
-    // Trim from the end: keep the first `target` matching rows, drop the rest
-    const keepIds = new Set(matching.slice(0, target).map((i) => i.id))
-    inventoryItems = inventoryItems.filter((i) => i.productId !== productId || keepIds.has(i.id))
-  },
-  /** Count of unplaced units for a product. */
-  inventoryCount(productId: string): number {
-    return inventoryItems.filter((i) => i.productId === productId).length
-  },
   /** Count of placed units for a product (across the whole diagram). */
   placedCount(productId: string): number {
     let n = 0
@@ -1094,6 +1030,16 @@ export const diagramState = {
       if (link.cable?.productId === productId) n++
     }
     return n
+  },
+  /**
+   * Effective required quantity for a product. Returns the explicit
+   * `requiredQty` when set; otherwise falls back to the placed count
+   * (so an unset target is "however many we've drawn").
+   */
+  requiredCount(productId: string): number {
+    const product = products.find((p) => p.id === productId)
+    if (product?.requiredQty !== undefined) return product.requiredQty
+    return diagramState.placedCount(productId)
   },
 
   // Assignments — node/module/cable ↔ product binding view
@@ -1159,38 +1105,23 @@ export const diagramState = {
 
   /**
    * Bind a diagram node to a (device) Product. Consumes one matching
-   * InventoryItem if available — otherwise the binding is simply
-   * recorded on the node. Switches the bind if the node was already
-   * bound to a different product (returns the previous product to
-   * inventory if it was).
+   * Bind a diagram node to a (device) Product. The product's spec is
+   * snapshotted onto the node, and ports are derived from the product
+   * spec when available.
    */
   bindNodeToProduct(nodeId: string, productId: string) {
     const product = deviceProduct(productId)
     if (!product) return
     const node = diagram.nodes.get(nodeId)
     if (!node) return
-
-    // If switching binding, return the previous to inventory
-    if (node.productId && node.productId !== productId) {
-      inventoryItems = [...inventoryItems, { id: newId('inv'), productId: node.productId }]
-    }
-
-    // Consume one matching InventoryItem
-    if (node.productId !== productId) {
-      const idx = inventoryItems.findIndex((i) => i.productId === productId)
-      if (idx >= 0) {
-        inventoryItems = [...inventoryItems.slice(0, idx), ...inventoryItems.slice(idx + 1)]
-      }
-    }
-
     diagram.nodes.set(nodeId, { ...node, productId, spec: product.spec })
     setNodePortsFromProduct(nodeId, product)
   },
 
   /**
-   * Materialize a fresh diagram node for an unplaced inventory item
-   * (or a product, if no inventory row is available). Returns the new
-   * node id.
+   * Materialize a fresh diagram node bound to the given product. Returns
+   * the new node id. Increments `placedCount` on its own; if the user
+   * had a `requiredQty` set, the gap closes by one.
    */
   placeProductAsNode(productId: string): string | undefined {
     const product = deviceProduct(productId)
@@ -1220,12 +1151,6 @@ export const diagramState = {
       shape: 'rounded',
       position: pos,
     })
-
-    // Consume one matching InventoryItem
-    const idx = inventoryItems.findIndex((i) => i.productId === productId)
-    if (idx >= 0) {
-      inventoryItems = [...inventoryItems.slice(0, idx), ...inventoryItems.slice(idx + 1)]
-    }
     return id
   },
 
@@ -1266,7 +1191,6 @@ export const diagramState = {
       version: 2,
       name,
       products: [...products],
-      inventory: [...inventoryItems],
       diagram: diagramState.exportGraph(),
     }
     return JSON.stringify(project, null, 2)
@@ -1295,7 +1219,6 @@ export const diagramState = {
         version: 2,
         name: 'YAML Import',
         products: [...products],
-        inventory: [...inventoryItems],
         diagram,
       })
       yamlSource = yamlStr
@@ -1323,7 +1246,6 @@ export const diagramState = {
       version: 2,
       name: 'Diagram Import',
       products: [...products],
-      inventory: [...inventoryItems],
       diagram,
     })
   },
@@ -1344,7 +1266,6 @@ export const diagramState = {
     // Reset all state unconditionally — every path through the terminal
     // gets a clean slate before apply.
     products = []
-    inventoryItems = []
     diagram.nodes.clear()
     diagram.ports.clear()
     diagram.edges.clear()
@@ -1383,18 +1304,12 @@ export const diagramState = {
  */
 async function applyProject(data: Partial<NetedProject>) {
   await applyGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
-  const {
-    products: cleanProducts,
-    inventory: cleanInventory,
-    links: cleanLinks,
-  } = sanitizeProductsAndInventory(
+  const { products: cleanProducts, links: cleanLinks } = sanitizeProducts(
     data.products ?? [],
-    data.inventory ?? [],
     diagram.nodes,
     diagram.links,
   )
   products = cleanProducts
-  inventoryItems = cleanInventory
   diagram.links = cleanLinks
 
   // Re-derive ports for nodes bound to a device product. preserveExisting

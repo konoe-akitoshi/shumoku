@@ -197,6 +197,5 @@ export const sampleProject: NetedProject = {
   version: 2,
   name: 'Sample Network',
   products: sampleProducts,
-  inventory: [],
   diagram: sampleDiagramWithBindings,
 }

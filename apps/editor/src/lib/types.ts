@@ -30,6 +30,11 @@ interface ProductBase {
   id: string
   /** Catalog entry ID if linked to an external catalog. Absence = manually authored. */
   catalogId?: string
+  /**
+   * Procurement target. When set, BOM shows the gap against `placedCount`.
+   * Undefined means "track placed count" — no separate target.
+   */
+  requiredQty?: number
   /** User notes */
   notes?: string
 }
@@ -81,25 +86,6 @@ export interface CableProduct extends ProductBase {
 }
 
 // =========================================================================
-// Inventory — unplaced stock pool
-// =========================================================================
-
-/**
- * One physical unit ordered/owned but not yet placed in the diagram.
- * Placed units are tracked on the diagram side (`Node.productId` /
- * `LinkModule.productId` / `LinkCable.productId`); InventoryItem holds
- * only the in-stock pool.
- */
-export interface InventoryItem {
-  /** Stable unique ID (nanoid) */
-  id: string
-  /** Product this unit is an instance of */
-  productId: string
-  /** User notes for this specific unit */
-  notes?: string
-}
-
-// =========================================================================
 // Materials assignments — design element to Product binding view
 // =========================================================================
 
@@ -132,8 +118,6 @@ export interface NetedProject {
   settings?: Record<string, unknown>
   /** Project-local Products (devices / modules / cables) */
   products: Product[]
-  /** In-stock unplaced units */
-  inventory: InventoryItem[]
   /** Diagram — NetworkGraph (nodes with positions, links, subgraphs) */
   diagram: NetworkGraph
 }
