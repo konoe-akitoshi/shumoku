@@ -21,7 +21,7 @@
     status: 'placed' | 'unplaced' | 'node-only'
   }
 
-  let tab = $state('library')
+  let tab = $state('assignments')
   let catalogDialogOpen = $state(false)
   let customDialogOpen = $state(false)
 
@@ -207,9 +207,7 @@
 <div class="mb-6 flex items-center justify-between">
   <div>
     <h1 class="text-lg font-semibold">Materials</h1>
-    <p class="text-sm text-muted-foreground">
-      Project product library and device-to-node assignments
-    </p>
+    <p class="text-sm text-muted-foreground">Assign equipment products to diagram nodes</p>
   </div>
   <DropdownMenu.Root>
     <DropdownMenu.Trigger>
@@ -241,16 +239,16 @@
 <Tabs.Root bind:value={tab} class="space-y-4">
   <Tabs.List class="inline-flex rounded-lg border bg-muted/30 p-1">
     <Tabs.Trigger
-      value="library"
-      class="rounded-md px-3 py-1.5 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm"
-    >
-      Library
-    </Tabs.Trigger>
-    <Tabs.Trigger
       value="assignments"
       class="rounded-md px-3 py-1.5 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm"
     >
       Assignments
+    </Tabs.Trigger>
+    <Tabs.Trigger
+      value="library"
+      class="rounded-md px-3 py-1.5 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm"
+    >
+      Library
     </Tabs.Trigger>
   </Tabs.List>
 
@@ -312,9 +310,9 @@
   <Tabs.Content value="assignments">
     <div class="mb-3 flex items-center justify-between">
       <div>
-        <h2 class="text-sm font-semibold">Device assignments</h2>
+        <h2 class="text-sm font-semibold">Node assignments</h2>
         <p class="text-xs text-muted-foreground">
-          Bind project product rows to diagram nodes. Cable and module details stay in Connections.
+          Assign equipment products to diagram nodes. Cable and module details stay in Connections.
         </p>
       </div>
       <DropdownMenu.Root>
@@ -322,7 +320,7 @@
           {#snippet child({ props })}
             <Button variant="outline" size="sm" {...props}>
               <Plus class="mr-1 h-3.5 w-3.5" />
-              Add Device Row
+              Add Equipment
               <CaretDown class="ml-1 h-3 w-3" />
             </Button>
           {/snippet}
@@ -332,7 +330,7 @@
             class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
             onclick={() => addDeviceRow()}
           >
-            Empty device row
+            Unplaced equipment
           </DropdownMenu.Item>
           {#each deviceProducts as product}
             <DropdownMenu.Item
@@ -351,8 +349,8 @@
         <Table.Root>
           <Table.Header>
             <Table.Row>
-              <Table.Head>Product</Table.Head>
               <Table.Head>Node</Table.Head>
+              <Table.Head>Equipment</Table.Head>
               <Table.Head>Status</Table.Head>
               <Table.Head class="w-32"></Table.Head>
             </Table.Row>
@@ -360,26 +358,6 @@
           <Table.Body>
             {#each deviceRows as row}
               <Table.Row>
-                <Table.Cell>
-                  <select
-                    class={selectClass}
-                    value={row.productId ?? ''}
-                    onchange={(e) => {
-                      const value = (e.target as HTMLSelectElement).value || undefined
-                      setRowProduct(row, value)
-                    }}
-                  >
-                    <option value="">-- unassigned product --</option>
-                    {#each deviceProducts as product}
-                      <option value={product.id}>{paletteEntryLabel(product)}</option>
-                    {/each}
-                  </select>
-                  {#if row.productId && productsById.get(row.productId)}
-                    <div class="mt-1 text-[11px] text-muted-foreground">
-                      {productsById.get(row.productId)?.spec.kind}
-                    </div>
-                  {/if}
-                </Table.Cell>
                 <Table.Cell>
                   <select
                     class={selectClass}
@@ -399,6 +377,26 @@
                     <GitBranch class="h-3 w-3" />
                     {row.nodeLabel}
                   </div>
+                </Table.Cell>
+                <Table.Cell>
+                  <select
+                    class={selectClass}
+                    value={row.productId ?? ''}
+                    onchange={(e) => {
+                      const value = (e.target as HTMLSelectElement).value || undefined
+                      setRowProduct(row, value)
+                    }}
+                  >
+                    <option value="">-- unassigned equipment --</option>
+                    {#each deviceProducts as product}
+                      <option value={product.id}>{paletteEntryLabel(product)}</option>
+                    {/each}
+                  </select>
+                  {#if row.productId && productsById.get(row.productId)}
+                    <div class="mt-1 text-[11px] text-muted-foreground">
+                      {productsById.get(row.productId)?.spec.kind}
+                    </div>
+                  {/if}
                 </Table.Cell>
                 <Table.Cell>
                   {#if row.status === 'placed'}
@@ -442,7 +440,7 @@
       <Card.Root class="py-16">
         <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
           <p class="mb-1 text-sm">No device assignments yet.</p>
-          <p class="text-xs">Add a device row or create nodes in the diagram.</p>
+          <p class="text-xs">Create nodes in the diagram or add unplaced equipment.</p>
         </Card.Content>
       </Card.Root>
     {/if}
