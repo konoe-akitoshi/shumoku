@@ -28,7 +28,14 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
-import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
+import type {
+  AssignmentRow,
+  AssignmentTarget,
+  BomItem,
+  NetedProject,
+  Product,
+  SpecPaletteEntry,
+} from './types'
 import { paletteEntryLabel } from './types'
 
 // =========================================================================
@@ -132,6 +139,85 @@ let bomItems = $state<BomItem[]>([])
 let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
+
+function specProductSku(entry: Product): string | undefined {
+  return entry.catalogId ?? ('model' in entry.spec ? entry.spec.model : undefined) ?? entry.id
+}
+
+function nodeDisplayLabel(node: Node): string {
+  return Array.isArray(node.label) ? node.label[0] : (node.label ?? node.id)
+}
+
+function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undefined {
+  return link[side].plug?.module?.sku ?? link[side].plug?.module?.standard
+}
+
+function cableRequirementKey(link: Link): string | undefined {
+  const cable = link.cable
+  if (!cable) return undefined
+  return [cable.category, cable.medium, cable.length_m ? `${cable.length_m}m` : undefined]
+    .filter(Boolean)
+    .join(' / ')
+}
+
+function buildAssignmentRows(): AssignmentRow[] {
+  const rows: AssignmentRow[] = []
+  const bomByNode = new Map<string, BomItem>()
+  for (const item of bomItems) {
+    if (item.nodeId) bomByNode.set(item.nodeId, item)
+  }
+
+  for (const [nodeId, node] of diagram.nodes) {
+    const productId = node.productId ?? bomByNode.get(nodeId)?.paletteId
+    rows.push({
+      id: `node:${nodeId}`,
+      target: { kind: 'node', nodeId },
+      label: nodeDisplayLabel(node),
+      source: 'Diagram node',
+      productId,
+      requirementKey: node.spec
+        ? 'model' in node.spec
+          ? node.spec.model
+          : 'service' in node.spec
+            ? node.spec.service
+            : node.spec.kind
+        : undefined,
+      status: productId ? 'resolved' : node.spec ? 'generic' : 'incomplete',
+    })
+  }
+
+  for (const link of diagram.links) {
+    if (!link.id) continue
+    for (const side of ['from', 'to'] as const) {
+      const endpoint = link[side]
+      const key = endpointRequirementKey(link, side)
+      if (!key) continue
+      rows.push({
+        id: `module:${link.id}:${side}`,
+        target: { kind: 'link-module', linkId: link.id, side },
+        label: `${link.id} ${side} module`,
+        source: `${endpoint.node}:${endpoint.port}`,
+        productId: endpoint.plug?.module?.productId,
+        requirementKey: key,
+        status: endpoint.plug?.module?.productId ? 'resolved' : 'generic',
+      })
+    }
+    const cableKey = cableRequirementKey(link)
+    if (cableKey) {
+      rows.push({
+        id: `cable:${link.id}`,
+        target: { kind: 'link-cable', linkId: link.id },
+        label: `${link.id} cable`,
+        source: 'Connections cable',
+        productId: link.cable?.productId,
+        requirementKey: cableKey,
+        status: link.cable?.productId ? 'resolved' : 'generic',
+      })
+    }
+  }
+
+  return rows
+}
 
 /**
  * Active sheet for hierarchical / multi-sheet editing.
@@ -855,7 +941,21 @@ export const diagramState = {
     invalidateSheetCache()
   },
 
-  // Palette
+  // Materials / Library
+  get products() {
+    return palette as Product[]
+  },
+  addProduct(entry: Product) {
+    palette = [...palette, entry]
+  },
+  removeProduct(id: string) {
+    diagramState.removeFromPalette(id)
+  },
+  updateProduct(id: string, updates: Partial<Product>) {
+    diagramState.updatePaletteEntry(id, updates)
+  },
+
+  // Palette (legacy API while routes/components migrate)
   get palette() {
     return palette
   },
@@ -873,7 +973,7 @@ export const diagramState = {
       setNodeSpecs(boundNodeIds, roleSpec)
       for (const nodeId of boundNodeIds) {
         const node = diagram.nodes.get(nodeId)
-        if (node) diagram.nodes.set(nodeId, { ...node, ports: undefined })
+        if (node) diagram.nodes.set(nodeId, { ...node, productId: undefined, ports: undefined })
       }
     }
     palette = palette.filter((e) => e.id !== id)
@@ -899,6 +999,49 @@ export const diagramState = {
   // BOM items (device instances — master for qty management)
   get bomItems() {
     return bomItems
+  },
+  get assignmentRows(): AssignmentRow[] {
+    return buildAssignmentRows()
+  },
+  bindAssignment(target: AssignmentTarget, productId: string | undefined) {
+    if (target.kind === 'node') {
+      if (productId) diagramState.bindNodeToPalette(target.nodeId, productId)
+      else diagramState.unbindNodes([target.nodeId])
+      return
+    }
+
+    const link = diagram.links.find((l) => l.id === target.linkId)
+    if (!link?.id) return
+
+    if (target.kind === 'link-module') {
+      const endpoint = link[target.side]
+      const standard = endpoint.plug?.module?.standard
+      if (!standard) return
+      const product = productId ? palette.find((p) => p.id === productId) : undefined
+      const nextModule = {
+        ...endpoint.plug?.module,
+        standard,
+        productId,
+        sku: product ? specProductSku(product) : endpoint.plug?.module?.sku,
+      }
+      if (!productId) {
+        delete nextModule.productId
+        delete nextModule.sku
+      }
+      diagramState.updateLink(link.id, {
+        [target.side]: {
+          ...endpoint,
+          plug: { ...(endpoint.plug ?? {}), module: nextModule },
+        },
+      })
+      return
+    }
+
+    const nextCable = { ...(link.cable ?? {}), productId }
+    if (!productId) delete nextCable.productId
+    diagramState.updateLink(link.id, {
+      cable: Object.keys(nextCable).length > 0 ? nextCable : undefined,
+    })
   },
   addBomItem(item: BomItem) {
     bomItems = [...bomItems, item]
@@ -938,6 +1081,8 @@ export const diagramState = {
     if (nodeId) {
       const bom = bomItems.find((i) => i.id === bomId)
       const entry = bom ? palette.find((e) => e.id === bom.paletteId) : undefined
+      const node = diagram.nodes.get(nodeId)
+      if (node) diagram.nodes.set(nodeId, { ...node, productId: entry?.id })
       setNodeSpecs([nodeId], entry?.spec)
       setNodePortsFromPalette(nodeId, entry)
     }
@@ -963,7 +1108,12 @@ export const diagramState = {
     for (const nodeId of ids) {
       const rn = diagram.nodes.get(nodeId)
       if (rn) {
-        diagram.nodes.set(nodeId, { ...rn, spec: stripProductFromSpec(rn.spec), ports: undefined })
+        diagram.nodes.set(nodeId, {
+          ...rn,
+          productId: undefined,
+          spec: stripProductFromSpec(rn.spec),
+          ports: undefined,
+        })
       }
     }
     bomItems = bomItems.map((i) =>
@@ -983,6 +1133,8 @@ export const diagramState = {
       diagramState.updateBomItem(existing.id, { paletteId })
       const entry = palette.find((e) => e.id === paletteId)
       if (entry) {
+        const node = diagram.nodes.get(nodeId)
+        if (node) diagram.nodes.set(nodeId, { ...node, productId: entry.id })
         setNodeSpecs([nodeId], entry.spec)
         setNodePortsFromPalette(nodeId, entry)
       }
@@ -996,6 +1148,8 @@ export const diagramState = {
         diagramState.addBomItem({ id, paletteId, nodeId })
         const entry = palette.find((e) => e.id === paletteId)
         if (entry) {
+          const node = diagram.nodes.get(nodeId)
+          if (node) diagram.nodes.set(nodeId, { ...node, productId: entry.id })
           setNodeSpecs([nodeId], entry.spec)
           setNodePortsFromPalette(nodeId, entry)
         }
@@ -1028,6 +1182,7 @@ export const diagramState = {
       id,
       label,
       spec,
+      productId: entry.id,
       ports: nodePortsFromPaletteEntry(entry),
       shape: 'rounded',
       position: pos,
@@ -1074,6 +1229,7 @@ export const diagramState = {
       version: 1,
       name,
       palette: [...palette],
+      products: [...palette],
       bom: [...bomItems],
       diagram: diagramState.exportGraph(),
     }
@@ -1196,7 +1352,7 @@ export const diagramState = {
 async function applyProject(data: Partial<NetedProject>) {
   await applyGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
   const { palette: cleanPalette, bom: cleanBom } = sanitizePaletteAndBom(
-    data.palette ?? [],
+    data.products ?? data.palette ?? [],
     data.bom ?? [],
     diagram.nodes,
   )
@@ -1204,6 +1360,8 @@ async function applyProject(data: Partial<NetedProject>) {
   bomItems = cleanBom
   for (const item of bomItems) {
     if (!item.nodeId || !item.paletteId) continue
+    const node = diagram.nodes.get(item.nodeId)
+    if (node) diagram.nodes.set(item.nodeId, { ...node, productId: item.paletteId })
     setNodePortsFromPalette(
       item.nodeId,
       palette.find((entry) => entry.id === item.paletteId),

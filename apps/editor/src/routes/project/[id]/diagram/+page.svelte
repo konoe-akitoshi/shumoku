@@ -115,8 +115,7 @@
         onchange={() => {}}
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
         oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => { contextMenu = { id, type, x: screenX, y: screenY } }}
-        onnodeadd={(id: string) => {
-          diagramState.addBomItem({ id: newId('bom'), nodeId: id })
+        onnodeadd={(_id: string) => {
           // The renderer mutated diagram.nodes directly (via $bindable)
           // before emitting this event — invalidate cached sheets now.
           diagramState.invalidateSheetCache()
@@ -197,7 +196,7 @@
         const info = renderer?.getElementInfo(id)
         if (!info) { clipboard = null; return }
         const paletteId = info.kind === 'node'
-          ? diagramState.bomItems.find((b) => b.nodeId === id)?.paletteId
+          ? diagramState.nodes.get(id)?.productId ?? diagramState.bomItems.find((b) => b.nodeId === id)?.paletteId
           : undefined
         clipboard = {
           label: info.label,

@@ -307,6 +307,13 @@ export interface Node {
   spec?: NodeSpec
 
   /**
+   * Project-local product definition assigned to this design node.
+   * The node keeps `spec` as a snapshot so diagrams remain usable without
+   * the project product library.
+   */
+  productId?: string
+
+  /**
    * Concrete ports owned by this node. Catalog-backed nodes snapshot
    * their port list here so saved diagrams do not change when catalog
    * definitions are updated later.
@@ -381,6 +388,8 @@ export interface LinkModule {
   standard: EthernetStandard
   /** Vendor SKU for inventory, e.g. "SFP-10G-SR-S". Optional. */
   sku?: string
+  /** Project-local product definition assigned to this endpoint module. */
+  productId?: string
 }
 
 /**
@@ -448,6 +457,8 @@ export interface LinkCable {
   category?: CableGrade
   /** Run length in meters. Used for reach warnings. */
   length_m?: number
+  /** Project-local product definition assigned to this cable run. */
+  productId?: string
 }
 
 export interface Link {
