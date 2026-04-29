@@ -333,7 +333,10 @@
               {@const placed = diagramState.placedCount(product.id)}
               {@const required = diagramState.requiredCount(product.id)}
               {@const diff = required - placed}
-              <Table.Row>
+              <Table.Row
+                class="cursor-pointer hover:bg-muted/40"
+                onclick={() => goto(`/project/${$page.params.id}/materials/${product.id}`)}
+              >
                 <Table.Cell
                   ><Badge variant="secondary">{productKindLabel(product)}</Badge></Table.Cell
                 >
@@ -353,7 +356,7 @@
                   {/if}
                 </Table.Cell>
                 <Table.Cell class="text-right font-mono text-xs">{placed}</Table.Cell>
-                <Table.Cell class="text-right">
+                <Table.Cell class="text-right" onclick={(e) => e.stopPropagation()}>
                   <input
                     type="number"
                     min="0"
@@ -373,7 +376,7 @@
                     <span class="text-muted-foreground">0</span>
                   {/if}
                 </Table.Cell>
-                <Table.Cell>
+                <Table.Cell onclick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" onclick={() => { removeTarget = product }}>
                     <Trash class="h-3.5 w-3.5 text-destructive" />
                   </Button>
