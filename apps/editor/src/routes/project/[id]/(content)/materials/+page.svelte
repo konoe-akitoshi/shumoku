@@ -10,7 +10,16 @@
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
-  import { type Product, paletteEntryLabel, specIdentifier } from '$lib/types'
+  import { paletteEntryLabel, specIdentifier } from '$lib/types'
+
+  type DeviceAssignmentRow = {
+    id: string
+    bomId?: string
+    nodeId?: string
+    productId?: string
+    nodeLabel: string
+    status: 'placed' | 'unplaced' | 'node-only'
+  }
 
   let tab = $state('library')
   let catalogDialogOpen = $state(false)
@@ -29,12 +38,49 @@
   const catalog = diagramState.catalog
 
   const products = $derived(diagramState.products)
-  const assignmentRows = $derived(diagramState.assignmentRows)
+  const productsById = $derived(new Map(products.map((product) => [product.id, product])))
+  const nodes = $derived(
+    [...diagramState.nodes.values()].sort((a, b) =>
+      displayNodeLabel(a).localeCompare(displayNodeLabel(b)),
+    ),
+  )
   const deviceProducts = $derived(
     products.filter(
       (p) => p.spec.kind === 'hardware' || p.spec.kind === 'compute' || p.spec.kind === 'service',
     ),
   )
+
+  const boundNodeIds = $derived(
+    new Set(diagramState.bomItems.flatMap((item) => (item.nodeId ? [item.nodeId] : []))),
+  )
+  const unboundNodes = $derived(nodes.filter((node) => !boundNodeIds.has(node.id)))
+
+  const deviceRows = $derived.by<DeviceAssignmentRow[]>(() => {
+    const rows: DeviceAssignmentRow[] = diagramState.bomItems.map((item) => {
+      const node = item.nodeId ? diagramState.nodes.get(item.nodeId) : undefined
+      return {
+        id: item.id,
+        bomId: item.id,
+        nodeId: item.nodeId,
+        productId: item.paletteId,
+        nodeLabel: node ? displayNodeLabel(node) : 'Unplaced',
+        status: item.nodeId ? 'placed' : 'unplaced',
+      }
+    })
+
+    for (const node of nodes) {
+      if (boundNodeIds.has(node.id)) continue
+      rows.push({
+        id: `node:${node.id}`,
+        nodeId: node.id,
+        productId: node.productId,
+        nodeLabel: displayNodeLabel(node),
+        status: 'node-only',
+      })
+    }
+
+    return rows
+  })
 
   const vendors = $derived.by(() => {
     const set = new Set<string>()
@@ -68,14 +114,10 @@
     return null
   })
 
-  const usageRows = $derived.by(() => {
-    const rows = []
-    for (const product of products) {
-      const usage = assignmentRows.filter((row) => row.productId === product.id)
-      rows.push({ product, usage })
-    }
-    return rows
-  })
+  function displayNodeLabel(node: { id: string; label?: string | string[] }): string {
+    if (Array.isArray(node.label)) return node.label[0] ?? node.id
+    return node.label ?? node.id
+  }
 
   function addFromCatalog() {
     const entry = selectedEntry
@@ -113,14 +155,46 @@
     selectedModelId = ''
   }
 
-  function targetPath(row: { target: { kind: string; nodeId?: string; linkId?: string } }) {
-    if (row.target.kind === 'node') return `/project/${$page.params.id}/diagram`
-    return `/project/${$page.params.id}/connections`
+  function addDeviceRow(productId?: string) {
+    diagramState.addBomItem({ id: newId('bom'), paletteId: productId })
+    tab = 'assignments'
   }
 
-  function compatibleProducts(row: { target: { kind: string } }): Product[] {
-    if (row.target.kind === 'node') return deviceProducts
-    return products
+  function setRowProduct(row: DeviceAssignmentRow, productId: string | undefined) {
+    if (row.bomId) {
+      diagramState.updateBomItem(row.bomId, { paletteId: productId })
+      if (row.nodeId) diagramState.bindNodeToBom(row.bomId, row.nodeId)
+      return
+    }
+    if (row.nodeId) {
+      if (productId) diagramState.bindNodeToPalette(row.nodeId, productId)
+      else diagramState.unbindNodes([row.nodeId])
+    }
+  }
+
+  function setRowNode(row: DeviceAssignmentRow, nodeId: string | undefined) {
+    if (!row.bomId) return
+    if (row.nodeId && row.nodeId !== nodeId) diagramState.unbindNodes([row.nodeId])
+    diagramState.bindNodeToBom(row.bomId, nodeId)
+  }
+
+  function nodeOptions(row: DeviceAssignmentRow) {
+    const options = [...unboundNodes]
+    if (row.nodeId && !options.some((node) => node.id === row.nodeId)) {
+      const current = diagramState.nodes.get(row.nodeId)
+      if (current) options.unshift(current)
+    }
+    return options
+  }
+
+  function placeRow(row: DeviceAssignmentRow) {
+    if (row.nodeId) {
+      goto(`/project/${$page.params.id}/diagram`)
+      return
+    }
+    if (!row.bomId) return
+    const nodeId = diagramState.placeNodeForBom(row.bomId)
+    if (nodeId) goto(`/project/${$page.params.id}/diagram`)
   }
 
   const selectClass =
@@ -134,7 +208,7 @@
   <div>
     <h1 class="text-lg font-semibold">Materials</h1>
     <p class="text-sm text-muted-foreground">
-      Product library, design assignments, and usage across this project
+      Project product library and device-to-node assignments
     </p>
   </div>
   <DropdownMenu.Root>
@@ -178,12 +252,6 @@
     >
       Assignments
     </Tabs.Trigger>
-    <Tabs.Trigger
-      value="usage"
-      class="rounded-md px-3 py-1.5 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm"
-    >
-      Usage
-    </Tabs.Trigger>
   </Tabs.List>
 
   <Tabs.Content value="library">
@@ -196,16 +264,16 @@
               <Table.Head>Vendor</Table.Head>
               <Table.Head>Identifier</Table.Head>
               <Table.Head>Source</Table.Head>
-              <Table.Head class="text-right">Used</Table.Head>
+              <Table.Head class="text-right">Assigned</Table.Head>
               <Table.Head class="w-10"></Table.Head>
             </Table.Row>
           </Table.Header>
           <Table.Body>
             {#each products as product}
-              {@const usageCount = assignmentRows.filter((row) => row.productId === product.id).length}
+              {@const usageCount = deviceRows.filter((row) => row.productId === product.id).length}
               <Table.Row>
                 <Table.Cell><Badge variant="secondary">{product.spec.kind}</Badge></Table.Cell>
-                <Table.Cell class="font-mono text-xs">{product.spec.vendor ?? '—'}</Table.Cell>
+                <Table.Cell class="font-mono text-xs">{product.spec.vendor ?? '-'}</Table.Cell>
                 <Table.Cell class="font-mono text-xs">{specIdentifier(product.spec)}</Table.Cell>
                 <Table.Cell>
                   {#if product.source === 'catalog'}
@@ -242,97 +310,142 @@
   </Tabs.Content>
 
   <Tabs.Content value="assignments">
-    <Card.Root class="py-0">
-      <Table.Root>
-        <Table.Header>
-          <Table.Row>
-            <Table.Head>Target</Table.Head>
-            <Table.Head>Source</Table.Head>
-            <Table.Head>Requirement</Table.Head>
-            <Table.Head>Assigned Product</Table.Head>
-            <Table.Head>Status</Table.Head>
-            <Table.Head class="w-16"></Table.Head>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {#each assignmentRows as row}
-            <Table.Row>
-              <Table.Cell>
-                <div class="flex items-center gap-2">
-                  <GitBranch class="h-3.5 w-3.5 text-muted-foreground" />
-                  <span class="text-xs font-medium">{row.label}</span>
-                </div>
-              </Table.Cell>
-              <Table.Cell class="font-mono text-xs">{row.source}</Table.Cell>
-              <Table.Cell class="font-mono text-xs">{row.requirementKey ?? '—'}</Table.Cell>
-              <Table.Cell>
-                <select
-                  class={selectClass}
-                  value={row.productId ?? ''}
-                  onchange={(e) => {
-                    const value = (e.target as HTMLSelectElement).value || undefined
-                    diagramState.bindAssignment(row.target, value)
-                  }}
-                >
-                  <option value="">-- generic / unassigned --</option>
-                  {#each compatibleProducts(row) as product}
-                    <option value={product.id}>{paletteEntryLabel(product)}</option>
-                  {/each}
-                </select>
-              </Table.Cell>
-              <Table.Cell>
-                {#if row.status === 'resolved'}
-                  <Badge variant="default">resolved</Badge>
-                {:else if row.status === 'generic'}
-                  <Badge variant="secondary">generic</Badge>
-                {:else}
-                  <Badge variant="outline">incomplete</Badge>
-                {/if}
-              </Table.Cell>
-              <Table.Cell>
-                <Button variant="ghost" size="sm" onclick={() => goto(targetPath(row))}
-                  >Open</Button
-                >
-              </Table.Cell>
-            </Table.Row>
+    <div class="mb-3 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-semibold">Device assignments</h2>
+        <p class="text-xs text-muted-foreground">
+          Bind project product rows to diagram nodes. Cable and module details stay in Connections.
+        </p>
+      </div>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}
+            <Button variant="outline" size="sm" {...props}>
+              <Plus class="mr-1 h-3.5 w-3.5" />
+              Add Device Row
+              <CaretDown class="ml-1 h-3 w-3" />
+            </Button>
+          {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content class="z-50 min-w-56 rounded-lg border bg-popover p-1 shadow-md">
+          <DropdownMenu.Item
+            class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+            onclick={() => addDeviceRow()}
+          >
+            Empty device row
+          </DropdownMenu.Item>
+          {#each deviceProducts as product}
+            <DropdownMenu.Item
+              class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+              onclick={() => addDeviceRow(product.id)}
+            >
+              {paletteEntryLabel(product)}
+            </DropdownMenu.Item>
           {/each}
-        </Table.Body>
-      </Table.Root>
-    </Card.Root>
-  </Tabs.Content>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </div>
 
-  <Tabs.Content value="usage">
-    <Card.Root class="py-0">
-      <Table.Root>
-        <Table.Header>
-          <Table.Row>
-            <Table.Head>Product</Table.Head>
-            <Table.Head class="text-right">Used</Table.Head>
-            <Table.Head>Targets</Table.Head>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {#each usageRows as row}
+    {#if deviceRows.length > 0}
+      <Card.Root class="py-0">
+        <Table.Root>
+          <Table.Header>
             <Table.Row>
-              <Table.Cell>
-                <div class="text-xs font-medium">{paletteEntryLabel(row.product)}</div>
-                <div class="text-[11px] text-muted-foreground">{row.product.spec.kind}</div>
-              </Table.Cell>
-              <Table.Cell class="text-right font-mono text-xs">{row.usage.length}</Table.Cell>
-              <Table.Cell>
-                <div class="flex flex-wrap gap-1">
-                  {#each row.usage as usage}
-                    <Badge variant="outline" class="font-mono text-[10px]">{usage.label}</Badge>
-                  {:else}
-                    <span class="text-xs text-muted-foreground">Not used</span>
-                  {/each}
-                </div>
-              </Table.Cell>
+              <Table.Head>Product</Table.Head>
+              <Table.Head>Node</Table.Head>
+              <Table.Head>Status</Table.Head>
+              <Table.Head class="w-32"></Table.Head>
             </Table.Row>
-          {/each}
-        </Table.Body>
-      </Table.Root>
-    </Card.Root>
+          </Table.Header>
+          <Table.Body>
+            {#each deviceRows as row}
+              <Table.Row>
+                <Table.Cell>
+                  <select
+                    class={selectClass}
+                    value={row.productId ?? ''}
+                    onchange={(e) => {
+                      const value = (e.target as HTMLSelectElement).value || undefined
+                      setRowProduct(row, value)
+                    }}
+                  >
+                    <option value="">-- unassigned product --</option>
+                    {#each deviceProducts as product}
+                      <option value={product.id}>{paletteEntryLabel(product)}</option>
+                    {/each}
+                  </select>
+                  {#if row.productId && productsById.get(row.productId)}
+                    <div class="mt-1 text-[11px] text-muted-foreground">
+                      {productsById.get(row.productId)?.spec.kind}
+                    </div>
+                  {/if}
+                </Table.Cell>
+                <Table.Cell>
+                  <select
+                    class={selectClass}
+                    value={row.nodeId ?? ''}
+                    disabled={!row.bomId}
+                    onchange={(e) => {
+                      const value = (e.target as HTMLSelectElement).value || undefined
+                      setRowNode(row, value)
+                    }}
+                  >
+                    <option value="">-- unplaced --</option>
+                    {#each nodeOptions(row) as node}
+                      <option value={node.id}>{displayNodeLabel(node)}</option>
+                    {/each}
+                  </select>
+                  <div class="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <GitBranch class="h-3 w-3" />
+                    {row.nodeLabel}
+                  </div>
+                </Table.Cell>
+                <Table.Cell>
+                  {#if row.status === 'placed'}
+                    <Badge variant="default">placed</Badge>
+                  {:else if row.status === 'unplaced'}
+                    <Badge variant="secondary">unplaced</Badge>
+                  {:else}
+                    <Badge variant="outline">node only</Badge>
+                  {/if}
+                </Table.Cell>
+                <Table.Cell>
+                  <div class="flex justify-end gap-1">
+                    <Button variant="ghost" size="sm" onclick={() => placeRow(row)}>
+                      {row.nodeId ? 'Open' : 'Place'}
+                    </Button>
+                    {#if row.nodeId}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onclick={() => diagramState.unbindNodes([row.nodeId as string])}
+                      >
+                        Unbind
+                      </Button>
+                    {:else if row.bomId}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onclick={() => diagramState.removeBomItem(row.bomId as string)}
+                      >
+                        <Trash class="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    {/if}
+                  </div>
+                </Table.Cell>
+              </Table.Row>
+            {/each}
+          </Table.Body>
+        </Table.Root>
+      </Card.Root>
+    {:else}
+      <Card.Root class="py-16">
+        <Card.Content class="flex flex-col items-center text-center text-muted-foreground">
+          <p class="mb-1 text-sm">No device assignments yet.</p>
+          <p class="text-xs">Add a device row or create nodes in the diagram.</p>
+        </Card.Content>
+      </Card.Root>
+    {/if}
   </Tabs.Content>
 </Tabs.Root>
 
@@ -409,7 +522,7 @@
           <Card.Root class="border-primary/20 bg-primary/5">
             <Card.Content class="px-3 py-2 text-xs text-primary"
               >{selectedEntry.label}
-              — {selectedEntry.id}</Card.Content
+              - {selectedEntry.id}</Card.Content
             >
           </Card.Root>
         {/if}
