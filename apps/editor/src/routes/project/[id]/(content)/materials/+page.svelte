@@ -33,7 +33,6 @@
   let removeTarget = $state<Product | null>(null)
   let addTarget = $state<Product | null>(null)
   let addDelta = $state('1')
-  let highlightedNodeId = $state<string | null>(null)
 
   function openAddDialog(product: Product) {
     addTarget = product
@@ -93,23 +92,11 @@
         })
       }
     }
-    // Pull a freshly-added node to the top so the user sees their action
-    if (highlightedNodeId) {
-      const idx = out.findIndex((r) => r.nodeId === highlightedNodeId)
-      if (idx > 0) {
-        const [first] = out.splice(idx, 1)
-        if (first) out.unshift(first)
-      }
-    }
     return out
   })
 
   function handleAddNode() {
-    const id = diagramState.addEmptyNode()
-    highlightedNodeId = id
-    setTimeout(() => {
-      if (highlightedNodeId === id) highlightedNodeId = null
-    }, 3000)
+    diagramState.addEmptyNode()
   }
 
   const vendors = $derived.by(() => {
@@ -453,17 +440,12 @@
           <Table.Body>
             {#each rows as row (row.id)}
               <Table.Row
-                class={row.nodeId === highlightedNodeId
-                  ? 'bg-amber-50 transition-colors dark:bg-amber-900/20'
-                  : ''}
+                class={row.kind === 'node-only' ? 'bg-amber-50/40 dark:bg-amber-900/10' : ''}
               >
                 <Table.Cell>
                   <div class="flex items-center gap-1 text-xs">
                     <GitBranch class="h-3 w-3 text-muted-foreground" />
                     <span class="font-mono">{row.nodeLabel}</span>
-                    {#if row.nodeId === highlightedNodeId}
-                      <Badge variant="secondary" class="ml-1 text-[9px]">new</Badge>
-                    {/if}
                   </div>
                 </Table.Cell>
                 <Table.Cell>
