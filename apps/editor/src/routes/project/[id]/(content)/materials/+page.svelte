@@ -362,16 +362,12 @@
                 </Table.Cell>
                 <Table.Cell class="text-right" onclick={(e) => e.stopPropagation()}>
                   <div class="inline-flex items-center justify-end gap-2 font-mono text-xs">
-                    <span>
-                      <span class="text-muted-foreground">{placed}</span>
-                      <span class="text-muted-foreground">/</span>
-                      <span class="font-semibold">{required}</span>
-                      {#if diff > 0}
-                        <span class="ml-1 text-amber-600">+{diff}</span>
-                      {:else if diff < 0}
-                        <span class="ml-1 text-rose-600">{diff}</span>
-                      {/if}
-                    </span>
+                    <span class="font-semibold">{required}</span>
+                    {#if diff > 0}
+                      <span class="text-amber-600" title="{diff} more needed">+{diff}</span>
+                    {:else if diff < 0}
+                      <span class="text-rose-600" title="{Math.abs(diff)} over">{diff}</span>
+                    {/if}
                     <Button
                       variant="outline"
                       size="icon"
