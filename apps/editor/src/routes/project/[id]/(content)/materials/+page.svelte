@@ -31,6 +31,19 @@
   let catalogDialogOpen = $state(false)
   let customDialogOpen = $state(false)
   let removeTarget = $state<Product | null>(null)
+  let requiredEditTarget = $state<Product | null>(null)
+  let requiredEditValue = $state('')
+
+  function openRequiredEdit(product: Product) {
+    requiredEditTarget = product
+    requiredEditValue = product.requiredQty !== undefined ? String(product.requiredQty) : ''
+  }
+
+  function saveRequiredEdit() {
+    if (!requiredEditTarget) return
+    setRequiredQty(requiredEditTarget.id, requiredEditValue)
+    requiredEditTarget = null
+  }
 
   let selectedKind = $state('hardware')
   let selectedVendor = $state('')
@@ -322,9 +335,7 @@
               <Table.Head>Vendor</Table.Head>
               <Table.Head>Identifier</Table.Head>
               <Table.Head>Origin</Table.Head>
-              <Table.Head class="text-right">Placed</Table.Head>
-              <Table.Head class="w-28 text-right">Required</Table.Head>
-              <Table.Head class="w-16 text-right">Diff</Table.Head>
+              <Table.Head class="w-32 text-right">Quantity</Table.Head>
               <Table.Head class="w-10"></Table.Head>
             </Table.Row>
           </Table.Header>
@@ -355,26 +366,22 @@
                     <Badge variant="outline">custom</Badge>
                   {/if}
                 </Table.Cell>
-                <Table.Cell class="text-right font-mono text-xs">{placed}</Table.Cell>
                 <Table.Cell class="text-right" onclick={(e) => e.stopPropagation()}>
-                  <input
-                    type="number"
-                    min="0"
-                    inputmode="numeric"
-                    placeholder={String(placed)}
-                    class="w-16 rounded border border-input bg-background px-1.5 py-0.5 text-right font-mono text-xs outline-none focus:ring-1 focus:ring-ring"
-                    value={product.requiredQty ?? ''}
-                    onchange={(e) => setRequiredQty(product.id, (e.target as HTMLInputElement).value)}
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-xs hover:bg-muted/60"
+                    onclick={() => openRequiredEdit(product)}
+                    title="Set required count"
                   >
-                </Table.Cell>
-                <Table.Cell class="text-right font-mono text-xs">
-                  {#if diff > 0}
-                    <span class="text-amber-600">+{diff}</span>
-                  {:else if diff < 0}
-                    <span class="text-rose-600">{diff}</span>
-                  {:else}
-                    <span class="text-muted-foreground">0</span>
-                  {/if}
+                    <span class="text-muted-foreground">{placed}</span>
+                    <span class="text-muted-foreground">/</span>
+                    <span class="font-semibold">{required}</span>
+                    {#if diff > 0}
+                      <span class="text-amber-600">+{diff}</span>
+                    {:else if diff < 0}
+                      <span class="text-rose-600">{diff}</span>
+                    {/if}
+                  </button>
                 </Table.Cell>
                 <Table.Cell onclick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" onclick={() => { removeTarget = product }}>
@@ -703,6 +710,67 @@
           >
           <Button variant="destructive" size="sm" onclick={confirmRemoveProduct}>Remove</Button>
         </div>
+      </div>
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
+
+<!-- Set Required popup -->
+<Dialog.Root
+  open={requiredEditTarget !== null}
+  onOpenChange={(o) => { if (!o) requiredEditTarget = null }}
+>
+  <Dialog.Portal>
+    <Dialog.Overlay class="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] dark:bg-black/40" />
+    <Dialog.Content
+      class="fixed left-1/2 top-1/2 z-50 w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-popover shadow-2xl focus:outline-none"
+    >
+      <div class="flex items-center justify-between border-b px-5 py-4">
+        <Dialog.Title class="text-sm font-semibold">Set required count</Dialog.Title>
+        <Dialog.Close
+          class="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <X class="h-4 w-4" />
+        </Dialog.Close>
+      </div>
+      <Dialog.Description class="sr-only"
+        >Set the procurement target for this product</Dialog.Description
+      >
+      <div class="space-y-3 px-5 py-4 text-sm">
+        {#if requiredEditTarget}
+          {@const placedNow = diagramState.placedCount(requiredEditTarget.id)}
+          <div>
+            <div class="text-xs text-muted-foreground">Product</div>
+            <div class="font-mono text-sm">{productLabel(requiredEditTarget)}</div>
+          </div>
+          <div class="flex items-center gap-3 rounded-md bg-muted/40 p-3 text-xs">
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Placed</div>
+              <div class="font-mono text-base">{placedNow}</div>
+            </div>
+          </div>
+          <div>
+            <div class={labelClass}>Required (target)</div>
+            <input
+              type="number"
+              min="0"
+              inputmode="numeric"
+              placeholder="(follow placed)"
+              class={inputClass}
+              bind:value={requiredEditValue}
+              onkeydown={(e) => { if (e.key === 'Enter') saveRequiredEdit() }}
+            >
+            <p class="mt-1 text-[10px] text-muted-foreground">
+              Empty = follow placed count. Editing this never deletes diagram nodes.
+            </p>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onclick={() => { requiredEditTarget = null }}
+              >Cancel</Button
+            >
+            <Button size="sm" onclick={saveRequiredEdit}>Save</Button>
+          </div>
+        {/if}
       </div>
     </Dialog.Content>
   </Dialog.Portal>
