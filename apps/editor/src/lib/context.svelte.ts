@@ -1154,6 +1154,30 @@ export const diagramState = {
     return id
   },
 
+  /**
+   * Materialize an empty diagram node with no spec or product binding.
+   * Used when a user wants to start from a node placeholder and bind a
+   * product later. Returns the new node id.
+   */
+  addEmptyNode(label = 'Node'): string {
+    const id = newId('node')
+    const { width: w, height: h } = computeNodeSize({ label })
+    const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
+    const pos = resolvePosition(
+      {
+        x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
+        y: diagram.bounds.y + diagram.bounds.height / 2,
+        w,
+        h,
+      },
+      obstacles,
+    )
+    diagram.nodes.set(id, { id, label, shape: 'rounded', position: pos })
+    invalidateSheetCache()
+    rebuildPortsAndEdges()
+    return id
+  },
+
   // NetworkGraph — canonical save/load format
   exportGraph(): NetworkGraph {
     return {

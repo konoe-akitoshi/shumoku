@@ -33,6 +33,7 @@
   let removeTarget = $state<Product | null>(null)
   let addTarget = $state<Product | null>(null)
   let addDelta = $state('1')
+  let highlightedNodeId = $state<string | null>(null)
 
   function openAddDialog(product: Product) {
     addTarget = product
@@ -92,8 +93,24 @@
         })
       }
     }
+    // Pull a freshly-added node to the top so the user sees their action
+    if (highlightedNodeId) {
+      const idx = out.findIndex((r) => r.nodeId === highlightedNodeId)
+      if (idx > 0) {
+        const [first] = out.splice(idx, 1)
+        if (first) out.unshift(first)
+      }
+    }
     return out
   })
+
+  function handleAddNode() {
+    const id = diagramState.addEmptyNode()
+    highlightedNodeId = id
+    setTimeout(() => {
+      if (highlightedNodeId === id) highlightedNodeId = null
+    }, 3000)
+  }
 
   const vendors = $derived.by(() => {
     const set = new Set<string>()
@@ -224,38 +241,11 @@
   const labelClass = 'text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1'
 </script>
 
-<div class="mb-4 flex items-start justify-between gap-3">
-  <div>
-    <h1 class="text-lg font-semibold">Materials</h1>
-    <p class="text-sm text-muted-foreground">
-      Project-local products with required counts; bind to diagram nodes.
-    </p>
-  </div>
-  <DropdownMenu.Root>
-    <DropdownMenu.Trigger>
-      {#snippet child({ props })}
-        <Button size="sm" {...props}>
-          <Plus class="mr-1 h-4 w-4" />
-          Add Product
-          <CaretDown class="ml-1 h-3 w-3" />
-        </Button>
-      {/snippet}
-    </DropdownMenu.Trigger>
-    <DropdownMenu.Content class="z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-md">
-      <DropdownMenu.Item
-        class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-        onclick={() => { catalogDialogOpen = true }}
-      >
-        From external catalog
-      </DropdownMenu.Item>
-      <DropdownMenu.Item
-        class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-        onclick={() => { customDialogOpen = true }}
-      >
-        Custom product
-      </DropdownMenu.Item>
-    </DropdownMenu.Content>
-  </DropdownMenu.Root>
+<div class="mb-4">
+  <h1 class="text-lg font-semibold">Materials</h1>
+  <p class="text-sm text-muted-foreground">
+    Project-local products with required counts; bind to diagram nodes.
+  </p>
 </div>
 
 <!-- Project status banner — single-glance health view -->
@@ -313,11 +303,38 @@
   </Tabs.List>
 
   <Tabs.Content value="library">
-    <div class="mb-3">
-      <h2 class="text-sm font-semibold">Product library</h2>
-      <p class="text-xs text-muted-foreground">
-        Devices, modules, cables you reference in this project.
-      </p>
+    <div class="mb-3 flex items-center justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-semibold">Product library</h2>
+        <p class="text-xs text-muted-foreground">
+          Devices, modules, cables you reference in this project.
+        </p>
+      </div>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}
+            <Button size="sm" {...props}>
+              <Plus class="mr-1 h-4 w-4" />
+              Add Product
+              <CaretDown class="ml-1 h-3 w-3" />
+            </Button>
+          {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content class="z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-md">
+          <DropdownMenu.Item
+            class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+            onclick={() => { catalogDialogOpen = true }}
+          >
+            From external catalog
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+            onclick={() => { customDialogOpen = true }}
+          >
+            Custom product
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
     </div>
 
     {#if products.length > 0}
@@ -408,12 +425,18 @@
   </Tabs.Content>
 
   <Tabs.Content value="assignments">
-    <div class="mb-3">
-      <h2 class="text-sm font-semibold">Node assignments</h2>
-      <p class="text-xs text-muted-foreground">
-        Each diagram node and the product it is bound to. Edit `Required` in the Library tab to
-        adjust procurement targets.
-      </p>
+    <div class="mb-3 flex items-center justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-semibold">Node assignments</h2>
+        <p class="text-xs text-muted-foreground">
+          Each diagram node and the product it is bound to. Edit `Required` in the Library tab to
+          adjust procurement targets.
+        </p>
+      </div>
+      <Button size="sm" onclick={handleAddNode}>
+        <Plus class="mr-1 h-4 w-4" />
+        Add Node
+      </Button>
     </div>
 
     {#if rows.length > 0}
@@ -429,11 +452,18 @@
           </Table.Header>
           <Table.Body>
             {#each rows as row (row.id)}
-              <Table.Row>
+              <Table.Row
+                class={row.nodeId === highlightedNodeId
+                  ? 'bg-amber-50 transition-colors dark:bg-amber-900/20'
+                  : ''}
+              >
                 <Table.Cell>
                   <div class="flex items-center gap-1 text-xs">
                     <GitBranch class="h-3 w-3 text-muted-foreground" />
                     <span class="font-mono">{row.nodeLabel}</span>
+                    {#if row.nodeId === highlightedNodeId}
+                      <Badge variant="secondary" class="ml-1 text-[9px]">new</Badge>
+                    {/if}
                   </div>
                 </Table.Cell>
                 <Table.Cell>
