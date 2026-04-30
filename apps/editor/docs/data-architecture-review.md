@@ -1,8 +1,8 @@
-# データ構造レビュー（現状スナップショット）
+# データ構造（Materials 周り）
 
-`#162` 後の **現実装** を 1 枚に並べ、最適化の議論台にするための作業 doc。理想形（`project-workflow-model.md`）ではなく**今コードに何があるか**だけを書く。
+エディタ内のデータ構造を 1 枚にまとめた reference doc。Materials 操作フローや BOM ロジックなど、上位の議論はこの形を前提にする。
 
-> このドキュメントは議論用。決定事項は他の `*-model.md` に反映してから、ここから消す。
+決定済みの議論ログは §6 に Q1〜Q6 として残してある（経緯を辿りたい人向け）。
 
 ---
 
@@ -21,21 +21,23 @@ flowchart LR
   end
 
   subgraph EDITOR[apps/editor 拡張]
-    PROD[Product 配列<br/>= palette]
-    BOM[BomItem 配列]
+    PROD[Product 配列]
     DIAG[diagram&#40;NetworkGraph&#41;]
     SVIEW[sheetView&#40;NetworkGraph&#41;]
   end
 
   PROD -. productId .-> NODE
   PROD -. productId .-> LINK
-  BOM -. paletteId .-> PROD
-  BOM -. nodeId .-> NODE
   DIAG --> NG
   SVIEW --> NG
 ```
 
-3 つのコレクション（**Product 配列 / BomItem 配列 / NetworkGraph**）が `productId` / `paletteId` / `nodeId` で互いを指す構造。Diagram 編集の master は NetworkGraph。
+**2 つのコレクション**で完結：
+
+- **Product 配列** — プロジェクト固有の機材定義（device / module / cable）
+- **NetworkGraph** — diagram の正本。Node / LinkModule / LinkCable が `productId` で Product を参照
+
+「在庫」「BOM 表」は別 table を持たない。**Product.requiredQty（target）** と **diagram から派生する placedCount（実績）** の差分で表現する。
 
 ---
 
@@ -133,27 +135,57 @@ classDiagram
 ```mermaid
 classDiagram
   class Product {
+    &lt;&lt;union&gt;&gt;
+    DeviceProduct
+    ModuleProduct
+    CableProduct
+  }
+
+  class ProductBase {
     id: string
-    source: 'catalog'|'modified'|'custom'
     catalogId?: string
-    spec: NodeSpec
-    properties?: HardwareProperties|...
+    requiredQty?: number
     notes?: string
   }
 
-  class BomItem {
-    id: string
-    paletteId?: string
-    nodeId?: string
-    notes?: string
+  class DeviceProduct {
+    kind: 'device'
+    spec: NodeSpec
+    properties?: HardwareProperties|ComputeProperties|ServiceProperties
+  }
+
+  class ModuleProduct {
+    kind: 'module'
+    spec: ModuleSpec
+  }
+
+  class CableProduct {
+    kind: 'cable'
+    spec: CableSpec
+  }
+
+  class ModuleSpec {
+    vendor?: string
+    mpn?: string
+    standard: EthernetStandard
+    formFactor?: PortConnector
+    reach_m?: number
+    wavelength_nm?: number
+  }
+
+  class CableSpec {
+    vendor?: string
+    mpn?: string
+    medium: CableMedium
+    category?: CableGrade
+    length_m?: number
+    connectors?: [CableConnector, CableConnector]
   }
 
   class NetedProject {
-    version: 1
+    version: 2
     name: string
-    palette: Product[]
-    products?: Product[]
-    bom: BomItem[]
+    products: Product[]
     diagram: NetworkGraph
   }
 
@@ -172,143 +204,153 @@ classDiagram
     status: 'resolved'|'generic'|'incomplete'
   }
 
-  NetedProject "1" --> "*" Product : palette/products
-  NetedProject "1" --> "*" BomItem : bom
+  ProductBase <|-- DeviceProduct
+  ProductBase <|-- ModuleProduct
+  ProductBase <|-- CableProduct
+  Product .. DeviceProduct
+  Product .. ModuleProduct
+  Product .. CableProduct
+  ModuleProduct --> ModuleSpec
+  CableProduct --> CableSpec
+  NetedProject "1" --> "*" Product : products
   NetedProject "1" --> "1" NetworkGraph : diagram
-  BomItem ..> Product : paletteId
   AssignmentRow ..> Product : productId
 ```
 
-`SpecPaletteEntry` は `Product` の `@deprecated` alias。`paletteEntryLabel` も同。
-
----
-
 ## 3. ランタイム state（`context.svelte.ts`）
 
-```
-let palette: SpecPaletteEntry[]   // 実体は Product 配列
-let bomItems: BomItem[]
-let diagram: { nodes: SvelteMap, links, subgraphs, ... }
+```ts
+let products: Product[]
+let diagram: { nodes: SvelteMap, links, subgraphs, ports, edges, bounds }
 let sheetView: { ... }            // 子シート用、構造は diagram と同じ
 let currentSheetId: string | null
 let sheetCache: Map<id, ResolvedLayout>
 let sheetCacheGeneration: number
 ```
 
-`diagramState` API レイヤ：
+`diagramState` の Materials 周り API：
 
 ```mermaid
 flowchart TB
-  subgraph L4[Layer 4: 統合 Assignment]
+  subgraph L3[Layer 3: 統合 Assignment]
     A1[bindAssignment&#40;target, productId&#41;]
     A2[get assignmentRows]
   end
 
-  subgraph L3[Layer 3: 高レベル node↔product]
-    B1[bindNodeToPalette]
+  subgraph L2[Layer 2: 高レベル node↔product]
+    B1[bindNodeToProduct]
     B2[unbindNodes]
-    B3[placeBomItem]
+    B3[placeProductAsNode]
+    B4[addEmptyNode]
   end
 
-  subgraph L2[Layer 2: BomItem CRUD]
-    C1[addBomItem / updateBomItem / removeBomItem]
-    C2[bindNodeToBom]
-    C3[getBomItemsForPalette / getPaletteIdForNode]
-  end
-
-  subgraph L1[Layer 1: Product/Palette CRUD]
+  subgraph L1[Layer 1: Product CRUD]
     D1[addProduct / removeProduct / updateProduct]
-    D2[addToPalette / removeFromPalette / updatePaletteEntry]
-    D3[get products / get palette]
+    D2[get products]
+  end
+
+  subgraph LD[Derived counts]
+    DC1[placedCount&#40;productId&#41;]
+    DC2[requiredCount&#40;productId&#41;]
   end
 
   subgraph L0[Layer 0: state]
-    E1[palette]
-    E2[bomItems]
+    E1[products]
     E3[diagram.nodes &#40;Node.productId&#41;]
     E4[diagram.links &#40;Module/Cable.productId&#41;]
   end
 
   A1 --> B1
   A1 --> E4
-  A2 --> E2
   A2 --> E3
-  B1 --> C1
+  A2 --> E4
   B1 --> E3
-  D1 --> D2
-  D2 --> E1
-  D2 --> C1
-  C1 --> E2
+  B3 --> E3
+  B4 --> E3
+  D1 --> E1
+  DC1 --> E3
+  DC1 --> E4
+  DC2 --> E1
+  DC2 --> DC1
 ```
 
-L1 は **products と palette の二重 API**（products は wrapper）。L4 だけが Module/Cable も対象、L3 以下は node 専用。
+主要な不変条件：
+
+- Product.requiredQty 編集は `diagram` に絶対影響しない（procurement target のみ動く）
+- ノード追加/削除は renderer または `addEmptyNode` / `placeProductAsNode` 経由のみ
+- `placedCount` は read-only な derive（Node + LinkModule + LinkCable の `productId === id` を数える）
+- `requiredCount(id) = product.requiredQty ?? placedCount(id)`
 
 ---
 
-## 4. 同じ情報が複数箇所にある（重複の地図）
+## 4. 同期と snapshot
 
-| 情報                          | 場所 A                  | 場所 B                  | 場所 C                  |
-| ----------------------------- | ----------------------- | ----------------------- | ----------------------- |
-| Product 配列                  | `palette` field         | `products` field        | （内部 state は 1 個）  |
-| node → product bind           | `Node.productId`        | `BomItem.nodeId+paletteId` | —                    |
-| node の spec                  | `Node.spec`             | `Product.spec`（経由） | —                       |
-| node の ports                 | `Node.ports`            | `Product.spec` から再生成 | —                    |
-| 未配置数（在庫）              | `BomItem` で nodeId 無し行 | `Product.quantity` は無い | —                  |
-| module SKU                    | `LinkModule.sku`        | `LinkModule.productId` → `Product.spec.model` | — |
+Diagram 側の `Node.spec` / `LinkModule` / `LinkCable` は Product から **snapshot** されている。
 
----
+| 操作                       | snapshot 挙動                                                  |
+| -------------------------- | -------------------------------------------------------------- |
+| `bindNodeToProduct`        | Product.spec を Node.spec にコピー、ports を Product から再生成 |
+| `placeProductAsNode`       | 新ノードに Product.spec / ports をコピー                        |
+| `updateProduct`（spec 編集）| 紐付き Node 全部に Node.spec を上書き、ports を再生成           |
+| `unbindNodes`              | Node.spec から vendor/model 等を剥がし、role のみに（kind/type）|
+| `removeProduct`            | 紐付き Node の spec を role-only に剥がす + productId クリア。<br>紐付き LinkModule/LinkCable から productId を削除 |
 
-## 5. 議論したい論点
-
-### Q1. `palette` と `products` field の二重出力
-
-`exportProject` が両方書き、`applyProject` は `products ?? palette`。互換不要なら `products` 一本でよい。`palette` という名前は **UI 比喩**、`products` は **ドメイン語**。
-
-- 内部 state 名も `products` にリネーム？
-- L1 の `addToPalette` 系を消す？
-
-### Q2. `BomItem` の存在意義
-
-`Node.productId` ができたことで `BomItem` の `nodeId+paletteId` は二重持ち。残る役割は「未配置の在庫行」だけ。選択肢：
-
-- **A**: `BomItem` を削除し、Product に `unplacedQty: number` を持たせる
-- **B**: `BomItem` を `InventoryItem` にリネームし、`nodeId` フィールドも消し、未配置行のみのテーブル化（配置済みは Node から逆引き）
-- **C**: 現状維持（移行期）
-
-### Q3. Module / Cable の在庫管理
-
-Node には Product bind + 在庫（BomItem 経由）あり、Module / Cable は Product bind だけで在庫概念なし。
-
-- Module の SFP、Cable のリール本数を「未配置在庫」として持つか？
-- 持つなら何の table？（`InventoryItem` を node 以外にも拡張？）
-
-### Q4. `Node.spec` と `Product.spec` の同期
-
-現在 `bindNodeToPalette` で Product.spec を Node.spec にコピー、`unbindNodes` で `stripProductFromSpec`。これは **snapshot pattern**。
-
-- snapshot を維持する（Product 削除しても diagram は読める）
-- 都度 lookup（Node.productId だけ持って spec は Product から引く）
-
-snapshot 派なら、Product 編集時の Node.spec 更新ポリシーを明文化する必要あり（現状 update 時に `getNodesForPalette` で書き戻している）。
-
-### Q5. `assignmentRows` は派生 view か、それとも state か？
-
-現状は毎回 diagram + bom から生成する getter。重い場合は cache が要る。逆に軽いなら BomItem を消して assignmentRows ベースに統一する案もある。
-
-### Q6. file format `.neted.json` は何を保存する？
-
-現在: `palette / products / bom / diagram`。
-
-- Q1, Q2 の結論次第で `bom` や `palette` を消す
-- version bump するか（`version: 1` → `2`）
+snapshot のおかげで、Product を消した後も diagram は読める（壊れない）。一方で Product 編集時は紐付きノードに反映する責務を `updateProduct` 側が持つ。
 
 ---
 
-## 6. 関連 doc
+## 5. ファイル形式（`.neted.json`）
+
+```ts
+interface NetedProject {
+  version: 2
+  name: string
+  settings?: Record<string, unknown>
+  products: Product[]
+  diagram: NetworkGraph
+}
+```
+
+Product は kind 毎の discriminated union。version=2 で確定。
+
+---
+
+## 6. 議論ログ（決定済み）
+
+このリファクタの過程で決まったこと。後で経緯を辿りたい人向けの reference。
+
+### Q1. `palette` / `products` field の二重出力 → `products` 一本に
+
+旧 `NetedProject.palette` と `NetedProject.products` が並走していた。互換不要なので `products` のみに統一。state 名 `palette` も `products` にリネーム済み。
+
+### Q2. `BomItem` の存在意義 → 削除
+
+旧 `BomItem` は「未配置在庫」と「node bind」を兼ねていた。`Node.productId` 導入後は二重持ちに。**A 案（削除 + Product.requiredQty で表現）** を採用。個体管理が必要になったら別 model（`Asset` 等）として直交に追加する。
+
+### Q3. Module / Cable の在庫管理 → 同じく requiredQty で表現
+
+Module / Cable も Product として扱える discriminated union に拡張済み。在庫は Inventory ではなく `requiredQty` 経由。
+
+### Q4. `Node.spec` と `Product.spec` の同期 → snapshot
+
+Product 編集時に紐付き Node の spec を都度上書きする。これにより Product を削除しても diagram は壊れない（spec が独立したまま残る）。
+
+### Q5. `assignmentRows` は派生 view → そのまま
+
+現状の derived getter で十分軽い。BOM ページが `assignmentRows` 経由で集計に使う。
+
+### Q6. `Product.source` field → 削除
+
+旧 `source: 'catalog' | 'modified' | 'custom'` は UI badge 程度の意味。`catalogId` の有無で「カタログ由来 / 手起こし」が分かるので削除。
+
+---
+
+## 7. 関連 doc
 
 - `data-model.md` — NetworkGraph 全体（core 側、編集者向け）
 - `connection-model.md` — Port / Link / LinkModule / LinkCable
-- `bom-model.md` — **#162 前の状態**。SpecPaletteEntry のまま、要更新
-- `project-workflow-model.md` — **理想形**（Product/InventoryItem/RequirementLine）。まだ実装と乖離
+- `materials-flow.md` — Materials の操作フロー（このデータ構造を前提に書かれている）
+- `bom-model.md` — BOM 派生ロジック（要更新）
+- `project-workflow-model.md` — 上位の workflow 設計（要更新）
 - `sheet-model.md` — diagramState の sheetView / sheetCache 周り
 - `layout-model.md` — NetworkGraph → ResolvedLayout 変換

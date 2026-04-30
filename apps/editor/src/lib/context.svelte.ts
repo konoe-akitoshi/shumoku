@@ -1104,7 +1104,6 @@ export const diagramState = {
   },
 
   /**
-   * Bind a diagram node to a (device) Product. Consumes one matching
    * Bind a diagram node to a (device) Product. The product's spec is
    * snapshotted onto the node, and ports are derived from the product
    * spec when available.
