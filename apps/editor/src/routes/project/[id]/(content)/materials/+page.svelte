@@ -31,18 +31,24 @@
   let catalogDialogOpen = $state(false)
   let customDialogOpen = $state(false)
   let removeTarget = $state<Product | null>(null)
-  let requiredEditTarget = $state<Product | null>(null)
-  let requiredEditValue = $state('')
+  let addTarget = $state<Product | null>(null)
+  let addDelta = $state('1')
 
-  function openRequiredEdit(product: Product) {
-    requiredEditTarget = product
-    requiredEditValue = product.requiredQty !== undefined ? String(product.requiredQty) : ''
+  function openAddDialog(product: Product) {
+    addTarget = product
+    addDelta = '1'
   }
 
-  function saveRequiredEdit() {
-    if (!requiredEditTarget) return
-    setRequiredQty(requiredEditTarget.id, requiredEditValue)
-    requiredEditTarget = null
+  function confirmAdd() {
+    if (!addTarget) return
+    const n = Number(addDelta)
+    if (!Number.isFinite(n) || n <= 0) {
+      addTarget = null
+      return
+    }
+    const current = diagramState.requiredCount(addTarget.id)
+    diagramState.updateProduct(addTarget.id, { requiredQty: current + Math.floor(n) })
+    addTarget = null
   }
 
   let selectedKind = $state('hardware')
@@ -169,18 +175,6 @@
   function bindNodeOnly(nodeId: string, productId: string | undefined) {
     if (productId) diagramState.bindNodeToProduct(nodeId, productId)
     else diagramState.unbindNodes([nodeId])
-  }
-
-  function setRequiredQty(productId: string, value: string) {
-    const trimmed = value.trim()
-    if (trimmed === '') {
-      // Empty input clears the explicit target; required falls back to placed.
-      diagramState.updateProduct(productId, { requiredQty: undefined })
-      return
-    }
-    const n = Number(trimmed)
-    if (!Number.isFinite(n) || n < 0) return
-    diagramState.updateProduct(productId, { requiredQty: Math.floor(n) })
   }
 
   // Project-level health metrics (principle: status visibility / soft constraints)
@@ -367,21 +361,27 @@
                   {/if}
                 </Table.Cell>
                 <Table.Cell class="text-right" onclick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-xs hover:bg-muted/60"
-                    onclick={() => openRequiredEdit(product)}
-                    title="Set required count"
-                  >
-                    <span class="text-muted-foreground">{placed}</span>
-                    <span class="text-muted-foreground">/</span>
-                    <span class="font-semibold">{required}</span>
-                    {#if diff > 0}
-                      <span class="text-amber-600">+{diff}</span>
-                    {:else if diff < 0}
-                      <span class="text-rose-600">{diff}</span>
-                    {/if}
-                  </button>
+                  <div class="inline-flex items-center justify-end gap-2 font-mono text-xs">
+                    <span>
+                      <span class="text-muted-foreground">{placed}</span>
+                      <span class="text-muted-foreground">/</span>
+                      <span class="font-semibold">{required}</span>
+                      {#if diff > 0}
+                        <span class="ml-1 text-amber-600">+{diff}</span>
+                      {:else if diff < 0}
+                        <span class="ml-1 text-rose-600">{diff}</span>
+                      {/if}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      class="h-6 w-6"
+                      onclick={() => openAddDialog(product)}
+                      title="Add to required count"
+                    >
+                      <Plus class="h-3 w-3" />
+                    </Button>
+                  </div>
                 </Table.Cell>
                 <Table.Cell onclick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" onclick={() => { removeTarget = product }}>
@@ -715,18 +715,15 @@
   </Dialog.Portal>
 </Dialog.Root>
 
-<!-- Set Required popup -->
-<Dialog.Root
-  open={requiredEditTarget !== null}
-  onOpenChange={(o) => { if (!o) requiredEditTarget = null }}
->
+<!-- Add to Required popup -->
+<Dialog.Root open={addTarget !== null} onOpenChange={(o) => { if (!o) addTarget = null }}>
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] dark:bg-black/40" />
     <Dialog.Content
       class="fixed left-1/2 top-1/2 z-50 w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-popover shadow-2xl focus:outline-none"
     >
       <div class="flex items-center justify-between border-b px-5 py-4">
-        <Dialog.Title class="text-sm font-semibold">Set required count</Dialog.Title>
+        <Dialog.Title class="text-sm font-semibold">Add units</Dialog.Title>
         <Dialog.Close
           class="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
@@ -734,41 +731,47 @@
         </Dialog.Close>
       </div>
       <Dialog.Description class="sr-only"
-        >Set the procurement target for this product</Dialog.Description
+        >Increase the required count for this product</Dialog.Description
       >
       <div class="space-y-3 px-5 py-4 text-sm">
-        {#if requiredEditTarget}
-          {@const placedNow = diagramState.placedCount(requiredEditTarget.id)}
+        {#if addTarget}
+          {@const currentRequired = diagramState.requiredCount(addTarget.id)}
+          {@const delta = Number(addDelta)}
+          {@const next = Number.isFinite(delta) && delta > 0 ? currentRequired + Math.floor(delta) : currentRequired}
           <div>
             <div class="text-xs text-muted-foreground">Product</div>
-            <div class="font-mono text-sm">{productLabel(requiredEditTarget)}</div>
+            <div class="font-mono text-sm">{productLabel(addTarget)}</div>
           </div>
-          <div class="flex items-center gap-3 rounded-md bg-muted/40 p-3 text-xs">
+          <div class="grid grid-cols-3 gap-2 rounded-md bg-muted/40 p-3 text-xs">
             <div>
-              <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Placed</div>
-              <div class="font-mono text-base">{placedNow}</div>
+              <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Current</div>
+              <div class="font-mono text-base">{currentRequired}</div>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-muted-foreground">Add</div>
+              <div class="font-mono text-base text-amber-600">
+                +{delta > 0 ? Math.floor(delta) : 0}
+              </div>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-muted-foreground">After</div>
+              <div class="font-mono text-base font-semibold">{next}</div>
             </div>
           </div>
           <div>
-            <div class={labelClass}>Required (target)</div>
+            <div class={labelClass}>Quantity to add</div>
             <input
               type="number"
-              min="0"
+              min="1"
               inputmode="numeric"
-              placeholder="(follow placed)"
               class={inputClass}
-              bind:value={requiredEditValue}
-              onkeydown={(e) => { if (e.key === 'Enter') saveRequiredEdit() }}
+              bind:value={addDelta}
+              onkeydown={(e) => { if (e.key === 'Enter') confirmAdd() }}
             >
-            <p class="mt-1 text-[10px] text-muted-foreground">
-              Empty = follow placed count. Editing this never deletes diagram nodes.
-            </p>
           </div>
           <div class="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onclick={() => { requiredEditTarget = null }}
-              >Cancel</Button
-            >
-            <Button size="sm" onclick={saveRequiredEdit}>Save</Button>
+            <Button variant="outline" size="sm" onclick={() => { addTarget = null }}>Cancel</Button>
+            <Button size="sm" onclick={confirmAdd}>Add</Button>
           </div>
         {/if}
       </div>
