@@ -1,21 +1,19 @@
 <script lang="ts">
   import { getDeviceIcon, type Link, type Node, specDeviceType } from '@shumoku/core'
   import type { PoEBudget } from '$lib/poe-analysis'
-  import type { BomItem, SpecPaletteEntry } from '$lib/types'
-  import { paletteEntryLabel } from '$lib/types'
+  import type { Product } from '$lib/types'
+  import { productLabel } from '$lib/types'
 
   let {
     node,
     poeBudget,
-    palette = [],
-    bomItems = [],
+    products = [],
     links = [],
     nodes = new Map(),
   }: {
     node: Node
     poeBudget?: PoEBudget
-    palette: SpecPaletteEntry[]
-    bomItems: BomItem[]
+    products: Product[]
     links: Link[]
     nodes?: Map<string, Node>
   } = $props()
@@ -41,10 +39,10 @@
       : '',
   )
 
-  const boundPalette = $derived.by(() => {
-    const bom = bomItems.find((b) => b.nodeId === node.id)
-    if (!bom?.paletteId) return null
-    return palette.find((e) => e.id === bom.paletteId) ?? null
+  const boundProduct = $derived.by(() => {
+    if (!node.productId) return null
+    const p = products.find((e) => e.id === node.productId)
+    return p?.kind === 'device' ? p : null
   })
 
   interface PortConnection {
@@ -137,15 +135,13 @@
     <div class="text-sm font-semibold text-neutral-800 dark:text-neutral-100 truncate">
       {nodeLabel || node.id}
     </div>
-    {#if boundPalette}
+    {#if boundProduct}
       <div class="flex items-center gap-1.5 text-[11px]">
         <span
           class="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-[9px] font-medium uppercase text-neutral-500 dark:text-neutral-400"
-          >{boundPalette.spec.kind}</span
+          >{boundProduct.spec.kind}</span
         >
-        <span class="text-neutral-600 dark:text-neutral-300"
-          >{paletteEntryLabel(boundPalette)}</span
-        >
+        <span class="text-neutral-600 dark:text-neutral-300">{productLabel(boundProduct)}</span>
       </div>
     {:else}
       <div class="text-[11px] text-neutral-400 dark:text-neutral-500 italic">No spec assigned</div>
