@@ -224,11 +224,38 @@
   const labelClass = 'text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1'
 </script>
 
-<div class="mb-4">
-  <h1 class="text-lg font-semibold">Materials</h1>
-  <p class="text-sm text-muted-foreground">
-    Project-local products with required counts; bind to diagram nodes.
-  </p>
+<div class="mb-4 flex items-start justify-between gap-3">
+  <div>
+    <h1 class="text-lg font-semibold">Materials</h1>
+    <p class="text-sm text-muted-foreground">
+      Project-local products with required counts; bind to diagram nodes.
+    </p>
+  </div>
+  <DropdownMenu.Root>
+    <DropdownMenu.Trigger>
+      {#snippet child({ props })}
+        <Button size="sm" {...props}>
+          <Plus class="mr-1 h-4 w-4" />
+          Add Product
+          <CaretDown class="ml-1 h-3 w-3" />
+        </Button>
+      {/snippet}
+    </DropdownMenu.Trigger>
+    <DropdownMenu.Content class="z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-md">
+      <DropdownMenu.Item
+        class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+        onclick={() => { catalogDialogOpen = true }}
+      >
+        From external catalog
+      </DropdownMenu.Item>
+      <DropdownMenu.Item
+        class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+        onclick={() => { customDialogOpen = true }}
+      >
+        Custom product
+      </DropdownMenu.Item>
+    </DropdownMenu.Content>
+  </DropdownMenu.Root>
 </div>
 
 <!-- Project status banner — single-glance health view -->
@@ -286,38 +313,11 @@
   </Tabs.List>
 
   <Tabs.Content value="library">
-    <div class="mb-3 flex items-center justify-between">
-      <div>
-        <h2 class="text-sm font-semibold">Product library</h2>
-        <p class="text-xs text-muted-foreground">
-          Devices, modules, cables you reference in this project.
-        </p>
-      </div>
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger>
-          {#snippet child({ props })}
-            <Button size="sm" {...props}>
-              <Plus class="mr-1 h-4 w-4" />
-              Add Product
-              <CaretDown class="ml-1 h-3 w-3" />
-            </Button>
-          {/snippet}
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content class="z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-md">
-          <DropdownMenu.Item
-            class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-            onclick={() => { catalogDialogOpen = true }}
-          >
-            From external catalog
-          </DropdownMenu.Item>
-          <DropdownMenu.Item
-            class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-            onclick={() => { customDialogOpen = true }}
-          >
-            Custom product
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
+    <div class="mb-3">
+      <h2 class="text-sm font-semibold">Product library</h2>
+      <p class="text-xs text-muted-foreground">
+        Devices, modules, cables you reference in this project.
+      </p>
     </div>
 
     {#if products.length > 0}
