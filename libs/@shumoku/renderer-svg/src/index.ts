@@ -10,20 +10,15 @@ import * as svg from './svg.js'
 
 // Brand
 export { BRANDING_ICON_SVG, LOGO_PATHS, LOGO_VIEWBOX } from './brand.js'
-export type { CDNConfig, IconDimensions, ResolvedIconDimensions } from './cdn-icons.js'
-// CDN icon utilities
+export type { IconDimensions } from './icon-dims.js'
+// Icon dimension/fetch utilities (URL icons)
 export {
   clearIconCache,
-  DEFAULT_CDN_CONFIG,
-  fetchCDNIcon,
+  DEFAULT_ICON_FETCH_TIMEOUT,
+  fetchIconAsDataUrl,
   fetchImageDimensions,
-  getCDNIconUrl,
-  getIconExtension,
-  hasCDNIcons,
   resolveAllIconDimensions,
-  resolveIconDimensions,
-  resolveIconDimensionsForGraph,
-} from './cdn-icons.js'
+} from './icon-dims.js'
 export type {
   EmbeddableRenderOptions,
   EmbeddableRenderOutput,
