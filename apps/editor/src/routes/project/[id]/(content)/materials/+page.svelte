@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CatalogEntry } from '@shumoku/catalog'
-  import { newId } from '@shumoku/core'
+  import { classifyIcon, newId } from '@shumoku/core'
   import { Dialog, DropdownMenu, Tabs } from 'bits-ui'
   import { CaretDown, GitBranch, Plus, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
@@ -60,6 +60,8 @@
   let customType = $state('')
   let customVendor = $state('')
   let customModel = $state('')
+  let customIcon = $state('')
+  const customIconView = $derived(classifyIcon(customIcon))
 
   const catalog = diagramState.catalog
 
@@ -149,6 +151,7 @@
       catalogId: entry.id,
       spec: entry.spec,
       properties: entry.properties,
+      icon: entry.icon,
     })
     resetCatalogSelect()
     catalogDialogOpen = false
@@ -161,11 +164,17 @@
     if (customType) spec.type = customType
     if (customVendor) spec.vendor = customVendor
     if (customModel) spec.model = customModel
-    diagramState.addProduct({ id: newId('product'), kind: 'device', spec })
+    diagramState.addProduct({
+      id: newId('product'),
+      kind: 'device',
+      spec,
+      icon: customIcon.trim() || undefined,
+    })
     customKind = 'hardware'
     customType = ''
     customVendor = ''
     customModel = ''
+    customIcon = ''
     customDialogOpen = false
   }
 
@@ -179,6 +188,29 @@
   function bindNodeOnly(nodeId: string, productId: string | undefined) {
     if (productId) diagramState.bindNodeToProduct(nodeId, productId)
     else diagramState.unbindNodes([nodeId])
+  }
+
+  /**
+   * Read a user-selected file into a string suitable for `Product.icon`.
+   * SVG files are kept as inline content; other images become data URLs.
+   */
+  async function readIconFile(file: File): Promise<string> {
+    const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
+    if (isSvg) return await file.text()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result ?? ''))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleCustomIconUpload(e: Event) {
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    customIcon = await readIconFile(file)
+    input.value = '' // allow same file re-selection
   }
 
   // Project-level health metrics (principle: status visibility / soft constraints)
@@ -329,6 +361,7 @@
         <Table.Root>
           <Table.Header>
             <Table.Row>
+              <Table.Head class="w-10"></Table.Head>
               <Table.Head>Kind</Table.Head>
               <Table.Head>Vendor</Table.Head>
               <Table.Head>Identifier</Table.Head>
@@ -342,10 +375,30 @@
               {@const placed = diagramState.placedCount(product.id)}
               {@const required = diagramState.requiredCount(product.id)}
               {@const diff = required - placed}
+              {@const iconView = classifyIcon(product.icon)}
               <Table.Row
                 class="cursor-pointer hover:bg-muted/40"
                 onclick={() => goto(`/project/${$page.params.id}/materials/${product.id}`)}
               >
+                <Table.Cell>
+                  {#if iconView?.kind === 'inline'}
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      class="text-muted-foreground"
+                      role="img"
+                      aria-label="icon"
+                    >
+                      {@html iconView.svg}
+                    </svg>
+                  {:else if iconView?.kind === 'url'}
+                    <img src={iconView.url} alt="icon" class="h-5 w-5 object-contain">
+                  {:else}
+                    <span class="text-muted-foreground">—</span>
+                  {/if}
+                </Table.Cell>
                 <Table.Cell
                   ><Badge variant="secondary">{productKindLabel(product)}</Badge></Table.Cell
                 >
@@ -661,6 +714,62 @@
             bind:value={customModel}
             placeholder="ws-c3560cx-8pc-s..."
           >
+        </div>
+        <div>
+          <div class={labelClass}>Icon (optional)</div>
+          <div class="flex items-start gap-2">
+            <textarea
+              class="{inputClass} h-20 resize-none font-mono"
+              bind:value={customIcon}
+              placeholder={'<path d="M..." /> または URL'}
+            ></textarea>
+            {#if customIconView}
+              <div
+                class="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-input bg-background"
+              >
+                {#if customIconView.kind === 'inline'}
+                  <svg
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    role="img"
+                    aria-label="icon preview"
+                  >
+                    {@html customIconView.svg}
+                  </svg>
+                {:else}
+                  <img src={customIconView.url} alt="icon preview" class="h-8 w-8 object-contain">
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <div class="mt-2 flex items-center gap-2">
+            <label
+              class="cursor-pointer rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted"
+            >
+              Upload SVG / image
+              <input
+                type="file"
+                accept=".svg,image/*"
+                class="hidden"
+                onchange={handleCustomIconUpload}
+              >
+            </label>
+            {#if customIcon}
+              <button
+                type="button"
+                class="text-[11px] text-muted-foreground hover:text-foreground"
+                onclick={() => { customIcon = '' }}
+              >
+                Clear
+              </button>
+            {/if}
+          </div>
+          <p class="mt-1 text-[10px] text-muted-foreground">
+            Inline SVG path（24×24 viewBox 想定）または画像 URL。SVG ファイルは inline、PNG/JPG は
+            data URL に。
+          </p>
         </div>
         <Button class="w-full" disabled={!customVendor && !customModel} onclick={addCustom}
           >Create Product</Button

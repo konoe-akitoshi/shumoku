@@ -123,6 +123,7 @@ export const builtinData = [
         image: 'lan-base',
       },
     },
+    icon: '<path d="M3 6h18v3H3V6zm0 4h18v3H3v-3zm0 4h18v3H3v-3zm2 1h2v1H5v-1zm4 0h2v1H9v-1zm4 0h2v1h-2v-1z"/><circle cx="19" cy="15.5" r="1" fill="currentColor"/>',
   },
   {
     id: 'cisco/catalyst-3560cx/ws-c3560cx-8tc-s',
@@ -288,6 +289,7 @@ export const builtinData = [
         mounting: ['ceiling', 'wall'],
       },
     },
+    icon: 'https://icons.shumoku.packof.me/v1/aruba/ap500-series.svg',
   },
   {
     id: 'hpe/aruba-instant-on-ap11d',

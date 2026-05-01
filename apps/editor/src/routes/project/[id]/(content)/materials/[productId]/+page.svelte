@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { classifyIcon } from '@shumoku/core'
   import { Dialog } from 'bits-ui'
   import { ArrowLeft, GitBranch, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
@@ -19,6 +20,7 @@
   const placed = $derived(diagramState.placedCount(productId))
   const required = $derived(diagramState.requiredCount(productId))
   const diff = $derived(required - placed)
+  const headerIcon = $derived(classifyIcon(product?.icon))
 
   // List of node bindings for this product
   const placedNodes = $derived.by(() => {
@@ -78,6 +80,33 @@
     goto(`/project/${projectId}/materials`)
   }
 
+  /** SVG → inline content; raster → data URL. */
+  async function readIconFile(file: File): Promise<string> {
+    const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
+    if (isSvg) return await file.text()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result ?? ''))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleIconUpload(e: Event) {
+    if (!product) return
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    const value = await readIconFile(file)
+    diagramState.updateProduct(product.id, { icon: value || undefined })
+    input.value = ''
+  }
+
+  function clearIcon() {
+    if (!product) return
+    diagramState.updateProduct(product.id, { icon: undefined })
+  }
+
   const labelClass = 'text-[10px] font-medium text-muted-foreground uppercase tracking-wider'
 </script>
 
@@ -97,21 +126,43 @@
   </Card.Root>
 {:else}
   <div class="mb-6 flex items-start justify-between gap-4">
-    <div class="min-w-0">
-      <div class="mb-1 flex items-center gap-2">
-        <Badge variant="secondary"
-          >{product.kind === 'device' ? product.spec.kind : product.kind}</Badge
-        >
-        {#if product.catalogId}
-          <Badge variant="default" title={product.catalogId}>catalog</Badge>
+    <div class="flex min-w-0 items-start gap-3">
+      <div
+        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground"
+      >
+        {#if headerIcon?.kind === 'inline'}
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            role="img"
+            aria-label="product icon"
+          >
+            {@html headerIcon.svg}
+          </svg>
+        {:else if headerIcon?.kind === 'url'}
+          <img src={headerIcon.url} alt="product icon" class="h-8 w-8 object-contain">
         {:else}
-          <Badge variant="outline">custom</Badge>
+          <span class="text-[10px]">no icon</span>
         {/if}
       </div>
-      <h1 class="truncate font-mono text-lg font-semibold">{productLabel(product)}</h1>
-      {#if product.catalogId}
-        <p class="truncate font-mono text-xs text-muted-foreground">{product.catalogId}</p>
-      {/if}
+      <div class="min-w-0">
+        <div class="mb-1 flex items-center gap-2">
+          <Badge variant="secondary"
+            >{product.kind === 'device' ? product.spec.kind : product.kind}</Badge
+          >
+          {#if product.catalogId}
+            <Badge variant="default" title={product.catalogId}>catalog</Badge>
+          {:else}
+            <Badge variant="outline">custom</Badge>
+          {/if}
+        </div>
+        <h1 class="truncate font-mono text-lg font-semibold">{productLabel(product)}</h1>
+        {#if product.catalogId}
+          <p class="truncate font-mono text-xs text-muted-foreground">{product.catalogId}</p>
+        {/if}
+      </div>
     </div>
     <Button variant="outline" size="sm" onclick={() => { removeOpen = true }}>
       <Trash class="mr-1 h-3.5 w-3.5 text-destructive" />
@@ -228,6 +279,67 @@
           <dd>{product.notes}</dd>
         {/if}
       </dl>
+    </Card.Content>
+  </Card.Root>
+
+  <!-- Icon edit -->
+  <Card.Root class="mb-6 py-0">
+    <Card.Content class="px-5 py-4">
+      <div class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        Icon
+      </div>
+      <div class="flex items-start gap-3">
+        <div
+          class="flex h-16 w-16 shrink-0 items-center justify-center rounded border bg-muted/30 text-muted-foreground"
+        >
+          {#if headerIcon?.kind === 'inline'}
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              role="img"
+              aria-label="icon preview"
+            >
+              {@html headerIcon.svg}
+            </svg>
+          {:else if headerIcon?.kind === 'url'}
+            <img src={headerIcon.url} alt="icon preview" class="h-10 w-10 object-contain">
+          {:else}
+            <span class="text-[10px]">none</span>
+          {/if}
+        </div>
+        <textarea
+          class="h-20 flex-1 resize-none rounded border border-input bg-background px-2 py-1.5 font-mono text-xs outline-none focus:ring-1 focus:ring-ring"
+          placeholder={'<path d="M..." /> または URL（空欄で削除）'}
+          value={product.icon ?? ''}
+          onchange={(e) => {
+            const v = (e.target as HTMLTextAreaElement).value.trim()
+            diagramState.updateProduct(product.id, { icon: v || undefined })
+          }}
+        ></textarea>
+      </div>
+      <div class="mt-2 flex items-center gap-2">
+        <label
+          class="cursor-pointer rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted"
+        >
+          Upload SVG / image
+          <input type="file" accept=".svg,image/*" class="hidden" onchange={handleIconUpload}>
+        </label>
+        {#if product.icon}
+          <button
+            type="button"
+            class="text-[11px] text-muted-foreground hover:text-foreground"
+            onclick={clearIcon}
+          >
+            Clear
+          </button>
+        {/if}
+      </div>
+      <p class="mt-1 text-[10px] text-muted-foreground">
+        Inline SVG path (24×24 viewBox) または画像 URL。SVG ファイルは inline、PNG/JPG は data URL
+        に変換。配置済みノードに即時反映される。
+      </p>
     </Card.Content>
   </Card.Root>
 

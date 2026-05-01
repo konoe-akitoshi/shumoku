@@ -231,6 +231,13 @@ export interface CatalogEntry {
   tags: string[]
   /** Detailed properties — use kind to narrow */
   properties: HardwareProperties | ComputeProperties | ServiceProperties
+  /**
+   * Default icon for this entry. Either an inline SVG path string
+   * (e.g. `<path d="..."/>`, rendered inside a `viewBox="0 0 24 24"`)
+   * or a URL. Copied onto the Product when the entry is added to the
+   * project Library; the Product is then the canonical source.
+   */
+  icon?: string
 }
 
 /** Type-narrowed entry for hardware */

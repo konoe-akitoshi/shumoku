@@ -17,11 +17,13 @@ export const sampleProducts: DeviceProduct[] = [
     id: 'product-aws-ec2',
     kind: 'device',
     spec: { kind: 'service', vendor: 'aws', service: 'ec2', resource: 'instances' },
+    icon: 'https://icons.shumoku.packof.me/v1/aws/ec2-instances.svg',
   },
   {
     id: 'product-aws-vpn-gw',
     kind: 'device',
     spec: { kind: 'service', vendor: 'aws', service: 'vpc', resource: 'vpn-gateway' },
+    icon: 'https://icons.shumoku.packof.me/v1/aws/vpc-vpn-gateway.svg',
   },
 
   // ========== Perimeter ==========
@@ -34,11 +36,13 @@ export const sampleProducts: DeviceProduct[] = [
     id: 'product-yamaha-rtx3510',
     kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.Router, vendor: 'yamaha', model: 'rtx3510' },
+    icon: 'https://icons.shumoku.packof.me/v1/yamaha/rtx3510.png',
   },
   {
     id: 'product-juniper-srx4100',
     kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.Firewall, vendor: 'juniper', model: 'SRX4100' },
+    icon: 'https://icons.shumoku.packof.me/v1/juniper/srx4100.png',
   },
 
   // ========== DMZ ==========
@@ -63,6 +67,7 @@ export const sampleProducts: DeviceProduct[] = [
       vendor: 'juniper',
       model: 'QFX5120-48T',
     },
+    icon: 'https://icons.shumoku.packof.me/v1/juniper/qfx5120-48t.png',
   },
   {
     id: 'product-juniper-ex4400',
@@ -73,6 +78,7 @@ export const sampleProducts: DeviceProduct[] = [
       vendor: 'juniper',
       model: 'EX4400-48T',
     },
+    icon: 'https://icons.shumoku.packof.me/v1/juniper/ex4400-48t.png',
   },
 
   // ========== Building A (Cisco + Aruba) ==========

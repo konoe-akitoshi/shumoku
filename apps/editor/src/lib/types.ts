@@ -35,6 +35,13 @@ interface ProductBase {
    * Undefined means "track placed count" — no separate target.
    */
   requiredQty?: number
+  /**
+   * Display icon. Inline SVG path string (rendered inside `viewBox="0 0 24 24"`)
+   * or a URL. Initialized from a catalog entry on import; can be overridden
+   * by uploading a custom icon. Snapshotted onto bound nodes' `Node.spec.icon`
+   * so diagrams stay self-contained even if the Product is later removed.
+   */
+  icon?: string
   /** User notes */
   notes?: string
 }

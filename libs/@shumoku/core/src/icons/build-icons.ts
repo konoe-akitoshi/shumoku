@@ -107,68 +107,6 @@ function generateTypeScript(icons: Record<string, string>): string {
   lines.push('}')
   lines.push('')
 
-  // Vendor icon registry and registration API
-  lines.push('// Vendor icon registry (populated via registerVendorIcons())')
-  lines.push('let vendorIconRegistry: Record<string, Record<string, IconEntry>> = {}')
-  lines.push('')
-
-  lines.push('/**')
-  lines.push(' * Register vendor icons for a given vendor')
-  lines.push(' */')
-  lines.push(
-    'export function registerVendorIcons(vendor: string, icons: Record<string, IconEntry>): void {',
-  )
-  lines.push('  vendorIconRegistry[vendor] = icons')
-  lines.push('}')
-  lines.push('')
-
-  lines.push('/**')
-  lines.push(' * Get vendor icon entry')
-  lines.push(' */')
-  lines.push('export function getVendorIconEntry(')
-  lines.push('  vendor: string,')
-  lines.push('  service: string,')
-  lines.push('  resource?: string')
-  lines.push('): IconEntry | undefined {')
-  lines.push("  if (vendor === 'default' || !vendor) {")
-  lines.push(
-    '    const content = defaultIcons[service] || (resource ? defaultIcons[resource] : undefined)',
-  )
-  lines.push('    return content ? { default: content } : undefined')
-  lines.push('  }')
-  lines.push('')
-  lines.push('  const vendorIcons = vendorIconRegistry[vendor]')
-  lines.push('  if (!vendorIcons) return undefined')
-  lines.push('')
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: generating typescript source
-  lines.push('  const key = resource ? `${service}/${resource}` : service')
-  lines.push('  const entry = vendorIcons[key]')
-  lines.push('  if (!entry) {')
-  lines.push(
-    "    const serviceKey = Object.keys(vendorIcons).find(k => k.startsWith(service + '/'))",
-  )
-  lines.push('    if (serviceKey) return vendorIcons[serviceKey]')
-  lines.push('    return undefined')
-  lines.push('  }')
-  lines.push('  return entry')
-  lines.push('}')
-  lines.push('')
-
-  lines.push('/**')
-  lines.push(' * Get vendor icon with theme support')
-  lines.push(' */')
-  lines.push('export function getVendorIcon(')
-  lines.push('  vendor: string,')
-  lines.push('  service: string,')
-  lines.push('  resource?: string,')
-  lines.push("  theme: IconThemeVariant = 'default'")
-  lines.push('): string | undefined {')
-  lines.push('  const entry = getVendorIconEntry(vendor, service, resource)')
-  lines.push('  if (!entry) return undefined')
-  lines.push('  return entry[theme] || entry.default')
-  lines.push('}')
-  lines.push('')
-
   // Export
   lines.push('export const iconSets = {')
   lines.push('  default: defaultIcons,')
