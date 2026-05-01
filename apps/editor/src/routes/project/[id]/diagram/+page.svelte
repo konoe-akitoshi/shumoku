@@ -35,7 +35,7 @@
     label: string
     shape?: string
     spec?: NodeSpec
-    paletteId?: string
+    productId?: string
     elementKind: 'node' | 'subgraph'
   } | null>(null)
   let detailTarget = $state<{ id: string; type: 'node' | 'link' | 'subgraph' } | null>(null)
@@ -195,14 +195,12 @@
       oncopy={(id) => {
         const info = renderer?.getElementInfo(id)
         if (!info) { clipboard = null; return }
-        const paletteId = info.kind === 'node'
-          ? diagramState.nodes.get(id)?.productId ?? diagramState.bomItems.find((b) => b.nodeId === id)?.paletteId
-          : undefined
+        const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
         clipboard = {
           label: info.label,
           shape: info.kind === 'node' ? info.shape : undefined,
           spec: info.kind === 'node' ? info.spec : undefined,
-          paletteId,
+          productId,
           elementKind: info.kind,
         }
       }}
@@ -220,8 +218,8 @@
             shape: clipboard.shape,
             position: svgPos,
           })
-          if (clipboard.paletteId) {
-            diagramState.bindNodeToPalette(pastedId, clipboard.paletteId)
+          if (clipboard.productId) {
+            diagramState.bindNodeToProduct(pastedId, clipboard.productId)
           }
         }
       }}

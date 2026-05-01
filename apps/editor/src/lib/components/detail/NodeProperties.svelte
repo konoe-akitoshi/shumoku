@@ -2,32 +2,34 @@
   import type { Node, Subgraph } from '@shumoku/core'
   import { Combobox } from 'bits-ui'
   import { CaretUpDown } from 'phosphor-svelte'
-  import type { SpecPaletteEntry } from '$lib/types'
-  import { paletteEntryLabel } from '$lib/types'
+  import type { Product } from '$lib/types'
+  import { productLabel } from '$lib/types'
 
   let {
     node,
     editing = false,
-    palette = [],
+    products = [],
     subgraphs = new Map(),
     onupdate,
-    onbindpalette,
+    onbindproduct,
   }: {
     node: Node
     editing?: boolean
-    palette?: SpecPaletteEntry[]
+    products?: Product[]
     subgraphs?: Map<string, Subgraph>
     onupdate?: (field: string, value: unknown) => void
-    onbindpalette?: (paletteId: string) => void
+    onbindproduct?: (productId: string) => void
   } = $props()
 
   let comboSearchValue = $state('')
 
+  const deviceProducts = $derived(products.filter((p) => p.kind === 'device'))
+
   const comboResults = $derived.by(() => {
-    if (!palette.length) return []
-    if (!comboSearchValue.trim()) return palette.slice(0, 10)
+    if (!deviceProducts.length) return []
+    if (!comboSearchValue.trim()) return deviceProducts.slice(0, 10)
     const q = comboSearchValue.toLowerCase()
-    return palette.filter((e) => paletteEntryLabel(e).toLowerCase().includes(q)).slice(0, 10)
+    return deviceProducts.filter((e) => productLabel(e).toLowerCase().includes(q)).slice(0, 10)
   })
 
   const nodeLabel = $derived(
@@ -104,10 +106,10 @@
     <dt class={labelClass}>Spec</dt>
     <dd>
       {#if editing}
-        <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindpalette?.(v) }}>
+        <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindproduct?.(v) }}>
           <div class="relative">
             <Combobox.Input
-              placeholder="Assign spec..."
+              placeholder="Assign product..."
               class="w-full pl-2 pr-7 py-1 text-[11px] bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono"
               oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
             />
@@ -118,18 +120,18 @@
           <Combobox.Content
             class="z-[70] mt-1 max-h-48 w-full overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-lg"
           >
-            {#each comboResults as palEntry}
+            {#each comboResults as product}
               <Combobox.Item
-                value={palEntry.id}
-                label={paletteEntryLabel(palEntry)}
+                value={product.id}
+                label={productLabel(product)}
                 class="px-3 py-1.5 text-[11px] cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 data-[highlighted]:bg-neutral-50 dark:data-[highlighted]:bg-neutral-700/50"
               >
                 <div class="font-medium text-neutral-800 dark:text-neutral-100">
-                  {paletteEntryLabel(palEntry)}
+                  {productLabel(product)}
                 </div>
                 <div class="text-[9px] font-mono text-neutral-400">
-                  {palEntry.spec.kind}
-                  / {palEntry.spec.vendor ?? ''}
+                  {product.spec.kind}
+                  / {product.spec.vendor ?? ''}
                 </div>
               </Combobox.Item>
             {/each}

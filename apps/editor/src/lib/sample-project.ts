@@ -2,62 +2,61 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /**
- * Sample project template — provides initial Palette + diagram data.
- * Every spec used in the sample diagram MUST be defined here.
+ * Sample project template — provides initial Products + diagram data.
  * Will be replaced by a proper template system when DB is introduced.
  */
 
 import type { HardwareProperties } from '@shumoku/catalog'
-import { DeviceType } from '@shumoku/core'
+import { DeviceType, type NetworkGraph } from '@shumoku/core'
 import { sampleDiagram } from './sample-diagram'
-import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
+import type { DeviceProduct, NetedProject } from './types'
 
-export const samplePalette: SpecPaletteEntry[] = [
+export const sampleProducts: DeviceProduct[] = [
   // ========== Cloud ==========
   {
-    id: 'pal-aws-ec2',
-    source: 'custom',
+    id: 'product-aws-ec2',
+    kind: 'device',
     spec: { kind: 'service', vendor: 'aws', service: 'ec2', resource: 'instances' },
   },
   {
-    id: 'pal-aws-vpn-gw',
-    source: 'custom',
+    id: 'product-aws-vpn-gw',
+    kind: 'device',
     spec: { kind: 'service', vendor: 'aws', service: 'vpc', resource: 'vpn-gateway' },
   },
 
   // ========== Perimeter ==========
   {
-    id: 'pal-internet',
-    source: 'custom',
+    id: 'product-internet',
+    kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.Internet, vendor: undefined },
   },
   {
-    id: 'pal-yamaha-rtx3510',
-    source: 'custom',
+    id: 'product-yamaha-rtx3510',
+    kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.Router, vendor: 'yamaha', model: 'rtx3510' },
   },
   {
-    id: 'pal-juniper-srx4100',
-    source: 'custom',
+    id: 'product-juniper-srx4100',
+    kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.Firewall, vendor: 'juniper', model: 'SRX4100' },
   },
 
   // ========== DMZ ==========
   {
-    id: 'pal-generic-l2-switch',
-    source: 'custom',
+    id: 'product-generic-l2-switch',
+    kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.L2Switch },
   },
   {
-    id: 'pal-generic-server',
-    source: 'custom',
+    id: 'product-generic-server',
+    kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.Server },
   },
 
   // ========== NOC ==========
   {
-    id: 'pal-juniper-qfx5120',
-    source: 'custom',
+    id: 'product-juniper-qfx5120',
+    kind: 'device',
     spec: {
       kind: 'hardware',
       type: DeviceType.L3Switch,
@@ -66,8 +65,8 @@ export const samplePalette: SpecPaletteEntry[] = [
     },
   },
   {
-    id: 'pal-juniper-ex4400',
-    source: 'custom',
+    id: 'product-juniper-ex4400',
+    kind: 'device',
     spec: {
       kind: 'hardware',
       type: DeviceType.L3Switch,
@@ -78,8 +77,8 @@ export const samplePalette: SpecPaletteEntry[] = [
 
   // ========== Building A (Cisco + Aruba) ==========
   {
-    id: 'pal-cisco-3560cx-8pc',
-    source: 'catalog',
+    id: 'product-cisco-3560cx-8pc',
+    kind: 'device',
     catalogId: 'cisco/catalyst-3560cx/ws-c3560cx-8pc-s',
     spec: {
       kind: 'hardware',
@@ -96,8 +95,8 @@ export const samplePalette: SpecPaletteEntry[] = [
     } satisfies HardwareProperties,
   },
   {
-    id: 'pal-aruba-ap505',
-    source: 'catalog',
+    id: 'product-aruba-ap505',
+    kind: 'device',
     catalogId: 'hpe/aruba-ap-505',
     spec: {
       kind: 'hardware',
@@ -113,8 +112,8 @@ export const samplePalette: SpecPaletteEntry[] = [
 
   // ========== Building B (Panasonic + AP11D + IP Phone) ==========
   {
-    id: 'pal-panasonic-m8egpwr-plus',
-    source: 'catalog',
+    id: 'product-panasonic-m8egpwr-plus',
+    kind: 'device',
     catalogId: 'panasonic/switch-m8egpwr-plus',
     spec: {
       kind: 'hardware',
@@ -131,8 +130,8 @@ export const samplePalette: SpecPaletteEntry[] = [
     } satisfies HardwareProperties,
   },
   {
-    id: 'pal-aruba-ap11d',
-    source: 'catalog',
+    id: 'product-aruba-ap11d',
+    kind: 'device',
     catalogId: 'hpe/aruba-instant-on-ap11d',
     spec: {
       kind: 'hardware',
@@ -150,8 +149,8 @@ export const samplePalette: SpecPaletteEntry[] = [
     } satisfies HardwareProperties,
   },
   {
-    id: 'pal-generic-ip-phone',
-    source: 'catalog',
+    id: 'product-generic-ip-phone',
+    kind: 'device',
     catalogId: 'generic/ip-phone',
     spec: { kind: 'hardware', type: DeviceType.CPE, vendor: 'generic', model: 'ip-phone' },
     properties: {
@@ -160,41 +159,43 @@ export const samplePalette: SpecPaletteEntry[] = [
   },
 ]
 
-/** BOM items for the sample project — each row is one device instance */
-export const sampleBomItems: BomItem[] = [
-  // Cloud
-  { id: 'bom-cloud-services', paletteId: 'pal-aws-ec2', nodeId: 'cloud-services' },
-  { id: 'bom-vgw', paletteId: 'pal-aws-vpn-gw', nodeId: 'vgw' },
-  // Perimeter
-  { id: 'bom-isp1', paletteId: 'pal-internet', nodeId: 'isp1' },
-  { id: 'bom-isp2', paletteId: 'pal-internet', nodeId: 'isp2' },
-  { id: 'bom-rt1', paletteId: 'pal-yamaha-rtx3510', nodeId: 'rt1' },
-  { id: 'bom-rt2', paletteId: 'pal-yamaha-rtx3510', nodeId: 'rt2' },
-  { id: 'bom-fw1', paletteId: 'pal-juniper-srx4100', nodeId: 'fw1' },
-  { id: 'bom-fw2', paletteId: 'pal-juniper-srx4100', nodeId: 'fw2' },
-  // DMZ
-  { id: 'bom-dmz-sw', paletteId: 'pal-generic-l2-switch', nodeId: 'dmz-sw' },
-  { id: 'bom-web-srv', paletteId: 'pal-generic-server', nodeId: 'web-srv' },
-  { id: 'bom-mail-srv', paletteId: 'pal-generic-server', nodeId: 'mail-srv' },
-  // NOC
-  { id: 'bom-core-sw', paletteId: 'pal-juniper-qfx5120', nodeId: 'core-sw' },
-  { id: 'bom-dist-sw', paletteId: 'pal-juniper-ex4400', nodeId: 'dist-sw' },
-  // Building A
-  { id: 'bom-sw-a1', paletteId: 'pal-cisco-3560cx-8pc', nodeId: 'sw-a1' },
-  { id: 'bom-ap-a1', paletteId: 'pal-aruba-ap505', nodeId: 'ap-a1' },
-  { id: 'bom-ap-a2', paletteId: 'pal-aruba-ap505', nodeId: 'ap-a2' },
-  // Building B
-  { id: 'bom-sw-b1', paletteId: 'pal-panasonic-m8egpwr-plus', nodeId: 'sw-b1' },
-  { id: 'bom-ap-b1', paletteId: 'pal-aruba-ap505', nodeId: 'ap-b1' },
-  { id: 'bom-ap-b2', paletteId: 'pal-aruba-ap11d', nodeId: 'ap-b2' },
-  { id: 'bom-ip-phone', paletteId: 'pal-generic-ip-phone', nodeId: 'ip-phone' },
-]
+/** Map of nodeId → productId for the bundled sample diagram. */
+const sampleNodeProduct: Record<string, string> = {
+  'cloud-services': 'product-aws-ec2',
+  vgw: 'product-aws-vpn-gw',
+  isp1: 'product-internet',
+  isp2: 'product-internet',
+  rt1: 'product-yamaha-rtx3510',
+  rt2: 'product-yamaha-rtx3510',
+  fw1: 'product-juniper-srx4100',
+  fw2: 'product-juniper-srx4100',
+  'dmz-sw': 'product-generic-l2-switch',
+  'web-srv': 'product-generic-server',
+  'mail-srv': 'product-generic-server',
+  'core-sw': 'product-juniper-qfx5120',
+  'dist-sw': 'product-juniper-ex4400',
+  'sw-a1': 'product-cisco-3560cx-8pc',
+  'ap-a1': 'product-aruba-ap505',
+  'ap-a2': 'product-aruba-ap505',
+  'sw-b1': 'product-panasonic-m8egpwr-plus',
+  'ap-b1': 'product-aruba-ap505',
+  'ap-b2': 'product-aruba-ap11d',
+  'ip-phone': 'product-generic-ip-phone',
+}
 
-/** Sample project — bundled palette, bom, and positioned diagram */
+/** sample diagram with productId stamped onto each node */
+const sampleDiagramWithBindings: NetworkGraph = {
+  ...(sampleDiagram as NetworkGraph),
+  nodes: (sampleDiagram as NetworkGraph).nodes.map((node) => {
+    const productId = sampleNodeProduct[node.id]
+    return productId ? { ...node, productId } : node
+  }),
+}
+
+/** Sample project — bundled products and positioned diagram. */
 export const sampleProject: NetedProject = {
-  version: 1,
+  version: 2,
   name: 'Sample Network',
-  palette: samplePalette,
-  bom: sampleBomItems,
-  diagram: sampleDiagram,
+  products: sampleProducts,
+  diagram: sampleDiagramWithBindings,
 }

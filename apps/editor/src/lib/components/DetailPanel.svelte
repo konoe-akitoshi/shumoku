@@ -65,9 +65,9 @@
     diagramState.updateNode(node.id, { [field]: value })
   }
 
-  function bindPalette(paletteId: string) {
+  function bindProduct(productId: string) {
     if (!node) return
-    diagramState.bindNodeToPalette(node.id, paletteId)
+    diagramState.bindNodeToProduct(node.id, productId)
   }
 
   // Link update helper
@@ -134,8 +134,7 @@
                     <NodeContent
                       {node}
                       poeBudget={diagramState.poeBudgets.find((b) => b.nodeId === node?.id)}
-                      palette={diagramState.palette}
-                      bomItems={diagramState.bomItems}
+                      products={diagramState.products}
                       links={diagramState.links}
                       nodes={diagramState.nodes}
                     />
@@ -170,10 +169,10 @@
                     <NodeProperties
                       {node}
                       {editing}
-                      palette={diagramState.palette}
+                      products={diagramState.products}
                       subgraphs={diagramState.subgraphs}
                       onupdate={updateNode}
-                      onbindpalette={bindPalette}
+                      onbindproduct={bindProduct}
                     />
                   {:else if link}
                     <LinkProperties
