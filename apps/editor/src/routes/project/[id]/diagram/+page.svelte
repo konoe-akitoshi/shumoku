@@ -12,6 +12,8 @@
   import SheetBar from '$lib/components/SheetBar.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
+  import SceneBar from '$lib/components/scene/SceneBar.svelte'
+  import SceneCanvas from '$lib/components/scene/SceneCanvas.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
 
   // =========================================================================
@@ -97,9 +99,11 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="absolute inset-0"
-    ondblclick={() => { if (selected) openDetail(selected.id, selected.type) }}
+    ondblclick={() => { if (selected && diagramState.currentSceneId === null) openDetail(selected.id, selected.type) }}
   >
-    {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
+    {#if diagramState.currentSceneId !== null && diagramState.currentScene}
+      <SceneCanvas scene={diagramState.currentScene} />
+    {:else if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
       <ShumokuRenderer
         bind:this={renderer}
         bind:svgElement={rendererSvg}
@@ -163,8 +167,11 @@
     <CodePanel bind:isOpen={codePanelOpen} />
   </div>
 
-  <!-- Bottom-center: Sheet bar -->
-  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"><SheetBar /></div>
+  <!-- Bottom-center: Sheet (hierarchy) + Scene (presentation) bars -->
+  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
+    <SheetBar />
+    <SceneBar />
+  </div>
 
   <!-- Overlays -->
 
