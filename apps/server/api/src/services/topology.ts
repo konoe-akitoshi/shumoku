@@ -15,7 +15,7 @@ import {
   sampleNetwork,
   YamlParser,
 } from '@shumoku/core'
-import { collectIconUrls, resolveIconDimensionsForGraph } from '@shumoku/renderer-svg'
+import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
 
@@ -46,12 +46,9 @@ function rowToTopology(row: TopologyRow): Topology {
 }
 
 /**
- * Resolved icon dimensions for rendering
+ * Resolved icon dimensions for rendering, keyed by URL.
  */
-export interface ResolvedIconDimensions {
-  byUrl: Map<string, IconDimensions>
-  byKey: Map<string, IconDimensions>
-}
+export type ResolvedIconDimensions = Map<string, IconDimensions>
 
 /**
  * Error information when a topology fails to parse or layout
@@ -380,20 +377,18 @@ export class TopologyService {
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
     const graph = this.parseContent(topology.contentJson)
 
-    // Resolve icon dimensions from CDN for proper sizing
-    let iconDimensions: ResolvedIconDimensions = { byUrl: new Map(), byKey: new Map() }
+    // Resolve icon dimensions for URL icons (used by renderer for
+    // aspect-preserving sizing).
+    let iconDimensions: ResolvedIconDimensions = new Map()
     const iconUrls = collectIconUrls(graph)
     if (iconUrls.length > 0) {
       try {
-        iconDimensions = await resolveIconDimensionsForGraph(iconUrls)
+        iconDimensions = await resolveAllIconDimensions(iconUrls)
       } catch (err) {
         console.warn('Failed to resolve icon dimensions:', err)
-        // Continue with empty dimensions - will use defaults
       }
     }
 
-    // Compute layout with icon dimensions for proper node sizing
-    // Use byKey (vendor/model format) for layout engine
     const { resolved, layout: layoutResult } = await computeNetworkLayout(graph)
     const metrics = this.createEmptyMetrics(graph)
 

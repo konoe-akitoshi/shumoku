@@ -3,9 +3,9 @@
   import {
     computeNodeSize,
     DEFAULT_ICON_SIZE,
-    getDeviceIcon,
     ICON_LABEL_GAP,
     LABEL_LINE_HEIGHT,
+    resolveIcon,
     specDeviceType,
   } from '@shumoku/core'
   import type { NodeOverlaySnippet } from '../../lib/overlays'
@@ -62,20 +62,9 @@
     height: size.height,
   })
 
-  // Icon: prefer spec.icon (snapshotted from Product), fall back to generic
-  // device-type icon. spec.icon may be either a URL or inline SVG content
-  // (a `<path .../>` fragment or `<svg ...>...</svg>` block).
-  type ResolvedIcon = { kind: 'inline'; svg: string } | { kind: 'url'; url: string } | null
-  const icon = $derived.by<ResolvedIcon>(() => {
-    const explicit = node.spec?.icon
-    if (explicit) {
-      return explicit.trim().startsWith('<')
-        ? { kind: 'inline', svg: explicit }
-        : { kind: 'url', url: explicit }
-    }
-    const fallback = getDeviceIcon(specDeviceType(node.spec))
-    return fallback ? { kind: 'inline', svg: fallback } : null
-  })
+  // Icon: spec.icon is the producer-supplied final value (URL or inline
+  // SVG); resolveIcon adds the bundled device-type fallback when empty.
+  const icon = $derived(resolveIcon(node.spec))
   const iconSize = DEFAULT_ICON_SIZE
 
   // Labels
