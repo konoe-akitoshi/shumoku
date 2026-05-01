@@ -207,9 +207,14 @@ export type EthernetStandard =
  * Shared fields across all spec kinds.
  */
 export interface SpecBase {
-  /** Custom icon URL (overrides vendor/type icons) */
+  /**
+   * Icon to render for this node — either inline SVG content
+   * (`<path .../>` or `<svg ...>...</svg>`) or a URL. Producers
+   * (editor / catalog import) snapshot this from `Product.icon`;
+   * renderers fall back to a generic device-type icon when empty.
+   */
   icon?: string
-  /** Vendor name for vendor-specific icons (e.g., 'aws', 'azure', 'gcp', 'yamaha') */
+  /** Vendor name (e.g., 'aws', 'cisco', 'juniper'). Display metadata only. */
   vendor?: string
 }
 
@@ -250,20 +255,6 @@ export type NodeSpec = HardwareSpec | ComputeSpec | ServiceSpec
 export function specDeviceType(spec: NodeSpec | undefined): DeviceType | undefined {
   if (!spec || spec.kind === 'service') return undefined
   return spec.type
-}
-
-/**
- * Extract the icon lookup key for CDN icons.
- * Hardware → model, Service → service/resource, Compute → platform.
- */
-export function specIconKey(spec: NodeSpec | undefined): string | undefined {
-  if (!spec) return undefined
-  if (spec.kind === 'service') {
-    return spec.resource ? `${spec.service}/${spec.resource}` : spec.service
-  }
-  if (spec.kind === 'hardware') return spec.model
-  if (spec.kind === 'compute') return spec.platform
-  return undefined
 }
 
 export interface Node {
