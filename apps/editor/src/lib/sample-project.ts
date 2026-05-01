@@ -17,11 +17,13 @@ export const sampleProducts: DeviceProduct[] = [
     id: 'product-aws-ec2',
     kind: 'device',
     spec: { kind: 'service', vendor: 'aws', service: 'ec2', resource: 'instances' },
+    icon: 'https://icons.shumoku.packof.me/v1/aws/ec2-instances.svg',
   },
   {
     id: 'product-aws-vpn-gw',
     kind: 'device',
     spec: { kind: 'service', vendor: 'aws', service: 'vpc', resource: 'vpn-gateway' },
+    icon: 'https://icons.shumoku.packof.me/v1/aws/vpc-vpn-gateway.svg',
   },
 
   // ========== Perimeter ==========
@@ -40,6 +42,7 @@ export const sampleProducts: DeviceProduct[] = [
     id: 'product-juniper-srx4100',
     kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.Firewall, vendor: 'juniper', model: 'SRX4100' },
+    icon: 'https://icons.shumoku.packof.me/v1/juniper/srx4100.png',
   },
 
   // ========== DMZ ==========
@@ -64,6 +67,7 @@ export const sampleProducts: DeviceProduct[] = [
       vendor: 'juniper',
       model: 'QFX5120-48T',
     },
+    icon: 'https://icons.shumoku.packof.me/v1/juniper/qfx5120-48t.png',
   },
   {
     id: 'product-juniper-ex4400',
@@ -74,6 +78,7 @@ export const sampleProducts: DeviceProduct[] = [
       vendor: 'juniper',
       model: 'EX4400-48T',
     },
+    icon: 'https://icons.shumoku.packof.me/v1/juniper/ex4400-48t.png',
   },
 
   // ========== Building A (Cisco + Aruba) ==========
@@ -110,6 +115,7 @@ export const sampleProducts: DeviceProduct[] = [
       power: { max_draw_w: 11, poe_in: { standard: '802.3af', class: 3, max_draw_w: 16.5 } },
       wireless: { standard: 'wifi-6', radios: 2, mimo: '2x2', bands: ['2.4ghz', '5ghz'] },
     } satisfies HardwareProperties,
+    icon: 'https://icons.shumoku.packof.me/v1/aruba/aruba-ap-505.svg',
   },
 
   // ========== Building B (Panasonic + AP11D + IP Phone) ==========
@@ -149,6 +155,7 @@ export const sampleProducts: DeviceProduct[] = [
       },
       wireless: { standard: 'wifi-5', radios: 2, mimo: '2x2', bands: ['2.4ghz', '5ghz'] },
     } satisfies HardwareProperties,
+    icon: 'https://icons.shumoku.packof.me/v1/aruba/aruba-instant-on-ap11d.svg',
   },
   {
     id: 'product-generic-ip-phone',
