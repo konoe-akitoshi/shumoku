@@ -133,10 +133,21 @@ export interface Scene {
   name: string
   /** Optional background image (floor plan / blueprint / photo). */
   background?: SceneBackground
-  /** Per-node placement metadata; only nodes listed here render in this scene. */
+  /**
+   * Position overrides. Sparse — every diagram node renders in this
+   * scene at its `Node.position` unless an entry here overrides it.
+   */
   nodePlacements: NodePlacement[]
-  /** Per-link wire routing; only links listed here render in this scene. */
+  /**
+   * Wire routing overrides. Sparse — every diagram link renders in
+   * this scene with a default orthogonal route unless an entry here
+   * overrides it.
+   */
   wireRoutes: WireRoute[]
+  /** Node ids explicitly hidden from this scene. */
+  hiddenNodeIds?: string[]
+  /** Link ids explicitly hidden from this scene. */
+  hiddenLinkIds?: string[]
 }
 
 export interface SceneBackground {

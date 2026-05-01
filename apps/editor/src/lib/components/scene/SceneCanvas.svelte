@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { computeNodeSize, type Node, resolveIcon, specDeviceType } from '@shumoku/core'
+  import { computeNodeSize, resolveIcon, specDeviceType } from '@shumoku/core'
   import { attachCamera } from '@shumoku/renderer'
   import { DropdownMenu } from 'bits-ui'
   import { CaretDown, Plus } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
   import { Button } from '$lib/components/ui/button'
   import { diagramState, editorState } from '$lib/context.svelte'
-  import type { NodePlacement, Scene, WireRoute } from '$lib/types'
+  import type { Scene } from '$lib/types'
   import { productLabel } from '$lib/types'
 
   let {
@@ -46,47 +46,73 @@
 
   const interactive = $derived(editorState.interactive)
   const bg = $derived(scene.background)
+  const hiddenNodeIds = $derived(new Set(scene.hiddenNodeIds ?? []))
+  const hiddenLinkIds = $derived(new Set(scene.hiddenLinkIds ?? []))
+  const visibleNodes = $derived(
+    [...diagramState.nodes.values()].filter((n) => !hiddenNodeIds.has(n.id)),
+  )
+  const visibleLinks = $derived(
+    diagramState.links.filter((l) => !!l.id && !hiddenLinkIds.has(l.id)),
+  )
 
-  // Compute viewBox: image extent (or fallback to placement bounds).
+  /**
+   * Effective position for a node in this scene: a scene-local override
+   * if present, otherwise the diagram (auto-layout) position. Lets a
+   * freshly-added scene render every existing device at its diagram
+   * position automatically — the user only sets overrides when they
+   * want this scene to differ.
+   */
+  function positionFor(nodeId: string): { x: number; y: number } {
+    const override = scene.nodePlacements.find((p) => p.nodeId === nodeId)
+    if (override) return override.position
+    const node = diagramState.nodes.get(nodeId)
+    return node?.position ?? { x: 100, y: 100 }
+  }
+
+  // Compute viewBox: image extent (or fallback to derived bounds across
+  // every node in the diagram, since they all show in the scene).
   const viewBox = $derived.by(() => {
     if (bg) return `0 0 ${bg.width} ${bg.height}`
-    if (scene.nodePlacements.length === 0) return '0 0 800 600'
+    const nodeIds = [...diagramState.nodes.keys()]
+    if (nodeIds.length === 0) return '0 0 800 600'
     let minX = Number.POSITIVE_INFINITY
     let minY = Number.POSITIVE_INFINITY
     let maxX = Number.NEGATIVE_INFINITY
     let maxY = Number.NEGATIVE_INFINITY
-    for (const p of scene.nodePlacements) {
-      minX = Math.min(minX, p.position.x - 60)
-      minY = Math.min(minY, p.position.y - 40)
-      maxX = Math.max(maxX, p.position.x + 60)
-      maxY = Math.max(maxY, p.position.y + 40)
+    for (const id of nodeIds) {
+      const p = positionFor(id)
+      minX = Math.min(minX, p.x - 60)
+      minY = Math.min(minY, p.y - 40)
+      maxX = Math.max(maxX, p.x + 60)
+      maxY = Math.max(maxY, p.y + 40)
     }
     return `${minX} ${minY} ${Math.max(maxX - minX, 200)} ${Math.max(maxY - minY, 200)}`
   })
 
-  // Resolve helpers
-  function nodeFor(placement: NodePlacement): Node | undefined {
-    return diagramState.nodes.get(placement.nodeId)
-  }
-
-  function placementOf(nodeId: string): NodePlacement | undefined {
-    return scene.nodePlacements.find((p) => p.nodeId === nodeId)
-  }
-
   // Wire path generation (orthogonal / straight / free with optional waypoints)
-  function wirePoints(route: WireRoute): { x: number; y: number }[] | null {
-    const link = diagramState.links.find((l) => l.id === route.linkId)
-    if (!link) return null
-    const from = placementOf(link.from.node)
-    const to = placementOf(link.to.node)
-    if (!from || !to) return null
-    const cps = route.controlPoints ?? []
-    const all = [from.position, ...cps, to.position]
-    if (route.pathStyle === 'orthogonal' && cps.length === 0) {
-      // Two-segment elbow: horizontal then vertical
-      return [from.position, { x: to.position.x, y: from.position.y }, to.position]
+  function wirePoints(link: { id?: string; from: { node: string }; to: { node: string } }): {
+    points: { x: number; y: number }[]
+    pathStyle: 'orthogonal' | 'straight' | 'free'
+    controlPoints: { x: number; y: number }[]
+  } | null {
+    if (!link.id) return null
+    const from = positionFor(link.from.node)
+    const to = positionFor(link.to.node)
+    const route = scene.wireRoutes.find((w) => w.linkId === link.id)
+    const pathStyle = route?.pathStyle ?? 'orthogonal'
+    const cps = route?.controlPoints ?? []
+    if (pathStyle === 'orthogonal' && cps.length === 0) {
+      return {
+        points: [from, { x: to.x, y: from.y }, to],
+        pathStyle,
+        controlPoints: cps,
+      }
     }
-    return all
+    return {
+      points: [from, ...cps, to],
+      pathStyle,
+      controlPoints: cps,
+    }
   }
 
   function pathD(points: { x: number; y: number }[]): string {
@@ -127,16 +153,17 @@
     selectedWireId = null
   }
 
-  function handleItemPointerDown(placement: NodePlacement, e: PointerEvent) {
+  function handleItemPointerDown(nodeId: string, e: PointerEvent) {
     if (!interactive) return
     if (e.button !== 0) return
     const target = e.currentTarget as SVGGElement
     target.setPointerCapture(e.pointerId)
     const scenePt = clientToScene(e.clientX, e.clientY)
+    const pos = positionFor(nodeId)
     dragging = {
-      nodeId: placement.nodeId,
-      offsetX: scenePt.x - placement.position.x,
-      offsetY: scenePt.y - placement.position.y,
+      nodeId,
+      offsetX: scenePt.x - pos.x,
+      offsetY: scenePt.y - pos.y,
     }
   }
 
@@ -149,9 +176,14 @@
       })
     } else if (draggingControl) {
       const scenePt = clientToScene(e.clientX, e.clientY)
-      const link = diagramState.links.find((l) => l.id === draggingControl?.linkId)
-      const route = scene.wireRoutes.find((w) => w.linkId === draggingControl?.linkId)
-      if (!link || !route) return
+      const linkId = draggingControl.linkId
+      const link = diagramState.links.find((l) => l.id === linkId)
+      if (!link) return
+      const route = scene.wireRoutes.find((w) => w.linkId === linkId) ?? {
+        linkId,
+        pathStyle: 'orthogonal' as const,
+        controlPoints: [] as { x: number; y: number }[],
+      }
       const cps = [...(route.controlPoints ?? [])]
       cps[draggingControl.index] = {
         x: scenePt.x - draggingControl.offsetX,
@@ -210,25 +242,31 @@
     selectedItemId = null
   }
 
-  // Add a midpoint when alt-clicking the wire path (simple way to bend).
+  // Add a midpoint when double-clicking the wire path. Creates a route
+  // override on demand so the user doesn't need a pre-existing one.
   function handleWireDblClick(linkId: string, e: MouseEvent) {
     if (!interactive) return
     e.stopPropagation()
-    const route = scene.wireRoutes.find((w) => w.linkId === linkId)
-    if (!route) return
     const scenePt = clientToScene(e.clientX, e.clientY)
+    const route = scene.wireRoutes.find((w) => w.linkId === linkId) ?? {
+      linkId,
+      pathStyle: 'orthogonal' as const,
+      controlPoints: [] as { x: number; y: number }[],
+    }
     const cps = [...(route.controlPoints ?? []), scenePt]
     diagramState.setWireRoute(scene.id, { ...route, controlPoints: cps })
+    selectedWireId = linkId
   }
 
   function deleteSelected() {
     if (selectedWireId) {
-      // Remove wire route + the underlying link
-      diagramState.removeWireFromScene(scene.id, selectedWireId)
-      diagramState.removeLink(selectedWireId)
+      // Hide the wire from this scene only. Topology stays intact.
+      diagramState.hideLinkInScene(scene.id, selectedWireId)
       selectedWireId = null
     } else if (selectedItemId) {
-      diagramState.removePlacementFromScene(scene.id, selectedItemId)
+      // Hide the item from this scene only. Topology stays intact;
+      // unhide via 'Show all' in the toolbar (TODO).
+      diagramState.hideNodeInScene(scene.id, selectedItemId)
       selectedItemId = null
     }
   }
@@ -257,6 +295,15 @@
     camera?.detach()
     window.removeEventListener('keydown', handleKeydown)
   })
+
+  function unhideAll() {
+    for (const id of scene.hiddenNodeIds ?? []) {
+      diagramState.unhideNodeInScene(scene.id, id)
+    }
+    for (const id of scene.hiddenLinkIds ?? []) {
+      diagramState.unhideLinkInScene(scene.id, id)
+    }
+  }
 
   function pendingLabel(): string {
     const pending = pendingPlacement
@@ -295,132 +342,132 @@
         />
       {/if}
 
-      <!-- Wires (under items) -->
-      {#each scene.wireRoutes as route (route.linkId)}
-        {@const points = wirePoints(route)}
-        {#if points}
-          {@const isSelected = selectedWireId === route.linkId}
-          <g class="wire">
-            <!-- hit area -->
-            <path
-              d={pathD(points)}
-              stroke="transparent"
-              stroke-width="14"
-              fill="none"
-              style:cursor={interactive ? 'pointer' : 'default'}
-              onclick={(e) => handleWireClick(route.linkId, e)}
-              ondblclick={(e) => handleWireDblClick(route.linkId, e)}
-            />
-            <path
-              d={pathD(points)}
-              stroke={isSelected ? '#3b82f6' : '#475569'}
-              stroke-width={isSelected ? 2.5 : 2}
-              fill="none"
-              pointer-events="none"
-            />
-            {#if isSelected}
-              {#each route.controlPoints ?? [] as cp, idx (idx)}
-                <circle
-                  cx={cp.x}
-                  cy={cp.y}
-                  r="5"
-                  fill="white"
-                  stroke="#3b82f6"
-                  stroke-width="1.5"
-                  style:cursor="grab"
-                  onpointerdown={(e) => handleControlPointerDown(route.linkId, idx, e)}
-                />
-              {/each}
-            {/if}
-          </g>
+      <!-- Wires (under items): every visible diagram link renders here -->
+      {#each visibleLinks as link (link.id)}
+        {#if link.id}
+          {@const linkId = link.id}
+          {@const wp = wirePoints(link)}
+          {#if wp}
+            {@const isSelected = selectedWireId === linkId}
+            <g class="wire">
+              <!-- hit area -->
+              <path
+                d={pathD(wp.points)}
+                stroke="transparent"
+                stroke-width="14"
+                fill="none"
+                style:cursor={interactive ? 'pointer' : 'default'}
+                onclick={(e) => handleWireClick(linkId, e)}
+                ondblclick={(e) => handleWireDblClick(linkId, e)}
+              />
+              <path
+                d={pathD(wp.points)}
+                stroke={isSelected ? '#3b82f6' : '#475569'}
+                stroke-width={isSelected ? 2.5 : 2}
+                fill="none"
+                pointer-events="none"
+              />
+              {#if isSelected}
+                {#each wp.controlPoints as cp, idx (idx)}
+                  <circle
+                    cx={cp.x}
+                    cy={cp.y}
+                    r="5"
+                    fill="white"
+                    stroke="#3b82f6"
+                    stroke-width="1.5"
+                    style:cursor="grab"
+                    onpointerdown={(e) => handleControlPointerDown(linkId, idx, e)}
+                  />
+                {/each}
+              {/if}
+            </g>
+          {/if}
         {/if}
       {/each}
 
       <!-- Pending wire preview -->
       {#if pendingWireFrom}
-        {@const from = placementOf(pendingWireFrom)}
-        {#if from}
-          <circle
-            cx={from.position.x}
-            cy={from.position.y}
-            r="14"
-            fill="rgba(59,130,246,0.18)"
-            stroke="#3b82f6"
-            stroke-dasharray="3 3"
-          />
-        {/if}
+        {@const fromPos = positionFor(pendingWireFrom)}
+        <circle
+          cx={fromPos.x}
+          cy={fromPos.y}
+          r="14"
+          fill="rgba(59,130,246,0.18)"
+          stroke="#3b82f6"
+          stroke-dasharray="3 3"
+        />
       {/if}
 
-      <!-- Items -->
-      {#each scene.nodePlacements as placement (placement.nodeId)}
-        {@const node = nodeFor(placement)}
-        {#if node}
-          {@const size = computeNodeSize(node)}
-          {@const icon = resolveIcon(node.spec)}
-          {@const label = Array.isArray(node.label) ? node.label[0] : (node.label ?? node.id)}
-          {@const isSelected = selectedItemId === placement.nodeId}
-          {@const isWireSrc = pendingWireFrom === placement.nodeId}
-          <g
-            class="scene-item"
-            transform="translate({placement.position.x}, {placement.position.y})"
-            style:cursor={interactive ? 'grab' : 'default'}
-            onpointerdown={(e) => handleItemPointerDown(placement, e)}
-            onclick={(e) => handleItemClick(placement.nodeId, e)}
-            ondblclick={(e) => {
+      <!-- Items: every visible diagram node renders, position falls
+           through from Node.position when the scene has no override. -->
+      {#each visibleNodes as node (node.id)}
+        {@const pos = positionFor(node.id)}
+        {@const size = computeNodeSize(node)}
+        {@const icon = resolveIcon(node.spec)}
+        {@const label = Array.isArray(node.label) ? node.label[0] : (node.label ?? node.id)}
+        {@const isSelected = selectedItemId === node.id}
+        {@const isWireSrc = pendingWireFrom === node.id}
+        <g
+          class="scene-item"
+          transform="translate({pos.x}, {pos.y})"
+          style:cursor={interactive ? 'grab' : 'default'}
+          onpointerdown={(e) => handleItemPointerDown(node.id, e)}
+          onclick={(e) => handleItemClick(node.id, e)}
+          ondblclick={(e) => {
             e.stopPropagation()
-            startWireFrom(placement.nodeId)
+            startWireFrom(node.id)
           }}
-          >
-            <rect
-              x={-size.width / 2}
-              y={-size.height / 2}
-              width={size.width}
-              height={size.height}
-              rx="8"
-              ry="8"
-              fill="white"
-              stroke={isSelected ? '#3b82f6' : isWireSrc ? '#10b981' : '#cbd5e1'}
-              stroke-width={isSelected || isWireSrc ? 2.5 : 1.5}
-              filter="drop-shadow(0 1px 2px rgba(0,0,0,0.06))"
-            />
-            {#if icon}
-              {#if icon.kind === 'inline'}
-                <svg
-                  x={-12}
-                  y={-size.height / 2 + 6}
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  role="img"
-                  aria-label={specDeviceType(node.spec) ?? 'icon'}
-                  style:color="#475569"
-                >
-                  {@html icon.svg}
-                </svg>
-              {:else}
-                <image
-                  href={icon.url}
-                  x={-12}
-                  y={-size.height / 2 + 6}
-                  width="24"
-                  height="24"
-                  preserveAspectRatio="xMidYMid meet"
-                />
-              {/if}
+        >
+          <rect
+            x={-size.width / 2}
+            y={-size.height / 2}
+            width={size.width}
+            height={size.height}
+            rx="8"
+            ry="8"
+            fill="white"
+            stroke={isSelected ? '#3b82f6' : isWireSrc ? '#10b981' : '#cbd5e1'}
+            stroke-width={isSelected || isWireSrc ? 2.5 : 1.5}
+            filter="drop-shadow(0 1px 2px rgba(0,0,0,0.06))"
+          />
+          {#if icon}
+            {#if icon.kind === 'inline'}
+              <svg
+                x={-12}
+                y={-size.height / 2 + 6}
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                role="img"
+                aria-label={specDeviceType(node.spec) ?? 'icon'}
+                style:color="#475569"
+              >
+                {@html icon.svg}
+              </svg>
+            {:else}
+              <image
+                href={icon.url}
+                x={-12}
+                y={-size.height / 2 + 6}
+                width="24"
+                height="24"
+                preserveAspectRatio="xMidYMid meet"
+              />
             {/if}
-            <text
-              x="0"
-              y={size.height / 2 - 8}
-              text-anchor="middle"
-              font-size="11"
-              fill="#0f172a"
-              pointer-events="none"
-            >
-              {label}
-            </text>
-          </g>
-        {/if}
+          {/if}
+          <text
+            x="0"
+            y={size.height / 2 - 8}
+            text-anchor="middle"
+            font-size="11"
+            fill="#0f172a"
+            pointer-events="none"
+          >
+            {label}
+          </text>
+        </g>
       {/each}
     </g>
   </svg>
@@ -480,6 +527,12 @@
             Double-click an item to start a wire
           {/if}
         </span>
+        {#if (scene.hiddenNodeIds?.length ?? 0) + (scene.hiddenLinkIds?.length ?? 0) > 0}
+          <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
+          <Button size="sm" variant="ghost" onclick={unhideAll}>
+            Show {(scene.hiddenNodeIds?.length ?? 0) + (scene.hiddenLinkIds?.length ?? 0)} hidden
+          </Button>
+        {/if}
       </div>
     </div>
   {/if}

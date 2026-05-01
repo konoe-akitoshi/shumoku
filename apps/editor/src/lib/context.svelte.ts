@@ -1274,6 +1274,47 @@ export const diagramState = {
     )
   },
 
+  /** Hide a node from a scene without affecting the diagram. */
+  hideNodeInScene(sceneId: string, nodeId: string) {
+    scenes = scenes.map((s) => {
+      if (s.id !== sceneId) return s
+      const hidden = new Set(s.hiddenNodeIds ?? [])
+      hidden.add(nodeId)
+      return {
+        ...s,
+        hiddenNodeIds: [...hidden],
+        // Hidden node's wires are also hidden — drop the routes too.
+        wireRoutes: s.wireRoutes.filter((w) => {
+          const link = diagram.links.find((l) => l.id === w.linkId)
+          if (!link) return false
+          return link.from.node !== nodeId && link.to.node !== nodeId
+        }),
+      }
+    })
+  },
+  unhideNodeInScene(sceneId: string, nodeId: string) {
+    scenes = scenes.map((s) =>
+      s.id === sceneId
+        ? { ...s, hiddenNodeIds: (s.hiddenNodeIds ?? []).filter((id) => id !== nodeId) }
+        : s,
+    )
+  },
+  hideLinkInScene(sceneId: string, linkId: string) {
+    scenes = scenes.map((s) => {
+      if (s.id !== sceneId) return s
+      const hidden = new Set(s.hiddenLinkIds ?? [])
+      hidden.add(linkId)
+      return { ...s, hiddenLinkIds: [...hidden] }
+    })
+  },
+  unhideLinkInScene(sceneId: string, linkId: string) {
+    scenes = scenes.map((s) =>
+      s.id === sceneId
+        ? { ...s, hiddenLinkIds: (s.hiddenLinkIds ?? []).filter((id) => id !== linkId) }
+        : s,
+    )
+  },
+
   /**
    * Place a Product onto a scene at the given position. Creates the
    * underlying Node (via the existing place flow), then records the
@@ -1516,11 +1557,15 @@ async function applyProject(data: Partial<NetedProject>) {
   )
   await rerouteEdges()
 
-  // Scenes — drop placements / wires that point at orphan node/link ids
+  // Scenes — drop placements / wires / hidden ids that point at orphan
+  // node or link ids.
+  const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
   scenes = (data.scenes ?? []).map((scene) => ({
     ...scene,
     nodePlacements: scene.nodePlacements.filter((p) => diagram.nodes.has(p.nodeId)),
-    wireRoutes: scene.wireRoutes.filter((w) => diagram.links.some((l) => l.id === w.linkId)),
+    wireRoutes: scene.wireRoutes.filter((w) => linkIdSet.has(w.linkId)),
+    hiddenNodeIds: scene.hiddenNodeIds?.filter((id) => diagram.nodes.has(id)),
+    hiddenLinkIds: scene.hiddenLinkIds?.filter((id) => linkIdSet.has(id)),
   }))
   currentSceneId = null
 }
