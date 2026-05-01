@@ -1338,7 +1338,14 @@ async function applyProject(data: Partial<NetedProject>) {
     diagram.nodes,
     diagram.links,
   )
-  products = cleanProducts
+  // Backfill icons from catalog when a Product is catalog-linked but
+  // doesn't carry an icon yet — ensures bundled catalog artwork shows
+  // up on legacy projects without re-importing.
+  products = cleanProducts.map((p) => {
+    if (p.icon || !p.catalogId) return p
+    const entry = catalog.lookup(p.catalogId)
+    return entry?.icon ? ({ ...p, icon: entry.icon } as Product) : p
+  })
   diagram.links = cleanLinks
 
   // Re-derive ports for nodes bound to a device product, and snapshot the

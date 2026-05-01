@@ -99,7 +99,6 @@ export const sampleProducts: DeviceProduct[] = [
       },
       switching: { capacity_gbps: 22 },
     } satisfies HardwareProperties,
-    icon: '<path d="M3 6h18v3H3V6zm0 4h18v3H3v-3zm0 4h18v3H3v-3zm2 1h2v1H5v-1zm4 0h2v1H9v-1zm4 0h2v1h-2v-1z"/><circle cx="19" cy="15.5" r="1" fill="currentColor"/>',
   },
   {
     id: 'product-aruba-ap505',
@@ -115,7 +114,6 @@ export const sampleProducts: DeviceProduct[] = [
       power: { max_draw_w: 11, poe_in: { standard: '802.3af', class: 3, max_draw_w: 16.5 } },
       wireless: { standard: 'wifi-6', radios: 2, mimo: '2x2', bands: ['2.4ghz', '5ghz'] },
     } satisfies HardwareProperties,
-    icon: 'https://icons.shumoku.packof.me/v1/aruba/aruba-ap-505.svg',
   },
 
   // ========== Building B (Panasonic + AP11D + IP Phone) ==========
@@ -155,7 +153,6 @@ export const sampleProducts: DeviceProduct[] = [
       },
       wireless: { standard: 'wifi-5', radios: 2, mimo: '2x2', bands: ['2.4ghz', '5ghz'] },
     } satisfies HardwareProperties,
-    icon: 'https://icons.shumoku.packof.me/v1/aruba/aruba-instant-on-ap11d.svg',
   },
   {
     id: 'product-generic-ip-phone',
