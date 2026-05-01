@@ -97,21 +97,45 @@
   </Card.Root>
 {:else}
   <div class="mb-6 flex items-start justify-between gap-4">
-    <div class="min-w-0">
-      <div class="mb-1 flex items-center gap-2">
-        <Badge variant="secondary"
-          >{product.kind === 'device' ? product.spec.kind : product.kind}</Badge
-        >
-        {#if product.catalogId}
-          <Badge variant="default" title={product.catalogId}>catalog</Badge>
+    <div class="flex min-w-0 items-start gap-3">
+      <div
+        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground"
+      >
+        {#if product.icon}
+          {#if product.icon.trim().startsWith('<')}
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              role="img"
+              aria-label="product icon"
+            >
+              {@html product.icon}
+            </svg>
+          {:else}
+            <img src={product.icon} alt="product icon" class="h-8 w-8 object-contain">
+          {/if}
         {:else}
-          <Badge variant="outline">custom</Badge>
+          <span class="text-[10px]">no icon</span>
         {/if}
       </div>
-      <h1 class="truncate font-mono text-lg font-semibold">{productLabel(product)}</h1>
-      {#if product.catalogId}
-        <p class="truncate font-mono text-xs text-muted-foreground">{product.catalogId}</p>
-      {/if}
+      <div class="min-w-0">
+        <div class="mb-1 flex items-center gap-2">
+          <Badge variant="secondary"
+            >{product.kind === 'device' ? product.spec.kind : product.kind}</Badge
+          >
+          {#if product.catalogId}
+            <Badge variant="default" title={product.catalogId}>catalog</Badge>
+          {:else}
+            <Badge variant="outline">custom</Badge>
+          {/if}
+        </div>
+        <h1 class="truncate font-mono text-lg font-semibold">{productLabel(product)}</h1>
+        {#if product.catalogId}
+          <p class="truncate font-mono text-xs text-muted-foreground">{product.catalogId}</p>
+        {/if}
+      </div>
     </div>
     <Button variant="outline" size="sm" onclick={() => { removeOpen = true }}>
       <Trash class="mr-1 h-3.5 w-3.5 text-destructive" />
@@ -228,6 +252,51 @@
           <dd>{product.notes}</dd>
         {/if}
       </dl>
+    </Card.Content>
+  </Card.Root>
+
+  <!-- Icon edit -->
+  <Card.Root class="mb-6 py-0">
+    <Card.Content class="px-5 py-4">
+      <div class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        Icon
+      </div>
+      <div class="flex items-start gap-3">
+        <div
+          class="flex h-16 w-16 shrink-0 items-center justify-center rounded border bg-muted/30 text-muted-foreground"
+        >
+          {#if product.icon}
+            {#if product.icon.trim().startsWith('<')}
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                role="img"
+                aria-label="icon preview"
+              >
+                {@html product.icon}
+              </svg>
+            {:else}
+              <img src={product.icon} alt="icon preview" class="h-10 w-10 object-contain">
+            {/if}
+          {:else}
+            <span class="text-[10px]">none</span>
+          {/if}
+        </div>
+        <textarea
+          class="h-20 flex-1 resize-none rounded border border-input bg-background px-2 py-1.5 font-mono text-xs outline-none focus:ring-1 focus:ring-ring"
+          placeholder={'<path d="M..." /> または URL（空欄で削除）'}
+          value={product.icon ?? ''}
+          onchange={(e) => {
+            const v = (e.target as HTMLTextAreaElement).value.trim()
+            diagramState.updateProduct(product.id, { icon: v || undefined })
+          }}
+        ></textarea>
+      </div>
+      <p class="mt-1 text-[10px] text-muted-foreground">
+        Inline SVG path (24×24 viewBox) または画像 URL。配置済みノードに即時反映される。
+      </p>
     </Card.Content>
   </Card.Root>
 

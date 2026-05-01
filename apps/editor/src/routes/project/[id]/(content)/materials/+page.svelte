@@ -60,6 +60,7 @@
   let customType = $state('')
   let customVendor = $state('')
   let customModel = $state('')
+  let customIcon = $state('')
 
   const catalog = diagramState.catalog
 
@@ -149,6 +150,7 @@
       catalogId: entry.id,
       spec: entry.spec,
       properties: entry.properties,
+      icon: entry.icon,
     })
     resetCatalogSelect()
     catalogDialogOpen = false
@@ -161,11 +163,17 @@
     if (customType) spec.type = customType
     if (customVendor) spec.vendor = customVendor
     if (customModel) spec.model = customModel
-    diagramState.addProduct({ id: newId('product'), kind: 'device', spec })
+    diagramState.addProduct({
+      id: newId('product'),
+      kind: 'device',
+      spec,
+      icon: customIcon.trim() || undefined,
+    })
     customKind = 'hardware'
     customType = ''
     customVendor = ''
     customModel = ''
+    customIcon = ''
     customDialogOpen = false
   }
 
@@ -329,6 +337,7 @@
         <Table.Root>
           <Table.Header>
             <Table.Row>
+              <Table.Head class="w-10"></Table.Head>
               <Table.Head>Kind</Table.Head>
               <Table.Head>Vendor</Table.Head>
               <Table.Head>Identifier</Table.Head>
@@ -346,6 +355,27 @@
                 class="cursor-pointer hover:bg-muted/40"
                 onclick={() => goto(`/project/${$page.params.id}/materials/${product.id}`)}
               >
+                <Table.Cell>
+                  {#if product.icon}
+                    {#if product.icon.trim().startsWith('<')}
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        class="text-muted-foreground"
+                        role="img"
+                        aria-label="icon"
+                      >
+                        {@html product.icon}
+                      </svg>
+                    {:else}
+                      <img src={product.icon} alt="icon" class="h-5 w-5 object-contain">
+                    {/if}
+                  {:else}
+                    <span class="text-muted-foreground">—</span>
+                  {/if}
+                </Table.Cell>
                 <Table.Cell
                   ><Badge variant="secondary">{productKindLabel(product)}</Badge></Table.Cell
                 >
@@ -661,6 +691,39 @@
             bind:value={customModel}
             placeholder="ws-c3560cx-8pc-s..."
           >
+        </div>
+        <div>
+          <div class={labelClass}>Icon (optional)</div>
+          <div class="flex items-start gap-2">
+            <textarea
+              class="{inputClass} h-20 resize-none font-mono"
+              bind:value={customIcon}
+              placeholder={'<path d="M..." /> または URL'}
+            ></textarea>
+            {#if customIcon.trim()}
+              <div
+                class="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-input bg-background"
+              >
+                {#if customIcon.trim().startsWith('<')}
+                  <svg
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    role="img"
+                    aria-label="icon preview"
+                  >
+                    {@html customIcon}
+                  </svg>
+                {:else}
+                  <img src={customIcon} alt="icon preview" class="h-8 w-8 object-contain">
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <p class="mt-1 text-[10px] text-muted-foreground">
+            Inline SVG path（24×24 viewBox 想定）または画像 URL。
+          </p>
         </div>
         <Button class="w-full" disabled={!customVendor && !customModel} onclick={addCustom}
           >Create Product</Button
