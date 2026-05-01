@@ -62,8 +62,20 @@
     height: size.height,
   })
 
-  // Icon
-  const iconPath = $derived(getDeviceIcon(specDeviceType(node.spec)))
+  // Icon: prefer spec.icon (snapshotted from Product), fall back to generic
+  // device-type icon. spec.icon may be either a URL or inline SVG content
+  // (a `<path .../>` fragment or `<svg ...>...</svg>` block).
+  type ResolvedIcon = { kind: 'inline'; svg: string } | { kind: 'url'; url: string } | null
+  const icon = $derived.by<ResolvedIcon>(() => {
+    const explicit = node.spec?.icon
+    if (explicit) {
+      return explicit.trim().startsWith('<')
+        ? { kind: 'inline', svg: explicit }
+        : { kind: 'url', url: explicit }
+    }
+    const fallback = getDeviceIcon(specDeviceType(node.spec))
+    return fallback ? { kind: 'inline', svg: fallback } : null
+  })
   const iconSize = DEFAULT_ICON_SIZE
 
   // Labels
@@ -83,7 +95,7 @@
   )
 
   // Vertical centering
-  const iconHeight = $derived(iconPath ? iconSize : 0)
+  const iconHeight = $derived(icon ? iconSize : 0)
   const gap = $derived(iconHeight > 0 ? ICON_LABEL_GAP : 0)
   const labelHeight = $derived(parsedLabels.length * LABEL_LINE_HEIGHT)
   const totalContentHeight = $derived(iconHeight + gap + labelHeight)
@@ -273,18 +285,29 @@
 
   <!-- Content -->
   <g class="node-fg" pointer-events="none">
-    {#if iconPath}
+    {#if icon}
       <g class="node-icon" transform="translate({cx - iconSize / 2}, {contentTop})">
-        <svg
-          width={iconSize}
-          height={iconSize}
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          role="img"
-          aria-label={specDeviceType(node.spec) ?? 'icon'}
-        >
-          {@html iconPath}
-        </svg>
+        {#if icon.kind === 'inline'}
+          <svg
+            width={iconSize}
+            height={iconSize}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            role="img"
+            aria-label={specDeviceType(node.spec) ?? 'icon'}
+          >
+            {@html icon.svg}
+          </svg>
+        {:else}
+          <image
+            href={icon.url}
+            width={iconSize}
+            height={iconSize}
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-label={specDeviceType(node.spec) ?? 'icon'}
+          />
+        {/if}
       </g>
     {/if}
     {#each parsedLabels as label, i}

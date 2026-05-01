@@ -1086,8 +1086,16 @@ ${fg}
 
     const spec = node.spec
 
-    // User-specified icon URL takes highest priority
+    // User-specified icon takes highest priority. Either inline SVG content
+    // (`<path .../>` or `<svg ...>...</svg>`) or a URL.
     if (spec?.icon) {
+      if (spec.icon.trim().startsWith('<')) {
+        return {
+          width: DEFAULT_ICON_SIZE,
+          height: DEFAULT_ICON_SIZE,
+          svg: `<svg width="${DEFAULT_ICON_SIZE}" height="${DEFAULT_ICON_SIZE}" viewBox="0 0 24 24" fill="currentColor">${spec.icon}</svg>`,
+        }
+      }
       const dims = this.options.iconDimensions.get(spec.icon)
       const { width, height } = this.calculateIconSize(dims, maxIconWidth)
       return {
