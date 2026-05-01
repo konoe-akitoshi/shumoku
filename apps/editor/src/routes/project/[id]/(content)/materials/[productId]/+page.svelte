@@ -78,6 +78,33 @@
     goto(`/project/${projectId}/materials`)
   }
 
+  /** SVG → inline content; raster → data URL. */
+  async function readIconFile(file: File): Promise<string> {
+    const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
+    if (isSvg) return await file.text()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result ?? ''))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleIconUpload(e: Event) {
+    if (!product) return
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    const value = await readIconFile(file)
+    diagramState.updateProduct(product.id, { icon: value || undefined })
+    input.value = ''
+  }
+
+  function clearIcon() {
+    if (!product) return
+    diagramState.updateProduct(product.id, { icon: undefined })
+  }
+
   const labelClass = 'text-[10px] font-medium text-muted-foreground uppercase tracking-wider'
 </script>
 
@@ -294,8 +321,26 @@
           }}
         ></textarea>
       </div>
+      <div class="mt-2 flex items-center gap-2">
+        <label
+          class="cursor-pointer rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted"
+        >
+          Upload SVG / image
+          <input type="file" accept=".svg,image/*" class="hidden" onchange={handleIconUpload}>
+        </label>
+        {#if product.icon}
+          <button
+            type="button"
+            class="text-[11px] text-muted-foreground hover:text-foreground"
+            onclick={clearIcon}
+          >
+            Clear
+          </button>
+        {/if}
+      </div>
       <p class="mt-1 text-[10px] text-muted-foreground">
-        Inline SVG path (24×24 viewBox) または画像 URL。配置済みノードに即時反映される。
+        Inline SVG path (24×24 viewBox) または画像 URL。SVG ファイルは inline、PNG/JPG は data URL
+        に変換。配置済みノードに即時反映される。
       </p>
     </Card.Content>
   </Card.Root>

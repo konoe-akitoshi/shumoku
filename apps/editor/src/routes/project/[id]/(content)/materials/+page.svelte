@@ -189,6 +189,29 @@
     else diagramState.unbindNodes([nodeId])
   }
 
+  /**
+   * Read a user-selected file into a string suitable for `Product.icon`.
+   * SVG files are kept as inline content; other images become data URLs.
+   */
+  async function readIconFile(file: File): Promise<string> {
+    const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
+    if (isSvg) return await file.text()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result ?? ''))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleCustomIconUpload(e: Event) {
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    customIcon = await readIconFile(file)
+    input.value = '' // allow same file re-selection
+  }
+
   // Project-level health metrics (principle: status visibility / soft constraints)
   const stats = $derived.by(() => {
     let placed = 0
@@ -721,8 +744,31 @@
               </div>
             {/if}
           </div>
+          <div class="mt-2 flex items-center gap-2">
+            <label
+              class="cursor-pointer rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted"
+            >
+              Upload SVG / image
+              <input
+                type="file"
+                accept=".svg,image/*"
+                class="hidden"
+                onchange={handleCustomIconUpload}
+              >
+            </label>
+            {#if customIcon}
+              <button
+                type="button"
+                class="text-[11px] text-muted-foreground hover:text-foreground"
+                onclick={() => { customIcon = '' }}
+              >
+                Clear
+              </button>
+            {/if}
+          </div>
           <p class="mt-1 text-[10px] text-muted-foreground">
-            Inline SVG path（24×24 viewBox 想定）または画像 URL。
+            Inline SVG path（24×24 viewBox 想定）または画像 URL。SVG ファイルは inline、PNG/JPG は
+            data URL に。
           </p>
         </div>
         <Button class="w-full" disabled={!customVendor && !customModel} onclick={addCustom}

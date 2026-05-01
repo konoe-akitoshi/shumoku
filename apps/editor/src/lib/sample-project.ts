@@ -34,6 +34,7 @@ export const sampleProducts: DeviceProduct[] = [
     id: 'product-yamaha-rtx3510',
     kind: 'device',
     spec: { kind: 'hardware', type: DeviceType.Router, vendor: 'yamaha', model: 'rtx3510' },
+    icon: 'https://icons.shumoku.packof.me/v1/yamaha/rtx3510.png',
   },
   {
     id: 'product-juniper-srx4100',
