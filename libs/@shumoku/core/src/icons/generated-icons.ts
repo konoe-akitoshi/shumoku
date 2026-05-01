@@ -62,56 +62,6 @@ export function getDeviceIcon(type?: DeviceType): string | undefined {
   return defaultIcons[iconKey]
 }
 
-// Vendor icon registry (populated via registerVendorIcons())
-const vendorIconRegistry: Record<string, Record<string, IconEntry>> = {}
-
-/**
- * Register vendor icons for a given vendor
- */
-export function registerVendorIcons(vendor: string, icons: Record<string, IconEntry>): void {
-  vendorIconRegistry[vendor] = icons
-}
-
-/**
- * Get vendor icon entry
- */
-export function getVendorIconEntry(
-  vendor: string,
-  service: string,
-  resource?: string,
-): IconEntry | undefined {
-  if (vendor === 'default' || !vendor) {
-    const content = defaultIcons[service] || (resource ? defaultIcons[resource] : undefined)
-    return content ? { default: content } : undefined
-  }
-
-  const vendorIcons = vendorIconRegistry[vendor]
-  if (!vendorIcons) return undefined
-
-  const key = resource ? `${service}/${resource}` : service
-  const entry = vendorIcons[key]
-  if (!entry) {
-    const serviceKey = Object.keys(vendorIcons).find((k) => k.startsWith(`${service}/`))
-    if (serviceKey) return vendorIcons[serviceKey]
-    return undefined
-  }
-  return entry
-}
-
-/**
- * Get vendor icon with theme support
- */
-export function getVendorIcon(
-  vendor: string,
-  service: string,
-  resource?: string,
-  theme: IconThemeVariant = 'default',
-): string | undefined {
-  const entry = getVendorIconEntry(vendor, service, resource)
-  if (!entry) return undefined
-  return entry[theme] || entry.default
-}
-
 export const iconSets = {
   default: defaultIcons,
 }
