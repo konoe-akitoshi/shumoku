@@ -144,11 +144,13 @@ classDiagram
   class LinkModule {
     standard: EthernetStandard
     sku?: string
+    productId?: string
   }
   class LinkCable {
     medium?: CableMedium
     category?: CableGrade
     length_m?: number
+    productId?: string
   }
 
   Node *-- "ports *" NodePort : owns

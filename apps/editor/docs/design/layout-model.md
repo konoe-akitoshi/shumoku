@@ -107,7 +107,7 @@ flowchart TB
 | 「選択範囲だけ整列」 | `layoutNetwork` | `fixed = 選択外のノード全部` |
 | 「特定の x に寄せたい」 | `layoutNetwork` | `hints = Map(node → {x})` |
 | ユーザが drop した位置に新ノード | `placeNode` | （障害物 collision のみ） |
-| BOM → diagram の 1 個変換 | `placeNode` | （障害物 collision のみ） |
+| Materials → diagram の 1 個配置 | `placeNode` | （障害物 collision のみ） |
 | paste at cursor | `placeNode` | （障害物 collision のみ） |
 
 ## ポート配置
@@ -226,5 +226,5 @@ classDiagram
 - `libs/@shumoku/core/src/layout/unified-engine.ts` — `computeNetworkLayout`（layout + routing 一括）、`createNetworkLayoutEngine`（legacy interface）。
 - `libs/@shumoku/core/src/layout/resolved-types.ts` — `ResolvedLayout` / `ResolvedEdge` / `ResolvedPort`。
 - `libs/@shumoku/core/src/models/types.ts` — `Position` / `Bounds` / `Size` / `Direction` の幾何共有型。
-- `apps/editor/src/lib/context.svelte.ts` — `autoArrange`（`layoutNetwork` 直接呼び出し）、`placeNodeForBom`（`resolvePosition` 経由で BOM → diagram 変換時のノード配置）、`switchSheet`（child sheet で `computeNetworkLayout`）。
+- `apps/editor/src/lib/context.svelte.ts` — `autoArrange`（`layoutNetwork` 直接呼び出し）、`placeProductAsNode` / `addEmptyNode`（`resolvePosition` 経由で新規ノードの配置）、`switchSheet`（child sheet で `computeNetworkLayout`）。
 - `docs/ARCHITECTURE.md` — レイアウトエンジンの bird's-eye view。

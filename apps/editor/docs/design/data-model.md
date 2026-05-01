@@ -1,8 +1,8 @@
-# データ構造（Materials 周り）
+# データモデル
 
-エディタ内のデータ構造を 1 枚にまとめた reference doc。Materials 操作フローや BOM ロジックなど、上位の議論はこの形を前提にする。
+エディタ内のデータ構造を 1 枚にまとめた reference doc。各ページ（Materials / BOM / Connections / Diagram）はこの形を前提に動く。
 
-決定済みの議論ログは §6 に Q1〜Q6 として残してある（経緯を辿りたい人向け）。
+決定済みの議論ログは §7 に Q1〜Q6 として残してある（経緯を辿りたい人向け）。
 
 ---
 
@@ -315,7 +315,27 @@ Product は kind 毎の discriminated union。version=2 で確定。
 
 ---
 
-## 6. 議論ログ（決定済み）
+## 6. Load パイプライン
+
+ロードは線形パイプライン — 各ステップが入力を一段抽象化して次に渡す。`loadProject` が終端で、状態リセット / `initialized` フラグ / status を所有する。
+
+```
+applyYaml(yaml)          YAML  →  NetedProject（既存の products は保持）
+     │
+     ▼
+importProject(input)     NetedProject（文字列またはオブジェクト）  →  loadProject('imported', data)
+     │
+     ▼
+loadProject(id, data?)   状態をリセット + applyProject(data or builtin)
+```
+
+二つの adapter（`applyYaml` / `importProject`）は薄く、変換 + forward だけ。private helper の `applyProject` / `applyGraph` はモジュールスコープにあり、sanitize + `placePorts` + `routeEdges` を担う。あらゆるロード（サンプル / YAML 貼り付け / JSON drop）は同じ終端を通る。
+
+`applyProject` は `sanitizeProducts` を経由して、孤児になった `productId` 参照（Node / LinkModule / LinkCable）を diagram 側から自動的にクリアする。
+
+---
+
+## 7. 議論ログ（決定済み）
 
 このリファクタの過程で決まったこと。後で経緯を辿りたい人向けの reference。
 
@@ -345,12 +365,10 @@ Product 編集時に紐付き Node の spec を都度上書きする。これに
 
 ---
 
-## 7. 関連 doc
+## 8. 関連 doc
 
-- `data-model.md` — NetworkGraph 全体（core 側、編集者向け）
 - `connection-model.md` — Port / Link / LinkModule / LinkCable
-- `materials-flow.md` — Materials の操作フロー（このデータ構造を前提に書かれている）
-- `bom-model.md` — BOM 派生ロジック（要更新）
-- `project-workflow-model.md` — 上位の workflow 設計（要更新）
-- `sheet-model.md` — diagramState の sheetView / sheetCache 周り
-- `layout-model.md` — NetworkGraph → ResolvedLayout 変換
+- `layout-model.md` — Sugiyama pipeline + 配置 API
+- `sheet-model.md` — drill-down / sheetView / sheetCache
+- `../pages/materials.md` — Materials ページの操作フローと UI
+- `../pages/bom.md` — BOM 派生ロジック
