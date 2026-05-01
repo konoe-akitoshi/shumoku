@@ -20,6 +20,7 @@
   const placed = $derived(diagramState.placedCount(productId))
   const required = $derived(diagramState.requiredCount(productId))
   const diff = $derived(required - placed)
+  const headerIcon = $derived(classifyIcon(product?.icon))
 
   // List of node bindings for this product
   const placedNodes = $derived.by(() => {
@@ -129,21 +130,19 @@
       <div
         class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground"
       >
-        {#if product.icon}
-          {#if product.icon.trim().startsWith('<')}
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              role="img"
-              aria-label="product icon"
-            >
-              {@html product.icon}
-            </svg>
-          {:else}
-            <img src={product.icon} alt="product icon" class="h-8 w-8 object-contain">
-          {/if}
+        {#if headerIcon?.kind === 'inline'}
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            role="img"
+            aria-label="product icon"
+          >
+            {@html headerIcon.svg}
+          </svg>
+        {:else if headerIcon?.kind === 'url'}
+          <img src={headerIcon.url} alt="product icon" class="h-8 w-8 object-contain">
         {:else}
           <span class="text-[10px]">no icon</span>
         {/if}
@@ -293,21 +292,19 @@
         <div
           class="flex h-16 w-16 shrink-0 items-center justify-center rounded border bg-muted/30 text-muted-foreground"
         >
-          {#if product.icon}
-            {#if product.icon.trim().startsWith('<')}
-              <svg
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                role="img"
-                aria-label="icon preview"
-              >
-                {@html product.icon}
-              </svg>
-            {:else}
-              <img src={product.icon} alt="icon preview" class="h-10 w-10 object-contain">
-            {/if}
+          {#if headerIcon?.kind === 'inline'}
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              role="img"
+              aria-label="icon preview"
+            >
+              {@html headerIcon.svg}
+            </svg>
+          {:else if headerIcon?.kind === 'url'}
+            <img src={headerIcon.url} alt="icon preview" class="h-10 w-10 object-contain">
           {:else}
             <span class="text-[10px]">none</span>
           {/if}

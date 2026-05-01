@@ -61,6 +61,7 @@
   let customVendor = $state('')
   let customModel = $state('')
   let customIcon = $state('')
+  const customIconView = $derived(classifyIcon(customIcon))
 
   const catalog = diagramState.catalog
 
@@ -722,11 +723,11 @@
               bind:value={customIcon}
               placeholder={'<path d="M..." /> または URL'}
             ></textarea>
-            {#if customIcon.trim()}
+            {#if customIconView}
               <div
                 class="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-input bg-background"
               >
-                {#if customIcon.trim().startsWith('<')}
+                {#if customIconView.kind === 'inline'}
                   <svg
                     width="32"
                     height="32"
@@ -735,10 +736,10 @@
                     role="img"
                     aria-label="icon preview"
                   >
-                    {@html customIcon}
+                    {@html customIconView.svg}
                   </svg>
                 {:else}
-                  <img src={customIcon} alt="icon preview" class="h-8 w-8 object-contain">
+                  <img src={customIconView.url} alt="icon preview" class="h-8 w-8 object-contain">
                 {/if}
               </div>
             {/if}
