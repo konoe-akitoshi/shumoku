@@ -289,7 +289,7 @@ export const builtinData = [
         mounting: ['ceiling', 'wall'],
       },
     },
-    icon: 'https://icons.shumoku.packof.me/v1/aruba/aruba-ap-505.svg',
+    icon: 'https://icons.shumoku.packof.me/v1/aruba/ap500-series.svg',
   },
   {
     id: 'hpe/aruba-instant-on-ap11d',
@@ -356,7 +356,6 @@ export const builtinData = [
         mounting: ['desk', 'wall'],
       },
     },
-    icon: 'https://icons.shumoku.packof.me/v1/aruba/aruba-instant-on-ap11d.svg',
   },
   {
     id: 'panasonic/switch-m8egpwr-plus',
