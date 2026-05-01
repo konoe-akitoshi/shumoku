@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { computeNodeSize, resolveIcon, specDeviceType } from '@shumoku/core'
+  import { resolveIcon, specDeviceType } from '@shumoku/core'
   import { attachCamera } from '@shumoku/renderer'
   import { DropdownMenu } from 'bits-ui'
   import { CaretDown, Plus } from 'phosphor-svelte'
@@ -399,15 +399,19 @@
         />
       {/if}
 
-      <!-- Items: every visible diagram node renders, position falls
-           through from Node.position when the scene has no override. -->
+      <!-- Items: rendered as floor-plan pins (icon + label, no box).
+           Position falls through to Node.position when the scene has
+           no per-node override yet. -->
       {#each visibleNodes as node (node.id)}
         {@const pos = positionFor(node.id)}
-        {@const size = computeNodeSize(node)}
         {@const icon = resolveIcon(node.spec)}
         {@const label = Array.isArray(node.label) ? node.label[0] : (node.label ?? node.id)}
         {@const isSelected = selectedItemId === node.id}
         {@const isWireSrc = pendingWireFrom === node.id}
+        {@const iconSize = 36}
+        {@const half = iconSize / 2}
+        {@const labelChars = (label ?? '').length}
+        {@const labelW = Math.max(28, labelChars * 6 + 8)}
         <g
           class="scene-item"
           transform="translate({pos.x}, {pos.y})"
@@ -419,54 +423,76 @@
             startWireFrom(node.id)
           }}
         >
-          <rect
-            x={-size.width / 2}
-            y={-size.height / 2}
-            width={size.width}
-            height={size.height}
-            rx="8"
-            ry="8"
-            fill="white"
-            stroke={isSelected ? '#3b82f6' : isWireSrc ? '#10b981' : '#cbd5e1'}
-            stroke-width={isSelected || isWireSrc ? 2.5 : 1.5}
-            filter="drop-shadow(0 1px 2px rgba(0,0,0,0.06))"
-          />
+          <!-- Selection / wire-source halo (under the icon) -->
+          {#if isSelected || isWireSrc}
+            <circle
+              cx="0"
+              cy="0"
+              r={half + 4}
+              fill="none"
+              stroke={isSelected ? '#3b82f6' : '#10b981'}
+              stroke-width="2"
+              stroke-dasharray={isWireSrc ? '4 3' : ''}
+            />
+          {/if}
+
           {#if icon}
             {#if icon.kind === 'inline'}
               <svg
-                x={-12}
-                y={-size.height / 2 + 6}
-                width="24"
-                height="24"
+                x={-half}
+                y={-half}
+                width={iconSize}
+                height={iconSize}
                 viewBox="0 0 24 24"
                 fill="currentColor"
                 role="img"
                 aria-label={specDeviceType(node.spec) ?? 'icon'}
-                style:color="#475569"
+                style:color="#1e293b"
+                style:filter="drop-shadow(0 1px 1px rgba(0,0,0,0.25))"
               >
                 {@html icon.svg}
               </svg>
             {:else}
               <image
                 href={icon.url}
-                x={-12}
-                y={-size.height / 2 + 6}
-                width="24"
-                height="24"
+                x={-half}
+                y={-half}
+                width={iconSize}
+                height={iconSize}
                 preserveAspectRatio="xMidYMid meet"
+                style:filter="drop-shadow(0 1px 1px rgba(0,0,0,0.25))"
               />
             {/if}
+          {:else}
+            <!-- Iconless fallback: subtle dot so the pin is still grabbable -->
+            <circle cx="0" cy="0" r={half - 6} fill="white" stroke="#94a3b8" stroke-width="1.5" />
           {/if}
-          <text
-            x="0"
-            y={size.height / 2 - 8}
-            text-anchor="middle"
-            font-size="11"
-            fill="#0f172a"
-            pointer-events="none"
-          >
-            {label}
-          </text>
+
+          <!-- Label background pill (so text reads on busy floor plans) -->
+          {#if label}
+            <rect
+              x={-labelW / 2}
+              y={half + 2}
+              width={labelW}
+              height={14}
+              rx="3"
+              ry="3"
+              fill="rgba(255,255,255,0.92)"
+              stroke="rgba(15,23,42,0.08)"
+              stroke-width="0.5"
+              pointer-events="none"
+            />
+            <text
+              x="0"
+              y={half + 12}
+              text-anchor="middle"
+              font-size="10"
+              fill="#0f172a"
+              pointer-events="none"
+            >
+              {label}
+            </text>
+          {/if}
         </g>
       {/each}
     </g>
