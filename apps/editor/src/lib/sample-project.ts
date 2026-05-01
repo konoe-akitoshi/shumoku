@@ -93,6 +93,7 @@ export const sampleProducts: DeviceProduct[] = [
       },
       switching: { capacity_gbps: 22 },
     } satisfies HardwareProperties,
+    icon: '<path d="M3 6h18v3H3V6zm0 4h18v3H3v-3zm0 4h18v3H3v-3zm2 1h2v1H5v-1zm4 0h2v1H9v-1zm4 0h2v1h-2v-1z"/><circle cx="19" cy="15.5" r="1" fill="currentColor"/>',
   },
   {
     id: 'product-aruba-ap505',

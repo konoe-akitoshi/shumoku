@@ -1002,17 +1002,22 @@ export const diagramState = {
     products = products.map((p) => (p.id === id ? ({ ...p, ...updates } as Product) : p))
     // Propagate device-product changes to bound nodes
     const product = products.find((p) => p.id === id)
-    if (
-      product?.kind === 'device' &&
-      (updates.spec || 'properties' in updates || updates.catalogId)
-    ) {
+    const iconChanged = 'icon' in updates
+    const specChanged = !!updates.spec
+    const propsChanged = 'properties' in updates || !!updates.catalogId
+    if (product?.kind === 'device' && (specChanged || propsChanged || iconChanged)) {
       const boundNodeIds: string[] = []
       for (const [nodeId, node] of diagram.nodes) {
         if (node.productId === id) boundNodeIds.push(nodeId)
       }
       if (boundNodeIds.length > 0) {
-        if (updates.spec) setNodeSpecs(boundNodeIds, product.spec)
-        for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, product)
+        if (specChanged || iconChanged) {
+          const nextSpec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
+          setNodeSpecs(boundNodeIds, nextSpec)
+        }
+        if (specChanged || propsChanged) {
+          for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, product)
+        }
       }
     }
   },
@@ -1113,7 +1118,8 @@ export const diagramState = {
     if (!product) return
     const node = diagram.nodes.get(nodeId)
     if (!node) return
-    diagram.nodes.set(nodeId, { ...node, productId, spec: product.spec })
+    const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
+    diagram.nodes.set(nodeId, { ...node, productId, spec })
     setNodePortsFromProduct(nodeId, product)
   },
 
@@ -1128,7 +1134,7 @@ export const diagramState = {
 
     const id = newId('node')
     const label = productLabel(product)
-    const spec = product.spec
+    const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
     const { width: w, height: h } = computeNodeSize({ label, spec })
     const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
     const pos = resolvePosition(
@@ -1335,12 +1341,17 @@ async function applyProject(data: Partial<NetedProject>) {
   products = cleanProducts
   diagram.links = cleanLinks
 
-  // Re-derive ports for nodes bound to a device product. preserveExisting
-  // keeps any port shape persisted in the saved diagram.
+  // Re-derive ports for nodes bound to a device product, and snapshot the
+  // Product.icon onto Node.spec.icon so loaded diagrams pick up icon
+  // updates that happened on the Product side. preserveExisting keeps
+  // any port shape persisted in the saved diagram.
   for (const [nodeId, node] of diagram.nodes) {
     if (!node.productId) continue
     const product = products.find((p) => p.id === node.productId)
     if (product?.kind !== 'device') continue
+    if (product.icon && node.spec && node.spec.icon !== product.icon) {
+      diagram.nodes.set(nodeId, { ...node, spec: { ...node.spec, icon: product.icon } })
+    }
     setNodePortsFromProduct(nodeId, product, { preserveExisting: true, reroute: false })
   }
   replaceMap(
