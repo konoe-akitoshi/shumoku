@@ -129,7 +129,7 @@ get activeView() {
 | `updateNode({ parent: ... })`     | ✅ する（parent 変更時のみ）        |
 | `updateSubgraph({ parent: ... })` | ✅ する（parent 変更時のみ）        |
 | `moveNodeToGroup`                 | ✅ する                              |
-| `removeBomItem`（Node も削除）    | ✅ する                              |
+| `addEmptyNode` / `placeProductAsNode` | ✅ する                          |
 | renderer の `onnodeadd` / `onnodedelete` | ✅ する（`+page.svelte` で明示） |
 | ノード drag / autoArrange         | ❌ しない（位置のみ）                |
 | label / spec / link bandwidth 等の visual 変更 | ❌ しない                |
