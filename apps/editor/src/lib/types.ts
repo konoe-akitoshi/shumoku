@@ -112,13 +112,71 @@ export interface AssignmentRow {
 }
 
 // =========================================================================
+// Scenes — physical-placement view (Meraki / Miro style)
+// =========================================================================
+
+/**
+ * A scene is a free-form, image-backed view of (a subset of) the
+ * project's NetworkGraph. The graph stays the source of truth for
+ * topology; a scene only carries presentation metadata: which nodes
+ * are placed where on this floor plan, and how wires for selected
+ * links are routed.
+ *
+ * Multiple scenes can show the same node at different positions —
+ * useful when a switch belongs to a logical layout AND a physical
+ * floor plan, or when a campus has multiple buildings.
+ */
+export interface Scene {
+  /** Stable unique ID (newId('scene')) */
+  id: string
+  /** Display name (e.g. 'Floor 1', 'Server Room') */
+  name: string
+  /** Optional background image (floor plan / blueprint / photo). */
+  background?: SceneBackground
+  /** Per-node placement metadata; only nodes listed here render in this scene. */
+  nodePlacements: NodePlacement[]
+  /** Per-link wire routing; only links listed here render in this scene. */
+  wireRoutes: WireRoute[]
+}
+
+export interface SceneBackground {
+  /** Inline data URL or external URL. */
+  src: string
+  /** Image natural dimensions in px. Scene coordinates match these pixels. */
+  width: number
+  height: number
+}
+
+export interface NodePlacement {
+  /** Reference to NetworkGraph.nodes[].id */
+  nodeId: string
+  /** Center position in scene (image-pixel) coordinates. */
+  position: { x: number; y: number }
+  /** Rotation in degrees (default 0). */
+  rotation?: number
+  /** Uniform scale (default 1). */
+  scale?: number
+}
+
+export type WirePathStyle = 'straight' | 'orthogonal' | 'free'
+
+export interface WireRoute {
+  /** Reference to NetworkGraph.links[].id */
+  linkId: string
+  /** Path style; default 'orthogonal'. */
+  pathStyle: WirePathStyle
+  /** Optional waypoints between endpoints; renderer connects them in order. */
+  controlPoints?: { x: number; y: number }[]
+}
+
+// =========================================================================
 // Project file — .neted.json
 // =========================================================================
 
 /** neted project file format */
 export interface NetedProject {
   /** Format version */
-  version: 2
+  version: 3
   /** Project name */
   name: string
   /** Project settings */
@@ -127,6 +185,8 @@ export interface NetedProject {
   products: Product[]
   /** Diagram — NetworkGraph (nodes with positions, links, subgraphs) */
   diagram: NetworkGraph
+  /** Physical-placement views (floor plans / image-backed canvases). */
+  scenes?: Scene[]
 }
 
 /** File extension for neted projects */
