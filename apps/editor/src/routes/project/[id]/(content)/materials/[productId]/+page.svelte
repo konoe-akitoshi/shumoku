@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { classifyIcon } from '@shumoku/core'
   import { Dialog } from 'bits-ui'
   import { ArrowLeft, GitBranch, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'

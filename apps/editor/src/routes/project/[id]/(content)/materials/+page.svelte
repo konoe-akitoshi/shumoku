@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CatalogEntry } from '@shumoku/catalog'
-  import { newId } from '@shumoku/core'
+  import { classifyIcon, newId } from '@shumoku/core'
   import { Dialog, DropdownMenu, Tabs } from 'bits-ui'
   import { CaretDown, GitBranch, Plus, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
@@ -374,27 +374,26 @@
               {@const placed = diagramState.placedCount(product.id)}
               {@const required = diagramState.requiredCount(product.id)}
               {@const diff = required - placed}
+              {@const iconView = classifyIcon(product.icon)}
               <Table.Row
                 class="cursor-pointer hover:bg-muted/40"
                 onclick={() => goto(`/project/${$page.params.id}/materials/${product.id}`)}
               >
                 <Table.Cell>
-                  {#if product.icon}
-                    {#if product.icon.trim().startsWith('<')}
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        class="text-muted-foreground"
-                        role="img"
-                        aria-label="icon"
-                      >
-                        {@html product.icon}
-                      </svg>
-                    {:else}
-                      <img src={product.icon} alt="icon" class="h-5 w-5 object-contain">
-                    {/if}
+                  {#if iconView?.kind === 'inline'}
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      class="text-muted-foreground"
+                      role="img"
+                      aria-label="icon"
+                    >
+                      {@html iconView.svg}
+                    </svg>
+                  {:else if iconView?.kind === 'url'}
+                    <img src={iconView.url} alt="icon" class="h-5 w-5 object-contain">
                   {:else}
                     <span class="text-muted-foreground">—</span>
                   {/if}
