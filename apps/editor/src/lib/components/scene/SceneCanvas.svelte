@@ -682,128 +682,128 @@
     </g>
   </svg>
 
-  {#if interactive}
-    <!-- Floating toolbar -->
-    <div class="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2">
-      <div
-        class="pointer-events-auto flex items-center gap-1 rounded-xl border border-neutral-200 bg-white/90 p-1 shadow-lg backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-800/90"
-      >
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            {#snippet child({ props })}
-              <Button size="sm" variant="ghost" {...props}>
-                <Plus class="mr-1 h-3.5 w-3.5" />
-                Place
-                <CaretDown class="ml-1 h-3 w-3" />
-              </Button>
-            {/snippet}
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content
-            align="center"
-            sideOffset={4}
-            class="z-50 min-w-[220px] rounded-lg border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
+  <!-- Floating toolbar (always visible in scene mode; mutating actions
+       are gated by `interactive` internally so Calibrate works in view
+       mode but Place / wire authoring don't). -->
+  <div class="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2">
+    <div
+      class="pointer-events-auto flex items-center gap-1 rounded-xl border border-neutral-200 bg-white/90 p-1 shadow-lg backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-800/90"
+    >
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}
+            <Button size="sm" variant="ghost" {...props}>
+              <Plus class="mr-1 h-3.5 w-3.5" />
+              Place
+              <CaretDown class="ml-1 h-3 w-3" />
+            </Button>
+          {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content
+          align="center"
+          sideOffset={4}
+          class="z-50 min-w-[220px] rounded-lg border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
+        >
+          <DropdownMenu.Item
+            class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
+            onclick={() => { pendingPlacement = { kind: 'empty' } }}
           >
-            <DropdownMenu.Item
-              class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
-              onclick={() => { pendingPlacement = { kind: 'empty' } }}
+            Empty node
+          </DropdownMenu.Item>
+          {#if deviceProducts.length > 0}
+            <div class="my-1 border-t border-neutral-200 dark:border-neutral-700"></div>
+            <div
+              class="px-2 pt-1 pb-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground"
             >
-              Empty node
-            </DropdownMenu.Item>
-            {#if deviceProducts.length > 0}
-              <div class="my-1 border-t border-neutral-200 dark:border-neutral-700"></div>
-              <div
-                class="px-2 pt-1 pb-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground"
+              Products
+            </div>
+            {#each deviceProducts as product (product.id)}
+              <DropdownMenu.Item
+                class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
+                onclick={() => { pendingPlacement = { kind: 'product', productId: product.id } }}
               >
-                Products
-              </div>
-              {#each deviceProducts as product (product.id)}
-                <DropdownMenu.Item
-                  class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
-                  onclick={() => { pendingPlacement = { kind: 'product', productId: product.id } }}
-                >
-                  <span class="block max-w-[260px] truncate">{productLabel(product)}</span>
-                </DropdownMenu.Item>
-              {/each}
-            {/if}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-        <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
-        {#if scene.calibration}
-          <Button size="sm" variant="ghost" onclick={startCalibration}>
-            <Ruler class="mr-1 h-3.5 w-3.5" />
-            {(scene.calibration.pxPerMeter).toFixed(1)}
-            px/m
-          </Button>
-          <button
-            type="button"
-            class="text-[11px] text-muted-foreground hover:text-foreground"
-            onclick={clearCalibration}
-            title="Clear calibration"
-          >
-            ×
-          </button>
-        {:else}
-          <Button size="sm" variant="ghost" onclick={startCalibration}>
-            <Ruler class="mr-1 h-3.5 w-3.5" />
-            Calibrate
-          </Button>
-        {/if}
-        <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
-        <span class="px-2 text-[10px] text-muted-foreground">
-          {#if pendingPlacement}
-            {pendingLabel()}
-          {:else if calibrationMode && !calibrationMode.from}
-            Click the first reference point on the image
-          {:else if calibrationMode?.from}
-            Click the second reference point
-          {:else if pendingWireFrom}
-            Click waypoints, then the target item to finish (Esc to cancel)
-          {:else}
-            Double-click an item to start a wire
+                <span class="block max-w-[260px] truncate">{productLabel(product)}</span>
+              </DropdownMenu.Item>
+            {/each}
           {/if}
-        </span>
-        {#if (scene.hiddenNodeIds?.length ?? 0) + (scene.hiddenLinkIds?.length ?? 0) > 0}
-          <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
-          <Button size="sm" variant="ghost" onclick={unhideAll}>
-            Show {(scene.hiddenNodeIds?.length ?? 0) + (scene.hiddenLinkIds?.length ?? 0)} hidden
-          </Button>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+      <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
+      {#if scene.calibration}
+        <Button size="sm" variant="ghost" onclick={startCalibration}>
+          <Ruler class="mr-1 h-3.5 w-3.5" />
+          {(scene.calibration.pxPerMeter).toFixed(1)}
+          px/m
+        </Button>
+        <button
+          type="button"
+          class="text-[11px] text-muted-foreground hover:text-foreground"
+          onclick={clearCalibration}
+          title="Clear calibration"
+        >
+          ×
+        </button>
+      {:else}
+        <Button size="sm" variant="ghost" onclick={startCalibration}>
+          <Ruler class="mr-1 h-3.5 w-3.5" />
+          Calibrate
+        </Button>
+      {/if}
+      <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
+      <span class="px-2 text-[10px] text-muted-foreground">
+        {#if pendingPlacement}
+          {pendingLabel()}
+        {:else if calibrationMode && !calibrationMode.from}
+          Click the first reference point on the image
+        {:else if calibrationMode?.from}
+          Click the second reference point
+        {:else if pendingWireFrom}
+          Click waypoints, then the target item to finish (Esc to cancel)
+        {:else}
+          Double-click an item to start a wire
         {/if}
-      </div>
+      </span>
+      {#if (scene.hiddenNodeIds?.length ?? 0) + (scene.hiddenLinkIds?.length ?? 0) > 0}
+        <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
+        <Button size="sm" variant="ghost" onclick={unhideAll}>
+          Show {(scene.hiddenNodeIds?.length ?? 0) + (scene.hiddenLinkIds?.length ?? 0)} hidden
+        </Button>
+      {/if}
     </div>
+  </div>
 
-    <!-- Calibration distance prompt -->
-    {#if calibrationPrompt}
-      <div
-        class="absolute top-16 left-1/2 z-10 -translate-x-1/2 rounded-xl border border-neutral-200 bg-white p-3 shadow-2xl dark:border-neutral-700 dark:bg-neutral-800"
-      >
-        <div class="mb-2 text-xs font-medium">How long is this segment?</div>
-        <div class="flex items-center gap-2">
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            inputmode="decimal"
-            class="w-24 rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
-            placeholder="meters"
-            bind:value={calibrationMeters}
-            onkeydown={(e) => {
+  <!-- Calibration distance prompt -->
+  {#if calibrationPrompt}
+    <div
+      class="absolute top-16 left-1/2 z-10 -translate-x-1/2 rounded-xl border border-neutral-200 bg-white p-3 shadow-2xl dark:border-neutral-700 dark:bg-neutral-800"
+    >
+      <div class="mb-2 text-xs font-medium">How long is this segment?</div>
+      <div class="flex items-center gap-2">
+        <input
+          type="number"
+          min="0"
+          step="0.1"
+          inputmode="decimal"
+          class="w-24 rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+          placeholder="meters"
+          bind:value={calibrationMeters}
+          onkeydown={(e) => {
               if (e.key === 'Enter') commitCalibration()
             }}
-          >
-          <span class="text-xs text-muted-foreground">m</span>
-          <Button size="sm" onclick={commitCalibration}>Save</Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onclick={() => {
+        >
+        <span class="text-xs text-muted-foreground">m</span>
+        <Button size="sm" onclick={commitCalibration}>Save</Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onclick={() => {
               calibrationPrompt = null
               calibrationMeters = ''
             }}
-          >
-            Cancel
-          </Button>
-        </div>
+        >
+          Cancel
+        </Button>
       </div>
-    {/if}
+    </div>
   {/if}
 </div>
