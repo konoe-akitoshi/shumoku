@@ -2,7 +2,7 @@
   import { resolveIcon, specDeviceType } from '@shumoku/core'
   import { attachCamera } from '@shumoku/renderer'
   import { DropdownMenu } from 'bits-ui'
-  import { CaretDown, Plus } from 'phosphor-svelte'
+  import { CaretDown, Plus, Ruler } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
   import { Button } from '$lib/components/ui/button'
   import { diagramState, editorState } from '$lib/context.svelte'
@@ -26,9 +26,21 @@
 
   const deviceProducts = $derived(diagramState.products.filter((p) => p.kind === 'device'))
 
-  // Two-step wire authoring: first click selects source, second click
-  // commits the link.
+  // Multi-step wire authoring: click source item → optional waypoint
+  // clicks on background → click target item commits the link with
+  // those waypoints baked into the route.
   let pendingWireFrom = $state<string | null>(null)
+  let pendingWireWaypoints = $state<{ x: number; y: number }[]>([])
+  let cursorScenePt = $state<{ x: number; y: number } | null>(null)
+
+  // Calibration capture state. Two-click flow: 1st click = from, 2nd
+  // click = to, then prompt the user for the real-world distance.
+  let calibrationMode = $state<{ from?: { x: number; y: number } } | null>(null)
+  let calibrationPrompt = $state<{
+    from: { x: number; y: number }
+    to: { x: number; y: number }
+  } | null>(null)
+  let calibrationMeters = $state('')
 
   // Selection (single, by Node id for items / Link id for wires).
   let selectedItemId = $state<string | null>(null)
@@ -144,9 +156,16 @@
       return
     }
     if (pendingWireFrom && pendingWireFrom !== nodeId) {
-      // Second click → create wire
-      diagramState.addWireInScene(scene.id, pendingWireFrom, nodeId)
+      // Final click on target item → create wire with accumulated
+      // waypoints in 'free' style so the user's path is preserved.
+      const waypoints = pendingWireWaypoints
+      const linkId = diagramState.addWireInScene(scene.id, pendingWireFrom, nodeId, {
+        pathStyle: waypoints.length > 0 ? 'free' : 'orthogonal',
+        controlPoints: waypoints.length > 0 ? waypoints : undefined,
+      })
+      if (linkId) selectedWireId = linkId
       pendingWireFrom = null
+      pendingWireWaypoints = []
       return
     }
     selectedItemId = nodeId
@@ -168,6 +187,10 @@
   }
 
   function handlePointerMove(e: PointerEvent) {
+    // Track cursor for live preview of pending wire / calibration.
+    if (pendingWireFrom || calibrationMode) {
+      cursorScenePt = clientToScene(e.clientX, e.clientY)
+    }
     if (dragging) {
       const scenePt = clientToScene(e.clientX, e.clientY)
       diagramState.placeNodeInScene(scene.id, dragging.nodeId, {
@@ -199,8 +222,8 @@
   }
 
   function handleBackgroundClick(e: MouseEvent) {
+    const scenePt = clientToScene(e.clientX, e.clientY)
     if (pendingPlacement) {
-      const scenePt = clientToScene(e.clientX, e.clientY)
       if (pendingPlacement.kind === 'product') {
         diagramState.placeProductInScene(scene.id, pendingPlacement.productId, scenePt)
       } else {
@@ -209,9 +232,72 @@
       pendingPlacement = null
       return
     }
-    pendingWireFrom = null
+    if (calibrationMode) {
+      if (!calibrationMode.from) {
+        calibrationMode = { from: scenePt }
+      } else {
+        calibrationPrompt = { from: calibrationMode.from, to: scenePt }
+        calibrationMode = null
+      }
+      return
+    }
+    if (pendingWireFrom) {
+      // Background click while authoring a wire = add a waypoint.
+      pendingWireWaypoints = [...pendingWireWaypoints, scenePt]
+      return
+    }
     selectedItemId = null
     selectedWireId = null
+  }
+
+  function commitCalibration() {
+    if (!calibrationPrompt) return
+    const meters = Number(calibrationMeters)
+    if (!Number.isFinite(meters) || meters <= 0) {
+      calibrationPrompt = null
+      calibrationMeters = ''
+      return
+    }
+    const dx = calibrationPrompt.to.x - calibrationPrompt.from.x
+    const dy = calibrationPrompt.to.y - calibrationPrompt.from.y
+    const px = Math.hypot(dx, dy)
+    if (px <= 0) {
+      calibrationPrompt = null
+      calibrationMeters = ''
+      return
+    }
+    diagramState.updateScene(scene.id, {
+      calibration: {
+        pxPerMeter: px / meters,
+        reference: { from: calibrationPrompt.from, to: calibrationPrompt.to, meters },
+      },
+    })
+    calibrationPrompt = null
+    calibrationMeters = ''
+  }
+
+  function startCalibration() {
+    pendingPlacement = null
+    pendingWireFrom = null
+    pendingWireWaypoints = []
+    calibrationMode = {}
+  }
+
+  function clearCalibration() {
+    diagramState.updateScene(scene.id, { calibration: undefined })
+  }
+
+  /** Polyline length in scene px → meters (only when calibrated). */
+  function polylineMeters(points: { x: number; y: number }[]): number | null {
+    if (!scene.calibration) return null
+    let len = 0
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1]
+      const b = points[i]
+      if (!a || !b) continue
+      len += Math.hypot(b.x - a.x, b.y - a.y)
+    }
+    return len / scene.calibration.pxPerMeter
   }
 
   function startWireFrom(nodeId: string) {
@@ -275,7 +361,10 @@
     if (!interactive) return
     if (e.key === 'Escape') {
       pendingWireFrom = null
+      pendingWireWaypoints = []
       pendingPlacement = null
+      calibrationMode = null
+      calibrationPrompt = null
       selectedItemId = null
       selectedWireId = null
     }
@@ -381,14 +470,66 @@
                   />
                 {/each}
               {/if}
+              <!-- Length label at the polyline midpoint (calibrated only) -->
+              {#if scene.calibration}
+                {@const meters = polylineMeters(wp.points)}
+                {#if meters !== null && wp.points.length >= 2}
+                  {@const midIdx = Math.floor(wp.points.length / 2)}
+                  {@const a = wp.points[midIdx - 1] ?? wp.points[0]}
+                  {@const b = wp.points[midIdx] ?? wp.points[wp.points.length - 1]}
+                  {#if a && b}
+                    {@const mx = (a.x + b.x) / 2}
+                    {@const my = (a.y + b.y) / 2}
+                    {@const text = `${meters.toFixed(meters < 10 ? 1 : 0)} m`}
+                    {@const tw = text.length * 6 + 8}
+                    <rect
+                      x={mx - tw / 2}
+                      y={my - 8}
+                      width={tw}
+                      height={14}
+                      rx="3"
+                      ry="3"
+                      fill="rgba(255,255,255,0.92)"
+                      stroke="rgba(15,23,42,0.12)"
+                      stroke-width="0.5"
+                      pointer-events="none"
+                    />
+                    <text
+                      x={mx}
+                      y={my + 2}
+                      text-anchor="middle"
+                      font-size="10"
+                      fill="#475569"
+                      pointer-events="none"
+                    >
+                      {text}
+                    </text>
+                  {/if}
+                {/if}
+              {/if}
             </g>
           {/if}
         {/if}
       {/each}
 
-      <!-- Pending wire preview -->
+      <!-- Pending wire preview: source halo + accumulated polyline +
+           ghost segment to the cursor -->
       {#if pendingWireFrom}
         {@const fromPos = positionFor(pendingWireFrom)}
+        {@const previewPoints = [
+          fromPos,
+          ...pendingWireWaypoints,
+          ...(cursorScenePt ? [cursorScenePt] : []),
+        ]}
+        <path
+          d={pathD(previewPoints)}
+          stroke="#3b82f6"
+          stroke-width="2"
+          stroke-dasharray="6 4"
+          fill="none"
+          pointer-events="none"
+          opacity="0.7"
+        />
         <circle
           cx={fromPos.x}
           cy={fromPos.y}
@@ -396,6 +537,49 @@
           fill="rgba(59,130,246,0.18)"
           stroke="#3b82f6"
           stroke-dasharray="3 3"
+        />
+        {#each pendingWireWaypoints as wp, idx (idx)}
+          <circle cx={wp.x} cy={wp.y} r="3" fill="#3b82f6" pointer-events="none" />
+        {/each}
+      {/if}
+
+      <!-- Calibration capture preview -->
+      {#if calibrationMode?.from && cursorScenePt}
+        <line
+          x1={calibrationMode.from.x}
+          y1={calibrationMode.from.y}
+          x2={cursorScenePt.x}
+          y2={cursorScenePt.y}
+          stroke="#f59e0b"
+          stroke-width="2"
+          stroke-dasharray="6 4"
+          pointer-events="none"
+        />
+        <circle cx={calibrationMode.from.x} cy={calibrationMode.from.y} r="4" fill="#f59e0b" />
+      {/if}
+      {#if calibrationPrompt}
+        <line
+          x1={calibrationPrompt.from.x}
+          y1={calibrationPrompt.from.y}
+          x2={calibrationPrompt.to.x}
+          y2={calibrationPrompt.to.y}
+          stroke="#f59e0b"
+          stroke-width="2"
+          pointer-events="none"
+        />
+      {/if}
+      {#if scene.calibration?.reference}
+        <!-- Persistent reference indicator: thin, faint amber line. -->
+        {@const ref = scene.calibration.reference}
+        <line
+          x1={ref.from.x}
+          y1={ref.from.y}
+          x2={ref.to.x}
+          y2={ref.to.y}
+          stroke="rgba(245,158,11,0.5)"
+          stroke-width="1"
+          stroke-dasharray="3 3"
+          pointer-events="none"
         />
       {/if}
 
@@ -544,11 +728,36 @@
           </DropdownMenu.Content>
         </DropdownMenu.Root>
         <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
+        {#if scene.calibration}
+          <Button size="sm" variant="ghost" onclick={startCalibration}>
+            <Ruler class="mr-1 h-3.5 w-3.5" />
+            {(scene.calibration.pxPerMeter).toFixed(1)}
+            px/m
+          </Button>
+          <button
+            type="button"
+            class="text-[11px] text-muted-foreground hover:text-foreground"
+            onclick={clearCalibration}
+            title="Clear calibration"
+          >
+            ×
+          </button>
+        {:else}
+          <Button size="sm" variant="ghost" onclick={startCalibration}>
+            <Ruler class="mr-1 h-3.5 w-3.5" />
+            Calibrate
+          </Button>
+        {/if}
+        <div class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700"></div>
         <span class="px-2 text-[10px] text-muted-foreground">
           {#if pendingPlacement}
             {pendingLabel()}
+          {:else if calibrationMode && !calibrationMode.from}
+            Click the first reference point on the image
+          {:else if calibrationMode?.from}
+            Click the second reference point
           {:else if pendingWireFrom}
-            Click another item to wire (Esc to cancel)
+            Click waypoints, then the target item to finish (Esc to cancel)
           {:else}
             Double-click an item to start a wire
           {/if}
@@ -561,5 +770,40 @@
         {/if}
       </div>
     </div>
+
+    <!-- Calibration distance prompt -->
+    {#if calibrationPrompt}
+      <div
+        class="absolute top-16 left-1/2 z-10 -translate-x-1/2 rounded-xl border border-neutral-200 bg-white p-3 shadow-2xl dark:border-neutral-700 dark:bg-neutral-800"
+      >
+        <div class="mb-2 text-xs font-medium">How long is this segment?</div>
+        <div class="flex items-center gap-2">
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            inputmode="decimal"
+            class="w-24 rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+            placeholder="meters"
+            bind:value={calibrationMeters}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') commitCalibration()
+            }}
+          >
+          <span class="text-xs text-muted-foreground">m</span>
+          <Button size="sm" onclick={commitCalibration}>Save</Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onclick={() => {
+              calibrationPrompt = null
+              calibrationMeters = ''
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    {/if}
   {/if}
 </div>

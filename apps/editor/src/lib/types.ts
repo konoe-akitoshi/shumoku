@@ -148,6 +148,8 @@ export interface Scene {
   hiddenNodeIds?: string[]
   /** Link ids explicitly hidden from this scene. */
   hiddenLinkIds?: string[]
+  /** Scale calibration for distance / cable-length calculations. */
+  calibration?: SceneCalibration
 }
 
 export interface SceneBackground {
@@ -156,6 +158,26 @@ export interface SceneBackground {
   /** Image natural dimensions in px. Scene coordinates match these pixels. */
   width: number
   height: number
+}
+
+/**
+ * Scale calibration so cable lengths and distances on the canvas
+ * map to real-world units. The user picks two reference points on
+ * the background image (see SceneCalibrationRef) and enters how many
+ * meters they represent; we store the derived px/m ratio.
+ */
+export interface SceneCalibration {
+  /** Pixels per meter (derived from the user's reference). */
+  pxPerMeter: number
+  /** The reference segment used to derive the ratio (kept for re-edit). */
+  reference?: SceneCalibrationRef
+}
+
+export interface SceneCalibrationRef {
+  from: { x: number; y: number }
+  to: { x: number; y: number }
+  /** Real-world distance the segment represents, in meters. */
+  meters: number
 }
 
 export interface NodePlacement {
