@@ -9,8 +9,7 @@
     "preview": "vite preview",
     "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "biome check .",
-    "format": "biome check --write .",
-    "gen:sample": "bun scripts/generate-sample-diagram.ts"
+    "format": "biome check --write ."
   },
   "dependencies": {
     "@shumoku/catalog": "workspace:*",
