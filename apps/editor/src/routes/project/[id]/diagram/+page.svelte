@@ -6,6 +6,7 @@
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
+  import HeaderBar from '$lib/components/HeaderBar.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
   import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
@@ -137,6 +138,9 @@
       </div>
     {/if}
   </div>
+
+  <!-- Top-left: Undo / Redo header bar -->
+  <div class="fixed top-3 left-3 z-20"><HeaderBar /></div>
 
   <!-- Top-right: Export -->
   <div class="fixed top-3 right-3 z-20">

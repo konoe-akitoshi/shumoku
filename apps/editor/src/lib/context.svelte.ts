@@ -38,6 +38,7 @@ import type {
   WireRoute,
 } from './types'
 import { productLabel } from './types'
+import { type ProjectSnapshot, undoManager } from './undo.svelte'
 
 // =========================================================================
 // Editor UI state — mode, theme
@@ -585,6 +586,79 @@ function sanitizeProducts(
   return { products: cleanProducts, links: cleanLinks }
 }
 
+// =========================================================================
+// Project snapshot + undo/redo
+// =========================================================================
+
+/**
+ * Capture the persistent project state (the same surface that
+ * export/import round-trips through). Used by the undo manager —
+ * snapshots are the unit of "one undoable step".
+ */
+function getProjectSnapshot(): ProjectSnapshot {
+  return structuredClone({
+    nodes: [...diagram.nodes.entries()],
+    subgraphs: [...diagram.subgraphs.entries()],
+    links: diagram.links,
+    products,
+    scenes,
+  })
+}
+
+/**
+ * Restore project state from a snapshot. Rebuilds derived fields
+ * (ports / edges / bounds) and invalidates the sheet cache so
+ * anything reading sub-sheet layouts gets a fresh build.
+ */
+function applyProjectSnapshot(snap: ProjectSnapshot): void {
+  const cloned = structuredClone(snap)
+  replaceMap(diagram.nodes, cloned.nodes)
+  replaceMap(diagram.subgraphs, cloned.subgraphs)
+  diagram.links = cloned.links
+  products = cloned.products
+  scenes = cloned.scenes
+  // Drop the current scene if it was removed by the undo.
+  if (currentSceneId && !scenes.find((s) => s.id === currentSceneId)) {
+    currentSceneId = null
+  }
+  invalidateSheetCache()
+  rebuildPortsAndEdges()
+}
+
+/**
+ * Run a mutation, snapshotting the pre-state for undo. Re-entrant
+ * via the `inCommit` flag — a composite operation calls one
+ * top-level `commit()` and lets nested mutations skip their own
+ * snapshotting (otherwise we'd end up with two undo steps for one
+ * user action).
+ */
+let inCommit = false
+function commit<T>(label: string, fn: () => T): T {
+  if (inCommit) return fn()
+  const before = getProjectSnapshot()
+  inCommit = true
+  try {
+    const result = fn()
+    undoManager.push(label, before)
+    return result
+  } finally {
+    inCommit = false
+  }
+}
+
+async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  if (inCommit) return await fn()
+  const before = getProjectSnapshot()
+  inCommit = true
+  try {
+    const result = await fn()
+    undoManager.push(label, before)
+    return result
+  } finally {
+    inCommit = false
+  }
+}
+
 export const diagramState = {
   // Diagram — individual accessors for $bindable compat.
   // Setters defensively fold plain-Map assignments back into our existing
@@ -635,15 +709,19 @@ export const diagramState = {
     diagram.links = v
   },
   addLink(link: Link) {
-    diagram.links = [...diagram.links, link]
-    invalidateSheetCache()
-    rebuildPortsAndEdges()
+    commit('Add link', () => {
+      diagram.links = [...diagram.links, link]
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
+    })
   },
   updateLink(id: string, updates: Partial<Link>) {
-    // Endpoints may have moved into / out of a child sheet's scope.
-    diagram.links = diagram.links.map((l) => (l.id === id ? { ...l, ...updates } : l))
-    invalidateSheetCache()
-    rebuildPortsAndEdges()
+    commit('Update link', () => {
+      // Endpoints may have moved into / out of a child sheet's scope.
+      diagram.links = diagram.links.map((l) => (l.id === id ? { ...l, ...updates } : l))
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
+    })
   },
   /**
    * Append a port to a node and trigger a port/edge rebuild. Used by
@@ -689,41 +767,43 @@ export const diagramState = {
    * edges routed to the old location.
    */
   async moveNodeToGroup(nodeId: string, groupId: string | undefined) {
-    const node = diagram.nodes.get(nodeId)
-    if (!node?.position) return
-    if (node.parent === groupId) return
+    return commitAsync('Move to group', async () => {
+      const node = diagram.nodes.get(nodeId)
+      if (!node?.position) return
+      if (node.parent === groupId) return
 
-    // Parent change → sheet membership change → invalidate caches.
-    invalidateSheetCache()
-    // Set parent first so moveNode's obstacle filter excludes the new parent
-    diagram.nodes.set(nodeId, { ...node, parent: groupId })
+      // Parent change → sheet membership change → invalidate caches.
+      invalidateSheetCache()
+      // Set parent first so moveNode's obstacle filter excludes the new parent
+      diagram.nodes.set(nodeId, { ...node, parent: groupId })
 
-    if (groupId) {
-      const sg = diagram.subgraphs.get(groupId)
-      if (sg?.bounds) {
-        const targetX = sg.bounds.x + sg.bounds.width / 2
-        const targetY = sg.bounds.y + sg.bounds.height / 2
-        const result = await moveNode(
-          nodeId,
-          targetX,
-          targetY,
-          { nodes: diagram.nodes, ports: diagram.ports, subgraphs: diagram.subgraphs },
-          diagram.links,
-        )
-        if (result) {
-          replaceMap(diagram.nodes, result.nodes)
-          replaceMap(diagram.ports, result.ports)
-          replaceMap(diagram.edges, result.edges)
-          if (result.subgraphs) replaceMap(diagram.subgraphs, result.subgraphs)
-          return
+      if (groupId) {
+        const sg = diagram.subgraphs.get(groupId)
+        if (sg?.bounds) {
+          const targetX = sg.bounds.x + sg.bounds.width / 2
+          const targetY = sg.bounds.y + sg.bounds.height / 2
+          const result = await moveNode(
+            nodeId,
+            targetX,
+            targetY,
+            { nodes: diagram.nodes, ports: diagram.ports, subgraphs: diagram.subgraphs },
+            diagram.links,
+          )
+          if (result) {
+            replaceMap(diagram.nodes, result.nodes)
+            replaceMap(diagram.ports, result.ports)
+            replaceMap(diagram.edges, result.edges)
+            if (result.subgraphs) replaceMap(diagram.subgraphs, result.subgraphs)
+            return
+          }
         }
       }
-    }
 
-    // No-op position delta (or removing from a group): parent changed but
-    // node didn't move — still rebalance subgraph bounds and re-route edges.
-    rebalanceSubgraphs(diagram.nodes, diagram.subgraphs, diagram.ports)
-    await rerouteEdges()
+      // No-op position delta (or removing from a group): parent changed but
+      // node didn't move — still rebalance subgraph bounds and re-route edges.
+      rebalanceSubgraphs(diagram.nodes, diagram.subgraphs, diagram.ports)
+      await rerouteEdges()
+    })
   },
   get poeBudgets() {
     return poeBudgets
@@ -761,22 +841,24 @@ export const diagramState = {
    * `portId` is the resolved-port id (`${nodeId}:${nodePortId}`).
    */
   updatePortLabel(portId: string, label: string) {
-    const colon = portId.indexOf(':')
-    if (colon < 0) return
-    const nodeId = portId.slice(0, colon)
-    const portKey = portId.slice(colon + 1)
-    const node = diagram.nodes.get(nodeId)
-    if (!node?.ports) return
-    const idx = node.ports.findIndex((p) => p.id === portKey)
-    if (idx < 0) return
-    if (node.ports[idx]?.label === label) return
-    const next = [...node.ports]
-    const target = next[idx]
-    if (!target) return
-    next[idx] = { ...target, label }
-    diagram.nodes.set(nodeId, { ...node, ports: next })
-    const resolved = diagram.ports.get(portId)
-    if (resolved) diagram.ports.set(portId, { ...resolved, label })
+    commit('Rename port', () => {
+      const colon = portId.indexOf(':')
+      if (colon < 0) return
+      const nodeId = portId.slice(0, colon)
+      const portKey = portId.slice(colon + 1)
+      const node = diagram.nodes.get(nodeId)
+      if (!node?.ports) return
+      const idx = node.ports.findIndex((p) => p.id === portKey)
+      if (idx < 0) return
+      if (node.ports[idx]?.label === label) return
+      const next = [...node.ports]
+      const target = next[idx]
+      if (!target) return
+      next[idx] = { ...target, label }
+      diagram.nodes.set(nodeId, { ...node, ports: next })
+      const resolved = diagram.ports.get(portId)
+      if (resolved) diagram.ports.set(portId, { ...resolved, label })
+    })
   },
   /**
    * Catalog-defined port names for the node's bound device, e.g.
@@ -957,79 +1039,85 @@ export const diagramState = {
     return products
   },
   addProduct(entry: Product) {
-    products = [...products, entry]
+    commit('Add product', () => {
+      products = [...products, entry]
+    })
   },
   removeProduct(id: string) {
-    const product = products.find((p) => p.id === id)
-    if (!product) return
+    commit('Remove product', () => {
+      const product = products.find((p) => p.id === id)
+      if (!product) return
 
-    // Clear node bindings (devices) and strip product details from spec
-    if (product.kind === 'device') {
-      const boundNodeIds: string[] = []
-      for (const [nodeId, node] of diagram.nodes) {
-        if (node.productId === id) boundNodeIds.push(nodeId)
-      }
-      if (boundNodeIds.length > 0) {
-        const roleSpec = stripProductFromSpec(product.spec)
-        setNodeSpecs(boundNodeIds, roleSpec)
-        for (const nodeId of boundNodeIds) {
-          const node = diagram.nodes.get(nodeId)
-          if (node) diagram.nodes.set(nodeId, { ...node, productId: undefined, ports: undefined })
+      // Clear node bindings (devices) and strip product details from spec
+      if (product.kind === 'device') {
+        const boundNodeIds: string[] = []
+        for (const [nodeId, node] of diagram.nodes) {
+          if (node.productId === id) boundNodeIds.push(nodeId)
+        }
+        if (boundNodeIds.length > 0) {
+          const roleSpec = stripProductFromSpec(product.spec)
+          setNodeSpecs(boundNodeIds, roleSpec)
+          for (const nodeId of boundNodeIds) {
+            const node = diagram.nodes.get(nodeId)
+            if (node) diagram.nodes.set(nodeId, { ...node, productId: undefined, ports: undefined })
+          }
         }
       }
-    }
 
-    // Clear link-module / link-cable bindings
-    if (product.kind === 'module' || product.kind === 'cable') {
-      diagram.links = diagram.links.map((link) => {
-        let next = link
-        if (product.kind === 'module') {
-          for (const side of ['from', 'to'] as const) {
-            const mod = next[side].plug?.module
-            if (mod?.productId === id) {
-              const { productId: _drop, sku: _sku, ...rest } = mod
-              next = {
-                ...next,
-                [side]: {
-                  ...next[side],
-                  plug: { ...(next[side].plug ?? {}), module: rest },
-                },
+      // Clear link-module / link-cable bindings
+      if (product.kind === 'module' || product.kind === 'cable') {
+        diagram.links = diagram.links.map((link) => {
+          let next = link
+          if (product.kind === 'module') {
+            for (const side of ['from', 'to'] as const) {
+              const mod = next[side].plug?.module
+              if (mod?.productId === id) {
+                const { productId: _drop, sku: _sku, ...rest } = mod
+                next = {
+                  ...next,
+                  [side]: {
+                    ...next[side],
+                    plug: { ...(next[side].plug ?? {}), module: rest },
+                  },
+                }
               }
             }
           }
-        }
-        if (product.kind === 'cable' && next.cable?.productId === id) {
-          const { productId: _drop, ...rest } = next.cable
-          next = { ...next, cable: rest }
-        }
-        return next
-      })
-    }
+          if (product.kind === 'cable' && next.cable?.productId === id) {
+            const { productId: _drop, ...rest } = next.cable
+            next = { ...next, cable: rest }
+          }
+          return next
+        })
+      }
 
-    products = products.filter((p) => p.id !== id)
+      products = products.filter((p) => p.id !== id)
+    })
   },
   updateProduct(id: string, updates: Partial<Product>) {
-    products = products.map((p) => (p.id === id ? ({ ...p, ...updates } as Product) : p))
-    // Propagate device-product changes to bound nodes
-    const product = products.find((p) => p.id === id)
-    const iconChanged = 'icon' in updates
-    const specChanged = !!updates.spec
-    const propsChanged = 'properties' in updates || !!updates.catalogId
-    if (product?.kind === 'device' && (specChanged || propsChanged || iconChanged)) {
-      const boundNodeIds: string[] = []
-      for (const [nodeId, node] of diagram.nodes) {
-        if (node.productId === id) boundNodeIds.push(nodeId)
-      }
-      if (boundNodeIds.length > 0) {
-        if (specChanged || iconChanged) {
-          const nextSpec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
-          setNodeSpecs(boundNodeIds, nextSpec)
+    commit('Update product', () => {
+      products = products.map((p) => (p.id === id ? ({ ...p, ...updates } as Product) : p))
+      // Propagate device-product changes to bound nodes
+      const product = products.find((p) => p.id === id)
+      const iconChanged = 'icon' in updates
+      const specChanged = !!updates.spec
+      const propsChanged = 'properties' in updates || !!updates.catalogId
+      if (product?.kind === 'device' && (specChanged || propsChanged || iconChanged)) {
+        const boundNodeIds: string[] = []
+        for (const [nodeId, node] of diagram.nodes) {
+          if (node.productId === id) boundNodeIds.push(nodeId)
         }
-        if (specChanged || propsChanged) {
-          for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, product)
+        if (boundNodeIds.length > 0) {
+          if (specChanged || iconChanged) {
+            const nextSpec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
+            setNodeSpecs(boundNodeIds, nextSpec)
+          }
+          if (specChanged || propsChanged) {
+            for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, product)
+          }
         }
       }
-    }
+    })
   },
 
   /** Count of placed units for a product (across the whole diagram). */
@@ -1104,18 +1192,20 @@ export const diagramState = {
 
   /** Unbind diagram nodes from their bound product. Strips spec/ports back to role. */
   unbindNodes(nodeIds: string[]) {
-    const ids = new Set(nodeIds)
-    for (const nodeId of ids) {
-      const rn = diagram.nodes.get(nodeId)
-      if (rn) {
-        diagram.nodes.set(nodeId, {
-          ...rn,
-          productId: undefined,
-          spec: stripProductFromSpec(rn.spec),
-          ports: undefined,
-        })
+    commit('Unbind nodes', () => {
+      const ids = new Set(nodeIds)
+      for (const nodeId of ids) {
+        const rn = diagram.nodes.get(nodeId)
+        if (rn) {
+          diagram.nodes.set(nodeId, {
+            ...rn,
+            productId: undefined,
+            spec: stripProductFromSpec(rn.spec),
+            ports: undefined,
+          })
+        }
       }
-    }
+    })
   },
 
   /**
@@ -1124,13 +1214,15 @@ export const diagramState = {
    * spec when available.
    */
   bindNodeToProduct(nodeId: string, productId: string) {
-    const product = deviceProduct(productId)
-    if (!product) return
-    const node = diagram.nodes.get(nodeId)
-    if (!node) return
-    const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
-    diagram.nodes.set(nodeId, { ...node, productId, spec })
-    setNodePortsFromProduct(nodeId, product)
+    commit('Bind product', () => {
+      const product = deviceProduct(productId)
+      if (!product) return
+      const node = diagram.nodes.get(nodeId)
+      if (!node) return
+      const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
+      diagram.nodes.set(nodeId, { ...node, productId, spec })
+      setNodePortsFromProduct(nodeId, product)
+    })
   },
 
   /**
@@ -1139,34 +1231,36 @@ export const diagramState = {
    * had a `requiredQty` set, the gap closes by one.
    */
   placeProductAsNode(productId: string): string | undefined {
-    const product = deviceProduct(productId)
-    if (!product) return undefined
+    return commit('Place product', () => {
+      const product = deviceProduct(productId)
+      if (!product) return undefined
 
-    const id = newId('node')
-    const label = productLabel(product)
-    const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
-    const { width: w, height: h } = computeNodeSize({ label, spec })
-    const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
-    const pos = resolvePosition(
-      {
-        x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
-        y: diagram.bounds.y + diagram.bounds.height / 2,
-        w,
-        h,
-      },
-      obstacles,
-    )
+      const id = newId('node')
+      const label = productLabel(product)
+      const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
+      const { width: w, height: h } = computeNodeSize({ label, spec })
+      const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
+      const pos = resolvePosition(
+        {
+          x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
+          y: diagram.bounds.y + diagram.bounds.height / 2,
+          w,
+          h,
+        },
+        obstacles,
+      )
 
-    diagram.nodes.set(id, {
-      id,
-      label,
-      spec,
-      productId: product.id,
-      ports: nodePortsFromProduct(product),
-      shape: 'rounded',
-      position: pos,
+      diagram.nodes.set(id, {
+        id,
+        label,
+        spec,
+        productId: product.id,
+        ports: nodePortsFromProduct(product),
+        shape: 'rounded',
+        position: pos,
+      })
+      return id
     })
-    return id
   },
 
   /**
@@ -1175,22 +1269,24 @@ export const diagramState = {
    * product later. Returns the new node id.
    */
   addEmptyNode(label = 'Node'): string {
-    const id = newId('node')
-    const { width: w, height: h } = computeNodeSize({ label })
-    const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
-    const pos = resolvePosition(
-      {
-        x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
-        y: diagram.bounds.y + diagram.bounds.height / 2,
-        w,
-        h,
-      },
-      obstacles,
-    )
-    diagram.nodes.set(id, { id, label, shape: 'rounded', position: pos })
-    invalidateSheetCache()
-    rebuildPortsAndEdges()
-    return id
+    return commit('Add node', () => {
+      const id = newId('node')
+      const { width: w, height: h } = computeNodeSize({ label })
+      const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
+      const pos = resolvePosition(
+        {
+          x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
+          y: diagram.bounds.y + diagram.bounds.height / 2,
+          w,
+          h,
+        },
+        obstacles,
+      )
+      diagram.nodes.set(id, { id, label, shape: 'rounded', position: pos })
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
+      return id
+    })
   },
 
   // =====================================================================
@@ -1223,11 +1319,15 @@ export const diagramState = {
    * doesn't manually "add" them.
    */
   setCurrentSceneForScope(scopeSubgraphId: string | undefined) {
-    let scene = scenes.find((s) => s.scopeSubgraphId === scopeSubgraphId)
-    if (!scene) {
+    const existing = scenes.find((s) => s.scopeSubgraphId === scopeSubgraphId)
+    if (existing) {
+      currentSceneId = existing.id
+      return
+    }
+    commit('Open scene', () => {
       const sg = scopeSubgraphId ? diagram.subgraphs.get(scopeSubgraphId) : undefined
       const name = sg?.label ?? 'Root'
-      scene = {
+      const scene: Scene = {
         id: newId('scene'),
         name,
         nodePlacements: [],
@@ -1235,107 +1335,131 @@ export const diagramState = {
         scopeSubgraphId,
       }
       scenes = [...scenes, scene]
-    }
-    currentSceneId = scene.id
+      currentSceneId = scene.id
+    })
   },
   addScene(scene: Scene) {
-    scenes = [...scenes, scene]
+    commit('Add scene', () => {
+      scenes = [...scenes, scene]
+    })
   },
   removeScene(id: string) {
-    scenes = scenes.filter((s) => s.id !== id)
-    if (currentSceneId === id) currentSceneId = null
+    commit('Remove scene', () => {
+      scenes = scenes.filter((s) => s.id !== id)
+      if (currentSceneId === id) currentSceneId = null
+    })
   },
   updateScene(id: string, updates: Partial<Omit<Scene, 'id'>>) {
-    scenes = scenes.map((s) => (s.id === id ? { ...s, ...updates } : s))
+    commit('Update scene', () => {
+      scenes = scenes.map((s) => (s.id === id ? { ...s, ...updates } : s))
+    })
   },
 
   /** Place / move a node in a scene. */
   placeNodeInScene(sceneId: string, nodeId: string, position: { x: number; y: number }) {
-    scenes = scenes.map((s) => {
-      if (s.id !== sceneId) return s
-      const idx = s.nodePlacements.findIndex((p) => p.nodeId === nodeId)
-      if (idx >= 0) {
-        const next = [...s.nodePlacements]
-        next[idx] = { ...next[idx], position }
-        return { ...s, nodePlacements: next }
-      }
-      return { ...s, nodePlacements: [...s.nodePlacements, { nodeId, position }] }
+    commit('Move item', () => {
+      scenes = scenes.map((s) => {
+        if (s.id !== sceneId) return s
+        const idx = s.nodePlacements.findIndex((p) => p.nodeId === nodeId)
+        if (idx >= 0) {
+          const next = [...s.nodePlacements]
+          next[idx] = { ...next[idx], position }
+          return { ...s, nodePlacements: next }
+        }
+        return { ...s, nodePlacements: [...s.nodePlacements, { nodeId, position }] }
+      })
     })
   },
   removePlacementFromScene(sceneId: string, nodeId: string) {
-    scenes = scenes.map((s) =>
-      s.id === sceneId
-        ? {
-            ...s,
-            nodePlacements: s.nodePlacements.filter((p) => p.nodeId !== nodeId),
-            wireRoutes: s.wireRoutes.filter((w) => {
-              const link = diagram.links.find((l) => l.id === w.linkId)
-              if (!link) return false
-              return link.from.node !== nodeId && link.to.node !== nodeId
-            }),
-          }
-        : s,
-    )
+    commit('Remove placement', () => {
+      scenes = scenes.map((s) =>
+        s.id === sceneId
+          ? {
+              ...s,
+              nodePlacements: s.nodePlacements.filter((p) => p.nodeId !== nodeId),
+              wireRoutes: s.wireRoutes.filter((w) => {
+                const link = diagram.links.find((l) => l.id === w.linkId)
+                if (!link) return false
+                return link.from.node !== nodeId && link.to.node !== nodeId
+              }),
+            }
+          : s,
+      )
+    })
   },
 
   /** Set / replace a wire route. */
   setWireRoute(sceneId: string, route: WireRoute) {
-    scenes = scenes.map((s) => {
-      if (s.id !== sceneId) return s
-      const idx = s.wireRoutes.findIndex((w) => w.linkId === route.linkId)
-      if (idx >= 0) {
-        const next = [...s.wireRoutes]
-        next[idx] = route
-        return { ...s, wireRoutes: next }
-      }
-      return { ...s, wireRoutes: [...s.wireRoutes, route] }
+    commit('Route wire', () => {
+      scenes = scenes.map((s) => {
+        if (s.id !== sceneId) return s
+        const idx = s.wireRoutes.findIndex((w) => w.linkId === route.linkId)
+        if (idx >= 0) {
+          const next = [...s.wireRoutes]
+          next[idx] = route
+          return { ...s, wireRoutes: next }
+        }
+        return { ...s, wireRoutes: [...s.wireRoutes, route] }
+      })
     })
   },
   removeWireFromScene(sceneId: string, linkId: string) {
-    scenes = scenes.map((s) =>
-      s.id === sceneId ? { ...s, wireRoutes: s.wireRoutes.filter((w) => w.linkId !== linkId) } : s,
-    )
+    commit('Remove wire route', () => {
+      scenes = scenes.map((s) =>
+        s.id === sceneId
+          ? { ...s, wireRoutes: s.wireRoutes.filter((w) => w.linkId !== linkId) }
+          : s,
+      )
+    })
   },
 
   /** Hide a node from a scene without affecting the diagram. */
   hideNodeInScene(sceneId: string, nodeId: string) {
-    scenes = scenes.map((s) => {
-      if (s.id !== sceneId) return s
-      const hidden = new Set(s.hiddenNodeIds ?? [])
-      hidden.add(nodeId)
-      return {
-        ...s,
-        hiddenNodeIds: [...hidden],
-        // Hidden node's wires are also hidden — drop the routes too.
-        wireRoutes: s.wireRoutes.filter((w) => {
-          const link = diagram.links.find((l) => l.id === w.linkId)
-          if (!link) return false
-          return link.from.node !== nodeId && link.to.node !== nodeId
-        }),
-      }
+    commit('Hide node', () => {
+      scenes = scenes.map((s) => {
+        if (s.id !== sceneId) return s
+        const hidden = new Set(s.hiddenNodeIds ?? [])
+        hidden.add(nodeId)
+        return {
+          ...s,
+          hiddenNodeIds: [...hidden],
+          // Hidden node's wires are also hidden — drop the routes too.
+          wireRoutes: s.wireRoutes.filter((w) => {
+            const link = diagram.links.find((l) => l.id === w.linkId)
+            if (!link) return false
+            return link.from.node !== nodeId && link.to.node !== nodeId
+          }),
+        }
+      })
     })
   },
   unhideNodeInScene(sceneId: string, nodeId: string) {
-    scenes = scenes.map((s) =>
-      s.id === sceneId
-        ? { ...s, hiddenNodeIds: (s.hiddenNodeIds ?? []).filter((id) => id !== nodeId) }
-        : s,
-    )
+    commit('Unhide node', () => {
+      scenes = scenes.map((s) =>
+        s.id === sceneId
+          ? { ...s, hiddenNodeIds: (s.hiddenNodeIds ?? []).filter((id) => id !== nodeId) }
+          : s,
+      )
+    })
   },
   hideLinkInScene(sceneId: string, linkId: string) {
-    scenes = scenes.map((s) => {
-      if (s.id !== sceneId) return s
-      const hidden = new Set(s.hiddenLinkIds ?? [])
-      hidden.add(linkId)
-      return { ...s, hiddenLinkIds: [...hidden] }
+    commit('Hide link', () => {
+      scenes = scenes.map((s) => {
+        if (s.id !== sceneId) return s
+        const hidden = new Set(s.hiddenLinkIds ?? [])
+        hidden.add(linkId)
+        return { ...s, hiddenLinkIds: [...hidden] }
+      })
     })
   },
   unhideLinkInScene(sceneId: string, linkId: string) {
-    scenes = scenes.map((s) =>
-      s.id === sceneId
-        ? { ...s, hiddenLinkIds: (s.hiddenLinkIds ?? []).filter((id) => id !== linkId) }
-        : s,
-    )
+    commit('Unhide link', () => {
+      scenes = scenes.map((s) =>
+        s.id === sceneId
+          ? { ...s, hiddenLinkIds: (s.hiddenLinkIds ?? []).filter((id) => id !== linkId) }
+          : s,
+      )
+    })
   },
 
   /**
@@ -1348,19 +1472,21 @@ export const diagramState = {
     productId: string,
     position: { x: number; y: number },
   ): string | undefined {
-    const nodeId = diagramState.placeProductAsNode(productId)
-    if (!nodeId) return undefined
-    // Inherit scene's scope: scene-added nodes belong to the subgraph
-    // that scene is bound to. Without this they'd drop to root and be
-    // filtered out by the scene's own scope view.
-    const scene = scenes.find((s) => s.id === sceneId)
-    const node = diagram.nodes.get(nodeId)
-    if (scene?.scopeSubgraphId && node) {
-      diagram.nodes.set(nodeId, { ...node, parent: scene.scopeSubgraphId })
-      invalidateSheetCache()
-    }
-    diagramState.placeNodeInScene(sceneId, nodeId, position)
-    return nodeId
+    return commit('Place product in scene', () => {
+      const nodeId = diagramState.placeProductAsNode(productId)
+      if (!nodeId) return undefined
+      // Inherit scene's scope: scene-added nodes belong to the subgraph
+      // that scene is bound to. Without this they'd drop to root and be
+      // filtered out by the scene's own scope view.
+      const scene = scenes.find((s) => s.id === sceneId)
+      const node = diagram.nodes.get(nodeId)
+      if (scene?.scopeSubgraphId && node) {
+        diagram.nodes.set(nodeId, { ...node, parent: scene.scopeSubgraphId })
+        invalidateSheetCache()
+      }
+      diagramState.placeNodeInScene(sceneId, nodeId, position)
+      return nodeId
+    })
   },
 
   /**
@@ -1368,15 +1494,17 @@ export const diagramState = {
    * Mirrors `addEmptyNode` but pins the placement to a scene.
    */
   addEmptyNodeInScene(sceneId: string, position: { x: number; y: number }, label = 'Node'): string {
-    const id = diagramState.addEmptyNode(label)
-    const scene = scenes.find((s) => s.id === sceneId)
-    const node = diagram.nodes.get(id)
-    if (scene?.scopeSubgraphId && node) {
-      diagram.nodes.set(id, { ...node, parent: scene.scopeSubgraphId })
-      invalidateSheetCache()
-    }
-    diagramState.placeNodeInScene(sceneId, id, position)
-    return id
+    return commit('Add node in scene', () => {
+      const id = diagramState.addEmptyNode(label)
+      const scene = scenes.find((s) => s.id === sceneId)
+      const node = diagram.nodes.get(id)
+      if (scene?.scopeSubgraphId && node) {
+        diagram.nodes.set(id, { ...node, parent: scene.scopeSubgraphId })
+        invalidateSheetCache()
+      }
+      diagramState.placeNodeInScene(sceneId, id, position)
+      return id
+    })
   },
 
   /**
@@ -1389,21 +1517,54 @@ export const diagramState = {
     toNodeId: string,
     options?: { pathStyle?: WireRoute['pathStyle']; controlPoints?: WireRoute['controlPoints'] },
   ): string | undefined {
-    const fromNode = diagram.nodes.get(fromNodeId)
-    const toNode = diagram.nodes.get(toNodeId)
-    if (!fromNode || !toNode) return undefined
-    const linkId = newId('link')
-    diagramState.addLink({
-      id: linkId,
-      from: { node: fromNodeId, port: '' },
-      to: { node: toNodeId, port: '' },
+    return commit('Add wire', () => {
+      const fromNode = diagram.nodes.get(fromNodeId)
+      const toNode = diagram.nodes.get(toNodeId)
+      if (!fromNode || !toNode) return undefined
+      const linkId = newId('link')
+      diagramState.addLink({
+        id: linkId,
+        from: { node: fromNodeId, port: '' },
+        to: { node: toNodeId, port: '' },
+      })
+      diagramState.setWireRoute(sceneId, {
+        linkId,
+        pathStyle: options?.pathStyle ?? 'orthogonal',
+        controlPoints: options?.controlPoints,
+      })
+      return linkId
     })
-    diagramState.setWireRoute(sceneId, {
-      linkId,
-      pathStyle: options?.pathStyle ?? 'orthogonal',
-      controlPoints: options?.controlPoints,
-    })
-    return linkId
+  },
+
+  // ---------------------------------------------------------------------
+  // Undo / Redo — project-wide. Mutating methods above call `commit()`
+  // to capture a pre-state snapshot; these handlers consume it.
+  // ---------------------------------------------------------------------
+  get canUndo() {
+    return undoManager.canUndo
+  },
+  get canRedo() {
+    return undoManager.canRedo
+  },
+  get undoLabel() {
+    return undoManager.undoLabel
+  },
+  get redoLabel() {
+    return undoManager.redoLabel
+  },
+  undo(): boolean {
+    const current = getProjectSnapshot()
+    const target = undoManager.undo(current)
+    if (!target) return false
+    applyProjectSnapshot(target)
+    return true
+  },
+  redo(): boolean {
+    const current = getProjectSnapshot()
+    const target = undoManager.redo(current)
+    if (!target) return false
+    applyProjectSnapshot(target)
+    return true
   },
 
   // NetworkGraph — canonical save/load format
@@ -1424,17 +1585,19 @@ export const diagramState = {
    * fresh YAML import would produce; palette and BOM are untouched.
    */
   async autoArrange() {
-    const graph: NetworkGraph = {
-      ...diagramState.exportGraph(),
-      nodes: [...diagram.nodes.values()].map((n) => ({ ...n, position: undefined })),
-      subgraphs: [...diagram.subgraphs.values()].map((s) => ({ ...s, bounds: undefined })),
-    }
-    const { resolved } = await computeNetworkLayout(graph)
-    replaceMap(diagram.nodes, resolved.nodes)
-    replaceMap(diagram.subgraphs, resolved.subgraphs)
-    replaceMap(diagram.ports, resolved.ports)
-    replaceMap(diagram.edges, resolved.edges)
-    diagram.bounds = { ...resolved.bounds }
+    return commitAsync('Auto-arrange', async () => {
+      const graph: NetworkGraph = {
+        ...diagramState.exportGraph(),
+        nodes: [...diagram.nodes.values()].map((n) => ({ ...n, position: undefined })),
+        subgraphs: [...diagram.subgraphs.values()].map((s) => ({ ...s, bounds: undefined })),
+      }
+      const { resolved } = await computeNetworkLayout(graph)
+      replaceMap(diagram.nodes, resolved.nodes)
+      replaceMap(diagram.subgraphs, resolved.subgraphs)
+      replaceMap(diagram.ports, resolved.ports)
+      replaceMap(diagram.edges, resolved.edges)
+      diagram.bounds = { ...resolved.bounds }
+    })
   },
   // Serialization — .neted.json format
   /** Export project as NetedProject JSON string */
@@ -1560,6 +1723,9 @@ export const diagramState = {
  * importProject, loadProject) are the only public way to populate state.
  */
 async function applyProject(data: Partial<NetedProject>) {
+  // Loading a project is not itself an undoable action — clear history
+  // so the very first user action's snapshot reflects the loaded state.
+  undoManager.reset()
   await applyGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
   const { products: cleanProducts, links: cleanLinks } = sanitizeProducts(
     data.products ?? [],
