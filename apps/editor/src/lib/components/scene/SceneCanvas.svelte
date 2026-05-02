@@ -39,6 +39,10 @@
   const bg = $derived(scene.background)
   const hiddenNodeIds = $derived(new Set(scene.hiddenNodeIds ?? []))
   const hiddenLinkIds = $derived(new Set(scene.hiddenLinkIds ?? []))
+  // KiCad-style sheet semantics: scope filters to descendants, and
+  // cross-boundary links render with the external endpoint shown as a
+  // pill-shaped "export connector" labeled with the destination
+  // subgraph (matches what Diagram does when drilled into a sheet).
   const inScope = $derived(
     nodesInScope(diagramState.nodes.values(), diagramState.subgraphs, scene.scopeSubgraphId),
   )
@@ -49,10 +53,59 @@
       (l) =>
         !!l.id &&
         !hiddenLinkIds.has(l.id) &&
-        inScopeIds.has(l.from.node) &&
-        inScopeIds.has(l.to.node),
+        (inScopeIds.has(l.from.node) || inScopeIds.has(l.to.node)),
     ),
   )
+  /** Pseudo node id for the export pill that represents "go to subgraph
+   *  X" — KiCad merges multiple cross-boundary links to the same
+   *  destination into a single pill. */
+  function exportNodeId(destSubgraphId: string): string {
+    return `__scene_export_${destSubgraphId}`
+  }
+
+  /** External Node → its destination subgraph (the pill it collapses
+   *  into). Falls back to '__external__' for orphan nodes (no parent). */
+  function destSubgraphFor(nodeId: string): string {
+    const node = diagramState.nodes.get(nodeId)
+    return node?.parent ?? '__external__'
+  }
+
+  /** Build the set of export pills (one per destination subgraph) and
+   *  remember which external Node ids each pill represents. */
+  const exportPills = $derived.by(() => {
+    const groups = new Map<string, { destId: string; label: string; nodeIds: Set<string> }>()
+    for (const l of visibleLinks) {
+      for (const ep of [l.from.node, l.to.node]) {
+        if (inScopeIds.has(ep)) continue
+        const destId = destSubgraphFor(ep)
+        const sg = diagramState.subgraphs.get(destId)
+        const label =
+          sg?.label ??
+          (() => {
+            const node = diagramState.nodes.get(ep)
+            const lbl = Array.isArray(node?.label) ? node?.label[0] : node?.label
+            return lbl ?? destId
+          })()
+        const existing = groups.get(destId) ?? { destId, label, nodeIds: new Set<string>() }
+        existing.nodeIds.add(ep)
+        groups.set(destId, existing)
+      }
+    }
+    return [...groups.values()]
+  })
+
+  /** External Node id → the export pill (pseudo) id it maps to. */
+  const externalToPill = $derived.by(() => {
+    const m = new Map<string, string>()
+    for (const pill of exportPills) {
+      for (const id of pill.nodeIds) m.set(id, exportNodeId(pill.destId))
+    }
+    return m
+  })
+
+  function isCrossBoundary(linkFrom: string, linkTo: string): boolean {
+    return !inScopeIds.has(linkFrom) || !inScopeIds.has(linkTo)
+  }
 
   /**
    * Effective position for a node in this scene: a scene-local override
@@ -62,10 +115,41 @@
    * want this scene to differ.
    */
   function positionFor(nodeId: string): { x: number; y: number } {
+    // External Node → redirect to its export pill (one pill per
+    // destination subgraph).
+    const pillId = externalToPill.get(nodeId)
+    if (pillId) return positionForPill(pillId)
     const override = scene.nodePlacements.find((p) => p.nodeId === nodeId)
     if (override) return override.position
     const node = diagramState.nodes.get(nodeId)
     return node?.position ?? { x: 100, y: 100 }
+  }
+
+  /** Resolve a pill's position. User-set placement wins; otherwise we
+   *  spawn it near the average of in-scope endpoints connected to it. */
+  function positionForPill(pillId: string): { x: number; y: number } {
+    const override = scene.nodePlacements.find((p) => p.nodeId === pillId)
+    if (override) return override.position
+    // Default: average of connected in-scope nodes + offset so the
+    // pill lands on the floor plan rather than at default coords.
+    const inScopePartners: { x: number; y: number }[] = []
+    for (const l of visibleLinks) {
+      const fromIn = inScopeIds.has(l.from.node)
+      const toIn = inScopeIds.has(l.to.node)
+      if (fromIn && externalToPill.get(l.to.node) === pillId) {
+        const placement = scene.nodePlacements.find((p) => p.nodeId === l.from.node)
+        const pos = placement?.position ?? diagramState.nodes.get(l.from.node)?.position
+        if (pos) inScopePartners.push(pos)
+      } else if (toIn && externalToPill.get(l.from.node) === pillId) {
+        const placement = scene.nodePlacements.find((p) => p.nodeId === l.to.node)
+        const pos = placement?.position ?? diagramState.nodes.get(l.to.node)?.position
+        if (pos) inScopePartners.push(pos)
+      }
+    }
+    if (inScopePartners.length === 0) return { x: 100, y: 100 }
+    const cx = inScopePartners.reduce((s, p) => s + p.x, 0) / inScopePartners.length
+    const cy = inScopePartners.reduce((s, p) => s + p.y, 0) / inScopePartners.length
+    return { x: cx + 80, y: cy - 60 }
   }
 
   // Compute viewBox: image extent (or fallback to derived bounds across
@@ -405,6 +489,7 @@
           {@const wp = wirePoints(link)}
           {#if wp}
             {@const isSelected = selectedWireId === linkId}
+            {@const crossBoundary = isCrossBoundary(link.from.node, link.to.node)}
             <g class="wire">
               <!-- hit area -->
               <path
@@ -421,6 +506,7 @@
                 stroke={isSelected ? '#3b82f6' : '#475569'}
                 stroke-width={isSelected ? 2.5 : 2}
                 fill="none"
+                stroke-dasharray={crossBoundary ? '5 3' : ''}
                 pointer-events="none"
               />
               {#if isSelected}
@@ -649,6 +735,68 @@
               {label}
             </text>
           {/if}
+        </g>
+      {/each}
+
+      <!-- Boundary export connectors: one stadium-pill per destination
+           subgraph (mirrors Diagram drill-down — multiple cross-boundary
+           links to the same subgraph collapse into a single pill). -->
+      {#each exportPills as pill (pill.destId)}
+        {@const pillId = exportNodeId(pill.destId)}
+        {@const pos = positionForPill(pillId)}
+        {@const label = pill.label}
+        {@const isSelected = selectedItemId === pillId}
+        {@const isWireSrc = auth.pendingWireFrom === pillId}
+        {@const labelChars = label.length}
+        {@const w = Math.max(56, labelChars * 6.5 + 18)}
+        {@const h = 22}
+        {@const r = h / 2}
+        <g
+          class="scene-export"
+          transform="translate({pos.x}, {pos.y})"
+          style:cursor={interactive ? 'grab' : 'default'}
+          onpointerdown={(e) => handleItemPointerDown(pillId, e)}
+          onclick={(e) => handleItemClick(pillId, e)}
+          ondblclick={(e) => {
+            e.stopPropagation()
+            startWireFrom(pillId)
+          }}
+        >
+          {#if isSelected || isWireSrc}
+            <rect
+              x={-w / 2 - 3}
+              y={-h / 2 - 3}
+              width={w + 6}
+              height={h + 6}
+              rx={r + 3}
+              ry={r + 3}
+              fill="none"
+              stroke={isSelected ? '#3b82f6' : '#10b981'}
+              stroke-width="2"
+              stroke-dasharray={isWireSrc ? '4 3' : ''}
+            />
+          {/if}
+          <rect
+            x={-w / 2}
+            y={-h / 2}
+            width={w}
+            height={h}
+            rx={r}
+            ry={r}
+            fill="white"
+            stroke="#94a3b8"
+            stroke-width="1.25"
+          />
+          <text
+            x="0"
+            y="3.5"
+            text-anchor="middle"
+            font-size="10.5"
+            fill="#475569"
+            pointer-events="none"
+          >
+            {label}
+          </text>
         </g>
       {/each}
     </g>

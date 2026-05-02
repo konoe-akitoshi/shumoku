@@ -1,6 +1,6 @@
 <script lang="ts">
   import { DropdownMenu, Tooltip } from 'bits-ui'
-  import { Eye, EyeSlash, Moon, Pencil, Plus, Ruler, Sun } from 'phosphor-svelte'
+  import { Eye, EyeSlash, ImageSquare, Moon, Pencil, Plus, Ruler, Sun } from 'phosphor-svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
   import { productLabel } from '$lib/types'
   import { sceneAuthoring } from './scene-authoring.svelte'
@@ -19,6 +19,7 @@
     (scene?.hiddenNodeIds?.length ?? 0) + (scene?.hiddenLinkIds?.length ?? 0),
   )
   const calibration = $derived(scene?.calibration)
+  const hasBackground = $derived(!!scene?.background)
 
   function unhideAll() {
     if (!scene) return
@@ -29,6 +30,46 @@
   function clearCalibration() {
     if (!scene) return
     diagramState.updateScene(scene.id, { calibration: undefined })
+  }
+
+  function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+      img.onerror = () => reject(new Error('Failed to load image'))
+      img.src = src
+    })
+  }
+
+  async function handleBackgroundUpload(e: Event) {
+    if (!scene) return
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result ?? ''))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+    try {
+      const dim = await loadImageDimensions(dataUrl)
+      diagramState.updateScene(scene.id, { background: { src: dataUrl, ...dim } })
+    } catch {
+      // ignore — corrupt image input. UI flag would be nice eventually.
+    }
+    input.value = ''
+  }
+
+  function clearBackground() {
+    if (!scene) return
+    diagramState.updateScene(scene.id, { background: undefined })
+  }
+
+  function rename() {
+    if (!scene) return
+    const next = window.prompt('Scene name', scene.name)?.trim()
+    if (next && next !== scene.name) diagramState.updateScene(scene.id, { name: next })
   }
 </script>
 
@@ -92,6 +133,69 @@
         {/if}
       </DropdownMenu.Content>
     </DropdownMenu.Root>
+
+    <!-- Background image: upload / replace / clear -->
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <label
+          class="relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"
+        >
+          <ImageSquare class="h-4.5 w-4.5" />
+          {#if hasBackground}
+            <span
+              class="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full bg-emerald-500"
+              aria-hidden="true"
+            ></span>
+          {/if}
+          <input type="file" accept="image/*" class="hidden" onchange={handleBackgroundUpload}>
+        </label>
+      </Tooltip.Trigger>
+      <Tooltip.Content
+        side="left"
+        class="rounded bg-neutral-800 px-2 py-1 text-xs text-white shadow-lg"
+      >
+        {hasBackground ? 'Replace background image' : 'Upload background image'}
+      </Tooltip.Content>
+    </Tooltip.Root>
+
+    {#if hasBackground}
+      <Tooltip.Root>
+        <Tooltip.Trigger>
+          <button
+            type="button"
+            class="flex h-6 w-9 items-center justify-center rounded-md text-[10px] text-muted-foreground hover:bg-neutral-100 dark:hover:bg-neutral-700"
+            onclick={clearBackground}
+          >
+            clear
+          </button>
+        </Tooltip.Trigger>
+        <Tooltip.Content
+          side="left"
+          class="rounded bg-neutral-800 px-2 py-1 text-xs text-white shadow-lg"
+        >
+          Remove background
+        </Tooltip.Content>
+      </Tooltip.Root>
+    {/if}
+
+    <!-- Rename scene -->
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <button
+          type="button"
+          class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"
+          onclick={rename}
+        >
+          <Pencil class="h-4 w-4" />
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Content
+        side="left"
+        class="rounded bg-neutral-800 px-2 py-1 text-xs text-white shadow-lg"
+      >
+        Rename ({scene?.name ?? 'scene'})
+      </Tooltip.Content>
+    </Tooltip.Root>
 
     <!-- Calibrate / re-calibrate / clear -->
     <Tooltip.Root>

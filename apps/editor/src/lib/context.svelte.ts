@@ -1215,6 +1215,29 @@ export const diagramState = {
   setCurrentScene(id: string | null) {
     currentSceneId = id
   },
+  /**
+   * Switch to the scene bound to a subgraph (or root if `undefined`).
+   * Auto-creates the scene record on first access — scenes are
+   * implicit views of their subgraph (mirrors how every subgraph
+   * already exists as a sheet on the diagram side), so the user
+   * doesn't manually "add" them.
+   */
+  setCurrentSceneForScope(scopeSubgraphId: string | undefined) {
+    let scene = scenes.find((s) => s.scopeSubgraphId === scopeSubgraphId)
+    if (!scene) {
+      const sg = scopeSubgraphId ? diagram.subgraphs.get(scopeSubgraphId) : undefined
+      const name = sg?.label ?? 'Root'
+      scene = {
+        id: newId('scene'),
+        name,
+        nodePlacements: [],
+        wireRoutes: [],
+        scopeSubgraphId,
+      }
+      scenes = [...scenes, scene]
+    }
+    currentSceneId = scene.id
+  },
   addScene(scene: Scene) {
     scenes = [...scenes, scene]
   },
@@ -1327,6 +1350,15 @@ export const diagramState = {
   ): string | undefined {
     const nodeId = diagramState.placeProductAsNode(productId)
     if (!nodeId) return undefined
+    // Inherit scene's scope: scene-added nodes belong to the subgraph
+    // that scene is bound to. Without this they'd drop to root and be
+    // filtered out by the scene's own scope view.
+    const scene = scenes.find((s) => s.id === sceneId)
+    const node = diagram.nodes.get(nodeId)
+    if (scene?.scopeSubgraphId && node) {
+      diagram.nodes.set(nodeId, { ...node, parent: scene.scopeSubgraphId })
+      invalidateSheetCache()
+    }
     diagramState.placeNodeInScene(sceneId, nodeId, position)
     return nodeId
   },
@@ -1337,6 +1369,12 @@ export const diagramState = {
    */
   addEmptyNodeInScene(sceneId: string, position: { x: number; y: number }, label = 'Node'): string {
     const id = diagramState.addEmptyNode(label)
+    const scene = scenes.find((s) => s.id === sceneId)
+    const node = diagram.nodes.get(id)
+    if (scene?.scopeSubgraphId && node) {
+      diagram.nodes.set(id, { ...node, parent: scene.scopeSubgraphId })
+      invalidateSheetCache()
+    }
     diagramState.placeNodeInScene(sceneId, id, position)
     return id
   },
