@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DeviceType } from '@shumoku/core'
+  import { DeviceType, type NodeSpec } from '@shumoku/core'
   import { DropdownMenu, Tooltip } from 'bits-ui'
   import {
     ArrowsOutCardinal,
@@ -24,7 +24,7 @@
     mode: 'edit' | 'view'
     isDark?: boolean
     onmodechange?: (mode: 'edit' | 'view') => void
-    onaddnode?: (spec?: { kind: string; type?: string }) => void
+    onaddnode?: (spec?: NodeSpec) => void
     onaddsubgraph?: () => void
     onautoarrange?: () => void
     onthemetoggle?: () => void
@@ -32,8 +32,8 @@
 
   const editing = $derived(mode === 'edit')
 
-  const nodeTypes = [
-    { label: 'Generic Node', spec: undefined },
+  const nodeTypes: Array<{ label: string; spec?: NodeSpec }> = [
+    { label: 'Generic Node' },
     { label: '---' },
     { label: 'Router', spec: { kind: 'hardware', type: DeviceType.Router } },
     { label: 'Firewall', spec: { kind: 'hardware', type: DeviceType.Firewall } },
@@ -45,8 +45,8 @@
     { label: 'Internet', spec: { kind: 'hardware', type: DeviceType.Internet } },
     { label: '---' },
     { label: 'VM / Compute', spec: { kind: 'compute' } },
-    { label: 'Cloud Service', spec: { kind: 'service' } },
-  ] as const
+    { label: 'Cloud Service', spec: { kind: 'service', service: '' } },
+  ]
 </script>
 
 <div

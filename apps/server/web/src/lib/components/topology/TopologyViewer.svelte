@@ -21,8 +21,8 @@
     type Camera,
     type CameraOptions,
     type RendererOverlaySnippets,
-    ShumokuRenderer,
   } from '@shumoku/renderer'
+  import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import type { Snippet } from 'svelte'
 
   export interface ViewerContext {

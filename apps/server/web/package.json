@@ -19,11 +19,9 @@
     "@sveltejs/kit": "^2.15.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@tailwindcss/vite": "^4.1.18",
-    "@types/node": "^22.10.7",
     "svelte": "^5.17.3",
     "svelte-check": "^4.1.4",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.7.3",
     "vite": "^6.0.7"
   },
   "type": "module",

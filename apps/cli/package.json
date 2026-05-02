@@ -22,8 +22,5 @@
     "@shumoku/renderer-html": "workspace:*",
     "@shumoku/renderer-png": "workspace:*"
   },
-  "devDependencies": {
-    "@types/node": "^25.0.7",
-    "typescript": "^5.9.3"
-  }
+  "devDependencies": {}
 }

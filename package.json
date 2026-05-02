@@ -41,6 +41,7 @@
     "knip": "^6.4.1",
     "lefthook": "^2.1.4",
     "turbo": "^2.7.4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
   }
 }
