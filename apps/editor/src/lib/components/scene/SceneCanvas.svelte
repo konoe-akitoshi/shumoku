@@ -4,6 +4,7 @@
   import { onDestroy, onMount } from 'svelte'
   import { Button } from '$lib/components/ui/button'
   import { diagramState, editorState } from '$lib/context.svelte'
+  import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
   import { sceneAuthoring } from './scene-authoring.svelte'
 
@@ -38,11 +39,19 @@
   const bg = $derived(scene.background)
   const hiddenNodeIds = $derived(new Set(scene.hiddenNodeIds ?? []))
   const hiddenLinkIds = $derived(new Set(scene.hiddenLinkIds ?? []))
-  const visibleNodes = $derived(
-    [...diagramState.nodes.values()].filter((n) => !hiddenNodeIds.has(n.id)),
+  const inScope = $derived(
+    nodesInScope(diagramState.nodes.values(), diagramState.subgraphs, scene.scopeSubgraphId),
   )
+  const inScopeIds = $derived(new Set(inScope.map((n) => n.id)))
+  const visibleNodes = $derived(inScope.filter((n) => !hiddenNodeIds.has(n.id)))
   const visibleLinks = $derived(
-    diagramState.links.filter((l) => !!l.id && !hiddenLinkIds.has(l.id)),
+    diagramState.links.filter(
+      (l) =>
+        !!l.id &&
+        !hiddenLinkIds.has(l.id) &&
+        inScopeIds.has(l.from.node) &&
+        inScopeIds.has(l.to.node),
+    ),
   )
 
   /**

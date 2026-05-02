@@ -131,6 +131,17 @@ export interface Scene {
   id: string
   /** Display name (e.g. 'Floor 1', 'Server Room') */
   name: string
+  /**
+   * Subgraph this scene physically realizes. Only descendant nodes
+   * (via `Node.parent` / `Subgraph.parent` chain) appear in this
+   * scene. `undefined` = root scope (entire diagram, useful for
+   * single-floor projects without an enclosing subgraph).
+   *
+   * Logical subgraphs (cloud services, virtual networks) shouldn't
+   * have scenes — there's nothing to lay out on a floor plan. The UI
+   * gates "Add scene" on `isPhysicalSubgraph(sg)`.
+   */
+  scopeSubgraphId?: string
   /** Optional background image (floor plan / blueprint / photo). */
   background?: SceneBackground
   /**
