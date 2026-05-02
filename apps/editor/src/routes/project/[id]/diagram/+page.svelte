@@ -9,11 +9,12 @@
   import ExportMenu from '$lib/components/ExportMenu.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
   import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
+  import SheetBar from '$lib/components/SheetBar.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
+  import SceneBar from '$lib/components/scene/SceneBar.svelte'
   import SceneCanvas from '$lib/components/scene/SceneCanvas.svelte'
   import SceneSideToolbar from '$lib/components/scene/SceneSideToolbar.svelte'
-  import ViewPicker from '$lib/components/ViewPicker.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
 
   // =========================================================================
@@ -171,8 +172,11 @@
     <CodePanel bind:isOpen={codePanelOpen} />
   </div>
 
-  <!-- Bottom-center: unified View picker (hierarchy + scenes) -->
-  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"><ViewPicker /></div>
+  <!-- Bottom-center: Sheet (hierarchy) + Scene (presentation) bars -->
+  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
+    <SheetBar />
+    <SceneBar />
+  </div>
 
   <!-- Overlays -->
 

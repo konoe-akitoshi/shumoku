@@ -1,16 +1,10 @@
 <script lang="ts">
   import { newId } from '@shumoku/core'
   import { Dialog, DropdownMenu } from 'bits-ui'
-  import { CaretDown, Graph, ImageSquare, MapPin, Plus, Trash, X } from 'phosphor-svelte'
+  import { CaretDown, ImageSquare, MapPin, Plus, Trash, X } from 'phosphor-svelte'
   import { Button } from '$lib/components/ui/button'
   import { diagramState } from '$lib/context.svelte'
   import { isPhysicalSubgraph } from '$lib/scene/scope'
-
-  // Unified picker that replaces SheetBar (hierarchy drill-down) and
-  // SceneBar (presentation views). The natural mental model after
-  // binding scenes to subgraphs is "pick a hierarchy level, then pick
-  // logical-or-one-of-its-physical-realizations" — so one dropdown
-  // covers both axes.
 
   let addOpen = $state(false)
   let newName = $state('')
@@ -20,22 +14,16 @@
 
   const scenes = $derived(diagramState.scenes)
   const currentSceneId = $derived(diagramState.currentSceneId)
-  const currentSheetId = $derived(diagramState.currentSheetId)
-  const currentScene = $derived(diagramState.currentScene)
+  const current = $derived(diagramState.currentScene)
   const subgraphs = $derived([...diagramState.subgraphs.values()])
   const topLevelSubgraphs = $derived(subgraphs.filter((sg) => !sg.parent))
 
   const triggerLabel = $derived.by(() => {
-    if (currentSceneId && currentScene) {
-      const scope = currentScene.scopeSubgraphId
-      const parentLabel = scope ? (subgraphs.find((sg) => sg.id === scope)?.label ?? 'Root') : null
-      return parentLabel ? `${parentLabel} / ${currentScene.name}` : currentScene.name
-    }
-    if (currentSheetId !== null) {
-      const sg = subgraphs.find((s) => s.id === currentSheetId)
-      return sg?.label ?? 'Sheet'
-    }
-    return 'Diagram (root)'
+    if (currentSceneId === null) return 'Diagram'
+    if (!current) return 'Scene'
+    const scope = current.scopeSubgraphId
+    const parentLabel = scope ? (subgraphs.find((sg) => sg.id === scope)?.label ?? null) : null
+    return parentLabel ? `${parentLabel} / ${current.name}` : current.name
   })
 
   function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
@@ -93,16 +81,10 @@
 
   function selectDiagram() {
     diagramState.setCurrentScene(null)
-    diagramState.switchSheet(null)
   }
 
-  function selectSheet(sheetId: string) {
-    diagramState.setCurrentScene(null)
-    diagramState.switchSheet(sheetId)
-  }
-
-  function selectScene(sceneId: string) {
-    diagramState.setCurrentScene(sceneId)
+  function selectScene(id: string) {
+    diagramState.setCurrentScene(id)
   }
 
   function deleteScene(id: string) {
@@ -128,9 +110,9 @@
         {#if currentSceneId}
           <MapPin class="h-3.5 w-3.5 text-amber-500" />
         {:else}
-          <Graph class="h-3.5 w-3.5 text-neutral-500" />
+          <ImageSquare class="h-3.5 w-3.5 text-neutral-500" />
         {/if}
-        <span class="max-w-[260px] truncate">{triggerLabel}</span>
+        <span class="max-w-[220px] truncate">{triggerLabel}</span>
         <CaretDown class="h-3 w-3 text-neutral-400" />
       </button>
     {/snippet}
@@ -138,93 +120,71 @@
   <DropdownMenu.Content
     align="center"
     sideOffset={6}
-    class="z-50 min-w-[280px] rounded-lg border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
+    class="z-50 min-w-[260px] rounded-lg border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
   >
-    <!-- Root: Diagram + root-scoped scenes -->
-    <div
-      class="px-2 pt-1 pb-0.5 text-[9px] font-medium tracking-wider text-muted-foreground uppercase"
-    >
-      Root
-    </div>
     <DropdownMenu.Item
       class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60 {currentSceneId ===
-        null && currentSheetId === null
+      null
         ? 'font-semibold text-blue-700 dark:text-blue-300'
         : 'text-neutral-700 dark:text-neutral-200'}"
       onclick={selectDiagram}
     >
-      <span class="flex items-center gap-1.5">
-        <Graph class="h-3 w-3" />
-        Diagram (logical)
-      </span>
-    </DropdownMenu.Item>
-    {#each rootScopeScenes as scene (scene.id)}
-      {@const isActive = scene.id === currentSceneId}
-      <div class="flex items-center gap-1">
-        <DropdownMenu.Item
-          class="flex-1 cursor-pointer rounded-md px-2 py-1.5 pl-5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60 {isActive
-            ? 'font-semibold text-blue-700 dark:text-blue-300'
-            : 'text-neutral-700 dark:text-neutral-200'}"
-          onclick={() => selectScene(scene.id)}
-        >
-          <span class="flex items-center gap-1.5">
-            <MapPin class="h-3 w-3 text-amber-500" />
-            <span class="block truncate">{scene.name}</span>
-          </span>
-        </DropdownMenu.Item>
-        <button
-          type="button"
-          aria-label="Delete scene"
-          class="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-rose-600 dark:hover:bg-neutral-700"
-          onclick={(e) => {
-            e.stopPropagation()
-            deleteScene(scene.id)
-          }}
-        >
-          <Trash class="h-3 w-3" />
-        </button>
-      </div>
-    {/each}
-    <DropdownMenu.Item
-      class="cursor-pointer rounded-md px-2 py-1.5 pl-5 text-xs text-muted-foreground hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
-      onclick={() => openAddDialog(undefined)}
-    >
-      <span class="flex items-center gap-1.5">
-        <Plus class="h-3 w-3" />
-        Add scene at root…
-      </span>
+      Diagram (logical)
     </DropdownMenu.Item>
 
-    {#if topLevelSubgraphs.length > 0}
+    <!-- Root-scoped scenes -->
+    {#if rootScopeScenes.length > 0}
       <div class="my-1 border-t border-neutral-200 dark:border-neutral-700"></div>
       <div
         class="px-2 pt-1 pb-0.5 text-[9px] font-medium tracking-wider text-muted-foreground uppercase"
       >
-        Subgraphs
+        Root scope
       </div>
-      {#each topLevelSubgraphs as sg (sg.id)}
-        {@const physical = isPhysicalSubgraph(sg)}
-        {@const sgScenes = scenesForScope(sg.id)}
-        {@const sheetActive = currentSceneId === null && currentSheetId === sg.id}
-        <DropdownMenu.Item
-          class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60 {sheetActive
-            ? 'font-semibold text-blue-700 dark:text-blue-300'
-            : 'text-neutral-700 dark:text-neutral-200'}"
-          onclick={() => selectSheet(sg.id)}
+      {#each rootScopeScenes as scene (scene.id)}
+        {@const isActive = scene.id === currentSceneId}
+        <div class="flex items-center gap-1">
+          <DropdownMenu.Item
+            class="flex-1 cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60 {isActive
+              ? 'font-semibold text-blue-700 dark:text-blue-300'
+              : 'text-neutral-700 dark:text-neutral-200'}"
+            onclick={() => selectScene(scene.id)}
+          >
+            <span class="flex items-center gap-1.5">
+              <MapPin class="h-3 w-3 text-amber-500" />
+              <span class="block truncate">{scene.name}</span>
+            </span>
+          </DropdownMenu.Item>
+          <button
+            type="button"
+            aria-label="Delete scene"
+            class="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-rose-600 dark:hover:bg-neutral-700"
+            onclick={(e) => {
+              e.stopPropagation()
+              deleteScene(scene.id)
+            }}
+          >
+            <Trash class="h-3 w-3" />
+          </button>
+        </div>
+      {/each}
+    {/if}
+
+    <!-- Per-subgraph scenes -->
+    {#each topLevelSubgraphs as sg (sg.id)}
+      {@const sgScenes = scenesForScope(sg.id)}
+      {@const physical = isPhysicalSubgraph(sg)}
+      {#if sgScenes.length > 0 || physical}
+        <div class="my-1 border-t border-neutral-200 dark:border-neutral-700"></div>
+        <div
+          class="px-2 pt-1 pb-0.5 text-[9px] font-medium tracking-wider text-muted-foreground uppercase"
         >
-          <span class="flex items-center gap-1.5">
-            <Graph class="h-3 w-3" />
-            <span class="block max-w-[220px] truncate">{sg.label}</span>
-            {#if !physical}
-              <span class="text-[9px] text-muted-foreground">logical</span>
-            {/if}
-          </span>
-        </DropdownMenu.Item>
+          {sg.label}
+        </div>
         {#each sgScenes as scene (scene.id)}
           {@const isActive = scene.id === currentSceneId}
           <div class="flex items-center gap-1">
             <DropdownMenu.Item
-              class="flex-1 cursor-pointer rounded-md px-2 py-1.5 pl-5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60 {isActive
+              class="flex-1 cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60 {isActive
                 ? 'font-semibold text-blue-700 dark:text-blue-300'
                 : 'text-neutral-700 dark:text-neutral-200'}"
               onclick={() => selectScene(scene.id)}
@@ -249,7 +209,7 @@
         {/each}
         {#if physical}
           <DropdownMenu.Item
-            class="cursor-pointer rounded-md px-2 py-1.5 pl-5 text-xs text-muted-foreground hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
+            class="cursor-pointer rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
             onclick={() => openAddDialog(sg.id)}
           >
             <span class="flex items-center gap-1.5">
@@ -258,8 +218,19 @@
             </span>
           </DropdownMenu.Item>
         {/if}
-      {/each}
-    {/if}
+      {/if}
+    {/each}
+
+    <div class="my-1 border-t border-neutral-200 dark:border-neutral-700"></div>
+    <DropdownMenu.Item
+      class="cursor-pointer rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
+      onclick={() => openAddDialog(undefined)}
+    >
+      <span class="flex items-center gap-1.5">
+        <Plus class="h-3 w-3" />
+        Add scene at root…
+      </span>
+    </DropdownMenu.Item>
   </DropdownMenu.Content>
 </DropdownMenu.Root>
 
