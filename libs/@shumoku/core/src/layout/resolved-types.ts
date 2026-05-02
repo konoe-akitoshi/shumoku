@@ -48,21 +48,21 @@ export interface ResolvedPort {
 // ============================================================================
 
 /**
- * A routed edge connecting two ports (or node centers for portless connections).
- * Points are absolute coordinates — the first point should be at/near the
- * source port, and the last point at/near the destination port.
+ * A routed edge connecting two existing ports. Points are absolute coordinates;
+ * the first point is at the source port, and the last point at the destination
+ * port. Both endpoints always have a port — the model invariant guarantees it.
  */
 export interface ResolvedEdge {
   /** Unique edge ID */
   id: string
-  /** Source port ID (or node ID for portless connections) */
-  fromPortId: string | null
-  /** Destination port ID (or node ID for portless connections) */
-  toPortId: string | null
-  /** Resolved source port, when this edge starts at a port */
-  fromPort: ResolvedPort | null
-  /** Resolved destination port, when this edge ends at a port */
-  toPort: ResolvedPort | null
+  /** Source port ID (always set — `${nodeId}:${portId}`) */
+  fromPortId: string
+  /** Destination port ID (always set — `${nodeId}:${portId}`) */
+  toPortId: string
+  /** Resolved source port (always present) */
+  fromPort: ResolvedPort
+  /** Resolved destination port (always present) */
+  toPort: ResolvedPort
   /** Source node ID */
   fromNodeId: string
   /** Destination node ID */

@@ -1,25 +1,34 @@
 <script lang="ts">
-  import type { Link } from '@shumoku/core'
+  import type { Link, Node } from '@shumoku/core'
   import { Badge } from '$lib/components/ui/badge'
 
   let {
     link,
+    nodes = new Map(),
   }: {
     link: Link
+    nodes?: Map<string, Node>
   } = $props()
 
-  const fromNode = $derived(typeof link.from === 'string' ? link.from : link.from.node)
-  const toNode = $derived(typeof link.to === 'string' ? link.to : link.to.node)
-  const fromPort = $derived(typeof link.from === 'object' ? link.from.port : undefined)
-  const toPort = $derived(typeof link.to === 'object' ? link.to.port : undefined)
-  const fromIp = $derived(typeof link.from === 'object' ? link.from.ip : undefined)
-  const toIp = $derived(typeof link.to === 'object' ? link.to.ip : undefined)
+  const fromNode = $derived(link.from.node)
+  const toNode = $derived(link.to.node)
+  const fromPort = $derived(link.from.port)
+  const toPort = $derived(link.to.port)
+  const fromIp = $derived(link.from.ip)
+  const toIp = $derived(link.to.ip)
   const vlanDisplay = $derived(
     link.vlan ? (Array.isArray(link.vlan) ? link.vlan.join(', ') : String(link.vlan)) : undefined,
   )
   const labelDisplay = $derived(
     link.label ? (Array.isArray(link.label) ? link.label.join(', ') : link.label) : undefined,
   )
+
+  function displayPort(nodeId: string, portId: string | undefined) {
+    if (!portId) return ''
+    const port = nodes.get(nodeId)?.ports?.find((p) => p.id === portId)
+    if (!port) return portId
+    return port.label || port.cage || 'unnamed port'
+  }
 </script>
 
 <!-- Endpoints -->
@@ -34,7 +43,9 @@
       <div class="text-[9px] uppercase text-neutral-400 dark:text-neutral-500 mb-0.5">From</div>
       <div class="font-mono font-medium text-neutral-800 dark:text-neutral-100">{fromNode}</div>
       {#if fromPort}
-        <div class="font-mono text-[10px] text-blue-600 dark:text-blue-400">{fromPort}</div>
+        <div class="font-mono text-[10px] text-blue-600 dark:text-blue-400">
+          {displayPort(fromNode, fromPort)}
+        </div>
       {/if}
       {#if fromIp}
         <div class="font-mono text-[10px] text-neutral-400">{fromIp}</div>
@@ -45,7 +56,9 @@
       <div class="text-[9px] uppercase text-neutral-400 dark:text-neutral-500 mb-0.5">To</div>
       <div class="font-mono font-medium text-neutral-800 dark:text-neutral-100">{toNode}</div>
       {#if toPort}
-        <div class="font-mono text-[10px] text-blue-600 dark:text-blue-400">{toPort}</div>
+        <div class="font-mono text-[10px] text-blue-600 dark:text-blue-400">
+          {displayPort(toNode, toPort)}
+        </div>
       {/if}
       {#if toIp}
         <div class="font-mono text-[10px] text-neutral-400">{toIp}</div>
@@ -62,10 +75,17 @@
     Properties
   </div>
   <dl class="space-y-1.5 text-[11px]">
-    {#if link.bandwidth}
+    {#if link.from.plug?.module?.standard || link.to.plug?.module?.standard}
       <div class="flex justify-between">
-        <dt class="text-neutral-400 dark:text-neutral-500">Bandwidth</dt>
-        <dd><Badge variant="secondary" class="font-mono text-[10px]">{link.bandwidth}</Badge></dd>
+        <dt class="text-neutral-400 dark:text-neutral-500">Standard</dt>
+        <dd>
+          <Badge variant="secondary" class="font-mono text-[10px]">
+            {link.from.plug?.module?.standard ?? link.to.plug?.module?.standard}
+            {#if link.from.plug?.module?.standard && link.to.plug?.module?.standard && link.from.plug?.module?.standard !== link.to.plug?.module?.standard}
+              ↔ {link.to.plug?.module?.standard}
+            {/if}
+          </Badge>
+        </dd>
       </div>
     {/if}
     {#if vlanDisplay}

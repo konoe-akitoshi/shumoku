@@ -35,7 +35,7 @@ export async function renderPng(
 ): Promise<Buffer> {
   return png.render(prepared.graph, prepared.layout, {
     scale: options?.scale,
-    iconDimensions: prepared.iconDimensions?.byUrl,
+    iconDimensions: prepared.iconDimensions ?? undefined,
   })
 }
 

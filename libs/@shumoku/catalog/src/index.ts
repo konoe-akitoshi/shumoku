@@ -12,6 +12,7 @@ export {
   POE_STANDARD_MAX_CLASS,
   type PoEStandard,
 } from './poe.js'
+export { type CatalogPortTemplate, expandCatalogPorts } from './ports.js'
 export type {
   CatalogEntry,
   ComputeCatalogEntry,

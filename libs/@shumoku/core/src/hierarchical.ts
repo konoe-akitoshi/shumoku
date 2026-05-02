@@ -8,7 +8,15 @@
  */
 
 import type { ResolvedLayout } from './layout/resolved-types.js'
-import type { LayoutResult, Link, NetworkGraph, Node, Subgraph } from './models/types.js'
+import { ensurePorts } from './models/migrate.js'
+import type {
+  LayoutResult,
+  Link,
+  LinkEndpoint,
+  NetworkGraph,
+  Node,
+  Subgraph,
+} from './models/types.js'
 
 // ============================================
 // Constants
@@ -37,9 +45,9 @@ export interface LayoutEngine {
 
 interface ExportConnection {
   device: string
-  port?: string
+  port: string
   destDevice: string
-  destPort?: string
+  destPort: string
 }
 
 interface ExportPoint {
@@ -145,11 +153,9 @@ export function buildChildSheetGraph(
   })
 
   // Get internal links (both endpoints in subgraph or descendants)
-  const childLinks = rootGraph.links.filter((l) => {
-    const fromNode = typeof l.from === 'string' ? l.from : l.from.node
-    const toNode = typeof l.to === 'string' ? l.to : l.to.node
-    return childNodeIds.has(fromNode) && childNodeIds.has(toNode)
-  })
+  const childLinks = rootGraph.links.filter(
+    (l) => childNodeIds.has(l.from.node) && childNodeIds.has(l.to.node),
+  )
 
   // Generate export connectors for boundary connections
   const { exportNodes, exportLinks } = generateExportConnectors(
@@ -183,14 +189,17 @@ export function buildChildSheetGraph(
     bounds: undefined,
   }))
 
-  return {
+  // Newly synthesized export-connector links don't have ports yet — let the
+  // shared migration helper materialize them so the invariant still holds
+  // when the child sheet is handed to the layout engine.
+  return ensurePorts({
     ...rootGraph,
     name: subgraph.label,
     nodes: [...transformedNodes, ...exportNodes],
     links: [...childLinks, ...exportLinks],
     subgraphs:
       transformedSubgraphs && transformedSubgraphs.length > 0 ? transformedSubgraphs : undefined,
-  }
+  })
 }
 
 async function buildChildSheet(
@@ -224,10 +233,10 @@ function generateExportConnectors(
 
   // Find boundary links and group by destination subgraph
   for (const link of rootGraph.links) {
-    const fromNode = typeof link.from === 'string' ? link.from : link.from.node
-    const toNode = typeof link.to === 'string' ? link.to : link.to.node
-    const fromPort = typeof link.from === 'object' ? link.from.port : undefined
-    const toPort = typeof link.to === 'object' ? link.to.port : undefined
+    const fromNode = link.from.node
+    const toNode = link.to.node
+    const fromPort = link.from.port
+    const toPort = link.to.port
 
     const fromInside = childNodeIds.has(fromNode)
     const toInside = childNodeIds.has(toNode)
@@ -298,14 +307,16 @@ function generateExportConnectors(
       },
     })
 
-    // Export links (one per connection)
+    // Export links (one per connection). The export-side port is left
+    // blank; `ensurePorts` materializes a stub NodePort on the export node.
     for (const [i, conn] of exportPoint.connections.entries()) {
-      const deviceEndpoint = conn.port ? { node: conn.device, port: conn.port } : conn.device
+      const deviceEndpoint: LinkEndpoint = { node: conn.device, port: conn.port }
+      const exportEndpoint: LinkEndpoint = { node: exportNodeId, port: '' }
 
       exportLinks.push({
         id: `${EXPORT_LINK_PREFIX}${exportId}_${i}`,
-        from: exportPoint.isSource ? deviceEndpoint : exportNodeId,
-        to: exportPoint.isSource ? exportNodeId : deviceEndpoint,
+        from: exportPoint.isSource ? deviceEndpoint : exportEndpoint,
+        to: exportPoint.isSource ? exportEndpoint : deviceEndpoint,
         type: 'dashed',
         arrow: 'forward',
         metadata: {

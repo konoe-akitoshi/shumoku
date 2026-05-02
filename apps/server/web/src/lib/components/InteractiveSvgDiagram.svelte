@@ -16,7 +16,7 @@
       id: string
       from: string
       to: string
-      bandwidth?: string
+      standard?: string
     }>
   }
 
@@ -195,13 +195,13 @@
         return from === nodeId || to === nodeId
       })
       .map((l) => {
-        const from = typeof l.from === 'string' ? l.from : l.from.node
-        const to = typeof l.to === 'string' ? l.to : l.to.node
+        const from = l.from.node
+        const to = l.to.node
         return {
           id: l.id ?? `${from}->${to}`,
           from,
           to,
-          bandwidth: l.bandwidth !== undefined ? String(l.bandwidth) : undefined,
+          standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
         }
       })
     const nodeLabel = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
@@ -262,11 +262,11 @@
     // Link: show endpoints + live metrics if available
     const link = g.links.find((x) => x.id === hovered.id)
     if (!link) return `<strong>${escapeHtml(hovered.id)}</strong>`
-    const from = typeof link.from === 'string' ? link.from : link.from.node
-    const to = typeof link.to === 'string' ? link.to : link.to.node
+    const from = link.from.node
+    const to = link.to.node
     let out = `<strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong>`
-    if (link.bandwidth)
-      out += `<br><span class="muted">Bandwidth: ${escapeHtml(String(link.bandwidth))}</span>`
+    const std = link.from.plug?.module?.standard ?? link.to.plug?.module?.standard
+    if (std) out += `<br><span class="muted">Standard: ${escapeHtml(String(std))}</span>`
 
     const m = $metricsData?.links?.[hovered.id]
     if (m) {

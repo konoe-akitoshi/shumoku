@@ -1,21 +1,21 @@
 <script lang="ts">
   import { getDeviceIcon, type Link, type Node, specDeviceType } from '@shumoku/core'
   import type { PoEBudget } from '$lib/poe-analysis'
-  import type { BomItem, SpecPaletteEntry } from '$lib/types'
-  import { paletteEntryLabel } from '$lib/types'
+  import type { Product } from '$lib/types'
+  import { productLabel } from '$lib/types'
 
   let {
     node,
     poeBudget,
-    palette = [],
-    bomItems = [],
+    products = [],
     links = [],
+    nodes = new Map(),
   }: {
     node: Node
     poeBudget?: PoEBudget
-    palette: SpecPaletteEntry[]
-    bomItems: BomItem[]
+    products: Product[]
     links: Link[]
+    nodes?: Map<string, Node>
   } = $props()
 
   function stripHtml(s: string): string {
@@ -23,6 +23,13 @@
   }
 
   const iconPath = $derived(node.spec ? getDeviceIcon(specDeviceType(node.spec)) : undefined)
+
+  function displayPort(nodeId: string, portId: string | undefined) {
+    if (!portId) return ''
+    const port = nodes.get(nodeId)?.ports?.find((p) => p.id === portId)
+    if (!port) return portId
+    return port.label || port.cage || 'unnamed port'
+  }
 
   const nodeLabel = $derived(
     node.label
@@ -32,10 +39,10 @@
       : '',
   )
 
-  const boundPalette = $derived.by(() => {
-    const bom = bomItems.find((b) => b.nodeId === node.id)
-    if (!bom?.paletteId) return null
-    return palette.find((e) => e.id === bom.paletteId) ?? null
+  const boundProduct = $derived.by(() => {
+    if (!node.productId) return null
+    const p = products.find((e) => e.id === node.productId)
+    return p?.kind === 'device' ? p : null
   })
 
   interface PortConnection {
@@ -55,12 +62,12 @@
     const conns: PortConnection[] = []
 
     for (const link of links) {
-      const fromNode = typeof link.from === 'string' ? link.from : link.from.node
-      const toNode = typeof link.to === 'string' ? link.to : link.to.node
-      const fromPort = typeof link.from === 'object' ? link.from.port : undefined
-      const toPort = typeof link.to === 'object' ? link.to.port : undefined
-      const rawFromIp = typeof link.from === 'object' ? link.from.ip : undefined
-      const rawToIp = typeof link.to === 'object' ? link.to.ip : undefined
+      const fromNode = link.from.node
+      const toNode = link.to.node
+      const fromPort = link.from.port
+      const toPort = link.to.port
+      const rawFromIp = link.from.ip
+      const rawToIp = link.to.ip
       const fromIp = Array.isArray(rawFromIp) ? rawFromIp.join(', ') : rawFromIp
       const toIp = Array.isArray(rawToIp) ? rawToIp.join(', ') : rawToIp
       const vlan = link.vlan
@@ -68,14 +75,14 @@
           ? link.vlan.join(', ')
           : String(link.vlan)
         : undefined
-      const bw = link.bandwidth !== undefined ? String(link.bandwidth) : undefined
+      const bw = link.from.plug?.module?.standard ?? link.to.plug?.module?.standard ?? undefined
       const label = Array.isArray(link.label) ? link.label.join(', ') : link.label
 
       if (fromNode === node.id && fromPort) {
         conns.push({
-          portLabel: fromPort,
+          portLabel: displayPort(fromNode, fromPort),
           peerNode: toNode,
-          peerPort: toPort ?? '',
+          peerPort: displayPort(toNode, toPort),
           ip: fromIp,
           peerIp: toIp,
           bandwidth: bw,
@@ -85,9 +92,9 @@
         })
       } else if (toNode === node.id && toPort) {
         conns.push({
-          portLabel: toPort,
+          portLabel: displayPort(toNode, toPort),
           peerNode: fromNode,
-          peerPort: fromPort ?? '',
+          peerPort: displayPort(fromNode, fromPort),
           ip: toIp,
           peerIp: fromIp,
           bandwidth: bw,
@@ -128,15 +135,13 @@
     <div class="text-sm font-semibold text-neutral-800 dark:text-neutral-100 truncate">
       {nodeLabel || node.id}
     </div>
-    {#if boundPalette}
+    {#if boundProduct}
       <div class="flex items-center gap-1.5 text-[11px]">
         <span
           class="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-[9px] font-medium uppercase text-neutral-500 dark:text-neutral-400"
-          >{boundPalette.spec.kind}</span
+          >{boundProduct.spec.kind}</span
         >
-        <span class="text-neutral-600 dark:text-neutral-300"
-          >{paletteEntryLabel(boundPalette)}</span
-        >
+        <span class="text-neutral-600 dark:text-neutral-300">{productLabel(boundProduct)}</span>
       </div>
     {:else}
       <div class="text-[11px] text-neutral-400 dark:text-neutral-500 italic">No spec assigned</div>

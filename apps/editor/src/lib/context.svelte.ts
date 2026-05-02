@@ -1,4 +1,4 @@
-import { builtinEntries, Catalog } from '@shumoku/catalog'
+import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   buildChildSheetGraph,
   collectObstacles,
@@ -6,13 +6,13 @@ import {
   computeNodeSize,
   createMemoryFileResolver,
   darkTheme,
-  getNodeId,
   HierarchicalParser,
   type Link,
   lightTheme,
   moveNode,
   type NetworkGraph,
   type Node,
+  type NodePort,
   type NodeSpec,
   newId,
   placePorts,
@@ -28,8 +28,8 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
-import type { BomItem, NetedProject, SpecPaletteEntry } from './types'
-import { paletteEntryLabel } from './types'
+import type { AssignmentRow, AssignmentTarget, DeviceProduct, NetedProject, Product } from './types'
+import { productLabel } from './types'
 
 // =========================================================================
 // Editor UI state — mode, theme
@@ -83,6 +83,22 @@ export function initDarkMode() {
   return () => obs.disconnect()
 }
 
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  // Devtools convenience: poke at editor state from the console.
+  // biome-ignore lint/suspicious/noExplicitAny: dev-only window augmentation
+  ;(window as any).diagramState = new Proxy(
+    {},
+    {
+      get(_t, prop) {
+        // biome-ignore lint/suspicious/noExplicitAny: lazy proxy
+        return (diagramState as any)[prop]
+      },
+    },
+  )
+  // biome-ignore lint/suspicious/noExplicitAny: dev-only window augmentation
+  ;(window as any).editorState = editorState
+}
+
 // =========================================================================
 // Diagram state — shared across pages
 // =========================================================================
@@ -111,11 +127,90 @@ function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
   for (const [k, v] of source) target.set(k, v)
 }
 
-let palette = $state<SpecPaletteEntry[]>([])
-let bomItems = $state<BomItem[]>([])
+let products = $state<Product[]>([])
 let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
+
+function deviceProduct(id: string): DeviceProduct | undefined {
+  const p = products.find((p) => p.id === id)
+  return p?.kind === 'device' ? p : undefined
+}
+
+function moduleProductSku(product: Product): string | undefined {
+  if (product.kind !== 'module') return undefined
+  return product.spec.mpn ?? product.catalogId
+}
+
+function nodeDisplayLabel(node: Node): string {
+  return Array.isArray(node.label) ? node.label[0] : (node.label ?? node.id)
+}
+
+function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undefined {
+  return link[side].plug?.module?.sku ?? link[side].plug?.module?.standard
+}
+
+function cableRequirementKey(link: Link): string | undefined {
+  const cable = link.cable
+  if (!cable) return undefined
+  return [cable.category, cable.medium, cable.length_m ? `${cable.length_m}m` : undefined]
+    .filter(Boolean)
+    .join(' / ')
+}
+
+function buildAssignmentRows(): AssignmentRow[] {
+  const rows: AssignmentRow[] = []
+
+  for (const [nodeId, node] of diagram.nodes) {
+    rows.push({
+      id: `node:${nodeId}`,
+      target: { kind: 'node', nodeId },
+      label: nodeDisplayLabel(node),
+      source: 'Diagram node',
+      productId: node.productId,
+      requirementKey: node.spec
+        ? 'model' in node.spec
+          ? node.spec.model
+          : 'service' in node.spec
+            ? node.spec.service
+            : node.spec.kind
+        : undefined,
+      status: node.productId ? 'resolved' : node.spec ? 'generic' : 'incomplete',
+    })
+  }
+
+  for (const link of diagram.links) {
+    if (!link.id) continue
+    for (const side of ['from', 'to'] as const) {
+      const endpoint = link[side]
+      const key = endpointRequirementKey(link, side)
+      if (!key) continue
+      rows.push({
+        id: `module:${link.id}:${side}`,
+        target: { kind: 'link-module', linkId: link.id, side },
+        label: `${link.id} ${side} module`,
+        source: `${endpoint.node}:${endpoint.port}`,
+        productId: endpoint.plug?.module?.productId,
+        requirementKey: key,
+        status: endpoint.plug?.module?.productId ? 'resolved' : 'generic',
+      })
+    }
+    const cableKey = cableRequirementKey(link)
+    if (cableKey) {
+      rows.push({
+        id: `cable:${link.id}`,
+        target: { kind: 'link-cable', linkId: link.id },
+        label: `${link.id} cable`,
+        source: 'Connections cable',
+        productId: link.cable?.productId,
+        requirementKey: cableKey,
+        status: link.cable?.productId ? 'resolved' : 'generic',
+      })
+    }
+  }
+
+  return rows
+}
 
 /**
  * Active sheet for hierarchical / multi-sheet editing.
@@ -213,6 +308,15 @@ async function rerouteEdges() {
   }
 }
 
+function replaceDerivedPorts() {
+  replaceMap(diagram.ports, placePorts(diagram.nodes, diagram.links))
+}
+
+async function rebuildPortsAndEdges() {
+  replaceDerivedPorts()
+  await rerouteEdges()
+}
+
 const catalog = new Catalog()
 catalog.registerAll(builtinEntries)
 
@@ -235,6 +339,99 @@ function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined 
   if (spec.kind === 'compute') return { kind: 'compute', type: spec.type }
   if (spec.kind === 'service') return { kind: 'service', service: spec.service }
   return undefined
+}
+
+function nodePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | undefined {
+  if (!product) return undefined
+  const catalogEntry = product.catalogId ? catalog.lookup(product.catalogId) : undefined
+  const ports = expandCatalogPorts(
+    catalogEntry ?? {
+      id: product.id,
+      label: productLabel(product),
+      spec: product.spec,
+      tags: [],
+      properties: product.properties ?? {},
+    },
+  )
+  return ports.length > 0
+    ? ports.map((port) => ({
+        id: newId('port'),
+        ...port,
+      }))
+    : undefined
+}
+
+function setNodePortsFromProduct(
+  nodeId: string,
+  product: DeviceProduct | undefined,
+  options: { preserveExisting?: boolean; reroute?: boolean } = {},
+) {
+  const node = diagram.nodes.get(nodeId)
+  if (!node) return
+  if (options.preserveExisting && node.ports) return
+  const ports = nodePortsFromProduct(product)
+  diagram.nodes.set(nodeId, { ...node, ports })
+  const migrated = migrateLinkEndpointPortsForNode(nodeId, ports)
+  if (migrated && options.reroute !== false) rebuildPortsAndEdges()
+}
+
+function findNodePortId(
+  ports: NodePort[] | undefined,
+  value: string | undefined,
+): string | undefined {
+  if (!ports || !value) return value
+  const match = ports.find(
+    (port) =>
+      port.id === value ||
+      port.label === value ||
+      port.faceplateLabel === value ||
+      port.interfaceName === value ||
+      port.aliases?.includes(value),
+  )
+  return match?.id ?? value
+}
+
+/**
+ * Append a port to a node's `ports` array. Returns the new port's ID, or
+ * undefined when the target node is missing. This is the single explicit
+ * port-creation operation for the editor — link-creation paths must call
+ * this themselves before constructing the LinkEndpoint, never afterward.
+ */
+function appendPortToNode(
+  nodes: Map<string, Node>,
+  nodeId: string,
+  init: Partial<NodePort> = {},
+): string | undefined {
+  const node = nodes.get(nodeId)
+  if (!node) return undefined
+  const port: NodePort = {
+    id: init.id ?? newId('port'),
+    label: init.label ?? '',
+    source: init.source ?? 'custom',
+    ...init,
+  }
+  nodes.set(nodeId, { ...node, ports: [...(node.ports ?? []), port] })
+  return port.id
+}
+
+function migrateLinkEndpointPortsForNode(nodeId: string, ports: NodePort[] | undefined): boolean {
+  if (!ports?.length) return false
+  let changed = false
+  const links = diagram.links.map((link) => {
+    let next = link
+    for (const side of ['from', 'to'] as const) {
+      const endpoint = next[side]
+      if (endpoint.node !== nodeId || !endpoint.port) continue
+      const resolved = findNodePortId(ports, endpoint.port)
+      if (resolved && resolved !== endpoint.port) {
+        next = { ...next, [side]: { ...endpoint, port: resolved } }
+        changed = true
+      }
+    }
+    return next
+  })
+  if (changed) diagram.links = links
+  return changed
 }
 
 /**
@@ -300,9 +497,7 @@ function sanitizeGraph(graph: NetworkGraph): {
   const validLinks: Link[] = []
   let droppedLinks = 0
   for (const link of graph.links ?? []) {
-    const from = getNodeId(link.from)
-    const to = getNodeId(link.to)
-    if (nodes.has(from) && nodes.has(to)) {
+    if (nodes.has(link.from.node) && nodes.has(link.to.node)) {
       validLinks.push(link)
     } else {
       droppedLinks++
@@ -316,60 +511,68 @@ function sanitizeGraph(graph: NetworkGraph): {
 }
 
 /**
- * Reconcile palette/bom against the (already-sanitized) set of node IDs.
- * BOM items whose palette is gone are dropped; items whose node is gone
- * are unbound but kept, so the user sees an "unplaced" entry rather than
- * silently losing a purchased device.
+ * Reconcile products against the loaded diagram. Diagram-side
+ * `productId` references (Node / LinkModule / LinkCable) are cleared
+ * when the referenced product is gone.
  */
-function sanitizePaletteAndBom(
-  rawPalette: SpecPaletteEntry[],
-  rawBom: BomItem[],
+function sanitizeProducts(
+  rawProducts: Product[],
   nodes: Map<string, Node>,
-): { palette: SpecPaletteEntry[]; bom: BomItem[] } {
-  const paletteIds = new Set<string>()
-  const cleanPalette: SpecPaletteEntry[] = []
-  let duplicatePalette = 0
-  for (const entry of rawPalette) {
-    if (paletteIds.has(entry.id)) {
-      duplicatePalette++
+  links: Link[],
+): { products: Product[]; links: Link[] } {
+  const productIds = new Set<string>()
+  const cleanProducts: Product[] = []
+  let duplicates = 0
+  for (const entry of rawProducts) {
+    if (productIds.has(entry.id)) {
+      duplicates++
       continue
     }
-    paletteIds.add(entry.id)
-    cleanPalette.push(entry)
+    productIds.add(entry.id)
+    cleanProducts.push(entry)
   }
-  if (duplicatePalette > 0) {
-    console.warn(`[import] dropped ${duplicatePalette} duplicate palette id(s)`)
+  if (duplicates > 0) {
+    console.warn(`[import] dropped ${duplicates} duplicate product id(s)`)
   }
 
-  const cleanBom: BomItem[] = []
-  let droppedBom = 0
-  let unboundBom = 0
-  const bomIds = new Set<string>()
-  for (const item of rawBom) {
-    if (bomIds.has(item.id)) {
-      droppedBom++
-      continue
-    }
-    if (item.paletteId && !paletteIds.has(item.paletteId)) {
-      droppedBom++
-      continue
-    }
-    bomIds.add(item.id)
-    if (item.nodeId && !nodes.has(item.nodeId)) {
-      cleanBom.push({ ...item, nodeId: undefined })
-      unboundBom++
-    } else {
-      cleanBom.push(item)
+  // Clear stale productId references on diagram side
+  let clearedNodes = 0
+  for (const [id, node] of nodes) {
+    if (node.productId && !productIds.has(node.productId)) {
+      nodes.set(id, { ...node, productId: undefined })
+      clearedNodes++
     }
   }
-  if (droppedBom > 0) {
-    console.warn(`[import] dropped ${droppedBom} orphan/duplicate bom item(s)`)
-  }
-  if (unboundBom > 0) {
-    console.warn(`[import] unbound ${unboundBom} bom item(s) whose node was missing`)
+  if (clearedNodes > 0) {
+    console.warn(`[import] cleared ${clearedNodes} node(s) with unknown productId`)
   }
 
-  return { palette: cleanPalette, bom: cleanBom }
+  let clearedLinks = 0
+  const cleanLinks = links.map((link) => {
+    let next = link
+    for (const side of ['from', 'to'] as const) {
+      const mod = next[side].plug?.module
+      if (mod?.productId && !productIds.has(mod.productId)) {
+        const { productId: _drop, ...rest } = mod
+        next = {
+          ...next,
+          [side]: { ...next[side], plug: { ...(next[side].plug ?? {}), module: rest } },
+        }
+        clearedLinks++
+      }
+    }
+    if (next.cable?.productId && !productIds.has(next.cable.productId)) {
+      const { productId: _drop, ...rest } = next.cable
+      next = { ...next, cable: rest }
+      clearedLinks++
+    }
+    return next
+  })
+  if (clearedLinks > 0) {
+    console.warn(`[import] cleared ${clearedLinks} link product reference(s)`)
+  }
+
+  return { products: cleanProducts, links: cleanLinks }
 }
 
 export const diagramState = {
@@ -424,18 +627,29 @@ export const diagramState = {
   addLink(link: Link) {
     diagram.links = [...diagram.links, link]
     invalidateSheetCache()
-    rerouteEdges()
+    rebuildPortsAndEdges()
   },
   updateLink(id: string, updates: Partial<Link>) {
     // Endpoints may have moved into / out of a child sheet's scope.
     diagram.links = diagram.links.map((l) => (l.id === id ? { ...l, ...updates } : l))
     invalidateSheetCache()
-    rerouteEdges()
+    rebuildPortsAndEdges()
+  },
+  /**
+   * Append a port to a node and trigger a port/edge rebuild. Used by
+   * forms (and other UI) that need to materialize a port *before*
+   * constructing the link endpoint. The `port` field of any LinkEndpoint
+   * we append to `links` must already point at an existing port.
+   */
+  addNodePort(nodeId: string, init: Partial<NodePort> = {}) {
+    const portId = appendPortToNode(diagram.nodes, nodeId, init)
+    if (portId) rebuildPortsAndEdges()
+    return portId
   },
   removeLink(id: string) {
     diagram.links = diagram.links.filter((l) => l.id !== id)
     invalidateSheetCache()
-    rerouteEdges()
+    rebuildPortsAndEdges()
   },
   updateNode(id: string, updates: Partial<Node>) {
     const rn = diagram.nodes.get(id)
@@ -525,6 +739,72 @@ export const diagramState = {
       links: diagram.links.length,
       subgraphs: diagram.subgraphs.size,
     }
+  },
+  getNodePorts(nodeId: string): NodePort[] {
+    return diagram.nodes.get(nodeId)?.ports ?? []
+  },
+  /**
+   * Update a port's label and propagate to the resolved-port map. The
+   * renderer's `commitLabel` only updates `ResolvedPort`, which is not
+   * persisted — `Node.ports[i].label` is the source of truth.
+   *
+   * `portId` is the resolved-port id (`${nodeId}:${nodePortId}`).
+   */
+  updatePortLabel(portId: string, label: string) {
+    const colon = portId.indexOf(':')
+    if (colon < 0) return
+    const nodeId = portId.slice(0, colon)
+    const portKey = portId.slice(colon + 1)
+    const node = diagram.nodes.get(nodeId)
+    if (!node?.ports) return
+    const idx = node.ports.findIndex((p) => p.id === portKey)
+    if (idx < 0) return
+    if (node.ports[idx]?.label === label) return
+    const next = [...node.ports]
+    const target = next[idx]
+    if (!target) return
+    next[idx] = { ...target, label }
+    diagram.nodes.set(nodeId, { ...node, ports: next })
+    const resolved = diagram.ports.get(portId)
+    if (resolved) diagram.ports.set(portId, { ...resolved, label })
+  },
+  /**
+   * Catalog-defined port names for the node's bound device, e.g.
+   * `["Gi1/0/1", "Gi1/0/2", ...]` for a Cisco WS-C3560CX. Surfaced as
+   * suggestions when the user renames a port. We don't filter by "already
+   * used" — a 24-port switch's full template list is more useful than a
+   * filtered subset, and label uniqueness isn't enforced by the model
+   * anyway (links reference NodePort.id, not label).
+   */
+  getPortLabelSuggestions(nodeId: string): string[] {
+    const spec = diagram.nodes.get(nodeId)?.spec
+    if (spec?.kind !== 'hardware' || !spec.vendor || !spec.model) return []
+    const entry = catalog.lookup(`${spec.vendor}/${spec.model}`)
+    if (!entry) return []
+    return expandCatalogPorts(entry)
+      .map((t) => t.label)
+      .filter(Boolean)
+  },
+  getPortUsage(nodeId: string): Map<string, string[]> {
+    const usage = new Map<string, string[]>()
+    for (const [i, link] of diagram.links.entries()) {
+      const linkId = link.id ?? `link-${i}`
+      const fromNode = link.from.node
+      const toNode = link.to.node
+      const fromPort = link.from.port
+      const toPort = link.to.port
+      if (fromNode === nodeId && fromPort) {
+        const links = usage.get(fromPort) ?? []
+        links.push(linkId)
+        usage.set(fromPort, links)
+      }
+      if (toNode === nodeId && toPort) {
+        const links = usage.get(toPort) ?? []
+        links.push(linkId)
+        usage.set(toPort, links)
+      }
+    }
+    return usage
   },
 
   // =====================================================================
@@ -662,149 +942,199 @@ export const diagramState = {
     invalidateSheetCache()
   },
 
-  // Palette
-  get palette() {
-    return palette
+  // Products — project-local material library
+  get products() {
+    return products
   },
-  addToPalette(entry: SpecPaletteEntry) {
-    palette = [...palette, entry]
+  addProduct(entry: Product) {
+    products = [...products, entry]
   },
-  removeFromPalette(id: string) {
-    // Strip product details but keep role (kind/type) on bound nodes
-    const entry = palette.find((e) => e.id === id)
-    const boundNodeIds = bomItems
-      .filter((i) => i.paletteId === id && i.nodeId)
-      .map((i) => i.nodeId as string)
-    if (boundNodeIds.length > 0) {
-      const roleSpec = stripProductFromSpec(entry?.spec)
-      setNodeSpecs(boundNodeIds, roleSpec)
+  removeProduct(id: string) {
+    const product = products.find((p) => p.id === id)
+    if (!product) return
+
+    // Clear node bindings (devices) and strip product details from spec
+    if (product.kind === 'device') {
+      const boundNodeIds: string[] = []
+      for (const [nodeId, node] of diagram.nodes) {
+        if (node.productId === id) boundNodeIds.push(nodeId)
+      }
+      if (boundNodeIds.length > 0) {
+        const roleSpec = stripProductFromSpec(product.spec)
+        setNodeSpecs(boundNodeIds, roleSpec)
+        for (const nodeId of boundNodeIds) {
+          const node = diagram.nodes.get(nodeId)
+          if (node) diagram.nodes.set(nodeId, { ...node, productId: undefined, ports: undefined })
+        }
+      }
     }
-    palette = palette.filter((e) => e.id !== id)
-    bomItems = bomItems.filter((i) => i.paletteId !== id)
+
+    // Clear link-module / link-cable bindings
+    if (product.kind === 'module' || product.kind === 'cable') {
+      diagram.links = diagram.links.map((link) => {
+        let next = link
+        if (product.kind === 'module') {
+          for (const side of ['from', 'to'] as const) {
+            const mod = next[side].plug?.module
+            if (mod?.productId === id) {
+              const { productId: _drop, sku: _sku, ...rest } = mod
+              next = {
+                ...next,
+                [side]: {
+                  ...next[side],
+                  plug: { ...(next[side].plug ?? {}), module: rest },
+                },
+              }
+            }
+          }
+        }
+        if (product.kind === 'cable' && next.cable?.productId === id) {
+          const { productId: _drop, ...rest } = next.cable
+          next = { ...next, cable: rest }
+        }
+        return next
+      })
+    }
+
+    products = products.filter((p) => p.id !== id)
   },
-  updatePaletteEntry(id: string, updates: Partial<SpecPaletteEntry>) {
-    palette = palette.map((e) => (e.id === id ? { ...e, ...updates } : e))
-    // Propagate spec change to all bound nodes (Figma-style)
-    if (updates.spec) {
-      const entry = palette.find((e) => e.id === id)
-      if (entry) {
-        const boundNodeIds = bomItems
-          .filter((i) => i.paletteId === id && i.nodeId)
-          .map((i) => i.nodeId as string)
-        if (boundNodeIds.length > 0) setNodeSpecs(boundNodeIds, entry.spec)
+  updateProduct(id: string, updates: Partial<Product>) {
+    products = products.map((p) => (p.id === id ? ({ ...p, ...updates } as Product) : p))
+    // Propagate device-product changes to bound nodes
+    const product = products.find((p) => p.id === id)
+    const iconChanged = 'icon' in updates
+    const specChanged = !!updates.spec
+    const propsChanged = 'properties' in updates || !!updates.catalogId
+    if (product?.kind === 'device' && (specChanged || propsChanged || iconChanged)) {
+      const boundNodeIds: string[] = []
+      for (const [nodeId, node] of diagram.nodes) {
+        if (node.productId === id) boundNodeIds.push(nodeId)
+      }
+      if (boundNodeIds.length > 0) {
+        if (specChanged || iconChanged) {
+          const nextSpec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
+          setNodeSpecs(boundNodeIds, nextSpec)
+        }
+        if (specChanged || propsChanged) {
+          for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, product)
+        }
       }
     }
   },
 
-  // BOM items (device instances — master for qty management)
-  get bomItems() {
-    return bomItems
-  },
-  addBomItem(item: BomItem) {
-    bomItems = [...bomItems, item]
-  },
-  removeBomItem(id: string) {
-    const item = bomItems.find((i) => i.id === id)
-    if (item?.nodeId) {
-      // Removing a diagram node is structural — clear any cached
-      // sub-sheets before the rerouteEdges call runs.
-      invalidateSheetCache()
-      // Remove diagram node + its ports + connected links
-      const nodeId = item.nodeId
-      diagram.nodes.delete(nodeId)
-      for (const [portId, port] of diagram.ports) {
-        if (port.nodeId === nodeId) diagram.ports.delete(portId)
+  /** Count of placed units for a product (across the whole diagram). */
+  placedCount(productId: string): number {
+    let n = 0
+    for (const node of diagram.nodes.values()) {
+      if (node.productId === productId) n++
+    }
+    for (const link of diagram.links) {
+      for (const side of ['from', 'to'] as const) {
+        if (link[side].plug?.module?.productId === productId) n++
       }
-      diagram.links = diagram.links.filter((l) => {
-        const from = typeof l.from === 'string' ? l.from : l.from.node
-        const to = typeof l.to === 'string' ? l.to : l.to.node
-        return from !== nodeId && to !== nodeId
+      if (link.cable?.productId === productId) n++
+    }
+    return n
+  },
+  /**
+   * Effective required quantity for a product. Returns the explicit
+   * `requiredQty` when set; otherwise falls back to the placed count
+   * (so an unset target is "however many we've drawn").
+   */
+  requiredCount(productId: string): number {
+    const product = products.find((p) => p.id === productId)
+    if (product?.requiredQty !== undefined) return product.requiredQty
+    return diagramState.placedCount(productId)
+  },
+
+  // Assignments — node/module/cable ↔ product binding view
+  get assignmentRows(): AssignmentRow[] {
+    return buildAssignmentRows()
+  },
+  bindAssignment(target: AssignmentTarget, productId: string | undefined) {
+    if (target.kind === 'node') {
+      if (productId) diagramState.bindNodeToProduct(target.nodeId, productId)
+      else diagramState.unbindNodes([target.nodeId])
+      return
+    }
+
+    const link = diagram.links.find((l) => l.id === target.linkId)
+    if (!link?.id) return
+
+    if (target.kind === 'link-module') {
+      const endpoint = link[target.side]
+      const standard = endpoint.plug?.module?.standard
+      if (!standard) return
+      const product = productId ? products.find((p) => p.id === productId) : undefined
+      const nextModule = {
+        ...endpoint.plug?.module,
+        standard,
+        productId,
+        sku: product ? moduleProductSku(product) : endpoint.plug?.module?.sku,
+      }
+      if (!productId) {
+        delete nextModule.productId
+        delete nextModule.sku
+      }
+      diagramState.updateLink(link.id, {
+        [target.side]: {
+          ...endpoint,
+          plug: { ...(endpoint.plug ?? {}), module: nextModule },
+        },
       })
-      rerouteEdges()
+      return
     }
-    bomItems = bomItems.filter((i) => i.id !== id)
+
+    const nextCable = { ...(link.cable ?? {}), productId }
+    if (!productId) delete nextCable.productId
+    diagramState.updateLink(link.id, {
+      cable: Object.keys(nextCable).length > 0 ? nextCable : undefined,
+    })
   },
-  updateBomItem(id: string, updates: Partial<BomItem>) {
-    bomItems = bomItems.map((i) => (i.id === id ? { ...i, ...updates } : i))
-  },
-  /** Bind a diagram node to a BOM item */
-  bindNodeToBom(bomId: string, nodeId: string | undefined) {
-    // Unbind from any other BOM item first
-    if (nodeId) {
-      bomItems = bomItems.map((i) => (i.nodeId === nodeId ? { ...i, nodeId: undefined } : i))
-    }
-    bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId } : i))
-    // Propagate palette spec to node
-    if (nodeId) {
-      const bom = bomItems.find((i) => i.id === bomId)
-      const entry = bom ? palette.find((e) => e.id === bom.paletteId) : undefined
-      setNodeSpecs([nodeId], entry?.spec)
-    }
-  },
-  /** Get BOM items for a palette entry */
-  getBomItemsForPalette(paletteId: string): BomItem[] {
-    return bomItems.filter((i) => i.paletteId === paletteId)
-  },
-  /** Get palette ID for a node (via BOM) */
-  getPaletteIdForNode(nodeId: string): string | undefined {
-    return bomItems.find((i) => i.nodeId === nodeId)?.paletteId
-  },
-  /** Get all node IDs bound to a palette entry (via BOM) */
-  getNodesForPalette(paletteId: string): string[] {
-    return bomItems
-      .filter((i) => i.paletteId === paletteId && i.nodeId)
-      .map((i) => i.nodeId as string)
-  },
-  /** Unbind node(s) from BOM — sets nodeId to undefined, keeps the BomItem */
+
+  /** Unbind diagram nodes from their bound product. Strips spec/ports back to role. */
   unbindNodes(nodeIds: string[]) {
     const ids = new Set(nodeIds)
-    // Strip product details but keep role (kind/type)
     for (const nodeId of ids) {
       const rn = diagram.nodes.get(nodeId)
       if (rn) {
-        diagram.nodes.set(nodeId, { ...rn, spec: stripProductFromSpec(rn.spec) })
-      }
-    }
-    bomItems = bomItems.map((i) =>
-      i.nodeId && ids.has(i.nodeId) ? { ...i, nodeId: undefined } : i,
-    )
-  },
-  /** Remove BomItems for deleted diagram nodes */
-  removeNodeBomItems(nodeIds: string[]) {
-    const ids = new Set(nodeIds)
-    bomItems = bomItems.filter((i) => !i.nodeId || !ids.has(i.nodeId))
-  },
-  /** High-level: bind a diagram node to a palette entry (finds/creates BomItem + propagates spec) */
-  bindNodeToPalette(nodeId: string, paletteId: string) {
-    const existing = bomItems.find((i) => i.nodeId === nodeId)
-    if (existing) {
-      // Already bound — re-bind to different palette
-      diagramState.updateBomItem(existing.id, { paletteId })
-      const entry = palette.find((e) => e.id === paletteId)
-      if (entry) setNodeSpecs([nodeId], entry.spec)
-    } else {
-      // Find unplaced BOM item for this palette entry, or create new
-      const unplaced = bomItems.find((i) => i.paletteId === paletteId && !i.nodeId)
-      if (unplaced) {
-        diagramState.bindNodeToBom(unplaced.id, nodeId)
-      } else {
-        const id = newId('bom')
-        diagramState.addBomItem({ id, paletteId, nodeId })
-        const entry = palette.find((e) => e.id === paletteId)
-        if (entry) setNodeSpecs([nodeId], entry.spec)
+        diagram.nodes.set(nodeId, {
+          ...rn,
+          productId: undefined,
+          spec: stripProductFromSpec(rn.spec),
+          ports: undefined,
+        })
       }
     }
   },
-  /** Create a diagram node for an unplaced BomItem and bind it */
-  placeNodeForBom(bomId: string): string | undefined {
-    const bom = bomItems.find((i) => i.id === bomId)
-    if (!bom || bom.nodeId) return undefined
-    const entry = palette.find((e) => e.id === bom.paletteId)
-    if (!entry) return undefined
+
+  /**
+   * Bind a diagram node to a (device) Product. The product's spec is
+   * snapshotted onto the node, and ports are derived from the product
+   * spec when available.
+   */
+  bindNodeToProduct(nodeId: string, productId: string) {
+    const product = deviceProduct(productId)
+    if (!product) return
+    const node = diagram.nodes.get(nodeId)
+    if (!node) return
+    const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
+    diagram.nodes.set(nodeId, { ...node, productId, spec })
+    setNodePortsFromProduct(nodeId, product)
+  },
+
+  /**
+   * Materialize a fresh diagram node bound to the given product. Returns
+   * the new node id. Increments `placedCount` on its own; if the user
+   * had a `requiredQty` set, the gap closes by one.
+   */
+  placeProductAsNode(productId: string): string | undefined {
+    const product = deviceProduct(productId)
+    if (!product) return undefined
 
     const id = newId('node')
-    const label = paletteEntryLabel(entry)
-    const spec = entry.spec
+    const label = productLabel(product)
+    const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
     const { width: w, height: h } = computeNodeSize({ label, spec })
     const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
     const pos = resolvePosition(
@@ -817,9 +1147,39 @@ export const diagramState = {
       obstacles,
     )
 
-    diagram.nodes.set(id, { id, label, spec, shape: 'rounded', position: pos })
-    // Bind BomItem to the new node
-    bomItems = bomItems.map((i) => (i.id === bomId ? { ...i, nodeId: id } : i))
+    diagram.nodes.set(id, {
+      id,
+      label,
+      spec,
+      productId: product.id,
+      ports: nodePortsFromProduct(product),
+      shape: 'rounded',
+      position: pos,
+    })
+    return id
+  },
+
+  /**
+   * Materialize an empty diagram node with no spec or product binding.
+   * Used when a user wants to start from a node placeholder and bind a
+   * product later. Returns the new node id.
+   */
+  addEmptyNode(label = 'Node'): string {
+    const id = newId('node')
+    const { width: w, height: h } = computeNodeSize({ label })
+    const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
+    const pos = resolvePosition(
+      {
+        x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
+        y: diagram.bounds.y + diagram.bounds.height / 2,
+        w,
+        h,
+      },
+      obstacles,
+    )
+    diagram.nodes.set(id, { id, label, shape: 'rounded', position: pos })
+    invalidateSheetCache()
+    rebuildPortsAndEdges()
     return id
   },
 
@@ -857,10 +1217,9 @@ export const diagramState = {
   /** Export project as NetedProject JSON string */
   exportProject(name = 'Untitled'): string {
     const project: NetedProject = {
-      version: 1,
+      version: 2,
       name,
-      palette: [...palette],
-      bom: [...bomItems],
+      products: [...products],
       diagram: diagramState.exportGraph(),
     }
     return JSON.stringify(project, null, 2)
@@ -874,7 +1233,7 @@ export const diagramState = {
   // status. Everything above is a thin adapter.
   // =====================================================================
 
-  /** YAML text → NetedProject (current palette/bom preserved) → importProject. */
+  /** YAML text → NetedProject (current products/inventory preserved) → importProject. */
   async applyYaml(yamlStr: string) {
     try {
       status = 'Parsing YAML...'
@@ -886,10 +1245,9 @@ export const diagramState = {
       const hp = new HierarchicalParser(resolver)
       const diagram = (await hp.parse(yamlStr, '/main.yaml')).graph
       await diagramState.importProject({
-        version: 1,
+        version: 2,
         name: 'YAML Import',
-        palette: [...palette],
-        bom: [...bomItems],
+        products: [...products],
         diagram,
       })
       yamlSource = yamlStr
@@ -907,21 +1265,16 @@ export const diagramState = {
   /**
    * Diagram-only import: accepts a NetworkGraph (parsed or JSON
    * string) and replaces just the diagram while preserving the
-   * current palette and BOM. Wraps the input in a synthetic
+   * current products and inventory. Wraps the input in a synthetic
    * NetedProject and forwards to `importProject`, so the linear
    * pipeline stays uniform regardless of what format came in.
-   *
-   * Use this when the user drops a standalone diagram JSON
-   * (`NetworkGraph`) — the `.neted.json` project container is for
-   * full project import which overwrites palette/BOM.
    */
   async importDiagram(input: string | NetworkGraph) {
     const diagram: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
     await diagramState.importProject({
-      version: 1,
+      version: 2,
       name: 'Diagram Import',
-      palette: [...palette],
-      bom: [...bomItems],
+      products: [...products],
       diagram,
     })
   },
@@ -941,8 +1294,7 @@ export const diagramState = {
 
     // Reset all state unconditionally — every path through the terminal
     // gets a clean slate before apply.
-    palette = []
-    bomItems = []
+    products = []
     diagram.nodes.clear()
     diagram.ports.clear()
     diagram.edges.clear()
@@ -981,13 +1333,39 @@ export const diagramState = {
  */
 async function applyProject(data: Partial<NetedProject>) {
   await applyGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
-  const { palette: cleanPalette, bom: cleanBom } = sanitizePaletteAndBom(
-    data.palette ?? [],
-    data.bom ?? [],
+  const { products: cleanProducts, links: cleanLinks } = sanitizeProducts(
+    data.products ?? [],
     diagram.nodes,
+    diagram.links,
   )
-  palette = cleanPalette
-  bomItems = cleanBom
+  // Backfill icons from catalog when a Product is catalog-linked but
+  // doesn't carry an icon yet — ensures bundled catalog artwork shows
+  // up on legacy projects without re-importing.
+  products = cleanProducts.map((p) => {
+    if (p.icon || !p.catalogId) return p
+    const entry = catalog.lookup(p.catalogId)
+    return entry?.icon ? ({ ...p, icon: entry.icon } as Product) : p
+  })
+  diagram.links = cleanLinks
+
+  // Re-derive ports for nodes bound to a device product, and snapshot the
+  // Product.icon onto Node.spec.icon so loaded diagrams pick up icon
+  // updates that happened on the Product side. preserveExisting keeps
+  // any port shape persisted in the saved diagram.
+  for (const [nodeId, node] of diagram.nodes) {
+    if (!node.productId) continue
+    const product = products.find((p) => p.id === node.productId)
+    if (product?.kind !== 'device') continue
+    if (product.icon && node.spec && node.spec.icon !== product.icon) {
+      diagram.nodes.set(nodeId, { ...node, spec: { ...node.spec, icon: product.icon } })
+    }
+    setNodePortsFromProduct(nodeId, product, { preserveExisting: true, reroute: false })
+  }
+  replaceMap(
+    diagram.ports,
+    placePorts(diagram.nodes, diagram.links, data.diagram?.settings?.direction ?? 'TB'),
+  )
+  await rerouteEdges()
 }
 
 /**

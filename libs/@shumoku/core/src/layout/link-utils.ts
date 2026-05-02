@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { getStandardSpec } from '../models/standards.js'
 import type { Link, LinkBandwidth } from '../models/types.js'
 
 /**
- * Canonical bps values for the preset labels in `LinkBandwidthLabel`.
- * Any string not in this table is parsed by the regex below, so adding
- * a new preset here is purely for readability — unlisted values like
- * "2.5G" or "500M" still resolve correctly.
+ * Canonical bps for the preset bandwidth labels.
  */
 const PRESET_BPS: Record<string, number> = {
   '10M': 10_000_000,
@@ -28,29 +26,22 @@ const PRESET_BPS: Record<string, number> = {
 const BANDWIDTH_RE = /^(\d+(?:\.\d+)?)\s*(K|M|G|T)?(?:BIT|B|BPS|BE)?$/
 
 /**
- * Resolve a `LinkBandwidth` (number or string label) to bits per
- * second. The single source of truth used by both stroke-width
- * calculation and metrics-utilization computation — if this agrees,
- * the two axes stay in sync.
- *
- * Returns `undefined` for unrecognized or non-positive input so
- * callers can fall back cleanly instead of inheriting NaN.
+ * Parse a bandwidth string ("10G", "2.5Gbps", "500M") or raw bps number
+ * into bits/sec. Pure utility — used by plugin configs that accept
+ * user-typed bandwidth values; not tied to Link semantics.
  */
 export function resolveBandwidthBps(bw: LinkBandwidth | null | undefined): number | undefined {
   if (bw === undefined || bw === null || bw === '') return undefined
   if (typeof bw === 'number') return bw > 0 && Number.isFinite(bw) ? bw : undefined
-
   const normalized = bw.toUpperCase().replace(/\s/g, '')
   const preset = PRESET_BPS[normalized]
   if (preset !== undefined) return preset
-
   const match = BANDWIDTH_RE.exec(normalized)
   if (!match) return undefined
   const valueStr = match[1]
   if (valueStr === undefined) return undefined
   const value = Number.parseFloat(valueStr)
   if (!Number.isFinite(value) || value <= 0) return undefined
-
   const unit = match[2]
   const multiplier =
     unit === 'T' ? 1e12 : unit === 'G' ? 1e9 : unit === 'M' ? 1e6 : unit === 'K' ? 1e3 : 1
@@ -61,8 +52,7 @@ export function resolveBandwidthBps(bw: LinkBandwidth | null | undefined): numbe
  * Width anchors in (log10(bps), pixel-width) form. Calibration bumped
  * from the original 1G→6…100G→24 curve by ~40% so diagrams read as
  * "pipes" rather than hairlines, and so the weathermap flow (which
- * now lives inside the stroke) has enough room for its two lanes.
- * In-between values (2.5G, 50G, 500M, …) are smoothly interpolated.
+ * lives inside the stroke) has enough room for its two lanes.
  */
 const WIDTH_ANCHORS: readonly (readonly [number, number])[] = [
   [Math.log10(100_000_000), 5], // 100M
@@ -74,18 +64,23 @@ const WIDTH_ANCHORS: readonly (readonly [number, number])[] = [
 ]
 
 /**
- * Map a `LinkBandwidth` value (number or label) to pixel width,
- * using the same piecewise-log interpolation as `getLinkWidth` but
- * without the Link-style overrides. Returns 0 when the value can't
- * be resolved, letting callers pick their own fallback.
- *
- * Exported so the SVG renderer (and anything that only has a
- * bandwidth scalar, not a full Link) can share one calibration
- * curve with the rest of the codebase.
+ * Resolve a link's nominal speed (bits/sec). Reads per-endpoint module
+ * standards (the canonical source) and falls back to runtime `rateBps`
+ * when neither end has a module set. For symmetric links both endpoints
+ * return the same speed; for asymmetric links (BiDi etc.) we pick the
+ * lower of the two (conservative for utilization math).
  */
-export function getBandwidthWidth(bw: LinkBandwidth | null | undefined): number {
-  const bps = resolveBandwidthBps(bw)
-  return bps === undefined ? 0 : bpsToWidth(bps)
+export function linkSpeedBps(link: Link | null | undefined): number | undefined {
+  if (!link) return undefined
+  const fromBps = getStandardSpec(link.from?.plug?.module?.standard)?.speedBps
+  const toBps = getStandardSpec(link.to?.plug?.module?.standard)?.speedBps
+  if (fromBps !== undefined && toBps !== undefined) return Math.min(fromBps, toBps)
+  if (fromBps !== undefined) return fromBps
+  if (toBps !== undefined) return toBps
+  if (typeof link.rateBps === 'number' && link.rateBps > 0 && Number.isFinite(link.rateBps)) {
+    return link.rateBps
+  }
+  return undefined
 }
 
 function bpsToWidth(bps: number): number {
@@ -111,6 +106,16 @@ function bpsToWidth(bps: number): number {
   return last[1] + slope * (x - last[0])
 }
 
+/** Map a raw bits/sec value to the calibrated stroke width. */
+export function bpsToLinkWidth(bps: number | undefined): number {
+  return bps === undefined ? 0 : bpsToWidth(bps)
+}
+
+/** Map a bandwidth label/number to the calibrated stroke width. */
+export function getBandwidthWidth(bw: LinkBandwidth | null | undefined): number {
+  return bpsToLinkWidth(resolveBandwidthBps(bw))
+}
+
 /**
  * Compute the visual line width for a link.
  * Single source of truth — used by layout, routing, and rendering.
@@ -119,7 +124,7 @@ export function getLinkWidth(link: Link): number {
   // Explicit style overrides everything
   if (link.style?.strokeWidth) return link.style.strokeWidth
 
-  const bps = resolveBandwidthBps(link.bandwidth)
+  const bps = linkSpeedBps(link)
   if (bps !== undefined) return bpsToWidth(bps)
 
   // Link type

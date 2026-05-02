@@ -103,12 +103,11 @@ function getPower(node: Node, catalog: Catalog): PowerProperties | undefined {
   return (entry.properties as HardwareProperties).power
 }
 
-function linkEndpointNode(ep: string | { node: string }): string {
-  return typeof ep === 'string' ? ep : ep.node
-}
-
-function linkEndpointPort(ep: string | { node: string; port?: string }): string {
-  return typeof ep === 'object' ? (ep.port ?? '') : ''
+function displayPort(nodeMap: Map<string, Node>, nodeId: string, portId: string): string {
+  if (!portId) return ''
+  const port = nodeMap.get(nodeId)?.ports?.find((p) => p.id === portId)
+  if (!port) return portId
+  return port.label || port.cage || 'unnamed port'
 }
 
 /**
@@ -176,11 +175,11 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
   }
   const adj = new Map<string, AdjEntry[]>()
   for (const link of links) {
-    const from = linkEndpointNode(link.from)
-    const to = linkEndpointNode(link.to)
+    const from = link.from.node
+    const to = link.to.node
     const id = link.id ?? `${from}-${to}`
-    const fromPort = linkEndpointPort(link.from)
-    const toPort = linkEndpointPort(link.to)
+    const fromPort = link.from.port
+    const toPort = link.to.port
 
     const fl = adj.get(from) ?? []
     fl.push({ peerId: to, linkId: id, localPort: fromPort, peerPort: toPort })
@@ -238,10 +237,10 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
 
       poeLinks.push({
         linkId,
-        fromPort: localPort,
+        fromPort: displayPort(nodeMap, node.id, localPort),
         toNodeId: peerId,
         toNodeLabel: nodeLabelOf(peer, peerId),
-        toPort: peerPort,
+        toPort: displayPort(nodeMap, peerId, peerPort),
         reserved_w: round1(port.reserved_w),
         draw_w: round1(port.draw_w),
         effective_class: port.effective_class,

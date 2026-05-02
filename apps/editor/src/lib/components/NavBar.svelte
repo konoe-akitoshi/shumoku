@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Cube, GearSix, ListBullets, PlugsConnected, Table } from 'phosphor-svelte'
+  import { Cube, GearSix, PlugsConnected, Table, Toolbox } from 'phosphor-svelte'
   import { page } from '$app/stores'
 
   // Extract project ID from URL
@@ -7,9 +7,9 @@
 
   const navItems = $derived([
     { href: `/project/${projectId}/diagram`, label: 'Diagram', icon: Cube },
-    { href: `/project/${projectId}/specs`, label: 'Specs', icon: ListBullets },
-    { href: `/project/${projectId}/bom`, label: 'BOM', icon: Table },
     { href: `/project/${projectId}/connections`, label: 'Connections', icon: PlugsConnected },
+    { href: `/project/${projectId}/materials`, label: 'Materials', icon: Toolbox },
+    { href: `/project/${projectId}/bom`, label: 'BOM', icon: Table },
     { href: `/project/${projectId}/settings`, label: 'Settings', icon: GearSix },
   ])
 </script>

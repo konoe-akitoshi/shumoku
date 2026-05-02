@@ -34,7 +34,6 @@ import type {
 
 import {
   CABLE_STYLES,
-  convertSpeedToBandwidth,
   DEFAULT_TAG_MAPPING,
   DEVICE_STATUS_STYLES,
   ROLE_TO_TYPE,
@@ -666,12 +665,13 @@ function buildLinks(
   colorByCableType: boolean,
 ): Link[] {
   return connections.map((conn, index) => {
-    const from: LinkEndpoint = { node: conn.srcDev }
-    const to: LinkEndpoint = { node: conn.dstDev }
-
-    if (showPorts) {
-      from.port = conn.srcPort
-      to.port = conn.dstPort
+    const from: LinkEndpoint = {
+      node: conn.srcDev,
+      port: showPorts ? conn.srcPort : '',
+    }
+    const to: LinkEndpoint = {
+      node: conn.dstDev,
+      port: showPorts ? conn.dstPort : '',
     }
 
     const link: Link = {
@@ -681,8 +681,7 @@ function buildLinks(
       arrow: 'none',
     }
 
-    const bandwidth = convertSpeedToBandwidth(conn.speed)
-    if (bandwidth) link.bandwidth = bandwidth
+    if (conn.speed && conn.speed > 0) link.rateBps = conn.speed * 1000
 
     if (conn.vlans.length > 0) link.vlan = conn.vlans
 
@@ -930,7 +929,15 @@ function serializeLink(lines: string[], link: Link): void {
     lines.push(`    to: ${to}`)
   }
 
-  if (link.bandwidth) lines.push(`    bandwidth: ${link.bandwidth}`)
+  // Emit the link-level standard shorthand when both endpoints agree
+  // (the symmetric case). Asymmetric per-endpoint module standards
+  // would need a richer YAML output; netbox import only produces
+  // symmetric links so we don't need to handle that here.
+  const fromStd = link.from.plug?.module?.standard
+  const toStd = link.to.plug?.module?.standard
+  if (fromStd && fromStd === toStd) {
+    lines.push(`    standard: ${fromStd}`)
+  }
   if (link.type) lines.push(`    type: ${link.type}`)
   if (link.vlan?.length) lines.push(`    vlan: [${link.vlan.join(', ')}]`)
   if (link.style?.stroke) {
@@ -1222,8 +1229,6 @@ function generateMainYaml(
       lines.push(`      node: ${crossLink.toDevice}`)
       lines.push(`      port: ${crossLink.toPort}`)
 
-      const bandwidth = convertSpeedToBandwidth(crossLink.cable.speed)
-      if (bandwidth) lines.push(`    bandwidth: ${bandwidth}`)
       if (crossLink.cable.cableLabel) lines.push(`    label: "${crossLink.cable.cableLabel}"`)
     }
   }

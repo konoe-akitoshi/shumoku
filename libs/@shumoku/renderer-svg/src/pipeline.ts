@@ -18,7 +18,7 @@ import {
   type ResolvedLayout,
   type SurfaceToken,
 } from '@shumoku/core'
-import { type ResolvedIconDimensions, resolveIconDimensionsForGraph } from './cdn-icons.js'
+import { type IconDimensions, resolveAllIconDimensions } from './icon-dims.js'
 import { collectIconUrls, SVGRenderer } from './svg.js'
 
 /**
@@ -31,8 +31,8 @@ export interface PreparedRender {
   layout: LayoutResult
   /** Resolved layout (new format, used by network pipeline) */
   resolved?: ResolvedLayout
-  /** Resolved icon dimensions (null if no CDN icons used) */
-  iconDimensions: ResolvedIconDimensions | null
+  /** Resolved icon dimensions keyed by URL (null if no URL icons used) */
+  iconDimensions: Map<string, IconDimensions> | null
 }
 
 /**
@@ -42,7 +42,7 @@ export interface PrepareOptions {
   /** Pre-computed layout result. If provided, layout computation is skipped. */
   layout?: LayoutResult
   /** Pre-resolved icon dimensions. If provided, icon resolution is skipped. */
-  iconDimensions?: ResolvedIconDimensions
+  iconDimensions?: Map<string, IconDimensions>
 }
 
 /**
@@ -98,7 +98,7 @@ export async function prepareRender(
   if (!iconDimensions) {
     const iconUrls = collectIconUrls(graph)
     if (iconUrls.length > 0) {
-      iconDimensions = await resolveIconDimensionsForGraph(iconUrls)
+      iconDimensions = await resolveAllIconDimensions(iconUrls)
     }
   }
 
@@ -123,7 +123,7 @@ export async function renderSvg(
 ): Promise<string> {
   const renderer = new SVGRenderer({
     renderMode: options?.renderMode ?? 'static',
-    iconDimensions: prepared.iconDimensions?.byUrl,
+    iconDimensions: prepared.iconDimensions ?? undefined,
   })
   // Use resolved layout directly (no conversion) when available
   if (prepared.resolved) {
@@ -161,7 +161,7 @@ export function renderEmbeddable(
   // Render SVG with interactive mode (includes data attributes)
   const renderer = new SVGRenderer({
     renderMode: 'interactive',
-    iconDimensions: prepared.iconDimensions?.byUrl,
+    iconDimensions: prepared.iconDimensions ?? undefined,
   })
   const svg = prepared.resolved
     ? renderer.renderResolved(prepared.graph, prepared.resolved)

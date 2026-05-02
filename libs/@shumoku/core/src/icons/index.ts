@@ -3,3 +3,4 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 export * from './generated-icons.js'
+export * from './resolve.js'

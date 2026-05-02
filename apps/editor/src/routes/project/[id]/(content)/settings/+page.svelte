@@ -31,7 +31,7 @@
       <div>
         <div class="text-sm font-medium">Project file</div>
         <div class="text-xs text-muted-foreground">
-          Download as .neted.json (includes palette, BOM, and diagram)
+          Download as .neted.json (includes products and diagram)
         </div>
       </div>
       <Button variant="outline" size="sm" onclick={handleExportProject}>

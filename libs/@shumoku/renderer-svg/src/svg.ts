@@ -9,12 +9,13 @@
 
 import type {
   EdgeStyle,
+  EthernetStandard,
   LayoutLink,
   LayoutNode,
   LayoutResult,
   LayoutSubgraph,
   LegendSettings,
-  LinkBandwidth,
+  Link,
   LinkType,
   NetworkGraph,
   Node,
@@ -24,27 +25,22 @@ import type {
   ThemeType,
 } from '@shumoku/core'
 import {
+  bpsToLinkWidth,
   computeNodeSize,
   DEFAULT_ICON_SIZE,
   darkTheme,
-  getBandwidthWidth,
-  getDeviceIcon,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
+  linkSpeedBps,
+  resolveIcon,
   SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   specDeviceType,
-  specIconKey,
   type Theme,
 } from '@shumoku/core'
 
-import {
-  getCDNIconUrl,
-  hasCDNIcons,
-  type IconDimensions,
-  resolveAllIconDimensions,
-} from './cdn-icons.js'
+import { type IconDimensions, resolveAllIconDimensions } from './icon-dims.js'
 import type { DataAttributeOptions, RenderMode } from './types.js'
 
 // ============================================
@@ -447,11 +443,12 @@ export class SVGRenderer {
     let itemCount = 0
 
     if (settings.showBandwidth) {
-      const usedBandwidths = new Set<LinkBandwidth>()
+      const usedStandards = new Set<string>()
       for (const link of graph.links) {
-        if (link.bandwidth) usedBandwidths.add(link.bandwidth)
+        if (link.from.plug?.module?.standard) usedStandards.add(link.from.plug?.module?.standard)
+        if (link.to.plug?.module?.standard) usedStandards.add(link.to.plug?.module?.standard)
       }
-      itemCount += usedBandwidths.size
+      itemCount += usedStandards.size
     }
 
     if (itemCount === 0) {
@@ -509,10 +506,12 @@ export class SVGRenderer {
     const iconWidth = 30
     const maxLabelWidth = 100
 
-    // Collect used bandwidths
-    const usedBandwidths = new Set<LinkBandwidth>()
+    // Collect used standards across both endpoints (asymmetric links may
+    // have a different standard at each end — both should appear).
+    const usedStandards = new Set<string>()
     for (const link of graph.links) {
-      if (link.bandwidth) usedBandwidths.add(link.bandwidth)
+      if (link.from.plug?.module?.standard) usedStandards.add(link.from.plug?.module?.standard)
+      if (link.to.plug?.module?.standard) usedStandards.add(link.to.plug?.module?.standard)
     }
 
     // Collect used device types
@@ -523,20 +522,17 @@ export class SVGRenderer {
     }
 
     // Build legend items
-    if (settings.showBandwidth && usedBandwidths.size > 0) {
-      // The legend only surfaces the known preset labels. Arbitrary
-      // numeric bandwidths (e.g. mapping overrides from monitoring)
-      // still render correctly but are omitted from the legend to
-      // keep it tidy.
-      const sortedBandwidths = ['1G', '10G', '25G', '40G', '100G'].filter((b) =>
-        usedBandwidths.has(b as LinkBandwidth),
-      )
-
-      for (const bw of sortedBandwidths) {
-        const sw = this.getBandwidthStrokeWidth(bw)
+    if (settings.showBandwidth && usedStandards.size > 0) {
+      const sortedStandards = [...usedStandards].sort()
+      for (const std of sortedStandards) {
+        const speed = linkSpeedBps({
+          from: { node: '', port: '', module: { standard: std as EthernetStandard } },
+          to: { node: '', port: '', module: { standard: std as EthernetStandard } },
+        } as Link)
+        const sw = bpsToLinkWidth(speed)
         items.push({
           icon: this.renderBandwidthLegendIcon(sw),
-          label: bw,
+          label: std,
         })
       }
     }
@@ -666,49 +662,26 @@ export class SVGRenderer {
 
     const rx = 12 // Border radius (larger for container/card feel)
 
-    // Check if subgraph has icon (user-specified or CDN-supported vendor)
-    // AWS uses service/resource format (e.g., ec2/instance)
+    // Subgraphs only render URL icons here (inline SVG drawing inside a
+    // container is uncommon enough to keep this path simple).
     const sgSpec = subgraph.spec
-    const iconKey = specIconKey(sgSpec)
     let hasIcon = false
     const defaultIconSize = 24
     const iconPadding = 8
 
-    // Get icon URL and dimensions for sizing calculations
     let iconUrl: string | undefined
     let iconWidth = defaultIconSize
     let iconHeight = defaultIconSize
 
-    if (sgSpec?.icon) {
+    if (sgSpec?.icon && !sgSpec.icon.trim().startsWith('<')) {
       hasIcon = true
       iconUrl = sgSpec.icon
       const dims = this.options.iconDimensions.get(sgSpec.icon)
       if (dims) {
         const aspectRatio = dims.width / dims.height
-        if (aspectRatio >= 1) {
-          iconHeight = defaultIconSize
-          iconWidth = Math.round(defaultIconSize * aspectRatio)
-        } else {
-          iconHeight = defaultIconSize
-          iconWidth = Math.round(defaultIconSize * aspectRatio)
-        }
+        iconHeight = defaultIconSize
+        iconWidth = Math.round(defaultIconSize * aspectRatio)
       }
-    } else if (sgSpec?.vendor && iconKey && hasCDNIcons(sgSpec.vendor)) {
-      const cdnUrl = getCDNIconUrl(sgSpec.vendor, iconKey)
-      const dims = this.options.iconDimensions.get(cdnUrl)
-      if (dims) {
-        hasIcon = true
-        iconUrl = cdnUrl
-        const aspectRatio = dims.width / dims.height
-        if (aspectRatio >= 1) {
-          iconHeight = defaultIconSize
-          iconWidth = Math.round(defaultIconSize * aspectRatio)
-        } else {
-          iconHeight = defaultIconSize
-          iconWidth = Math.round(defaultIconSize * aspectRatio)
-        }
-      }
-      // dims not found = icon doesn't exist on CDN, skip icon
     }
 
     // Calculate icon position (top-left corner)
@@ -1082,45 +1055,23 @@ ${fg}
     // Use full node width as max; layout engine already calculated appropriate size
     const maxIconWidth = w
 
-    const spec = node.spec
+    const icon = resolveIcon(node.spec)
+    if (!icon) return null
 
-    // User-specified icon URL takes highest priority
-    if (spec?.icon) {
-      const dims = this.options.iconDimensions.get(spec.icon)
-      const { width, height } = this.calculateIconSize(dims, maxIconWidth)
+    if (icon.kind === 'inline') {
       return {
-        width,
-        height,
-        svg: `<image href="${spec.icon}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
+        width: DEFAULT_ICON_SIZE,
+        height: DEFAULT_ICON_SIZE,
+        svg: `<svg width="${DEFAULT_ICON_SIZE}" height="${DEFAULT_ICON_SIZE}" viewBox="0 0 24 24" fill="currentColor">${icon.svg}</svg>`,
       }
     }
 
-    // Try vendor-specific icon first (service for cloud, model for hardware)
-    // AWS uses service/resource format (e.g., ec2/instance)
-    const iconKey = specIconKey(spec)
-    // Use CDN icons for supported vendors (only if dimensions were resolved, i.e. icon exists)
-    if (spec?.vendor && iconKey && hasCDNIcons(spec.vendor)) {
-      const cdnUrl = getCDNIconUrl(spec.vendor, iconKey)
-      const dims = this.options.iconDimensions.get(cdnUrl)
-      if (dims) {
-        const { width, height } = this.calculateIconSize(dims, maxIconWidth)
-        return {
-          width,
-          height,
-          svg: `<image href="${cdnUrl}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
-        }
-      }
-      // dims not found = icon doesn't exist on CDN, fall through to device type icon
-    }
-
-    // Fall back to device type icon
-    const iconPath = getDeviceIcon(specDeviceType(spec))
-    if (!iconPath) return null
-
+    const dims = this.options.iconDimensions.get(icon.url)
+    const { width, height } = this.calculateIconSize(dims, maxIconWidth)
     return {
-      width: DEFAULT_ICON_SIZE,
-      height: DEFAULT_ICON_SIZE,
-      svg: `<svg width="${DEFAULT_ICON_SIZE}" height="${DEFAULT_ICON_SIZE}" viewBox="0 0 24 24" fill="currentColor">${iconPath}</svg>`,
+      width,
+      height,
+      svg: `<image href="${icon.url}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
     }
   }
 
@@ -1201,10 +1152,10 @@ ${fg}
     const dasharray = link.style?.strokeDasharray || this.getLinkDasharray(type)
     const markerEnd = arrow !== 'none' ? `url(#${this.arrowId})` : ''
 
-    // Bandwidth determines stroke width
-    const bandwidthStrokeWidth = this.getBandwidthStrokeWidth(link.bandwidth)
+    // Standard determines stroke width via the registry's speed mapping.
+    const standardStrokeWidth = bpsToLinkWidth(linkSpeedBps(link))
     const strokeWidth =
-      link.style?.strokeWidth || bandwidthStrokeWidth || this.getLinkStrokeWidth(type)
+      link.style?.strokeWidth || standardStrokeWidth || this.getLinkStrokeWidth(type)
 
     // Render link line
     let result = this.renderLinkLine(id, points, stroke, strokeWidth, dasharray, markerEnd, type)
@@ -1275,9 +1226,13 @@ ${fg}
     const { link, fromEndpoint, toEndpoint } = layoutLink
     const attrs: string[] = []
 
-    // Basic link attributes
-    if (link.bandwidth)
-      attrs.push(`data-link-bandwidth="${this.escapeXml(String(link.bandwidth))}"`)
+    // Basic link attributes — surface both endpoint standards so consumers
+    // can see asymmetric configs (BiDi etc.). For symmetric the value is
+    // the same on both data attributes.
+    const fromStd = link.from.plug?.module?.standard
+    const toStd = link.to.plug?.module?.standard
+    if (fromStd) attrs.push(`data-link-from-standard="${this.escapeXml(fromStd)}"`)
+    if (toStd) attrs.push(`data-link-to-standard="${this.escapeXml(toStd)}"`)
     if (link.vlan && link.vlan.length > 0) {
       attrs.push(`data-link-vlan="${link.vlan.join(',')}"`)
     }
@@ -1441,16 +1396,6 @@ ${fg}
       default:
         return 3
     }
-  }
-
-  /**
-   * Delegates to core's shared bandwidth→width curve. See
-   * `getBandwidthWidth` / `WIDTH_ANCHORS` in @shumoku/core for the
-   * calibration; tune there so every surface (renderer-svg, the
-   * reactive Svelte renderer, weathermap) stays in lockstep.
-   */
-  private getBandwidthStrokeWidth(bandwidth?: LinkBandwidth): number {
-    return getBandwidthWidth(bandwidth)
   }
 
   /**
@@ -1845,28 +1790,21 @@ export function render(graph: NetworkGraph, layout: LayoutResult, options?: Rend
 }
 
 /**
- * Collect all icon URLs from a NetworkGraph
+ * Collect every URL-form icon referenced by the graph, so a caller can
+ * pre-resolve their dimensions (or fetch their bytes) before rendering.
+ * Inline SVG icons (`<...>`) are skipped — they don't need fetching.
  */
 export function collectIconUrls(graph: NetworkGraph): string[] {
   const urls = new Set<string>()
+  const isUrl = (icon: string | undefined): icon is string => !!icon && !icon.trim().startsWith('<')
 
   for (const node of graph.nodes) {
-    const spec = node.spec
-    if (spec?.icon) {
-      urls.add(spec.icon)
-    } else if (spec?.vendor && hasCDNIcons(spec.vendor)) {
-      const iconKey = specIconKey(spec)
-      if (iconKey) {
-        urls.add(getCDNIconUrl(spec.vendor, iconKey))
-      }
-    }
+    if (isUrl(node.spec?.icon)) urls.add(node.spec.icon as string)
   }
 
   if (graph.subgraphs) {
     for (const sg of graph.subgraphs) {
-      if (sg.spec?.icon) {
-        urls.add(sg.spec.icon)
-      }
+      if (isUrl(sg.spec?.icon)) urls.add(sg.spec.icon as string)
     }
   }
 

@@ -34,7 +34,7 @@
     label: string
     shape?: NodeShape
     spec?: NodeSpec
-    paletteId?: string
+    productId?: string
     elementKind: 'node' | 'subgraph'
   } | null>(null)
   let detailTarget = $state<{ id: string; type: 'node' | 'link' | 'subgraph' } | null>(null)
@@ -114,8 +114,7 @@
         onchange={() => {}}
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
         oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => { contextMenu = { id, type, x: screenX, y: screenY } }}
-        onnodeadd={(id: string) => {
-          diagramState.addBomItem({ id: newId('bom'), nodeId: id })
+        onnodeadd={(_id: string) => {
           // The renderer mutated diagram.nodes directly (via $bindable)
           // before emitting this event — invalidate cached sheets now.
           diagramState.invalidateSheetCache()
@@ -174,7 +173,10 @@
       label={labelEdit.label}
       x={labelEdit.x}
       y={labelEdit.y}
-      oncommit={(portId, value) => renderer?.commitLabel(portId, value)}
+      oncommit={(portId, value) => {
+        diagramState.updatePortLabel(portId, value)
+        renderer?.commitLabel(portId, value)
+      }}
       onclose={() => { labelEdit = null }}
     />
   {/if}
@@ -192,14 +194,12 @@
       oncopy={(id) => {
         const info = renderer?.getElementInfo(id)
         if (!info) { clipboard = null; return }
-        const paletteId = info.kind === 'node'
-          ? diagramState.bomItems.find((b) => b.nodeId === id)?.paletteId
-          : undefined
+        const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
         clipboard = {
           label: Array.isArray(info.label) ? info.label.join(', ') : info.label,
           shape: info.kind === 'node' ? info.shape : undefined,
           spec: info.kind === 'node' ? info.spec : undefined,
-          paletteId,
+          productId,
           elementKind: info.kind,
         }
       }}
@@ -217,8 +217,8 @@
             shape: clipboard.shape,
             position: svgPos,
           })
-          if (clipboard.paletteId) {
-            diagramState.bindNodeToPalette(pastedId, clipboard.paletteId)
+          if (clipboard.productId) {
+            diagramState.bindNodeToProduct(pastedId, clipboard.productId)
           }
         }
       }}

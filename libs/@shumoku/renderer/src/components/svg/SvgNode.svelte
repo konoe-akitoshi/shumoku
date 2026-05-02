@@ -3,9 +3,9 @@
   import {
     computeNodeSize,
     DEFAULT_ICON_SIZE,
-    getDeviceIcon,
     ICON_LABEL_GAP,
     LABEL_LINE_HEIGHT,
+    resolveIcon,
     specDeviceType,
   } from '@shumoku/core'
   import type { NodeOverlaySnippet } from '../../lib/overlays'
@@ -62,8 +62,9 @@
     height: size.height,
   })
 
-  // Icon
-  const iconPath = $derived(getDeviceIcon(specDeviceType(node.spec)))
+  // Icon: spec.icon is the producer-supplied final value (URL or inline
+  // SVG); resolveIcon adds the bundled device-type fallback when empty.
+  const icon = $derived(resolveIcon(node.spec))
   const iconSize = DEFAULT_ICON_SIZE
 
   // Labels
@@ -83,7 +84,7 @@
   )
 
   // Vertical centering
-  const iconHeight = $derived(iconPath ? iconSize : 0)
+  const iconHeight = $derived(icon ? iconSize : 0)
   const gap = $derived(iconHeight > 0 ? ICON_LABEL_GAP : 0)
   const labelHeight = $derived(parsedLabels.length * LABEL_LINE_HEIGHT)
   const totalContentHeight = $derived(iconHeight + gap + labelHeight)
@@ -273,18 +274,29 @@
 
   <!-- Content -->
   <g class="node-fg" pointer-events="none">
-    {#if iconPath}
+    {#if icon}
       <g class="node-icon" transform="translate({cx - iconSize / 2}, {contentTop})">
-        <svg
-          width={iconSize}
-          height={iconSize}
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          role="img"
-          aria-label={specDeviceType(node.spec) ?? 'icon'}
-        >
-          {@html iconPath}
-        </svg>
+        {#if icon.kind === 'inline'}
+          <svg
+            width={iconSize}
+            height={iconSize}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            role="img"
+            aria-label={specDeviceType(node.spec) ?? 'icon'}
+          >
+            {@html icon.svg}
+          </svg>
+        {:else}
+          <image
+            href={icon.url}
+            width={iconSize}
+            height={iconSize}
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-label={specDeviceType(node.spec) ?? 'icon'}
+          />
+        {/if}
       </g>
     {/if}
     {#each parsedLabels as label, i}

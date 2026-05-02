@@ -9,12 +9,9 @@
 
 import { Resvg } from '@resvg/resvg-js'
 import type { LayoutResult, NetworkGraph } from '@shumoku/core'
-import { specIconKey } from '@shumoku/core'
 import {
-  type CDNConfig,
-  fetchCDNIcon,
-  getCDNIconUrl,
-  hasCDNIcons,
+  collectIconUrls,
+  fetchIconAsDataUrl,
   type IconDimensions,
   resolveAllIconDimensions,
   svg,
@@ -25,8 +22,8 @@ export interface PngOptions {
   scale?: number
   /** Load system fonts (default: true) */
   loadSystemFonts?: boolean
-  /** CDN configuration for icon dimension resolution */
-  cdnConfig?: CDNConfig
+  /** Fetch timeout for icon URLs (ms). Default 3000. */
+  iconTimeout?: number
   /** Pre-resolved icon dimensions (skips fetching if provided) */
   iconDimensions?: Map<string, IconDimensions>
 }
@@ -48,7 +45,7 @@ async function embedExternalImages(svgString: string, timeout = 3000): Promise<s
 
   await Promise.all(
     uniqueUrls.map(async (url) => {
-      const base64 = await fetchCDNIcon(url, timeout)
+      const base64 = await fetchIconAsDataUrl(url, timeout)
       if (base64) {
         urlToBase64.set(url, base64)
       }
@@ -62,39 +59,6 @@ async function embedExternalImages(svgString: string, timeout = 3000): Promise<s
   }
 
   return result
-}
-
-/**
- * Collect all icon URLs from a NetworkGraph
- * Must match the URL generation logic in svg.ts calculateIconInfo()
- */
-function collectIconUrls(graph: NetworkGraph): string[] {
-  const urls = new Set<string>()
-
-  // Collect from nodes
-  for (const node of graph.nodes) {
-    const spec = node.spec
-    if (spec?.icon) {
-      urls.add(spec.icon)
-    } else if (spec?.vendor && hasCDNIcons(spec.vendor)) {
-      // Match the same logic as calculateIconInfo in svg.ts
-      const iconKey = specIconKey(spec)
-      if (iconKey) {
-        urls.add(getCDNIconUrl(spec.vendor, iconKey))
-      }
-    }
-  }
-
-  // Collect from subgraphs (flat structure)
-  if (graph.subgraphs) {
-    for (const sg of graph.subgraphs) {
-      if (sg.spec?.icon) {
-        urls.add(sg.spec.icon)
-      }
-    }
-  }
-
-  return Array.from(urls)
 }
 
 /**
@@ -114,14 +78,14 @@ export async function render(
   if (!iconDimensions) {
     const urls = collectIconUrls(graph)
     if (urls.length > 0) {
-      iconDimensions = await resolveAllIconDimensions(urls, options.cdnConfig)
+      iconDimensions = await resolveAllIconDimensions(urls, options.iconTimeout)
     }
   }
 
   let svgString = svg.render(graph, layout, { iconDimensions })
 
   // Embed external images as base64 (resvg cannot fetch external URLs)
-  svgString = await embedExternalImages(svgString, options.cdnConfig?.timeout)
+  svgString = await embedExternalImages(svgString, options.iconTimeout)
 
   const resvg = new Resvg(svgString, {
     fitTo: { mode: 'zoom', value: scale },
@@ -138,7 +102,7 @@ export async function render(
 export function renderSync(
   graph: NetworkGraph,
   layout: LayoutResult,
-  options: Omit<PngOptions, 'cdnConfig'> = {},
+  options: Omit<PngOptions, 'iconTimeout'> = {},
 ): Buffer {
   const scale = options.scale ?? 2
   const loadSystemFonts = options.loadSystemFonts ?? true
