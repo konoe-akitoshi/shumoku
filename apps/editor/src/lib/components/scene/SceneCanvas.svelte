@@ -669,6 +669,18 @@
             startWireFrom(node.id)
           }}
         >
+          <!-- Invisible hit area: SVG icon paths only register clicks on
+               painted pixels, which makes pin grabbing feel jaggy. A full
+               square covering icon + label gives a generous target. -->
+          <rect
+            x={-half - 2}
+            y={-half - 2}
+            width={iconSize + 4}
+            height={iconSize + 18}
+            fill="transparent"
+            pointer-events="all"
+          />
+
           <!-- Selection / wire-source halo (under the icon) -->
           {#if isSelected || isWireSrc}
             <circle
