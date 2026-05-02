@@ -645,9 +645,11 @@
         />
       {/if}
 
-      <!-- Items: rendered as floor-plan pins (icon + label, no box).
-           Position falls through to Node.position when the scene has
-           no per-node override yet. -->
+      <!-- Items: rendered via <foreignObject> so each pin is an actual
+           HTML <div> — DOM rect-based hit detection beats SVG's
+           per-painted-pixel hit detection (icons have lots of
+           transparent gaps). Camera transform on the parent viewport
+           still applies, so pan/zoom keep them in place. -->
       {#each visibleNodes as node (node.id)}
         {@const pos = positionFor(node.id)}
         {@const icon = resolveIcon(node.spec)}
@@ -655,103 +657,78 @@
         {@const isSelected = selectedItemId === node.id}
         {@const isWireSrc = auth.pendingWireFrom === node.id}
         {@const iconSize = 36}
-        {@const half = iconSize / 2}
-        {@const labelChars = (label ?? '').length}
-        {@const labelW = Math.max(28, labelChars * 6 + 8)}
-        <g
-          class="scene-item"
-          transform="translate({pos.x}, {pos.y})"
-          style:cursor={interactive ? 'grab' : 'default'}
-          onpointerdown={(e) => handleItemPointerDown(node.id, e)}
-          onclick={(e) => handleItemClick(node.id, e)}
-          ondblclick={(e) => {
-            e.stopPropagation()
-            startWireFrom(node.id)
-          }}
+        {@const labelW = Math.max(28, (label ?? '').length * 6 + 8)}
+        {@const boxW = Math.max(iconSize + 8, labelW + 4)}
+        {@const boxH = iconSize + 22}
+        <foreignObject
+          x={pos.x - boxW / 2}
+          y={pos.y - iconSize / 2 - 4}
+          width={boxW}
+          height={boxH}
+          overflow="visible"
         >
-          <!-- Invisible hit area: SVG icon paths only register clicks on
-               painted pixels, which makes pin grabbing feel jaggy. A full
-               square covering icon + label gives a generous target. -->
-          <rect
-            x={-half - 2}
-            y={-half - 2}
-            width={iconSize + 4}
-            height={iconSize + 18}
-            fill="transparent"
-            pointer-events="all"
-          />
-
-          <!-- Selection / wire-source halo (under the icon) -->
-          {#if isSelected || isWireSrc}
-            <circle
-              cx="0"
-              cy="0"
-              r={half + 4}
-              fill="none"
-              stroke={isSelected ? '#3b82f6' : '#10b981'}
-              stroke-width="2"
-              stroke-dasharray={isWireSrc ? '4 3' : ''}
-            />
-          {/if}
-
-          {#if icon}
-            {#if icon.kind === 'inline'}
-              <svg
-                x={-half}
-                y={-half}
-                width={iconSize}
-                height={iconSize}
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                role="img"
-                aria-label={specDeviceType(node.spec) ?? 'icon'}
-                style:color="#1e293b"
-                style:filter="drop-shadow(0 1px 1px rgba(0,0,0,0.25))"
-              >
-                {@html icon.svg}
-              </svg>
-            {:else}
-              <image
-                href={icon.url}
-                x={-half}
-                y={-half}
-                width={iconSize}
-                height={iconSize}
-                preserveAspectRatio="xMidYMid meet"
-                style:filter="drop-shadow(0 1px 1px rgba(0,0,0,0.25))"
-              />
-            {/if}
-          {:else}
-            <!-- Iconless fallback: subtle dot so the pin is still grabbable -->
-            <circle cx="0" cy="0" r={half - 6} fill="white" stroke="#94a3b8" stroke-width="1.5" />
-          {/if}
-
-          <!-- Label background pill (so text reads on busy floor plans) -->
-          {#if label}
-            <rect
-              x={-labelW / 2}
-              y={half + 2}
-              width={labelW}
-              height={14}
-              rx="3"
-              ry="3"
-              fill="rgba(255,255,255,0.92)"
-              stroke="rgba(15,23,42,0.08)"
-              stroke-width="0.5"
-              pointer-events="none"
-            />
-            <text
-              x="0"
-              y={half + 12}
-              text-anchor="middle"
-              font-size="10"
-              fill="#0f172a"
-              pointer-events="none"
+          <div
+            xmlns="http://www.w3.org/1999/xhtml"
+            class="scene-item flex h-full w-full select-none flex-col items-center"
+            style:cursor={interactive ? 'grab' : 'default'}
+            onpointerdown={(e) => handleItemPointerDown(node.id, e)}
+            onclick={(e) => handleItemClick(node.id, e)}
+            ondblclick={(e) => {
+              e.stopPropagation()
+              startWireFrom(node.id)
+            }}
+          >
+            <div
+              class="relative flex items-center justify-center"
+              style="width: {iconSize}px; height: {iconSize}px;"
             >
-              {label}
-            </text>
-          {/if}
-        </g>
+              {#if isSelected || isWireSrc}
+                <div
+                  class="absolute inset-[-4px] rounded-full"
+                  style:border={isSelected ? '2px solid #3b82f6' : '2px dashed #10b981'}
+                ></div>
+              {/if}
+              {#if icon}
+                {#if icon.kind === 'inline'}
+                  <svg
+                    width={iconSize}
+                    height={iconSize}
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    role="img"
+                    aria-label={specDeviceType(node.spec) ?? 'icon'}
+                    style:color="#1e293b"
+                    style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); pointer-events: none;"
+                  >
+                    <title>{specDeviceType(node.spec) ?? 'icon'}</title>
+                    {@html icon.svg}
+                  </svg>
+                {:else}
+                  <img
+                    src={icon.url}
+                    alt=""
+                    width={iconSize}
+                    height={iconSize}
+                    style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); pointer-events: none;"
+                  >
+                {/if}
+              {:else}
+                <div
+                  class="rounded-full border border-neutral-400 bg-white"
+                  style="width: {iconSize - 12}px; height: {iconSize - 12}px;"
+                ></div>
+              {/if}
+            </div>
+            {#if label}
+              <div
+                class="mt-0.5 max-w-full truncate rounded-[3px] border border-black/10 bg-white/95 px-1 text-[10px] leading-[14px] text-slate-900"
+                style="pointer-events: none;"
+              >
+                {label}
+              </div>
+            {/if}
+          </div>
+        </foreignObject>
       {/each}
 
       <!-- Boundary export connectors: one stadium-pill per destination
