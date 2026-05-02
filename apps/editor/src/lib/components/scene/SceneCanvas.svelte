@@ -204,16 +204,20 @@
     return `M ${first.x} ${first.y}${rest.map((p) => ` L ${p.x} ${p.y}`).join('')}`
   }
 
-  // Convert client (mouse) coordinates to scene/SVG coordinates.
+  // Convert client (mouse) coordinates to scene/SVG coordinates. Uses
+  // the viewport <g>'s CTM (not the outer SVG's), so the camera's
+  // pan/zoom transform — which lives on the viewport — is accounted
+  // for. Without this, dragged nodes drift as you zoom or pan.
   function clientToScene(clientX: number, clientY: number): { x: number; y: number } {
     if (!svgEl) return { x: 0, y: 0 }
+    const viewport = svgEl.querySelector<SVGGElement>('g.viewport')
+    const target = viewport ?? svgEl
     const pt = svgEl.createSVGPoint()
     pt.x = clientX
     pt.y = clientY
-    const ctm = svgEl.getScreenCTM()
+    const ctm = target.getScreenCTM()
     if (!ctm) return { x: 0, y: 0 }
-    const inv = ctm.inverse()
-    const out = pt.matrixTransform(inv)
+    const out = pt.matrixTransform(ctm.inverse())
     return { x: out.x, y: out.y }
   }
 
