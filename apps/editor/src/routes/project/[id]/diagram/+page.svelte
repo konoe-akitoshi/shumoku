@@ -14,6 +14,7 @@
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import SceneBar from '$lib/components/scene/SceneBar.svelte'
   import SceneCanvas from '$lib/components/scene/SceneCanvas.svelte'
+  import SceneSideToolbar from '$lib/components/scene/SceneSideToolbar.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
 
   // =========================================================================
@@ -144,17 +145,21 @@
     <ExportMenu onexportjson={handleExportJson} onexportsvg={handleExportSvg} />
   </div>
 
-  <!-- Right: Side toolbar -->
+  <!-- Right: Side toolbar (Diagram tools / Scene tools depending on view) -->
   <div class="fixed right-3 top-1/2 -translate-y-1/2 z-20">
-    <SideToolbar
-      mode={editorState.mode}
-      isDark={editorState.isDark}
-      onmodechange={(m) => { editorState.mode = m }}
-      onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
-      onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
-      onautoarrange={() => diagramState.autoArrange()}
-      onthemetoggle={() => editorState.toggleTheme()}
-    />
+    {#if diagramState.currentSceneId !== null}
+      <SceneSideToolbar sceneId={diagramState.currentSceneId} />
+    {:else}
+      <SideToolbar
+        mode={editorState.mode}
+        isDark={editorState.isDark}
+        onmodechange={(m) => { editorState.mode = m }}
+        onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
+        onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
+        onautoarrange={() => diagramState.autoArrange()}
+        onthemetoggle={() => editorState.toggleTheme()}
+      />
+    {/if}
   </div>
 
   <!-- Bottom-left: Status -->
