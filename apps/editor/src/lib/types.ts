@@ -112,13 +112,115 @@ export interface AssignmentRow {
 }
 
 // =========================================================================
+// Scenes — physical-placement view (Meraki / Miro style)
+// =========================================================================
+
+/**
+ * A scene is a free-form, image-backed view of (a subset of) the
+ * project's NetworkGraph. The graph stays the source of truth for
+ * topology; a scene only carries presentation metadata: which nodes
+ * are placed where on this floor plan, and how wires for selected
+ * links are routed.
+ *
+ * Multiple scenes can show the same node at different positions —
+ * useful when a switch belongs to a logical layout AND a physical
+ * floor plan, or when a campus has multiple buildings.
+ */
+export interface Scene {
+  /** Stable unique ID (newId('scene')) */
+  id: string
+  /** Display name (e.g. 'Floor 1', 'Server Room') */
+  name: string
+  /**
+   * Subgraph this scene physically realizes. Only descendant nodes
+   * (via `Node.parent` / `Subgraph.parent` chain) appear in this
+   * scene. `undefined` = root scope (entire diagram, useful for
+   * single-floor projects without an enclosing subgraph).
+   *
+   * Logical subgraphs (cloud services, virtual networks) shouldn't
+   * have scenes — there's nothing to lay out on a floor plan. The UI
+   * gates "Add scene" on `isPhysicalSubgraph(sg)`.
+   */
+  scopeSubgraphId?: string
+  /** Optional background image (floor plan / blueprint / photo). */
+  background?: SceneBackground
+  /**
+   * Position overrides. Sparse — every diagram node renders in this
+   * scene at its `Node.position` unless an entry here overrides it.
+   */
+  nodePlacements: NodePlacement[]
+  /**
+   * Wire routing overrides. Sparse — every diagram link renders in
+   * this scene with a default orthogonal route unless an entry here
+   * overrides it.
+   */
+  wireRoutes: WireRoute[]
+  /** Node ids explicitly hidden from this scene. */
+  hiddenNodeIds?: string[]
+  /** Link ids explicitly hidden from this scene. */
+  hiddenLinkIds?: string[]
+  /** Scale calibration for distance / cable-length calculations. */
+  calibration?: SceneCalibration
+}
+
+export interface SceneBackground {
+  /** Inline data URL or external URL. */
+  src: string
+  /** Image natural dimensions in px. Scene coordinates match these pixels. */
+  width: number
+  height: number
+}
+
+/**
+ * Scale calibration so cable lengths and distances on the canvas
+ * map to real-world units. The user picks two reference points on
+ * the background image (see SceneCalibrationRef) and enters how many
+ * meters they represent; we store the derived px/m ratio.
+ */
+export interface SceneCalibration {
+  /** Pixels per meter (derived from the user's reference). */
+  pxPerMeter: number
+  /** The reference segment used to derive the ratio (kept for re-edit). */
+  reference?: SceneCalibrationRef
+}
+
+export interface SceneCalibrationRef {
+  from: { x: number; y: number }
+  to: { x: number; y: number }
+  /** Real-world distance the segment represents, in meters. */
+  meters: number
+}
+
+export interface NodePlacement {
+  /** Reference to NetworkGraph.nodes[].id */
+  nodeId: string
+  /** Center position in scene (image-pixel) coordinates. */
+  position: { x: number; y: number }
+  /** Rotation in degrees (default 0). */
+  rotation?: number
+  /** Uniform scale (default 1). */
+  scale?: number
+}
+
+export type WirePathStyle = 'straight' | 'orthogonal' | 'free'
+
+export interface WireRoute {
+  /** Reference to NetworkGraph.links[].id */
+  linkId: string
+  /** Path style; default 'orthogonal'. */
+  pathStyle: WirePathStyle
+  /** Optional waypoints between endpoints; renderer connects them in order. */
+  controlPoints?: { x: number; y: number }[]
+}
+
+// =========================================================================
 // Project file — .neted.json
 // =========================================================================
 
 /** neted project file format */
 export interface NetedProject {
   /** Format version */
-  version: 2
+  version: 3
   /** Project name */
   name: string
   /** Project settings */
@@ -127,6 +229,8 @@ export interface NetedProject {
   products: Product[]
   /** Diagram — NetworkGraph (nodes with positions, links, subgraphs) */
   diagram: NetworkGraph
+  /** Physical-placement views (floor plans / image-backed canvases). */
+  scenes?: Scene[]
 }
 
 /** File extension for neted projects */

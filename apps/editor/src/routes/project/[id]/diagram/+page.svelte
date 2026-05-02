@@ -8,9 +8,11 @@
   import ExportMenu from '$lib/components/ExportMenu.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
   import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
-  import SheetBar from '$lib/components/SheetBar.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
+  import SceneCanvas from '$lib/components/scene/SceneCanvas.svelte'
+  import SceneSideToolbar from '$lib/components/scene/SceneSideToolbar.svelte'
+  import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
 
   // =========================================================================
@@ -96,9 +98,11 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="absolute inset-0"
-    ondblclick={() => { if (selected) openDetail(selected.id, selected.type) }}
+    ondblclick={() => { if (selected && diagramState.currentSceneId === null) openDetail(selected.id, selected.type) }}
   >
-    {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
+    {#if diagramState.currentSceneId !== null && diagramState.currentScene}
+      <SceneCanvas scene={diagramState.currentScene} />
+    {:else if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
       <ShumokuRenderer
         bind:this={renderer}
         bind:svgElement={rendererSvg}
@@ -139,17 +143,21 @@
     <ExportMenu onexportjson={handleExportJson} onexportsvg={handleExportSvg} />
   </div>
 
-  <!-- Right: Side toolbar -->
+  <!-- Right: Side toolbar (Diagram tools / Scene tools depending on view) -->
   <div class="fixed right-3 top-1/2 -translate-y-1/2 z-20">
-    <SideToolbar
-      mode={editorState.mode}
-      isDark={editorState.isDark}
-      onmodechange={(m) => { editorState.mode = m }}
-      onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
-      onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
-      onautoarrange={() => diagramState.autoArrange()}
-      onthemetoggle={() => editorState.toggleTheme()}
-    />
+    {#if diagramState.currentSceneId !== null}
+      <SceneSideToolbar sceneId={diagramState.currentSceneId} />
+    {:else}
+      <SideToolbar
+        mode={editorState.mode}
+        isDark={editorState.isDark}
+        onmodechange={(m) => { editorState.mode = m }}
+        onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
+        onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
+        onautoarrange={() => diagramState.autoArrange()}
+        onthemetoggle={() => editorState.toggleTheme()}
+      />
+    {/if}
   </div>
 
   <!-- Bottom-left: Status -->
@@ -162,8 +170,8 @@
     <CodePanel bind:isOpen={codePanelOpen} />
   </div>
 
-  <!-- Bottom-center: Sheet bar -->
-  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"><SheetBar /></div>
+  <!-- Bottom-center: segmented Diagram | Scene view picker. -->
+  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"><ViewBar /></div>
 
   <!-- Overlays -->
 

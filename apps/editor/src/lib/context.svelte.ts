@@ -28,7 +28,15 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
-import type { AssignmentRow, AssignmentTarget, DeviceProduct, NetedProject, Product } from './types'
+import type {
+  AssignmentRow,
+  AssignmentTarget,
+  DeviceProduct,
+  NetedProject,
+  Product,
+  Scene,
+  WireRoute,
+} from './types'
 import { productLabel } from './types'
 
 // =========================================================================
@@ -128,6 +136,8 @@ function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
 }
 
 let products = $state<Product[]>([])
+let scenes = $state<Scene[]>([])
+let currentSceneId = $state<string | null>(null)
 let status = $state('Loading...')
 let yamlSource = $state('')
 let initialized = $state(false)
@@ -1183,6 +1193,219 @@ export const diagramState = {
     return id
   },
 
+  // =====================================================================
+  // Scenes — physical-placement views of the underlying NetworkGraph.
+  //
+  // A scene carries presentation metadata (which nodes are placed where
+  // on a floor plan, how each link is routed). The graph stays the
+  // source of truth for topology; scene CRUD only touches the scene
+  // array. High-level helpers (placeProductInScene / addWireInScene)
+  // sync to graph state by delegating to the existing diagram APIs.
+  // =====================================================================
+
+  get scenes() {
+    return scenes
+  },
+  get currentSceneId() {
+    return currentSceneId
+  },
+  get currentScene(): Scene | undefined {
+    return currentSceneId ? scenes.find((s) => s.id === currentSceneId) : undefined
+  },
+  setCurrentScene(id: string | null) {
+    currentSceneId = id
+  },
+  /**
+   * Switch to the scene bound to a subgraph (or root if `undefined`).
+   * Auto-creates the scene record on first access — scenes are
+   * implicit views of their subgraph (mirrors how every subgraph
+   * already exists as a sheet on the diagram side), so the user
+   * doesn't manually "add" them.
+   */
+  setCurrentSceneForScope(scopeSubgraphId: string | undefined) {
+    let scene = scenes.find((s) => s.scopeSubgraphId === scopeSubgraphId)
+    if (!scene) {
+      const sg = scopeSubgraphId ? diagram.subgraphs.get(scopeSubgraphId) : undefined
+      const name = sg?.label ?? 'Root'
+      scene = {
+        id: newId('scene'),
+        name,
+        nodePlacements: [],
+        wireRoutes: [],
+        scopeSubgraphId,
+      }
+      scenes = [...scenes, scene]
+    }
+    currentSceneId = scene.id
+  },
+  addScene(scene: Scene) {
+    scenes = [...scenes, scene]
+  },
+  removeScene(id: string) {
+    scenes = scenes.filter((s) => s.id !== id)
+    if (currentSceneId === id) currentSceneId = null
+  },
+  updateScene(id: string, updates: Partial<Omit<Scene, 'id'>>) {
+    scenes = scenes.map((s) => (s.id === id ? { ...s, ...updates } : s))
+  },
+
+  /** Place / move a node in a scene. */
+  placeNodeInScene(sceneId: string, nodeId: string, position: { x: number; y: number }) {
+    scenes = scenes.map((s) => {
+      if (s.id !== sceneId) return s
+      const idx = s.nodePlacements.findIndex((p) => p.nodeId === nodeId)
+      if (idx >= 0) {
+        const next = [...s.nodePlacements]
+        next[idx] = { ...next[idx], position }
+        return { ...s, nodePlacements: next }
+      }
+      return { ...s, nodePlacements: [...s.nodePlacements, { nodeId, position }] }
+    })
+  },
+  removePlacementFromScene(sceneId: string, nodeId: string) {
+    scenes = scenes.map((s) =>
+      s.id === sceneId
+        ? {
+            ...s,
+            nodePlacements: s.nodePlacements.filter((p) => p.nodeId !== nodeId),
+            wireRoutes: s.wireRoutes.filter((w) => {
+              const link = diagram.links.find((l) => l.id === w.linkId)
+              if (!link) return false
+              return link.from.node !== nodeId && link.to.node !== nodeId
+            }),
+          }
+        : s,
+    )
+  },
+
+  /** Set / replace a wire route. */
+  setWireRoute(sceneId: string, route: WireRoute) {
+    scenes = scenes.map((s) => {
+      if (s.id !== sceneId) return s
+      const idx = s.wireRoutes.findIndex((w) => w.linkId === route.linkId)
+      if (idx >= 0) {
+        const next = [...s.wireRoutes]
+        next[idx] = route
+        return { ...s, wireRoutes: next }
+      }
+      return { ...s, wireRoutes: [...s.wireRoutes, route] }
+    })
+  },
+  removeWireFromScene(sceneId: string, linkId: string) {
+    scenes = scenes.map((s) =>
+      s.id === sceneId ? { ...s, wireRoutes: s.wireRoutes.filter((w) => w.linkId !== linkId) } : s,
+    )
+  },
+
+  /** Hide a node from a scene without affecting the diagram. */
+  hideNodeInScene(sceneId: string, nodeId: string) {
+    scenes = scenes.map((s) => {
+      if (s.id !== sceneId) return s
+      const hidden = new Set(s.hiddenNodeIds ?? [])
+      hidden.add(nodeId)
+      return {
+        ...s,
+        hiddenNodeIds: [...hidden],
+        // Hidden node's wires are also hidden — drop the routes too.
+        wireRoutes: s.wireRoutes.filter((w) => {
+          const link = diagram.links.find((l) => l.id === w.linkId)
+          if (!link) return false
+          return link.from.node !== nodeId && link.to.node !== nodeId
+        }),
+      }
+    })
+  },
+  unhideNodeInScene(sceneId: string, nodeId: string) {
+    scenes = scenes.map((s) =>
+      s.id === sceneId
+        ? { ...s, hiddenNodeIds: (s.hiddenNodeIds ?? []).filter((id) => id !== nodeId) }
+        : s,
+    )
+  },
+  hideLinkInScene(sceneId: string, linkId: string) {
+    scenes = scenes.map((s) => {
+      if (s.id !== sceneId) return s
+      const hidden = new Set(s.hiddenLinkIds ?? [])
+      hidden.add(linkId)
+      return { ...s, hiddenLinkIds: [...hidden] }
+    })
+  },
+  unhideLinkInScene(sceneId: string, linkId: string) {
+    scenes = scenes.map((s) =>
+      s.id === sceneId
+        ? { ...s, hiddenLinkIds: (s.hiddenLinkIds ?? []).filter((id) => id !== linkId) }
+        : s,
+    )
+  },
+
+  /**
+   * Place a Product onto a scene at the given position. Creates the
+   * underlying Node (via the existing place flow), then records the
+   * scene-local placement. Returns the new node id.
+   */
+  placeProductInScene(
+    sceneId: string,
+    productId: string,
+    position: { x: number; y: number },
+  ): string | undefined {
+    const nodeId = diagramState.placeProductAsNode(productId)
+    if (!nodeId) return undefined
+    // Inherit scene's scope: scene-added nodes belong to the subgraph
+    // that scene is bound to. Without this they'd drop to root and be
+    // filtered out by the scene's own scope view.
+    const scene = scenes.find((s) => s.id === sceneId)
+    const node = diagram.nodes.get(nodeId)
+    if (scene?.scopeSubgraphId && node) {
+      diagram.nodes.set(nodeId, { ...node, parent: scene.scopeSubgraphId })
+      invalidateSheetCache()
+    }
+    diagramState.placeNodeInScene(sceneId, nodeId, position)
+    return nodeId
+  },
+
+  /**
+   * Add an empty (unbound) node to a scene at the given position.
+   * Mirrors `addEmptyNode` but pins the placement to a scene.
+   */
+  addEmptyNodeInScene(sceneId: string, position: { x: number; y: number }, label = 'Node'): string {
+    const id = diagramState.addEmptyNode(label)
+    const scene = scenes.find((s) => s.id === sceneId)
+    const node = diagram.nodes.get(id)
+    if (scene?.scopeSubgraphId && node) {
+      diagram.nodes.set(id, { ...node, parent: scene.scopeSubgraphId })
+      invalidateSheetCache()
+    }
+    diagramState.placeNodeInScene(sceneId, id, position)
+    return id
+  },
+
+  /**
+   * Wire two scene items together. Adds a Link to the diagram and a
+   * WireRoute to the scene. Returns the new link id.
+   */
+  addWireInScene(
+    sceneId: string,
+    fromNodeId: string,
+    toNodeId: string,
+    options?: { pathStyle?: WireRoute['pathStyle']; controlPoints?: WireRoute['controlPoints'] },
+  ): string | undefined {
+    const fromNode = diagram.nodes.get(fromNodeId)
+    const toNode = diagram.nodes.get(toNodeId)
+    if (!fromNode || !toNode) return undefined
+    const linkId = newId('link')
+    diagramState.addLink({
+      id: linkId,
+      from: { node: fromNodeId, port: '' },
+      to: { node: toNodeId, port: '' },
+    })
+    diagramState.setWireRoute(sceneId, {
+      linkId,
+      pathStyle: options?.pathStyle ?? 'orthogonal',
+      controlPoints: options?.controlPoints,
+    })
+    return linkId
+  },
+
   // NetworkGraph — canonical save/load format
   exportGraph(): NetworkGraph {
     return {
@@ -1217,10 +1440,11 @@ export const diagramState = {
   /** Export project as NetedProject JSON string */
   exportProject(name = 'Untitled'): string {
     const project: NetedProject = {
-      version: 2,
+      version: 3,
       name,
       products: [...products],
       diagram: diagramState.exportGraph(),
+      scenes: scenes.length > 0 ? [...scenes] : undefined,
     }
     return JSON.stringify(project, null, 2)
   },
@@ -1245,10 +1469,11 @@ export const diagramState = {
       const hp = new HierarchicalParser(resolver)
       const diagram = (await hp.parse(yamlStr, '/main.yaml')).graph
       await diagramState.importProject({
-        version: 2,
+        version: 3,
         name: 'YAML Import',
         products: [...products],
         diagram,
+        scenes: scenes.length > 0 ? [...scenes] : undefined,
       })
       yamlSource = yamlStr
     } catch (e) {
@@ -1272,10 +1497,11 @@ export const diagramState = {
   async importDiagram(input: string | NetworkGraph) {
     const diagram: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
     await diagramState.importProject({
-      version: 2,
+      version: 3,
       name: 'Diagram Import',
       products: [...products],
       diagram,
+      scenes: scenes.length > 0 ? [...scenes] : undefined,
     })
   },
 
@@ -1295,6 +1521,8 @@ export const diagramState = {
     // Reset all state unconditionally — every path through the terminal
     // gets a clean slate before apply.
     products = []
+    scenes = []
+    currentSceneId = null
     diagram.nodes.clear()
     diagram.ports.clear()
     diagram.edges.clear()
@@ -1366,6 +1594,18 @@ async function applyProject(data: Partial<NetedProject>) {
     placePorts(diagram.nodes, diagram.links, data.diagram?.settings?.direction ?? 'TB'),
   )
   await rerouteEdges()
+
+  // Scenes — drop placements / wires / hidden ids that point at orphan
+  // node or link ids.
+  const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
+  scenes = (data.scenes ?? []).map((scene) => ({
+    ...scene,
+    nodePlacements: scene.nodePlacements.filter((p) => diagram.nodes.has(p.nodeId)),
+    wireRoutes: scene.wireRoutes.filter((w) => linkIdSet.has(w.linkId)),
+    hiddenNodeIds: scene.hiddenNodeIds?.filter((id) => diagram.nodes.has(id)),
+    hiddenLinkIds: scene.hiddenLinkIds?.filter((id) => linkIdSet.has(id)),
+  }))
+  currentSceneId = null
 }
 
 /**
