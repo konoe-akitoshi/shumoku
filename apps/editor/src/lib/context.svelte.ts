@@ -52,6 +52,17 @@ export const editorState = {
     return mode
   },
   set mode(v: 'edit' | 'view') {
+    // The diagram canvas uses Svelte $bindable to mutate node positions
+    // directly during drag, so individual node moves don't go through
+    // diagramState.commit(). Instead we wrap the entire edit session as
+    // one undoable transaction: snapshot when entering edit, push the
+    // delta when leaving (only if state actually changed).
+    if (mode === v) return
+    if (v === 'edit') {
+      diagramState.beginTx('Edit')
+    } else if (mode === 'edit') {
+      diagramState.endTx()
+    }
     mode = v
   },
   get isDark() {
@@ -67,7 +78,9 @@ export const editorState = {
     return mode === 'edit'
   },
   toggleMode() {
-    mode = mode === 'edit' ? 'view' : 'edit'
+    // Route through the setter so the edit-session transaction
+    // bracket fires.
+    editorState.mode = mode === 'edit' ? 'view' : 'edit'
   },
   toggleTheme() {
     isDark = !isDark
@@ -635,10 +648,19 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
  * top-level `commit()` and lets nested mutations skip their own
  * snapshotting (otherwise we'd end up with two undo steps for one
  * user action).
+ *
+ * Also yields to a higher-level transaction (`beginTx` / `endTx`)
+ * when one is active — every commit during the transaction
+ * collapses into a single undo entry, so a scene drag of 200 pixels
+ * doesn't poison history with 200 entries.
  */
 let inCommit = false
+let txActive = false
+let txSnap: ProjectSnapshot | null = null
+let txLabel = ''
+
 function commit<T>(label: string, fn: () => T): T {
-  if (inCommit) return fn()
+  if (inCommit || txActive) return fn()
   const before = getProjectSnapshot()
   inCommit = true
   try {
@@ -651,7 +673,7 @@ function commit<T>(label: string, fn: () => T): T {
 }
 
 async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  if (inCommit) return await fn()
+  if (inCommit || txActive) return await fn()
   const before = getProjectSnapshot()
   inCommit = true
   try {
@@ -1569,6 +1591,52 @@ export const diagramState = {
     if (!target) return false
     applyProjectSnapshot(target)
     return true
+  },
+  /**
+   * Begin an undo transaction. While active, individual `commit()`
+   * calls don't push their own undo entries — the whole transaction
+   * collapses to a single undo step at `endTx()`. Use for drags,
+   * multi-step edit sessions, or any user gesture where the
+   * intermediate state isn't a meaningful undo target.
+   *
+   * No-op if a transaction is already active (only the outermost
+   * begin/end pair takes effect).
+   */
+  beginTx(label: string): void {
+    if (txActive) return
+    txSnap = getProjectSnapshot()
+    txLabel = label
+    txActive = true
+  },
+  /**
+   * Close a transaction. Pushes the entry-snapshot only if state
+   * actually differs from then — a beginTx with no mutations is a
+   * silent no-op, so callers can be liberal with begin/end without
+   * polluting history with empty entries.
+   */
+  endTx(): void {
+    if (!txActive) return
+    const snap = txSnap
+    const label = txLabel
+    txActive = false
+    txSnap = null
+    txLabel = ''
+    if (!snap) return
+    // Compare lightly: same key counts + same JSON of arrays. Avoids
+    // pushing empty entries for begin/end bracketing a no-op gesture.
+    const after = getProjectSnapshot()
+    const changed =
+      snap.nodes.length !== after.nodes.length ||
+      snap.subgraphs.length !== after.subgraphs.length ||
+      snap.links.length !== after.links.length ||
+      snap.products.length !== after.products.length ||
+      snap.scenes.length !== after.scenes.length ||
+      JSON.stringify(snap) !== JSON.stringify(after)
+    if (changed) undoManager.push(label, snap)
+  },
+  /** Whether a transaction is currently open. */
+  get inTx(): boolean {
+    return txActive
   },
 
   // NetworkGraph — canonical save/load format

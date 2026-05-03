@@ -259,6 +259,9 @@
       offsetX: scenePt.x - pos.x,
       offsetY: scenePt.y - pos.y,
     }
+    // Collapse all per-frame placeNodeInScene commits during this
+    // drag into a single undo entry.
+    diagramState.beginTx('Move item')
   }
 
   function handlePointerMove(e: PointerEvent) {
@@ -292,6 +295,7 @@
   }
 
   function handlePointerUp() {
+    if (dragging || draggingControl) diagramState.endTx()
     dragging = null
     draggingControl = null
   }
@@ -384,6 +388,7 @@
       offsetX: scenePt.x - cp.x,
       offsetY: scenePt.y - cp.y,
     }
+    diagramState.beginTx('Adjust wire')
   }
 
   function handleWireClick(linkId: string, e: MouseEvent) {
