@@ -596,13 +596,17 @@ function sanitizeProducts(
  * snapshots are the unit of "one undoable step".
  */
 function getProjectSnapshot(): ProjectSnapshot {
-  return structuredClone({
+  // `$state.snapshot` strips Svelte's reactive proxy wrapping and
+  // deeply clones — `structuredClone` can choke on those proxies in
+  // some paths and silently throw, breaking the click that triggered
+  // the mutation.
+  return $state.snapshot({
     nodes: [...diagram.nodes.entries()],
     subgraphs: [...diagram.subgraphs.entries()],
     links: diagram.links,
     products,
     scenes,
-  })
+  }) as ProjectSnapshot
 }
 
 /**
@@ -611,7 +615,7 @@ function getProjectSnapshot(): ProjectSnapshot {
  * anything reading sub-sheet layouts gets a fresh build.
  */
 function applyProjectSnapshot(snap: ProjectSnapshot): void {
-  const cloned = structuredClone(snap)
+  const cloned = $state.snapshot(snap) as ProjectSnapshot
   replaceMap(diagram.nodes, cloned.nodes)
   replaceMap(diagram.subgraphs, cloned.subgraphs)
   diagram.links = cloned.links
