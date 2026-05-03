@@ -32,10 +32,14 @@
     }
   }
 
+  // onDestroy runs on the SSR side too, so guard the window access.
+  // onMount-only-on-client is fine but symmetry beats subtle bugs.
   onMount(() => {
+    if (typeof window === 'undefined') return
     window.addEventListener('keydown', onKeydown)
   })
   onDestroy(() => {
+    if (typeof window === 'undefined') return
     window.removeEventListener('keydown', onKeydown)
   })
 </script>
