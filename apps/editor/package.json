@@ -16,6 +16,7 @@
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-svg": "workspace:*",
+    "@xyflow/svelte": "^1.5.2",
     "bits-ui": "^2.16.3",
     "clsx": "^2.1.1",
     "phosphor-svelte": "^3.1.0",
