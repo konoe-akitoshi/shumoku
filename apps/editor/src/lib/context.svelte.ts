@@ -1,3 +1,22 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// =========================================================================
+// Composer — wires the per-domain stores together and exposes the
+// editor's public API (`diagramState`, `editorState`).
+//
+// Each store under `state/` owns its own $state and primitives. This
+// file:
+//   1. composes them into the public API,
+//   2. wraps mutations with the undo `commit` / transaction layer,
+//   3. holds composite operations that span stores
+//      (placeProductInScene, removeProduct→node-cleanup, …),
+//   4. owns the load pipeline (applyYaml → importProject → loadProject).
+//
+// Re-exports `editorState` and `diagramState` from here so existing
+// imports keep working — the split is internal only.
+// =========================================================================
+
 import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   buildChildSheetGraph,
@@ -5,10 +24,8 @@ import {
   computeNetworkLayout,
   computeNodeSize,
   createMemoryFileResolver,
-  darkTheme,
   HierarchicalParser,
   type Link,
-  lightTheme,
   moveNode,
   type NetworkGraph,
   type Node,
@@ -16,18 +33,32 @@ import {
   type NodeSpec,
   newId,
   placePorts,
-  type ResolvedEdge,
-  type ResolvedLayout,
-  type ResolvedPort,
   rebalanceSubgraphs,
   resolvePosition,
-  routeEdges,
   type Subgraph,
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
+import {
+  applyResolvedLayout,
+  currentSheetCacheGeneration,
+  diagram,
+  invalidateSheetCache,
+  rebuildPortsAndEdges,
+  replaceMap,
+  rerouteEdges,
+  sanitizeGraph,
+  sheetCache,
+  sheetLinkCache,
+  sheetStore,
+  sheetView,
+} from './state/diagram.svelte'
+import { editorStore, initDarkMode } from './state/editor.svelte'
+import { productsStore, sanitizeProducts } from './state/products.svelte'
+import { sanitizeScenes, scenesStore } from './state/scenes.svelte'
+import { sessionStore } from './state/session.svelte'
 import type {
   AssignmentRow,
   AssignmentTarget,
@@ -40,124 +71,25 @@ import type {
 import { productLabel } from './types'
 import { type ProjectSnapshot, undoManager } from './undo.svelte'
 
-// =========================================================================
-// Editor UI state — mode, theme
-// =========================================================================
-
-let mode = $state<'edit' | 'view'>('view')
-let isDark = $state(false)
-
-export const editorState = {
-  get mode() {
-    return mode
-  },
-  set mode(v: 'edit' | 'view') {
-    // The diagram canvas uses Svelte $bindable to mutate node positions
-    // directly during drag, so individual node moves don't go through
-    // diagramState.commit(). Instead we wrap the entire edit session as
-    // one undoable transaction: snapshot when entering edit, push the
-    // delta when leaving (only if state actually changed).
-    if (mode === v) return
-    if (v === 'edit') {
-      diagramState.beginTx('Edit')
-    } else if (mode === 'edit') {
-      diagramState.endTx()
-    }
-    mode = v
-  },
-  get isDark() {
-    return isDark
-  },
-  set isDark(v: boolean) {
-    isDark = v
-  },
-  get theme(): Theme {
-    return isDark ? darkTheme : lightTheme
-  },
-  get interactive() {
-    return mode === 'edit'
-  },
-  toggleMode() {
-    // Route through the setter so the edit-session transaction
-    // bracket fires.
-    editorState.mode = mode === 'edit' ? 'view' : 'edit'
-  },
-  toggleTheme() {
-    isDark = !isDark
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', isDark)
-      localStorage.setItem('theme', isDark ? 'dark' : 'light')
-    }
-  },
-}
-
-/** Call once in root layout to sync dark mode from DOM */
-export function initDarkMode() {
-  if (typeof document === 'undefined') return
-  isDark = document.documentElement.classList.contains('dark')
-  const obs = new MutationObserver(() => {
-    isDark = document.documentElement.classList.contains('dark')
-  })
-  obs.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['class'],
-  })
-  return () => obs.disconnect()
-}
-
-if (typeof window !== 'undefined' && import.meta.env.DEV) {
-  // Devtools convenience: poke at editor state from the console.
-  // biome-ignore lint/suspicious/noExplicitAny: dev-only window augmentation
-  ;(window as any).diagramState = new Proxy(
-    {},
-    {
-      get(_t, prop) {
-        // biome-ignore lint/suspicious/noExplicitAny: lazy proxy
-        return (diagramState as any)[prop]
-      },
-    },
-  )
-  // biome-ignore lint/suspicious/noExplicitAny: dev-only window augmentation
-  ;(window as any).editorState = editorState
-}
+// Re-export the load-time hook so the layout file doesn't need to know
+// where editor state lives.
+export { initDarkMode }
 
 // =========================================================================
-// Diagram state — shared across pages
+// Catalog + PoE — singletons (not in undo)
 // =========================================================================
 
-// The diagram object — single source of truth for the renderer's JSON.
-// The four Map slots are SvelteMap instances so that `.set()`/`.delete()`
-// mutations trigger reactivity directly, without the copy-on-write
-// (`const n = new Map(...); ...; diagram.nodes = n`) dance that Svelte 4
-// required.
-const diagram = $state({
-  nodes: new SvelteMap<string, Node>(),
-  ports: new SvelteMap<string, ResolvedPort>(),
-  edges: new SvelteMap<string, ResolvedEdge>(),
-  subgraphs: new SvelteMap<string, Subgraph>(),
-  bounds: { x: 0, y: 0, width: 0, height: 0 },
-  links: [] as Link[],
-})
+const catalog = new Catalog()
+catalog.registerAll(builtinEntries)
 
-/**
- * Replace the contents of a SvelteMap in place, preserving its identity
- * so bindings and downstream reactivity stay attached. Used whenever we
- * would otherwise reassign `diagram.nodes = new Map(...)`.
- */
-function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
-  target.clear()
-  for (const [k, v] of source) target.set(k, v)
-}
+const poeBudgets = $derived(analyzePoE([...diagram.nodes.values()], diagram.links, catalog))
 
-let products = $state<Product[]>([])
-let scenes = $state<Scene[]>([])
-let currentSceneId = $state<string | null>(null)
-let status = $state('Loading...')
-let yamlSource = $state('')
-let initialized = $state(false)
+// =========================================================================
+// Cross-store derivations / helpers
+// =========================================================================
 
 function deviceProduct(id: string): DeviceProduct | undefined {
-  const p = products.find((p) => p.id === id)
+  const p = productsStore.find(id)
   return p?.kind === 'device' ? p : undefined
 }
 
@@ -236,119 +168,10 @@ function buildAssignmentRows(): AssignmentRow[] {
   return rows
 }
 
-/**
- * Active sheet for hierarchical / multi-sheet editing.
- *
- * `null` = the root sheet (the whole diagram, as today).
- * Any non-null id = a top-level subgraph being viewed "as its own sheet".
- *
- * Layer 1 behaviour: switching to a non-null sheet drills into that
- * subgraph KiCad-style. The renderer binds to `sheetView` (a cached
- * `ResolvedLayout` built via `buildHierarchicalSheets` from core)
- * instead of the root maps. Cross-boundary links are represented as
- * stadium-shaped "export connector" nodes on the sheet edge.
- *
- * The sub-sheet view is **read-only** for now — the editor forces
- * View mode while drilled in, because the renderer's `$bindable`
- * writes would land on the sheet's ephemeral maps rather than on the
- * root canonical state. Write-through is deferred (Layer 2).
- */
-let currentSheetId = $state<string | null>(null)
+// =========================================================================
+// Node spec + port helpers — touch diagram + products
+// =========================================================================
 
-/**
- * Runtime state used by the renderer when drilled into a sub-sheet.
- * Structurally mirrors `diagram` so the renderer can bind the same
- * way. Populated by `switchSheet` via `buildChildSheetGraph` +
- * `computeNetworkLayout`.
- *
- * SvelteMap identity is preserved across switches: we `replaceMap()`
- * into these containers rather than assigning new instances, so
- * reactive bindings in the renderer stay attached.
- */
-const sheetView = $state({
-  nodes: new SvelteMap<string, Node>(),
-  ports: new SvelteMap<string, ResolvedPort>(),
-  edges: new SvelteMap<string, ResolvedEdge>(),
-  subgraphs: new SvelteMap<string, Subgraph>(),
-  bounds: { x: 0, y: 0, width: 400, height: 300 },
-  links: [] as Link[],
-})
-
-/**
- * Per-sheet layout cache. Entries are invalidated any time the root
- * graph's structure changes (nodes/subgraphs/links added/removed,
- * parents reparented). Purely-visual root edits (position, label,
- * spec, link bandwidth, …) don't affect child-sheet content, so
- * we're careful to only clear on structural changes — bouncing
- * between tabs stays instant in the common case.
- *
- * The `generation` counter lets an in-flight `switchSheet` abandon
- * a stale layout result when the graph has changed underneath it.
- */
-const sheetCache = new Map<string, ResolvedLayout>()
-const sheetLinkCache = new Map<string, Link[]>()
-let sheetCacheGeneration = 0
-
-function invalidateSheetCache() {
-  sheetCache.clear()
-  sheetLinkCache.clear()
-  sheetCacheGeneration++
-}
-
-/**
- * Assign a `ResolvedLayout` into the given mirror state, preserving
- * SvelteMap identity (so the renderer's bindings stay attached).
- * Shared by both sheet load and sheet cache hits.
- */
-function applyResolvedLayout(
-  target: {
-    nodes: SvelteMap<string, Node>
-    ports: SvelteMap<string, ResolvedPort>
-    edges: SvelteMap<string, ResolvedEdge>
-    subgraphs: SvelteMap<string, Subgraph>
-    bounds: { x: number; y: number; width: number; height: number }
-    links: Link[]
-  },
-  resolved: ResolvedLayout,
-  links: Link[],
-) {
-  replaceMap(target.nodes, resolved.nodes)
-  replaceMap(target.ports, resolved.ports)
-  replaceMap(target.edges, resolved.edges)
-  replaceMap(target.subgraphs, resolved.subgraphs)
-  target.bounds = { ...resolved.bounds }
-  target.links = [...links]
-}
-
-// Edge routing: generation counter prevents stale async results
-let routeGeneration = 0
-
-/** Recompute edges from current nodes/ports/links (async WASM) */
-async function rerouteEdges() {
-  const gen = ++routeGeneration
-  const result = await routeEdges(diagram.nodes, diagram.ports, diagram.links)
-  if (gen === routeGeneration) {
-    replaceMap(diagram.edges, result)
-  }
-}
-
-function replaceDerivedPorts() {
-  replaceMap(diagram.ports, placePorts(diagram.nodes, diagram.links))
-}
-
-async function rebuildPortsAndEdges() {
-  replaceDerivedPorts()
-  await rerouteEdges()
-}
-
-const catalog = new Catalog()
-catalog.registerAll(builtinEntries)
-
-// Reactive: recompute whenever nodes or links change. Avoids stale budget
-// display when users add/remove nodes, rebind specs, or edit links.
-const poeBudgets = $derived(analyzePoE([...diagram.nodes.values()], diagram.links, catalog))
-
-/** Update spec on multiple nodes at once (Palette → Node propagation) */
 function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
   for (const id of new Set(nodeIds)) {
     const rn = diagram.nodes.get(id)
@@ -356,7 +179,6 @@ function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
   }
 }
 
-/** Strip product details from spec, keep kind/type (role) */
 function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined {
   if (!spec) return undefined
   if (spec.kind === 'hardware') return { kind: 'hardware', type: spec.type }
@@ -377,12 +199,7 @@ function nodePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | 
       properties: product.properties ?? {},
     },
   )
-  return ports.length > 0
-    ? ports.map((port) => ({
-        id: newId('port'),
-        ...port,
-      }))
-    : undefined
+  return ports.length > 0 ? ports.map((port) => ({ id: newId('port'), ...port })) : undefined
 }
 
 function setNodePortsFromProduct(
@@ -415,12 +232,6 @@ function findNodePortId(
   return match?.id ?? value
 }
 
-/**
- * Append a port to a node's `ports` array. Returns the new port's ID, or
- * undefined when the target node is missing. This is the single explicit
- * port-creation operation for the editor — link-creation paths must call
- * this themselves before constructing the LinkEndpoint, never afterward.
- */
 function appendPortToNode(
   nodes: Map<string, Node>,
   nodeId: string,
@@ -458,202 +269,34 @@ function migrateLinkEndpointPortsForNode(nodeId: string, ports: NodePort[] | und
   return changed
 }
 
-/**
- * Drop malformed entries from an imported graph so the app never renders
- * orphan references. Fixes are best-effort with a console warning per
- * category — we favor loading *something* over rejecting the whole file.
- */
-function sanitizeGraph(graph: NetworkGraph): {
-  nodes: Map<string, Node>
-  subgraphs: Map<string, Subgraph>
-  links: Link[]
-} {
-  const nodes = new Map<string, Node>()
-  let duplicateNodes = 0
-  for (const node of graph.nodes ?? []) {
-    if (nodes.has(node.id)) {
-      duplicateNodes++
-      continue
-    }
-    nodes.set(node.id, node)
-  }
-  if (duplicateNodes > 0) {
-    console.warn(`[import] dropped ${duplicateNodes} duplicate node id(s)`)
-  }
-
-  const subgraphs = new Map<string, Subgraph>()
-  let duplicateSubgraphs = 0
-  for (const sg of graph.subgraphs ?? []) {
-    if (subgraphs.has(sg.id) || nodes.has(sg.id)) {
-      duplicateSubgraphs++
-      continue
-    }
-    subgraphs.set(sg.id, sg)
-  }
-  if (duplicateSubgraphs > 0) {
-    console.warn(`[import] dropped ${duplicateSubgraphs} duplicate/conflicting subgraph id(s)`)
-  }
-
-  // Strip parent pointers that reference a missing subgraph
-  let strippedNodeParents = 0
-  for (const [id, node] of nodes) {
-    if (node.parent && !subgraphs.has(node.parent)) {
-      nodes.set(id, { ...node, parent: undefined })
-      strippedNodeParents++
-    }
-  }
-  if (strippedNodeParents > 0) {
-    console.warn(`[import] cleared ${strippedNodeParents} node(s) with unknown parent`)
-  }
-
-  let strippedSgParents = 0
-  for (const [id, sg] of subgraphs) {
-    if (sg.parent && !subgraphs.has(sg.parent)) {
-      subgraphs.set(id, { ...sg, parent: undefined })
-      strippedSgParents++
-    }
-  }
-  if (strippedSgParents > 0) {
-    console.warn(`[import] cleared ${strippedSgParents} subgraph(s) with unknown parent`)
-  }
-
-  // Drop links whose endpoints reference missing nodes
-  const validLinks: Link[] = []
-  let droppedLinks = 0
-  for (const link of graph.links ?? []) {
-    if (nodes.has(link.from.node) && nodes.has(link.to.node)) {
-      validLinks.push(link)
-    } else {
-      droppedLinks++
-    }
-  }
-  if (droppedLinks > 0) {
-    console.warn(`[import] dropped ${droppedLinks} link(s) with unknown endpoints`)
-  }
-
-  return { nodes, subgraphs, links: validLinks }
-}
-
-/**
- * Reconcile products against the loaded diagram. Diagram-side
- * `productId` references (Node / LinkModule / LinkCable) are cleared
- * when the referenced product is gone.
- */
-function sanitizeProducts(
-  rawProducts: Product[],
-  nodes: Map<string, Node>,
-  links: Link[],
-): { products: Product[]; links: Link[] } {
-  const productIds = new Set<string>()
-  const cleanProducts: Product[] = []
-  let duplicates = 0
-  for (const entry of rawProducts) {
-    if (productIds.has(entry.id)) {
-      duplicates++
-      continue
-    }
-    productIds.add(entry.id)
-    cleanProducts.push(entry)
-  }
-  if (duplicates > 0) {
-    console.warn(`[import] dropped ${duplicates} duplicate product id(s)`)
-  }
-
-  // Clear stale productId references on diagram side
-  let clearedNodes = 0
-  for (const [id, node] of nodes) {
-    if (node.productId && !productIds.has(node.productId)) {
-      nodes.set(id, { ...node, productId: undefined })
-      clearedNodes++
-    }
-  }
-  if (clearedNodes > 0) {
-    console.warn(`[import] cleared ${clearedNodes} node(s) with unknown productId`)
-  }
-
-  let clearedLinks = 0
-  const cleanLinks = links.map((link) => {
-    let next = link
-    for (const side of ['from', 'to'] as const) {
-      const mod = next[side].plug?.module
-      if (mod?.productId && !productIds.has(mod.productId)) {
-        const { productId: _drop, ...rest } = mod
-        next = {
-          ...next,
-          [side]: { ...next[side], plug: { ...(next[side].plug ?? {}), module: rest } },
-        }
-        clearedLinks++
-      }
-    }
-    if (next.cable?.productId && !productIds.has(next.cable.productId)) {
-      const { productId: _drop, ...rest } = next.cable
-      next = { ...next, cable: rest }
-      clearedLinks++
-    }
-    return next
-  })
-  if (clearedLinks > 0) {
-    console.warn(`[import] cleared ${clearedLinks} link product reference(s)`)
-  }
-
-  return { products: cleanProducts, links: cleanLinks }
-}
-
 // =========================================================================
-// Project snapshot + undo/redo
+// Project snapshot + undo machinery
 // =========================================================================
 
-/**
- * Capture the persistent project state (the same surface that
- * export/import round-trips through). Used by the undo manager —
- * snapshots are the unit of "one undoable step".
- */
 function getProjectSnapshot(): ProjectSnapshot {
-  // `$state.snapshot` strips Svelte's reactive proxy wrapping and
-  // deeply clones — `structuredClone` can choke on those proxies in
-  // some paths and silently throw, breaking the click that triggered
-  // the mutation.
   return $state.snapshot({
     nodes: [...diagram.nodes.entries()],
     subgraphs: [...diagram.subgraphs.entries()],
     links: diagram.links,
-    products,
-    scenes,
+    products: productsStore.list,
+    scenes: scenesStore.list,
   }) as ProjectSnapshot
 }
 
-/**
- * Restore project state from a snapshot. Rebuilds derived fields
- * (ports / edges / bounds) and invalidates the sheet cache so
- * anything reading sub-sheet layouts gets a fresh build.
- */
 function applyProjectSnapshot(snap: ProjectSnapshot): void {
   const cloned = $state.snapshot(snap) as ProjectSnapshot
   replaceMap(diagram.nodes, cloned.nodes)
   replaceMap(diagram.subgraphs, cloned.subgraphs)
   diagram.links = cloned.links
-  products = cloned.products
-  scenes = cloned.scenes
-  // Drop the current scene if it was removed by the undo.
-  if (currentSceneId && !scenes.find((s) => s.id === currentSceneId)) {
-    currentSceneId = null
+  productsStore.set(cloned.products)
+  scenesStore.set(cloned.scenes)
+  if (scenesStore.currentId && !scenesStore.find(scenesStore.currentId)) {
+    scenesStore.setCurrentId(null)
   }
   invalidateSheetCache()
   rebuildPortsAndEdges()
 }
 
-/**
- * Run a mutation, snapshotting the pre-state for undo. Re-entrant
- * via the `inCommit` flag — a composite operation calls one
- * top-level `commit()` and lets nested mutations skip their own
- * snapshotting (otherwise we'd end up with two undo steps for one
- * user action).
- *
- * Also yields to a higher-level transaction (`beginTx` / `endTx`)
- * when one is active — every commit during the transaction
- * collapses into a single undo entry, so a scene drag of 200 pixels
- * doesn't poison history with 200 entries.
- */
 let inCommit = false
 let txActive = false
 let txSnap: ProjectSnapshot | null = null
@@ -685,33 +328,77 @@ async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
   }
 }
 
+// =========================================================================
+// Public editor state — adds the edit-session transaction bracket
+// over the raw editor store.
+// =========================================================================
+
+export const editorState = {
+  get mode() {
+    return editorStore.mode
+  },
+  set mode(v: 'edit' | 'view') {
+    // The diagram canvas drag uses Svelte $bindable so individual node
+    // moves don't go through commit. Wrap the entire edit session as
+    // one undo transaction: snapshot on enter, push delta on exit
+    // (only if state actually changed).
+    if (editorStore.mode === v) return
+    if (v === 'edit') {
+      diagramState.beginTx('Edit')
+    } else if (editorStore.mode === 'edit') {
+      diagramState.endTx()
+    }
+    editorStore.setMode(v)
+  },
+  get isDark() {
+    return editorStore.isDark
+  },
+  set isDark(v: boolean) {
+    editorStore.setDark(v)
+  },
+  get theme(): Theme {
+    return editorStore.theme
+  },
+  get interactive() {
+    return editorStore.interactive
+  },
+  toggleMode() {
+    editorState.mode = editorStore.mode === 'edit' ? 'view' : 'edit'
+  },
+  toggleTheme() {
+    editorStore.toggleTheme()
+  },
+}
+
+// =========================================================================
+// Public diagram state — composes diagram/products/scenes/sheet/undo
+// into the existing god-object surface. Wraps mutations with commit.
+// =========================================================================
+
 export const diagramState = {
-  // Diagram — individual accessors for $bindable compat.
-  // Setters defensively fold plain-Map assignments back into our existing
-  // SvelteMap so an accidental `bind:` write-back can't silently downgrade
-  // the reactive identity.
+  // ----- Diagram (root maps) — getters for $bindable compat ------------
   get nodes() {
     return diagram.nodes
   },
   set nodes(v: Map<string, Node>) {
     if (v === diagram.nodes) return
-    if (v instanceof SvelteMap) diagram.nodes = v
+    if (v instanceof SvelteMap) Object.assign(diagram, { nodes: v })
     else replaceMap(diagram.nodes, v)
   },
   get ports() {
     return diagram.ports
   },
-  set ports(v: Map<string, ResolvedPort>) {
+  set ports(v: Map<string, ResolvedPortShim>) {
     if (v === diagram.ports) return
-    if (v instanceof SvelteMap) diagram.ports = v
+    if (v instanceof SvelteMap) Object.assign(diagram, { ports: v })
     else replaceMap(diagram.ports, v)
   },
   get edges() {
     return diagram.edges
   },
-  set edges(v: Map<string, ResolvedEdge>) {
+  set edges(v: Map<string, ResolvedEdgeShim>) {
     if (v === diagram.edges) return
-    if (v instanceof SvelteMap) diagram.edges = v
+    if (v instanceof SvelteMap) Object.assign(diagram, { edges: v })
     else replaceMap(diagram.edges, v)
   },
   get subgraphs() {
@@ -719,7 +406,7 @@ export const diagramState = {
   },
   set subgraphs(v: Map<string, Subgraph>) {
     if (v === diagram.subgraphs) return
-    if (v instanceof SvelteMap) diagram.subgraphs = v
+    if (v instanceof SvelteMap) Object.assign(diagram, { subgraphs: v })
     else replaceMap(diagram.subgraphs, v)
   },
   get bounds() {
@@ -734,6 +421,8 @@ export const diagramState = {
   set links(v: Link[]) {
     diagram.links = v
   },
+
+  // ----- Diagram mutations (commit-wrapped) ---------------------------
   addLink(link: Link) {
     commit('Add link', () => {
       diagram.links = [...diagram.links, link]
@@ -743,34 +432,24 @@ export const diagramState = {
   },
   updateLink(id: string, updates: Partial<Link>) {
     commit('Update link', () => {
-      // Endpoints may have moved into / out of a child sheet's scope.
       diagram.links = diagram.links.map((l) => (l.id === id ? { ...l, ...updates } : l))
       invalidateSheetCache()
       rebuildPortsAndEdges()
     })
-  },
-  /**
-   * Append a port to a node and trigger a port/edge rebuild. Used by
-   * forms (and other UI) that need to materialize a port *before*
-   * constructing the link endpoint. The `port` field of any LinkEndpoint
-   * we append to `links` must already point at an existing port.
-   */
-  addNodePort(nodeId: string, init: Partial<NodePort> = {}) {
-    const portId = appendPortToNode(diagram.nodes, nodeId, init)
-    if (portId) rebuildPortsAndEdges()
-    return portId
   },
   removeLink(id: string) {
     diagram.links = diagram.links.filter((l) => l.id !== id)
     invalidateSheetCache()
     rebuildPortsAndEdges()
   },
+  addNodePort(nodeId: string, init: Partial<NodePort> = {}) {
+    const portId = appendPortToNode(diagram.nodes, nodeId, init)
+    if (portId) rebuildPortsAndEdges()
+    return portId
+  },
   updateNode(id: string, updates: Partial<Node>) {
     const rn = diagram.nodes.get(id)
     if (!rn) return
-    // Only a `parent` change moves the node between sheets; purely-
-    // visual updates (label, spec, position, style) leave sheet
-    // membership untouched so we skip the cache invalidation there.
     if ('parent' in updates && updates.parent !== rn.parent) invalidateSheetCache()
     diagram.nodes.set(id, { ...rn, ...updates })
   },
@@ -780,27 +459,13 @@ export const diagramState = {
     if ('parent' in updates && updates.parent !== sg.parent) invalidateSheetCache()
     diagram.subgraphs.set(id, { ...sg, ...updates })
   },
-  /**
-   * Re-parent a node. When moving INTO a group, the node is recentered on
-   * the target subgraph so it's visible inside the new container. When
-   * removing from a group (groupId = undefined), the current position is
-   * preserved.
-   *
-   * Delegates position/port/edge recomputation to core's moveNode so ports
-   * stick to the node and edges re-route through libavoid — the same path
-   * used by interactive drag. A plain parent+position update on the node
-   * record alone leaves ports at their stale absolute positions and leaves
-   * edges routed to the old location.
-   */
   async moveNodeToGroup(nodeId: string, groupId: string | undefined) {
     return commitAsync('Move to group', async () => {
       const node = diagram.nodes.get(nodeId)
       if (!node?.position) return
       if (node.parent === groupId) return
 
-      // Parent change → sheet membership change → invalidate caches.
       invalidateSheetCache()
-      // Set parent first so moveNode's obstacle filter excludes the new parent
       diagram.nodes.set(nodeId, { ...node, parent: groupId })
 
       if (groupId) {
@@ -825,47 +490,10 @@ export const diagramState = {
         }
       }
 
-      // No-op position delta (or removing from a group): parent changed but
-      // node didn't move — still rebalance subgraph bounds and re-route edges.
       rebalanceSubgraphs(diagram.nodes, diagram.subgraphs, diagram.ports)
       await rerouteEdges()
     })
   },
-  get poeBudgets() {
-    return poeBudgets
-  },
-  get catalog() {
-    return catalog
-  },
-  get status() {
-    return status
-  },
-  get yamlSource() {
-    return yamlSource
-  },
-  set yamlSource(v: string) {
-    yamlSource = v
-  },
-  get initialized() {
-    return initialized
-  },
-  get stats() {
-    return {
-      nodes: diagram.nodes.size,
-      links: diagram.links.length,
-      subgraphs: diagram.subgraphs.size,
-    }
-  },
-  getNodePorts(nodeId: string): NodePort[] {
-    return diagram.nodes.get(nodeId)?.ports ?? []
-  },
-  /**
-   * Update a port's label and propagate to the resolved-port map. The
-   * renderer's `commitLabel` only updates `ResolvedPort`, which is not
-   * persisted — `Node.ports[i].label` is the source of truth.
-   *
-   * `portId` is the resolved-port id (`${nodeId}:${nodePortId}`).
-   */
   updatePortLabel(portId: string, label: string) {
     commit('Rename port', () => {
       const colon = portId.indexOf(':')
@@ -886,14 +514,9 @@ export const diagramState = {
       if (resolved) diagram.ports.set(portId, { ...resolved, label })
     })
   },
-  /**
-   * Catalog-defined port names for the node's bound device, e.g.
-   * `["Gi1/0/1", "Gi1/0/2", ...]` for a Cisco WS-C3560CX. Surfaced as
-   * suggestions when the user renames a port. We don't filter by "already
-   * used" — a 24-port switch's full template list is more useful than a
-   * filtered subset, and label uniqueness isn't enforced by the model
-   * anyway (links reference NodePort.id, not label).
-   */
+  getNodePorts(nodeId: string): NodePort[] {
+    return diagram.nodes.get(nodeId)?.ports ?? []
+  },
   getPortLabelSuggestions(nodeId: string): string[] {
     const spec = diagram.nodes.get(nodeId)?.spec
     if (spec?.kind !== 'hardware' || !spec.vendor || !spec.model) return []
@@ -907,50 +530,51 @@ export const diagramState = {
     const usage = new Map<string, string[]>()
     for (const [i, link] of diagram.links.entries()) {
       const linkId = link.id ?? `link-${i}`
-      const fromNode = link.from.node
-      const toNode = link.to.node
-      const fromPort = link.from.port
-      const toPort = link.to.port
-      if (fromNode === nodeId && fromPort) {
-        const links = usage.get(fromPort) ?? []
-        links.push(linkId)
-        usage.set(fromPort, links)
+      if (link.from.node === nodeId && link.from.port) {
+        const arr = usage.get(link.from.port) ?? []
+        arr.push(linkId)
+        usage.set(link.from.port, arr)
       }
-      if (toNode === nodeId && toPort) {
-        const links = usage.get(toPort) ?? []
-        links.push(linkId)
-        usage.set(toPort, links)
+      if (link.to.node === nodeId && link.to.port) {
+        const arr = usage.get(link.to.port) ?? []
+        arr.push(linkId)
+        usage.set(link.to.port, arr)
       }
     }
     return usage
   },
 
-  // =====================================================================
-  // Sheets — hierarchical / multi-sheet editing state
-  //
-  // Layer 0 of the sheet feature: we track which sheet is active and
-  // expose the list of available sheets. Filtering the renderer based
-  // on the active sheet is a separate follow-up (see ARCHITECTURE.md
-  // "Known gaps / hierarchical sheets").
-  // =====================================================================
-
-  /**
-   * Current active sheet id. `null` means the root sheet (full
-   * diagram). A non-null value is the id of a top-level subgraph
-   * being viewed as its own sheet.
-   */
-  get currentSheetId() {
-    return currentSheetId
+  // ----- Status / session passthroughs --------------------------------
+  get poeBudgets() {
+    return poeBudgets
+  },
+  get catalog() {
+    return catalog
+  },
+  get status() {
+    return sessionStore.status
+  },
+  get yamlSource() {
+    return sessionStore.yamlSource
+  },
+  set yamlSource(v: string) {
+    sessionStore.setYamlSource(v)
+  },
+  get initialized() {
+    return sessionStore.initialized
+  },
+  get stats() {
+    return {
+      nodes: diagram.nodes.size,
+      links: diagram.links.length,
+      subgraphs: diagram.subgraphs.size,
+    }
   },
 
-  /**
-   * Available sheets, derived from the current diagram.
-   *
-   * The root sheet always exists; it's joined by one entry per
-   * top-level subgraph (those whose `parent` is undefined). Deeper
-   * subgraphs aren't promoted to tabs here — they're accessible by
-   * drilling further once Layer 1 filtering lands.
-   */
+  // ----- Sheets -------------------------------------------------------
+  get currentSheetId() {
+    return sheetStore.currentSheetId
+  },
   get availableSheets(): Array<{ id: string | null; label: string }> {
     const sheets: Array<{ id: string | null; label: string }> = [{ id: null, label: 'Root' }]
     for (const sg of diagram.subgraphs.values()) {
@@ -959,36 +583,14 @@ export const diagramState = {
     }
     return sheets
   },
-
-  /**
-   * Switch to a different sheet. `null` switches back to the root.
-   *
-   * Non-null switches drill KiCad-style: the subgraph's filtered
-   * graph (with export connectors for cross-boundary links) is fed
-   * into `computeNetworkLayout` and the result is mirrored into
-   * `sheetView` so the renderer can bind to it. Layouts are cached
-   * per sheet-id and reused until a structural root-graph change
-   * invalidates them — rapid back-and-forth between tabs stays
-   * instant.
-   *
-   * Read-only: edits while drilled in land on `sheetView`, not on
-   * the root canonical state. Switching back to root discards any
-   * such edits (Layer 2 will add write-through). `currentSheetId`
-   * changes synchronously so UI highlighting is instantaneous; the
-   * layout call runs asynchronously and updates `sheetView` when
-   * it completes.
-   */
   async switchSheet(id: string | null) {
     if (id !== null && !diagram.subgraphs.has(id)) {
-      // Silently fall back to root rather than entering a ghost sheet.
-      currentSheetId = null
+      sheetStore.setCurrentSheetId(null)
       return
     }
-    currentSheetId = id
+    sheetStore.setCurrentSheetId(id)
 
     if (id === null) {
-      // Back to root: no async work, clear the sheet view so any next
-      // drill-down starts from a clean slate.
       sheetView.nodes.clear()
       sheetView.ports.clear()
       sheetView.edges.clear()
@@ -997,21 +599,15 @@ export const diagramState = {
       return
     }
 
-    // Cache hit: apply the stored layout and we're done.
     const cached = sheetCache.get(id)
     if (cached) {
       applyResolvedLayout(sheetView, cached, sheetView.links)
-      // Cache hit still needs the links array — stored separately so
-      // the renderer has the connections list for its port routing.
       const cachedLinks = sheetLinkCache.get(id)
       if (cachedLinks) sheetView.links = [...cachedLinks]
       return
     }
 
-    // Cache miss: build the filtered sub-graph and lay it out. We
-    // sanitize the root graph first so the sub-sheet inherits the
-    // same orphan-safe invariants `applyGraph` enforces.
-    const generation = sheetCacheGeneration
+    const generation = currentSheetCacheGeneration()
     const rootGraph = diagramState.exportGraph()
     const { nodes: sanNodes, subgraphs: sanSubgraphs, links: sanLinks } = sanitizeGraph(rootGraph)
     const sanitized: NetworkGraph = {
@@ -1022,59 +618,38 @@ export const diagramState = {
     }
     const childGraph = buildChildSheetGraph(sanitized, id)
     if (!childGraph) {
-      // Subgraph disappeared between the tab render and our read —
-      // bounce back to root rather than showing an empty sheet.
-      currentSheetId = null
+      sheetStore.setCurrentSheetId(null)
       return
     }
     const { resolved } = await computeNetworkLayout(childGraph)
 
-    // Bail if either (a) the user has switched away while we were
-    // computing, or (b) the root graph has been mutated underneath us
-    // (generation counter bumped) and our result is stale.
-    if (currentSheetId !== id || generation !== sheetCacheGeneration) return
+    if (sheetStore.currentSheetId !== id || generation !== currentSheetCacheGeneration()) return
 
     sheetCache.set(id, resolved)
     sheetLinkCache.set(id, childGraph.links)
     applyResolvedLayout(sheetView, resolved, childGraph.links)
   },
-
-  /**
-   * Current visible diagram — either the root state or the cached
-   * sub-sheet view. The renderer binds to this via `+page.svelte`.
-   */
   get activeView() {
-    if (currentSheetId === null) return diagram
+    if (sheetStore.currentSheetId === null) return diagram
     return sheetView
   },
-
-  /**
-   * Invalidate every cached sub-sheet layout. Exposed for the cases
-   * where a structural mutation happens outside `diagramState` (e.g.
-   * the renderer adds a node directly via its internal `addNewNode`
-   * and emits `onnodeadd`). Methods inside `diagramState` that
-   * already mutate root structure call this internally — callers of
-   * those don't need to repeat.
-   */
   invalidateSheetCache() {
     invalidateSheetCache()
   },
 
-  // Products — project-local material library
+  // ----- Products -----------------------------------------------------
   get products() {
-    return products
+    return productsStore.list
   },
   addProduct(entry: Product) {
-    commit('Add product', () => {
-      products = [...products, entry]
-    })
+    commit('Add product', () => productsStore.add(entry))
   },
   removeProduct(id: string) {
     commit('Remove product', () => {
-      const product = products.find((p) => p.id === id)
+      const product = productsStore.find(id)
       if (!product) return
 
-      // Clear node bindings (devices) and strip product details from spec
+      // Cross-store cleanup: clear node/link bindings before removing.
       if (product.kind === 'device') {
         const boundNodeIds: string[] = []
         for (const [nodeId, node] of diagram.nodes) {
@@ -1090,7 +665,6 @@ export const diagramState = {
         }
       }
 
-      // Clear link-module / link-cable bindings
       if (product.kind === 'module' || product.kind === 'cable') {
         diagram.links = diagram.links.map((link) => {
           let next = link
@@ -1117,14 +691,13 @@ export const diagramState = {
         })
       }
 
-      products = products.filter((p) => p.id !== id)
+      productsStore.remove(id)
     })
   },
   updateProduct(id: string, updates: Partial<Product>) {
     commit('Update product', () => {
-      products = products.map((p) => (p.id === id ? ({ ...p, ...updates } as Product) : p))
-      // Propagate device-product changes to bound nodes
-      const product = products.find((p) => p.id === id)
+      productsStore.update(id, updates)
+      const product = productsStore.find(id)
       const iconChanged = 'icon' in updates
       const specChanged = !!updates.spec
       const propsChanged = 'properties' in updates || !!updates.catalogId
@@ -1145,8 +718,6 @@ export const diagramState = {
       }
     })
   },
-
-  /** Count of placed units for a product (across the whole diagram). */
   placedCount(productId: string): number {
     let n = 0
     for (const node of diagram.nodes.values()) {
@@ -1160,18 +731,13 @@ export const diagramState = {
     }
     return n
   },
-  /**
-   * Effective required quantity for a product. Returns the explicit
-   * `requiredQty` when set; otherwise falls back to the placed count
-   * (so an unset target is "however many we've drawn").
-   */
   requiredCount(productId: string): number {
-    const product = products.find((p) => p.id === productId)
+    const product = productsStore.find(productId)
     if (product?.requiredQty !== undefined) return product.requiredQty
     return diagramState.placedCount(productId)
   },
 
-  // Assignments — node/module/cable ↔ product binding view
+  // ----- Assignments --------------------------------------------------
   get assignmentRows(): AssignmentRow[] {
     return buildAssignmentRows()
   },
@@ -1189,7 +755,7 @@ export const diagramState = {
       const endpoint = link[target.side]
       const standard = endpoint.plug?.module?.standard
       if (!standard) return
-      const product = productId ? products.find((p) => p.id === productId) : undefined
+      const product = productId ? productsStore.find(productId) : undefined
       const nextModule = {
         ...endpoint.plug?.module,
         standard,
@@ -1215,8 +781,6 @@ export const diagramState = {
       cable: Object.keys(nextCable).length > 0 ? nextCable : undefined,
     })
   },
-
-  /** Unbind diagram nodes from their bound product. Strips spec/ports back to role. */
   unbindNodes(nodeIds: string[]) {
     commit('Unbind nodes', () => {
       const ids = new Set(nodeIds)
@@ -1233,12 +797,6 @@ export const diagramState = {
       }
     })
   },
-
-  /**
-   * Bind a diagram node to a (device) Product. The product's spec is
-   * snapshotted onto the node, and ports are derived from the product
-   * spec when available.
-   */
   bindNodeToProduct(nodeId: string, productId: string) {
     commit('Bind product', () => {
       const product = deviceProduct(productId)
@@ -1250,12 +808,6 @@ export const diagramState = {
       setNodePortsFromProduct(nodeId, product)
     })
   },
-
-  /**
-   * Materialize a fresh diagram node bound to the given product. Returns
-   * the new node id. Increments `placedCount` on its own; if the user
-   * had a `requiredQty` set, the gap closes by one.
-   */
   placeProductAsNode(productId: string): string | undefined {
     return commit('Place product', () => {
       const product = deviceProduct(productId)
@@ -1288,12 +840,6 @@ export const diagramState = {
       return id
     })
   },
-
-  /**
-   * Materialize an empty diagram node with no spec or product binding.
-   * Used when a user wants to start from a node placeholder and bind a
-   * product later. Returns the new node id.
-   */
   addEmptyNode(label = 'Node'): string {
     return commit('Add node', () => {
       const id = newId('node')
@@ -1315,39 +861,23 @@ export const diagramState = {
     })
   },
 
-  // =====================================================================
-  // Scenes — physical-placement views of the underlying NetworkGraph.
-  //
-  // A scene carries presentation metadata (which nodes are placed where
-  // on a floor plan, how each link is routed). The graph stays the
-  // source of truth for topology; scene CRUD only touches the scene
-  // array. High-level helpers (placeProductInScene / addWireInScene)
-  // sync to graph state by delegating to the existing diagram APIs.
-  // =====================================================================
-
+  // ----- Scenes -------------------------------------------------------
   get scenes() {
-    return scenes
+    return scenesStore.list
   },
   get currentSceneId() {
-    return currentSceneId
+    return scenesStore.currentId
   },
   get currentScene(): Scene | undefined {
-    return currentSceneId ? scenes.find((s) => s.id === currentSceneId) : undefined
+    return scenesStore.current
   },
   setCurrentScene(id: string | null) {
-    currentSceneId = id
+    scenesStore.setCurrentId(id)
   },
-  /**
-   * Switch to the scene bound to a subgraph (or root if `undefined`).
-   * Auto-creates the scene record on first access — scenes are
-   * implicit views of their subgraph (mirrors how every subgraph
-   * already exists as a sheet on the diagram side), so the user
-   * doesn't manually "add" them.
-   */
   setCurrentSceneForScope(scopeSubgraphId: string | undefined) {
-    const existing = scenes.find((s) => s.scopeSubgraphId === scopeSubgraphId)
+    const existing = scenesStore.list.find((s) => s.scopeSubgraphId === scopeSubgraphId)
     if (existing) {
-      currentSceneId = existing.id
+      scenesStore.setCurrentId(existing.id)
       return
     }
     commit('Open scene', () => {
@@ -1360,139 +890,55 @@ export const diagramState = {
         wireRoutes: [],
         scopeSubgraphId,
       }
-      scenes = [...scenes, scene]
-      currentSceneId = scene.id
+      scenesStore.add(scene)
+      scenesStore.setCurrentId(scene.id)
     })
   },
   addScene(scene: Scene) {
-    commit('Add scene', () => {
-      scenes = [...scenes, scene]
-    })
+    commit('Add scene', () => scenesStore.add(scene))
   },
   removeScene(id: string) {
-    commit('Remove scene', () => {
-      scenes = scenes.filter((s) => s.id !== id)
-      if (currentSceneId === id) currentSceneId = null
-    })
+    commit('Remove scene', () => scenesStore.remove(id))
   },
   updateScene(id: string, updates: Partial<Omit<Scene, 'id'>>) {
-    commit('Update scene', () => {
-      scenes = scenes.map((s) => (s.id === id ? { ...s, ...updates } : s))
-    })
+    commit('Update scene', () => scenesStore.update(id, updates))
   },
-
-  /** Place / move a node in a scene. */
   placeNodeInScene(sceneId: string, nodeId: string, position: { x: number; y: number }) {
-    commit('Move item', () => {
-      scenes = scenes.map((s) => {
-        if (s.id !== sceneId) return s
-        const idx = s.nodePlacements.findIndex((p) => p.nodeId === nodeId)
-        if (idx >= 0) {
-          const next = [...s.nodePlacements]
-          next[idx] = { ...next[idx], position }
-          return { ...s, nodePlacements: next }
-        }
-        return { ...s, nodePlacements: [...s.nodePlacements, { nodeId, position }] }
-      })
-    })
+    commit('Move item', () => scenesStore.placeNode(sceneId, nodeId, position))
   },
   removePlacementFromScene(sceneId: string, nodeId: string) {
     commit('Remove placement', () => {
-      scenes = scenes.map((s) =>
-        s.id === sceneId
-          ? {
-              ...s,
-              nodePlacements: s.nodePlacements.filter((p) => p.nodeId !== nodeId),
-              wireRoutes: s.wireRoutes.filter((w) => {
-                const link = diagram.links.find((l) => l.id === w.linkId)
-                if (!link) return false
-                return link.from.node !== nodeId && link.to.node !== nodeId
-              }),
-            }
-          : s,
-      )
-    })
-  },
-
-  /** Set / replace a wire route. */
-  setWireRoute(sceneId: string, route: WireRoute) {
-    commit('Route wire', () => {
-      scenes = scenes.map((s) => {
-        if (s.id !== sceneId) return s
-        const idx = s.wireRoutes.findIndex((w) => w.linkId === route.linkId)
-        if (idx >= 0) {
-          const next = [...s.wireRoutes]
-          next[idx] = route
-          return { ...s, wireRoutes: next }
-        }
-        return { ...s, wireRoutes: [...s.wireRoutes, route] }
+      scenesStore.removePlacement(sceneId, nodeId, (linkId) => {
+        const link = diagram.links.find((l) => l.id === linkId)
+        if (!link) return false
+        return link.from.node !== nodeId && link.to.node !== nodeId
       })
     })
   },
-  removeWireFromScene(sceneId: string, linkId: string) {
-    commit('Remove wire route', () => {
-      scenes = scenes.map((s) =>
-        s.id === sceneId
-          ? { ...s, wireRoutes: s.wireRoutes.filter((w) => w.linkId !== linkId) }
-          : s,
-      )
-    })
+  setWireRoute(sceneId: string, route: WireRoute) {
+    commit('Route wire', () => scenesStore.setWireRoute(sceneId, route))
   },
-
-  /** Hide a node from a scene without affecting the diagram. */
+  removeWireFromScene(sceneId: string, linkId: string) {
+    commit('Remove wire route', () => scenesStore.removeWireRoute(sceneId, linkId))
+  },
   hideNodeInScene(sceneId: string, nodeId: string) {
     commit('Hide node', () => {
-      scenes = scenes.map((s) => {
-        if (s.id !== sceneId) return s
-        const hidden = new Set(s.hiddenNodeIds ?? [])
-        hidden.add(nodeId)
-        return {
-          ...s,
-          hiddenNodeIds: [...hidden],
-          // Hidden node's wires are also hidden — drop the routes too.
-          wireRoutes: s.wireRoutes.filter((w) => {
-            const link = diagram.links.find((l) => l.id === w.linkId)
-            if (!link) return false
-            return link.from.node !== nodeId && link.to.node !== nodeId
-          }),
-        }
+      scenesStore.hideNode(sceneId, nodeId, (linkId) => {
+        const link = diagram.links.find((l) => l.id === linkId)
+        if (!link) return false
+        return link.from.node !== nodeId && link.to.node !== nodeId
       })
     })
   },
   unhideNodeInScene(sceneId: string, nodeId: string) {
-    commit('Unhide node', () => {
-      scenes = scenes.map((s) =>
-        s.id === sceneId
-          ? { ...s, hiddenNodeIds: (s.hiddenNodeIds ?? []).filter((id) => id !== nodeId) }
-          : s,
-      )
-    })
+    commit('Unhide node', () => scenesStore.unhideNode(sceneId, nodeId))
   },
   hideLinkInScene(sceneId: string, linkId: string) {
-    commit('Hide link', () => {
-      scenes = scenes.map((s) => {
-        if (s.id !== sceneId) return s
-        const hidden = new Set(s.hiddenLinkIds ?? [])
-        hidden.add(linkId)
-        return { ...s, hiddenLinkIds: [...hidden] }
-      })
-    })
+    commit('Hide link', () => scenesStore.hideLink(sceneId, linkId))
   },
   unhideLinkInScene(sceneId: string, linkId: string) {
-    commit('Unhide link', () => {
-      scenes = scenes.map((s) =>
-        s.id === sceneId
-          ? { ...s, hiddenLinkIds: (s.hiddenLinkIds ?? []).filter((id) => id !== linkId) }
-          : s,
-      )
-    })
+    commit('Unhide link', () => scenesStore.unhideLink(sceneId, linkId))
   },
-
-  /**
-   * Place a Product onto a scene at the given position. Creates the
-   * underlying Node (via the existing place flow), then records the
-   * scene-local placement. Returns the new node id.
-   */
   placeProductInScene(
     sceneId: string,
     productId: string,
@@ -1501,10 +947,7 @@ export const diagramState = {
     return commit('Place product in scene', () => {
       const nodeId = diagramState.placeProductAsNode(productId)
       if (!nodeId) return undefined
-      // Inherit scene's scope: scene-added nodes belong to the subgraph
-      // that scene is bound to. Without this they'd drop to root and be
-      // filtered out by the scene's own scope view.
-      const scene = scenes.find((s) => s.id === sceneId)
+      const scene = scenesStore.find(sceneId)
       const node = diagram.nodes.get(nodeId)
       if (scene?.scopeSubgraphId && node) {
         diagram.nodes.set(nodeId, { ...node, parent: scene.scopeSubgraphId })
@@ -1514,15 +957,10 @@ export const diagramState = {
       return nodeId
     })
   },
-
-  /**
-   * Add an empty (unbound) node to a scene at the given position.
-   * Mirrors `addEmptyNode` but pins the placement to a scene.
-   */
   addEmptyNodeInScene(sceneId: string, position: { x: number; y: number }, label = 'Node'): string {
     return commit('Add node in scene', () => {
       const id = diagramState.addEmptyNode(label)
-      const scene = scenes.find((s) => s.id === sceneId)
+      const scene = scenesStore.find(sceneId)
       const node = diagram.nodes.get(id)
       if (scene?.scopeSubgraphId && node) {
         diagram.nodes.set(id, { ...node, parent: scene.scopeSubgraphId })
@@ -1532,11 +970,6 @@ export const diagramState = {
       return id
     })
   },
-
-  /**
-   * Wire two scene items together. Adds a Link to the diagram and a
-   * WireRoute to the scene. Returns the new link id.
-   */
   addWireInScene(
     sceneId: string,
     fromNodeId: string,
@@ -1562,10 +995,7 @@ export const diagramState = {
     })
   },
 
-  // ---------------------------------------------------------------------
-  // Undo / Redo — project-wide. Mutating methods above call `commit()`
-  // to capture a pre-state snapshot; these handlers consume it.
-  // ---------------------------------------------------------------------
+  // ----- Undo / Redo + transactions -----------------------------------
   get canUndo() {
     return undoManager.canUndo
   },
@@ -1592,28 +1022,12 @@ export const diagramState = {
     applyProjectSnapshot(target)
     return true
   },
-  /**
-   * Begin an undo transaction. While active, individual `commit()`
-   * calls don't push their own undo entries — the whole transaction
-   * collapses to a single undo step at `endTx()`. Use for drags,
-   * multi-step edit sessions, or any user gesture where the
-   * intermediate state isn't a meaningful undo target.
-   *
-   * No-op if a transaction is already active (only the outermost
-   * begin/end pair takes effect).
-   */
   beginTx(label: string): void {
     if (txActive) return
     txSnap = getProjectSnapshot()
     txLabel = label
     txActive = true
   },
-  /**
-   * Close a transaction. Pushes the entry-snapshot only if state
-   * actually differs from then — a beginTx with no mutations is a
-   * silent no-op, so callers can be liberal with begin/end without
-   * polluting history with empty entries.
-   */
   endTx(): void {
     if (!txActive) return
     const snap = txSnap
@@ -1622,8 +1036,6 @@ export const diagramState = {
     txSnap = null
     txLabel = ''
     if (!snap) return
-    // Compare lightly: same key counts + same JSON of arrays. Avoids
-    // pushing empty entries for begin/end bracketing a no-op gesture.
     const after = getProjectSnapshot()
     const changed =
       snap.nodes.length !== after.nodes.length ||
@@ -1634,12 +1046,11 @@ export const diagramState = {
       JSON.stringify(snap) !== JSON.stringify(after)
     if (changed) undoManager.push(label, snap)
   },
-  /** Whether a transaction is currently open. */
   get inTx(): boolean {
     return txActive
   },
 
-  // NetworkGraph — canonical save/load format
+  // ----- Serialization ------------------------------------------------
   exportGraph(): NetworkGraph {
     return {
       version: '1',
@@ -1648,14 +1059,16 @@ export const diagramState = {
       subgraphs: [...diagram.subgraphs.values()],
     }
   },
-  /**
-   * Re-run the layout engine across the whole diagram, discarding every
-   * manual position. Intended for a user-invoked "Auto-arrange" command
-   * after manual edits have left the graph visually messy.
-   *
-   * Stripping positions (not pinning) means the result matches what a
-   * fresh YAML import would produce; palette and BOM are untouched.
-   */
+  exportProject(name = 'Untitled'): string {
+    const project: NetedProject = {
+      version: 3,
+      name,
+      products: [...productsStore.list],
+      diagram: diagramState.exportGraph(),
+      scenes: scenesStore.list.length > 0 ? [...scenesStore.list] : undefined,
+    }
+    return JSON.stringify(project, null, 2)
+  },
   async autoArrange() {
     return commitAsync('Auto-arrange', async () => {
       const graph: NetworkGraph = {
@@ -1671,132 +1084,94 @@ export const diagramState = {
       diagram.bounds = { ...resolved.bounds }
     })
   },
-  // Serialization — .neted.json format
-  /** Export project as NetedProject JSON string */
-  exportProject(name = 'Untitled'): string {
-    const project: NetedProject = {
-      version: 3,
-      name,
-      products: [...products],
-      diagram: diagramState.exportGraph(),
-      scenes: scenes.length > 0 ? [...scenes] : undefined,
-    }
-    return JSON.stringify(project, null, 2)
-  },
 
-  // =====================================================================
-  // Linear load pipeline:   applyYaml → importProject → loadProject
-  //
-  // Each step converts its input one level up and forwards to the next.
-  // loadProject is the terminal: it owns state reset, `initialized`, and
-  // status. Everything above is a thin adapter.
-  // =====================================================================
-
-  /** YAML text → NetedProject (current products/inventory preserved) → importProject. */
+  // ----- Load pipeline ------------------------------------------------
   async applyYaml(yamlStr: string) {
     try {
-      status = 'Parsing YAML...'
+      sessionStore.setStatus('Parsing YAML...')
       const fileMap = new Map<string, string>()
       fileMap.set('main.yaml', yamlStr)
       fileMap.set('./main.yaml', yamlStr)
       fileMap.set('/main.yaml', yamlStr)
       const resolver = createMemoryFileResolver(fileMap, '/')
       const hp = new HierarchicalParser(resolver)
-      const diagram = (await hp.parse(yamlStr, '/main.yaml')).graph
+      const parsed = (await hp.parse(yamlStr, '/main.yaml')).graph
       await diagramState.importProject({
         version: 3,
         name: 'YAML Import',
-        products: [...products],
-        diagram,
-        scenes: scenes.length > 0 ? [...scenes] : undefined,
+        products: [...productsStore.list],
+        diagram: parsed,
+        scenes: scenesStore.list.length > 0 ? [...scenesStore.list] : undefined,
       })
-      yamlSource = yamlStr
+      sessionStore.setYamlSource(yamlStr)
     } catch (e) {
-      status = `Error: ${e instanceof Error ? e.message : String(e)}`
+      sessionStore.setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`)
     }
   },
-
-  /** JSON string or parsed NetedProject → loadProject('imported', data). */
   async importProject(input: string | NetedProject) {
     const data = typeof input === 'string' ? JSON.parse(input) : input
     await diagramState.loadProject('imported', data)
   },
-
-  /**
-   * Diagram-only import: accepts a NetworkGraph (parsed or JSON
-   * string) and replaces just the diagram while preserving the
-   * current products and inventory. Wraps the input in a synthetic
-   * NetedProject and forwards to `importProject`, so the linear
-   * pipeline stays uniform regardless of what format came in.
-   */
   async importDiagram(input: string | NetworkGraph) {
-    const diagram: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
+    const parsed: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
     await diagramState.importProject({
       version: 3,
       name: 'Diagram Import',
-      products: [...products],
-      diagram,
-      scenes: scenes.length > 0 ? [...scenes] : undefined,
+      products: [...productsStore.list],
+      diagram: parsed,
+      scenes: scenesStore.list.length > 0 ? [...scenesStore.list] : undefined,
     })
   },
-
-  /**
-   * Terminal: reset state, apply project data, set status.
-   *
-   * - `projectId`: 'sample' / 'imported' / 'empty' / other (= empty)
-   * - `data`: optional — when provided (e.g. via importProject) it's used
-   *   directly instead of the built-in lookup.
-   */
   async loadProject(projectId: string, data?: Partial<NetedProject>) {
-    // When importProject routed us to /project/imported/diagram it has
-    // already populated state; the follow-up route-triggered loadProject
-    // with no data would otherwise wipe what was just imported.
-    if (projectId === 'imported' && initialized && !data) return
+    if (projectId === 'imported' && sessionStore.initialized && !data) return
 
-    // Reset all state unconditionally — every path through the terminal
-    // gets a clean slate before apply.
-    products = []
-    scenes = []
-    currentSceneId = null
+    productsStore.set([])
+    scenesStore.set([])
+    scenesStore.setCurrentId(null)
     diagram.nodes.clear()
     diagram.ports.clear()
     diagram.edges.clear()
     diagram.subgraphs.clear()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
-    yamlSource = ''
-    currentSheetId = null
-    initialized = false
+    sessionStore.setYamlSource('')
+    sheetStore.setCurrentSheetId(null)
+    sessionStore.setInitialized(false)
 
     try {
       const project = data ?? (projectId === 'sample' ? sampleProject : null)
       if (project) {
-        status =
+        sessionStore.setStatus(
           projectId === 'sample'
             ? 'Loading sample...'
             : projectId === 'imported'
               ? 'Loading project...'
-              : 'Loading...'
+              : 'Loading...',
+        )
         await applyProject(project)
       }
-      status = 'Ready'
-      initialized = true
+      sessionStore.setStatus('Ready')
+      sessionStore.setInitialized(true)
     } catch (e) {
-      status = `Error: ${e instanceof Error ? e.message : String(e)}`
+      sessionStore.setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`)
     }
   },
 }
 
-/**
- * Apply a NetedProject (diagram + palette + bom) to runtime state.
- * Assumes state has already been reset by the caller (loadProject).
- *
- * Private to this module — the pipeline entry points (applyYaml,
- * importProject, loadProject) are the only public way to populate state.
- */
+// ResolvedPort/ResolvedEdge type aliases used in the Map setter signatures
+// — avoids re-importing the (lengthy) interfaces just for setters.
+type ResolvedPortShim =
+  ReturnType<typeof diagram.ports.values> extends IterableIterator<infer V> ? V : never
+type ResolvedEdgeShim =
+  ReturnType<typeof diagram.edges.values> extends IterableIterator<infer V> ? V : never
+
+// =========================================================================
+// Internal: load pipeline body
+// =========================================================================
+
 async function applyProject(data: Partial<NetedProject>) {
-  // Loading a project is not itself an undoable action — clear history
-  // so the very first user action's snapshot reflects the loaded state.
+  // Loading is not undoable — clear history so the first user action
+  // captures the loaded state as its baseline.
   undoManager.reset()
   await applyGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
   const { products: cleanProducts, links: cleanLinks } = sanitizeProducts(
@@ -1804,23 +1179,18 @@ async function applyProject(data: Partial<NetedProject>) {
     diagram.nodes,
     diagram.links,
   )
-  // Backfill icons from catalog when a Product is catalog-linked but
-  // doesn't carry an icon yet — ensures bundled catalog artwork shows
-  // up on legacy projects without re-importing.
-  products = cleanProducts.map((p) => {
-    if (p.icon || !p.catalogId) return p
-    const entry = catalog.lookup(p.catalogId)
-    return entry?.icon ? ({ ...p, icon: entry.icon } as Product) : p
-  })
+  productsStore.set(
+    cleanProducts.map((p) => {
+      if (p.icon || !p.catalogId) return p
+      const entry = catalog.lookup(p.catalogId)
+      return entry?.icon ? ({ ...p, icon: entry.icon } as Product) : p
+    }),
+  )
   diagram.links = cleanLinks
 
-  // Re-derive ports for nodes bound to a device product, and snapshot the
-  // Product.icon onto Node.spec.icon so loaded diagrams pick up icon
-  // updates that happened on the Product side. preserveExisting keeps
-  // any port shape persisted in the saved diagram.
   for (const [nodeId, node] of diagram.nodes) {
     if (!node.productId) continue
-    const product = products.find((p) => p.id === node.productId)
+    const product = productsStore.find(node.productId)
     if (product?.kind !== 'device') continue
     if (product.icon && node.spec && node.spec.icon !== product.icon) {
       diagram.nodes.set(nodeId, { ...node, spec: { ...node.spec, icon: product.icon } })
@@ -1833,28 +1203,12 @@ async function applyProject(data: Partial<NetedProject>) {
   )
   await rerouteEdges()
 
-  // Scenes — drop placements / wires / hidden ids that point at orphan
-  // node or link ids.
   const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
-  scenes = (data.scenes ?? []).map((scene) => ({
-    ...scene,
-    nodePlacements: scene.nodePlacements.filter((p) => diagram.nodes.has(p.nodeId)),
-    wireRoutes: scene.wireRoutes.filter((w) => linkIdSet.has(w.linkId)),
-    hiddenNodeIds: scene.hiddenNodeIds?.filter((id) => diagram.nodes.has(id)),
-    hiddenLinkIds: scene.hiddenLinkIds?.filter((id) => linkIdSet.has(id)),
-  }))
-  currentSceneId = null
+  scenesStore.set(sanitizeScenes(data.scenes ?? [], diagram.nodes, linkIdSet))
+  scenesStore.setCurrentId(null)
 }
 
-/**
- * Populate runtime state from a NetworkGraph. Handles both positioned
- * inputs (saved JSON/sample) and unpositioned ones (parsed YAML): the
- * former derives ports/edges from the saved positions; the latter falls
- * back to the full layoutNetwork pass.
- */
 async function applyGraph(graph: NetworkGraph) {
-  // Any root structural change invalidates every cached sheet layout.
-  // Load replaces the graph wholesale, so this is always the right call.
   invalidateSheetCache()
   const { nodes, subgraphs, links } = sanitizeGraph(graph)
   const direction = graph.settings?.direction ?? 'TB'
@@ -1882,23 +1236,10 @@ async function applyGraph(graph: NetworkGraph) {
   replaceMap(diagram.subgraphs, subgraphs)
   diagram.links = links
   replaceMap(diagram.ports, placePorts(nodes, links, direction))
-  // Positioned path skips layoutNetwork, so nobody else computes
-  // bounds from the saved coordinates. Mirror the same union + 50-pad
-  // formula `layoutNetwork` uses internally so the renderer's viewBox
-  // matches the actual extent of the loaded diagram. Without this the
-  // initial viewBox stays at the `loadProject` reset default
-  // (800×600) and large saved diagrams render clipped to the top-left.
   diagram.bounds = boundsOfPositionedGraph(nodes, subgraphs)
   await rerouteEdges()
 }
 
-/**
- * Compute a padded bounding box over positioned nodes and subgraphs.
- * Matches the fallback in `layoutNetwork` (50-unit margin around the
- * tight union), and falls back to the same empty-graph placeholder so
- * the runtime `diagram.bounds` shape is consistent whichever path set
- * it.
- */
 function boundsOfPositionedGraph(
   nodes: Map<string, Node>,
   subgraphs: Map<string, Subgraph>,
@@ -1934,4 +1275,23 @@ function boundsOfPositionedGraph(
     width: maxX - minX + pad * 2,
     height: maxY - minY + pad * 2,
   }
+}
+
+// =========================================================================
+// Devtools window bindings
+// =========================================================================
+
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  // biome-ignore lint/suspicious/noExplicitAny: dev-only window augmentation
+  ;(window as any).diagramState = new Proxy(
+    {},
+    {
+      get(_t, prop) {
+        // biome-ignore lint/suspicious/noExplicitAny: lazy proxy
+        return (diagramState as any)[prop]
+      },
+    },
+  )
+  // biome-ignore lint/suspicious/noExplicitAny: dev-only window augmentation
+  ;(window as any).editorState = editorState
 }
