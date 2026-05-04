@@ -225,23 +225,15 @@
     if (auth.pendingPlacement) auth.pendingPlacement = null
   }
 
-  // Bounds that include both the background image and every node, so
-  // the initial viewport fits the whole scene rather than just the
-  // pin cluster (which `fitView` would default to).
+  // Initial fit target: just the floor-plan image (when set). Pins
+  // dragged outside the image are out of frame on first paint, but
+  // unioning bounds with pins still at their diagram-side auto-layout
+  // positions shoves the image off-center / toward a corner — worse
+  // UX than "image fits, pin out of frame until you scroll to it".
   const fitBounds = $derived.by<{ x: number; y: number; width: number; height: number } | null>(
     () => {
       if (!bg) return null
-      let minX = 0
-      let minY = 0
-      let maxX = bg.width
-      let maxY = bg.height
-      for (const n of sfNodes) {
-        minX = Math.min(minX, n.position.x)
-        minY = Math.min(minY, n.position.y)
-        maxX = Math.max(maxX, n.position.x + 60)
-        maxY = Math.max(maxY, n.position.y + 60)
-      }
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+      return { x: 0, y: 0, width: bg.width, height: bg.height }
     },
   )
 </script>
