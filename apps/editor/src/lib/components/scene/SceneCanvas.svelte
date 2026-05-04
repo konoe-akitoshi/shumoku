@@ -256,6 +256,8 @@
     elementsSelectable
     connectionMode={ConnectionMode.Loose}
     fitView
+    minZoom={0.05}
+    maxZoom={4}
     onnodedragstart={onNodeDragStart}
     onnodedragstop={onNodeDragStop}
     onconnect={onConnect}
