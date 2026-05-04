@@ -6,12 +6,14 @@
     MarkerType,
     type Node as SfNode,
     SvelteFlow,
+    ViewportPortal,
   } from '@xyflow/svelte'
   import '@xyflow/svelte/dist/style.css'
   import { diagramState, editorState } from '$lib/context.svelte'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
   import SceneExportNode from './SceneExportNode.svelte'
+  import SceneFitOnLoad from './SceneFitOnLoad.svelte'
   import SceneNode from './SceneNode.svelte'
   import { sceneAuthoring } from './scene-authoring.svelte'
 
@@ -204,6 +206,26 @@
   function onPaneClick() {
     if (auth.pendingPlacement) auth.pendingPlacement = null
   }
+
+  // Bounds that include both the background image and every node, so
+  // the initial viewport fits the whole scene rather than just the
+  // pin cluster (which `fitView` would default to).
+  const fitBounds = $derived.by<{ x: number; y: number; width: number; height: number } | null>(
+    () => {
+      if (!bg) return null
+      let minX = 0
+      let minY = 0
+      let maxX = bg.width
+      let maxY = bg.height
+      for (const n of sfNodes) {
+        minX = Math.min(minX, n.position.x)
+        minY = Math.min(minY, n.position.y)
+        maxX = Math.max(maxX, n.position.x + 60)
+        maxY = Math.max(maxY, n.position.y + 60)
+      }
+      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    },
+  )
 </script>
 
 <div class="relative h-full w-full">
@@ -222,23 +244,22 @@
     onpaneclick={onPaneClick}
     proOptions={{ hideAttribution: true }}
   >
+    <SceneFitOnLoad bounds={fitBounds} />
+
     {#if bg}
-      <!-- Background image as a viewport-portaled <img> so pan/zoom
-           apply to it. Sits behind the flow nodes. -->
-      <div
-        class="pointer-events-none absolute top-0 left-0 z-0"
-        style:width="{bg.width}px"
-        style:height="{bg.height}px"
-      >
+      <!-- Background image lives inside ViewportPortal so the viewport
+           transform (pan/zoom) applies to it. Sits behind the nodes. -->
+      <ViewportPortal target="back">
         <img
           src={bg.src}
           alt="floor plan"
           class="block"
+          style="position: absolute; left: 0; top: 0; width: {bg.width}px; height: {bg.height}px; pointer-events: none; user-select: none;"
           width={bg.width}
           height={bg.height}
           draggable={false}
         >
-      </div>
+      </ViewportPortal>
     {/if}
   </SvelteFlow>
 
@@ -256,11 +277,21 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-       plan is set, but otherwise let its theming through. */
+         plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
   :global(.svelte-flow .svelte-flow__edge .svelte-flow__edge-path) {
     stroke-linecap: round;
+  }
+  /* Make connection handles visible on hover so users can see where
+       to drag from. Otherwise the fully-transparent handles leave the
+       "how do I draw a wire" UX a guess. */
+  :global(.svelte-flow__node:hover .svelte-flow__handle) {
+    opacity: 1 !important;
+    background: #3b82f6;
+    border: 1px solid white;
+    width: 8px;
+    height: 8px;
   }
 </style>
