@@ -270,9 +270,7 @@
     edgeTypes={{ wire: SceneEdge }}
     nodesDraggable={interactive}
     nodesConnectable={interactive}
-    elementsSelectable={interactive}
-    nodesFocusable={interactive}
-    edgesFocusable={interactive}
+    elementsSelectable
     connectionMode={ConnectionMode.Loose}
     minZoom={0.05}
     maxZoom={4}
@@ -320,12 +318,10 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-     mode. Keep them in the DOM (opacity 0) so edges still resolve
-     their endpoint positions — display:none would break edge
-     rendering. */
+     mode. Keep size + DOM presence so Svelte Flow can still resolve
+     edge endpoint positions from each handle's bounding rect — only
+     opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 0 !important;
-    width: 0 !important;
-    height: 0 !important;
   }
 </style>
