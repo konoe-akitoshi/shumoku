@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { BaseEdge, type Edge, EdgeLabel, type EdgeProps, useSvelteFlow } from '@xyflow/svelte'
+  import {
+    BaseEdge,
+    type Edge,
+    EdgeLabel,
+    type EdgeProps,
+    getSmoothStepPath,
+    Position,
+    useSvelteFlow,
+  } from '@xyflow/svelte'
   import { editorState } from '$lib/context.svelte'
   import {
     bendOnDrag,
@@ -27,6 +35,8 @@
     sourceY,
     targetX,
     targetY,
+    sourcePosition,
+    targetPosition,
     selected,
     style,
     markerEnd,
@@ -46,11 +56,25 @@
     ...waypoints,
     { x: targetX, y: targetY },
   ])
-  // Rounded polyline: each corner gets a quadratic-Bezier sweep so
-  // both default (no waypoints) and bent (with waypoints) wires look
-  // consistent. polylinePath handles the no-waypoint case as a plain
-  // M…L line, with no corners to round.
-  const pathD = $derived(polylinePath(points))
+  // No-waypoint default: smoothstep (Svelte Flow's standard rounded
+  // L-shape) so the wire reads as a softly-routed cable rather than a
+  // stiff straight line. Once the user bends the wire, swap in our
+  // own rounded polyline through their waypoints.
+  const pathD = $derived.by(() => {
+    if (waypoints.length === 0) {
+      const [path] = getSmoothStepPath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition: sourcePosition ?? Position.Bottom,
+        targetPosition: targetPosition ?? Position.Top,
+        borderRadius: 12,
+      })
+      return path
+    }
+    return polylinePath(points)
+  })
   const midpoints = $derived(segmentMidpoints(points))
 
   // ── Handlers ─────────────────────────────────────────────────────
