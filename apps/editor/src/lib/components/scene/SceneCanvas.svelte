@@ -295,7 +295,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-               plan is set, but otherwise let its theming through. */
+                 plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -303,8 +303,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-             to drag from. Otherwise the fully-transparent handles leave the
-             "how do I draw a wire" UX a guess. */
+               to drag from. Otherwise the fully-transparent handles leave the
+               "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 1 !important;
     background: #3b82f6;
