@@ -197,6 +197,7 @@
 <BaseEdge
   path={pathD}
   {markerEnd}
+  interactionWidth={0}
   style="stroke: {selected ? '#3b82f6' : '#475569'}; stroke-width: {selected
     ? 2.5
     : 2}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
