@@ -12,6 +12,7 @@
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
   import SceneBackgroundNode from './SceneBackgroundNode.svelte'
+  import SceneCalibrationCapture from './SceneCalibrationCapture.svelte'
   import SceneEdge from './SceneEdge.svelte'
   import SceneExportNode from './SceneExportNode.svelte'
   import SceneFitOnLoad from './SceneFitOnLoad.svelte'
@@ -240,7 +241,16 @@
     diagramState.addWireInScene(scene.id, connection.source, connection.target)
   }
 
-  function onPaneClick() {
+  // Pane click → forward screen coords down to SceneCalibrationCapture
+  // (which lives inside SvelteFlow, so it has the screenToFlowPosition
+  // hook). Bumping a counter ensures the same coords still trigger the
+  // child's effect on a repeat click.
+  let paneClickEvent = $state<{ x: number; y: number; n: number } | null>(null)
+  let paneClickN = 0
+
+  function onPaneClick(args: { event: MouseEvent | TouchEvent }) {
+    const ev = args.event as MouseEvent
+    paneClickEvent = { x: ev.clientX, y: ev.clientY, n: ++paneClickN }
     if (auth.pendingPlacement) auth.pendingPlacement = null
   }
 
@@ -284,16 +294,23 @@
     proOptions={{ hideAttribution: true }}
   >
     <SceneFitOnLoad bounds={fitBounds} refitKey={bg?.src ?? ''} />
+    <SceneCalibrationCapture sceneId={scene.id} paneClick={paneClickEvent} />
   </SvelteFlow>
 
   <!-- Status hint: shown while the user is mid-action. Calibration UI
        and the rest of the authoring overlays will move here in
        follow-ups; this spike just confirms the Flow integration. -->
-  {#if auth.pendingPlacement || auth.calibrationMode || auth.pendingWireFrom}
+  {#if auth.calibrationMode || auth.pendingPlacement || auth.pendingWireFrom}
     <div
       class="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-neutral-200 bg-white/90 px-3 py-1 text-[11px] text-neutral-700 shadow backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-800/90 dark:text-neutral-200"
     >
-      Authoring…
+      {#if auth.calibrationMode && !auth.calibrationMode.from}
+        Click the first reference point
+      {:else if auth.calibrationMode?.from}
+        Click the second reference point
+      {:else}
+        Authoring…
+      {/if}
     </div>
   {/if}
 </div>
