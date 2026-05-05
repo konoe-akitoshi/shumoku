@@ -196,7 +196,8 @@
       class="block rounded-[3px] border border-black/10 bg-white/95 px-1.5 text-[10px] leading-[14px] font-medium text-slate-700 shadow-sm"
       style="transform: translate(-50%, -50%); pointer-events: none;"
     >
-      {lengthMeters < 10 ? lengthMeters.toFixed(1) : Math.round(lengthMeters)} m
+      {lengthMeters < 10 ? lengthMeters.toFixed(1) : Math.round(lengthMeters)}
+      m
     </span>
   </EdgeLabel>
 {/if}

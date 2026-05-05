@@ -8,11 +8,13 @@
     SvelteFlow,
   } from '@xyflow/svelte'
   import '@xyflow/svelte/dist/style.css'
+  import { onDestroy, onMount } from 'svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
   import SceneBackgroundNode from './SceneBackgroundNode.svelte'
   import SceneCalibrationCapture from './SceneCalibrationCapture.svelte'
+  import SceneClickPlace from './SceneClickPlace.svelte'
   import SceneEdge from './SceneEdge.svelte'
   import SceneExportNode from './SceneExportNode.svelte'
   import SceneFitOnLoad from './SceneFitOnLoad.svelte'
@@ -252,8 +254,25 @@
   function onPaneClick(args: { event: MouseEvent | TouchEvent }) {
     const ev = args.event as MouseEvent
     paneClickEvent = { x: ev.clientX, y: ev.clientY, n: ++paneClickN }
-    if (auth.pendingPlacement) auth.pendingPlacement = null
+    // SceneCalibrationCapture / SceneClickPlace inside the flow
+    // consume the click via the bumped counter.
   }
+
+  // Esc cancels any pending authoring action.
+  function onWindowKey(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return
+    if (auth.pendingPlacement) auth.pendingPlacement = null
+    if (auth.pendingWireFrom) {
+      auth.pendingWireFrom = null
+      auth.pendingWireWaypoints = []
+    }
+    // calibrationMode Esc handling lives in SceneCalibrationCapture
+    // (it needs to also clear the prompt state).
+  }
+  onMount(() => window.addEventListener('keydown', onWindowKey))
+  onDestroy(() =>
+    typeof window !== 'undefined' ? window.removeEventListener('keydown', onWindowKey) : undefined,
+  )
 
   // Initial fit: floor-plan image + staging tray on the left for any
   // unplaced pins (those default to negative-x in `positionFor`).
@@ -273,7 +292,11 @@
   )
 </script>
 
-<div class="relative h-full w-full" class:scene-canvas-readonly={!interactive}>
+<div
+  class="relative h-full w-full"
+  class:scene-canvas-readonly={!interactive}
+  class:scene-canvas-placing={!!auth.pendingPlacement}
+>
   <SvelteFlow
     bind:nodes
     bind:edges
@@ -296,6 +319,7 @@
   >
     <SceneFitOnLoad bounds={fitBounds} refitKey={bg?.src ?? ''} />
     <SceneCalibrationCapture sceneId={scene.id} paneClick={paneClickEvent} />
+    <SceneClickPlace sceneId={scene.id} paneClick={paneClickEvent} />
   </SvelteFlow>
 
   <!-- Status hint: shown while the user is mid-action. Calibration UI
@@ -309,6 +333,10 @@
         Click the first reference point
       {:else if auth.calibrationMode?.from}
         Click the second reference point
+      {:else if auth.pendingPlacement?.kind === 'product'}
+        Click to place item (Esc to cancel)
+      {:else if auth.pendingPlacement?.kind === 'empty'}
+        Click to place an empty node (Esc to cancel)
       {:else}
         Authoring…
       {/if}
@@ -318,7 +346,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                 plan is set, but otherwise let its theming through. */
+                   plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -326,8 +354,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-               to drag from. Otherwise the fully-transparent handles leave the
-               "how do I draw a wire" UX a guess. */
+                 to drag from. Otherwise the fully-transparent handles leave the
+                 "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 1 !important;
     background: #3b82f6;
@@ -336,10 +364,15 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-     mode. Keep size + DOM presence so Svelte Flow can still resolve
-     edge endpoint positions from each handle's bounding rect — only
-     opacity is dropped. */
+       mode. Keep size + DOM presence so Svelte Flow can still resolve
+       edge endpoint positions from each handle's bounding rect — only
+       opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 0 !important;
+  }
+  /* Placement-pending: crosshair cursor on the pane so users see
+       "click somewhere to drop the item". */
+  .scene-canvas-placing :global(.svelte-flow__pane) {
+    cursor: crosshair !important;
   }
 </style>
