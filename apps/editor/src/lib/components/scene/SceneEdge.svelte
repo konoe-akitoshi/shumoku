@@ -108,6 +108,72 @@
       controlPoints: next,
     })
   }
+
+  // ── Drag-to-bend: pointerdown anywhere on the line creates a new
+  // waypoint at the click position and immediately starts dragging it.
+  // The polyline's segments are: 0=source→wp[0], 1=wp[0]→wp[1], …,
+  // n=wp[n-1]→target. Insert position = the segment we clicked on.
+  function nearestSegment(p: { x: number; y: number }): number {
+    let best = 0
+    let bestDist = Infinity
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i]
+      const b = points[i + 1]
+      if (!a || !b) continue
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len2 = dx * dx + dy * dy
+      const t =
+        len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
+      const px = a.x + t * dx
+      const py = a.y + t * dy
+      const d = (p.x - px) ** 2 + (p.y - py) ** 2
+      if (d < bestDist) {
+        bestDist = d
+        best = i
+      }
+    }
+    return best
+  }
+
+  function onLinePointerDown(e: PointerEvent) {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    e.preventDefault()
+    const flow = sf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+    const segIdx = nearestSegment(flow)
+    const next = [...waypoints]
+    next.splice(segIdx, 0, flow)
+    diagramState.beginTx('Adjust wire')
+    diagramState.setWireRoute(sceneId, {
+      linkId: id,
+      pathStyle: 'free',
+      controlPoints: next,
+    })
+    // Now drive the drag of the newly-inserted waypoint.
+    const idx = segIdx
+    const onMove = (ev: PointerEvent) => {
+      const fp = sf.screenToFlowPosition({ x: ev.clientX, y: ev.clientY })
+      const route = diagramState.scenes
+        .find((s) => s.id === sceneId)
+        ?.wireRoutes.find((w) => w.linkId === id)
+      const cur = route?.controlPoints ?? next
+      const upd = [...cur]
+      upd[idx] = { x: fp.x, y: fp.y }
+      diagramState.setWireRoute(sceneId, {
+        linkId: id,
+        pathStyle: 'free',
+        controlPoints: upd,
+      })
+    }
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      diagramState.endTx()
+    }
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+  }
 </script>
 
 <BaseEdge
@@ -116,6 +182,19 @@
   style="stroke: {selected ? '#3b82f6' : '#475569'}; stroke-width: {selected
     ? 2.5
     : 2}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
+/>
+<!-- Wide invisible hit path on top of the visible line so a drag
+     anywhere along the wire creates a waypoint and bends it. The
+     `nopan nodrag` keeps Svelte Flow's pane handler off, and our
+     onpointerdown takes over. -->
+<path
+  d={pathD}
+  class="nopan nodrag"
+  fill="none"
+  stroke="transparent"
+  stroke-width="16"
+  style="cursor: grab; pointer-events: stroke;"
+  onpointerdown={onLinePointerDown}
 />
 
 {#if selected}
