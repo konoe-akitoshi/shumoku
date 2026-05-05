@@ -31,11 +31,7 @@
   } = $props()
 
   const auth = sceneAuthoring
-  // Read mode directly (rather than via the editorState.interactive
-  // getter chain) so the reactive dependency is unambiguous — nested
-  // getter passthroughs can occasionally lose the dep graph in
-  // Svelte 5.
-  const interactive = $derived(editorState.mode === 'edit')
+  const interactive = $derived(editorState.interactive)
   const bg = $derived(scene.background)
   const hiddenNodeIds = $derived(new Set(scene.hiddenNodeIds ?? []))
   const hiddenLinkIds = $derived(new Set(scene.hiddenLinkIds ?? []))
@@ -266,7 +262,7 @@
   )
 </script>
 
-<div class="relative h-full w-full">
+<div class="relative h-full w-full" class:scene-canvas-readonly={!interactive}>
   <SvelteFlow
     bind:nodes
     bind:edges
@@ -322,5 +318,9 @@
     border: 1px solid white;
     width: 8px;
     height: 8px;
+  }
+  /* Read-only cue: hide connection handles entirely in view mode. */
+  .scene-canvas-readonly :global(.svelte-flow__handle) {
+    display: none !important;
   }
 </style>

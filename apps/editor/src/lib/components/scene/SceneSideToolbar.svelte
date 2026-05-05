@@ -13,7 +13,7 @@
 
   const scene = $derived(diagramState.scenes.find((s) => s.id === sceneId))
   const deviceProducts = $derived(diagramState.products.filter((p) => p.kind === 'device'))
-  const editing = $derived(editorState.mode === 'edit')
+  const editing = $derived(editorState.interactive)
   const isDark = $derived(editorState.isDark)
   const hiddenCount = $derived(
     (scene?.hiddenNodeIds?.length ?? 0) + (scene?.hiddenLinkIds?.length ?? 0),

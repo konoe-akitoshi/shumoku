@@ -39,7 +39,7 @@
   const sceneId = $derived(data?.sceneId ?? '')
   // Wire editing (drag-to-bend, waypoint drag, midpoint insert) is
   // gated by the editor's mode — view mode disables all of it.
-  const interactive = $derived(editorState.mode === 'edit')
+  const interactive = $derived(editorState.interactive)
 
   const points = $derived<Waypoint[]>([
     { x: sourceX, y: sourceY },
