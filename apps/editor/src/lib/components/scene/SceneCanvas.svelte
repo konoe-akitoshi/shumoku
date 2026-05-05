@@ -269,6 +269,7 @@
     connectionMode={ConnectionMode.Loose}
     minZoom={0.05}
     maxZoom={4}
+    zoomOnDoubleClick={false}
     onnodedragstart={onNodeDragStart}
     onnodedragstop={onNodeDragStop}
     onconnect={onConnect}

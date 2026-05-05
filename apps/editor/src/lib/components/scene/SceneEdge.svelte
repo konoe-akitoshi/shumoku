@@ -145,6 +145,7 @@
       fill="white"
       stroke="#3b82f6"
       stroke-width="1.5"
+      class="nopan nodrag"
       style="cursor: grab;"
       onpointerdown={(e) => onWaypointDown(idx, e)}
       ondblclick={(e) => onWaypointDblClick(idx, e)}
@@ -160,6 +161,7 @@
       fill="rgba(59,130,246,0.4)"
       stroke="#3b82f6"
       stroke-width="1"
+      class="nopan nodrag"
       style="cursor: copy;"
       onclick={(e) => onMidpointClick(idx, e)}
     />
