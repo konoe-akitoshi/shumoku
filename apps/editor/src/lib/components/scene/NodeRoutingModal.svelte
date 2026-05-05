@@ -75,6 +75,18 @@
   // routing[linkId][epsId] = checked? — opt-out per cell.
   let routing = $state<Record<string, Record<string, boolean>>>({})
 
+  // Direction heuristic: a wire where this node is the source
+  // (`from.node`) is treated as downstream — these are the runs
+  // that physically go to wall outlets in remote rooms via the EPS
+  // chase, so we default them on. Wires where this node is the
+  // target are treated as upstream / uplinks (e.g. fiber to a core
+  // switch), which usually bypass the EPS — default off.
+  function isDownstream(linkFrom: string, linkTo: string): boolean {
+    if (linkFrom === nodeId) return true
+    if (linkTo === nodeId) return false
+    return false
+  }
+
   $effect(() => {
     if (!nodeId) return
     const next: Record<string, Record<string, boolean>> = {}
@@ -83,10 +95,11 @@
       if (!id) continue
       const via = w.via ?? []
       const row: Record<string, boolean> = {}
+      const downstream = isDownstream(w.from.node, w.to.node)
       for (const eps of epsInScope) {
-        // Default-on opt-out: a fresh link (no via yet) treats every
-        // EPS in scope as enabled. Existing assignments are preserved.
-        row[eps.id] = via.length > 0 ? via.includes(eps.id) : true
+        // Existing assignments win over the default. For fresh wires,
+        // default-on only for downstream wires; uplinks start unchecked.
+        row[eps.id] = via.length > 0 ? via.includes(eps.id) : downstream
       }
       next[id] = row
     }
@@ -277,7 +290,7 @@
             Routing — {nodeLabel}
           </Dialog.Title>
           <p class="mt-0.5 text-[11px] text-muted-foreground">
-            Toggle EPS routing for this node's wires. Defaults to on; uncheck exceptions.
+            Downstream (↓) wires default on; upstream (↑) uplinks default off.
           </p>
         </div>
         <Dialog.Close
@@ -340,8 +353,17 @@
             <tbody class="divide-y divide-neutral-100 dark:divide-neutral-700">
               {#each wires as wire (wire.id)}
                 {@const linkId = wire.id ?? ''}
+                {@const downstream = isDownstream(wire.from.node, wire.to.node)}
                 <tr class="hover:bg-neutral-50 dark:hover:bg-neutral-700/40">
                   <td class="px-4 py-2 text-neutral-800 dark:text-neutral-200">
+                    <span
+                      class="mr-1 inline-block w-3 text-center font-mono text-[10px] {downstream
+                        ? 'text-emerald-600'
+                        : 'text-amber-600'}"
+                      title={downstream ? 'downstream' : 'upstream'}
+                    >
+                      {downstream ? '↓' : '↑'}
+                    </span>
                     {nodeLabel}
                     <span class="text-muted-foreground">↔</span>
                     {farEndLabel(linkId)}
