@@ -1,6 +1,6 @@
 <script lang="ts">
   import { BaseEdge, type Edge, EdgeLabel, type EdgeProps, useSvelteFlow } from '@xyflow/svelte'
-  import { diagramState } from '$lib/context.svelte'
+  import { editorState } from '$lib/context.svelte'
   import {
     bendOnDrag,
     dragWaypoint,
@@ -37,6 +37,9 @@
 
   const waypoints = $derived<Waypoint[]>(data?.waypoints ?? [])
   const sceneId = $derived(data?.sceneId ?? '')
+  // Wire editing (drag-to-bend, waypoint drag, midpoint insert) is
+  // gated by the editor's mode — view mode disables all of it.
+  const interactive = $derived(editorState.mode === 'edit')
 
   const points = $derived<Waypoint[]>([
     { x: sourceX, y: sourceY },
@@ -52,6 +55,7 @@
 
   // ── Handlers ─────────────────────────────────────────────────────
   function onWaypointDown(idx: number, e: PointerEvent) {
+    if (!interactive) return
     if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
@@ -69,6 +73,7 @@
   }
 
   function onLinePointerDown(e: PointerEvent) {
+    if (!interactive) return
     if (e.button !== 0) return
     // stopImmediatePropagation kills any sibling listener (incl.
     // d3-zoom's pane handler in some configurations); preventDefault
@@ -119,7 +124,7 @@
   onpointerdown={onLinePointerDown}
 />
 
-{#if selected}
+{#if selected && interactive}
   {#each waypoints as wp, idx (idx)}
     <EdgeLabel x={wp.x} y={wp.y}>
       <button

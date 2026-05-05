@@ -31,7 +31,11 @@
   } = $props()
 
   const auth = sceneAuthoring
-  const interactive = $derived(editorState.interactive)
+  // Read mode directly (rather than via the editorState.interactive
+  // getter chain) so the reactive dependency is unambiguous — nested
+  // getter passthroughs can occasionally lose the dep graph in
+  // Svelte 5.
+  const interactive = $derived(editorState.mode === 'edit')
   const bg = $derived(scene.background)
   const hiddenNodeIds = $derived(new Set(scene.hiddenNodeIds ?? []))
   const hiddenLinkIds = $derived(new Set(scene.hiddenLinkIds ?? []))
