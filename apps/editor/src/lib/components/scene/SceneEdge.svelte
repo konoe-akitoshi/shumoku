@@ -47,39 +47,45 @@
     }),
   )
 
-  let dragging = $state<{ idx: number; offsetX: number; offsetY: number } | null>(null)
-
+  // Drag is implemented with explicit document listeners attached on
+  // pointerdown (not <svelte:window>) so the listener survives the
+  // EdgeLabel re-render that fires on every move (waypoints array
+  // updates → portal re-renders → the original button is gone).
   function onWaypointDown(idx: number, e: PointerEvent) {
     if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
-    const target = e.currentTarget as HTMLElement
-    target.setPointerCapture(e.pointerId)
     const wp = waypoints[idx]
     if (!wp) return
     const flow = sf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
-    dragging = { idx, offsetX: flow.x - wp.x, offsetY: flow.y - wp.y }
+    const offsetX = flow.x - wp.x
+    const offsetY = flow.y - wp.y
+
     diagramState.beginTx('Adjust wire')
-  }
 
-  function onWaypointMove(e: PointerEvent) {
-    if (!dragging) return
-    const flow = sf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
-    const next = [...waypoints]
-    next[dragging.idx] = {
-      x: flow.x - dragging.offsetX,
-      y: flow.y - dragging.offsetY,
+    const onMove = (ev: PointerEvent) => {
+      const fp = sf.screenToFlowPosition({ x: ev.clientX, y: ev.clientY })
+      // Read the latest waypoints fresh each move so we don't write
+      // back stale data when several drags interleave.
+      const route = diagramState.scenes
+        .find((s) => s.id === sceneId)
+        ?.wireRoutes.find((w) => w.linkId === id)
+      const cur = route?.controlPoints ?? waypoints
+      const next = [...cur]
+      next[idx] = { x: fp.x - offsetX, y: fp.y - offsetY }
+      diagramState.setWireRoute(sceneId, {
+        linkId: id,
+        pathStyle: 'free',
+        controlPoints: next,
+      })
     }
-    diagramState.setWireRoute(sceneId, {
-      linkId: id,
-      pathStyle: 'free',
-      controlPoints: next,
-    })
-  }
-
-  function onWaypointUp() {
-    if (dragging) diagramState.endTx()
-    dragging = null
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      diagramState.endTx()
+    }
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
   }
 
   function insertWaypoint(segIdx: number) {
@@ -103,8 +109,6 @@
     })
   }
 </script>
-
-<svelte:window onpointermove={onWaypointMove} onpointerup={onWaypointUp} />
 
 <BaseEdge
   path={pathD}
