@@ -91,14 +91,13 @@
     const override = scene.nodePlacements.find((p) => p.nodeId === nodeId)
     if (override) return override.position
     // Bg-bound scene with no placement yet: stack the unplaced pins
-    // along the image's left edge so they sit on the floor plan
-    // ready to be dragged. Falling through to Node.position (the
-    // diagram auto-layout coords) leaves pins floating far below
-    // the image — visually disconnected from the scene.
+    // in a staging "tray" *to the left of the image*, off the floor
+    // plan so they don't obscure its content. Pin lands inside the
+    // floor plan only after the user drags it there.
     if (bg) {
       const idx = visibleSceneNodes.findIndex((n) => n.id === nodeId)
       if (idx >= 0) {
-        return { x: 30, y: 30 + idx * 60 }
+        return { x: -120, y: 30 + idx * 60 }
       }
     }
     const node = diagramState.nodes.get(nodeId)
@@ -236,15 +235,20 @@
     if (auth.pendingPlacement) auth.pendingPlacement = null
   }
 
-  // Initial fit target: just the floor-plan image (when set). Pins
-  // dragged outside the image are out of frame on first paint, but
-  // unioning bounds with pins still at their diagram-side auto-layout
-  // positions shoves the image off-center / toward a corner — worse
-  // UX than "image fits, pin out of frame until you scroll to it".
+  // Initial fit: floor-plan image + staging tray on the left for any
+  // unplaced pins (those default to negative-x in `positionFor`).
+  // Excluding pins still at their diagram-side auto-layout positions
+  // — those are far below the image and would shove the fit way out
+  // of proportion.
+  const TRAY_WIDTH = 180
+  const hasUnplaced = $derived(
+    visibleSceneNodes.some((n) => !scene.nodePlacements.find((p) => p.nodeId === n.id)),
+  )
   const fitBounds = $derived.by<{ x: number; y: number; width: number; height: number } | null>(
     () => {
       if (!bg) return null
-      return { x: 0, y: 0, width: bg.width, height: bg.height }
+      const trayPad = hasUnplaced ? TRAY_WIDTH : 0
+      return { x: -trayPad, y: 0, width: bg.width + trayPad, height: bg.height }
     },
   )
 </script>
