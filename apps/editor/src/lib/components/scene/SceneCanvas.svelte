@@ -319,8 +319,13 @@
     width: 8px;
     height: 8px;
   }
-  /* Read-only cue: hide connection handles entirely in view mode. */
-  .scene-canvas-readonly :global(.svelte-flow__handle) {
-    display: none !important;
+  /* Read-only cue: don't reveal connection handles on hover in view
+     mode. Keep them in the DOM (opacity 0) so edges still resolve
+     their endpoint positions — display:none would break edge
+     rendering. */
+  .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 </style>
