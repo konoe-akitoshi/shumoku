@@ -108,16 +108,22 @@ function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undef
 }
 
 function cableRequirementKey(link: Link): string | undefined {
-  const cable = link.cable
-  if (!cable) return undefined
   // Scene-derived length wins over the stored field — keeps BOM /
   // Materials Library in sync with the floor-plan polyline as the
   // user bends wires, without writing back to link.cable.length_m.
+  // We also generate a row when only scene-derived length is known
+  // (e.g. wire authored in scene before its cable type is filled in)
+  // so BOM doesn't silently drop those wires.
   const eff = cableLengthMeters(link, scenesStore.list)
+  const cable = link.cable
+  if (!cable && !eff) return undefined
   const lengthLabel = eff
     ? `${eff.meters < 10 ? eff.meters.toFixed(1) : Math.round(eff.meters)}m`
-    : undefined
-  return [cable.category, cable.medium, lengthLabel].filter(Boolean).join(' / ')
+    : cable?.length_m
+      ? `${cable.length_m}m`
+      : undefined
+  const parts = [cable?.category, cable?.medium, lengthLabel].filter(Boolean)
+  return parts.length > 0 ? parts.join(' / ') : undefined
 }
 
 function buildAssignmentRows(): AssignmentRow[] {
@@ -998,10 +1004,14 @@ export const diagramState = {
       const toNode = diagram.nodes.get(toNodeId)
       if (!fromNode || !toNode) return undefined
       const linkId = newId('link')
+      // Init an empty cable record so the BOM / detail panel pick the
+      // wire up immediately. Type/grade/length stay unset; the user
+      // (or scene-derived length) fills them in afterward.
       diagramState.addLink({
         id: linkId,
         from: { node: fromNodeId, port: '' },
         to: { node: toNodeId, port: '' },
+        cable: {},
       })
       diagramState.setWireRoute(sceneId, {
         linkId,
