@@ -56,38 +56,43 @@
     ),
   )
 
-  // ── Export pills (1 per destination subgraph) ────────────────────
-  function exportNodeId(destSubgraphId: string): string {
-    return `__scene_export_${destSubgraphId}`
+  // ── Boundary anchors — one per cross-boundary external node ─────
+  // Previously we collapsed all wires to a destination subgraph into
+  // one "export pill", but that lost identity (FW-1 vs FW-2) and the
+  // pill's position was just an arbitrary average. Now: each unique
+  // external endpoint gets its own boundary marker so the user can
+  // place each one at the spot where its cable physically exits the
+  // scope. The label includes the destination subgraph so the cross-
+  // boundary nature stays visible.
+  function boundaryAnchorId(externalNodeId: string): string {
+    return `__boundary_${externalNodeId}`
   }
-  function destSubgraphFor(nodeId: string): string {
-    return diagramState.nodes.get(nodeId)?.parent ?? '__external__'
+  type BoundaryAnchor = {
+    externalNodeId: string
+    nodeLabel: string
+    subgraphLabel: string | null
   }
-  const exportPills = $derived.by(() => {
-    const groups = new Map<string, { destId: string; label: string; nodeIds: Set<string> }>()
+  const boundaryAnchors = $derived.by<BoundaryAnchor[]>(() => {
+    const seen = new Map<string, BoundaryAnchor>()
     for (const l of visibleLinks) {
       for (const ep of [l.from.node, l.to.node]) {
         if (inScopeIds.has(ep)) continue
-        const destId = destSubgraphFor(ep)
-        const sg = diagramState.subgraphs.get(destId)
-        const fallback = (() => {
-          const n = diagramState.nodes.get(ep)
-          const lbl = Array.isArray(n?.label) ? n?.label[0] : n?.label
-          return lbl ?? destId
-        })()
-        const label = sg?.label ?? fallback
-        const existing = groups.get(destId) ?? { destId, label, nodeIds: new Set<string>() }
-        existing.nodeIds.add(ep)
-        groups.set(destId, existing)
+        if (seen.has(ep)) continue
+        const node = diagramState.nodes.get(ep)
+        const label = Array.isArray(node?.label) ? node.label[0] : (node?.label ?? ep)
+        const sg = node?.parent ? diagramState.subgraphs.get(node.parent) : undefined
+        seen.set(ep, {
+          externalNodeId: ep,
+          nodeLabel: label ?? ep,
+          subgraphLabel: sg?.label ?? null,
+        })
       }
     }
-    return [...groups.values()]
+    return [...seen.values()]
   })
-  const externalToPill = $derived.by(() => {
+  const externalToAnchorId = $derived.by(() => {
     const m = new Map<string, string>()
-    for (const pill of exportPills) {
-      for (const id of pill.nodeIds) m.set(id, exportNodeId(pill.destId))
-    }
+    for (const a of boundaryAnchors) m.set(a.externalNodeId, boundaryAnchorId(a.externalNodeId))
     return m
   })
 
@@ -117,22 +122,24 @@
     return node?.position ?? { x: 100, y: 100 }
   }
 
-  function positionForPill(_destId: string, pillId: string): { x: number; y: number } {
-    const override = placementById.get(pillId)
+  function positionForAnchor(externalNodeId: string, anchorId: string): { x: number; y: number } {
+    const override = placementById.get(anchorId)
     if (override) return override
-    // Default: average of in-scope endpoints connected to this pill.
-    const partners: { x: number; y: number }[] = []
+    // Default: pick the in-scope endpoint of this anchor's wire and
+    // offset to the upper-right so the anchor lands near its
+    // partner instead of at origin. Multiple wires from the same
+    // external node share the anchor and use the first match.
     for (const l of visibleLinks) {
-      if (inScopeIds.has(l.from.node) && externalToPill.get(l.to.node) === pillId) {
-        partners.push(positionFor(l.from.node))
-      } else if (inScopeIds.has(l.to.node) && externalToPill.get(l.from.node) === pillId) {
-        partners.push(positionFor(l.to.node))
+      if (inScopeIds.has(l.from.node) && l.to.node === externalNodeId) {
+        const p = positionFor(l.from.node)
+        return { x: p.x + 80, y: p.y - 60 }
+      }
+      if (inScopeIds.has(l.to.node) && l.from.node === externalNodeId) {
+        const p = positionFor(l.to.node)
+        return { x: p.x + 80, y: p.y - 60 }
       }
     }
-    if (partners.length === 0) return { x: 100, y: 100 }
-    const cx = partners.reduce((s, p) => s + p.x, 0) / partners.length
-    const cy = partners.reduce((s, p) => s + p.y, 0) / partners.length
-    return { x: cx + 80, y: cy - 60 }
+    return { x: 100, y: 100 }
   }
 
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
@@ -167,13 +174,16 @@
         selectable: true,
       })
     }
-    for (const pill of exportPills) {
-      const id = exportNodeId(pill.destId)
+    for (const a of boundaryAnchors) {
+      const id = boundaryAnchorId(a.externalNodeId)
       out.push({
         id,
         type: 'export',
-        position: positionForPill(pill.destId, id),
-        data: { label: pill.label },
+        position: positionForAnchor(a.externalNodeId, id),
+        data: {
+          // Show "FW-1 (security)" — node identity + cross-boundary subgraph.
+          label: a.subgraphLabel ? `${a.nodeLabel} (${a.subgraphLabel})` : a.nodeLabel,
+        },
         draggable: interactive,
         selectable: true,
       })
@@ -187,10 +197,10 @@
       if (!link.id) continue
       const from = inScopeIds.has(link.from.node)
         ? link.from.node
-        : (externalToPill.get(link.from.node) ?? link.from.node)
+        : (externalToAnchorId.get(link.from.node) ?? link.from.node)
       const to = inScopeIds.has(link.to.node)
         ? link.to.node
-        : (externalToPill.get(link.to.node) ?? link.to.node)
+        : (externalToAnchorId.get(link.to.node) ?? link.to.node)
       const crossBoundary = !inScopeIds.has(link.from.node) || !inScopeIds.has(link.to.node)
       const route = scene.wireRoutes.find((w) => w.linkId === link.id)
       // Cable length: scene-derived (calibration + endpoint positions
