@@ -113,6 +113,38 @@
         >
           Empty node
         </DropdownMenu.Item>
+
+        <div class="my-1 border-t border-neutral-200 dark:border-neutral-700"></div>
+        <div
+          class="px-2 pt-1 pb-0.5 text-[9px] font-medium tracking-wider text-muted-foreground uppercase"
+        >
+          Cable termination
+        </div>
+        <DropdownMenu.Item
+          class="cursor-pointer rounded-md px-2 py-1.5 text-xs text-neutral-700 hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
+          onclick={() => {
+            sceneAuthoring.pendingPlacement = { kind: 'termination', role: 'outlet' }
+          }}
+        >
+          Wall outlet
+        </DropdownMenu.Item>
+        <DropdownMenu.Item
+          class="cursor-pointer rounded-md px-2 py-1.5 text-xs text-neutral-700 hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
+          onclick={() => {
+            sceneAuthoring.pendingPlacement = { kind: 'termination', role: 'eps' }
+          }}
+        >
+          EPS / riser
+        </DropdownMenu.Item>
+        <DropdownMenu.Item
+          class="cursor-pointer rounded-md px-2 py-1.5 text-xs text-neutral-700 hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-700 dark:data-[highlighted]:bg-neutral-700/60"
+          onclick={() => {
+            sceneAuthoring.pendingPlacement = { kind: 'termination', role: 'panel' }
+          }}
+        >
+          Patch panel
+        </DropdownMenu.Item>
+
         {#if deviceProducts.length > 0}
           <div class="my-1 border-t border-neutral-200 dark:border-neutral-700"></div>
           <div

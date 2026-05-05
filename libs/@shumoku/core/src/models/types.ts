@@ -317,6 +317,14 @@ export interface Node {
    * When absent, the layout engine computes it automatically.
    */
   position?: Position
+
+  /**
+   * Marks this node as a passive cable termination point (wall outlet,
+   * EPS / vertical riser, patch panel) rather than an active device.
+   * Cables physically transit through TPs via `Link.via`. Absent =
+   * regular device.
+   */
+  termination?: { role: 'outlet' | 'eps' | 'panel' }
 }
 
 // ============================================
@@ -466,6 +474,15 @@ export interface Link {
    * the parser normalizes any YAML shorthand.
    */
   to: LinkEndpoint
+
+  /**
+   * Ordered list of passive termination point node ids the cable
+   * physically transits between `from` and `to` (wall outlet → EPS →
+   * wall outlet → patch panel, etc.). Used by scene-derived length to
+   * sum per-segment polylines and by BOM to break the run into
+   * structured/patch cable segments. Logical diagrams ignore `via`.
+   */
+  via?: string[]
 
   /**
    * Link label - can be multiple lines (displayed at center)

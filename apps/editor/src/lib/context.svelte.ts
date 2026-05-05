@@ -114,7 +114,7 @@ function cableRequirementKey(link: Link): string | undefined {
   // We also generate a row when only scene-derived length is known
   // (e.g. wire authored in scene before its cable type is filled in)
   // so BOM doesn't silently drop those wires.
-  const eff = cableLengthMeters(link, scenesStore.list, diagram.nodes, diagram.subgraphs)
+  const eff = cableLengthMeters(link, scenesStore.list, diagram.nodes)
   const cable = link.cable
   if (!cable && !eff) return undefined
   const lengthLabel = eff
@@ -739,7 +739,7 @@ export const diagramState = {
   cableLengthMeters(linkId: string): { meters: number; source: 'scene' | 'stored' } | null {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return null
-    return cableLengthMeters(link, scenesStore.list, diagram.nodes, diagram.subgraphs)
+    return cableLengthMeters(link, scenesStore.list, diagram.nodes)
   },
   placedCount(productId: string): number {
     let n = 0
@@ -991,6 +991,95 @@ export const diagramState = {
       }
       diagramState.placeNodeInScene(sceneId, id, position)
       return id
+    })
+  },
+  /**
+   * Drop a passive cable termination point (wall outlet, EPS riser,
+   * patch panel) at `position` in the scene. Termination Nodes follow
+   * the same lifecycle as device Nodes (placement, parent inheritance,
+   * undo) — they just carry `termination` metadata so the scene
+   * renders them differently and the logical diagram filters them out.
+   */
+  addTerminationInScene(
+    sceneId: string,
+    position: { x: number; y: number },
+    role: 'outlet' | 'eps' | 'panel',
+  ): string {
+    return commit('Add termination in scene', () => {
+      const defaultLabel = role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : 'Panel'
+      const id = diagramState.addEmptyNode(defaultLabel)
+      const scene = scenesStore.find(sceneId)
+      const node = diagram.nodes.get(id)
+      if (node) {
+        diagram.nodes.set(id, {
+          ...node,
+          termination: { role },
+          parent: scene?.scopeSubgraphId ?? node.parent,
+        })
+        invalidateSheetCache()
+      }
+      diagramState.placeNodeInScene(sceneId, id, position)
+      return id
+    })
+  },
+  /**
+   * Apply EPS routing in bulk. For each link in `linkIds`, ensure the
+   * given `epsId` is present in `link.via` (when included=true) or
+   * removed (when included=false). All other entries in `via` are
+   * preserved — this only toggles a single TP's membership, so other
+   * TPs (other EPSes, outlets) keep their assignments. Wraps as one
+   * undo step so the modal's whole apply collapses to a single entry.
+   */
+  /**
+   * Hard-delete a Node from the diagram. Also strips it from any
+   * scene placement and from any link's `via` chain so the data
+   * stays consistent. Useful for cleaning up auto-created
+   * termination points (e.g. outlets) that are no longer referenced.
+   */
+  removeNode(id: string) {
+    commit('Remove node', () => {
+      diagram.nodes.delete(id)
+      diagram.links = diagram.links.map((l) => {
+        const via = l.via
+        if (!via?.includes(id)) return l
+        const next = via.filter((v) => v !== id)
+        return { ...l, via: next.length > 0 ? next : undefined }
+      })
+      // Drop placements / wire routes / hidden lists referencing this id.
+      for (const scene of scenesStore.list) {
+        const placements = scene.nodePlacements.filter((p) => p.nodeId !== id)
+        const hidden = (scene.hiddenNodeIds ?? []).filter((nid) => nid !== id)
+        if (
+          placements.length !== scene.nodePlacements.length ||
+          hidden.length !== (scene.hiddenNodeIds?.length ?? 0)
+        ) {
+          scenesStore.update(scene.id, {
+            nodePlacements: placements,
+            hiddenNodeIds: hidden,
+          })
+        }
+      }
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
+    })
+  },
+  setEpsRoutingForLinks(epsId: string, linkIds: string[], included: boolean) {
+    if (linkIds.length === 0) return
+    commit('Update EPS routing', () => {
+      const targets = new Set(linkIds)
+      diagram.links = diagram.links.map((l) => {
+        if (!l.id || !targets.has(l.id)) return l
+        const via = l.via ?? []
+        const has = via.includes(epsId)
+        if (included && !has) return { ...l, via: [...via, epsId] }
+        if (!included && has) {
+          const next = via.filter((id) => id !== epsId)
+          return { ...l, via: next.length > 0 ? next : undefined }
+        }
+        return l
+      })
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
     })
   },
   addWireInScene(

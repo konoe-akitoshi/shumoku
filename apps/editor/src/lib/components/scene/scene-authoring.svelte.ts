@@ -6,7 +6,12 @@
 // level $state (not class fields) so the runes preprocessor handles
 // it cleanly under SSR — class fields ate the reactivity earlier.
 
-type Pending = { kind: 'product'; productId: string } | { kind: 'empty' } | null
+type TerminationRole = 'outlet' | 'eps' | 'panel'
+type Pending =
+  | { kind: 'product'; productId: string }
+  | { kind: 'empty' }
+  | { kind: 'termination'; role: TerminationRole }
+  | null
 
 let pendingPlacement = $state<Pending>(null)
 let pendingWireFrom = $state<string | null>(null)

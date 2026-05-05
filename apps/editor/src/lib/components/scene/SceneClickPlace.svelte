@@ -34,6 +34,8 @@
     const flow = sf.screenToFlowPosition({ x: paneClick.x, y: paneClick.y })
     if (pending.kind === 'product') {
       diagramState.placeProductInScene(sceneId, pending.productId, flow)
+    } else if (pending.kind === 'termination') {
+      diagramState.addTerminationInScene(sceneId, flow, pending.role)
     } else {
       diagramState.addEmptyNodeInScene(sceneId, flow)
     }

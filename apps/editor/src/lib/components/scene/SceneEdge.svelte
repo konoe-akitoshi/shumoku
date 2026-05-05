@@ -5,10 +5,10 @@
     EdgeLabel,
     type EdgeProps,
     getSmoothStepPath,
-    Position,
     useSvelteFlow,
   } from '@xyflow/svelte'
   import { editorState } from '$lib/context.svelte'
+  import { pickSideForDirection } from '$lib/scene/node-geometry'
   import {
     bendOnDrag,
     dragWaypoint,
@@ -28,11 +28,21 @@
   type SceneEdgeData = {
     sceneId: string
     waypoints: Waypoint[]
+    /** Visible cable segments (one entry per disjoint subpath). When
+     *  the wire transits an EPS, the chase-internal portion is hidden
+     *  — that breaks one logical wire into multiple visible polylines.
+     *  Each entry is the via positions BETWEEN source/target (which the
+     *  edge gets from sourceX/Y / targetX/Y). The first and last
+     *  segments include source/target implicitly. */
+    segments?: Array<Waypoint[]>
     /** Effective real-world cable length, computed by the parent
      *  via the cableLengthMeters helper. Already accounts for
      *  scene-derived (placements + calibration) vs stored fallback;
      *  null when neither is available. */
     lengthMeters: number | null
+    /** When false, waypoints are auto-positioned (e.g. derived from
+     *  Link.via TP placements) and the user can't drag them. */
+    editableWaypoints?: boolean
   }
   type SceneEdgeT = Edge<SceneEdgeData, 'wire'>
 
@@ -56,33 +66,83 @@
   const waypoints = $derived<Waypoint[]>(data?.waypoints ?? [])
   const sceneId = $derived(data?.sceneId ?? '')
   // Wire editing (drag-to-bend, waypoint drag, midpoint insert) is
-  // gated by the editor's mode — view mode disables all of it.
-  const interactive = $derived(editorState.interactive)
+  // gated by the editor's mode AND the `editableWaypoints` data flag —
+  // via-routed wires have auto-derived waypoints, not user bends.
+  const interactive = $derived(editorState.interactive && (data?.editableWaypoints ?? true))
 
-  const points = $derived<Waypoint[]>([
-    { x: sourceX, y: sourceY },
-    ...waypoints,
-    { x: targetX, y: targetY },
-  ])
-  // No-waypoint default: smoothstep (Svelte Flow's standard rounded
-  // L-shape) so the wire reads as a softly-routed cable rather than a
-  // stiff straight line. Once the user bends the wire, swap in our
-  // own rounded polyline through their waypoints.
-  const pathD = $derived.by(() => {
-    if (waypoints.length === 0) {
-      const [path] = getSmoothStepPath({
-        sourceX,
-        sourceY,
-        targetX,
-        targetY,
-        sourcePosition: sourcePosition ?? Position.Bottom,
-        targetPosition: targetPosition ?? Position.Top,
-        borderRadius: 12,
-      })
-      return path
+  // Composed visible segments: each becomes one continuous polyline.
+  // Source attaches to the first segment, target to the last. When
+  // there's only one segment (no EPS in via), this is the legacy
+  // single-polyline path.
+  const visualSegments = $derived.by<Waypoint[][]>(() => {
+    const segs = data?.segments ?? [[]]
+    const result: Waypoint[][] = []
+    const last = segs.length - 1
+    for (let i = 0; i < segs.length; i++) {
+      const inner = segs[i] ?? []
+      const pts: Waypoint[] = []
+      if (i === 0) pts.push({ x: sourceX, y: sourceY })
+      pts.push(...inner)
+      // Trailing segments (after an EPS) only get a target appended on
+      // the very last; intermediate gap segments stand alone.
+      if (i === last) pts.push({ x: targetX, y: targetY })
+      // Drop degenerate segments (e.g. trailing EPS with no outlet
+      // produces a single-point segment with just target).
+      if (pts.length >= 2) result.push(pts)
     }
-    return polylinePath(points)
+    // For wires with user bends (no via), interleave them into the one
+    // and only segment.
+    if (segs.length === 1 && waypoints.length > 0 && result[0]) {
+      const r0 = result[0]
+      result[0] = [r0[0] as Waypoint, ...waypoints, r0[r0.length - 1] as Waypoint]
+    }
+    return result
   })
+
+  // Render each segment with the same smoothstep treatment Svelte
+  // Flow uses for plain edges. Inner endpoints (via TPs in the
+  // middle) don't have framework-provided handle positions, so we
+  // compute Position from the line direction. Multi-segment wires
+  // join as multi-subpath SVG so wall gaps render as breaks. Falls
+  // back to a rounded polyline only when a segment has bends in its
+  // interior (3+ points).
+  const pathD = $derived.by(() => {
+    if (visualSegments.length === 0) return ''
+    const parts: string[] = []
+    for (let i = 0; i < visualSegments.length; i++) {
+      const seg = visualSegments[i]
+      if (!seg || seg.length < 2) continue
+      const isFirst = i === 0
+      const isLast = i === visualSegments.length - 1
+      if (seg.length === 2) {
+        const a = seg[0]
+        const b = seg[1]
+        if (!a || !b) continue
+        const startPos = isFirst
+          ? (sourcePosition ?? pickSideForDirection(b.x - a.x, b.y - a.y))
+          : pickSideForDirection(b.x - a.x, b.y - a.y)
+        const endPos = isLast
+          ? (targetPosition ?? pickSideForDirection(a.x - b.x, a.y - b.y))
+          : pickSideForDirection(a.x - b.x, a.y - b.y)
+        const [path] = getSmoothStepPath({
+          sourceX: a.x,
+          sourceY: a.y,
+          targetX: b.x,
+          targetY: b.y,
+          sourcePosition: startPos,
+          targetPosition: endPos,
+          borderRadius: 12,
+        })
+        parts.push(path)
+      } else {
+        parts.push(polylinePath(seg))
+      }
+    }
+    return parts.join(' ')
+  })
+  // Midpoints / waypoints handles only meaningful for the simple
+  // single-segment, user-editable case.
+  const points = $derived<Waypoint[]>(visualSegments[0] ?? [])
   const midpoints = $derived(segmentMidpoints(points))
 
   // Cable length comes pre-computed from the parent (canvas + BOM

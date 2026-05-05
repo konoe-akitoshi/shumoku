@@ -1,72 +1,138 @@
 <script lang="ts">
   import { type NodeSpec, resolveIcon, specDeviceType } from '@shumoku/core'
   import { Handle, type Node, type NodeProps, Position } from '@xyflow/svelte'
+  import { sceneNodeSize } from '$lib/scene/node-geometry'
 
-  // Custom Svelte Flow node — renders a floor-plan "pin": icon + label.
-  // Uses Handle on all four sides so wires can attach naturally from
-  // any direction. The wrapping <div> gives DOM-rect hit detection.
+  // Custom Svelte Flow node — renders a floor-plan "pin". Two visual
+  // modes share the same component:
+  //   - device:      icon + label (the default)
+  //   - termination: small role-specific glyph for outlets / EPS /
+  //                  patch panels (passive cable transit points)
+  // Both expose the same 4-handle layout so wires connect identically.
 
-  type SceneNodeT = Node<{ label: string; spec?: NodeSpec; isExternal?: boolean }, 'scene'>
+  type Termination = { role: 'outlet' | 'eps' | 'panel' }
+  type SceneNodeT = Node<
+    { label: string; spec?: NodeSpec; isExternal?: boolean; termination?: Termination },
+    'scene'
+  >
 
   let { data, selected }: NodeProps<SceneNodeT> = $props()
 
-  const icon = $derived(resolveIcon(data.spec))
-  const iconSize = 36
-  const ariaLabel = $derived(specDeviceType(data.spec) ?? 'icon')
+  const termination = $derived(data.termination)
+  const icon = $derived(termination ? null : resolveIcon(data.spec))
+  // Sizes come from the shared geometry module so SceneCanvas can
+  // compute matching centers / hit areas without re-deriving.
+  const sizes = $derived(sceneNodeSize({ termination }))
+  const ariaLabel = $derived(
+    termination
+      ? termination.role === 'outlet'
+        ? 'wall outlet'
+        : termination.role === 'eps'
+          ? 'EPS riser'
+          : 'patch panel'
+      : (specDeviceType(data.spec) ?? 'icon'),
+  )
 </script>
 
-<div class="flex select-none flex-col items-center" style:opacity={data.isExternal ? 0.6 : 1}>
-  <!-- Connection handles on all four sides; visually invisible but
-       active for connection authoring. -->
-  <Handle type="source" position={Position.Top} style="opacity: 0;" />
-  <Handle type="source" position={Position.Right} style="opacity: 0;" />
-  <Handle type="source" position={Position.Bottom} style="opacity: 0;" />
-  <Handle type="source" position={Position.Left} style="opacity: 0;" />
+<div
+  class="relative select-none"
+  style:width="{sizes.w}px"
+  style:height="{sizes.h}px"
+  style:opacity={data.isExternal ? 0.6 : 1}
+>
+  <!-- Handles anchor to the box's four sides so wires terminate at the
+       icon (or termination glyph) and don't pass through the label. -->
+  <!-- Handle ids match Position values so picking a side ('top' /
+       'right' / 'bottom' / 'left') gives both a sourceHandle id and
+       a sourcePosition for smoothstep — one identifier, two uses. -->
+  <Handle id="top" type="source" position={Position.Top} style="opacity: 0;" />
+  <Handle id="right" type="source" position={Position.Right} style="opacity: 0;" />
+  <Handle id="bottom" type="source" position={Position.Bottom} style="opacity: 0;" />
+  <Handle id="left" type="source" position={Position.Left} style="opacity: 0;" />
 
-  <div
-    class="relative flex items-center justify-center rounded-full {selected
-      ? 'ring-2 ring-blue-500'
-      : ''}"
-    style:width="{iconSize}px"
-    style:height="{iconSize}px"
-  >
-    {#if icon}
-      {#if icon.kind === 'inline'}
-        <svg
-          width={iconSize}
-          height={iconSize}
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          role="img"
-          aria-label={ariaLabel}
-          style:color="#1e293b"
-          style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); pointer-events: none;"
-        >
-          <title>{ariaLabel}</title>
-          {@html icon.svg}
-        </svg>
-      {:else}
-        <img
-          src={icon.url}
-          alt={ariaLabel}
-          width={iconSize}
-          height={iconSize}
-          style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); pointer-events: none;"
-        >
-      {/if}
+  {#if termination}
+    <!-- Termination glyphs: small, role-specific shapes. Selected state
+         lights the border so editing affordance stays consistent. -->
+    {#if termination.role === 'outlet'}
+      <div
+        class="flex h-full w-full items-center justify-center rounded-[3px] border-[1.5px] bg-white shadow-sm"
+        class:border-blue-500={selected}
+        class:border-neutral-500={!selected}
+        aria-label={ariaLabel}
+      >
+        <div class="h-1 w-1 rounded-full bg-neutral-700"></div>
+        <div class="ml-0.5 h-1 w-1 rounded-full bg-neutral-700"></div>
+      </div>
+    {:else if termination.role === 'eps'}
+      <div
+        class="flex h-full w-full flex-col justify-around rounded-[2px] border-[1.5px] bg-amber-50 px-0.5 shadow-sm"
+        class:border-blue-500={selected}
+        class:border-amber-500={!selected}
+        aria-label={ariaLabel}
+      >
+        <div class="h-[1.5px] bg-amber-500"></div>
+        <div class="h-[1.5px] bg-amber-500"></div>
+        <div class="h-[1.5px] bg-amber-500"></div>
+      </div>
     {:else}
       <div
-        class="rounded-full border border-neutral-400 bg-white"
-        style:width="{iconSize - 12}px"
-        style:height="{iconSize - 12}px"
-      ></div>
+        class="flex h-full w-full items-center justify-around rounded-[2px] border-[1.5px] bg-slate-100 shadow-sm"
+        class:border-blue-500={selected}
+        class:border-slate-500={!selected}
+        aria-label={ariaLabel}
+      >
+        <div class="h-1 w-1 rounded-full bg-slate-600"></div>
+        <div class="h-1 w-1 rounded-full bg-slate-600"></div>
+        <div class="h-1 w-1 rounded-full bg-slate-600"></div>
+      </div>
     {/if}
-  </div>
+  {:else}
+    <div
+      class="flex h-full w-full items-center justify-center rounded-full {selected
+        ? 'ring-2 ring-blue-500'
+        : ''}"
+    >
+      {#if icon}
+        {#if icon.kind === 'inline'}
+          <svg
+            width={sizes.w}
+            height={sizes.h}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            role="img"
+            aria-label={ariaLabel}
+            style:color="#1e293b"
+            style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); pointer-events: none;"
+          >
+            <title>{ariaLabel}</title>
+            {@html icon.svg}
+          </svg>
+        {:else}
+          <img
+            src={icon.url}
+            alt={ariaLabel}
+            width={sizes.w}
+            height={sizes.h}
+            style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); pointer-events: none;"
+          >
+        {/if}
+      {:else}
+        <div
+          class="rounded-full border border-neutral-400 bg-white"
+          style:width="{sizes.w - 12}px"
+          style:height="{sizes.h - 12}px"
+        ></div>
+      {/if}
+    </div>
+  {/if}
 
   {#if data.label}
+    <!-- Label floats beneath the icon, absolutely positioned so it
+         doesn't extend the node's hit area — handles + wires stay
+         locked to the icon. -->
     <div
-      class="mt-0.5 max-w-[160px] truncate rounded-[3px] border border-black/10 bg-white/95 px-1 text-[10px] leading-[14px] text-slate-900"
-      style="pointer-events: none;"
+      class="absolute left-1/2 top-full max-w-[160px] -translate-x-1/2 truncate rounded-[3px] border border-black/10 bg-white/95 px-1 text-[10px] leading-[14px] text-slate-900"
+      style="margin-top: 2px; pointer-events: none;"
     >
       {data.label}
     </div>

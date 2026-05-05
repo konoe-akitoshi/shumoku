@@ -10,9 +10,11 @@
   import '@xyflow/svelte/dist/style.css'
   import { onDestroy, onMount } from 'svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
-  import { cableLengthMeters } from '$lib/scene/cable-length'
+  import { cableLengthMeters, visibleCableSegments } from '$lib/scene/cable-length'
+  import { pickSideForDirection, sceneNodeSize } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
+  import NodeRoutingModal from './NodeRoutingModal.svelte'
   import SceneBackgroundNode from './SceneBackgroundNode.svelte'
   import SceneCalibrationCapture from './SceneCalibrationCapture.svelte'
   import SceneClickPlace from './SceneClickPlace.svelte'
@@ -101,7 +103,7 @@
   })
   const trayIndexById = $derived.by(() => {
     const m = new Map<string, number>()
-    visibleSceneNodes.forEach((n, i) => m.set(n.id, i))
+    for (const [i, n] of visibleSceneNodes.entries()) m.set(n.id, i)
     return m
   })
 
@@ -116,6 +118,16 @@
     return node?.position ?? { x: 100, y: 100 }
   }
 
+  // Center of a node's icon in flow coords. Svelte Flow stores
+  // positions as top-left, so anything that wants to anchor against
+  // the visible icon (wire endpoints into a via TP, etc.) needs to
+  // shift by half the size. Sizes come from the shared
+  // node-geometry module, kept in sync with SceneNode's own render.
+  function centerOf(nodeId: string): { x: number; y: number } {
+    const tl = positionFor(nodeId)
+    const { w, h } = sceneNodeSize(diagramState.nodes.get(nodeId))
+    return { x: tl.x + w / 2, y: tl.y + h / 2 }
+  }
 
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
   const sfNodes = $derived.by<SfNode[]>(() => {
@@ -145,7 +157,7 @@
         id: n.id,
         type: 'scene',
         position: positionFor(n.id),
-        data: { label, spec: n.spec },
+        data: { label, spec: n.spec, termination: n.termination },
         draggable: interactive,
         selectable: true,
       })
@@ -163,19 +175,63 @@
       const to = link.to.node
       const crossBoundary = !inScopeIds.has(from) || !inScopeIds.has(to)
       const route = scene.wireRoutes.find((w) => w.linkId === link.id)
+      const fromPos = centerOf(from)
+      const toPos = centerOf(to)
+      // Wire path: split into visible cable segments at every EPS in
+      // via. Cable physically enters the chase at the EPS and exits
+      // at an outlet on the other side; the wall-internal portion is
+      // hidden, so we render two disjoint polylines (source → EPS,
+      // outlet → target) instead of one continuous line. The
+      // visibleCableSegments helper keeps this consistent with the
+      // length math.
+      const idSegments = visibleCableSegments(link, diagramState.nodes)
+      // Inner via points target the icon's CENTER so the smoothstep
+      // curves enter the TP at the visual edge, not its top-left
+      // corner. Source/target endpoints stay handle-driven via
+      // sourceX/Y / targetX/Y from Svelte Flow.
+      const segments: Array<Array<{ x: number; y: number }>> = idSegments.map((seg) =>
+        seg.filter((id) => id !== from && id !== to).map((id) => centerOf(id)),
+      )
+      const userBends = (link.via?.length ?? 0) > 0 ? [] : (route?.controlPoints ?? [])
+      // Handle side picked toward the FIRST visible waypoint after the
+      // source (and the LAST visible waypoint before the target). For
+      // a wire that goes source → EPS → … via, we want to leave the
+      // source pointing toward the EPS, not toward the eventual far
+      // device (which our line never actually heads to in segment A).
+      const firstAfterSource = segments[0]?.[0] ?? toPos
+      const lastBeforeTarget =
+        segments[segments.length - 1]?.[(segments[segments.length - 1]?.length ?? 0) - 1] ?? fromPos
+      const sourceHandle = pickSideForDirection(
+        firstAfterSource.x - fromPos.x,
+        firstAfterSource.y - fromPos.y,
+      )
+      const targetHandle = pickSideForDirection(
+        lastBeforeTarget.x - toPos.x,
+        lastBeforeTarget.y - toPos.y,
+      )
       // Cable length: scene-derived (calibration + endpoint positions
       // — placement override OR Node.position fallback) wins, else
       // stored link.cable.length_m. Same helper BOM / Connections use,
       // so canvas and the rest of the app agree on the value.
-      const eff = cableLengthMeters(link, [scene], diagramState.nodes, diagramState.subgraphs)
+      const eff = cableLengthMeters(link, [scene], diagramState.nodes)
       out.push({
         id: link.id,
         source: from,
         target: to,
+        sourceHandle,
+        targetHandle,
         type: 'wire',
         data: {
           sceneId: scene.id,
-          waypoints: route?.controlPoints ?? [],
+          // For non-via wires the renderer keeps using `waypoints`
+          // for backward compatibility (drag-to-bend points). For
+          // via wires we hand it the segmented form.
+          segments,
+          waypoints: userBends,
+          // Drag-to-bend is suppressed when via routing is active —
+          // bending a TP-routed wire would create per-segment bends
+          // we don't store yet.
+          editableWaypoints: segments.length === 1 && segments[0]?.length === 0,
           lengthMeters: eff?.meters ?? null,
         },
         animated: false,
@@ -205,12 +261,33 @@
   function onNodeDragStart(_args: { targetNode: SfNode | null }) {
     diagramState.beginTx('Move item')
   }
+  function onNodeDrag(args: { targetNode: SfNode | null }) {
+    // Live placement update mid-drag so wires routed through this
+    // node (via TP) follow the cursor instead of waiting for drop.
+    // We're inside a tx (started by onNodeDragStart) so the per-frame
+    // updates collapse to one undo step on stop.
+    const target = args.targetNode
+    if (!target) return
+    diagramState.placeNodeInScene(scene.id, target.id, target.position)
+  }
   function onNodeDragStop(args: { targetNode: SfNode | null }) {
     const target = args.targetNode
     if (target) {
       diagramState.placeNodeInScene(scene.id, target.id, target.position)
     }
     diagramState.endTx()
+  }
+
+  // Double-click on a regular (non-TP) node opens its routing modal —
+  // a per-wire picker for which EPSes in scope each wire routes
+  // through (opt-out: all on by default).
+  let routingNodeId = $state<string | null>(null)
+  function onNodeDblClick(args: { targetNode: SfNode | null }) {
+    const t = args.targetNode
+    if (!t) return
+    const node = diagramState.nodes.get(t.id)
+    if (!node || node.termination) return
+    routingNodeId = node.id
   }
 
   function onConnect(connection: Connection) {
@@ -315,7 +392,16 @@
     panOnDrag={[1, 2]}
     selectionOnDrag
     onnodedragstart={onNodeDragStart}
+    onnodedrag={onNodeDrag}
     onnodedragstop={onNodeDragStop}
+    onnodeclick={(args) => {
+      // Single click is selection; doubleclick semantics live on the
+      // pointer event itself (Svelte Flow re-emits node.click for
+      // detail===2). Detect via event.detail to avoid setting up an
+      // explicit dblclick listener that fights selection.
+      const ev = args.event as MouseEvent
+      if (ev.detail === 2) onNodeDblClick({ targetNode: args.node })
+    }}
     onconnect={onConnect}
     onpaneclick={onPaneClick}
     proOptions={{ hideAttribution: true }}
@@ -340,16 +426,30 @@
         Click to place item (Esc to cancel)
       {:else if auth.pendingPlacement?.kind === 'empty'}
         Click to place an empty node (Esc to cancel)
+      {:else if auth.pendingPlacement?.kind === 'termination'}
+        Click to place
+        {auth.pendingPlacement.role === 'outlet'
+          ? 'a wall outlet'
+          : auth.pendingPlacement.role === 'eps'
+            ? 'an EPS riser'
+            : 'a patch panel'}
+        (Esc to cancel)
       {:else}
         Authoring…
       {/if}
     </div>
   {/if}
+
+  <NodeRoutingModal
+    nodeId={routingNodeId}
+    sceneId={scene.id}
+    onclose={() => (routingNodeId = null)}
+  />
 </div>
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                     plan is set, but otherwise let its theming through. */
+                       plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -357,8 +457,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-                   to drag from. Otherwise the fully-transparent handles leave the
-                   "how do I draw a wire" UX a guess. */
+                     to drag from. Otherwise the fully-transparent handles leave the
+                     "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 1 !important;
     background: #3b82f6;
@@ -367,14 +467,14 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-         mode. Keep size + DOM presence so Svelte Flow can still resolve
-         edge endpoint positions from each handle's bounding rect — only
-         opacity is dropped. */
+           mode. Keep size + DOM presence so Svelte Flow can still resolve
+           edge endpoint positions from each handle's bounding rect — only
+           opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
-         "click somewhere to drop the item". */
+           "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
     cursor: crosshair !important;
   }

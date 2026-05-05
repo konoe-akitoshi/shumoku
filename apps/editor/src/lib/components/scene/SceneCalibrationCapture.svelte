@@ -110,6 +110,8 @@
      it pans/zooms with the scene. -->
 <ViewportPortal target="front">
   <svg
+    role="presentation"
+    aria-hidden="true"
     style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;"
   >
     <!-- Persistent reference line (faint dashed amber) once
