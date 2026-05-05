@@ -109,11 +109,10 @@
   function positionFor(nodeId: string): { x: number; y: number } {
     const override = placementById.get(nodeId)
     if (override) return override
-    // Unplaced + bg present → staging tray on the left of the image.
-    if (bg) {
-      const idx = trayIndexById.get(nodeId)
-      if (idx !== undefined) return { x: -120, y: 30 + idx * 60 }
-    }
+    // No placement — fall through to the diagram-side auto-layout
+    // position. The auto-placement effect below distributes unplaced
+    // in-scope pins on the floor plan when bg is present, so this
+    // path is mostly hit when bg isn't set yet.
     const node = diagramState.nodes.get(nodeId)
     return node?.position ?? { x: 100, y: 100 }
   }
@@ -279,22 +278,50 @@
     typeof window !== 'undefined' ? window.removeEventListener('keydown', onWindowKey) : undefined,
   )
 
-  // Initial fit: floor-plan image + staging tray on the left for any
-  // unplaced pins (those default to negative-x in `positionFor`).
-  // Excluding pins still at their diagram-side auto-layout positions
-  // — those are far below the image and would shove the fit way out
-  // of proportion.
-  const TRAY_WIDTH = 180
-  const hasUnplaced = $derived(
-    visibleSceneNodes.some((n) => !scene.nodePlacements.find((p) => p.nodeId === n.id)),
-  )
+  // Initial fit: just the floor-plan image. Auto-placement (below)
+  // ensures all pins land inside the image, so we don't need to
+  // pad for off-canvas tray pins anymore.
   const fitBounds = $derived.by<{ x: number; y: number; width: number; height: number } | null>(
     () => {
       if (!bg) return null
-      const trayPad = hasUnplaced ? TRAY_WIDTH : 0
-      return { x: -trayPad, y: 0, width: bg.width + trayPad, height: bg.height }
+      return { x: 0, y: 0, width: bg.width, height: bg.height }
     },
   )
+
+  // Auto-place unplaced in-scope pins on the floor plan grid the
+  // first time a scene is opened (or when a bg is uploaded after
+  // the fact). Without this users see calibration set + wires
+  // drawn but no length values until they manually drag every pin
+  // — non-obvious "hidden requirement" UX. New diagram nodes added
+  // later don't auto-place; users explicitly position those.
+  let lastTopupKey = ''
+  $effect(() => {
+    if (!bg) return
+    const key = `${scene.id}:${bg.src}`
+    if (key === lastTopupKey) return
+    lastTopupKey = key
+
+    const placed = new Set(scene.nodePlacements.map((p) => p.nodeId))
+    const unplaced = visibleSceneNodes.filter((n) => !placed.has(n.id))
+    if (unplaced.length === 0) return
+
+    const cols = Math.max(1, Math.ceil(Math.sqrt(unplaced.length)))
+    const rows = Math.max(1, Math.ceil(unplaced.length / cols))
+    const cellW = bg.width / (cols + 1)
+    const cellH = bg.height / (rows + 1)
+
+    const next = unplaced.map((n, i) => ({
+      nodeId: n.id,
+      position: {
+        x: cellW * ((i % cols) + 1),
+        y: cellH * (Math.floor(i / cols) + 1),
+      },
+    }))
+
+    diagramState.updateScene(scene.id, {
+      nodePlacements: [...scene.nodePlacements, ...next],
+    })
+  })
 </script>
 
 <div
