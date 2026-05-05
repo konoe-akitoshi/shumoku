@@ -6,40 +6,37 @@ import type { Scene } from '../types'
 import { nodesInScope } from './scope'
 
 /**
- * Effective endpoint position in a scene: explicit placement
- * override → diagram-side Node.position fallback. Both live in the
- * same coordinate system as the scene's calibration anchor (it was
- * clicked on rendered positions), so either is valid for length math.
+ * Endpoint position in a scene. Order:
+ *   1. explicit placement (user dragged the pin somewhere)
+ *   2. Node.position (diagram-side auto-layout) — only as a
+ *      fallback for in-scope nodes; out-of-scope nodes' diagram
+ *      positions are unrelated to the scene's coordinate system.
+ *
+ * For an out-of-scope endpoint without an explicit placement, the
+ * scene can't physically measure where the cable goes, so we return
+ * null (no scene-derived length until the user places the pin).
  */
 function endpointPos(
   scene: Scene,
   nodeId: string,
   nodes: Map<string, Node>,
+  inScope: Set<string>,
 ): { x: number; y: number } | null {
   const placement = scene.nodePlacements.find((p) => p.nodeId === nodeId)
   if (placement) return placement.position
-  return nodes.get(nodeId)?.position ?? null
+  if (inScope.has(nodeId)) return nodes.get(nodeId)?.position ?? null
+  return null
 }
 
-/**
- * Sum the polyline length (px) for a wire in a scene, only when
- * both endpoints are in the scene's scope. Cross-boundary wires
- * (one endpoint outside the scope subgraph) return null — a single
- * scene can't measure distances that exit it; the boundary point
- * isn't physically meaningful without explicit user marking.
- */
 function polylinePx(
   scene: Scene,
   link: Link,
   nodes: Map<string, Node>,
-  inScopeIds: Set<string>,
+  inScope: Set<string>,
 ): number | null {
   if (!link.id) return null
-  if (!inScopeIds.has(link.from.node)) return null
-  if (!inScopeIds.has(link.to.node)) return null
-
-  const fromPos = endpointPos(scene, link.from.node, nodes)
-  const toPos = endpointPos(scene, link.to.node, nodes)
+  const fromPos = endpointPos(scene, link.from.node, nodes, inScope)
+  const toPos = endpointPos(scene, link.to.node, nodes, inScope)
   if (!fromPos || !toPos) return null
 
   const route = scene.wireRoutes.find((w) => w.linkId === link.id)
@@ -58,15 +55,14 @@ function polylinePx(
  * Effective real-world cable length for a link.
  *
  * Priority:
- *   1. Scene-derived: a calibrated scene whose scope contains BOTH
- *      endpoints. The polyline through that scene's positions ×
- *      m/px. Cross-boundary wires (one endpoint outside the scope)
- *      don't qualify — the within-scope length isn't the cable's
- *      real length, and we don't yet model the boundary exit point.
- *   2. Stored `link.cable.length_m` — manual input or imported.
+ *   1. Scene-derived: a calibrated scene where both endpoints have
+ *      a usable position — placement (any node) or Node.position
+ *      fallback (in-scope nodes only). For an out-of-scope endpoint
+ *      (cross-boundary wire), the user must explicitly place the
+ *      pin in this scene before length computes.
+ *   2. Stored `link.cable.length_m`.
  *
- * Returns `{ meters, source }` so callers can label "(from scene)"
- * vs "(manual)". Null when neither path produces a value.
+ * Returns `{ meters, source }`; null when neither qualifies.
  */
 export function cableLengthMeters(
   link: Link,

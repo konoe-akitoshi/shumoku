@@ -17,7 +17,6 @@
   import SceneCalibrationCapture from './SceneCalibrationCapture.svelte'
   import SceneClickPlace from './SceneClickPlace.svelte'
   import SceneEdge from './SceneEdge.svelte'
-  import SceneExportNode from './SceneExportNode.svelte'
   import SceneFitOnLoad from './SceneFitOnLoad.svelte'
   import SceneNode from './SceneNode.svelte'
   import { sceneAuthoring } from './scene-authoring.svelte'
@@ -46,7 +45,6 @@
     nodesInScope(diagramState.nodes.values(), diagramState.subgraphs, scene.scopeSubgraphId),
   )
   const inScopeIds = $derived(new Set(inScope.map((n) => n.id)))
-  const visibleSceneNodes = $derived(inScope.filter((n) => !hiddenNodeIds.has(n.id)))
   const visibleLinks = $derived(
     diagramState.links.filter(
       (l) =>
@@ -55,46 +53,42 @@
         (inScopeIds.has(l.from.node) || inScopeIds.has(l.to.node)),
     ),
   )
-
-  // ── Boundary anchors — one per cross-boundary external node ─────
-  // Previously we collapsed all wires to a destination subgraph into
-  // one "export pill", but that lost identity (FW-1 vs FW-2) and the
-  // pill's position was just an arbitrary average. Now: each unique
-  // external endpoint gets its own boundary marker so the user can
-  // place each one at the spot where its cable physically exits the
-  // scope. The label includes the destination subgraph so the cross-
-  // boundary nature stays visible.
-  function boundaryAnchorId(externalNodeId: string): string {
-    return `__boundary_${externalNodeId}`
-  }
-  type BoundaryAnchor = {
-    externalNodeId: string
-    nodeLabel: string
-    subgraphLabel: string | null
-  }
-  const boundaryAnchors = $derived.by<BoundaryAnchor[]>(() => {
-    const seen = new Map<string, BoundaryAnchor>()
+  // Nodes to render as pins in this scene = scope-internal nodes
+  // PLUS any external endpoint referenced by a visible cross-boundary
+  // link. Externals are normal SceneNodes (draggable, length-bearing);
+  // their cross-boundary nature only shows in the label suffix.
+  const visibleSceneNodes = $derived.by(() => {
+    const ids = new Set<string>()
+    const out: typeof inScope = []
+    for (const n of inScope) {
+      if (hiddenNodeIds.has(n.id)) continue
+      ids.add(n.id)
+      out.push(n)
+    }
     for (const l of visibleLinks) {
       for (const ep of [l.from.node, l.to.node]) {
-        if (inScopeIds.has(ep)) continue
-        if (seen.has(ep)) continue
+        if (ids.has(ep)) continue
         const node = diagramState.nodes.get(ep)
-        const label = Array.isArray(node?.label) ? node.label[0] : (node?.label ?? ep)
-        const sg = node?.parent ? diagramState.subgraphs.get(node.parent) : undefined
-        seen.set(ep, {
-          externalNodeId: ep,
-          nodeLabel: label ?? ep,
-          subgraphLabel: sg?.label ?? null,
-        })
+        if (!node) continue
+        ids.add(ep)
+        out.push(node)
       }
     }
-    return [...seen.values()]
+    return out
   })
-  const externalToAnchorId = $derived.by(() => {
-    const m = new Map<string, string>()
-    for (const a of boundaryAnchors) m.set(a.externalNodeId, boundaryAnchorId(a.externalNodeId))
-    return m
-  })
+
+  // Cross-boundary external nodes are rendered as regular pins in
+  // the scene. We just compute a "(<subgraph>)" suffix to show the
+  // node belongs elsewhere on the diagram, so the user can spot
+  // boundary connections without conflating them with native pins.
+  function externalSubgraphSuffix(nodeId: string): string {
+    if (inScopeIds.has(nodeId)) return ''
+    const node = diagramState.nodes.get(nodeId)
+    const sgId = node?.parent
+    if (!sgId) return ''
+    const sg = diagramState.subgraphs.get(sgId)
+    return sg?.label ? ` (${sg.label})` : ''
+  }
 
   // ── Position resolution (cached) ────────────────────────────────
   // Index lookups by id once per derive cycle so per-node lookups are
@@ -122,25 +116,6 @@
     return node?.position ?? { x: 100, y: 100 }
   }
 
-  function positionForAnchor(externalNodeId: string, anchorId: string): { x: number; y: number } {
-    const override = placementById.get(anchorId)
-    if (override) return override
-    // Default: pick the in-scope endpoint of this anchor's wire and
-    // offset to the upper-right so the anchor lands near its
-    // partner instead of at origin. Multiple wires from the same
-    // external node share the anchor and use the first match.
-    for (const l of visibleLinks) {
-      if (inScopeIds.has(l.from.node) && l.to.node === externalNodeId) {
-        const p = positionFor(l.from.node)
-        return { x: p.x + 80, y: p.y - 60 }
-      }
-      if (inScopeIds.has(l.to.node) && l.from.node === externalNodeId) {
-        const p = positionFor(l.to.node)
-        return { x: p.x + 80, y: p.y - 60 }
-      }
-    }
-    return { x: 100, y: 100 }
-  }
 
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
   const sfNodes = $derived.by<SfNode[]>(() => {
@@ -164,26 +139,13 @@
       })
     }
     for (const n of visibleSceneNodes) {
-      const label = Array.isArray(n.label) ? n.label[0] : (n.label ?? n.id)
+      const baseLabel = Array.isArray(n.label) ? n.label[0] : (n.label ?? n.id)
+      const label = `${baseLabel}${externalSubgraphSuffix(n.id)}`
       out.push({
         id: n.id,
         type: 'scene',
         position: positionFor(n.id),
         data: { label, spec: n.spec },
-        draggable: interactive,
-        selectable: true,
-      })
-    }
-    for (const a of boundaryAnchors) {
-      const id = boundaryAnchorId(a.externalNodeId)
-      out.push({
-        id,
-        type: 'export',
-        position: positionForAnchor(a.externalNodeId, id),
-        data: {
-          // Show "FW-1 (security)" — node identity + cross-boundary subgraph.
-          label: a.subgraphLabel ? `${a.nodeLabel} (${a.subgraphLabel})` : a.nodeLabel,
-        },
         draggable: interactive,
         selectable: true,
       })
@@ -195,13 +157,11 @@
     const out: Edge[] = []
     for (const link of visibleLinks) {
       if (!link.id) continue
-      const from = inScopeIds.has(link.from.node)
-        ? link.from.node
-        : (externalToAnchorId.get(link.from.node) ?? link.from.node)
-      const to = inScopeIds.has(link.to.node)
-        ? link.to.node
-        : (externalToAnchorId.get(link.to.node) ?? link.to.node)
-      const crossBoundary = !inScopeIds.has(link.from.node) || !inScopeIds.has(link.to.node)
+      // Both endpoints are now real SceneNodes (in-scope or cross-
+      // boundary), no synthetic anchor IDs to substitute.
+      const from = link.from.node
+      const to = link.to.node
+      const crossBoundary = !inScopeIds.has(from) || !inScopeIds.has(to)
       const route = scene.wireRoutes.find((w) => w.linkId === link.id)
       // Cable length: scene-derived (calibration + endpoint positions
       // — placement override OR Node.position fallback) wins, else
@@ -343,7 +303,7 @@
   <SvelteFlow
     bind:nodes
     bind:edges
-    nodeTypes={{ scene: SceneNode, export: SceneExportNode, background: SceneBackgroundNode }}
+    nodeTypes={{ scene: SceneNode, background: SceneBackgroundNode }}
     edgeTypes={{ wire: SceneEdge }}
     nodesDraggable={interactive}
     nodesConnectable={interactive}
