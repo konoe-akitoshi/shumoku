@@ -270,6 +270,8 @@
     minZoom={0.05}
     maxZoom={4}
     zoomOnDoubleClick={false}
+    panOnDrag={[1, 2]}
+    selectionOnDrag
     onnodedragstart={onNodeDragStart}
     onnodedragstop={onNodeDragStop}
     onconnect={onConnect}
