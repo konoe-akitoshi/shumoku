@@ -28,7 +28,11 @@
   type SceneEdgeData = {
     sceneId: string
     waypoints: Waypoint[]
-    pxPerMeter?: number
+    /** Effective real-world cable length, computed by the parent
+     *  via the cableLengthMeters helper. Already accounts for
+     *  scene-derived (placements + calibration) vs stored fallback;
+     *  null when neither is available. */
+    lengthMeters: number | null
   }
   type SceneEdgeT = Edge<SceneEdgeData, 'wire'>
 
@@ -81,10 +85,10 @@
   })
   const midpoints = $derived(segmentMidpoints(points))
 
-  // Cable length label — shown at the polyline midpoint when the
-  // scene is calibrated. Computes Σ segment lengths through any
-  // waypoints so a wire bent along walls reports the real cable run,
-  // not the source-to-target straight-line distance.
+  // Cable length comes pre-computed from the parent (canvas + BOM
+  // share the same cableLengthMeters helper). We just pick a label
+  // anchor on the rendered polyline.
+  const lengthMeters = $derived(data?.lengthMeters ?? null)
   const totalPx = $derived.by(() => {
     let len = 0
     for (let i = 0; i < points.length - 1; i++) {
@@ -95,11 +99,7 @@
     }
     return len
   })
-  const lengthMeters = $derived(
-    data?.pxPerMeter && data.pxPerMeter > 0 ? totalPx / data.pxPerMeter : null,
-  )
   const labelAt = $derived.by(() => {
-    // Place at the visual middle of the polyline (by accumulated length).
     if (points.length < 2) return null
     const half = totalPx / 2
     let walked = 0

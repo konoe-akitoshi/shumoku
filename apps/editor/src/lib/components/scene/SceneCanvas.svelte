@@ -10,6 +10,7 @@
   import '@xyflow/svelte/dist/style.css'
   import { onDestroy, onMount } from 'svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
+  import { cableLengthMeters } from '$lib/scene/cable-length'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
   import SceneBackgroundNode from './SceneBackgroundNode.svelte'
@@ -193,6 +194,10 @@
         : (externalToPill.get(link.to.node) ?? link.to.node)
       const crossBoundary = !inScopeIds.has(link.from.node) || !inScopeIds.has(link.to.node)
       const route = scene.wireRoutes.find((w) => w.linkId === link.id)
+      // Cable length: scene-derived from explicit placements + calibration.
+      // Falls back to stored link.cable.length_m if scene-derived is null.
+      // Pass meters directly to the edge so canvas + Connections agree.
+      const eff = cableLengthMeters(link, [scene])
       out.push({
         id: link.id,
         source: from,
@@ -201,7 +206,7 @@
         data: {
           sceneId: scene.id,
           waypoints: route?.controlPoints ?? [],
-          pxPerMeter: scene.calibration?.pxPerMeter,
+          lengthMeters: eff?.meters ?? null,
         },
         animated: false,
         style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
