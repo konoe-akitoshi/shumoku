@@ -98,6 +98,7 @@
     standard: string
     issues: ValidationIssue[]
     cableLength: string
+    cableLengthSource: 'scene' | 'stored' | null
     vlan: string
     fromIp: string
     toIp: string
@@ -110,6 +111,16 @@
       const { from, to } = link
       const rawFromIp = from.ip
       const rawToIp = to.ip
+      // Effective length: scene-derived (calibrated polyline) wins
+      // over the stored field — same precedence as BOM / detail panel.
+      const eff = link.id ? diagramState.cableLengthMeters(link.id) : null
+      const cableLengthDisplay = eff
+        ? eff.meters < 10
+          ? eff.meters.toFixed(1)
+          : String(Math.round(eff.meters))
+        : link.cable?.length_m !== undefined
+          ? String(link.cable.length_m)
+          : ''
       return {
         link,
         id: link.id ?? `link-${i}`,
@@ -123,7 +134,8 @@
           getPort(link.to.node, link.to.port),
           link,
         ),
-        cableLength: link.cable?.length_m !== undefined ? String(link.cable.length_m) : '',
+        cableLength: cableLengthDisplay,
+        cableLengthSource: eff?.source ?? null,
         vlan: link.vlan
           ? Array.isArray(link.vlan)
             ? link.vlan.join(', ')
@@ -821,15 +833,25 @@
               <ValidationCell
                 issues={issuesForTarget(row.issues, { kind: 'cable', field: 'length_m' })}
               >
-                <input
-                  type="number"
-                  min="0"
-                  class={cellInput}
-                  value={row.cableLength}
-                  placeholder="—"
-                  onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
-                  onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                >
+                {#if row.cableLengthSource === 'scene'}
+                  <!-- Scene-derived: read-only display with origin badge.
+                       Editing manually wouldn't stick (the helper recomputes
+                       from polyline × calibration each render). -->
+                  <span class="font-mono text-xs text-neutral-700 dark:text-neutral-200">
+                    {row.cableLength}
+                    <span class="ml-1 text-[9px] text-muted-foreground">scene</span>
+                  </span>
+                {:else}
+                  <input
+                    type="number"
+                    min="0"
+                    class={cellInput}
+                    value={row.cableLength}
+                    placeholder="—"
+                    onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
+                    onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  >
+                {/if}
               </ValidationCell>
             </Table.Cell>
             <Table.Cell>
