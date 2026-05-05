@@ -1,47 +1,30 @@
 <script lang="ts">
-  import { useSvelteFlow } from '@xyflow/svelte'
-  import { onMount, untrack } from 'svelte'
+  import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
 
-  // Tiny child of <SvelteFlow> that fits the viewport — once on
-  // mount, and again whenever `refitKey` changes (e.g. background
-  // image swapped). When `fitNodeId` is set, fits that node alone
-  // (Svelte Flow uses its measured rect); otherwise falls back to
-  // fitView.
+  // Fit the viewport to `bounds` once Svelte Flow reports initialized.
+  // Without waiting, fitBounds runs before the viewport has been
+  // measured and silently no-ops, leaving whatever fitView painted.
+  // Refit again only when `refitKey` (e.g. bg.src) changes — Svelte
+  // Flow mutates internal state during fit, which would otherwise
+  // loop a reactive effect on bounds.
 
   let {
-    fitNodeId = null,
+    bounds,
     refitKey = '',
   }: {
-    fitNodeId?: string | null
+    bounds: { x: number; y: number; width: number; height: number } | null
     refitKey?: string
   } = $props()
 
   const sf = useSvelteFlow()
+  const initialized = useNodesInitialized()
 
-  onMount(() => {
-    schedule(untrack(() => fitNodeId))
-  })
-
-  let lastKey = ''
+  let lastKey = '<<unset>>'
   $effect(() => {
-    const key = refitKey
-    if (key === lastKey) return
-    lastKey = key
-    schedule(untrack(() => fitNodeId))
+    if (!initialized.current) return
+    if (refitKey === lastKey) return
+    lastKey = refitKey
+    if (bounds) sf.fitBounds(bounds, { padding: 0.1, duration: 0 })
+    else sf.fitView({ padding: 0.1, duration: 0 })
   })
-
-  /** Wait a few frames so Svelte Flow has measured the node before
-   *  fitting — otherwise `fitView({ nodes })` sees zero-sized nodes
-   *  and the viewport ends up wrong. */
-  function schedule(id: string | null) {
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        if (id) {
-          sf.fitView({ nodes: [{ id }], padding: 0.1, duration: 0 })
-        } else {
-          sf.fitView({ padding: 0.1, duration: 0 })
-        }
-      }),
-    )
-  }
 </script>

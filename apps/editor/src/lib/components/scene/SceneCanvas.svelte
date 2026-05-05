@@ -225,6 +225,17 @@
     if (auth.pendingPlacement) auth.pendingPlacement = null
   }
 
+  // Initial fit target: just the floor-plan image (when set). Pins
+  // dragged outside the image are out of frame on first paint, but
+  // unioning bounds with pins still at their diagram-side auto-layout
+  // positions shoves the image off-center / toward a corner — worse
+  // UX than "image fits, pin out of frame until you scroll to it".
+  const fitBounds = $derived.by<{ x: number; y: number; width: number; height: number } | null>(
+    () => {
+      if (!bg) return null
+      return { x: 0, y: 0, width: bg.width, height: bg.height }
+    },
+  )
 </script>
 
 <div class="relative h-full w-full">
@@ -236,7 +247,6 @@
     nodesConnectable={interactive}
     elementsSelectable
     connectionMode={ConnectionMode.Loose}
-    fitView
     minZoom={0.05}
     maxZoom={4}
     onnodedragstart={onNodeDragStart}
@@ -245,7 +255,7 @@
     onpaneclick={onPaneClick}
     proOptions={{ hideAttribution: true }}
   >
-    <SceneFitOnLoad fitNodeId={bg ? '__bg__' : null} refitKey={bg?.src ?? ''} />
+    <SceneFitOnLoad bounds={fitBounds} refitKey={bg?.src ?? ''} />
   </SvelteFlow>
 
   <!-- Status hint: shown while the user is mid-action. Calibration UI
