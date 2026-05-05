@@ -197,7 +197,7 @@
       // — placement override OR Node.position fallback) wins, else
       // stored link.cable.length_m. Same helper BOM / Connections use,
       // so canvas and the rest of the app agree on the value.
-      const eff = cableLengthMeters(link, [scene], diagramState.nodes)
+      const eff = cableLengthMeters(link, [scene], diagramState.nodes, diagramState.subgraphs)
       out.push({
         id: link.id,
         source: from,

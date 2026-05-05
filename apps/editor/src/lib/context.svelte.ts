@@ -114,7 +114,7 @@ function cableRequirementKey(link: Link): string | undefined {
   // We also generate a row when only scene-derived length is known
   // (e.g. wire authored in scene before its cable type is filled in)
   // so BOM doesn't silently drop those wires.
-  const eff = cableLengthMeters(link, scenesStore.list, diagram.nodes)
+  const eff = cableLengthMeters(link, scenesStore.list, diagram.nodes, diagram.subgraphs)
   const cable = link.cable
   if (!cable && !eff) return undefined
   const lengthLabel = eff
@@ -739,7 +739,7 @@ export const diagramState = {
   cableLengthMeters(linkId: string): { meters: number; source: 'scene' | 'stored' } | null {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return null
-    return cableLengthMeters(link, scenesStore.list, diagram.nodes)
+    return cableLengthMeters(link, scenesStore.list, diagram.nodes, diagram.subgraphs)
   },
   placedCount(productId: string): number {
     let n = 0
