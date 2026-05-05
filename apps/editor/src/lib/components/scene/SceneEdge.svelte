@@ -25,7 +25,11 @@
   // segment math) lives in wire-edit.ts so this component is just
   // the rendering shell.
 
-  type SceneEdgeData = { sceneId: string; waypoints: Waypoint[] }
+  type SceneEdgeData = {
+    sceneId: string
+    waypoints: Waypoint[]
+    pxPerMeter?: number
+  }
   type SceneEdgeT = Edge<SceneEdgeData, 'wire'>
 
   let {
@@ -76,6 +80,43 @@
     return polylinePath(points)
   })
   const midpoints = $derived(segmentMidpoints(points))
+
+  // Cable length label — shown at the polyline midpoint when the
+  // scene is calibrated. Computes Σ segment lengths through any
+  // waypoints so a wire bent along walls reports the real cable run,
+  // not the source-to-target straight-line distance.
+  const totalPx = $derived.by(() => {
+    let len = 0
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i]
+      const b = points[i + 1]
+      if (!a || !b) continue
+      len += Math.hypot(b.x - a.x, b.y - a.y)
+    }
+    return len
+  })
+  const lengthMeters = $derived(
+    data?.pxPerMeter && data.pxPerMeter > 0 ? totalPx / data.pxPerMeter : null,
+  )
+  const labelAt = $derived.by(() => {
+    // Place at the visual middle of the polyline (by accumulated length).
+    if (points.length < 2) return null
+    const half = totalPx / 2
+    let walked = 0
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i]
+      const b = points[i + 1]
+      if (!a || !b) continue
+      const seg = Math.hypot(b.x - a.x, b.y - a.y)
+      if (walked + seg >= half) {
+        const t = seg === 0 ? 0 : (half - walked) / seg
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+      }
+      walked += seg
+    }
+    const last = points[points.length - 1]
+    return last ?? null
+  })
 
   // ── Handlers ─────────────────────────────────────────────────────
   function onWaypointDown(idx: number, e: PointerEvent) {
@@ -147,6 +188,18 @@
   style="cursor: grab; pointer-events: stroke;"
   onpointerdown={onLinePointerDown}
 />
+
+<!-- Cable length pill — only when the scene is calibrated. -->
+{#if lengthMeters !== null && labelAt}
+  <EdgeLabel x={labelAt.x} y={labelAt.y}>
+    <span
+      class="block rounded-[3px] border border-black/10 bg-white/95 px-1.5 text-[10px] leading-[14px] font-medium text-slate-700 shadow-sm"
+      style="transform: translate(-50%, -50%); pointer-events: none;"
+    >
+      {lengthMeters < 10 ? lengthMeters.toFixed(1) : Math.round(lengthMeters)} m
+    </span>
+  </EdgeLabel>
+{/if}
 
 {#if selected && interactive}
   {#each waypoints as wp, idx (idx)}

@@ -199,6 +199,7 @@
         data: {
           sceneId: scene.id,
           waypoints: route?.controlPoints ?? [],
+          pxPerMeter: scene.calibration?.pxPerMeter,
         },
         animated: false,
         style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
