@@ -4,22 +4,22 @@
 import type { Link } from '@shumoku/core'
 import type { Scene } from '../types'
 
-/** Sum the polyline length (px) of a scene wire route through its
- *  waypoints between the source and target node positions. */
+/**
+ * Sum the polyline length (px) for a wire in a scene: from →
+ * waypoints → to. wireRoute is optional — without one we just take
+ * the straight line between the placed endpoints. Returns null only
+ * when an endpoint has no scene placement (no anchor for length
+ * math; off-canvas tray / diagram coords aren't meaningful BOM
+ * values).
+ */
 function polylinePx(scene: Scene, link: Link): number | null {
   if (!link.id) return null
-  const route = scene.wireRoutes.find((w) => w.linkId === link.id)
-  if (!route) return null
-
-  // Resolve endpoint positions: scene placement override → fall back
-  // to scene-tray default isn't safe for length math, so require an
-  // explicit placement on each side. Otherwise the value is too
-  // arbitrary to feed into BOM.
   const fromPlacement = scene.nodePlacements.find((p) => p.nodeId === link.from.node)
   const toPlacement = scene.nodePlacements.find((p) => p.nodeId === link.to.node)
   if (!fromPlacement || !toPlacement) return null
 
-  const points = [fromPlacement.position, ...(route.controlPoints ?? []), toPlacement.position]
+  const route = scene.wireRoutes.find((w) => w.linkId === link.id)
+  const points = [fromPlacement.position, ...(route?.controlPoints ?? []), toPlacement.position]
   let len = 0
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i]
