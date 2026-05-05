@@ -193,10 +193,11 @@
         : (externalToPill.get(link.to.node) ?? link.to.node)
       const crossBoundary = !inScopeIds.has(link.from.node) || !inScopeIds.has(link.to.node)
       const route = scene.wireRoutes.find((w) => w.linkId === link.id)
-      // Cable length: scene-derived from explicit placements + calibration.
-      // Falls back to stored link.cable.length_m if scene-derived is null.
-      // Pass meters directly to the edge so canvas + Connections agree.
-      const eff = cableLengthMeters(link, [scene])
+      // Cable length: scene-derived (calibration + endpoint positions
+      // — placement override OR Node.position fallback) wins, else
+      // stored link.cable.length_m. Same helper BOM / Connections use,
+      // so canvas and the rest of the app agree on the value.
+      const eff = cableLengthMeters(link, [scene], diagramState.nodes)
       out.push({
         id: link.id,
         source: from,
