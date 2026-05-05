@@ -3,6 +3,12 @@
   import { X } from 'phosphor-svelte'
   import { tick } from 'svelte'
   import { diagramState } from '$lib/context.svelte'
+  import {
+    autoOutletPosition,
+    autoOutletTag,
+    buildViaForLink,
+    findAutoOutlet,
+  } from '$lib/scene/auto-outlets'
   import { descendantSubgraphIds } from '$lib/scene/scope'
 
   // Per-node routing modal. Triggered from a regular device (switch /
@@ -170,104 +176,53 @@
     setMatrix(want)
   }
 
-  // Looks up an auto-created outlet tagged for this (link, eps) pair.
-  // Auto-outlets are normal Nodes with a metadata marker so cleanup
-  // can find them later without needing a separate registry.
-  function autoOutletTag(linkId: string, epsId: string): string {
-    return `${linkId}:${epsId}`
-  }
-  function findAutoOutlet(linkId: string, epsId: string): string | null {
-    const tag = autoOutletTag(linkId, epsId)
-    for (const n of diagramState.nodes.values()) {
-      if (n.termination?.role !== 'outlet') continue
-      if (n.metadata?.autoFor === tag) return n.id
-    }
-    return null
-  }
-
   function save() {
     if (!nodeId) return
     const scene = diagramState.scenes.find((s) => s.id === sceneId)
+    const knownEpsIds = epsInScope.map((e) => e.id)
 
     for (const w of wires) {
       const wireId = w.id
       if (!wireId) continue
       const enabledEpsIds = epsInScope.filter((eps) => routing[wireId]?.[eps.id]).map((e) => e.id)
 
-      // Build the new via list. Each enabled EPS gets a paired outlet
-      // on its device-side — physically the cable terminates at a wall
-      // jack before plugging into the device. Outlets are auto-tagged
-      // so the inverse op (uncheck) can clean them up.
-      // Outlet position: physically the outlet sits in the device's
-      // room (the far-end side of the wire), not next to the EPS.
-      // Place it just before the far-end so the cable visually runs
-      //   source → EPS → outlet → device
-      // with each leg clearly separated.
+      // Outlets sit on the device side (room) of the wire — the
+      // far-end from this node's perspective.
       const farEndId = w.from.node === nodeId ? w.to.node : w.from.node
       const farEnd = diagramState.nodes.get(farEndId)
       const farEndPos =
-        scene?.nodePlacements.find((p) => p.nodeId === farEndId)?.position ?? farEnd?.position
+        scene?.nodePlacements.find((p) => p.nodeId === farEndId)?.position ??
+        farEnd?.position ??
+        null
 
-      const newVia: string[] = []
+      const enabledPairs: Array<{ epsId: string; outletId: string }> = []
       for (const epsId of enabledEpsIds) {
         const eps = diagramState.nodes.get(epsId)
         if (!eps) continue
-        let outletId = findAutoOutlet(wireId, epsId)
+        let outletId = findAutoOutlet(diagramState.nodes, wireId, epsId)
         if (!outletId) {
-          // Bias the outlet toward the device. When far-end has a
-          // resolvable position, drop the outlet just shy of it on
-          // the EPS-to-far-end line; otherwise fall back to a small
-          // offset from the EPS.
-          let outletPos: { x: number; y: number }
-          if (farEndPos) {
-            const epsPos =
-              scene?.nodePlacements.find((p) => p.nodeId === epsId)?.position ?? eps.position
-            if (epsPos) {
-              const dx = farEndPos.x - epsPos.x
-              const dy = farEndPos.y - epsPos.y
-              const dist = Math.hypot(dx, dy) || 1
-              const margin = Math.min(60, dist * 0.25)
-              outletPos = {
-                x: farEndPos.x - (dx / dist) * margin,
-                y: farEndPos.y - (dy / dist) * margin,
-              }
-            } else {
-              outletPos = { x: farEndPos.x - 40, y: farEndPos.y - 24 }
-            }
-          } else {
-            const epsPos =
-              scene?.nodePlacements.find((p) => p.nodeId === epsId)?.position ?? eps.position
-            outletPos = epsPos ? { x: epsPos.x + 80, y: epsPos.y + 80 } : { x: 100, y: 100 }
-          }
+          const epsPos =
+            scene?.nodePlacements.find((p) => p.nodeId === epsId)?.position ?? eps.position ?? null
+          const outletPos = autoOutletPosition(epsPos, farEndPos)
           outletId = diagramState.addTerminationInScene(sceneId, outletPos, 'outlet')
           diagramState.updateNode(outletId, { metadata: { autoFor: autoOutletTag(wireId, epsId) } })
         }
-        newVia.push(epsId, outletId)
+        enabledPairs.push({ epsId, outletId })
       }
 
-      // Determine which auto-outlets to clean up: any tagged for
-      // (this wire, an EPS that's now disabled but was previously in
-      // via). They're orphans once we remove the EPS reference.
+      // Auto-outlets to delete: those tagged for an EPS that just got
+      // disabled (was in via, isn't enabled now). They're orphans once
+      // the EPS reference goes away.
       const oldVia = w.via ?? []
-      const disabledEpsInOld = epsInScope
-        .map((e) => e.id)
-        .filter((id) => oldVia.includes(id) && !enabledEpsIds.includes(id))
       const orphanOutlets: string[] = []
-      for (const epsId of disabledEpsInOld) {
-        const tagged = findAutoOutlet(wireId, epsId)
-        if (tagged) orphanOutlets.push(tagged)
+      for (const epsId of knownEpsIds) {
+        if (oldVia.includes(epsId) && !enabledEpsIds.includes(epsId)) {
+          const tagged = findAutoOutlet(diagramState.nodes, wireId, epsId)
+          if (tagged) orphanOutlets.push(tagged)
+        }
       }
 
-      // Preserve any via entries the user added through other paths
-      // (e.g. manual outlets via toolbar). We only manage entries
-      // related to the EPSes we know about + their tagged outlets.
-      const managedIds = new Set<string>([...epsInScope.map((e) => e.id), ...orphanOutlets])
-      for (const epsId of enabledEpsIds) {
-        const outletId = findAutoOutlet(wireId, epsId)
-        if (outletId) managedIds.add(outletId)
-      }
-      const preserved = oldVia.filter((id) => !managedIds.has(id))
-      const finalVia = [...preserved, ...newVia]
+      const finalVia = buildViaForLink(w, knownEpsIds, enabledPairs, orphanOutlets)
       diagramState.updateLink(wireId, { via: finalVia.length > 0 ? finalVia : undefined })
 
       for (const orphan of orphanOutlets) diagramState.removeNode(orphan)

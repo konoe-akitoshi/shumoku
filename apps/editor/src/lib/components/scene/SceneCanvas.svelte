@@ -14,6 +14,7 @@
   import { pickSideForDirection, sceneNodeSize } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
+  import EpsRoutingModal from './EpsRoutingModal.svelte'
   import NodeRoutingModal from './NodeRoutingModal.svelte'
   import SceneBackgroundNode from './SceneBackgroundNode.svelte'
   import SceneCalibrationCapture from './SceneCalibrationCapture.svelte'
@@ -278,16 +279,22 @@
     diagramState.endTx()
   }
 
-  // Double-click on a regular (non-TP) node opens its routing modal —
-  // a per-wire picker for which EPSes in scope each wire routes
-  // through (opt-out: all on by default).
+  // Double-click branches by what was clicked:
+  //   regular device → "Routing for this node" modal
+  //   EPS termination → "Wires through this EPS" modal
+  // Both edit Link.via, just from different angles.
   let routingNodeId = $state<string | null>(null)
+  let routingEpsId = $state<string | null>(null)
   function onNodeDblClick(args: { targetNode: SfNode | null }) {
     const t = args.targetNode
     if (!t) return
     const node = diagramState.nodes.get(t.id)
-    if (!node || node.termination) return
-    routingNodeId = node.id
+    if (!node) return
+    if (node.termination?.role === 'eps') {
+      routingEpsId = node.id
+    } else if (!node.termination) {
+      routingNodeId = node.id
+    }
   }
 
   function onConnect(connection: Connection) {
@@ -445,6 +452,7 @@
     sceneId={scene.id}
     onclose={() => (routingNodeId = null)}
   />
+  <EpsRoutingModal epsId={routingEpsId} sceneId={scene.id} onclose={() => (routingEpsId = null)} />
 </div>
 
 <style>
