@@ -138,28 +138,42 @@
 
   function onLinePointerDown(e: PointerEvent) {
     if (e.button !== 0) return
-    e.stopPropagation()
-    e.preventDefault()
-    const flow = sf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
-    const segIdx = nearestSegment(flow)
-    const next = [...waypoints]
-    next.splice(segIdx, 0, flow)
-    diagramState.beginTx('Adjust wire')
-    diagramState.setWireRoute(sceneId, {
-      linkId: id,
-      pathStyle: 'free',
-      controlPoints: next,
-    })
-    // Now drive the drag of the newly-inserted waypoint.
-    const idx = segIdx
+    // Block d3-zoom's pane handler — without stopImmediatePropagation
+    // the pane sometimes still wins. Don't preventDefault yet so the
+    // click can fall through to BaseEdge's selection if the gesture
+    // turns out to be a tap, not a drag.
+    e.stopImmediatePropagation()
+
+    const startClient = { x: e.clientX, y: e.clientY }
+    const THRESHOLD = 4
+    let dragWp: { idx: number } | null = null
+    const initialWaypoints = [...waypoints]
+
     const onMove = (ev: PointerEvent) => {
+      if (!dragWp) {
+        const moved = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y)
+        if (moved < THRESHOLD) return
+        // Now we're definitely dragging — insert a waypoint at the
+        // original click position and start tracking the cursor.
+        const flowStart = sf.screenToFlowPosition(startClient)
+        const segIdx = nearestSegment(flowStart)
+        const inserted = [...initialWaypoints]
+        inserted.splice(segIdx, 0, flowStart)
+        diagramState.beginTx('Bend wire')
+        diagramState.setWireRoute(sceneId, {
+          linkId: id,
+          pathStyle: 'free',
+          controlPoints: inserted,
+        })
+        dragWp = { idx: segIdx }
+      }
       const fp = sf.screenToFlowPosition({ x: ev.clientX, y: ev.clientY })
       const route = diagramState.scenes
         .find((s) => s.id === sceneId)
         ?.wireRoutes.find((w) => w.linkId === id)
-      const cur = route?.controlPoints ?? next
+      const cur = route?.controlPoints ?? initialWaypoints
       const upd = [...cur]
-      upd[idx] = { x: fp.x, y: fp.y }
+      upd[dragWp.idx] = { x: fp.x, y: fp.y }
       diagramState.setWireRoute(sceneId, {
         linkId: id,
         pathStyle: 'free',
@@ -169,7 +183,11 @@
     const onUp = () => {
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
-      diagramState.endTx()
+      if (dragWp) diagramState.endTx()
+      // If never dragged: a tap → let BaseEdge / Svelte Flow's
+      // selection logic handle the click naturally (we didn't
+      // preventDefault, so the click event will fire and BaseEdge
+      // catches it for selection highlight).
     }
     document.addEventListener('pointermove', onMove)
     document.addEventListener('pointerup', onUp)
