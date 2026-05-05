@@ -87,38 +87,43 @@
     return m
   })
 
-  // ── Position resolution ──────────────────────────────────────────
+  // ── Position resolution (cached) ────────────────────────────────
+  // Index lookups by id once per derive cycle so per-node lookups are
+  // O(1) instead of repeated findIndex/find scans. Drag re-renders
+  // hammer these so the cost adds up fast.
+  const placementById = $derived.by(() => {
+    const m = new Map<string, { x: number; y: number }>()
+    for (const p of scene.nodePlacements) m.set(p.nodeId, p.position)
+    return m
+  })
+  const trayIndexById = $derived.by(() => {
+    const m = new Map<string, number>()
+    visibleSceneNodes.forEach((n, i) => m.set(n.id, i))
+    return m
+  })
+
   function positionFor(nodeId: string): { x: number; y: number } {
-    const override = scene.nodePlacements.find((p) => p.nodeId === nodeId)
-    if (override) return override.position
-    // Bg-bound scene with no placement yet: stack the unplaced pins
-    // in a staging "tray" *to the left of the image*, off the floor
-    // plan so they don't obscure its content. Pin lands inside the
-    // floor plan only after the user drags it there.
+    const override = placementById.get(nodeId)
+    if (override) return override
+    // Unplaced + bg present → staging tray on the left of the image.
     if (bg) {
-      const idx = visibleSceneNodes.findIndex((n) => n.id === nodeId)
-      if (idx >= 0) {
-        return { x: -120, y: 30 + idx * 60 }
-      }
+      const idx = trayIndexById.get(nodeId)
+      if (idx !== undefined) return { x: -120, y: 30 + idx * 60 }
     }
     const node = diagramState.nodes.get(nodeId)
     return node?.position ?? { x: 100, y: 100 }
   }
-  function positionForPill(destId: string, pillId: string): { x: number; y: number } {
-    const override = scene.nodePlacements.find((p) => p.nodeId === pillId)
-    if (override) return override.position
-    // Default: average of in-scope endpoints connected to this pill
-    // + offset so it lands on the floor plan rather than at origin.
+
+  function positionForPill(_destId: string, pillId: string): { x: number; y: number } {
+    const override = placementById.get(pillId)
+    if (override) return override
+    // Default: average of in-scope endpoints connected to this pill.
     const partners: { x: number; y: number }[] = []
     for (const l of visibleLinks) {
-      const fromIn = inScopeIds.has(l.from.node)
-      const toIn = inScopeIds.has(l.to.node)
-      if (fromIn && externalToPill.get(l.to.node) === pillId) {
-        const p = positionFor(l.from.node)
-        partners.push(p)
-      } else if (toIn && externalToPill.get(l.from.node) === pillId) {
-        const p = positionFor(l.to.node)
-        partners.push(p)
+      if (inScopeIds.has(l.from.node) && externalToPill.get(l.to.node) === pillId) {
+        partners.push(positionFor(l.from.node))
+      } else if (inScopeIds.has(l.to.node) && externalToPill.get(l.from.node) === pillId) {
+        partners.push(positionFor(l.to.node))
       }
     }
     if (partners.length === 0) return { x: 100, y: 100 }
@@ -265,7 +270,9 @@
     edgeTypes={{ wire: SceneEdge }}
     nodesDraggable={interactive}
     nodesConnectable={interactive}
-    elementsSelectable
+    elementsSelectable={interactive}
+    nodesFocusable={interactive}
+    edgesFocusable={interactive}
     connectionMode={ConnectionMode.Loose}
     minZoom={0.05}
     maxZoom={4}
