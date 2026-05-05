@@ -90,6 +90,17 @@
   function positionFor(nodeId: string): { x: number; y: number } {
     const override = scene.nodePlacements.find((p) => p.nodeId === nodeId)
     if (override) return override.position
+    // Bg-bound scene with no placement yet: stack the unplaced pins
+    // along the image's left edge so they sit on the floor plan
+    // ready to be dragged. Falling through to Node.position (the
+    // diagram auto-layout coords) leaves pins floating far below
+    // the image — visually disconnected from the scene.
+    if (bg) {
+      const idx = visibleSceneNodes.findIndex((n) => n.id === nodeId)
+      if (idx >= 0) {
+        return { x: 30, y: 30 + idx * 60 }
+      }
+    }
     const node = diagramState.nodes.get(nodeId)
     return node?.position ?? { x: 100, y: 100 }
   }
