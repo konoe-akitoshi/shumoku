@@ -41,6 +41,7 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
+import { cableLengthMeters } from './scene/cable-length'
 import {
   applyResolvedLayout,
   currentSheetCacheGeneration,
@@ -109,9 +110,14 @@ function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undef
 function cableRequirementKey(link: Link): string | undefined {
   const cable = link.cable
   if (!cable) return undefined
-  return [cable.category, cable.medium, cable.length_m ? `${cable.length_m}m` : undefined]
-    .filter(Boolean)
-    .join(' / ')
+  // Scene-derived length wins over the stored field — keeps BOM /
+  // Materials Library in sync with the floor-plan polyline as the
+  // user bends wires, without writing back to link.cable.length_m.
+  const eff = cableLengthMeters(link, scenesStore.list)
+  const lengthLabel = eff
+    ? `${eff.meters < 10 ? eff.meters.toFixed(1) : Math.round(eff.meters)}m`
+    : undefined
+  return [cable.category, cable.medium, lengthLabel].filter(Boolean).join(' / ')
 }
 
 function buildAssignmentRows(): AssignmentRow[] {
@@ -717,6 +723,17 @@ export const diagramState = {
         }
       }
     })
+  },
+  /**
+   * Effective real-world cable length for a link. Scene-derived
+   * (when the user has placed the link's endpoints in a calibrated
+   * scene and bent the wire along walls) takes precedence over the
+   * stored `link.cable.length_m`.
+   */
+  cableLengthMeters(linkId: string): { meters: number; source: 'scene' | 'stored' } | null {
+    const link = diagram.links.find((l) => l.id === linkId)
+    if (!link) return null
+    return cableLengthMeters(link, scenesStore.list)
   },
   placedCount(productId: string): number {
     let n = 0

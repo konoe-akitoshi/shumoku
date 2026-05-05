@@ -16,6 +16,7 @@
   import PortPicker from '$lib/components/PortPicker.svelte'
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
   import ValidationCell from '$lib/components/ValidationCell.svelte'
+  import { diagramState } from '$lib/context.svelte'
 
   let {
     link,
@@ -28,6 +29,10 @@
     nodes?: Map<string, Node>
     onupdate?: (updates: Partial<Link>) => void
   } = $props()
+
+  // Effective cable length: scene-derived (calibrated polyline) wins
+  // over the stored field. Display reflects whichever is in effect.
+  const effectiveLength = $derived(link.id ? diagramState.cableLengthMeters(link.id) : null)
 
   function getEndpoint(ep: LinkEndpoint) {
     return {
@@ -433,7 +438,15 @@
     <dt class={labelClass}>Length (m)</dt>
     <dd>
       <ValidationCell issues={issuesForTarget(issues, { kind: 'cable', field: 'length_m' })}>
-        {#if editing}
+        {#if effectiveLength?.source === 'scene'}
+          <!-- Scene-derived from a calibrated floor plan: read-only here. -->
+          <span class={valueClass}
+            >{effectiveLength.meters < 10
+              ? effectiveLength.meters.toFixed(1)
+              : Math.round(effectiveLength.meters)}
+            <span class="ml-1 text-[9px] text-muted-foreground">from scene</span>
+          </span>
+        {:else if editing}
           <input
             type="number"
             min="0"
