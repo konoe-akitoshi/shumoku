@@ -123,7 +123,7 @@
     <EdgeLabel x={wp.x} y={wp.y}>
       <button
         type="button"
-        class="block h-3 w-3 rounded-full border-[1.5px] border-blue-500 bg-white shadow"
+        class="nopan nodrag block h-3 w-3 rounded-full border-[1.5px] border-blue-500 bg-white shadow"
         style="cursor: grab; transform: translate(-50%, -50%); pointer-events: all;"
         aria-label="waypoint"
         onpointerdown={(e) => onWaypointDown(idx, e)}
@@ -139,7 +139,7 @@
     <EdgeLabel x={mp.x} y={mp.y}>
       <button
         type="button"
-        class="block h-2 w-2 rounded-full border border-blue-500 bg-blue-500/40 hover:bg-blue-500"
+        class="nopan nodrag block h-2 w-2 rounded-full border border-blue-500 bg-blue-500/40 hover:bg-blue-500"
         style="cursor: copy; transform: translate(-50%, -50%); pointer-events: all;"
         aria-label="add waypoint"
         onclick={(e) => {
