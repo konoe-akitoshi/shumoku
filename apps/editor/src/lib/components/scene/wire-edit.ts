@@ -5,12 +5,45 @@ import { diagramState } from '$lib/context.svelte'
 
 export type Waypoint = { x: number; y: number }
 
-/** Build the SVG `d` for a polyline through the given points. */
-export function polylinePath(points: Waypoint[]): string {
+/**
+ * Build the SVG `d` for a polyline through the given points with
+ * rounded corners — each interior waypoint becomes a quadratic
+ * Bezier with the corner radius capped at half the adjacent segment
+ * length so short segments don't overshoot.
+ */
+export function polylinePath(points: Waypoint[], radius = 12): string {
   if (points.length === 0) return ''
-  const [first, ...rest] = points
+  const first = points[0]
   if (!first) return ''
-  return `M ${first.x} ${first.y}${rest.map((p) => ` L ${p.x} ${p.y}`).join('')}`
+  if (points.length === 1) return `M ${first.x} ${first.y}`
+  if (points.length === 2) {
+    const last = points[1]
+    if (!last) return `M ${first.x} ${first.y}`
+    return `M ${first.x} ${first.y} L ${last.x} ${last.y}`
+  }
+
+  let d = `M ${first.x} ${first.y}`
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1]
+    const curr = points[i]
+    const next = points[i + 1]
+    if (!prev || !curr || !next) continue
+    const v1x = curr.x - prev.x
+    const v1y = curr.y - prev.y
+    const v2x = next.x - curr.x
+    const v2y = next.y - curr.y
+    const l1 = Math.hypot(v1x, v1y) || 1
+    const l2 = Math.hypot(v2x, v2y) || 1
+    const r = Math.min(radius, l1 / 2, l2 / 2)
+    const ax = curr.x - (v1x / l1) * r
+    const ay = curr.y - (v1y / l1) * r
+    const bx = curr.x + (v2x / l2) * r
+    const by = curr.y + (v2y / l2) * r
+    d += ` L ${ax} ${ay} Q ${curr.x} ${curr.y}, ${bx} ${by}`
+  }
+  const last = points[points.length - 1]
+  if (last) d += ` L ${last.x} ${last.y}`
+  return d
 }
 
 /** Midpoint of each consecutive pair of points (for "+" insert handles). */
