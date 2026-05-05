@@ -12,6 +12,7 @@
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
   import SceneBackgroundNode from './SceneBackgroundNode.svelte'
+  import SceneEdge from './SceneEdge.svelte'
   import SceneExportNode from './SceneExportNode.svelte'
   import SceneFitOnLoad from './SceneFitOnLoad.svelte'
   import SceneNode from './SceneNode.svelte'
@@ -183,15 +184,18 @@
         ? link.to.node
         : (externalToPill.get(link.to.node) ?? link.to.node)
       const crossBoundary = !inScopeIds.has(link.from.node) || !inScopeIds.has(link.to.node)
+      const route = scene.wireRoutes.find((w) => w.linkId === link.id)
       out.push({
         id: link.id,
         source: from,
         target: to,
-        type: 'smoothstep',
+        type: 'wire',
+        data: {
+          sceneId: scene.id,
+          waypoints: route?.controlPoints ?? [],
+        },
         animated: false,
-        style: crossBoundary
-          ? 'stroke: #475569; stroke-width: 2; stroke-dasharray: 5 3;'
-          : 'stroke: #475569; stroke-width: 2;',
+        style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
         markerEnd: { type: MarkerType.ArrowClosed, color: '#475569' },
       })
     }
@@ -258,6 +262,7 @@
     bind:nodes
     bind:edges
     nodeTypes={{ scene: SceneNode, export: SceneExportNode, background: SceneBackgroundNode }}
+    edgeTypes={{ wire: SceneEdge }}
     nodesDraggable={interactive}
     nodesConnectable={interactive}
     elementsSelectable
@@ -287,7 +292,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-             plan is set, but otherwise let its theming through. */
+               plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -295,8 +300,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-           to drag from. Otherwise the fully-transparent handles leave the
-           "how do I draw a wire" UX a guess. */
+             to drag from. Otherwise the fully-transparent handles leave the
+             "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 1 !important;
     background: #3b82f6;
