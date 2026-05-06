@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { DropdownMenu } from 'bits-ui'
-  import { CaretDown, Cube, FileJs, FolderOpen, Plus, Trash } from 'phosphor-svelte'
+  import { Dialog, DropdownMenu } from 'bits-ui'
+  import { CaretDown, Cube, FileJs, FolderOpen, Plus, Trash, X } from 'phosphor-svelte'
+  import { tick } from 'svelte'
   import { goto } from '$app/navigation'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
@@ -56,8 +57,22 @@
     input.click()
   }
 
-  async function handleNewProject() {
-    const id = await diagramState.createNewProject('Untitled')
+  let newOpen = $state(false)
+  let newName = $state('')
+  let newInputEl = $state<HTMLInputElement | null>(null)
+
+  async function openNewProjectDialog() {
+    newName = ''
+    newOpen = true
+    // Focus the input once the dialog has rendered.
+    await tick()
+    newInputEl?.focus()
+  }
+
+  async function confirmNewProject() {
+    const name = newName.trim() || 'Untitled'
+    newOpen = false
+    const id = await diagramState.createNewProject(name)
     goto(`/project/${id}/diagram`)
   }
 
@@ -130,7 +145,7 @@
         sideOffset={4}
         align="end"
       >
-        <DropdownMenu.Item class={itemClass} onSelect={handleNewProject}>
+        <DropdownMenu.Item class={itemClass} onSelect={openNewProjectDialog}>
           <Plus class="w-4 h-4 text-neutral-400" />
           New Project
         </DropdownMenu.Item>
@@ -237,3 +252,50 @@
     </div>
   </section>
 </div>
+
+<!-- New project — name first, then create + navigate. Prompting
+     for a name up front avoids the "create Untitled, hunt down
+     Settings, rename, then start working" flow. -->
+<Dialog.Root bind:open={newOpen}>
+  <Dialog.Portal>
+    <Dialog.Overlay class="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] dark:bg-black/40" />
+    <Dialog.Content
+      class="fixed top-1/2 left-1/2 z-50 w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-popover shadow-2xl focus:outline-none"
+    >
+      <div class="flex items-center justify-between border-b px-5 py-4">
+        <Dialog.Title class="text-sm font-semibold">New project</Dialog.Title>
+        <Dialog.Close
+          class="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <X class="h-4 w-4" />
+        </Dialog.Close>
+      </div>
+      <Dialog.Description class="sr-only">Name a new project before opening it.</Dialog.Description>
+      <form
+        class="space-y-3 px-5 py-4 text-sm"
+        onsubmit={(e) => {
+          e.preventDefault()
+          void confirmNewProject()
+        }}
+      >
+        <label class="block space-y-1">
+          <span class="text-xs font-medium text-muted-foreground">Project name</span>
+          <input
+            bind:this={newInputEl}
+            bind:value={newName}
+            class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="My new network"
+            autocomplete="off"
+            spellcheck="false"
+          >
+        </label>
+        <div class="flex justify-end gap-2 pt-1">
+          <Button variant="outline" size="sm" type="button" onclick={() => { newOpen = false }}
+            >Cancel</Button
+          >
+          <Button size="sm" type="submit">Create</Button>
+        </div>
+      </form>
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
