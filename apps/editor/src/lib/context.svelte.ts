@@ -1208,10 +1208,21 @@ export const diagramState = {
    * by sample / YAML paths) or a `.neted` zip blob (user import).
    * Anything string-shaped is rejected — the JSON-only format is
    * gone.
+   *
+   * The asset reset has to bracket the zip read: clear the previous
+   * project's blob URLs first, *then* let the reader register the
+   * incoming ones. Calling reset later (e.g. inside `loadProject`)
+   * would revoke the blobs the reader just created.
    */
   async importProject(input: NetedProject | Blob) {
-    const data = input instanceof Blob ? await readProjectZip(input) : input
-    await diagramState.loadProject('imported', data)
+    if (input instanceof Blob) {
+      assetStore.reset()
+      const data = await readProjectZip(input)
+      await diagramState.loadProject('imported', data)
+    } else {
+      assetStore.reset()
+      await diagramState.loadProject('imported', input)
+    }
   },
   async importDiagram(input: string | NetworkGraph) {
     const parsed: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
@@ -1235,10 +1246,12 @@ export const diagramState = {
     diagram.subgraphs.clear()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
-    // Drop the previous project's image blobs — `loadProject` is the
-    // session boundary for assets too. The reader will repopulate as
-    // it extracts the new zip.
-    assetStore.reset()
+    // Reset image asset blobs only when the caller hasn't preloaded
+    // them. `importProject(Blob)` extracts assets *before* getting
+    // here so its `data` already references blob URLs we don't want
+    // to revoke; sample / empty paths have no assets to clear but
+    // any prior session's assets should go.
+    if (!data) assetStore.reset()
     sessionStore.setYamlSource('')
     sheetStore.setCurrentSheetId(null)
     sessionStore.setInitialized(false)

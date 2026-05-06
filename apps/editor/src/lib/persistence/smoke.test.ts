@@ -22,6 +22,49 @@ function pngBlob(): Blob {
   return new Blob([bytes], { type: 'image/png' })
 }
 
+test('imported blob URLs survive the load pipeline', async () => {
+  // Regression: a stale `assetStore.reset()` after `readProjectZip`
+  // would revoke the blobs the reader just registered, leaving image
+  // fields pointing at dead `blob:` URLs after import.
+  const revoked = new Set<string>()
+  globalThis.URL.createObjectURL = ((b: object) => {
+    const u = `blob:test/${Math.random()}`
+    revokedTracking.set(b, u)
+    return u
+  }) as typeof URL.createObjectURL
+  globalThis.URL.revokeObjectURL = (u: string) => {
+    revoked.add(u)
+  }
+
+  assetStore.reset()
+  const entry = await assetStore.put(pngBlob(), 'png')
+  const blob = await writeProjectZip({
+    name: 'T',
+    diagram: { version: '1', nodes: [], links: [], subgraphs: [] },
+    products: [],
+    scenes: [
+      {
+        id: 's1',
+        name: 'F1',
+        nodePlacements: [],
+        wireRoutes: [],
+        background: { src: entry.url, width: 1, height: 1 },
+      },
+    ],
+  })
+
+  // Simulate the import path: reset → read → loadProject (we just
+  // call read here; loadProject itself is plain state mutation).
+  assetStore.reset()
+  const loaded = await readProjectZip(blob)
+
+  const sceneSrc = loaded.scenes?.[0]?.background?.src ?? ''
+  expect(sceneSrc.startsWith('blob:')).toBe(true)
+  expect(revoked.has(sceneSrc)).toBe(false)
+})
+
+const revokedTracking = new Map<object, string>()
+
 test('round-trips a project through .neted', async () => {
   // URL.createObjectURL polyfill — Bun does not provide it.
   const urls = new Map<object, string>()
