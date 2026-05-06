@@ -1373,19 +1373,27 @@ export const diagramState = {
         // applyProject runs sanitize, port placement, edge routing,
         // and the legacy `wireRoutes.controlPoints` migration —
         // each of which fires `commit()` and would otherwise emit
-        // its own IDB write. Suspend the cache for the duration so
-        // the post-load sync runs once with the resolved state.
+        // its own IDB write. Suspend the cache for the duration.
+        //
+        // The baseline for the post-load diff is `project` itself
+        // (not the post-applyProject state): both DB-load and
+        // import paths just put `project` into IDB, so any
+        // mutations applyProject made over the top of it are the
+        // delta we want persisted. Setting the baseline to
+        // post-applyProject state would lose those mutations on
+        // the very next drain.
         cache.suspend()
         try {
           await applyProject(project)
         } finally {
+          lastSyncedSnap =
+            projectId === 'sample' ? null : projectToSnapshot(project as NetedProject)
           cache.resume()
         }
         sessionStore.setProjectName((project as NetedProject).name ?? sessionStore.projectName)
+      } else {
+        lastSyncedSnap = null
       }
-      // Baseline for diff-based sync. Set even when nothing loaded
-      // so the first commit's diff has something to compare against.
-      lastSyncedSnap = projectId === 'sample' ? null : getProjectSnapshot()
       sessionStore.setStatus('Ready')
       sessionStore.setInitialized(true)
     } catch (e) {
