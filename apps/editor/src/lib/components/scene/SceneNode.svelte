@@ -179,13 +179,13 @@
         <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
       </div>
     {:else}
-      <!-- Bend: tiny anchor dot. Only visible when selected so the
-           wire reads cleanly in the default state; selected state
-           gives the user something to grab for fine adjustments. -->
+      <!-- Bend: tiny anchor dot. Light gray by default so the user
+           can spot the bend (and click it for delete / drag); turns
+           solid blue on selection. Hover bumps the contrast a bit
+           so the hit target reads from a few feet away. -->
       <div
-        class="h-full w-full rounded-full transition-colors"
-        class:bg-blue-500={selected}
-        class:bg-transparent={!selected}
+        class="h-full w-full rounded-full bg-slate-400/40 transition-colors hover:bg-slate-500/70"
+        class:!bg-blue-500={selected}
         aria-label={ariaLabel}
       ></div>
     {/if}
