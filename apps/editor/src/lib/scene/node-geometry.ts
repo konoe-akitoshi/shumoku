@@ -14,9 +14,17 @@ export type WithTermination = { termination?: { role: TerminationRole } }
  * compute correct centers, hit areas, and wire endpoint anchors
  * without re-deriving sizes.
  */
+/**
+ * Path corner radius for a polyline that bends through Nodes. The
+ * bend dot is sized at 2x this so its footprint exactly matches the
+ * arc the path cuts at each corner — visually the bend covers the
+ * rounded corner rather than floating beside it.
+ */
+export const WIRE_CORNER_RADIUS = 8
+
 export function sceneNodeSize(node: WithTermination | undefined): { w: number; h: number } {
   const role = node?.termination?.role
-  if (role === 'bend') return { w: 8, h: 8 }
+  if (role === 'bend') return { w: WIRE_CORNER_RADIUS * 2, h: WIRE_CORNER_RADIUS * 2 }
   if (role === 'outlet') return { w: 28, h: 28 }
   if (role === 'eps') return { w: 22, h: 32 }
   if (role === 'panel') return { w: 44, h: 22 }

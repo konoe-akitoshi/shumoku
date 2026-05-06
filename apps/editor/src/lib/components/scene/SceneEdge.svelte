@@ -2,6 +2,7 @@
   import { BaseEdge, type Edge, EdgeLabel, type EdgeProps, useSvelteFlow } from '@xyflow/svelte'
   import { editorState } from '$lib/context.svelte'
   import { formatMeters } from '$lib/scene/cable-length'
+  import { WIRE_CORNER_RADIUS } from '$lib/scene/node-geometry'
   import { bendOnDrag, polylinePath, type Waypoint } from './wire-edit'
 
   // Custom Svelte Flow edge for floor-plan wiring. The path is a
@@ -73,14 +74,13 @@
   // subpaths so the wall-gap shows as a break.
   const pathD = $derived.by(() => {
     if (visualSegments.length === 0) return ''
-    // Plain polyline through all points. Small corner radius
-    // (matches the bend dot size) so the line softens at each bend
-    // without visibly bypassing the dot — the bezier control still
-    // sits at the bend, but the curve stays within the dot's
-    // footprint so the bend visually sits on the line.
+    // Plain polyline. Corner radius is shared with WIRE_CORNER_RADIUS
+    // so the bend dot (sized at 2× this in node-geometry) exactly
+    // covers the rounded-corner cutout — the bend visually sits ON
+    // the line even though the bezier control is at the corner peak.
     return visualSegments
       .filter((seg) => seg.length >= 2)
-      .map((seg) => polylinePath(seg, 4))
+      .map((seg) => polylinePath(seg, WIRE_CORNER_RADIUS))
       .join(' ')
   })
   // First-segment points feed bendOnDrag's segment-search so a
