@@ -73,14 +73,14 @@
   // subpaths so the wall-gap shows as a break.
   const pathD = $derived.by(() => {
     if (visualSegments.length === 0) return ''
-    // Plain polyline through all points. radius=0 keeps the path
-    // passing exactly through each bend / via Node — otherwise the
-    // rounded-corner Bezier control sits at the point and the line
-    // visibly bypasses the dot. stroke-linejoin: round on the path
-    // softens the corner cosmetically without offsetting it.
+    // Plain polyline through all points. Small corner radius
+    // (matches the bend dot size) so the line softens at each bend
+    // without visibly bypassing the dot — the bezier control still
+    // sits at the bend, but the curve stays within the dot's
+    // footprint so the bend visually sits on the line.
     return visualSegments
       .filter((seg) => seg.length >= 2)
-      .map((seg) => polylinePath(seg, 0))
+      .map((seg) => polylinePath(seg, 4))
       .join(' ')
   })
   // First-segment points feed bendOnDrag's segment-search so a
