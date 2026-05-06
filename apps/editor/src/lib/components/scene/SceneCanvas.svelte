@@ -119,20 +119,33 @@
     return node?.position ?? { x: 100, y: 100 }
   }
 
-  // Per-scene visual tuning. nodeScale scales icon sizes (and is
-  // therefore baked into centerOf so wire endpoints still aim at
-  // the icon's visual center); wireScale lifts stroke width.
-  const nodeScale = $derived(scene.display?.nodeScale ?? 1)
-  const wireScale = $derived(scene.display?.wireScale ?? 1)
+  // Per-scene visual tuning. The scene-level multipliers are the
+  // baseline; individual nodes / wires can override them via
+  // `Node.metadata.displayScale` and `Link.metadata.wireScale`.
+  const sceneNodeScale = $derived(scene.display?.nodeScale ?? 1)
+  const sceneWireScale = $derived(scene.display?.wireScale ?? 1)
+
+  function effectiveNodeScale(nodeId: string): number {
+    const ov = diagramState.nodes.get(nodeId)?.metadata?.displayScale
+    if (typeof ov === 'number' && ov > 0) return ov
+    return sceneNodeScale
+  }
+  function effectiveWireScale(link: { metadata?: Record<string, unknown> }): number {
+    const ov = link.metadata?.wireScale
+    if (typeof ov === 'number' && ov > 0) return ov
+    return sceneWireScale
+  }
 
   // Center of a node's icon in flow coords. Svelte Flow stores
   // positions as top-left, so anything that wants to anchor against
   // the visible icon (wire endpoints into a via TP, etc.) needs to
-  // shift by half the (scaled) size.
+  // shift by half the (scaled) size — using the node's own effective
+  // scale so per-node overrides land at the right spot.
   function centerOf(nodeId: string): { x: number; y: number } {
     const tl = positionFor(nodeId)
     const { w, h } = sceneNodeSize(diagramState.nodes.get(nodeId))
-    return { x: tl.x + (w * nodeScale) / 2, y: tl.y + (h * nodeScale) / 2 }
+    const s = effectiveNodeScale(nodeId)
+    return { x: tl.x + (w * s) / 2, y: tl.y + (h * s) / 2 }
   }
 
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
@@ -163,7 +176,12 @@
         id: n.id,
         type: 'scene',
         position: positionFor(n.id),
-        data: { label, spec: n.spec, termination: n.termination, scale: nodeScale },
+        data: {
+          label,
+          spec: n.spec,
+          termination: n.termination,
+          scale: effectiveNodeScale(n.id),
+        },
         draggable: interactive,
         selectable: true,
       })
@@ -239,7 +257,7 @@
           // we don't store yet.
           editableWaypoints: segments.length === 1 && segments[0]?.length === 0,
           lengthMeters: eff?.meters ?? null,
-          wireScale,
+          wireScale: effectiveWireScale(link),
         },
         animated: false,
         style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',

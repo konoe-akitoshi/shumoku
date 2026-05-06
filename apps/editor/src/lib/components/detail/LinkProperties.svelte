@@ -179,6 +179,18 @@
     onupdate?.({ vlan: numbers.length > 0 ? numbers : undefined })
   }
 
+  const wireScale = $derived.by(() => {
+    const v = link.metadata?.wireScale
+    return typeof v === 'number' && v > 0 ? v : null
+  })
+
+  function setWireScale(value: number | null) {
+    const next = { ...(link.metadata ?? {}) }
+    if (value === null) delete next.wireScale
+    else next.wireScale = value
+    onupdate?.({ metadata: Object.keys(next).length > 0 ? next : undefined })
+  }
+
   const inputClass =
     'w-full text-[11px] px-2 py-1 bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono'
 
@@ -576,6 +588,43 @@
         </select>
       {:else}
         <span class={valueClass}>{link.arrow ?? 'none'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <!-- Per-wire stroke override. Falls back to Scene.display.wireScale. -->
+  <div class="grid grid-cols-[80px_1fr] items-center gap-2">
+    <dt class={labelClass}>Wire scale</dt>
+    <dd class="flex items-center gap-1">
+      {#if editing}
+        <input
+          type="number"
+          step="0.1"
+          min="0.1"
+          max="10"
+          class={inputClass}
+          placeholder="(scene default)"
+          value={wireScale ?? ''}
+          oninput={(e) => {
+            const raw = (e.target as HTMLInputElement).value.trim()
+            if (raw === '') setWireScale(null)
+            else {
+              const n = Number(raw)
+              if (Number.isFinite(n) && n > 0) setWireScale(n)
+            }
+          }}
+        >
+        {#if wireScale !== null}
+          <button
+            type="button"
+            class="text-[10px] text-muted-foreground hover:text-neutral-700 dark:hover:text-neutral-300"
+            onclick={() => setWireScale(null)}
+          >
+            clear
+          </button>
+        {/if}
+      {:else}
+        <span class={valueClass}>{wireScale != null ? `${wireScale}×` : '(scene default)'}</span>
       {/if}
     </dd>
   </div>

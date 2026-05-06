@@ -36,6 +36,18 @@
     node.label ? (Array.isArray(node.label) ? node.label.join(' / ') : String(node.label)) : '',
   )
 
+  const displayScale = $derived.by(() => {
+    const v = node.metadata?.displayScale
+    return typeof v === 'number' && v > 0 ? v : null
+  })
+
+  function setDisplayScale(value: number | null) {
+    const next = { ...(node.metadata ?? {}) }
+    if (value === null) delete next.displayScale
+    else next.displayScale = value
+    onupdate?.('metadata', Object.keys(next).length > 0 ? next : undefined)
+  }
+
   const subgraphOptions = $derived(
     [...subgraphs.entries()].map(([id, sg]) => ({ id, label: sg.label || id })),
   )
@@ -168,6 +180,46 @@
             None
           {/if}
         </span>
+      {/if}
+    </dd>
+  </div>
+
+  <!-- Per-node icon scale override. Overrides Scene.display.nodeScale
+       just for this node. Empty / cleared = inherit scene default. -->
+  <div class="grid grid-cols-[80px_1fr] items-center gap-2">
+    <dt class={labelClass}>Icon scale</dt>
+    <dd class="flex items-center gap-1">
+      {#if editing}
+        <input
+          type="number"
+          step="0.1"
+          min="0.1"
+          max="10"
+          class={inputClass}
+          placeholder="(scene default)"
+          value={displayScale ?? ''}
+          oninput={(e) => {
+            const raw = (e.target as HTMLInputElement).value.trim()
+            if (raw === '') setDisplayScale(null)
+            else {
+              const n = Number(raw)
+              if (Number.isFinite(n) && n > 0) setDisplayScale(n)
+            }
+          }}
+        >
+        {#if displayScale !== null}
+          <button
+            type="button"
+            class="text-[10px] text-muted-foreground hover:text-neutral-700 dark:hover:text-neutral-300"
+            onclick={() => setDisplayScale(null)}
+          >
+            clear
+          </button>
+        {/if}
+      {:else}
+        <span class={valueClass}
+          >{displayScale != null ? `${displayScale}×` : '(scene default)'}</span
+        >
       {/if}
     </dd>
   </div>
