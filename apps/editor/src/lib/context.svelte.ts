@@ -107,23 +107,46 @@ function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undef
   return link[side].plug?.module?.sku ?? link[side].plug?.module?.standard
 }
 
-function cableRequirementKey(link: Link): string | undefined {
-  // Scene-derived length wins over the stored field — keeps BOM /
-  // Materials Library in sync with the floor-plan polyline as the
-  // user bends wires, without writing back to link.cable.length_m.
-  // We also generate a row when only scene-derived length is known
-  // (e.g. wire authored in scene before its cable type is filled in)
-  // so BOM doesn't silently drop those wires.
-  const eff = cableLengthMeters(link, scenesStore.list, diagram.nodes)
+function formatLength(m: number): string {
+  return `${m < 10 ? m.toFixed(1) : Math.round(m)}m`
+}
+
+/**
+ * Cable requirements for a link, one entry per physical cable. EPS-
+ * split wires produce N entries (one per visible segment), since an
+ * installer buys each side of the chase as a separate cable. Wires
+ * with no scene split fall back to a single entry using either the
+ * scene total or the stored `cable.length_m`.
+ *
+ * Returned shape: `{ key, lengthM }` per segment. The key is the
+ * BOM grouping identifier (cable kind + length); lengthM is the
+ * raw meters for tooltips / details.
+ */
+function cableRequirementKeys(link: Link): Array<{ key: string; lengthM: number | null }> {
   const cable = link.cable
-  if (!cable && !eff) return undefined
+  const segs = cableSegmentLengths(link, scenesStore.list, diagram.nodes)
+  const baseParts = [cable?.category, cable?.medium].filter(Boolean) as string[]
+
+  if (segs.length > 1) {
+    // Each segment is its own cable on the BOM.
+    return segs.map((s) => ({
+      key: [...baseParts, formatLength(s.meters)].join(' / '),
+      lengthM: s.meters,
+    }))
+  }
+
+  // No scene split: fall back to the total — scene-derived if
+  // calibrated, otherwise the stored length_m.
+  const eff = cableLengthMeters(link, scenesStore.list, diagram.nodes)
+  if (!cable && !eff) return []
   const lengthLabel = eff
-    ? `${eff.meters < 10 ? eff.meters.toFixed(1) : Math.round(eff.meters)}m`
+    ? formatLength(eff.meters)
     : cable?.length_m
       ? `${cable.length_m}m`
       : undefined
-  const parts = [cable?.category, cable?.medium, lengthLabel].filter(Boolean)
-  return parts.length > 0 ? parts.join(' / ') : undefined
+  const parts = [...baseParts, lengthLabel].filter(Boolean) as string[]
+  if (parts.length === 0) return []
+  return [{ key: parts.join(' / '), lengthM: eff?.meters ?? cable?.length_m ?? null }]
 }
 
 function buildAssignmentRows(): AssignmentRow[] {
@@ -163,15 +186,20 @@ function buildAssignmentRows(): AssignmentRow[] {
         status: endpoint.plug?.module?.productId ? 'resolved' : 'generic',
       })
     }
-    const cableKey = cableRequirementKey(link)
-    if (cableKey) {
+    const cableReqs = cableRequirementKeys(link)
+    for (const [i, req] of cableReqs.entries()) {
+      // Multi-segment wires get a "1/2" / "2/2" suffix on the row id
+      // and label so the BOM can show which side of the chase each
+      // entry belongs to. Single-segment wires keep the stable
+      // `cable:${linkId}` id (no migration churn for assignments).
+      const isMulti = cableReqs.length > 1
       rows.push({
-        id: `cable:${link.id}`,
+        id: isMulti ? `cable:${link.id}:${i}` : `cable:${link.id}`,
         target: { kind: 'link-cable', linkId: link.id },
-        label: `${link.id} cable`,
+        label: isMulti ? `${link.id} cable ${i + 1}/${cableReqs.length}` : `${link.id} cable`,
         source: 'Connections cable',
         productId: link.cable?.productId,
-        requirementKey: cableKey,
+        requirementKey: req.key,
         status: link.cable?.productId ? 'resolved' : 'generic',
       })
     }
