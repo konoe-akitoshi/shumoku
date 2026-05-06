@@ -28,6 +28,13 @@ export const editorStore = {
   get theme(): Theme {
     return editor.isDark ? darkTheme : lightTheme
   },
+  /**
+   * Single source of truth for "is the user allowed to mutate
+   * canvas state right now". UI components and event handlers
+   * across the app gate edit affordances on this — read it via
+   * `editorState.interactive`, never duplicate the
+   * `mode === 'edit'` derivation at callsites.
+   */
   get interactive(): boolean {
     return editor.mode === 'edit'
   },

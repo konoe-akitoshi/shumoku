@@ -1,68 +1,38 @@
 <script lang="ts">
-  import { DropdownMenu } from 'bits-ui'
-  import { CaretDown, ImageSquare, MapPin } from 'phosphor-svelte'
+  import { MapPin } from 'phosphor-svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
   import { diagramState } from '$lib/context.svelte'
   import { isPhysicalSubgraph } from '$lib/scene/scope'
-  import HierarchyMenu, { type Entry } from './HierarchyMenu.svelte'
   import { segmentClass } from './segment'
 
+  // Scene view button. The scope is whatever Hierarchy has currently
+  // focused — Hierarchy is the single picker for "which subgraph".
+  // Navigates to /project/[id]/scene[?focus=<id>] preserving focus.
   let { active = false }: { active?: boolean } = $props()
 
-  // Scenes mirror subgraphs 1:1 — every (physical) subgraph implicitly
-  // has a scene view. The Scene record materializes lazily on first
-  // access, same shape of nav as the Diagram-side sheet picker.
-  const currentSceneId = $derived(diagramState.currentSceneId)
-  const current = $derived(diagramState.currentScene)
-  const subgraphs = $derived([...diagramState.subgraphs.values()])
-  const topLevelSubgraphs = $derived(subgraphs.filter((sg) => !sg.parent))
+  const sheetId = $derived(diagramState.currentSheetId)
+  const subgraph = $derived(sheetId ? diagramState.subgraphs.get(sheetId) : undefined)
+  // Scene view only makes sense for physical subgraphs (a logical
+  // service group has no floor plan). Disable when focused subgraph
+  // is logical.
+  const allowed = $derived(!subgraph || isPhysicalSubgraph(subgraph))
 
-  const triggerLabel = $derived.by(() => {
-    if (currentSceneId === null || !current) return 'Scene'
-    const scope = current.scopeSubgraphId
-    const parentLabel = scope ? (subgraphs.find((sg) => sg.id === scope)?.label ?? null) : null
-    return parentLabel ? `Scene: ${parentLabel}` : `Scene: ${current.name}`
-  })
-
-  // Same shape of entries as SheetSegment — Root + each top-level
-  // subgraph — filtered to physical (logical subgraphs can't host a
-  // floor plan).
-  const entries = $derived<Entry[]>([
-    { id: null, label: 'Root', indent: 0, showPin: true },
-    ...topLevelSubgraphs
-      .filter(isPhysicalSubgraph)
-      .map((sg) => ({ id: sg.id, label: sg.label, indent: 1, showPin: true })),
-  ])
-
-  function isActive(id: string | null): boolean {
-    if (currentSceneId === null) return false
-    const scope = current?.scopeSubgraphId
-    return id === null ? scope === undefined : scope === id
-  }
-
-  function selectScene(id: string | null) {
-    diagramState.setCurrentSceneForScope(id ?? undefined)
+  function selectScene() {
+    if (!allowed) return
+    const projectId = $page.params.id
+    const target = `/project/${projectId}/scene${sheetId ? `?focus=${encodeURIComponent(sheetId)}` : ''}`
+    goto(target)
   }
 </script>
 
-<DropdownMenu.Root>
-  <DropdownMenu.Trigger>
-    {#snippet child({ props })}
-      <button type="button" class={segmentClass(active)} title="View" {...props}>
-        {#if currentSceneId}
-          <MapPin class="h-3.5 w-3.5 text-amber-500" />
-        {:else}
-          <ImageSquare class="h-3.5 w-3.5 text-neutral-500" />
-        {/if}
-        <span class="max-w-[220px] truncate">{triggerLabel}</span>
-        <CaretDown class="h-3 w-3 text-neutral-400" />
-      </button>
-    {/snippet}
-  </DropdownMenu.Trigger>
-  <DropdownMenu.Content
-    align="center"
-    sideOffset={6}
-    class="z-50 min-w-[200px] rounded-lg border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
-  >
-    <HierarchyMenu {entries} {isActive} onselect={selectScene} />
-  </DropdownMenu.Content>
-</DropdownMenu.Root>
+<button
+  type="button"
+  class={segmentClass(active)}
+  title={allowed ? 'Scene' : 'Scene view is only available for physical subgraphs'}
+  disabled={!allowed}
+  onclick={selectScene}
+>
+  <MapPin class="h-3.5 w-3.5 {allowed ? 'text-amber-500' : 'text-neutral-400'}" />
+  <span>Scene</span>
+</button>

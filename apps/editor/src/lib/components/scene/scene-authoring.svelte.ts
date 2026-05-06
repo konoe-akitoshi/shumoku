@@ -1,41 +1,43 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Module-scoped state shared between SceneCanvas (which captures the
-// clicks) and SceneSideToolbar (which exposes the buttons). Keeping
-// it in a singleton lets the toolbar live in `+page.svelte` while the
-// authoring loop runs inside the canvas.
+// Module-scoped state shared between SceneCanvas (which captures
+// the clicks), the side toolbar (which arms the actions), and the
+// authoring overlays (calibration capture). Module-level $state —
+// not class fields — so the runes preprocessor handles it cleanly
+// under SSR.
 
-type Pending = { kind: 'product'; productId: string } | { kind: 'empty' } | null
+type TerminationRole = 'outlet' | 'eps' | 'panel'
+type Pending =
+  | { kind: 'product'; productId: string }
+  | { kind: 'empty' }
+  | { kind: 'termination'; role: TerminationRole }
+  | null
 
-class SceneAuthoring {
-  pendingPlacement = $state<Pending>(null)
-  pendingWireFrom = $state<string | null>(null)
-  pendingWireWaypoints = $state<{ x: number; y: number }[]>([])
-  cursorScenePt = $state<{ x: number; y: number } | null>(null)
-  calibrationMode = $state<{ from?: { x: number; y: number } } | null>(null)
-  calibrationPrompt = $state<{
-    from: { x: number; y: number }
-    to: { x: number; y: number }
-  } | null>(null)
-  calibrationMeters = $state('')
+let pendingPlacement = $state<Pending>(null)
+let calibrationMode = $state<{ from?: { x: number; y: number } } | null>(null)
+
+export const sceneAuthoring = {
+  get pendingPlacement() {
+    return pendingPlacement
+  },
+  set pendingPlacement(v: Pending) {
+    pendingPlacement = v
+  },
+  get calibrationMode() {
+    return calibrationMode
+  },
+  set calibrationMode(v: { from?: { x: number; y: number } } | null) {
+    calibrationMode = v
+  },
 
   reset() {
-    this.pendingPlacement = null
-    this.pendingWireFrom = null
-    this.pendingWireWaypoints = []
-    this.cursorScenePt = null
-    this.calibrationMode = null
-    this.calibrationPrompt = null
-    this.calibrationMeters = ''
-  }
+    pendingPlacement = null
+    calibrationMode = null
+  },
 
   startCalibration() {
-    this.pendingPlacement = null
-    this.pendingWireFrom = null
-    this.pendingWireWaypoints = []
-    this.calibrationMode = {}
-  }
+    pendingPlacement = null
+    calibrationMode = {}
+  },
 }
-
-export const sceneAuthoring = new SceneAuthoring()

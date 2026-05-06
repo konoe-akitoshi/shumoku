@@ -1,30 +1,35 @@
 <script lang="ts">
   import { DropdownMenu } from 'bits-ui'
   import { CaretDown, Stack } from 'phosphor-svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
   import { diagramState } from '$lib/context.svelte'
   import HierarchyMenu, { type Entry } from './HierarchyMenu.svelte'
   import { segmentClass } from './segment'
 
+  // Hierarchy is the single picker for "which subgraph am I focused
+  // on". Both /diagram and /scene reflect this focus through the
+  // shared `?focus=<id>` URL param — so toggling view modes never
+  // loses the user's drilldown.
   let { active = false }: { active?: boolean } = $props()
 
   const sheets = $derived(diagramState.availableSheets)
   const activeId = $derived(diagramState.currentSheetId)
   const activeSheet = $derived(sheets.find((s) => s.id === activeId)?.label ?? 'Root')
-  const triggerLabel = $derived(activeId === null ? 'Diagram' : `Diagram: ${activeSheet}`)
 
   const entries = $derived<Entry[]>(
     sheets.map((s) => ({ id: s.id, label: s.label, indent: s.id === null ? 0 : 1 })),
   )
 
   function isActive(id: string | null): boolean {
-    return id === activeId && diagramState.currentSceneId === null
+    return id === activeId
   }
 
   function selectSheet(id: string | null) {
-    // Picking any sheet implicitly leaves any active scene — the
-    // natural way to "go back to Diagram" is to click a sheet entry.
-    diagramState.setCurrentScene(null)
-    diagramState.switchSheet(id)
+    const url = new URL($page.url)
+    if (id === null) url.searchParams.delete('focus')
+    else url.searchParams.set('focus', id)
+    goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true })
   }
 </script>
 
@@ -33,7 +38,7 @@
     {#snippet child({ props })}
       <button type="button" class={segmentClass(active)} title="Hierarchy" {...props}>
         <Stack class="h-3.5 w-3.5 text-neutral-500" />
-        <span class="max-w-[220px] truncate">{triggerLabel}</span>
+        <span class="max-w-[180px] truncate">{activeSheet}</span>
         <CaretDown class="h-3 w-3 text-neutral-400" />
       </button>
     {/snippet}

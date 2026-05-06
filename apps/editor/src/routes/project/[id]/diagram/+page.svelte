@@ -3,6 +3,7 @@
   import { attachCamera } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
+  import { page } from '$app/stores'
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
@@ -11,8 +12,6 @@
   import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
-  import SceneCanvas from '$lib/components/scene/SceneCanvas.svelte'
-  import SceneSideToolbar from '$lib/components/scene/SceneSideToolbar.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
 
@@ -30,6 +29,21 @@
     if (!rendererSvg) return
     const camera = attachCamera(rendererSvg)
     return () => camera.detach()
+  })
+
+  // Sync URL → state. `?focus=<id>` drives Hierarchy drilldown so a
+  // reload restores the same view. The diagram route never holds a
+  // scene; if a scene was active from a previous /scene navigation,
+  // clear it.
+  $effect(() => {
+    const focus = $page.url.searchParams.get('focus')
+    const focusId = focus || null
+    if (diagramState.currentSheetId !== focusId) {
+      diagramState.switchSheet(focusId)
+    }
+    if (diagramState.currentSceneId !== null) {
+      diagramState.setCurrentScene(null)
+    }
   })
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
@@ -99,11 +113,11 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="absolute inset-0"
-    ondblclick={() => { if (selected && diagramState.currentSceneId === null) openDetail(selected.id, selected.type) }}
+    ondblclick={() => {
+      if (selected) openDetail(selected.id, selected.type)
+    }}
   >
-    {#if diagramState.currentSceneId !== null && diagramState.currentScene}
-      <SceneCanvas scene={diagramState.currentScene} />
-    {:else if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
+    {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
       <ShumokuRenderer
         bind:this={renderer}
         bind:svgElement={rendererSvg}
@@ -147,21 +161,17 @@
     <ExportMenu onexportjson={handleExportJson} onexportsvg={handleExportSvg} />
   </div>
 
-  <!-- Right: Side toolbar (Diagram tools / Scene tools depending on view) -->
+  <!-- Right: diagram-side tools. -->
   <div class="fixed right-3 top-1/2 -translate-y-1/2 z-20">
-    {#if diagramState.currentSceneId !== null}
-      <SceneSideToolbar sceneId={diagramState.currentSceneId} />
-    {:else}
-      <SideToolbar
-        mode={editorState.mode}
-        isDark={editorState.isDark}
-        onmodechange={(m) => { editorState.mode = m }}
-        onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
-        onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
-        onautoarrange={() => diagramState.autoArrange()}
-        onthemetoggle={() => editorState.toggleTheme()}
-      />
-    {/if}
+    <SideToolbar
+      mode={editorState.mode}
+      isDark={editorState.isDark}
+      onmodechange={(m) => { editorState.mode = m }}
+      onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
+      onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
+      onautoarrange={() => diagramState.autoArrange()}
+      onthemetoggle={() => editorState.toggleTheme()}
+    />
   </div>
 
   <!-- Bottom-left: Status -->

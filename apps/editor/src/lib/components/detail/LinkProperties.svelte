@@ -16,6 +16,8 @@
   import PortPicker from '$lib/components/PortPicker.svelte'
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
   import ValidationCell from '$lib/components/ValidationCell.svelte'
+  import { diagramState } from '$lib/context.svelte'
+  import { formatMeters } from '$lib/scene/cable-length'
 
   let {
     link,
@@ -28,6 +30,10 @@
     nodes?: Map<string, Node>
     onupdate?: (updates: Partial<Link>) => void
   } = $props()
+
+  // Effective cable length: scene-derived (calibrated polyline) wins
+  // over the stored field. Display reflects whichever is in effect.
+  const effectiveLength = $derived(link.id ? diagramState.cableLengthMeters(link.id) : null)
 
   function getEndpoint(ep: LinkEndpoint) {
     return {
@@ -172,6 +178,18 @@
       .map((v) => Number.parseInt(v.trim(), 10))
       .filter((v) => !Number.isNaN(v))
     onupdate?.({ vlan: numbers.length > 0 ? numbers : undefined })
+  }
+
+  const wireScale = $derived.by(() => {
+    const v = link.metadata?.wireScale
+    return typeof v === 'number' && v > 0 ? v : null
+  })
+
+  function setWireScale(value: number | null) {
+    const next = { ...(link.metadata ?? {}) }
+    if (value === null) delete next.wireScale
+    else next.wireScale = value
+    onupdate?.({ metadata: Object.keys(next).length > 0 ? next : undefined })
   }
 
   const inputClass =
@@ -433,7 +451,13 @@
     <dt class={labelClass}>Length (m)</dt>
     <dd>
       <ValidationCell issues={issuesForTarget(issues, { kind: 'cable', field: 'length_m' })}>
-        {#if editing}
+        {#if effectiveLength?.source === 'scene'}
+          <!-- Scene-derived from a calibrated floor plan: read-only here. -->
+          <span class={valueClass}>
+            {formatMeters(effectiveLength.meters)}
+            <span class="ml-1 text-[9px] text-muted-foreground">from scene</span>
+          </span>
+        {:else if editing}
           <input
             type="number"
             min="0"
@@ -563,6 +587,43 @@
         </select>
       {:else}
         <span class={valueClass}>{link.arrow ?? 'none'}</span>
+      {/if}
+    </dd>
+  </div>
+
+  <!-- Per-wire stroke override. Falls back to Scene.display.wireScale. -->
+  <div class="grid grid-cols-[80px_1fr] items-center gap-2">
+    <dt class={labelClass}>Wire scale</dt>
+    <dd class="flex items-center gap-1">
+      {#if editing}
+        <input
+          type="number"
+          step="0.1"
+          min="0.1"
+          max="10"
+          class={inputClass}
+          placeholder="(scene default)"
+          value={wireScale ?? ''}
+          oninput={(e) => {
+            const raw = (e.target as HTMLInputElement).value.trim()
+            if (raw === '') setWireScale(null)
+            else {
+              const n = Number(raw)
+              if (Number.isFinite(n) && n > 0) setWireScale(n)
+            }
+          }}
+        >
+        {#if wireScale !== null}
+          <button
+            type="button"
+            class="text-[10px] text-muted-foreground hover:text-neutral-700 dark:hover:text-neutral-300"
+            onclick={() => setWireScale(null)}
+          >
+            clear
+          </button>
+        {/if}
+      {:else}
+        <span class={valueClass}>{wireScale != null ? `${wireScale}×` : '(scene default)'}</span>
       {/if}
     </dd>
   </div>

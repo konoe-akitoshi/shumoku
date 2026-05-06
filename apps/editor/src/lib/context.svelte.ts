@@ -41,6 +41,8 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
+import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
+import { buildAssignmentRows as buildBomRows } from './state/bom'
 import {
   applyResolvedLayout,
   currentSheetCacheGeneration,
@@ -98,74 +100,12 @@ function moduleProductSku(product: Product): string | undefined {
   return product.spec.mpn ?? product.catalogId
 }
 
-function nodeDisplayLabel(node: Node): string {
-  return Array.isArray(node.label) ? node.label[0] : (node.label ?? node.id)
-}
-
-function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undefined {
-  return link[side].plug?.module?.sku ?? link[side].plug?.module?.standard
-}
-
-function cableRequirementKey(link: Link): string | undefined {
-  const cable = link.cable
-  if (!cable) return undefined
-  return [cable.category, cable.medium, cable.length_m ? `${cable.length_m}m` : undefined]
-    .filter(Boolean)
-    .join(' / ')
-}
-
 function buildAssignmentRows(): AssignmentRow[] {
-  const rows: AssignmentRow[] = []
-
-  for (const [nodeId, node] of diagram.nodes) {
-    rows.push({
-      id: `node:${nodeId}`,
-      target: { kind: 'node', nodeId },
-      label: nodeDisplayLabel(node),
-      source: 'Diagram node',
-      productId: node.productId,
-      requirementKey: node.spec
-        ? 'model' in node.spec
-          ? node.spec.model
-          : 'service' in node.spec
-            ? node.spec.service
-            : node.spec.kind
-        : undefined,
-      status: node.productId ? 'resolved' : node.spec ? 'generic' : 'incomplete',
-    })
-  }
-
-  for (const link of diagram.links) {
-    if (!link.id) continue
-    for (const side of ['from', 'to'] as const) {
-      const endpoint = link[side]
-      const key = endpointRequirementKey(link, side)
-      if (!key) continue
-      rows.push({
-        id: `module:${link.id}:${side}`,
-        target: { kind: 'link-module', linkId: link.id, side },
-        label: `${link.id} ${side} module`,
-        source: `${endpoint.node}:${endpoint.port}`,
-        productId: endpoint.plug?.module?.productId,
-        requirementKey: key,
-        status: endpoint.plug?.module?.productId ? 'resolved' : 'generic',
-      })
-    }
-    const cableKey = cableRequirementKey(link)
-    if (cableKey) {
-      rows.push({
-        id: `cable:${link.id}`,
-        target: { kind: 'link-cable', linkId: link.id },
-        label: `${link.id} cable`,
-        source: 'Connections cable',
-        productId: link.cable?.productId,
-        requirementKey: cableKey,
-        status: link.cable?.productId ? 'resolved' : 'generic',
-      })
-    }
-  }
-
-  return rows
+  return buildBomRows({
+    nodes: diagram.nodes,
+    links: diagram.links,
+    scenes: scenesStore.list,
+  })
 }
 
 // =========================================================================
@@ -718,6 +658,27 @@ export const diagramState = {
       }
     })
   },
+  /**
+   * Effective real-world cable length for a link. Scene-derived
+   * (when the user has placed the link's endpoints in a calibrated
+   * scene and bent the wire along walls) takes precedence over the
+   * stored `link.cable.length_m`.
+   */
+  cableLengthMeters(linkId: string): { meters: number; source: 'scene' | 'stored' } | null {
+    const link = diagram.links.find((l) => l.id === linkId)
+    if (!link) return null
+    return cableLengthMeters(link, scenesStore.list, diagram.nodes)
+  },
+  /**
+   * Per-visible-segment cable lengths for a link. EPS-routed wires
+   * yield one entry per side of the chase (the physical cable
+   * count). Empty array when no segment has a scene-derived length.
+   */
+  cableSegmentLengths(linkId: string): Array<{ fromId: string; toId: string; meters: number }> {
+    const link = diagram.links.find((l) => l.id === linkId)
+    if (!link) return []
+    return cableSegmentLengths(link, scenesStore.list, diagram.nodes)
+  },
   placedCount(productId: string): number {
     let n = 0
     for (const node of diagram.nodes.values()) {
@@ -906,6 +867,18 @@ export const diagramState = {
   placeNodeInScene(sceneId: string, nodeId: string, position: { x: number; y: number }) {
     commit('Move item', () => scenesStore.placeNode(sceneId, nodeId, position))
   },
+  /**
+   * Bulk version for multi-drag: a single store mutation (and a
+   * single derive cascade) for the whole selection per drag tick.
+   * No-op when `updates` is empty.
+   */
+  placeNodesInScene(
+    sceneId: string,
+    updates: Array<{ nodeId: string; position: { x: number; y: number } }>,
+  ) {
+    if (updates.length === 0) return
+    commit('Move items', () => scenesStore.placeNodes(sceneId, updates))
+  },
   removePlacementFromScene(sceneId: string, nodeId: string) {
     commit('Remove placement', () => {
       scenesStore.removePlacement(sceneId, nodeId, (linkId) => {
@@ -970,6 +943,118 @@ export const diagramState = {
       return id
     })
   },
+  /**
+   * Drop a passive cable termination point (wall outlet, EPS riser,
+   * patch panel) at `position` in the scene. Termination Nodes follow
+   * the same lifecycle as device Nodes (placement, parent inheritance,
+   * undo) — they just carry `termination` metadata so the scene
+   * renders them differently and the logical diagram filters them out.
+   */
+  addTerminationInScene(
+    sceneId: string,
+    position: { x: number; y: number },
+    role: 'outlet' | 'eps' | 'panel' | 'bend',
+  ): string {
+    return commit('Add termination in scene', () => {
+      const defaultLabel =
+        role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : role === 'panel' ? 'Panel' : 'Bend'
+      const id = diagramState.addEmptyNode(defaultLabel)
+      const scene = scenesStore.find(sceneId)
+      const node = diagram.nodes.get(id)
+      if (node) {
+        diagram.nodes.set(id, {
+          ...node,
+          termination: { role },
+          parent: scene?.scopeSubgraphId ?? node.parent,
+        })
+        invalidateSheetCache()
+      }
+      diagramState.placeNodeInScene(sceneId, id, position)
+      return id
+    })
+  },
+  /**
+   * Insert a fresh bend Node into a wire's `via` at `viaIndex`.
+   * Creates the Node (termination role 'bend'), places it in the
+   * scene, and updates the link's via in one transaction. Returns
+   * the new bend Node's id so the drag handler can move it.
+   */
+  insertBendInLink(
+    sceneId: string,
+    linkId: string,
+    position: { x: number; y: number },
+    viaIndex: number,
+  ): string {
+    return commit('Bend wire', () => {
+      const id = diagramState.addTerminationInScene(sceneId, position, 'bend')
+      const link = diagram.links.find((l) => l.id === linkId)
+      const oldVia = link?.via ?? []
+      const idx = Math.max(0, Math.min(viaIndex, oldVia.length))
+      const newVia = [...oldVia.slice(0, idx), id, ...oldVia.slice(idx)]
+      diagramState.updateLink(linkId, { via: newVia })
+      return id
+    })
+  },
+  /**
+   * Apply EPS routing in bulk. For each link in `linkIds`, ensure the
+   * given `epsId` is present in `link.via` (when included=true) or
+   * removed (when included=false). All other entries in `via` are
+   * preserved — this only toggles a single TP's membership, so other
+   * TPs (other EPSes, outlets) keep their assignments. Wraps as one
+   * undo step so the modal's whole apply collapses to a single entry.
+   */
+  /**
+   * Hard-delete a Node from the diagram. Also strips it from any
+   * scene placement and from any link's `via` chain so the data
+   * stays consistent. Useful for cleaning up auto-created
+   * termination points (e.g. outlets) that are no longer referenced.
+   */
+  removeNode(id: string) {
+    commit('Remove node', () => {
+      diagram.nodes.delete(id)
+      diagram.links = diagram.links.map((l) => {
+        const via = l.via
+        if (!via?.includes(id)) return l
+        const next = via.filter((v) => v !== id)
+        return { ...l, via: next.length > 0 ? next : undefined }
+      })
+      // Drop placements / wire routes / hidden lists referencing this id.
+      for (const scene of scenesStore.list) {
+        const placements = scene.nodePlacements.filter((p) => p.nodeId !== id)
+        const hidden = (scene.hiddenNodeIds ?? []).filter((nid) => nid !== id)
+        if (
+          placements.length !== scene.nodePlacements.length ||
+          hidden.length !== (scene.hiddenNodeIds?.length ?? 0)
+        ) {
+          scenesStore.update(scene.id, {
+            nodePlacements: placements,
+            hiddenNodeIds: hidden,
+          })
+        }
+      }
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
+    })
+  },
+  setEpsRoutingForLinks(epsId: string, linkIds: string[], included: boolean) {
+    if (linkIds.length === 0) return
+    commit('Update EPS routing', () => {
+      const targets = new Set(linkIds)
+      diagram.links = diagram.links.map((l) => {
+        if (!l.id || !targets.has(l.id)) return l
+        const via = l.via ?? []
+        const has = via.includes(epsId)
+        if (included && !has) return { ...l, via: [...via, epsId] }
+        if (!included && has) {
+          const next = via.filter((id) => id !== epsId)
+          return { ...l, via: next.length > 0 ? next : undefined }
+        }
+        return l
+      })
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
+    })
+  },
   addWireInScene(
     sceneId: string,
     fromNodeId: string,
@@ -981,10 +1066,14 @@ export const diagramState = {
       const toNode = diagram.nodes.get(toNodeId)
       if (!fromNode || !toNode) return undefined
       const linkId = newId('link')
+      // Init an empty cable record so the BOM / detail panel pick the
+      // wire up immediately. Type/grade/length stay unset; the user
+      // (or scene-derived length) fills them in afterward.
       diagramState.addLink({
         id: linkId,
         from: { node: fromNodeId, port: '' },
         to: { node: toNodeId, port: '' },
+        cable: {},
       })
       diagramState.setWireRoute(sceneId, {
         linkId,
@@ -1206,6 +1295,40 @@ async function applyProject(data: Partial<NetedProject>) {
   const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
   scenesStore.set(sanitizeScenes(data.scenes ?? [], diagram.nodes, linkIdSet))
   scenesStore.setCurrentId(null)
+
+  // Backwards compat: convert legacy wireRoutes.controlPoints into
+  // bend Nodes inserted in Link.via. Old projects stored bends as
+  // anonymous absolute coords; the new model treats every transit
+  // point (including user bends) as a Node so multi-drag, deletion,
+  // and selection all flow through Svelte Flow's native node
+  // machinery. Run once after sanitize so node ids are stable.
+  migrateWireRoutesToBendNodes()
+}
+
+function migrateWireRoutesToBendNodes() {
+  for (const scene of scenesStore.list) {
+    const routesWithBends = scene.wireRoutes.filter((r) => (r.controlPoints?.length ?? 0) > 0)
+    if (routesWithBends.length === 0) continue
+    for (const route of routesWithBends) {
+      const link = diagram.links.find((l) => l.id === route.linkId)
+      if (!link) continue
+      const newBendIds: string[] = []
+      for (const pt of route.controlPoints ?? []) {
+        const id = diagramState.addTerminationInScene(scene.id, pt, 'bend')
+        newBendIds.push(id)
+      }
+      // Bends go before any existing TPs in via — preserves the
+      // visual order from before the migration where bends were
+      // first-class waypoints.
+      diagramState.updateLink(route.linkId, { via: [...newBendIds, ...(link.via ?? [])] })
+    }
+    // Clear migrated controlPoints; pathStyle stays for routing
+    // hints in the future, but controlPoints is no longer the
+    // source of truth.
+    scenesStore.update(scene.id, {
+      wireRoutes: scene.wireRoutes.map((r) => ({ ...r, controlPoints: [] })),
+    })
+  }
 }
 
 async function applyGraph(graph: NetworkGraph) {

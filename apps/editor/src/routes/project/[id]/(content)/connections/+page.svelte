@@ -25,6 +25,7 @@
   import * as Table from '$lib/components/ui/table'
   import ValidationCell from '$lib/components/ValidationCell.svelte'
   import { diagramState } from '$lib/context.svelte'
+  import { formatMeters } from '$lib/scene/cable-length'
 
   // =========================================================================
   // Derived: nodes, ports, connections
@@ -73,6 +74,13 @@
     return groups
   })
 
+  function nodeLabelOf(id: string): string {
+    const n = diagramState.nodes.get(id)
+    if (!n) return id
+    const l = n.label
+    return Array.isArray(l) ? l[0] : (l ?? id)
+  }
+
   function getPortLabel(p: PortOption) {
     const label = p.label || p.cage || 'unnamed port'
     const attrs = [
@@ -98,6 +106,10 @@
     standard: string
     issues: ValidationIssue[]
     cableLength: string
+    cableLengthSource: 'scene' | 'stored' | null
+    /** Per-visible-segment breakdown for via-EPS wires. Empty when
+     *  the wire is one continuous cable (no chase split). */
+    cableSegments: Array<{ from: string; to: string; meters: number }>
     vlan: string
     fromIp: string
     toIp: string
@@ -110,6 +122,25 @@
       const { from, to } = link
       const rawFromIp = from.ip
       const rawToIp = to.ip
+      // Effective length: scene-derived (calibrated polyline) wins
+      // over the stored field — same precedence as BOM / detail panel.
+      const eff = link.id ? diagramState.cableLengthMeters(link.id) : null
+      const cableLengthDisplay = eff
+        ? formatMeters(eff.meters)
+        : link.cable?.length_m !== undefined
+          ? String(link.cable.length_m)
+          : ''
+      // Segment breakdown — physical cables split at each EPS, since
+      // installers buy one cable per side of the chase.
+      const segs = link.id ? diagramState.cableSegmentLengths(link.id) : []
+      const cableSegments =
+        segs.length > 1
+          ? segs.map((s) => ({
+              from: nodeLabelOf(s.fromId),
+              to: nodeLabelOf(s.toId),
+              meters: s.meters,
+            }))
+          : []
       return {
         link,
         id: link.id ?? `link-${i}`,
@@ -123,7 +154,9 @@
           getPort(link.to.node, link.to.port),
           link,
         ),
-        cableLength: link.cable?.length_m !== undefined ? String(link.cable.length_m) : '',
+        cableLength: cableLengthDisplay,
+        cableLengthSource: eff?.source ?? null,
+        cableSegments,
         vlan: link.vlan
           ? Array.isArray(link.vlan)
             ? link.vlan.join(', ')
@@ -821,15 +854,46 @@
               <ValidationCell
                 issues={issuesForTarget(row.issues, { kind: 'cable', field: 'length_m' })}
               >
-                <input
-                  type="number"
-                  min="0"
-                  class={cellInput}
-                  value={row.cableLength}
-                  placeholder="—"
-                  onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
-                  onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                >
+                {#if row.cableLengthSource === 'scene'}
+                  <!-- Scene-derived: read-only display with origin badge.
+                       Editing manually wouldn't stick (the helper recomputes
+                       from polyline × calibration each render). -->
+                  {#if row.cableSegments.length > 0}
+                    <!-- EPS-split: show each side as its own cable so the
+                         numbers reflect what an installer actually buys.
+                         Tooltip names the segment endpoints for clarity. -->
+                    <div
+                      class="font-mono text-xs text-neutral-700 dark:text-neutral-200"
+                      title={row.cableSegments
+                        .map((s) => `${s.from} ↔ ${s.to}: ${s.meters.toFixed(1)}m`)
+                        .join(' / ')}
+                    >
+                      {#each row.cableSegments as s, i (i)}
+                        {#if i > 0}
+                          <span class="text-muted-foreground"> + </span>
+                        {/if}
+                        <span>{formatMeters(s.meters)}</span>
+                      {/each}
+                      <span class="text-muted-foreground">m</span>
+                      <span class="ml-1 text-[9px] text-muted-foreground">scene</span>
+                    </div>
+                  {:else}
+                    <span class="font-mono text-xs text-neutral-700 dark:text-neutral-200">
+                      {row.cableLength}
+                      <span class="ml-1 text-[9px] text-muted-foreground">scene</span>
+                    </span>
+                  {/if}
+                {:else}
+                  <input
+                    type="number"
+                    min="0"
+                    class={cellInput}
+                    value={row.cableLength}
+                    placeholder="—"
+                    onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
+                    onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  >
+                {/if}
               </ValidationCell>
             </Table.Cell>
             <Table.Cell>

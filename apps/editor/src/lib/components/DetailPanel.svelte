@@ -21,7 +21,7 @@
     onclose?: () => void
   } = $props()
 
-  const editing = $derived(editorState.mode === 'edit')
+  const editing = $derived(editorState.interactive)
 
   // Resolve element from diagramState
   const node = $derived(

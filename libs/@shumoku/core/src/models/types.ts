@@ -317,6 +317,22 @@ export interface Node {
    * When absent, the layout engine computes it automatically.
    */
   position?: Position
+
+  /**
+   * Marks this node as a passive cable termination point (wall outlet,
+   * EPS / vertical riser, patch panel) or a user-drawn bend on a
+   * scene cable run, rather than an active device. Cables physically
+   * transit through these via `Link.via`. Absent = regular device.
+   *
+   * Roles:
+   *   - 'outlet' / 'eps' / 'panel' — physical infrastructure picked
+   *     by the user; show in routing dialogs and BOMs.
+   *   - 'bend' — anonymous waypoint inserted by drag-to-bend on the
+   *     scene canvas. Hidden from BOM and routing pickers; rendered
+   *     only as a tiny anchor so a marquee selection can drag the
+   *     bend along with its neighbors.
+   */
+  termination?: { role: 'outlet' | 'eps' | 'panel' | 'bend' }
 }
 
 // ============================================
@@ -466,6 +482,15 @@ export interface Link {
    * the parser normalizes any YAML shorthand.
    */
   to: LinkEndpoint
+
+  /**
+   * Ordered list of passive termination point node ids the cable
+   * physically transits between `from` and `to` (wall outlet → EPS →
+   * wall outlet → patch panel, etc.). Used by scene-derived length to
+   * sum per-segment polylines and by BOM to break the run into
+   * structured/patch cable segments. Logical diagrams ignore `via`.
+   */
+  via?: string[]
 
   /**
    * Link label - can be multiple lines (displayed at center)
