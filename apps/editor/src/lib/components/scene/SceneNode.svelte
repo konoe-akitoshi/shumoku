@@ -1,7 +1,6 @@
 <script lang="ts">
   import { type NodeSpec, resolveIcon, specDeviceType } from '@shumoku/core'
   import { Handle, type Node, type NodeProps, Position } from '@xyflow/svelte'
-  import { sceneNodeSize } from '$lib/scene/node-geometry'
 
   // Custom Svelte Flow node — renders a floor-plan "pin". Two visual
   // modes share the same component:
@@ -9,6 +8,12 @@
   //   - termination: small role-specific glyph for outlets / EPS /
   //                  patch panels (passive cable transit points)
   // Both expose the same 4-handle layout so wires connect identically.
+  //
+  // Sizing is driven by Svelte Flow: SceneCanvas hands the library
+  // `Node.width`/`Node.height` per-node, and the framework applies
+  // them to the wrapper div. We just fill the wrapper with `w-full
+  // h-full`, so per-node / per-scene scale is a one-source-of-truth
+  // computation in the canvas, not duplicated here.
 
   type Termination = { role: 'outlet' | 'eps' | 'panel' }
   type SceneNodeT = Node<
@@ -17,8 +22,6 @@
       spec?: NodeSpec
       isExternal?: boolean
       termination?: Termination
-      /** Per-scene size multiplier from Scene.display.nodeScale. */
-      scale?: number
     },
     'scene'
   >
@@ -27,12 +30,6 @@
 
   const termination = $derived(data.termination)
   const icon = $derived(termination ? null : resolveIcon(data.spec))
-  // Base sizes come from the shared geometry module; the per-scene
-  // scale multiplier (from Scene.display.nodeScale) is applied here
-  // and matched in SceneCanvas's centerOf so wires still aim true.
-  const baseSize = $derived(sceneNodeSize({ termination }))
-  const scale = $derived(data.scale ?? 1)
-  const sizes = $derived({ w: baseSize.w * scale, h: baseSize.h * scale })
   const ariaLabel = $derived(
     termination
       ? termination.role === 'outlet'
@@ -44,15 +41,10 @@
   )
 </script>
 
-<div
-  class="relative select-none"
-  style:width="{sizes.w}px"
-  style:height="{sizes.h}px"
-  style:opacity={data.isExternal ? 0.6 : 1}
->
+<div class="relative h-full w-full select-none" style:opacity={data.isExternal ? 0.6 : 1}>
   <!-- Handles anchor to the box's four sides so wires terminate at the
-       icon (or termination glyph) and don't pass through the label. -->
-  <!-- Handle ids match Position values so picking a side ('top' /
+       icon (or termination glyph) and don't pass through the label.
+       Handle ids match Position values so picking a side ('top' /
        'right' / 'bottom' / 'left') gives both a sourceHandle id and
        a sourcePosition for smoothstep — one identifier, two uses. -->
   <Handle id="top" type="source" position={Position.Top} style="opacity: 0;" />
@@ -105,12 +97,13 @@
       {#if icon}
         {#if icon.kind === 'inline'}
           <svg
-            width={sizes.w}
-            height={sizes.h}
+            width="100%"
+            height="100%"
             viewBox="0 0 24 24"
             fill="currentColor"
             role="img"
             aria-label={ariaLabel}
+            preserveAspectRatio="xMidYMid meet"
             style:color="#1e293b"
             style="filter: drop-shadow(0 0 1.5px white) drop-shadow(0 0 1.5px white) drop-shadow(0 1px 1px rgba(0,0,0,0.3)); pointer-events: none;"
           >
@@ -121,17 +114,12 @@
           <img
             src={icon.url}
             alt={ariaLabel}
-            width={sizes.w}
-            height={sizes.h}
+            class="h-full w-full object-contain"
             style="filter: drop-shadow(0 0 1.5px white) drop-shadow(0 0 1.5px white) drop-shadow(0 1px 1px rgba(0,0,0,0.3)); pointer-events: none;"
           >
         {/if}
       {:else}
-        <div
-          class="rounded-full border border-neutral-400 bg-white"
-          style:width="{sizes.w - 12}px"
-          style:height="{sizes.h - 12}px"
-        ></div>
+        <div class="h-2/3 w-2/3 rounded-full border border-neutral-400 bg-white"></div>
       {/if}
     </div>
   {/if}

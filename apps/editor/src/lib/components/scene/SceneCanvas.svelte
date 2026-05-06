@@ -136,16 +136,25 @@
     return sceneWireScale
   }
 
-  // Center of a node's icon in flow coords. Svelte Flow stores
-  // positions as top-left, so anything that wants to anchor against
-  // the visible icon (wire endpoints into a via TP, etc.) needs to
-  // shift by half the (scaled) size — using the node's own effective
-  // scale so per-node overrides land at the right spot.
+  // Effective rendered dimensions for a node — base role size times
+  // its effective scale. We pass these to Svelte Flow as
+  // `Node.width`/`Node.height` so the library positions handles
+  // and computes sourceX/Y / targetX/Y itself; SceneNode just fills
+  // the wrapper with `w-full h-full`.
+  function effSize(nodeId: string): { w: number; h: number } {
+    const base = sceneNodeSize(diagramState.nodes.get(nodeId))
+    const s = effectiveNodeScale(nodeId)
+    return { w: base.w * s, h: base.h * s }
+  }
+
+  // Center of a node's icon in flow coords. Used for via TP positions
+  // — Svelte Flow doesn't expose those automatically (they're not
+  // edge endpoints). Reads the same effective size we hand to Svelte
+  // Flow for the node, so layouts stay in sync.
   function centerOf(nodeId: string): { x: number; y: number } {
     const tl = positionFor(nodeId)
-    const { w, h } = sceneNodeSize(diagramState.nodes.get(nodeId))
-    const s = effectiveNodeScale(nodeId)
-    return { x: tl.x + (w * s) / 2, y: tl.y + (h * s) / 2 }
+    const { w, h } = effSize(nodeId)
+    return { x: tl.x + w / 2, y: tl.y + h / 2 }
   }
 
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
@@ -172,16 +181,16 @@
     for (const n of visibleSceneNodes) {
       const baseLabel = Array.isArray(n.label) ? n.label[0] : (n.label ?? n.id)
       const label = `${baseLabel}${externalSubgraphSuffix(n.id)}`
+      const { w, h } = effSize(n.id)
       out.push({
         id: n.id,
         type: 'scene',
         position: positionFor(n.id),
-        data: {
-          label,
-          spec: n.spec,
-          termination: n.termination,
-          scale: effectiveNodeScale(n.id),
-        },
+        // Svelte Flow uses width/height to size the wrapper and
+        // anchor handles — no need to also push the size into data.
+        width: w,
+        height: h,
+        data: { label, spec: n.spec, termination: n.termination },
         draggable: interactive,
         selectable: true,
       })
