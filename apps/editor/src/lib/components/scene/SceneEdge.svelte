@@ -73,15 +73,14 @@
   // subpaths so the wall-gap shows as a break.
   const pathD = $derived.by(() => {
     if (visualSegments.length === 0) return ''
-    // Plain polyline through all points. No smoothstep auto-routing
-    // — its "rounded L" was a phantom corner that disappeared the
-    // moment the user added a real bend, and the auto-corner itself
-    // wasn't a Node so it couldn't be moved or deleted. Default is
-    // a straight line; the user explicitly creates bends to shape
-    // the cable run.
+    // Plain polyline through all points. radius=0 keeps the path
+    // passing exactly through each bend / via Node — otherwise the
+    // rounded-corner Bezier control sits at the point and the line
+    // visibly bypasses the dot. stroke-linejoin: round on the path
+    // softens the corner cosmetically without offsetting it.
     return visualSegments
       .filter((seg) => seg.length >= 2)
-      .map((seg) => polylinePath(seg))
+      .map((seg) => polylinePath(seg, 0))
       .join(' ')
   })
   // First-segment points feed bendOnDrag's segment-search so a

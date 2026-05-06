@@ -137,11 +137,16 @@
        icon (or termination glyph) and don't pass through the label.
        Handle ids match Position values so picking a side ('top' /
        'right' / 'bottom' / 'left') gives both a sourceHandle id and
-       a sourcePosition for smoothstep — one identifier, two uses. -->
-  <Handle id="top" type="source" position={Position.Top} style="opacity: 0;" />
-  <Handle id="right" type="source" position={Position.Right} style="opacity: 0;" />
-  <Handle id="bottom" type="source" position={Position.Bottom} style="opacity: 0;" />
-  <Handle id="left" type="source" position={Position.Left} style="opacity: 0;" />
+       a sourcePosition for smoothstep — one identifier, two uses.
+       Bends are anonymous waypoints inside an existing wire — they
+       must NOT be valid wire endpoints (would let users drag a new
+       wire out of a bend point), so they get no handles. -->
+  {#if termination?.role !== 'bend'}
+    <Handle id="top" type="source" position={Position.Top} style="opacity: 0;" />
+    <Handle id="right" type="source" position={Position.Right} style="opacity: 0;" />
+    <Handle id="bottom" type="source" position={Position.Bottom} style="opacity: 0;" />
+    <Handle id="left" type="source" position={Position.Left} style="opacity: 0;" />
+  {/if}
 
   {#if termination}
     <!-- Termination glyphs: small, role-specific shapes. Selected state
