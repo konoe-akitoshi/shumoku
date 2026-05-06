@@ -49,12 +49,20 @@ asset's bytes. That is more than enough collision resistance for
 a single project's worth of images and short enough to keep
 filenames pleasant.
 
-`asset:` lives **only** in serialized form. In memory, the same
-fields hold runtime URLs (`blob:`, `http(s):`, or inline SVG
-text). The reader rewrites `asset:` → blob URL on load; the
-writer rewrites blob URL → `asset:` on save. Render paths never
-see the `asset:` scheme, so adding the format did not require
-touching `classifyIcon` / `resolveIcon` / `<img>` consumers.
+`asset:` lives in **two storage tiers** but never in memory: the
+zip file and IndexedDB rows both carry `asset:<hash>` strings;
+state in the editor always holds runtime URLs (`blob:`,
+`http(s):`, or inline SVG text).
+
+- `serializeEntity(value)` — walks the value, replacing `blob:`
+  URLs with `asset:` refs. Used by both the zip writer and the
+  IDB sync layer before persisting.
+- `rehydrateEntity(value)` — inverse. Used by both the zip reader
+  and the IDB load path so render code only ever sees blob URLs.
+
+Render paths never see the `asset:` scheme, so adding the format
+did not require touching `classifyIcon` / `resolveIcon` / `<img>`
+consumers.
 
 ## AssetStore
 
@@ -72,24 +80,48 @@ The store is **session-scoped**, not project-scoped per se —
 mid-session, undoing a "set background" leaves the previous blob
 addressable so redo works. Orphaned entries are not GC'd
 mid-session; the writer simply walks live state for `asset:` refs
-and writes only those.
+and writes only those. The durable copies of the asset bytes live
+in IDB rows under `[projectId, hash]` (see `local-cache.md`); the
+AssetStore is just a runtime cache.
 
 ## Writer / reader
 
 Both live under `apps/editor/src/lib/persistence/`:
 
-- `writer.ts` — `writeProjectZip({ name, diagram, products, scenes })`
-  → `Blob`. Walks each top-level slice, replaces blob URLs with
-  `asset:` refs (`toSerializedRef`), collects referenced hashes,
-  and packs everything via `fflate.zipSync`.
+- `writer.ts` — `writeProjectZip({ name, diagram, products,
+  scenes, resolveAsset? })` → `Blob`. Runs `serializeEntity` on
+  each top-level slice (idempotent for already-`asset:` refs),
+  collects referenced hashes, and packs everything via
+  `fflate.zipSync`. The `resolveAsset` callback feeds asset
+  bytes; defaults to the in-memory `AssetStore`. The DB-canonical
+  export path passes a resolver built from per-project asset
+  rows in IDB so the zip reflects what's actually persisted.
 - `reader.ts` — `readProjectZip(blob | bytes)` → `NetedProject`.
-  Two passes: register every `assets/<hash>.<ext>` first so refs
-  can resolve, then parse JSON and `rehydrateRefs` walks each
-  parsed tree replacing `asset:` strings with the live blob URL.
+  Two passes: register every `assets/<hash>.<ext>` into the
+  AssetStore first so refs can resolve, then parse JSON and run
+  `rehydrateEntity` on each tree, replacing `asset:` strings with
+  the live blob URL.
 
-Both pieces deliberately stay thin (~120 lines each) and the
-serializer functions are per-slice so the JSON shape stays
-checked by the existing `NetedProject` types.
+Both pieces deliberately stay thin (~150 lines each); shape
+checking lives in the `NetedProject` types.
+
+## Where the zip comes from
+
+Export is **DB-driven**. `exportProjectZip(name?)`:
+
+1. `cache.drain()` — make sure any pending sync has landed so the
+   DB reflects the latest state.
+2. `projectsDb.loadSnapshot(id)` + `projectsDb.getAssets(id)` —
+   read the canonical rows + per-project asset blobs.
+3. Build a per-export `resolveAsset` from the asset rows.
+4. `writeProjectZip(...)` with the loaded data.
+
+This makes "what's in the .neted.zip" identical to "what loads on
+reload". The in-memory state is a working copy; the DB and the
+zip are both projections of the canonical store.
+
+Sample (read-only) is the only exception: it's never cached, so
+its export still falls back to in-memory state.
 
 ## Boundary contract
 
