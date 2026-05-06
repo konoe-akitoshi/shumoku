@@ -35,26 +35,36 @@ the cache as ephemeral and Export is the portable form.
 ## Data flow
 
 ```
-                   apply / undo / redo
-in-memory state ◄────────────────────── ProjectSnapshot
-       │
-       │ commit() →  diffSnapshots(before, after)
-       │              │
-       │              ▼
-       │           per-kind upserts / deletes
-       │              │
-       └──────────►  applySync(projectId, diff)
-                      │   (one IDB transaction across all
-                      │    entity stores; bumps projects.updatedAt)
-                      ▼
-                 IndexedDB (mirror)
+        UI
+        │
+        ▼ commit()
+  in-memory state  ──────────► IndexedDB (canonical / durable)
+        ▲                            │
+        │ loadProject                │ exportProjectZip
+        │ (rehydrate)                ▼
+        │                       .neted.zip
+        │
+   undo / redo (memory only)
 ```
+
+State writes flow into IndexedDB after every commit. Read paths
+(reload, export) read from IndexedDB, then rehydrate into state.
+The zip is never derived from in-memory state directly — Export
+drains pending sync, then reads from the DB so "what's in the
+zip" == "what would I get on reload".
 
 Each commit produces a diff between the previous synced snapshot
 and the new state. Reference equality is the unchanged predicate
 — editor stores update immutably, so `before === after` for an
 entity ID means "this row didn't change". Conservative
 false-positives just cost an idempotent IDB put.
+
+Image refs cross the storage boundary in serialized form. Entity
+data going to IDB has its image fields rewritten from runtime
+`blob:` URLs to `asset:<hash>.<ext>` (see
+`serializeEntity` / `rehydrateEntity` in `state/assets.svelte.ts`).
+The reverse runs after read so render code only sees blob URLs.
+This keeps DB rows portable across reloads and sessions.
 
 ## Lifecycle
 

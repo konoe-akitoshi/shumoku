@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Link, Node, Subgraph } from '@shumoku/core'
+import { rehydrateEntity, serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
 import { ENTITY_STORES, getAllByProject, isAvailable, reqToPromise, STORES, withTxn } from './idb'
@@ -148,14 +149,17 @@ export const projectsDb = {
           getAllByProject<ProductRow>(txn.objectStore(STORES.products), projectId),
           getAllByProject<SceneRow>(txn.objectStore(STORES.scenes), projectId),
         ])
+        // Rehydrate `asset:` refs back to live blob URLs (caller
+        // must have populated AssetStore from per-project asset
+        // rows first).
         return {
           meta,
           snapshot: {
-            nodes: nodes.map((r) => [r.id, r.data] as [string, Node]),
-            subgraphs: subgraphs.map((r) => [r.id, r.data] as [string, Subgraph]),
-            links: links.map((r) => r.data),
-            products: products.map((r) => r.data),
-            scenes: scenes.map((r) => r.data),
+            nodes: nodes.map((r) => [r.id, rehydrateEntity(r.data)] as [string, Node]),
+            subgraphs: subgraphs.map((r) => [r.id, rehydrateEntity(r.data)] as [string, Subgraph]),
+            links: links.map((r) => rehydrateEntity(r.data)),
+            products: products.map((r) => rehydrateEntity(r.data)),
+            scenes: scenes.map((r) => rehydrateEntity(r.data)),
           },
         }
       },
@@ -177,23 +181,31 @@ export const projectsDb = {
         for (const kind of ENTITY_STORES) {
           await clearByProject(txn.objectStore(STORES[kind]), meta.id)
         }
+        // Serialize blob URLs → `asset:` refs so rows survive a
+        // page reload (in-memory blob URLs die with the session).
         for (const [id, n] of snapshot.nodes)
-          txn.objectStore(STORES.nodes).put({ projectId: meta.id, id, data: n })
+          txn.objectStore(STORES.nodes).put({ projectId: meta.id, id, data: serializeEntity(n) })
         for (const [id, sg] of snapshot.subgraphs)
-          txn.objectStore(STORES.subgraphs).put({ projectId: meta.id, id, data: sg })
+          txn
+            .objectStore(STORES.subgraphs)
+            .put({ projectId: meta.id, id, data: serializeEntity(sg) })
         for (const link of snapshot.links) {
           // Idless legacy links aren't persistable; the composer
           // always assigns an id when creating them, so this only
           // skips degenerate input.
           if (!link.id) continue
-          txn.objectStore(STORES.links).put({ projectId: meta.id, id: link.id, data: link })
+          txn
+            .objectStore(STORES.links)
+            .put({ projectId: meta.id, id: link.id, data: serializeEntity(link) })
         }
         for (const product of snapshot.products)
           txn
             .objectStore(STORES.products)
-            .put({ projectId: meta.id, id: product.id, data: product })
+            .put({ projectId: meta.id, id: product.id, data: serializeEntity(product) })
         for (const scene of snapshot.scenes)
-          txn.objectStore(STORES.scenes).put({ projectId: meta.id, id: scene.id, data: scene })
+          txn
+            .objectStore(STORES.scenes)
+            .put({ projectId: meta.id, id: scene.id, data: serializeEntity(scene) })
       },
     )
   },

@@ -1157,13 +1157,42 @@ export const diagramState = {
     }
   },
   /**
-   * Build the .neted zip blob for the current project. Image assets
-   * (scene backgrounds, raster product icons) flow out of the
-   * AssetStore as content-addressed entries under `assets/`.
+   * Build the .neted zip blob for the current project from the DB
+   * mirror. We drain the cache first so any pending sync lands,
+   * then read entity + asset rows back. This keeps "what you
+   * Export" identical to "what you'd see on reload" and matches
+   * the DB-as-canonical model.
+   *
+   * Sample falls back to in-memory state because it's never cached.
    */
-  async exportProjectZip(name = 'Untitled'): Promise<Blob> {
+  async exportProjectZip(name?: string): Promise<Blob> {
+    const id = sessionStore.projectId
+    if (id && id !== 'sample') {
+      await cache.drain()
+      const cached = await projectsDb.loadSnapshot(id)
+      if (cached) {
+        const assets = await projectsDb.getAssets(id)
+        const byHash = new Map(assets.map((a) => [a.hash, a]))
+        const project = snapshotToProject(cached.snapshot, cached.meta)
+        return await writeProjectZip({
+          name: name ?? cached.meta.name,
+          settings: cached.meta.settings,
+          diagram: project.diagram,
+          products: project.products,
+          scenes: project.scenes ?? [],
+          // DB-side asset rows feed the writer directly — bypass
+          // the AssetStore so the zip reflects what's actually
+          // persisted, not what's hot in memory.
+          resolveAsset: (hash) => {
+            const a = byHash.get(hash)
+            return a ? { hash: a.hash, ext: a.ext, blob: a.blob, url: '' } : undefined
+          },
+        })
+      }
+    }
+    // Sample / detached: fall back to current in-memory state.
     return await writeProjectZip({
-      name,
+      name: name ?? sessionStore.projectName,
       diagram: diagramState.exportGraph(),
       products: [...productsStore.list],
       scenes: [...scenesStore.list],

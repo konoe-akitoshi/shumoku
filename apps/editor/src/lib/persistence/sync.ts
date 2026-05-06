@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Link, Node, Subgraph } from '@shumoku/core'
+import { serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
 import { ENTITY_STORES, isAvailable, STORES, withTxn } from './idb'
@@ -122,7 +123,10 @@ export async function applySync(projectId: string, diff: SnapshotDiff): Promise<
       for (const kind of ENTITY_STORES) {
         const store = writers[kind]
         for (const u of diff[kind].upserts) {
-          store.put({ projectId, id: u.id, data: u.data })
+          // Serialize blob URLs → `asset:` refs so the row stays
+          // valid across reloads (in-memory blob URLs die with the
+          // page).
+          store.put({ projectId, id: u.id, data: serializeEntity(u.data) })
         }
         for (const id of diff[kind].deletes) {
           store.delete([projectId, id])

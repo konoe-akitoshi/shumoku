@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { type Zippable, zipSync } from 'fflate'
-import { assetStore, toSerializedRef } from '../state/assets.svelte'
+import { type AssetEntry, assetStore, serializeEntity } from '../state/assets.svelte'
 import type { NetedProject, Product, Scene } from '../types'
 
 // Zip writer for `.neted` projects (format v1).
@@ -37,31 +37,6 @@ function jsonBytes(value: unknown): Uint8Array {
   return ENC.encode(`${JSON.stringify(value, null, 2)}\n`)
 }
 
-/** Serialize Product, replacing runtime icon URLs with `asset:` refs. */
-function serializeProduct(p: Product): Product {
-  return p.icon ? { ...p, icon: toSerializedRef(p.icon) } : p
-}
-
-/** Serialize Scene, replacing background URL with an `asset:` ref. */
-function serializeScene(s: Scene): Scene {
-  if (!s.background) return s
-  return { ...s, background: { ...s.background, src: toSerializedRef(s.background.src) } }
-}
-
-/** Serialize NetworkGraph, replacing Node.spec.icon URLs with `asset:` refs. */
-function serializeDiagram(diagram: NetedProject['diagram']): NetedProject['diagram'] {
-  return {
-    ...diagram,
-    nodes: diagram.nodes.map((n) => {
-      const icon = n.spec?.icon
-      if (!icon || !n.spec) return n
-      const serialized = toSerializedRef(icon)
-      if (serialized === icon) return n
-      return { ...n, spec: { ...n.spec, icon: serialized } }
-    }),
-  }
-}
-
 /**
  * Walk the serialized JSON tree for `asset:` refs so we know which
  * assets to embed. Strings only — that's where refs live.
@@ -89,21 +64,32 @@ export interface WriteProjectInput {
   diagram: NetedProject['diagram']
   products: Product[]
   scenes: Scene[]
+  /**
+   * Source of asset bytes for the `assets/<hash>.<ext>` entries.
+   * Defaults to the in-memory `AssetStore` so old call sites keep
+   * working; the DB-backed export path passes its own resolver
+   * built from the per-project asset rows.
+   */
+  resolveAsset?: (hash: string) => AssetEntry | undefined
 }
 
 /**
- * Build a `.neted` zip blob from the current project state. The
- * caller is responsible for triggering a download; this function
- * just produces the bytes.
+ * Build a `.neted` zip blob from a project payload. The caller is
+ * responsible for triggering a download; this function just
+ * produces the bytes.
+ *
+ * Inputs may already hold `asset:` refs (DB read path) or raw
+ * blob URLs (legacy state path); `serializeEntity` is idempotent
+ * for already-serialized values.
  */
 export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
-  const diagram = serializeDiagram(input.diagram)
-  const products = input.products.map(serializeProduct)
-  const scenes = input.scenes.map(serializeScene)
+  const diagram = serializeEntity(input.diagram)
+  const products = input.products.map((p) => serializeEntity(p))
+  const scenes = input.scenes.map((s) => serializeEntity(s))
 
   // Find every `asset:` ref across all serialized JSON, then embed
   // only the assets that are actually referenced. Orphaned blobs
-  // hanging in the AssetStore from since-undone uploads stay out.
+  // (e.g. since-undone uploads still in the AssetStore) stay out.
   const used = new Set<string>()
   collectAssetHashes(diagram, used)
   collectAssetHashes(products, used)
@@ -126,8 +112,9 @@ export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
   for (const s of scenes) {
     zipInput[`scenes/${s.id}.json`] = jsonBytes(s)
   }
+  const resolveAsset = input.resolveAsset ?? ((hash) => assetStore.byHash(hash))
   for (const hash of used) {
-    const entry = assetStore.byHash(hash)
+    const entry = resolveAsset(hash)
     if (!entry) continue // Stale ref — silently skip; reader treats as missing.
     const bytes = new Uint8Array(await entry.blob.arrayBuffer())
     zipInput[`assets/${entry.hash}.${entry.ext}`] = bytes
