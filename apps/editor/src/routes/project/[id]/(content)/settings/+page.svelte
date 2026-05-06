@@ -1,7 +1,6 @@
 <script lang="ts">
   import { DownloadSimple, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
-  import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import { diagramState } from '$lib/context.svelte'
   import { projectsDb } from '$lib/persistence/projects-store'
@@ -124,35 +123,32 @@
 
   <!-- Local cache -->
   <section class="space-y-3">
-    <div class="flex items-center gap-2">
-      <h2
-        class="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider"
-      >
-        Local cache
-      </h2>
-      <Badge variant="outline" class="text-[10px]">Beta</Badge>
+    <h2
+      class="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider"
+    >
+      Local cache
+    </h2>
+    <!-- Where the data lives — beta users need this up front so
+         "I cleared my browser cache" failures don't surprise. -->
+    <div
+      class="rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200 space-y-1.5"
+    >
+      <div>
+        <span class="font-semibold">Beta — local only.</span>
+        Projects are stored in this browser's <span class="font-mono">IndexedDB</span> under the
+        <span class="font-mono">{origin}</span>
+        origin. Nothing leaves your machine — there is no server sync yet.
+      </div>
+      <div>
+        Data <strong>can be lost</strong> if you clear browser site data, switch browsers / profiles
+        / devices, or use a private window. Treat
+        <span class="font-mono">.neted.zip</span>
+        export as the durable backup until server sync ships.
+      </div>
     </div>
     <div
       class="space-y-3 p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
     >
-      <!-- Where the data lives — beta users need this up front so
-           "I cleared my browser cache" failures don't surprise. -->
-      <div
-        class="text-xs text-muted-foreground space-y-1.5 pb-2 border-b border-neutral-200 dark:border-neutral-700"
-      >
-        <div>
-          Projects are stored in this browser's <span class="font-mono">IndexedDB</span> under the
-          <span class="font-mono">{origin}</span>
-          origin. Nothing leaves your machine — there is no server sync yet.
-        </div>
-        <div>
-          Data <strong>can be lost</strong> if you clear browser site data, switch browsers /
-          profiles / devices, or use a private window. Treat
-          <span class="font-mono">.neted.zip</span>
-          export as the durable backup until server sync ships.
-        </div>
-      </div>
-
       <div class="flex items-center justify-between">
         <div>
           <div class="text-sm font-medium">Cache edits in this browser</div>

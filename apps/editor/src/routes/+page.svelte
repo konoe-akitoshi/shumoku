@@ -2,7 +2,6 @@
   import { DropdownMenu } from 'bits-ui'
   import { CaretDown, Cube, FileJs, FolderOpen, Plus, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
-  import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import { diagramState } from '$lib/context.svelte'
@@ -160,15 +159,17 @@
 
   <!-- Recent projects (local cache, beta) -->
   <section class="mb-8">
-    <div class="flex items-center gap-2 mb-1">
-      <h2 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Recent projects
-      </h2>
-      <Badge variant="outline" class="text-[10px]">Beta — local only</Badge>
-    </div>
-    <div class="text-xs text-muted-foreground mb-3">
-      Stored in this browser's IndexedDB. Lost if you clear site data, switch browsers, or use
-      private mode — export <span class="font-mono">.neted.zip</span> for a durable backup.
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+      Recent projects
+    </h2>
+    <div
+      class="mb-3 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200"
+    >
+      <span class="font-semibold">Beta — local only.</span>
+      Projects live in this browser's IndexedDB. They can be lost if you clear site data, switch
+      browsers / profiles / devices, or use a private window. Export
+      <span class="font-mono">.neted.zip</span>
+      as a durable backup.
     </div>
     {#if !cachedLoaded}
       <div class="text-sm text-muted-foreground">Loading…</div>
