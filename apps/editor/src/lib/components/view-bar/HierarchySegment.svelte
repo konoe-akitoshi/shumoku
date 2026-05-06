@@ -7,11 +7,10 @@
   import HierarchyMenu, { type Entry } from './HierarchyMenu.svelte'
   import { segmentClass } from './segment'
 
-  // Hierarchy is the one place the user picks "which subgraph am I
-  // looking at". The Diagram and Scene buttons read that focus and
-  // open the appropriate view of it. When a scene is already active,
-  // drilling here re-points the scene at the new focus too (keeping
-  // the URL's ?scope= in sync).
+  // Hierarchy is the single picker for "which subgraph am I focused
+  // on". Both /diagram and /scene reflect this focus through the
+  // shared `?focus=<id>` URL param — so toggling view modes never
+  // loses the user's drilldown.
   let { active = false }: { active?: boolean } = $props()
 
   const sheets = $derived(diagramState.availableSheets)
@@ -27,13 +26,10 @@
   }
 
   function selectSheet(id: string | null) {
-    diagramState.switchSheet(id)
-    if (diagramState.currentSceneId !== null) {
-      diagramState.setCurrentSceneForScope(id ?? undefined)
-      const url = new URL($page.url)
-      url.searchParams.set('scope', id ?? '')
-      goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true })
-    }
+    const url = new URL($page.url)
+    if (id === null) url.searchParams.delete('focus')
+    else url.searchParams.set('focus', id)
+    goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true })
   }
 </script>
 

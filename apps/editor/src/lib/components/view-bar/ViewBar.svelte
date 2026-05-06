@@ -1,18 +1,17 @@
 <script lang="ts">
-  import { diagramState } from '$lib/context.svelte'
+  import { page } from '$app/stores'
   import DiagramSegment from './DiagramSegment.svelte'
   import HierarchySegment from './HierarchySegment.svelte'
   import SceneSegment from './SceneSegment.svelte'
 
   // Bottom-center segmented control. Three roles split out:
-  //   Hierarchy  — pick which sheet (subgraph) to drill into for the
-  //                diagram canvas.
-  //   Diagram    — switch the canvas to the diagram view.
-  //   Scene      — switch the canvas to a scene view, with a scope
-  //                picker dropdown.
-  // Active state lights one of Diagram / Scene depending on whether
-  // a scene is selected.
-  const sceneActive = $derived(diagramState.currentSceneId !== null)
+  //   Hierarchy  — pick which sheet (subgraph) to drill into; shared
+  //                between diagram and scene views via `?focus=`.
+  //   Diagram    — switch to /project/[id]/diagram.
+  //   Scene      — switch to /project/[id]/scene.
+  // Active state lights one of Diagram / Scene based on the URL
+  // pathname so reload / back-forward stay in sync.
+  const sceneActive = $derived($page.url.pathname.endsWith('/scene'))
 </script>
 
 <div

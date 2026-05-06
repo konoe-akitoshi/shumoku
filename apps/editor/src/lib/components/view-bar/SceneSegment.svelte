@@ -6,26 +6,23 @@
   import { isPhysicalSubgraph } from '$lib/scene/scope'
   import { segmentClass } from './segment'
 
-  // Scene view button. The scope is whatever the Hierarchy segment
-  // has currently focused — Hierarchy is the single picker for "which
-  // subgraph". Clicking Scene opens (or creates) the floor-plan view
-  // for that subgraph and persists `?scope=<id>` in the URL so reload
-  // restores the same view.
+  // Scene view button. The scope is whatever Hierarchy has currently
+  // focused — Hierarchy is the single picker for "which subgraph".
+  // Navigates to /project/[id]/scene[?focus=<id>] preserving focus.
   let { active = false }: { active?: boolean } = $props()
 
   const sheetId = $derived(diagramState.currentSheetId)
   const subgraph = $derived(sheetId ? diagramState.subgraphs.get(sheetId) : undefined)
   // Scene view only makes sense for physical subgraphs (a logical
-  // service group has no floor plan). Disable the button when the
-  // currently-focused sheet is logical.
+  // service group has no floor plan). Disable when focused subgraph
+  // is logical.
   const allowed = $derived(!subgraph || isPhysicalSubgraph(subgraph))
 
   function selectScene() {
     if (!allowed) return
-    diagramState.setCurrentSceneForScope(sheetId ?? undefined)
-    const url = new URL($page.url)
-    url.searchParams.set('scope', sheetId ?? '')
-    goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true })
+    const projectId = $page.params.id
+    const target = `/project/${projectId}/scene${sheetId ? `?focus=${encodeURIComponent(sheetId)}` : ''}`
+    goto(target)
   }
 </script>
 

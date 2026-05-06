@@ -2,21 +2,19 @@
   import { ImageSquare } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
-  import { diagramState } from '$lib/context.svelte'
   import { segmentClass } from './segment'
 
-  // Diagram view button. Clicking switches off any active scene and
-  // (if needed) drops the ?scope= search param so the URL reflects
-  // the diagram view. Active when no scene is selected.
+  // Diagram view button. Navigates to /project/[id]/diagram while
+  // preserving the current `?focus=<id>` so toggling between view
+  // modes keeps the user's drilldown intact.
   let { active = false }: { active?: boolean } = $props()
 
   function selectDiagram() {
-    diagramState.setCurrentScene(null)
     const url = new URL($page.url)
-    if (url.searchParams.has('scope')) {
-      url.searchParams.delete('scope')
-      goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true })
-    }
+    const projectId = $page.params.id
+    const focus = url.searchParams.get('focus')
+    const target = `/project/${projectId}/diagram${focus !== null ? `?focus=${encodeURIComponent(focus)}` : ''}`
+    goto(target)
   }
 </script>
 
