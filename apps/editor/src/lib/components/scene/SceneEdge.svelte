@@ -43,6 +43,8 @@
     /** When false, waypoints are auto-positioned (e.g. derived from
      *  Link.via TP placements) and the user can't drag them. */
     editableWaypoints?: boolean
+    /** Per-scene stroke width multiplier (Scene.display.wireScale). */
+    wireScale?: number
   }
   type SceneEdgeT = Edge<SceneEdgeData, 'wire'>
 
@@ -235,7 +237,7 @@
   d={pathD}
   fill="none"
   stroke="rgba(255, 255, 255, 0.85)"
-  stroke-width={selected ? 9 : 8}
+  stroke-width={(selected ? 9 : 8) * (data?.wireScale ?? 1)}
   stroke-linecap="round"
   stroke-linejoin="round"
   pointer-events="none"
@@ -244,9 +246,8 @@
   path={pathD}
   {markerEnd}
   interactionWidth={0}
-  style="stroke: {selected ? '#3b82f6' : '#475569'}; stroke-width: {selected
-    ? 3.5
-    : 3}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
+  style="stroke: {selected ? '#3b82f6' : '#475569'}; stroke-width: {(selected ? 3.5 : 3) *
+    (data?.wireScale ?? 1)}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
 />
 
 <!-- Wire-body hit path. nopan/nodrag opt out of d3-zoom so the line

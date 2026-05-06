@@ -1,6 +1,16 @@
 <script lang="ts">
-  import { DropdownMenu, Tooltip } from 'bits-ui'
-  import { Eye, EyeSlash, ImageSquare, Moon, Pencil, Plus, Ruler, Sun } from 'phosphor-svelte'
+  import { DropdownMenu, Popover, Tooltip } from 'bits-ui'
+  import {
+    ArrowsOutSimple,
+    Eye,
+    EyeSlash,
+    ImageSquare,
+    Moon,
+    Pencil,
+    Plus,
+    Ruler,
+    Sun,
+  } from 'phosphor-svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
   import { productLabel } from '$lib/types'
   import { sceneAuthoring } from './scene-authoring.svelte'
@@ -20,6 +30,19 @@
   )
   const calibration = $derived(scene?.calibration)
   const hasBackground = $derived(!!scene?.background)
+  const nodeScale = $derived(scene?.display?.nodeScale ?? 1)
+  const wireScale = $derived(scene?.display?.wireScale ?? 1)
+
+  function setDisplay(next: { nodeScale?: number; wireScale?: number }) {
+    if (!scene) return
+    diagramState.updateScene(scene.id, {
+      display: { ...(scene.display ?? {}), ...next },
+    })
+  }
+  function resetDisplay() {
+    if (!scene) return
+    diagramState.updateScene(scene.id, { display: undefined })
+  }
 
   function unhideAll() {
     if (!scene) return
@@ -275,6 +298,78 @@
         </Tooltip.Content>
       </Tooltip.Root>
     {/if}
+
+    <!-- Display tuning: per-scene icon and wire size multipliers. -->
+    <Popover.Root>
+      <Tooltip.Root>
+        <Tooltip.Trigger>
+          <Popover.Trigger>
+            {#snippet child({ props })}
+              <button
+                type="button"
+                class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                {...props}
+              >
+                <ArrowsOutSimple class="h-4.5 w-4.5" />
+              </button>
+            {/snippet}
+          </Popover.Trigger>
+        </Tooltip.Trigger>
+        <Tooltip.Content
+          side="left"
+          class="rounded bg-neutral-800 px-2 py-1 text-xs text-white shadow-lg"
+        >
+          Display scale
+        </Tooltip.Content>
+      </Tooltip.Root>
+      <Popover.Content
+        side="left"
+        sideOffset={8}
+        class="z-50 w-56 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
+      >
+        <div class="space-y-3">
+          <div>
+            <div class="mb-1 flex items-center justify-between text-[11px]">
+              <span class="font-medium text-neutral-700 dark:text-neutral-200">Icon size</span>
+              <span class="font-mono text-muted-foreground">{nodeScale.toFixed(1)}×</span>
+            </div>
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.1"
+              class="w-full accent-blue-500"
+              value={nodeScale}
+              oninput={(e) =>
+                setDisplay({ nodeScale: Number((e.target as HTMLInputElement).value) })}
+            >
+          </div>
+          <div>
+            <div class="mb-1 flex items-center justify-between text-[11px]">
+              <span class="font-medium text-neutral-700 dark:text-neutral-200">Wire thickness</span>
+              <span class="font-mono text-muted-foreground">{wireScale.toFixed(1)}×</span>
+            </div>
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.1"
+              class="w-full accent-blue-500"
+              value={wireScale}
+              oninput={(e) =>
+                setDisplay({ wireScale: Number((e.target as HTMLInputElement).value) })}
+            >
+          </div>
+          <button
+            type="button"
+            class="w-full rounded border border-neutral-300 px-2 py-1 text-[11px] text-neutral-600 hover:bg-neutral-100 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-700"
+            onclick={resetDisplay}
+          >
+            Reset to defaults
+          </button>
+        </div>
+      </Popover.Content>
+    </Popover.Root>
 
     {#if hiddenCount > 0}
       <Tooltip.Root>

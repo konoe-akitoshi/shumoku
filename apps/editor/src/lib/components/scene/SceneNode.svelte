@@ -12,7 +12,14 @@
 
   type Termination = { role: 'outlet' | 'eps' | 'panel' }
   type SceneNodeT = Node<
-    { label: string; spec?: NodeSpec; isExternal?: boolean; termination?: Termination },
+    {
+      label: string
+      spec?: NodeSpec
+      isExternal?: boolean
+      termination?: Termination
+      /** Per-scene size multiplier from Scene.display.nodeScale. */
+      scale?: number
+    },
     'scene'
   >
 
@@ -20,9 +27,12 @@
 
   const termination = $derived(data.termination)
   const icon = $derived(termination ? null : resolveIcon(data.spec))
-  // Sizes come from the shared geometry module so SceneCanvas can
-  // compute matching centers / hit areas without re-deriving.
-  const sizes = $derived(sceneNodeSize({ termination }))
+  // Base sizes come from the shared geometry module; the per-scene
+  // scale multiplier (from Scene.display.nodeScale) is applied here
+  // and matched in SceneCanvas's centerOf so wires still aim true.
+  const baseSize = $derived(sceneNodeSize({ termination }))
+  const scale = $derived(data.scale ?? 1)
+  const sizes = $derived({ w: baseSize.w * scale, h: baseSize.h * scale })
   const ariaLabel = $derived(
     termination
       ? termination.role === 'outlet'

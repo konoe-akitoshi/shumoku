@@ -161,6 +161,20 @@ export interface Scene {
   hiddenLinkIds?: string[]
   /** Scale calibration for distance / cable-length calculations. */
   calibration?: SceneCalibration
+  /**
+   * Per-scene visual tuning. Multipliers applied on top of the
+   * default node / wire dimensions so users can scale things up
+   * (a small floor plan with many devices) or down (a sparse plan
+   * where defaults read too chunky). Both default to 1.
+   */
+  display?: SceneDisplay
+}
+
+export interface SceneDisplay {
+  /** Multiplier on SceneNode pixel dimensions. */
+  nodeScale?: number
+  /** Multiplier on wire stroke width (and halo proportionally). */
+  wireScale?: number
 }
 
 export interface SceneBackground {

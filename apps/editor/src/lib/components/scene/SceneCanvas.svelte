@@ -119,15 +119,20 @@
     return node?.position ?? { x: 100, y: 100 }
   }
 
+  // Per-scene visual tuning. nodeScale scales icon sizes (and is
+  // therefore baked into centerOf so wire endpoints still aim at
+  // the icon's visual center); wireScale lifts stroke width.
+  const nodeScale = $derived(scene.display?.nodeScale ?? 1)
+  const wireScale = $derived(scene.display?.wireScale ?? 1)
+
   // Center of a node's icon in flow coords. Svelte Flow stores
   // positions as top-left, so anything that wants to anchor against
   // the visible icon (wire endpoints into a via TP, etc.) needs to
-  // shift by half the size. Sizes come from the shared
-  // node-geometry module, kept in sync with SceneNode's own render.
+  // shift by half the (scaled) size.
   function centerOf(nodeId: string): { x: number; y: number } {
     const tl = positionFor(nodeId)
     const { w, h } = sceneNodeSize(diagramState.nodes.get(nodeId))
-    return { x: tl.x + w / 2, y: tl.y + h / 2 }
+    return { x: tl.x + (w * nodeScale) / 2, y: tl.y + (h * nodeScale) / 2 }
   }
 
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
@@ -158,7 +163,7 @@
         id: n.id,
         type: 'scene',
         position: positionFor(n.id),
-        data: { label, spec: n.spec, termination: n.termination },
+        data: { label, spec: n.spec, termination: n.termination, scale: nodeScale },
         draggable: interactive,
         selectable: true,
       })
@@ -234,6 +239,7 @@
           // we don't store yet.
           editableWaypoints: segments.length === 1 && segments[0]?.length === 0,
           lengthMeters: eff?.meters ?? null,
+          wireScale,
         },
         animated: false,
         style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
