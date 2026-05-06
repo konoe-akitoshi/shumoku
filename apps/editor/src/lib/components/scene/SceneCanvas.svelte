@@ -10,7 +10,11 @@
   import '@xyflow/svelte/dist/style.css'
   import { onDestroy, onMount } from 'svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
-  import { cableLengthMeters, visibleCableSegments } from '$lib/scene/cable-length'
+  import {
+    cableLengthMeters,
+    cableSegmentLengths,
+    visibleCableSegments,
+  } from '$lib/scene/cable-length'
   import { pickSideForDirection, sceneNodeSize } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
@@ -279,6 +283,13 @@
       // stored link.cable.length_m. Same helper BOM / Connections use,
       // so canvas and the rest of the app agree on the value.
       const eff = cableLengthMeters(link, [scene], diagramState.nodes)
+      // Per-segment meters parallel to `segments` so the edge renders
+      // one pill per visible segment (rack-side / room-side cables on
+      // an EPS-split wire show their own numbers instead of one sum).
+      const segParts = cableSegmentLengths(link, [scene], diagramState.nodes)
+      const segmentMeters: Array<number | null> = idSegments.map(
+        (_, i) => segParts[i]?.meters ?? null,
+      )
       out.push({
         id: link.id,
         source: from,
@@ -298,6 +309,7 @@
           // we don't store yet.
           editableWaypoints: segments.length === 1 && segments[0]?.length === 0,
           lengthMeters: eff?.meters ?? null,
+          segmentMeters,
           wireScale: effectiveWireScale(link),
         },
         animated: false,

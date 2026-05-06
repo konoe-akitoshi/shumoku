@@ -40,6 +40,11 @@
      *  scene-derived (placements + calibration) vs stored fallback;
      *  null when neither is available. */
     lengthMeters: number | null
+    /** Per-visible-segment lengths in meters, parallel to
+     *  `segments`. Used to draw one pill per segment so an EPS-split
+     *  wire shows its rack-side and room-side cables individually
+     *  rather than one combined number. */
+    segmentMeters?: Array<number | null>
     /** When false, waypoints are auto-positioned (e.g. derived from
      *  Link.via TP placements) and the user can't drag them. */
     editableWaypoints?: boolean
@@ -152,37 +157,50 @@
   const points = $derived<Waypoint[]>(visualSegments[0] ?? [])
   const midpoints = $derived(segmentMidpoints(points))
 
-  // Cable length comes pre-computed from the parent (canvas + BOM
-  // share the same cableLengthMeters helper). We just pick a label
-  // anchor on the rendered polyline.
-  const lengthMeters = $derived(data?.lengthMeters ?? null)
-  const totalPx = $derived.by(() => {
-    let len = 0
-    for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i]
-      const b = points[i + 1]
+  // Per-visible-segment label anchors: each segment shows its own
+  // length pill so an EPS-split wire reads as two separate cables.
+  function midpointOf(seg: Waypoint[]): Waypoint | null {
+    if (seg.length < 2) return null
+    let total = 0
+    for (let i = 0; i < seg.length - 1; i++) {
+      const a = seg[i]
+      const b = seg[i + 1]
       if (!a || !b) continue
-      len += Math.hypot(b.x - a.x, b.y - a.y)
+      total += Math.hypot(b.x - a.x, b.y - a.y)
     }
-    return len
-  })
-  const labelAt = $derived.by(() => {
-    if (points.length < 2) return null
-    const half = totalPx / 2
+    const half = total / 2
     let walked = 0
-    for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i]
-      const b = points[i + 1]
+    for (let i = 0; i < seg.length - 1; i++) {
+      const a = seg[i]
+      const b = seg[i + 1]
       if (!a || !b) continue
-      const seg = Math.hypot(b.x - a.x, b.y - a.y)
-      if (walked + seg >= half) {
-        const t = seg === 0 ? 0 : (half - walked) / seg
+      const len = Math.hypot(b.x - a.x, b.y - a.y)
+      if (walked + len >= half) {
+        const t = len === 0 ? 0 : (half - walked) / len
         return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
       }
-      walked += seg
+      walked += len
     }
-    const last = points[points.length - 1]
-    return last ?? null
+    return seg[seg.length - 1] ?? null
+  }
+  // For each visible segment, an anchor point and its meters reading.
+  // Segments with no scene-derived length get null and skip the pill.
+  const segmentLabels = $derived.by(() => {
+    const segMeters = data?.segmentMeters ?? []
+    return visualSegments.map((seg, i) => ({
+      anchor: midpointOf(seg),
+      meters: segMeters[i] ?? null,
+    }))
+  })
+  // Single-segment fallback: if SceneCanvas didn't supply per-segment
+  // meters but did supply a total, attach it to the only segment.
+  const fallbackSinglePill = $derived.by(() => {
+    if ((data?.segmentMeters?.length ?? 0) > 0) return null
+    if (visualSegments.length !== 1) return null
+    const total = data?.lengthMeters
+    if (total == null) return null
+    const anchor = midpointOf(visualSegments[0] ?? [])
+    return anchor ? { anchor, meters: total } : null
   })
 
   // ── Handlers ─────────────────────────────────────────────────────
@@ -274,19 +292,37 @@
 <!-- Cable length pill — only when the scene is calibrated. Fully
      opaque white with a soft outer ring so it stands clear of any
      image content beneath. -->
-{#if lengthMeters !== null && labelAt && !selected}
-  <!-- Hidden while the wire is selected so the white pill doesn't
-       fight the waypoint markers / toolbar layer. The length is
-       still visible in the right-side detail panel during edits. -->
-  <EdgeLabel x={labelAt.x} y={labelAt.y}>
-    <span
-      class="block rounded-[3px] border border-black/15 bg-white px-1.5 text-[10px] leading-[14px] font-medium text-slate-800 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.2)]"
-      style="transform: translate(-50%, -50%); pointer-events: none;"
-    >
-      {lengthMeters < 10 ? lengthMeters.toFixed(1) : Math.round(lengthMeters)}
-      m
-    </span>
-  </EdgeLabel>
+<!-- One pill per visible segment so EPS-split wires show their
+     rack-side and room-side cables as separate numbers — matches
+     the breakdown in the Connections list. Hidden while selected
+     to keep the wire-edit space uncluttered. -->
+{#if !selected}
+  {#each segmentLabels as label, i (i)}
+    {#if label.anchor && label.meters !== null}
+      <EdgeLabel x={label.anchor.x} y={label.anchor.y}>
+        <span
+          class="block rounded-[3px] border border-black/15 bg-white px-1.5 text-[10px] leading-[14px] font-medium text-slate-800 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.2)]"
+          style="transform: translate(-50%, -50%); pointer-events: none;"
+        >
+          {label.meters < 10 ? label.meters.toFixed(1) : Math.round(label.meters)}
+          m
+        </span>
+      </EdgeLabel>
+    {/if}
+  {/each}
+  {#if fallbackSinglePill}
+    <EdgeLabel x={fallbackSinglePill.anchor.x} y={fallbackSinglePill.anchor.y}>
+      <span
+        class="block rounded-[3px] border border-black/15 bg-white px-1.5 text-[10px] leading-[14px] font-medium text-slate-800 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.2)]"
+        style="transform: translate(-50%, -50%); pointer-events: none;"
+      >
+        {fallbackSinglePill.meters < 10
+          ? fallbackSinglePill.meters.toFixed(1)
+          : Math.round(fallbackSinglePill.meters)}
+        m
+      </span>
+    </EdgeLabel>
+  {/if}
 {/if}
 
 <!-- No floating per-wire toolbar — Svelte Flow doesn't have an
