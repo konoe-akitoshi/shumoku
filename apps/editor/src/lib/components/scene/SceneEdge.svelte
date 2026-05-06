@@ -9,21 +9,13 @@
   } from '@xyflow/svelte'
   import { editorState } from '$lib/context.svelte'
   import { pickSideForDirection } from '$lib/scene/node-geometry'
-  import {
-    bendOnDrag,
-    dragWaypoint,
-    polylinePath,
-    segmentMidpoints,
-    type Waypoint,
-    writeWaypoints,
-  } from './wire-edit'
+  import { bendOnDrag, polylinePath, type Waypoint } from './wire-edit'
 
-  // Custom Svelte Flow edge for floor-plan wiring. The path uses
-  // BaseEdge so it inherits the standard styling/selection. Drag on
-  // the line body bends it; selecting reveals waypoint/midpoint
-  // handles for fine adjustment. All editing logic (drag, insert,
-  // segment math) lives in wire-edit.ts so this component is just
-  // the rendering shell.
+  // Custom Svelte Flow edge for floor-plan wiring. The path is a
+  // BaseEdge so it inherits standard styling / selection. Drag on
+  // the line body inserts a waypoint and starts dragging it (the
+  // bend lives in scene.wireRoutes; no handle UI on top of the
+  // wire). Length pills sit at each visible-segment midpoint.
 
   type SceneEdgeData = {
     sceneId: string
@@ -152,10 +144,9 @@
     }
     return parts.join(' ')
   })
-  // Midpoints / waypoints handles only meaningful for the simple
-  // single-segment, user-editable case.
+  // First-segment points feed bendOnDrag's segment-search so a
+  // line-body pointerdown maps to the right insertion index.
   const points = $derived<Waypoint[]>(visualSegments[0] ?? [])
-  const midpoints = $derived(segmentMidpoints(points))
 
   // Per-visible-segment label anchors: each segment shows its own
   // length pill so an EPS-split wire reads as two separate cables.
@@ -203,25 +194,9 @@
     return anchor ? { anchor, meters: total } : null
   })
 
-  // ── Handlers ─────────────────────────────────────────────────────
-  function onWaypointDown(idx: number, e: PointerEvent) {
-    if (!interactive) return
-    if (e.button !== 0) return
-    e.stopPropagation()
-    e.preventDefault()
-    const wp = waypoints[idx]
-    if (!wp) return
-    dragWaypoint({
-      sceneId,
-      linkId: id,
-      index: idx,
-      initialPointerFlow: toFlow(e.clientX, e.clientY),
-      initialWaypoint: wp,
-      toFlow,
-      label: 'Adjust wire',
-    })
-  }
-
+  // Drag-to-bend on the line body: insert a waypoint at the click
+  // and start dragging it. snap-to-existing logic in `bendOnDrag`
+  // grabs an existing nearby waypoint instead of creating a duplicate.
   function onLinePointerDown(e: PointerEvent) {
     if (!interactive) return
     if (e.button !== 0) return
@@ -237,19 +212,6 @@
       pointsForSegmentSearch: points,
       toFlow,
     })
-  }
-
-  function insertMidpoint(segIdx: number) {
-    const mp = midpoints[segIdx]
-    if (!mp) return
-    const next = [...waypoints]
-    next.splice(segIdx, 0, mp)
-    writeWaypoints(sceneId, id, next)
-  }
-
-  function deleteWaypoint(idx: number) {
-    const next = waypoints.filter((_, i) => i !== idx)
-    writeWaypoints(sceneId, id, next)
   }
 </script>
 

@@ -46,20 +46,11 @@ export function polylinePath(points: Waypoint[], radius = 12): string {
   return d
 }
 
-/** Midpoint of each consecutive pair of points (for "+" insert handles). */
-export function segmentMidpoints(points: Waypoint[]): Waypoint[] {
-  return points.slice(0, -1).map((p, i) => {
-    const q = points[i + 1]
-    if (!q) return { x: p.x, y: p.y }
-    return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }
-  })
-}
-
 /**
  * Index of the polyline segment closest to `p`. Used by drag-to-bend
  * to decide where in the waypoints array a new bend should land.
  */
-export function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
+function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
   let best = 0
   let bestDist = Infinity
   for (let i = 0; i < points.length - 1; i++) {
@@ -91,47 +82,12 @@ function currentWaypoints(sceneId: string, linkId: string): Waypoint[] {
 }
 
 /** Commit a new waypoints list back to the scene store. */
-export function writeWaypoints(sceneId: string, linkId: string, waypoints: Waypoint[]) {
+function writeWaypoints(sceneId: string, linkId: string, waypoints: Waypoint[]) {
   diagramState.setWireRoute(sceneId, {
     linkId,
     pathStyle: waypoints.length > 0 ? 'free' : 'orthogonal',
     controlPoints: waypoints,
   })
-}
-
-/**
- * Drag a single waypoint to follow the cursor. Re-reads the live
- * waypoints array on every move so the write-back doesn't clobber
- * concurrent edits.
- */
-export function dragWaypoint(args: {
-  sceneId: string
-  linkId: string
-  index: number
-  initialPointerFlow: Waypoint
-  initialWaypoint: Waypoint
-  toFlow: (clientX: number, clientY: number) => Waypoint
-  label: string
-}) {
-  const { sceneId, linkId, index, initialPointerFlow, initialWaypoint, toFlow, label } = args
-  const offsetX = initialPointerFlow.x - initialWaypoint.x
-  const offsetY = initialPointerFlow.y - initialWaypoint.y
-
-  diagramState.beginTx(label)
-  const onMove = (ev: PointerEvent) => {
-    const fp = toFlow(ev.clientX, ev.clientY)
-    const cur = currentWaypoints(sceneId, linkId)
-    const next = [...cur]
-    next[index] = { x: fp.x - offsetX, y: fp.y - offsetY }
-    writeWaypoints(sceneId, linkId, next)
-  }
-  const onUp = () => {
-    document.removeEventListener('pointermove', onMove)
-    document.removeEventListener('pointerup', onUp)
-    diagramState.endTx()
-  }
-  document.addEventListener('pointermove', onMove)
-  document.addEventListener('pointerup', onUp)
 }
 
 /**
