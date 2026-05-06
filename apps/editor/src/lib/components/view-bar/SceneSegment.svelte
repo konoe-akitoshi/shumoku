@@ -1,6 +1,8 @@
 <script lang="ts">
   import { DropdownMenu } from 'bits-ui'
-  import { CaretDown, ImageSquare, MapPin } from 'phosphor-svelte'
+  import { CaretDown, MapPin } from 'phosphor-svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
   import { diagramState } from '$lib/context.svelte'
   import { isPhysicalSubgraph } from '$lib/scene/scope'
   import HierarchyMenu, { type Entry } from './HierarchyMenu.svelte'
@@ -20,7 +22,7 @@
     if (currentSceneId === null || !current) return 'Scene'
     const scope = current.scopeSubgraphId
     const parentLabel = scope ? (subgraphs.find((sg) => sg.id === scope)?.label ?? null) : null
-    return parentLabel ? `Scene: ${parentLabel}` : `Scene: ${current.name}`
+    return parentLabel ?? current.name
   })
 
   // Same shape of entries as SheetSegment — Root + each top-level
@@ -41,19 +43,22 @@
 
   function selectScene(id: string | null) {
     diagramState.setCurrentSceneForScope(id ?? undefined)
+    // Persist scope to URL so a reload returns to the same scene
+    // instead of dumping the user back to the diagram view.
+    //   id === null   → ?scope=  (empty value = root scene)
+    //   id === '<sg>' → ?scope=<sg>
+    const url = new URL($page.url)
+    url.searchParams.set('scope', id ?? '')
+    goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true })
   }
 </script>
 
 <DropdownMenu.Root>
   <DropdownMenu.Trigger>
     {#snippet child({ props })}
-      <button type="button" class={segmentClass(active)} title="View" {...props}>
-        {#if currentSceneId}
-          <MapPin class="h-3.5 w-3.5 text-amber-500" />
-        {:else}
-          <ImageSquare class="h-3.5 w-3.5 text-neutral-500" />
-        {/if}
-        <span class="max-w-[220px] truncate">{triggerLabel}</span>
+      <button type="button" class={segmentClass(active)} title="Scene" {...props}>
+        <MapPin class="h-3.5 w-3.5 text-amber-500" />
+        <span class="max-w-[180px] truncate">{triggerLabel}</span>
         <CaretDown class="h-3 w-3 text-neutral-400" />
       </button>
     {/snippet}

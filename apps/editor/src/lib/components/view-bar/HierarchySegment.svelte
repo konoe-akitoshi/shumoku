@@ -5,25 +5,25 @@
   import HierarchyMenu, { type Entry } from './HierarchyMenu.svelte'
   import { segmentClass } from './segment'
 
+  // Hierarchy drilldown — selects which sheet (subgraph) to focus on.
+  // Switching sheets is meaningful for the diagram view (drills into
+  // the subgraph as its own canvas); the scene view ignores sheet
+  // and uses its own scope picker instead.
   let { active = false }: { active?: boolean } = $props()
 
   const sheets = $derived(diagramState.availableSheets)
   const activeId = $derived(diagramState.currentSheetId)
   const activeSheet = $derived(sheets.find((s) => s.id === activeId)?.label ?? 'Root')
-  const triggerLabel = $derived(activeId === null ? 'Diagram' : `Diagram: ${activeSheet}`)
 
   const entries = $derived<Entry[]>(
     sheets.map((s) => ({ id: s.id, label: s.label, indent: s.id === null ? 0 : 1 })),
   )
 
   function isActive(id: string | null): boolean {
-    return id === activeId && diagramState.currentSceneId === null
+    return id === activeId
   }
 
   function selectSheet(id: string | null) {
-    // Picking any sheet implicitly leaves any active scene — the
-    // natural way to "go back to Diagram" is to click a sheet entry.
-    diagramState.setCurrentScene(null)
     diagramState.switchSheet(id)
   }
 </script>
@@ -33,7 +33,7 @@
     {#snippet child({ props })}
       <button type="button" class={segmentClass(active)} title="Hierarchy" {...props}>
         <Stack class="h-3.5 w-3.5 text-neutral-500" />
-        <span class="max-w-[220px] truncate">{triggerLabel}</span>
+        <span class="max-w-[180px] truncate">{activeSheet}</span>
         <CaretDown class="h-3 w-3 text-neutral-400" />
       </button>
     {/snippet}

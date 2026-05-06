@@ -3,6 +3,7 @@
   import { attachCamera } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
+  import { page } from '$app/stores'
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
@@ -30,6 +31,23 @@
     if (!rendererSvg) return
     const camera = attachCamera(rendererSvg)
     return () => camera.detach()
+  })
+
+  // Sync scene selection with URL ?scope= so reload restores the
+  // active scene. URL convention:
+  //   no `scope` param        → diagram view
+  //   `?scope=` (empty value) → root scene
+  //   `?scope=<subgraphId>`   → scoped scene
+  $effect(() => {
+    const url = $page.url
+    if (!url.searchParams.has('scope')) {
+      if (diagramState.currentSceneId !== null) diagramState.setCurrentScene(null)
+      return
+    }
+    const scope = url.searchParams.get('scope') || undefined
+    const current = diagramState.currentScene
+    if (current?.scopeSubgraphId === scope) return
+    diagramState.setCurrentSceneForScope(scope)
   })
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
