@@ -1,14 +1,17 @@
 <script lang="ts">
   import { DropdownMenu } from 'bits-ui'
   import { CaretDown, Stack } from 'phosphor-svelte'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
   import { diagramState } from '$lib/context.svelte'
   import HierarchyMenu, { type Entry } from './HierarchyMenu.svelte'
   import { segmentClass } from './segment'
 
-  // Hierarchy drilldown — selects which sheet (subgraph) to focus on.
-  // Switching sheets is meaningful for the diagram view (drills into
-  // the subgraph as its own canvas); the scene view ignores sheet
-  // and uses its own scope picker instead.
+  // Hierarchy is the one place the user picks "which subgraph am I
+  // looking at". The Diagram and Scene buttons read that focus and
+  // open the appropriate view of it. When a scene is already active,
+  // drilling here re-points the scene at the new focus too (keeping
+  // the URL's ?scope= in sync).
   let { active = false }: { active?: boolean } = $props()
 
   const sheets = $derived(diagramState.availableSheets)
@@ -25,6 +28,12 @@
 
   function selectSheet(id: string | null) {
     diagramState.switchSheet(id)
+    if (diagramState.currentSceneId !== null) {
+      diagramState.setCurrentSceneForScope(id ?? undefined)
+      const url = new URL($page.url)
+      url.searchParams.set('scope', id ?? '')
+      goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true })
+    }
   }
 </script>
 
