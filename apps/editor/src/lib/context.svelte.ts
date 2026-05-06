@@ -41,7 +41,8 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
-import { cableLengthMeters, cableSegmentLengths, formatMeters } from './scene/cable-length'
+import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
+import { buildAssignmentRows as buildBomRows } from './state/bom'
 import {
   applyResolvedLayout,
   currentSheetCacheGeneration,
@@ -99,113 +100,12 @@ function moduleProductSku(product: Product): string | undefined {
   return product.spec.mpn ?? product.catalogId
 }
 
-function nodeDisplayLabel(node: Node): string {
-  return Array.isArray(node.label) ? node.label[0] : (node.label ?? node.id)
-}
-
-function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undefined {
-  return link[side].plug?.module?.sku ?? link[side].plug?.module?.standard
-}
-
-function formatLength(m: number): string {
-  return `${formatMeters(m)}m`
-}
-
-/**
- * Cable requirements for a link, one entry per physical cable. EPS-
- * split wires produce N entries (one per visible segment), since an
- * installer buys each side of the chase as a separate cable. Wires
- * with no scene split fall back to a single entry using either the
- * scene total or the stored `cable.length_m`.
- *
- * Returned shape: `{ key, lengthM }` per segment. The key is the
- * BOM grouping identifier (cable kind + length); lengthM is the
- * raw meters for tooltips / details.
- */
-function cableRequirementKeys(link: Link): Array<{ key: string; lengthM: number | null }> {
-  const cable = link.cable
-  const segs = cableSegmentLengths(link, scenesStore.list, diagram.nodes)
-  const baseParts = [cable?.category, cable?.medium].filter(Boolean) as string[]
-
-  if (segs.length > 1) {
-    // Each segment is its own cable on the BOM.
-    return segs.map((s) => ({
-      key: [...baseParts, formatLength(s.meters)].join(' / '),
-      lengthM: s.meters,
-    }))
-  }
-
-  // No scene split: fall back to the total — scene-derived if
-  // calibrated, otherwise the stored length_m.
-  const eff = cableLengthMeters(link, scenesStore.list, diagram.nodes)
-  if (!cable && !eff) return []
-  const lengthLabel = eff
-    ? formatLength(eff.meters)
-    : cable?.length_m
-      ? `${cable.length_m}m`
-      : undefined
-  const parts = [...baseParts, lengthLabel].filter(Boolean) as string[]
-  if (parts.length === 0) return []
-  return [{ key: parts.join(' / '), lengthM: eff?.meters ?? cable?.length_m ?? null }]
-}
-
 function buildAssignmentRows(): AssignmentRow[] {
-  const rows: AssignmentRow[] = []
-
-  for (const [nodeId, node] of diagram.nodes) {
-    rows.push({
-      id: `node:${nodeId}`,
-      target: { kind: 'node', nodeId },
-      label: nodeDisplayLabel(node),
-      source: 'Diagram node',
-      productId: node.productId,
-      requirementKey: node.spec
-        ? 'model' in node.spec
-          ? node.spec.model
-          : 'service' in node.spec
-            ? node.spec.service
-            : node.spec.kind
-        : undefined,
-      status: node.productId ? 'resolved' : node.spec ? 'generic' : 'incomplete',
-    })
-  }
-
-  for (const link of diagram.links) {
-    if (!link.id) continue
-    for (const side of ['from', 'to'] as const) {
-      const endpoint = link[side]
-      const key = endpointRequirementKey(link, side)
-      if (!key) continue
-      rows.push({
-        id: `module:${link.id}:${side}`,
-        target: { kind: 'link-module', linkId: link.id, side },
-        label: `${link.id} ${side} module`,
-        source: `${endpoint.node}:${endpoint.port}`,
-        productId: endpoint.plug?.module?.productId,
-        requirementKey: key,
-        status: endpoint.plug?.module?.productId ? 'resolved' : 'generic',
-      })
-    }
-    const cableReqs = cableRequirementKeys(link)
-    for (const [i, req] of cableReqs.entries()) {
-      // Multi-segment wires get a "1/2" / "2/2" suffix on the row id
-      // and label so the BOM can show which side of the chase each
-      // entry belongs to. Single-segment wires keep the stable
-      // `cable:${linkId}` id (no migration churn for assignments).
-      const isMulti = cableReqs.length > 1
-      rows.push({
-        id: isMulti ? `cable:${link.id}:${i}` : `cable:${link.id}`,
-        target: { kind: 'link-cable', linkId: link.id },
-        label: isMulti ? `${link.id} cable ${i + 1}/${cableReqs.length}` : `${link.id} cable`,
-        source: 'Connections cable',
-        productId: link.cable?.productId,
-        requirementKey: req.key,
-        status: link.cable?.productId ? 'resolved' : 'generic',
-      })
-    }
-  }
-
-  return rows
+  return buildBomRows({
+    nodes: diagram.nodes,
+    links: diagram.links,
+    scenes: scenesStore.list,
+  })
 }
 
 // =========================================================================
