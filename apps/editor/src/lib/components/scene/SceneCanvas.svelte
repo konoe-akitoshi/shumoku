@@ -329,24 +329,26 @@
   })
 
   // ── Event handlers ───────────────────────────────────────────────
-  // Drag start/stop are NodeTargetEventWithPointer — we read targetNode.
-  function onNodeDragStart(_args: { targetNode: SfNode | null }) {
+  // Drag handlers receive both `targetNode` (the one under the
+  // pointer) and `nodes` (every node moving in this gesture — for
+  // multi-select group drags). Persist all of them, otherwise the
+  // sfNodes derive snaps non-target nodes back to their stored
+  // placements on the next reactive cycle.
+  function persistDragged(nodes: SfNode[] | null | undefined) {
+    if (!nodes) return
+    for (const n of nodes) diagramState.placeNodeInScene(scene.id, n.id, n.position)
+  }
+  function onNodeDragStart(_args: { targetNode: SfNode | null; nodes: SfNode[] }) {
     diagramState.beginTx('Move item')
   }
-  function onNodeDrag(args: { targetNode: SfNode | null }) {
+  function onNodeDrag(args: { targetNode: SfNode | null; nodes: SfNode[] }) {
     // Live placement update mid-drag so wires routed through this
-    // node (via TP) follow the cursor instead of waiting for drop.
-    // We're inside a tx (started by onNodeDragStart) so the per-frame
-    // updates collapse to one undo step on stop.
-    const target = args.targetNode
-    if (!target) return
-    diagramState.placeNodeInScene(scene.id, target.id, target.position)
+    // node (via TP) follow the cursor instead of waiting for drop,
+    // and so multi-drag updates each selected node's placement.
+    persistDragged(args.nodes)
   }
-  function onNodeDragStop(args: { targetNode: SfNode | null }) {
-    const target = args.targetNode
-    if (target) {
-      diagramState.placeNodeInScene(scene.id, target.id, target.position)
-    }
+  function onNodeDragStop(args: { targetNode: SfNode | null; nodes: SfNode[] }) {
+    persistDragged(args.nodes)
     diagramState.endTx()
   }
 
