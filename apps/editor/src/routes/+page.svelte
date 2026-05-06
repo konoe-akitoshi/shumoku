@@ -12,16 +12,16 @@
   ]
 
   /**
-   * Prompt for a local file and stream its contents through `onLoad`.
-   * The file picker's `accept` is a hint to the OS dialog — we still
-   * check the file name to keep wrong-format imports from silently
-   * feeding JSON.parse something that would only fail later.
+   * Prompt for a local file and stream it through `onLoad`. The
+   * picker's `accept` is a UI hint; we still check the suffix so a
+   * mismatched file doesn't silently fail at parse time. Receives the
+   * raw `File` so callers can decide between text and Blob handling.
    */
   function promptFile(opts: {
     accept: string
     expectedSuffix: string
     formatLabel: string
-    onLoad: (text: string) => Promise<void>
+    onLoad: (file: File) => Promise<void>
   }) {
     const input = document.createElement('input')
     input.type = 'file'
@@ -35,9 +35,8 @@
         )
         return
       }
-      const text = await file.text()
       try {
-        await opts.onLoad(text)
+        await opts.onLoad(file)
       } catch (e) {
         alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`)
       }
@@ -47,11 +46,11 @@
 
   function handleImportProject() {
     promptFile({
-      accept: '.neted.json',
-      expectedSuffix: '.neted.json',
+      accept: '.neted',
+      expectedSuffix: '.neted',
       formatLabel: 'neted project',
-      onLoad: async (text) => {
-        await diagramState.importProject(text)
+      onLoad: async (file) => {
+        await diagramState.importProject(file)
         goto('/project/imported/diagram')
       },
     })
@@ -62,8 +61,8 @@
       accept: '.json',
       expectedSuffix: '.json',
       formatLabel: 'diagram JSON (NetworkGraph)',
-      onLoad: async (text) => {
-        await diagramState.importDiagram(text)
+      onLoad: async (file) => {
+        await diagramState.importDiagram(await file.text())
         goto('/project/imported/diagram')
       },
     })
@@ -104,7 +103,7 @@
           <div class="flex flex-col items-start gap-0.5">
             <span>Import Project</span>
             <span class="text-[10px] text-neutral-400 dark:text-neutral-500"
-              >.neted.json (products + diagram)</span
+              >.neted (zip — diagram, products, scenes, assets)</span
             >
           </div>
         </DropdownMenu.Item>

@@ -3,13 +3,12 @@
   import { Button } from '$lib/components/ui/button'
   import { diagramState } from '$lib/context.svelte'
 
-  function handleExportProject() {
-    const json = diagramState.exportProject('Project')
-    const blob = new Blob([json], { type: 'application/json' })
+  async function handleExportProject() {
+    const blob = await diagramState.exportProjectZip('Project')
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'project.neted.json'
+    a.download = 'project.neted'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -31,7 +30,7 @@
       <div>
         <div class="text-sm font-medium">Project file</div>
         <div class="text-xs text-muted-foreground">
-          Download as .neted.json (includes products and diagram)
+          Download as .neted (zip — diagram, products, scenes, image assets)
         </div>
       </div>
       <Button variant="outline" size="sm" onclick={handleExportProject}>

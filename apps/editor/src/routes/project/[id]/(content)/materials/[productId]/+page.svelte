@@ -9,6 +9,7 @@
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
+  import { assetStore } from '$lib/state/assets.svelte'
   import { productLabel, specIdentifier } from '$lib/types'
 
   const projectId = $derived($page.params.id ?? '')
@@ -80,24 +81,14 @@
     goto(`/project/${projectId}/materials`)
   }
 
-  /** SVG → inline content; raster → data URL. */
-  async function readIconFile(file: File): Promise<string> {
-    const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
-    if (isSvg) return await file.text()
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result ?? ''))
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(file)
-    })
-  }
-
   async function handleIconUpload(e: Event) {
     if (!product) return
     const input = e.target as HTMLInputElement
     const file = input.files?.[0]
     if (!file) return
-    const value = await readIconFile(file)
+    // SVG → inline text (small, snapshot-friendly). Raster → AssetStore
+    // returns a blob URL backed by content-addressed bytes.
+    const value = await assetStore.putUserImage(file)
     diagramState.updateProduct(product.id, { icon: value || undefined })
     input.value = ''
   }
