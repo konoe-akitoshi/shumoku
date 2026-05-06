@@ -1,15 +1,7 @@
 <script lang="ts">
-  import {
-    BaseEdge,
-    type Edge,
-    EdgeLabel,
-    type EdgeProps,
-    getSmoothStepPath,
-    useSvelteFlow,
-  } from '@xyflow/svelte'
+  import { BaseEdge, type Edge, EdgeLabel, type EdgeProps, useSvelteFlow } from '@xyflow/svelte'
   import { editorState } from '$lib/context.svelte'
   import { formatMeters } from '$lib/scene/cable-length'
-  import { pickSideForDirection } from '$lib/scene/node-geometry'
   import { bendOnDrag, polylinePath, type Waypoint } from './wire-edit'
 
   // Custom Svelte Flow edge for floor-plan wiring. The path is a
@@ -46,8 +38,6 @@
     sourceY,
     targetX,
     targetY,
-    sourcePosition,
-    targetPosition,
     selected,
     style,
     markerEnd,
@@ -78,51 +68,21 @@
     return result
   })
 
-  // Render each segment with the same smoothstep treatment Svelte
-  // Flow uses for plain edges. Inner endpoints (via TPs in the
-  // middle) don't have framework-provided handle positions, so we
-  // compute Position from the line direction. Multi-segment wires
-  // join as multi-subpath SVG so wall gaps render as breaks. Falls
-  // back to a rounded polyline only when a segment has bends in its
-  // interior (3+ points).
+  // Render every segment as a rounded polyline. Multi-segment wires
+  // (EPS-split) get joined into one path string with separate
+  // subpaths so the wall-gap shows as a break.
   const pathD = $derived.by(() => {
     if (visualSegments.length === 0) return ''
-    const parts: string[] = []
-    for (let i = 0; i < visualSegments.length; i++) {
-      const seg = visualSegments[i]
-      if (!seg || seg.length < 2) continue
-      const isFirst = i === 0
-      const isLast = i === visualSegments.length - 1
-      if (seg.length === 2) {
-        const a = seg[0]
-        const b = seg[1]
-        if (!a || !b) continue
-        const startPos = isFirst
-          ? (sourcePosition ?? pickSideForDirection(b.x - a.x, b.y - a.y))
-          : pickSideForDirection(b.x - a.x, b.y - a.y)
-        const endPos = isLast
-          ? (targetPosition ?? pickSideForDirection(a.x - b.x, a.y - b.y))
-          : pickSideForDirection(a.x - b.x, a.y - b.y)
-        const [path] = getSmoothStepPath({
-          sourceX: a.x,
-          sourceY: a.y,
-          targetX: b.x,
-          targetY: b.y,
-          sourcePosition: startPos,
-          targetPosition: endPos,
-          borderRadius: 12,
-        })
-        parts.push(path)
-      } else {
-        // Rounded corners between waypoints — the visible bend
-        // softens with a quadratic Bezier whose control sits at the
-        // waypoint position. We no longer render a marker AT the
-        // waypoint, so the small offset between point and curve
-        // doesn't cause visible misalignment anymore.
-        parts.push(polylinePath(seg))
-      }
-    }
-    return parts.join(' ')
+    // Plain polyline through all points. No smoothstep auto-routing
+    // — its "rounded L" was a phantom corner that disappeared the
+    // moment the user added a real bend, and the auto-corner itself
+    // wasn't a Node so it couldn't be moved or deleted. Default is
+    // a straight line; the user explicitly creates bends to shape
+    // the cable run.
+    return visualSegments
+      .filter((seg) => seg.length >= 2)
+      .map((seg) => polylinePath(seg))
+      .join(' ')
   })
   // First-segment points feed bendOnDrag's segment-search so a
   // line-body pointerdown maps to the right insertion index.
