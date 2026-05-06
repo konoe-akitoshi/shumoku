@@ -39,12 +39,14 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
+import { projectsDb } from './persistence/idb'
 import { readProjectZip } from './persistence/reader'
 import { writeProjectZip } from './persistence/writer'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
 import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
 import { assetStore } from './state/assets.svelte'
+import { autosave } from './state/autosave.svelte'
 import { buildAssignmentRows as buildBomRows } from './state/bom'
 import {
   applyResolvedLayout,
@@ -252,6 +254,7 @@ function commit<T>(label: string, fn: () => T): T {
   try {
     const result = fn()
     undoManager.push(label, before)
+    autosave.schedule()
     return result
   } finally {
     inCommit = false
@@ -265,6 +268,7 @@ async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
   try {
     const result = await fn()
     undoManager.push(label, before)
+    autosave.schedule()
     return result
   } finally {
     inCommit = false
@@ -1206,37 +1210,76 @@ export const diagramState = {
   /**
    * Load a project. Accepts either an in-memory NetedProject (used
    * by sample / YAML paths) or a `.neted` zip blob (user import).
-   * Anything string-shaped is rejected — the JSON-only format is
-   * gone.
+   * Returns the new project's id so the caller can navigate to it
+   * — imported projects get a fresh `proj_<id>` and round-trip
+   * through the IndexedDB cache so reload picks up where the user
+   * left off.
    *
    * The asset reset has to bracket the zip read: clear the previous
    * project's blob URLs first, *then* let the reader register the
    * incoming ones. Calling reset later (e.g. inside `loadProject`)
    * would revoke the blobs the reader just created.
    */
-  async importProject(input: NetedProject | Blob) {
+  async importProject(input: NetedProject | Blob): Promise<string> {
+    autosave.reset()
+    assetStore.reset()
+    let data: NetedProject
+    let blob: Blob
     if (input instanceof Blob) {
-      assetStore.reset()
-      const data = await readProjectZip(input)
-      await diagramState.loadProject('imported', data)
+      data = await readProjectZip(input)
+      blob = input
     } else {
-      assetStore.reset()
-      await diagramState.loadProject('imported', input)
+      data = input
+      blob = await writeProjectZip({
+        name: data.name,
+        diagram: data.diagram,
+        products: data.products,
+        scenes: data.scenes ?? [],
+      })
     }
+    const id = newId('proj')
+    await projectsDb.save(id, data.name || 'Untitled', blob)
+    await diagramState.loadProject(id, data)
+    return id
   },
-  async importDiagram(input: string | NetworkGraph) {
+  async importDiagram(input: string | NetworkGraph): Promise<string> {
     const parsed: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
-    await diagramState.importProject({
+    return await diagramState.importProject({
       version: 1,
       name: 'Diagram Import',
-      products: [...productsStore.list],
+      products: [],
       diagram: parsed,
-      scenes: scenesStore.list.length > 0 ? [...scenesStore.list] : undefined,
     })
   },
+  /**
+   * Create an empty project, persist it, and return its id. Used by
+   * the home page's "New project" entry point.
+   */
+  async createNewProject(name = 'Untitled'): Promise<string> {
+    const project: NetedProject = {
+      version: 1,
+      name,
+      products: [],
+      diagram: { version: '1', nodes: [], links: [], subgraphs: [] },
+    }
+    return await diagramState.importProject(project)
+  },
+  /** Delete a cached project (no in-memory side effects). */
+  async deleteCachedProject(id: string): Promise<void> {
+    await projectsDb.delete(id)
+  },
+  /** Rename a cached project (DB only — caller still owns in-memory name). */
+  async renameCachedProject(id: string, name: string): Promise<void> {
+    await projectsDb.rename(id, name)
+    if (sessionStore.projectId === id) sessionStore.setProjectName(name)
+  },
   async loadProject(projectId: string, data?: Partial<NetedProject>) {
-    if (projectId === 'imported' && sessionStore.initialized && !data) return
+    // Layout `$effect` re-fires `loadProject(projectId)` on every
+    // navigation tick. Skip the rebuild if the requested project
+    // is already loaded.
+    if (sessionStore.initialized && sessionStore.projectId === projectId && !data) return
 
+    autosave.reset()
     productsStore.set([])
     scenesStore.set([])
     scenesStore.setCurrentId(null)
@@ -1255,18 +1298,27 @@ export const diagramState = {
     sessionStore.setYamlSource('')
     sheetStore.setCurrentSheetId(null)
     sessionStore.setInitialized(false)
+    sessionStore.setProjectId(projectId)
 
     try {
-      const project = data ?? (projectId === 'sample' ? sampleProject : null)
+      // Resolution order:
+      //   - explicit data wins (caller already parsed via importProject)
+      //   - 'sample' loads the bundled sample (read-only, never cached)
+      //   - anything else: try IndexedDB
+      let project: NetedProject | Partial<NetedProject> | null = data ?? null
+      if (!project && projectId === 'sample') project = sampleProject
+      if (!project && projectId !== 'sample') {
+        sessionStore.setStatus('Loading from cache...')
+        const cached = await projectsDb.load(projectId)
+        if (cached) {
+          project = await readProjectZip(cached.blob)
+          sessionStore.setProjectName(cached.meta.name)
+        }
+      }
       if (project) {
-        sessionStore.setStatus(
-          projectId === 'sample'
-            ? 'Loading sample...'
-            : projectId === 'imported'
-              ? 'Loading project...'
-              : 'Loading...',
-        )
+        sessionStore.setStatus(projectId === 'sample' ? 'Loading sample...' : 'Loading project...')
         await applyProject(project)
+        sessionStore.setProjectName((project as NetedProject).name ?? sessionStore.projectName)
       }
       sessionStore.setStatus('Ready')
       sessionStore.setInitialized(true)
@@ -1275,6 +1327,25 @@ export const diagramState = {
     }
   },
 }
+
+// =========================================================================
+// Autosave hook — register a flush that re-writes the active project
+// blob into IndexedDB. The composer is the only piece that knows how
+// to assemble a `.neted.zip` from current state, hence wiring lives
+// here rather than inside `state/autosave.svelte.ts`.
+// =========================================================================
+
+autosave.register(async () => {
+  const id = sessionStore.projectId
+  if (!id || id === 'sample') return
+  const blob = await writeProjectZip({
+    name: sessionStore.projectName,
+    diagram: diagramState.exportGraph(),
+    products: [...productsStore.list],
+    scenes: [...scenesStore.list],
+  })
+  await projectsDb.save(id, sessionStore.projectName, blob)
+})
 
 // ResolvedPort/ResolvedEdge type aliases used in the Map setter signatures
 // — avoids re-importing the (lengthy) interfaces just for setters.

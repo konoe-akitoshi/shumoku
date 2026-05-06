@@ -2,6 +2,7 @@
   import { page } from '$app/stores'
   import NavBar from '$lib/components/NavBar.svelte'
   import { diagramState } from '$lib/context.svelte'
+  import { autosave } from '$lib/state/autosave.svelte'
 
   let { children } = $props()
 
@@ -12,8 +13,15 @@
 
   $effect(() => {
     if (projectId && projectId !== currentProjectId) {
+      // Flush any pending autosave from the previous project before
+      // tearing it down — prevents "edit, navigate away within 1.5s,
+      // lose those edits" while the debounce was still pending.
+      const prev = currentProjectId
       currentProjectId = projectId
-      diagramState.loadProject(projectId)
+      ;(async () => {
+        if (prev) await autosave.flush()
+        await diagramState.loadProject(projectId)
+      })()
     }
   })
 </script>

@@ -1,15 +1,28 @@
 <script lang="ts">
   import { DropdownMenu } from 'bits-ui'
-  import { CaretDown, Cube, FileJs, FolderOpen, Plus } from 'phosphor-svelte'
+  import { CaretDown, Cube, FileJs, FolderOpen, Plus, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
+  import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import { diagramState } from '$lib/context.svelte'
+  import { type ProjectMeta, projectsDb } from '$lib/persistence/idb'
 
-  const projects = [
+  const starters = [
     { id: 'sample', name: 'Sample Network', description: 'Multi-site campus network with PoE' },
-    { id: 'empty', name: 'Empty Project', description: 'Start from scratch' },
   ]
+
+  let cached = $state<ProjectMeta[]>([])
+  let cachedLoaded = $state(false)
+
+  $effect(() => {
+    void refreshCache()
+  })
+
+  async function refreshCache() {
+    cached = await projectsDb.list()
+    cachedLoaded = true
+  }
 
   /**
    * Prompt for a local file and stream it through `onLoad`. The
@@ -44,14 +57,19 @@
     input.click()
   }
 
+  async function handleNewProject() {
+    const id = await diagramState.createNewProject('Untitled')
+    goto(`/project/${id}/diagram`)
+  }
+
   function handleImportProject() {
     promptFile({
       accept: '.neted.zip,.zip',
       expectedSuffix: '.neted.zip',
       formatLabel: 'neted project',
       onLoad: async (file) => {
-        await diagramState.importProject(file)
-        goto('/project/imported/diagram')
+        const id = await diagramState.importProject(file)
+        goto(`/project/${id}/diagram`)
       },
     })
   }
@@ -62,10 +80,30 @@
       expectedSuffix: '.json',
       formatLabel: 'diagram JSON (NetworkGraph)',
       onLoad: async (file) => {
-        await diagramState.importDiagram(await file.text())
-        goto('/project/imported/diagram')
+        const id = await diagramState.importDiagram(await file.text())
+        goto(`/project/${id}/diagram`)
       },
     })
+  }
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Delete cached project "${name}"? This cannot be undone.`)) return
+    await projectsDb.delete(id)
+    await refreshCache()
+  }
+
+  function fmtUpdatedAt(t: number): string {
+    const diff = Date.now() - t
+    if (diff < 60_000) return 'just now'
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+    return new Date(t).toLocaleDateString()
+  }
+
+  function fmtSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   const itemClass =
@@ -93,7 +131,7 @@
         sideOffset={4}
         align="end"
       >
-        <DropdownMenu.Item class="{itemClass} opacity-50 cursor-not-allowed" disabled>
+        <DropdownMenu.Item class={itemClass} onSelect={handleNewProject}>
           <Plus class="w-4 h-4 text-neutral-400" />
           New Project
         </DropdownMenu.Item>
@@ -120,20 +158,77 @@
     </DropdownMenu.Root>
   </div>
 
-  <div class="grid gap-4">
-    {#each projects as project}
-      <Card.Root
-        class="cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
-        onclick={() => goto(`/project/${project.id}/diagram`)}
-      >
-        <Card.Content class="pt-4 flex items-center gap-4">
-          <div class="p-3 rounded-lg bg-muted"><Cube class="w-6 h-6 text-muted-foreground" /></div>
-          <div>
-            <div class="font-semibold">{project.name}</div>
-            <div class="text-sm text-muted-foreground">{project.description}</div>
-          </div>
-        </Card.Content>
-      </Card.Root>
-    {/each}
-  </div>
+  <!-- Recent projects (local cache, beta) -->
+  <section class="mb-8">
+    <div class="flex items-center gap-2 mb-3">
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Recent projects
+      </h2>
+      <Badge variant="outline" class="text-[10px]">Beta — local only</Badge>
+    </div>
+    {#if !cachedLoaded}
+      <div class="text-sm text-muted-foreground">Loading…</div>
+    {:else if cached.length === 0}
+      <div class="text-sm text-muted-foreground">
+        No cached projects yet — create or import one to start.
+      </div>
+    {:else}
+      <div class="grid gap-2">
+        {#each cached as project (project.id)}
+          <Card.Root class="hover:ring-2 hover:ring-primary/20 transition-all">
+            <Card.Content class="pt-4 flex items-center gap-4">
+              <button
+                type="button"
+                class="flex items-center gap-4 flex-1 text-left"
+                onclick={() => goto(`/project/${project.id}/diagram`)}
+              >
+                <div class="p-3 rounded-lg bg-muted">
+                  <Cube class="w-6 h-6 text-muted-foreground" />
+                </div>
+                <div class="flex-1">
+                  <div class="font-semibold">{project.name}</div>
+                  <div class="text-xs text-muted-foreground">
+                    Updated {fmtUpdatedAt(project.updatedAt)} · {fmtSize(project.size)}
+                  </div>
+                </div>
+              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={() => handleDelete(project.id, project.name)}
+                aria-label="Delete project"
+              >
+                <Trash class="w-4 h-4 text-muted-foreground" />
+              </Button>
+            </Card.Content>
+          </Card.Root>
+        {/each}
+      </div>
+    {/if}
+  </section>
+
+  <!-- Starter projects -->
+  <section>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+      Starter projects
+    </h2>
+    <div class="grid gap-2">
+      {#each starters as project (project.id)}
+        <Card.Root
+          class="cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
+          onclick={() => goto(`/project/${project.id}/diagram`)}
+        >
+          <Card.Content class="pt-4 flex items-center gap-4">
+            <div class="p-3 rounded-lg bg-muted">
+              <Cube class="w-6 h-6 text-muted-foreground" />
+            </div>
+            <div>
+              <div class="font-semibold">{project.name}</div>
+              <div class="text-sm text-muted-foreground">{project.description}</div>
+            </div>
+          </Card.Content>
+        </Card.Root>
+      {/each}
+    </div>
+  </section>
 </div>
