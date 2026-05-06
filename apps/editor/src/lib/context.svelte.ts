@@ -1267,15 +1267,25 @@ export const diagramState = {
     // Write the imported project as one big snapshot, then persist
     // every asset the reader registered in memory under this proj.
     // `persistedAssetHashes` gets seeded here so the post-load sync
-    // doesn't re-put what we just put.
-    await projectsDb.writeSnapshot(meta, projectToSnapshot(data))
-    persistedAssetHashes = new Set()
-    for (const entry of assetStore.list()) {
-      await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
-      persistedAssetHashes.add(entry.hash)
+    // doesn't re-put what we just put. On any DB write failure
+    // partway through, roll back so we don't leave half-imported
+    // rows hanging under a `proj_id` no UI surfaces.
+    try {
+      await projectsDb.writeSnapshot(meta, projectToSnapshot(data))
+      persistedAssetHashes = new Set()
+      for (const entry of assetStore.list()) {
+        await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
+        persistedAssetHashes.add(entry.hash)
+      }
+      await diagramState.loadProject(id, data)
+      return id
+    } catch (err) {
+      // Best-effort cleanup. If delete itself fails we'd rather
+      // surface the original error than mask it.
+      await projectsDb.deleteProject(id).catch(() => {})
+      persistedAssetHashes = new Set()
+      throw err
     }
-    await diagramState.loadProject(id, data)
-    return id
   },
   async importDiagram(input: string | NetworkGraph): Promise<string> {
     const parsed: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
