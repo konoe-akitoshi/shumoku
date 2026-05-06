@@ -8,7 +8,7 @@
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'project.neted'
+    a.download = 'project.neted.zip'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -30,7 +30,7 @@
       <div>
         <div class="text-sm font-medium">Project file</div>
         <div class="text-xs text-muted-foreground">
-          Download as .neted (zip — diagram, products, scenes, image assets)
+          Download as .neted.zip (diagram, products, scenes, image assets)
         </div>
       </div>
       <Button variant="outline" size="sm" onclick={handleExportProject}>

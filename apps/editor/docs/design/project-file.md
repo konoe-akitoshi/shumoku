@@ -1,4 +1,4 @@
-# Project file (`.neted`, format v1)
+# Project file (`.neted.zip`, format v1)
 
 A neted project is a single zip archive carrying everything the
 editor needs to reopen the project — diagram, products (catalog),
@@ -112,5 +112,5 @@ reader rejects anything else with a clear message. Bumps:
 - **patch / minor**: in-place fixes that the v1 reader still
   parses — keep version at 1.
 - **major**: breaking layout change — bump to 2 and write a new
-  reader branch. We do not carry old readers; `.neted` is not a
+  reader branch. We do not carry old readers; `.neted.zip` is not a
   long-term archival format.

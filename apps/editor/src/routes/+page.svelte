@@ -46,8 +46,8 @@
 
   function handleImportProject() {
     promptFile({
-      accept: '.neted',
-      expectedSuffix: '.neted',
+      accept: '.neted.zip,.zip',
+      expectedSuffix: '.neted.zip',
       formatLabel: 'neted project',
       onLoad: async (file) => {
         await diagramState.importProject(file)
@@ -103,7 +103,7 @@
           <div class="flex flex-col items-start gap-0.5">
             <span>Import Project</span>
             <span class="text-[10px] text-neutral-400 dark:text-neutral-500"
-              >.neted (zip — diagram, products, scenes, assets)</span
+              >.neted.zip (diagram, products, scenes, assets)</span
             >
           </div>
         </DropdownMenu.Item>

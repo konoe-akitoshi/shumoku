@@ -256,7 +256,7 @@ export interface NetedProject {
 }
 
 /** File extension for neted projects (zip package). */
-export const NETED_FILE_EXTENSION = '.neted'
+export const NETED_FILE_EXTENSION = '.neted.zip'
 
 // =========================================================================
 // Display helpers
