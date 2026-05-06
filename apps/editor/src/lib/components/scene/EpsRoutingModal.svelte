@@ -135,8 +135,10 @@
       if (!w) continue
       const want = routing[linkId] ?? false
 
-      let pair: { epsId: string; outletId: string } | null = null
+      const viaTail: string[] = []
+      let createdOutletId: string | null = null
       if (want) {
+        viaTail.push(epsId)
         let outletId = findAutoOutlet(diagramState.nodes, linkId, epsId)
         if (!outletId) {
           // Pick the device-side endpoint as the outlet anchor — for
@@ -146,7 +148,6 @@
           let farId = w.to.node
           if (fromN?.termination && !toN?.termination) farId = w.to.node
           else if (!fromN?.termination && toN?.termination) farId = w.from.node
-          else farId = w.to.node
           const farNode = diagramState.nodes.get(farId)
           const farPos =
             scene?.nodePlacements.find((p) => p.nodeId === farId)?.position ??
@@ -158,7 +159,8 @@
             metadata: { autoFor: autoOutletTag(linkId, epsId) },
           })
         }
-        pair = { epsId, outletId }
+        viaTail.push(outletId)
+        createdOutletId = outletId
       }
 
       const orphanOutlets: string[] = []
@@ -168,7 +170,9 @@
         if (tagged) orphanOutlets.push(tagged)
       }
 
-      const finalVia = buildViaForLink(w, [epsId], pair ? [pair] : [], orphanOutlets)
+      const managedIds = [epsId, ...orphanOutlets]
+      if (createdOutletId) managedIds.push(createdOutletId)
+      const finalVia = buildViaForLink(w, managedIds, viaTail)
       diagramState.updateLink(linkId, { via: finalVia.length > 0 ? finalVia : undefined })
 
       for (const orphan of orphanOutlets) diagramState.removeNode(orphan)

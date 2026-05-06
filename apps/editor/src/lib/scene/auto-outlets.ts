@@ -58,25 +58,20 @@ export function autoOutletPosition(
 }
 
 /**
- * Build the post-save `via` list for a single link, given which
- * EPSes ended up enabled. For each enabled EPS, the helper expects
- * an outlet id (creator's responsibility — auto-create or reuse).
+ * Build the post-save `via` list for a single link.
  *
- * Preserves any existing via entries that aren't related to the set
- * of EPSes we know about (so manual outlets / future TP types stay
- * intact). EPS+outlet pairs are appended in order.
+ * `managedIds` is the universe of TP ids the caller knows about and
+ * is rewriting — anything in old via that's also in this set is
+ * dropped (so the new tail can take its place). `viaTail` is the
+ * fresh ordered list of TP ids the wire should now transit.
+ *
+ * Anything else in old via (manual outlets the user added via the
+ * toolbar, future TP types we don't manage) is preserved verbatim
+ * before the tail.
  */
-export function buildViaForLink(
-  link: Link,
-  knownEpsIds: string[],
-  enabledPairs: Array<{ epsId: string; outletId: string }>,
-  orphanOutletIds: string[],
-): string[] {
+export function buildViaForLink(link: Link, managedIds: string[], viaTail: string[]): string[] {
   const oldVia = link.via ?? []
-  const managed = new Set<string>([...knownEpsIds, ...orphanOutletIds])
-  for (const { outletId } of enabledPairs) managed.add(outletId)
+  const managed = new Set<string>([...managedIds, ...viaTail])
   const preserved = oldVia.filter((id) => !managed.has(id))
-  const tail: string[] = []
-  for (const { epsId, outletId } of enabledPairs) tail.push(epsId, outletId)
-  return [...preserved, ...tail]
+  return [...preserved, ...viaTail]
 }

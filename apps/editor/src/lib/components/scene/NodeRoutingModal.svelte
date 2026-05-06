@@ -47,18 +47,25 @@
     return out
   }
 
-  const epsInScope = $derived.by(() => {
+  // Both EPS and patch panels are valid via choices for a wire from
+  // this node. We surface them in scope (ancestor or sibling of this
+  // node's parent subgraph). Outlets are excluded — they're auto-
+  // created downstream of EPS routing, never user-picked from here.
+  function tpsInScope(role: 'eps' | 'panel') {
     if (!node) return []
-    const allEps = [...diagramState.nodes.values()].filter((n) => n.termination?.role === 'eps')
-    if (!node.parent) return allEps
-    return allEps.filter((eps) => {
-      if (!eps.parent) return true
-      const epsScope = descendantSubgraphIds(diagramState.subgraphs, eps.parent)
+    const all = [...diagramState.nodes.values()].filter((n) => n.termination?.role === role)
+    if (!node.parent) return all
+    return all.filter((tp) => {
+      if (!tp.parent) return true
+      const tpScope = descendantSubgraphIds(diagramState.subgraphs, tp.parent)
       const nodeAncestors = ancestorChain(node.parent)
-      for (const a of nodeAncestors) if (epsScope.has(a)) return true
-      return epsScope.has(node.parent ?? '')
+      for (const a of nodeAncestors) if (tpScope.has(a)) return true
+      return tpScope.has(node.parent ?? '')
     })
-  })
+  }
+  const epsInScope = $derived.by(() => tpsInScope('eps'))
+  const panelsInScope = $derived.by(() => tpsInScope('panel'))
+  const allTpsInScope = $derived([...epsInScope, ...panelsInScope])
 
   const wires = $derived(
     nodeId
@@ -78,19 +85,24 @@
     const lbl = n.label
     return Array.isArray(lbl) ? lbl[0] : (lbl ?? id)
   }
-  function epsLabelOf(id: string): string {
+  function tpLabelOf(id: string): string {
     const n = diagramState.nodes.get(id)
     if (!n) return id
     const lbl = n.label
     return Array.isArray(lbl) ? lbl[0] : (lbl ?? id)
   }
+  function tpRoleOf(id: string): 'eps' | 'panel' | 'outlet' | undefined {
+    return diagramState.nodes.get(id)?.termination?.role
+  }
 
-  // routing[linkId] = epsId chosen for this wire, or null for "no EPS".
+  // routing[linkId] = TP id chosen for this wire (panel or eps), or
+  // null for "no transit". Single TP per wire (Model Z) — a port has
+  // one direct downstream connection, so we don't allow stacking.
   let routing = $state<Record<string, string | null>>({})
 
-  // Seed routing only on modal open. Subsequent re-derives of `wires`
-  // / `epsInScope` don't clobber user edits — we only merge in shape
-  // changes (new wires appear, existing entries preserved).
+  // Seed routing only on modal open. Subsequent re-derives don't
+  // clobber user edits — `untrack` keeps the seed firing only when
+  // nodeId itself changes (modal open / close).
   $effect(() => {
     const id = nodeId
     if (!id) return
@@ -102,19 +114,19 @@
           next[w.id] = routing[w.id] ?? null
           continue
         }
-        // Existing via membership wins on first seed; default = no EPS.
+        // Existing via membership wins on first seed; pick the first
+        // in-scope TP from the link's via, else None.
         const via = w.via ?? []
-        const matchedEps = via.find((vid) => epsInScope.some((e) => e.id === vid))
-        next[w.id] = matchedEps ?? null
+        const matched = via.find((vid) => allTpsInScope.some((t) => t.id === vid))
+        next[w.id] = matched ?? null
       }
       routing = next
     })
   })
 
-  // Dropdown choices: None, each EPS, plus a sentinel "+ Create" used
-  // to auto-create an EPS when scope has none (or the user wants a
-  // new one). The sentinel is intercepted in onPick.
-  const CREATE = '__create__'
+  // Dropdown sentinels. Real TP ids never start with "__".
+  const CREATE_EPS = '__create_eps__'
+  const CREATE_PANEL = '__create_panel__'
   const NONE = '__none__'
 
   async function onPick(linkId: string, value: string) {
@@ -122,10 +134,9 @@
       routing = { ...routing, [linkId]: null }
       return
     }
-    if (value === CREATE) {
-      const newId = ensureEpsExists()
-      // Wait for derives to flush so the new EPS shows up in scope
-      // and any future opens see it; then point this row at it.
+    if (value === CREATE_EPS || value === CREATE_PANEL) {
+      const role = value === CREATE_EPS ? 'eps' : 'panel'
+      const newId = ensureTpExists(role)
       await tick()
       routing = { ...routing, [linkId]: newId ?? null }
       return
@@ -133,7 +144,7 @@
     routing = { ...routing, [linkId]: value }
   }
 
-  function ensureEpsExists(): string | null {
+  function ensureTpExists(role: 'eps' | 'panel'): string | null {
     if (!nodeId) return null
     const scene = diagramState.scenes.find((s) => s.id === sceneId)
     const nodePlacement = scene?.nodePlacements.find((p) => p.nodeId === nodeId)
@@ -141,7 +152,14 @@
       ? { x: scene.background.width / 2, y: scene.background.height / 2 }
       : { x: 100, y: 100 }
     const base = nodePlacement?.position ?? center
-    return diagramState.addTerminationInScene(sceneId, { x: base.x + 80, y: base.y + 80 }, 'eps')
+    // Stagger panels and EPSes a bit so creating both doesn't stack
+    // them on the same point.
+    const offset = role === 'panel' ? { x: -80, y: 80 } : { x: 80, y: 80 }
+    return diagramState.addTerminationInScene(
+      sceneId,
+      { x: base.x + offset.x, y: base.y + offset.y },
+      role,
+    )
   }
 
   function save() {
@@ -151,47 +169,58 @@
     for (const w of wires) {
       const wireId = w.id
       if (!wireId) continue
-      const wantEpsId = routing[wireId] ?? null
+      const wantTpId = routing[wireId] ?? null
+      const wantRole = wantTpId ? tpRoleOf(wantTpId) : undefined
 
       const farId = w.from.node === nodeId ? w.to.node : w.from.node
       const farNode = diagramState.nodes.get(farId)
       const farPos =
         scene?.nodePlacements.find((p) => p.nodeId === farId)?.position ?? farNode?.position ?? null
 
-      let pair: { epsId: string; outletId: string } | null = null
-      if (wantEpsId) {
-        const eps = diagramState.nodes.get(wantEpsId)
-        if (eps) {
-          let outletId = findAutoOutlet(diagramState.nodes, wireId, wantEpsId)
-          if (!outletId) {
-            const epsPos =
-              scene?.nodePlacements.find((p) => p.nodeId === wantEpsId)?.position ??
-              eps.position ??
-              null
-            const outletPos = autoOutletPosition(epsPos, farPos)
-            outletId = diagramState.addTerminationInScene(sceneId, outletPos, 'outlet')
-            diagramState.updateNode(outletId, {
-              metadata: { autoFor: autoOutletTag(wireId, wantEpsId) },
-            })
-          }
-          pair = { epsId: wantEpsId, outletId }
+      // Build the new via tail. EPS routing pairs with an auto-outlet
+      // on the device side; panel routing terminates without one
+      // (the cable physically ends at the panel jack).
+      const viaTail: string[] = []
+      let createdOutletId: string | null = null
+      if (wantTpId && wantRole === 'eps') {
+        viaTail.push(wantTpId)
+        let outletId = findAutoOutlet(diagramState.nodes, wireId, wantTpId)
+        if (!outletId) {
+          const epsNode = diagramState.nodes.get(wantTpId)
+          const epsPos =
+            scene?.nodePlacements.find((p) => p.nodeId === wantTpId)?.position ??
+            epsNode?.position ??
+            null
+          const outletPos = autoOutletPosition(epsPos, farPos)
+          outletId = diagramState.addTerminationInScene(sceneId, outletPos, 'outlet')
+          diagramState.updateNode(outletId, {
+            metadata: { autoFor: autoOutletTag(wireId, wantTpId) },
+          })
         }
+        viaTail.push(outletId)
+        createdOutletId = outletId
+      } else if (wantTpId && wantRole === 'panel') {
+        viaTail.push(wantTpId)
       }
 
-      // Cleanup auto-outlets for any in-scope EPS this wire used to
-      // route through but doesn't anymore.
+      // Auto-outlets to clean up: tagged for any in-scope EPS that's
+      // no longer the chosen TP.
       const oldVia = w.via ?? []
       const orphanOutlets: string[] = []
       for (const eps of epsInScope) {
-        if (eps.id === wantEpsId) continue
+        if (eps.id === wantTpId) continue
         if (oldVia.includes(eps.id)) {
           const tagged = findAutoOutlet(diagramState.nodes, wireId, eps.id)
           if (tagged) orphanOutlets.push(tagged)
         }
       }
 
-      const knownEpsIds = epsInScope.map((e) => e.id)
-      const finalVia = buildViaForLink(w, knownEpsIds, pair ? [pair] : [], orphanOutlets)
+      // Managed ids = all TPs we know about + auto-outlets we touch
+      // (the new one for the current pick + the orphans being removed).
+      const managedIds = [...allTpsInScope.map((t) => t.id), ...orphanOutlets]
+      if (createdOutletId) managedIds.push(createdOutletId)
+
+      const finalVia = buildViaForLink(w, managedIds, viaTail)
       diagramState.updateLink(wireId, { via: finalVia.length > 0 ? finalVia : undefined })
 
       for (const orphan of orphanOutlets) diagramState.removeNode(orphan)
@@ -211,10 +240,10 @@
       >
         <div>
           <Dialog.Title class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            Wire targets — {nodeLabel}
+            Wire routing — {nodeLabel}
           </Dialog.Title>
           <p class="mt-0.5 text-[11px] text-muted-foreground">
-            For each destination, choose which EPS the wire routes through (or leave as None).
+            For each destination, pick a patch panel or EPS the wire routes through (or None).
           </p>
         </div>
         <Dialog.Close
@@ -245,10 +274,18 @@
                     onchange={(e) => onPick(linkId, (e.target as HTMLSelectElement).value)}
                   >
                     <option value={NONE}>None</option>
-                    {#each epsInScope as eps (eps.id)}
-                      <option value={eps.id}>via {epsLabelOf(eps.id)}</option>
-                    {/each}
-                    <option value={CREATE}>+ Create EPS</option>
+                    <optgroup label="Patch panel">
+                      {#each panelsInScope as p (p.id)}
+                        <option value={p.id}>{tpLabelOf(p.id)}</option>
+                      {/each}
+                      <option value={CREATE_PANEL}>+ Create panel</option>
+                    </optgroup>
+                    <optgroup label="EPS / chase">
+                      {#each epsInScope as eps (eps.id)}
+                        <option value={eps.id}>{tpLabelOf(eps.id)}</option>
+                      {/each}
+                      <option value={CREATE_EPS}>+ Create EPS</option>
+                    </optgroup>
                   </select>
                   <CaretDown
                     class="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground"
