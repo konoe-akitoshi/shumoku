@@ -20,8 +20,10 @@
 
   let storage = $state<{ usage: number; quota: number } | null>(null)
   let projectCount = $state<number | null>(null)
+  let origin = $state('')
   $effect(() => {
     void refreshStorage()
+    if (typeof window !== 'undefined') origin = window.location.origin
   })
   async function refreshStorage() {
     storage = await projectsDb.storageEstimate()
@@ -133,6 +135,24 @@
     <div
       class="space-y-3 p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
     >
+      <!-- Where the data lives — beta users need this up front so
+           "I cleared my browser cache" failures don't surprise. -->
+      <div
+        class="text-xs text-muted-foreground space-y-1.5 pb-2 border-b border-neutral-200 dark:border-neutral-700"
+      >
+        <div>
+          Projects are stored in this browser's <span class="font-mono">IndexedDB</span> under the
+          <span class="font-mono">{origin}</span>
+          origin. Nothing leaves your machine — there is no server sync yet.
+        </div>
+        <div>
+          Data <strong>can be lost</strong> if you clear browser site data, switch browsers /
+          profiles / devices, or use a private window. Treat
+          <span class="font-mono">.neted.zip</span>
+          export as the durable backup until server sync ships.
+        </div>
+      </div>
+
       <div class="flex items-center justify-between">
         <div>
           <div class="text-sm font-medium">Cache edits in this browser</div>

@@ -160,11 +160,15 @@
 
   <!-- Recent projects (local cache, beta) -->
   <section class="mb-8">
-    <div class="flex items-center gap-2 mb-3">
+    <div class="flex items-center gap-2 mb-1">
       <h2 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         Recent projects
       </h2>
       <Badge variant="outline" class="text-[10px]">Beta — local only</Badge>
+    </div>
+    <div class="text-xs text-muted-foreground mb-3">
+      Stored in this browser's IndexedDB. Lost if you clear site data, switch browsers, or use
+      private mode — export <span class="font-mono">.neted.zip</span> for a durable backup.
     </div>
     {#if !cachedLoaded}
       <div class="text-sm text-muted-foreground">Loading…</div>
