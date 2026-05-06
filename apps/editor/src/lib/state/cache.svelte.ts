@@ -20,6 +20,16 @@ let registered: SyncFn | null = null
 let inFlight: Promise<void> | null = null
 let pending = false
 let listenersBound = false
+/**
+ * Suspended-touch counter. While > 0, `touch()` only sets the
+ * `pending` flag — it does NOT kick the sync loop. `resume()`
+ * decrements and drains once if anything got marked dirty.
+ *
+ * Used during project load / migrations where many commits fire
+ * back-to-back and we want one sync at the end, not one per
+ * commit.
+ */
+let suspendedDepth = 0
 
 const enabledState = $state({
   /** Beta flag — defaults on; user can disable via Settings. */
@@ -105,12 +115,31 @@ export const cache = {
   /**
    * State changed. Mark dirty and kick the sync loop. If a sync is
    * already running, it will pick this up after it finishes the
-   * current write.
+   * current write. While `suspend()` is in effect, kicking is
+   * deferred to `resume()`.
    */
   touch(): void {
     if (!enabledState.on || !registered) return
     pending = true
+    if (suspendedDepth > 0) return
     void drain()
+  },
+  /**
+   * Suspend the sync loop. `touch()` calls during a suspended
+   * window collapse into a single `pending` flag; `resume()` then
+   * drains once at the end. Reentrant — call/match by depth.
+   *
+   * Use case: loading a project triggers many `commit()`s
+   * (sanitize, port placement, legacy migrations). Without
+   * suspend, each one fires its own IDB write.
+   */
+  suspend(): void {
+    suspendedDepth++
+  },
+  resume(): void {
+    if (suspendedDepth === 0) return
+    suspendedDepth--
+    if (suspendedDepth === 0 && pending) void drain()
   },
   /** Wait for any pending writes to land. Used on lifecycle boundaries. */
   drain(): Promise<void> {

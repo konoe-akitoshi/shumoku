@@ -1266,9 +1266,13 @@ export const diagramState = {
     }
     // Write the imported project as one big snapshot, then persist
     // every asset the reader registered in memory under this proj.
+    // `persistedAssetHashes` gets seeded here so the post-load sync
+    // doesn't re-put what we just put.
     await projectsDb.writeSnapshot(meta, projectToSnapshot(data))
+    persistedAssetHashes = new Set()
     for (const entry of assetStore.list()) {
       await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
+      persistedAssetHashes.add(entry.hash)
     }
     await diagramState.loadProject(id, data)
     return id
@@ -1320,12 +1324,17 @@ export const diagramState = {
     diagram.subgraphs.clear()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
-    // Reset image asset blobs only when the caller hasn't preloaded
-    // them. `importProject(Blob)` extracts assets *before* getting
-    // here so its `data` already references blob URLs we don't want
-    // to revoke; sample / empty paths have no assets to clear but
-    // any prior session's assets should go.
-    if (!data) assetStore.reset()
+    // Reset image asset blobs (and the persisted-hashes set that
+    // tracks them) only when the caller hasn't preloaded them.
+    // `importProject(Blob)` extracts assets *before* getting here
+    // so its `data` already references blob URLs we don't want to
+    // revoke and has seeded the persisted set; sample / empty
+    // paths have no assets to clear but any prior session's
+    // assets should go.
+    if (!data) {
+      assetStore.reset()
+      persistedAssetHashes = new Set()
+    }
     sessionStore.setYamlSource('')
     sheetStore.setCurrentSheetId(null)
     sessionStore.setInitialized(false)
@@ -1344,9 +1353,14 @@ export const diagramState = {
         if (cached) {
           // Repopulate the AssetStore from per-project asset rows
           // before applying state — image fields hold blob URLs that
-          // need their backing entries to exist before render.
+          // need their backing entries to exist before render. Also
+          // seed `persistedAssetHashes` so the next sync skips
+          // re-putting these.
           const assets = await projectsDb.getAssets(projectId)
-          for (const a of assets) assetStore.putWithHash(a.hash, a.ext, a.blob)
+          for (const a of assets) {
+            assetStore.putWithHash(a.hash, a.ext, a.blob)
+            persistedAssetHashes.add(a.hash)
+          }
           // Translate the persisted snapshot back into a NetedProject
           // so the existing applyProject pipeline (sanitize, port
           // placement, asset rehydration) handles it uniformly.
@@ -1356,7 +1370,17 @@ export const diagramState = {
       }
       if (project) {
         sessionStore.setStatus(projectId === 'sample' ? 'Loading sample...' : 'Loading project...')
-        await applyProject(project)
+        // applyProject runs sanitize, port placement, edge routing,
+        // and the legacy `wireRoutes.controlPoints` migration —
+        // each of which fires `commit()` and would otherwise emit
+        // its own IDB write. Suspend the cache for the duration so
+        // the post-load sync runs once with the resolved state.
+        cache.suspend()
+        try {
+          await applyProject(project)
+        } finally {
+          cache.resume()
+        }
         sessionStore.setProjectName((project as NetedProject).name ?? sessionStore.projectName)
       }
       // Baseline for diff-based sync. Set even when nothing loaded
@@ -1379,6 +1403,14 @@ export const diagramState = {
 // =========================================================================
 
 let lastSyncedSnap: ProjectSnapshot | null = null
+/**
+ * Hashes already persisted to IDB under the current project.
+ * Initialized from `getAssets(projectId)` on load and updated as
+ * sync writes new ones. Lets the sync loop skip the per-commit
+ * "put every AssetStore entry" loop, which previously did a full
+ * IDB roundtrip per asset on every commit.
+ */
+let persistedAssetHashes = new Set<string>()
 
 const EMPTY_SNAP: ProjectSnapshot = {
   nodes: [],
@@ -1424,10 +1456,14 @@ cache.register(async () => {
   const after = getProjectSnapshot()
   const before = lastSyncedSnap ?? EMPTY_SNAP
   const diff = diffSnapshots(before, after)
-  // Persist any newly-added image assets to IDB under this project.
-  // Idempotent puts — cheap to re-run for already-persisted hashes.
+  // Persist only assets that aren't already in the per-project
+  // `persistedAssetHashes` set. Previously we re-put every entry
+  // on every commit; on a project with 10 raster icons that's 10
+  // IDB writes for every node-position commit.
   for (const entry of assetStore.list()) {
+    if (persistedAssetHashes.has(entry.hash)) continue
     await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
+    persistedAssetHashes.add(entry.hash)
   }
   await applySync(id, diff)
   lastSyncedSnap = after
