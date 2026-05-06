@@ -137,11 +137,12 @@
         })
         parts.push(path)
       } else {
-        // Sharp corners through user-placed waypoints — the bend
-        // sits exactly at the point so the waypoint handle visually
-        // aligns with the wire. stroke-linejoin: round on the path
-        // softens the corner cosmetically without offsetting it.
-        parts.push(polylinePath(seg, 0))
+        // Rounded corners between waypoints — the visible bend
+        // softens with a quadratic Bezier whose control sits at the
+        // waypoint position. We no longer render a marker AT the
+        // waypoint, so the small offset between point and curve
+        // doesn't cause visible misalignment anymore.
+        parts.push(polylinePath(seg))
       }
     }
     return parts.join(' ')
@@ -234,18 +235,22 @@
   }
 </script>
 
-<!-- White halo behind the wire so dark stroke stays legible over
-     busy / dark floor-plan backgrounds. Slightly translucent so the
-     image still shows through at the edges of the line. -->
-<path
-  d={pathD}
-  fill="none"
-  stroke="rgba(255, 255, 255, 0.85)"
-  stroke-width={(selected ? 9 : 8) * (data?.wireScale ?? 1)}
-  stroke-linecap="round"
-  stroke-linejoin="round"
-  pointer-events="none"
-/>
+<!-- Subtle white halo behind the wire so a dark stroke stays
+     legible over busy / dark floor-plan backgrounds. Skipped while
+     selected — the bright blue selection color provides its own
+     contrast, and a halo behind it just reads as a white smear
+     under the waypoint / midpoint markers. -->
+{#if !selected}
+  <path
+    d={pathD}
+    fill="none"
+    stroke="rgba(255, 255, 255, 0.55)"
+    stroke-width={5 * (data?.wireScale ?? 1)}
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    pointer-events="none"
+  />
+{/if}
 <BaseEdge
   path={pathD}
   {markerEnd}
@@ -269,7 +274,10 @@
 <!-- Cable length pill — only when the scene is calibrated. Fully
      opaque white with a soft outer ring so it stands clear of any
      image content beneath. -->
-{#if lengthMeters !== null && labelAt}
+{#if lengthMeters !== null && labelAt && !selected}
+  <!-- Hidden while the wire is selected so the white pill doesn't
+       fight the waypoint markers / toolbar layer. The length is
+       still visible in the right-side detail panel during edits. -->
   <EdgeLabel x={labelAt.x} y={labelAt.y}>
     <span
       class="block rounded-[3px] border border-black/15 bg-white px-1.5 text-[10px] leading-[14px] font-medium text-slate-800 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.2)]"
@@ -287,35 +295,6 @@
      routing edits are accessed from the source node's NodeToolbar
      or from the right-side DetailPanel. -->
 
-{#if selected && interactive}
-  {#each waypoints as wp, idx (idx)}
-    <EdgeLabel x={wp.x} y={wp.y}>
-      <button
-        type="button"
-        class="nopan nodrag block h-3 w-3 rounded-full border-[1.5px] border-blue-500 bg-white shadow"
-        style="cursor: grab; transform: translate(-50%, -50%); pointer-events: all;"
-        aria-label="waypoint"
-        onpointerdown={(e) => onWaypointDown(idx, e)}
-        ondblclick={(e) => {
-          e.stopPropagation()
-          deleteWaypoint(idx)
-        }}
-      ></button>
-    </EdgeLabel>
-  {/each}
-
-  {#each midpoints as mp, idx (idx)}
-    <EdgeLabel x={mp.x} y={mp.y}>
-      <button
-        type="button"
-        class="nopan nodrag block h-2 w-2 rounded-full border border-blue-500 bg-blue-500/40 hover:bg-blue-500"
-        style="cursor: copy; transform: translate(-50%, -50%); pointer-events: all;"
-        aria-label="add waypoint"
-        onclick={(e) => {
-          e.stopPropagation()
-          insertMidpoint(idx)
-        }}
-      ></button>
-    </EdgeLabel>
-  {/each}
-{/if}
+<!-- Waypoint / midpoint markers temporarily disabled — drag-to-bend
+     on the line body still creates waypoints in data, but no UI
+     handles render on top of the wire. -->
