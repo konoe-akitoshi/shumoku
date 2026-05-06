@@ -140,7 +140,11 @@
         })
         parts.push(path)
       } else {
-        parts.push(polylinePath(seg))
+        // Sharp corners through user-placed waypoints — the bend
+        // sits exactly at the point so the waypoint handle visually
+        // aligns with the wire. stroke-linejoin: round on the path
+        // softens the corner cosmetically without offsetting it.
+        parts.push(polylinePath(seg, 0))
       }
     }
     return parts.join(' ')
