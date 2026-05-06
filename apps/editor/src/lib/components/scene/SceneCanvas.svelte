@@ -299,15 +299,6 @@
           editableWaypoints: segments.length === 1 && segments[0]?.length === 0,
           lengthMeters: eff?.meters ?? null,
           wireScale: effectiveWireScale(link),
-          onOpenRouting: () => {
-            // Open the source-side node modal so the user can adjust
-            // this wire's via — that's where the per-wire dropdown
-            // already lives.
-            routingNodeId = from
-          },
-          onDelete: () => {
-            if (link.id) diagramState.removeLink(link.id)
-          },
         },
         animated: false,
         style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
@@ -465,6 +456,13 @@
     onnodedragstop={onNodeDragStop}
     onconnect={onConnect}
     onpaneclick={onPaneClick}
+    ondelete={({ nodes, edges }: { nodes: SfNode[]; edges: Edge[] }) => {
+      // Native Backspace/Delete keyboard path. NodeToolbar's Delete
+      // button calls removeNode directly; this catches edges and
+      // multi-select.
+      for (const e of edges) if (e.id) diagramState.removeLink(e.id)
+      for (const n of nodes) diagramState.removeNode(n.id)
+    }}
     proOptions={{ hideAttribution: true }}
   >
     <SceneFitOnLoad bounds={fitBounds} refitKey={bg?.src ?? ''} />
