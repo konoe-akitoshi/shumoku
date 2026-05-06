@@ -10,7 +10,7 @@ const sessionState = $state({
   initialized: false,
   /** Active project id (null = nothing loaded; 'sample' = read-only sample). */
   projectId: null as string | null,
-  /** User-visible project name. Used by autosave / settings UI. */
+  /** User-visible project name. Used by the cache mirror and settings UI. */
   projectName: 'Untitled',
 })
 

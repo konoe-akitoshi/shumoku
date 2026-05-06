@@ -5,7 +5,7 @@
   import { Button } from '$lib/components/ui/button'
   import { diagramState } from '$lib/context.svelte'
   import { projectsDb } from '$lib/persistence/idb'
-  import { autosave } from '$lib/state/autosave.svelte'
+  import { cache } from '$lib/state/cache.svelte'
   import { sessionStore } from '$lib/state/session.svelte'
 
   async function handleExportProject() {
@@ -135,13 +135,13 @@
     >
       <div class="flex items-center justify-between">
         <div>
-          <div class="text-sm font-medium">Autosave</div>
+          <div class="text-sm font-medium">Cache edits in this browser</div>
           <div class="text-xs text-muted-foreground">
-            Persist edits to this browser. Export remains the source of truth.
+            Reload picks up where you left off. Export remains the source of truth.
           </div>
         </div>
-        <Button variant="outline" size="sm" onclick={() => autosave.setEnabled(!autosave.enabled)}>
-          {autosave.enabled ? 'On' : 'Off'}
+        <Button variant="outline" size="sm" onclick={() => cache.setEnabled(!cache.enabled)}>
+          {cache.enabled ? 'On' : 'Off'}
         </Button>
       </div>
       <div class="flex items-center justify-between">

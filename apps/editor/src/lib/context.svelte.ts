@@ -46,8 +46,8 @@ import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
 import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
 import { assetStore } from './state/assets.svelte'
-import { autosave } from './state/autosave.svelte'
 import { buildAssignmentRows as buildBomRows } from './state/bom'
+import { cache } from './state/cache.svelte'
 import {
   applyResolvedLayout,
   currentSheetCacheGeneration,
@@ -254,7 +254,7 @@ function commit<T>(label: string, fn: () => T): T {
   try {
     const result = fn()
     undoManager.push(label, before)
-    autosave.schedule()
+    cache.touch()
     return result
   } finally {
     inCommit = false
@@ -268,7 +268,7 @@ async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
   try {
     const result = await fn()
     undoManager.push(label, before)
-    autosave.schedule()
+    cache.touch()
     return result
   } finally {
     inCommit = false
@@ -1221,7 +1221,7 @@ export const diagramState = {
    * would revoke the blobs the reader just created.
    */
   async importProject(input: NetedProject | Blob): Promise<string> {
-    autosave.reset()
+    cache.reset()
     assetStore.reset()
     let data: NetedProject
     let blob: Blob
@@ -1279,7 +1279,7 @@ export const diagramState = {
     // is already loaded.
     if (sessionStore.initialized && sessionStore.projectId === projectId && !data) return
 
-    autosave.reset()
+    cache.reset()
     productsStore.set([])
     scenesStore.set([])
     scenesStore.setCurrentId(null)
@@ -1329,13 +1329,13 @@ export const diagramState = {
 }
 
 // =========================================================================
-// Autosave hook — register a flush that re-writes the active project
-// blob into IndexedDB. The composer is the only piece that knows how
-// to assemble a `.neted.zip` from current state, hence wiring lives
-// here rather than inside `state/autosave.svelte.ts`.
+// Cache sync — keep the IndexedDB mirror up-to-date with current
+// state. The composer is the only piece that knows how to assemble
+// a `.neted.zip` from in-memory state, hence wiring lives here
+// rather than inside `state/cache.svelte.ts`.
 // =========================================================================
 
-autosave.register(async () => {
+cache.register(async () => {
   const id = sessionStore.projectId
   if (!id || id === 'sample') return
   const blob = await writeProjectZip({
