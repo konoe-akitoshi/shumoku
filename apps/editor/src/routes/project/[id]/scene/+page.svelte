@@ -28,7 +28,11 @@
       diagramState.switchSheet(focusId)
     }
     const want = focus || undefined
-    if (diagramState.currentScene?.scopeSubgraphId !== want) {
+    const have = diagramState.currentScene
+    // The "no scene yet" case has to be handled explicitly: at root
+    // both `have?.scopeSubgraphId` and `want` are `undefined`, so a
+    // bare `!==` would short-circuit and never create the root scene.
+    if (!have || have.scopeSubgraphId !== want) {
       diagramState.setCurrentSceneForScope(want)
     }
   })
