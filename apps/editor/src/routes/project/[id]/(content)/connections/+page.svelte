@@ -25,6 +25,7 @@
   import * as Table from '$lib/components/ui/table'
   import ValidationCell from '$lib/components/ValidationCell.svelte'
   import { diagramState } from '$lib/context.svelte'
+  import { formatMeters } from '$lib/scene/cable-length'
 
   // =========================================================================
   // Derived: nodes, ports, connections
@@ -125,9 +126,7 @@
       // over the stored field — same precedence as BOM / detail panel.
       const eff = link.id ? diagramState.cableLengthMeters(link.id) : null
       const cableLengthDisplay = eff
-        ? eff.meters < 10
-          ? eff.meters.toFixed(1)
-          : String(Math.round(eff.meters))
+        ? formatMeters(eff.meters)
         : link.cable?.length_m !== undefined
           ? String(link.cable.length_m)
           : ''
@@ -873,7 +872,7 @@
                         {#if i > 0}
                           <span class="text-muted-foreground"> + </span>
                         {/if}
-                        <span>{s.meters < 10 ? s.meters.toFixed(1) : Math.round(s.meters)}</span>
+                        <span>{formatMeters(s.meters)}</span>
                       {/each}
                       <span class="text-muted-foreground">m</span>
                       <span class="ml-1 text-[9px] text-muted-foreground">scene</span>

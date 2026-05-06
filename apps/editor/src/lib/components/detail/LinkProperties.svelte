@@ -17,6 +17,7 @@
   import StandardImpliedBlock from '$lib/components/StandardImpliedBlock.svelte'
   import ValidationCell from '$lib/components/ValidationCell.svelte'
   import { diagramState } from '$lib/context.svelte'
+  import { formatMeters } from '$lib/scene/cable-length'
 
   let {
     link,
@@ -452,10 +453,8 @@
       <ValidationCell issues={issuesForTarget(issues, { kind: 'cable', field: 'length_m' })}>
         {#if effectiveLength?.source === 'scene'}
           <!-- Scene-derived from a calibrated floor plan: read-only here. -->
-          <span class={valueClass}
-            >{effectiveLength.meters < 10
-              ? effectiveLength.meters.toFixed(1)
-              : Math.round(effectiveLength.meters)}
+          <span class={valueClass}>
+            {formatMeters(effectiveLength.meters)}
             <span class="ml-1 text-[9px] text-muted-foreground">from scene</span>
           </span>
         {:else if editing}

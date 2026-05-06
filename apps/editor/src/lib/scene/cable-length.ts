@@ -5,6 +5,15 @@ import type { Link, Node } from '@shumoku/core'
 import type { Scene } from '../types'
 
 /**
+ * Single source of truth for cable length number formatting:
+ * one decimal under 10m, rounded above. Callers append the "m"
+ * suffix if they want it (lets layouts style the unit separately).
+ */
+export function formatMeters(m: number): string {
+  return m < 10 ? m.toFixed(1) : String(Math.round(m))
+}
+
+/**
  * Endpoint position in a scene. Order:
  *   1. explicit placement (user dragged the pin somewhere)
  *   2. Node.position fallback (auto-layout coords)

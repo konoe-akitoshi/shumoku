@@ -41,7 +41,7 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
-import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
+import { cableLengthMeters, cableSegmentLengths, formatMeters } from './scene/cable-length'
 import {
   applyResolvedLayout,
   currentSheetCacheGeneration,
@@ -108,7 +108,7 @@ function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undef
 }
 
 function formatLength(m: number): string {
-  return `${m < 10 ? m.toFixed(1) : Math.round(m)}m`
+  return `${formatMeters(m)}m`
 }
 
 /**

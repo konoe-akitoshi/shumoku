@@ -8,6 +8,7 @@
     useSvelteFlow,
   } from '@xyflow/svelte'
   import { editorState } from '$lib/context.svelte'
+  import { formatMeters } from '$lib/scene/cable-length'
   import { pickSideForDirection } from '$lib/scene/node-geometry'
   import { bendOnDrag, polylinePath, type Waypoint } from './wire-edit'
 
@@ -266,8 +267,7 @@
           class="block rounded-[3px] border border-black/15 bg-white px-1.5 text-[10px] leading-[14px] font-medium text-slate-800 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.2)]"
           style="transform: translate(-50%, -50%); pointer-events: none;"
         >
-          {label.meters < 10 ? label.meters.toFixed(1) : Math.round(label.meters)}
-          m
+          {formatMeters(label.meters)}m
         </span>
       </EdgeLabel>
     {/if}
@@ -278,10 +278,7 @@
         class="block rounded-[3px] border border-black/15 bg-white px-1.5 text-[10px] leading-[14px] font-medium text-slate-800 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.2)]"
         style="transform: translate(-50%, -50%); pointer-events: none;"
       >
-        {fallbackSinglePill.meters < 10
-          ? fallbackSinglePill.meters.toFixed(1)
-          : Math.round(fallbackSinglePill.meters)}
-        m
+        {formatMeters(fallbackSinglePill.meters)}m
       </span>
     </EdgeLabel>
   {/if}
