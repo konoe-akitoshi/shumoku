@@ -1,21 +1,102 @@
 <script lang="ts">
-  import { DownloadSimple } from 'phosphor-svelte'
+  import { DownloadSimple, Trash } from 'phosphor-svelte'
+  import { goto } from '$app/navigation'
   import { Button } from '$lib/components/ui/button'
   import { diagramState } from '$lib/context.svelte'
+  import { projectsDb } from '$lib/persistence/projects-store'
+  import { cache } from '$lib/state/cache.svelte'
+  import { sessionStore } from '$lib/state/session.svelte'
 
   async function handleExportProject() {
-    const blob = await diagramState.exportProjectZip('Project')
+    const blob = await diagramState.exportProjectZip(sessionStore.projectName)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'project.neted.zip'
+    a.download = `${sessionStore.projectName || 'project'}.neted.zip`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  let storage = $state<{ usage: number; quota: number } | null>(null)
+  let projectCount = $state<number | null>(null)
+  let origin = $state('')
+  $effect(() => {
+    void refreshStorage()
+    if (typeof window !== 'undefined') origin = window.location.origin
+  })
+  async function refreshStorage() {
+    storage = await projectsDb.storageEstimate()
+    projectCount = (await projectsDb.list()).length
+  }
+
+  async function handleClearCache() {
+    if (
+      !confirm(
+        "Delete all cached projects? Anything you haven't exported will be lost. This cannot be undone.",
+      )
+    )
+      return
+    await projectsDb.clearAll()
+    await refreshStorage()
+    goto('/')
+  }
+
+  function fmtSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  }
+
+  let renaming = $state(false)
+  let renameValue = $state('')
+  function startRename() {
+    renameValue = sessionStore.projectName
+    renaming = true
+  }
+  async function commitRename() {
+    const next = renameValue.trim()
+    if (!next || !sessionStore.projectId) {
+      renaming = false
+      return
+    }
+    sessionStore.setProjectName(next)
+    await diagramState.renameCachedProject(sessionStore.projectId, next)
+    renaming = false
   }
 </script>
 
 <div class="max-w-2xl mx-auto space-y-8">
   <h1 class="text-lg font-bold">Settings</h1>
+
+  <!-- Project info -->
+  <section class="space-y-3">
+    <h2
+      class="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider"
+    >
+      Project
+    </h2>
+    <div
+      class="flex items-center justify-between p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
+    >
+      <div class="flex-1">
+        <div class="text-sm font-medium">Name</div>
+        {#if renaming}
+          <input
+            class="mt-1 px-2 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 w-full max-w-sm"
+            bind:value={renameValue}
+            onkeydown={(e) => e.key === 'Enter' && commitRename()}
+            onblur={commitRename}
+          >
+        {:else}
+          <div class="text-xs text-muted-foreground">{sessionStore.projectName}</div>
+        {/if}
+      </div>
+      {#if !renaming}
+        <Button variant="outline" size="sm" onclick={startRename}>Rename</Button>
+      {/if}
+    </div>
+  </section>
 
   <!-- Export -->
   <section class="space-y-3">
@@ -37,6 +118,64 @@
         <DownloadSimple class="w-4 h-4 mr-1" />
         Export
       </Button>
+    </div>
+  </section>
+
+  <!-- Local cache -->
+  <section class="space-y-3">
+    <h2
+      class="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider"
+    >
+      Local cache
+    </h2>
+    <!-- Where the data lives — beta users need this up front so
+         "I cleared my browser cache" failures don't surprise. -->
+    <div
+      class="rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200 space-y-1.5"
+    >
+      <div>
+        <span class="font-semibold">Beta — local only.</span>
+        Projects are stored in this browser's <span class="font-mono">IndexedDB</span> under the
+        <span class="font-mono">{origin}</span>
+        origin. Nothing leaves your machine — there is no server sync yet.
+      </div>
+      <div>
+        Data <strong>can be lost</strong> if you clear browser site data, switch browsers / profiles
+        / devices, or use a private window. Treat
+        <span class="font-mono">.neted.zip</span>
+        export as the durable backup until server sync ships.
+      </div>
+    </div>
+    <div
+      class="space-y-3 p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
+    >
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-medium">Cache edits in this browser</div>
+          <div class="text-xs text-muted-foreground">
+            Reload picks up where you left off. Export remains the source of truth.
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onclick={() => cache.setEnabled(!cache.enabled)}>
+          {cache.enabled ? 'On' : 'Off'}
+        </Button>
+      </div>
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-medium">Storage</div>
+          <div class="text-xs text-muted-foreground">
+            {projectCount ?? '—'}
+            cached project{projectCount === 1 ? '' : 's'}
+            {#if storage}
+              · {fmtSize(storage.usage)} used of {fmtSize(storage.quota)} quota
+            {/if}
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onclick={handleClearCache}>
+          <Trash class="w-4 h-4 mr-1" />
+          Clear cache
+        </Button>
+      </div>
     </div>
   </section>
 </div>

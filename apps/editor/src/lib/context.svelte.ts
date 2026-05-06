@@ -39,13 +39,16 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
+import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
+import { applySync, diffSnapshots } from './persistence/sync'
 import { writeProjectZip } from './persistence/writer'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
 import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
 import { assetStore } from './state/assets.svelte'
 import { buildAssignmentRows as buildBomRows } from './state/bom'
+import { cache } from './state/cache.svelte'
 import {
   applyResolvedLayout,
   currentSheetCacheGeneration,
@@ -252,6 +255,7 @@ function commit<T>(label: string, fn: () => T): T {
   try {
     const result = fn()
     undoManager.push(label, before)
+    cache.touch()
     return result
   } finally {
     inCommit = false
@@ -265,6 +269,7 @@ async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
   try {
     const result = await fn()
     undoManager.push(label, before)
+    cache.touch()
     return result
   } finally {
     inCommit = false
@@ -1152,13 +1157,42 @@ export const diagramState = {
     }
   },
   /**
-   * Build the .neted zip blob for the current project. Image assets
-   * (scene backgrounds, raster product icons) flow out of the
-   * AssetStore as content-addressed entries under `assets/`.
+   * Build the .neted zip blob for the current project from the DB
+   * mirror. We drain the cache first so any pending sync lands,
+   * then read entity + asset rows back. This keeps "what you
+   * Export" identical to "what you'd see on reload" and matches
+   * the DB-as-canonical model.
+   *
+   * Sample falls back to in-memory state because it's never cached.
    */
-  async exportProjectZip(name = 'Untitled'): Promise<Blob> {
+  async exportProjectZip(name?: string): Promise<Blob> {
+    const id = sessionStore.projectId
+    if (id && id !== 'sample') {
+      await cache.drain()
+      const cached = await projectsDb.loadSnapshot(id)
+      if (cached) {
+        const assets = await projectsDb.getAssets(id)
+        const byHash = new Map(assets.map((a) => [a.hash, a]))
+        const project = snapshotToProject(cached.snapshot, cached.meta)
+        return await writeProjectZip({
+          name: name ?? cached.meta.name,
+          settings: cached.meta.settings,
+          diagram: project.diagram,
+          products: project.products,
+          scenes: project.scenes ?? [],
+          // DB-side asset rows feed the writer directly — bypass
+          // the AssetStore so the zip reflects what's actually
+          // persisted, not what's hot in memory.
+          resolveAsset: (hash) => {
+            const a = byHash.get(hash)
+            return a ? { hash: a.hash, ext: a.ext, blob: a.blob, url: '' } : undefined
+          },
+        })
+      }
+    }
+    // Sample / detached: fall back to current in-memory state.
     return await writeProjectZip({
-      name,
+      name: name ?? sessionStore.projectName,
       diagram: diagramState.exportGraph(),
       products: [...productsStore.list],
       scenes: [...scenesStore.list],
@@ -1206,37 +1240,91 @@ export const diagramState = {
   /**
    * Load a project. Accepts either an in-memory NetedProject (used
    * by sample / YAML paths) or a `.neted` zip blob (user import).
-   * Anything string-shaped is rejected — the JSON-only format is
-   * gone.
+   * Returns the new project's id so the caller can navigate to it
+   * — imported projects get a fresh `proj_<id>` and round-trip
+   * through the IndexedDB cache so reload picks up where the user
+   * left off.
    *
    * The asset reset has to bracket the zip read: clear the previous
    * project's blob URLs first, *then* let the reader register the
    * incoming ones. Calling reset later (e.g. inside `loadProject`)
    * would revoke the blobs the reader just created.
    */
-  async importProject(input: NetedProject | Blob) {
-    if (input instanceof Blob) {
-      assetStore.reset()
-      const data = await readProjectZip(input)
-      await diagramState.loadProject('imported', data)
-    } else {
-      assetStore.reset()
-      await diagramState.loadProject('imported', input)
+  async importProject(input: NetedProject | Blob): Promise<string> {
+    cache.reset()
+    assetStore.reset()
+    const data = input instanceof Blob ? await readProjectZip(input) : input
+    const id = newId('proj')
+    const now = Date.now()
+    const meta = {
+      id,
+      name: data.name || 'Untitled',
+      settings: data.settings,
+      formatVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+    }
+    // Write the imported project as one big snapshot, then persist
+    // every asset the reader registered in memory under this proj.
+    // `persistedAssetHashes` gets seeded here so the post-load sync
+    // doesn't re-put what we just put. On any DB write failure
+    // partway through, roll back so we don't leave half-imported
+    // rows hanging under a `proj_id` no UI surfaces.
+    try {
+      await projectsDb.writeSnapshot(meta, projectToSnapshot(data))
+      persistedAssetHashes = new Set()
+      for (const entry of assetStore.list()) {
+        await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
+        persistedAssetHashes.add(entry.hash)
+      }
+      await diagramState.loadProject(id, data)
+      return id
+    } catch (err) {
+      // Best-effort cleanup. If delete itself fails we'd rather
+      // surface the original error than mask it.
+      await projectsDb.deleteProject(id).catch(() => {})
+      persistedAssetHashes = new Set()
+      throw err
     }
   },
-  async importDiagram(input: string | NetworkGraph) {
+  async importDiagram(input: string | NetworkGraph): Promise<string> {
     const parsed: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
-    await diagramState.importProject({
+    return await diagramState.importProject({
       version: 1,
       name: 'Diagram Import',
-      products: [...productsStore.list],
+      products: [],
       diagram: parsed,
-      scenes: scenesStore.list.length > 0 ? [...scenesStore.list] : undefined,
     })
   },
+  /**
+   * Create an empty project, persist it, and return its id. Used by
+   * the home page's "New project" entry point.
+   */
+  async createNewProject(name = 'Untitled'): Promise<string> {
+    const project: NetedProject = {
+      version: 1,
+      name,
+      products: [],
+      diagram: { version: '1', nodes: [], links: [], subgraphs: [] },
+    }
+    return await diagramState.importProject(project)
+  },
+  /** Delete a cached project (no in-memory side effects). */
+  async deleteCachedProject(id: string): Promise<void> {
+    await projectsDb.deleteProject(id)
+  },
+  /** Rename a cached project (DB only — caller still owns in-memory name). */
+  async renameCachedProject(id: string, name: string): Promise<void> {
+    await projectsDb.rename(id, name)
+    if (sessionStore.projectId === id) sessionStore.setProjectName(name)
+  },
   async loadProject(projectId: string, data?: Partial<NetedProject>) {
-    if (projectId === 'imported' && sessionStore.initialized && !data) return
+    // Layout `$effect` re-fires `loadProject(projectId)` on every
+    // navigation tick. Skip the rebuild if the requested project
+    // is already loaded.
+    if (sessionStore.initialized && sessionStore.projectId === projectId && !data) return
 
+    cache.reset()
     productsStore.set([])
     scenesStore.set([])
     scenesStore.setCurrentId(null)
@@ -1246,27 +1334,75 @@ export const diagramState = {
     diagram.subgraphs.clear()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
-    // Reset image asset blobs only when the caller hasn't preloaded
-    // them. `importProject(Blob)` extracts assets *before* getting
-    // here so its `data` already references blob URLs we don't want
-    // to revoke; sample / empty paths have no assets to clear but
-    // any prior session's assets should go.
-    if (!data) assetStore.reset()
+    // Reset image asset blobs (and the persisted-hashes set that
+    // tracks them) only when the caller hasn't preloaded them.
+    // `importProject(Blob)` extracts assets *before* getting here
+    // so its `data` already references blob URLs we don't want to
+    // revoke and has seeded the persisted set; sample / empty
+    // paths have no assets to clear but any prior session's
+    // assets should go.
+    if (!data) {
+      assetStore.reset()
+      persistedAssetHashes = new Set()
+    }
     sessionStore.setYamlSource('')
     sheetStore.setCurrentSheetId(null)
     sessionStore.setInitialized(false)
+    sessionStore.setProjectId(projectId)
 
     try {
-      const project = data ?? (projectId === 'sample' ? sampleProject : null)
+      // Resolution order:
+      //   - explicit data wins (caller already parsed via importProject)
+      //   - 'sample' loads the bundled sample (read-only, never cached)
+      //   - anything else: read normalized rows for projectId from IDB
+      let project: NetedProject | Partial<NetedProject> | null = data ?? null
+      if (!project && projectId === 'sample') project = sampleProject
+      if (!project && projectId !== 'sample') {
+        sessionStore.setStatus('Loading from cache...')
+        const cached = await projectsDb.loadSnapshot(projectId)
+        if (cached) {
+          // Repopulate the AssetStore from per-project asset rows
+          // before applying state — image fields hold blob URLs that
+          // need their backing entries to exist before render. Also
+          // seed `persistedAssetHashes` so the next sync skips
+          // re-putting these.
+          const assets = await projectsDb.getAssets(projectId)
+          for (const a of assets) {
+            assetStore.putWithHash(a.hash, a.ext, a.blob)
+            persistedAssetHashes.add(a.hash)
+          }
+          // Translate the persisted snapshot back into a NetedProject
+          // so the existing applyProject pipeline (sanitize, port
+          // placement, asset rehydration) handles it uniformly.
+          project = snapshotToProject(cached.snapshot, cached.meta)
+          sessionStore.setProjectName(cached.meta.name)
+        }
+      }
       if (project) {
-        sessionStore.setStatus(
-          projectId === 'sample'
-            ? 'Loading sample...'
-            : projectId === 'imported'
-              ? 'Loading project...'
-              : 'Loading...',
-        )
-        await applyProject(project)
+        sessionStore.setStatus(projectId === 'sample' ? 'Loading sample...' : 'Loading project...')
+        // applyProject runs sanitize, port placement, edge routing,
+        // and the legacy `wireRoutes.controlPoints` migration —
+        // each of which fires `commit()` and would otherwise emit
+        // its own IDB write. Suspend the cache for the duration.
+        //
+        // The baseline for the post-load diff is `project` itself
+        // (not the post-applyProject state): both DB-load and
+        // import paths just put `project` into IDB, so any
+        // mutations applyProject made over the top of it are the
+        // delta we want persisted. Setting the baseline to
+        // post-applyProject state would lose those mutations on
+        // the very next drain.
+        cache.suspend()
+        try {
+          await applyProject(project)
+        } finally {
+          lastSyncedSnap =
+            projectId === 'sample' ? null : projectToSnapshot(project as NetedProject)
+          cache.resume()
+        }
+        sessionStore.setProjectName((project as NetedProject).name ?? sessionStore.projectName)
+      } else {
+        lastSyncedSnap = null
       }
       sessionStore.setStatus('Ready')
       sessionStore.setInitialized(true)
@@ -1275,6 +1411,81 @@ export const diagramState = {
     }
   },
 }
+
+// =========================================================================
+// Cache sync — keep the IndexedDB mirror up-to-date with current
+// state. After every commit we diff against the last-synced
+// snapshot and write only the entities that actually changed.
+// One IDB transaction per commit; commits are user-action grained,
+// so the cost stays O(touched-rows) rather than O(project-size).
+// =========================================================================
+
+let lastSyncedSnap: ProjectSnapshot | null = null
+/**
+ * Hashes already persisted to IDB under the current project.
+ * Initialized from `getAssets(projectId)` on load and updated as
+ * sync writes new ones. Lets the sync loop skip the per-commit
+ * "put every AssetStore entry" loop, which previously did a full
+ * IDB roundtrip per asset on every commit.
+ */
+let persistedAssetHashes = new Set<string>()
+
+const EMPTY_SNAP: ProjectSnapshot = {
+  nodes: [],
+  subgraphs: [],
+  links: [],
+  products: [],
+  scenes: [],
+}
+
+function projectToSnapshot(data: NetedProject): ProjectSnapshot {
+  const graph = data.diagram ?? { version: '1', nodes: [], links: [], subgraphs: [] }
+  return {
+    nodes: graph.nodes.map((n) => [n.id, n] as [string, Node]),
+    subgraphs: (graph.subgraphs ?? []).map((sg) => [sg.id, sg] as [string, Subgraph]),
+    links: graph.links,
+    products: data.products ?? [],
+    scenes: data.scenes ?? [],
+  }
+}
+
+function snapshotToProject(
+  snap: ProjectSnapshot,
+  meta: { name: string; settings?: Record<string, unknown> },
+): NetedProject {
+  return {
+    version: 1,
+    name: meta.name,
+    settings: meta.settings,
+    products: snap.products,
+    diagram: {
+      version: '1',
+      nodes: snap.nodes.map(([_id, n]) => n),
+      links: snap.links,
+      subgraphs: snap.subgraphs.map(([_id, sg]) => sg),
+    },
+    scenes: snap.scenes,
+  }
+}
+
+cache.register(async () => {
+  const id = sessionStore.projectId
+  if (!id || id === 'sample') return
+  const after = getProjectSnapshot()
+  const before = lastSyncedSnap ?? EMPTY_SNAP
+  const diff = diffSnapshots(before, after)
+  // Persist only assets that aren't already in the per-project
+  // `persistedAssetHashes` set. Previously we re-put every entry
+  // on every commit; on a project with 10 raster icons that's 10
+  // IDB writes for every node-position commit.
+  for (const entry of assetStore.list()) {
+    if (persistedAssetHashes.has(entry.hash)) continue
+    await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
+    persistedAssetHashes.add(entry.hash)
+  }
+  await applySync(id, diff)
+  lastSyncedSnap = after
+})
 
 // ResolvedPort/ResolvedEdge type aliases used in the Map setter signatures
 // — avoids re-importing the (lengthy) interfaces just for setters.

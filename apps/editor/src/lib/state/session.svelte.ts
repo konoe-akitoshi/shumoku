@@ -8,6 +8,10 @@ const sessionState = $state({
   status: 'Loading...',
   yamlSource: '',
   initialized: false,
+  /** Active project id (null = nothing loaded; 'sample' = read-only sample). */
+  projectId: null as string | null,
+  /** User-visible project name. Used by the cache mirror and settings UI. */
+  projectName: 'Untitled',
 })
 
 export const sessionStore = {
@@ -28,5 +32,17 @@ export const sessionStore = {
   },
   setInitialized(v: boolean) {
     sessionState.initialized = v
+  },
+  get projectId(): string | null {
+    return sessionState.projectId
+  },
+  setProjectId(v: string | null) {
+    sessionState.projectId = v
+  },
+  get projectName(): string {
+    return sessionState.projectName
+  },
+  setProjectName(v: string) {
+    sessionState.projectName = v
   },
 }

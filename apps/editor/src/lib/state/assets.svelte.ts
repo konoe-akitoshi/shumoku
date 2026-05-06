@@ -163,3 +163,39 @@ export function fromSerializedRef(value: string): string {
   const entry = assetStore.byHash(parsed.hash)
   return entry?.url ?? value
 }
+
+/**
+ * Walk an arbitrary JSON-shaped value and replace every string with
+ * `mapper(s)`. Returns a new tree (does not mutate the input). Used
+ * to translate image refs at the storage / runtime boundary so the
+ * IDB / zip side never holds ephemeral `blob:` URLs.
+ */
+function mapStringsDeep<T>(value: T, mapper: (s: string) => string): T {
+  if (typeof value === 'string') return mapper(value) as unknown as T
+  if (Array.isArray(value)) return value.map((v) => mapStringsDeep(v, mapper)) as unknown as T
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value)) out[k] = mapStringsDeep(v, mapper)
+    return out as T
+  }
+  return value
+}
+
+/**
+ * Convert a state-side entity (with `blob:` URLs in image fields)
+ * to its persistable form (`asset:<hash>.<ext>` refs). Idempotent
+ * for entities that already hold `asset:` refs or non-blob URLs.
+ */
+export function serializeEntity<T>(entity: T): T {
+  return mapStringsDeep(entity, toSerializedRef)
+}
+
+/**
+ * Inverse of `serializeEntity` — used after IDB / zip read to
+ * convert `asset:<hash>` refs back to live blob URLs. Requires the
+ * AssetStore to already hold the referenced hashes (the loader is
+ * responsible for populating it before rehydrating data).
+ */
+export function rehydrateEntity<T>(entity: T): T {
+  return mapStringsDeep(entity, fromSerializedRef)
+}

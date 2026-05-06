@@ -12,7 +12,7 @@ import { nanoid } from 'nanoid'
  * 2. Collision-avoidance across kinds — a node and a link can never share an ID
  *    even if nanoid were to theoretically produce the same suffix.
  */
-export type IdKind = 'node' | 'sg' | 'link' | 'product' | 'inv' | 'port' | 'scene'
+export type IdKind = 'node' | 'sg' | 'link' | 'product' | 'inv' | 'port' | 'scene' | 'proj'
 
 /**
  * Generate a fresh unique ID for the given entity kind.
