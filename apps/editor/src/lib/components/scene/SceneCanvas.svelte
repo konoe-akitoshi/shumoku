@@ -176,8 +176,11 @@
       })
     }
     for (const n of visibleSceneNodes) {
+      const isBend = n.termination?.role === 'bend'
       const baseLabel = Array.isArray(n.label) ? n.label[0] : (n.label ?? n.id)
-      const label = `${baseLabel}${externalSubgraphSuffix(n.id)}`
+      // Bends are anonymous waypoints — no label clutter beneath the
+      // tiny anchor dot.
+      const label = isBend ? '' : `${baseLabel}${externalSubgraphSuffix(n.id)}`
       const base = sceneNodeSize(n)
       const { w, h } = effSize(n.id)
       const isEps = n.termination?.role === 'eps'
@@ -236,7 +239,6 @@
       const from = link.from.node
       const to = link.to.node
       const crossBoundary = !inScopeIds.has(from) || !inScopeIds.has(to)
-      const route = scene.wireRoutes.find((w) => w.linkId === link.id)
       const fromPos = centerOf(from)
       const toPos = centerOf(to)
       // Wire path: split into visible cable segments at every EPS in
@@ -254,7 +256,6 @@
       const segments: Array<Array<{ x: number; y: number }>> = idSegments.map((seg) =>
         seg.filter((id) => id !== from && id !== to).map((id) => centerOf(id)),
       )
-      const userBends = (link.via?.length ?? 0) > 0 ? [] : (route?.controlPoints ?? [])
       // Handle side picked toward the FIRST visible waypoint after the
       // source (and the LAST visible waypoint before the target). For
       // a wire that goes source → EPS → … via, we want to leave the
@@ -292,15 +293,7 @@
         type: 'wire',
         data: {
           sceneId: scene.id,
-          // For non-via wires the renderer keeps using `waypoints`
-          // for backward compatibility (drag-to-bend points). For
-          // via wires we hand it the segmented form.
           segments,
-          waypoints: userBends,
-          // Drag-to-bend is suppressed when via routing is active —
-          // bending a TP-routed wire would create per-segment bends
-          // we don't store yet.
-          editableWaypoints: segments.length === 1 && segments[0]?.length === 0,
           lengthMeters: eff?.meters ?? null,
           segmentMeters,
           wireScale: effectiveWireScale(link),
@@ -513,7 +506,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                       plan is set, but otherwise let its theming through. */
+                         plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -521,8 +514,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-                     to drag from. Otherwise the fully-transparent handles leave the
-                     "how do I draw a wire" UX a guess. */
+                       to drag from. Otherwise the fully-transparent handles leave the
+                       "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 1 !important;
     background: #3b82f6;
@@ -531,14 +524,14 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-           mode. Keep size + DOM presence so Svelte Flow can still resolve
-           edge endpoint positions from each handle's bounding rect — only
-           opacity is dropped. */
+             mode. Keep size + DOM presence so Svelte Flow can still resolve
+             edge endpoint positions from each handle's bounding rect — only
+             opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
-           "click somewhere to drop the item". */
+             "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
     cursor: crosshair !important;
   }

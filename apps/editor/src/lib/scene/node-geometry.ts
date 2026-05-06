@@ -3,18 +3,20 @@
 
 import { Position } from '@xyflow/svelte'
 
-export type TerminationRole = 'outlet' | 'eps' | 'panel'
+export type TerminationRole = 'outlet' | 'eps' | 'panel' | 'bend'
 export type WithTermination = { termination?: { role: TerminationRole } }
 
 /**
  * Pixel dimensions of a SceneNode for its role. Devices are larger
  * pins; termination points (outlet / EPS / panel) are role-specific
- * smaller glyphs. Returned width/height match what `SceneNode.svelte`
- * actually renders, so callers can compute correct centers, hit
- * areas, and wire endpoint anchors without re-deriving sizes.
+ * smaller glyphs; bends are tiny anchor dots. Returned width/height
+ * match what `SceneNode.svelte` actually renders, so callers can
+ * compute correct centers, hit areas, and wire endpoint anchors
+ * without re-deriving sizes.
  */
 export function sceneNodeSize(node: WithTermination | undefined): { w: number; h: number } {
   const role = node?.termination?.role
+  if (role === 'bend') return { w: 8, h: 8 }
   if (role === 'outlet') return { w: 28, h: 28 }
   if (role === 'eps') return { w: 22, h: 32 }
   if (role === 'panel') return { w: 44, h: 22 }

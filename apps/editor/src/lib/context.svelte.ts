@@ -941,10 +941,11 @@ export const diagramState = {
   addTerminationInScene(
     sceneId: string,
     position: { x: number; y: number },
-    role: 'outlet' | 'eps' | 'panel',
+    role: 'outlet' | 'eps' | 'panel' | 'bend',
   ): string {
     return commit('Add termination in scene', () => {
-      const defaultLabel = role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : 'Panel'
+      const defaultLabel =
+        role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : role === 'panel' ? 'Panel' : 'Bend'
       const id = diagramState.addEmptyNode(defaultLabel)
       const scene = scenesStore.find(sceneId)
       const node = diagram.nodes.get(id)
@@ -957,6 +958,28 @@ export const diagramState = {
         invalidateSheetCache()
       }
       diagramState.placeNodeInScene(sceneId, id, position)
+      return id
+    })
+  },
+  /**
+   * Insert a fresh bend Node into a wire's `via` at `viaIndex`.
+   * Creates the Node (termination role 'bend'), places it in the
+   * scene, and updates the link's via in one transaction. Returns
+   * the new bend Node's id so the drag handler can move it.
+   */
+  insertBendInLink(
+    sceneId: string,
+    linkId: string,
+    position: { x: number; y: number },
+    viaIndex: number,
+  ): string {
+    return commit('Bend wire', () => {
+      const id = diagramState.addTerminationInScene(sceneId, position, 'bend')
+      const link = diagram.links.find((l) => l.id === linkId)
+      const oldVia = link?.via ?? []
+      const idx = Math.max(0, Math.min(viaIndex, oldVia.length))
+      const newVia = [...oldVia.slice(0, idx), id, ...oldVia.slice(idx)]
+      diagramState.updateLink(linkId, { via: newVia })
       return id
     })
   },
@@ -1260,6 +1283,40 @@ async function applyProject(data: Partial<NetedProject>) {
   const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
   scenesStore.set(sanitizeScenes(data.scenes ?? [], diagram.nodes, linkIdSet))
   scenesStore.setCurrentId(null)
+
+  // Backwards compat: convert legacy wireRoutes.controlPoints into
+  // bend Nodes inserted in Link.via. Old projects stored bends as
+  // anonymous absolute coords; the new model treats every transit
+  // point (including user bends) as a Node so multi-drag, deletion,
+  // and selection all flow through Svelte Flow's native node
+  // machinery. Run once after sanitize so node ids are stable.
+  migrateWireRoutesToBendNodes()
+}
+
+function migrateWireRoutesToBendNodes() {
+  for (const scene of scenesStore.list) {
+    const routesWithBends = scene.wireRoutes.filter((r) => (r.controlPoints?.length ?? 0) > 0)
+    if (routesWithBends.length === 0) continue
+    for (const route of routesWithBends) {
+      const link = diagram.links.find((l) => l.id === route.linkId)
+      if (!link) continue
+      const newBendIds: string[] = []
+      for (const pt of route.controlPoints ?? []) {
+        const id = diagramState.addTerminationInScene(scene.id, pt, 'bend')
+        newBendIds.push(id)
+      }
+      // Bends go before any existing TPs in via — preserves the
+      // visual order from before the migration where bends were
+      // first-class waypoints.
+      diagramState.updateLink(route.linkId, { via: [...newBendIds, ...(link.via ?? [])] })
+    }
+    // Clear migrated controlPoints; pathStyle stays for routing
+    // hints in the future, but controlPoints is no longer the
+    // source of truth.
+    scenesStore.update(scene.id, {
+      wireRoutes: scene.wireRoutes.map((r) => ({ ...r, controlPoints: [] })),
+    })
+  }
 }
 
 async function applyGraph(graph: NetworkGraph) {

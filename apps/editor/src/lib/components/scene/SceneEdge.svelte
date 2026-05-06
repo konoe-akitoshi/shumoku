@@ -20,27 +20,20 @@
 
   type SceneEdgeData = {
     sceneId: string
-    waypoints: Waypoint[]
     /** Visible cable segments (one entry per disjoint subpath). When
      *  the wire transits an EPS, the chase-internal portion is hidden
      *  — that breaks one logical wire into multiple visible polylines.
      *  Each entry is the via positions BETWEEN source/target (which the
      *  edge gets from sourceX/Y / targetX/Y). The first and last
-     *  segments include source/target implicitly. */
+     *  segments include source/target implicitly. Bends ride along in
+     *  these segments since they're now via Nodes too. */
     segments?: Array<Waypoint[]>
     /** Effective real-world cable length, computed by the parent
-     *  via the cableLengthMeters helper. Already accounts for
-     *  scene-derived (placements + calibration) vs stored fallback;
-     *  null when neither is available. */
+     *  via the cableLengthMeters helper. */
     lengthMeters: number | null
-    /** Per-visible-segment lengths in meters, parallel to
-     *  `segments`. Used to draw one pill per segment so an EPS-split
-     *  wire shows its rack-side and room-side cables individually
-     *  rather than one combined number. */
+    /** Per-visible-segment lengths in meters, parallel to `segments`.
+     *  One pill per segment for EPS-split wires. */
     segmentMeters?: Array<number | null>
-    /** When false, waypoints are auto-positioned (e.g. derived from
-     *  Link.via TP placements) and the user can't drag them. */
-    editableWaypoints?: boolean
     /** Per-scene stroke width multiplier (Scene.display.wireScale). */
     wireScale?: number
   }
@@ -63,17 +56,13 @@
   const sf = useSvelteFlow()
   const toFlow = (cx: number, cy: number) => sf.screenToFlowPosition({ x: cx, y: cy })
 
-  const waypoints = $derived<Waypoint[]>(data?.waypoints ?? [])
   const sceneId = $derived(data?.sceneId ?? '')
-  // Wire editing (drag-to-bend, waypoint drag, midpoint insert) is
-  // gated by the editor's mode AND the `editableWaypoints` data flag —
-  // via-routed wires have auto-derived waypoints, not user bends.
-  const interactive = $derived(editorState.interactive && (data?.editableWaypoints ?? true))
+  const interactive = $derived(editorState.interactive)
 
   // Composed visible segments: each becomes one continuous polyline.
-  // Source attaches to the first segment, target to the last. When
-  // there's only one segment (no EPS in via), this is the legacy
-  // single-polyline path.
+  // Source attaches to the first segment, target to the last. Bends
+  // are inside via now, so they ride within `segments` — no separate
+  // userBends interleave needed.
   const visualSegments = $derived.by<Waypoint[][]>(() => {
     const segs = data?.segments ?? [[]]
     const result: Waypoint[][] = []
@@ -83,18 +72,8 @@
       const pts: Waypoint[] = []
       if (i === 0) pts.push({ x: sourceX, y: sourceY })
       pts.push(...inner)
-      // Trailing segments (after an EPS) only get a target appended on
-      // the very last; intermediate gap segments stand alone.
       if (i === last) pts.push({ x: targetX, y: targetY })
-      // Drop degenerate segments (e.g. trailing EPS with no outlet
-      // produces a single-point segment with just target).
       if (pts.length >= 2) result.push(pts)
-    }
-    // For wires with user bends (no via), interleave them into the one
-    // and only segment.
-    if (segs.length === 1 && waypoints.length > 0 && result[0]) {
-      const r0 = result[0]
-      result[0] = [r0[0] as Waypoint, ...waypoints, r0[r0.length - 1] as Waypoint]
     }
     return result
   })
@@ -195,21 +174,18 @@
     return anchor ? { anchor, meters: total } : null
   })
 
-  // Drag-to-bend on the line body: insert a waypoint at the click
-  // and start dragging it. snap-to-existing logic in `bendOnDrag`
-  // grabs an existing nearby waypoint instead of creating a duplicate.
+  // Drag-to-bend on the line body: insert a bend Node into the
+  // link's via at the click, then drag its placement. snap-to-
+  // existing inside bendOnDrag grabs a nearby existing bend
+  // instead of duplicating.
   function onLinePointerDown(e: PointerEvent) {
     if (!interactive) return
     if (e.button !== 0) return
-    // stopImmediatePropagation kills any sibling listener (incl.
-    // d3-zoom's pane handler in some configurations); preventDefault
-    // stays off so a tap can fall through to BaseEdge's selection.
     e.stopImmediatePropagation()
     bendOnDrag({
       sceneId,
       linkId: id,
       startClient: { x: e.clientX, y: e.clientY },
-      initialWaypoints: [...waypoints],
       pointsForSegmentSearch: points,
       toFlow,
     })

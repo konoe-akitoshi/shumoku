@@ -23,7 +23,7 @@
   // h-full`, so per-node / per-scene scale is a one-source-of-truth
   // computation in the canvas, not duplicated here.
 
-  type Termination = { role: 'outlet' | 'eps' | 'panel' }
+  type Termination = { role: 'outlet' | 'eps' | 'panel' | 'bend' }
   type SceneNodeT = Node<
     {
       label: string
@@ -58,7 +58,9 @@
         ? 'wall outlet'
         : termination.role === 'eps'
           ? 'EPS riser'
-          : 'patch panel'
+          : termination.role === 'panel'
+            ? 'patch panel'
+            : 'wire bend'
       : (specDeviceType(data.spec) ?? 'icon'),
   )
 </script>
@@ -67,29 +69,38 @@
      back via `onResizeEnd`; we divide by the role's base size to
      recover a scale multiplier that lives on the node's metadata.
      Aspect ratio is locked so devices stay square and termination
-     glyphs keep their proportions. -->
-<NodeResizer
-  isVisible={selected}
-  keepAspectRatio
-  minWidth={(data.baseW ?? 36) * 0.4}
-  minHeight={(data.baseH ?? 36) * 0.4}
-  maxWidth={(data.baseW ?? 36) * 6}
-  maxHeight={(data.baseH ?? 36) * 6}
-  lineStyle="border-color: rgba(59, 130, 246, 0.4);"
-  handleStyle="background: white; border: 1px solid #3b82f6; width: 8px; height: 8px;"
-  onResizeEnd={(_e, params) => {
-    const baseW = data.baseW
-    if (!baseW || baseW <= 0) return
-    const scale = params.width / baseW
-    data.onResizeScale?.(scale)
-  }}
-/>
+     glyphs keep their proportions. Bends are anonymous waypoints —
+     no resizer or toolbar, they should disappear into the line. -->
+{#if termination?.role !== 'bend'}
+  <NodeResizer
+    isVisible={selected}
+    keepAspectRatio
+    minWidth={(data.baseW ?? 36) * 0.4}
+    minHeight={(data.baseH ?? 36) * 0.4}
+    maxWidth={(data.baseW ?? 36) * 6}
+    maxHeight={(data.baseH ?? 36) * 6}
+    lineStyle="border-color: rgba(59, 130, 246, 0.4);"
+    handleStyle="background: white; border: 1px solid #3b82f6; width: 8px; height: 8px;"
+    onResizeEnd={(_e, params) => {
+      const baseW = data.baseW
+      if (!baseW || baseW <= 0) return
+      const scale = params.width / baseW
+      data.onResizeScale?.(scale)
+    }}
+  />
+{/if}
 
 <!-- Floating contextual toolbar — visible while this node is the
      selection. Buttons fan out by role: device pins get the wire-
      routing dialog; EPS chases get their own multi-source picker.
-     Both kinds get Delete. -->
-<NodeToolbar isVisible={selected} position={Position.Top} offset={8}>
+     Both kinds get Delete. Bends are too small to host a toolbar
+     and don't have meaningful actions beyond delete (which works
+     via Backspace anyway). -->
+<NodeToolbar
+  isVisible={selected && termination?.role !== 'bend'}
+  position={Position.Top}
+  offset={8}
+>
   <div
     class="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-1.5 py-1 shadow-md dark:border-neutral-700 dark:bg-neutral-800"
   >
@@ -156,7 +167,7 @@
         <div class="h-[2px] bg-amber-500"></div>
         <div class="h-[2px] bg-amber-500"></div>
       </div>
-    {:else}
+    {:else if termination.role === 'panel'}
       <div
         class="flex h-full w-full items-center justify-around rounded-[2px] border-[1.5px] bg-slate-100 shadow-[0_0_0_1.5px_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.2)]"
         class:border-blue-500={selected}
@@ -167,6 +178,16 @@
         <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
         <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
       </div>
+    {:else}
+      <!-- Bend: tiny anchor dot. Only visible when selected so the
+           wire reads cleanly in the default state; selected state
+           gives the user something to grab for fine adjustments. -->
+      <div
+        class="h-full w-full rounded-full transition-colors"
+        class:bg-blue-500={selected}
+        class:bg-transparent={!selected}
+        aria-label={ariaLabel}
+      ></div>
     {/if}
   {:else}
     <div

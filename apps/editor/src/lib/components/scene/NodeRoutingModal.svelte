@@ -91,7 +91,7 @@
     const lbl = n.label
     return Array.isArray(lbl) ? lbl[0] : (lbl ?? id)
   }
-  function tpRoleOf(id: string): 'eps' | 'panel' | 'outlet' | undefined {
+  function tpRoleOf(id: string): 'eps' | 'panel' | 'outlet' | 'bend' | undefined {
     return diagramState.nodes.get(id)?.termination?.role
   }
 

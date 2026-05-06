@@ -48,7 +48,7 @@ export function polylinePath(points: Waypoint[], radius = 12): string {
 
 /**
  * Index of the polyline segment closest to `p`. Used by drag-to-bend
- * to decide where in the waypoints array a new bend should land.
+ * to decide where in via the new bend should land.
  */
 function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
   let best = 0
@@ -73,41 +73,22 @@ function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
   return best
 }
 
-/** Read the latest waypoints for a wire from the source-of-truth store. */
-function currentWaypoints(sceneId: string, linkId: string): Waypoint[] {
-  const route = diagramState.scenes
-    .find((s) => s.id === sceneId)
-    ?.wireRoutes.find((w) => w.linkId === linkId)
-  return route?.controlPoints ?? []
-}
-
-/** Commit a new waypoints list back to the scene store. */
-function writeWaypoints(sceneId: string, linkId: string, waypoints: Waypoint[]) {
-  diagramState.setWireRoute(sceneId, {
-    linkId,
-    pathStyle: waypoints.length > 0 ? 'free' : 'orthogonal',
-    controlPoints: waypoints,
-  })
-}
-
 /**
- * Drag-to-bend: pointerdown on the line body.
+ * Drag-to-bend: pointerdown on the line body. Creates a bend Node in
+ * the link's `via` chain at the right insertion index, then drags
+ * its scene placement until pointerup. Snap-to-existing grabs an
+ * already-placed bend (within `snapTol` flow units) instead of
+ * spawning a duplicate.
  *
- * Two paths after the cursor moves past `threshold` pixels:
- *   - Click landed within `snapTol` (flow units) of an existing
- *     waypoint → drag THAT waypoint instead of creating a new one.
- *     This kills the "click near old point → spawn duplicate"
- *     feedback loop.
- *   - Otherwise → insert a fresh waypoint at the click position and
- *     start dragging it.
- *
- * A tap (no drag) falls through so the framework's selection fires.
+ * `pointsForSegmentSearch` is the rendered polyline (source +
+ * existing via positions + target). The segment index found here
+ * maps directly to the via insertion index since the polyline
+ * mirrors via's order.
  */
 export function bendOnDrag(args: {
   sceneId: string
   linkId: string
   startClient: { x: number; y: number }
-  initialWaypoints: Waypoint[]
   pointsForSegmentSearch: Waypoint[]
   toFlow: (clientX: number, clientY: number) => Waypoint
   threshold?: number
@@ -117,56 +98,65 @@ export function bendOnDrag(args: {
     sceneId,
     linkId,
     startClient,
-    initialWaypoints,
     pointsForSegmentSearch,
     toFlow,
     threshold = 4,
     snapTol = 18,
   } = args
-  let dragIdx: number | null = null
+  let dragNodeId: string | null = null
+  let txOpen = false
+
+  function nearestExistingBend(at: Waypoint): { id: string; dist: number } | null {
+    const link = diagramState.links.find((l) => l.id === linkId)
+    const via = link?.via ?? []
+    const scene = diagramState.scenes.find((s) => s.id === sceneId)
+    let bestId: string | null = null
+    let bestDist = Infinity
+    for (const id of via) {
+      const node = diagramState.nodes.get(id)
+      if (node?.termination?.role !== 'bend') continue
+      const placement =
+        scene?.nodePlacements.find((p) => p.nodeId === id)?.position ?? node.position
+      if (!placement) continue
+      const dist = Math.hypot(placement.x - at.x, placement.y - at.y)
+      if (dist < bestDist) {
+        bestDist = dist
+        bestId = id
+      }
+    }
+    return bestId ? { id: bestId, dist: bestDist } : null
+  }
 
   const onMove = (ev: PointerEvent) => {
-    if (dragIdx === null) {
+    if (dragNodeId === null) {
       const moved = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y)
       if (moved < threshold) return
       const flowStart = toFlow(startClient.x, startClient.y)
 
-      // Snap-to-existing: pick the closest waypoint within snapTol
-      // and grab it instead of inserting a new one.
-      let nearIdx = -1
-      let nearDist = Infinity
-      for (let i = 0; i < initialWaypoints.length; i++) {
-        const wp = initialWaypoints[i]
-        if (!wp) continue
-        const d = Math.hypot(wp.x - flowStart.x, wp.y - flowStart.y)
-        if (d < nearDist) {
-          nearDist = d
-          nearIdx = i
-        }
-      }
-      if (nearIdx >= 0 && nearDist <= snapTol) {
+      const near = nearestExistingBend(flowStart)
+      if (near && near.dist <= snapTol) {
         diagramState.beginTx('Adjust wire')
-        dragIdx = nearIdx
+        txOpen = true
+        dragNodeId = near.id
       } else {
+        // Insert a fresh bend into via at the segment the user clicked.
+        // pointsForSegmentSearch starts with source, so segIdx maps
+        // directly to via index (segIdx=0 → before via[0], etc.).
         const segIdx = nearestSegmentIndex(pointsForSegmentSearch, flowStart)
-        const inserted = [...initialWaypoints]
-        inserted.splice(segIdx, 0, flowStart)
-        diagramState.beginTx('Bend wire')
-        writeWaypoints(sceneId, linkId, inserted)
-        dragIdx = segIdx
+        // insertBendInLink wraps the create + via splice in its own
+        // commit, so we don't double-wrap with our drag tx.
+        dragNodeId = diagramState.insertBendInLink(sceneId, linkId, flowStart, segIdx)
+        diagramState.beginTx('Adjust wire')
+        txOpen = true
       }
     }
     const fp = toFlow(ev.clientX, ev.clientY)
-    const cur = currentWaypoints(sceneId, linkId)
-    const upd = [...cur]
-    if (dragIdx === null) return
-    upd[dragIdx] = { x: fp.x, y: fp.y }
-    writeWaypoints(sceneId, linkId, upd)
+    if (dragNodeId) diagramState.placeNodeInScene(sceneId, dragNodeId, fp)
   }
   const onUp = () => {
     document.removeEventListener('pointermove', onMove)
     document.removeEventListener('pointerup', onUp)
-    if (dragIdx !== null) diagramState.endTx()
+    if (txOpen) diagramState.endTx()
   }
   document.addEventListener('pointermove', onMove)
   document.addEventListener('pointerup', onUp)

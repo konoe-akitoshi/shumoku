@@ -320,11 +320,19 @@ export interface Node {
 
   /**
    * Marks this node as a passive cable termination point (wall outlet,
-   * EPS / vertical riser, patch panel) rather than an active device.
-   * Cables physically transit through TPs via `Link.via`. Absent =
-   * regular device.
+   * EPS / vertical riser, patch panel) or a user-drawn bend on a
+   * scene cable run, rather than an active device. Cables physically
+   * transit through these via `Link.via`. Absent = regular device.
+   *
+   * Roles:
+   *   - 'outlet' / 'eps' / 'panel' — physical infrastructure picked
+   *     by the user; show in routing dialogs and BOMs.
+   *   - 'bend' — anonymous waypoint inserted by drag-to-bend on the
+   *     scene canvas. Hidden from BOM and routing pickers; rendered
+   *     only as a tiny anchor so a marquee selection can drag the
+   *     bend along with its neighbors.
    */
-  termination?: { role: 'outlet' | 'eps' | 'panel' }
+  termination?: { role: 'outlet' | 'eps' | 'panel' | 'bend' }
 }
 
 // ============================================
