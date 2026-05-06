@@ -15,10 +15,10 @@ export type WithTermination = { termination?: { role: TerminationRole } }
  */
 export function sceneNodeSize(node: WithTermination | undefined): { w: number; h: number } {
   const role = node?.termination?.role
-  if (role === 'outlet') return { w: 20, h: 20 }
-  if (role === 'eps') return { w: 16, h: 24 }
-  if (role === 'panel') return { w: 32, h: 16 }
-  return { w: 36, h: 36 }
+  if (role === 'outlet') return { w: 28, h: 28 }
+  if (role === 'eps') return { w: 22, h: 32 }
+  if (role === 'panel') return { w: 44, h: 22 }
+  return { w: 52, h: 52 }
 }
 
 /**

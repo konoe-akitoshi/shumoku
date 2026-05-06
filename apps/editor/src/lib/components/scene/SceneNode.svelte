@@ -60,8 +60,8 @@
         class:border-neutral-500={!selected}
         aria-label={ariaLabel}
       >
-        <div class="h-1 w-1 rounded-full bg-neutral-700"></div>
-        <div class="ml-0.5 h-1 w-1 rounded-full bg-neutral-700"></div>
+        <div class="h-1.5 w-1.5 rounded-full bg-neutral-700"></div>
+        <div class="ml-1 h-1.5 w-1.5 rounded-full bg-neutral-700"></div>
       </div>
     {:else if termination.role === 'eps'}
       <div
@@ -70,9 +70,9 @@
         class:border-amber-500={!selected}
         aria-label={ariaLabel}
       >
-        <div class="h-[1.5px] bg-amber-500"></div>
-        <div class="h-[1.5px] bg-amber-500"></div>
-        <div class="h-[1.5px] bg-amber-500"></div>
+        <div class="h-[2px] bg-amber-500"></div>
+        <div class="h-[2px] bg-amber-500"></div>
+        <div class="h-[2px] bg-amber-500"></div>
       </div>
     {:else}
       <div
@@ -81,9 +81,9 @@
         class:border-slate-500={!selected}
         aria-label={ariaLabel}
       >
-        <div class="h-1 w-1 rounded-full bg-slate-600"></div>
-        <div class="h-1 w-1 rounded-full bg-slate-600"></div>
-        <div class="h-1 w-1 rounded-full bg-slate-600"></div>
+        <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
+        <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
+        <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
       </div>
     {/if}
   {:else}

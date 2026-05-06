@@ -235,7 +235,7 @@
   d={pathD}
   fill="none"
   stroke="rgba(255, 255, 255, 0.85)"
-  stroke-width={selected ? 6.5 : 6}
+  stroke-width={selected ? 9 : 8}
   stroke-linecap="round"
   stroke-linejoin="round"
   pointer-events="none"
@@ -245,8 +245,8 @@
   {markerEnd}
   interactionWidth={0}
   style="stroke: {selected ? '#3b82f6' : '#475569'}; stroke-width: {selected
-    ? 2.5
-    : 2}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
+    ? 3.5
+    : 3}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
 />
 
 <!-- Wire-body hit path. nopan/nodrag opt out of d3-zoom so the line
