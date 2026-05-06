@@ -55,7 +55,7 @@
          lights the border so editing affordance stays consistent. -->
     {#if termination.role === 'outlet'}
       <div
-        class="flex h-full w-full items-center justify-center rounded-[3px] border-[1.5px] bg-white shadow-sm"
+        class="flex h-full w-full items-center justify-center rounded-[3px] border-[1.5px] bg-white shadow-[0_0_0_1.5px_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.2)]"
         class:border-blue-500={selected}
         class:border-neutral-500={!selected}
         aria-label={ariaLabel}
@@ -65,7 +65,7 @@
       </div>
     {:else if termination.role === 'eps'}
       <div
-        class="flex h-full w-full flex-col justify-around rounded-[2px] border-[1.5px] bg-amber-50 px-0.5 shadow-sm"
+        class="flex h-full w-full flex-col justify-around rounded-[2px] border-[1.5px] bg-amber-50 px-0.5 shadow-[0_0_0_1.5px_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.2)]"
         class:border-blue-500={selected}
         class:border-amber-500={!selected}
         aria-label={ariaLabel}
@@ -76,7 +76,7 @@
       </div>
     {:else}
       <div
-        class="flex h-full w-full items-center justify-around rounded-[2px] border-[1.5px] bg-slate-100 shadow-sm"
+        class="flex h-full w-full items-center justify-around rounded-[2px] border-[1.5px] bg-slate-100 shadow-[0_0_0_1.5px_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.2)]"
         class:border-blue-500={selected}
         class:border-slate-500={!selected}
         aria-label={ariaLabel}
@@ -102,7 +102,7 @@
             role="img"
             aria-label={ariaLabel}
             style:color="#1e293b"
-            style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); pointer-events: none;"
+            style="filter: drop-shadow(0 0 1.5px white) drop-shadow(0 0 1.5px white) drop-shadow(0 1px 1px rgba(0,0,0,0.3)); pointer-events: none;"
           >
             <title>{ariaLabel}</title>
             {@html icon.svg}
@@ -113,7 +113,7 @@
             alt={ariaLabel}
             width={sizes.w}
             height={sizes.h}
-            style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); pointer-events: none;"
+            style="filter: drop-shadow(0 0 1.5px white) drop-shadow(0 0 1.5px white) drop-shadow(0 1px 1px rgba(0,0,0,0.3)); pointer-events: none;"
           >
         {/if}
       {:else}
@@ -131,8 +131,8 @@
          doesn't extend the node's hit area — handles + wires stay
          locked to the icon. -->
     <div
-      class="absolute left-1/2 top-full max-w-[160px] -translate-x-1/2 truncate rounded-[3px] border border-black/10 bg-white/95 px-1 text-[10px] leading-[14px] text-slate-900"
-      style="margin-top: 2px; pointer-events: none;"
+      class="absolute left-1/2 top-full max-w-[160px] -translate-x-1/2 truncate rounded-[3px] border border-black/15 bg-white px-1 text-[10px] leading-[14px] text-slate-900"
+      style="margin-top: 2px; pointer-events: none; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
     >
       {data.label}
     </div>

@@ -228,6 +228,18 @@
   }
 </script>
 
+<!-- White halo behind the wire so dark stroke stays legible over
+     busy / dark floor-plan backgrounds. Slightly translucent so the
+     image still shows through at the edges of the line. -->
+<path
+  d={pathD}
+  fill="none"
+  stroke="rgba(255, 255, 255, 0.85)"
+  stroke-width={selected ? 6.5 : 6}
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  pointer-events="none"
+/>
 <BaseEdge
   path={pathD}
   {markerEnd}
@@ -249,11 +261,13 @@
   onpointerdown={onLinePointerDown}
 />
 
-<!-- Cable length pill — only when the scene is calibrated. -->
+<!-- Cable length pill — only when the scene is calibrated. Fully
+     opaque white with a soft outer ring so it stands clear of any
+     image content beneath. -->
 {#if lengthMeters !== null && labelAt}
   <EdgeLabel x={labelAt.x} y={labelAt.y}>
     <span
-      class="block rounded-[3px] border border-black/10 bg-white/95 px-1.5 text-[10px] leading-[14px] font-medium text-slate-700 shadow-sm"
+      class="block rounded-[3px] border border-black/15 bg-white px-1.5 text-[10px] leading-[14px] font-medium text-slate-800 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.2)]"
       style="transform: translate(-50%, -50%); pointer-events: none;"
     >
       {lengthMeters < 10 ? lengthMeters.toFixed(1) : Math.round(lengthMeters)}
