@@ -135,10 +135,17 @@ export function dragWaypoint(args: {
 }
 
 /**
- * Drag-to-bend: pointerdown on the line body. Does nothing until the
- * cursor moves past `threshold` pixels, then inserts a waypoint at
- * the original click and starts dragging it. Tap (no drag) falls
- * through so the framework's selection can fire.
+ * Drag-to-bend: pointerdown on the line body.
+ *
+ * Two paths after the cursor moves past `threshold` pixels:
+ *   - Click landed within `snapTol` (flow units) of an existing
+ *     waypoint → drag THAT waypoint instead of creating a new one.
+ *     This kills the "click near old point → spawn duplicate"
+ *     feedback loop.
+ *   - Otherwise → insert a fresh waypoint at the click position and
+ *     start dragging it.
+ *
+ * A tap (no drag) falls through so the framework's selection fires.
  */
 export function bendOnDrag(args: {
   sceneId: string
@@ -148,6 +155,7 @@ export function bendOnDrag(args: {
   pointsForSegmentSearch: Waypoint[]
   toFlow: (clientX: number, clientY: number) => Waypoint
   threshold?: number
+  snapTol?: number
 }) {
   const {
     sceneId,
@@ -157,6 +165,7 @@ export function bendOnDrag(args: {
     pointsForSegmentSearch,
     toFlow,
     threshold = 4,
+    snapTol = 18,
   } = args
   let dragIdx: number | null = null
 
@@ -165,12 +174,31 @@ export function bendOnDrag(args: {
       const moved = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y)
       if (moved < threshold) return
       const flowStart = toFlow(startClient.x, startClient.y)
-      const segIdx = nearestSegmentIndex(pointsForSegmentSearch, flowStart)
-      const inserted = [...initialWaypoints]
-      inserted.splice(segIdx, 0, flowStart)
-      diagramState.beginTx('Bend wire')
-      writeWaypoints(sceneId, linkId, inserted)
-      dragIdx = segIdx
+
+      // Snap-to-existing: pick the closest waypoint within snapTol
+      // and grab it instead of inserting a new one.
+      let nearIdx = -1
+      let nearDist = Infinity
+      for (let i = 0; i < initialWaypoints.length; i++) {
+        const wp = initialWaypoints[i]
+        if (!wp) continue
+        const d = Math.hypot(wp.x - flowStart.x, wp.y - flowStart.y)
+        if (d < nearDist) {
+          nearDist = d
+          nearIdx = i
+        }
+      }
+      if (nearIdx >= 0 && nearDist <= snapTol) {
+        diagramState.beginTx('Adjust wire')
+        dragIdx = nearIdx
+      } else {
+        const segIdx = nearestSegmentIndex(pointsForSegmentSearch, flowStart)
+        const inserted = [...initialWaypoints]
+        inserted.splice(segIdx, 0, flowStart)
+        diagramState.beginTx('Bend wire')
+        writeWaypoints(sceneId, linkId, inserted)
+        dragIdx = segIdx
+      }
     }
     const fp = toFlow(ev.clientX, ev.clientY)
     const cur = currentWaypoints(sceneId, linkId)
