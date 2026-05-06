@@ -170,8 +170,8 @@
     {/if}
   {:else}
     <div
-      class="flex h-full w-full items-center justify-center rounded-full {selected
-        ? 'ring-2 ring-blue-500'
+      class="flex h-full w-full items-center justify-center {selected
+        ? 'rounded-sm ring-2 ring-blue-500'
         : ''}"
     >
       {#if icon}
