@@ -3,7 +3,6 @@
     type Connection,
     ConnectionMode,
     type Edge,
-    MarkerType,
     type Node as SfNode,
     SvelteFlow,
   } from '@xyflow/svelte'
@@ -308,7 +307,8 @@
         },
         animated: false,
         style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#475569' },
+        // No arrow marker — cables are physical runs, not directional
+        // signals. Direction is implicit from the endpoints.
       })
     }
     return out
