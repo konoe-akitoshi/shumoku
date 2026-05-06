@@ -41,7 +41,7 @@ import {
 import { SvelteMap } from 'svelte/reactivity'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
-import { cableLengthMeters } from './scene/cable-length'
+import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
 import {
   applyResolvedLayout,
   currentSheetCacheGeneration,
@@ -740,6 +740,16 @@ export const diagramState = {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return null
     return cableLengthMeters(link, scenesStore.list, diagram.nodes)
+  },
+  /**
+   * Per-visible-segment cable lengths for a link. EPS-routed wires
+   * yield one entry per side of the chase (the physical cable
+   * count). Empty array when no segment has a scene-derived length.
+   */
+  cableSegmentLengths(linkId: string): Array<{ fromId: string; toId: string; meters: number }> {
+    const link = diagram.links.find((l) => l.id === linkId)
+    if (!link) return []
+    return cableSegmentLengths(link, scenesStore.list, diagram.nodes)
   },
   placedCount(productId: string): number {
     let n = 0

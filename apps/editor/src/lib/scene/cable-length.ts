@@ -99,25 +99,26 @@ export function visibleCableSegments(link: Link, nodes: Map<string, Node>): stri
   return segments.filter((s) => s.length >= 2)
 }
 
-export function cableLengthMeters(
+/**
+ * Per-visible-segment cable lengths. EPS-routed wires return one
+ * entry per "side of the chase" — physically you order one cable per
+ * segment, so BOM / Connections breakdowns match what the installer
+ * actually buys. The endpoint ids are the segment's first and last
+ * (e.g. switch + eps for the rack-side run). Returns an empty array
+ * when no scene-derived length is available for any segment.
+ */
+export function cableSegmentLengths(
   link: Link,
   scenes: Scene[],
   nodes: Map<string, Node>,
-): { meters: number; source: 'scene' | 'stored' } | null {
-  // Length follows what's drawn: sum the visible segments. EPS internal
-  // (chase-internal) length isn't modeled here.
+): Array<{ fromId: string; toId: string; meters: number }> {
   const segments = visibleCableSegments(link, nodes)
-  if (segments.length === 0) {
-    const stored = link.cable?.length_m
-    if (stored !== undefined && Number.isFinite(stored)) {
-      return { meters: stored, source: 'stored' }
-    }
-    return null
-  }
+  if (segments.length === 0) return []
   const isOnlySegment = segments.length === 1 && segments[0]?.length === 2
-  let total = 0
-  let any = false
+  const out: Array<{ fromId: string; toId: string; meters: number }> = []
   for (const seg of segments) {
+    let segMeters = 0
+    let any = false
     for (let i = 0; i < seg.length - 1; i++) {
       const aId = seg[i]
       const bId = seg[i + 1]
@@ -127,13 +128,32 @@ export function cableLengthMeters(
         if (!ratio || ratio <= 0) continue
         const px = segmentPx(scene, link, aId, bId, nodes, isOnlySegment)
         if (px === null) continue
-        total += px / ratio
+        segMeters += px / ratio
         any = true
         break
       }
     }
+    if (any) {
+      const fromId = seg[0]
+      const toId = seg[seg.length - 1]
+      if (fromId && toId) out.push({ fromId, toId, meters: segMeters })
+    }
   }
-  if (any) return { meters: total, source: 'scene' }
+  return out
+}
+
+export function cableLengthMeters(
+  link: Link,
+  scenes: Scene[],
+  nodes: Map<string, Node>,
+): { meters: number; source: 'scene' | 'stored' } | null {
+  // Length follows what's drawn: sum the visible segments. EPS internal
+  // (chase-internal) length isn't modeled here.
+  const parts = cableSegmentLengths(link, scenes, nodes)
+  if (parts.length > 0) {
+    const total = parts.reduce((s, p) => s + p.meters, 0)
+    return { meters: total, source: 'scene' }
+  }
   const stored = link.cable?.length_m
   if (stored !== undefined && Number.isFinite(stored)) {
     return { meters: stored, source: 'stored' }
