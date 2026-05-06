@@ -39,8 +39,9 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
-import { projectsDb } from './persistence/idb'
+import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
+import { applySync, diffSnapshots } from './persistence/sync'
 import { writeProjectZip } from './persistence/writer'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
@@ -1223,22 +1224,23 @@ export const diagramState = {
   async importProject(input: NetedProject | Blob): Promise<string> {
     cache.reset()
     assetStore.reset()
-    let data: NetedProject
-    let blob: Blob
-    if (input instanceof Blob) {
-      data = await readProjectZip(input)
-      blob = input
-    } else {
-      data = input
-      blob = await writeProjectZip({
-        name: data.name,
-        diagram: data.diagram,
-        products: data.products,
-        scenes: data.scenes ?? [],
-      })
-    }
+    const data = input instanceof Blob ? await readProjectZip(input) : input
     const id = newId('proj')
-    await projectsDb.save(id, data.name || 'Untitled', blob)
+    const now = Date.now()
+    const meta = {
+      id,
+      name: data.name || 'Untitled',
+      settings: data.settings,
+      formatVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+    }
+    // Write the imported project as one big snapshot, then persist
+    // every asset the reader registered in memory under this proj.
+    await projectsDb.writeSnapshot(meta, projectToSnapshot(data))
+    for (const entry of assetStore.list()) {
+      await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
+    }
     await diagramState.loadProject(id, data)
     return id
   },
@@ -1266,7 +1268,7 @@ export const diagramState = {
   },
   /** Delete a cached project (no in-memory side effects). */
   async deleteCachedProject(id: string): Promise<void> {
-    await projectsDb.delete(id)
+    await projectsDb.deleteProject(id)
   },
   /** Rename a cached project (DB only — caller still owns in-memory name). */
   async renameCachedProject(id: string, name: string): Promise<void> {
@@ -1304,14 +1306,22 @@ export const diagramState = {
       // Resolution order:
       //   - explicit data wins (caller already parsed via importProject)
       //   - 'sample' loads the bundled sample (read-only, never cached)
-      //   - anything else: try IndexedDB
+      //   - anything else: read normalized rows for projectId from IDB
       let project: NetedProject | Partial<NetedProject> | null = data ?? null
       if (!project && projectId === 'sample') project = sampleProject
       if (!project && projectId !== 'sample') {
         sessionStore.setStatus('Loading from cache...')
-        const cached = await projectsDb.load(projectId)
+        const cached = await projectsDb.loadSnapshot(projectId)
         if (cached) {
-          project = await readProjectZip(cached.blob)
+          // Repopulate the AssetStore from per-project asset rows
+          // before applying state — image fields hold blob URLs that
+          // need their backing entries to exist before render.
+          const assets = await projectsDb.getAssets(projectId)
+          for (const a of assets) assetStore.putWithHash(a.hash, a.ext, a.blob)
+          // Translate the persisted snapshot back into a NetedProject
+          // so the existing applyProject pipeline (sanitize, port
+          // placement, asset rehydration) handles it uniformly.
+          project = snapshotToProject(cached.snapshot, cached.meta)
           sessionStore.setProjectName(cached.meta.name)
         }
       }
@@ -1320,6 +1330,9 @@ export const diagramState = {
         await applyProject(project)
         sessionStore.setProjectName((project as NetedProject).name ?? sessionStore.projectName)
       }
+      // Baseline for diff-based sync. Set even when nothing loaded
+      // so the first commit's diff has something to compare against.
+      lastSyncedSnap = projectId === 'sample' ? null : getProjectSnapshot()
       sessionStore.setStatus('Ready')
       sessionStore.setInitialized(true)
     } catch (e) {
@@ -1330,21 +1343,65 @@ export const diagramState = {
 
 // =========================================================================
 // Cache sync — keep the IndexedDB mirror up-to-date with current
-// state. The composer is the only piece that knows how to assemble
-// a `.neted.zip` from in-memory state, hence wiring lives here
-// rather than inside `state/cache.svelte.ts`.
+// state. After every commit we diff against the last-synced
+// snapshot and write only the entities that actually changed.
+// One IDB transaction per commit; commits are user-action grained,
+// so the cost stays O(touched-rows) rather than O(project-size).
 // =========================================================================
+
+let lastSyncedSnap: ProjectSnapshot | null = null
+
+const EMPTY_SNAP: ProjectSnapshot = {
+  nodes: [],
+  subgraphs: [],
+  links: [],
+  products: [],
+  scenes: [],
+}
+
+function projectToSnapshot(data: NetedProject): ProjectSnapshot {
+  const graph = data.diagram ?? { version: '1', nodes: [], links: [], subgraphs: [] }
+  return {
+    nodes: graph.nodes.map((n) => [n.id, n] as [string, Node]),
+    subgraphs: (graph.subgraphs ?? []).map((sg) => [sg.id, sg] as [string, Subgraph]),
+    links: graph.links,
+    products: data.products ?? [],
+    scenes: data.scenes ?? [],
+  }
+}
+
+function snapshotToProject(
+  snap: ProjectSnapshot,
+  meta: { name: string; settings?: Record<string, unknown> },
+): NetedProject {
+  return {
+    version: 1,
+    name: meta.name,
+    settings: meta.settings,
+    products: snap.products,
+    diagram: {
+      version: '1',
+      nodes: snap.nodes.map(([_id, n]) => n),
+      links: snap.links,
+      subgraphs: snap.subgraphs.map(([_id, sg]) => sg),
+    },
+    scenes: snap.scenes,
+  }
+}
 
 cache.register(async () => {
   const id = sessionStore.projectId
   if (!id || id === 'sample') return
-  const blob = await writeProjectZip({
-    name: sessionStore.projectName,
-    diagram: diagramState.exportGraph(),
-    products: [...productsStore.list],
-    scenes: [...scenesStore.list],
-  })
-  await projectsDb.save(id, sessionStore.projectName, blob)
+  const after = getProjectSnapshot()
+  const before = lastSyncedSnap ?? EMPTY_SNAP
+  const diff = diffSnapshots(before, after)
+  // Persist any newly-added image assets to IDB under this project.
+  // Idempotent puts — cheap to re-run for already-persisted hashes.
+  for (const entry of assetStore.list()) {
+    await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
+  }
+  await applySync(id, diff)
+  lastSyncedSnap = after
 })
 
 // ResolvedPort/ResolvedEdge type aliases used in the Map setter signatures

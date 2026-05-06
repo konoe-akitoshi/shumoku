@@ -6,13 +6,13 @@
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import { diagramState } from '$lib/context.svelte'
-  import { type ProjectMeta, projectsDb } from '$lib/persistence/idb'
+  import { type ProjectSummary, projectsDb } from '$lib/persistence/projects-store'
 
   const starters = [
     { id: 'sample', name: 'Sample Network', description: 'Multi-site campus network with PoE' },
   ]
 
-  let cached = $state<ProjectMeta[]>([])
+  let cached = $state<ProjectSummary[]>([])
   let cachedLoaded = $state(false)
 
   $effect(() => {
@@ -88,7 +88,7 @@
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete cached project "${name}"? This cannot be undone.`)) return
-    await projectsDb.delete(id)
+    await projectsDb.deleteProject(id)
     await refreshCache()
   }
 

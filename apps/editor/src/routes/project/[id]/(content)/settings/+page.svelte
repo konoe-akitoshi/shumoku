@@ -4,7 +4,7 @@
   import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import { diagramState } from '$lib/context.svelte'
-  import { projectsDb } from '$lib/persistence/idb'
+  import { projectsDb } from '$lib/persistence/projects-store'
   import { cache } from '$lib/state/cache.svelte'
   import { sessionStore } from '$lib/state/session.svelte'
 
