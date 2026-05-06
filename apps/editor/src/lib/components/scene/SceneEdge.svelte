@@ -45,6 +45,9 @@
     editableWaypoints?: boolean
     /** Per-scene stroke width multiplier (Scene.display.wireScale). */
     wireScale?: number
+    /** Toolbar callbacks routed back to SceneCanvas. */
+    onOpenRouting?: () => void
+    onDelete?: () => void
   }
   type SceneEdgeT = Edge<SceneEdgeData, 'wire'>
 
@@ -274,6 +277,40 @@
       {lengthMeters < 10 ? lengthMeters.toFixed(1) : Math.round(lengthMeters)}
       m
     </span>
+  </EdgeLabel>
+{/if}
+
+<!-- Selected-edge contextual toolbar. Mirrors NodeToolbar in feel:
+     anchored above the wire's midpoint, fans out role-appropriate
+     actions. Only shows in edit mode. -->
+{#if selected && interactive && labelAt}
+  <EdgeLabel x={labelAt.x} y={labelAt.y}>
+    <div
+      class="nopan nodrag flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-1.5 py-1 shadow-md dark:border-neutral-700 dark:bg-neutral-800"
+      style="transform: translate(-50%, calc(-100% - 14px)); pointer-events: all;"
+    >
+      <button
+        type="button"
+        class="rounded px-2 py-0.5 text-[11px] text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-700"
+        onclick={(e) => {
+          e.stopPropagation()
+          data?.onOpenRouting?.()
+        }}
+      >
+        Routing…
+      </button>
+      <button
+        type="button"
+        class="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+        onclick={(e) => {
+          e.stopPropagation()
+          data?.onDelete?.()
+        }}
+        aria-label="Delete wire"
+      >
+        <span style="font-size: 14px; line-height: 1;">×</span>
+      </button>
+    </div>
   </EdgeLabel>
 {/if}
 

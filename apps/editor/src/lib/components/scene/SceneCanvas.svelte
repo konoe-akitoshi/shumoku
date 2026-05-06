@@ -181,7 +181,10 @@
     for (const n of visibleSceneNodes) {
       const baseLabel = Array.isArray(n.label) ? n.label[0] : (n.label ?? n.id)
       const label = `${baseLabel}${externalSubgraphSuffix(n.id)}`
+      const base = sceneNodeSize(n)
       const { w, h } = effSize(n.id)
+      const isEps = n.termination?.role === 'eps'
+      const isDevice = !n.termination
       out.push({
         id: n.id,
         type: 'scene',
@@ -190,7 +193,36 @@
         // anchor handles — no need to also push the size into data.
         width: w,
         height: h,
-        data: { label, spec: n.spec, termination: n.termination },
+        data: {
+          label,
+          spec: n.spec,
+          termination: n.termination,
+          baseW: base.w,
+          baseH: base.h,
+          onOpenRouting: isDevice
+            ? () => {
+                routingNodeId = n.id
+              }
+            : undefined,
+          onOpenEpsRouting: isEps
+            ? () => {
+                routingEpsId = n.id
+              }
+            : undefined,
+          onDelete: () => diagramState.removeNode(n.id),
+          onResizeScale: (scale: number) => {
+            const node = diagramState.nodes.get(n.id)
+            if (!node) return
+            const meta = { ...(node.metadata ?? {}) }
+            // 1× sits at the scene default; clear the override so
+            // future scene scale tweaks reflow this node too.
+            if (Math.abs(scale - 1) < 0.02) delete meta.displayScale
+            else meta.displayScale = Number(scale.toFixed(2))
+            diagramState.updateNode(n.id, {
+              metadata: Object.keys(meta).length > 0 ? meta : undefined,
+            })
+          },
+        },
         draggable: interactive,
         selectable: true,
       })
@@ -267,6 +299,15 @@
           editableWaypoints: segments.length === 1 && segments[0]?.length === 0,
           lengthMeters: eff?.meters ?? null,
           wireScale: effectiveWireScale(link),
+          onOpenRouting: () => {
+            // Open the source-side node modal so the user can adjust
+            // this wire's via — that's where the per-wire dropdown
+            // already lives.
+            routingNodeId = from
+          },
+          onDelete: () => {
+            if (link.id) diagramState.removeLink(link.id)
+          },
         },
         animated: false,
         style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
@@ -312,23 +353,11 @@
     diagramState.endTx()
   }
 
-  // Double-click branches by what was clicked:
-  //   regular device → "Routing for this node" modal
-  //   EPS termination → "Wires through this EPS" modal
-  // Both edit Link.via, just from different angles.
+  // Routing modals open from the per-node NodeToolbar buttons (a
+  // device → node-side modal, an EPS → chase-side modal). The state
+  // lives here so SceneCanvas can mount the dialogs.
   let routingNodeId = $state<string | null>(null)
   let routingEpsId = $state<string | null>(null)
-  function onNodeDblClick(args: { targetNode: SfNode | null }) {
-    const t = args.targetNode
-    if (!t) return
-    const node = diagramState.nodes.get(t.id)
-    if (!node) return
-    if (node.termination?.role === 'eps') {
-      routingEpsId = node.id
-    } else if (!node.termination) {
-      routingNodeId = node.id
-    }
-  }
 
   function onConnect(connection: Connection) {
     if (!connection.source || !connection.target) return
@@ -434,14 +463,6 @@
     onnodedragstart={onNodeDragStart}
     onnodedrag={onNodeDrag}
     onnodedragstop={onNodeDragStop}
-    onnodeclick={(args) => {
-      // Single click is selection; doubleclick semantics live on the
-      // pointer event itself (Svelte Flow re-emits node.click for
-      // detail===2). Detect via event.detail to avoid setting up an
-      // explicit dblclick listener that fights selection.
-      const ev = args.event as MouseEvent
-      if (ev.detail === 2) onNodeDblClick({ targetNode: args.node })
-    }}
     onconnect={onConnect}
     onpaneclick={onPaneClick}
     proOptions={{ hideAttribution: true }}
