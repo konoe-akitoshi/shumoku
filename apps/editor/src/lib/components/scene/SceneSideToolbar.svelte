@@ -12,6 +12,7 @@
     Sun,
   } from 'phosphor-svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
+  import { assetStore } from '$lib/state/assets.svelte'
   import { productLabel } from '$lib/types'
   import { sceneAuthoring } from './scene-authoring.svelte'
 
@@ -69,15 +70,14 @@
     const input = e.target as HTMLInputElement
     const file = input.files?.[0]
     if (!file) return
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result ?? ''))
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(file)
-    })
+    // Register the file in the session AssetStore — that returns a
+    // blob URL the renderer can `<img src>` and the writer can later
+    // hash back into an `asset:` ref. Avoids carrying multi-MB data
+    // URLs in state / undo history.
+    const src = await assetStore.putUserImage(file)
     try {
-      const dim = await loadImageDimensions(dataUrl)
-      diagramState.updateScene(scene.id, { background: { src: dataUrl, ...dim } })
+      const dim = await loadImageDimensions(src)
+      diagramState.updateScene(scene.id, { background: { src, ...dim } })
     } catch {
       // ignore — corrupt image input. UI flag would be nice eventually.
     }

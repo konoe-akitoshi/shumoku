@@ -200,7 +200,7 @@ const sampleDiagramWithBindings: NetworkGraph = {
 
 /** Sample project — bundled products and positioned diagram. */
 export const sampleProject: NetedProject = {
-  version: 3,
+  version: 1,
   name: 'Sample Network',
   products: sampleProducts,
   diagram: sampleDiagramWithBindings,

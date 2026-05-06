@@ -39,9 +39,12 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
+import { readProjectZip } from './persistence/reader'
+import { writeProjectZip } from './persistence/writer'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
 import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
+import { assetStore } from './state/assets.svelte'
 import { buildAssignmentRows as buildBomRows } from './state/bom'
 import {
   applyResolvedLayout,
@@ -1148,15 +1151,18 @@ export const diagramState = {
       subgraphs: [...diagram.subgraphs.values()],
     }
   },
-  exportProject(name = 'Untitled'): string {
-    const project: NetedProject = {
-      version: 3,
+  /**
+   * Build the .neted zip blob for the current project. Image assets
+   * (scene backgrounds, raster product icons) flow out of the
+   * AssetStore as content-addressed entries under `assets/`.
+   */
+  async exportProjectZip(name = 'Untitled'): Promise<Blob> {
+    return await writeProjectZip({
       name,
-      products: [...productsStore.list],
       diagram: diagramState.exportGraph(),
-      scenes: scenesStore.list.length > 0 ? [...scenesStore.list] : undefined,
-    }
-    return JSON.stringify(project, null, 2)
+      products: [...productsStore.list],
+      scenes: [...scenesStore.list],
+    })
   },
   async autoArrange() {
     return commitAsync('Auto-arrange', async () => {
@@ -1186,7 +1192,7 @@ export const diagramState = {
       const hp = new HierarchicalParser(resolver)
       const parsed = (await hp.parse(yamlStr, '/main.yaml')).graph
       await diagramState.importProject({
-        version: 3,
+        version: 1,
         name: 'YAML Import',
         products: [...productsStore.list],
         diagram: parsed,
@@ -1197,14 +1203,31 @@ export const diagramState = {
       sessionStore.setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`)
     }
   },
-  async importProject(input: string | NetedProject) {
-    const data = typeof input === 'string' ? JSON.parse(input) : input
-    await diagramState.loadProject('imported', data)
+  /**
+   * Load a project. Accepts either an in-memory NetedProject (used
+   * by sample / YAML paths) or a `.neted` zip blob (user import).
+   * Anything string-shaped is rejected — the JSON-only format is
+   * gone.
+   *
+   * The asset reset has to bracket the zip read: clear the previous
+   * project's blob URLs first, *then* let the reader register the
+   * incoming ones. Calling reset later (e.g. inside `loadProject`)
+   * would revoke the blobs the reader just created.
+   */
+  async importProject(input: NetedProject | Blob) {
+    if (input instanceof Blob) {
+      assetStore.reset()
+      const data = await readProjectZip(input)
+      await diagramState.loadProject('imported', data)
+    } else {
+      assetStore.reset()
+      await diagramState.loadProject('imported', input)
+    }
   },
   async importDiagram(input: string | NetworkGraph) {
     const parsed: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
     await diagramState.importProject({
-      version: 3,
+      version: 1,
       name: 'Diagram Import',
       products: [...productsStore.list],
       diagram: parsed,
@@ -1223,6 +1246,12 @@ export const diagramState = {
     diagram.subgraphs.clear()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
+    // Reset image asset blobs only when the caller hasn't preloaded
+    // them. `importProject(Blob)` extracts assets *before* getting
+    // here so its `data` already references blob URLs we don't want
+    // to revoke; sample / empty paths have no assets to clear but
+    // any prior session's assets should go.
+    if (!data) assetStore.reset()
     sessionStore.setYamlSource('')
     sheetStore.setCurrentSheetId(null)
     sessionStore.setInitialized(false)

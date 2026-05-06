@@ -228,27 +228,35 @@ export interface WireRoute {
 }
 
 // =========================================================================
-// Project file — .neted.json
+// Project file — .neted (zip package, format v1)
 // =========================================================================
 
-/** neted project file format */
+/**
+ * Logical representation of a neted project. On disk this lives as a
+ * zip archive (`.neted`) split into:
+ *   manifest.json          { version, name, settings, sceneIds }
+ *   diagram.json           NetworkGraph
+ *   products.json          Product[]
+ *   scenes/<sceneId>.json  Scene
+ *   assets/<hash>.<ext>    binary blobs referenced by `asset:` URIs
+ *
+ * In memory we hand the same logical shape around — the zip layout is
+ * an artifact of the writer/reader. Image fields hold runtime URLs
+ * (blob: / http: / inline svg); the `asset:` scheme only appears
+ * inside the zip's JSON files.
+ */
 export interface NetedProject {
-  /** Format version */
-  version: 3
-  /** Project name */
+  /** Format version (zip package). */
+  version: 1
   name: string
-  /** Project settings */
   settings?: Record<string, unknown>
-  /** Project-local Products (devices / modules / cables) */
   products: Product[]
-  /** Diagram — NetworkGraph (nodes with positions, links, subgraphs) */
   diagram: NetworkGraph
-  /** Physical-placement views (floor plans / image-backed canvases). */
   scenes?: Scene[]
 }
 
-/** File extension for neted projects */
-export const NETED_FILE_EXTENSION = '.neted.json'
+/** File extension for neted projects (zip package). */
+export const NETED_FILE_EXTENSION = '.neted.zip'
 
 // =========================================================================
 // Display helpers

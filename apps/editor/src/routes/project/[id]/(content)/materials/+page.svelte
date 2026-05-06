@@ -10,6 +10,7 @@
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
+  import { assetStore } from '$lib/state/assets.svelte'
   import { type Product, productLabel, specIdentifier } from '$lib/types'
 
   type AssignmentRow =
@@ -190,26 +191,12 @@
     else diagramState.unbindNodes([nodeId])
   }
 
-  /**
-   * Read a user-selected file into a string suitable for `Product.icon`.
-   * SVG files are kept as inline content; other images become data URLs.
-   */
-  async function readIconFile(file: File): Promise<string> {
-    const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
-    if (isSvg) return await file.text()
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result ?? ''))
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(file)
-    })
-  }
-
   async function handleCustomIconUpload(e: Event) {
     const input = e.target as HTMLInputElement
     const file = input.files?.[0]
     if (!file) return
-    customIcon = await readIconFile(file)
+    // SVG → inline text; raster → AssetStore-backed blob URL.
+    customIcon = await assetStore.putUserImage(file)
     input.value = '' // allow same file re-selection
   }
 
