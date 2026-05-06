@@ -9,11 +9,7 @@
   import '@xyflow/svelte/dist/style.css'
   import { onDestroy, onMount } from 'svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
-  import {
-    cableLengthMeters,
-    cableSegmentLengths,
-    visibleCableSegments,
-  } from '$lib/scene/cable-length'
+  import { cableSegmentLengths, visibleCableSegments } from '$lib/scene/cable-length'
   import { pickSideForDirection, sceneNodeSize } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
@@ -272,18 +268,24 @@
         lastBeforeTarget.x - toPos.x,
         lastBeforeTarget.y - toPos.y,
       )
-      // Cable length: scene-derived (calibration + endpoint positions
-      // — placement override OR Node.position fallback) wins, else
-      // stored link.cable.length_m. Same helper BOM / Connections use,
-      // so canvas and the rest of the app agree on the value.
-      const eff = cableLengthMeters(link, [scene], diagramState.nodes)
-      // Per-segment meters parallel to `segments` so the edge renders
-      // one pill per visible segment (rack-side / room-side cables on
-      // an EPS-split wire show their own numbers instead of one sum).
+      // Cable length: compute per-segment meters once; total is the
+      // sum. cableLengthMeters() also calls cableSegmentLengths()
+      // internally, so calling both would walk the via list and the
+      // scene placements twice per link per derive. With many wires
+      // and live drag, that's the kind of repeated work we want to
+      // skip — derive once, sum here.
       const segParts = cableSegmentLengths(link, [scene], diagramState.nodes)
       const segmentMeters: Array<number | null> = idSegments.map(
         (_, i) => segParts[i]?.meters ?? null,
       )
+      const totalSceneMeters = segParts.length ? segParts.reduce((s, p) => s + p.meters, 0) : null
+      const storedMeters = link.cable?.length_m
+      const eff: { meters: number; source: 'scene' | 'stored' } | null =
+        totalSceneMeters !== null
+          ? { meters: totalSceneMeters, source: 'scene' }
+          : storedMeters !== undefined && Number.isFinite(storedMeters)
+            ? { meters: storedMeters, source: 'stored' }
+            : null
       out.push({
         id: link.id,
         source: from,
@@ -324,12 +326,15 @@
   // ── Event handlers ───────────────────────────────────────────────
   // Drag handlers receive both `targetNode` (the one under the
   // pointer) and `nodes` (every node moving in this gesture — for
-  // multi-select group drags). Persist all of them, otherwise the
-  // sfNodes derive snaps non-target nodes back to their stored
-  // placements on the next reactive cycle.
+  // multi-select group drags). Bulk-persist so each drag tick
+  // triggers exactly one store mutation / derive cascade instead
+  // of one per selected node.
   function persistDragged(nodes: SfNode[] | null | undefined) {
-    if (!nodes) return
-    for (const n of nodes) diagramState.placeNodeInScene(scene.id, n.id, n.position)
+    if (!nodes || nodes.length === 0) return
+    diagramState.placeNodesInScene(
+      scene.id,
+      nodes.map((n) => ({ nodeId: n.id, position: n.position })),
+    )
   }
   function onNodeDragStart(_args: { targetNode: SfNode | null; nodes: SfNode[] }) {
     diagramState.beginTx('Move item')
@@ -506,7 +511,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                         plan is set, but otherwise let its theming through. */
+                           plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -514,8 +519,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-                       to drag from. Otherwise the fully-transparent handles leave the
-                       "how do I draw a wire" UX a guess. */
+                         to drag from. Otherwise the fully-transparent handles leave the
+                         "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 1 !important;
     background: #3b82f6;
@@ -524,14 +529,14 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-             mode. Keep size + DOM presence so Svelte Flow can still resolve
-             edge endpoint positions from each handle's bounding rect — only
-             opacity is dropped. */
+               mode. Keep size + DOM presence so Svelte Flow can still resolve
+               edge endpoint positions from each handle's bounding rect — only
+               opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
-             "click somewhere to drop the item". */
+               "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
     cursor: crosshair !important;
   }

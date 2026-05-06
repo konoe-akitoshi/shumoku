@@ -45,15 +45,34 @@ export const scenesStore = {
   },
   /** Place / move a node in a scene. */
   placeNode(sceneId: string, nodeId: string, position: { x: number; y: number }) {
+    this.placeNodes(sceneId, [{ nodeId, position }])
+  },
+  /**
+   * Bulk-place / move a batch of nodes in a single scene. Rebuilds
+   * the scenes list and target scene's placements once for the whole
+   * batch — drastically cheaper than calling `placeNode` per node
+   * during multi-drag (O(scenes) array rebuilds drop from N to 1).
+   */
+  placeNodes(
+    sceneId: string,
+    updates: Array<{ nodeId: string; position: { x: number; y: number } }>,
+  ) {
+    if (updates.length === 0) return
+    const byId = new Map(updates.map((u) => [u.nodeId, u.position] as const))
     scenesState.list = scenesState.list.map((s) => {
       if (s.id !== sceneId) return s
-      const idx = s.nodePlacements.findIndex((p) => p.nodeId === nodeId)
-      if (idx >= 0) {
-        const next = [...s.nodePlacements]
-        next[idx] = { ...next[idx], position }
-        return { ...s, nodePlacements: next }
+      const seen = new Set<string>()
+      const next = s.nodePlacements.map((p) => {
+        const pos = byId.get(p.nodeId)
+        if (pos === undefined) return p
+        seen.add(p.nodeId)
+        return { ...p, position: pos }
+      })
+      // Append placements for nodes not previously placed.
+      for (const [nodeId, pos] of byId) {
+        if (!seen.has(nodeId)) next.push({ nodeId, position: pos })
       }
-      return { ...s, nodePlacements: [...s.nodePlacements, { nodeId, position }] }
+      return { ...s, nodePlacements: next }
     })
   },
   removePlacement(

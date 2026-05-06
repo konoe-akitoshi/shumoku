@@ -867,6 +867,18 @@ export const diagramState = {
   placeNodeInScene(sceneId: string, nodeId: string, position: { x: number; y: number }) {
     commit('Move item', () => scenesStore.placeNode(sceneId, nodeId, position))
   },
+  /**
+   * Bulk version for multi-drag: a single store mutation (and a
+   * single derive cascade) for the whole selection per drag tick.
+   * No-op when `updates` is empty.
+   */
+  placeNodesInScene(
+    sceneId: string,
+    updates: Array<{ nodeId: string; position: { x: number; y: number } }>,
+  ) {
+    if (updates.length === 0) return
+    commit('Move items', () => scenesStore.placeNodes(sceneId, updates))
+  },
   removePlacementFromScene(sceneId: string, nodeId: string) {
     commit('Remove placement', () => {
       scenesStore.removePlacement(sceneId, nodeId, (linkId) => {
