@@ -34,18 +34,23 @@ fresh empty project. Both round-trip through IndexedDB.
 ## Lifecycle
 
 ```
-edit → commit() → autosave.schedule()  [debounce 1500ms]
-                                       ↓
-                                       writeProjectZip + projectsDb.save
+edit → commit() → autosave.schedule()  →  writeProjectZip + projectsDb.save
+                                          (one save in flight at a time;
+                                           further commits set a pending
+                                           flag the running loop picks up)
 ```
+
+Commits are user-action grained (drag end / blur / button click),
+not 60Hz, so writing on every commit is fine. The single-flight
+coalescer is just to avoid overlapping IDB writes from two rapid
+commits — there's no time-based debounce to reason about.
 
 Lifecycle hooks:
 
 - `commit` / `commitAsync` — every undo step calls
-  `autosave.schedule()`, which collapses bursts (typing, drag) into
-  one zip pass after 1.5s idle.
-- `visibilitychange` → hidden — flush immediately so a tab switch
-  doesn't lose pending edits.
+  `autosave.schedule()`.
+- `visibilitychange` → hidden — `flush()` to drain any pending
+  write before the tab loses focus.
 - `pagehide` — flush on close / navigation away.
 - `[id]/+layout.svelte` $effect — flush before tearing down the
   active project to load a different one.

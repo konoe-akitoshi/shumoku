@@ -1,27 +1,24 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Coordinates "edit happened → eventually persist to IndexedDB".
+// "Edit happened → write to IndexedDB."
 //
-// Strategy:
-//   - debounce 1500ms after the last commit (typing / dragging
-//     bursts collapse into one zip pass)
-//   - immediate flush on `visibilitychange` → hidden and on
-//     `pagehide` so a tab close in the debounce window doesn't lose
-//     the last edits
+// Model: every commit fires `schedule()`. If a save is already in
+// flight, the new request just sets a `pending` flag — the running
+// loop will pick it up after the current write completes. This
+// coalesces bursts naturally without arbitrary timeouts and keeps
+// IDB write order serialized.
 //
-// The actual write is owned by context.svelte.ts (it's the only
-// piece that knows how to assemble a `.neted.zip` from current
-// state); this module just schedules it.
+// Lifecycle hooks (visibilitychange / pagehide) call `flush()`
+// which awaits any in-flight save plus one more if pending.
 
 const PREF_KEY = 'shumoku.autosave'
-const DEBOUNCE_MS = 1500
 
 type FlushFn = () => Promise<void> | void
 
 let registered: FlushFn | null = null
+let saving: Promise<void> | null = null
 let pending = false
-let timer: ReturnType<typeof setTimeout> | null = null
 let listenersBound = false
 
 const enabledState = $state({
@@ -45,29 +42,39 @@ loadPref()
 function bindLifecycleListeners() {
   if (listenersBound || typeof window === 'undefined') return
   listenersBound = true
-  // 'hidden' fires reliably on tab switch, OS minimize, mobile
-  // background. 'pagehide' is the navigation/close path.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') void flushNow()
+    if (document.visibilityState === 'hidden') void flush()
   })
   window.addEventListener('pagehide', () => {
-    void flushNow()
+    void flush()
   })
 }
 
-async function flushNow() {
-  if (!registered || !pending) return
-  if (timer) {
-    clearTimeout(timer)
-    timer = null
+async function runLoop(): Promise<void> {
+  while (pending) {
+    pending = false
+    if (!registered) return
+    try {
+      await registered()
+    } catch (err) {
+      // Don't loop forever on a broken DB — log and let the next
+      // commit re-trigger.
+      console.warn('[autosave] save failed', err)
+      return
+    }
   }
-  pending = false
-  try {
-    await registered()
-  } catch (err) {
-    // Don't loop on a broken DB — surface and move on.
-    console.warn('[autosave] flush failed', err)
+}
+
+async function flush(): Promise<void> {
+  if (!enabledState.on || !registered) {
+    pending = false
+    return
   }
+  if (saving) return saving
+  saving = runLoop().finally(() => {
+    saving = null
+  })
+  return saving
 }
 
 export const autosave = {
@@ -84,13 +91,7 @@ export const autosave = {
     } catch {
       // ignore — same SSR / private-mode reasoning as loadPref
     }
-    if (!on) {
-      pending = false
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
-    }
+    if (!on) pending = false
   },
   /**
    * Wire up the flush function. Caller is the composer; we keep the
@@ -98,32 +99,26 @@ export const autosave = {
    * overwrites the previous one — the editor only has one active
    * flush sink at a time.
    */
-  register(flush: FlushFn): void {
-    registered = flush
+  register(flushFn: FlushFn): void {
+    registered = flushFn
     bindLifecycleListeners()
   },
   /**
-   * A commit happened. If autosave is on, schedule a flush; if off,
-   * the call is a no-op (export still works manually).
+   * A commit happened. Mark dirty and kick the save loop. If a
+   * save is already running, it will pick this up after it
+   * finishes the current write.
    */
   schedule(): void {
     if (!enabledState.on || !registered) return
     pending = true
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => {
-      void flushNow()
-    }, DEBOUNCE_MS)
+    void flush()
   },
   /** Force-flush — useful before navigation away or user-driven save. */
   flush(): Promise<void> {
-    return Promise.resolve(flushNow())
+    return flush()
   },
   /** Reset everything — used when switching projects or in tests. */
   reset(): void {
     pending = false
-    if (timer) {
-      clearTimeout(timer)
-      timer = null
-    }
   },
 }
