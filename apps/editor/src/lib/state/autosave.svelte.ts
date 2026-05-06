@@ -30,8 +30,15 @@ const enabledState = $state({
 })
 
 function loadPref() {
-  if (typeof localStorage === 'undefined') return
-  enabledState.on = localStorage.getItem(PREF_KEY) !== 'off'
+  // `typeof localStorage` is 'object' in SSR (Vite stubs it) but
+  // its methods aren't real functions, so feature-detect by call
+  // shape, not by presence.
+  try {
+    if (typeof localStorage?.getItem !== 'function') return
+    enabledState.on = localStorage.getItem(PREF_KEY) !== 'off'
+  } catch {
+    // ignore — disabled storage / private mode etc.
+  }
 }
 loadPref()
 
@@ -70,8 +77,12 @@ export const autosave = {
   },
   setEnabled(on: boolean) {
     enabledState.on = on
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(PREF_KEY, on ? 'on' : 'off')
+    try {
+      if (typeof localStorage?.setItem === 'function') {
+        localStorage.setItem(PREF_KEY, on ? 'on' : 'off')
+      }
+    } catch {
+      // ignore — same SSR / private-mode reasoning as loadPref
     }
     if (!on) {
       pending = false
