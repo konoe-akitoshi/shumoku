@@ -181,7 +181,7 @@
       <div class="grid gap-2">
         {#each cached as project (project.id)}
           <Card.Root class="hover:ring-2 hover:ring-primary/20 transition-all">
-            <Card.Content class="pt-4 flex items-center gap-4">
+            <Card.Content class="flex items-center gap-4">
               <button
                 type="button"
                 class="flex items-center gap-4 flex-1 text-left"
@@ -191,8 +191,8 @@
                   <Cube class="w-6 h-6 text-muted-foreground" />
                 </div>
                 <div class="flex-1">
-                  <div class="font-semibold">{project.name}</div>
-                  <div class="text-xs text-muted-foreground">
+                  <div class="text-sm font-semibold">{project.name}</div>
+                  <div class="text-xs text-muted-foreground mt-0.5">
                     Updated {fmtUpdatedAt(project.updatedAt)} · {fmtSize(project.size)}
                   </div>
                 </div>
@@ -223,13 +223,13 @@
           class="cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
           onclick={() => goto(`/project/${project.id}/diagram`)}
         >
-          <Card.Content class="pt-4 flex items-center gap-4">
+          <Card.Content class="flex items-center gap-4">
             <div class="p-3 rounded-lg bg-muted">
               <Cube class="w-6 h-6 text-muted-foreground" />
             </div>
             <div>
-              <div class="font-semibold">{project.name}</div>
-              <div class="text-sm text-muted-foreground">{project.description}</div>
+              <div class="text-sm font-semibold">{project.name}</div>
+              <div class="text-xs text-muted-foreground mt-0.5">{project.description}</div>
             </div>
           </Card.Content>
         </Card.Root>
