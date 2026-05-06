@@ -106,12 +106,6 @@
     for (const p of scene.nodePlacements) m.set(p.nodeId, p.position)
     return m
   })
-  const trayIndexById = $derived.by(() => {
-    const m = new Map<string, number>()
-    for (const [i, n] of visibleSceneNodes.entries()) m.set(n.id, i)
-    return m
-  })
-
   function positionFor(nodeId: string): { x: number; y: number } {
     const override = placementById.get(nodeId)
     if (override) return override
@@ -386,10 +380,6 @@
   function onWindowKey(e: KeyboardEvent) {
     if (e.key !== 'Escape') return
     if (auth.pendingPlacement) auth.pendingPlacement = null
-    if (auth.pendingWireFrom) {
-      auth.pendingWireFrom = null
-      auth.pendingWireWaypoints = []
-    }
     // calibrationMode Esc handling lives in SceneCalibrationCapture
     // (it needs to also clear the prompt state).
   }
@@ -485,7 +475,7 @@
   <!-- Status hint: shown while the user is mid-action. Calibration UI
        and the rest of the authoring overlays will move here in
        follow-ups; this spike just confirms the Flow integration. -->
-  {#if auth.calibrationMode || auth.pendingPlacement || auth.pendingWireFrom}
+  {#if auth.calibrationMode || auth.pendingPlacement}
     <div
       class="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-neutral-200 bg-white/90 px-3 py-1 text-[11px] text-neutral-700 shadow backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-800/90 dark:text-neutral-200"
     >
