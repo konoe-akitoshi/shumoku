@@ -19,7 +19,9 @@
     selected = false,
     interactive = false,
     overlay,
+    ondragstart,
     ondragmove,
+    ondragend,
     onaddport,
     onselect,
     oncontextmenu: onctx,
@@ -30,7 +32,11 @@
     selected?: boolean
     interactive?: boolean
     overlay?: NodeOverlaySnippet
+    /** Fires once when a drag begins — host opens an undo/sync transaction here. */
+    ondragstart?: (id: string) => void
     ondragmove?: (id: string, x: number, y: number) => void
+    /** Fires once on release — host closes the transaction (undo push + DB sync). */
+    ondragend?: (id: string) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onselect?: (id: string) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
@@ -139,7 +145,9 @@
       const t = e.target as Element
       return !t.closest('.port') && !t.closest('.edge-zone') && e.button === 0 && interactive
     },
+    onStart: () => ondragstart?.(node.id),
     onDrag: (dx, dy) => ondragmove?.(node.id, (node.position?.x ?? 0) + dx, (node.position?.y ?? 0) + dy),
+    onEnd: () => ondragend?.(node.id),
   })}
   onclick={(e) => { e.stopPropagation(); onselect?.(node.id) }}
   onpointerenter={() => { if (interactive) hovered = true }}

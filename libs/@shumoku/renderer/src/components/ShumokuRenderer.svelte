@@ -71,6 +71,14 @@
     onnodeadd?: (id: string) => void
     onnodedelete?: (ids: string[]) => void
     /**
+     * Fires once when the user starts dragging a node or subgraph.
+     * Hosts open an undo / cache transaction here and close it in
+     * `ondragend` so the in-flight 60Hz drag mutations collapse
+     * into one undo step + one IDB write.
+     */
+    ondragstart?: (id: string) => void
+    ondragend?: (id: string) => void
+    /**
      * Fired when the user drags between two ports to request a new link.
      * The parent owns link identity — it must create the link (with an ID of
      * its choosing) and either push it via `bind:links` or call `appendLink()`.
@@ -96,6 +104,8 @@
     oncontextmenu: onctx,
     onnodeadd,
     onnodedelete,
+    ondragstart,
+    ondragend,
     oncreatelink,
     subgraphOverlay,
     linkOverlay,
@@ -574,7 +584,9 @@
     {portOverlay}
     linkPreview={linkDrag}
     bind:svgEl={svgElement}
+    {ondragstart}
     ondragmove={handleDragMove}
+    {ondragend}
     onselect={handleSelect}
     onaddport={handleAddPort}
     onlinkstart={handleLinkStart}
