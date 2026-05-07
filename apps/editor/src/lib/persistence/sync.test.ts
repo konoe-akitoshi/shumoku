@@ -23,7 +23,7 @@ const link = (id: string): Link => ({ id, from: { node: 'a' }, to: { node: 'b' }
 const sg = (id: string): Subgraph => ({ id, label: id }) as Subgraph
 const product = (id: string): Product =>
   ({ id, kind: 'device', spec: { kind: 'hardware' } }) as Product
-const scene = (id: string): Scene => ({ id, name: id, nodePlacements: [], wireRoutes: [] })
+const scene = (id: string): Scene => ({ id, name: id, nodePlacements: [] })
 
 test('empty diff is a no-op', () => {
   expect(diffSize(diffSnapshots(snap(), snap()))).toBe(0)

@@ -35,34 +35,18 @@ function endpointPos(
   return nodes.get(nodeId)?.position ?? null
 }
 
-/**
- * Length in pixels of one segment (a, b) within a scene. Uses the
- * link's wireRoute controlPoints only when this segment is the entire
- * link (via-less) — controlPoints aren't keyed per-segment, so they
- * can't be split across via hops without ambiguity.
- */
+/** Pixel distance between two scene endpoints, or null if either
+ *  endpoint can't be resolved. */
 function segmentPx(
   scene: Scene,
-  link: Link,
   aId: string,
   bId: string,
   nodes: Map<string, Node>,
-  isOnlySegment: boolean,
 ): number | null {
   const a = endpointPos(scene, aId, nodes)
   const b = endpointPos(scene, bId, nodes)
   if (!a || !b) return null
-  if (!isOnlySegment) return Math.hypot(b.x - a.x, b.y - a.y)
-  const route = link.id ? scene.wireRoutes.find((w) => w.linkId === link.id) : undefined
-  const points = [a, ...(route?.controlPoints ?? []), b]
-  let len = 0
-  for (let i = 0; i < points.length - 1; i++) {
-    const p = points[i]
-    const q = points[i + 1]
-    if (!p || !q) continue
-    len += Math.hypot(q.x - p.x, q.y - p.y)
-  }
-  return len
+  return Math.hypot(b.x - a.x, b.y - a.y)
 }
 
 /**
@@ -123,7 +107,6 @@ export function cableSegmentLengths(
 ): Array<{ fromId: string; toId: string; meters: number }> {
   const segments = visibleCableSegments(link, nodes)
   if (segments.length === 0) return []
-  const isOnlySegment = segments.length === 1 && segments[0]?.length === 2
   const out: Array<{ fromId: string; toId: string; meters: number }> = []
   for (const seg of segments) {
     let segMeters = 0
@@ -135,7 +118,7 @@ export function cableSegmentLengths(
       for (const scene of scenes) {
         const ratio = scene.calibration?.pxPerMeter
         if (!ratio || ratio <= 0) continue
-        const px = segmentPx(scene, link, aId, bId, nodes, isOnlySegment)
+        const px = segmentPx(scene, aId, bId, nodes)
         if (px === null) continue
         segMeters += px / ratio
         any = true

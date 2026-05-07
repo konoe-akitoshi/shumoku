@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Scene, WireRoute } from '../types'
+import type { Scene } from '../types'
 
 // Scenes store — pure list + currentSceneId. Mutations are leaf-
 // level (no commit, no cross-store side effects). Composite ops
@@ -75,50 +75,19 @@ export const scenesStore = {
       return { ...s, nodePlacements: next }
     })
   },
-  removePlacement(
-    sceneId: string,
-    nodeId: string,
-    /** Predicate to keep a wire route. Caller passes a check that
-     *  references diagram links since this store doesn't know them. */
-    keepWire: (linkId: string) => boolean,
-  ) {
+  removePlacement(sceneId: string, nodeId: string) {
     scenesState.list = scenesState.list.map((s) =>
       s.id === sceneId
-        ? {
-            ...s,
-            nodePlacements: s.nodePlacements.filter((p) => p.nodeId !== nodeId),
-            wireRoutes: s.wireRoutes.filter((w) => keepWire(w.linkId)),
-          }
+        ? { ...s, nodePlacements: s.nodePlacements.filter((p) => p.nodeId !== nodeId) }
         : s,
     )
   },
-  setWireRoute(sceneId: string, route: WireRoute) {
-    scenesState.list = scenesState.list.map((s) => {
-      if (s.id !== sceneId) return s
-      const idx = s.wireRoutes.findIndex((w) => w.linkId === route.linkId)
-      if (idx >= 0) {
-        const next = [...s.wireRoutes]
-        next[idx] = route
-        return { ...s, wireRoutes: next }
-      }
-      return { ...s, wireRoutes: [...s.wireRoutes, route] }
-    })
-  },
-  removeWireRoute(sceneId: string, linkId: string) {
-    scenesState.list = scenesState.list.map((s) =>
-      s.id === sceneId ? { ...s, wireRoutes: s.wireRoutes.filter((w) => w.linkId !== linkId) } : s,
-    )
-  },
-  hideNode(sceneId: string, nodeId: string, keepWire: (linkId: string) => boolean) {
+  hideNode(sceneId: string, nodeId: string) {
     scenesState.list = scenesState.list.map((s) => {
       if (s.id !== sceneId) return s
       const hidden = new Set(s.hiddenNodeIds ?? [])
       hidden.add(nodeId)
-      return {
-        ...s,
-        hiddenNodeIds: [...hidden],
-        wireRoutes: s.wireRoutes.filter((w) => keepWire(w.linkId)),
-      }
+      return { ...s, hiddenNodeIds: [...hidden] }
     })
   },
   unhideNode(sceneId: string, nodeId: string) {
@@ -146,19 +115,29 @@ export const scenesStore = {
 }
 
 /**
- * Drop placements / wires / hidden ids that point at orphan node or
- * link ids. Used on project import.
+ * Drop placements / hidden ids that point at orphan node or link
+ * ids. Also strips any legacy `wireRoutes` field from incoming
+ * data (the field was deprecated when bends moved to `Link.via`).
+ * Used on project import.
  */
 export function sanitizeScenes(
   rawScenes: Scene[],
   nodes: Map<string, unknown>,
   linkIdSet: Set<string>,
 ): Scene[] {
-  return rawScenes.map((scene) => ({
-    ...scene,
-    nodePlacements: scene.nodePlacements.filter((p) => nodes.has(p.nodeId)),
-    wireRoutes: scene.wireRoutes.filter((w) => linkIdSet.has(w.linkId)),
-    hiddenNodeIds: scene.hiddenNodeIds?.filter((id) => nodes.has(id)),
-    hiddenLinkIds: scene.hiddenLinkIds?.filter((id) => linkIdSet.has(id)),
-  }))
+  return rawScenes.map((scene) => {
+    // Strip the legacy field if it survived through import. The
+    // load-time migration converts `wireRoutes[].controlPoints` →
+    // bend Nodes before sanitize runs, so by this point the field
+    // (if present) carries no information.
+    const { wireRoutes: _wireRoutes, ...rest } = scene as Scene & {
+      wireRoutes?: unknown[]
+    }
+    return {
+      ...rest,
+      nodePlacements: scene.nodePlacements.filter((p) => nodes.has(p.nodeId)),
+      hiddenNodeIds: scene.hiddenNodeIds?.filter((id) => nodes.has(id)),
+      hiddenLinkIds: scene.hiddenLinkIds?.filter((id) => linkIdSet.has(id)),
+    }
+  })
 }
