@@ -1,8 +1,15 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { ArrowsClockwise, ArrowUUpLeft, ArrowUUpRight, Trash } from 'phosphor-svelte'
+import {
+  ArrowsClockwise,
+  ArrowUUpLeft,
+  ArrowUUpRight,
+  MagnifyingGlass,
+  Trash,
+} from 'phosphor-svelte'
 import { diagramState } from '../context.svelte'
+import { openPalette } from './palette.svelte'
 import { defineAction } from './registry'
 import type { Action, ActionContext } from './types'
 
@@ -108,6 +115,16 @@ const builtinActions: Action[] = [
     group: 'arrange',
     when: inDiagram,
     run: () => diagramState.autoArrange(),
+  },
+
+  // ----- UI ---------------------------------------------------------------
+  {
+    id: 'ui.commandPalette',
+    label: 'Command palette',
+    shortcut: `${Mod}+K`,
+    icon: MagnifyingGlass,
+    group: 'misc',
+    run: () => openPalette(),
   },
 ]
 
