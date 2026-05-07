@@ -147,19 +147,35 @@
     return anchor ? { anchor, meters: total } : null
   })
 
-  // Drag-to-bend on the line body: insert a bend Node into the
-  // link's via at the click, then drag its placement. snap-to-
-  // existing inside bendOnDrag grabs a nearby existing bend
-  // instead of duplicating.
-  function onLinePointerDown(e: PointerEvent) {
+  // Which visible polyline was last clicked. The selection
+  // highlight only colors this segment so the user can tell
+  // which side of an EPS-split wire they're acting on. Defaults
+  // to 0 (single-segment wires keep the existing visual).
+  let activeSegment = $state(0)
+
+  // Reset to 0 if visualSegments shrinks below activeSegment so we
+  // don't index out of range (e.g. EPS removed → single segment).
+  $effect(() => {
+    if (activeSegment >= visualSegments.length) activeSegment = 0
+  })
+
+  // Drag-to-bend on the line body. Each visible polyline has its
+  // own hit path so we know — at pixel level — which side of an
+  // EPS-split wire the user clicked. Forward that index to
+  // bendOnDrag instead of letting it geometrically re-infer
+  // (which could pick the wrong polyline when the two sides are
+  // perpendicular-close at the click point).
+  function onLinePointerDown(e: PointerEvent, segIdx: number) {
     if (!interactive) return
     if (e.button !== 0) return
+    activeSegment = segIdx
     e.stopImmediatePropagation()
     bendOnDrag({
       sceneId,
       linkId: id,
       startClient: { x: e.clientX, y: e.clientY },
       segments: bendSegments,
+      segmentIndex: segIdx,
       toFlow,
     })
   }
@@ -181,25 +197,52 @@
     pointer-events="none"
   />
 {/if}
+<!-- Slate base stroke for the whole wire — drawn first so the
+     active-segment overlay (when selected) sits on top. -->
 <BaseEdge
   path={pathD}
   {markerEnd}
   interactionWidth={0}
-  style="stroke: {selected ? '#3b82f6' : '#475569'}; stroke-width: {(selected ? 3.5 : 3) *
+  style="stroke: #475569; stroke-width: {3 *
     (data?.wireScale ?? 1)}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
 />
 
-<!-- Wire-body hit path. nopan/nodrag opt out of d3-zoom so the line
-     drag isn't hijacked into a pane pan. -->
-<path
-  d={pathD}
-  class="nopan nodrag"
-  fill="none"
-  stroke="transparent"
-  stroke-width="16"
-  style="cursor: grab; pointer-events: stroke;"
-  onpointerdown={onLinePointerDown}
-/>
+<!-- Per-segment selection highlight: only the polyline the user
+     clicked turns blue. EPS-split wires read as two distinct
+     cables instead of "the whole logical link lights up". -->
+{#if selected}
+  {#each visualSegments as seg, i (i)}
+    {#if i === activeSegment && seg.length >= 2}
+      <path
+        d={polylinePath(seg, WIRE_CORNER_RADIUS)}
+        fill="none"
+        stroke="#3b82f6"
+        stroke-width={3.5 * (data?.wireScale ?? 1)}
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        pointer-events="none"
+      />
+    {/if}
+  {/each}
+{/if}
+
+<!-- Per-segment hit path. Each visible polyline gets its own
+     pointerdown handler so we can track which side of the wire
+     the user is interacting with. nopan/nodrag opts out of
+     d3-zoom so a line drag isn't hijacked into a pane pan. -->
+{#each visualSegments as seg, i (i)}
+  {#if seg.length >= 2}
+    <path
+      d={polylinePath(seg, WIRE_CORNER_RADIUS)}
+      class="nopan nodrag"
+      fill="none"
+      stroke="transparent"
+      stroke-width="16"
+      style="cursor: grab; pointer-events: stroke;"
+      onpointerdown={(e) => onLinePointerDown(e, i)}
+    />
+  {/if}
+{/each}
 
 <!-- Cable length pill — only when the scene is calibrated. Fully
      opaque white with a soft outer ring so it stands clear of any

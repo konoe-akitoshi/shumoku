@@ -82,14 +82,16 @@ function nearestSegment(points: Waypoint[], p: Waypoint): { index: number; distS
  * already-placed bend (within `snapTol` flow units) instead of
  * spawning a duplicate.
  *
- * `segments` is the array of visible polylines (one per side of an
- * EPS, plus the trivial single-segment case). Each polyline carries
- * its own `viaOffset` so a click resolves to the right insertion
- * index in the link's via list:
+ * `segmentIndex` identifies which visible polyline the user
+ * clicked. SceneEdge knows this from pixel-level hit testing
+ * (each polyline has its own hit path), so bendOnDrag doesn't try
+ * to re-infer it geometrically — that previously misfired on
+ * EPS-split wires when one polyline was perpendicular-closer to
+ * the click than the one actually under the cursor. The matching
+ * `BendDragSegment` carries its own `viaOffset`, so:
  *   global segIdx = viaOffset + nearestSegment(local).index
- * Without this offset an EPS-split wire would always insert into
- * the rack-side via slice regardless of which visible side the
- * user clicked.
+ * inside the polyline picks where in the link's via the new bend
+ * lands.
  */
 export interface BendDragSegment {
   points: Waypoint[]
@@ -101,11 +103,21 @@ export function bendOnDrag(args: {
   linkId: string
   startClient: { x: number; y: number }
   segments: BendDragSegment[]
+  segmentIndex: number
   toFlow: (clientX: number, clientY: number) => Waypoint
   threshold?: number
   snapTol?: number
 }) {
-  const { sceneId, linkId, startClient, segments, toFlow, threshold = 4, snapTol = 18 } = args
+  const {
+    sceneId,
+    linkId,
+    startClient,
+    segments,
+    segmentIndex,
+    toFlow,
+    threshold = 4,
+    snapTol = 18,
+  } = args
   let dragNodeId: string | null = null
   let txOpen = false
 
@@ -142,22 +154,16 @@ export function bendOnDrag(args: {
         txOpen = true
         dragNodeId = near.id
       } else {
-        // Pick the closest visible polyline first, then the
-        // closest line within it. Capture viaOffset alongside the
-        // local index in the same loop so we don't re-look the
-        // winner up after.
-        let bestLocal = 0
-        let bestOffset = 0
-        let bestDist = Infinity
-        for (const seg of segments) {
-          const { index, distSq } = nearestSegment(seg.points, flowStart)
-          if (distSq < bestDist) {
-            bestDist = distSq
-            bestLocal = index
-            bestOffset = seg.viaOffset
-          }
-        }
-        const segIdx = bestOffset + bestLocal
+        // Use the segment SceneEdge told us was clicked (pixel-
+        // level hit test) — only resolve the *line within that
+        // polyline* geometrically. This avoids the
+        // EPS-split footgun where two polylines were both fed to
+        // a global nearestSegment loop and a perpendicular-closer
+        // line on the other polyline could win.
+        const seg = segments[segmentIndex] ?? segments[0]
+        if (!seg) return
+        const { index: localIdx } = nearestSegment(seg.points, flowStart)
+        const segIdx = seg.viaOffset + localIdx
         // insertBendInLink wraps the create + via splice in its own
         // commit, so we don't double-wrap with our drag tx.
         dragNodeId = diagramState.insertBendInLink(sceneId, linkId, flowStart, segIdx)
