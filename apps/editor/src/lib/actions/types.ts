@@ -90,10 +90,18 @@ export interface Action {
   label: string
   /**
    * Keyboard shortcut, simplified syntax: `Mod+Z` (Mod = Cmd on
-   * macOS, Ctrl elsewhere). Display only for v1 — actual key
-   * dispatch lands in PR-2.
+   * macOS, Ctrl elsewhere). The global keyboard handler binds to
+   * this string AND menu / palette surfaces show it as a hint.
    */
   shortcut?: string
+  /**
+   * Display-only shortcut hint shown in menus / palette when the
+   * key is handled outside the registry (e.g. Delete is consumed
+   * by the renderer's own keyboard listener; binding here would
+   * double-fire). Use sparingly — `shortcut` is the right field
+   * for anything the registry actually dispatches.
+   */
+  shortcutHint?: string
   /** Icon component (Phosphor Svelte) — optional. */
   icon?: Component
   /** Group for menu sectioning. Defaults to `misc`. */

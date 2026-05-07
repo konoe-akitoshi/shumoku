@@ -92,8 +92,10 @@
             {/if}
             {a.label}
           </span>
-          {#if a.shortcut}
-            <span class="text-[10px] font-mono text-muted-foreground">{a.shortcut}</span>
+          {#if a.shortcut || a.shortcutHint}
+            <span class="text-[10px] font-mono text-muted-foreground">
+              {a.shortcut ?? a.shortcutHint}
+            </span>
           {/if}
         </button>
       {/each}
