@@ -451,7 +451,8 @@
     minZoom={0.05}
     maxZoom={4}
     zoomOnDoubleClick={false}
-    panOnDrag={[1, 2]}
+    panOnDrag={[1]}
+    panActivationKey="Alt"
     selectionOnDrag
     onnodedragstart={onNodeDragStart}
     onnodedrag={onNodeDrag}
