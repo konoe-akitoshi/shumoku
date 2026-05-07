@@ -45,7 +45,6 @@ test('serializeEntity replaces blob URLs in nested fields with asset: refs', asy
       name: 'F1',
       background: { src: entry.url, width: 100, height: 100 },
       nodePlacements: [],
-      wireRoutes: [],
     }
     const serialized = serializeEntity(scene)
     expect(serialized.background?.src).toBe(`asset:${entry.hash}.png`)

@@ -149,12 +149,6 @@ export interface Scene {
    * scene at its `Node.position` unless an entry here overrides it.
    */
   nodePlacements: NodePlacement[]
-  /**
-   * Wire routing overrides. Sparse — every diagram link renders in
-   * this scene with a default orthogonal route unless an entry here
-   * overrides it.
-   */
-  wireRoutes: WireRoute[]
   /** Node ids explicitly hidden from this scene. */
   hiddenNodeIds?: string[]
   /** Link ids explicitly hidden from this scene. */
@@ -214,17 +208,6 @@ export interface NodePlacement {
   rotation?: number
   /** Uniform scale (default 1). */
   scale?: number
-}
-
-export type WirePathStyle = 'straight' | 'orthogonal' | 'free'
-
-export interface WireRoute {
-  /** Reference to NetworkGraph.links[].id */
-  linkId: string
-  /** Path style; default 'orthogonal'. */
-  pathStyle: WirePathStyle
-  /** Optional waypoints between endpoints; renderer connects them in order. */
-  controlPoints?: { x: number; y: number }[]
 }
 
 // =========================================================================

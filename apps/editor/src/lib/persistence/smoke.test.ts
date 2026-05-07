@@ -47,7 +47,6 @@ test('imported blob URLs survive the load pipeline', async () => {
         id: 's1',
         name: 'F1',
         nodePlacements: [],
-        wireRoutes: [],
         background: { src: entry.url, width: 1, height: 1 },
       },
     ],
@@ -110,7 +109,6 @@ test('round-trips a project through .neted', async () => {
       id: 'scene1',
       name: 'Floor 1',
       nodePlacements: [],
-      wireRoutes: [],
       background: { src: sceneBg, width: 100, height: 100 },
     },
   ]

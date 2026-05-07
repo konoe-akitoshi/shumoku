@@ -74,7 +74,6 @@ import type {
   NetedProject,
   Product,
   Scene,
-  WireRoute,
 } from './types'
 import { productLabel } from './types'
 import { type ProjectSnapshot, undoManager } from './undo.svelte'
@@ -856,7 +855,6 @@ export const diagramState = {
         id: newId('scene'),
         name,
         nodePlacements: [],
-        wireRoutes: [],
         scopeSubgraphId,
       }
       scenesStore.add(scene)
@@ -888,28 +886,10 @@ export const diagramState = {
     commit('Move items', () => scenesStore.placeNodes(sceneId, updates))
   },
   removePlacementFromScene(sceneId: string, nodeId: string) {
-    commit('Remove placement', () => {
-      scenesStore.removePlacement(sceneId, nodeId, (linkId) => {
-        const link = diagram.links.find((l) => l.id === linkId)
-        if (!link) return false
-        return link.from.node !== nodeId && link.to.node !== nodeId
-      })
-    })
-  },
-  setWireRoute(sceneId: string, route: WireRoute) {
-    commit('Route wire', () => scenesStore.setWireRoute(sceneId, route))
-  },
-  removeWireFromScene(sceneId: string, linkId: string) {
-    commit('Remove wire route', () => scenesStore.removeWireRoute(sceneId, linkId))
+    commit('Remove placement', () => scenesStore.removePlacement(sceneId, nodeId))
   },
   hideNodeInScene(sceneId: string, nodeId: string) {
-    commit('Hide node', () => {
-      scenesStore.hideNode(sceneId, nodeId, (linkId) => {
-        const link = diagram.links.find((l) => l.id === linkId)
-        if (!link) return false
-        return link.from.node !== nodeId && link.to.node !== nodeId
-      })
-    })
+    commit('Hide node', () => scenesStore.hideNode(sceneId, nodeId))
   },
   unhideNodeInScene(sceneId: string, nodeId: string) {
     commit('Unhide node', () => scenesStore.unhideNode(sceneId, nodeId))
@@ -1063,30 +1043,22 @@ export const diagramState = {
       rebuildPortsAndEdges()
     })
   },
-  addWireInScene(
-    sceneId: string,
-    fromNodeId: string,
-    toNodeId: string,
-    options?: { pathStyle?: WireRoute['pathStyle']; controlPoints?: WireRoute['controlPoints'] },
-  ): string | undefined {
+  addWireInScene(_sceneId: string, fromNodeId: string, toNodeId: string): string | undefined {
     return commit('Add wire', () => {
       const fromNode = diagram.nodes.get(fromNodeId)
       const toNode = diagram.nodes.get(toNodeId)
       if (!fromNode || !toNode) return undefined
       const linkId = newId('link')
-      // Init an empty cable record so the BOM / detail panel pick the
-      // wire up immediately. Type/grade/length stay unset; the user
-      // (or scene-derived length) fills them in afterward.
+      // Init an empty cable record so the BOM / detail panel pick
+      // the wire up immediately. Type / grade / length stay unset;
+      // the user (or scene-derived length) fills them in
+      // afterward. The wire's scene appearance is fully derived
+      // from `link.via` placements — no per-scene route record.
       diagramState.addLink({
         id: linkId,
         from: { node: fromNodeId, port: '' },
         to: { node: toNodeId, port: '' },
         cable: {},
-      })
-      diagramState.setWireRoute(sceneId, {
-        linkId,
-        pathStyle: options?.pathStyle ?? 'orthogonal',
-        controlPoints: options?.controlPoints,
       })
       return linkId
     })
@@ -1540,28 +1512,43 @@ async function applyProject(data: Partial<NetedProject>) {
   await rerouteEdges()
 
   const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
+  // Migration must run BEFORE sanitize so the legacy `wireRoutes`
+  // field (already stripped by sanitize) is still readable from
+  // the raw input. addTerminationInScene needs the scene present
+  // in scenesStore though, so we set sanitized first and then
+  // migrate from the raw payload.
   scenesStore.set(sanitizeScenes(data.scenes ?? [], diagram.nodes, linkIdSet))
   scenesStore.setCurrentId(null)
-
-  // Backwards compat: convert legacy wireRoutes.controlPoints into
-  // bend Nodes inserted in Link.via. Old projects stored bends as
-  // anonymous absolute coords; the new model treats every transit
-  // point (including user bends) as a Node so multi-drag, deletion,
-  // and selection all flow through Svelte Flow's native node
-  // machinery. Run once after sanitize so node ids are stable.
-  migrateWireRoutesToBendNodes()
+  migrateLegacyWireRoutes(data.scenes ?? [])
 }
 
-function migrateWireRoutesToBendNodes() {
-  for (const scene of scenesStore.list) {
-    const routesWithBends = scene.wireRoutes.filter((r) => (r.controlPoints?.length ?? 0) > 0)
-    if (routesWithBends.length === 0) continue
-    for (const route of routesWithBends) {
+/**
+ * One-shot migration of legacy `Scene.wireRoutes[].controlPoints`
+ * (anonymous absolute-coord bends) into bend Nodes spliced into
+ * `Link.via`. The new model treats every transit point — bends
+ * included — as a Node, so multi-drag / deletion / selection all
+ * flow through Svelte Flow's native node machinery. The
+ * `wireRoutes` field is gone from the Scene type; the migration
+ * reads it via a loose cast on the raw input.
+ */
+type LegacyScene = {
+  id: string
+  wireRoutes?: Array<{ linkId: string; controlPoints?: Array<{ x: number; y: number }> }>
+}
+
+function migrateLegacyWireRoutes(rawScenes: unknown[]) {
+  for (const raw of rawScenes) {
+    const legacy = raw as LegacyScene
+    const routes = legacy.wireRoutes
+    if (!routes?.length) continue
+    for (const route of routes) {
+      const points = route.controlPoints
+      if (!points?.length) continue
       const link = diagram.links.find((l) => l.id === route.linkId)
       if (!link) continue
       const newBendIds: string[] = []
-      for (const pt of route.controlPoints ?? []) {
-        const id = diagramState.addTerminationInScene(scene.id, pt, 'bend')
+      for (const pt of points) {
+        const id = diagramState.addTerminationInScene(legacy.id, pt, 'bend')
         newBendIds.push(id)
       }
       // Bends go before any existing TPs in via — preserves the
@@ -1569,12 +1556,6 @@ function migrateWireRoutesToBendNodes() {
       // first-class waypoints.
       diagramState.updateLink(route.linkId, { via: [...newBendIds, ...(link.via ?? [])] })
     }
-    // Clear migrated controlPoints; pathStyle stays for routing
-    // hints in the future, but controlPoints is no longer the
-    // source of truth.
-    scenesStore.update(scene.id, {
-      wireRoutes: scene.wireRoutes.map((r) => ({ ...r, controlPoints: [] })),
-    })
   }
 }
 
