@@ -57,7 +57,10 @@ const builtinActions: Action[] = [
   {
     id: 'edit.delete',
     label: 'Delete',
-    shortcut: 'Del',
+    // No shortcut field on purpose: both diagram (custom SVG) and
+    // scene (Svelte Flow) already handle Backspace/Delete natively
+    // on the canvas. Binding it here would double-fire. The menu
+    // entry stays so right-click → Delete works without keyboard.
     icon: Trash,
     group: 'edit',
     enabled: hasSelection,

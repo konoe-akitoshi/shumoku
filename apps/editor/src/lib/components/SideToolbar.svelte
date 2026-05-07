@@ -11,6 +11,8 @@
     SquaresFour,
     Sun,
   } from 'phosphor-svelte'
+  import { getActionContext } from '$lib/actions/context-provider.svelte'
+  import { runAction } from '$lib/actions/registry'
 
   let {
     mode = 'view',
@@ -18,7 +20,6 @@
     onmodechange,
     onaddnode,
     onaddsubgraph,
-    onautoarrange,
     onthemetoggle,
   }: {
     mode: 'edit' | 'view'
@@ -26,7 +27,6 @@
     onmodechange?: (mode: 'edit' | 'view') => void
     onaddnode?: (spec?: NodeSpec) => void
     onaddsubgraph?: () => void
-    onautoarrange?: () => void
     onthemetoggle?: () => void
   } = $props()
 
@@ -127,7 +127,7 @@
         <button
           type="button"
           class="flex items-center justify-center w-9 h-9 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
-          onclick={() => onautoarrange?.()}
+          onclick={() => runAction('arrange.autoLayout', getActionContext())}
         >
           <ArrowsOutCardinal class="w-4.5 h-4.5" />
         </button>

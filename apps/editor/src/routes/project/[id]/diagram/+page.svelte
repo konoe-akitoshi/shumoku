@@ -4,6 +4,7 @@
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
   import { page } from '$app/stores'
+  import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
   import type { ActionContext, CameraHandle } from '$lib/actions/types'
   import CanvasContextMenu from '$lib/components/CanvasContextMenu.svelte'
   import CodePanel from '$lib/components/CodePanel.svelte'
@@ -86,6 +87,14 @@
       : { ids: [], types: [] },
     canvasPos: canvasMenuOpen ? { x: canvasMenuX, y: canvasMenuY } : undefined,
     camera: cameraHandle ?? undefined,
+  })
+
+  // Publish to the global slot so the keyboard handler + any
+  // toolbar buttons see this page's context. Re-runs on every
+  // ctx change because of the $derived read.
+  $effect(() => {
+    provideActionContext(actionCtx)
+    return clearActionContext
   })
   let clipboard = $state<{
     label: string
@@ -220,7 +229,6 @@
       onmodechange={(m) => { editorState.mode = m }}
       onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
       onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
-      onautoarrange={() => diagramState.autoArrange()}
       onthemetoggle={() => editorState.toggleTheme()}
     />
   </div>
