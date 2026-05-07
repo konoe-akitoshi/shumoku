@@ -1,23 +1,21 @@
 <script lang="ts">
+  import { getActionContext } from '$lib/actions/context-provider.svelte'
   import { runAction, visibleActionsByGroup } from '$lib/actions/registry'
-  import type { Action, ActionContext } from '$lib/actions/types'
+  import type { Action } from '$lib/actions/types'
+  import {
+    canvasMenuPosition,
+    closeCanvasMenu,
+    isCanvasMenuOpen,
+  } from '$lib/state/canvas-menu.svelte'
 
-  // Right-click menu on canvas surfaces. Renders whatever actions
-  // the registry exposes for the given context, grouped by their
-  // `group` field. Surfaces choose what `ctx` to pass (selection,
-  // canvas position, mode, camera handle).
+  // Right-click menu on canvas surfaces. Reads its open/position
+  // state and the action context from global slots so it can be
+  // mounted once at the (canvas) layout level — pages just call
+  // `openCanvasMenu(x, y)` from their right-click handler.
 
-  let {
-    open = $bindable(false),
-    x = 0,
-    y = 0,
-    ctx,
-  }: {
-    open: boolean
-    x: number
-    y: number
-    ctx: ActionContext
-  } = $props()
+  const open = $derived(isCanvasMenuOpen())
+  const pos = $derived(canvasMenuPosition())
+  const ctx = $derived(getActionContext())
 
   const groups = $derived(open ? visibleActionsByGroup(ctx) : [])
 
@@ -27,14 +25,12 @@
 
   async function pick(a: Action) {
     if (!isEnabled(a)) return
-    open = false
+    closeCanvasMenu()
     await runAction(a.id, ctx)
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      open = false
-    }
+    if (e.key === 'Escape') closeCanvasMenu()
   }
 
   // Bind to the menu root so the close-on-outside-click handler
@@ -51,7 +47,7 @@
     if (!open) return
     const t = e.target
     if (menuEl && t instanceof Node && menuEl.contains(t)) return
-    open = false
+    closeCanvasMenu()
   }
 
   $effect(() => {
@@ -70,7 +66,7 @@
   <div
     bind:this={menuEl}
     class="fixed z-50 min-w-[200px] rounded-lg border border-neutral-200 bg-white py-1 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
-    style="left: {x}px; top: {y}px"
+    style="left: {pos.x}px; top: {pos.y}px"
     role="menu"
     tabindex="-1"
   >
