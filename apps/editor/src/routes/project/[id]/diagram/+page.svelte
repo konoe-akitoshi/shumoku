@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { type LinkEndpoint, type NodeShape, type NodeSpec, newId } from '@shumoku/core'
+  import { type LinkEndpoint, newId } from '@shumoku/core'
   import { attachCamera } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
   import { page } from '$app/stores'
   import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
-  import type { ActionContext, CameraHandle } from '$lib/actions/types'
+  import type { ActionContext, CameraHandle, RendererHandle } from '$lib/actions/types'
   import CanvasContextMenu from '$lib/components/CanvasContextMenu.svelte'
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
@@ -17,6 +17,7 @@
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
+  import { clipboard } from '$lib/state/clipboard.svelte'
   import { preventBrowserZoom } from '$lib/utils/prevent-browser-zoom'
 
   preventBrowserZoom()
@@ -77,6 +78,25 @@
   let canvasMenuX = $state(0)
   let canvasMenuY = $state(0)
 
+  // Adapter that lets registry-side actions (copy / paste) talk to
+  // the renderer instance without each action grabbing the bound
+  // ref themselves.
+  const rendererHandle = $derived<RendererHandle | undefined>(
+    renderer && rendererSvg
+      ? {
+          getElementInfo: (id: string) => renderer?.getElementInfo(id) ?? null,
+          screenToSvg: (x: number, y: number) => renderer?.screenToSvg(x, y),
+          addNewNode: (init) => renderer?.addNewNode(init),
+          addNewSubgraph: (init) => renderer?.addNewSubgraph(init),
+          viewportCenter: () => {
+            if (!rendererSvg) return undefined
+            const r = rendererSvg.getBoundingClientRect()
+            return renderer?.screenToSvg(r.left + r.width / 2, r.top + r.height / 2)
+          },
+        }
+      : undefined,
+  )
+
   const actionCtx = $derived<ActionContext>({
     mode: 'diagram',
     selection: selected
@@ -87,6 +107,7 @@
       : { ids: [], types: [] },
     canvasPos: canvasMenuOpen ? { x: canvasMenuX, y: canvasMenuY } : undefined,
     camera: cameraHandle ?? undefined,
+    renderer: rendererHandle,
   })
 
   // Publish to the global slot so the keyboard handler + any
@@ -96,13 +117,6 @@
     provideActionContext(actionCtx)
     return clearActionContext
   })
-  let clipboard = $state<{
-    label: string
-    shape?: NodeShape
-    spec?: NodeSpec
-    productId?: string
-    elementKind: 'node' | 'subgraph'
-  } | null>(null)
   let detailTarget = $state<{ id: string; type: 'node' | 'link' | 'subgraph' } | null>(null)
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
   let codePanelOpen = $state(false)
@@ -269,37 +283,38 @@
       x={contextMenu.x}
       y={contextMenu.y}
       mode={editorState.mode}
-      hasClipboard={clipboard !== null}
+      hasClipboard={clipboard.hasEntry}
       subgraphs={diagramState.subgraphs}
       currentParent={contextMenu.type === 'node' ? diagramState.nodes.get(contextMenu.id)?.parent : undefined}
       oncopy={(id) => {
         const info = renderer?.getElementInfo(id)
-        if (!info) { clipboard = null; return }
+        if (!info) { clipboard.clear(); return }
         const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
-        clipboard = {
+        clipboard.set({
           label: Array.isArray(info.label) ? info.label.join(', ') : info.label,
           shape: info.kind === 'node' ? info.shape : undefined,
           spec: info.kind === 'node' ? info.spec : undefined,
           productId,
           elementKind: info.kind,
-        }
+        })
       }}
       onpaste={() => {
-        if (!clipboard || !contextMenu) return
+        const entry = clipboard.entry
+        if (!entry || !contextMenu) return
         const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
-        if (clipboard.elementKind === 'subgraph') {
-          renderer?.addNewSubgraph({ id: newId('sg'), label: clipboard.label, position: svgPos })
+        if (entry.elementKind === 'subgraph') {
+          renderer?.addNewSubgraph({ id: newId('sg'), label: entry.label, position: svgPos })
         } else {
           const pastedId = newId('node')
           renderer?.addNewNode({
             id: pastedId,
-            label: clipboard.label,
-            spec: clipboard.spec,
-            shape: clipboard.shape,
+            label: entry.label,
+            spec: entry.spec,
+            shape: entry.shape,
             position: svgPos,
           })
-          if (clipboard.productId) {
-            diagramState.bindNodeToProduct(pastedId, clipboard.productId)
+          if (entry.productId) {
+            diagramState.bindNodeToProduct(pastedId, entry.productId)
           }
         }
       }}

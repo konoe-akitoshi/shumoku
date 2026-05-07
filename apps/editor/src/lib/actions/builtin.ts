@@ -1,14 +1,18 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { newId } from '@shumoku/core'
 import {
   ArrowsClockwise,
   ArrowUUpLeft,
   ArrowUUpRight,
+  ClipboardText,
+  Copy,
   MagnifyingGlass,
   Trash,
 } from 'phosphor-svelte'
 import { diagramState } from '../context.svelte'
+import { clipboard } from '../state/clipboard.svelte'
 import { openPalette } from './palette.svelte'
 import { defineAction } from './registry'
 import type { Action, ActionContext } from './types'
@@ -59,6 +63,62 @@ const builtinActions: Action[] = [
     enabled: () => diagramState.canRedo,
     run: () => {
       diagramState.redo()
+    },
+  },
+  {
+    id: 'edit.copy',
+    label: 'Copy',
+    shortcut: `${Mod}+C`,
+    icon: Copy,
+    group: 'edit',
+    when: inDiagram,
+    enabled: (ctx) =>
+      !!ctx.renderer &&
+      ctx.selection.ids.length === 1 &&
+      (ctx.selection.types[0] === 'node' || ctx.selection.types[0] === 'subgraph'),
+    run: (ctx) => {
+      const id = ctx.selection.ids[0]
+      if (!id || !ctx.renderer) return
+      const info = ctx.renderer.getElementInfo(id)
+      if (!info) return
+      const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
+      clipboard.set({
+        label: Array.isArray(info.label) ? info.label.join(', ') : info.label,
+        shape: info.kind === 'node' ? info.shape : undefined,
+        spec: info.kind === 'node' ? info.spec : undefined,
+        productId,
+        elementKind: info.kind,
+      })
+    },
+  },
+  {
+    id: 'edit.paste',
+    label: 'Paste',
+    shortcut: `${Mod}+V`,
+    icon: ClipboardText,
+    group: 'edit',
+    when: inDiagram,
+    enabled: (ctx) => !!ctx.renderer && clipboard.hasEntry,
+    run: (ctx) => {
+      const entry = clipboard.entry
+      if (!entry || !ctx.renderer) return
+      // SVG-space position: right-click ctx → screenToSvg, else viewport center.
+      const pos = ctx.canvasPos
+        ? ctx.renderer.screenToSvg(ctx.canvasPos.x, ctx.canvasPos.y)
+        : ctx.renderer.viewportCenter()
+      if (entry.elementKind === 'subgraph') {
+        ctx.renderer.addNewSubgraph({ id: newId('sg'), label: entry.label, position: pos })
+      } else {
+        const pastedId = newId('node')
+        ctx.renderer.addNewNode({
+          id: pastedId,
+          label: entry.label,
+          spec: entry.spec,
+          shape: entry.shape,
+          position: pos,
+        })
+        if (entry.productId) diagramState.bindNodeToProduct(pastedId, entry.productId)
+      }
     },
   },
   {
