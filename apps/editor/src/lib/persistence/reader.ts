@@ -64,7 +64,7 @@ export async function readProjectZip(
   for (const path of Object.keys(files)) {
     if (!path.startsWith('assets/')) continue
     const m = /^assets\/([a-f0-9]+)\.([a-z0-9]+)$/.exec(path)
-    if (!m || !m[1] || !m[2]) continue
+    if (!m?.[1] || !m[2]) continue
     const fileBytes = files[path]
     if (!fileBytes) continue
     const blob = new Blob([fileBytes as Uint8Array<ArrayBuffer>])

@@ -1,17 +1,24 @@
 <script lang="ts">
   import { Tooltip } from 'bits-ui'
   import { registerBuiltinActions } from '$lib/actions/builtin'
+  import { installKeyboardShortcuts } from '$lib/actions/keyboard'
   import { initDarkMode } from '$lib/context.svelte'
   import '../app.css'
 
   let { children } = $props()
 
-  // Register the action set once on app boot. Inside `$effect` so
-  // it runs in the browser only — the registry has no SSR side
+  // Register the action set + install the global keyboard handler
+  // once on app boot. Inside `$effect` so it runs in the browser
+  // only — the registry / window listeners have no SSR side
   // effects.
   $effect(() => {
     registerBuiltinActions()
-    return initDarkMode()
+    const detachKeys = installKeyboardShortcuts()
+    const detachDarkMode = initDarkMode()
+    return () => {
+      detachKeys()
+      detachDarkMode?.()
+    }
   })
 </script>
 

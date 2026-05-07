@@ -133,7 +133,7 @@ export const assetStore = {
 /** Parse `asset:<hash>.<ext>` → its parts. Returns null otherwise. */
 export function parseAssetRef(ref: string): { hash: string; ext: string } | null {
   const m = ASSET_REF_RE.exec(ref)
-  if (!m || !m[1] || !m[2]) return null
+  if (!m?.[1] || !m[2]) return null
   return { hash: m[1], ext: m[2] }
 }
 

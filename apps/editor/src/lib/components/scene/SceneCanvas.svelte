@@ -524,6 +524,7 @@
                          to drag from. Otherwise the fully-transparent handles leave the
                          "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
+    /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 1 !important;
     background: #3b82f6;
     border: 1px solid white;
@@ -535,11 +536,13 @@
                edge endpoint positions from each handle's bounding rect — only
                opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
+    /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
                "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
+    /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     cursor: crosshair !important;
   }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
   import { page } from '$app/stores'
+  import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
   import type { ActionContext } from '$lib/actions/types'
   import CanvasContextMenu from '$lib/components/CanvasContextMenu.svelte'
   import CodePanel from '$lib/components/CodePanel.svelte'
@@ -76,6 +77,10 @@
     mode: 'scene',
     selection: { ids: [], types: [] },
     canvasPos: canvasMenuOpen ? { x: canvasMenuX, y: canvasMenuY } : undefined,
+  })
+  $effect(() => {
+    provideActionContext(actionCtx)
+    return clearActionContext
   })
 </script>
 
