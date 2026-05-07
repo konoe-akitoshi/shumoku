@@ -453,6 +453,7 @@
     zoomOnDoubleClick={false}
     panOnDrag={[1]}
     panActivationKey="Alt"
+    panOnScroll
     selectionOnDrag
     onnodedragstart={onNodeDragStart}
     onnodedrag={onNodeDrag}
