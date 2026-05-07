@@ -2,6 +2,7 @@
   import { Tooltip } from 'bits-ui'
   import { registerBuiltinActions } from '$lib/actions/builtin'
   import { installKeyboardShortcuts } from '$lib/actions/keyboard'
+  import CommandPalette from '$lib/components/CommandPalette.svelte'
   import { initDarkMode } from '$lib/context.svelte'
   import '../app.css'
 
@@ -27,4 +28,7 @@
   <meta name="description" content="Interactive network topology diagram editor">
 </svelte:head>
 
-<Tooltip.Provider delayDuration={200}> {@render children()} </Tooltip.Provider>
+<Tooltip.Provider delayDuration={200}>
+  {@render children()}
+  <CommandPalette />
+</Tooltip.Provider>
