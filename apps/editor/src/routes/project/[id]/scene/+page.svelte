@@ -10,6 +10,9 @@
   import SceneSideToolbar from '$lib/components/scene/SceneSideToolbar.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState } from '$lib/context.svelte'
+  import { preventBrowserZoom } from '$lib/utils/prevent-browser-zoom'
+
+  preventBrowserZoom()
 
   // Scene route — floor-plan view of a subgraph. URL convention:
   //   /project/[id]/scene                → root scene

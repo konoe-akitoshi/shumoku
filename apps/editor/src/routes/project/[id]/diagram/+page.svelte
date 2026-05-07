@@ -14,6 +14,9 @@
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
+  import { preventBrowserZoom } from '$lib/utils/prevent-browser-zoom'
+
+  preventBrowserZoom()
 
   // =========================================================================
   // Local UI state (page-specific, not shared)
