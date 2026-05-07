@@ -252,6 +252,21 @@
       const segments: Array<Array<{ x: number; y: number }>> = idSegments.map((seg) =>
         seg.filter((id) => id !== from && id !== to).map((id) => centerOf(id)),
       )
+      // Per-segment via offset for drag-to-bend. The offset is the
+      // global via index of each visible segment's left endpoint:
+      //   - source-rooted segment → 0
+      //   - any other segment (room-side after EPS) → (via index of
+      //     its first id) + 1
+      // SceneEdge uses these to map a click on a specific visible
+      // polyline back to the right insertion index in `link.via`.
+      const via = link.via ?? []
+      const viaIndexOf = new Map<string, number>(via.map((id, i) => [id, i] as const))
+      const segmentViaOffsets: number[] = idSegments.map((seg) => {
+        const head = seg[0]
+        if (head === from) return 0
+        const j = head !== undefined ? viaIndexOf.get(head) : undefined
+        return j === undefined ? 0 : j + 1
+      })
       // Handle side picked toward the FIRST visible waypoint after the
       // source (and the LAST visible waypoint before the target). For
       // a wire that goes source → EPS → … via, we want to leave the
@@ -296,6 +311,7 @@
         data: {
           sceneId: scene.id,
           segments,
+          segmentViaOffsets,
           lengthMeters: eff?.meters ?? null,
           segmentMeters,
           wireScale: effectiveWireScale(link),
