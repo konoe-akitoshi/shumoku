@@ -21,6 +21,12 @@
      *  segments include source/target implicitly. Bends ride along in
      *  these segments since they're now via Nodes too. */
     segments?: Array<Waypoint[]>
+    /** Per-visible-segment via offset for drag-to-bend. Maps the
+     *  local nearest-segment index inside one visible polyline back
+     *  to the global insertion index in `link.via`. Source-rooted
+     *  segments are 0; room-side segments after an EPS skip past
+     *  the rack-side via entries. Computed in SceneCanvas. */
+    segmentViaOffsets?: number[]
     /** Effective real-world cable length, computed by the parent
      *  via the cableLengthMeters helper. */
     lengthMeters: number | null
@@ -83,9 +89,17 @@
       .map((seg) => polylinePath(seg, WIRE_CORNER_RADIUS))
       .join(' ')
   })
-  // First-segment points feed bendOnDrag's segment-search so a
-  // line-body pointerdown maps to the right insertion index.
-  const points = $derived<Waypoint[]>(visualSegments[0] ?? [])
+  // Visible polylines + per-segment via offsets feed bendOnDrag's
+  // search. Without offsets a click on the room-side polyline
+  // would resolve to the rack-side via slice (different
+  // geometric polylines but indices conflated). See
+  // wire-edit.ts:bendOnDrag for the offset → via index mapping.
+  const bendSegments = $derived(
+    visualSegments.map((points, i) => ({
+      points,
+      viaOffset: data?.segmentViaOffsets?.[i] ?? 0,
+    })),
+  )
 
   // Per-visible-segment label anchors: each segment shows its own
   // length pill so an EPS-split wire reads as two separate cables.
@@ -145,7 +159,7 @@
       sceneId,
       linkId: id,
       startClient: { x: e.clientX, y: e.clientY },
-      pointsForSegmentSearch: points,
+      segments: bendSegments,
       toFlow,
     })
   }

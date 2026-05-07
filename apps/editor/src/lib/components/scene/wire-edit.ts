@@ -47,10 +47,12 @@ export function polylinePath(points: Waypoint[], radius = 12): string {
 }
 
 /**
- * Index of the polyline segment closest to `p`. Used by drag-to-bend
- * to decide where in via the new bend should land.
+ * Index of the polyline segment closest to `p` and the squared
+ * perpendicular distance to it. The squared distance lets callers
+ * pick between multiple polylines (e.g. EPS-split visible
+ * segments) without needing a sqrt.
  */
-function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
+function nearestSegment(points: Waypoint[], p: Waypoint): { index: number; distSq: number } {
   let best = 0
   let bestDist = Infinity
   for (let i = 0; i < points.length - 1; i++) {
@@ -70,7 +72,7 @@ function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
       best = i
     }
   }
-  return best
+  return { index: best, distSq: bestDist }
 }
 
 /**
@@ -80,29 +82,30 @@ function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
  * already-placed bend (within `snapTol` flow units) instead of
  * spawning a duplicate.
  *
- * `pointsForSegmentSearch` is the rendered polyline (source +
- * existing via positions + target). The segment index found here
- * maps directly to the via insertion index since the polyline
- * mirrors via's order.
+ * `segments` is the array of visible polylines (one per side of an
+ * EPS, plus the trivial single-segment case). Each polyline carries
+ * its own `viaOffset` so a click resolves to the right insertion
+ * index in the link's via list:
+ *   global segIdx = viaOffset + nearestSegment(local).index
+ * Without this offset an EPS-split wire would always insert into
+ * the rack-side via slice regardless of which visible side the
+ * user clicked.
  */
+export interface BendDragSegment {
+  points: Waypoint[]
+  viaOffset: number
+}
+
 export function bendOnDrag(args: {
   sceneId: string
   linkId: string
   startClient: { x: number; y: number }
-  pointsForSegmentSearch: Waypoint[]
+  segments: BendDragSegment[]
   toFlow: (clientX: number, clientY: number) => Waypoint
   threshold?: number
   snapTol?: number
 }) {
-  const {
-    sceneId,
-    linkId,
-    startClient,
-    pointsForSegmentSearch,
-    toFlow,
-    threshold = 4,
-    snapTol = 18,
-  } = args
+  const { sceneId, linkId, startClient, segments, toFlow, threshold = 4, snapTol = 18 } = args
   let dragNodeId: string | null = null
   let txOpen = false
 
@@ -139,10 +142,22 @@ export function bendOnDrag(args: {
         txOpen = true
         dragNodeId = near.id
       } else {
-        // Insert a fresh bend into via at the segment the user clicked.
-        // pointsForSegmentSearch starts with source, so segIdx maps
-        // directly to via index (segIdx=0 → before via[0], etc.).
-        const segIdx = nearestSegmentIndex(pointsForSegmentSearch, flowStart)
+        // Pick the closest visible polyline first, then the
+        // closest line within it. Capture viaOffset alongside the
+        // local index in the same loop so we don't re-look the
+        // winner up after.
+        let bestLocal = 0
+        let bestOffset = 0
+        let bestDist = Infinity
+        for (const seg of segments) {
+          const { index, distSq } = nearestSegment(seg.points, flowStart)
+          if (distSq < bestDist) {
+            bestDist = distSq
+            bestLocal = index
+            bestOffset = seg.viaOffset
+          }
+        }
+        const segIdx = bestOffset + bestLocal
         // insertBendInLink wraps the create + via splice in its own
         // commit, so we don't double-wrap with our drag tx.
         dragNodeId = diagramState.insertBendInLink(sceneId, linkId, flowStart, segIdx)
