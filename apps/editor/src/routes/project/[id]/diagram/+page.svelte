@@ -12,12 +12,12 @@
   import ExportMenu from '$lib/components/ExportMenu.svelte'
   import HeaderBar from '$lib/components/HeaderBar.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
-  import NodeContextMenu from '$lib/components/NodeContextMenu.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
   import { clipboard } from '$lib/state/clipboard.svelte'
+  import { detailPanel } from '$lib/state/detail-panel.svelte'
   import { preventBrowserZoom } from '$lib/utils/prevent-browser-zoom'
 
   preventBrowserZoom()
@@ -69,11 +69,12 @@
     }
   })
   let selected = $state<{ id: string; type: string } | null>(null)
-  let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
-  // Canvas-level (empty-area) right-click menu — driven by the
-  // action registry. NodeContextMenu still handles node/subgraph/
-  // edge clicks via `oncontextmenu` from the renderer (which
-  // stopPropagation's so this wrapper handler doesn't also fire).
+  // Canvas right-click menu — registry-driven for both empty
+  // canvas and per-element clicks. The renderer's per-element
+  // `oncontextmenu` callback first sets `selected = { id, type }`
+  // so action gating sees the clicked item; then the wrapper div's
+  // `oncontextmenu` opens this menu (per-element handlers
+  // stopPropagation so only one path fires).
   let canvasMenuOpen = $state(false)
   let canvasMenuX = $state(0)
   let canvasMenuY = $state(0)
@@ -117,7 +118,6 @@
     provideActionContext(actionCtx)
     return clearActionContext
   })
-  let detailTarget = $state<{ id: string; type: 'node' | 'link' | 'subgraph' } | null>(null)
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
   let codePanelOpen = $state(false)
 
@@ -127,21 +127,21 @@
 
   function openDetail(id: string, rawType: string) {
     if (rawType === 'node') {
-      detailTarget = { id, type: 'node' }
+      detailPanel.show({ id, type: 'node' })
     } else if (rawType === 'edge') {
       // Edge → find corresponding Link
       const edge = diagramState.edges.get(id)
       if (edge?.link?.id) {
-        detailTarget = { id: edge.link.id, type: 'link' }
+        detailPanel.show({ id: edge.link.id, type: 'link' })
       }
     } else if (rawType === 'port') {
       // Port → open parent Node
       const port = diagramState.ports.get(id)
       if (port) {
-        detailTarget = { id: port.nodeId, type: 'node' }
+        detailPanel.show({ id: port.nodeId, type: 'node' })
       }
     } else if (rawType === 'subgraph') {
-      detailTarget = { id, type: 'subgraph' }
+      detailPanel.show({ id, type: 'subgraph' })
     }
   }
 
@@ -206,7 +206,16 @@
         onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}
         onchange={() => {}}
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
-        oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => { contextMenu = { id, type, x: screenX, y: screenY } }}
+        oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => {
+          // Right-click selects the element so the registry-driven
+          // menu sees it as the current selection, then opens the
+          // canvas-level menu at the click position. Same component
+          // as empty-canvas right-click — one menu, two trigger paths.
+          selected = { id, type }
+          canvasMenuX = screenX
+          canvasMenuY = screenY
+          canvasMenuOpen = true
+        }}
         onnodeadd={(_id: string) => {
           // The renderer mutated diagram.nodes directly (via $bindable)
           // before emitting this event — invalidate cached sheets now.
@@ -276,60 +285,17 @@
     />
   {/if}
 
-  {#if contextMenu}
-    <NodeContextMenu
-      id={contextMenu.id}
-      type={contextMenu.type}
-      x={contextMenu.x}
-      y={contextMenu.y}
-      mode={editorState.mode}
-      hasClipboard={clipboard.hasEntry}
-      subgraphs={diagramState.subgraphs}
-      currentParent={contextMenu.type === 'node' ? diagramState.nodes.get(contextMenu.id)?.parent : undefined}
-      oncopy={(id) => {
-        const info = renderer?.getElementInfo(id)
-        if (!info) { clipboard.clear(); return }
-        const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
-        clipboard.set({
-          label: Array.isArray(info.label) ? info.label.join(', ') : info.label,
-          shape: info.kind === 'node' ? info.shape : undefined,
-          spec: info.kind === 'node' ? info.spec : undefined,
-          productId,
-          elementKind: info.kind,
-        })
-      }}
-      onpaste={() => {
-        const entry = clipboard.entry
-        if (!entry || !contextMenu) return
-        const svgPos = renderer?.screenToSvg(contextMenu.x, contextMenu.y)
-        if (entry.elementKind === 'subgraph') {
-          renderer?.addNewSubgraph({ id: newId('sg'), label: entry.label, position: svgPos })
-        } else {
-          const pastedId = newId('node')
-          renderer?.addNewNode({
-            id: pastedId,
-            label: entry.label,
-            spec: entry.spec,
-            shape: entry.shape,
-            position: svgPos,
-          })
-          if (entry.productId) {
-            diagramState.bindNodeToProduct(pastedId, entry.productId)
-          }
-        }
-      }}
-      ondetails={(id) => openDetail(id, contextMenu?.type ?? 'node')}
-      onmovetogroup={(nodeId, groupId) => diagramState.moveNodeToGroup(nodeId, groupId)}
-      ondelete={(id) => { renderer?.deleteById(id) }}
-      onclose={() => { contextMenu = null }}
-    />
-  {/if}
+  <!-- Element right-click and empty-canvas right-click both flow into
+       the same registry-driven menu. Element right-click first sets
+       `selected` so registry actions see the clicked element as the
+       active selection (Copy / Delete / Information / Duplicate gate
+       on selection). -->
 
   <DetailPanel
-    open={detailTarget !== null}
-    elementType={detailTarget?.type ?? null}
-    elementId={detailTarget?.id ?? null}
-    onclose={() => { detailTarget = null }}
+    open={detailPanel.open}
+    elementType={detailPanel.target?.type ?? null}
+    elementId={detailPanel.target?.id ?? null}
+    onclose={() => detailPanel.close()}
   />
 
   <CanvasContextMenu bind:open={canvasMenuOpen} x={canvasMenuX} y={canvasMenuY} ctx={actionCtx} />

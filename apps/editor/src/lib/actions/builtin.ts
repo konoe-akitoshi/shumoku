@@ -8,11 +8,14 @@ import {
   ArrowUUpRight,
   ClipboardText,
   Copy,
+  CopySimple,
+  Info,
   MagnifyingGlass,
   Trash,
 } from 'phosphor-svelte'
 import { diagramState } from '../context.svelte'
 import { clipboard } from '../state/clipboard.svelte'
+import { detailPanel } from '../state/detail-panel.svelte'
 import { openPalette } from './palette.svelte'
 import { defineAction } from './registry'
 import type { Action, ActionContext } from './types'
@@ -122,6 +125,40 @@ const builtinActions: Action[] = [
     },
   },
   {
+    id: 'edit.duplicate',
+    label: 'Duplicate',
+    shortcut: `${Mod}+D`,
+    icon: CopySimple,
+    group: 'edit',
+    when: inDiagram,
+    enabled: (ctx) =>
+      !!ctx.renderer &&
+      ctx.selection.ids.length === 1 &&
+      (ctx.selection.types[0] === 'node' || ctx.selection.types[0] === 'subgraph'),
+    run: (ctx) => {
+      const id = ctx.selection.ids[0]
+      if (!id || !ctx.renderer) return
+      const info = ctx.renderer.getElementInfo(id)
+      if (!info) return
+      // Duplicate at a slight offset from the source so the copy is
+      // visible without clicking.
+      const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
+      const label = Array.isArray(info.label) ? info.label.join(', ') : info.label
+      if (info.kind === 'subgraph') {
+        ctx.renderer.addNewSubgraph({ id: newId('sg'), label })
+      } else {
+        const dupId = newId('node')
+        ctx.renderer.addNewNode({
+          id: dupId,
+          label,
+          spec: info.spec,
+          shape: info.shape,
+        })
+        if (productId) diagramState.bindNodeToProduct(dupId, productId)
+      }
+    },
+  },
+  {
     id: 'edit.delete',
     label: 'Delete',
     // No shortcut field on purpose: both diagram (custom SVG) and
@@ -132,6 +169,28 @@ const builtinActions: Action[] = [
     group: 'edit',
     enabled: hasSelection,
     run: deleteSelection,
+  },
+  {
+    id: 'ui.openDetails',
+    label: 'Information',
+    icon: Info,
+    group: 'misc',
+    enabled: (ctx) => ctx.selection.ids.length === 1,
+    run: (ctx) => {
+      const id = ctx.selection.ids[0]
+      const rawType = ctx.selection.types[0]
+      if (!id) return
+      // Edge / port resolution stays page-side because it needs the
+      // editor's stores; the action only opens whatever it's given,
+      // so the caller has to pre-resolve to a node / link / subgraph.
+      const type =
+        rawType === 'edge' || rawType === 'link'
+          ? 'link'
+          : rawType === 'subgraph'
+            ? 'subgraph'
+            : 'node'
+      detailPanel.show({ id, type })
+    },
   },
 
   // ----- View ------------------------------------------------------------
