@@ -1141,7 +1141,14 @@ export const diagramState = {
       snap.products.length !== after.products.length ||
       snap.scenes.length !== after.scenes.length ||
       JSON.stringify(snap) !== JSON.stringify(after)
-    if (changed) undoManager.push(label, snap)
+    if (changed) {
+      undoManager.push(label, snap)
+      // Same hook as `commit()` — close the transaction by telling
+      // the cache layer to sync. Without this, drag (which uses
+      // beginTx/endTx instead of per-frame commit()) would land in
+      // memory but never reach IndexedDB.
+      cache.touch()
+    }
   },
   get inTx(): boolean {
     return txActive

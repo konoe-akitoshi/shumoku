@@ -129,6 +129,8 @@
         bind:links={diagramState.activeView.links}
         theme={editorState.theme}
         mode={diagramState.currentSheetId === null ? editorState.mode : 'view'}
+        ondragstart={() => diagramState.beginTx('Move node')}
+        ondragend={() => diagramState.endTx()}
         onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}
         onchange={() => {}}
         onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}

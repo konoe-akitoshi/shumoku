@@ -25,8 +25,10 @@
     portOverlay,
     linkPreview = null,
     svgEl = $bindable<SVGSVGElement | null>(null),
-    // Callbacks (unified: ondragmove/onselect work for all element types)
+    // Callbacks (unified: drag/select work for all element types)
+    ondragstart,
     ondragmove,
+    ondragend,
     onselect,
     onaddport,
     onlinkstart,
@@ -47,7 +49,9 @@
     linkedPorts?: Set<string>
     linkPreview?: { fromX: number; fromY: number; toX: number; toY: number } | null
     svgEl?: SVGSVGElement | null
+    ondragstart?: (id: string) => void
     ondragmove?: (id: string, x: number, y: number) => void
+    ondragend?: (id: string) => void
     onselect?: (id: string) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onlinkstart?: (portId: string, x: number, y: number) => void
@@ -143,7 +147,9 @@
         selected={selection.has(subgraph.id)}
         {interactive}
         overlay={subgraphOverlay}
+        {ondragstart}
         {ondragmove}
+        {ondragend}
         {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'subgraph', e)}
       />
@@ -168,7 +174,9 @@
         selected={selection.has(node.id)}
         {interactive}
         overlay={nodeOverlay}
+        {ondragstart}
         {ondragmove}
+        {ondragend}
         {onselect}
         {onaddport}
         oncontextmenu={(id, e) => onctx?.(id, 'node', e)}

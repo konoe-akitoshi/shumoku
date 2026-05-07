@@ -11,7 +11,9 @@
     selected = false,
     interactive = false,
     overlay,
+    ondragstart,
     ondragmove,
+    ondragend,
     onselect,
     oncontextmenu: onctx,
   }: {
@@ -21,7 +23,9 @@
     selected?: boolean
     interactive?: boolean
     overlay?: SubgraphOverlaySnippet
+    ondragstart?: (sgId: string) => void
     ondragmove?: (sgId: string, x: number, y: number) => void
+    ondragend?: (sgId: string) => void
     onselect?: (sgId: string) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
   } = $props()
@@ -84,7 +88,9 @@
     oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); onselect?.(subgraph.id); onctx?.(subgraph.id, e) }}
     use:elementDrag={() => ({
       filter: (e) => e.button === 0 && interactive,
+      onStart: () => ondragstart?.(subgraph.id),
       onDrag: (dx, dy) => ondragmove?.(subgraph.id, (subgraph.bounds?.x ?? 0) + dx, (subgraph.bounds?.y ?? 0) + dy),
+      onEnd: () => ondragend?.(subgraph.id),
     })}
   />
   {@render overlay?.(subgraph, overlayContext)}
