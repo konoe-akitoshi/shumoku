@@ -11,6 +11,7 @@
 // fits their affordance (icon button vs menu item vs keystroke
 // match), and call `run(ctx)` when the user picks one.
 
+import type { NodeShape, NodeSpec } from '@shumoku/core'
 import type { Component } from 'svelte'
 
 /** Where the user invoked the action. Drives `when` / `enabled`. */
@@ -26,9 +27,10 @@ export interface ActionContext {
     types: ('node' | 'subgraph' | 'edge' | 'link' | 'port')[]
   }
   /**
-   * Canvas-space coordinates where the action was invoked, when
-   * applicable (right-click position for "paste here", etc.).
-   * `undefined` for keyboard / toolbar invocations.
+   * Canvas-space *screen* coordinates where the action was invoked,
+   * when applicable (right-click position for "paste here", etc.).
+   * `undefined` for keyboard / toolbar / palette invocations —
+   * `RendererHandle.viewportCenter()` is a sensible fallback.
    */
   canvasPos?: { x: number; y: number }
   /**
@@ -38,6 +40,12 @@ export interface ActionContext {
    * to gate themselves.
    */
   camera?: CameraHandle
+  /**
+   * Renderer handle for copy / paste / duplicate that need to call
+   * into the ShumokuRenderer instance (only diagram view supplies
+   * this; scene actions go through the SceneCanvas store).
+   */
+  renderer?: RendererHandle
 }
 
 /** Subset of the diagram camera (and Svelte Flow's useSvelteFlow) shared by both canvases. */
@@ -46,6 +54,30 @@ export interface CameraHandle {
   zoomIn(): void
   zoomOut(): void
   reset(): void
+}
+
+/** Diagram renderer methods callable by Action `run` functions. */
+export interface RendererHandle {
+  /** Snapshot a node / subgraph's display info for the clipboard. */
+  getElementInfo(id: string): {
+    kind: 'node' | 'subgraph'
+    label: string | string[]
+    shape?: NodeShape
+    spec?: NodeSpec
+  } | null
+  /** Convert a screen-space (clientX/Y) point to SVG-space coords. */
+  screenToSvg(clientX: number, clientY: number): { x: number; y: number } | undefined
+  /** Add a new node at the given SVG-space position. */
+  addNewNode(init: {
+    id: string
+    label?: string
+    shape?: NodeShape
+    spec?: NodeSpec
+    position?: { x: number; y: number }
+  }): void
+  addNewSubgraph(init: { id: string; label?: string; position?: { x: number; y: number } }): void
+  /** Center of the visible canvas in SVG-space — fallback for keyboard paste. */
+  viewportCenter(): { x: number; y: number } | undefined
 }
 
 /** Visual grouping in a context menu / palette. */
@@ -58,10 +90,18 @@ export interface Action {
   label: string
   /**
    * Keyboard shortcut, simplified syntax: `Mod+Z` (Mod = Cmd on
-   * macOS, Ctrl elsewhere). Display only for v1 — actual key
-   * dispatch lands in PR-2.
+   * macOS, Ctrl elsewhere). The global keyboard handler binds to
+   * this string AND menu / palette surfaces show it as a hint.
    */
   shortcut?: string
+  /**
+   * Display-only shortcut hint shown in menus / palette when the
+   * key is handled outside the registry (e.g. Delete is consumed
+   * by the renderer's own keyboard listener; binding here would
+   * double-fire). Use sparingly — `shortcut` is the right field
+   * for anything the registry actually dispatches.
+   */
+  shortcutHint?: string
   /** Icon component (Phosphor Svelte) — optional. */
   icon?: Component
   /** Group for menu sectioning. Defaults to `misc`. */

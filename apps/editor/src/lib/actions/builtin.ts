@@ -1,14 +1,21 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { newId } from '@shumoku/core'
 import {
   ArrowsClockwise,
   ArrowUUpLeft,
   ArrowUUpRight,
+  ClipboardText,
+  Copy,
+  CopySimple,
+  Info,
   MagnifyingGlass,
   Trash,
 } from 'phosphor-svelte'
 import { diagramState } from '../context.svelte'
+import { clipboard } from '../state/clipboard.svelte'
+import { detailPanel } from '../state/detail-panel.svelte'
 import { openPalette } from './palette.svelte'
 import { defineAction } from './registry'
 import type { Action, ActionContext } from './types'
@@ -62,16 +69,128 @@ const builtinActions: Action[] = [
     },
   },
   {
+    id: 'edit.copy',
+    label: 'Copy',
+    shortcut: `${Mod}+C`,
+    icon: Copy,
+    group: 'edit',
+    when: inDiagram,
+    enabled: (ctx) =>
+      !!ctx.renderer &&
+      ctx.selection.ids.length === 1 &&
+      (ctx.selection.types[0] === 'node' || ctx.selection.types[0] === 'subgraph'),
+    run: (ctx) => {
+      const id = ctx.selection.ids[0]
+      if (!id || !ctx.renderer) return
+      const info = ctx.renderer.getElementInfo(id)
+      if (!info) return
+      const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
+      clipboard.set({
+        label: Array.isArray(info.label) ? info.label.join(', ') : info.label,
+        shape: info.kind === 'node' ? info.shape : undefined,
+        spec: info.kind === 'node' ? info.spec : undefined,
+        productId,
+        elementKind: info.kind,
+      })
+    },
+  },
+  {
+    id: 'edit.paste',
+    label: 'Paste',
+    shortcut: `${Mod}+V`,
+    icon: ClipboardText,
+    group: 'edit',
+    when: inDiagram,
+    enabled: (ctx) => !!ctx.renderer && clipboard.hasEntry,
+    run: (ctx) => {
+      const entry = clipboard.entry
+      if (!entry || !ctx.renderer) return
+      // SVG-space position: right-click ctx → screenToSvg, else viewport center.
+      const pos = ctx.canvasPos
+        ? ctx.renderer.screenToSvg(ctx.canvasPos.x, ctx.canvasPos.y)
+        : ctx.renderer.viewportCenter()
+      if (entry.elementKind === 'subgraph') {
+        ctx.renderer.addNewSubgraph({ id: newId('sg'), label: entry.label, position: pos })
+      } else {
+        const pastedId = newId('node')
+        ctx.renderer.addNewNode({
+          id: pastedId,
+          label: entry.label,
+          spec: entry.spec,
+          shape: entry.shape,
+          position: pos,
+        })
+        if (entry.productId) diagramState.bindNodeToProduct(pastedId, entry.productId)
+      }
+    },
+  },
+  {
+    id: 'edit.duplicate',
+    label: 'Duplicate',
+    shortcut: `${Mod}+D`,
+    icon: CopySimple,
+    group: 'edit',
+    when: inDiagram,
+    enabled: (ctx) =>
+      !!ctx.renderer &&
+      ctx.selection.ids.length === 1 &&
+      (ctx.selection.types[0] === 'node' || ctx.selection.types[0] === 'subgraph'),
+    run: (ctx) => {
+      const id = ctx.selection.ids[0]
+      if (!id || !ctx.renderer) return
+      const info = ctx.renderer.getElementInfo(id)
+      if (!info) return
+      // Duplicate at a slight offset from the source so the copy is
+      // visible without clicking.
+      const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
+      const label = Array.isArray(info.label) ? info.label.join(', ') : info.label
+      if (info.kind === 'subgraph') {
+        ctx.renderer.addNewSubgraph({ id: newId('sg'), label })
+      } else {
+        const dupId = newId('node')
+        ctx.renderer.addNewNode({
+          id: dupId,
+          label,
+          spec: info.spec,
+          shape: info.shape,
+        })
+        if (productId) diagramState.bindNodeToProduct(dupId, productId)
+      }
+    },
+  },
+  {
     id: 'edit.delete',
     label: 'Delete',
-    // No shortcut field on purpose: both diagram (custom SVG) and
-    // scene (Svelte Flow) already handle Backspace/Delete natively
-    // on the canvas. Binding it here would double-fire. The menu
-    // entry stays so right-click → Delete works without keyboard.
+    // No `shortcut` (would double-fire with the renderer's native
+    // Backspace handler), but show the hint so users know which
+    // key removes a selection.
+    shortcutHint: 'Del',
     icon: Trash,
     group: 'edit',
     enabled: hasSelection,
     run: deleteSelection,
+  },
+  {
+    id: 'ui.openDetails',
+    label: 'Information',
+    icon: Info,
+    group: 'misc',
+    enabled: (ctx) => ctx.selection.ids.length === 1,
+    run: (ctx) => {
+      const id = ctx.selection.ids[0]
+      const rawType = ctx.selection.types[0]
+      if (!id) return
+      // Edge / port resolution stays page-side because it needs the
+      // editor's stores; the action only opens whatever it's given,
+      // so the caller has to pre-resolve to a node / link / subgraph.
+      const type =
+        rawType === 'edge' || rawType === 'link'
+          ? 'link'
+          : rawType === 'subgraph'
+            ? 'subgraph'
+            : 'node'
+      detailPanel.show({ id, type })
+    },
   },
 
   // ----- View ------------------------------------------------------------

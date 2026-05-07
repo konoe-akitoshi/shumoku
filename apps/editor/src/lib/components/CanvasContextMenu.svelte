@@ -37,10 +37,21 @@
     }
   }
 
-  // Close on any click outside the menu surface (the menu's own
-  // pointer events stop propagation below).
-  function onWindowPointerDown() {
-    if (open) open = false
+  // Bind to the menu root so the close-on-outside-click handler
+  // can tell "click inside menu" from "click on the page".
+  let menuEl = $state<HTMLDivElement | null>(null)
+
+  // Close on click outside. `capture: true` so we see the event
+  // before the underlying canvas handlers (otherwise SVG / Svelte
+  // Flow nodes' own pointerdown can swallow it). Inside-menu
+  // clicks (button picks) are filtered by the target check —
+  // closing on the click itself would race with the button's
+  // pointerdown→click sequence and the click would never reach.
+  function onWindowPointerDown(e: PointerEvent) {
+    if (!open) return
+    const t = e.target
+    if (menuEl && t instanceof Node && menuEl.contains(t)) return
+    open = false
   }
 
   $effect(() => {
@@ -57,11 +68,11 @@
 {#if open}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
+    bind:this={menuEl}
     class="fixed z-50 min-w-[200px] rounded-lg border border-neutral-200 bg-white py-1 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
     style="left: {x}px; top: {y}px"
     role="menu"
     tabindex="-1"
-    onpointerdown={(e) => e.stopPropagation()}
   >
     {#each groups as [ group, items ], i (group)}
       {#if i > 0}
@@ -81,8 +92,10 @@
             {/if}
             {a.label}
           </span>
-          {#if a.shortcut}
-            <span class="text-[10px] font-mono text-muted-foreground">{a.shortcut}</span>
+          {#if a.shortcut || a.shortcutHint}
+            <span class="text-[10px] font-mono text-muted-foreground">
+              {a.shortcut ?? a.shortcutHint}
+            </span>
           {/if}
         </button>
       {/each}
