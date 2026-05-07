@@ -1,6 +1,8 @@
 <script lang="ts">
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
   import { page } from '$app/stores'
+  import type { ActionContext } from '$lib/actions/types'
+  import CanvasContextMenu from '$lib/components/CanvasContextMenu.svelte'
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
@@ -62,9 +64,33 @@
   }
 
   let codePanelOpen = $state(false)
+
+  // Canvas-level right-click menu (registry-driven). v1: no camera
+  // handle from scene yet — view actions render disabled. Wiring
+  // a CameraHandle through SceneCanvas → useSvelteFlow is a
+  // follow-up.
+  let canvasMenuOpen = $state(false)
+  let canvasMenuX = $state(0)
+  let canvasMenuY = $state(0)
+  const actionCtx = $derived<ActionContext>({
+    mode: 'scene',
+    selection: { ids: [], types: [] },
+    canvasPos: canvasMenuOpen ? { x: canvasMenuX, y: canvasMenuY } : undefined,
+  })
 </script>
 
-<div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950"
+  oncontextmenu={(e) => {
+    // Per-element handlers in Svelte Flow stopPropagation so this
+    // only fires for empty-canvas right-clicks.
+    e.preventDefault()
+    canvasMenuX = e.clientX
+    canvasMenuY = e.clientY
+    canvasMenuOpen = true
+  }}
+>
   <div class="absolute inset-0">
     {#if diagramState.currentScene}
       <SceneCanvas scene={diagramState.currentScene} />
@@ -105,4 +131,6 @@
       detailTarget = null
     }}
   />
+
+  <CanvasContextMenu bind:open={canvasMenuOpen} x={canvasMenuX} y={canvasMenuY} ctx={actionCtx} />
 </div>

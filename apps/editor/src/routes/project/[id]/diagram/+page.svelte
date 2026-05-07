@@ -4,6 +4,8 @@
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
   import { page } from '$app/stores'
+  import type { ActionContext, CameraHandle } from '$lib/actions/types'
+  import CanvasContextMenu from '$lib/components/CanvasContextMenu.svelte'
   import CodePanel from '$lib/components/CodePanel.svelte'
   import DetailPanel from '$lib/components/DetailPanel.svelte'
   import ExportMenu from '$lib/components/ExportMenu.svelte'
@@ -25,13 +27,29 @@
   let renderer: ShumokuRenderer | undefined = $state()
   let rendererSvg: SVGSVGElement | null = $state(null)
 
+  // Camera handle for the action registry — diagram's d3-zoom doesn't
+  // expose `fitAll`/`zoomIn`/`zoomOut` directly, so wrap its primitives.
+  let cameraHandle = $state<CameraHandle | null>(null)
+
   // Editor camera: auto-detects mouse (wheel → zoom) vs trackpad
   // (two-finger → pan). Pinch always zooms. Alt+left or middle-click
   // drags the viewport.
   $effect(() => {
     if (!rendererSvg) return
-    const camera = attachCamera(rendererSvg)
-    return () => camera.detach()
+    const c = attachCamera(rendererSvg)
+    cameraHandle = {
+      // `reset()` returns to the SVG viewBox (= layout bounds), which
+      // is exactly "fit everything" since the renderer sizes the
+      // viewBox to the computed graph extent.
+      fitAll: () => c.reset(),
+      zoomIn: () => c.zoomBy(1.25),
+      zoomOut: () => c.zoomBy(0.8),
+      reset: () => c.reset(),
+    }
+    return () => {
+      c.detach()
+      cameraHandle = null
+    }
   })
 
   // Sync URL → state. `?focus=<id>` drives Hierarchy drilldown so a
@@ -50,6 +68,25 @@
   })
   let selected = $state<{ id: string; type: string } | null>(null)
   let contextMenu = $state<{ id: string; type: string; x: number; y: number } | null>(null)
+  // Canvas-level (empty-area) right-click menu — driven by the
+  // action registry. NodeContextMenu still handles node/subgraph/
+  // edge clicks via `oncontextmenu` from the renderer (which
+  // stopPropagation's so this wrapper handler doesn't also fire).
+  let canvasMenuOpen = $state(false)
+  let canvasMenuX = $state(0)
+  let canvasMenuY = $state(0)
+
+  const actionCtx = $derived<ActionContext>({
+    mode: 'diagram',
+    selection: selected
+      ? {
+          ids: [selected.id],
+          types: [selected.type as ActionContext['selection']['types'][number]],
+        }
+      : { ids: [], types: [] },
+    canvasPos: canvasMenuOpen ? { x: canvasMenuX, y: canvasMenuY } : undefined,
+    camera: cameraHandle ?? undefined,
+  })
   let clipboard = $state<{
     label: string
     shape?: NodeShape
@@ -118,6 +155,15 @@
     class="absolute inset-0"
     ondblclick={() => {
       if (selected) openDetail(selected.id, selected.type)
+    }}
+    oncontextmenu={(e) => {
+      // Per-element handlers stopPropagation, so this only fires on
+      // the empty canvas. Open the action-registry-driven menu in
+      // place of the browser default.
+      e.preventDefault()
+      canvasMenuX = e.clientX
+      canvasMenuY = e.clientY
+      canvasMenuOpen = true
     }}
   >
     {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
@@ -262,4 +308,6 @@
     elementId={detailTarget?.id ?? null}
     onclose={() => { detailTarget = null }}
   />
+
+  <CanvasContextMenu bind:open={canvasMenuOpen} x={canvasMenuX} y={canvasMenuY} ctx={actionCtx} />
 </div>
