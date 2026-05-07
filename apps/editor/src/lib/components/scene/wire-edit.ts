@@ -46,13 +46,8 @@ export function polylinePath(points: Waypoint[], radius = 12): string {
   return d
 }
 
-/**
- * Index of the polyline segment closest to `p` and the squared
- * perpendicular distance to it. The squared distance lets callers
- * pick between multiple polylines (e.g. EPS-split visible
- * segments) without needing a sqrt.
- */
-function nearestSegment(points: Waypoint[], p: Waypoint): { index: number; distSq: number } {
+/** Index of the polyline segment closest to `p`. */
+function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
   let best = 0
   let bestDist = Infinity
   for (let i = 0; i < points.length - 1; i++) {
@@ -72,40 +67,44 @@ function nearestSegment(points: Waypoint[], p: Waypoint): { index: number; distS
       best = i
     }
   }
-  return { index: best, distSq: bestDist }
+  return best
 }
 
 /**
- * Drag-to-bend: pointerdown on the line body. Creates a bend Node in
- * the link's `via` chain at the right insertion index, then drags
- * its scene placement until pointerup. Snap-to-existing grabs an
- * already-placed bend (within `snapTol` flow units) instead of
- * spawning a duplicate.
+ * Drag-to-bend: pointerdown on a wire's hit path. Creates a bend
+ * Node in the link's `via` chain at the right insertion index,
+ * then drags its scene placement until pointerup. Snap-to-existing
+ * grabs an already-placed bend within `snapTol` flow units instead
+ * of spawning a duplicate.
  *
- * `segments` is the array of visible polylines (one per side of an
- * EPS, plus the trivial single-segment case). Each polyline carries
- * its own `viaOffset` so a click resolves to the right insertion
- * index in the link's via list:
- *   global segIdx = viaOffset + nearestSegment(local).index
- * Without this offset an EPS-split wire would always insert into
- * the rack-side via slice regardless of which visible side the
- * user clicked.
+ * Each Svelte Flow edge in the scene corresponds to a single
+ * visible cable segment — `points` is that segment's polyline and
+ * `viaOffset` is the global via index of its left endpoint
+ * (source-rooted segment = 0; post-EPS segment = `viaIndex(head) + 1`).
+ * Local nearest-segment-index + offset = global insertion index.
  */
-export interface BendDragSegment {
-  points: Waypoint[]
-  viaOffset: number
-}
-
 export function bendOnDrag(args: {
   sceneId: string
   linkId: string
+  /** This segment's polyline, in flow coordinates. */
+  points: Waypoint[]
+  /** Global via offset for this segment. */
+  viaOffset: number
   startClient: { x: number; y: number }
-  segments: BendDragSegment[]
   toFlow: (clientX: number, clientY: number) => Waypoint
   threshold?: number
   snapTol?: number
 }) {
-  const { sceneId, linkId, startClient, segments, toFlow, threshold = 4, snapTol = 18 } = args
+  const {
+    sceneId,
+    linkId,
+    points,
+    viaOffset,
+    startClient,
+    toFlow,
+    threshold = 4,
+    snapTol = 18,
+  } = args
   let dragNodeId: string | null = null
   let txOpen = false
 
@@ -142,22 +141,8 @@ export function bendOnDrag(args: {
         txOpen = true
         dragNodeId = near.id
       } else {
-        // Pick the closest visible polyline first, then the
-        // closest line within it. Capture viaOffset alongside the
-        // local index in the same loop so we don't re-look the
-        // winner up after.
-        let bestLocal = 0
-        let bestOffset = 0
-        let bestDist = Infinity
-        for (const seg of segments) {
-          const { index, distSq } = nearestSegment(seg.points, flowStart)
-          if (distSq < bestDist) {
-            bestDist = distSq
-            bestLocal = index
-            bestOffset = seg.viaOffset
-          }
-        }
-        const segIdx = bestOffset + bestLocal
+        const localIdx = nearestSegmentIndex(points, flowStart)
+        const segIdx = viaOffset + localIdx
         // insertBendInLink wraps the create + via splice in its own
         // commit, so we don't double-wrap with our drag tx.
         dragNodeId = diagramState.insertBendInLink(sceneId, linkId, flowStart, segIdx)

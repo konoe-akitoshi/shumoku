@@ -226,101 +226,80 @@
     return out
   })
 
+  // One Svelte Flow edge per *visible cable segment* (i.e. per
+  // physical cable run). A logical Link with via passing through
+  // an EPS becomes 2 edges — rack-side and room-side — so that
+  // each cable selects, hovers, and gets dragged on its own. The
+  // underlying Link is unchanged: deleting any one edge removes
+  // the whole logical wire (the data model is still all-or-
+  // nothing per Link); deleting a TP node strips it from `via` so
+  // the segments rejoin or disappear naturally.
   const sfEdges = $derived.by<Edge[]>(() => {
     const out: Edge[] = []
     for (const link of visibleLinks) {
       if (!link.id) continue
-      // Both endpoints are now real SceneNodes (in-scope or cross-
-      // boundary), no synthetic anchor IDs to substitute.
-      const from = link.from.node
-      const to = link.to.node
-      const crossBoundary = !inScopeIds.has(from) || !inScopeIds.has(to)
-      const fromPos = centerOf(from)
-      const toPos = centerOf(to)
-      // Wire path: split into visible cable segments at every EPS in
-      // via. Cable physically enters the chase at the EPS and exits
-      // at an outlet on the other side; the wall-internal portion is
-      // hidden, so we render two disjoint polylines (source → EPS,
-      // outlet → target) instead of one continuous line. The
-      // visibleCableSegments helper keeps this consistent with the
-      // length math.
+      const linkFrom = link.from.node
+      const linkTo = link.to.node
+      const crossBoundary = !inScopeIds.has(linkFrom) || !inScopeIds.has(linkTo)
       const idSegments = visibleCableSegments(link, diagramState.nodes)
-      // Inner via points target the icon's CENTER so the smoothstep
-      // curves enter the TP at the visual edge, not its top-left
-      // corner. Source/target endpoints stay handle-driven via
-      // sourceX/Y / targetX/Y from Svelte Flow.
-      const segments: Array<Array<{ x: number; y: number }>> = idSegments.map((seg) =>
-        seg.filter((id) => id !== from && id !== to).map((id) => centerOf(id)),
-      )
-      // Per-segment via offset for drag-to-bend. The offset is the
-      // global via index of each visible segment's left endpoint:
-      //   - source-rooted segment → 0
-      //   - any other segment (room-side after EPS) → (via index of
-      //     its first id) + 1
-      // SceneEdge uses these to map a click on a specific visible
-      // polyline back to the right insertion index in `link.via`.
+      // Per-segment via offset — global via index of the segment's
+      // left endpoint. Source-rooted segment = 0; room-side (after
+      // EPS) = (viaIndex of head) + 1. Drag-to-bend uses this to
+      // map a local insertion within this segment to the right
+      // position in `link.via`.
       const via = link.via ?? []
       const viaIndexOf = new Map<string, number>(via.map((id, i) => [id, i] as const))
-      const segmentViaOffsets: number[] = idSegments.map((seg) => {
-        const head = seg[0]
-        if (head === from) return 0
-        const j = head !== undefined ? viaIndexOf.get(head) : undefined
-        return j === undefined ? 0 : j + 1
-      })
-      // Handle side picked toward the FIRST visible waypoint after the
-      // source (and the LAST visible waypoint before the target). For
-      // a wire that goes source → EPS → … via, we want to leave the
-      // source pointing toward the EPS, not toward the eventual far
-      // device (which our line never actually heads to in segment A).
-      const firstAfterSource = segments[0]?.[0] ?? toPos
-      const lastBeforeTarget =
-        segments[segments.length - 1]?.[(segments[segments.length - 1]?.length ?? 0) - 1] ?? fromPos
-      const sourceHandle = pickSideForDirection(
-        firstAfterSource.x - fromPos.x,
-        firstAfterSource.y - fromPos.y,
-      )
-      const targetHandle = pickSideForDirection(
-        lastBeforeTarget.x - toPos.x,
-        lastBeforeTarget.y - toPos.y,
-      )
-      // Cable length: compute per-segment meters once; total is the
-      // sum. cableLengthMeters() also calls cableSegmentLengths()
-      // internally, so calling both would walk the via list and the
-      // scene placements twice per link per derive. With many wires
-      // and live drag, that's the kind of repeated work we want to
-      // skip — derive once, sum here.
+      // Cable length per segment (already computed by
+      // cableSegmentLengths in the same order as visibleCableSegments).
       const segParts = cableSegmentLengths(link, [scene], diagramState.nodes)
-      const segmentMeters: Array<number | null> = idSegments.map(
-        (_, i) => segParts[i]?.meters ?? null,
-      )
-      const totalSceneMeters = segParts.length ? segParts.reduce((s, p) => s + p.meters, 0) : null
-      const storedMeters = link.cable?.length_m
-      const eff: { meters: number; source: 'scene' | 'stored' } | null =
-        totalSceneMeters !== null
-          ? { meters: totalSceneMeters, source: 'scene' }
-          : storedMeters !== undefined && Number.isFinite(storedMeters)
-            ? { meters: storedMeters, source: 'stored' }
-            : null
-      out.push({
-        id: link.id,
-        source: from,
-        target: to,
-        sourceHandle,
-        targetHandle,
-        type: 'wire',
-        data: {
-          sceneId: scene.id,
-          segments,
-          segmentViaOffsets,
-          lengthMeters: eff?.meters ?? null,
-          segmentMeters,
-          wireScale: effectiveWireScale(link),
-        },
-        animated: false,
-        style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
-        // No arrow marker — cables are physical runs, not directional
-        // signals. Direction is implicit from the endpoints.
-      })
+      const wireScale = effectiveWireScale(link)
+      for (let i = 0; i < idSegments.length; i++) {
+        const segIds = idSegments[i] ?? []
+        const segFrom = segIds[0]
+        const segTo = segIds[segIds.length - 1]
+        if (!segFrom || !segTo || segFrom === segTo) continue
+        const segFromPos = centerOf(segFrom)
+        const segToPos = centerOf(segTo)
+        // Inner via points (between segFrom and segTo) target each
+        // icon's center.
+        const innerWaypoints: Array<{ x: number; y: number }> = segIds
+          .slice(1, -1)
+          .map((id) => centerOf(id))
+        // Handle side: out from segFrom toward the next visible
+        // point; into segTo from the previous one.
+        const firstInner = innerWaypoints[0] ?? segToPos
+        const lastInner = innerWaypoints[innerWaypoints.length - 1] ?? segFromPos
+        const sourceHandle = pickSideForDirection(
+          firstInner.x - segFromPos.x,
+          firstInner.y - segFromPos.y,
+        )
+        const targetHandle = pickSideForDirection(
+          lastInner.x - segToPos.x,
+          lastInner.y - segToPos.y,
+        )
+        const j = viaIndexOf.get(segFrom)
+        const viaOffset = segFrom === linkFrom ? 0 : j === undefined ? 0 : j + 1
+        const meters = segParts[i]?.meters ?? null
+        out.push({
+          id: `${link.id}::${i}`,
+          source: segFrom,
+          target: segTo,
+          sourceHandle,
+          targetHandle,
+          type: 'wire',
+          data: {
+            sceneId: scene.id,
+            linkId: link.id,
+            segmentIndex: i,
+            viaOffset,
+            innerWaypoints,
+            lengthMeters: meters,
+            wireScale,
+          },
+          animated: false,
+          style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
+        })
+      }
     }
     return out
   })
@@ -477,10 +456,21 @@
     onconnect={onConnect}
     onpaneclick={onPaneClick}
     ondelete={({ nodes, edges }: { nodes: SfNode[]; edges: Edge[] }) => {
-      // Native Backspace/Delete keyboard path. NodeToolbar's Delete
-      // button calls removeNode directly; this catches edges and
-      // multi-select.
-      for (const e of edges) if (e.id) diagramState.removeLink(e.id)
+      // Native Backspace/Delete keyboard path. Each Svelte Flow
+      // edge corresponds to a single visible cable segment, but
+      // its id is `${linkId}::${segmentIndex}` and the underlying
+      // data model is one Link — deleting any segment removes the
+      // whole logical wire. Dedupe via a Set so a multi-segment
+      // selection (rare via keyboard) doesn't re-call removeLink
+      // for the same Link.
+      const linkIds = new Set<string>()
+      for (const e of edges) {
+        const linkId =
+          (e.data as { linkId?: string } | undefined)?.linkId ??
+          (typeof e.id === 'string' ? e.id.split('::')[0] : undefined)
+        if (linkId) linkIds.add(linkId)
+      }
+      for (const id of linkIds) diagramState.removeLink(id)
       for (const n of nodes) diagramState.removeNode(n.id)
     }}
     proOptions={{ hideAttribution: true }}
@@ -529,7 +519,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                               plan is set, but otherwise let its theming through. */
+                                 plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -537,8 +527,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-                             to drag from. Otherwise the fully-transparent handles leave the
-                             "how do I draw a wire" UX a guess. */
+                               to drag from. Otherwise the fully-transparent handles leave the
+                               "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 1 !important;
@@ -548,15 +538,15 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-                   mode. Keep size + DOM presence so Svelte Flow can still resolve
-                   edge endpoint positions from each handle's bounding rect — only
-                   opacity is dropped. */
+                     mode. Keep size + DOM presence so Svelte Flow can still resolve
+                     edge endpoint positions from each handle's bounding rect — only
+                     opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
-                   "click somewhere to drop the item". */
+                     "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     cursor: crosshair !important;
