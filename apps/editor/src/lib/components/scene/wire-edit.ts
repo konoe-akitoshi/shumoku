@@ -143,24 +143,21 @@ export function bendOnDrag(args: {
         dragNodeId = near.id
       } else {
         // Pick the closest visible polyline first, then the
-        // closest line within it. Adding `viaOffset` for that
-        // polyline maps the local index back to a global via
-        // insertion index.
-        let bestSegIdx = 0
+        // closest line within it. Capture viaOffset alongside the
+        // local index in the same loop so we don't re-look the
+        // winner up after.
         let bestLocal = 0
+        let bestOffset = 0
         let bestDist = Infinity
-        for (let i = 0; i < segments.length; i++) {
-          const seg = segments[i]
-          if (!seg) continue
+        for (const seg of segments) {
           const { index, distSq } = nearestSegment(seg.points, flowStart)
           if (distSq < bestDist) {
             bestDist = distSq
-            bestSegIdx = i
             bestLocal = index
+            bestOffset = seg.viaOffset
           }
         }
-        const seg = segments[bestSegIdx]
-        const segIdx = (seg?.viaOffset ?? 0) + bestLocal
+        const segIdx = bestOffset + bestLocal
         // insertBendInLink wraps the create + via splice in its own
         // commit, so we don't double-wrap with our drag tx.
         dragNodeId = diagramState.insertBendInLink(sceneId, linkId, flowStart, segIdx)
