@@ -803,6 +803,71 @@ export const builtinData = [
     },
   },
   {
+    id: 'hpe/aruba-ap-315',
+    label: 'Aruba AP-315',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+      model: 'aruba-ap-315',
+    },
+    tags: ['wifi-5', 'indoor', 'ceiling-mount', 'poe-consumer', 'apin0315'],
+    properties: {
+      power: {
+        max_draw_w: 14.4,
+        poe_in: {
+          standard: '802.3at',
+          class: 4,
+          min_class: 3,
+          max_draw_w: 14.4,
+          by_class: {
+            '3': {
+              standard: '802.3af',
+              max_draw_w: 13.6,
+              note: 'On 802.3af without IPM: USB disabled, 2.4 GHz TX -3 dB',
+            },
+            '4': {
+              standard: '802.3at',
+              max_draw_w: 14.4,
+            },
+          },
+        },
+      },
+      wireless: {
+        standard: 'wifi-5',
+        radios: 2,
+        mimo: '4x4:4',
+        bands: ['2.4ghz', '5ghz'],
+        antenna_type: 'internal',
+        max_data_rate_mbps: 2033,
+      },
+      ports: {
+        uplink: [
+          {
+            names: ['E0'],
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'ceiling',
+        dimensions_mm: {
+          w: 182,
+          d: 180,
+          h: 48,
+        },
+        weight_g: 650,
+        mounting: ['ceiling', 'wall'],
+        operating_temp_c: {
+          min: 0,
+          max: 50,
+        },
+      },
+    },
+  },
+  {
     id: 'hpe/aruba-ap-505',
     label: 'Aruba AP-505',
     spec: {
@@ -858,6 +923,192 @@ export const builtinData = [
         },
         weight_g: 500,
         mounting: ['ceiling', 'wall'],
+      },
+    },
+  },
+  {
+    id: 'hpe/aruba-ap-515',
+    label: 'Aruba AP-515',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+      model: 'aruba-ap-515',
+    },
+    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'poe-consumer', 'smart-rate', 'apin0515'],
+    properties: {
+      power: {
+        max_draw_w: 20.8,
+        poe_in: {
+          standard: '802.3at',
+          class: 4,
+          min_class: 3,
+          max_draw_w: 20.8,
+          by_class: {
+            '3': {
+              standard: '802.3af',
+              max_draw_w: 13.5,
+              note: 'IPM-enabled reduced mode on 802.3af',
+            },
+            '4': {
+              standard: '802.3at',
+              max_draw_w: 20.8,
+            },
+          },
+        },
+      },
+      wireless: {
+        standard: 'wifi-6',
+        radios: 2,
+        mimo: '4x4:4',
+        bands: ['2.4ghz', '5ghz'],
+        antenna_type: 'internal',
+        max_data_rate_mbps: 2690,
+      },
+      ports: {
+        uplink: [
+          {
+            names: ['E0'],
+            speed: '2.5g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        lan: [
+          {
+            names: ['E1'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'ceiling',
+        dimensions_mm: {
+          w: 200,
+          d: 200,
+          h: 46,
+        },
+        weight_g: 810,
+        mounting: ['ceiling', 'wall'],
+      },
+    },
+  },
+  {
+    id: 'hpe/aruba-ap-535',
+    label: 'Aruba AP-535',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+      model: 'aruba-ap-535',
+    },
+    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'poe-consumer', 'smart-rate', 'lacp', 'apin0535'],
+    properties: {
+      power: {
+        max_draw_w: 30,
+        poe_in: {
+          standard: '802.3bt',
+          class: 5,
+          min_class: 4,
+          max_draw_w: 30,
+          by_class: {
+            '4': {
+              standard: '802.3at',
+              max_draw_w: 25,
+              note: 'Single 802.3at: USB+E1 disabled without IPM. Dual 802.3at (E0+E1) = full 30W. 802.3af is NOT supported.',
+            },
+            '5': {
+              standard: '802.3bt',
+              max_draw_w: 30,
+            },
+          },
+        },
+      },
+      wireless: {
+        standard: 'wifi-6',
+        radios: 2,
+        mimo: '4x4:4',
+        bands: ['2.4ghz', '5ghz'],
+        antenna_type: 'internal',
+        max_data_rate_mbps: 3550,
+      },
+      ports: {
+        uplink: [
+          {
+            names: ['E0', 'E1'],
+            speed: '5g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'ceiling',
+        dimensions_mm: {
+          w: 240,
+          d: 240,
+          h: 57,
+        },
+        mounting: ['ceiling', 'wall'],
+        operating_temp_c: {
+          min: 0,
+          max: 50,
+        },
+      },
+    },
+  },
+  {
+    id: 'hpe/aruba-instant-on-ap11',
+    label: 'Aruba Instant On AP11',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+      model: 'aruba-instant-on-ap11',
+    },
+    tags: ['wifi-5', 'indoor', 'ceiling-mount', 'poe-consumer', 'apin0303'],
+    properties: {
+      power: {
+        max_draw_w: 10.1,
+        poe_in: {
+          standard: '802.3af',
+          class: 3,
+          min_class: 3,
+          max_draw_w: 10.1,
+        },
+      },
+      wireless: {
+        standard: 'wifi-5',
+        radios: 2,
+        mimo: '2x2',
+        bands: ['2.4ghz', '5ghz'],
+        antenna_type: 'internal',
+        max_data_rate_mbps: 1167,
+      },
+      ports: {
+        uplink: [
+          {
+            names: ['E0'],
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'ceiling',
+        dimensions_mm: {
+          w: 152,
+          d: 152,
+          h: 34,
+        },
+        weight_g: 193,
+        mounting: ['ceiling', 'wall'],
+        operating_temp_c: {
+          min: 0,
+          max: 40,
+        },
       },
     },
   },

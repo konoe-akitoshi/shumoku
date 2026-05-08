@@ -1,0 +1,43 @@
+# Aruba AP-535 — WiFi 6 indoor campus AP, 4x4:4 dual-band, dual 5G Smart Rate
+# Source: https://www.hpe.com/us/en/collaterals/collateral.a00060238enw.html
+# Regulatory model: APIN0535. Order SKU: JZ336A (RW), JZ335A (JP).
+# Both E0/E1 support 802.3bz (100M/1G/2.5G/5G) with PoE-in; LACP supported.
+id: hpe/aruba-ap-535
+label: Aruba AP-535
+spec:
+  kind: hardware
+  type: access-point
+  vendor: hpe
+  model: aruba-ap-535
+tags: [wifi-6, indoor, ceiling-mount, poe-consumer, smart-rate, lacp, apin0535]
+properties:
+  power:
+    max_draw_w: 30.0
+    poe_in:
+      standard: "802.3bt"
+      class: 5
+      min_class: 4
+      max_draw_w: 30.0
+      by_class:
+        4:
+          standard: "802.3at"
+          max_draw_w: 25
+          note: "Single 802.3at: USB+E1 disabled without IPM. Dual 802.3at (E0+E1) = full 30W. 802.3af is NOT supported."
+        5:
+          standard: "802.3bt"
+          max_draw_w: 30
+  wireless:
+    standard: wifi-6
+    radios: 2
+    mimo: "4x4:4"
+    bands: ["2.4ghz", "5ghz"]
+    antenna_type: internal
+    max_data_rate_mbps: 3550
+  ports:
+    uplink:
+      - { names: ["E0", "E1"], speed: "5g", cage: rj45, poe: true }
+  physical:
+    form_factor: ceiling
+    dimensions_mm: { w: 240, d: 240, h: 57 }
+    mounting: [ceiling, wall]
+    operating_temp_c: { min: 0, max: 50 }
