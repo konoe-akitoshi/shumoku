@@ -1,0 +1,8 @@
+# HPE Aruba AP-530 Series — WiFi 6 indoor campus APs (4x4:4 dual-band, dual smart-rate)
+id: hpe/aruba-ap-530
+label: Aruba AP-530 Series
+spec:
+  kind: hardware
+  type: access-point
+  vendor: hpe
+tags: [wifi-6, indoor, ceiling-mount, campus, smart-rate, dual-uplink]

@@ -1,0 +1,8 @@
+# HPE Aruba AP-500 Series — WiFi 6 indoor campus APs (2x2 dual-band)
+id: hpe/aruba-ap-500
+label: Aruba AP-500 Series
+spec:
+  kind: hardware
+  type: access-point
+  vendor: hpe
+tags: [wifi-6, indoor, ceiling-mount, campus]

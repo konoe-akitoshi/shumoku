@@ -1,0 +1,8 @@
+# NEC UNIVERGE IX2000 Series — small/branch routers
+id: nec/ix2000
+label: NEC UNIVERGE IX2000 Series
+spec:
+  kind: hardware
+  type: router
+  vendor: nec
+tags: [branch, ipsec]

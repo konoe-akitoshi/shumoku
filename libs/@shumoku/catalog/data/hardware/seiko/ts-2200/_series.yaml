@@ -1,0 +1,8 @@
+# Seiko Solutions TS-2200 Series — GPS-synchronized NTP time servers
+id: seiko/ts-2200
+label: Seiko TS-2200 Series
+spec:
+  kind: hardware
+  type: generic
+  vendor: seiko
+tags: [time-server, ntp]

@@ -1,0 +1,8 @@
+# NEC UNIVERGE IX3000 Series — enterprise edge routers
+id: nec/ix3000
+label: NEC UNIVERGE IX3000 Series
+spec:
+  kind: hardware
+  type: router
+  vendor: nec
+tags: [edge, enterprise, ipsec]

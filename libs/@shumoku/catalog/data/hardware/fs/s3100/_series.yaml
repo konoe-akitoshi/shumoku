@@ -1,0 +1,8 @@
+# FS S3100 Series — multi-gig PoE smart switches
+id: fs/s3100
+label: FS S3100 Series
+spec:
+  kind: hardware
+  type: l2-switch
+  vendor: fs
+tags: [smart-managed, multi-gig]

@@ -1,0 +1,42 @@
+# Aruba Instant On 1830 48G 24p Class4 PoE 4SFP 370W (JL815A)
+# Source: https://www.arubanetworks.com/products/switches/instant-on/1830/
+# 48 RJ45 + 4 SFP. First 24 RJ45 ports support 802.3at PoE+ (370W budget).
+id: hpe/aruba-instant-on-1830/aruba-instant-on-1830-48g-class4-poe
+label: Aruba Instant On 1830 48G PoE+ (JL815A)
+extends: hpe/aruba-instant-on-1830
+spec:
+  kind: hardware
+  type: l2-switch
+  vendor: hpe
+  model: aruba-instant-on-1830-48g-class4-poe
+tags: [poe-source, fanless, jl815a]
+properties:
+  power:
+    max_draw_w: 462.5
+    poe_out:
+      standard: "802.3at"
+      budget_w: 370
+      max_per_port_w: 30
+      ports: 24
+  switching:
+    capacity_gbps: 104
+    forwarding_rate_mpps: 77.37
+    mac_table_size: 16384
+    vlan_count: 256
+    jumbo_frame_bytes: 10240
+  ports:
+    downlink:
+      - { count: 24, name_pattern: "{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45, poe: true }
+      - { names: ["25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48"], faceplate_labels: ["25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48"], speed: "1g", cage: rj45 }
+    uplink:
+      - { names: ["49","50","51","52"], faceplate_labels: ["49","50","51","52"], speed: "1g", cage: sfp }
+  physical:
+    form_factor: 1U
+    fanless: true
+    mounting: [rack, desk]
+  management:
+    layer: 2
+    stackable: false
+    dram_mb: 512
+    flash_mb: 256
+    protocols: [snmp-v1, snmp-v2c, ssh, https, lldp, lacp, igmp-snooping, stp, rstp, mstp]

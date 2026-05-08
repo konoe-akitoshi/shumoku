@@ -1,0 +1,8 @@
+# HPE Aruba AP-310 Series — WiFi 5 indoor campus APs (4x4:4 5G + 2x2:2 2.4G)
+id: hpe/aruba-ap-310
+label: Aruba AP-310 Series
+spec:
+  kind: hardware
+  type: access-point
+  vendor: hpe
+tags: [wifi-5, indoor, ceiling-mount, campus]

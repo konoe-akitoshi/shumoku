@@ -5,7 +5,7 @@ import type { CatalogEntry } from './types.js'
 
 export const builtinData = [
   {
-    id: 'allied/at-x230-18gp',
+    id: 'allied/at-x230/at-x230-18gp',
     label: 'Allied Telesis AT-x230-18GP',
     spec: {
       kind: 'hardware',
@@ -13,7 +13,8 @@ export const builtinData = [
       vendor: 'allied',
       model: 'at-x230-18gp',
     },
-    tags: ['l3-switch', 'poe-source', 'alliedware-plus'],
+    extends: 'allied/at-x230',
+    tags: ['poe-source'],
     properties: {
       power: {
         max_draw_w: 330,
@@ -78,6 +79,17 @@ export const builtinData = [
         ],
       },
     },
+  },
+  {
+    id: 'allied/at-x230',
+    label: 'Allied Telesis AT-x230 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'allied',
+    },
+    tags: ['l3-lite', 'access', 'alliedware-plus'],
+    properties: {},
   },
   {
     id: 'cisco/catalyst-2960l/ws-c2960l-24ps-jp',
@@ -857,7 +869,7 @@ export const builtinData = [
     },
   },
   {
-    id: 'dell/optiplex-3070-micro',
+    id: 'dell/optiplex-3000/optiplex-3070-micro',
     label: 'Dell OptiPlex 3070 Micro',
     spec: {
       kind: 'hardware',
@@ -865,7 +877,8 @@ export const builtinData = [
       vendor: 'dell',
       model: 'optiplex-3070-micro',
     },
-    tags: ['pc', 'mini-pc', 'desktop', 'compact'],
+    extends: 'dell/optiplex-3000',
+    tags: ['mini-pc', 'compact'],
     properties: {
       ports: {
         lan: [
@@ -889,7 +902,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'fs/s3100-8tms-p',
+    id: 'dell/optiplex-3000',
+    label: 'Dell OptiPlex 3000 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'dell',
+    },
+    tags: ['pc', 'desktop', 'smb'],
+    properties: {},
+  },
+  {
+    id: 'fs/s3100/s3100-8tms-p',
     label: 'FS S3100-8TMS-P',
     spec: {
       kind: 'hardware',
@@ -897,7 +921,8 @@ export const builtinData = [
       vendor: 'fs',
       model: 's3100-8tms-p',
     },
-    tags: ['l2-switch', 'smart-managed', 'poe-source', 'multi-gig', 'fanless'],
+    extends: 'fs/s3100',
+    tags: ['poe-source', 'fanless'],
     properties: {
       power: {
         poe_out: {
@@ -968,6 +993,17 @@ export const builtinData = [
     },
   },
   {
+    id: 'fs/s3100',
+    label: 'FS S3100 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'fs',
+    },
+    tags: ['smart-managed', 'multi-gig'],
+    properties: {},
+  },
+  {
     id: 'generic/ip-phone',
     label: 'IP Phone',
     spec: {
@@ -989,7 +1025,7 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/aruba-ap-315',
+    id: 'hpe/aruba-ap-310/aruba-ap-315',
     label: 'Aruba AP-315',
     spec: {
       kind: 'hardware',
@@ -997,7 +1033,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-ap-315',
     },
-    tags: ['wifi-5', 'indoor', 'ceiling-mount', 'poe-consumer', 'apin0315'],
+    extends: 'hpe/aruba-ap-310',
+    tags: ['poe-consumer', 'apin0315'],
     properties: {
       power: {
         max_draw_w: 14.4,
@@ -1054,7 +1091,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/aruba-ap-505',
+    id: 'hpe/aruba-ap-310',
+    label: 'Aruba AP-310 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-5', 'indoor', 'ceiling-mount', 'campus'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-ap-500/aruba-ap-505',
     label: 'Aruba AP-505',
     spec: {
       kind: 'hardware',
@@ -1062,7 +1110,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-ap-505',
     },
-    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'poe-consumer'],
+    extends: 'hpe/aruba-ap-500',
+    tags: ['poe-consumer'],
     properties: {
       power: {
         max_draw_w: 16.5,
@@ -1113,7 +1162,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/aruba-ap-515',
+    id: 'hpe/aruba-ap-500',
+    label: 'Aruba AP-500 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'campus'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-ap-510/aruba-ap-515',
     label: 'Aruba AP-515',
     spec: {
       kind: 'hardware',
@@ -1121,7 +1181,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-ap-515',
     },
-    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'poe-consumer', 'smart-rate', 'apin0515'],
+    extends: 'hpe/aruba-ap-510',
+    tags: ['poe-consumer', 'apin0515'],
     properties: {
       power: {
         max_draw_w: 20.8,
@@ -1181,7 +1242,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/aruba-ap-535',
+    id: 'hpe/aruba-ap-510',
+    label: 'Aruba AP-510 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'campus', 'smart-rate'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-ap-530/aruba-ap-535',
     label: 'Aruba AP-535',
     spec: {
       kind: 'hardware',
@@ -1189,7 +1261,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-ap-535',
     },
-    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'poe-consumer', 'smart-rate', 'lacp', 'apin0535'],
+    extends: 'hpe/aruba-ap-530',
+    tags: ['poe-consumer', 'lacp', 'apin0535'],
     properties: {
       power: {
         max_draw_w: 30,
@@ -1202,7 +1275,7 @@ export const builtinData = [
             '4': {
               standard: '802.3at',
               max_draw_w: 25,
-              note: 'Single 802.3at: USB+E1 disabled without IPM. Dual 802.3at (E0+E1) = full 30W. 802.3af is NOT supported.',
+              note: 'Single 802.3at: USB+E1 disabled without IPM. Dual 802.3at = full 30W. 802.3af not supported.',
             },
             '5': {
               standard: '802.3bt',
@@ -1245,7 +1318,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/aruba-instant-on-1830-48g-class4-poe',
+    id: 'hpe/aruba-ap-530',
+    label: 'Aruba AP-530 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'campus', 'smart-rate', 'dual-uplink'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-instant-on-1830/aruba-instant-on-1830-48g-class4-poe',
     label: 'Aruba Instant On 1830 48G PoE+ (JL815A)',
     spec: {
       kind: 'hardware',
@@ -1253,7 +1337,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-instant-on-1830-48g-class4-poe',
     },
-    tags: ['l2-switch', 'smart-managed', 'poe-source', 'fanless', 'jl815a'],
+    extends: 'hpe/aruba-instant-on-1830',
+    tags: ['poe-source', 'fanless', 'jl815a'],
     properties: {
       power: {
         max_draw_w: 462.5,
@@ -1373,7 +1458,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/aruba-instant-on-ap11',
+    id: 'hpe/aruba-instant-on-1830',
+    label: 'Aruba Instant On 1830 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'hpe',
+    },
+    tags: ['instant-on', 'smart-managed', 'smb'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-instant-on-ap11x/aruba-instant-on-ap11',
     label: 'Aruba Instant On AP11',
     spec: {
       kind: 'hardware',
@@ -1381,7 +1477,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-instant-on-ap11',
     },
-    tags: ['wifi-5', 'indoor', 'ceiling-mount', 'poe-consumer', 'apin0303'],
+    extends: 'hpe/aruba-instant-on-ap11x',
+    tags: ['ceiling-mount', 'poe-consumer', 'apin0303'],
     properties: {
       power: {
         max_draw_w: 10.1,
@@ -1427,7 +1524,7 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/aruba-instant-on-ap11d',
+    id: 'hpe/aruba-instant-on-ap11x/aruba-instant-on-ap11d',
     label: 'Aruba Instant On AP11D',
     spec: {
       kind: 'hardware',
@@ -1435,7 +1532,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-instant-on-ap11d',
     },
-    tags: ['wifi-5', 'desk', 'poe-consumer', 'poe-passthrough'],
+    extends: 'hpe/aruba-instant-on-ap11x',
+    tags: ['desktop', 'poe-consumer', 'poe-passthrough', 'apinh303'],
     properties: {
       power: {
         max_draw_w: 27.4,
@@ -1493,7 +1591,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/proliant-dl360-gen10',
+    id: 'hpe/aruba-instant-on-ap11x',
+    label: 'Aruba Instant On AP11 / AP11D',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-5', 'instant-on', 'smb'],
+    properties: {},
+  },
+  {
+    id: 'hpe/proliant-dl360/proliant-dl360-gen10',
     label: 'HPE ProLiant DL360 Gen10',
     spec: {
       kind: 'hardware',
@@ -1501,7 +1610,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'proliant-dl360-gen10',
     },
-    tags: ['server', '1u', 'rack', 'redundant-psu', 'ilo5'],
+    extends: 'hpe/proliant-dl360',
+    tags: ['redundant-psu', 'ilo5'],
     properties: {
       ports: {
         lan: [
@@ -1532,7 +1642,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/proliant-dl380p-gen8',
+    id: 'hpe/proliant-dl360',
+    label: 'HPE ProLiant DL360',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'hpe',
+    },
+    tags: ['server', '1u', 'rack'],
+    properties: {},
+  },
+  {
+    id: 'hpe/proliant-dl380/proliant-dl380p-gen8',
     label: 'HPE ProLiant DL380p Gen8',
     spec: {
       kind: 'hardware',
@@ -1540,7 +1661,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'proliant-dl380p-gen8',
     },
-    tags: ['server', '2u', 'rack', 'redundant-psu', 'ilo4', 'discontinued'],
+    extends: 'hpe/proliant-dl380',
+    tags: ['redundant-psu', 'ilo4', 'discontinued'],
     properties: {
       ports: {
         lan: [
@@ -1571,7 +1693,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'nec/ix2106',
+    id: 'hpe/proliant-dl380',
+    label: 'HPE ProLiant DL380',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'hpe',
+    },
+    tags: ['server', '2u', 'rack'],
+    properties: {},
+  },
+  {
+    id: 'nec/ix2000/ix2106',
     label: 'NEC UNIVERGE IX2106',
     spec: {
       kind: 'hardware',
@@ -1579,7 +1712,8 @@ export const builtinData = [
       vendor: 'nec',
       model: 'ix2106',
     },
-    tags: ['router', 'branch', 'compact', 'fanless', 'ipsec', 'l2tp'],
+    extends: 'nec/ix2000',
+    tags: ['compact', 'fanless', 'l2tp'],
     properties: {
       power: {
         max_draw_w: 7,
@@ -1645,7 +1779,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'nec/ix3315',
+    id: 'nec/ix2000',
+    label: 'NEC UNIVERGE IX2000 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'nec',
+    },
+    tags: ['branch', 'ipsec'],
+    properties: {},
+  },
+  {
+    id: 'nec/ix3000/ix3315',
     label: 'NEC UNIVERGE IX3315',
     spec: {
       kind: 'hardware',
@@ -1653,7 +1798,8 @@ export const builtinData = [
       vendor: 'nec',
       model: 'ix3315',
     },
-    tags: ['router', 'edge', 'enterprise', 'ipsec', 'openflow', 'sdn'],
+    extends: 'nec/ix3000',
+    tags: ['openflow', 'sdn'],
     properties: {
       power: {
         max_draw_w: 75,
@@ -1721,7 +1867,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'netgear/gs108pp',
+    id: 'nec/ix3000',
+    label: 'NEC UNIVERGE IX3000 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'nec',
+    },
+    tags: ['edge', 'enterprise', 'ipsec'],
+    properties: {},
+  },
+  {
+    id: 'netgear/gs108/gs108pp',
     label: 'Netgear GS108PP',
     spec: {
       kind: 'hardware',
@@ -1729,7 +1886,8 @@ export const builtinData = [
       vendor: 'netgear',
       model: 'gs108pp',
     },
-    tags: ['l2-switch', 'unmanaged', 'poe-source', 'desktop', 'smb'],
+    extends: 'netgear/gs108',
+    tags: ['unmanaged', 'poe-source'],
     properties: {
       power: {
         poe_out: {
@@ -1774,7 +1932,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'panasonic/switch-m8egpwr-plus',
+    id: 'netgear/gs108',
+    label: 'Netgear GS108 Family',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'netgear',
+    },
+    tags: ['desktop', 'smb', '8-port'],
+    properties: {},
+  },
+  {
+    id: 'panasonic/switch-m/switch-m8egpwr-plus',
     label: 'Switch-M8eGPWR+ (PN28089K)',
     spec: {
       kind: 'hardware',
@@ -1782,7 +1951,8 @@ export const builtinData = [
       vendor: 'panasonic',
       model: 'switch-m8egpwr-plus',
     },
-    tags: ['poe-source', 'l2-switch', 'managed', 'poe-plus'],
+    extends: 'panasonic/switch-m',
+    tags: ['poe-source', 'poe-plus'],
     properties: {
       power: {
         max_draw_w: 310,
@@ -1833,7 +2003,7 @@ export const builtinData = [
     },
   },
   {
-    id: 'panasonic/switch-m8epwr',
+    id: 'panasonic/switch-m/switch-m8epwr',
     label: 'Switch-M8ePWR (PN27089K)',
     spec: {
       kind: 'hardware',
@@ -1841,7 +2011,8 @@ export const builtinData = [
       vendor: 'panasonic',
       model: 'switch-m8epwr',
     },
-    tags: ['poe-source', 'l2-switch', 'managed'],
+    extends: 'panasonic/switch-m',
+    tags: ['poe-source'],
     properties: {
       power: {
         max_draw_w: 161,
@@ -1893,7 +2064,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'seiko/ts-2210',
+    id: 'panasonic/switch-m',
+    label: 'Panasonic Switch-M Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'panasonic',
+    },
+    tags: ['managed'],
+    properties: {},
+  },
+  {
+    id: 'seiko/ts-2200/ts-2210',
     label: 'Seiko TS-2210',
     spec: {
       kind: 'hardware',
@@ -1901,7 +2083,8 @@ export const builtinData = [
       vendor: 'seiko',
       model: 'ts-2210',
     },
-    tags: ['time-server', 'ntp', 'gps', 'discontinued'],
+    extends: 'seiko/ts-2200',
+    tags: ['gps', 'discontinued'],
     properties: {
       ports: {
         management: [
@@ -1922,7 +2105,18 @@ export const builtinData = [
     },
   },
   {
-    id: 'yamaha/rtx1210',
+    id: 'seiko/ts-2200',
+    label: 'Seiko TS-2200 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'generic',
+      vendor: 'seiko',
+    },
+    tags: ['time-server', 'ntp'],
+    properties: {},
+  },
+  {
+    id: 'yamaha/rtx/rtx1210',
     label: 'Yamaha RTX1210',
     spec: {
       kind: 'hardware',
@@ -1930,7 +2124,8 @@ export const builtinData = [
       vendor: 'yamaha',
       model: 'rtx1210',
     },
-    tags: ['router', 'vpn', 'ipsec', 'l2tpv3', 'fanless', 'smb'],
+    extends: 'yamaha/rtx',
+    tags: ['l2tpv3', 'fanless'],
     properties: {
       power: {
         max_draw_w: 14.5,
@@ -2000,5 +2195,16 @@ export const builtinData = [
         ],
       },
     },
+  },
+  {
+    id: 'yamaha/rtx',
+    label: 'Yamaha RTX Series',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'yamaha',
+    },
+    tags: ['vpn', 'ipsec', 'smb'],
+    properties: {},
   },
 ] as unknown as CatalogEntry[]

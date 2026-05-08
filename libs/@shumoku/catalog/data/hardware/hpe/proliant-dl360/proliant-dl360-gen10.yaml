@@ -1,0 +1,23 @@
+# HPE ProLiant DL360 Gen10 — 1U dual-socket rack server
+# Source: https://www.hpe.com/psnow/doc/a00008159enw
+# Onboard 4×1G FlexibleLOM (366FLR / Intel I350), dedicated iLO 5 port.
+id: hpe/proliant-dl360/proliant-dl360-gen10
+label: HPE ProLiant DL360 Gen10
+extends: hpe/proliant-dl360
+spec:
+  kind: hardware
+  type: server
+  vendor: hpe
+  model: proliant-dl360-gen10
+tags: [redundant-psu, ilo5]
+properties:
+  ports:
+    lan:
+      - { count: 4, name_pattern: "NIC{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45 }
+    management:
+      - { names: ["iLO"], faceplate_labels: ["iLO"], speed: "1g", cage: rj45 }
+  physical:
+    form_factor: 1U
+    mounting: [rack]
+  management:
+    protocols: [ipmi, redfish, snmp-v2c, snmp-v3, ssh, https]

@@ -1,0 +1,31 @@
+# NEC UNIVERGE IX3315 — enterprise edge router
+# Source: https://jpn.nec.com/univerge/ix/Info/ix3315.html
+# 2× combo (10GBASE-T or SFP+) + 2× 1G SFP + 16-port internal LAN switch.
+# IPv4 forwarding 10 Gbps, IPsec 4 Gbps.
+id: nec/ix3000/ix3315
+label: NEC UNIVERGE IX3315
+extends: nec/ix3000
+spec:
+  kind: hardware
+  type: router
+  vendor: nec
+  model: ix3315
+tags: [openflow, sdn]
+properties:
+  power:
+    max_draw_w: 75
+  ports:
+    wan:
+      - { names: ["GE0", "GE1"], faceplate_labels: ["WAN1", "WAN2"], speed: "10g", cage: combo }
+      - { names: ["GE2", "GE3"], faceplate_labels: ["SFP1", "SFP2"], speed: "1g", cage: sfp }
+    lan:
+      - { count: 16, name_pattern: "LAN{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45 }
+  physical:
+    form_factor: 1U
+    fanless: false
+    dimensions_mm: { w: 430, d: 393, h: 43 }
+    weight_g: 5500
+    mounting: [rack]
+  management:
+    layer: 3
+    protocols: [ipsec, ikev1, ikev2, l2tpv2, l2tp-ipsec, etherip, gre, ospfv2, ospfv3, bgp4, pppoe, dhcp, nat, openflow, snmp-v1, snmp-v2c, snmp-v3, ssh, telnet]

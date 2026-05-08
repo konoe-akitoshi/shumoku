@@ -1,0 +1,8 @@
+# HPE Aruba Instant On AP11/AP11D — WiFi 5 entry-level APs (2x2 dual-band)
+id: hpe/aruba-instant-on-ap11x
+label: Aruba Instant On AP11 / AP11D
+spec:
+  kind: hardware
+  type: access-point
+  vendor: hpe
+tags: [wifi-5, instant-on, smb]

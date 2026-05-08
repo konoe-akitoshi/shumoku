@@ -1,0 +1,8 @@
+# HPE ProLiant DL360 — 1U dual-socket rack server family (Gen8 onwards)
+id: hpe/proliant-dl360
+label: HPE ProLiant DL360
+spec:
+  kind: hardware
+  type: server
+  vendor: hpe
+tags: [server, 1u, rack]
