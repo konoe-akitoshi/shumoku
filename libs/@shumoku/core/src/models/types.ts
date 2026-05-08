@@ -942,6 +942,7 @@ export enum DeviceType {
   Server = 'server',
   AccessPoint = 'access-point',
   CPE = 'cpe',
+  ConsoleServer = 'console-server',
   Cloud = 'cloud',
   Internet = 'internet',
   VPN = 'vpn',
