@@ -25,6 +25,12 @@
     portOverlay,
     linkPreview = null,
     svgEl = $bindable<SVGSVGElement | null>(null),
+    // Optional rendering filter — predicate that returns true for
+    // nodes the host wants hidden from this canvas (e.g. the editor's
+    // termination-role nodes that are scene-physical, not logical-
+    // diagram concepts). Hidden nodes still exist in `nodes`; they
+    // just aren't drawn here.
+    hideNode,
     // Callbacks (unified: drag/select work for all element types)
     ondragstart,
     ondragmove,
@@ -49,6 +55,7 @@
     linkedPorts?: Set<string>
     linkPreview?: { fromX: number; fromY: number; toX: number; toY: number } | null
     svgEl?: SVGSVGElement | null
+    hideNode?: (node: Node) => boolean
     ondragstart?: (id: string) => void
     ondragmove?: (id: string, x: number, y: number) => void
     ondragend?: (id: string) => void
@@ -168,19 +175,21 @@
 
     <!-- Nodes layer -->
     {#each nodes.values() as node (node.id)}
-      <SvgNode
-        {node}
-        {colors}
-        selected={selection.has(node.id)}
-        {interactive}
-        overlay={nodeOverlay}
-        {ondragstart}
-        {ondragmove}
-        {ondragend}
-        {onselect}
-        {onaddport}
-        oncontextmenu={(id, e) => onctx?.(id, 'node', e)}
-      />
+      {#if !hideNode?.(node)}
+        <SvgNode
+          {node}
+          {colors}
+          selected={selection.has(node.id)}
+          {interactive}
+          overlay={nodeOverlay}
+          {ondragstart}
+          {ondragmove}
+          {ondragend}
+          {onselect}
+          {onaddport}
+          oncontextmenu={(id, e) => onctx?.(id, 'node', e)}
+        />
+      {/if}
     {/each}
 
     <!-- Ports layer (above nodes so they're always clickable) -->

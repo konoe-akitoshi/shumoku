@@ -201,6 +201,7 @@
         bind:links={diagramState.activeView.links}
         theme={editorState.theme}
         mode={diagramState.currentSheetId === null ? editorState.mode : 'view'}
+        hideNode={(n) => !!n.termination}
         ondragstart={() => diagramState.beginTx('Move node')}
         ondragend={() => diagramState.endTx()}
         onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}

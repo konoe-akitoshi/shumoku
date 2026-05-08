@@ -79,6 +79,13 @@
     ondragstart?: (id: string) => void
     ondragend?: (id: string) => void
     /**
+     * Predicate to skip rendering specific nodes — useful when the
+     * host stores extra nodes the user shouldn't see in this view
+     * (e.g. the editor hides scene-physical termination nodes from
+     * the logical diagram view).
+     */
+    hideNode?: (node: Node) => boolean
+    /**
      * Fired when the user drags between two ports to request a new link.
      * The parent owns link identity — it must create the link (with an ID of
      * its choosing) and either push it via `bind:links` or call `appendLink()`.
@@ -106,6 +113,7 @@
     onnodedelete,
     ondragstart,
     ondragend,
+    hideNode,
     oncreatelink,
     subgraphOverlay,
     linkOverlay,
@@ -587,6 +595,7 @@
     {ondragstart}
     ondragmove={handleDragMove}
     {ondragend}
+    {hideNode}
     onselect={handleSelect}
     onaddport={handleAddPort}
     onlinkstart={handleLinkStart}
