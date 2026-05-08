@@ -1,0 +1,8 @@
+# HPE ProLiant DL380 — 2U dual-socket rack server family (Gen8 onwards)
+id: hpe/proliant-dl380
+label: HPE ProLiant DL380
+spec:
+  kind: hardware
+  type: server
+  vendor: hpe
+tags: [server, 2u, rack]

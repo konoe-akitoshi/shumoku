@@ -1,13 +1,14 @@
 # Panasonic Switch-M8eGPWR+ (PN28089K) — 8-port Gigabit PoE+ managed switch
 # Source: https://panasonic.co.jp/ew/pewnw/product/lan/m8egpwr_new.html
-id: panasonic/switch-m8egpwr-plus
+id: panasonic/switch-m/switch-m8egpwr-plus
 label: Switch-M8eGPWR+ (PN28089K)
+extends: panasonic/switch-m
 spec:
   kind: hardware
   type: l2-switch
   vendor: panasonic
   model: switch-m8egpwr-plus
-tags: [poe-source, l2-switch, managed, poe-plus]
+tags: [poe-source, poe-plus]
 properties:
   power:
     max_draw_w: 310
@@ -27,7 +28,7 @@ properties:
     uplink:
       - { names: ["9", "10"], speed: "1g", cage: combo }
   physical:
-    form_factor: "1U"
+    form_factor: 1U
     dimensions_mm: { w: 330, d: 250, h: 44 }
     weight_g: 3000
     mounting: [rack]

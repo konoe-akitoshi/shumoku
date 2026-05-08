@@ -1,0 +1,8 @@
+# HPE Aruba AP-510 Series — WiFi 6 indoor campus APs (4x4 5G + 2x2 2.4G, smart-rate)
+id: hpe/aruba-ap-510
+label: Aruba AP-510 Series
+spec:
+  kind: hardware
+  type: access-point
+  vendor: hpe
+tags: [wifi-6, indoor, ceiling-mount, campus, smart-rate]

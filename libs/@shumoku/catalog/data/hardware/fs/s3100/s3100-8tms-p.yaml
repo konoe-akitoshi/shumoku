@@ -1,0 +1,37 @@
+# FS S3100-8TMS-P — multi-gig PoE+ smart switch
+# Source: https://www.fs.com/products/160708.html
+# 6× 1G PoE+ + 2× 1G non-PoE + 2× 5G PoE+ + 2× 10G SFP+ uplink. 125W budget.
+id: fs/s3100/s3100-8tms-p
+label: FS S3100-8TMS-P
+extends: fs/s3100
+spec:
+  kind: hardware
+  type: l2-switch
+  vendor: fs
+  model: s3100-8tms-p
+tags: [poe-source, fanless]
+properties:
+  power:
+    poe_out:
+      standard: "802.3at"
+      budget_w: 125
+      max_per_port_w: 30
+      ports: 8
+  switching:
+    capacity_gbps: 76
+    forwarding_rate_mpps: 49.1
+  ports:
+    downlink:
+      - { count: 6, name_pattern: "GE{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45, poe: true }
+      - { names: ["GE7", "GE8"], faceplate_labels: ["7", "8"], speed: "1g", cage: rj45 }
+      - { names: ["MGE1", "MGE2"], faceplate_labels: ["MG1", "MG2"], speed: "5g", cage: rj45, poe: true }
+    uplink:
+      - { names: ["XGE1", "XGE2"], faceplate_labels: ["X1", "X2"], speed: "10g", cage: sfp+ }
+  physical:
+    form_factor: desktop
+    fanless: true
+    mounting: [desk, wall, rack]
+  management:
+    layer: 2
+    image: airware
+    protocols: [ssh, telnet, http, https, snmp-v2c, snmp-v3, lacp, lldp, igmp-snooping, voice-vlan]

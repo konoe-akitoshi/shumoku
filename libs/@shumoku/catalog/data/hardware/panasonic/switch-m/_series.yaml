@@ -1,0 +1,8 @@
+# Panasonic Switch-M Series — managed L2 switches
+id: panasonic/switch-m
+label: Panasonic Switch-M Series
+spec:
+  kind: hardware
+  type: l2-switch
+  vendor: panasonic
+tags: [managed]

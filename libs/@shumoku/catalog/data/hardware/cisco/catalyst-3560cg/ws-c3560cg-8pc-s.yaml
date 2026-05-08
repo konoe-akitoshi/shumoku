@@ -1,0 +1,33 @@
+# Cisco WS-C3560CG-8PC-S — 8-port PoE+ compact L3 switch + 2 dual-purpose uplinks
+id: cisco/catalyst-3560cg/ws-c3560cg-8pc-s
+label: WS-C3560CG-8PC-S
+extends: cisco/catalyst-3560cg
+spec:
+  kind: hardware
+  type: l3-switch
+  vendor: cisco
+  model: ws-c3560cg-8pc-s
+tags: [poe-source]
+properties:
+  power:
+    max_draw_w: 150
+    poe_out:
+      standard: "802.3at"
+      budget_w: 124
+      max_per_port_w: 30
+      ports: 8
+  switching:
+    capacity_gbps: 20
+    forwarding_rate_mpps: 14.9
+  physical:
+    dimensions_mm: { w: 270, d: 239, h: 44 }
+    weight_g: 1950
+  ports:
+    downlink:
+      - { count: 8, name_pattern: "Gi0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet0/{n}", speed: "1g", cage: rj45, poe: true }
+    uplink:
+      # Dual-purpose ports: each is RJ45 OR SFP (combo). 1G.
+      - { names: ["Gi0/9", "Gi0/10"], faceplate_labels: ["9", "10"], interface_names: ["GigabitEthernet0/9", "GigabitEthernet0/10"], speed: "1g", cage: combo }
+  management:
+    layer: 3
+    image: ip-base

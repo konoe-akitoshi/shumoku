@@ -1,0 +1,25 @@
+# Cisco Catalyst 9300 Series — stackable enterprise access switches
+# Source: https://www.cisco.com/c/en/us/products/collateral/switches/catalyst-9300-series-switches/nb-06-cat9300-ser-data-sheet-cte-en.html
+id: cisco/catalyst-9300
+label: Catalyst 9300 Series
+spec:
+  kind: hardware
+  type: l3-switch
+  vendor: cisco
+tags: [l3-switch, stackable, enterprise, modular-uplink]
+properties:
+  switching:
+    mac_table_size: 32000
+    vlan_count: 4094
+    jumbo_frame_bytes: 9198
+  physical:
+    form_factor: 1U
+    fanless: false
+    operating_temp_c: { min: -5, max: 45 }
+    mounting: [rack]
+  management:
+    stackable: true
+    stack_members_max: 8
+    protocols: [snmp-v1, snmp-v2c, snmp-v3, ssh, telnet, https, netconf, restconf, gnmi, syslog, radius, tacacs+, ospf, eigrp, bgp, is-is]
+    dram_mb: 8192
+    flash_mb: 16384

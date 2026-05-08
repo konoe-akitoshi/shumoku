@@ -5,6 +5,361 @@ import type { CatalogEntry } from './types.js'
 
 export const builtinData = [
   {
+    id: 'allied/at-x230/at-x230-18gp',
+    label: 'Allied Telesis AT-x230-18GP',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'allied',
+      model: 'at-x230-18gp',
+    },
+    extends: 'allied/at-x230',
+    tags: ['poe-source'],
+    properties: {
+      power: {
+        max_draw_w: 330,
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 247,
+          max_per_port_w: 30,
+          ports: 16,
+        },
+      },
+      switching: {
+        capacity_gbps: 36,
+        forwarding_rate_mpps: 26.8,
+        mac_table_size: 16000,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 16,
+            name_pattern: 'port1.0.{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        uplink: [
+          {
+            names: ['port1.0.17', 'port1.0.18'],
+            faceplate_labels: ['17', '18'],
+            speed: '1g',
+            cage: 'sfp',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '1U',
+        fanless: false,
+        dimensions_mm: {
+          w: 341,
+          d: 231,
+          h: 44,
+        },
+        weight_g: 3000,
+        mounting: ['rack', 'desk'],
+      },
+      management: {
+        layer: 3,
+        stackable: false,
+        image: 'alliedware-plus',
+        protocols: [
+          'ssh',
+          'telnet',
+          'http',
+          'https',
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'lldp',
+          'rip',
+          'static-routing',
+        ],
+      },
+    },
+  },
+  {
+    id: 'allied/at-x230',
+    label: 'Allied Telesis AT-x230 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'allied',
+    },
+    tags: ['l3-lite', 'access', 'alliedware-plus'],
+    properties: {},
+  },
+  {
+    id: 'cisco/catalyst-2960l/ws-c2960l-24ps-jp',
+    label: 'WS-C2960L-24PS-JP',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'cisco',
+      model: 'ws-c2960l-24ps-jp',
+    },
+    extends: 'cisco/catalyst-2960l',
+    tags: ['poe-source', 'japan-sku'],
+    properties: {
+      power: {
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 195,
+          max_per_port_w: 30,
+          ports: 24,
+        },
+      },
+      switching: {
+        capacity_gbps: 56,
+        forwarding_rate_mpps: 41.67,
+      },
+      physical: {
+        fanless: true,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 24,
+            name_pattern: 'Gi1/0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet1/0/{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        uplink: [
+          {
+            names: ['Gi1/0/25', 'Gi1/0/26', 'Gi1/0/27', 'Gi1/0/28'],
+            faceplate_labels: ['25', '26', '27', '28'],
+            interface_names: [
+              'GigabitEthernet1/0/25',
+              'GigabitEthernet1/0/26',
+              'GigabitEthernet1/0/27',
+              'GigabitEthernet1/0/28',
+            ],
+            speed: '1g',
+            cage: 'sfp',
+          },
+        ],
+      },
+      management: {
+        layer: 2,
+        image: 'lan-lite',
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-2960l/ws-c2960l-48ps-jp',
+    label: 'WS-C2960L-48PS-JP',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'cisco',
+      model: 'ws-c2960l-48ps-jp',
+    },
+    extends: 'cisco/catalyst-2960l',
+    tags: ['poe-source', 'japan-sku'],
+    properties: {
+      power: {
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 370,
+          max_per_port_w: 30,
+          ports: 48,
+        },
+      },
+      switching: {
+        capacity_gbps: 104,
+        forwarding_rate_mpps: 77.38,
+      },
+      physical: {
+        fanless: false,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 48,
+            name_pattern: 'Gi1/0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet1/0/{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        uplink: [
+          {
+            names: ['Gi1/0/49', 'Gi1/0/50', 'Gi1/0/51', 'Gi1/0/52'],
+            faceplate_labels: ['49', '50', '51', '52'],
+            interface_names: [
+              'GigabitEthernet1/0/49',
+              'GigabitEthernet1/0/50',
+              'GigabitEthernet1/0/51',
+              'GigabitEthernet1/0/52',
+            ],
+            speed: '1g',
+            cage: 'sfp',
+          },
+        ],
+      },
+      management: {
+        layer: 2,
+        image: 'lan-lite',
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-2960l',
+    label: 'Catalyst 2960-L Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'cisco',
+    },
+    tags: ['l2-switch', 'access', 'campus', 'lan-lite'],
+    properties: {
+      switching: {
+        mac_table_size: 16000,
+        vlan_count: 256,
+        jumbo_frame_bytes: 10240,
+      },
+      physical: {
+        form_factor: '1U',
+        operating_temp_c: {
+          min: -5,
+          max: 45,
+        },
+        mounting: ['rack'],
+      },
+      management: {
+        stackable: false,
+        protocols: [
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+          'http',
+          'https',
+          'tftp',
+          'syslog',
+          'radius',
+          'tacacs+',
+        ],
+        dram_mb: 512,
+        flash_mb: 256,
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-3560cg/ws-c3560cg-8pc-s',
+    label: 'WS-C3560CG-8PC-S',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'cisco',
+      model: 'ws-c3560cg-8pc-s',
+    },
+    extends: 'cisco/catalyst-3560cg',
+    tags: ['poe-source'],
+    properties: {
+      power: {
+        max_draw_w: 150,
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 124,
+          max_per_port_w: 30,
+          ports: 8,
+        },
+      },
+      switching: {
+        capacity_gbps: 20,
+        forwarding_rate_mpps: 14.9,
+      },
+      physical: {
+        dimensions_mm: {
+          w: 270,
+          d: 239,
+          h: 44,
+        },
+        weight_g: 1950,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 8,
+            name_pattern: 'Gi0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet0/{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        uplink: [
+          {
+            names: ['Gi0/9', 'Gi0/10'],
+            faceplate_labels: ['9', '10'],
+            interface_names: ['GigabitEthernet0/9', 'GigabitEthernet0/10'],
+            speed: '1g',
+            cage: 'combo',
+          },
+        ],
+      },
+      management: {
+        layer: 3,
+        image: 'ip-base',
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-3560cg',
+    label: 'Catalyst 3560-CG Compact Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'cisco',
+    },
+    tags: ['l3-switch', 'compact', 'fanless', 'campus'],
+    properties: {
+      switching: {
+        mac_table_size: 12000,
+        vlan_count: 1005,
+        jumbo_frame_bytes: 9198,
+      },
+      physical: {
+        form_factor: 'compact',
+        fanless: true,
+        operating_temp_c: {
+          min: -5,
+          max: 45,
+        },
+        mounting: ['desk', 'wall', 'rack'],
+      },
+      management: {
+        stackable: false,
+        protocols: [
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+          'http',
+          'https',
+          'tftp',
+          'syslog',
+          'radius',
+          'tacacs+',
+        ],
+        dram_mb: 128,
+        flash_mb: 64,
+      },
+    },
+  },
+  {
     id: 'cisco/catalyst-3560cx/ws-c3560cx-12pc-s',
     label: 'WS-C3560CX-12PC-S',
     spec: {
@@ -123,7 +478,6 @@ export const builtinData = [
         image: 'lan-base',
       },
     },
-    icon: '<path d="M3 6h18v3H3V6zm0 4h18v3H3v-3zm0 4h18v3H3v-3zm2 1h2v1H5v-1zm4 0h2v1H9v-1zm4 0h2v1h-2v-1z"/><circle cx="19" cy="15.5" r="1" fill="currentColor"/>',
   },
   {
     id: 'cisco/catalyst-3560cx/ws-c3560cx-8tc-s',
@@ -211,6 +565,445 @@ export const builtinData = [
     },
   },
   {
+    id: 'cisco/catalyst-4948e/ws-c4948e',
+    label: 'WS-C4948E',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'cisco',
+      model: 'ws-c4948e',
+    },
+    extends: 'cisco/catalyst-4948e',
+    tags: [],
+    properties: {
+      power: {
+        max_draw_w: 300,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 48,
+            name_pattern: 'Gi1/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet1/{n}',
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+        uplink: [
+          {
+            names: ['Te1/49', 'Te1/50', 'Te1/51', 'Te1/52'],
+            faceplate_labels: ['49', '50', '51', '52'],
+            interface_names: [
+              'TenGigabitEthernet1/49',
+              'TenGigabitEthernet1/50',
+              'TenGigabitEthernet1/51',
+              'TenGigabitEthernet1/52',
+            ],
+            speed: '10g',
+            cage: 'sfp+',
+          },
+        ],
+      },
+      management: {
+        layer: 3,
+        image: 'ip-base',
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-4948e',
+    label: 'Catalyst 4948E',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'cisco',
+    },
+    tags: ['l3-switch', 'top-of-rack', 'datacenter', 'dual-psu'],
+    properties: {
+      switching: {
+        capacity_gbps: 96,
+        forwarding_rate_mpps: 72,
+        mac_table_size: 32000,
+        vlan_count: 4094,
+        jumbo_frame_bytes: 9216,
+      },
+      physical: {
+        form_factor: '1U',
+        fanless: false,
+        dimensions_mm: {
+          w: 445,
+          d: 493,
+          h: 43,
+        },
+        weight_g: 6400,
+        operating_temp_c: {
+          min: 0,
+          max: 40,
+        },
+        mounting: ['rack'],
+      },
+      management: {
+        stackable: false,
+        protocols: [
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+          'http',
+          'https',
+          'tftp',
+          'syslog',
+          'radius',
+          'tacacs+',
+          'ospf',
+          'eigrp',
+          'bgp',
+          'is-is',
+        ],
+        dram_mb: 256,
+        flash_mb: 64,
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-9200l/c9200l-24t-4x-e',
+    label: 'C9200L-24T-4X-E',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'cisco',
+      model: 'c9200l-24t-4x-e',
+    },
+    extends: 'cisco/catalyst-9200l',
+    tags: ['non-poe', 'network-essentials'],
+    properties: {
+      power: {
+        max_draw_w: 36.28,
+      },
+      switching: {
+        capacity_gbps: 128,
+        forwarding_rate_mpps: 190.4,
+      },
+      physical: {
+        dimensions_mm: {
+          w: 445,
+          d: 288,
+          h: 44,
+        },
+        weight_g: 4350,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 24,
+            name_pattern: 'Gi1/0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet1/0/{n}',
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+        uplink: [
+          {
+            count: 4,
+            name_pattern: 'Te1/1/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'TenGigabitEthernet1/1/{n}',
+            speed: '10g',
+            cage: 'sfp+',
+          },
+        ],
+      },
+      management: {
+        layer: 3,
+        image: 'network-essentials',
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-9200l',
+    label: 'Catalyst 9200L Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'cisco',
+    },
+    tags: ['l3-switch', 'stackable', 'access', 'enterprise'],
+    properties: {
+      switching: {
+        mac_table_size: 16000,
+        vlan_count: 4094,
+        jumbo_frame_bytes: 9198,
+      },
+      physical: {
+        form_factor: '1U',
+        fanless: false,
+        operating_temp_c: {
+          min: -5,
+          max: 45,
+        },
+        mounting: ['rack'],
+      },
+      management: {
+        stackable: true,
+        stack_members_max: 8,
+        protocols: [
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+          'https',
+          'netconf',
+          'restconf',
+          'syslog',
+          'radius',
+          'tacacs+',
+        ],
+        dram_mb: 2048,
+        flash_mb: 4096,
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-9300/c9300-24ux',
+    label: 'C9300-24UX',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'cisco',
+      model: 'c9300-24ux',
+    },
+    extends: 'cisco/catalyst-9300',
+    tags: ['poe-source', 'upoe', 'mgig'],
+    properties: {
+      switching: {
+        capacity_gbps: 640,
+        forwarding_rate_mpps: 476.19,
+      },
+      power: {
+        poe_out: {
+          standard: 'cisco-upoe',
+          budget_w: 560,
+          max_per_port_w: 60,
+          ports: 24,
+        },
+      },
+      physical: {
+        dimensions_mm: {
+          w: 445,
+          d: 513,
+          h: 44,
+        },
+        weight_g: 8250,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 24,
+            name_pattern: 'Gi1/0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigabitEthernet1/0/{n}',
+            speed: '10g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      management: {
+        layer: 3,
+        image: 'network-advantage',
+      },
+    },
+  },
+  {
+    id: 'cisco/catalyst-9300',
+    label: 'Catalyst 9300 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'cisco',
+    },
+    tags: ['l3-switch', 'stackable', 'enterprise', 'modular-uplink'],
+    properties: {
+      switching: {
+        mac_table_size: 32000,
+        vlan_count: 4094,
+        jumbo_frame_bytes: 9198,
+      },
+      physical: {
+        form_factor: '1U',
+        fanless: false,
+        operating_temp_c: {
+          min: -5,
+          max: 45,
+        },
+        mounting: ['rack'],
+      },
+      management: {
+        stackable: true,
+        stack_members_max: 8,
+        protocols: [
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+          'https',
+          'netconf',
+          'restconf',
+          'gnmi',
+          'syslog',
+          'radius',
+          'tacacs+',
+          'ospf',
+          'eigrp',
+          'bgp',
+          'is-is',
+        ],
+        dram_mb: 8192,
+        flash_mb: 16384,
+      },
+    },
+  },
+  {
+    id: 'dell/optiplex-3000/optiplex-3070-micro',
+    label: 'Dell OptiPlex 3070 Micro',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'dell',
+      model: 'optiplex-3070-micro',
+    },
+    extends: 'dell/optiplex-3000',
+    tags: ['mini-pc', 'compact'],
+    properties: {
+      ports: {
+        lan: [
+          {
+            names: ['NIC'],
+            faceplate_labels: ['LAN'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'compact',
+        dimensions_mm: {
+          w: 36,
+          d: 182,
+          h: 178,
+        },
+        mounting: ['desk'],
+      },
+    },
+  },
+  {
+    id: 'dell/optiplex-3000',
+    label: 'Dell OptiPlex 3000 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'dell',
+    },
+    tags: ['pc', 'desktop', 'smb'],
+    properties: {},
+  },
+  {
+    id: 'fs/s3100/s3100-8tms-p',
+    label: 'FS S3100-8TMS-P',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'fs',
+      model: 's3100-8tms-p',
+    },
+    extends: 'fs/s3100',
+    tags: ['poe-source', 'fanless'],
+    properties: {
+      power: {
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 125,
+          max_per_port_w: 30,
+          ports: 8,
+        },
+      },
+      switching: {
+        capacity_gbps: 76,
+        forwarding_rate_mpps: 49.1,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 6,
+            name_pattern: 'GE{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+          {
+            names: ['GE7', 'GE8'],
+            faceplate_labels: ['7', '8'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+          {
+            names: ['MGE1', 'MGE2'],
+            faceplate_labels: ['MG1', 'MG2'],
+            speed: '5g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        uplink: [
+          {
+            names: ['XGE1', 'XGE2'],
+            faceplate_labels: ['X1', 'X2'],
+            speed: '10g',
+            cage: 'sfp+',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'desktop',
+        fanless: true,
+        mounting: ['desk', 'wall', 'rack'],
+      },
+      management: {
+        layer: 2,
+        image: 'airware',
+        protocols: [
+          'ssh',
+          'telnet',
+          'http',
+          'https',
+          'snmp-v2c',
+          'snmp-v3',
+          'lacp',
+          'lldp',
+          'igmp-snooping',
+          'voice-vlan',
+        ],
+      },
+    },
+  },
+  {
+    id: 'fs/s3100',
+    label: 'FS S3100 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'fs',
+    },
+    tags: ['smart-managed', 'multi-gig'],
+    properties: {},
+  },
+  {
     id: 'generic/ip-phone',
     label: 'IP Phone',
     spec: {
@@ -232,7 +1025,84 @@ export const builtinData = [
     },
   },
   {
-    id: 'hpe/aruba-ap-505',
+    id: 'hpe/aruba-ap-310/aruba-ap-315',
+    label: 'Aruba AP-315',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+      model: 'aruba-ap-315',
+    },
+    extends: 'hpe/aruba-ap-310',
+    tags: ['poe-consumer', 'apin0315'],
+    properties: {
+      power: {
+        max_draw_w: 14.4,
+        poe_in: {
+          standard: '802.3at',
+          class: 4,
+          min_class: 3,
+          max_draw_w: 14.4,
+          by_class: {
+            '3': {
+              standard: '802.3af',
+              max_draw_w: 13.6,
+              note: 'On 802.3af without IPM: USB disabled, 2.4 GHz TX -3 dB',
+            },
+            '4': {
+              standard: '802.3at',
+              max_draw_w: 14.4,
+            },
+          },
+        },
+      },
+      wireless: {
+        standard: 'wifi-5',
+        radios: 2,
+        mimo: '4x4:4',
+        bands: ['2.4ghz', '5ghz'],
+        antenna_type: 'internal',
+        max_data_rate_mbps: 2033,
+      },
+      ports: {
+        uplink: [
+          {
+            names: ['E0'],
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'ceiling',
+        dimensions_mm: {
+          w: 182,
+          d: 180,
+          h: 48,
+        },
+        weight_g: 650,
+        mounting: ['ceiling', 'wall'],
+        operating_temp_c: {
+          min: 0,
+          max: 50,
+        },
+      },
+    },
+  },
+  {
+    id: 'hpe/aruba-ap-310',
+    label: 'Aruba AP-310 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-5', 'indoor', 'ceiling-mount', 'campus'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-ap-500/aruba-ap-505',
     label: 'Aruba AP-505',
     spec: {
       kind: 'hardware',
@@ -240,7 +1110,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-ap-505',
     },
-    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'poe-consumer'],
+    extends: 'hpe/aruba-ap-500',
+    tags: ['poe-consumer'],
     properties: {
       power: {
         max_draw_w: 16.5,
@@ -289,10 +1160,371 @@ export const builtinData = [
         mounting: ['ceiling', 'wall'],
       },
     },
-    icon: 'https://icons.shumoku.packof.me/v1/aruba/ap500-series.svg',
   },
   {
-    id: 'hpe/aruba-instant-on-ap11d',
+    id: 'hpe/aruba-ap-500',
+    label: 'Aruba AP-500 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'campus'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-ap-510/aruba-ap-515',
+    label: 'Aruba AP-515',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+      model: 'aruba-ap-515',
+    },
+    extends: 'hpe/aruba-ap-510',
+    tags: ['poe-consumer', 'apin0515'],
+    properties: {
+      power: {
+        max_draw_w: 20.8,
+        poe_in: {
+          standard: '802.3at',
+          class: 4,
+          min_class: 3,
+          max_draw_w: 20.8,
+          by_class: {
+            '3': {
+              standard: '802.3af',
+              max_draw_w: 13.5,
+              note: 'IPM-enabled reduced mode on 802.3af',
+            },
+            '4': {
+              standard: '802.3at',
+              max_draw_w: 20.8,
+            },
+          },
+        },
+      },
+      wireless: {
+        standard: 'wifi-6',
+        radios: 2,
+        mimo: '4x4:4',
+        bands: ['2.4ghz', '5ghz'],
+        antenna_type: 'internal',
+        max_data_rate_mbps: 2690,
+      },
+      ports: {
+        uplink: [
+          {
+            names: ['E0'],
+            speed: '2.5g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        lan: [
+          {
+            names: ['E1'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'ceiling',
+        dimensions_mm: {
+          w: 200,
+          d: 200,
+          h: 46,
+        },
+        weight_g: 810,
+        mounting: ['ceiling', 'wall'],
+      },
+    },
+  },
+  {
+    id: 'hpe/aruba-ap-510',
+    label: 'Aruba AP-510 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'campus', 'smart-rate'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-ap-530/aruba-ap-535',
+    label: 'Aruba AP-535',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+      model: 'aruba-ap-535',
+    },
+    extends: 'hpe/aruba-ap-530',
+    tags: ['poe-consumer', 'lacp', 'apin0535'],
+    properties: {
+      power: {
+        max_draw_w: 30,
+        poe_in: {
+          standard: '802.3bt',
+          class: 5,
+          min_class: 4,
+          max_draw_w: 30,
+          by_class: {
+            '4': {
+              standard: '802.3at',
+              max_draw_w: 25,
+              note: 'Single 802.3at: USB+E1 disabled without IPM. Dual 802.3at = full 30W. 802.3af not supported.',
+            },
+            '5': {
+              standard: '802.3bt',
+              max_draw_w: 30,
+            },
+          },
+        },
+      },
+      wireless: {
+        standard: 'wifi-6',
+        radios: 2,
+        mimo: '4x4:4',
+        bands: ['2.4ghz', '5ghz'],
+        antenna_type: 'internal',
+        max_data_rate_mbps: 3550,
+      },
+      ports: {
+        uplink: [
+          {
+            names: ['E0', 'E1'],
+            speed: '5g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'ceiling',
+        dimensions_mm: {
+          w: 240,
+          d: 240,
+          h: 57,
+        },
+        mounting: ['ceiling', 'wall'],
+        operating_temp_c: {
+          min: 0,
+          max: 50,
+        },
+      },
+    },
+  },
+  {
+    id: 'hpe/aruba-ap-530',
+    label: 'Aruba AP-530 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-6', 'indoor', 'ceiling-mount', 'campus', 'smart-rate', 'dual-uplink'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-instant-on-1830/aruba-instant-on-1830-48g-class4-poe',
+    label: 'Aruba Instant On 1830 48G PoE+ (JL815A)',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'hpe',
+      model: 'aruba-instant-on-1830-48g-class4-poe',
+    },
+    extends: 'hpe/aruba-instant-on-1830',
+    tags: ['poe-source', 'fanless', 'jl815a'],
+    properties: {
+      power: {
+        max_draw_w: 462.5,
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 370,
+          max_per_port_w: 30,
+          ports: 24,
+        },
+      },
+      switching: {
+        capacity_gbps: 104,
+        forwarding_rate_mpps: 77.37,
+        mac_table_size: 16384,
+        vlan_count: 256,
+        jumbo_frame_bytes: 10240,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 24,
+            name_pattern: '{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+          {
+            names: [
+              '25',
+              '26',
+              '27',
+              '28',
+              '29',
+              '30',
+              '31',
+              '32',
+              '33',
+              '34',
+              '35',
+              '36',
+              '37',
+              '38',
+              '39',
+              '40',
+              '41',
+              '42',
+              '43',
+              '44',
+              '45',
+              '46',
+              '47',
+              '48',
+            ],
+            faceplate_labels: [
+              '25',
+              '26',
+              '27',
+              '28',
+              '29',
+              '30',
+              '31',
+              '32',
+              '33',
+              '34',
+              '35',
+              '36',
+              '37',
+              '38',
+              '39',
+              '40',
+              '41',
+              '42',
+              '43',
+              '44',
+              '45',
+              '46',
+              '47',
+              '48',
+            ],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+        uplink: [
+          {
+            names: ['49', '50', '51', '52'],
+            faceplate_labels: ['49', '50', '51', '52'],
+            speed: '1g',
+            cage: 'sfp',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '1U',
+        fanless: true,
+        mounting: ['rack', 'desk'],
+      },
+      management: {
+        layer: 2,
+        stackable: false,
+        dram_mb: 512,
+        flash_mb: 256,
+        protocols: [
+          'snmp-v1',
+          'snmp-v2c',
+          'ssh',
+          'https',
+          'lldp',
+          'lacp',
+          'igmp-snooping',
+          'stp',
+          'rstp',
+          'mstp',
+        ],
+      },
+    },
+  },
+  {
+    id: 'hpe/aruba-instant-on-1830',
+    label: 'Aruba Instant On 1830 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'hpe',
+    },
+    tags: ['instant-on', 'smart-managed', 'smb'],
+    properties: {},
+  },
+  {
+    id: 'hpe/aruba-instant-on-ap11x/aruba-instant-on-ap11',
+    label: 'Aruba Instant On AP11',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+      model: 'aruba-instant-on-ap11',
+    },
+    extends: 'hpe/aruba-instant-on-ap11x',
+    tags: ['ceiling-mount', 'poe-consumer', 'apin0303'],
+    properties: {
+      power: {
+        max_draw_w: 10.1,
+        poe_in: {
+          standard: '802.3af',
+          class: 3,
+          min_class: 3,
+          max_draw_w: 10.1,
+        },
+      },
+      wireless: {
+        standard: 'wifi-5',
+        radios: 2,
+        mimo: '2x2',
+        bands: ['2.4ghz', '5ghz'],
+        antenna_type: 'internal',
+        max_data_rate_mbps: 1167,
+      },
+      ports: {
+        uplink: [
+          {
+            names: ['E0'],
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'ceiling',
+        dimensions_mm: {
+          w: 152,
+          d: 152,
+          h: 34,
+        },
+        weight_g: 193,
+        mounting: ['ceiling', 'wall'],
+        operating_temp_c: {
+          min: 0,
+          max: 40,
+        },
+      },
+    },
+  },
+  {
+    id: 'hpe/aruba-instant-on-ap11x/aruba-instant-on-ap11d',
     label: 'Aruba Instant On AP11D',
     spec: {
       kind: 'hardware',
@@ -300,7 +1532,8 @@ export const builtinData = [
       vendor: 'hpe',
       model: 'aruba-instant-on-ap11d',
     },
-    tags: ['wifi-5', 'desk', 'poe-consumer', 'poe-passthrough'],
+    extends: 'hpe/aruba-instant-on-ap11x',
+    tags: ['desktop', 'poe-consumer', 'poe-passthrough', 'apinh303'],
     properties: {
       power: {
         max_draw_w: 27.4,
@@ -358,7 +1591,359 @@ export const builtinData = [
     },
   },
   {
-    id: 'panasonic/switch-m8egpwr-plus',
+    id: 'hpe/aruba-instant-on-ap11x',
+    label: 'Aruba Instant On AP11 / AP11D',
+    spec: {
+      kind: 'hardware',
+      type: 'access-point',
+      vendor: 'hpe',
+    },
+    tags: ['wifi-5', 'instant-on', 'smb'],
+    properties: {},
+  },
+  {
+    id: 'hpe/proliant-dl360/proliant-dl360-gen10',
+    label: 'HPE ProLiant DL360 Gen10',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'hpe',
+      model: 'proliant-dl360-gen10',
+    },
+    extends: 'hpe/proliant-dl360',
+    tags: ['redundant-psu', 'ilo5'],
+    properties: {
+      ports: {
+        lan: [
+          {
+            count: 4,
+            name_pattern: 'NIC{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+        management: [
+          {
+            names: ['iLO'],
+            faceplate_labels: ['iLO'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '1U',
+        mounting: ['rack'],
+      },
+      management: {
+        protocols: ['ipmi', 'redfish', 'snmp-v2c', 'snmp-v3', 'ssh', 'https'],
+      },
+    },
+  },
+  {
+    id: 'hpe/proliant-dl360',
+    label: 'HPE ProLiant DL360',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'hpe',
+    },
+    tags: ['server', '1u', 'rack'],
+    properties: {},
+  },
+  {
+    id: 'hpe/proliant-dl380/proliant-dl380p-gen8',
+    label: 'HPE ProLiant DL380p Gen8',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'hpe',
+      model: 'proliant-dl380p-gen8',
+    },
+    extends: 'hpe/proliant-dl380',
+    tags: ['redundant-psu', 'ilo4', 'discontinued'],
+    properties: {
+      ports: {
+        lan: [
+          {
+            count: 4,
+            name_pattern: 'NIC{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+        management: [
+          {
+            names: ['iLO'],
+            faceplate_labels: ['iLO'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '2U',
+        mounting: ['rack'],
+      },
+      management: {
+        protocols: ['ipmi', 'redfish', 'snmp-v2c', 'snmp-v3', 'ssh', 'https'],
+      },
+    },
+  },
+  {
+    id: 'hpe/proliant-dl380',
+    label: 'HPE ProLiant DL380',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'hpe',
+    },
+    tags: ['server', '2u', 'rack'],
+    properties: {},
+  },
+  {
+    id: 'nec/ix2000/ix2106',
+    label: 'NEC UNIVERGE IX2106',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'nec',
+      model: 'ix2106',
+    },
+    extends: 'nec/ix2000',
+    tags: ['compact', 'fanless', 'l2tp'],
+    properties: {
+      power: {
+        max_draw_w: 7,
+      },
+      ports: {
+        wan: [
+          {
+            names: ['GE0'],
+            faceplate_labels: ['WAN'],
+            interface_names: ['GigaEthernet0.0'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+        lan: [
+          {
+            count: 4,
+            name_pattern: 'LAN{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigaEthernet1.0',
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'compact',
+        fanless: true,
+        dimensions_mm: {
+          w: 135,
+          d: 196,
+          h: 36,
+        },
+        operating_temp_c: {
+          min: 0,
+          max: 50,
+        },
+        mounting: ['desk', 'wall', 'rack'],
+      },
+      management: {
+        layer: 3,
+        dram_mb: 256,
+        protocols: [
+          'ipsec',
+          'ikev1',
+          'ikev2',
+          'l2tpv2',
+          'l2tp-ipsec',
+          'etherip',
+          'gre',
+          'ospf',
+          'bgp4',
+          'pppoe',
+          'dhcp',
+          'nat',
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+        ],
+      },
+    },
+  },
+  {
+    id: 'nec/ix2000',
+    label: 'NEC UNIVERGE IX2000 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'nec',
+    },
+    tags: ['branch', 'ipsec'],
+    properties: {},
+  },
+  {
+    id: 'nec/ix3000/ix3315',
+    label: 'NEC UNIVERGE IX3315',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'nec',
+      model: 'ix3315',
+    },
+    extends: 'nec/ix3000',
+    tags: ['openflow', 'sdn'],
+    properties: {
+      power: {
+        max_draw_w: 75,
+      },
+      ports: {
+        wan: [
+          {
+            names: ['GE0', 'GE1'],
+            faceplate_labels: ['WAN1', 'WAN2'],
+            speed: '10g',
+            cage: 'combo',
+          },
+          {
+            names: ['GE2', 'GE3'],
+            faceplate_labels: ['SFP1', 'SFP2'],
+            speed: '1g',
+            cage: 'sfp',
+          },
+        ],
+        lan: [
+          {
+            count: 16,
+            name_pattern: 'LAN{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '1U',
+        fanless: false,
+        dimensions_mm: {
+          w: 430,
+          d: 393,
+          h: 43,
+        },
+        weight_g: 5500,
+        mounting: ['rack'],
+      },
+      management: {
+        layer: 3,
+        protocols: [
+          'ipsec',
+          'ikev1',
+          'ikev2',
+          'l2tpv2',
+          'l2tp-ipsec',
+          'etherip',
+          'gre',
+          'ospfv2',
+          'ospfv3',
+          'bgp4',
+          'pppoe',
+          'dhcp',
+          'nat',
+          'openflow',
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+        ],
+      },
+    },
+  },
+  {
+    id: 'nec/ix3000',
+    label: 'NEC UNIVERGE IX3000 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'nec',
+    },
+    tags: ['edge', 'enterprise', 'ipsec'],
+    properties: {},
+  },
+  {
+    id: 'netgear/gs108/gs108pp',
+    label: 'Netgear GS108PP',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'netgear',
+      model: 'gs108pp',
+    },
+    extends: 'netgear/gs108',
+    tags: ['unmanaged', 'poe-source'],
+    properties: {
+      power: {
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 123,
+          max_per_port_w: 30,
+          ports: 8,
+        },
+      },
+      switching: {
+        capacity_gbps: 16,
+        mac_table_size: 4000,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 8,
+            name_pattern: '{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'desktop',
+        fanless: false,
+        dimensions_mm: {
+          w: 236,
+          d: 102,
+          h: 27,
+        },
+        weight_g: 600,
+        mounting: ['desk', 'wall', 'rack'],
+      },
+      management: {
+        layer: 2,
+        stackable: false,
+        protocols: [],
+      },
+    },
+  },
+  {
+    id: 'netgear/gs108',
+    label: 'Netgear GS108 Family',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'netgear',
+    },
+    tags: ['desktop', 'smb', '8-port'],
+    properties: {},
+  },
+  {
+    id: 'panasonic/switch-m/switch-m8egpwr-plus',
     label: 'Switch-M8eGPWR+ (PN28089K)',
     spec: {
       kind: 'hardware',
@@ -366,7 +1951,8 @@ export const builtinData = [
       vendor: 'panasonic',
       model: 'switch-m8egpwr-plus',
     },
-    tags: ['poe-source', 'l2-switch', 'managed', 'poe-plus'],
+    extends: 'panasonic/switch-m',
+    tags: ['poe-source', 'poe-plus'],
     properties: {
       power: {
         max_draw_w: 310,
@@ -417,7 +2003,7 @@ export const builtinData = [
     },
   },
   {
-    id: 'panasonic/switch-m8epwr',
+    id: 'panasonic/switch-m/switch-m8epwr',
     label: 'Switch-M8ePWR (PN27089K)',
     spec: {
       kind: 'hardware',
@@ -425,7 +2011,8 @@ export const builtinData = [
       vendor: 'panasonic',
       model: 'switch-m8epwr',
     },
-    tags: ['poe-source', 'l2-switch', 'managed'],
+    extends: 'panasonic/switch-m',
+    tags: ['poe-source'],
     properties: {
       power: {
         max_draw_w: 161,
@@ -475,5 +2062,149 @@ export const builtinData = [
         protocols: ['snmp-v1', 'snmp-v2c', 'ssh', 'cli', 'web'],
       },
     },
+  },
+  {
+    id: 'panasonic/switch-m',
+    label: 'Panasonic Switch-M Series',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'panasonic',
+    },
+    tags: ['managed'],
+    properties: {},
+  },
+  {
+    id: 'seiko/ts-2200/ts-2210',
+    label: 'Seiko TS-2210',
+    spec: {
+      kind: 'hardware',
+      type: 'generic',
+      vendor: 'seiko',
+      model: 'ts-2210',
+    },
+    extends: 'seiko/ts-2200',
+    tags: ['gps', 'discontinued'],
+    properties: {
+      ports: {
+        management: [
+          {
+            names: ['MGMT'],
+            speed: '100m',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '1U',
+        mounting: ['rack'],
+      },
+      management: {
+        protocols: ['ntp', 'snmp-v2c', 'snmp-v3', 'ssh', 'https', 'syslog'],
+      },
+    },
+  },
+  {
+    id: 'seiko/ts-2200',
+    label: 'Seiko TS-2200 Series',
+    spec: {
+      kind: 'hardware',
+      type: 'generic',
+      vendor: 'seiko',
+    },
+    tags: ['time-server', 'ntp'],
+    properties: {},
+  },
+  {
+    id: 'yamaha/rtx/rtx1210',
+    label: 'Yamaha RTX1210',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'yamaha',
+      model: 'rtx1210',
+    },
+    extends: 'yamaha/rtx',
+    tags: ['l2tpv3', 'fanless'],
+    properties: {
+      power: {
+        max_draw_w: 14.5,
+      },
+      ports: {
+        lan: [
+          {
+            count: 8,
+            name_pattern: 'LAN1.{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'LAN1',
+            speed: '1g',
+            cage: 'rj45',
+          },
+          {
+            names: ['LAN2'],
+            faceplate_labels: ['LAN2'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+          {
+            names: ['LAN3'],
+            faceplate_labels: ['LAN3'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'desktop',
+        fanless: true,
+        dimensions_mm: {
+          w: 220,
+          d: 239,
+          h: 42,
+        },
+        weight_g: 1500,
+        operating_temp_c: {
+          min: 0,
+          max: 45,
+        },
+        mounting: ['desk', 'wall', 'rack'],
+      },
+      management: {
+        layer: 3,
+        dram_mb: 256,
+        flash_mb: 32,
+        protocols: [
+          'ipsec',
+          'ikev1',
+          'ikev2',
+          'l2tpv3',
+          'l2tp-ipsec',
+          'gre',
+          'ospf',
+          'bgp',
+          'pppoe',
+          'dhcp',
+          'nat',
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+          'https',
+          'syslog',
+        ],
+      },
+    },
+  },
+  {
+    id: 'yamaha/rtx',
+    label: 'Yamaha RTX Series',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'yamaha',
+    },
+    tags: ['vpn', 'ipsec', 'smb'],
+    properties: {},
   },
 ] as unknown as CatalogEntry[]

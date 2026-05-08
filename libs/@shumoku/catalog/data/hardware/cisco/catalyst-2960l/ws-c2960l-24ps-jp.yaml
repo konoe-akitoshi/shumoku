@@ -1,0 +1,30 @@
+# Cisco WS-C2960L-24PS-JP — 24-port PoE+ L2 switch + 4 SFP uplinks (Japan SKU)
+id: cisco/catalyst-2960l/ws-c2960l-24ps-jp
+label: WS-C2960L-24PS-JP
+extends: cisco/catalyst-2960l
+spec:
+  kind: hardware
+  type: l2-switch
+  vendor: cisco
+  model: ws-c2960l-24ps-jp
+tags: [poe-source, japan-sku]
+properties:
+  power:
+    poe_out:
+      standard: "802.3at"
+      budget_w: 195
+      max_per_port_w: 30
+      ports: 24
+  switching:
+    capacity_gbps: 56
+    forwarding_rate_mpps: 41.67
+  physical:
+    fanless: true
+  ports:
+    downlink:
+      - { count: 24, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "1g", cage: rj45, poe: true }
+    uplink:
+      - { names: ["Gi1/0/25", "Gi1/0/26", "Gi1/0/27", "Gi1/0/28"], faceplate_labels: ["25", "26", "27", "28"], interface_names: ["GigabitEthernet1/0/25", "GigabitEthernet1/0/26", "GigabitEthernet1/0/27", "GigabitEthernet1/0/28"], speed: "1g", cage: sfp }
+  management:
+    layer: 2
+    image: lan-lite

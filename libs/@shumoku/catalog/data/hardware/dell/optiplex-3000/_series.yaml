@@ -1,0 +1,8 @@
+# Dell OptiPlex 3000 Series — entry-level business desktop PCs
+id: dell/optiplex-3000
+label: Dell OptiPlex 3000 Series
+spec:
+  kind: hardware
+  type: server
+  vendor: dell
+tags: [pc, desktop, smb]

@@ -1,0 +1,23 @@
+# Cisco Catalyst 2960-L Series — fixed-config L2 access switches
+# Source: https://www.cisco.com/c/en/us/products/collateral/switches/catalyst-2960-l-series-switches/nb-06-cat2960-l-ser-data-sheet-cte-en.html
+id: cisco/catalyst-2960l
+label: Catalyst 2960-L Series
+spec:
+  kind: hardware
+  type: l2-switch
+  vendor: cisco
+tags: [l2-switch, access, campus, lan-lite]
+properties:
+  switching:
+    mac_table_size: 16000
+    vlan_count: 256
+    jumbo_frame_bytes: 10240
+  physical:
+    form_factor: 1U
+    operating_temp_c: { min: -5, max: 45 }
+    mounting: [rack]
+  management:
+    stackable: false
+    protocols: [snmp-v1, snmp-v2c, snmp-v3, ssh, telnet, http, https, tftp, syslog, radius, tacacs+]
+    dram_mb: 512
+    flash_mb: 256

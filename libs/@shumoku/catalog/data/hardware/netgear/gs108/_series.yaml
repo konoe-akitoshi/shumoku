@@ -1,0 +1,8 @@
+# Netgear GS108 Family — 8-port Gigabit Ethernet desktop switches
+id: netgear/gs108
+label: Netgear GS108 Family
+spec:
+  kind: hardware
+  type: l2-switch
+  vendor: netgear
+tags: [desktop, smb, 8-port]

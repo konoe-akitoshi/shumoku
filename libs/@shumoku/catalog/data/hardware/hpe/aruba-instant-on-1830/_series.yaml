@@ -1,0 +1,8 @@
+# HPE Aruba Instant On 1830 Series — smart-managed L2 switches for SMB
+id: hpe/aruba-instant-on-1830
+label: Aruba Instant On 1830 Series
+spec:
+  kind: hardware
+  type: l2-switch
+  vendor: hpe
+tags: [instant-on, smart-managed, smb]

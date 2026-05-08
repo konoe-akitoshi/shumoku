@@ -1,0 +1,8 @@
+# Yamaha RTX Series — VPN/router family
+id: yamaha/rtx
+label: Yamaha RTX Series
+spec:
+  kind: hardware
+  type: router
+  vendor: yamaha
+tags: [vpn, ipsec, smb]

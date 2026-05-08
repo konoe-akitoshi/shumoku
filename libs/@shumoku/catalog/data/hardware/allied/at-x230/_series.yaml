@@ -1,0 +1,8 @@
+# Allied Telesis AT-x230 Series — Layer 3 lite Gigabit access switches
+id: allied/at-x230
+label: Allied Telesis AT-x230 Series
+spec:
+  kind: hardware
+  type: l3-switch
+  vendor: allied
+tags: [l3-lite, access, alliedware-plus]
