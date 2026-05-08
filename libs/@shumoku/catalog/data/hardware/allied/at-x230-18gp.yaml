@@ -1,0 +1,38 @@
+# Allied Telesis AT-x230-18GP — 16-port PoE+ L3-lite switch + 2 SFP uplinks
+# Source: https://www.alliedtelesis.com/us/en/products/switches/x230-series/x230-18gp
+id: allied/at-x230-18gp
+label: Allied Telesis AT-x230-18GP
+spec:
+  kind: hardware
+  type: l3-switch
+  vendor: allied
+  model: at-x230-18gp
+tags: [l3-switch, poe-source, alliedware-plus]
+properties:
+  power:
+    max_draw_w: 330
+    poe_out:
+      standard: "802.3at"
+      budget_w: 247
+      max_per_port_w: 30
+      ports: 16
+  switching:
+    capacity_gbps: 36
+    forwarding_rate_mpps: 26.8
+    mac_table_size: 16000
+  ports:
+    downlink:
+      - { count: 16, name_pattern: "port1.0.{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45, poe: true }
+    uplink:
+      - { names: ["port1.0.17", "port1.0.18"], faceplate_labels: ["17", "18"], speed: "1g", cage: sfp }
+  physical:
+    form_factor: 1U
+    fanless: false
+    dimensions_mm: { w: 341, d: 231, h: 44 }
+    weight_g: 3000
+    mounting: [rack, desk]
+  management:
+    layer: 3
+    stackable: false
+    image: alliedware-plus
+    protocols: [ssh, telnet, http, https, snmp-v1, snmp-v2c, snmp-v3, lldp, rip, static-routing]

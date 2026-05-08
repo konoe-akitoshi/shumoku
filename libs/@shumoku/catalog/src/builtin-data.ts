@@ -5,6 +5,81 @@ import type { CatalogEntry } from './types.js'
 
 export const builtinData = [
   {
+    id: 'allied/at-x230-18gp',
+    label: 'Allied Telesis AT-x230-18GP',
+    spec: {
+      kind: 'hardware',
+      type: 'l3-switch',
+      vendor: 'allied',
+      model: 'at-x230-18gp',
+    },
+    tags: ['l3-switch', 'poe-source', 'alliedware-plus'],
+    properties: {
+      power: {
+        max_draw_w: 330,
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 247,
+          max_per_port_w: 30,
+          ports: 16,
+        },
+      },
+      switching: {
+        capacity_gbps: 36,
+        forwarding_rate_mpps: 26.8,
+        mac_table_size: 16000,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 16,
+            name_pattern: 'port1.0.{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        uplink: [
+          {
+            names: ['port1.0.17', 'port1.0.18'],
+            faceplate_labels: ['17', '18'],
+            speed: '1g',
+            cage: 'sfp',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '1U',
+        fanless: false,
+        dimensions_mm: {
+          w: 341,
+          d: 231,
+          h: 44,
+        },
+        weight_g: 3000,
+        mounting: ['rack', 'desk'],
+      },
+      management: {
+        layer: 3,
+        stackable: false,
+        image: 'alliedware-plus',
+        protocols: [
+          'ssh',
+          'telnet',
+          'http',
+          'https',
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'lldp',
+          'rip',
+          'static-routing',
+        ],
+      },
+    },
+  },
+  {
     id: 'cisco/catalyst-2960l/ws-c2960l-24ps-jp',
     label: 'WS-C2960L-24PS-JP',
     spec: {
@@ -782,6 +857,85 @@ export const builtinData = [
     },
   },
   {
+    id: 'fs/s3100-8tms-p',
+    label: 'FS S3100-8TMS-P',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'fs',
+      model: 's3100-8tms-p',
+    },
+    tags: ['l2-switch', 'smart-managed', 'poe-source', 'multi-gig', 'fanless'],
+    properties: {
+      power: {
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 125,
+          max_per_port_w: 30,
+          ports: 8,
+        },
+      },
+      switching: {
+        capacity_gbps: 76,
+        forwarding_rate_mpps: 49.1,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 6,
+            name_pattern: 'GE{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+          {
+            names: ['GE7', 'GE8'],
+            faceplate_labels: ['7', '8'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+          {
+            names: ['MGE1', 'MGE2'],
+            faceplate_labels: ['MG1', 'MG2'],
+            speed: '5g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+        uplink: [
+          {
+            names: ['XGE1', 'XGE2'],
+            faceplate_labels: ['X1', 'X2'],
+            speed: '10g',
+            cage: 'sfp+',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'desktop',
+        fanless: true,
+        mounting: ['desk', 'wall', 'rack'],
+      },
+      management: {
+        layer: 2,
+        image: 'airware',
+        protocols: [
+          'ssh',
+          'telnet',
+          'http',
+          'https',
+          'snmp-v2c',
+          'snmp-v3',
+          'lacp',
+          'lldp',
+          'igmp-snooping',
+          'voice-vlan',
+        ],
+      },
+    },
+  },
+  {
     id: 'generic/ip-phone',
     label: 'IP Phone',
     spec: {
@@ -1457,6 +1611,59 @@ export const builtinData = [
     },
   },
   {
+    id: 'netgear/gs108pp',
+    label: 'Netgear GS108PP',
+    spec: {
+      kind: 'hardware',
+      type: 'l2-switch',
+      vendor: 'netgear',
+      model: 'gs108pp',
+    },
+    tags: ['l2-switch', 'unmanaged', 'poe-source', 'desktop', 'smb'],
+    properties: {
+      power: {
+        poe_out: {
+          standard: '802.3at',
+          budget_w: 123,
+          max_per_port_w: 30,
+          ports: 8,
+        },
+      },
+      switching: {
+        capacity_gbps: 16,
+        mac_table_size: 4000,
+      },
+      ports: {
+        downlink: [
+          {
+            count: 8,
+            name_pattern: '{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+            poe: true,
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'desktop',
+        fanless: false,
+        dimensions_mm: {
+          w: 236,
+          d: 102,
+          h: 27,
+        },
+        weight_g: 600,
+        mounting: ['desk', 'wall', 'rack'],
+      },
+      management: {
+        layer: 2,
+        stackable: false,
+        protocols: [],
+      },
+    },
+  },
+  {
     id: 'panasonic/switch-m8egpwr-plus',
     label: 'Switch-M8eGPWR+ (PN28089K)',
     spec: {
@@ -1572,6 +1779,86 @@ export const builtinData = [
       management: {
         layer: 2,
         protocols: ['snmp-v1', 'snmp-v2c', 'ssh', 'cli', 'web'],
+      },
+    },
+  },
+  {
+    id: 'yamaha/rtx1210',
+    label: 'Yamaha RTX1210',
+    spec: {
+      kind: 'hardware',
+      type: 'router',
+      vendor: 'yamaha',
+      model: 'rtx1210',
+    },
+    tags: ['router', 'vpn', 'ipsec', 'l2tpv3', 'fanless', 'smb'],
+    properties: {
+      power: {
+        max_draw_w: 14.5,
+      },
+      ports: {
+        lan: [
+          {
+            count: 8,
+            name_pattern: 'LAN1.{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'LAN1',
+            speed: '1g',
+            cage: 'rj45',
+          },
+          {
+            names: ['LAN2'],
+            faceplate_labels: ['LAN2'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+          {
+            names: ['LAN3'],
+            faceplate_labels: ['LAN3'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'desktop',
+        fanless: true,
+        dimensions_mm: {
+          w: 220,
+          d: 239,
+          h: 42,
+        },
+        weight_g: 1500,
+        operating_temp_c: {
+          min: 0,
+          max: 45,
+        },
+        mounting: ['desk', 'wall', 'rack'],
+      },
+      management: {
+        layer: 3,
+        dram_mb: 256,
+        flash_mb: 32,
+        protocols: [
+          'ipsec',
+          'ikev1',
+          'ikev2',
+          'l2tpv3',
+          'l2tp-ipsec',
+          'gre',
+          'ospf',
+          'bgp',
+          'pppoe',
+          'dhcp',
+          'nat',
+          'snmp-v1',
+          'snmp-v2c',
+          'snmp-v3',
+          'ssh',
+          'telnet',
+          'https',
+          'syslog',
+        ],
       },
     },
   },
