@@ -1,0 +1,19 @@
+# Seiko Solutions TS-2210 — GPS-synchronized NTP time server (discontinued)
+# Source: https://www.seiko-sol.co.jp/en/products/time_server/time_server-lineup/time_server_ts2210/
+id: seiko/ts-2210
+label: Seiko TS-2210
+spec:
+  kind: hardware
+  type: generic
+  vendor: seiko
+  model: ts-2210
+tags: [time-server, ntp, gps, discontinued]
+properties:
+  ports:
+    management:
+      - { names: ["MGMT"], speed: "100m", cage: rj45 }
+  physical:
+    form_factor: 1U
+    mounting: [rack]
+  management:
+    protocols: [ntp, snmp-v2c, snmp-v3, ssh, https, syslog]

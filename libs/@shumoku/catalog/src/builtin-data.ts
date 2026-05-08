@@ -857,6 +857,38 @@ export const builtinData = [
     },
   },
   {
+    id: 'dell/optiplex-3070-micro',
+    label: 'Dell OptiPlex 3070 Micro',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'dell',
+      model: 'optiplex-3070-micro',
+    },
+    tags: ['pc', 'mini-pc', 'desktop', 'compact'],
+    properties: {
+      ports: {
+        lan: [
+          {
+            names: ['NIC'],
+            faceplate_labels: ['LAN'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: 'compact',
+        dimensions_mm: {
+          w: 36,
+          d: 182,
+          h: 178,
+        },
+        mounting: ['desk'],
+      },
+    },
+  },
+  {
     id: 'fs/s3100-8tms-p',
     label: 'FS S3100-8TMS-P',
     spec: {
@@ -1461,6 +1493,84 @@ export const builtinData = [
     },
   },
   {
+    id: 'hpe/proliant-dl360-gen10',
+    label: 'HPE ProLiant DL360 Gen10',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'hpe',
+      model: 'proliant-dl360-gen10',
+    },
+    tags: ['server', '1u', 'rack', 'redundant-psu', 'ilo5'],
+    properties: {
+      ports: {
+        lan: [
+          {
+            count: 4,
+            name_pattern: 'NIC{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+        management: [
+          {
+            names: ['iLO'],
+            faceplate_labels: ['iLO'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '1U',
+        mounting: ['rack'],
+      },
+      management: {
+        protocols: ['ipmi', 'redfish', 'snmp-v2c', 'snmp-v3', 'ssh', 'https'],
+      },
+    },
+  },
+  {
+    id: 'hpe/proliant-dl380p-gen8',
+    label: 'HPE ProLiant DL380p Gen8',
+    spec: {
+      kind: 'hardware',
+      type: 'server',
+      vendor: 'hpe',
+      model: 'proliant-dl380p-gen8',
+    },
+    tags: ['server', '2u', 'rack', 'redundant-psu', 'ilo4', 'discontinued'],
+    properties: {
+      ports: {
+        lan: [
+          {
+            count: 4,
+            name_pattern: 'NIC{n}',
+            faceplate_label_pattern: '{n}',
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+        management: [
+          {
+            names: ['iLO'],
+            faceplate_labels: ['iLO'],
+            speed: '1g',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '2U',
+        mounting: ['rack'],
+      },
+      management: {
+        protocols: ['ipmi', 'redfish', 'snmp-v2c', 'snmp-v3', 'ssh', 'https'],
+      },
+    },
+  },
+  {
     id: 'nec/ix2106',
     label: 'NEC UNIVERGE IX2106',
     spec: {
@@ -1779,6 +1889,35 @@ export const builtinData = [
       management: {
         layer: 2,
         protocols: ['snmp-v1', 'snmp-v2c', 'ssh', 'cli', 'web'],
+      },
+    },
+  },
+  {
+    id: 'seiko/ts-2210',
+    label: 'Seiko TS-2210',
+    spec: {
+      kind: 'hardware',
+      type: 'generic',
+      vendor: 'seiko',
+      model: 'ts-2210',
+    },
+    tags: ['time-server', 'ntp', 'gps', 'discontinued'],
+    properties: {
+      ports: {
+        management: [
+          {
+            names: ['MGMT'],
+            speed: '100m',
+            cage: 'rj45',
+          },
+        ],
+      },
+      physical: {
+        form_factor: '1U',
+        mounting: ['rack'],
+      },
+      management: {
+        protocols: ['ntp', 'snmp-v2c', 'snmp-v3', 'ssh', 'https', 'syslog'],
       },
     },
   },

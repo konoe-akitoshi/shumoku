@@ -1,0 +1,23 @@
+# HPE ProLiant DL380p Gen8 — 2U dual-socket rack server
+# Source: https://www.hpe.com/psnow/doc/c04123238
+# Onboard 4×1G FlexibleLOM (331FLR), dedicated iLO 4 port. Discontinued.
+id: hpe/proliant-dl380p-gen8
+label: HPE ProLiant DL380p Gen8
+spec:
+  kind: hardware
+  type: server
+  vendor: hpe
+  model: proliant-dl380p-gen8
+tags: [server, 2u, rack, redundant-psu, ilo4, discontinued]
+properties:
+  ports:
+    lan:
+      # 331FLR FlexibleLOM (4× 1G)
+      - { count: 4, name_pattern: "NIC{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45 }
+    management:
+      - { names: ["iLO"], faceplate_labels: ["iLO"], speed: "1g", cage: rj45 }
+  physical:
+    form_factor: 2U
+    mounting: [rack]
+  management:
+    protocols: [ipmi, redfish, snmp-v2c, snmp-v3, ssh, https]
