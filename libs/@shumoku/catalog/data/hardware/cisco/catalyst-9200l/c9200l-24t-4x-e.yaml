@@ -1,0 +1,27 @@
+# Cisco C9200L-24T-4X-E — 24×1G + 4×10G SFP+, non-PoE, Network Essentials
+id: cisco/catalyst-9200l/c9200l-24t-4x-e
+label: C9200L-24T-4X-E
+extends: cisco/catalyst-9200l
+spec:
+  kind: hardware
+  type: l3-switch
+  vendor: cisco
+  model: c9200l-24t-4x-e
+tags: [non-poe, network-essentials]
+properties:
+  power:
+    max_draw_w: 36.28
+  switching:
+    capacity_gbps: 128
+    forwarding_rate_mpps: 190.4
+  physical:
+    dimensions_mm: { w: 445, d: 288, h: 44 }
+    weight_g: 4350
+  ports:
+    downlink:
+      - { count: 24, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "1g", cage: rj45 }
+    uplink:
+      - { count: 4, name_pattern: "Te1/1/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "TenGigabitEthernet1/1/{n}", speed: "10g", cage: sfp+ }
+  management:
+    layer: 3
+    image: network-essentials

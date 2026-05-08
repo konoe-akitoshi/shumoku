@@ -1,0 +1,28 @@
+# Cisco Catalyst 4948E Series — top-of-rack L3 switch
+# Source: https://www.cisco.com/c/en/us/products/collateral/switches/catalyst-4948e-ethernet-switch/data_sheet_c78-598933.html
+id: cisco/catalyst-4948e
+label: Catalyst 4948E
+spec:
+  kind: hardware
+  type: l3-switch
+  vendor: cisco
+tags: [l3-switch, top-of-rack, datacenter, dual-psu]
+properties:
+  switching:
+    capacity_gbps: 96
+    forwarding_rate_mpps: 72
+    mac_table_size: 32000
+    vlan_count: 4094
+    jumbo_frame_bytes: 9216
+  physical:
+    form_factor: 1U
+    fanless: false
+    dimensions_mm: { w: 445, d: 493, h: 43 }
+    weight_g: 6400
+    operating_temp_c: { min: 0, max: 40 }
+    mounting: [rack]
+  management:
+    stackable: false
+    protocols: [snmp-v1, snmp-v2c, snmp-v3, ssh, telnet, http, https, tftp, syslog, radius, tacacs+, ospf, eigrp, bgp, is-is]
+    dram_mb: 256
+    flash_mb: 64
