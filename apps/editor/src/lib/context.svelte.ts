@@ -34,6 +34,7 @@ import {
   newId,
   placePorts,
   rebalanceSubgraphs,
+  removePort as removePortCore,
   resolvePosition,
   type Subgraph,
   type Theme,
@@ -1047,6 +1048,56 @@ export const diagramState = {
           })
         }
       }
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
+    })
+  },
+  /**
+   * Remove a port: drops it from its parent Node's `ports` array,
+   * deletes any links that referenced it, and rebalances the
+   * remaining ports on the node. Wraps the core helper so undo +
+   * cache.touch + edge re-routing all happen in one commit.
+   */
+  removePort(id: string) {
+    commit('Remove port', () => {
+      const result = removePortCore(id, diagram.nodes, diagram.ports, diagram.links)
+      if (!result) return
+      diagram.nodes = result.nodes as typeof diagram.nodes
+      diagram.ports = result.ports as typeof diagram.ports
+      diagram.links = result.links
+      rebuildPortsAndEdges()
+    })
+  },
+  /**
+   * Remove a subgraph but leave its contents intact — children
+   * (nodes and nested subgraphs) re-parent to the deleted
+   * subgraph's parent, so the subgraph "unwraps" rather than
+   * cascading. Scenes that scoped to this subgraph fall back to
+   * its parent (or root if it was a top-level subgraph).
+   *
+   * Recursive descendant deletion is intentionally not the default:
+   * users almost always want to ungroup, not nuke. If they do want
+   * to remove the contents, they can multi-select and Delete.
+   */
+  removeSubgraph(id: string) {
+    commit('Remove subgraph', () => {
+      const sg = diagram.subgraphs.get(id)
+      if (!sg) return
+      const newParent = sg.parent
+      for (const [nid, n] of diagram.nodes) {
+        if (n.parent === id) diagram.nodes.set(nid, { ...n, parent: newParent })
+      }
+      for (const [cid, c] of diagram.subgraphs) {
+        if (c.parent === id) diagram.subgraphs.set(cid, { ...c, parent: newParent })
+      }
+      diagram.subgraphs.delete(id)
+
+      for (const scene of scenesStore.list) {
+        if (scene.scopeSubgraphId === id) {
+          scenesStore.update(scene.id, { scopeSubgraphId: newParent })
+        }
+      }
+
       invalidateSheetCache()
       rebuildPortsAndEdges()
     })
