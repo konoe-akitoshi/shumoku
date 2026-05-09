@@ -202,5 +202,35 @@ export function sanitizeGraph(graph: NetworkGraph): {
     console.warn(`[import] dropped ${droppedLinks} link(s) with unknown endpoints`)
   }
 
+  // Heal orphan port references: a link's endpoint may point at a port id
+  // that no longer exists on the node (legacy data from when product
+  // updates regenerated port ids). Materialize a stub NodePort with the
+  // referenced id and an empty label so the link stays attached and the
+  // user can rename it from the popover. We mutate `nodes` in place
+  // because the maps haven't been replaced into the reactive store yet.
+  const portsByNode = new Map<string, Set<string>>()
+  for (const [id, node] of nodes) {
+    portsByNode.set(id, new Set((node.ports ?? []).map((p) => p.id)))
+  }
+  let healed = 0
+  for (const link of validLinks) {
+    for (const ep of [link.from, link.to]) {
+      if (!ep.port) continue
+      const existing = portsByNode.get(ep.node)
+      if (!existing || existing.has(ep.port)) continue
+      const node = nodes.get(ep.node)
+      if (!node) continue
+      const stub = { id: ep.port, label: '', connectors: [], source: 'custom' as const }
+      nodes.set(ep.node, { ...node, ports: [...(node.ports ?? []), stub] })
+      existing.add(ep.port)
+      healed++
+    }
+  }
+  if (healed > 0) {
+    console.warn(
+      `[import] materialized ${healed} stub port(s) for link endpoints referencing missing ids`,
+    )
+  }
+
   return { nodes, subgraphs, links: validLinks }
 }
