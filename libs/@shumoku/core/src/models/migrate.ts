@@ -24,11 +24,27 @@ function ensureNodePort(node: Node, init: Partial<NodePort> = {}): NodePort {
   const port: NodePort = {
     id: init.id ?? newPortId(),
     label: init.label ?? '',
+    connectors: init.connectors ?? [],
     source: init.source ?? 'custom',
     ...init,
   }
   node.ports = [...(node.ports ?? []), port]
   return port
+}
+
+/**
+ * Backwards-compat shim for saved files: an older NodePort serialized
+ * with `cage: PortConnector` (or `cage: 'combo'`) is normalized into
+ * the modern `connectors: PortConnector[]` shape on read. Combo expands
+ * to ['rj45', 'sfp'] as a best-effort default; users can refine from
+ * the editor afterwards.
+ */
+export function migratePortShape<T extends { cage?: string; connectors?: string[] }>(port: T): T {
+  if (port.connectors) return port
+  const cage = port.cage
+  if (cage === undefined || cage === null) return { ...port, connectors: [] }
+  if (cage === 'combo') return { ...port, connectors: ['rj45', 'sfp'] }
+  return { ...port, connectors: [cage] }
 }
 
 function findPort(node: Node | undefined, portId: string): NodePort | undefined {
@@ -71,7 +87,13 @@ function normalizeEndpoint(ep: LinkEndpoint, nodes: Map<string, Node>): LinkEndp
 export function ensurePorts(graph: NetworkGraph): NetworkGraph {
   const nodes = new Map<string, Node>()
   for (const n of graph.nodes) {
-    nodes.set(n.id, { ...n, ports: n.ports ? [...n.ports] : undefined })
+    nodes.set(n.id, {
+      ...n,
+      // Normalize the legacy `cage` shape into `connectors[]` so older
+      // .neted saves keep working without forcing the user to re-create
+      // ports.
+      ports: n.ports ? n.ports.map((p) => migratePortShape(p as NodePort)) : undefined,
+    })
   }
 
   const links: Link[] = graph.links.map((link) => ({

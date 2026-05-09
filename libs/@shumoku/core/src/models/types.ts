@@ -48,15 +48,7 @@ export interface NodeStyle {
 
 export type PortRole = 'downlink' | 'uplink' | 'wan' | 'lan' | 'management' | 'power' | 'console'
 
-export type PortConnector =
-  | 'rj45'
-  | 'sfp'
-  | 'sfp+'
-  | 'sfp28'
-  | 'qsfp+'
-  | 'qsfp28'
-  | 'combo'
-  | (string & {})
+export type PortConnector = 'rj45' | 'sfp' | 'sfp+' | 'sfp28' | 'qsfp+' | 'qsfp28' | (string & {})
 
 export type LinkMediumKind = 'twisted-pair' | 'fiber' | 'dac' | 'aoc' | (string & {})
 
@@ -125,9 +117,13 @@ export interface NodePort {
   role?: PortRole | (string & {})
   /** Cage's nominal max speed label, e.g. "1g", "10g". */
   speed?: string
-  /** Physical receptacle (cage) type, e.g. "rj45", "sfp+", "qsfp28". */
-  cage?: PortConnector
-  /** Whether this cage can source PoE (RJ45 only). Capability flag only —
+  /**
+   * Physical receptacles available on this port. Length 1 = single
+   * connector. Length ≥ 2 = combo (e.g. shared RJ45 + SFP slot, only
+   * one in use at a time). Empty array = unknown / permissive.
+   */
+  connectors: PortConnector[]
+  /** Whether this port can source PoE (RJ45 only). Capability flag only —
    * detailed class / wattage / role lives on the device's catalog
    * `PowerProperties` (poe_in / poe_out). */
   poe?: boolean
@@ -414,7 +410,7 @@ export interface LinkModule {
  * Invariants (validator-enforced):
  * - If both `cage` and `module.standard` are set, `module`'s required
  *   cage must equal `plug.cage`.
- * - If both `plug.cage` and `port.cage` are set, they must agree.
+ * - `plug.cage` must be present in `port.connectors` (when both known).
  */
 export interface LinkPlug {
   /** Form factor the plug presents. Optional when derivable. */

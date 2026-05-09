@@ -107,7 +107,7 @@ function displayPort(nodeMap: Map<string, Node>, nodeId: string, portId: string)
   if (!portId) return ''
   const port = nodeMap.get(nodeId)?.ports?.find((p) => p.id === portId)
   if (!port) return portId
-  return port.label || port.cage || 'unnamed port'
+  return port.label || port.connectors?.join('/') || 'unnamed port'
 }
 
 /**

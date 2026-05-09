@@ -84,8 +84,18 @@ export interface PortGroup {
   role?: PortRole | (string & {})
   /** Port speed: "100m", "1g", "2.5g", "5g", "10g", "25g", "40g", "100g" */
   speed: string
-  /** Physical receptacle (cage) type: "rj45", "sfp", "sfp+", "qsfp+", "qsfp28", "combo" */
-  cage: PortConnector
+  /**
+   * Physical receptacles available on these ports. Length 1 = single
+   * connector. Length ≥ 2 = combo (e.g. RJ45 + SFP slot sharing one
+   * logical interface, mutually exclusive). Empty / missing = unknown.
+   */
+  connectors?: PortConnector[]
+  /**
+   * @deprecated Use `connectors`. Kept for legacy YAML; the loader
+   * normalizes `cage: <single>` to `connectors: [<single>]` and
+   * `cage: combo` to `connectors: [rj45, sfp]`.
+   */
+  cage?: PortConnector
   /** Whether these ports support PoE */
   poe?: boolean
 }

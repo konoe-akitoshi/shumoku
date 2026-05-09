@@ -16,9 +16,9 @@ properties:
     max_draw_w: 14.5
   ports:
     lan:
-      - { count: 8, name_pattern: "LAN1.{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "LAN1", speed: "1g", cage: rj45 }
-      - { names: ["LAN2"], faceplate_labels: ["LAN2"], speed: "1g", cage: rj45 }
-      - { names: ["LAN3"], faceplate_labels: ["LAN3"], speed: "1g", cage: rj45 }
+      - { count: 8, name_pattern: "LAN1.{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "LAN1", speed: "1g", connectors: [rj45] }
+      - { names: ["LAN2"], faceplate_labels: ["LAN2"], speed: "1g", connectors: [rj45] }
+      - { names: ["LAN3"], faceplate_labels: ["LAN3"], speed: "1g", connectors: [rj45] }
   physical:
     form_factor: desktop
     fanless: true

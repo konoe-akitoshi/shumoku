@@ -35,7 +35,7 @@ properties:
     max_data_rate_mbps: 2033
   ports:
     uplink:
-      - { names: ["E0"], speed: "1g", cage: rj45, poe: true }
+      - { names: ["E0"], speed: "1g", connectors: [rj45], poe: true }
   physical:
     form_factor: ceiling
     dimensions_mm: { w: 182, d: 180, h: 48 }

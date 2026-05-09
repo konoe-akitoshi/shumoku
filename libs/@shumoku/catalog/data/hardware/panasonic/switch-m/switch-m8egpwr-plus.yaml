@@ -24,13 +24,10 @@ properties:
     mac_table_size: 8000
   ports:
     downlink:
-      - { names: ["1", "2", "3", "4", "5", "6", "7", "8"], speed: "1g", cage: rj45, poe: true }
+      - { names: ["1", "2", "3", "4", "5", "6", "7", "8"], speed: "1g", connectors: [rj45], poe: true }
     uplink:
-      # Combo ports 9, 10: each has RJ45 jack + SFP slot sharing one interface (mutually exclusive).
-      - { names: ["9"],      faceplate_labels: ["9"],     interface_names: ["9"],  speed: "1g", cage: rj45 }
-      - { names: ["9(SFP)"], faceplate_labels: ["9 SFP"], interface_names: ["9"],  speed: "1g", cage: sfp }
-      - { names: ["10"],     faceplate_labels: ["10"],    interface_names: ["10"], speed: "1g", cage: rj45 }
-      - { names: ["10(SFP)"],faceplate_labels: ["10 SFP"],interface_names: ["10"], speed: "1g", cage: sfp }
+      # Ports 9, 10: combo (RJ45 + SFP, mutually exclusive).
+      - { names: ["9", "10"], speed: "1g", connectors: [rj45, sfp] }
   physical:
     form_factor: 1U
     dimensions_mm: { w: 330, d: 250, h: 44 }

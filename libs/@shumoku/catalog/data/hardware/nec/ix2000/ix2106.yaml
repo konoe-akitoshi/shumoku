@@ -17,10 +17,10 @@ properties:
   ports:
     wan:
       # GE0: single 10/100/1000BASE-T WAN port
-      - { names: ["GE0"], faceplate_labels: ["GE0"], interface_names: ["GigaEthernet0.0"], speed: "1g", cage: rj45 }
+      - { names: ["GE0"], faceplate_labels: ["GE0"], interface_names: ["GigaEthernet0.0"], speed: "1g", connectors: [rj45] }
     lan:
       # GE1 (SW-HUB): 4-port 1G L2 switch — all jacks share GigaEthernet1.0
-      - { count: 4, name_pattern: "GE1.0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigaEthernet1.0", speed: "1g", cage: rj45 }
+      - { count: 4, name_pattern: "GE1.0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigaEthernet1.0", speed: "1g", connectors: [rj45] }
   physical:
     form_factor: compact
     fanless: true

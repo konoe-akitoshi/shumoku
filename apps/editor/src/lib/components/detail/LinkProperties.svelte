@@ -66,13 +66,14 @@
   }
 
   function portOptionLabel(port: NonNullable<Node['ports']>[number]) {
-    const label = port.label || port.cage || 'unnamed port'
+    const connectors = port.connectors?.length ? port.connectors.join('/') : ''
+    const label = port.label || connectors || 'unnamed port'
     const attrs = [
       port.faceplateLabel && port.faceplateLabel !== port.label
         ? `panel ${port.faceplateLabel}`
         : '',
       port.speed,
-      port.cage,
+      connectors,
       port.poe ? 'PoE' : '',
     ]
       .filter(Boolean)
@@ -203,11 +204,12 @@
   const sectionClass =
     'text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1.5'
 
-  const fromCage = $derived(getPortOptions(from.node).find((p) => p.id === from.port)?.cage)
-  const toCage = $derived(getPortOptions(to.node).find((p) => p.id === to.port)?.cage)
-
   const fromPort = $derived(getPortOptions(from.node).find((p) => p.id === from.port))
   const toPort = $derived(getPortOptions(to.node).find((p) => p.id === to.port))
+
+  // (fromCage / toCage removed — ports may now be combo, so the single
+  // representative cage doesn't make sense. Pickers and StandardImpliedBlock
+  // accept the full connectors array directly.)
 
   const issues = $derived(validateLinkCompatibility(fromPort, toPort, link))
 
@@ -272,7 +274,7 @@
         {#if editing}
           <EndpointModulePicker
             class={selectClass}
-            cage={fromCage}
+            connectors={fromPort?.connectors}
             standard={link.from.plug?.module?.standard}
             onchange={(v) => updateEndpointModuleStandard('from', v)}
           />
@@ -370,7 +372,7 @@
         {#if editing}
           <EndpointModulePicker
             class={selectClass}
-            cage={toCage}
+            connectors={toPort?.connectors}
             standard={link.to.plug?.module?.standard}
             onchange={(v) => updateEndpointModuleStandard('to', v)}
           />
@@ -475,7 +477,12 @@
 
 {#if referenceStandard}
   <div class="mb-4">
-    <StandardImpliedBlock standard={referenceStandard} cable={link.cable} {fromCage} {toCage} />
+    <StandardImpliedBlock
+      standard={referenceStandard}
+      cable={link.cable}
+      fromConnectors={fromPort?.connectors}
+      toConnectors={toPort?.connectors}
+    />
     {#if link.from.plug?.module?.standard && link.to.plug?.module?.standard && link.from.plug?.module?.standard !== link.to.plug?.module?.standard}
       <div class="mt-1 text-[10px] text-amber-600">
         ⚠ Asymmetric: {link.from.plug?.module?.standard} ↔ {link.to.plug?.module?.standard}

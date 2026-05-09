@@ -23,9 +23,9 @@ properties:
     mac_table_size: 16000
   ports:
     downlink:
-      - { count: 16, name_pattern: "port1.0.{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45, poe: true }
+      - { count: 16, name_pattern: "port1.0.{n}", faceplate_label_pattern: "{n}", speed: "1g", connectors: [rj45], poe: true }
     uplink:
-      - { names: ["port1.0.17", "port1.0.18"], faceplate_labels: ["17", "18"], speed: "1g", cage: sfp }
+      - { names: ["port1.0.17", "port1.0.18"], faceplate_labels: ["17", "18"], speed: "1g", connectors: [sfp] }
   physical:
     form_factor: 1U
     fanless: false

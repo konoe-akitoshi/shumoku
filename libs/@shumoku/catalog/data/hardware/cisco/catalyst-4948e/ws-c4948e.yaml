@@ -12,9 +12,9 @@ properties:
     max_draw_w: 300
   ports:
     downlink:
-      - { count: 48, name_pattern: "Gi1/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/{n}", speed: "1g", cage: rj45 }
+      - { count: 48, name_pattern: "Gi1/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/{n}", speed: "1g", connectors: [rj45] }
     uplink:
-      - { names: ["Te1/49", "Te1/50", "Te1/51", "Te1/52"], faceplate_labels: ["49", "50", "51", "52"], interface_names: ["TenGigabitEthernet1/49", "TenGigabitEthernet1/50", "TenGigabitEthernet1/51", "TenGigabitEthernet1/52"], speed: "10g", cage: sfp+ }
+      - { names: ["Te1/49", "Te1/50", "Te1/51", "Te1/52"], faceplate_labels: ["49", "50", "51", "52"], interface_names: ["TenGigabitEthernet1/49", "TenGigabitEthernet1/50", "TenGigabitEthernet1/51", "TenGigabitEthernet1/52"], speed: "10g", connectors: [sfp+] }
   management:
     layer: 3
     image: ip-base

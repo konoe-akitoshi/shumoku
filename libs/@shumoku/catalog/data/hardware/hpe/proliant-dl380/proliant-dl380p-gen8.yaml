@@ -13,9 +13,9 @@ tags: [redundant-psu, ilo4, discontinued]
 properties:
   ports:
     lan:
-      - { count: 4, name_pattern: "NIC{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45 }
+      - { count: 4, name_pattern: "NIC{n}", faceplate_label_pattern: "{n}", speed: "1g", connectors: [rj45] }
     management:
-      - { names: ["iLO"], faceplate_labels: ["iLO"], speed: "1g", cage: rj45 }
+      - { names: ["iLO"], faceplate_labels: ["iLO"], speed: "1g", connectors: [rj45] }
   physical:
     form_factor: 2U
     mounting: [rack]

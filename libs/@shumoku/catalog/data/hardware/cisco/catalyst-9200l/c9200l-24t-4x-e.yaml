@@ -19,9 +19,9 @@ properties:
     weight_g: 4350
   ports:
     downlink:
-      - { count: 24, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "1g", cage: rj45 }
+      - { count: 24, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "1g", connectors: [rj45] }
     uplink:
-      - { count: 4, name_pattern: "Te1/1/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "TenGigabitEthernet1/1/{n}", speed: "10g", cage: sfp+ }
+      - { count: 4, name_pattern: "Te1/1/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "TenGigabitEthernet1/1/{n}", speed: "10g", connectors: [sfp+] }
   management:
     layer: 3
     image: network-essentials

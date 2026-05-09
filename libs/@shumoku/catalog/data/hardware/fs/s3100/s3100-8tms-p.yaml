@@ -22,11 +22,11 @@ properties:
     forwarding_rate_mpps: 49.1
   ports:
     downlink:
-      - { count: 6, name_pattern: "GE{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45, poe: true }
-      - { names: ["GE7", "GE8"], faceplate_labels: ["7", "8"], speed: "1g", cage: rj45 }
-      - { names: ["MGE1", "MGE2"], faceplate_labels: ["MG1", "MG2"], speed: "5g", cage: rj45, poe: true }
+      - { count: 6, name_pattern: "GE{n}", faceplate_label_pattern: "{n}", speed: "1g", connectors: [rj45], poe: true }
+      - { names: ["GE7", "GE8"], faceplate_labels: ["7", "8"], speed: "1g", connectors: [rj45] }
+      - { names: ["MGE1", "MGE2"], faceplate_labels: ["MG1", "MG2"], speed: "5g", connectors: [rj45], poe: true }
     uplink:
-      - { names: ["XGE1", "XGE2"], faceplate_labels: ["X1", "X2"], speed: "10g", cage: sfp+ }
+      - { names: ["XGE1", "XGE2"], faceplate_labels: ["X1", "X2"], speed: "10g", connectors: [sfp+] }
   physical:
     form_factor: desktop
     fanless: true

@@ -5,38 +5,40 @@
     groupCableVariants,
     type PortConnector,
     plugProfileForStandard,
-    plugProfilesForCages,
+    plugProfilesForConnectors,
   } from '@shumoku/core'
 
   let {
-    cage,
+    connectors,
     standard,
     onchange,
     class: className = '',
     disabled = false,
   }: {
-    cage?: PortConnector
+    /** Physical receptacles on the port. Length 1 = single connector;
+     * length ≥ 2 = combo (user picks which receptacle to use). Undefined
+     * or empty = unknown (offer all plug options). */
+    connectors?: PortConnector[]
     standard: EthernetStandard | undefined
     onchange: (v: EthernetStandard | undefined) => void
     class?: string
     disabled?: boolean
   } = $props()
 
-  // Plug = cable-side form factor (RJ45, SFP, SFP+, …). The user picks
-  // it explicitly so the module list stays narrow. When the port carries
-  // a cage (catalog-known), it pins the plug — otherwise the user picks
-  // freely and we fall back to all known plugs.
-  const plugOptions = $derived(plugProfilesForCages(cage, undefined))
+  // Plug = cable-side form factor. We constrain the dropdown to plugs
+  // that fit at least one of the port's connectors. Empty list =
+  // permissive (all plugs).
+  const plugOptions = $derived(plugProfilesForConnectors(connectors, undefined))
 
-  // Local UI state for the plug select when neither cage nor module
+  // Local UI state for the plug select when neither connectors nor module
   // implies a plug yet (fresh row, nothing picked).
   let userPlug = $state<string>('')
 
-  // Effective plug priority: port cage (hardware constraint) > module's
-  // implied plug > user explicit pick. Cage wins when both cage and
-  // module disagree because the port can't host an incompatible module.
+  // Effective plug priority for non-combo ports: port's single connector
+  // pins the plug. For combo ports, fall through to the module's implied
+  // plug or the user's explicit pick — they have to choose physically.
   const effectivePlug = $derived.by<string | undefined>(() => {
-    if (cage) return cage
+    if (connectors && connectors.length === 1) return connectors[0]
     return plugProfileForStandard(standard)?.cage ?? userPlug ?? undefined
   })
 
@@ -51,9 +53,10 @@
   )
   const groups = $derived(groupCableVariants(variants))
 
-  // Cage-locked: the port hardware forces the plug, so disable the select
-  // (it would only ever show the same value).
-  const plugLocked = $derived(Boolean(cage))
+  // Plug locked when the port has a single connector — the hardware
+  // forces the plug, so the select would only ever show one value.
+  // Combo ports (≥ 2 connectors) leave the user to choose.
+  const plugLocked = $derived(connectors?.length === 1)
 
   function onPlugChange(value: string) {
     userPlug = value
