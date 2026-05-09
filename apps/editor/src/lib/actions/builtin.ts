@@ -40,6 +40,7 @@ function deleteSelection(ctx: ActionContext): void {
   const items = ctx.selection.ids.map((id, i) => ({ id, type: ctx.selection.types[i] }))
   for (const it of items) {
     if (it.type === 'edge' || it.type === 'link') diagramState.removeLink(it.id)
+    else if (it.type === 'subgraph') diagramState.removeSubgraph(it.id)
     else diagramState.removeNode(it.id)
   }
 }

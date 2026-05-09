@@ -1051,6 +1051,70 @@ export const diagramState = {
       rebuildPortsAndEdges()
     })
   },
+  /**
+   * Remove a subgraph and everything physically inside it: descendant
+   * nodes (recursive), nested subgraphs, links touching any deleted
+   * node, scene placements / hidden refs that pointed at them, and
+   * `Link.via` entries that named a deleted node. Scenes whose
+   * `scopeSubgraphId` was the deleted subgraph (or any descendant)
+   * fall back to root scope rather than getting orphaned.
+   *
+   * Mirrors `removeNode`'s data-consistency contract — kept on the
+   * editor side so undo, cache.touch, and scene/Link.via cleanup all
+   * happen in one commit. The renderer no longer needs its own delete
+   * implementation.
+   */
+  removeSubgraph(id: string) {
+    commit('Remove subgraph', () => {
+      const sgsToDelete = new Set<string>()
+      const nodesToDelete = new Set<string>()
+      const collect = (sgId: string) => {
+        sgsToDelete.add(sgId)
+        for (const [nid, n] of diagram.nodes) {
+          if (n.parent === sgId) nodesToDelete.add(nid)
+        }
+        for (const [cid, c] of diagram.subgraphs) {
+          if (c.parent === sgId) collect(cid)
+        }
+      }
+      collect(id)
+
+      for (const nid of nodesToDelete) diagram.nodes.delete(nid)
+      for (const sgId of sgsToDelete) diagram.subgraphs.delete(sgId)
+
+      diagram.links = diagram.links.flatMap((l) => {
+        if (nodesToDelete.has(l.from.node) || nodesToDelete.has(l.to.node)) return []
+        const via = l.via
+        if (!via) return [l]
+        const next = via.filter((v) => !nodesToDelete.has(v))
+        if (next.length === via.length) return [l]
+        return [{ ...l, via: next.length > 0 ? next : undefined }]
+      })
+
+      for (const scene of scenesStore.list) {
+        const placements = scene.nodePlacements.filter((p) => !nodesToDelete.has(p.nodeId))
+        const hidden = (scene.hiddenNodeIds ?? []).filter((nid) => !nodesToDelete.has(nid))
+        const scope =
+          scene.scopeSubgraphId && sgsToDelete.has(scene.scopeSubgraphId)
+            ? undefined
+            : scene.scopeSubgraphId
+        const changed =
+          placements.length !== scene.nodePlacements.length ||
+          hidden.length !== (scene.hiddenNodeIds?.length ?? 0) ||
+          scope !== scene.scopeSubgraphId
+        if (changed) {
+          scenesStore.update(scene.id, {
+            nodePlacements: placements,
+            hiddenNodeIds: hidden,
+            scopeSubgraphId: scope,
+          })
+        }
+      }
+
+      invalidateSheetCache()
+      rebuildPortsAndEdges()
+    })
+  },
   setEpsRoutingForLinks(epsId: string, linkIds: string[], included: boolean) {
     if (linkIds.length === 0) return
     commit('Update EPS routing', () => {
