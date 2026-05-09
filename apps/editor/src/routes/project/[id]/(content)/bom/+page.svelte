@@ -237,16 +237,6 @@
     <Button
       variant="outline"
       size="sm"
-      disabled={diagramState.links.length === 0}
-      onclick={downloadLabelCsv}
-      title="ケーブル両端ラベル用 CSV (SPC10 / P-touch 差し込み印刷)"
-    >
-      <DownloadSimple class="mr-1 h-3.5 w-3.5" />
-      Label CSV
-    </Button>
-    <Button
-      variant="outline"
-      size="sm"
       onclick={() => goto(`/project/${$page.params.id}/materials`)}
     >
       Open Materials
@@ -309,11 +299,25 @@
                   </span>
                   <Badge variant="secondary" class="font-mono">{sectionQty(section.lines)}</Badge>
                 </div>
-                {#if section.lines.length === 0}
-                  <span class="text-xs text-muted-foreground"
-                    >No {section.title.toLowerCase()} requirements</span
-                  >
-                {/if}
+                <div class="flex items-center gap-2">
+                  {#if section.key === 'cables' && diagramState.links.length > 0}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="h-6 gap-1 px-2 text-[11px]"
+                      onclick={downloadLabelCsv}
+                      title="ケーブル両端ラベル用 CSV (SPC10 / P-touch 差し込み印刷)"
+                    >
+                      <DownloadSimple class="h-3 w-3" />
+                      Label CSV
+                    </Button>
+                  {/if}
+                  {#if section.lines.length === 0}
+                    <span class="text-xs text-muted-foreground"
+                      >No {section.title.toLowerCase()} requirements</span
+                    >
+                  {/if}
+                </div>
               </div>
             </Table.Cell>
           </Table.Row>
