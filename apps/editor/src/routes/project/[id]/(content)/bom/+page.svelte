@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Copy } from 'phosphor-svelte'
+  import { Check, Copy, DownloadSimple } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { Badge } from '$lib/components/ui/badge'
@@ -74,6 +74,90 @@
       }
     }
     return rows.map((row) => row.map(tsvCell).join('\t')).join('\n')
+  }
+
+  // ── Tepra label CSV ────────────────────────────────────────────────
+  // Cable-management labels: one logical link → two CSV rows (one per
+  // physical end). EPS / patch panel TPs that the cable transits are
+  // intentionally NOT included as separate labels — the user-facing
+  // information is "this end plugs into device X port Y, the other end
+  // goes to device Z port W". Via nodes are routing detail, not
+  // endpoints.
+  //
+  // SPC10 (テプラ純正) や Brother P-touch Editor の差し込み印刷で
+  // テンプレ側は `this_device` / `this_port` / `peer_device` / `peer_port`
+  // を縦/横どちらでも組める。9mm ラベルでは横並び（this ▶ peer）が想定。
+
+  function csvCell(value: string | number | undefined | null): string {
+    const s = value == null ? '' : String(value)
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+    return s
+  }
+
+  function nodeLabelOf(nodeId: string): string {
+    const n = diagramState.nodes.get(nodeId)
+    if (!n) return nodeId
+    const lbl = Array.isArray(n.label) ? n.label[0] : n.label
+    return lbl ?? nodeId
+  }
+
+  function portLabelOf(nodeId: string, portId: string | undefined): string {
+    if (!portId) return ''
+    const node = diagramState.nodes.get(nodeId)
+    const port = node?.ports?.find((p) => p.id === portId)
+    return port?.label ?? portId
+  }
+
+  function buildLabelCsv(): string {
+    const header = [
+      'link_id',
+      'end',
+      'this_device',
+      'this_port',
+      'peer_device',
+      'peer_port',
+      'length_m',
+    ]
+    const rows: string[][] = [header]
+    for (const link of diagramState.links) {
+      if (!link.id) continue
+      const a = link.from
+      const b = link.to
+      const eff = diagramState.cableLengthMeters(link.id)
+      const len = eff ? eff.meters.toFixed(1) : ''
+      rows.push([
+        link.id,
+        'A',
+        nodeLabelOf(a.node),
+        portLabelOf(a.node, a.port),
+        nodeLabelOf(b.node),
+        portLabelOf(b.node, b.port),
+        len,
+      ])
+      rows.push([
+        link.id,
+        'B',
+        nodeLabelOf(b.node),
+        portLabelOf(b.node, b.port),
+        nodeLabelOf(a.node),
+        portLabelOf(a.node, a.port),
+        len,
+      ])
+    }
+    return rows.map((row) => row.map(csvCell).join(',')).join('\n')
+  }
+
+  function downloadLabelCsv() {
+    if (diagramState.links.length === 0) return
+    const csv = buildLabelCsv()
+    // BOM utf-8 — SPC10 / Excel が日本語 device 名を文字化けせず読むため
+    const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'cable-labels.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   async function copyBomTable() {
@@ -166,6 +250,16 @@
         <Copy class="mr-1 h-3.5 w-3.5" />
         {copyState === 'failed' ? 'Copy Failed' : 'Copy Table'}
       {/if}
+    </Button>
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={diagramState.links.length === 0}
+      onclick={downloadLabelCsv}
+      title="ケーブル両端ラベル用 CSV (SPC10 / P-touch 差し込み印刷)"
+    >
+      <DownloadSimple class="mr-1 h-3.5 w-3.5" />
+      Label CSV
     </Button>
     <Button
       variant="outline"
