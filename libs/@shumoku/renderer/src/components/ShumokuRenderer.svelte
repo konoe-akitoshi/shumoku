@@ -220,10 +220,11 @@
       selection = new Set()
       linkDrag = null
     }
-    if (!interactive) return
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      for (const id of selection) deleteById(id)
-    }
+    // Delete / Backspace are owned by the host's action registry
+    // (window-level handler) — see `edit.delete` in builtin actions.
+    // Handling them here too would double-fire and bypass the
+    // editor-side cleanup contract (undo, cache, scene/Link.via
+    // integrity).
   }
 
   // =========================================================================

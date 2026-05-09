@@ -162,9 +162,13 @@ const builtinActions: Action[] = [
   {
     id: 'edit.delete',
     label: 'Delete',
-    // No `shortcut` (would double-fire with the renderer's native
-    // Backspace handler), but show the hint so users know which
-    // key removes a selection.
+    // Window-level handler — the renderer's local keydown listener
+    // is attached to <svg>, which isn't focusable by default, so
+    // Delete only fired when the user happened to have the SVG in
+    // focus. Owning the shortcut here makes it work everywhere a
+    // selection exists; the renderer no longer handles Delete to
+    // avoid double-fire.
+    shortcut: 'Del',
     shortcutHint: 'Del',
     icon: Trash,
     group: 'edit',
