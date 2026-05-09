@@ -26,7 +26,7 @@ properties:
     downlink:
       # mGig ports: interface name varies with negotiated speed
       # (Two/Five/TenGigabitEthernet). "10g" = max line rate.
-      - { count: 24, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "10g", cage: rj45, poe: true }
+      - { count: 24, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "10g", connectors: [rj45], poe: true }
     # uplink: modular Network Module slot (NM-2Q / NM-4G / NM-4M / NM-8X / NM-2Y).
     # Modeled per-NM as a separate entry; left empty here.
   management:

@@ -12,8 +12,12 @@ export interface CatalogPortTemplate {
   aliases?: string[]
   role?: PortRole | (string & {})
   speed?: string
-  /** Physical receptacle (cage) type the catalog declares for this port. */
-  cage?: PortConnector
+  /**
+   * Physical receptacles available on this port. Length 1 = single
+   * connector; length ≥ 2 = combo (mutually exclusive). Empty array =
+   * unknown / permissive.
+   */
+  connectors: PortConnector[]
   poe?: boolean
   source?: 'catalog'
 }
@@ -52,7 +56,7 @@ export function expandCatalogPorts(entry: CatalogEntry | undefined): CatalogPort
         aliases: group.aliases?.[index],
         role: group.role,
         speed: group.speed,
-        cage: group.cage,
+        connectors: groupConnectors(group),
         poe: group.poe,
         source: 'catalog',
       })
@@ -100,4 +104,17 @@ function defaultPattern(role: PortGroup['role']): string {
   if (role === 'wan') return 'wan{n}'
   if (role === 'lan') return 'lan{n}'
   return '{n}'
+}
+
+/**
+ * Resolve the physical receptacle list for a group. The schema has
+ * settled on `connectors: PortConnector[]`; legacy YAMLs that still
+ * declare `cage: <single>` are normalized for free, with `cage: combo`
+ * expanding to `[rj45, sfp]` as a best-effort default.
+ */
+function groupConnectors(group: PortGroup): PortConnector[] {
+  if (group.connectors && group.connectors.length > 0) return [...group.connectors]
+  if (!group.cage) return []
+  if ((group.cage as string) === 'combo') return ['rj45', 'sfp']
+  return [group.cage]
 }

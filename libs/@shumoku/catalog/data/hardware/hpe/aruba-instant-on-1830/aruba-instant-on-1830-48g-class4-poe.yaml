@@ -26,10 +26,10 @@ properties:
     jumbo_frame_bytes: 10240
   ports:
     downlink:
-      - { count: 24, name_pattern: "{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45, poe: true }
-      - { names: ["25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48"], faceplate_labels: ["25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48"], speed: "1g", cage: rj45 }
+      - { count: 24, name_pattern: "{n}", faceplate_label_pattern: "{n}", speed: "1g", connectors: [rj45], poe: true }
+      - { names: ["25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48"], faceplate_labels: ["25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48"], speed: "1g", connectors: [rj45] }
     uplink:
-      - { names: ["49","50","51","52"], faceplate_labels: ["49","50","51","52"], speed: "1g", cage: sfp }
+      - { names: ["49","50","51","52"], faceplate_labels: ["49","50","51","52"], speed: "1g", connectors: [sfp] }
   physical:
     form_factor: 1U
     fanless: true

@@ -93,13 +93,17 @@ export function isPoeCapableConnector(connector: string | undefined): boolean {
   return normalizePortConnector(connector) === 'rj45'
 }
 
-/** "combo" cages accept either copper or fiber pluggables. */
-function cageAccepts(cage: PortConnector | undefined, required: PortConnector): boolean {
-  const c = normalizePortConnector(cage)
-  if (!c) return true // unknown cage — be permissive
-  if (c === required) return true
-  if (c === 'combo') return true
-  return false
+/**
+ * Whether a port's connector list can host a cable that requires `required`.
+ * Empty list = unknown / permissive (host anything). Non-empty list =
+ * required must be a member.
+ */
+function connectorsHost(
+  connectors: readonly PortConnector[] | undefined,
+  required: PortConnector,
+): boolean {
+  if (!connectors || connectors.length === 0) return true
+  return connectors.some((c) => normalizePortConnector(c) === normalizePortConnector(required))
 }
 
 // ============================================================================
@@ -144,14 +148,17 @@ export function endpointPlugCage(ep: LinkEndpoint): PortConnector | undefined {
 
 /**
  * Resolve the effective plug cage for an endpoint with the canonical priority:
- * explicit `plug.cage` > module's required cage > port.cage. Returns
- * undefined when none are known.
+ * explicit `plug.cage` > module's required cage > port.connectors[0]
+ * (only when the port has a single connector — multi-connector combo
+ * ports require an explicit choice on the link side). Returns undefined
+ * when none are known.
  */
 export function effectivePlugCage(ep: LinkEndpoint, port?: NodePort): PortConnector | undefined {
   if (ep.plug?.cage) return ep.plug.cage
   const stdCage = getStandardSpec(ep.plug?.module?.standard)?.cage as PortConnector | undefined
   if (stdCage) return stdCage
-  return port?.cage
+  if (port?.connectors?.length === 1) return port.connectors[0]
+  return undefined
 }
 
 // ============================================================================
@@ -194,44 +201,46 @@ const checkPlugMatchesModuleStandard: EndpointCheck = ({ side, endpoint }) => {
   return undefined
 }
 
-/** plug.cage and port.cage must agree (combo accepts either). */
+/** plug.cage must be one of the port's connectors. */
 const checkPlugMatchesPortCage: EndpointCheck = ({ side, endpoint, port }) => {
   const plug = endpoint.plug
-  if (plug?.cage && port?.cage && plug.cage !== port.cage && port.cage !== 'combo') {
+  if (!plug?.cage || !port?.connectors?.length) return undefined
+  if (!connectorsHost(port.connectors, plug.cage)) {
     return {
       code: 'plug-cage-port-mismatch',
       severity: 'error',
-      message: `plug.cage ${plug.cage} disagrees with port.cage ${port.cage}`,
+      message: `plug.cage ${plug.cage} not in port.connectors [${port.connectors.join(', ')}]`,
       target: { kind: 'endpoint', side, field: 'plug.cage' },
     }
   }
   return undefined
 }
 
-/** Port cage must accept the module's required cage. */
+/** Port connectors must include the module's required cage. */
 const checkPortCageHostsStandard: EndpointCheck = ({ side, endpoint, port }) => {
   const std = endpoint.plug?.module?.standard
   const spec = getStandardSpec(std)
-  if (!spec || !port?.cage) return undefined
-  if (!cageAccepts(port.cage, spec.cage)) {
+  if (!spec || !port?.connectors?.length) return undefined
+  if (!connectorsHost(port.connectors, spec.cage)) {
     return {
       code: 'port-cage-cannot-host-module',
       severity: 'error',
-      message: `cage ${port.cage} cannot host ${std} (requires ${spec.cage})`,
+      message: `connectors [${port.connectors.join(', ')}] cannot host ${std} (requires ${spec.cage})`,
       target: { kind: 'endpoint', side, field: 'plug.module' },
     }
   }
   return undefined
 }
 
-/** PoE flag is only meaningful on RJ45 cages. */
+/** PoE flag is only meaningful on ports that include RJ45. */
 const checkPoeFlagFitsCage: EndpointCheck = ({ side, port }) => {
   if (!port?.poe) return undefined
-  if (isPoeCapableConnector(port.cage)) return undefined
+  if (port.connectors?.some((c) => isPoeCapableConnector(c))) return undefined
+  const cs = port.connectors?.length ? port.connectors.join(', ') : 'unknown'
   return {
     code: 'poe-flag-on-non-rj45',
     severity: 'error',
-    message: `${port.label || port.id} is marked PoE but ${port.cage ?? 'unknown'} cages cannot source PoE`,
+    message: `${port.label || port.id} is marked PoE but connectors [${cs}] cannot source PoE`,
     target: { kind: 'port', side, field: 'poe' },
   }
 }

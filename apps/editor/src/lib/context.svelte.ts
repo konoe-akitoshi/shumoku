@@ -145,7 +145,13 @@ function nodePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | 
       properties: product.properties ?? {},
     },
   )
-  return ports.length > 0 ? ports.map((port) => ({ id: newId('port'), ...port })) : undefined
+  return ports.length > 0
+    ? ports.map((port) => ({
+        id: newId('port'),
+        ...port,
+        connectors: port.connectors ?? [],
+      }))
+    : undefined
 }
 
 function setNodePortsFromProduct(
@@ -188,6 +194,7 @@ function appendPortToNode(
   const port: NodePort = {
     id: init.id ?? newId('port'),
     label: init.label ?? '',
+    connectors: init.connectors ?? [],
     source: init.source ?? 'custom',
     ...init,
   }

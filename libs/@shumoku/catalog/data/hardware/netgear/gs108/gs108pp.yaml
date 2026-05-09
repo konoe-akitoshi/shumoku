@@ -21,7 +21,7 @@ properties:
     mac_table_size: 4000
   ports:
     downlink:
-      - { count: 8, name_pattern: "{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45, poe: true }
+      - { count: 8, name_pattern: "{n}", faceplate_label_pattern: "{n}", speed: "1g", connectors: [rj45], poe: true }
   physical:
     form_factor: desktop
     fanless: false

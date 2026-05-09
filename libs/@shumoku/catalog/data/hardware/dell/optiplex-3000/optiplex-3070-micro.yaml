@@ -13,7 +13,7 @@ tags: [mini-pc, compact]
 properties:
   ports:
     lan:
-      - { names: ["NIC"], faceplate_labels: ["LAN"], speed: "1g", cage: rj45 }
+      - { names: ["NIC"], faceplate_labels: ["LAN"], speed: "1g", connectors: [rj45] }
   physical:
     form_factor: compact
     dimensions_mm: { w: 36, d: 182, h: 178 }

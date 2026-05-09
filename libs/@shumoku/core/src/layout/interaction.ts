@@ -705,7 +705,7 @@ export function addPort(
   const portKey = newId('port')
   const portId = `${nodeId}:${portKey}`
 
-  const nodePort: NodePort = { id: portKey, label: '', source: 'custom' }
+  const nodePort: NodePort = { id: portKey, label: '', connectors: [], source: 'custom' }
 
   const newNodes = new Map(nodes)
   newNodes.set(nodeId, { ...node, ports: [...(node.ports ?? []), nodePort] })

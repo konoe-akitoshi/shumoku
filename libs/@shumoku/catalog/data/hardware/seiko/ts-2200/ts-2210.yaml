@@ -12,7 +12,7 @@ tags: [gps, discontinued]
 properties:
   ports:
     management:
-      - { names: ["MGMT"], speed: "100m", cage: rj45 }
+      - { names: ["MGMT"], speed: "100m", connectors: [rj45] }
   physical:
     form_factor: 1U
     mounting: [rack]

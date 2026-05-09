@@ -26,15 +26,19 @@
   const ports = $derived(diagramState.getNodePorts(nodeId))
   const currentPort = $derived(ports.find((p) => p.id === value))
 
+  function connectorsLabel(p: NodePort): string {
+    return p.connectors?.length ? p.connectors.join('/') : ''
+  }
+
   function portDisplay(p: NodePort): string {
-    return p.label || p.cage || 'unnamed'
+    return p.label || connectorsLabel(p) || 'unnamed'
   }
 
   function portDetails(p: NodePort): string {
     return [
       p.faceplateLabel && p.faceplateLabel !== p.label ? `panel ${p.faceplateLabel}` : '',
       p.speed,
-      p.cage,
+      connectorsLabel(p),
       p.poe ? 'PoE' : '',
     ]
       .filter(Boolean)
@@ -49,7 +53,7 @@
     const q = query.trim().toLowerCase()
     if (!q) return ports
     return ports.filter((p) =>
-      [p.label, p.faceplateLabel, p.interfaceName, p.cage, p.speed]
+      [p.label, p.faceplateLabel, p.interfaceName, connectorsLabel(p), p.speed]
         .filter(Boolean)
         // biome-ignore lint/style/noNonNullAssertion: filter(Boolean) guarantees non-null
         .some((s) => s!.toLowerCase().includes(q)),

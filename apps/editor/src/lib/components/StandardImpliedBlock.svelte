@@ -10,24 +10,26 @@
   let {
     standard,
     cable,
-    fromCage,
-    toCage,
+    fromConnectors,
+    toConnectors,
   }: {
     standard: string | undefined
     cable?: LinkCable
-    fromCage?: PortConnector
-    toCage?: PortConnector
+    fromConnectors?: PortConnector[]
+    toConnectors?: PortConnector[]
   } = $props()
 
   const spec = $derived(getStandardSpec(standard))
 
-  function cageMatches(cage: PortConnector | undefined, required: string): boolean {
-    if (!cage) return true
-    return cage === required || cage === 'combo'
+  function connectorsHost(connectors: PortConnector[] | undefined, required: string): boolean {
+    if (!connectors || connectors.length === 0) return true
+    return connectors.some((c) => c === required)
   }
 
   const cageOk = $derived(
-    spec ? cageMatches(fromCage, spec.cage) && cageMatches(toCage, spec.cage) : true,
+    spec
+      ? connectorsHost(fromConnectors, spec.cage) && connectorsHost(toConnectors, spec.cage)
+      : true,
   )
 
   // Grade-adjusted reach — e.g. 10GBASE-T is 100 m on Cat6a but only 55 m

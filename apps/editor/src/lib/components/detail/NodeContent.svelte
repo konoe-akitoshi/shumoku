@@ -28,7 +28,7 @@
     if (!portId) return ''
     const port = nodes.get(nodeId)?.ports?.find((p) => p.id === portId)
     if (!port) return portId
-    return port.label || port.cage || 'unnamed port'
+    return port.label || port.connectors?.join('/') || 'unnamed port'
   }
 
   const nodeLabel = $derived(

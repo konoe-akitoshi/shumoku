@@ -33,7 +33,7 @@ properties:
     antenna_type: internal
   ports:
     uplink:
-      - { names: ["E0"], speed: "1g", cage: rj45 }
+      - { names: ["E0"], speed: "1g", connectors: [rj45] }
   physical:
     form_factor: ceiling
     dimensions_mm: { w: 160, d: 161, h: 37 }

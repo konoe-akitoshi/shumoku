@@ -22,9 +22,9 @@ properties:
     fanless: false
   ports:
     downlink:
-      - { count: 48, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "1g", cage: rj45, poe: true }
+      - { count: 48, name_pattern: "Gi1/0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet1/0/{n}", speed: "1g", connectors: [rj45], poe: true }
     uplink:
-      - { names: ["Gi1/0/49", "Gi1/0/50", "Gi1/0/51", "Gi1/0/52"], faceplate_labels: ["49", "50", "51", "52"], interface_names: ["GigabitEthernet1/0/49", "GigabitEthernet1/0/50", "GigabitEthernet1/0/51", "GigabitEthernet1/0/52"], speed: "1g", cage: sfp }
+      - { names: ["Gi1/0/49", "Gi1/0/50", "Gi1/0/51", "Gi1/0/52"], faceplate_labels: ["49", "50", "51", "52"], interface_names: ["GigabitEthernet1/0/49", "GigabitEthernet1/0/50", "GigabitEthernet1/0/51", "GigabitEthernet1/0/52"], speed: "1g", connectors: [sfp] }
   management:
     layer: 2
     image: lan-lite

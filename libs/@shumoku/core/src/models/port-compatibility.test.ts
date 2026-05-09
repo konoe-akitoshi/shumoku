@@ -6,12 +6,12 @@ import {
   plugFromStandard,
   validateLinkCompatibility,
 } from './port-compatibility.js'
-import type { EthernetStandard, Link, LinkCable, NodePort } from './types.js'
+import type { EthernetStandard, Link, LinkCable, NodePort, PortConnector } from './types.js'
 
-const port = (label: string, cage: string, poe = false): NodePort => ({
+const port = (label: string, connectors: PortConnector[], poe = false): NodePort => ({
   id: label,
   label,
-  cage,
+  connectors,
   poe,
 })
 
@@ -29,8 +29,8 @@ describe('link compatibility', () => {
   test('1000BASE-T fits two RJ45 cages (symmetric)', () => {
     expect(
       validateLinkCompatibility(
-        port('1', 'rj45'),
-        port('2', 'rj45'),
+        port('1', ['rj45']),
+        port('2', ['rj45']),
         link('1000BASE-T', '1000BASE-T'),
       ),
     ).toEqual([])
@@ -38,8 +38,8 @@ describe('link compatibility', () => {
 
   test('rejects 10GBASE-SR on RJ45 cage', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'rj45'),
-      port('2', 'sfp+'),
+      port('1', ['rj45']),
+      port('2', ['sfp+']),
       link('10GBASE-SR', '10GBASE-SR'),
     )
     expect(issues.some((i) => i.severity === 'error')).toBe(true)
@@ -47,8 +47,8 @@ describe('link compatibility', () => {
 
   test('flags PoE on a pluggable cage as misconfig', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'sfp+', true),
-      port('2', 'sfp+'),
+      port('1', ['sfp+'], true),
+      port('2', ['sfp+']),
       link('10GBASE-SR', '10GBASE-SR'),
     )
     expect(issues.some((i) => i.severity === 'error')).toBe(true)
@@ -56,18 +56,18 @@ describe('link compatibility', () => {
 
   test('warns when cable length exceeds standard reach', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'sfp+'),
-      port('2', 'sfp+'),
+      port('1', ['sfp+']),
+      port('2', ['sfp+']),
       link('10GBASE-SR', '10GBASE-SR', { length_m: 1000 }),
     )
     expect(issues.some((i) => i.severity === 'warning')).toBe(true)
   })
 
-  test('combo cage accepts any standard', () => {
+  test('combo port (rj45 + sfp connectors) accepts either standard', () => {
     expect(
       validateLinkCompatibility(
-        port('1', 'combo'),
-        port('2', 'rj45'),
+        port('1', ['rj45', 'sfp']),
+        port('2', ['rj45']),
         link('1000BASE-T', '1000BASE-T'),
       ),
     ).toEqual([])
@@ -86,8 +86,8 @@ describe('link compatibility', () => {
 
   test('reach drops with weaker cable grade (10GBASE-T over Cat6)', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'rj45'),
-      port('2', 'rj45'),
+      port('1', ['rj45']),
+      port('2', ['rj45']),
       link('10GBASE-T', '10GBASE-T', { category: 'cat6', length_m: 70 }),
     )
     expect(issues.some((i) => i.severity === 'warning')).toBe(true)
@@ -95,8 +95,8 @@ describe('link compatibility', () => {
 
   test('reach drops on OM3 fiber for 10GBASE-SR', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'sfp+'),
-      port('2', 'sfp+'),
+      port('1', ['sfp+']),
+      port('2', ['sfp+']),
       link('10GBASE-SR', '10GBASE-SR', { category: 'om3', length_m: 350 }),
     )
     expect(issues.some((i) => i.severity === 'warning')).toBe(true)
@@ -106,8 +106,8 @@ describe('link compatibility', () => {
     // Both ends have a standard but they differ — typical BiDi pair, but
     // we surface a soft warning so accidental mismatches are visible.
     const issues = validateLinkCompatibility(
-      port('1', 'sfp+'),
-      port('2', 'sfp+'),
+      port('1', ['sfp+']),
+      port('2', ['sfp+']),
       link('10GBASE-SR' as EthernetStandard, '10GBASE-LR' as EthernetStandard),
     )
     expect(issues.some((i) => i.severity === 'warning')).toBe(true)
@@ -115,11 +115,11 @@ describe('link compatibility', () => {
 
   test('one-sided standard (only fromTransceiver set) still validates cage', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'rj45'),
-      port('2', 'sfp+'),
+      port('1', ['rj45']),
+      port('2', ['sfp+']),
       link('10GBASE-SR' as EthernetStandard, undefined),
     )
-    // from cage RJ45 cannot host 10GBASE-SR (requires SFP+).
+    // from connectors [rj45] cannot host 10GBASE-SR (requires SFP+).
     expect(issues.some((i) => i.severity === 'error')).toBe(true)
   })
 })
@@ -127,8 +127,8 @@ describe('link compatibility', () => {
 describe('issue targets', () => {
   test('cage mismatch issue targets the source endpoint plug.module', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'rj45'),
-      port('2', 'sfp+'),
+      port('1', ['rj45']),
+      port('2', ['sfp+']),
       link('10GBASE-SR', '10GBASE-SR'),
     )
     const matching = issuesForTarget(issues, {
@@ -142,8 +142,8 @@ describe('issue targets', () => {
 
   test('reach warning targets cable.length_m', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'sfp+'),
-      port('2', 'sfp+'),
+      port('1', ['sfp+']),
+      port('2', ['sfp+']),
       link('10GBASE-SR', '10GBASE-SR', { length_m: 1000 }),
     )
     const matching = issuesForTarget(issues, { kind: 'cable', field: 'length_m' })
@@ -154,8 +154,8 @@ describe('issue targets', () => {
 
   test('asymmetric warning targets the link as a whole', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'sfp+'),
-      port('2', 'sfp+'),
+      port('1', ['sfp+']),
+      port('2', ['sfp+']),
       link('10GBASE-SR', '10GBASE-LR'),
     )
     const matching = issuesForTarget(issues, { kind: 'link' })
@@ -164,8 +164,8 @@ describe('issue targets', () => {
 
   test('PoE flag on non-RJ45 cage targets port.poe', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'sfp+', true),
-      port('2', 'sfp+'),
+      port('1', ['sfp+'], true),
+      port('2', ['sfp+']),
       link('10GBASE-SR', '10GBASE-SR'),
     )
     const matching = issuesForTarget(issues, { kind: 'port', side: 'source', field: 'poe' })
@@ -175,8 +175,8 @@ describe('issue targets', () => {
 
   test('cable medium / category mismatch targets cable.medium', () => {
     const issues = validateLinkCompatibility(
-      port('1', 'rj45'),
-      port('2', 'rj45'),
+      port('1', ['rj45']),
+      port('2', ['rj45']),
       link('1000BASE-T', '1000BASE-T', { medium: 'fiber-mm', category: 'cat6a' }),
     )
     const matching = issuesForTarget(issues, { kind: 'cable', field: 'medium' })

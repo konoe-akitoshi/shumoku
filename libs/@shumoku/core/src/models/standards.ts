@@ -348,12 +348,19 @@ export function formatReachMeters(m: number): string {
   return `${m} m`
 }
 
-function cageAcceptsRequired(cage: string | undefined, required: string): boolean {
-  if (!cage) return true // unknown cage — be permissive
-  const c = cage.toLowerCase()
-  if (c === required) return true
-  if (c === 'combo') return true
-  return false
+/**
+ * Whether the port's connector list can host a cable that requires
+ * `required`. Empty/undefined list is treated permissively (unknown
+ * port → host anything) so the editor's standard picker still produces
+ * options for ad-hoc nodes without catalog data.
+ */
+function connectorsHostStandard(
+  connectors: readonly string[] | undefined,
+  required: string,
+): boolean {
+  if (!connectors || connectors.length === 0) return true
+  const want = required.toLowerCase()
+  return connectors.some((c) => c.toLowerCase() === want)
 }
 
 export interface StandardOption {
@@ -371,24 +378,27 @@ export interface StandardOption {
 }
 
 /**
- * Standards available given the cages on each port. Used by the editor's
- * cascading "Standard" picker so the dropdown only offers links that
- * physically fit. Unknown cages (`undefined`) are treated permissively —
+ * Standards available given the connectors on each port. Used by the
+ * editor's cascading "Standard" picker so the dropdown only offers
+ * links that physically fit. Empty arrays are treated permissively —
  * we'd rather show too many than none.
  *
- * Returned as one flat list; group via `option.group` if the UI wants to
- * split into sections.
+ * For combo ports (multiple connectors), this returns the union: any
+ * standard that fits at least one connector on each side qualifies.
+ *
+ * Returned as one flat list; group via `option.group` if the UI wants
+ * to split into sections.
  */
-export function standardsForCages(
-  fromCage: string | undefined,
-  toCage: string | undefined,
+export function standardsForConnectors(
+  fromConnectors: readonly string[] | undefined,
+  toConnectors: readonly string[] | undefined,
 ): StandardOption[] {
   const result: StandardOption[] = []
   for (const name of KNOWN_STANDARDS) {
     const spec = STANDARD_SPECS[name]
     if (!spec) continue
-    if (!cageAcceptsRequired(fromCage, spec.cage)) continue
-    if (!cageAcceptsRequired(toCage, spec.cage)) continue
+    if (!connectorsHostStandard(fromConnectors, spec.cage)) continue
+    if (!connectorsHostStandard(toConnectors, spec.cage)) continue
     result.push({
       name,
       spec,
@@ -452,21 +462,21 @@ function makePlugProfile(cage: PortConnector): PlugProfile {
 }
 
 /**
- * Plug profiles compatible with the given port cages. Same permissive
- * behavior as `standardsForCages`: unknown cages → all plugs, `combo`
- * cage → all plugs.
+ * Plug profiles compatible with the given port connectors. Empty
+ * arrays are permissive (return all plugs); multi-connector combo
+ * ports return the union of compatible plugs.
  */
-export function plugProfilesForCages(
-  fromCage: string | undefined,
-  toCage: string | undefined,
+export function plugProfilesForConnectors(
+  fromConnectors: readonly string[] | undefined,
+  toConnectors: readonly string[] | undefined,
 ): PlugProfile[] {
   const seen = new Set<string>()
   const out: PlugProfile[] = []
   for (const name of KNOWN_STANDARDS) {
     const spec = STANDARD_SPECS[name]
     if (!spec) continue
-    if (!cageAcceptsRequired(fromCage, spec.cage)) continue
-    if (!cageAcceptsRequired(toCage, spec.cage)) continue
+    if (!connectorsHostStandard(fromConnectors, spec.cage)) continue
+    if (!connectorsHostStandard(toConnectors, spec.cage)) continue
     if (seen.has(spec.cage)) continue
     seen.add(spec.cage)
     out.push(makePlugProfile(spec.cage))

@@ -44,7 +44,7 @@
     faceplateLabel: string
     role: string
     speed: string
-    cage: string
+    connectors: string[]
     interfaceName: string
     poe: boolean
     disabled: boolean
@@ -63,7 +63,7 @@
         faceplateLabel: port.faceplateLabel ?? '',
         role: String(port.role ?? ''),
         speed: port.speed ?? '',
-        cage: port.cage ?? '',
+        connectors: port.connectors ?? [],
         interfaceName: port.interfaceName ?? '',
         poe: port.poe ?? false,
         disabled: port.disabled ?? false,
@@ -82,11 +82,12 @@
   }
 
   function getPortLabel(p: PortOption) {
-    const label = p.label || p.cage || 'unnamed port'
+    const connectors = p.connectors.length > 0 ? p.connectors.join('/') : ''
+    const label = p.label || connectors || 'unnamed port'
     const attrs = [
       p.faceplateLabel && p.faceplateLabel !== p.label ? `panel ${p.faceplateLabel}` : '',
       p.speed,
-      p.cage,
+      connectors,
       p.poe ? 'PoE' : '',
       p.usage.length > 0 ? 'used' : '',
     ]
@@ -248,10 +249,10 @@
       row.toPort,
       fromPort?.label,
       fromPort?.interfaceName,
-      fromPort?.cage,
+      ...(fromPort?.connectors ?? []),
       toPort?.label,
       toPort?.interfaceName,
-      toPort?.cage,
+      ...(toPort?.connectors ?? []),
       row.standard,
       row.vlan,
       row.fromIp,
@@ -319,8 +320,8 @@
   let addToStandard = $state<EthernetStandard | ''>('')
   let addCableCategory = $state<CableGrade | undefined>(undefined)
 
-  const addFromCage = $derived(getPort(addFromNode, addFromPortId)?.cage)
-  const addToCage = $derived(getPort(addToNode, addToPortId)?.cage)
+  const addFromConnectors = $derived(getPort(addFromNode, addFromPortId)?.connectors)
+  const addToConnectors = $derived(getPort(addToNode, addToPortId)?.connectors)
   const addReferenceStandard = $derived<EthernetStandard | undefined>(
     (addFromStandard || addToStandard || undefined) as EthernetStandard | undefined,
   )
@@ -358,7 +359,11 @@
   $effect(() => {
     if (addFromStandard || addToStandard) return
     if (!addFromPortId || !addToPortId) return
-    const proposed = defaultStandardForCages(addFromCage, addToCage)
+    // Auto-default only when each side has a single connector — combo
+    // ports leave the picker open so the user can choose RJ45 vs SFP.
+    const fromSingle = addFromConnectors?.length === 1 ? addFromConnectors[0] : undefined
+    const toSingle = addToConnectors?.length === 1 ? addToConnectors[0] : undefined
+    const proposed = defaultStandardForCages(fromSingle, toSingle)
     if (proposed) {
       addFromStandard = proposed
       addToStandard = proposed
@@ -590,7 +595,7 @@
           <span class="text-[10px] text-muted-foreground mb-1 block">Plug / Module</span>
           <EndpointModulePicker
             class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
-            cage={addFromCage}
+            connectors={addFromConnectors}
             standard={addFromStandard || undefined}
             disabled={!addFromPortId}
             onchange={(v) => setAddStandard('from', v)}
@@ -624,8 +629,8 @@
             <StandardImpliedBlock
               standard={addReferenceStandard}
               cable={addCableCategory ? { category: addCableCategory } : undefined}
-              fromCage={addFromCage}
-              toCage={addToCage}
+              fromConnectors={addFromConnectors}
+              toConnectors={addToConnectors}
             />
           </div>
         {:else}
@@ -704,7 +709,7 @@
           <span class="text-[10px] text-muted-foreground mb-1 block">Plug / Module</span>
           <EndpointModulePicker
             class="w-full px-2 py-1.5 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring"
-            cage={addToCage}
+            connectors={addToConnectors}
             standard={addToStandard || undefined}
             disabled={!addToPortId}
             onchange={(v) => setAddStandard('to', v)}
@@ -763,8 +768,8 @@
       </Table.Header>
       <Table.Body>
         {#each visibleRows as row (row.id)}
-          {@const fromCage = getPort(row.fromNode, row.fromPort)?.cage}
-          {@const toCage = getPort(row.toNode, row.toPort)?.cage}
+          {@const fromConnectors = getPort(row.fromNode, row.fromPort)?.connectors}
+          {@const toConnectors = getPort(row.toNode, row.toPort)?.connectors}
           {@const referenceStandard = row.link.from.plug?.module?.standard ?? row.link.to.plug?.module?.standard}
           {@const gradeOptions = cableGradesForStandard(referenceStandard)}
           {@const rowSeverity = row.issues.find((i) => i.severity === 'error')?.severity
@@ -796,7 +801,7 @@
                 >
                   <EndpointModulePicker
                     class={cellInput}
-                    cage={fromCage}
+                    connectors={fromConnectors}
                     standard={row.link.from.plug?.module?.standard}
                     onchange={(v) => updateEndpointModuleStandard(row.link, 'from', v)}
                   />
@@ -820,7 +825,7 @@
                 >
                   <EndpointModulePicker
                     class={cellInput}
-                    cage={toCage}
+                    connectors={toConnectors}
                     standard={row.link.to.plug?.module?.standard}
                     onchange={(v) => updateEndpointModuleStandard(row.link, 'to', v)}
                   />
@@ -998,7 +1003,9 @@
                   >
                     {getPortLabel(port)}
                   </span>
-                  <span class="text-muted-foreground">{port.cage || port.speed || 'port'}</span>
+                  <span class="text-muted-foreground"
+                    >{port.connectors.join('/') || port.speed || 'port'}</span
+                  >
                 </div>
               {/each}
             </div>
