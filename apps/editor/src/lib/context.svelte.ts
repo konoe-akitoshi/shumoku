@@ -1338,18 +1338,20 @@ export const diagramState = {
       if (!project && projectId === 'sample') project = sampleProject
       if (!project && projectId !== 'sample') {
         sessionStore.setStatus('Loading from cache...')
+        // Asset rows MUST be registered into the AssetStore before
+        // we read the snapshot — `loadSnapshot` rehydrates each
+        // entity's `asset:<hash>` refs back into blob URLs by
+        // looking the hash up, and an empty store means every ref
+        // gets left as a literal string. The visible symptom of
+        // getting the order wrong: scene backgrounds and product
+        // icons render as broken `<img>`.
+        const assets = await projectsDb.getAssets(projectId)
+        for (const a of assets) {
+          assetStore.putWithHash(a.hash, a.ext, a.blob)
+          persistedAssetHashes.add(a.hash)
+        }
         const cached = await projectsDb.loadSnapshot(projectId)
         if (cached) {
-          // Repopulate the AssetStore from per-project asset rows
-          // before applying state — image fields hold blob URLs that
-          // need their backing entries to exist before render. Also
-          // seed `persistedAssetHashes` so the next sync skips
-          // re-putting these.
-          const assets = await projectsDb.getAssets(projectId)
-          for (const a of assets) {
-            assetStore.putWithHash(a.hash, a.ext, a.blob)
-            persistedAssetHashes.add(a.hash)
-          }
           // Translate the persisted snapshot back into a NetedProject
           // so the existing applyProject pipeline (sanitize, port
           // placement, asset rehydration) handles it uniformly.
