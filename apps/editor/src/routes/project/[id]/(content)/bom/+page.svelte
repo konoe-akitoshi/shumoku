@@ -101,48 +101,31 @@
     return lbl ?? nodeId
   }
 
-  function portLabelOf(nodeId: string, portId: string | undefined): string {
-    if (!portId) return ''
+  function portLabelOf(nodeId: string, portId: string | undefined): string | null {
+    if (!portId) return null
     const node = diagramState.nodes.get(nodeId)
     const port = node?.ports?.find((p) => p.id === portId)
     return port?.label ?? portId
   }
 
+  /** "F1-SW1 (Gi0/1)" — port が無いノード端は "F1-SW1" のまま */
+  function endpointString(nodeId: string, portId: string | undefined): string {
+    const dev = nodeLabelOf(nodeId)
+    const port = portLabelOf(nodeId, portId)
+    return port ? `${dev} (${port})` : dev
+  }
+
   function buildLabelCsv(): string {
-    const header = [
-      'link_id',
-      'end',
-      'this_device',
-      'this_port',
-      'peer_device',
-      'peer_port',
-      'length_m',
-    ]
+    const header = ['link_id', 'end', 'this', 'peer', 'length_m']
     const rows: string[][] = [header]
     for (const link of diagramState.links) {
       if (!link.id) continue
-      const a = link.from
-      const b = link.to
+      const a = endpointString(link.from.node, link.from.port)
+      const b = endpointString(link.to.node, link.to.port)
       const eff = diagramState.cableLengthMeters(link.id)
       const len = eff ? eff.meters.toFixed(1) : ''
-      rows.push([
-        link.id,
-        'A',
-        nodeLabelOf(a.node),
-        portLabelOf(a.node, a.port),
-        nodeLabelOf(b.node),
-        portLabelOf(b.node, b.port),
-        len,
-      ])
-      rows.push([
-        link.id,
-        'B',
-        nodeLabelOf(b.node),
-        portLabelOf(b.node, b.port),
-        nodeLabelOf(a.node),
-        portLabelOf(a.node, a.port),
-        len,
-      ])
+      rows.push([link.id, 'A', a, b, len])
+      rows.push([link.id, 'B', b, a, len])
     }
     return rows.map((row) => row.map(csvCell).join(',')).join('\n')
   }
