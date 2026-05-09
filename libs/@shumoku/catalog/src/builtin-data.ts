@@ -1722,7 +1722,7 @@ export const builtinData = [
         wan: [
           {
             names: ['GE0'],
-            faceplate_labels: ['WAN'],
+            faceplate_labels: ['GE0'],
             interface_names: ['GigaEthernet0.0'],
             speed: '1g',
             cage: 'rj45',
@@ -1731,7 +1731,7 @@ export const builtinData = [
         lan: [
           {
             count: 4,
-            name_pattern: 'LAN{n}',
+            name_pattern: 'GE1.0/{n}',
             faceplate_label_pattern: '{n}',
             interface_name_pattern: 'GigaEthernet1.0',
             speed: '1g',
@@ -1808,22 +1808,33 @@ export const builtinData = [
         wan: [
           {
             names: ['GE0', 'GE1'],
-            faceplate_labels: ['WAN1', 'WAN2'],
-            speed: '10g',
+            faceplate_labels: ['GE0', 'GE1'],
+            interface_names: ['GigaEthernet0.0', 'GigaEthernet1.0'],
+            speed: '1g',
             cage: 'combo',
           },
           {
             names: ['GE2', 'GE3'],
-            faceplate_labels: ['SFP1', 'SFP2'],
-            speed: '1g',
-            cage: 'sfp',
+            faceplate_labels: ['GE2', 'GE3'],
+            interface_names: ['GigaEthernet2.0', 'GigaEthernet3.0'],
+            speed: '10g',
+            cage: 'combo',
           },
         ],
         lan: [
           {
-            count: 16,
-            name_pattern: 'LAN{n}',
+            count: 8,
+            name_pattern: 'GE4.0/{n}',
             faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigaEthernet4.0',
+            speed: '1g',
+            cage: 'rj45',
+          },
+          {
+            count: 8,
+            name_pattern: 'GE5.0/{n}',
+            faceplate_label_pattern: '{n}',
+            interface_name_pattern: 'GigaEthernet5.0',
             speed: '1g',
             cage: 'rj45',
           },

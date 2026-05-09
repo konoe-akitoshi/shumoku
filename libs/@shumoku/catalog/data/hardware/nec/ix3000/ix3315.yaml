@@ -1,6 +1,8 @@
 # NEC UNIVERGE IX3315 — enterprise edge router
-# Source: https://jpn.nec.com/univerge/ix/Info/ix3315.html
-# 2× combo (10GBASE-T or SFP+) + 2× 1G SFP + 16-port internal LAN switch.
+# Source: NEC IX3000 series user manual (UM-IX3000-ver10.11)
+# Port layout: GE0/GE1 = 1G combo (RJ45 1000BASE-T or SFP 1000BASE-X),
+#              GE2/GE3 = 10G combo (RJ45 1000/10GBASE-T or SFP+ 10GBASE-R),
+#              GE4(SW-HUB) and GE5(SW-HUB) = 8-port 1G L2 switches each.
 # IPv4 forwarding 10 Gbps, IPsec 4 Gbps.
 id: nec/ix3000/ix3315
 label: NEC UNIVERGE IX3315
@@ -16,10 +18,15 @@ properties:
     max_draw_w: 75
   ports:
     wan:
-      - { names: ["GE0", "GE1"], faceplate_labels: ["WAN1", "WAN2"], speed: "10g", cage: combo }
-      - { names: ["GE2", "GE3"], faceplate_labels: ["SFP1", "SFP2"], speed: "1g", cage: sfp }
+      # GE0/GE1: 1G combo (RJ45 1000BASE-T or SFP 1000BASE-X)
+      - { names: ["GE0", "GE1"], faceplate_labels: ["GE0", "GE1"], interface_names: ["GigaEthernet0.0", "GigaEthernet1.0"], speed: "1g", cage: combo }
+      # GE2/GE3: 10G combo (RJ45 1000/10GBASE-T or SFP+ 10GBASE-R)
+      - { names: ["GE2", "GE3"], faceplate_labels: ["GE2", "GE3"], interface_names: ["GigaEthernet2.0", "GigaEthernet3.0"], speed: "10g", cage: combo }
     lan:
-      - { count: 16, name_pattern: "LAN{n}", faceplate_label_pattern: "{n}", speed: "1g", cage: rj45 }
+      # GE4 (SW-HUB): 8-port 1G L2 switch — all jacks share GigaEthernet4.0
+      - { count: 8, name_pattern: "GE4.0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigaEthernet4.0", speed: "1g", cage: rj45 }
+      # GE5 (SW-HUB): 8-port 1G L2 switch — all jacks share GigaEthernet5.0
+      - { count: 8, name_pattern: "GE5.0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigaEthernet5.0", speed: "1g", cage: rj45 }
   physical:
     form_factor: 1U
     fanless: false
