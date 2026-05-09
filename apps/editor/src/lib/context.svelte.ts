@@ -248,7 +248,24 @@ let txSnap: ProjectSnapshot | null = null
 let txLabel = ''
 
 function commit<T>(label: string, fn: () => T): T {
-  if (inCommit || txActive) return fn()
+  if (inCommit) return fn()
+  // While a transaction is open (e.g. the user is in edit mode, or
+  // a multi-tick drag is in progress) the bracket — not commit() —
+  // owns undo grouping: we skip undoManager.push so individual
+  // ticks don't pollute the undo stack. Cache sync is orthogonal,
+  // so per-commit state changes still mirror to IDB; otherwise
+  // anything done during edit mode (image upload, sidebar edits)
+  // would be lost on reload.
+  if (txActive) {
+    inCommit = true
+    try {
+      const result = fn()
+      cache.touch()
+      return result
+    } finally {
+      inCommit = false
+    }
+  }
   const before = getProjectSnapshot()
   inCommit = true
   try {
@@ -262,7 +279,17 @@ function commit<T>(label: string, fn: () => T): T {
 }
 
 async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  if (inCommit || txActive) return await fn()
+  if (inCommit) return await fn()
+  if (txActive) {
+    inCommit = true
+    try {
+      const result = await fn()
+      cache.touch()
+      return result
+    } finally {
+      inCommit = false
+    }
+  }
   const before = getProjectSnapshot()
   inCommit = true
   try {
