@@ -26,8 +26,11 @@ properties:
     downlink:
       - { count: 8, name_pattern: "Gi0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigabitEthernet0/{n}", speed: "1g", cage: rj45, poe: true }
     uplink:
-      # Dual-purpose ports: each is RJ45 OR SFP (combo). 1G.
-      - { names: ["Gi0/9", "Gi0/10"], faceplate_labels: ["9", "10"], interface_names: ["GigabitEthernet0/9", "GigabitEthernet0/10"], speed: "1g", cage: combo }
+      # Dual-purpose ports: each has RJ45 jack + SFP slot sharing one interface (mutually exclusive).
+      - { names: ["Gi0/9"],       faceplate_labels: ["9"],      interface_names: ["GigabitEthernet0/9"],  speed: "1g", cage: rj45 }
+      - { names: ["Gi0/9(SFP)"],  faceplate_labels: ["9 SFP"],  interface_names: ["GigabitEthernet0/9"],  speed: "1g", cage: sfp }
+      - { names: ["Gi0/10"],      faceplate_labels: ["10"],     interface_names: ["GigabitEthernet0/10"], speed: "1g", cage: rj45 }
+      - { names: ["Gi0/10(SFP)"], faceplate_labels: ["10 SFP"], interface_names: ["GigabitEthernet0/10"], speed: "1g", cage: sfp }
   management:
     layer: 3
     image: ip-base

@@ -339,6 +339,48 @@ export function validateLinkCompatibility(
 }
 
 // ============================================================================
+// Combo / exclusive-port detection.
+// ============================================================================
+
+/**
+ * Combo ports (e.g. NEC IX3315 GE0 RJ45 + GE0 SFP, Cisco 3560-CG dual-
+ * purpose uplinks, Panasonic Switch-M combo uplinks) expose two physical
+ * receptacles that share one OS interface — only one of them can carry
+ * traffic at a time. We mark this in the catalog by giving both ports
+ * the *same* `interfaceName`. This check finds groups where more than
+ * one is connected and warns the user.
+ *
+ * The caller passes a predicate `hasActiveLink(port)` — usually backed
+ * by the scene's link table — so this helper stays graph-agnostic.
+ */
+export function findComboInterfaceConflicts(
+  ports: readonly NodePort[],
+  hasActiveLink: (port: NodePort) => boolean,
+): ValidationIssue[] {
+  const groups = new Map<string, NodePort[]>()
+  for (const port of ports) {
+    if (!port.interfaceName) continue
+    const existing = groups.get(port.interfaceName)
+    if (existing) existing.push(port)
+    else groups.set(port.interfaceName, [port])
+  }
+  const issues: ValidationIssue[] = []
+  for (const [iface, group] of groups) {
+    if (group.length < 2) continue
+    const active = group.filter(hasActiveLink)
+    if (active.length <= 1) continue
+    const labels = active.map((p) => p.label || p.id).join(', ')
+    issues.push({
+      code: 'combo-interface-multi-active',
+      severity: 'warning',
+      message: `Interface ${iface} is a combo group; only one of [${labels}] can be in use, but ${active.length} are connected`,
+      target: { kind: 'link' },
+    })
+  }
+  return issues
+}
+
+// ============================================================================
 // Misc helpers / defaults.
 // ============================================================================
 

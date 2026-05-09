@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   defaultStandardForCages,
+  findComboInterfaceConflicts,
   isPoeCapableConnector,
   issuesForTarget,
   plugFromStandard,
@@ -13,6 +14,13 @@ const port = (label: string, cage: string, poe = false): NodePort => ({
   label,
   cage,
   poe,
+})
+
+const comboPort = (id: string, cage: string, interfaceName: string): NodePort => ({
+  id,
+  label: id,
+  cage,
+  interfaceName,
 })
 
 const link = (
@@ -172,7 +180,43 @@ describe('issue targets', () => {
     expect(matching).toHaveLength(1)
     expect(matching[0]?.code).toBe('poe-flag-on-non-rj45')
   })
+})
 
+describe('combo interface conflicts', () => {
+  const rj45 = comboPort('GE0', 'rj45', 'GigaEthernet0.0')
+  const sfp = comboPort('GE0(SFP)', 'sfp', 'GigaEthernet0.0')
+
+  test('flags two active links on a shared interface', () => {
+    const linked = new Set(['GE0', 'GE0(SFP)'])
+    const issues = findComboInterfaceConflicts([rj45, sfp], (p) => linked.has(p.id))
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.code).toBe('combo-interface-multi-active')
+    expect(issues[0]?.severity).toBe('warning')
+  })
+
+  test('no issue when only one combo side is connected', () => {
+    const linked = new Set(['GE0'])
+    const issues = findComboInterfaceConflicts([rj45, sfp], (p) => linked.has(p.id))
+    expect(issues).toEqual([])
+  })
+
+  test('ports without shared interface name are ignored', () => {
+    const ge1 = comboPort('GE1', 'rj45', 'GigaEthernet1.0')
+    const linked = new Set(['GE0', 'GE1'])
+    const issues = findComboInterfaceConflicts([rj45, ge1], (p) => linked.has(p.id))
+    expect(issues).toEqual([])
+  })
+
+  test('reports separate issues for distinct combo groups', () => {
+    const rj45b = comboPort('GE2', 'rj45', 'GigaEthernet2.0')
+    const sfpb = comboPort('GE2(SFP+)', 'sfp+', 'GigaEthernet2.0')
+    const linked = new Set(['GE0', 'GE0(SFP)', 'GE2', 'GE2(SFP+)'])
+    const issues = findComboInterfaceConflicts([rj45, sfp, rj45b, sfpb], (p) => linked.has(p.id))
+    expect(issues).toHaveLength(2)
+  })
+})
+
+describe('issue targets — cable medium', () => {
   test('cable medium / category mismatch targets cable.medium', () => {
     const issues = validateLinkCompatibility(
       port('1', 'rj45'),

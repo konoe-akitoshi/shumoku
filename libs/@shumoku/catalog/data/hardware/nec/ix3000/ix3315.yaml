@@ -18,10 +18,18 @@ properties:
     max_draw_w: 75
   ports:
     wan:
-      # GE0/GE1: 1G combo (RJ45 1000BASE-T or SFP 1000BASE-X)
-      - { names: ["GE0", "GE1"], faceplate_labels: ["GE0", "GE1"], interface_names: ["GigaEthernet0.0", "GigaEthernet1.0"], speed: "1g", cage: combo }
-      # GE2/GE3: 10G combo (RJ45 1000/10GBASE-T or SFP+ 10GBASE-R)
-      - { names: ["GE2", "GE3"], faceplate_labels: ["GE2", "GE3"], interface_names: ["GigaEthernet2.0", "GigaEthernet3.0"], speed: "10g", cage: combo }
+      # GE0: 1G combo — RJ45 (1000BASE-T) and SFP (1000BASE-SX/LX) share GigaEthernet0.0 (mutually exclusive)
+      - { names: ["GE0"],      faceplate_labels: ["GE0"],     interface_names: ["GigaEthernet0.0"], speed: "1g", cage: rj45 }
+      - { names: ["GE0(SFP)"], faceplate_labels: ["GE0 SFP"], interface_names: ["GigaEthernet0.0"], speed: "1g", cage: sfp }
+      # GE1: 1G combo
+      - { names: ["GE1"],      faceplate_labels: ["GE1"],     interface_names: ["GigaEthernet1.0"], speed: "1g", cage: rj45 }
+      - { names: ["GE1(SFP)"], faceplate_labels: ["GE1 SFP"], interface_names: ["GigaEthernet1.0"], speed: "1g", cage: sfp }
+      # GE2: 10G combo — RJ45 (1000/10GBASE-T) and SFP+ (10GBASE-SR/LR) share GigaEthernet2.0
+      - { names: ["GE2"],       faceplate_labels: ["GE2"],      interface_names: ["GigaEthernet2.0"], speed: "10g", cage: rj45 }
+      - { names: ["GE2(SFP+)"], faceplate_labels: ["GE2 SFP+"], interface_names: ["GigaEthernet2.0"], speed: "10g", cage: sfp+ }
+      # GE3: 10G combo
+      - { names: ["GE3"],       faceplate_labels: ["GE3"],      interface_names: ["GigaEthernet3.0"], speed: "10g", cage: rj45 }
+      - { names: ["GE3(SFP+)"], faceplate_labels: ["GE3 SFP+"], interface_names: ["GigaEthernet3.0"], speed: "10g", cage: sfp+ }
     lan:
       # GE4 (SW-HUB): 8-port 1G L2 switch — all jacks share GigaEthernet4.0
       - { count: 8, name_pattern: "GE4.0/{n}", faceplate_label_pattern: "{n}", interface_name_pattern: "GigaEthernet4.0", speed: "1g", cage: rj45 }
