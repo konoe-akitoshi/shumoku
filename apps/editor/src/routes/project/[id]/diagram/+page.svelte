@@ -222,10 +222,6 @@
           // before emitting this event — invalidate cached sheets now.
           diagramState.invalidateSheetCache()
         }}
-        onnodedelete={(ids: string[]) => {
-          diagramState.unbindNodes(ids)
-          diagramState.invalidateSheetCache()
-        }}
         oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
           diagramState.addLink({ id: newId('link'), from, to })
         }}

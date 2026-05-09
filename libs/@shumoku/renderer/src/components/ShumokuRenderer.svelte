@@ -20,7 +20,6 @@
     moveNode,
     moveSubgraph,
     rebalanceSubgraphs,
-    removePort,
     resolvePosition,
     routeEdges,
     specDeviceType,
@@ -69,7 +68,6 @@
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
     onnodeadd?: (id: string) => void
-    onnodedelete?: (ids: string[]) => void
     /**
      * Fires once when the user starts dragging a node or subgraph.
      * Hosts open an undo / cache transaction here and close it in
@@ -110,7 +108,6 @@
     onlabeledit,
     oncontextmenu: onctx,
     onnodeadd,
-    onnodedelete,
     ondragstart,
     ondragend,
     hideNode,
@@ -220,11 +217,6 @@
       selection = new Set()
       linkDrag = null
     }
-    // Delete / Backspace are owned by the host's action registry
-    // (window-level handler) — see `edit.delete` in builtin actions.
-    // Handling them here too would double-fire and bypass the
-    // editor-side cleanup contract (undo, cache, scene/Link.via
-    // integrity).
   }
 
   // =========================================================================
@@ -333,72 +325,6 @@
     })
     finalizeAdd(id)
     return id
-  }
-
-  // =========================================================================
-  // Delete (unified, recursive for subgraphs)
-  // =========================================================================
-
-  export function deleteById(id: string) {
-    const deletedNodeIds: string[] = []
-
-    if (nodes.has(id)) {
-      deletedNodeIds.push(id)
-      nodes.delete(id)
-      for (const [portId, port] of ports) {
-        if (port.nodeId === id) ports.delete(portId)
-      }
-      links = links.filter((l) => {
-        const from = typeof l.from === 'string' ? l.from : l.from.node
-        const to = typeof l.to === 'string' ? l.to : l.to.node
-        return from !== id && to !== id
-      })
-    } else if (edges.has(id)) {
-      const edge = edges.get(id)
-      if (edge?.link?.id) links = links.filter((l) => l.id !== edge.link?.id)
-    } else if (ports.has(id)) {
-      const result = removePort(id, nodes, ports, links)
-      if (result) {
-        replaceMap(nodes, result.nodes)
-        replaceMap(ports, result.ports)
-        links = result.links
-      }
-    } else if (subgraphs.has(id)) {
-      // Collect all descendants first, then delete in one pass
-      const toDeleteNodes = new Set<string>()
-      const toDeleteSgs = new Set<string>()
-      function collect(sgId: string) {
-        toDeleteSgs.add(sgId)
-        for (const [nid, n] of nodes) {
-          if (n.parent === sgId) toDeleteNodes.add(nid)
-        }
-        for (const [cid, c] of subgraphs) {
-          if (c.parent === sgId) collect(cid)
-        }
-      }
-      collect(id)
-
-      for (const nid of toDeleteNodes) {
-        deletedNodeIds.push(nid)
-        nodes.delete(nid)
-        for (const [portId, port] of ports) {
-          if (port.nodeId === nid) ports.delete(portId)
-        }
-      }
-      for (const sgId of toDeleteSgs) subgraphs.delete(sgId)
-      links = links.filter((l) => {
-        const from = typeof l.from === 'string' ? l.from : l.from.node
-        const to = typeof l.to === 'string' ? l.to : l.to.node
-        return !toDeleteNodes.has(from) && !toDeleteNodes.has(to)
-      })
-    }
-
-    selection = new Set()
-    routeEdges(nodes, ports, links).then((e) => {
-      replaceMap(edges, e)
-    })
-    onchange?.(links)
-    if (deletedNodeIds.length > 0) onnodedelete?.(deletedNodeIds)
   }
 
   // =========================================================================

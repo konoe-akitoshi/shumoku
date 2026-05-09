@@ -41,6 +41,7 @@ function deleteSelection(ctx: ActionContext): void {
   for (const it of items) {
     if (it.type === 'edge' || it.type === 'link') diagramState.removeLink(it.id)
     else if (it.type === 'subgraph') diagramState.removeSubgraph(it.id)
+    else if (it.type === 'port') diagramState.removePort(it.id)
     else diagramState.removeNode(it.id)
   }
 }

@@ -34,6 +34,7 @@ import {
   newId,
   placePorts,
   rebalanceSubgraphs,
+  removePort as removePortCore,
   resolvePosition,
   type Subgraph,
   type Theme,
@@ -1048,6 +1049,22 @@ export const diagramState = {
         }
       }
       invalidateSheetCache()
+      rebuildPortsAndEdges()
+    })
+  },
+  /**
+   * Remove a port: drops it from its parent Node's `ports` array,
+   * deletes any links that referenced it, and rebalances the
+   * remaining ports on the node. Wraps the core helper so undo +
+   * cache.touch + edge re-routing all happen in one commit.
+   */
+  removePort(id: string) {
+    commit('Remove port', () => {
+      const result = removePortCore(id, diagram.nodes, diagram.ports, diagram.links)
+      if (!result) return
+      diagram.nodes = result.nodes as typeof diagram.nodes
+      diagram.ports = result.ports as typeof diagram.ports
+      diagram.links = result.links
       rebuildPortsAndEdges()
     })
   },
