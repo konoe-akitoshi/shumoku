@@ -125,6 +125,28 @@ function setNodeSpecs(nodeIds: string[], spec: NodeSpec | undefined) {
   }
 }
 
+/**
+ * Whether the `(kind, vendor, model, platform, service)` identity tuple
+ * differs between two NodeSpecs. Used by `updateProduct` to decide if a
+ * product change actually warrants re-templating the catalog ports —
+ * routine property edits leave this tuple intact and must skip the
+ * port re-merge entirely.
+ */
+function nodeSpecIdentityChanged(a: NodeSpec | undefined, b: NodeSpec | undefined): boolean {
+  if (!a || !b) return a !== b
+  if (a.kind !== b.kind) return true
+  if (a.kind === 'hardware' && b.kind === 'hardware') {
+    return a.vendor !== b.vendor || a.model !== b.model || a.type !== b.type
+  }
+  if (a.kind === 'compute' && b.kind === 'compute') {
+    return a.platform !== b.platform || a.type !== b.type
+  }
+  if (a.kind === 'service' && b.kind === 'service') {
+    return a.service !== b.service || a.resource !== b.resource
+  }
+  return false
+}
+
 function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined {
   if (!spec) return undefined
   if (spec.kind === 'hardware') return { kind: 'hardware', type: spec.type }
@@ -133,10 +155,14 @@ function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined 
   return undefined
 }
 
-function nodePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | undefined {
-  if (!product) return undefined
+/**
+ * Catalog port templates for a product. Returns the list of `CatalogPortTemplate`s
+ * — without instantiated ids. Empty array when no ports are declared.
+ */
+function catalogPortTemplates(product: DeviceProduct | undefined) {
+  if (!product) return []
   const catalogEntry = product.catalogId ? catalog.lookup(product.catalogId) : undefined
-  const ports = expandCatalogPorts(
+  return expandCatalogPorts(
     catalogEntry ?? {
       id: product.id,
       label: productLabel(product),
@@ -145,15 +171,91 @@ function nodePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | 
       properties: product.properties ?? {},
     },
   )
-  return ports.length > 0
-    ? ports.map((port) => ({
-        id: newId('port'),
-        ...port,
-        connectors: port.connectors ?? [],
-      }))
-    : undefined
 }
 
+/**
+ * First-time port instantiation from a product. Each template gets a fresh
+ * stable `port-...` id. Used by `placeProductAsNode` and `bindNodeToProduct`
+ * when the node has no existing ports.
+ */
+function instantiatePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | undefined {
+  const templates = catalogPortTemplates(product)
+  if (templates.length === 0) return undefined
+  return templates.map((port) => ({
+    id: newId('port'),
+    ...port,
+    connectors: port.connectors ?? [],
+  }))
+}
+
+/**
+ * Merge a product's catalog port templates into an existing port list,
+ * preserving every existing port's `id` and user-edited `label`. Catalog
+ * physical attributes (`connectors`, `speed`, `poe`, `interfaceName`,
+ * `faceplateLabel`) are refreshed from the template; user-typed `label`
+ * is left intact.
+ *
+ * Match key: `interfaceName` first (most stable), else the catalog
+ * default `label` against the existing port's `label`. Ports that don't
+ * match any template (user-added customs or stale catalog ports) are
+ * appended at the end so links keep resolving.
+ */
+function mergeCatalogIntoExistingPorts(
+  existing: readonly NodePort[],
+  product: DeviceProduct | undefined,
+): NodePort[] {
+  const templates = catalogPortTemplates(product)
+  if (templates.length === 0) return [...existing]
+
+  const usedIds = new Set<string>()
+  const merged: NodePort[] = []
+
+  for (const t of templates) {
+    const match = existing.find((e) => {
+      if (usedIds.has(e.id)) return false
+      if (t.interfaceName && e.interfaceName === t.interfaceName) return true
+      if (e.label && t.label && e.label === t.label) return true
+      return false
+    })
+    if (match) {
+      usedIds.add(match.id)
+      merged.push({
+        ...match,
+        // Catalog-owned physical attributes refresh; user label stays.
+        speed: t.speed ?? match.speed,
+        connectors: t.connectors ?? match.connectors,
+        poe: t.poe ?? match.poe,
+        interfaceName: t.interfaceName ?? match.interfaceName,
+        faceplateLabel: t.faceplateLabel ?? match.faceplateLabel,
+        role: t.role ?? match.role,
+        aliases: t.aliases ?? match.aliases,
+      })
+    } else {
+      merged.push({ id: newId('port'), ...t, connectors: t.connectors ?? [] })
+    }
+  }
+  // Surface any existing ports the templates didn't claim (user-added
+  // custom ports, or catalog ports that disappeared from the new
+  // template) so links don't go orphan.
+  for (const e of existing) {
+    if (!usedIds.has(e.id)) merged.push(e)
+  }
+  return merged
+}
+
+/**
+ * Apply a product's port template to a node — instantiate fresh ids
+ * when the node has none, otherwise merge into existing ports preserving
+ * ids and user-edited labels.
+ *
+ * Callers:
+ * - `placeProductAsNode` / initial bind → no existing ports → instantiate
+ * - `bindNodeToProduct` on a node with ports → merge
+ * - load path with `preserveExisting: true` → keep saved ports as-is
+ *
+ * `updateProduct` should NOT call this for routine property edits —
+ * see `updateProduct` for the catalog-identity gate.
+ */
 function setNodePortsFromProduct(
   nodeId: string,
   product: DeviceProduct | undefined,
@@ -162,7 +264,9 @@ function setNodePortsFromProduct(
   const node = diagram.nodes.get(nodeId)
   if (!node) return
   if (options.preserveExisting && node.ports) return
-  const ports = nodePortsFromProduct(product)
+  const ports = node.ports?.length
+    ? mergeCatalogIntoExistingPorts(node.ports, product)
+    : instantiatePortsFromProduct(product)
   diagram.nodes.set(nodeId, { ...node, ports })
   const migrated = migrateLinkEndpointPortsForNode(nodeId, ports)
   if (migrated && options.reroute !== false) rebuildPortsAndEdges()
@@ -678,12 +782,22 @@ export const diagramState = {
   },
   updateProduct(id: string, updates: Partial<Product>) {
     commit('Update product', () => {
+      const before = productsStore.find(id)
       productsStore.update(id, updates)
       const product = productsStore.find(id)
       const iconChanged = 'icon' in updates
       const specChanged = !!updates.spec
-      const propsChanged = 'properties' in updates || !!updates.catalogId
-      if (product?.kind === 'device' && (specChanged || propsChanged || iconChanged)) {
+      // Catalog identity = the (vendor, model, catalogId, kind) tuple that
+      // determines which port templates apply. Routine property tweaks
+      // (description, requiredQty, properties.*) must NOT touch existing
+      // ports — `node.ports` is owned by the node once instantiated, with
+      // ids treated as immutable handles that links reference.
+      const catalogIdentityChanged =
+        before?.kind === 'device' && product?.kind === 'device'
+          ? before.catalogId !== product.catalogId ||
+            nodeSpecIdentityChanged(before.spec, product.spec)
+          : !!updates.spec || !!updates.catalogId
+      if (product?.kind === 'device' && (specChanged || iconChanged || catalogIdentityChanged)) {
         const boundNodeIds: string[] = []
         for (const [nodeId, node] of diagram.nodes) {
           if (node.productId === id) boundNodeIds.push(nodeId)
@@ -693,7 +807,10 @@ export const diagramState = {
             const nextSpec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
             setNodeSpecs(boundNodeIds, nextSpec)
           }
-          if (specChanged || propsChanged) {
+          if (catalogIdentityChanged) {
+            // Vendor/model changed — merge the new catalog template into
+            // each bound node's existing ports. Existing ids and user-
+            // edited labels survive; only physical attributes refresh.
             for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, product)
           }
         }
@@ -836,7 +953,7 @@ export const diagramState = {
         label,
         spec,
         productId: product.id,
-        ports: nodePortsFromProduct(product),
+        ports: instantiatePortsFromProduct(product),
         shape: 'rounded',
         position: pos,
       })
