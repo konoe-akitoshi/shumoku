@@ -12,6 +12,7 @@
   import { diagramState } from '$lib/context.svelte'
   import { assetStore } from '$lib/state/assets.svelte'
   import { type Product, productLabel, specIdentifier } from '$lib/types'
+  import { nodeDisplayLabel } from '$lib/utils/labels'
 
   type AssignmentRow =
     | {
@@ -71,7 +72,7 @@
   const deviceProducts = $derived(products.filter((p) => p.kind === 'device'))
   const nodes = $derived(
     [...diagramState.nodes.values()].sort((a, b) =>
-      displayNodeLabel(a).localeCompare(displayNodeLabel(b)),
+      nodeDisplayLabel(a).localeCompare(nodeDisplayLabel(b)),
     ),
   )
 
@@ -84,14 +85,14 @@
           id: `node:${node.id}`,
           nodeId: node.id,
           productId: node.productId,
-          nodeLabel: displayNodeLabel(node),
+          nodeLabel: nodeDisplayLabel(node),
         })
       } else {
         out.push({
           kind: 'node-only',
           id: `node:${node.id}`,
           nodeId: node.id,
-          nodeLabel: displayNodeLabel(node),
+          nodeLabel: nodeDisplayLabel(node),
         })
       }
     }
@@ -133,11 +134,6 @@
     if (selectedModelId) return catalog.lookup(selectedModelId) ?? null
     return null
   })
-
-  function displayNodeLabel(node: { id: string; label?: string | string[] }): string {
-    if (Array.isArray(node.label)) return node.label[0] ?? node.id
-    return node.label ?? node.id
-  }
 
   function productKindLabel(p: Product): string {
     return p.kind === 'device' ? p.spec.kind : p.kind

@@ -31,6 +31,7 @@ import {
   type PowerProperties,
 } from '@shumoku/catalog'
 import type { Link, Node } from '@shumoku/core'
+import { nodeDisplayLabel } from './utils/labels'
 
 export interface PoEPassthrough {
   nodeId: string
@@ -81,12 +82,6 @@ export interface PoEBudget {
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10
-}
-
-function nodeLabelOf(node: Node | undefined, fallbackId: string): string {
-  if (!node) return fallbackId
-  const label = Array.isArray(node.label) ? node.label[0] : node.label
-  return label ?? fallbackId
 }
 
 function catalogId(node: Node): string | undefined {
@@ -225,7 +220,7 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
           if (!dsPort) continue
           passthrough.push({
             nodeId: ds.peerId,
-            nodeLabel: nodeLabelOf(dsNode, ds.peerId),
+            nodeLabel: nodeDisplayLabel(dsNode, ds.peerId),
             draw_w: dsPort.draw_w,
             reserved_w: dsPort.reserved_w,
           })
@@ -239,7 +234,7 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
         linkId,
         fromPort: displayPort(nodeMap, node.id, localPort),
         toNodeId: peerId,
-        toNodeLabel: nodeLabelOf(peer, peerId),
+        toNodeLabel: nodeDisplayLabel(peer, peerId),
         toPort: displayPort(nodeMap, peerId, peerPort),
         reserved_w: round1(port.reserved_w),
         draw_w: round1(port.draw_w),
@@ -263,7 +258,7 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
 
     budgets.push({
       nodeId: node.id,
-      nodeLabel: nodeLabelOf(node, node.id),
+      nodeLabel: nodeDisplayLabel(node, node.id),
       budget_w: budget,
       reserved_w: round1(totalReserved),
       draw_w: round1(totalDraw),

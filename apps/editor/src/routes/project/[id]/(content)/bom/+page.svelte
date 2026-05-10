@@ -9,6 +9,8 @@
   import { diagramState } from '$lib/context.svelte'
   import { cableSegmentLengths, visibleCableSegments } from '$lib/scene/cable-length'
   import { productLabel } from '$lib/types'
+  import { nodeDisplayLabel } from '$lib/utils/labels'
+  import { csvCell, tsvCell } from '$lib/utils/tabular'
 
   type BomLine = {
     key: string
@@ -56,10 +58,6 @@
     return { label: 'Open Connections', path: `/project/${$page.params.id}/connections` }
   }
 
-  function tsvCell(value: string | number): string {
-    return String(value).replace(/\t/g, ' ').replace(/\r?\n/g, ' ')
-  }
-
   function buildBomTsv(): string {
     const rows = [['Category', 'Item', 'Spec', 'Qty', 'Status', 'Sources']]
     for (const section of bomSections) {
@@ -88,17 +86,8 @@
   // either the link's actual from/to (port info available) or an EPS
   // node along the via chain (node label only).
 
-  function csvCell(value: string | number | undefined | null): string {
-    const s = value == null ? '' : String(value)
-    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
-    return s
-  }
-
   function nodeLabelOf(nodeId: string): string {
-    const n = diagramState.nodes.get(nodeId)
-    if (!n) return nodeId
-    const lbl = Array.isArray(n.label) ? n.label[0] : n.label
-    return lbl ?? nodeId
+    return nodeDisplayLabel(diagramState.nodes.get(nodeId), nodeId)
   }
 
   function portLabelOf(nodeId: string, portId: string | undefined): string | null {

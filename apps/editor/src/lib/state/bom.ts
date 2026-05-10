@@ -13,13 +13,10 @@
 import type { Link, Node } from '@shumoku/core'
 import { cableLengthMeters, cableSegmentLengths, formatMeters } from '../scene/cable-length'
 import type { AssignmentRow, Scene } from '../types'
+import { nodeDisplayLabel } from '../utils/labels'
 
 function formatLength(m: number): string {
   return `${formatMeters(m)}m`
-}
-
-function nodeDisplayLabel(node: Node): string {
-  return Array.isArray(node.label) ? node.label[0] : (node.label ?? node.id)
 }
 
 function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undefined {
