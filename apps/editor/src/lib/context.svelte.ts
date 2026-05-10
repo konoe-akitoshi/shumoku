@@ -257,8 +257,12 @@ function ensureProductSnapshot(product: Product): Product {
 
 /**
  * Apply a Product's port template to a node — instantiate fresh ids
- * when the node has none, otherwise merge into existing ports preserving
- * ids and user-edited labels.
+ * when the node has none, otherwise merge into existing ports keeping
+ * the stable port `id` (so existing links continue resolving) and
+ * refreshing every Product-owned field from the template, including
+ * `label`. The `(label, iface, faceplate, speed, connectors)` tuple
+ * is owned as one unit by the catalog, so we can't preserve label
+ * piecewise without breaking that pairing.
  *
  * Callers:
  * - `placeProductAsNode` / initial bind → no existing ports → instantiate
@@ -823,9 +827,10 @@ export const diagramState = {
           if (catalogIdentityChanged) {
             // Vendor/model changed — re-snapshot the catalog into the
             // Product, then merge the new template into each bound
-            // node's existing ports. Existing ids and user-edited labels
-            // survive; only physical attributes refresh. One reroute at
-            // the end covers all bound nodes — cheaper than once per.
+            // node's existing ports. Stable port ids survive (so links
+            // keep resolving) but every Product-owned field — labels
+            // included — is taken from the new template. One reroute
+            // at the end covers all bound nodes — cheaper than once per.
             const snap = snapshotCatalogIntoProduct(product as DeviceProduct)
             productsStore.update(id, snap as Partial<Product>)
             const refreshed = productsStore.find(id) as DeviceProduct | undefined
