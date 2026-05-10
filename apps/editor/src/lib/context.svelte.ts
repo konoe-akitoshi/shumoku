@@ -1046,9 +1046,20 @@ export const diagramState = {
     scenesStore.setCurrentId(id)
   },
   setCurrentSceneForScope(scopeSubgraphId: string | undefined) {
-    const existing = scenesStore.list.find((s) => s.scopeSubgraphId === scopeSubgraphId)
-    if (existing) {
-      scenesStore.setCurrentId(existing.id)
+    const matches = scenesStore.list.filter((s) => s.scopeSubgraphId === scopeSubgraphId)
+    if (matches.length > 0) {
+      // Pick the most "interesting" scene when more than one shares
+      // the same scope. Older builds occasionally created a stray
+      // empty Root scene during load races (see the !initialized
+      // guard below); plain `find` returned the dud first by
+      // insertion / id order and the actual imported scene with the
+      // floor plan got hidden. Prefer scenes with a background or
+      // populated placements so projects with leftover empties still
+      // open on the user's data.
+      const score = (s: Scene): number =>
+        (s.background ? 1000 : 0) + (s.nodePlacements?.length ?? 0)
+      const best = matches.reduce((a, b) => (score(b) > score(a) ? b : a))
+      scenesStore.setCurrentId(best.id)
       return
     }
     commit('Open scene', () => {
