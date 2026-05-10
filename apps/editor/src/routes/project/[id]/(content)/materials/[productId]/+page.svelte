@@ -1,7 +1,7 @@
 <script lang="ts">
   import { classifyIcon } from '@shumoku/core'
   import { Dialog } from 'bits-ui'
-  import { ArrowLeft, GitBranch, Trash, X } from 'phosphor-svelte'
+  import { ArrowClockwise, ArrowLeft, GitBranch, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { Badge } from '$lib/components/ui/badge'
@@ -97,6 +97,26 @@
     if (!product) return
     diagramState.updateProduct(product.id, { icon: undefined })
   }
+
+  // === Resync from catalog ===
+  let resyncStatus = $state<{ kind: 'idle' } | { kind: 'done'; touched: number; at: number }>({
+    kind: 'idle',
+  })
+  function resyncFromCatalog() {
+    if (!product || product.kind !== 'device' || !product.catalogId) return
+    const touched = diagramState.resyncProductFromCatalog(product.id)
+    resyncStatus = { kind: 'done', touched, at: Date.now() }
+  }
+  const formattedSyncTimestamp = $derived.by(() => {
+    if (product?.kind !== 'device') return null
+    const iso = product.catalogSyncedAt
+    if (!iso) return null
+    try {
+      return new Date(iso).toLocaleString()
+    } catch {
+      return iso
+    }
+  })
 
   const labelClass = 'text-[10px] font-medium text-muted-foreground uppercase tracking-wider'
 </script>
@@ -272,6 +292,49 @@
       </dl>
     </Card.Content>
   </Card.Root>
+
+  <!-- Catalog sync (device products with catalogId only) -->
+  {#if product.kind === 'device' && product.catalogId}
+    <Card.Root class="mb-6 py-0">
+      <Card.Content class="px-5 py-4">
+        <div class="mb-2 flex items-center justify-between">
+          <div class="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Catalog sync
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onclick={resyncFromCatalog}
+            title="Re-snapshot port template from catalog and merge into all bound nodes"
+          >
+            <ArrowClockwise class="mr-1 h-3.5 w-3.5" />
+            Resync from catalog
+          </Button>
+        </div>
+        <div class="text-xs text-muted-foreground">
+          {#if formattedSyncTimestamp}
+            Last synced <span class="font-mono text-foreground/80">{formattedSyncTimestamp}</span>
+          {:else}
+            Not yet synced.
+          {/if}
+          {#if product.ports?.length}
+            ·
+            <span class="font-mono">{product.ports.length}</span>
+            port{product.ports.length === 1 ? '' : 's'}
+            in snapshot
+          {/if}
+        </div>
+        {#if resyncStatus.kind === 'done'}
+          <div
+            class="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-2 py-1.5 text-[11px] text-emerald-700 dark:text-emerald-400"
+          >
+            Resynced. Updated <span class="font-mono">{resyncStatus.touched}</span> bound node{resyncStatus.touched === 1 ? '' : 's'}.
+            Existing port ids and edited labels preserved.
+          </div>
+        {/if}
+      </Card.Content>
+    </Card.Root>
+  {/if}
 
   <!-- Icon edit -->
   <Card.Root class="mb-6 py-0">
