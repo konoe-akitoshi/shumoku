@@ -67,6 +67,7 @@ import {
 import { editorStore, initDarkMode } from './state/editor.svelte'
 import { instantiatePortsFromProduct, mergeProductPortsIntoExisting } from './state/product-ports'
 import { productsStore, sanitizeProducts } from './state/products.svelte'
+import { computeResyncPortDiff, type ResyncPreview } from './state/resync-diff'
 import { sanitizeScenes, scenesStore } from './state/scenes.svelte'
 import { sessionStore } from './state/session.svelte'
 import type {
@@ -851,6 +852,33 @@ export const diagramState = {
    * Returns the count of bound nodes that were touched, for the UI
    * to surface ("Resynced N nodes").
    */
+  /**
+   * Pure preview of `resyncProductFromCatalog`. Computes what would
+   * change if the user applied the resync — port additions, removals,
+   * field-level changes, whether properties differ, and how many
+   * bound nodes would be touched. Mutates nothing. Returns null when
+   * the product can't be resynced (not a device, or no template
+   * available).
+   */
+  previewResyncProductFromCatalog(id: string): ResyncPreview | null {
+    const product = productsStore.find(id)
+    if (!product || product.kind !== 'device') return null
+    const snap = snapshotCatalogIntoProduct(product)
+    const template = snap.ports
+    if (!template) return null
+
+    const { added, removed, changed } = computeResyncPortDiff(product.ports ?? [], template)
+    const propertiesChanged =
+      snap.properties !== undefined &&
+      JSON.stringify(snap.properties) !== JSON.stringify(product.properties)
+
+    let affectedNodeCount = 0
+    for (const [, node] of diagram.nodes) {
+      if (node.productId === id) affectedNodeCount++
+    }
+
+    return { added, removed, changed, propertiesChanged, affectedNodeCount }
+  },
   resyncProductFromCatalog(id: string): number {
     return commit('Resync product from catalog', () => {
       const product = productsStore.find(id)

@@ -5,12 +5,14 @@
   import { ArrowClockwise, ArrowLeft, GitBranch, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
+  import ResyncDiffDialog from '$lib/components/ResyncDiffDialog.svelte'
   import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
   import { assetStore } from '$lib/state/assets.svelte'
+  import type { ResyncPreview } from '$lib/state/resync-diff'
   import { productLabel } from '$lib/types'
 
   const projectId = $derived($page.params.id ?? '')
@@ -103,7 +105,14 @@
   let resyncStatus = $state<{ kind: 'idle' } | { kind: 'done'; touched: number; at: number }>({
     kind: 'idle',
   })
-  function resyncFromCatalog() {
+  let resyncDialogOpen = $state(false)
+  let resyncPreview = $state<ResyncPreview | null>(null)
+  function openResyncDialog() {
+    if (!product || product.kind !== 'device' || !product.catalogId) return
+    resyncPreview = diagramState.previewResyncProductFromCatalog(product.id)
+    resyncDialogOpen = true
+  }
+  function applyResync() {
     if (!product || product.kind !== 'device' || !product.catalogId) return
     const touched = diagramState.resyncProductFromCatalog(product.id)
     resyncStatus = { kind: 'done', touched, at: Date.now() }
@@ -338,11 +347,11 @@
           <Button
             variant="outline"
             size="sm"
-            onclick={resyncFromCatalog}
-            title="Re-snapshot port template from catalog and merge into all bound nodes"
+            onclick={openResyncDialog}
+            title="Preview catalog changes, then optionally cascade them into all bound nodes"
           >
             <ArrowClockwise class="mr-1 h-3.5 w-3.5" />
-            Resync from catalog
+            Resync from catalog…
           </Button>
         </div>
         <div class="text-xs text-muted-foreground">
@@ -820,3 +829,12 @@
     </Dialog.Content>
   </Dialog.Portal>
 </Dialog.Root>
+
+{#if product}
+  <ResyncDiffDialog
+    bind:open={resyncDialogOpen}
+    productLabel={productLabel(product)}
+    preview={resyncPreview}
+    onConfirm={applyResync}
+  />
+{/if}
