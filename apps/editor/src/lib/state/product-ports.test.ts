@@ -89,7 +89,13 @@ describe('mergeProductPortsIntoExisting', () => {
     expect(merged[0]?.label).toBe('GE2')
   })
 
-  test('preserves user-edited label even when catalog default differs', () => {
+  test('overwrites label from template — no special preservation', () => {
+    // Earlier the merge tried to preserve user-edited labels, but
+    // there's no way to distinguish "user typed this" from "old
+    // catalog default left behind", so stale labels rode forward and
+    // broke (label, iface) pairing. Resync now always overwrites
+    // label from the template; the planned Resync diff popup gives
+    // users visibility before applying.
     const existing: NodePort[] = [
       {
         id: 'p',
@@ -108,7 +114,8 @@ describe('mergeProductPortsIntoExisting', () => {
       }),
     ])
     const merged = mergeProductPortsIntoExisting(existing, product)
-    expect(merged[0]?.label).toBe('MyCustomLabel')
+    expect(merged[0]?.id).toBe('p')
+    expect(merged[0]?.label).toBe('GE0')
     expect(merged[0]?.connectors).toEqual(['rj45', 'sfp'])
   })
 
@@ -156,6 +163,68 @@ describe('mergeProductPortsIntoExisting', () => {
     const merged = mergeProductPortsIntoExisting(existing, product)
     expect(merged).toHaveLength(3)
     expect(merged.map((p) => p.id)).toEqual(['p1', 'p2', 'p3'])
+  })
+
+  test('bind-after-manual: labels matching catalog ports get full template overwrite', () => {
+    // Realistic flow: user creates an empty node, adds a few ports
+    // by hand naming them after what they expect ("GE0", "GE2",
+    // plus a custom one), then binds the node to a catalog Product.
+    // bindNodeToProduct routes through this merge.
+    const existing: NodePort[] = [
+      { id: 'manual-ge0', label: 'GE0', connectors: [] },
+      { id: 'manual-ge2', label: 'GE2', connectors: [] },
+      { id: 'manual-custom', label: 'uplink-to-isp', connectors: [] },
+    ]
+    const product = deviceProduct([
+      template({
+        label: 'GE0',
+        faceplateLabel: 'GE0',
+        interfaceName: 'GigaEthernet0.0',
+        speed: '1g',
+        connectors: ['rj45', 'sfp'],
+      }),
+      template({
+        label: 'GE1',
+        faceplateLabel: 'GE1',
+        interfaceName: 'GigaEthernet1.0',
+        speed: '1g',
+        connectors: ['rj45', 'sfp'],
+      }),
+      template({
+        label: 'GE2',
+        faceplateLabel: 'GE2',
+        interfaceName: 'GigaEthernet2.0',
+        speed: '10g',
+        connectors: ['rj45', 'sfp+'],
+      }),
+    ])
+    const merged = mergeProductPortsIntoExisting(existing, product)
+    // Three template ports + one orphan custom port
+    expect(merged).toHaveLength(4)
+
+    // GE0: matched by label, full overwrite, id preserved
+    const ge0 = merged.find((p) => p.label === 'GE0')
+    expect(ge0?.id).toBe('manual-ge0')
+    expect(ge0?.interfaceName).toBe('GigaEthernet0.0')
+    expect(ge0?.connectors).toEqual(['rj45', 'sfp'])
+    expect(ge0?.faceplateLabel).toBe('GE0')
+
+    // GE1: no manual counterpart, gets a fresh id
+    const ge1 = merged.find((p) => p.label === 'GE1')
+    expect(ge1?.id).toMatch(/^port-/)
+    expect(ge1?.interfaceName).toBe('GigaEthernet1.0')
+
+    // GE2: matched by label; physical attrs now reflect the 10G combo
+    const ge2 = merged.find((p) => p.label === 'GE2')
+    expect(ge2?.id).toBe('manual-ge2')
+    expect(ge2?.speed).toBe('10g')
+    expect(ge2?.connectors).toEqual(['rj45', 'sfp+'])
+    expect(ge2?.interfaceName).toBe('GigaEthernet2.0')
+
+    // Custom port survives untouched at the end
+    const orphan = merged[merged.length - 1]
+    expect(orphan?.id).toBe('manual-custom')
+    expect(orphan?.label).toBe('uplink-to-isp')
   })
 
   test('does not reuse the same existing port for two templates', () => {
