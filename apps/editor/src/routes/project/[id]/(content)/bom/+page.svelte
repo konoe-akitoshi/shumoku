@@ -7,6 +7,7 @@
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
+  import { cableSegmentLengths, visibleCableSegments } from '$lib/scene/cable-length'
   import { productLabel } from '$lib/types'
 
   type BomLine = {
@@ -77,16 +78,15 @@
   }
 
   // ── Tepra label CSV ────────────────────────────────────────────────
-  // Cable-management labels: one logical link → two CSV rows (one per
-  // physical end). EPS / patch panel TPs that the cable transits are
-  // intentionally NOT included as separate labels — the user-facing
-  // information is "this end plugs into device X port Y, the other end
-  // goes to device Z port W". Via nodes are routing detail, not
-  // endpoints.
+  // Cable-management labels track *physical* cables, not logical links:
+  // an EPS-bridged wire is multiple cables (one per visible segment),
+  // and each physical cable needs its own pair of labels — switch end
+  // says "EPS-A1", EPS panel side says "F1-SW1" — so a tech pulling a
+  // patch cord can read where it actually goes.
   //
-  // SPC10 (テプラ純正) や Brother P-touch Editor の差し込み印刷で
-  // テンプレ側は `this_device` / `this_port` / `peer_device` / `peer_port`
-  // を縦/横どちらでも組める。9mm ラベルでは横並び（this ▶ peer）が想定。
+  // 1 visible segment → 2 rows (A end, B end). Segment endpoints are
+  // either the link's actual from/to (port info available) or an EPS
+  // node along the via chain (node label only).
 
   function csvCell(value: string | number | undefined | null): string {
     const s = value == null ? '' : String(value)
@@ -116,16 +116,34 @@
   }
 
   function buildLabelCsv(): string {
-    const header = ['link_id', 'end', 'this', 'peer', 'length_m']
+    const scenes = diagramState.scenes
+    const header = ['link_id', 'segment', 'end', 'this', 'peer', 'length_m']
     const rows: string[][] = [header]
     for (const link of diagramState.links) {
       if (!link.id) continue
-      const a = endpointString(link.from.node, link.from.port)
-      const b = endpointString(link.to.node, link.to.port)
-      const eff = diagramState.cableLengthMeters(link.id)
-      const len = eff ? eff.meters.toFixed(1) : ''
-      rows.push([link.id, 'A', a, b, len])
-      rows.push([link.id, 'B', b, a, len])
+      const segments = visibleCableSegments(link, diagramState.nodes)
+      if (segments.length === 0) continue
+      // Per-segment scene-derived lengths, indexed by [fromId, toId].
+      const segLens = new Map<string, number>()
+      for (const s of cableSegmentLengths(link, scenes, diagramState.nodes)) {
+        segLens.set(`${s.fromId}::${s.toId}`, s.meters)
+      }
+      segments.forEach((seg, idx) => {
+        const fromId = seg[0]
+        const toId = seg[seg.length - 1]
+        if (!fromId || !toId) return
+        // Port info is only available for the link's actual from/to.
+        // Mid-chain endpoints (EPS) get device label only.
+        const fromPort = link.from.node === fromId ? link.from.port : undefined
+        const toPort = link.to.node === toId ? link.to.port : undefined
+        const a = endpointString(fromId, fromPort)
+        const b = endpointString(toId, toPort)
+        const meters = segLens.get(`${fromId}::${toId}`)
+        const len = meters !== undefined ? meters.toFixed(1) : ''
+        const segNo = String(idx + 1)
+        rows.push([link.id ?? '', segNo, 'A', a, b, len])
+        rows.push([link.id ?? '', segNo, 'B', b, a, len])
+      })
     }
     return rows.map((row) => row.map(csvCell).join(',')).join('\n')
   }
