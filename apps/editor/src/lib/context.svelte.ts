@@ -65,6 +65,7 @@ import {
   sheetView,
 } from './state/diagram.svelte'
 import { editorStore, initDarkMode } from './state/editor.svelte'
+import { instantiatePortsFromProduct, mergeProductPortsIntoExisting } from './state/product-ports'
 import { productsStore, sanitizeProducts } from './state/products.svelte'
 import { sanitizeScenes, scenesStore } from './state/scenes.svelte'
 import { sessionStore } from './state/session.svelte'
@@ -166,146 +167,92 @@ function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined 
 //
 //   Catalog      = global, immutable, shipped via the npm package
 //   Product      = project-local snapshot of a catalog entry, with its own
-//                  `ports` list. Survives catalog drift; refreshed on
-//                  demand via "Resync from catalog" in Materials.
+//                  `ports` and `properties`. Survives catalog drift;
+//                  refreshed on demand via "Resync from catalog" in
+//                  Materials.
 //   Node.ports   = per-instance, owns each port's stable id and user-
 //                  edited label.
 //
 // Catalog is read here only at *snapshot time* (Product creation /
-// resync). Steady-state Node operations consult Product.ports — never
-// the live catalog directly — so projects keep rendering even if a
-// catalog entry is later renamed or removed.
+// load-shim / explicit resync). Steady-state Node operations consult
+// Product.ports — never the live catalog directly — so projects keep
+// rendering even if a catalog entry is later renamed or removed.
+//
+// Pure Product → Node helpers (`instantiatePortsFromProduct`,
+// `mergeProductPortsIntoExisting`) live in `./state/product-ports.ts`
+// and are unit-tested there.
 // =========================================================================
 
 /**
- * Read catalog port templates for a product. Used only when snapshotting
- * a Product from catalog (initial import or "Resync from catalog").
- * Steady-state code paths must read from `product.ports` instead.
+ * Build a fresh catalog-derived snapshot of a Product (`ports` +
+ * `properties` + `catalogSyncedAt`). The single place that reads the
+ * live catalog for snapshotting purposes — every other catalog read is
+ * either initialization or a UI helper that lists catalog entries
+ * directly.
+ *
+ * Returns a `Partial<DeviceProduct>` so callers can decide whether to
+ * overwrite existing fields (`resyncProductFromCatalog`) or only fill
+ * missing ones (`ensureProductSnapshot`).
  */
-function catalogPortTemplates(product: DeviceProduct | undefined) {
-  if (!product) return []
+function snapshotCatalogIntoProduct(product: DeviceProduct): Partial<DeviceProduct> {
+  // Try the upstream catalog first; if absent, fall back to an inline
+  // entry built from the Product's own `properties` so catalog-less
+  // products that declare ports inline still get a snapshot.
   const catalogEntry = product.catalogId ? catalog.lookup(product.catalogId) : undefined
-  return expandCatalogPorts(
-    catalogEntry ?? {
-      id: product.id,
-      label: productLabel(product),
-      spec: product.spec,
-      tags: [],
-      properties: product.properties ?? {},
-    },
-  )
+  const entry = catalogEntry ?? {
+    id: product.id,
+    label: productLabel(product),
+    spec: product.spec,
+    tags: [],
+    properties: product.properties ?? {},
+  }
+  const templates = expandCatalogPorts(entry)
+  const out: Partial<DeviceProduct> = {}
+  if (templates.length > 0) {
+    out.ports = templates.map((t) => ({
+      id: newId('port'),
+      ...t,
+      connectors: t.connectors ?? [],
+    }))
+    out.catalogSyncedAt = new Date().toISOString()
+  }
+  // Only refresh properties when the upstream catalog actually had an
+  // entry — the inline fallback's properties are just `product.properties`
+  // round-tripped, so writing them back would be a no-op churn.
+  if (catalogEntry) {
+    out.properties = catalogEntry.properties as DeviceProduct['properties']
+  }
+  return out
 }
 
 /**
- * Snapshot the catalog template into a fresh `NodePort[]` — each port
- * gets a stable `port-…` id that becomes the canonical handle for any
- * Node instantiated from this Product.
+ * Materialize the catalog snapshot on a Product when missing. Called
+ * once per product at import / load time so every Product carries its
+ * own copy of the catalog data. Existing fields are preserved — this
+ * never overwrites a user's customizations.
+ *
+ * For an explicit refresh that DOES overwrite, see
+ * `resyncProductFromCatalog`.
  */
-function snapshotCatalogPortsForProduct(product: DeviceProduct): NodePort[] {
-  return catalogPortTemplates(product).map((t) => ({
-    id: newId('port'),
-    ...t,
-    connectors: t.connectors ?? [],
-  }))
-}
-
-/**
- * Materialize the catalog snapshot (ports + properties) on a Product
- * when missing. Called once at import / load time so every Product
- * carries its own copy of the catalog data — steady-state code paths
- * never need to consult the live catalog after this.
- */
-function ensureProductPorts(product: Product): Product {
+function ensureProductSnapshot(product: Product): Product {
   if (product.kind !== 'device') return product
-  let next = product
-  // Snapshot ports if not already present.
-  if (!next.ports || next.ports.length === 0) {
-    const ports = snapshotCatalogPortsForProduct(next)
-    if (ports.length > 0) {
-      next = { ...next, ports, catalogSyncedAt: next.catalogSyncedAt ?? new Date().toISOString() }
+  const needsPorts = !product.ports || product.ports.length === 0
+  const needsProps = !product.properties && !!product.catalogId
+  if (!needsPorts && !needsProps) return product
+
+  const snap = snapshotCatalogIntoProduct(product)
+  let next: DeviceProduct = product
+  if (needsPorts && snap.ports?.length) {
+    next = {
+      ...next,
+      ports: snap.ports,
+      catalogSyncedAt: next.catalogSyncedAt ?? snap.catalogSyncedAt,
     }
   }
-  // Snapshot properties from catalog if missing (legacy projects saved
-  // before properties was populated). This is what poe-analysis et al.
-  // read at steady state, so without it they'd silently fall back to
-  // empty data.
-  if (!next.properties && next.catalogId) {
-    const entry = catalog.lookup(next.catalogId)
-    if (entry) {
-      next = { ...next, properties: entry.properties as DeviceProduct['properties'] }
-    }
+  if (needsProps && snap.properties) {
+    next = { ...next, properties: snap.properties }
   }
   return next
-}
-
-function productPortTemplates(product: DeviceProduct | undefined): readonly NodePort[] {
-  return product?.ports ?? []
-}
-
-/**
- * First-time port instantiation from a Product's snapshot. Each port
- * gets a fresh node-side id so multiple placements of the same Product
- * have distinct port handles. Used by `placeProductAsNode` and
- * `bindNodeToProduct` when the node has no existing ports.
- */
-function instantiatePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | undefined {
-  const tpl = productPortTemplates(product)
-  if (tpl.length === 0) return undefined
-  return tpl.map((p) => ({ ...p, id: newId('port') }))
-}
-
-/**
- * Merge a Product's port snapshot into an existing port list, preserving
- * every existing port's `id` and user-edited `label`. Product-owned
- * physical attributes (`connectors`, `speed`, `poe`, `interfaceName`,
- * `faceplateLabel`) are refreshed from the snapshot.
- *
- * Match key: `interfaceName` first (most stable), else exact label
- * match against the snapshot's default label. Ports that don't match
- * any template (user-added customs or stale catalog ports) are
- * appended at the end so links keep resolving.
- */
-function mergeProductPortsIntoExisting(
-  existing: readonly NodePort[],
-  product: DeviceProduct | undefined,
-): NodePort[] {
-  const tpl = productPortTemplates(product)
-  if (tpl.length === 0) return [...existing]
-
-  const usedIds = new Set<string>()
-  const merged: NodePort[] = []
-
-  for (const t of tpl) {
-    const match = existing.find((e) => {
-      if (usedIds.has(e.id)) return false
-      if (t.interfaceName && e.interfaceName === t.interfaceName) return true
-      if (e.label && t.label && e.label === t.label) return true
-      return false
-    })
-    if (match) {
-      usedIds.add(match.id)
-      merged.push({
-        ...match,
-        // Product-owned physical attributes refresh; user label stays.
-        speed: t.speed ?? match.speed,
-        connectors: t.connectors ?? match.connectors,
-        poe: t.poe ?? match.poe,
-        interfaceName: t.interfaceName ?? match.interfaceName,
-        faceplateLabel: t.faceplateLabel ?? match.faceplateLabel,
-        role: t.role ?? match.role,
-        aliases: t.aliases ?? match.aliases,
-      })
-    } else {
-      merged.push({ ...t, id: newId('port') })
-    }
-  }
-  // Surface any existing ports the snapshot didn't claim (user-added
-  // custom ports, or template ports that disappeared) so links don't
-  // go orphan.
-  for (const e of existing) {
-    if (!usedIds.has(e.id)) merged.push(e)
-  }
-  return merged
 }
 
 /**
@@ -794,7 +741,7 @@ export const diagramState = {
     return productsStore.list
   },
   addProduct(entry: Product) {
-    commit('Add product', () => productsStore.add(ensureProductPorts(entry)))
+    commit('Add product', () => productsStore.add(ensureProductSnapshot(entry)))
   },
   removeProduct(id: string) {
     commit('Remove product', () => {
@@ -878,12 +825,8 @@ export const diagramState = {
             // Product, then merge the new template into each bound
             // node's existing ports. Existing ids and user-edited labels
             // survive; only physical attributes refresh.
-            const nextProduct = product as DeviceProduct
-            const ports = snapshotCatalogPortsForProduct(nextProduct)
-            productsStore.update(id, {
-              ports,
-              catalogSyncedAt: new Date().toISOString(),
-            } as Partial<Product>)
+            const snap = snapshotCatalogIntoProduct(product as DeviceProduct)
+            productsStore.update(id, snap as Partial<Product>)
             const refreshed = productsStore.find(id) as DeviceProduct | undefined
             for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, refreshed)
           }
@@ -905,20 +848,8 @@ export const diagramState = {
     return commit('Resync product from catalog', () => {
       const product = productsStore.find(id)
       if (!product || product.kind !== 'device') return 0
-      const ports = snapshotCatalogPortsForProduct(product)
-      const updates: Partial<DeviceProduct> = {
-        ports,
-        catalogSyncedAt: new Date().toISOString(),
-      }
-      // Refresh properties from catalog too — poe-analysis and other
-      // steady-state consumers read from product.properties (PoE budget,
-      // power draw), so a port resync without a properties refresh would
-      // leave those views stale.
-      if (product.catalogId) {
-        const entry = catalog.lookup(product.catalogId)
-        if (entry) updates.properties = entry.properties as DeviceProduct['properties']
-      }
-      productsStore.update(id, updates as Partial<Product>)
+      const snap = snapshotCatalogIntoProduct(product)
+      productsStore.update(id, snap as Partial<Product>)
       const refreshed = productsStore.find(id) as DeviceProduct | undefined
       let touched = 0
       for (const [nodeId, node] of diagram.nodes) {
@@ -1814,7 +1745,7 @@ async function applyProject(data: Partial<NetedProject>) {
       // Materialize port snapshot for legacy projects saved before
       // Product.ports existed. New `addProduct` flow already populates
       // this; the shim only fires once on load.
-      next = ensureProductPorts(next)
+      next = ensureProductSnapshot(next)
       return next
     }),
   )
