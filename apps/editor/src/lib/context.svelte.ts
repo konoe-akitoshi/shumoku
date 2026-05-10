@@ -155,9 +155,28 @@ function stripProductFromSpec(spec: NodeSpec | undefined): NodeSpec | undefined 
   return undefined
 }
 
+// =========================================================================
+// Catalog → Product (snapshot) and Product → Node (instantiate / merge)
+//
+// Three layers, modeled after KiCad's library/cache/instance hierarchy:
+//
+//   Catalog      = global, immutable, shipped via the npm package
+//   Product      = project-local snapshot of a catalog entry, with its own
+//                  `ports` list. Survives catalog drift; refreshed on
+//                  demand via "Resync from catalog" in Materials.
+//   Node.ports   = per-instance, owns each port's stable id and user-
+//                  edited label.
+//
+// Catalog is read here only at *snapshot time* (Product creation /
+// resync). Steady-state Node operations consult Product.ports — never
+// the live catalog directly — so projects keep rendering even if a
+// catalog entry is later renamed or removed.
+// =========================================================================
+
 /**
- * Catalog port templates for a product. Returns the list of `CatalogPortTemplate`s
- * — without instantiated ids. Empty array when no ports are declared.
+ * Read catalog port templates for a product. Used only when snapshotting
+ * a Product from catalog (initial import or "Resync from catalog").
+ * Steady-state code paths must read from `product.ports` instead.
  */
 function catalogPortTemplates(product: DeviceProduct | undefined) {
   if (!product) return []
@@ -174,43 +193,68 @@ function catalogPortTemplates(product: DeviceProduct | undefined) {
 }
 
 /**
- * First-time port instantiation from a product. Each template gets a fresh
- * stable `port-...` id. Used by `placeProductAsNode` and `bindNodeToProduct`
- * when the node has no existing ports.
+ * Snapshot the catalog template into a fresh `NodePort[]` — each port
+ * gets a stable `port-…` id that becomes the canonical handle for any
+ * Node instantiated from this Product.
  */
-function instantiatePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | undefined {
-  const templates = catalogPortTemplates(product)
-  if (templates.length === 0) return undefined
-  return templates.map((port) => ({
+function snapshotCatalogPortsForProduct(product: DeviceProduct): NodePort[] {
+  return catalogPortTemplates(product).map((t) => ({
     id: newId('port'),
-    ...port,
-    connectors: port.connectors ?? [],
+    ...t,
+    connectors: t.connectors ?? [],
   }))
 }
 
 /**
- * Merge a product's catalog port templates into an existing port list,
- * preserving every existing port's `id` and user-edited `label`. Catalog
+ * Materialize port snapshots on a Product if missing. Called once at
+ * import / load time so every Product carries its own port list.
+ */
+function ensureProductPorts(product: Product): Product {
+  if (product.kind !== 'device') return product
+  if (product.ports && product.ports.length > 0) return product
+  const ports = snapshotCatalogPortsForProduct(product)
+  if (ports.length === 0) return product
+  return { ...product, ports, catalogSyncedAt: product.catalogSyncedAt ?? new Date().toISOString() }
+}
+
+function productPortTemplates(product: DeviceProduct | undefined): readonly NodePort[] {
+  return product?.ports ?? []
+}
+
+/**
+ * First-time port instantiation from a Product's snapshot. Each port
+ * gets a fresh node-side id so multiple placements of the same Product
+ * have distinct port handles. Used by `placeProductAsNode` and
+ * `bindNodeToProduct` when the node has no existing ports.
+ */
+function instantiatePortsFromProduct(product: DeviceProduct | undefined): NodePort[] | undefined {
+  const tpl = productPortTemplates(product)
+  if (tpl.length === 0) return undefined
+  return tpl.map((p) => ({ ...p, id: newId('port') }))
+}
+
+/**
+ * Merge a Product's port snapshot into an existing port list, preserving
+ * every existing port's `id` and user-edited `label`. Product-owned
  * physical attributes (`connectors`, `speed`, `poe`, `interfaceName`,
- * `faceplateLabel`) are refreshed from the template; user-typed `label`
- * is left intact.
+ * `faceplateLabel`) are refreshed from the snapshot.
  *
- * Match key: `interfaceName` first (most stable), else the catalog
- * default `label` against the existing port's `label`. Ports that don't
- * match any template (user-added customs or stale catalog ports) are
+ * Match key: `interfaceName` first (most stable), else exact label
+ * match against the snapshot's default label. Ports that don't match
+ * any template (user-added customs or stale catalog ports) are
  * appended at the end so links keep resolving.
  */
-function mergeCatalogIntoExistingPorts(
+function mergeProductPortsIntoExisting(
   existing: readonly NodePort[],
   product: DeviceProduct | undefined,
 ): NodePort[] {
-  const templates = catalogPortTemplates(product)
-  if (templates.length === 0) return [...existing]
+  const tpl = productPortTemplates(product)
+  if (tpl.length === 0) return [...existing]
 
   const usedIds = new Set<string>()
   const merged: NodePort[] = []
 
-  for (const t of templates) {
+  for (const t of tpl) {
     const match = existing.find((e) => {
       if (usedIds.has(e.id)) return false
       if (t.interfaceName && e.interfaceName === t.interfaceName) return true
@@ -221,7 +265,7 @@ function mergeCatalogIntoExistingPorts(
       usedIds.add(match.id)
       merged.push({
         ...match,
-        // Catalog-owned physical attributes refresh; user label stays.
+        // Product-owned physical attributes refresh; user label stays.
         speed: t.speed ?? match.speed,
         connectors: t.connectors ?? match.connectors,
         poe: t.poe ?? match.poe,
@@ -231,12 +275,12 @@ function mergeCatalogIntoExistingPorts(
         aliases: t.aliases ?? match.aliases,
       })
     } else {
-      merged.push({ id: newId('port'), ...t, connectors: t.connectors ?? [] })
+      merged.push({ ...t, id: newId('port') })
     }
   }
-  // Surface any existing ports the templates didn't claim (user-added
-  // custom ports, or catalog ports that disappeared from the new
-  // template) so links don't go orphan.
+  // Surface any existing ports the snapshot didn't claim (user-added
+  // custom ports, or template ports that disappeared) so links don't
+  // go orphan.
   for (const e of existing) {
     if (!usedIds.has(e.id)) merged.push(e)
   }
@@ -244,7 +288,7 @@ function mergeCatalogIntoExistingPorts(
 }
 
 /**
- * Apply a product's port template to a node — instantiate fresh ids
+ * Apply a Product's port template to a node — instantiate fresh ids
  * when the node has none, otherwise merge into existing ports preserving
  * ids and user-edited labels.
  *
@@ -265,7 +309,7 @@ function setNodePortsFromProduct(
   if (!node) return
   if (options.preserveExisting && node.ports) return
   const ports = node.ports?.length
-    ? mergeCatalogIntoExistingPorts(node.ports, product)
+    ? mergeProductPortsIntoExisting(node.ports, product)
     : instantiatePortsFromProduct(product)
   diagram.nodes.set(nodeId, { ...node, ports })
   const migrated = migrateLinkEndpointPortsForNode(nodeId, ports)
@@ -728,7 +772,7 @@ export const diagramState = {
     return productsStore.list
   },
   addProduct(entry: Product) {
-    commit('Add product', () => productsStore.add(entry))
+    commit('Add product', () => productsStore.add(ensureProductPorts(entry)))
   },
   removeProduct(id: string) {
     commit('Remove product', () => {
@@ -808,13 +852,50 @@ export const diagramState = {
             setNodeSpecs(boundNodeIds, nextSpec)
           }
           if (catalogIdentityChanged) {
-            // Vendor/model changed — merge the new catalog template into
-            // each bound node's existing ports. Existing ids and user-
-            // edited labels survive; only physical attributes refresh.
-            for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, product)
+            // Vendor/model changed — re-snapshot the catalog into the
+            // Product, then merge the new template into each bound
+            // node's existing ports. Existing ids and user-edited labels
+            // survive; only physical attributes refresh.
+            const nextProduct = product as DeviceProduct
+            const ports = snapshotCatalogPortsForProduct(nextProduct)
+            productsStore.update(id, {
+              ports,
+              catalogSyncedAt: new Date().toISOString(),
+            } as Partial<Product>)
+            const refreshed = productsStore.find(id) as DeviceProduct | undefined
+            for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, refreshed)
           }
         }
       }
+    })
+  },
+  /**
+   * Re-snapshot the catalog template into the Product and cascade the
+   * new ports into every bound Node's `node.ports`. The merge logic
+   * preserves stable port ids and user-edited labels, so this is safe
+   * to invoke after a catalog YAML upgrade. No-op for catalog-less
+   * products.
+   *
+   * Returns the count of bound nodes that were touched, for the UI
+   * to surface ("Resynced N nodes").
+   */
+  resyncProductFromCatalog(id: string): number {
+    return commit('Resync product from catalog', () => {
+      const product = productsStore.find(id)
+      if (!product || product.kind !== 'device') return 0
+      const ports = snapshotCatalogPortsForProduct(product)
+      productsStore.update(id, {
+        ports,
+        catalogSyncedAt: new Date().toISOString(),
+      } as Partial<Product>)
+      const refreshed = productsStore.find(id) as DeviceProduct | undefined
+      let touched = 0
+      for (const [nodeId, node] of diagram.nodes) {
+        if (node.productId !== id) continue
+        setNodePortsFromProduct(nodeId, refreshed)
+        touched++
+      }
+      return touched
     })
   },
   /**
@@ -1693,9 +1774,17 @@ async function applyProject(data: Partial<NetedProject>) {
   )
   productsStore.set(
     cleanProducts.map((p) => {
-      if (p.icon || !p.catalogId) return p
-      const entry = catalog.lookup(p.catalogId)
-      return entry?.icon ? ({ ...p, icon: entry.icon } as Product) : p
+      let next = p
+      // Inherit icon from catalog if the saved product has none.
+      if (!next.icon && next.catalogId) {
+        const entry = catalog.lookup(next.catalogId)
+        if (entry?.icon) next = { ...next, icon: entry.icon } as Product
+      }
+      // Materialize port snapshot for legacy projects saved before
+      // Product.ports existed. New `addProduct` flow already populates
+      // this; the shim only fires once on load.
+      next = ensureProductPorts(next)
+      return next
     }),
   )
   diagram.links = cleanLinks

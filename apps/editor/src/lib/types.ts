@@ -8,6 +8,7 @@ import type {
   CableMedium,
   EthernetStandard,
   NetworkGraph,
+  NodePort,
   NodeSpec,
   PortConnector,
 } from '@shumoku/core'
@@ -52,6 +53,25 @@ export interface DeviceProduct extends ProductBase {
   spec: NodeSpec
   /** Resolved properties from catalog or custom input */
   properties?: HardwareProperties | ComputeProperties | ServiceProperties
+  /**
+   * Port template snapshot — taken from the catalog entry at import time
+   * (or from the inline `properties` for catalog-less products). Holds the
+   * canonical port list that bound Nodes instantiate from. Decoupled from
+   * `@shumoku/catalog` so the project file remains openable even if the
+   * upstream catalog version drifts or the entry disappears.
+   *
+   * Refreshed via the "Resync from catalog" action in the Materials view,
+   * which also cascades the new template into every bound Node's
+   * `node.ports` (preserving user-edited labels and stable port ids).
+   */
+  ports?: NodePort[]
+  /**
+   * Free-form marker recording the catalog version this Product was last
+   * synced against. Empty = never synced (legacy file before this field
+   * was introduced; the loader populates from the current catalog as a
+   * one-time materialization).
+   */
+  catalogSyncedAt?: string
 }
 
 export interface ModuleSpec {
