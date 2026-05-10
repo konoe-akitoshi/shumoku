@@ -841,9 +841,12 @@ export const diagramState = {
   /**
    * Re-snapshot the catalog template into the Product and cascade the
    * new ports into every bound Node's `node.ports`. The merge logic
-   * preserves stable port ids and user-edited labels, so this is safe
-   * to invoke after a catalog YAML upgrade. No-op for catalog-less
-   * products.
+   * preserves stable port ids (so existing links keep resolving) but
+   * refreshes every Product-owned field — including `label` — from
+   * the new template, since the `(label, iface, faceplate, speed,
+   * connectors)` tuple is owned by the catalog. User-added custom
+   * ports that don't match any template port survive at the end of
+   * the list. No-op for catalog-less products.
    *
    * Returns the count of bound nodes that were touched, for the UI
    * to surface ("Resynced N nodes").

@@ -32,14 +32,21 @@ export function instantiatePortsFromProduct(
 
 /**
  * Merge a Product's port snapshot into an existing port list, preserving
- * every existing port's `id` and user-edited `label`. Product-owned
- * physical attributes (`connectors`, `speed`, `poe`, `interfaceName`,
- * `faceplateLabel`) are refreshed from the snapshot.
+ * every existing port's stable `id` but refreshing **all** template-owned
+ * fields — including `label` — from the snapshot.
+ *
+ * Why label is not preserved: `(label, faceplateLabel, interfaceName,
+ * speed, connectors)` form a single tuple owned by the Product. Keeping
+ * `label` from the existing port while updating the rest lets stale
+ * catalog leftovers ride forward as if they were user edits, breaking
+ * the pairing (e.g. label "GE2" surviving on a port whose iface is now
+ * `GigaEthernet1.0`). The Resync action surfaces a diff so users see
+ * what gets overwritten before applying.
  *
  * Match key: `interfaceName` first (most stable), else exact label
- * match against the snapshot's default label. Ports that don't match
- * any template (user-added customs or stale catalog ports) are
- * appended at the end so links keep resolving.
+ * match. Existing ports that don't match any template (user-added
+ * customs or stale catalog ports the snapshot dropped) are appended
+ * at the end so existing links keep resolving.
  */
 export function mergeProductPortsIntoExisting(
   existing: readonly NodePort[],
@@ -60,17 +67,10 @@ export function mergeProductPortsIntoExisting(
     })
     if (match) {
       usedIds.add(match.id)
-      merged.push({
-        ...match,
-        // Product-owned physical attributes refresh; user label stays.
-        speed: t.speed ?? match.speed,
-        connectors: t.connectors ?? match.connectors,
-        poe: t.poe ?? match.poe,
-        interfaceName: t.interfaceName ?? match.interfaceName,
-        faceplateLabel: t.faceplateLabel ?? match.faceplateLabel,
-        role: t.role ?? match.role,
-        aliases: t.aliases ?? match.aliases,
-      })
+      // Stable id is the only thing carried over. Every Product-owned
+      // field comes from the template so the (label, iface, faceplate,
+      // speed, connectors) tuple stays internally consistent.
+      merged.push({ ...t, id: match.id })
     } else {
       merged.push({ ...t, id: newId('port') })
     }
