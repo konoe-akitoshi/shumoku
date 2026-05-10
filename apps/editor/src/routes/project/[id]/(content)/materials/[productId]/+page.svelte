@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { HardwareProperties } from '@shumoku/catalog'
   import { classifyIcon } from '@shumoku/core'
   import { Dialog } from 'bits-ui'
   import { ArrowClockwise, ArrowLeft, GitBranch, Trash, X } from 'phosphor-svelte'
@@ -10,7 +11,7 @@
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
   import { assetStore } from '$lib/state/assets.svelte'
-  import { productLabel, specIdentifier } from '$lib/types'
+  import { productLabel } from '$lib/types'
 
   const projectId = $derived($page.params.id ?? '')
   const productId = $derived($page.params.productId ?? '')
@@ -119,6 +120,46 @@
   })
 
   const labelClass = 'text-[10px] font-medium text-muted-foreground uppercase tracking-wider'
+
+  // === Device-specific render data ===
+
+  const hwProperties = $derived.by<HardwareProperties | null>(() => {
+    if (product?.kind !== 'device' || product.spec.kind !== 'hardware') return null
+    return (product.properties as HardwareProperties | undefined) ?? null
+  })
+
+  // Ports grouped by interfaceName-share key. Two ports sharing an
+  // interface are a combo group (RJ45/SFP exclusive); SW-HUB jacks
+  // share an interface across all 8 banks. Grouping reduces visual
+  // noise (one row per logical interface, with the RJ45/SFP variants
+  // shown as comma-joined connector list).
+  const portRows = $derived.by(() => {
+    if (product?.kind !== 'device' || !product.ports) return []
+    return product.ports.map((p) => ({
+      id: p.id,
+      label: p.label,
+      faceplate: p.faceplateLabel,
+      iface: p.interfaceName,
+      role: p.role,
+      speed: p.speed,
+      connectors: p.connectors ?? [],
+      poe: p.poe,
+    }))
+  })
+
+  function formatDim(d: { w: number; d: number; h: number } | undefined): string {
+    if (!d) return '—'
+    return `${d.w} × ${d.d} × ${d.h} mm`
+  }
+  function formatTemp(t: { min: number; max: number } | undefined): string {
+    if (!t) return '—'
+    return `${t.min}…${t.max} °C`
+  }
+  function joinList(xs: readonly string[] | undefined, sep = ', ', max = 8): string {
+    if (!xs?.length) return '—'
+    if (xs.length <= max) return xs.join(sep)
+    return `${xs.slice(0, max).join(sep)} +${xs.length - max}`
+  }
 </script>
 
 <div class="mb-4 flex items-center gap-3">
@@ -234,64 +275,57 @@
     </Card.Root>
   </div>
 
-  <!-- Spec details -->
-  <Card.Root class="mb-6 py-0">
-    <Card.Content class="px-5 py-4">
-      <div class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        Spec
-      </div>
-      <dl class="grid grid-cols-[8rem_1fr] gap-y-1.5 text-xs">
-        <dt class="text-muted-foreground">Kind</dt>
-        <dd class="font-mono">{product.kind === 'device' ? product.spec.kind : product.kind}</dd>
+  <!-- Spec details — only for module / cable; device header already shows kind/vendor/identifier -->
+  {#if product.kind !== 'device'}
+    <Card.Root class="mb-6 py-0">
+      <Card.Content class="px-5 py-4">
+        <div class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Spec
+        </div>
+        <dl class="grid grid-cols-[8rem_1fr] gap-y-1.5 text-xs">
+          <dt class="text-muted-foreground">Kind</dt>
+          <dd class="font-mono">{product.kind}</dd>
 
-        {#if product.kind === 'device'}
-          {#if 'type' in product.spec && product.spec.type}
-            <dt class="text-muted-foreground">Type</dt>
-            <dd class="font-mono">{product.spec.type}</dd>
+          {#if product.kind === 'module'}
+            <dt class="text-muted-foreground">Vendor</dt>
+            <dd class="font-mono">{product.spec.vendor ?? '—'}</dd>
+            <dt class="text-muted-foreground">MPN</dt>
+            <dd class="font-mono">{product.spec.mpn ?? '—'}</dd>
+            <dt class="text-muted-foreground">Standard</dt>
+            <dd class="font-mono">{product.spec.standard}</dd>
+            {#if product.spec.formFactor}
+              <dt class="text-muted-foreground">Form factor</dt>
+              <dd class="font-mono">{product.spec.formFactor}</dd>
+            {/if}
+            {#if product.spec.reach_m}
+              <dt class="text-muted-foreground">Reach</dt>
+              <dd class="font-mono">{product.spec.reach_m} m</dd>
+            {/if}
+          {:else}
+            <dt class="text-muted-foreground">Vendor</dt>
+            <dd class="font-mono">{product.spec.vendor ?? '—'}</dd>
+            <dt class="text-muted-foreground">MPN</dt>
+            <dd class="font-mono">{product.spec.mpn ?? '—'}</dd>
+            <dt class="text-muted-foreground">Medium</dt>
+            <dd class="font-mono">{product.spec.medium}</dd>
+            {#if product.spec.category}
+              <dt class="text-muted-foreground">Category</dt>
+              <dd class="font-mono">{product.spec.category}</dd>
+            {/if}
+            {#if product.spec.length_m}
+              <dt class="text-muted-foreground">Length</dt>
+              <dd class="font-mono">{product.spec.length_m} m</dd>
+            {/if}
           {/if}
-          <dt class="text-muted-foreground">Vendor</dt>
-          <dd class="font-mono">{product.spec.vendor ?? '—'}</dd>
-          <dt class="text-muted-foreground">Identifier</dt>
-          <dd class="font-mono">{specIdentifier(product.spec)}</dd>
-        {:else if product.kind === 'module'}
-          <dt class="text-muted-foreground">Vendor</dt>
-          <dd class="font-mono">{product.spec.vendor ?? '—'}</dd>
-          <dt class="text-muted-foreground">MPN</dt>
-          <dd class="font-mono">{product.spec.mpn ?? '—'}</dd>
-          <dt class="text-muted-foreground">Standard</dt>
-          <dd class="font-mono">{product.spec.standard}</dd>
-          {#if product.spec.formFactor}
-            <dt class="text-muted-foreground">Form factor</dt>
-            <dd class="font-mono">{product.spec.formFactor}</dd>
-          {/if}
-          {#if product.spec.reach_m}
-            <dt class="text-muted-foreground">Reach</dt>
-            <dd class="font-mono">{product.spec.reach_m} m</dd>
-          {/if}
-        {:else}
-          <dt class="text-muted-foreground">Vendor</dt>
-          <dd class="font-mono">{product.spec.vendor ?? '—'}</dd>
-          <dt class="text-muted-foreground">MPN</dt>
-          <dd class="font-mono">{product.spec.mpn ?? '—'}</dd>
-          <dt class="text-muted-foreground">Medium</dt>
-          <dd class="font-mono">{product.spec.medium}</dd>
-          {#if product.spec.category}
-            <dt class="text-muted-foreground">Category</dt>
-            <dd class="font-mono">{product.spec.category}</dd>
-          {/if}
-          {#if product.spec.length_m}
-            <dt class="text-muted-foreground">Length</dt>
-            <dd class="font-mono">{product.spec.length_m} m</dd>
-          {/if}
-        {/if}
 
-        {#if product.notes}
-          <dt class="text-muted-foreground">Notes</dt>
-          <dd>{product.notes}</dd>
-        {/if}
-      </dl>
-    </Card.Content>
-  </Card.Root>
+          {#if product.notes}
+            <dt class="text-muted-foreground">Notes</dt>
+            <dd>{product.notes}</dd>
+          {/if}
+        </dl>
+      </Card.Content>
+    </Card.Root>
+  {/if}
 
   <!-- Catalog sync (device products with catalogId only) -->
   {#if product.kind === 'device' && product.catalogId}
@@ -332,6 +366,283 @@
             Existing port ids and edited labels preserved.
           </div>
         {/if}
+      </Card.Content>
+    </Card.Root>
+  {/if}
+
+  <!-- Ports snapshot — device only -->
+  {#if product.kind === 'device' && portRows.length > 0}
+    <Card.Root class="mb-6 py-0">
+      <Card.Content class="px-5 py-4">
+        <div class="mb-2 flex items-center justify-between">
+          <div class="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Ports ({portRows.length})
+          </div>
+          <div class="text-[10px] text-muted-foreground">
+            Snapshot from catalog. Bound nodes instantiate from this list and may override labels.
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <Table.Root class="text-xs">
+            <Table.Header>
+              <Table.Row>
+                <Table.Head class="w-16">Faceplate</Table.Head>
+                <Table.Head>Label</Table.Head>
+                <Table.Head>Interface</Table.Head>
+                <Table.Head class="w-16">Role</Table.Head>
+                <Table.Head class="w-16">Speed</Table.Head>
+                <Table.Head>Connectors</Table.Head>
+                <Table.Head class="w-12">PoE</Table.Head>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {#each portRows as row (row.id)}
+                <Table.Row>
+                  <Table.Cell class="font-mono">{row.faceplate ?? '—'}</Table.Cell>
+                  <Table.Cell class="font-mono">{row.label || '—'}</Table.Cell>
+                  <Table.Cell class="font-mono text-muted-foreground"
+                    >{row.iface ?? '—'}</Table.Cell
+                  >
+                  <Table.Cell class="text-muted-foreground">{row.role ?? '—'}</Table.Cell>
+                  <Table.Cell class="font-mono">{row.speed ?? '—'}</Table.Cell>
+                  <Table.Cell class="font-mono"
+                    >{row.connectors.length ? row.connectors.join(' / ') : '—'}</Table.Cell
+                  >
+                  <Table.Cell>{row.poe ? '✓' : ''}</Table.Cell>
+                </Table.Row>
+              {/each}
+            </Table.Body>
+          </Table.Root>
+        </div>
+      </Card.Content>
+    </Card.Root>
+  {/if}
+
+  <!-- Hardware properties — power / switching / wireless / physical / management -->
+  {#if hwProperties}
+    {@const p = hwProperties}
+    <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+      {#if p.power}
+        <Card.Root class="py-0">
+          <Card.Content class="px-5 py-4">
+            <div
+              class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              Power
+            </div>
+            <dl class="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
+              {#if p.power.max_draw_w !== undefined}
+                <dt class="text-muted-foreground">Max draw</dt>
+                <dd class="font-mono">{p.power.max_draw_w} W</dd>
+              {/if}
+              {#if p.power.idle_draw_w !== undefined}
+                <dt class="text-muted-foreground">Idle</dt>
+                <dd class="font-mono">{p.power.idle_draw_w} W</dd>
+              {/if}
+              {#if p.power.poe_in}
+                <dt class="text-muted-foreground">PoE in</dt>
+                <dd class="font-mono">
+                  {p.power.poe_in.standard ?? '?'}
+                  {#if p.power.poe_in.class !== undefined}
+                    · class {p.power.poe_in.class}
+                  {/if}
+                  {#if p.power.poe_in.max_draw_w !== undefined}
+                    · {p.power.poe_in.max_draw_w} W
+                  {/if}
+                </dd>
+              {/if}
+              {#if p.power.poe_out}
+                <dt class="text-muted-foreground">PoE out</dt>
+                <dd class="font-mono">
+                  {p.power.poe_out.standard ?? '?'}
+                  {#if p.power.poe_out.budget_w !== undefined}
+                    · {p.power.poe_out.budget_w} W budget
+                  {/if}
+                  {#if p.power.poe_out.max_per_port_w !== undefined}
+                    · {p.power.poe_out.max_per_port_w} W/port
+                  {/if}
+                  {#if p.power.poe_out.ports !== undefined}
+                    · {p.power.poe_out.ports} ports
+                  {/if}
+                </dd>
+              {/if}
+            </dl>
+          </Card.Content>
+        </Card.Root>
+      {/if}
+
+      {#if p.switching}
+        <Card.Root class="py-0">
+          <Card.Content class="px-5 py-4">
+            <div
+              class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              Switching
+            </div>
+            <dl class="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
+              {#if p.switching.capacity_gbps !== undefined}
+                <dt class="text-muted-foreground">Capacity</dt>
+                <dd class="font-mono">{p.switching.capacity_gbps} Gbps</dd>
+              {/if}
+              {#if p.switching.forwarding_rate_mpps !== undefined}
+                <dt class="text-muted-foreground">Forwarding</dt>
+                <dd class="font-mono">{p.switching.forwarding_rate_mpps} Mpps</dd>
+              {/if}
+              {#if p.switching.mac_table_size !== undefined}
+                <dt class="text-muted-foreground">MAC table</dt>
+                <dd class="font-mono">{p.switching.mac_table_size.toLocaleString()}</dd>
+              {/if}
+              {#if p.switching.vlan_count !== undefined}
+                <dt class="text-muted-foreground">VLANs</dt>
+                <dd class="font-mono">{p.switching.vlan_count}</dd>
+              {/if}
+              {#if p.switching.jumbo_frame_bytes !== undefined}
+                <dt class="text-muted-foreground">Jumbo</dt>
+                <dd class="font-mono">{p.switching.jumbo_frame_bytes} B</dd>
+              {/if}
+              {#if p.switching.buffer_mb !== undefined}
+                <dt class="text-muted-foreground">Buffer</dt>
+                <dd class="font-mono">{p.switching.buffer_mb} MB</dd>
+              {/if}
+            </dl>
+          </Card.Content>
+        </Card.Root>
+      {/if}
+
+      {#if p.wireless}
+        <Card.Root class="py-0">
+          <Card.Content class="px-5 py-4">
+            <div
+              class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              Wireless
+            </div>
+            <dl class="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
+              {#if p.wireless.standard}
+                <dt class="text-muted-foreground">Standard</dt>
+                <dd class="font-mono">{p.wireless.standard}</dd>
+              {/if}
+              {#if p.wireless.radios !== undefined}
+                <dt class="text-muted-foreground">Radios</dt>
+                <dd class="font-mono">{p.wireless.radios}</dd>
+              {/if}
+              {#if p.wireless.mimo}
+                <dt class="text-muted-foreground">MIMO</dt>
+                <dd class="font-mono">{p.wireless.mimo}</dd>
+              {/if}
+              {#if p.wireless.bands}
+                <dt class="text-muted-foreground">Bands</dt>
+                <dd class="font-mono">{joinList(p.wireless.bands)}</dd>
+              {/if}
+              {#if p.wireless.max_data_rate_mbps !== undefined}
+                <dt class="text-muted-foreground">Max rate</dt>
+                <dd class="font-mono">{p.wireless.max_data_rate_mbps} Mbps</dd>
+              {/if}
+              {#if p.wireless.max_clients !== undefined}
+                <dt class="text-muted-foreground">Max clients</dt>
+                <dd class="font-mono">{p.wireless.max_clients}</dd>
+              {/if}
+              {#if p.wireless.antenna_type}
+                <dt class="text-muted-foreground">Antenna</dt>
+                <dd class="font-mono">{p.wireless.antenna_type}</dd>
+              {/if}
+            </dl>
+          </Card.Content>
+        </Card.Root>
+      {/if}
+
+      {#if p.physical}
+        <Card.Root class="py-0">
+          <Card.Content class="px-5 py-4">
+            <div
+              class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              Physical
+            </div>
+            <dl class="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
+              {#if p.physical.form_factor}
+                <dt class="text-muted-foreground">Form factor</dt>
+                <dd class="font-mono">{p.physical.form_factor}</dd>
+              {/if}
+              {#if p.physical.dimensions_mm}
+                <dt class="text-muted-foreground">Dimensions</dt>
+                <dd class="font-mono">{formatDim(p.physical.dimensions_mm)}</dd>
+              {/if}
+              {#if p.physical.weight_g !== undefined}
+                <dt class="text-muted-foreground">Weight</dt>
+                <dd class="font-mono">{p.physical.weight_g} g</dd>
+              {/if}
+              {#if p.physical.fanless !== undefined}
+                <dt class="text-muted-foreground">Fanless</dt>
+                <dd class="font-mono">{p.physical.fanless ? 'yes' : 'no'}</dd>
+              {/if}
+              {#if p.physical.operating_temp_c}
+                <dt class="text-muted-foreground">Op. temp</dt>
+                <dd class="font-mono">{formatTemp(p.physical.operating_temp_c)}</dd>
+              {/if}
+              {#if p.physical.mounting}
+                <dt class="text-muted-foreground">Mounting</dt>
+                <dd class="font-mono">{joinList(p.physical.mounting)}</dd>
+              {/if}
+              {#if p.physical.ip_rating}
+                <dt class="text-muted-foreground">IP rating</dt>
+                <dd class="font-mono">{p.physical.ip_rating}</dd>
+              {/if}
+            </dl>
+          </Card.Content>
+        </Card.Root>
+      {/if}
+
+      {#if p.management}
+        <Card.Root class="py-0">
+          <Card.Content class="px-5 py-4">
+            <div
+              class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              Management
+            </div>
+            <dl class="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
+              {#if p.management.layer !== undefined}
+                <dt class="text-muted-foreground">Layer</dt>
+                <dd class="font-mono">L{p.management.layer}</dd>
+              {/if}
+              {#if p.management.stackable !== undefined}
+                <dt class="text-muted-foreground">Stackable</dt>
+                <dd class="font-mono">
+                  {p.management.stackable ? `yes${p.management.stack_members_max ? ` (×${p.management.stack_members_max})` : ''}` : 'no'}
+                </dd>
+              {/if}
+              {#if p.management.image}
+                <dt class="text-muted-foreground">Image</dt>
+                <dd class="font-mono">{p.management.image}</dd>
+              {/if}
+              {#if p.management.dram_mb !== undefined}
+                <dt class="text-muted-foreground">DRAM</dt>
+                <dd class="font-mono">{p.management.dram_mb} MB</dd>
+              {/if}
+              {#if p.management.flash_mb !== undefined}
+                <dt class="text-muted-foreground">Flash</dt>
+                <dd class="font-mono">{p.management.flash_mb} MB</dd>
+              {/if}
+              {#if p.management.protocols}
+                <dt class="text-muted-foreground">Protocols</dt>
+                <dd class="font-mono text-[11px]">{joinList(p.management.protocols, ', ', 6)}</dd>
+              {/if}
+            </dl>
+          </Card.Content>
+        </Card.Root>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- Notes (device only — module/cable show notes inside the Spec card) -->
+  {#if product.kind === 'device' && product.notes}
+    <Card.Root class="mb-6 py-0">
+      <Card.Content class="px-5 py-4">
+        <div class="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Notes
+        </div>
+        <p class="whitespace-pre-wrap text-xs">{product.notes}</p>
       </Card.Content>
     </Card.Root>
   {/if}
