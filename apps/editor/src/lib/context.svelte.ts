@@ -824,11 +824,15 @@ export const diagramState = {
             // Vendor/model changed — re-snapshot the catalog into the
             // Product, then merge the new template into each bound
             // node's existing ports. Existing ids and user-edited labels
-            // survive; only physical attributes refresh.
+            // survive; only physical attributes refresh. One reroute at
+            // the end covers all bound nodes — cheaper than once per.
             const snap = snapshotCatalogIntoProduct(product as DeviceProduct)
             productsStore.update(id, snap as Partial<Product>)
             const refreshed = productsStore.find(id) as DeviceProduct | undefined
-            for (const nodeId of boundNodeIds) setNodePortsFromProduct(nodeId, refreshed)
+            for (const nodeId of boundNodeIds) {
+              setNodePortsFromProduct(nodeId, refreshed, { reroute: false })
+            }
+            if (boundNodeIds.length > 0) rebuildPortsAndEdges()
           }
         }
       }
@@ -852,11 +856,15 @@ export const diagramState = {
       productsStore.update(id, snap as Partial<Product>)
       const refreshed = productsStore.find(id) as DeviceProduct | undefined
       let touched = 0
+      // Mutate all bound nodes in one pass with rerouting suppressed —
+      // a single full reroute at the end is far cheaper than rerouting
+      // once per bound node (each call walks every node + every link).
       for (const [nodeId, node] of diagram.nodes) {
         if (node.productId !== id) continue
-        setNodePortsFromProduct(nodeId, refreshed)
+        setNodePortsFromProduct(nodeId, refreshed, { reroute: false })
         touched++
       }
+      if (touched > 0) rebuildPortsAndEdges()
       return touched
     })
   },
