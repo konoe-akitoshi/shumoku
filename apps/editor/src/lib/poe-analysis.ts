@@ -24,13 +24,13 @@
  */
 
 import {
-  type Catalog,
   classReservationW,
   effectivePoeClass,
   type HardwareProperties,
   type PowerProperties,
 } from '@shumoku/catalog'
 import type { Link, Node } from '@shumoku/core'
+import type { Product } from './types'
 import { nodeDisplayLabel } from './utils/labels'
 
 export interface PoEPassthrough {
@@ -84,18 +84,17 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-function catalogId(node: Node): string | undefined {
-  const s = node.spec
-  if (!s || s.kind !== 'hardware' || !s.vendor || !s.model) return undefined
-  return `${s.vendor}/${s.model}`
-}
-
-function getPower(node: Node, catalog: Catalog): PowerProperties | undefined {
-  const id = catalogId(node)
-  if (!id) return undefined
-  const entry = catalog.lookup(id)
-  if (!entry || entry.spec.kind !== 'hardware') return undefined
-  return (entry.properties as HardwareProperties).power
+/**
+ * Read PoE-relevant power properties from the Product the node is
+ * bound to. Properties are snapshotted onto Product at import / load
+ * time (see `ensureProductPorts` in context.svelte.ts), so this stays
+ * decoupled from the live catalog.
+ */
+function getPower(node: Node, products: Map<string, Product>): PowerProperties | undefined {
+  if (!node.productId) return undefined
+  const product = products.get(node.productId)
+  if (product?.kind !== 'device' || product.spec.kind !== 'hardware') return undefined
+  return (product.properties as HardwareProperties | undefined)?.power
 }
 
 function displayPort(nodeMap: Map<string, Node>, nodeId: string, portId: string): string {
@@ -158,7 +157,11 @@ function computePortPower(
  * PSE — they generate their own separate budget entry. Downstream draws from a
  * passthrough device are surfaced as informational sub-rows.
  */
-export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEBudget[] {
+export function analyzePoE(
+  nodes: Node[],
+  links: Link[],
+  products: Map<string, Product>,
+): PoEBudget[] {
   const nodeMap = new Map<string, Node>()
   for (const node of nodes) nodeMap.set(node.id, node)
 
@@ -188,7 +191,7 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
   const budgets: PoEBudget[] = []
 
   for (const node of nodes) {
-    const pse = getPower(node, catalog)
+    const pse = getPower(node, products)
     if (!pse?.poe_out?.budget_w) continue
 
     const neighbors = adj.get(node.id) ?? []
@@ -201,7 +204,7 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
       const peer = nodeMap.get(peerId)
       if (!peer) continue
 
-      const peerPower = getPower(peer, catalog)
+      const peerPower = getPower(peer, products)
       if (!peerPower) continue
 
       const port = computePortPower(peerPower, pse)
@@ -214,7 +217,7 @@ export function analyzePoE(nodes: Node[], links: Link[], catalog: Catalog): PoEB
           if (ds.peerId === node.id) continue
           const dsNode = nodeMap.get(ds.peerId)
           if (!dsNode) continue
-          const dsPower = getPower(dsNode, catalog)
+          const dsPower = getPower(dsNode, products)
           if (!dsPower) continue
           const dsPort = computePortPower(dsPower, peerPower)
           if (!dsPort) continue

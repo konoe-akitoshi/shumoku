@@ -90,7 +90,11 @@ export { initDarkMode }
 const catalog = new Catalog()
 catalog.registerAll(builtinEntries)
 
-const poeBudgets = $derived(analyzePoE([...diagram.nodes.values()], diagram.links, catalog))
+// Index Products by id for fast `node.productId → product.properties`
+// lookups inside `analyzePoE`. Re-derived on every productsStore change
+// so PoE budgets reflect resync events without manual cache invalidation.
+const productsById = $derived(new Map(productsStore.list.map((p) => [p.id, p])))
+const poeBudgets = $derived(analyzePoE([...diagram.nodes.values()], diagram.links, productsById))
 
 // =========================================================================
 // Cross-store derivations / helpers
@@ -206,15 +210,32 @@ function snapshotCatalogPortsForProduct(product: DeviceProduct): NodePort[] {
 }
 
 /**
- * Materialize port snapshots on a Product if missing. Called once at
- * import / load time so every Product carries its own port list.
+ * Materialize the catalog snapshot (ports + properties) on a Product
+ * when missing. Called once at import / load time so every Product
+ * carries its own copy of the catalog data — steady-state code paths
+ * never need to consult the live catalog after this.
  */
 function ensureProductPorts(product: Product): Product {
   if (product.kind !== 'device') return product
-  if (product.ports && product.ports.length > 0) return product
-  const ports = snapshotCatalogPortsForProduct(product)
-  if (ports.length === 0) return product
-  return { ...product, ports, catalogSyncedAt: product.catalogSyncedAt ?? new Date().toISOString() }
+  let next = product
+  // Snapshot ports if not already present.
+  if (!next.ports || next.ports.length === 0) {
+    const ports = snapshotCatalogPortsForProduct(next)
+    if (ports.length > 0) {
+      next = { ...next, ports, catalogSyncedAt: next.catalogSyncedAt ?? new Date().toISOString() }
+    }
+  }
+  // Snapshot properties from catalog if missing (legacy projects saved
+  // before properties was populated). This is what poe-analysis et al.
+  // read at steady state, so without it they'd silently fall back to
+  // empty data.
+  if (!next.properties && next.catalogId) {
+    const entry = catalog.lookup(next.catalogId)
+    if (entry) {
+      next = { ...next, properties: entry.properties as DeviceProduct['properties'] }
+    }
+  }
+  return next
 }
 
 function productPortTemplates(product: DeviceProduct | undefined): readonly NodePort[] {
@@ -648,13 +669,14 @@ export const diagramState = {
     return diagram.nodes.get(nodeId)?.ports ?? []
   },
   getPortLabelSuggestions(nodeId: string): string[] {
-    const spec = diagram.nodes.get(nodeId)?.spec
-    if (spec?.kind !== 'hardware' || !spec.vendor || !spec.model) return []
-    const entry = catalog.lookup(`${spec.vendor}/${spec.model}`)
-    if (!entry) return []
-    return expandCatalogPorts(entry)
-      .map((t) => t.label)
-      .filter(Boolean)
+    // Source from the bound Product's port snapshot — never the live
+    // catalog. Steady-state UI (the label-edit popover) keeps working
+    // even if the upstream catalog entry is renamed or removed.
+    const node = diagram.nodes.get(nodeId)
+    if (!node?.productId) return []
+    const product = productsStore.find(node.productId)
+    if (product?.kind !== 'device') return []
+    return (product.ports ?? []).map((p) => p.label).filter(Boolean)
   },
   getPortUsage(nodeId: string): Map<string, string[]> {
     const usage = new Map<string, string[]>()
@@ -884,10 +906,19 @@ export const diagramState = {
       const product = productsStore.find(id)
       if (!product || product.kind !== 'device') return 0
       const ports = snapshotCatalogPortsForProduct(product)
-      productsStore.update(id, {
+      const updates: Partial<DeviceProduct> = {
         ports,
         catalogSyncedAt: new Date().toISOString(),
-      } as Partial<Product>)
+      }
+      // Refresh properties from catalog too — poe-analysis and other
+      // steady-state consumers read from product.properties (PoE budget,
+      // power draw), so a port resync without a properties refresh would
+      // leave those views stale.
+      if (product.catalogId) {
+        const entry = catalog.lookup(product.catalogId)
+        if (entry) updates.properties = entry.properties as DeviceProduct['properties']
+      }
+      productsStore.update(id, updates as Partial<Product>)
       const refreshed = productsStore.find(id) as DeviceProduct | undefined
       let touched = 0
       for (const [nodeId, node] of diagram.nodes) {
