@@ -26,6 +26,7 @@
   import ValidationCell from '$lib/components/ValidationCell.svelte'
   import { diagramState } from '$lib/context.svelte'
   import { formatMeters } from '$lib/scene/cable-length'
+  import { nodeDisplayLabel } from '$lib/utils/labels'
 
   // =========================================================================
   // Derived: nodes, ports, connections
@@ -75,10 +76,7 @@
   })
 
   function nodeLabelOf(id: string): string {
-    const n = diagramState.nodes.get(id)
-    if (!n) return id
-    const l = n.label
-    return Array.isArray(l) ? l[0] : (l ?? id)
+    return nodeDisplayLabel(diagramState.nodes.get(id), id)
   }
 
   function getPortLabel(p: PortOption) {

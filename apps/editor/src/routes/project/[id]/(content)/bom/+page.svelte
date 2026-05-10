@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Copy } from 'phosphor-svelte'
+  import { Check, Copy, DownloadSimple } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { Badge } from '$lib/components/ui/badge'
@@ -7,7 +7,10 @@
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
+  import { cableSegmentLengths, visibleCableSegments } from '$lib/scene/cable-length'
   import { productLabel } from '$lib/types'
+  import { nodeDisplayLabel } from '$lib/utils/labels'
+  import { csvCell, tsvCell } from '$lib/utils/tabular'
 
   type BomLine = {
     key: string
@@ -55,10 +58,6 @@
     return { label: 'Open Connections', path: `/project/${$page.params.id}/connections` }
   }
 
-  function tsvCell(value: string | number): string {
-    return String(value).replace(/\t/g, ' ').replace(/\r?\n/g, ' ')
-  }
-
   function buildBomTsv(): string {
     const rows = [['Category', 'Item', 'Spec', 'Qty', 'Status', 'Sources']]
     for (const section of bomSections) {
@@ -74,6 +73,81 @@
       }
     }
     return rows.map((row) => row.map(tsvCell).join('\t')).join('\n')
+  }
+
+  // ── Tepra label CSV ────────────────────────────────────────────────
+  // Cable-management labels track *physical* cables, not logical links:
+  // an EPS-bridged wire is multiple cables (one per visible segment),
+  // and each physical cable needs its own pair of labels — switch end
+  // says "EPS-A1", EPS panel side says "F1-SW1" — so a tech pulling a
+  // patch cord can read where it actually goes.
+  //
+  // 1 visible segment → 2 rows (A end, B end). Segment endpoints are
+  // either the link's actual from/to (port info available) or an EPS
+  // node along the via chain (node label only).
+
+  function nodeLabelOf(nodeId: string): string {
+    return nodeDisplayLabel(diagramState.nodes.get(nodeId), nodeId)
+  }
+
+  function portLabelOf(nodeId: string, portId: string | undefined): string | null {
+    if (!portId) return null
+    const node = diagramState.nodes.get(nodeId)
+    const port = node?.ports?.find((p) => p.id === portId)
+    return port?.label ?? portId
+  }
+
+  /** "F1-SW1 (Gi0/1)" — port が無いノード端は "F1-SW1" のまま */
+  function endpointString(nodeId: string, portId: string | undefined): string {
+    const dev = nodeLabelOf(nodeId)
+    const port = portLabelOf(nodeId, portId)
+    return port ? `${dev} (${port})` : dev
+  }
+
+  function buildLabelCsv(): string {
+    const scenes = diagramState.scenes
+    const header = ['link_id', 'segment', 'end', 'this', 'peer', 'length_m']
+    const rows: string[][] = [header]
+    for (const link of diagramState.links) {
+      if (!link.id) continue
+      const segments = visibleCableSegments(link, diagramState.nodes)
+      if (segments.length === 0) continue
+      // Per-segment scene-derived lengths, indexed by [fromId, toId].
+      const segLens = new Map<string, number>()
+      for (const s of cableSegmentLengths(link, scenes, diagramState.nodes)) {
+        segLens.set(`${s.fromId}::${s.toId}`, s.meters)
+      }
+      segments.forEach((seg, idx) => {
+        const fromId = seg[0]
+        const toId = seg[seg.length - 1]
+        if (!fromId || !toId) return
+        // Port info is only available for the link's actual from/to.
+        // Mid-chain endpoints (EPS) get device label only.
+        const fromPort = link.from.node === fromId ? link.from.port : undefined
+        const toPort = link.to.node === toId ? link.to.port : undefined
+        const a = endpointString(fromId, fromPort)
+        const b = endpointString(toId, toPort)
+        const meters = segLens.get(`${fromId}::${toId}`)
+        const len = meters !== undefined ? meters.toFixed(1) : ''
+        const segNo = String(idx + 1)
+        rows.push([link.id ?? '', segNo, 'A', a, b, len])
+        rows.push([link.id ?? '', segNo, 'B', b, a, len])
+      })
+    }
+    return rows.map((row) => row.map(csvCell).join(',')).join('\n')
+  }
+
+  function downloadLabelCsv() {
+    if (diagramState.links.length === 0) return
+    const csv = buildLabelCsv()
+    // BOM utf-8 — SPC10 / Excel が日本語 device 名を文字化けせず読むため
+    const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'cable-labels.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   async function copyBomTable() {
@@ -232,11 +306,25 @@
                   </span>
                   <Badge variant="secondary" class="font-mono">{sectionQty(section.lines)}</Badge>
                 </div>
-                {#if section.lines.length === 0}
-                  <span class="text-xs text-muted-foreground"
-                    >No {section.title.toLowerCase()} requirements</span
-                  >
-                {/if}
+                <div class="flex items-center gap-2">
+                  {#if section.key === 'cables' && diagramState.links.length > 0}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="h-6 gap-1 px-2 text-[11px]"
+                      onclick={downloadLabelCsv}
+                      title="ケーブル両端ラベル用 CSV (SPC10 / P-touch 差し込み印刷)"
+                    >
+                      <DownloadSimple class="h-3 w-3" />
+                      Label CSV
+                    </Button>
+                  {/if}
+                  {#if section.lines.length === 0}
+                    <span class="text-xs text-muted-foreground"
+                      >No {section.title.toLowerCase()} requirements</span
+                    >
+                  {/if}
+                </div>
               </div>
             </Table.Cell>
           </Table.Row>
