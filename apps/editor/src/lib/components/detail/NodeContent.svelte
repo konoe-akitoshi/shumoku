@@ -1,5 +1,7 @@
 <script lang="ts">
   import { getDeviceIcon, type Link, type Node, specDeviceType } from '@shumoku/core'
+  import { X } from 'phosphor-svelte'
+  import { diagramState } from '$lib/context.svelte'
   import type { PoEBudget } from '$lib/poe-analysis'
   import type { Product } from '$lib/types'
   import { productLabel } from '$lib/types'
@@ -55,6 +57,28 @@
     vlan?: string
     linkLabel?: string
     direction: 'out' | 'in'
+  }
+
+  const ports = $derived(node.ports ?? [])
+
+  // A port is "in use" when any link's endpoint references it by id.
+  // Used to gate the custom-port delete button so we don't silently
+  // break a wired connection (delete still works for already-orphan
+  // custom ports the user added but never wired).
+  const portUsage = $derived.by(() => {
+    const used = new Set<string>()
+    for (const link of links) {
+      if (link.from.node === node.id && link.from.port) used.add(link.from.port)
+      if (link.to.node === node.id && link.to.port) used.add(link.to.port)
+    }
+    return used
+  })
+
+  function removePort(portId: string) {
+    // removeNodePort handles both routed and unrouted ports — orphan
+    // custom ports that were never wired don't have a ResolvedPort
+    // entry, so the layout-keyed `removePort` would no-op on them.
+    diagramState.removeNodePort(node.id, portId)
   }
 
   const portConnections = $derived.by<PortConnection[]>(() => {
@@ -191,6 +215,68 @@
               {/if}
             </div>
           {/if}
+        </div>
+      {/each}
+    </div>
+  </div>
+{/if}
+
+<!-- Ports — full list with cleanup affordance for custom ports -->
+{#if ports.length > 0}
+  <div>
+    <div
+      class="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1.5"
+    >
+      Ports ({ports.length})
+    </div>
+    <div class="space-y-0.5">
+      {#each ports as port (port.id)}
+        {@const display = port.label || port.connectors?.join('/') || 'unnamed'}
+        {@const showPanel = port.faceplateLabel && port.faceplateLabel !== port.label}
+        {@const inUse = portUsage.has(port.id)}
+        {@const meta = [port.speed, port.connectors?.join('/'), port.poe ? 'PoE' : '']
+          .filter(Boolean)
+          .join(' · ')}
+        <div
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-neutral-50 dark:bg-neutral-700/30 text-[10px]"
+        >
+          <span class="font-mono font-semibold text-neutral-700 dark:text-neutral-200 truncate"
+            >{display}</span
+          >
+          {#if showPanel}
+            <span
+              class="px-1 py-0.5 rounded bg-neutral-200 dark:bg-neutral-600 text-neutral-500 dark:text-neutral-300 text-[9px] font-mono"
+              >panel {port.faceplateLabel}</span
+            >
+          {/if}
+          {#if meta}
+            <span class="text-neutral-500 dark:text-neutral-400 truncate">{meta}</span>
+          {/if}
+          <span class="ml-auto flex items-center gap-1">
+            {#if inUse}
+              <span
+                class="px-1 py-0 rounded text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400"
+                >linked</span
+              >
+            {/if}
+            {#if port.source}
+              <span
+                class="px-1 py-0 rounded text-[9px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500"
+                >{port.source}</span
+              >
+            {/if}
+            {#if port.source === 'custom' && !inUse}
+              <button
+                type="button"
+                class="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-neutral-400 hover:text-red-600 dark:hover:text-red-400"
+                onclick={() => removePort(port.id)}
+                title="Remove this custom port"
+                aria-label="Remove port"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            {/if}
+          </span>
         </div>
       {/each}
     </div>
