@@ -1263,6 +1263,40 @@ export const diagramState = {
     })
   },
   /**
+   * Remove a port by its raw NodePort.id (not the ResolvedPort form).
+   * Use this when the port may have no layout entry — e.g. an unwired
+   * custom port the user added but never connected. Falls back to the
+   * standard `removePort` flow when the port does have a ResolvedPort,
+   * so behavior is identical for routed ports.
+   */
+  removeNodePort(nodeId: string, portId: string) {
+    commit('Remove port', () => {
+      const resolvedId = `${nodeId}:${portId}`
+      // Routed port — defer to the layout-aware path.
+      if (diagram.ports.has(resolvedId)) {
+        const result = removePortCore(resolvedId, diagram.nodes, diagram.ports, diagram.links)
+        if (!result) return
+        diagram.nodes = result.nodes as typeof diagram.nodes
+        diagram.ports = result.ports as typeof diagram.ports
+        diagram.links = result.links
+        rebuildPortsAndEdges()
+        return
+      }
+      // Unrouted port — strip from node.ports and any stray link refs.
+      const node = diagram.nodes.get(nodeId)
+      if (!node?.ports) return
+      const next = node.ports.filter((p) => p.id !== portId)
+      if (next.length === node.ports.length) return // nothing to drop
+      diagram.nodes.set(nodeId, { ...node, ports: next })
+      diagram.links = diagram.links.filter(
+        (l) =>
+          !(l.from.node === nodeId && l.from.port === portId) &&
+          !(l.to.node === nodeId && l.to.port === portId),
+      )
+      rebuildPortsAndEdges()
+    })
+  },
+  /**
    * Remove a subgraph but leave its contents intact — children
    * (nodes and nested subgraphs) re-parent to the deleted
    * subgraph's parent, so the subgraph "unwraps" rather than
