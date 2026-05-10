@@ -62,7 +62,10 @@ export interface DeviceProduct extends ProductBase {
    *
    * Refreshed via the "Resync from catalog" action in the Materials view,
    * which also cascades the new template into every bound Node's
-   * `node.ports` (preserving user-edited labels and stable port ids).
+   * `node.ports`. Stable port ids are preserved so existing links keep
+   * resolving; every Product-owned field (label included) is taken from
+   * the new template since the (label, iface, faceplate, speed,
+   * connectors) tuple is owned as one unit by the catalog.
    */
   ports?: NodePort[]
   /**
