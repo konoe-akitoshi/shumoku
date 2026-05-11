@@ -202,7 +202,61 @@ function buildParentOf(graph: NetworkGraph): Map<string, string | null> {
  * direction, so we don't want them driving layer assignment. Their
  * port sides are still handled separately by `placePorts`.
  */
-function buildCompoundEdges(graph: NetworkGraph, parentOf: Map<string, string | null>): Edge[] {
+/**
+ * Direction-derived "this side means upstream" map. Sugiyama lays
+ * out the flow along this axis, so a port pinned to the dest side
+ * of a source node (or vice versa) is the user telling layout that
+ * the link should run the other way.
+ */
+type Side = 'top' | 'bottom' | 'left' | 'right'
+
+function flowSides(direction: 'TB' | 'BT' | 'LR' | 'RL'): { source: Side; dest: Side } {
+  switch (direction) {
+    case 'TB':
+      return { source: 'bottom', dest: 'top' }
+    case 'BT':
+      return { source: 'top', dest: 'bottom' }
+    case 'LR':
+      return { source: 'right', dest: 'left' }
+    case 'RL':
+      return { source: 'left', dest: 'right' }
+  }
+}
+
+/**
+ * For a single link, decide whether the user-placed port sides
+ * disagree with the direction-derived defaults strongly enough to
+ * flip the link's layer ordering for layout purposes. Returns
+ * `false` (no flip) for perpendicular / HA-side placements — those
+ * carry no flow information.
+ *
+ * The actual `Link.from` / `Link.to` records are not mutated; only
+ * the (source, target) pair used to feed Sugiyama is swapped.
+ */
+function shouldFlipForLayout(
+  link: NetworkGraph['links'][number],
+  nodes: Map<string, Node>,
+  direction: 'TB' | 'BT' | 'LR' | 'RL',
+): boolean {
+  const sides = flowSides(direction)
+  const fromNode = nodes.get(link.from.node)
+  const toNode = nodes.get(link.to.node)
+  const fromSide = fromNode?.ports?.find((p) => p.id === link.from.port)?.placement?.side
+  const toSide = toNode?.ports?.find((p) => p.id === link.to.port)?.placement?.side
+  // From port pinned to the dest side → "from" wants to live downstream.
+  // To port pinned to the source side → "to" wants to live upstream.
+  // Either alone is enough to flip; both agreeing also flips (idempotent).
+  if (fromSide === sides.dest) return true
+  if (toSide === sides.source) return true
+  return false
+}
+
+function buildCompoundEdges(
+  graph: NetworkGraph,
+  parentOf: Map<string, string | null>,
+  direction: 'TB' | 'BT' | 'LR' | 'RL',
+  nodesById: Map<string, Node>,
+): Edge[] {
   const commonAncestor = (a: string, b: string): string | null => {
     const aChain = new Set<string | null>()
     let cur: string | null = a
@@ -236,8 +290,11 @@ function buildCompoundEdges(graph: NetworkGraph, parentOf: Map<string, string | 
   const edges: Edge[] = []
   for (const [i, link] of graph.links.entries()) {
     if (link.redundancy) continue
-    const s = epId(link.from)
-    const t = epId(link.to)
+    const flip = shouldFlipForLayout(link, nodesById, direction)
+    const from = flip ? link.to : link.from
+    const to = flip ? link.from : link.to
+    const s = epId(from)
+    const t = epId(to)
     const level = commonAncestor(s, t)
     const srcAtLevel = resolveChild(s, level)
     const tgtAtLevel = resolveChild(t, level)
@@ -334,7 +391,8 @@ export function layoutNetwork(
     parent: s.parent ?? null,
   }))
   const parentOf = buildParentOf(graph)
-  const edges = buildCompoundEdges(graph, parentOf)
+  const nodesById = new Map(graph.nodes.map((n) => [n.id, n]))
+  const edges = buildCompoundEdges(graph, parentOf, opts.direction, nodesById)
 
   // Compound Sugiyama: positions every node, bounds every subgraph.
   const result = layoutCompound(compoundNodes, compoundSubgraphs, edges, {
