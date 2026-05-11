@@ -33,6 +33,12 @@
       spec?: NodeSpec
       isExternal?: boolean
       termination?: Termination
+      /** For transit terminations (EPS / Outlet / Panel) — one entry
+       *  per wire whose `via` chain includes this node, as the two
+       *  device endpoints formatted `device(port)`. Surfaced below
+       *  the label so the user can see what the termination wires
+       *  between without opening the routing modal. */
+      transitPeers?: Array<{ a: string; b: string }>
       /** Toolbar callbacks routed back to SceneCanvas. The canvas
        *  owns modal state and undo bookkeeping; the node just
        *  surfaces the action. */
@@ -304,21 +310,43 @@
       class="nodrag absolute left-1/2 top-full max-w-[200px] -translate-x-1/2 rounded-[3px] border border-blue-500 bg-white px-1 text-[10px] leading-[14px] text-slate-900 outline-none focus:ring-1 focus:ring-blue-400"
       style="margin-top: 2px; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
     >
-  {:else if data.label}
-    <!-- Label floats beneath the icon, absolutely positioned so it
-         doesn't extend the node's hit area — handles + wires stay
-         locked to the icon. Double-click opens the rename input
-         (same handler as the toolbar Rename button). -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
+  {:else if data.label || data.transitPeers?.length}
+    <!-- Label + transit-peer sub-lines float beneath the icon,
+         absolutely positioned so they don't extend the node's hit
+         area — handles + wires stay locked to the icon. The label
+         is double-clickable to rename; the peer lines are static
+         info (auto-derived from each link's `via` chain). -->
     <div
-      class="absolute left-1/2 top-full max-w-[160px] -translate-x-1/2 truncate rounded-[3px] border border-black/15 bg-white px-1 text-[10px] leading-[14px] text-slate-900"
-      style="margin-top: 2px; pointer-events: auto; cursor: text; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
-      ondblclick={(e) => {
-        e.stopPropagation()
-        startRename()
-      }}
+      class="absolute left-1/2 top-full flex -translate-x-1/2 flex-col items-center gap-[2px]"
+      style="margin-top: 2px; pointer-events: none;"
     >
-      {data.label}
+      {#if data.label}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="max-w-[200px] truncate rounded-[3px] border border-black/15 bg-white px-1 text-[10px] leading-[14px] text-slate-900"
+          style="pointer-events: auto; cursor: text; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
+          ondblclick={(e) => {
+            e.stopPropagation()
+            startRename()
+          }}
+        >
+          {data.label}
+        </div>
+      {/if}
+      {#if data.transitPeers?.length}
+        <div
+          class="flex max-w-[260px] flex-col items-center gap-[1px] rounded-[3px] border border-black/10 bg-white/95 px-1 py-[1px] text-[9px] leading-[12px] text-slate-600"
+          style="box-shadow: 0 0 0 1.5px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.15);"
+        >
+          {#each data.transitPeers as peer (peer.a + '∷' + peer.b)}
+            <div class="truncate font-mono">
+              <span>{peer.a}</span>
+              <span class="text-slate-400">↔</span>
+              <span>{peer.b}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>

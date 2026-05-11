@@ -150,6 +150,35 @@
     return { x: tl.x + w / 2, y: tl.y + h / 2 }
   }
 
+  // Compact "device(port)" formatter for the transit-peer sub-label.
+  // Resolves port id to the user-visible port label (falls back to
+  // the id when the port isn't found, which would only happen for
+  // partially-migrated data).
+  function endpointSummary(nodeId: string, portId: string | undefined): string {
+    const node = diagramState.nodes.get(nodeId)
+    const baseLabel = Array.isArray(node?.label) ? node?.label[0] : (node?.label ?? nodeId)
+    if (!portId) return baseLabel ?? nodeId
+    const port = node?.ports?.find((p) => p.id === portId)
+    const portLabel = port?.label || port?.faceplateLabel || port?.interfaceName || portId
+    return `${baseLabel}(${portLabel})`
+  }
+
+  // Wires passing through this transit node — one entry per link
+  // whose `via` chain includes the node. Each entry is the two
+  // device endpoints as `device(port)` strings so the scene can
+  // surface them under the termination's label.
+  function peersForTransit(nodeId: string): Array<{ a: string; b: string }> {
+    const out: Array<{ a: string; b: string }> = []
+    for (const link of diagramState.links) {
+      if (!link.via?.includes(nodeId)) continue
+      out.push({
+        a: endpointSummary(link.from.node, link.from.port),
+        b: endpointSummary(link.to.node, link.to.port),
+      })
+    }
+    return out
+  }
+
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
   const sfNodes = $derived.by<SfNode[]>(() => {
     const out: SfNode[] = []
@@ -181,6 +210,13 @@
       const { w, h } = effSize(n.id)
       const isEps = n.termination?.role === 'eps'
       const isDevice = !n.termination
+      const isTransit = !!n.termination && !isBend
+      // For terminations (EPS / Outlet / Panel), look up every wire
+      // whose `via` chain includes this node and emit one "peer pair"
+      // per wire — e.g. `switch-A(Gi1/1) ↔ ap-2(eth0)`. Gives the
+      // user at-a-glance context for what the termination is wired
+      // between, without opening the routing modal.
+      const transitPeers = isTransit ? peersForTransit(n.id) : undefined
       out.push({
         id: n.id,
         type: 'scene',
@@ -197,6 +233,7 @@
           editableLabel: isBend ? '' : baseLabel,
           spec: n.spec,
           termination: n.termination,
+          transitPeers,
           baseW: base.w,
           baseH: base.h,
           onOpenRouting: isDevice
@@ -532,7 +569,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                                       plan is set, but otherwise let its theming through. */
+                                         plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -540,8 +577,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-                                     to drag from. Otherwise the fully-transparent handles leave the
-                                     "how do I draw a wire" UX a guess. */
+                                       to drag from. Otherwise the fully-transparent handles leave the
+                                       "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 1 !important;
@@ -551,15 +588,15 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-                           mode. Keep size + DOM presence so Svelte Flow can still resolve
-                           edge endpoint positions from each handle's bounding rect — only
-                           opacity is dropped. */
+                             mode. Keep size + DOM presence so Svelte Flow can still resolve
+                             edge endpoint positions from each handle's bounding rect — only
+                             opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
-                           "click somewhere to drop the item". */
+                             "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     cursor: crosshair !important;
