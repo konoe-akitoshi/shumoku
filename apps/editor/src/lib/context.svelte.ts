@@ -290,6 +290,36 @@ function setNodePortsFromProduct(
   if (migrated && options.reroute !== false) rebuildPortsAndEdges()
 }
 
+/**
+ * Pick a default label for a new termination placement. Bends stay
+ * anonymous ("Bend") — they're not labelled on the canvas. EPS /
+ * Outlet / Panel get a numeric suffix ("EPS 1", "EPS 2"…) scoped to
+ * existing same-role nodes anywhere in the diagram, so concurrent
+ * placements stay distinguishable before the user renames them.
+ */
+function nextTerminationLabel(role: 'outlet' | 'eps' | 'panel' | 'bend'): string {
+  if (role === 'bend') return 'Bend'
+  const base = role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : 'Panel'
+  // Walk existing same-role nodes and collect any "Base N" suffix
+  // they already carry; the new label takes max+1 (or 1 when none).
+  const re = new RegExp(`^${base}(?:\\s+(\\d+))?$`)
+  let max = 0
+  let baseSeen = false
+  for (const [, node] of diagram.nodes) {
+    if (node.termination?.role !== role) continue
+    const label = Array.isArray(node.label) ? node.label[0] : node.label
+    if (typeof label !== 'string') continue
+    const m = label.match(re)
+    if (!m) continue
+    if (m[1]) max = Math.max(max, Number.parseInt(m[1], 10))
+    else baseSeen = true
+  }
+  // If a bare "EPS" exists with no number yet, the first numbered one
+  // should be "EPS 2" so the existing one effectively becomes #1.
+  const next = baseSeen ? Math.max(max, 1) + 1 : max + 1
+  return `${base} ${next}`
+}
+
 function findNodePortId(
   ports: NodePort[] | undefined,
   value: string | undefined,
@@ -1195,8 +1225,11 @@ export const diagramState = {
     role: 'outlet' | 'eps' | 'panel' | 'bend',
   ): string {
     return commit('Add termination in scene', () => {
-      const defaultLabel =
-        role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : role === 'panel' ? 'Panel' : 'Bend'
+      // Auto-number same-role terminations so multiple placements stay
+      // distinguishable ("EPS 1", "EPS 2"…) before the user gets around
+      // to renaming them. Bends stay anonymous — they're not labelled
+      // on the canvas.
+      const defaultLabel = nextTerminationLabel(role)
       const id = diagramState.addEmptyNode(defaultLabel)
       const scene = scenesStore.find(sceneId)
       const node = diagram.nodes.get(id)
