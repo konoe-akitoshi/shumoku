@@ -16,6 +16,7 @@
     addPort,
     collectObstacles,
     computeNodeSize,
+    detectClickSide,
     linkExists,
     moveNode,
     moveSubgraph,
@@ -89,6 +90,14 @@
      * its choosing) and either push it via `bind:links` or call `appendLink()`.
      */
     oncreatelink?: (from: LinkEndpoint, to: LinkEndpoint) => void
+    /**
+     * User dragged an existing (linked) port to a new location on the
+     * same node. Renderer computes the target side from the drop
+     * coords; the host stores it as the port's `placement.side` so
+     * the next layout pass keeps it there. `order` is currently not
+     * computed by the renderer — order-within-side is a follow-up.
+     */
+    onportmove?: (nodeId: string, portId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
   }
 
   let {
@@ -112,6 +121,7 @@
     ondragend,
     hideNode,
     oncreatelink,
+    onportmove,
     subgraphOverlay,
     linkOverlay,
     nodeOverlay,
@@ -493,6 +503,35 @@
    * Used by the WebComponent wrapper, which owns its link state internally.
    * Editor apps should prefer mutating their own state via `bind:links`.
    */
+  /**
+   * Translate screen coords to SVG coords, decide which edge of the
+   * port's node the drop landed nearest to, and tell the host to
+   * persist the placement. If the side didn't actually change we
+   * skip the callback so the host's commit() doesn't dirty undo /
+   * cache for a no-op.
+   */
+  function handlePortDragEnd(portId: string, screenX: number, screenY: number) {
+    if (!onportmove) return
+    const port = ports.get(portId)
+    if (!port) return
+    const node = nodes.get(port.nodeId)
+    if (!node?.position) return
+    const { x, y } = screenToSvg(screenX, screenY)
+    const newSide = detectClickSide(
+      x,
+      y,
+      node as typeof node & { position: { x: number; y: number } },
+    )
+    if (newSide === port.side) return
+    // Bare port id used by external API — SvgPort sees the resolved
+    // `nodeId:portId` form; strip the prefix back to the raw port id
+    // that lives on `NodePort.id`.
+    const rawPortId = portId.startsWith(`${port.nodeId}:`)
+      ? portId.slice(port.nodeId.length + 1)
+      : portId
+    onportmove(port.nodeId, rawPortId, newSide)
+  }
+
   export async function appendLink(link: Link) {
     if (linkExists(links, link.from.node, link.from.port, link.to.node, link.to.port)) return
     links = [...links, link]
@@ -527,6 +566,7 @@
     onaddport={handleAddPort}
     onlinkstart={handleLinkStart}
     onlinkend={handleLinkEnd}
+    onportdragend={handlePortDragEnd}
     {onlabeledit}
     oncontextmenu={handleContextMenu}
     onbackgroundclick={handleBackgroundClick}
