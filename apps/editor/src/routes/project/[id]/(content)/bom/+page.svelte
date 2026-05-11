@@ -7,7 +7,7 @@
   import * as Card from '$lib/components/ui/card'
   import * as Table from '$lib/components/ui/table'
   import { diagramState } from '$lib/context.svelte'
-  import { cableSegmentLengths, visibleCableSegments } from '$lib/scene/cable-length'
+  import { cableSegmentLengths } from '$lib/scene/cable-length'
   import { productLabel } from '$lib/types'
   import { nodeDisplayLabel } from '$lib/utils/labels'
   import { csvCell, tsvCell } from '$lib/utils/tabular'
@@ -76,15 +76,17 @@
   }
 
   // ── Tepra label CSV ────────────────────────────────────────────────
-  // Cable-management labels track *physical* cables, not logical links:
-  // an EPS-bridged wire is multiple cables (one per visible segment),
-  // and each physical cable needs its own pair of labels — switch end
-  // says "EPS-A1", EPS panel side says "F1-SW1" — so a tech pulling a
-  // patch cord can read where it actually goes.
-  //
-  // 1 visible segment → 2 rows (A end, B end). Segment endpoints are
-  // either the link's actual from/to (port info available) or an EPS
-  // node along the via chain (node label only).
+  // One physical wire = two printable labels (A end, B end). Labels
+  // need to carry both the immediate hand-off (so the tech can match
+  // a cable to a wall outlet / EPS panel as they pull it) AND the
+  // wire's far-end device(port) (so they know the cable's purpose).
+  // Format:
+  //   - Direct wire     →  peer = "switch-B (Gi2/2)"
+  //   - 1 transit hop   →  peer = "EPS-1: switch-B (Gi2/2)"
+  //   - N transit hops  →  peer = "EPS-1 / EPS-2: switch-B (Gi2/2)"
+  // Mid-chain terminations are joined with " / " and prefixed before
+  // the far device, separated by a colon — keeps the layout regular
+  // so the tech can scan the label quickly.
 
   function nodeLabelOf(nodeId: string): string {
     return nodeDisplayLabel(diagramState.nodes.get(nodeId), nodeId)
@@ -104,35 +106,46 @@
     return port ? `${dev} (${port})` : dev
   }
 
+  /**
+   * Build the "peer" cell from the perspective of one end of the wire.
+   * `viaFromThis` is the via-chain ids encountered as we travel from
+   * `this` end toward the far end; we prefix them so the tech reads
+   * "go via these terminations to reach the far device(port)".
+   */
+  function peerWithVia(viaFromThis: readonly string[], farEnd: string): string {
+    if (viaFromThis.length === 0) return farEnd
+    const hops = viaFromThis.map((id) => nodeLabelOf(id)).join(' / ')
+    return `${hops}: ${farEnd}`
+  }
+
   function buildLabelCsv(): string {
     const scenes = diagramState.scenes
-    const header = ['link_id', 'segment', 'end', 'this', 'peer', 'length_m']
+    const header = ['link_id', 'end', 'this', 'peer', 'length_m']
     const rows: string[][] = [header]
     for (const link of diagramState.links) {
       if (!link.id) continue
-      const segments = visibleCableSegments(link, diagramState.nodes)
-      if (segments.length === 0) continue
-      // Per-segment scene-derived lengths, indexed by [fromId, toId].
-      const segLens = new Map<string, number>()
-      for (const s of cableSegmentLengths(link, scenes, diagramState.nodes)) {
-        segLens.set(`${s.fromId}::${s.toId}`, s.meters)
-      }
-      segments.forEach((seg, idx) => {
-        const fromId = seg[0]
-        const toId = seg[seg.length - 1]
-        if (!fromId || !toId) return
-        // Port info is only available for the link's actual from/to.
-        // Mid-chain endpoints (EPS) get device label only.
-        const fromPort = link.from.node === fromId ? link.from.port : undefined
-        const toPort = link.to.node === toId ? link.to.port : undefined
-        const a = endpointString(fromId, fromPort)
-        const b = endpointString(toId, toPort)
-        const meters = segLens.get(`${fromId}::${toId}`)
-        const len = meters !== undefined ? meters.toFixed(1) : ''
-        const segNo = String(idx + 1)
-        rows.push([link.id ?? '', segNo, 'A', a, b, len])
-        rows.push([link.id ?? '', segNo, 'B', b, a, len])
+      // Total wire length = sum of every visible segment's scene-derived
+      // meters. Empty when no segment has a calibrated length.
+      const segLens = cableSegmentLengths(link, scenes, diagramState.nodes)
+      const total = segLens.length > 0 ? segLens.reduce((acc, s) => acc + s.meters, 0) : undefined
+      const len = total !== undefined ? total.toFixed(1) : ''
+
+      const aEnd = endpointString(link.from.node, link.from.port)
+      const bEnd = endpointString(link.to.node, link.to.port)
+      // Skip bend waypoints — they're visual-only and don't correspond
+      // to a physical hand-off (no patch panel, no outlet box). Real
+      // terminations (EPS / Outlet / Panel) carry the hand-off info
+      // the technician needs.
+      const via = (link.via ?? []).filter((id) => {
+        const role = diagramState.nodes.get(id)?.termination?.role
+        return role && role !== 'bend'
       })
+      // Via-chain from A's perspective is the recorded order; from B's
+      // perspective it's the reverse.
+      const viaFromA = via
+      const viaFromB = [...via].reverse()
+      rows.push([link.id, 'A', aEnd, peerWithVia(viaFromA, bEnd), len])
+      rows.push([link.id, 'B', bEnd, peerWithVia(viaFromB, aEnd), len])
     }
     return rows.map((row) => row.map(csvCell).join(',')).join('\n')
   }
