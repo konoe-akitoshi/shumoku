@@ -8,7 +8,7 @@
     NodeToolbar,
     Position,
   } from '@xyflow/svelte'
-  import { Trash } from 'phosphor-svelte'
+  import { PencilSimple, Trash } from 'phosphor-svelte'
 
   // Custom Svelte Flow node — renders a floor-plan "pin". Two visual
   // modes share the same component:
@@ -26,7 +26,10 @@
   type Termination = { role: 'outlet' | 'eps' | 'panel' | 'bend' }
   type SceneNodeT = Node<
     {
+      /** Display label (may include a cross-boundary suffix). */
       label: string
+      /** Raw label without display decorations — what rename writes back. */
+      editableLabel?: string
       spec?: NodeSpec
       isExternal?: boolean
       termination?: Termination
@@ -36,6 +39,10 @@
       onOpenRouting?: () => void
       onOpenEpsRouting?: () => void
       onDelete?: () => void
+      /** Inline rename — writes back to `Node.label` so Diagram /
+       *  Connections views also pick up the change. Undefined for
+       *  bends (they're anonymous waypoints). */
+      onRename?: (label: string) => void
       /** Base (un-scaled) size for this node's role. NodeResizer
        *  reports absolute pixel dimensions; we divide by the base
        *  size to recover a scale multiplier and persist it. */
@@ -49,6 +56,48 @@
   >
 
   let { data, selected }: NodeProps<SceneNodeT> = $props()
+
+  // Inline rename state. While editing we swap the read-only label
+  // chip for an <input>; on commit we route through `data.onRename`
+  // so the canvas can update `Node.label` via the shared commit/undo
+  // path. Bends don't have a label at all, so editing is gated on
+  // `data.onRename` being present.
+  let editing = $state(false)
+  let editValue = $state('')
+  let inputEl: HTMLInputElement | null = $state(null)
+
+  function startRename() {
+    if (!data.onRename) return
+    editValue = data.editableLabel ?? data.label ?? ''
+    editing = true
+    // Focus + select happens after the input mounts.
+    queueMicrotask(() => {
+      inputEl?.focus()
+      inputEl?.select()
+    })
+  }
+
+  function commitRename() {
+    if (!editing) return
+    editing = false
+    const next = editValue.trim()
+    const baseline = data.editableLabel ?? data.label ?? ''
+    if (next !== baseline) data.onRename?.(next)
+  }
+
+  function cancelRename() {
+    editing = false
+  }
+
+  function onRenameKey(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      commitRename()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelRename()
+    }
+  }
 
   const termination = $derived(data.termination)
   const icon = $derived(termination ? null : resolveIcon(data.spec))
@@ -119,6 +168,17 @@
         onclick={() => data.onOpenRouting?.()}
       >
         Routing…
+      </button>
+    {/if}
+    {#if data.onRename}
+      <button
+        type="button"
+        class="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-700 dark:hover:text-neutral-100"
+        onclick={startRename}
+        aria-label="Rename"
+        title="Rename"
+      >
+        <PencilSimple class="h-3.5 w-3.5" />
       </button>
     {/if}
     <button
@@ -230,13 +290,33 @@
     </div>
   {/if}
 
-  {#if data.label}
+  {#if editing}
+    <!-- Inline rename input. Replaces the read-only label chip while
+         editing; commits on Enter / blur, cancels on Escape. The
+         outer `nodrag` class keeps Svelte Flow from interpreting
+         pointer drags inside the input as a node move. -->
+    <input
+      bind:this={inputEl}
+      bind:value={editValue}
+      onkeydown={onRenameKey}
+      onblur={commitRename}
+      type="text"
+      class="nodrag absolute left-1/2 top-full max-w-[200px] -translate-x-1/2 rounded-[3px] border border-blue-500 bg-white px-1 text-[10px] leading-[14px] text-slate-900 outline-none focus:ring-1 focus:ring-blue-400"
+      style="margin-top: 2px; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
+    >
+  {:else if data.label}
     <!-- Label floats beneath the icon, absolutely positioned so it
          doesn't extend the node's hit area — handles + wires stay
-         locked to the icon. -->
+         locked to the icon. Double-click opens the rename input
+         (same handler as the toolbar Rename button). -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="absolute left-1/2 top-full max-w-[160px] -translate-x-1/2 truncate rounded-[3px] border border-black/15 bg-white px-1 text-[10px] leading-[14px] text-slate-900"
-      style="margin-top: 2px; pointer-events: none; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
+      style="margin-top: 2px; pointer-events: auto; cursor: text; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
+      ondblclick={(e) => {
+        e.stopPropagation()
+        startRename()
+      }}
     >
       {data.label}
     </div>
