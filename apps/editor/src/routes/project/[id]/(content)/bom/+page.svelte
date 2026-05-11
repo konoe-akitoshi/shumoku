@@ -108,14 +108,16 @@
 
   /**
    * Build the "peer" cell from the perspective of one end of the wire.
-   * `viaFromThis` is the via-chain ids encountered as we travel from
-   * `this` end toward the far end; we prefix them so the tech reads
-   * "go via these terminations to reach the far device(port)".
+   * When there's a via chain, only the chain hops are shown — the tech
+   * physically connects to the next termination (wall outlet / EPS
+   * panel), not to the far device, so naming the chain matches what
+   * they actually plug into. The far device(port) is only relevant for
+   * direct (via-less) cables, where the cable terminates straight on
+   * the device.
    */
   function peerWithVia(viaFromThis: readonly string[], farEnd: string): string {
     if (viaFromThis.length === 0) return farEnd
-    const hops = viaFromThis.map((id) => nodeLabelOf(id)).join(' / ')
-    return `${hops}: ${farEnd}`
+    return viaFromThis.map((id) => nodeLabelOf(id)).join(' / ')
   }
 
   function buildLabelCsv(): string {
