@@ -30,6 +30,10 @@ interface PortAssignment {
   nodeId: string
   portId: string
   side: Side
+  /** The peer node id on the other end of this port's link — used to
+   *  sort ports along the side so adjacent peers don't force edges to
+   *  cross over each other. */
+  peerNodeId: string
 }
 
 function getNodePortLabel(node: Node | undefined, portId: string): string {
@@ -105,13 +109,19 @@ function assignPortSides(links: Link[], direction: Direction): PortAssignment[] 
         nodeId: fromNode,
         portId: link.from.port,
         side: sides.sourceSide,
+        peerNodeId: toNode,
       })
     }
 
     const toKey = `${toNode}:${link.to.port}`
     if (!seen.has(toKey)) {
       seen.add(toKey)
-      assignments.push({ nodeId: toNode, portId: link.to.port, side: sides.destSide })
+      assignments.push({
+        nodeId: toNode,
+        portId: link.to.port,
+        side: sides.destSide,
+        peerNodeId: fromNode,
+      })
     }
   }
 
@@ -188,6 +198,20 @@ export function placePorts(
     const side = first.side
     const node = nodes.get(nodeId)
     if (!node?.position) continue
+
+    // Sort ports along the side by their peer node's position so an
+    // edge going to a left-side peer ends up on the left port and one
+    // going to a right-side peer ends up on the right port. Without
+    // this the ports stay in the order they appeared in `links`, and
+    // edges to peers further along the side cross over each other in
+    // an "X" shape between the node and its neighbours.
+    const isHorizontalSide = side === 'top' || side === 'bottom'
+    sideAssignments.sort((a, b) => {
+      const pa = nodes.get(a.peerNodeId)?.position
+      const pb = nodes.get(b.peerNodeId)?.position
+      if (!pa || !pb) return 0
+      return isHorizontalSide ? pa.x - pb.x : pa.y - pb.y
+    })
 
     for (const [i, a] of sideAssignments.entries()) {
       const portId = `${a.nodeId}:${a.portId}`

@@ -756,7 +756,10 @@ export const diagramState = {
       sheetStore.setCurrentSheetId(null)
       return
     }
-    const { resolved } = await computeNetworkLayout(childGraph)
+    // Same reason as applyGraph: termination nodes belong to scene,
+    // not diagram. Strip before layout so they don't distort Sugiyama
+    // or inflate the resulting bounds.
+    const { resolved } = await computeNetworkLayout(stripTerminationFromGraph(childGraph))
 
     if (sheetStore.currentSheetId !== id || generation !== currentSheetCacheGeneration()) return
 
@@ -1552,8 +1555,12 @@ export const diagramState = {
         nodes: [...diagram.nodes.values()].map((n) => ({ ...n, position: undefined })),
         subgraphs: [...diagram.subgraphs.values()].map((s) => ({ ...s, bounds: undefined })),
       }
-      const { resolved } = await computeNetworkLayout(graph)
-      replaceMap(diagram.nodes, resolved.nodes)
+      const { resolved } = await computeNetworkLayout(stripTerminationFromGraph(graph))
+      const finalNodes = new Map(resolved.nodes)
+      for (const n of diagram.nodes.values()) {
+        if (n.termination) finalNodes.set(n.id, n)
+      }
+      replaceMap(diagram.nodes, finalNodes)
       replaceMap(diagram.subgraphs, resolved.subgraphs)
       replaceMap(diagram.ports, resolved.ports)
       replaceMap(diagram.edges, resolved.edges)
@@ -1906,14 +1913,27 @@ async function applyGraph(graph: NetworkGraph) {
   const allPositioned = hasAnyNode && [...nodes.values()].every((n) => n.position)
 
   if (hasAnyNode && !allPositioned) {
-    const reconstructed: NetworkGraph = {
+    // Lay out the LOGICAL subset only — termination nodes (bends,
+    // outlets, EPS, panels) live in the scene's physical coordinate
+    // system and are hidden from the diagram view (see PR #194).
+    // Feeding them to Sugiyama drags the layout into weird shapes
+    // and inflates bounds with positions that point at scene pixels
+    // far outside the diagram extent.
+    const logical = stripTerminationFromGraph({
       ...graph,
       nodes: [...nodes.values()],
       subgraphs: [...subgraphs.values()],
       links,
+    })
+    const { resolved } = await computeNetworkLayout(logical)
+    // Merge laid-out logical nodes back with the untouched termination
+    // nodes so the store still holds every Node — scene canvas needs
+    // them, just diagram doesn't.
+    const finalNodes = new Map(resolved.nodes)
+    for (const n of nodes.values()) {
+      if (n.termination) finalNodes.set(n.id, n)
     }
-    const { resolved } = await computeNetworkLayout(reconstructed)
-    replaceMap(diagram.nodes, resolved.nodes)
+    replaceMap(diagram.nodes, finalNodes)
     replaceMap(diagram.subgraphs, resolved.subgraphs)
     replaceMap(diagram.ports, resolved.ports)
     replaceMap(diagram.edges, resolved.edges)
@@ -1930,6 +1950,28 @@ async function applyGraph(graph: NetworkGraph) {
   await rerouteEdges()
 }
 
+/**
+ * Drop termination nodes from a graph for diagram-side layout.
+ * Termination nodes only appear as link `via` waypoints (never as
+ * `from` / `to` endpoints, by construction), so stripping them from
+ * `nodes` and from `link.via` keeps the topology intact for Sugiyama.
+ */
+function stripTerminationFromGraph(graph: NetworkGraph): NetworkGraph {
+  const termIds = new Set(graph.nodes.filter((n) => n.termination).map((n) => n.id))
+  if (termIds.size === 0) return graph
+  return {
+    ...graph,
+    nodes: graph.nodes.filter((n) => !n.termination),
+    links: graph.links.map((l) => {
+      if (!l.via?.length) return l
+      const nextVia = l.via.filter((id) => !termIds.has(id))
+      return nextVia.length === l.via.length
+        ? l
+        : { ...l, via: nextVia.length > 0 ? nextVia : undefined }
+    }),
+  }
+}
+
 function boundsOfPositionedGraph(
   nodes: Map<string, Node>,
   subgraphs: Map<string, Subgraph>,
@@ -1941,6 +1983,12 @@ function boundsOfPositionedGraph(
 
   for (const n of nodes.values()) {
     if (!n.position) continue
+    // Termination nodes (bend / outlet / EPS / panel) hold scene-side
+    // pixel positions, not logical-diagram coords. The diagram hides
+    // them from rendering; their positions must not influence bounds
+    // or the viewBox stretches to encompass scene pixels far outside
+    // the diagram extent.
+    if (n.termination) continue
     const size = computeNodeSize(n)
     minX = Math.min(minX, n.position.x - size.width / 2)
     minY = Math.min(minY, n.position.y - size.height / 2)
