@@ -40,6 +40,7 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
+import { inheritProductIconFromCatalog, migrateLegacyWireRoutes } from './migrations'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
 import { applySync, diffSnapshots } from './persistence/sync'
@@ -1823,20 +1824,12 @@ async function applyProject(data: Partial<NetedProject>) {
     diagram.nodes,
     diagram.links,
   )
+  // Load-time fix-ups for Products. Icon inheritance is a pure
+  // legacy migration (see migrations/product-icon-inheritance.ts);
+  // ensureProductSnapshot is a constructor invariant shared with
+  // addProduct, so it stays in this file.
   productsStore.set(
-    cleanProducts.map((p) => {
-      let next = p
-      // Inherit icon from catalog if the saved product has none.
-      if (!next.icon && next.catalogId) {
-        const entry = catalog.lookup(next.catalogId)
-        if (entry?.icon) next = { ...next, icon: entry.icon } as Product
-      }
-      // Materialize port snapshot for legacy projects saved before
-      // Product.ports existed. New `addProduct` flow already populates
-      // this; the shim only fires once on load.
-      next = ensureProductSnapshot(next)
-      return next
-    }),
+    cleanProducts.map((p) => ensureProductSnapshot(inheritProductIconFromCatalog(p, catalog))),
   )
   diagram.links = cleanLinks
 
@@ -1856,51 +1849,20 @@ async function applyProject(data: Partial<NetedProject>) {
   await rerouteEdges()
 
   const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
-  // Migration must run BEFORE sanitize so the legacy `wireRoutes`
-  // field (already stripped by sanitize) is still readable from
-  // the raw input. addTerminationInScene needs the scene present
-  // in scenesStore though, so we set sanitized first and then
-  // migrate from the raw payload.
+  // sanitizeScenes strips the legacy `wireRoutes` field on its way
+  // into the store, so the migration that converts it into bend
+  // Nodes has to read from the raw payload (`data.scenes`). We
+  // populate the store first because the migration calls store
+  // helpers (`addTerminationInScene`, `updateLink`) which need the
+  // scene to already exist. See migrations/README.md.
   scenesStore.set(sanitizeScenes(data.scenes ?? [], diagram.nodes, linkIdSet))
   scenesStore.setCurrentId(null)
-  migrateLegacyWireRoutes(data.scenes ?? [])
-}
-
-/**
- * One-shot migration of legacy `Scene.wireRoutes[].controlPoints`
- * (anonymous absolute-coord bends) into bend Nodes spliced into
- * `Link.via`. The new model treats every transit point — bends
- * included — as a Node, so multi-drag / deletion / selection all
- * flow through Svelte Flow's native node machinery. The
- * `wireRoutes` field is gone from the Scene type; the migration
- * reads it via a loose cast on the raw input.
- */
-type LegacyScene = {
-  id: string
-  wireRoutes?: Array<{ linkId: string; controlPoints?: Array<{ x: number; y: number }> }>
-}
-
-function migrateLegacyWireRoutes(rawScenes: unknown[]) {
-  for (const raw of rawScenes) {
-    const legacy = raw as LegacyScene
-    const routes = legacy.wireRoutes
-    if (!routes?.length) continue
-    for (const route of routes) {
-      const points = route.controlPoints
-      if (!points?.length) continue
-      const link = diagram.links.find((l) => l.id === route.linkId)
-      if (!link) continue
-      const newBendIds: string[] = []
-      for (const pt of points) {
-        const id = diagramState.addTerminationInScene(legacy.id, pt, 'bend')
-        newBendIds.push(id)
-      }
-      // Bends go before any existing TPs in via — preserves the
-      // visual order from before the migration where bends were
-      // first-class waypoints.
-      diagramState.updateLink(route.linkId, { via: [...newBendIds, ...(link.via ?? [])] })
-    }
-  }
+  migrateLegacyWireRoutes(data.scenes ?? [], {
+    links: diagram.links,
+    addTerminationInScene: (sceneId, position, role) =>
+      diagramState.addTerminationInScene(sceneId, position, role),
+    updateLink: (linkId, updates) => diagramState.updateLink(linkId, updates),
+  })
 }
 
 async function applyGraph(graph: NetworkGraph) {
