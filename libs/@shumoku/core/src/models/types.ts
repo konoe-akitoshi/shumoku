@@ -130,6 +130,24 @@ export interface NodePort {
   source?: 'catalog' | 'custom'
   disabled?: boolean
   notes?: string
+  /**
+   * User override for where this port lives on the node, used when
+   * the default rules (side from link direction, order from peer
+   * position) place it somewhere the user doesn't want. Either
+   * field can be set independently:
+   *
+   *   - `side` — pin the port to a specific edge; overrides the
+   *     direction-derived default. Absent → side is auto.
+   *   - `order` — index along the side, low → first. Ports with an
+   *     `order` lock to their position; ports without one fill the
+   *     remaining slots in their default peer-position order.
+   *     Sparse / non-integer values are fine (10, 20, 25, 30…) so
+   *     inserting between two pinned ports doesn't have to renumber.
+   */
+  placement?: {
+    side?: 'top' | 'bottom' | 'left' | 'right'
+    order?: number
+  }
 }
 
 /**
