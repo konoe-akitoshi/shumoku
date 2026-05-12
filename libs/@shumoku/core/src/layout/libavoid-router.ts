@@ -9,7 +9,9 @@
  * Pins ensure lines exit/enter ports perpendicularly.
  */
 
-import type { Link, Node, Position } from '../models/types.js'
+import type { Direction, Link, Node, Position } from '../models/types.js'
+import { assignChannelLanes, checkpointFromLane, type LaneAssignment } from './channel-routing.js'
+import { channelsFromLayers, detectLayers } from './layer-detection.js'
 import { getLinkWidth } from './link-utils.js'
 import { computeNodeSize } from './network-layout.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
@@ -60,6 +62,14 @@ export interface LibavoidRoutingOptions {
   edgeStyle?: 'orthogonal' | 'polyline' | 'straight'
   shapeBufferDistance?: number
   idealNudgingDistance?: number
+  /**
+   * Layout flow direction. Used to detect Sugiyama layers from node
+   * positions so multi-edge bus segments crossing the same layer
+   * boundary can be spread evenly across the inter-layer channel
+   * with stable per-edge lane ordinals (no twitching on node drag).
+   * Defaults to `'TB'`.
+   */
+  direction?: Direction
 }
 
 export async function routeEdges(
@@ -74,6 +84,7 @@ export async function routeEdges(
     edgeStyle: 'orthogonal' as const,
     shapeBufferDistance: 10,
     idealNudgingDistance: 20,
+    direction: 'TB' as Direction,
     ...options,
   }
 
@@ -110,7 +121,7 @@ export async function routeEdges(
   router.setRoutingOption(Avoid['RoutingOption']['nudgeSharedPathsWithCommonEndPoint'].value, true)
 
   try {
-    return doRoute(Avoid, router, nodes, ports, links, opts.edgeStyle)
+    return doRoute(Avoid, router, nodes, ports, links, opts.edgeStyle, opts.direction)
   } finally {
     router.delete()
   }
@@ -207,6 +218,10 @@ function createConnectors(
   pinIds: Map<string, number>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
+  /** Per-link channel-routed lane checkpoints. Links not in this map
+   *  fall through to the legacy midpoint checkpoint. */
+  lanes: Map<string, LaneAssignment>,
+  rankAxis: 'x' | 'y',
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
 ): Map<string, any> {
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
@@ -242,21 +257,22 @@ function createConnectors(
 
     const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
 
-    // One checkpoint anchored on the destination port's outward
-    // axis, halfway between the dest port and the source port. The
-    // earlier version offset by a fixed 20px from the dest port,
-    // which pushed the perpendicular bend right next to the
-    // destination — fine when the dest sat on the AP row (bend
-    // ended up between AP and access-switch layers, looked clean)
-    // but wrong when the user's placement override put the dest on
-    // a distribution switch's bottom side (bend ended up just
-    // under the distribution layer, visibly protruding through
-    // switch territory).
-    //
-    // Using midpoint along the dest's perpendicular axis places
-    // the bend in the gap between the two ports, regardless of
-    // which side the user pinned the port to.
-    if (toPortObj?.side && fromPortObj) {
+    // Lane assignment from channel routing: each rank-boundary the
+    // edge crosses gets its own checkpoint at the lane Y (TB) or X
+    // (LR) computed in `assignChannelLanes`. Same input → same
+    // lanes, so dragging one node never shifts another edge's bend.
+    const lane = link.id ? lanes.get(link.id) : undefined
+    if (lane && lane.rankCoords.length > 0) {
+      const cpVec = new Avoid.CheckpointVector()
+      for (const rankCoord of lane.rankCoords) {
+        const cp = checkpointFromLane(rankCoord, fromPortObj, toPortObj, rankAxis)
+        cpVec.push_back(new Avoid.Checkpoint(new Avoid.Point(cp.x, cp.y)))
+      }
+      conn.setRoutingCheckpoints(cpVec)
+    } else if (toPortObj?.side && fromPortObj) {
+      // Legacy midpoint fallback for edges without a lane — intra-
+      // layer / HA edges, or anything where `assignChannelLanes`
+      // didn't return an entry (missing port, malformed layer info).
       const side = toPortObj.side
       const dp = toPortObj.absolutePosition
       const sp = fromPortObj.absolutePosition
@@ -358,10 +374,30 @@ function doRoute(
   ports: Map<string, ResolvedPort>,
   links: Link[],
   edgeStyle: string,
+  direction: Direction,
 ): Map<string, ResolvedEdge> {
+  // Channel-based lane assignment: detect Sugiyama layers from
+  // node positions, build channels between them, and give every
+  // multi-layer edge a deterministic lane within each channel it
+  // crosses. The resulting checkpoints replace the legacy single
+  // midpoint, which packed dozens of edges onto the same Y when
+  // many edges crossed one layer boundary.
+  const layers = detectLayers(nodes, direction)
+  const channels = channelsFromLayers(layers.layers)
+  const lanes = assignChannelLanes(links, ports, layers, channels, direction)
+
   const shapeRefs = registerObstacles(Avoid, router, nodes)
   const pinIds = registerPins(Avoid, shapeRefs, nodes, ports)
-  const connRefs = createConnectors(Avoid, router, shapeRefs, pinIds, ports, links)
+  const connRefs = createConnectors(
+    Avoid,
+    router,
+    shapeRefs,
+    pinIds,
+    ports,
+    links,
+    lanes,
+    layers.rankAxis,
+  )
   const edges = extractEdges(connRefs, ports, links, edgeStyle)
   const spread = spreadOverlappingSegments(edges)
   return filletEdgeCorners(spread)
