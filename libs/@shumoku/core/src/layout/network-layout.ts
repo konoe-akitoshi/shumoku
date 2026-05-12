@@ -45,11 +45,13 @@ import { rebalanceSubgraphs } from './interaction.js'
 import { placePorts } from './port-placement.js'
 import type { ResolvedPort } from './resolved-types.js'
 import {
+  type CompoundLayoutResult,
   type CompoundNode,
   type CompoundSubgraph,
   type Edge,
   layoutCompound,
 } from './sugiyama/index.js'
+import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tree-layout.js'
 
 // ============================================================================
 // Options
@@ -456,15 +458,19 @@ export function layoutNetwork(
   const nodesById = new Map(graph.nodes.map((n) => [n.id, n]))
   const edges = buildCompoundEdges(graph, parentOf, opts.direction, nodesById)
 
-  // Compound Sugiyama: positions every node, bounds every subgraph.
-  const result = layoutCompound(compoundNodes, compoundSubgraphs, edges, {
-    direction: opts.direction,
-    nodeGap: opts.gap,
-    layerGap: opts.topLevelGap,
-    subgraphPadding: opts.subgraphPadding,
-    subgraphLabelHeight: opts.subgraphLabelHeight,
-    hints: opts.hints.size > 0 ? opts.hints : undefined,
-  })
+  // Choose between Buchheim tidy-tree (preferred for tree-dominant
+  // network topologies) and full Sugiyama (fallback for graphs with
+  // subgraphs, hints, or non-tree structure).
+  const result =
+    tryTreeLayout(compoundNodes, compoundSubgraphs, edges, opts) ??
+    layoutCompound(compoundNodes, compoundSubgraphs, edges, {
+      direction: opts.direction,
+      nodeGap: opts.gap,
+      layerGap: opts.topLevelGap,
+      subgraphPadding: opts.subgraphPadding,
+      subgraphLabelHeight: opts.subgraphLabelHeight,
+      hints: opts.hints.size > 0 ? opts.hints : undefined,
+    })
 
   // Fold positions back onto Node / Subgraph records.
   const nodes = new Map<string, Node>()
@@ -500,4 +506,115 @@ export function layoutNetwork(
         }
 
   return { nodes, ports, subgraphs, bounds }
+}
+
+// ============================================================================
+// Tree layout dispatcher
+// ============================================================================
+
+/**
+ * Maximum fraction of edges that can be "overlay" (non-structural) and
+ * still let Buchheim drive the layout. Overlay edges are rendered but
+ * don't constrain placement (Graphviz-style `constraint=false`).
+ *
+ * Beyond this ratio, the graph has enough non-tree structure that
+ * Sugiyama's global crossing minimisation is the better tool.
+ */
+const TREE_DOMINANT_OVERLAY_RATIO = 0.1
+const TREE_DOMINANT_OVERLAY_HARD_CAP = 5
+
+/**
+ * Pick the primary parent for each child node and run Buchheim's
+ * tidy-tree algorithm. Returns null if the graph isn't tree-dominant
+ * — caller falls back to Sugiyama in that case.
+ *
+ * Disqualifiers (forced fallback to Sugiyama):
+ *
+ *   - **Subgraphs present.** The tidy-tree path doesn't yet handle
+ *     compound containment; the user expects subgraph boundaries to
+ *     be respected, and Sugiyama already does that.
+ *   - **`hints` or `fixed` supplied.** User-driven coordinate
+ *     overrides flow more naturally through Sugiyama's coord
+ *     assignment than through Buchheim's contour-based packing.
+ *   - **Overlay ratio above threshold.** When too many edges fail
+ *     the "primary parent" test, the graph has real mesh-like
+ *     structure and Sugiyama's barycenter ordering is more
+ *     appropriate.
+ */
+function tryTreeLayout(
+  nodes: CompoundNode[],
+  subgraphs: CompoundSubgraph[],
+  edges: Edge[],
+  opts: typeof DEFAULTS,
+): CompoundLayoutResult | null {
+  if (subgraphs.length > 0) return null
+  if (opts.fixed.size > 0) return null
+  if (opts.hints.size > 0) return null
+
+  // Build incoming-edge index, ignoring self loops.
+  const incoming = new Map<string, Edge[]>()
+  for (const e of edges) {
+    if (e.source === e.target) continue
+    const list = incoming.get(e.target) ?? []
+    list.push(e)
+    incoming.set(e.target, list)
+  }
+
+  // Pick the first incoming edge as the primary parent for each
+  // node. Remaining incoming edges become overlay (rendered, but not
+  // structural for placement).
+  const treeEdges: TreeLayoutEdge[] = []
+  let overlayCount = 0
+  for (const [child, list] of incoming) {
+    const primary = list[0]
+    if (!primary) continue
+    treeEdges.push({ parent: primary.source, child })
+    overlayCount += list.length - 1
+  }
+
+  // Overlay budget check. A small number of cross-links is OK; many
+  // means the graph isn't really a tree.
+  if (
+    overlayCount > TREE_DOMINANT_OVERLAY_HARD_CAP &&
+    overlayCount / Math.max(edges.length, 1) > TREE_DOMINANT_OVERLAY_RATIO
+  ) {
+    return null
+  }
+
+  // Cycle detection: walk parent chains; if any chain loops back on
+  // itself, the "primary parent" picks formed a cycle (extremely
+  // rare in practice but possible with circular ownership). Bail in
+  // that case — Sugiyama's cycle removal handles it.
+  if (hasCycleAfterPrimaryPick(treeEdges)) return null
+
+  const treeNodes: TreeLayoutNode[] = nodes.map((n) => ({
+    id: n.id,
+    size: n.size ?? { width: 160, height: 60 },
+  }))
+  const result = layoutTree(treeNodes, treeEdges, {
+    direction: opts.direction,
+    nodeGap: opts.gap,
+    layerGap: opts.topLevelGap,
+  })
+
+  return {
+    nodePositions: result.positions,
+    subgraphBounds: new Map(),
+    rootBounds: result.bounds,
+  }
+}
+
+function hasCycleAfterPrimaryPick(treeEdges: readonly TreeLayoutEdge[]): boolean {
+  const parentOf = new Map<string, string>()
+  for (const e of treeEdges) parentOf.set(e.child, e.parent)
+  for (const start of parentOf.keys()) {
+    const seen = new Set<string>()
+    let cur: string | undefined = start
+    while (cur !== undefined) {
+      if (seen.has(cur)) return true
+      seen.add(cur)
+      cur = parentOf.get(cur)
+    }
+  }
+  return false
 }
