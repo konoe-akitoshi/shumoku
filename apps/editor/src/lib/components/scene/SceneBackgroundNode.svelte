@@ -21,10 +21,10 @@
 
 <style>
   /* The Svelte Flow node wrapper around this bg would otherwise
-                 swallow clicks (and route them as node clicks, not pane clicks),
-                 breaking calibration / click-to-place which both rely on
-                 onPaneClick. Disabling pointer-events on the wrapper lets clicks
-                 fall through to the pane underneath. */
+                   swallow clicks (and route them as node clicks, not pane clicks),
+                   breaking calibration / click-to-place which both rely on
+                   onPaneClick. Disabling pointer-events on the wrapper lets clicks
+                   fall through to the pane underneath. */
   :global(.svelte-flow__node.svelte-flow__node-background) {
     pointer-events: none;
   }

@@ -177,17 +177,10 @@ body {
     display: none !important;
   }
 
-  /* Hide the interactive Svelte Flow canvas; the print-only static
-   * surface (data-print-canvas + data-print-only) renders instead. */
-  [data-screen-canvas] {
-    display: none !important;
-  }
-  [data-print-only] {
-    display: block !important;
-  }
-
-  /* Canvas fills the printable area. The renderer-emitted SVG has
-   * its own viewBox so it scales naturally with the page. */
+  /* Tame Tailwind dark-mode backgrounds. The editor's page wrapper
+   * uses `dark:bg-neutral-950` which would print as a black block;
+   * force white at the outermost levels so the canvas inherits a
+   * paper-friendly background. */
   html,
   body,
   body > div,
@@ -195,6 +188,12 @@ body {
     background: white !important;
     color: black !important;
   }
+
+  /* `data-print-canvas` marks the surface that survives Print —
+   * everything outside it has already been hidden by `data-print-
+   * hide`. We make it fill the printable area so the canvas inside
+   * (a renderer SVG or a Svelte Flow instance) inherits a sensible
+   * size. */
   [data-print-canvas] {
     position: static !important;
     width: 100% !important;
@@ -202,45 +201,38 @@ body {
     min-height: calc(100vh - 16mm);
     background: white !important;
   }
-  [data-print-canvas] svg {
+
+  /* For the Diagram page (renderer-svg): the page-fitting SVG has
+   * its own `viewBox`, so `width:100%` + auto height plus a
+   * camera-reset on the panned viewport gives a sensible fit. */
+  [data-print-canvas] > div > svg,
+  [data-print-canvas] > svg {
     width: 100% !important;
     height: auto !important;
     max-height: calc(100vh - 16mm);
     background: white !important;
   }
+  [data-print-canvas] svg g.viewport {
+    /* The interactive camera applies a pan/zoom transform here. The
+     * renderer's SVG already has its full extent in the `viewBox`,
+     * so resetting the transform makes the print fit the page
+     * rather than capturing whatever the user happened to zoom to. */
+    transform: none !important;
+  }
 
-  /* Make small SVG text more legible in print: white halo so labels
-   * remain readable even when they overlap colored strokes. */
-  [data-print-canvas] text {
+  /* For the Scene page (Svelte Flow): we DELIBERATELY let Svelte
+   * Flow's internal layout stand. The on-screen rendering — node
+   * icons, cable bends, length labels, the background image — is
+   * what we want on paper. A `beforeprint` hook in `<ScenePrint-
+   * Fitter>` calls `fitView()` so the print captures everything,
+   * and we let Svelte Flow's own pan/zoom transform position the
+   * fitted content. */
+
+  /* Make small SVG text more legible: white halo so labels stay
+   * readable even where they overlap coloured strokes. */
+  [data-print-canvas] svg text {
     paint-order: stroke fill;
     stroke: white;
     stroke-width: 2.5px;
   }
-
-  /* Reset reactflow's internal absolute layering so the static
-   * print surface (a single SVG) fills the page. */
-  .svelte-flow,
-  .svelte-flow__renderer,
-  .svelte-flow__viewport {
-    position: static !important;
-    transform: none !important;
-    width: 100% !important;
-    height: auto !important;
-  }
-
-  /* Reset the diagram renderer's pan/zoom viewport transform so
-   * print shows the full diagram (per its viewBox), not whatever
-   * the user happened to zoom to onscreen. The renderer wraps
-   * everything in `<g class="viewport">` and applies a transform
-   * via the `attachCamera` runtime. */
-  [data-print-canvas] svg g.viewport {
-    transform: none !important;
-  }
-}
-
-/* By default the static print-only surfaces are hidden onscreen.
- * `display: none` keeps them out of the layout; `@media print`
- * above flips them back on. */
-[data-print-only] {
-  display: none;
 }
