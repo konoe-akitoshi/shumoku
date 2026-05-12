@@ -1,11 +1,11 @@
 <script lang="ts">
   import type { Node } from '@shumoku/core'
   import {
-    computeNodeSize,
     DEFAULT_ICON_SIZE,
     ICON_LABEL_GAP,
     LABEL_LINE_HEIGHT,
     resolveIcon,
+    resolveNodeSize,
     specDeviceType,
   } from '@shumoku/core'
   import type { NodeOverlaySnippet } from '../../lib/overlays'
@@ -44,7 +44,7 @@
 
   const cx = $derived(node.position?.x ?? 0)
   const cy = $derived(node.position?.y ?? 0)
-  const size = $derived(computeNodeSize(node))
+  const size = $derived(resolveNodeSize(node))
   const hw = $derived(size.width / 2)
   const hh = $derived(size.height / 2)
   const shape = $derived(node.shape ?? 'rounded')

@@ -16,7 +16,7 @@
 
 import type { LayoutEngine } from '../hierarchical.js'
 import type { LayoutResult, NetworkGraph } from '../models/types.js'
-import { computeNodeSize, layoutNetwork } from './network-layout.js'
+import { layoutNetwork, resolveNodeSize } from './network-layout.js'
 import type { ResolvedLayout } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 
@@ -73,7 +73,7 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
         }
       >()
       const pos = node.position ?? { x: 0, y: 0 }
-      const size = computeNodeSize(node)
+      const size = resolveNodeSize(node)
       for (const [portId, rp] of ports) {
         if (rp.nodeId !== id) continue
         nodePorts.set(portId, {

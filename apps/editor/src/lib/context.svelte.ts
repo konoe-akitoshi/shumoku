@@ -22,7 +22,7 @@ import {
   buildChildSheetGraph,
   collectObstacles,
   computeNetworkLayout,
-  computeNodeSize,
+  computeNodeBodySize,
   createMemoryFileResolver,
   HierarchicalParser,
   type Link,
@@ -35,6 +35,7 @@ import {
   placePorts,
   rebalanceSubgraphs,
   removePort as removePortCore,
+  resolveNodeSize,
   resolvePosition,
   type Subgraph,
   type Theme,
@@ -1057,7 +1058,7 @@ export const diagramState = {
       const id = newId('node')
       const label = productLabel(product)
       const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
-      const { width: w, height: h } = computeNodeSize({ label, spec })
+      const { width: w, height: h } = computeNodeBodySize({ label, spec })
       const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
       const pos = resolvePosition(
         {
@@ -1084,7 +1085,7 @@ export const diagramState = {
   addEmptyNode(label = 'Node'): string {
     return commit('Add node', () => {
       const id = newId('node')
-      const { width: w, height: h } = computeNodeSize({ label })
+      const { width: w, height: h } = computeNodeBodySize({ label })
       const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
       const pos = resolvePosition(
         {
@@ -2030,7 +2031,7 @@ function boundsOfPositionedGraph(
     // or the viewBox stretches to encompass scene pixels far outside
     // the diagram extent.
     if (n.termination) continue
-    const size = computeNodeSize(n)
+    const size = resolveNodeSize(n)
     minX = Math.min(minX, n.position.x - size.width / 2)
     minY = Math.min(minY, n.position.y - size.height / 2)
     maxX = Math.max(maxX, n.position.x + size.width / 2)

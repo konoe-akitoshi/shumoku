@@ -333,6 +333,15 @@ export interface Node {
   position?: Position
 
   /**
+   * Rendered footprint (width × height) chosen by the layout engine.
+   * Includes any extra space the node needed to fit ports along its
+   * sides. Renderers and collision detection should read this; if
+   * absent (node hasn't been through layout yet), they fall back to
+   * `computeNodeBodySize(node)` which gives a content-only estimate.
+   */
+  size?: Size
+
+  /**
    * Marks this node as a passive cable termination point (wall outlet,
    * EPS / vertical riser, patch panel) or a user-drawn bend on a
    * scene cable run, rather than an active device. Cables physically

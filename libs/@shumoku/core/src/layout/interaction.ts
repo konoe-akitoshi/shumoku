@@ -12,7 +12,7 @@
 
 import { newId } from '../ids.js'
 import type { Link, NetworkGraph, Node, NodePort, Subgraph } from '../models/types.js'
-import { computeNodeSize } from './network-layout.js'
+import { resolveNodeSize } from './network-layout.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 
@@ -77,7 +77,7 @@ export function collectObstacles(
   for (const [nid, n] of nodes) {
     if (nid === excludeId) continue
     if (!n.position) continue
-    const size = computeNodeSize(n)
+    const size = resolveNodeSize(n)
     obstacles.push({ x: n.position.x, y: n.position.y, w: size.width, h: size.height })
   }
 
@@ -130,7 +130,7 @@ export function resolveNodePosition(
 ): { x: number; y: number } {
   const node = nodes.get(id)
   if (!node) return { x, y }
-  const size = computeNodeSize(node)
+  const size = resolveNodeSize(node)
   const obstacles = collectObstacles(id, node.parent, nodes, subgraphs)
   return resolvePosition({ x, y, w: size.width, h: size.height }, obstacles, gap)
 }
@@ -156,7 +156,7 @@ export function placeNode(
   initial: { x: number; y: number },
   gap = DEFAULT_NODE_GAP,
 ): { x: number; y: number } {
-  const size = computeNodeSize(node)
+  const size = resolveNodeSize(node)
   const obstacles = collectObstacles(node.id, node.parent, graph.nodes, graph.subgraphs)
   return resolvePosition(
     { x: initial.x, y: initial.y, w: size.width, h: size.height },
@@ -273,7 +273,7 @@ export function rebalanceSubgraphs(
       if (n.parent !== sgId) continue
       if (!n.position) continue
       hasChildren = true
-      const size = computeNodeSize(n)
+      const size = resolveNodeSize(n)
       const hw = size.width / 2
       const hh = size.height / 2
       minX = Math.min(minX, n.position.x - hw)
@@ -337,7 +337,7 @@ export function rebalanceSubgraphs(
   // Third pass: push free nodes away from subgraphs they don't belong to
   for (const [nodeId, node] of nodes) {
     if (!node.position) continue
-    const size = computeNodeSize(node)
+    const size = resolveNodeSize(node)
     const obstacles = collectObstacles(nodeId, node.parent, nodes, subgraphs)
     const resolved = resolvePosition(
       { x: node.position.x, y: node.position.y, w: size.width, h: size.height },
@@ -561,7 +561,7 @@ export function detectClickSide(
   clickY: number,
   node: Node & { position: { x: number; y: number } },
 ): Side {
-  const size = computeNodeSize(node)
+  const size = resolveNodeSize(node)
   const cx = node.position.x
   const cy = node.position.y
   const hw = size.width / 2
@@ -620,7 +620,7 @@ function redistributePorts(
   node: Node & { position: { x: number; y: number } },
   ports: Map<string, ResolvedPort>,
 ): void {
-  const size = computeNodeSize(node)
+  const size = resolveNodeSize(node)
   const cx = node.position.x
   const cy = node.position.y
   const hw = size.width / 2
@@ -670,7 +670,7 @@ function rebalanceNode(
   const node = nodes.get(nodeId)
   if (!node?.position) return
 
-  const size = computeNodeSize(node)
+  const size = resolveNodeSize(node)
   const counts = countPortsPerSide(nodeId, ports)
   const minSize = computeMinSize(counts, size)
 

@@ -32,9 +32,15 @@ export {
   linkSpeedBps,
   resolveBandwidthBps,
 } from './link-utils.js'
-export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
 // Custom network layout (Sugiyama 4-alignment) + bezier edge wrapping
-export { computeNodeSize, layoutNetwork } from './network-layout.js'
+export type { NetworkLayoutOptions, NetworkLayoutResult, PortsBySide } from './network-layout.js'
+export {
+  computeNodeBodySize,
+  computeNodeFootprint,
+  computeNodeSize,
+  layoutNetwork,
+  resolveNodeSize,
+} from './network-layout.js'
 export { placePorts } from './port-placement.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'

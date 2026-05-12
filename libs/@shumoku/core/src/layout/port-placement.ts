@@ -31,7 +31,7 @@
  */
 
 import type { Direction, Link, Node, Position } from '../models/types.js'
-import { computeNodeSize } from './network-layout.js'
+import { resolveNodeSize } from './network-layout.js'
 import type { ResolvedPort } from './resolved-types.js'
 
 /** Default port visual size */
@@ -218,7 +218,7 @@ export function computePortPosition(
   index: number,
   total: number,
 ): Position {
-  const size = computeNodeSize(node)
+  const size = resolveNodeSize(node)
   const { x: cx, y: cy } = node.position
   const halfW = size.width / 2
   const halfH = size.height / 2

@@ -2,19 +2,43 @@ import { describe, expect, it } from 'vitest'
 import type { Link, Node } from '../models/types.js'
 import { placePorts } from './port-placement.js'
 
+// Test fixture: nodes mimic post-layout state with `.size` already
+// attached (as layoutNetwork would do). The old test fixture relied
+// on the implicit 180×60 default; now that the default body width is
+// 80, layout's footprint is what makes a switch wide enough to fit
+// its port bank, so we set size explicitly.
 function makeNodes(): Map<string, Node> {
+  const size = { width: 180, height: 60 }
   return new Map([
     [
       'sw1',
-      { id: 'sw1', label: 'Switch 1', shape: 'rounded' as const, position: { x: 200, y: 100 } },
+      {
+        id: 'sw1',
+        label: 'Switch 1',
+        shape: 'rounded' as const,
+        position: { x: 200, y: 100 },
+        size,
+      },
     ],
     [
       'sw2',
-      { id: 'sw2', label: 'Switch 2', shape: 'rounded' as const, position: { x: 200, y: 300 } },
+      {
+        id: 'sw2',
+        label: 'Switch 2',
+        shape: 'rounded' as const,
+        position: { x: 200, y: 300 },
+        size,
+      },
     ],
     [
       'sw3',
-      { id: 'sw3', label: 'Switch 3', shape: 'rounded' as const, position: { x: 400, y: 100 } },
+      {
+        id: 'sw3',
+        label: 'Switch 3',
+        shape: 'rounded' as const,
+        position: { x: 400, y: 100 },
+        size,
+      },
     ],
   ])
 }
