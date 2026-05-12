@@ -4,33 +4,54 @@
 /**
  * Layer assignment for Sugiyama-style layered layout.
  *
- * Two modes:
+ * Three modes:
  *
- *  - **ASAP** ("As Soon As Possible") — `layer(v) = max(layer(u)) + 1`
- *    over predecessors. Each node sits at the *shallowest* layer
- *    compatible with the DAG. Leaves end up at varying depths
- *    depending on how long their longest path from a root is.
- *    Standard Sugiyama default.
+ *  - **TIERED** (default) — internal nodes use ASAP, leaves use ALAP.
+ *    Concretely:
+ *      - internal: `layer(v) = max(layer(u)) + 1` over predecessors
+ *        (topological depth from root)
+ *      - leaf:     `layer(v) = maxLayer` (the deepest layer reached by
+ *        any node under ASAP)
+ *    This matches what a network engineer hand-draws:
+ *      - routers and distribution switches stack by their actual
+ *        distance from the WAN edge (ASAP)
+ *      - endpoints (APs, servers, single-leaf branches) align on a
+ *        common bottom row regardless of how short the chain to them
+ *        was (ALAP for leaves only)
+ *    The trade-off is that a leaf hanging off a shallow chain
+ *    (e.g. `noc-sw01 → noc-ap01`) becomes a *long* edge — its
+ *    source is at layer 2, its sink at layer N. With Bezier
+ *    rendering this is a single curve, not a problem; with
+ *    polyline routing it would need dummy-node insertion (we don't
+ *    do that).
  *
- *  - **ALAP** ("As Late As Possible") — each node sits at the
- *    *deepest* layer compatible with the DAG, computed as
- *    `layer(v) = totalDepth - longestPathToLeaf(v)`. Every leaf
- *    lands on the bottom row regardless of how it got there, which
- *    matches what network-engineer users expect from a topology
- *    diagram (APs at the bottom, ONU at the top, etc.). One
- *    drawback: edges crossing many ranks become longer; with no
- *    dummy-node insertion they remain direct straight bends.
+ *  - **ASAP** ("As Soon As Possible") — every node at its shallowest
+ *    legal layer. Standard Sugiyama default. Used here for tests
+ *    and for graphs where leaf alignment isn't useful.
  *
- * The longest-path implementations are O(V + E); the choice is a
- * single boolean knob, so we pay nothing for keeping both around.
+ *  - **ALAP** ("As Late As Possible") — every node at its deepest
+ *    legal layer. Was the default before the tiered redesign; one
+ *    drawback was that intermediate switches with only-leaf children
+ *    (like `noc-sw01`) got pushed all the way down to the leaf row,
+ *    out of position with their topological peers (`eps-sw01`).
+ *
+ * Each variant is O(V + E). The boolean knob is cheap so we keep all
+ * three around — pick mode based on the diagram's role.
  */
 
 import type { Edge, LayerAssignment, NodeId } from './types.js'
 
+export type LayerMode = 'asap' | 'alap' | 'tiered'
+
 export interface AssignLayersOptions {
-  /** 'asap' = leaves spread by depth; 'alap' = all leaves at the
-   *  bottom. Default 'alap' — better suited to network diagrams. */
-  mode?: 'asap' | 'alap'
+  /**
+   * - `'tiered'` (default) — internal nodes at topological depth,
+   *   leaves snapped to bottom row. Best for network topology.
+   * - `'asap'` — leaves naturally spread at varying depths.
+   * - `'alap'` — all nodes pushed as deep as their longest path
+   *   to a leaf will allow.
+   */
+  mode?: LayerMode
 }
 
 export function assignLayers(
@@ -38,41 +59,37 @@ export function assignLayers(
   dag: Edge[],
   options: AssignLayersOptions = {},
 ): LayerAssignment {
-  const mode = options.mode ?? 'alap'
-  // Build predecessor list. In a DAG this lets us compute
-  // layer(v) = 1 + max(layer(u) for u in preds(v)) via topological order.
-  const preds = new Map<NodeId, NodeId[]>()
-  for (const n of nodes) preds.set(n, [])
-  for (const e of dag) {
-    if (e.source === e.target) continue // self loop — skip
-    const list = preds.get(e.target)
-    if (list) list.push(e.source)
-  }
+  const mode: LayerMode = options.mode ?? 'asap'
 
-  // Build successor list for topological sort.
+  // Predecessor / successor lists. In a DAG these let us compute
+  //   asap(v)        = max(asap(u) over u ∈ preds(v)) + 1
+  //   reverseDepth(v) = max(reverseDepth(w) over w ∈ succs(v)) + 1
+  // via a single topological pass.
+  const preds = new Map<NodeId, NodeId[]>()
   const succ = new Map<NodeId, NodeId[]>()
   const inDegree = new Map<NodeId, number>()
   for (const n of nodes) {
+    preds.set(n, [])
     succ.set(n, [])
     inDegree.set(n, 0)
   }
   for (const e of dag) {
-    if (e.source === e.target) continue
+    if (e.source === e.target) continue // self loop — skip
+    preds.get(e.target)?.push(e.source)
     succ.get(e.source)?.push(e.target)
     inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1)
   }
 
-  // Kahn-style topological sort. We iterate nodes in a stable order (the
-  // input order of `nodes`) so the output is deterministic for equal
-  // graphs — important for testability and diff-friendly output.
+  // Kahn-style topological sort. Stable in the input order of `nodes`
+  // so equal graphs produce equal outputs — handy for tests and diffs.
   const queue: NodeId[] = []
   for (const n of nodes) {
     if ((inDegree.get(n) ?? 0) === 0) queue.push(n)
   }
   const topo: NodeId[] = []
-  const queueHead = { i: 0 }
-  while (queueHead.i < queue.length) {
-    const u = queue[queueHead.i++]
+  let qHead = 0
+  while (qHead < queue.length) {
+    const u = queue[qHead++]
     if (u === undefined) break
     topo.push(u)
     for (const v of succ.get(u) ?? []) {
@@ -82,7 +99,7 @@ export function assignLayers(
     }
   }
 
-  // Forward longest path from any root (ASAP layer).
+  // ASAP layer for every node.
   const asap = new Map<NodeId, number>()
   for (const u of topo) {
     let maxPred = -1
@@ -92,51 +109,94 @@ export function assignLayers(
     }
     asap.set(u, maxPred + 1)
   }
+  // Cycle survivors don't appear in topo; default them to 0.
   for (const n of nodes) {
     if (!asap.has(n)) asap.set(n, 0)
   }
 
   let layerOf: Map<NodeId, number>
-  if (mode === 'alap') {
-    // Reverse longest path: distance from each node to its furthest
-    // leaf. Walk topo in reverse so successors are resolved first.
-    const reverseDepth = new Map<NodeId, number>()
-    for (let i = topo.length - 1; i >= 0; i--) {
-      const u = topo[i]
-      if (u === undefined) continue
-      let maxSucc = -1
-      for (const v of succ.get(u) ?? []) {
-        const lv = reverseDepth.get(v)
-        if (lv !== undefined && lv > maxSucc) maxSucc = lv
-      }
-      reverseDepth.set(u, maxSucc + 1)
-    }
-    for (const n of nodes) {
-      if (!reverseDepth.has(n)) reverseDepth.set(n, 0)
-    }
-    let totalDepth = 0
-    for (const n of nodes) {
-      const d = (asap.get(n) ?? 0) + (reverseDepth.get(n) ?? 0)
-      if (d > totalDepth) totalDepth = d
-    }
-    layerOf = new Map<NodeId, number>()
-    for (const n of nodes) {
-      const layer = totalDepth - (reverseDepth.get(n) ?? 0)
-      layerOf.set(n, layer)
-    }
-  } else {
+  if (mode === 'asap') {
     layerOf = asap
+  } else if (mode === 'alap') {
+    layerOf = computeAlap(nodes, topo, asap, succ)
+  } else {
+    layerOf = computeTiered(nodes, asap, succ)
   }
 
   // Bucket into layers[i].
   let maxLayer = 0
-  for (const l of layerOf.values()) if (l > maxLayer) maxLayer = l
+  for (const l of layerOf.values()) {
+    if (l > maxLayer) maxLayer = l
+  }
   const layers: NodeId[][] = Array.from({ length: maxLayer + 1 }, () => [])
   for (const n of nodes) {
     const l = layerOf.get(n) ?? 0
-    const bucket = layers[l]
-    if (bucket) bucket.push(n)
+    layers[l]?.push(n)
   }
 
   return { layers, layerOf }
+}
+
+/**
+ * **Tiered**: ASAP for internal nodes, leaves pinned to `maxAsap`.
+ *
+ * "Leaf" here means no outgoing edges in the DAG used for layering
+ * (post cycle-removal). Network diagrams have one true leaf class —
+ * endpoint devices — and they look better aligned on a single row.
+ *
+ * Long edges (internal layer to bottom layer) are accepted as a
+ * trade-off; Bezier rendering handles them as one curve.
+ */
+function computeTiered(
+  nodes: NodeId[],
+  asap: Map<NodeId, number>,
+  succ: Map<NodeId, NodeId[]>,
+): Map<NodeId, number> {
+  let maxAsap = 0
+  for (const l of asap.values()) {
+    if (l > maxAsap) maxAsap = l
+  }
+  const out = new Map<NodeId, number>()
+  for (const n of nodes) {
+    const isLeaf = (succ.get(n)?.length ?? 0) === 0
+    out.set(n, isLeaf ? maxAsap : (asap.get(n) ?? 0))
+  }
+  return out
+}
+
+/**
+ * **ALAP**: every node sits at the deepest layer compatible with the
+ * DAG. Pre-tiered default, retained for explicit opt-in.
+ */
+function computeAlap(
+  nodes: NodeId[],
+  topo: NodeId[],
+  asap: Map<NodeId, number>,
+  succ: Map<NodeId, NodeId[]>,
+): Map<NodeId, number> {
+  // Reverse longest path: distance from each node to its furthest leaf.
+  const reverseDepth = new Map<NodeId, number>()
+  for (let i = topo.length - 1; i >= 0; i--) {
+    const u = topo[i]
+    if (u === undefined) continue
+    let maxSucc = -1
+    for (const v of succ.get(u) ?? []) {
+      const lv = reverseDepth.get(v)
+      if (lv !== undefined && lv > maxSucc) maxSucc = lv
+    }
+    reverseDepth.set(u, maxSucc + 1)
+  }
+  for (const n of nodes) {
+    if (!reverseDepth.has(n)) reverseDepth.set(n, 0)
+  }
+  let totalDepth = 0
+  for (const n of nodes) {
+    const d = (asap.get(n) ?? 0) + (reverseDepth.get(n) ?? 0)
+    if (d > totalDepth) totalDepth = d
+  }
+  const out = new Map<NodeId, number>()
+  for (const n of nodes) {
+    out.set(n, totalDepth - (reverseDepth.get(n) ?? 0))
+  }
+  return out
 }
