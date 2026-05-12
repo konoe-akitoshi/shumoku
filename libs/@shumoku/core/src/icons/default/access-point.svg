@@ -1,12 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-access-point)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <defs>
-    <linearGradient id="g-access-point" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="g-access-point" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
       <stop offset="0" stop-color="#60A5FA"/>
       <stop offset="1" stop-color="#2563EB"/>
     </linearGradient>
   </defs>
-  <path d="M3 10 A 13 13 0 0 1 21 10"/>
-  <path d="M6.5 13 A 8 8 0 0 1 17.5 13"/>
-  <path d="M10 16 A 3 3 0 0 1 14 16"/>
-  <circle cx="12" cy="19" r="1.5" fill="url(#g-access-point)" stroke="none"/>
+  <g fill="none" stroke="url(#g-access-point)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9" fill="url(#g-access-point)" fill-opacity="0.18"/>
+    <circle cx="12" cy="12" r="2" fill="url(#g-access-point)" stroke="none"/>
+    <path d="M 7.5 8.5 A 4.5 4.5 0 0 0 7.5 15.5"/>
+    <path d="M 16.5 8.5 A 4.5 4.5 0 0 1 16.5 15.5"/>
+  </g>
 </svg>

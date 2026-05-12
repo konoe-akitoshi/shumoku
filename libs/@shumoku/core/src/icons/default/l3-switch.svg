@@ -1,15 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-l3-switch)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <defs>
-    <linearGradient id="g-l3-switch" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="g-l3-switch" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
       <stop offset="0" stop-color="#34D399"/>
       <stop offset="1" stop-color="#059669"/>
     </linearGradient>
   </defs>
-  <rect x="2" y="6" width="20" height="12" rx="2.5"/>
-  <path d="M7 12 H 17"/>
-  <path d="M9 10 L7 12 L9 14"/>
-  <path d="M15 10 L17 12 L15 14"/>
-  <path d="M12 8.5 V 15.5"/>
-  <path d="M10 10.5 L12 8.5 L14 10.5"/>
-  <path d="M10 13.5 L12 15.5 L14 13.5"/>
+  <g fill="none" stroke="url(#g-l3-switch)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="12" width="18" height="8" rx="2" fill="url(#g-l3-switch)" fill-opacity="0.18"/>
+    <path d="M 6 5 H 18"/>
+    <path d="M 16 3.5 L 18 5 L 16 6.5"/>
+    <path d="M 18 8.5 H 6"/>
+    <path d="M 8 7 L 6 8.5 L 8 10"/>
+  </g>
 </svg>

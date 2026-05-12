@@ -1,12 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-vpn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <defs>
-    <linearGradient id="g-vpn" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="g-vpn" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
       <stop offset="0" stop-color="#34D399"/>
       <stop offset="1" stop-color="#059669"/>
     </linearGradient>
   </defs>
-  <path d="M8 10 V 7 A 4 4 0 0 1 16 7 V 10"/>
-  <rect x="5" y="10" width="14" height="11" rx="2"/>
-  <circle cx="12" cy="14.5" r="1.5" fill="url(#g-vpn)" stroke="none"/>
-  <path d="M12 16 V 18.5"/>
+  <g fill="none" stroke="url(#g-vpn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="7" width="20" height="10" rx="5" fill="url(#g-vpn)" fill-opacity="0.18"/>
+    <rect x="5" y="9.5" width="14" height="5" rx="2.5"/>
+    <path d="M 8 12 H 14"/>
+    <path d="M 12 10.5 L 14 12 L 12 13.5"/>
+  </g>
 </svg>

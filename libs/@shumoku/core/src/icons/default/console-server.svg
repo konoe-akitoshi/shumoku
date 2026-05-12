@@ -1,14 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-console-server)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <defs>
-    <linearGradient id="g-console-server" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="g-console-server" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
       <stop offset="0" stop-color="#94A3B8"/>
       <stop offset="1" stop-color="#475569"/>
     </linearGradient>
   </defs>
-  <rect x="2" y="5" width="20" height="14" rx="2"/>
-  <path d="M5.5 9.5 L 8 12 L 5.5 14.5"/>
-  <path d="M10 14.5 H 14"/>
-  <circle cx="18" cy="9" r="0.6" fill="url(#g-console-server)" stroke="none"/>
-  <circle cx="18" cy="12" r="0.6" fill="url(#g-console-server)" stroke="none"/>
-  <circle cx="18" cy="15" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+  <g fill="none" stroke="url(#g-console-server)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="7" width="20" height="10" rx="1.5" fill="url(#g-console-server)" fill-opacity="0.18"/>
+    <circle cx="5" cy="10" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="8.5" cy="10" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="12" cy="10" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="15.5" cy="10" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="19" cy="10" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="5" cy="14" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="8.5" cy="14" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="12" cy="14" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="15.5" cy="14" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+    <circle cx="19" cy="14" r="0.6" fill="url(#g-console-server)" stroke="none"/>
+  </g>
 </svg>

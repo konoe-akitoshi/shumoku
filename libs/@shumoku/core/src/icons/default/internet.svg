@@ -1,11 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-internet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <defs>
-    <linearGradient id="g-internet" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="g-internet" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
       <stop offset="0" stop-color="#38BDF8"/>
       <stop offset="1" stop-color="#0284C7"/>
     </linearGradient>
   </defs>
-  <circle cx="12" cy="12" r="9"/>
-  <ellipse cx="12" cy="12" rx="3.6" ry="9"/>
-  <path d="M3 12 H 21"/>
+  <g fill="none" stroke="url(#g-internet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10" fill="url(#g-internet)" fill-opacity="0.18"/>
+    <path d="M 12 2 A 14 14 0 0 0 12 22 A 14 14 0 0 0 12 2"/>
+    <path d="M 2 12 H 22"/>
+  </g>
 </svg>

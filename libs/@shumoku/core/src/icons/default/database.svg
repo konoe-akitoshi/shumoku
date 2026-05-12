@@ -1,12 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-database)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <defs>
-    <linearGradient id="g-database" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="g-database" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
       <stop offset="0" stop-color="#A78BFA"/>
       <stop offset="1" stop-color="#7C3AED"/>
     </linearGradient>
   </defs>
-  <ellipse cx="12" cy="5" rx="7" ry="2.5"/>
-  <path d="M5 5 V 19 C 5 20.4 8.1 21.5 12 21.5 C 15.9 21.5 19 20.4 19 19 V 5"/>
-  <path d="M5 10 C 5 11.4 8.1 12.5 12 12.5 C 15.9 12.5 19 11.4 19 10"/>
-  <path d="M5 14.5 C 5 15.9 8.1 17 12 17 C 15.9 17 19 15.9 19 14.5"/>
+  <g fill="none" stroke="url(#g-database)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="12" cy="5" rx="9" ry="2.5" fill="url(#g-database)" fill-opacity="0.18"/>
+    <path d="M 3 5 V 19 A 9 2.5 0 0 0 21 19 V 5" fill="url(#g-database)" fill-opacity="0.18"/>
+    <path d="M 3 12 A 9 2.5 0 0 0 21 12"/>
+  </g>
 </svg>

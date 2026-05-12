@@ -1,17 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-router)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <defs>
-    <linearGradient id="g-router" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="g-router" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
       <stop offset="0" stop-color="#34D399"/>
       <stop offset="1" stop-color="#059669"/>
     </linearGradient>
   </defs>
-  <circle cx="12" cy="12" r="3" fill="url(#g-router)" stroke="none"/>
-  <path d="M12 7.5 V 3"/>
-  <path d="M9.5 5.5 L12 3 L14.5 5.5"/>
-  <path d="M12 16.5 V 21"/>
-  <path d="M9.5 18.5 L12 21 L14.5 18.5"/>
-  <path d="M7.5 12 H 3"/>
-  <path d="M5.5 9.5 L3 12 L5.5 14.5"/>
-  <path d="M16.5 12 H 21"/>
-  <path d="M18.5 9.5 L21 12 L18.5 14.5"/>
+  <g fill="none" stroke="url(#g-router)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="14" width="20" height="6" rx="2" fill="url(#g-router)" fill-opacity="0.18"/>
+    <path d="M 5 14 V 9"/>
+    <circle cx="5" cy="8" r="1" fill="url(#g-router)" stroke="none"/>
+    <path d="M 9.5 14 V 5"/>
+    <circle cx="9.5" cy="4" r="1" fill="url(#g-router)" stroke="none"/>
+    <path d="M 14.5 14 V 5"/>
+    <circle cx="14.5" cy="4" r="1" fill="url(#g-router)" stroke="none"/>
+    <path d="M 19 14 V 9"/>
+    <circle cx="19" cy="8" r="1" fill="url(#g-router)" stroke="none"/>
+  </g>
 </svg>
