@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolveIcon } from '@shumoku/core'
   import { diagramState } from '$lib/context.svelte'
   import { sceneNodeSize } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
@@ -138,7 +139,26 @@
 
 <div class="scene-print" style:--scene-aspect={`${sceneW} / ${sceneH}`}>
   {#if bg}
-    <img class="scene-print__bg" src={bg.src} alt="" loading="eager" decoding="sync">
+    <!-- onerror: dead `blob:` URLs (carry-over from a previous
+         session) silently fail. Hiding the broken image icon keeps
+         the print clean; the user is responsible for re-uploading
+         the floor plan if it doesn't appear. A diagnostic warning is
+         logged so the cause is discoverable from devtools. -->
+    <img
+      class="scene-print__bg"
+      src={bg.src}
+      alt=""
+      loading="eager"
+      decoding="sync"
+      onerror={(e) => {
+        console.warn(
+          '[ScenePrintSurface] background image failed to load:',
+          bg?.src?.slice(0, 80),
+          '— re-upload the floor plan in Scene side toolbar to recover.',
+        )
+        ;(e.currentTarget as HTMLImageElement).style.visibility = 'hidden'
+      }}
+    >
   {/if}
   <svg
     class="scene-print__overlay"
@@ -148,7 +168,8 @@
     role="img"
     aria-label="Scene cabling overlay"
   >
-    <!-- Cables: straight chords between node centres. -->
+    <!-- Cables: straight chords between node centres. Thicker stroke
+         + black for print legibility. -->
     {#each visibleLinks as link (link.id)}
       {@const a = centerOf(link.from.node)}
       {@const b = centerOf(link.to.node)}
@@ -157,37 +178,66 @@
         y1={a.y}
         x2={b.x}
         y2={b.y}
-        stroke="#1f2937"
-        stroke-width={1.5}
+        stroke="#0f172a"
+        stroke-width={2}
         vector-effect="non-scaling-stroke"
+        stroke-linecap="round"
       />
     {/each}
 
-    <!-- Nodes: rect + label. -->
+    <!-- Nodes: icon (inline SVG or img) + label underneath. Background
+         disc + light stroke so the node reads against the photo. -->
     {#each visibleNodes as n (n.id)}
       {@const p = positionFor(n.id)}
       {@const s = effSize(n.id)}
       {@const label = Array.isArray(n.label) ? (n.label[0] ?? n.id) : (n.label ?? n.id)}
+      {@const icon = resolveIcon(n.spec)}
       <g transform={`translate(${p.x}, ${p.y})`}>
+        <!-- Disc background — keeps the icon legible if it overlaps
+             busy parts of the floor-plan photo. -->
         <rect
           x={0}
           y={0}
           width={s.w}
           height={s.h}
           fill="#ffffff"
-          fill-opacity={0.85}
-          stroke="#111827"
+          fill-opacity={0.9}
+          stroke="#0f172a"
           stroke-width={1}
           vector-effect="non-scaling-stroke"
-          rx={4}
+          rx={6}
         />
+        {#if icon?.kind === 'inline'}
+          <!-- Inline SVG: embed via foreignObject so the embedded svg
+               retains its own viewBox / styling. SVG-in-SVG via
+               `innerHTML` would also work but foreignObject keeps the
+               markup isolated from our coordinate system. -->
+          <g transform={`translate(${s.w * 0.15}, ${s.h * 0.1}) scale(${(s.w * 0.7) / 24})`}>
+            <!-- Resolved icon is sized for a 24×24 viewBox in our
+                 catalogue; scale to ~70% of the disc. -->
+            {@html icon.svg}
+          </g>
+        {:else if icon?.kind === 'url'}
+          <image
+            href={icon.url}
+            x={s.w * 0.15}
+            y={s.h * 0.1}
+            width={s.w * 0.7}
+            height={s.h * 0.7}
+            preserveAspectRatio="xMidYMid meet"
+          />
+        {/if}
+        <!-- Label below the disc so it doesn't overlap the icon. -->
         <text
           x={s.w / 2}
-          y={s.h / 2 + 4}
+          y={s.h + 12}
           text-anchor="middle"
-          font-size={12}
+          font-size={10}
           font-family="ui-sans-serif, system-ui, sans-serif"
-          fill="#111827"
+          fill="#0f172a"
+          paint-order="stroke fill"
+          stroke="#ffffff"
+          stroke-width={2.5}
         >
           {label}
         </text>
