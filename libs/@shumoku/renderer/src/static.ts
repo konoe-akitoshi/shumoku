@@ -29,7 +29,7 @@ import {
   specDeviceType,
 } from '@shumoku/core'
 import { type RenderColors, themeToColors } from './lib/render-colors'
-import { computePortLabelPosition, getVlanStroke, pointsToPathD } from './lib/svg-coords'
+import { bezierEdgePath, computePortLabelPosition, getVlanStroke } from './lib/svg-coords'
 
 // ============================================================================
 // Escape helper
@@ -211,7 +211,10 @@ function renderPort(port: ResolvedPort, colors: RenderColors): string {
 }
 
 function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
-  const pathD = pointsToPathD(edge.points)
+  const pathD =
+    edge.fromPort && edge.toPort
+      ? bezierEdgePath(edge.fromPort, edge.toPort)
+      : `M ${edge.points[0]?.x ?? 0} ${edge.points[0]?.y ?? 0} L ${edge.points[1]?.x ?? 0} ${edge.points[1]?.y ?? 0}`
   const link = edge.link
   const stroke = link?.style?.stroke ?? getVlanStroke(link?.vlan) ?? colors.linkStroke
   const dasharray = link?.type === 'dashed' ? '5 3' : (link?.style?.strokeDasharray ?? '')

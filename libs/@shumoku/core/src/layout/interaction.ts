@@ -12,9 +12,9 @@
 
 import { newId } from '../ids.js'
 import type { Link, NetworkGraph, Node, NodePort, Subgraph } from '../models/types.js'
-import { routeEdges } from './libavoid-router.js'
 import { computeNodeSize } from './network-layout.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
+import { routeEdges } from './route-edges.js'
 
 /** Minimum gap between nodes during collision resolution */
 const DEFAULT_NODE_GAP = 8
@@ -188,7 +188,7 @@ function isChildOf(
  * 1. Resolve collisions
  * 2. Update node position
  * 3. Update port positions (sticky to node)
- * 4. Re-route edges via libavoid
+ * 4. Re-route edges (port-anchored ResolvedEdge; renderer draws Bezier from ports)
  *
  * Returns a new partial layout with updated nodes, ports, and edges.
  */

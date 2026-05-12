@@ -10,8 +10,8 @@
  */
 
 import type { Link, NetworkGraph, Node, Subgraph } from '../models/types.js'
-import type { LibavoidRoutingOptions } from './libavoid-router.js'
 import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
+import type { RouteEdgesOptions } from './route-edges.js'
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -37,7 +37,7 @@ export async function routeEdgesRemote(
   nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
-  options?: LibavoidRoutingOptions,
+  options?: RouteEdgesOptions,
 ): Promise<Map<string, ResolvedEdge>> {
   if (apiBaseUrl === null) throw new Error('Layout API URL not set. Call setLayoutApiUrl() first.')
 

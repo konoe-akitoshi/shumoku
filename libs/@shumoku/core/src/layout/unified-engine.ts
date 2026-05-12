@@ -5,15 +5,20 @@
 /**
  * Unified layout engine adapter
  *
- * Wraps layoutNetwork + routeEdges into a LayoutEngine-compatible interface.
+ * Wraps `layoutNetwork` (custom Sugiyama with 4-alignment BK coords)
+ * plus the trivial `routeEdges` pass that just attaches port-anchored
+ * `ResolvedEdge` records. Edge geometry is computed in the renderer
+ * as cubic Beziers from the port positions, so no routing solver is
+ * involved at this layer anymore.
+ *
  * Used by server, CLI, renderer-html, and renderer-svg for consistent layout.
  */
 
 import type { LayoutEngine } from '../hierarchical.js'
 import type { LayoutResult, NetworkGraph } from '../models/types.js'
-import { routeEdges } from './libavoid-router.js'
 import { computeNodeSize, layoutNetwork } from './network-layout.js'
 import type { ResolvedLayout } from './resolved-types.js'
+import { routeEdges } from './route-edges.js'
 
 /**
  * Create a LayoutEngine that uses the custom network layout + libavoid routing.
@@ -40,13 +45,9 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
   layout: LayoutResult
 }> {
   const direction = graph.settings?.direction ?? 'TB'
-  const edgeStyle = graph.settings?.edgeStyle ?? 'orthogonal'
 
   const { nodes, ports, subgraphs, bounds } = layoutNetwork(graph, { direction })
-  const edges = await routeEdges(nodes, ports, graph.links, {
-    edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
-    direction,
-  })
+  const edges = await routeEdges(nodes, ports, graph.links, { direction })
 
   const resolved: ResolvedLayout = {
     nodes,
@@ -54,7 +55,7 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
     edges,
     subgraphs,
     bounds,
-    metadata: { algorithm: 'network-layout+libavoid', duration: 0 },
+    metadata: { algorithm: 'network-layout+bezier', duration: 0 },
   }
 
   // Build LayoutResult with ports converted from absolute to center-relative
