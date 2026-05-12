@@ -394,12 +394,21 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): Map<string
     })
   }
 
+  // Endpoint-touching segments are anchored to ports and must not be
+  // shifted: moving their endpoints would drag the port end with
+  // them, leaving the edge floating off its actual port. Skip the
+  // first and last segment of every edge. Middle segments are safe
+  // because their perpendicular neighbours just stretch to match.
+  const isPortAnchored = (edge: ResolvedEdge, i: number): boolean =>
+    i === 0 || i + 1 === edge.points.length - 1
+
   // Collect horizontal segments (consecutive points with same Y)
   const hSegs: Segment[] = []
   for (const [edgeId, edge] of result) {
     for (const [i, a] of edge.points.entries()) {
       const b = edge.points[i + 1]
       if (!b) continue
+      if (isPortAnchored(edge, i)) continue
       if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 1) {
         hSegs.push({
           edgeId,
@@ -421,6 +430,7 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): Map<string
     for (const [i, a] of edge.points.entries()) {
       const b = edge.points[i + 1]
       if (!b) continue
+      if (isPortAnchored(edge, i)) continue
       if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) > 1) {
         vSegs.push({
           edgeId,
