@@ -191,42 +191,31 @@ body {
 
   /* `data-print-canvas` marks the surface that survives Print —
    * everything outside it has already been hidden by `data-print-
-   * hide`. We make it fill the printable area so the canvas inside
-   * (a renderer SVG or a Svelte Flow instance) inherits a sensible
-   * size. */
+   * hide`. We DON'T reset its position/size here: the editor's
+   * onscreen layout (`absolute; inset: 0` inside an `h-screen
+   * w-screen` wrapper) already puts the canvas full-bleed, which
+   * is exactly what we want on paper. Forcing `height: auto`
+   * would collapse a Svelte Flow instance (which sizes itself by
+   * percentage of its parent) to zero. */
   [data-print-canvas] {
-    position: static !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: calc(100vh - 16mm);
     background: white !important;
   }
 
-  /* For the Diagram page (renderer-svg): the page-fitting SVG has
-   * its own `viewBox`, so `width:100%` + auto height plus a
-   * camera-reset on the panned viewport gives a sensible fit. */
-  [data-print-canvas] > div > svg,
-  [data-print-canvas] > svg {
-    width: 100% !important;
-    height: auto !important;
-    max-height: calc(100vh - 16mm);
-    background: white !important;
-  }
+  /* Diagram page (renderer-svg): the page-fitting SVG has its own
+   * `viewBox`, so it scales naturally to the printable area.
+   * Resetting the pan/zoom transform makes the print show the full
+   * diagram rather than whatever the user happened to zoom to. */
   [data-print-canvas] svg g.viewport {
-    /* The interactive camera applies a pan/zoom transform here. The
-     * renderer's SVG already has its full extent in the `viewBox`,
-     * so resetting the transform makes the print fit the page
-     * rather than capturing whatever the user happened to zoom to. */
     transform: none !important;
   }
 
-  /* For the Scene page (Svelte Flow): we DELIBERATELY let Svelte
-   * Flow's internal layout stand. The on-screen rendering — node
+  /* Scene page (Svelte Flow): we DELIBERATELY leave Svelte Flow's
+   * internal layout untouched. The on-screen rendering — node
    * icons, cable bends, length labels, the background image — is
    * what we want on paper. A `beforeprint` hook in `<ScenePrint-
    * Fitter>` calls `fitView()` so the print captures everything,
-   * and we let Svelte Flow's own pan/zoom transform position the
-   * fitted content. */
+   * and Svelte Flow's own pan/zoom transform positions the fitted
+   * content within the printable area. */
 
   /* Make small SVG text more legible: white halo so labels stay
    * readable even where they overlap coloured strokes. */
