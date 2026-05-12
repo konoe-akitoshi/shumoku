@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Link } from '../models/types.js'
+import type { Link, Node } from '../models/types.js'
 import { assignChannelLanes, checkpointFromLane } from './channel-routing.js'
 import type { Channel, LayerDetectionResult } from './layer-detection.js'
 import type { ResolvedPort } from './resolved-types.js'
@@ -21,6 +21,24 @@ function port(
   }
 }
 
+/** Build a minimal Node map from port positions — the channel router
+ *  reads node centres to group fan-out edges, so every test needs at
+ *  least a position per node id. The y is irrelevant for our TB tests
+ *  (the router uses crossAxis = x); we just need a defined position. */
+function nodesFromPorts(ports: Map<string, ResolvedPort>): Map<string, Node> {
+  const nodes = new Map<string, Node>()
+  for (const p of ports.values()) {
+    if (nodes.has(p.nodeId)) continue
+    nodes.set(p.nodeId, {
+      id: p.nodeId,
+      label: p.nodeId,
+      shape: 'rounded',
+      position: { x: p.absolutePosition.x, y: p.absolutePosition.y },
+    })
+  }
+  return nodes
+}
+
 function buildLayers(
   spec: Array<{ nodes: string[]; rankStart: number; rankEnd: number; rankCentre: number }>,
 ): LayerDetectionResult {
@@ -33,9 +51,10 @@ function buildLayers(
 }
 
 describe('assignChannelLanes', () => {
-  it('puts each edge in its own lane, sorted by source X (stable order)', () => {
-    // Three switches at top (y=100), three APs at bottom (y=400)
-    // Edges declared in REVERSE peer-x order to exercise sorting.
+  it('groups by source x; within a source, far peers get shallower lanes than near peers', () => {
+    // Three switches at top (y=100), three APs at bottom (y=400).
+    // Each switch fans to its OWN AP at matching x, so distances are
+    // all zero — the outer source-x ordering decides lane Y.
     const layers = buildLayers([
       { nodes: ['sw-l', 'sw-m', 'sw-r'], rankStart: 80, rankEnd: 120, rankCentre: 100 },
       { nodes: ['ap-l', 'ap-m', 'ap-r'], rankStart: 380, rankEnd: 420, rankCentre: 400 },
@@ -54,16 +73,42 @@ describe('assignChannelLanes', () => {
       { id: 'link-l', from: { node: 'sw-l', port: 'p' }, to: { node: 'ap-l', port: 'p' } },
       { id: 'link-m', from: { node: 'sw-m', port: 'p' }, to: { node: 'ap-m', port: 'p' } },
     ]
-
-    const result = assignChannelLanes(links, ports, layers, channels, 'TB')
+    const result = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, channels, 'TB')
     const l = result.get('link-l')?.rankCoords[0]
     const m = result.get('link-m')?.rankCoords[0]
     const r = result.get('link-r')?.rankCoords[0]
-    expect(l).toBeDefined()
-    expect(m).toBeDefined()
-    expect(r).toBeDefined()
-    expect(l).toBeLessThan(m as number) // left-source edge gets the first (smallest) lane Y
+    expect(l).toBeLessThan(m as number)
     expect(m).toBeLessThan(r as number)
+  })
+
+  it('fan-out: same source, far targets bend at shallower lanes than near targets', () => {
+    // One switch at x=500, three APs scattered left/right.
+    // Distances: ap-near at x=480 (Δ=20), ap-mid at x=300 (Δ=200), ap-far at x=900 (Δ=400).
+    // Expected lane order (low → high rank coord): ap-far, ap-mid, ap-near.
+    const layers = buildLayers([
+      { nodes: ['sw'], rankStart: 80, rankEnd: 120, rankCentre: 100 },
+      { nodes: ['ap-far', 'ap-mid', 'ap-near'], rankStart: 380, rankEnd: 420, rankCentre: 400 },
+    ])
+    const channels: Channel[] = [{ index: 0, rankStart: 130, rankEnd: 370 }]
+    const ports = new Map<string, ResolvedPort>([
+      ['sw:a', port('sw:a', 'sw', 500, 120)],
+      ['sw:b', port('sw:b', 'sw', 500, 120)],
+      ['sw:c', port('sw:c', 'sw', 500, 120)],
+      ['ap-far:p', port('ap-far:p', 'ap-far', 900, 380)],
+      ['ap-mid:p', port('ap-mid:p', 'ap-mid', 300, 380)],
+      ['ap-near:p', port('ap-near:p', 'ap-near', 480, 380)],
+    ])
+    const links: Link[] = [
+      { id: 'near', from: { node: 'sw', port: 'a' }, to: { node: 'ap-near', port: 'p' } },
+      { id: 'mid', from: { node: 'sw', port: 'b' }, to: { node: 'ap-mid', port: 'p' } },
+      { id: 'far', from: { node: 'sw', port: 'c' }, to: { node: 'ap-far', port: 'p' } },
+    ]
+    const result = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, channels, 'TB')
+    const farY = result.get('far')?.rankCoords[0] as number
+    const midY = result.get('mid')?.rankCoords[0] as number
+    const nearY = result.get('near')?.rankCoords[0] as number
+    expect(farY).toBeLessThan(midY) // far peels off first (shallow lane = small Y in TB)
+    expect(midY).toBeLessThan(nearY) // near stays deep
   })
 
   it('spreads lanes evenly within the channel span', () => {
@@ -86,7 +131,7 @@ describe('assignChannelLanes', () => {
       { id: 'by', from: { node: 'b', port: 'p' }, to: { node: 'y', port: 'p' } },
       { id: 'cz', from: { node: 'c', port: 'p' }, to: { node: 'z', port: 'p' } },
     ]
-    const result = assignChannelLanes(links, ports, layers, channels, 'TB')
+    const result = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, channels, 'TB')
     expect(result.get('ax')?.rankCoords[0]).toBe(190)
     expect(result.get('by')?.rankCoords[0]).toBe(250)
     expect(result.get('cz')?.rankCoords[0]).toBe(310)
@@ -106,7 +151,7 @@ describe('assignChannelLanes', () => {
     const links: Link[] = [
       { id: 'flip', from: { node: 'lo', port: 'p' }, to: { node: 'hi', port: 'p' } },
     ]
-    const result = assignChannelLanes(links, ports, layers, channels, 'TB')
+    const result = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, channels, 'TB')
     expect(result.get('flip')?.channelIndices).toEqual([0])
   })
 
@@ -127,7 +172,7 @@ describe('assignChannelLanes', () => {
     const links: Link[] = [
       { id: 'long', from: { node: 'top', port: 'p' }, to: { node: 'bot', port: 'p' } },
     ]
-    const result = assignChannelLanes(links, ports, layers, channels, 'TB')
+    const result = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, channels, 'TB')
     expect(result.get('long')?.channelIndices).toEqual([0, 1])
     expect(result.get('long')?.rankCoords.length).toBe(2)
   })
@@ -143,7 +188,7 @@ describe('assignChannelLanes', () => {
     const links: Link[] = [
       { id: 'ha', from: { node: 'a', port: 'p' }, to: { node: 'b', port: 'p' }, redundancy: 'ha' },
     ]
-    const result = assignChannelLanes(links, ports, layers, [], 'TB')
+    const result = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, [], 'TB')
     expect(result.has('ha')).toBe(false)
   })
 
@@ -157,7 +202,7 @@ describe('assignChannelLanes', () => {
     const links: Link[] = [
       { id: 'bad', from: { node: 'a', port: 'p' }, to: { node: 'b', port: 'missing' } },
     ]
-    const result = assignChannelLanes(links, ports, layers, channels, 'TB')
+    const result = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, channels, 'TB')
     expect(result.has('bad')).toBe(false)
   })
 
@@ -177,8 +222,8 @@ describe('assignChannelLanes', () => {
       { id: 'l1', from: { node: 'a', port: 'p1' }, to: { node: 'b', port: 'p' } },
       { id: 'l2', from: { node: 'a', port: 'p2' }, to: { node: 'c', port: 'p' } },
     ]
-    const r1 = assignChannelLanes(links, ports, layers, channels, 'TB')
-    const r2 = assignChannelLanes(links, ports, layers, channels, 'TB')
+    const r1 = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, channels, 'TB')
+    const r2 = assignChannelLanes(links, nodesFromPorts(ports), ports, layers, channels, 'TB')
     expect(r1.get('l1')?.rankCoords).toEqual(r2.get('l1')?.rankCoords)
     expect(r1.get('l2')?.rankCoords).toEqual(r2.get('l2')?.rankCoords)
   })
