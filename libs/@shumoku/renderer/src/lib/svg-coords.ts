@@ -18,6 +18,58 @@ export function pointsToPathD(points: { x: number; y: number }[]): string {
   return d
 }
 
+/**
+ * Build a cubic-Bezier SVG path that flows out of `from`'s port side and
+ * into `to`'s. The control-point distance is proportional to the
+ * straight-line gap between the two ports along the rank axis (the
+ * normal of the source's side), clamped to [MIN, MAX] so very short
+ * edges don't degenerate to overshooting curves and very long edges
+ * don't get visually flat.
+ *
+ * The curve has no notion of obstacle avoidance — by design, since we
+ * trade the bend-channel correctness of libavoid for visual flow. If
+ * the edge crosses an unrelated node body it just goes through it.
+ * Acceptable for the network-diagram case where parent/child layers
+ * are clearly stacked.
+ */
+export function bezierEdgePath(
+  from: { absolutePosition: { x: number; y: number }; side?: Side },
+  to: { absolutePosition: { x: number; y: number }; side?: Side },
+): string {
+  const a = from.absolutePosition
+  const b = to.absolutePosition
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  // Tangent distance: how far the curve "shoots straight" out of each
+  // port before bending. Scales with the perpendicular gap so a short
+  // edge bends tighter than a long one but never collapses to zero.
+  const reach = clamp(Math.sqrt(dx * dx + dy * dy) * 0.4, 24, 220)
+  const [ax, ay] = tangentOffset(from.side ?? 'bottom', reach)
+  const [bx, by] = tangentOffset(to.side ?? 'top', reach)
+  const c1x = a.x + ax
+  const c1y = a.y + ay
+  const c2x = b.x + bx
+  const c2y = b.y + by
+  return `M ${a.x} ${a.y} C ${c1x} ${c1y} ${c2x} ${c2y} ${b.x} ${b.y}`
+}
+
+function tangentOffset(side: Side, magnitude: number): [number, number] {
+  switch (side) {
+    case 'top':
+      return [0, -magnitude]
+    case 'bottom':
+      return [0, magnitude]
+    case 'left':
+      return [-magnitude, 0]
+    case 'right':
+      return [magnitude, 0]
+  }
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v
+}
+
 type Side = 'top' | 'bottom' | 'left' | 'right'
 
 const LABEL_OFFSET = 12

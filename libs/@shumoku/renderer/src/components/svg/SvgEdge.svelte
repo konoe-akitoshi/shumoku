@@ -1,8 +1,14 @@
 <script lang="ts">
   import type { ResolvedEdge } from '@shumoku/core'
+  import { edgeStyleStore } from '../../lib/edge-style.svelte'
   import type { LinkOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
-  import { computePortLabelPosition, getVlanStroke, pointsToPathD } from '../../lib/svg-coords'
+  import {
+    bezierEdgePath,
+    computePortLabelPosition,
+    getVlanStroke,
+    pointsToPathD,
+  } from '../../lib/svg-coords'
 
   let {
     edge,
@@ -20,7 +26,17 @@
     oncontextmenu?: (edgeId: string, e: MouseEvent) => void
   } = $props()
 
-  const pathD = $derived(pointsToPathD(edge.points))
+  // Edge rendering style. Toggle from devtools with
+  //   window.__shumoku.setEdgeStyle('bezier')   // or 'orthogonal'
+  // Bezier mode bypasses the libavoid polyline and draws a single
+  // cubic curve from the source port (with its side as the start
+  // tangent) to the dest port (with its side as the end tangent).
+  // Orthogonal mode (default) uses the routed polyline as before.
+  const pathD = $derived(
+    edgeStyleStore.current === 'bezier' && edge.fromPort && edge.toPort
+      ? bezierEdgePath(edge.fromPort, edge.toPort)
+      : pointsToPathD(edge.points),
+  )
   const link = $derived(edge.link)
   const linkType = $derived(link?.type ?? 'solid')
   const dasharray = $derived(() => {
