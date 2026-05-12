@@ -260,6 +260,57 @@ describe('assignCoordinates', () => {
     expect(xs).toEqual([-120, 0, 120])
   })
 
+  it('parent sits above the centroid of its children after refinement', () => {
+    // Tree fragment:
+    //   root          ← layer 0
+    //   / | \
+    //  a  b  c        ← layer 1 (intermediate switches)
+    //  |  |   \
+    //  l1 l2  l3 l4   ← layer 2 (leaves, c has 2 children)
+    //
+    // The leaf layer is *wider* than the middle layer: the four
+    // leaves stretch wider than three siblings could on the same
+    // pitch. Without subtree-aware refinement, a/b/c stay evenly
+    // spaced above their (single) parent and c ends up off to the
+    // side of its two leaves. With refinement, c should sit at
+    // the centroid of l3 and l4.
+    const layers: LayerAssignment = {
+      layers: [['root'], ['a', 'b', 'c'], ['l1', 'l2', 'l3', 'l4']],
+      layerOf: new Map([
+        ['root', 0],
+        ['a', 1],
+        ['b', 1],
+        ['c', 1],
+        ['l1', 2],
+        ['l2', 2],
+        ['l3', 2],
+        ['l4', 2],
+      ]),
+    }
+    const positions = assignCoordinates(layers, {
+      defaultSize: uniformSize,
+      nodeGap: 20,
+      edges: [
+        { id: 'e1', source: 'root', target: 'a' },
+        { id: 'e2', source: 'root', target: 'b' },
+        { id: 'e3', source: 'root', target: 'c' },
+        { id: 'e4', source: 'a', target: 'l1' },
+        { id: 'e5', source: 'b', target: 'l2' },
+        { id: 'e6', source: 'c', target: 'l3' },
+        { id: 'e7', source: 'c', target: 'l4' },
+      ],
+    })
+    const l3 = positions.get('l3')?.x ?? 0
+    const l4 = positions.get('l4')?.x ?? 0
+    const cx = positions.get('c')?.x ?? 0
+    // c should be within one node-width of its children's centroid.
+    // (Exact equality is too strict — collision packing in the parent
+    // layer can shift c by up to one gap to avoid hitting b.)
+    expect(Math.abs(cx - (l3 + l4) / 2)).toBeLessThanOrEqual(uniformSize.width + 20)
+    // Sanity: c is to the right of b (preserves layer ordering).
+    expect(cx).toBeGreaterThan(positions.get('b')?.x ?? 0)
+  })
+
   it('falls back to defaultSize when sizes map is missing a node', () => {
     const layers = makeLayers([['a', 'b']])
     const sizes = new Map<string, Size>([['a', { width: 100, height: 50 }]])
