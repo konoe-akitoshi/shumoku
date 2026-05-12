@@ -202,9 +202,14 @@ function registerPins(
     const xProp = (port.absolutePosition.x - (node.position.x - size.width / 2)) / size.width
     const yProp = (port.absolutePosition.y - (node.position.y - size.height / 2)) / size.height
 
-    // Direction = graph flow direction for vertical ports (TB → always down),
-    // side direction for horizontal ports (HA).
-    const dir = port.side === 'top' || port.side === 'bottom' ? ConnDirDown : sideToDir(port.side)
+    // Direction = "outward from the side". A port on the top edge of
+    // a shape has its line emerging upward; a bottom port emerges
+    // downward. The earlier hard-coded `ConnDirDown` for both top
+    // and bottom worked for the default TB layout (sources always
+    // landed on the bottom side) but produced impossible constraints
+    // for placement-overridden source ports pinned to the top of
+    // their node — libavoid silently fell back to a straight line.
+    const dir = sideToDir(port.side)
 
     const pin = new Avoid.ShapeConnectionPin(
       shape,
