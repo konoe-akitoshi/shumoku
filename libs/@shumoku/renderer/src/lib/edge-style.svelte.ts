@@ -13,7 +13,10 @@
 export type EdgeStyle = 'orthogonal' | 'bezier'
 
 class EdgeStyleStore {
-  current: EdgeStyle = $state('orthogonal')
+  // Default. Bezier flows out of each port for a stalk-length then
+  // arcs to the destination — dense fan-outs no longer collapse into
+  // a wall of bends. Orthogonal stays available via setEdgeStyle().
+  current: EdgeStyle = $state('bezier')
 }
 
 export const edgeStyleStore = new EdgeStyleStore()

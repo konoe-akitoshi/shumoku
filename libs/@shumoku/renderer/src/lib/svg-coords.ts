@@ -20,17 +20,21 @@ export function pointsToPathD(points: { x: number; y: number }[]): string {
 
 /**
  * Build a cubic-Bezier SVG path that flows out of `from`'s port side and
- * into `to`'s. The control-point distance is proportional to the
- * straight-line gap between the two ports along the rank axis (the
- * normal of the source's side), clamped to [MIN, MAX] so very short
- * edges don't degenerate to overshooting curves and very long edges
- * don't get visually flat.
+ * into `to`'s.
  *
- * The curve has no notion of obstacle avoidance — by design, since we
- * trade the bend-channel correctness of libavoid for visual flow. If
- * the edge crosses an unrelated node body it just goes through it.
- * Acceptable for the network-diagram case where parent/child layers
- * are clearly stacked.
+ * Tangent magnitude scales with **the distance along the port normal**
+ * (the rank-axis gap), not the straight-line Euclidean distance. That
+ * keeps the curve "shooting straight" out of the port for a sizeable
+ * fraction of the vertical gap before bending sideways — endpoints
+ * read as straight while the curvature concentrates in the middle.
+ * Using the Euclidean distance instead made every long edge into a
+ * gentle diagonal that started turning right at the port; perpendicular
+ * gap gives the more telegraphic "stalk → arc → stalk" silhouette.
+ *
+ * No obstacle avoidance — by design, since we trade the bend-channel
+ * correctness of libavoid for visual flow. If the edge crosses an
+ * unrelated node body it just goes through it. Acceptable for the
+ * network-diagram case where parent/child layers are clearly stacked.
  */
 export function bezierEdgePath(
   from: { absolutePosition: { x: number; y: number }; side?: Side },
@@ -38,19 +42,35 @@ export function bezierEdgePath(
 ): string {
   const a = from.absolutePosition
   const b = to.absolutePosition
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  // Tangent distance: how far the curve "shoots straight" out of each
-  // port before bending. Scales with the perpendicular gap so a short
-  // edge bends tighter than a long one but never collapses to zero.
-  const reach = clamp(Math.sqrt(dx * dx + dy * dy) * 0.4, 24, 220)
-  const [ax, ay] = tangentOffset(from.side ?? 'bottom', reach)
-  const [bx, by] = tangentOffset(to.side ?? 'top', reach)
+  const fromSide = from.side ?? 'bottom'
+  const toSide = to.side ?? 'top'
+  // Distance along the source's port normal (= the "rank-axis gap"
+  // when source.side is top/bottom this is |dy|, when it's left/right
+  // this is |dx|). Long stalks come out of the port before the arc
+  // takes over.
+  const normalGap = projectAlongNormal(fromSide, b.x - a.x, b.y - a.y)
+  const reach = clamp(normalGap * 0.6, 40, 320)
+  const [ax, ay] = tangentOffset(fromSide, reach)
+  const [bx, by] = tangentOffset(toSide, reach)
   const c1x = a.x + ax
   const c1y = a.y + ay
   const c2x = b.x + bx
   const c2y = b.y + by
   return `M ${a.x} ${a.y} C ${c1x} ${c1y} ${c2x} ${c2y} ${b.x} ${b.y}`
+}
+
+/** Absolute distance from the port along its outward normal. */
+function projectAlongNormal(side: Side, dx: number, dy: number): number {
+  switch (side) {
+    case 'top':
+      return Math.abs(Math.min(0, dy))
+    case 'bottom':
+      return Math.abs(Math.max(0, dy))
+    case 'left':
+      return Math.abs(Math.min(0, dx))
+    case 'right':
+      return Math.abs(Math.max(0, dx))
+  }
 }
 
 function tangentOffset(side: Side, magnitude: number): [number, number] {
