@@ -18,12 +18,12 @@ import type {
   Theme,
 } from '@shumoku/core'
 import {
-  computeNodeSize,
   DEFAULT_ICON_SIZE,
   getDeviceIcon,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
+  resolveNodeSize,
   SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   specDeviceType,
@@ -135,7 +135,7 @@ function renderNodeShape(
 function renderNode(node: Node, colors: RenderColors): string {
   const cx = node.position?.x ?? 0
   const cy = node.position?.y ?? 0
-  const size = computeNodeSize(node)
+  const size = resolveNodeSize(node)
   const style = node.style ?? {}
   const fill = style.fill ?? colors.nodeFill
   const stroke = style.stroke ?? colors.nodeStroke

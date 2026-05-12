@@ -15,12 +15,13 @@
   import {
     addPort,
     collectObstacles,
-    computeNodeSize,
+    computeNodeBodySize,
     detectClickSide,
     linkExists,
     moveNode,
     moveSubgraph,
     rebalanceSubgraphs,
+    resolveNodeSize,
     resolvePosition,
     routeEdges,
     specDeviceType,
@@ -297,7 +298,7 @@
       : opts.type
         ? ({ kind: 'hardware' as const, type: opts.type } satisfies NodeSpec)
         : undefined
-    const { width: w, height: h } = computeNodeSize({ label, spec })
+    const { width: w, height: h } = computeNodeBodySize({ label, spec })
     const { parent, initial } = resolveParentAndPosition(opts.position, w)
     const obstacles = collectObstacles(id, parent, nodes, subgraphs)
     const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
@@ -368,7 +369,7 @@
       return {
         kind: 'node',
         ...node,
-        size: computeNodeSize(node),
+        size: resolveNodeSize(node),
         ports: nodePorts.map((p) => ({
           id: p.id,
           label: p.label,

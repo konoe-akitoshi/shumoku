@@ -30,6 +30,7 @@ import {
   LABEL_LINE_HEIGHT,
   NODE_HORIZONTAL_PADDING,
   NODE_VERTICAL_PADDING,
+  SMALL_LABEL_CHAR_WIDTH,
 } from '../constants.js'
 import { getDeviceIcon } from '../icons/index.js'
 import type {
@@ -42,7 +43,7 @@ import type {
   Subgraph,
 } from '../models/types.js'
 import { rebalanceSubgraphs } from './interaction.js'
-import { placePorts } from './port-placement.js'
+import { decidePortSides, placePorts } from './port-placement.js'
 import type { ResolvedPort } from './resolved-types.js'
 import {
   type CompoundLayoutResult,
@@ -102,7 +103,7 @@ const DEFAULTS: Required<NetworkLayoutOptions> = {
   topLevelGap: 80,
   subgraphPadding: 20,
   subgraphLabelHeight: 28,
-  nodeWidth: 180,
+  nodeWidth: 80,
   minPortSpacing: 40,
   portSize: 8,
   portLabelPadding: 8,
@@ -115,33 +116,144 @@ const DEFAULTS: Required<NetworkLayoutOptions> = {
 // ============================================================================
 
 /**
- * Compute the appropriate size for a node based on its content.
- * Used by the layout engine, interactive addNewNode, and renderers.
- * `portCount` is the number of ports on the node — when the layout
- * engine invokes this it passes the count so very-wide port banks
- * grow the node rather than crowding its edge.
+ * Per-side port count. Used by `computeNodeFootprint` to size the
+ * node's bounding box to fit ports along whichever side has the
+ * most. Sides not actually used by the node have 0 count.
+ */
+export interface PortsBySide {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
+const EMPTY_PORTS_BY_SIDE: PortsBySide = { top: 0, bottom: 0, left: 0, right: 0 }
+
+/**
+ * Node BODY size — the rectangle that holds the icon + label, with no
+ * port-lane allowance. Pure function on the node's content; suitable
+ * for nodes that haven't been through layout yet (newly-dropped
+ * nodes in the editor, fixtures, previews).
+ *
+ * Floor is `DEFAULTS.nodeWidth` × 60 so very-short labels don't
+ * collapse below a readable click target.
+ */
+export function computeNodeBodySize(node: { label?: string | string[]; spec?: NodeSpec }): {
+  width: number
+  height: number
+} {
+  const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
+  const specType = node.spec?.kind !== 'service' ? node.spec?.type : undefined
+  const hasIcon = !!(specType && getDeviceIcon(specType))
+  const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
+  const iconW = hasIcon ? DEFAULT_ICON_SIZE : 0
+  const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
+  const contentH = iconH + gapH + lines * LABEL_LINE_HEIGHT
+  const labelLines = Array.isArray(node.label) ? node.label : node.label ? [node.label] : []
+  const labelW = Math.max(0, ...labelLines.map((l) => l.length)) * ESTIMATED_CHAR_WIDTH
+  const contentW = Math.max(iconW, labelW)
+
+  return {
+    width: Math.max(DEFAULTS.nodeWidth, contentW + NODE_HORIZONTAL_PADDING * 2),
+    height: Math.max(60, contentH + NODE_VERTICAL_PADDING),
+  }
+}
+
+/**
+ * Node FOOTPRINT — the outer rectangle the layout engine reserves
+ * for the node, including space along whichever side has the most
+ * ports. Width grows with `max(top, bottom)` port count; height
+ * grows with `max(left, right)`. Sides without ports don't inflate
+ * the corresponding axis.
+ *
+ * In a typical TB diagram an access switch has all downlinks on
+ * `bottom` and 1 uplink on `top` — so width = max(body, bottom *
+ * portSpacing) which is just what we need to fan out the downlinks.
+ *
+ * Falls back to body size when `portsBySide` is omitted (e.g. for
+ * a node that hasn't picked port sides yet).
+ */
+/** Minimum gap between adjacent port labels so they don't touch. */
+const PORT_LABEL_GAP = 6
+
+/**
+ * Slot width chosen so two adjacent port labels of the given char
+ * count don't visually touch. Falls back to `minPortSpacing` for
+ * short labels (e.g. `eth0`) — only inflates for verbose names
+ * like `port1.0.1` (9 chars ≈ 50 px text + gap).
+ */
+function portSlotWidth(maxLabelChars: number): number {
+  const labelWidth = maxLabelChars * SMALL_LABEL_CHAR_WIDTH + PORT_LABEL_GAP
+  return Math.max(DEFAULTS.minPortSpacing, labelWidth)
+}
+
+export function computeNodeFootprint(
+  node: { label?: string | string[]; spec?: NodeSpec },
+  portsBySide: PortsBySide = EMPTY_PORTS_BY_SIDE,
+  /** Longest port label on this node, in characters. When 0/omitted
+   *  the slot uses `minPortSpacing` (good for nodes with short
+   *  labels like `eth0`). Pass the max length across ALL sides so
+   *  every side gets a slot wide enough for the widest port. */
+  maxPortLabelChars = 0,
+): { width: number; height: number } {
+  const body = computeNodeBodySize(node)
+  const horizPorts = Math.max(portsBySide.top, portsBySide.bottom)
+  const vertPorts = Math.max(portsBySide.left, portsBySide.right)
+  // Port placement spreads N ports along a side at ratios
+  // (i + 1) / (N + 1), so actual centre-to-centre spacing is
+  // side_length / (N + 1). To *guarantee* `slot` between
+  // neighbouring port centres we need side_length ≥ (N + 1) × slot.
+  // The N+1 factor also leaves a half-slot margin on each end so
+  // the first / last port doesn't sit right on the node corner.
+  const slot = portSlotWidth(maxPortLabelChars)
+  const horizPortReq = horizPorts > 0 ? (horizPorts + 1) * slot : 0
+  const vertPortReq = vertPorts > 0 ? (vertPorts + 1) * slot : 0
+  return {
+    width: Math.max(body.width, horizPortReq),
+    height: Math.max(body.height, vertPortReq),
+  }
+}
+
+/**
+ * **The new "single source of truth" for node size at render time.**
+ *
+ * Returns `node.size` if the layout engine has already computed and
+ * attached a footprint to the node. Falls back to `computeNodeBody-
+ * Size` for nodes that haven't been through layout yet (newly-
+ * dropped, fixtures, previews). Renderers, port placement, collision
+ * detection, bounds calc should all funnel through here.
+ *
+ * The fallback gives a *body-only* size — no port-lane allowance —
+ * which is fine for an un-laid-out node because no ports have been
+ * placed on it yet.
+ */
+export function resolveNodeSize(node: {
+  label?: string | string[]
+  spec?: NodeSpec
+  size?: { width: number; height: number }
+}): { width: number; height: number } {
+  return node.size ?? computeNodeBodySize(node)
+}
+
+/**
+ * @deprecated Prefer `resolveNodeSize(node)` everywhere. The old
+ * `computeNodeSize(node, portCount)` signature is kept as a thin
+ * compat shim — `portCount` is treated as if every port lived on a
+ * single horizontal side (over-estimates width when ports actually
+ * split top/bottom). The new code path threads per-side counts via
+ * `computeNodeFootprint`.
  */
 export function computeNodeSize(
   node: { label?: string | string[]; spec?: NodeSpec },
   portCount = 0,
 ): { width: number; height: number } {
-  const lines = Array.isArray(node.label) ? node.label.length : node.label ? 1 : 0
-  const specType = node.spec?.kind !== 'service' ? node.spec?.type : undefined
-  const hasIcon = !!(specType && getDeviceIcon(specType))
-  const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
-  const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
-  const contentH = iconH + gapH + lines * LABEL_LINE_HEIGHT
-  const labelLines = Array.isArray(node.label) ? node.label : node.label ? [node.label] : []
-  const contentW = Math.max(0, ...labelLines.map((l) => l.length)) * ESTIMATED_CHAR_WIDTH
-
-  const w = Math.max(
-    DEFAULTS.nodeWidth,
-    contentW + NODE_HORIZONTAL_PADDING * 2,
-    portCount * DEFAULTS.minPortSpacing,
-  )
-  const h = Math.max(60, contentH + NODE_VERTICAL_PADDING, portCount * DEFAULTS.minPortSpacing)
-
-  return { width: w, height: h }
+  if (portCount <= 0) return computeNodeBodySize(node)
+  return computeNodeFootprint(node, {
+    top: 0,
+    bottom: portCount,
+    left: 0,
+    right: 0,
+  })
 }
 
 // ============================================================================
@@ -152,34 +264,9 @@ function epId(ep: LinkEndpoint) {
   return ep.node
 }
 
-function epPort(ep: LinkEndpoint) {
-  return ep.port
-}
-
 // ============================================================================
 // NetworkGraph → Sugiyama conversion
 // ============================================================================
-
-/**
- * Count how many distinct ports each node exposes (dedup by name).
- * Used to size nodes so their port banks fit along the edges.
- */
-function countPortsPerNode(graph: NetworkGraph): Map<string, number> {
-  const seen = new Set<string>()
-  const counts = new Map<string, number>()
-  const bump = (id: string, name: string | undefined) => {
-    if (!name) return
-    const key = `${id}:${name}`
-    if (seen.has(key)) return
-    seen.add(key)
-    counts.set(id, (counts.get(id) ?? 0) + 1)
-  }
-  for (const link of graph.links) {
-    bump(epId(link.from), epPort(link.from))
-    bump(epId(link.to), epPort(link.to))
-  }
-  return counts
-}
 
 /**
  * Build a parent-pointer map covering both nodes and subgraphs. `null`
@@ -443,19 +530,39 @@ export function layoutNetwork(
 ): NetworkLayoutResult {
   const opts = { ...DEFAULTS, ...options }
 
-  // Size each node with its port count so wide port banks get room.
-  const portCounts = countPortsPerNode(graph)
+  // Decide port sides up front so each node's footprint reflects
+  // *which* sides carry ports (and how many). Footprint width grows
+  // with max(top, bottom) port count; height with max(left, right).
+  // We also track the longest port label per node so the slot width
+  // is wide enough for that label without overlap with neighbours.
+  const nodesById = new Map(graph.nodes.map((n) => [n.id, n]))
+  const portAssignments = decidePortSides(graph.links, nodesById, opts.direction)
+  const portsBySideById = new Map<string, PortsBySide>()
+  const maxLabelCharsById = new Map<string, number>()
+  for (const a of portAssignments) {
+    let bucket = portsBySideById.get(a.nodeId)
+    if (!bucket) {
+      bucket = { top: 0, bottom: 0, left: 0, right: 0 }
+      portsBySideById.set(a.nodeId, bucket)
+    }
+    bucket[a.side]++
+    const node = nodesById.get(a.nodeId)
+    const port = node?.ports?.find((p) => p.id === a.portId)
+    const labelLen = (port?.label ?? a.portId).length
+    if (labelLen > (maxLabelCharsById.get(a.nodeId) ?? 0)) {
+      maxLabelCharsById.set(a.nodeId, labelLen)
+    }
+  }
   const compoundNodes: CompoundNode[] = graph.nodes.map((n) => ({
     id: n.id,
     parent: n.parent ?? null,
-    size: computeNodeSize(n, portCounts.get(n.id) ?? 0),
+    size: computeNodeFootprint(n, portsBySideById.get(n.id), maxLabelCharsById.get(n.id) ?? 0),
   }))
   const compoundSubgraphs: CompoundSubgraph[] = (graph.subgraphs ?? []).map((s) => ({
     id: s.id,
     parent: s.parent ?? null,
   }))
   const parentOf = buildParentOf(graph)
-  const nodesById = new Map(graph.nodes.map((n) => [n.id, n]))
   const edges = buildCompoundEdges(graph, parentOf, opts.direction, nodesById)
 
   // Choose between Buchheim tidy-tree (preferred for tree-dominant
@@ -472,11 +579,24 @@ export function layoutNetwork(
       hints: opts.hints.size > 0 ? opts.hints : undefined,
     })
 
-  // Fold positions back onto Node / Subgraph records.
+  // Fold positions + computed footprint back onto Node records.
+  // Consumers read `node.size` from here on; computeNodeBodySize is a
+  // fallback only for nodes that haven't been through layout.
+  const sizeById = new Map(
+    graph.nodes.map(
+      (n) =>
+        [
+          n.id,
+          computeNodeFootprint(n, portsBySideById.get(n.id), maxLabelCharsById.get(n.id) ?? 0),
+        ] as const,
+    ),
+  )
   const nodes = new Map<string, Node>()
   for (const n of graph.nodes) {
     const pos = result.nodePositions.get(n.id)
-    nodes.set(n.id, pos ? { ...n, position: pos } : n)
+    const size = sizeById.get(n.id)
+    const folded: Node = { ...n, ...(pos ? { position: pos } : {}), ...(size ? { size } : {}) }
+    nodes.set(n.id, folded)
   }
   const subgraphs = new Map<string, Subgraph>()
   for (const s of graph.subgraphs ?? []) {

@@ -26,7 +26,6 @@ import type {
 import {
   bezierEdgePath,
   bpsToLinkWidth,
-  computeNodeSize,
   DEFAULT_ICON_SIZE,
   darkTheme,
   ICON_LABEL_GAP,
@@ -34,6 +33,7 @@ import {
   lightTheme,
   linkSpeedBps,
   resolveIcon,
+  resolveNodeSize,
   SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   specDeviceType,
@@ -323,7 +323,7 @@ export class SVGRenderer {
           {
             id,
             position: node.position ?? { x: 0, y: 0 },
-            size: computeNodeSize(node),
+            size: resolveNodeSize(node),
             node,
           },
         ]),

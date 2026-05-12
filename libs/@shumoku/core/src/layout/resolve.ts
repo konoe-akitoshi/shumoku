@@ -19,7 +19,7 @@ import type {
   Subgraph,
 } from '../models/types.js'
 import { getLinkWidth } from './link-utils.js'
-import { computeNodeSize } from './network-layout.js'
+import { resolveNodeSize } from './network-layout.js'
 import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
 
 // ============================================================================
@@ -132,7 +132,7 @@ export function unresolveLayout(resolved: ResolvedLayout): LayoutResult {
   // Convert nodes — collect ports back into center-relative format
   for (const [id, node] of resolved.nodes) {
     if (!node.position) continue
-    const size = computeNodeSize(node)
+    const size = resolveNodeSize(node)
     const nodePorts = new Map<string, LayoutPort>()
     for (const [portId, rp] of resolved.ports) {
       if (rp.nodeId !== id) continue
