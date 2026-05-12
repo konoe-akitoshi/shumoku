@@ -45,6 +45,7 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
   const { nodes, ports, subgraphs, bounds } = layoutNetwork(graph, { direction })
   const edges = await routeEdges(nodes, ports, graph.links, {
     edgeStyle: edgeStyle === 'splines' ? 'polyline' : edgeStyle,
+    direction,
   })
 
   const resolved: ResolvedLayout = {
