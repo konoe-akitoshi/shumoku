@@ -1,3 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-  <path d="M12 4L4 8l8 4 8-4-8-4zm0 2.5L16 8l-4 2-4-2 4-1.5zM4 12l8 4 8-4v2l-8 4-8-4v-2zm0 4l8 4 8-4v2l-8 4-8-4v-2z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="g-load-balancer" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
+      <stop offset="0" stop-color="#FB923C"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#g-load-balancer)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="5" r="2" fill="url(#g-load-balancer)" fill-opacity="0.18"/>
+    <circle cx="5" cy="19" r="2" fill="url(#g-load-balancer)" fill-opacity="0.18"/>
+    <circle cx="12" cy="19" r="2" fill="url(#g-load-balancer)" fill-opacity="0.18"/>
+    <circle cx="19" cy="19" r="2" fill="url(#g-load-balancer)" fill-opacity="0.18"/>
+    <path d="M 11 6.7 L 6 17.3"/>
+    <path d="M 12 7 V 17"/>
+    <path d="M 13 6.7 L 18 17.3"/>
+  </g>
 </svg>

@@ -1,3 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-  <path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h8v2H8V8zm0 4h8v2H8v-2z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="g-generic" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="24">
+      <stop offset="0" stop-color="#D1D5DB"/>
+      <stop offset="1" stop-color="#6B7280"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#g-generic)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 12 3.5 L 19.794 8 V 16 L 12 20.5 L 4.206 16 V 8 Z" fill="url(#g-generic)" fill-opacity="0.18"/>
+    <circle cx="12" cy="12" r="2" fill="url(#g-generic)" stroke="none"/>
+  </g>
 </svg>
