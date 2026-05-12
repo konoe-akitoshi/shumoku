@@ -30,6 +30,7 @@ import {
   LABEL_LINE_HEIGHT,
   NODE_HORIZONTAL_PADDING,
   NODE_VERTICAL_PADDING,
+  SMALL_LABEL_CHAR_WIDTH,
 } from '../constants.js'
 import { getDeviceIcon } from '../icons/index.js'
 import type {
@@ -172,16 +173,44 @@ export function computeNodeBodySize(node: { label?: string | string[]; spec?: No
  * Falls back to body size when `portsBySide` is omitted (e.g. for
  * a node that hasn't picked port sides yet).
  */
+/** Minimum gap between adjacent port labels so they don't touch. */
+const PORT_LABEL_GAP = 6
+
+/**
+ * Slot width chosen so two adjacent port labels of the given char
+ * count don't visually touch. Falls back to `minPortSpacing` for
+ * short labels (e.g. `eth0`) — only inflates for verbose names
+ * like `port1.0.1` (9 chars ≈ 50 px text + gap).
+ */
+function portSlotWidth(maxLabelChars: number): number {
+  const labelWidth = maxLabelChars * SMALL_LABEL_CHAR_WIDTH + PORT_LABEL_GAP
+  return Math.max(DEFAULTS.minPortSpacing, labelWidth)
+}
+
 export function computeNodeFootprint(
   node: { label?: string | string[]; spec?: NodeSpec },
   portsBySide: PortsBySide = EMPTY_PORTS_BY_SIDE,
+  /** Longest port label on this node, in characters. When 0/omitted
+   *  the slot uses `minPortSpacing` (good for nodes with short
+   *  labels like `eth0`). Pass the max length across ALL sides so
+   *  every side gets a slot wide enough for the widest port. */
+  maxPortLabelChars = 0,
 ): { width: number; height: number } {
   const body = computeNodeBodySize(node)
   const horizPorts = Math.max(portsBySide.top, portsBySide.bottom)
   const vertPorts = Math.max(portsBySide.left, portsBySide.right)
+  // Port placement spreads N ports along a side at ratios
+  // (i + 1) / (N + 1), so actual centre-to-centre spacing is
+  // side_length / (N + 1). To *guarantee* `slot` between
+  // neighbouring port centres we need side_length ≥ (N + 1) × slot.
+  // The N+1 factor also leaves a half-slot margin on each end so
+  // the first / last port doesn't sit right on the node corner.
+  const slot = portSlotWidth(maxPortLabelChars)
+  const horizPortReq = horizPorts > 0 ? (horizPorts + 1) * slot : 0
+  const vertPortReq = vertPorts > 0 ? (vertPorts + 1) * slot : 0
   return {
-    width: Math.max(body.width, horizPorts * DEFAULTS.minPortSpacing),
-    height: Math.max(body.height, vertPorts * DEFAULTS.minPortSpacing),
+    width: Math.max(body.width, horizPortReq),
+    height: Math.max(body.height, vertPortReq),
   }
 }
 
@@ -504,11 +533,12 @@ export function layoutNetwork(
   // Decide port sides up front so each node's footprint reflects
   // *which* sides carry ports (and how many). Footprint width grows
   // with max(top, bottom) port count; height with max(left, right).
-  // This is more accurate than the legacy `portCount * spacing`
-  // which assumed every port crowded onto one side.
+  // We also track the longest port label per node so the slot width
+  // is wide enough for that label without overlap with neighbours.
   const nodesById = new Map(graph.nodes.map((n) => [n.id, n]))
   const portAssignments = decidePortSides(graph.links, nodesById, opts.direction)
   const portsBySideById = new Map<string, PortsBySide>()
+  const maxLabelCharsById = new Map<string, number>()
   for (const a of portAssignments) {
     let bucket = portsBySideById.get(a.nodeId)
     if (!bucket) {
@@ -516,11 +546,17 @@ export function layoutNetwork(
       portsBySideById.set(a.nodeId, bucket)
     }
     bucket[a.side]++
+    const node = nodesById.get(a.nodeId)
+    const port = node?.ports?.find((p) => p.id === a.portId)
+    const labelLen = (port?.label ?? a.portId).length
+    if (labelLen > (maxLabelCharsById.get(a.nodeId) ?? 0)) {
+      maxLabelCharsById.set(a.nodeId, labelLen)
+    }
   }
   const compoundNodes: CompoundNode[] = graph.nodes.map((n) => ({
     id: n.id,
     parent: n.parent ?? null,
-    size: computeNodeFootprint(n, portsBySideById.get(n.id)),
+    size: computeNodeFootprint(n, portsBySideById.get(n.id), maxLabelCharsById.get(n.id) ?? 0),
   }))
   const compoundSubgraphs: CompoundSubgraph[] = (graph.subgraphs ?? []).map((s) => ({
     id: s.id,
@@ -547,7 +583,13 @@ export function layoutNetwork(
   // Consumers read `node.size` from here on; computeNodeBodySize is a
   // fallback only for nodes that haven't been through layout.
   const sizeById = new Map(
-    graph.nodes.map((n) => [n.id, computeNodeFootprint(n, portsBySideById.get(n.id))] as const),
+    graph.nodes.map(
+      (n) =>
+        [
+          n.id,
+          computeNodeFootprint(n, portsBySideById.get(n.id), maxLabelCharsById.get(n.id) ?? 0),
+        ] as const,
+    ),
   )
   const nodes = new Map<string, Node>()
   for (const n of graph.nodes) {
