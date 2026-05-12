@@ -439,37 +439,115 @@ function spreadOverlappingSegments(edges: Map<string, ResolvedEdge>): Map<string
   return result
 }
 
+/**
+ * Visual "lane" gap a viewer needs to read parallel segments as
+ * separate routes rather than a single thick band. Sits on top of
+ * the geometric line-width clearance.
+ */
+const LANE_GAP_PX = 12
+
+/**
+ * Upper bound on a single cluster's total spread along the fixed
+ * axis. Without layer-aware channel detection we can't precisely
+ * know how much room is available between adjacent layers, so we
+ * cap the spread at a generous estimate of a typical inter-layer
+ * gap. Past this the lane gap shrinks proportionally — better to
+ * pack tightly than to cross over into a node row.
+ */
+const MAX_CLUSTER_SPAN_PX = 200
+
+/**
+ * Spread out parallel segments that overlap on the range axis so
+ * each gets its own lane along the fixed axis. The previous
+ * implementation pushed adjacent sorted pairs by (deficit / 2),
+ * which had two problems on dense clusters:
+ *
+ *   1. It only iterated each pair once, so 20+ segments at the same
+ *      fixed coordinate ended up in a ~80px band instead of being
+ *      spread across the available gap.
+ *   2. Pushing s2 right then comparing s2 with s3 broke sort order
+ *      and silently double-counted offsets, so the eventual layout
+ *      depended on the original sort tie-breaking.
+ *
+ * The cluster pass below groups all segments whose ranges
+ * transitively overlap and then redistributes them around the
+ * cluster's centroid with a uniform lane gap. That makes the spread
+ * deterministic and proportional to cluster size — dense clusters
+ * fan out wider, sparse ones stay compact.
+ */
 function spreadSegments(segs: Segment[], edges: Map<string, ResolvedEdge>, axis: 'x' | 'y'): void {
   if (segs.length < 2) return
 
-  // Sort by fixed coordinate
-  segs.sort((a, b) => a.fixed - b.fixed)
+  // Union-Find: any two segments whose ranges overlap (anywhere along
+  // the range axis) belong to the same lane cluster, regardless of
+  // how their fixed coordinates compare. Walking sort-by-fixed and
+  // chaining "overlaps with current cluster" misses pairs where a
+  // segment shares an X range with one already pushed past it, so
+  // the final result fragmented into small clusters and barely
+  // spread anything.
+  const parent: number[] = segs.map((_, i) => i)
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i] as number] as number
+      i = parent[i] as number
+    }
+    return i
+  }
+  const union = (a: number, b: number) => {
+    const ra = find(a)
+    const rb = find(b)
+    if (ra !== rb) parent[ra] = rb
+  }
+  for (let i = 0; i < segs.length; i++) {
+    const a = segs[i]
+    if (!a) continue
+    for (let j = i + 1; j < segs.length; j++) {
+      const b = segs[j]
+      if (!b) continue
+      if (a.max <= b.min || b.max <= a.min) continue
+      union(i, j)
+    }
+  }
 
-  // Check adjacent pairs for overlap
-  for (const [i, s1] of segs.entries()) {
-    const s2 = segs[i + 1]
-    if (!s2) continue
+  // Bucket members by root
+  const groups = new Map<number, Segment[]>()
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i]
+    if (!s) continue
+    const root = find(i)
+    const list = groups.get(root)
+    if (list) list.push(s)
+    else groups.set(root, [s])
+  }
 
-    // Do they overlap on the range axis?
-    if (s1.max <= s2.min || s2.max <= s1.min) continue
+  for (const cluster of groups.values()) {
+    if (cluster.length < 2) continue
+    // Order cluster members by their pre-spread fixed coordinate so
+    // the rank assignment is stable and matches the natural left-to-
+    // right (or top-to-bottom) reading order.
+    cluster.sort((a, b) => a.fixed - b.fixed)
 
-    // Minimum center-to-center distance:
-    // half-widths (no overlap) + gap equal to the wider line (clearance = line width)
-    const minDist = (s1.width + s2.width) / 2 + Math.max(s1.width, s2.width)
-    const actualDist = Math.abs(s2.fixed - s1.fixed)
-
-    if (actualDist >= minDist) continue
-
-    // Push apart: move each by half the deficit
-    const deficit = minDist - actualDist
-    const shift = deficit / 2
-
-    shiftSegment(edges, s1, -shift, axis)
-    shiftSegment(edges, s2, shift, axis)
-
-    // Update fixed values for subsequent comparisons
-    s1.fixed -= shift
-    s2.fixed += shift
+    let maxWidth = 0
+    for (const s of cluster) if (s.width > maxWidth) maxWidth = s.width
+    const desiredLane = maxWidth + LANE_GAP_PX
+    const minLane = maxWidth + 2 // never let lines literally touch
+    // Cap the cluster's total width so dense clusters don't overflow
+    // into adjacent node rows. The "lane" shrinks proportionally;
+    // we never compress below `minLane`.
+    const lane = Math.max(
+      minLane,
+      Math.min(desiredLane, MAX_CLUSTER_SPAN_PX / Math.max(1, cluster.length - 1)),
+    )
+    const totalSpan = (cluster.length - 1) * lane
+    const meanFixed = cluster.reduce((sum, s) => sum + s.fixed, 0) / cluster.length
+    const start = meanFixed - totalSpan / 2
+    for (const [i, s] of cluster.entries()) {
+      const newFixed = start + i * lane
+      const shift = newFixed - s.fixed
+      if (Math.abs(shift) < 0.001) continue
+      shiftSegment(edges, s, shift, axis)
+      s.fixed = newFixed
+    }
   }
 }
 
