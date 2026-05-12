@@ -134,3 +134,94 @@ body {
     color: var(--color-foreground);
   }
 }
+
+/*
+ * ─── Print ────────────────────────────────────────────────────────
+ *
+ * Cmd+P (or the in-app "Print" button) should produce a single
+ * landscape page suitable for use as a paper working document during
+ * network install / cabling work.
+ *
+ * Strategy: hide every interactive UI chrome element (toolbars,
+ * panels, dropdowns) and let the canvas fill the printable area.
+ * Components opt out of print by adding the `data-print-hide`
+ * attribute on their outermost wrapper. The canvas itself opts IN
+ * via `data-print-canvas`; everything inside it prints.
+ *
+ * Color: VLAN colors, port labels, link styles must survive print.
+ * `print-color-adjust: exact` is a hint, not a guarantee — users
+ * may override in their browser's print dialog. We additionally
+ * thicken strokes and add halo to small text so the output remains
+ * legible in monochrome.
+ */
+@page {
+  size: A4 landscape;
+  margin: 8mm;
+}
+
+@media print {
+  /* Color / background fidelity. Browsers may still override per
+   * user setting in the print dialog. */
+  html,
+  body,
+  [data-print-canvas],
+  [data-print-canvas] * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Hide interactive UI chrome — toolbars, panels, dropdowns,
+   * floating buttons. Add `data-print-hide` on the outermost
+   * wrapper of any new component that shouldn't print. */
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Tame Tailwind dark-mode backgrounds. The editor's page wrapper
+   * uses `dark:bg-neutral-950` which would print as a black block;
+   * force white at the outermost levels so the canvas inherits a
+   * paper-friendly background. */
+  html,
+  body,
+  body > div,
+  body > div > div {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* `data-print-canvas` marks the surface that survives Print —
+   * everything outside it has already been hidden by `data-print-
+   * hide`. We DON'T reset its position/size here: the editor's
+   * onscreen layout (`absolute; inset: 0` inside an `h-screen
+   * w-screen` wrapper) already puts the canvas full-bleed, which
+   * is exactly what we want on paper. Forcing `height: auto`
+   * would collapse a Svelte Flow instance (which sizes itself by
+   * percentage of its parent) to zero. */
+  [data-print-canvas] {
+    background: white !important;
+  }
+
+  /* Diagram page (renderer-svg): the page-fitting SVG has its own
+   * `viewBox`, so it scales naturally to the printable area.
+   * Resetting the pan/zoom transform makes the print show the full
+   * diagram rather than whatever the user happened to zoom to. */
+  [data-print-canvas] svg g.viewport {
+    transform: none !important;
+  }
+
+  /* Scene page (Svelte Flow): we DELIBERATELY leave Svelte Flow's
+   * internal layout untouched. The on-screen rendering — node
+   * icons, cable bends, length labels, the background image — is
+   * what we want on paper. A `beforeprint` hook in `<ScenePrint-
+   * Fitter>` calls `fitView()` so the print captures everything,
+   * and Svelte Flow's own pan/zoom transform positions the fitted
+   * content within the printable area. */
+
+  /* Make small SVG text more legible: white halo so labels stay
+   * readable even where they overlap coloured strokes. */
+  [data-print-canvas] svg text {
+    paint-order: stroke fill;
+    stroke: white;
+    stroke-width: 2.5px;
+  }
+}

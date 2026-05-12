@@ -50,6 +50,7 @@
 </script>
 
 <div
+  data-print-hide
   class="flex flex-col gap-1.5 p-1.5 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg transition-all duration-200"
 >
   <!-- Edit tools (show when editing) -->

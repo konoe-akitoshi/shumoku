@@ -96,7 +96,12 @@
     canvasMenuOpen = true
   }}
 >
-  <div class="absolute inset-0">
+  <!-- Single canvas: same Svelte Flow instance both onscreen and in
+       print. `data-print-canvas` keeps it visible during print; a
+       `beforeprint` listener inside SceneCanvas calls `fitView()` so
+       the print captures the whole scene regardless of the current
+       pan/zoom state. -->
+  <div data-print-canvas class="absolute inset-0">
     {#if diagramState.currentScene}
       <SceneCanvas scene={diagramState.currentScene} />
     {:else}
@@ -106,27 +111,27 @@
     {/if}
   </div>
 
-  <div class="fixed top-3 left-3 z-20"><HeaderBar /></div>
+  <div data-print-hide class="fixed top-3 left-3 z-20"><HeaderBar /></div>
 
-  <div class="fixed top-3 right-3 z-20">
+  <div data-print-hide class="fixed top-3 right-3 z-20">
     <ExportMenu onexportjson={handleExportJson} onexportsvg={handleExportSvg} />
   </div>
 
-  <div class="fixed top-1/2 right-3 z-20 -translate-y-1/2">
+  <div data-print-hide class="fixed top-1/2 right-3 z-20 -translate-y-1/2">
     {#if diagramState.currentSceneId !== null}
       <SceneSideToolbar sceneId={diagramState.currentSceneId} />
     {/if}
   </div>
 
-  <div class="fixed bottom-3 left-3 z-20">
+  <div data-print-hide class="fixed bottom-3 left-3 z-20">
     <StatusBadge status={diagramState.status} stats={diagramState.stats} selected={null} />
   </div>
 
-  <div class="fixed top-1/2 left-3 z-20 flex h-[80vh] -translate-y-1/2">
+  <div data-print-hide class="fixed top-1/2 left-3 z-20 flex h-[80vh] -translate-y-1/2">
     <CodePanel bind:isOpen={codePanelOpen} />
   </div>
 
-  <div class="fixed bottom-3 left-1/2 z-20 -translate-x-1/2"><ViewBar /></div>
+  <div data-print-hide class="fixed bottom-3 left-1/2 z-20 -translate-x-1/2"><ViewBar /></div>
 
   <DetailPanel
     open={detailTarget !== null}

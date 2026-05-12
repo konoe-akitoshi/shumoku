@@ -21,6 +21,7 @@
   import SceneEdge from './SceneEdge.svelte'
   import SceneFitOnLoad from './SceneFitOnLoad.svelte'
   import SceneNode from './SceneNode.svelte'
+  import ScenePrintFitter from './ScenePrintFitter.svelte'
   import { sceneAuthoring } from './scene-authoring.svelte'
 
   // Svelte Flow-based scene canvas. Pan/zoom/select/connect come from
@@ -489,6 +490,7 @@
     proOptions={{ hideAttribution: true }}
   >
     <SceneFitOnLoad bounds={fitBounds} refitKey={bg?.src ?? ''} />
+    <ScenePrintFitter />
     <SceneCalibrationCapture sceneId={scene.id} paneClick={paneClickEvent} />
     <SceneClickPlace sceneId={scene.id} paneClick={paneClickEvent} />
   </SvelteFlow>
@@ -532,7 +534,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                                       plan is set, but otherwise let its theming through. */
+                                           plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -540,8 +542,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-                                     to drag from. Otherwise the fully-transparent handles leave the
-                                     "how do I draw a wire" UX a guess. */
+                                         to drag from. Otherwise the fully-transparent handles leave the
+                                         "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 1 !important;
@@ -551,15 +553,15 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-                           mode. Keep size + DOM presence so Svelte Flow can still resolve
-                           edge endpoint positions from each handle's bounding rect — only
-                           opacity is dropped. */
+                               mode. Keep size + DOM presence so Svelte Flow can still resolve
+                               edge endpoint positions from each handle's bounding rect — only
+                               opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
-                           "click somewhere to drop the item". */
+                               "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     cursor: crosshair !important;

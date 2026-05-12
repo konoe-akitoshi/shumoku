@@ -15,6 +15,7 @@
 </script>
 
 <nav
+  data-print-hide
   class="fixed top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1 rounded-xl bg-white/80 dark:bg-neutral-800/80 backdrop-blur-lg border border-neutral-200 dark:border-neutral-700 shadow-lg"
 >
   <a

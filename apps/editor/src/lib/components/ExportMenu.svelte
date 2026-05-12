@@ -1,6 +1,6 @@
 <script lang="ts">
   import { DropdownMenu, Tooltip } from 'bits-ui'
-  import { DownloadSimple, Export } from 'phosphor-svelte'
+  import { DownloadSimple, Export, Printer } from 'phosphor-svelte'
 
   let {
     onexportjson,
@@ -13,7 +13,40 @@
   const itemClass =
     'flex items-center gap-2 px-3 py-2 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer transition-colors'
   const iconClass = 'w-4 h-4 text-neutral-400'
+
+  /**
+   * Print the current page via the browser's native print flow.
+   *
+   * Waits for web fonts and any data-URL images on the print surface
+   * to be ready before opening the print dialog — otherwise Chrome
+   * sometimes flashes the dialog mid-decode and prints a blank or
+   * fallback-font frame.
+   */
+  async function printPage(): Promise<void> {
+    try {
+      await document.fonts?.ready
+    } catch {
+      // ignore — old browsers
+    }
+    const imgs = document.querySelectorAll<HTMLImageElement>(
+      '[data-print-canvas] img, [data-print-only] img',
+    )
+    await Promise.all(
+      [...imgs].map((img) => (img.complete ? undefined : img.decode().catch(() => undefined))),
+    )
+    window.print()
+  }
 </script>
+
+<svelte:window
+  onkeydown={(e) => {
+    // Ctrl/Cmd+P → ensure fonts/images settle before the dialog
+    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+      e.preventDefault()
+      void printPage()
+    }
+  }}
+/>
 
 <DropdownMenu.Root>
   <DropdownMenu.Trigger>
@@ -44,6 +77,10 @@
     <DropdownMenu.Item class={itemClass} onSelect={() => onexportsvg?.()}>
       <DownloadSimple class={iconClass} />
       SVG
+    </DropdownMenu.Item>
+    <DropdownMenu.Item class={itemClass} onSelect={() => void printPage()}>
+      <Printer class={iconClass} />
+      Print
     </DropdownMenu.Item>
   </DropdownMenu.Content>
 </DropdownMenu.Root>
