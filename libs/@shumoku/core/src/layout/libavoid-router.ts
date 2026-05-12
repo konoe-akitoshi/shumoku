@@ -384,7 +384,7 @@ function doRoute(
   // many edges crossed one layer boundary.
   const layers = detectLayers(nodes, direction)
   const channels = channelsFromLayers(layers.layers)
-  const lanes = assignChannelLanes(links, ports, layers, channels, direction)
+  const lanes = assignChannelLanes(links, nodes, ports, layers, channels, direction)
 
   const shapeRefs = registerObstacles(Avoid, router, nodes)
   const pinIds = registerPins(Avoid, shapeRefs, nodes, ports)

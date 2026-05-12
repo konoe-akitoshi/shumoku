@@ -30,7 +30,7 @@
  * single checkpoint at the channel midpoint of their assigned lane.
  */
 
-import type { Direction, Link, Position } from '../models/types.js'
+import type { Direction, Link, Node, Position } from '../models/types.js'
 import type { Channel, LayerDetectionResult } from './layer-detection.js'
 import type { ResolvedPort } from './resolved-types.js'
 
@@ -52,15 +52,29 @@ export interface LaneAssignment {
  * be located in the layer map are absent (caller falls back to
  * un-channelled routing for those).
  *
- * Sort order within a channel: by source-end cross-axis coordinate,
- * then by target-end cross-axis coordinate, then by stable hash of
- * the link id. Source order is the primary key because Sugiyama
- * already minimised crossings along the cross axis when it ordered
- * each layer — going through the same order in each channel keeps
- * the bus visually "fanned out" instead of weaving.
+ * Sort order within a channel:
+ *
+ *   1. **Source cross-axis coordinate** (ascending) — groups edges
+ *      coming from the same source switch contiguously and keeps
+ *      the global left-to-right reading order Sugiyama already
+ *      established for its layers.
+ *   2. **Distance from source to target** (descending, within a
+ *      source group) — for a switch fanning out to multiple peers,
+ *      this puts the FARTHEST peer at the shallowest lane (just
+ *      below the source) and the CLOSEST peer at the deepest lane
+ *      (just above the target row). Visually the route turns into
+ *      a tree silhouette with the trunk anchored under the source
+ *      as long as possible, instead of all lines weaving past each
+ *      other. The closest-first order produced a bend right next to
+ *      the source for the closest target, which forced every other
+ *      cable to cross over it on the way out.
+ *   3. **Target cross-axis coordinate** (ascending) — tie-break for
+ *      same-source same-distance edges; reads left-to-right.
+ *   4. **Link id** (string compare) — final deterministic tiebreak.
  */
 export function assignChannelLanes(
   links: readonly Link[],
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   layers: LayerDetectionResult,
   channels: Channel[],
@@ -72,8 +86,24 @@ export function assignChannelLanes(
 
   const crossAxis: 'x' | 'y' = layers.rankAxis === 'y' ? 'x' : 'y'
 
+  /** Cross-axis coord of a node's CENTRE — used to group fan-out
+   *  edges by their source node. Falls back to 0 if the node has
+   *  no position (shouldn't happen at routing time but be safe). */
+  const nodeCenter = (nodeId: string): number => {
+    const n = nodes.get(nodeId)
+    const p = n?.position
+    if (!p) return 0
+    return crossAxis === 'x' ? p.x : p.y
+  }
+
   interface ChannelEdge {
     linkId: string
+    /** Source NODE centre cross-axis coord — groups all fan-out
+     *  edges from the same node into a single sort cluster. The
+     *  port coord (`srcCross`) varies per port, which would split
+     *  one fan-out into several "groups" of size 1 and disable the
+     *  same-source far-first rule. */
+    srcNodeCross: number
     srcCross: number
     dstCross: number
     /** Channel indices this edge crosses (sorted ascending). */
@@ -93,12 +123,17 @@ export function assignChannelLanes(
     if (!fromPort || !toPort) continue
     const srcCross = crossAxis === 'x' ? fromPort.absolutePosition.x : fromPort.absolutePosition.y
     const dstCross = crossAxis === 'x' ? toPort.absolutePosition.x : toPort.absolutePosition.y
+    // Pick the "upstream" node (lower rank) for fan-out grouping —
+    // a switch's downstream APs all share the switch's centre as
+    // their srcNodeCross even if the link is declared reversed.
+    const srcNodeId = fromLayer < toLayer ? link.from.node : link.to.node
+    const srcNodeCross = nodeCenter(srcNodeId)
 
     const [low, high] = fromLayer < toLayer ? [fromLayer, toLayer] : [toLayer, fromLayer]
     const crossings: number[] = []
     for (let k = low; k < high; k++) crossings.push(k)
 
-    const entry: ChannelEdge = { linkId: link.id, srcCross, dstCross, crossings }
+    const entry: ChannelEdge = { linkId: link.id, srcNodeCross, srcCross, dstCross, crossings }
     for (const k of crossings) {
       const list = perChannel.get(k) ?? []
       list.push(entry)
@@ -112,8 +147,18 @@ export function assignChannelLanes(
     const edges = perChannel.get(channel.index)
     if (!edges || edges.length === 0) continue
     edges.sort((a, b) => {
-      if (a.srcCross !== b.srcCross) return a.srcCross - b.srcCross
+      // Primary: source NODE x — groups same-source fan-outs together
+      // and keeps overall left-to-right reading order.
+      if (a.srcNodeCross !== b.srcNodeCross) return a.srcNodeCross - b.srcNodeCross
+      // Within one fan-out, far peers branch off at shallower lanes
+      // (Codex / yFiles convention). Distance measured against the
+      // source node's centre, not the port, so paired ports on the
+      // same node don't fight for the same priority.
+      const aDist = Math.abs(a.dstCross - a.srcNodeCross)
+      const bDist = Math.abs(b.dstCross - b.srcNodeCross)
+      if (aDist !== bDist) return bDist - aDist
       if (a.dstCross !== b.dstCross) return a.dstCross - b.dstCross
+      if (a.srcCross !== b.srcCross) return a.srcCross - b.srcCross
       return a.linkId.localeCompare(b.linkId)
     })
     const span = channel.rankEnd - channel.rankStart
