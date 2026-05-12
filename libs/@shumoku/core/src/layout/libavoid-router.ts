@@ -20,38 +20,6 @@ const ConnDirDown = 2
 const ConnDirLeft = 4
 const ConnDirRight = 8
 
-function sideToDir(side: 'top' | 'bottom' | 'left' | 'right'): number {
-  switch (side) {
-    case 'top':
-      return ConnDirUp
-    case 'bottom':
-      return ConnDirDown
-    case 'left':
-      return ConnDirLeft
-    case 'right':
-      return ConnDirRight
-  }
-}
-
-/** Check if a point is inside any node's bounding box (with margin) */
-function isInsideAnyNode(x: number, y: number, nodes: Map<string, Node>, margin = 2): boolean {
-  for (const node of nodes.values()) {
-    if (!node.position) continue
-    const size = computeNodeSize(node)
-    const hw = size.width / 2 + margin
-    const hh = size.height / 2 + margin
-    if (
-      x > node.position.x - hw &&
-      x < node.position.x + hw &&
-      y > node.position.y - hh &&
-      y < node.position.y + hh
-    ) {
-      return true
-    }
-  }
-  return false
-}
-
 // biome-ignore lint/suspicious/noExplicitAny: libavoid-js types don't match runtime API
 let avoidInstance: any = null
 
@@ -142,7 +110,7 @@ export async function routeEdges(
   router.setRoutingOption(Avoid['RoutingOption']['nudgeSharedPathsWithCommonEndPoint'].value, true)
 
   try {
-    return doRoute(Avoid, router, nodes, ports, links, opts.edgeStyle, opts.shapeBufferDistance)
+    return doRoute(Avoid, router, nodes, ports, links, opts.edgeStyle)
   } finally {
     router.delete()
   }
@@ -202,14 +170,17 @@ function registerPins(
     const xProp = (port.absolutePosition.x - (node.position.x - size.width / 2)) / size.width
     const yProp = (port.absolutePosition.y - (node.position.y - size.height / 2)) / size.height
 
-    // Direction = "outward from the side". A port on the top edge of
-    // a shape has its line emerging upward; a bottom port emerges
-    // downward. The earlier hard-coded `ConnDirDown` for both top
-    // and bottom worked for the default TB layout (sources always
-    // landed on the bottom side) but produced impossible constraints
-    // for placement-overridden source ports pinned to the top of
-    // their node — libavoid silently fell back to a straight line.
-    const dir = sideToDir(port.side)
+    // ConnDir = direction the segment leaves the pin going OUTWARD
+    // from the shape edge. Matches the port's actual side so the
+    // pin works for any placement (default OR user-overridden).
+    const dir =
+      port.side === 'top'
+        ? ConnDirUp
+        : port.side === 'bottom'
+          ? ConnDirDown
+          : port.side === 'left'
+            ? ConnDirLeft
+            : ConnDirRight
 
     const pin = new Avoid.ShapeConnectionPin(
       shape,
@@ -234,10 +205,8 @@ function createConnectors(
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ShapeRef instances
   shapeRefs: Map<string, any>,
   pinIds: Map<string, number>,
-  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: Link[],
-  shapeBufferDistance: number,
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
 ): Map<string, any> {
   // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnRef instances
@@ -256,7 +225,10 @@ function createConnectors(
     if (!fromPortObj || !toPortObj) continue
     const fromPin = pinIds.get(fromPortId)
 
-    // Source: use pin (direction constraint → perpendicular exit)
+    // Source: pin (direction constraint = outward from port side).
+    // Destination: Point — pin direction on the receiving end has
+    // to point INWARD into the shape (the line approaches the port
+    // from outside), which libavoid rejects.
     // biome-ignore lint/suspicious/noExplicitAny: libavoid ConnEnd
     let srcEnd: any
     if (fromPin !== undefined) {
@@ -265,43 +237,39 @@ function createConnectors(
       const pos = fromPortObj.absolutePosition
       srcEnd = new Avoid.ConnEnd(new Avoid.Point(pos.x, pos.y))
     }
-
-    // Destination: use Point (no direction constraint → natural arrival)
-    // Pin direction must be outward, but for destination ports the line
-    // approaches from outside → inward direction needed → libavoid rejects it.
     const dstPos = toPortObj.absolutePosition
     const dstEnd = new Avoid.ConnEnd(new Avoid.Point(dstPos.x, dstPos.y))
 
     const conn = new Avoid.ConnRef(router, srcEnd, dstEnd)
 
-    // Add checkpoint to force perpendicular arrival at destination port.
-    // Only set if the checkpoint doesn't land inside any node obstacle.
-    const dstPortObj = toPortObj
-    if (dstPortObj?.side) {
-      const portHalf = Math.max(dstPortObj.size.width, dstPortObj.size.height) / 2
-      const offset = portHalf + 16
-      let cpX = dstPortObj.absolutePosition.x
-      let cpY = dstPortObj.absolutePosition.y
-      switch (dstPortObj.side) {
-        case 'top':
-          cpY -= offset
-          break
-        case 'bottom':
-          cpY += offset
-          break
-        case 'left':
-          cpX -= offset
-          break
-        case 'right':
-          cpX += offset
-          break
+    // One checkpoint anchored on the destination port's outward
+    // axis, halfway between the dest port and the source port. The
+    // earlier version offset by a fixed 20px from the dest port,
+    // which pushed the perpendicular bend right next to the
+    // destination — fine when the dest sat on the AP row (bend
+    // ended up between AP and access-switch layers, looked clean)
+    // but wrong when the user's placement override put the dest on
+    // a distribution switch's bottom side (bend ended up just
+    // under the distribution layer, visibly protruding through
+    // switch territory).
+    //
+    // Using midpoint along the dest's perpendicular axis places
+    // the bend in the gap between the two ports, regardless of
+    // which side the user pinned the port to.
+    if (toPortObj?.side && fromPortObj) {
+      const side = toPortObj.side
+      const dp = toPortObj.absolutePosition
+      const sp = fromPortObj.absolutePosition
+      const cp = { x: dp.x, y: dp.y }
+      const isVertical = side === 'top' || side === 'bottom'
+      if (isVertical) {
+        cp.y = (dp.y + sp.y) / 2
+      } else {
+        cp.x = (dp.x + sp.x) / 2
       }
-      // Verify checkpoint is not inside any node obstacle (including buffer)
-      if (!isInsideAnyNode(cpX, cpY, nodes, shapeBufferDistance)) {
-        const checkpoints = new Avoid.CheckpointVector()
-        checkpoints.push_back(new Avoid.Checkpoint(new Avoid.Point(cpX, cpY)))
-        conn.setRoutingCheckpoints(checkpoints)
-      }
+      const cpVec = new Avoid.CheckpointVector()
+      cpVec.push_back(new Avoid.Checkpoint(new Avoid.Point(cp.x, cp.y)))
+      conn.setRoutingCheckpoints(cpVec)
     }
 
     connRefs.set(linkId, conn)
@@ -390,20 +358,10 @@ function doRoute(
   ports: Map<string, ResolvedPort>,
   links: Link[],
   edgeStyle: string,
-  shapeBufferDistance: number,
 ): Map<string, ResolvedEdge> {
   const shapeRefs = registerObstacles(Avoid, router, nodes)
   const pinIds = registerPins(Avoid, shapeRefs, nodes, ports)
-  const connRefs = createConnectors(
-    Avoid,
-    router,
-    shapeRefs,
-    pinIds,
-    nodes,
-    ports,
-    links,
-    shapeBufferDistance,
-  )
+  const connRefs = createConnectors(Avoid, router, shapeRefs, pinIds, ports, links)
   const edges = extractEdges(connRefs, ports, links, edgeStyle)
   const spread = spreadOverlappingSegments(edges)
   return filletEdgeCorners(spread)
