@@ -26,10 +26,10 @@ export {
   serializeLayout,
 } from './lib/serialization'
 export {
+  bezierEdgePath,
   computePortLabelPosition,
   getNodeLabel,
   getVlanStroke,
-  pointsToPathD,
   screenToSvg,
   svgPointToContainer,
   svgRectToContainer,

@@ -1,96 +1,16 @@
 /**
  * SVG ↔ Screen coordinate conversion and shared rendering utilities.
+ *
+ * Bezier edge geometry lives in `@shumoku/core/src/layout/bezier-path.ts`
+ * so the interactive renderer and the static SSR renderer share one
+ * implementation. This file re-exports it for renderer-local imports.
  */
 
-// ============================================================================
-// Shared rendering helpers
-// ============================================================================
+import type { PortSide } from '@shumoku/core'
 
-/** Build an SVG path 'd' attribute from an array of points */
-export function pointsToPathD(points: { x: number; y: number }[]): string {
-  if (points.length === 0) return ''
-  const [first, ...rest] = points
-  if (!first) return ''
-  let d = `M ${first.x} ${first.y}`
-  for (const pt of rest) {
-    d += ` L ${pt.x} ${pt.y}`
-  }
-  return d
-}
+export { bezierEdgePath } from '@shumoku/core'
 
-/**
- * Build a cubic-Bezier SVG path that flows out of `from`'s port side and
- * into `to`'s.
- *
- * Tangent magnitude scales with **the distance along the port normal**
- * (the rank-axis gap), not the straight-line Euclidean distance. That
- * keeps the curve "shooting straight" out of the port for a sizeable
- * fraction of the vertical gap before bending sideways — endpoints
- * read as straight while the curvature concentrates in the middle.
- * Using the Euclidean distance instead made every long edge into a
- * gentle diagonal that started turning right at the port; perpendicular
- * gap gives the more telegraphic "stalk → arc → stalk" silhouette.
- *
- * No obstacle avoidance — by design, since we trade the bend-channel
- * correctness of libavoid for visual flow. If the edge crosses an
- * unrelated node body it just goes through it. Acceptable for the
- * network-diagram case where parent/child layers are clearly stacked.
- */
-export function bezierEdgePath(
-  from: { absolutePosition: { x: number; y: number }; side?: Side },
-  to: { absolutePosition: { x: number; y: number }; side?: Side },
-): string {
-  const a = from.absolutePosition
-  const b = to.absolutePosition
-  const fromSide = from.side ?? 'bottom'
-  const toSide = to.side ?? 'top'
-  // Distance along the source's port normal (= the "rank-axis gap"
-  // when source.side is top/bottom this is |dy|, when it's left/right
-  // this is |dx|). Long stalks come out of the port before the arc
-  // takes over.
-  const normalGap = projectAlongNormal(fromSide, b.x - a.x, b.y - a.y)
-  const reach = clamp(normalGap * 0.6, 40, 320)
-  const [ax, ay] = tangentOffset(fromSide, reach)
-  const [bx, by] = tangentOffset(toSide, reach)
-  const c1x = a.x + ax
-  const c1y = a.y + ay
-  const c2x = b.x + bx
-  const c2y = b.y + by
-  return `M ${a.x} ${a.y} C ${c1x} ${c1y} ${c2x} ${c2y} ${b.x} ${b.y}`
-}
-
-/** Absolute distance from the port along its outward normal. */
-function projectAlongNormal(side: Side, dx: number, dy: number): number {
-  switch (side) {
-    case 'top':
-      return Math.abs(Math.min(0, dy))
-    case 'bottom':
-      return Math.abs(Math.max(0, dy))
-    case 'left':
-      return Math.abs(Math.min(0, dx))
-    case 'right':
-      return Math.abs(Math.max(0, dx))
-  }
-}
-
-function tangentOffset(side: Side, magnitude: number): [number, number] {
-  switch (side) {
-    case 'top':
-      return [0, -magnitude]
-    case 'bottom':
-      return [0, magnitude]
-    case 'left':
-      return [-magnitude, 0]
-    case 'right':
-      return [magnitude, 0]
-  }
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v
-}
-
-type Side = 'top' | 'bottom' | 'left' | 'right'
+type Side = PortSide
 
 const LABEL_OFFSET = 12
 

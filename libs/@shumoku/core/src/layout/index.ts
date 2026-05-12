@@ -6,6 +6,8 @@
  * Shumoku Layout Engines
  */
 
+// Bezier edge geometry (shared by interactive renderer + SSR renderer-svg)
+export { bezierEdgePath, type PortSide } from './bezier-path.js'
 // Interactive operations (node move, collision detection)
 export {
   addLink,
@@ -23,8 +25,6 @@ export {
   resolveNodePosition,
   resolvePosition,
 } from './interaction.js'
-export type { LibavoidRoutingOptions } from './libavoid-router.js'
-export { ensureLibavoidLoaded, routeEdges } from './libavoid-router.js'
 export {
   bpsToLinkWidth,
   getBandwidthWidth,
@@ -33,19 +33,13 @@ export {
   resolveBandwidthBps,
 } from './link-utils.js'
 export type { NetworkLayoutOptions, NetworkLayoutResult } from './network-layout.js'
-// Custom network layout + libavoid routing
+// Custom network layout (Sugiyama 4-alignment) + bezier edge wrapping
 export { computeNodeSize, layoutNetwork } from './network-layout.js'
 export { placePorts } from './port-placement.js'
-// Remote client (browser → server API, avoids WASM in browser)
-export {
-  computeNetworkLayoutRemote,
-  getLayoutApiUrl,
-  routeEdgesRemote,
-  setLayoutApiUrl,
-} from './remote-client.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
 // Resolved layout model (Port/Edge as computed objects, Node/Subgraph used directly)
 export type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
-// Unified layout engine (wraps network layout + libavoid)
+export { routeEdges } from './route-edges.js'
+// Unified layout engine (wraps network layout + bezier edge wrapping)
 export { computeNetworkLayout, createNetworkLayoutEngine } from './unified-engine.js'
