@@ -28,16 +28,6 @@ import { getLinkWidth } from './link-utils.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
 
 /**
- * Options retained for API compatibility with callers passing
- * `{ direction }`. None of the values are read today — Bezier edges
- * derive direction from per-port `side` attributes already on the
- * resolved ports.
- */
-export interface RouteEdgesOptions {
-  direction?: 'TB' | 'BT' | 'LR' | 'RL'
-}
-
-/**
  * Produce a `ResolvedEdge` for every link whose endpoints resolve to
  * known ports. Links pointing at a missing port are dropped (matches
  * the previous behaviour of libavoid-router).
@@ -45,12 +35,15 @@ export interface RouteEdgesOptions {
  * The function returns a Promise for backwards compatibility with
  * the old WASM-backed router — every existing caller already awaits
  * the result, and async-of-sync incurs zero cost.
+ *
+ * `nodes` is accepted but unused so the signature mirrors the
+ * historical libavoid-router API. Bezier edges read positions off
+ * `ports` directly via each `ResolvedPort.absolutePosition`.
  */
 export async function routeEdges(
   _nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: readonly Link[],
-  _options?: RouteEdgesOptions,
 ): Promise<Map<string, ResolvedEdge>> {
   const edges = new Map<string, ResolvedEdge>()
   for (const [i, link] of links.entries()) {

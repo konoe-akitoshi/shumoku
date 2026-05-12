@@ -8,7 +8,6 @@
  */
 
 import type {
-  EdgeStyle,
   EthernetStandard,
   LayoutLink,
   LayoutNode,
@@ -25,6 +24,7 @@ import type {
   ThemeType,
 } from '@shumoku/core'
 import {
+  bezierEdgePath,
   bpsToLinkWidth,
   computeNodeSize,
   DEFAULT_ICON_SIZE,
@@ -47,16 +47,13 @@ import type { DataAttributeOptions, RenderMode } from './types.js'
 // Render Colors (derived from Theme)
 // ============================================
 
-type CenterlineSegment =
-  | { type: 'line'; from: { x: number; y: number }; to: { x: number; y: number } }
-  | {
-      type: 'arc'
-      center: { x: number; y: number }
-      radius: number
-      t0: { x: number; y: number }
-      t1: { x: number; y: number }
-      sweepFlag: number
-    }
+/** Fallback path when port lookups fail — straight line from layout-link endpoints. */
+function straightLineFromPoints(points: { x: number; y: number }[]): string {
+  const first = points[0]
+  const last = points[points.length - 1]
+  if (!first || !last) return ''
+  return `M ${first.x} ${first.y} L ${last.x} ${last.y}`
+}
 
 interface RenderColors {
   backgroundColor: string
@@ -225,8 +222,6 @@ export class SVGRenderer {
   private options: Required<SVGRendererOptions>
   private theme: Theme = lightTheme
   private renderColors: RenderColors = themeToRenderColors(lightTheme)
-  private edgeStyle: EdgeStyle = 'orthogonal'
-
   constructor(options?: SVGRendererOptions) {
     this.options = { ...DEFAULT_OPTIONS, ...options }
   }
@@ -374,7 +369,6 @@ export class SVGRenderer {
     const { bounds } = layout
 
     this.setTheme(graph.settings?.theme)
-    this.edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
 
     const legendSettings = this.getLegendSettings(graph.settings?.legend)
     let legendWidth = 0
@@ -1157,8 +1151,33 @@ ${fg}
     const strokeWidth =
       link.style?.strokeWidth || standardStrokeWidth || this.getLinkStrokeWidth(type)
 
-    // Render link line
-    let result = this.renderLinkLine(id, points, stroke, strokeWidth, dasharray, markerEnd, type)
+    // Bezier curve from source port to dest port. Looks up each
+    // endpoint's port on its node; falls back to the polyline endpoints
+    // when port info is missing (shouldn't happen for routed graphs).
+    const fromNode = nodes.get(fromEndpoint.node)
+    const toNode = nodes.get(toEndpoint.node)
+    const fromPort = fromNode?.ports?.get(fromEndpoint.port)
+    const toPort = toNode?.ports?.get(toEndpoint.port)
+    const basePath =
+      fromNode && toNode && fromPort && toPort
+        ? bezierEdgePath(
+            {
+              absolutePosition: {
+                x: fromNode.position.x + fromPort.position.x,
+                y: fromNode.position.y + fromPort.position.y,
+              },
+              side: fromPort.side,
+            },
+            {
+              absolutePosition: {
+                x: toNode.position.x + toPort.position.x,
+                y: toNode.position.y + toPort.position.y,
+              },
+              side: toPort.side,
+            },
+          )
+        : straightLineFromPoints(points)
+    let result = this.renderLinkLine(id, basePath, stroke, strokeWidth, dasharray, markerEnd, type)
 
     // Center label and VLANs
     const midPoint = this.getMidPoint(points)
@@ -1177,9 +1196,7 @@ ${fg}
       result += `\n<text x="${midPoint.x}" y="${midPoint.y + labelYOffset}" class="link-label" text-anchor="middle">${this.escapeXml(vlanText)}</text>`
     }
 
-    // Get node center positions for label placement
-    const fromNode = nodes.get(fromEndpoint.node)
-    const toNode = nodes.get(toEndpoint.node)
+    // Node center positions for label placement (reusing the lookup above).
     const fromNodeCenterX = fromNode ? fromNode.position.x : (points[0]?.x ?? 0)
     const toNodeCenterX = toNode ? toNode.position.x : (points[points.length - 1]?.x ?? 0)
 
@@ -1403,30 +1420,13 @@ ${fg}
    */
   private renderLinkLine(
     id: string,
-    points: { x: number; y: number }[],
+    basePath: string,
     stroke: string,
     strokeWidth: number,
     dasharray: string,
     markerEnd: string,
     type: LinkType,
   ): string {
-    // Apply edge style transformations
-    let effectivePoints = points
-    let cornerRadius = 8
-
-    if (this.edgeStyle === 'straight') {
-      const first = points[0]
-      const last = points[points.length - 1]
-      if (first && last) effectivePoints = [first, last]
-      cornerRadius = 0
-    } else if (this.edgeStyle === 'polyline') {
-      cornerRadius = 0
-    }
-
-    // Build centerline as segments + fillet arcs
-    const centerline = this.buildFilletedCenterline(effectivePoints, cornerRadius)
-    const basePath = this.centerlineToPath(centerline, 0)
-
     let linePath = `<path class="link" data-id="${id}" d="${basePath}"
   fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"
   ${dasharray ? `stroke-dasharray="${dasharray}"` : ''}
@@ -1447,196 +1447,6 @@ ${linePath}
 <path class="link-hit-area" d="${basePath}"
   fill="none" stroke="${stroke}" stroke-width="${Math.max(strokeWidth, 8)}" opacity="0" />
 </g>`
-  }
-
-  /**
-   * Build a filleted centerline: sequence of line segments and arc definitions.
-   * Each corner is represented by its arc center, radius, tangent points, and sweep direction.
-   */
-  private buildFilletedCenterline(
-    points: { x: number; y: number }[],
-    cornerRadius: number,
-  ): CenterlineSegment[] {
-    if (points.length < 2) return []
-    const firstPoint = points[0]
-    const lastPoint = points[points.length - 1]
-    if (!firstPoint || !lastPoint) return []
-    if (points.length === 2 || cornerRadius < 1) {
-      return [{ type: 'line', from: firstPoint, to: lastPoint }]
-    }
-
-    // Use points directly — corner radius clamping handles short segments.
-    // simplifyMicroJogs was previously used here but it destructively
-    // altered paths, causing loops and backward segments (#79).
-    const merged = points
-
-    const segments: CenterlineSegment[] = []
-    let prevEnd = merged[0]
-    if (!prevEnd) return []
-
-    for (let i = 1; i < merged.length - 1; i++) {
-      const prev = merged[i - 1]
-      const curr = merged[i]
-      const next = merged[i + 1]
-      if (!prev || !curr || !next) continue
-
-      const distPrev = Math.hypot(curr.x - prev.x, curr.y - prev.y)
-      const distNext = Math.hypot(next.x - curr.x, next.y - curr.y)
-
-      if (distPrev < 0.01 || distNext < 0.01) {
-        continue
-      }
-
-      // Direction unit vectors
-      const d0x = (curr.x - prev.x) / distPrev
-      const d0y = (curr.y - prev.y) / distPrev
-      const d1x = (next.x - curr.x) / distNext
-      const d1y = (next.y - curr.y) / distNext
-
-      // Cross product determines turn direction (positive = CCW in SVG y-down)
-      const cross = d0x * d1y - d0y * d1x
-
-      if (Math.abs(cross) < 0.001) {
-        // Collinear, no arc needed
-        continue
-      }
-
-      // Clamp radius to half the shortest adjacent segment
-      const maxRadius = Math.min(distPrev, distNext) / 2
-      const R = Math.min(cornerRadius, maxRadius)
-
-      if (R < 1) {
-        continue
-      }
-
-      // Compute arc center first, then derive tangent points from it.
-      // This ensures T0/T1 are exactly on the circle, minimizing floating-point drift.
-      //
-      // sign: determines which side of the segments the arc center lies on
-      // In SVG y-down coords, cross > 0 = clockwise visual turn
-      const sign = cross > 0 ? 1 : -1
-
-      // Inward normals (pointing toward arc center) for each segment
-      const m0x = -sign * d0y
-      const m0y = sign * d0x
-      const m1x = -sign * d1y
-      const m1y = sign * d1x
-
-      // Center = intersection of two lines, each offset R inward from the segments
-      // Line 0: point (curr + R*m0), direction d0
-      // Line 1: point (curr + R*m1), direction d1
-      // Solve via parametric intersection: (curr + R*m0) + t*d0 = (curr + R*m1) + u*d1
-      // => t*d0 - u*d1 = R*(m1 - m0)
-      // Using cross product to solve for t:
-      const denom = d0x * d1y - d0y * d1x // = cross, already known non-zero
-      const diffX = R * (m1x - m0x)
-      const diffY = R * (m1y - m0y)
-      const t = (diffX * d1y - diffY * d1x) / denom
-      const center = {
-        x: curr.x + R * m0x + t * d0x,
-        y: curr.y + R * m0y + t * d0y,
-      }
-
-      // Tangent points: project center back onto each segment (perpendicular drop)
-      // T = C - R * inward_normal (since center is R away from segment in normal direction)
-      const t0 = { x: center.x - m0x * R, y: center.y - m0y * R }
-      const t1 = { x: center.x - m1x * R, y: center.y - m1y * R }
-
-      // sweep-flag: in SVG y-down, cross > 0 = clockwise visual turn = sweep=1
-      const sweepFlag = cross > 0 ? 1 : 0
-
-      // Line from previous end to tangent start
-      segments.push({ type: 'line', from: prevEnd, to: t0 })
-      // Arc segment
-      segments.push({ type: 'arc', center, radius: R, t0, t1, sweepFlag })
-
-      prevEnd = t1
-    }
-
-    // Final line segment
-    const last = merged[merged.length - 1]
-    if (last) segments.push({ type: 'line', from: prevEnd, to: last })
-
-    return segments
-  }
-
-  /**
-   * Convert a filleted centerline to an SVG path string, optionally offset for parallel lines.
-   * Line segments are shifted by `offset` perpendicular to their direction.
-   * Arc segments become concentric arcs with radius R ± offset (same center).
-   */
-  private centerlineToPath(segments: CenterlineSegment[], offset: number): string {
-    if (segments.length === 0) return ''
-
-    const parts: string[] = []
-    let first = true
-
-    for (const seg of segments) {
-      if (seg.type === 'line') {
-        const dx = seg.to.x - seg.from.x
-        const dy = seg.to.y - seg.from.y
-        const len = Math.hypot(dx, dy)
-
-        let fx = seg.from.x
-        let fy = seg.from.y
-        let tx = seg.to.x
-        let ty = seg.to.y
-
-        if (len > 0.01 && offset !== 0) {
-          // Perpendicular unit vector (left normal)
-          const nx = -dy / len
-          const ny = dx / len
-          fx += nx * offset
-          fy += ny * offset
-          tx += nx * offset
-          ty += ny * offset
-        }
-
-        if (first) {
-          parts.push(`M ${fx} ${fy}`)
-          first = false
-        }
-        parts.push(`L ${tx} ${ty}`)
-      } else {
-        // Arc segment — concentric offset
-        const { center, radius, t0, t1, sweepFlag } = seg
-
-        // Offset radius: inner lines get smaller R, outer get larger
-        // The offset sign relative to the arc is determined by sweep direction
-        const signFactor = sweepFlag === 1 ? -1 : 1
-        const Ro = radius + signFactor * offset
-
-        if (Ro < 0.5) {
-          // Radius too small, degenerate to sharp corner
-          // Compute offset tangent points by scaling from center
-          const scale = Math.max(0.5, Ro) / radius
-          const ot1x = center.x + (t1.x - center.x) * scale
-          const ot1y = center.y + (t1.y - center.y) * scale
-          if (first) {
-            const ot0x = center.x + (t0.x - center.x) * scale
-            const ot0y = center.y + (t0.y - center.y) * scale
-            parts.push(`M ${ot0x} ${ot0y}`)
-            first = false
-          }
-          parts.push(`L ${ot1x} ${ot1y}`)
-        } else {
-          // Offset tangent points: same angle from center, different radius
-          const ot0x = center.x + (t0.x - center.x) * (Ro / radius)
-          const ot0y = center.y + (t0.y - center.y) * (Ro / radius)
-          const ot1x = center.x + (t1.x - center.x) * (Ro / radius)
-          const ot1y = center.y + (t1.y - center.y) * (Ro / radius)
-
-          if (first) {
-            parts.push(`M ${ot0x} ${ot0y}`)
-            first = false
-          }
-          // SVG arc: A rx ry x-rotation large-arc-flag sweep-flag x y
-          parts.push(`A ${Ro} ${Ro} 0 0 ${sweepFlag} ${ot1x} ${ot1y}`)
-        }
-      }
-    }
-
-    return parts.join(' ')
   }
 
   /**
