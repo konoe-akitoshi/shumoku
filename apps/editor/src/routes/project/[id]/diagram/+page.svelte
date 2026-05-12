@@ -225,6 +225,9 @@
         oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
           diagramState.addLink({ id: newId('link'), from, to })
         }}
+        onportmove={(nodeId: string, portId: string, side: 'top' | 'bottom' | 'left' | 'right') => {
+          diagramState.setPortPlacement(nodeId, portId, { side })
+        }}
       />
     {:else}
       <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">

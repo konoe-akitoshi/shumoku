@@ -39,6 +39,8 @@
     onaddport,
     onlinkstart,
     onlinkend,
+    onportdragmove,
+    onportdragend,
     onlabeledit,
     oncontextmenu: onctx,
     onbackgroundclick,
@@ -63,6 +65,8 @@
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onlinkstart?: (portId: string, x: number, y: number) => void
     onlinkend?: (portId: string) => void
+    onportdragmove?: (portId: string, screenX: number, screenY: number) => void
+    onportdragend?: (portId: string, screenX: number, screenY: number) => void
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (id: string, type: string, e: MouseEvent) => void
     onbackgroundclick?: () => void
@@ -203,6 +207,8 @@
         overlay={portOverlay}
         {onlinkstart}
         {onlinkend}
+        {onportdragmove}
+        {onportdragend}
         {onselect}
         {onlabeledit}
         oncontextmenu={(id, e) => onctx?.(id, 'port', e)}

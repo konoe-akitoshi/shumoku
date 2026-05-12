@@ -1328,6 +1328,47 @@ export const diagramState = {
     })
   },
   /**
+   * Persist a user override for where this port sits on its node.
+   * `placement.side` pins the edge; `placement.order` (not yet
+   * surfaced by drag — follow-up) pins the slot within the side.
+   * Passing `null` for either field clears that override so the
+   * port falls back to the auto rules.
+   *
+   * The override lives on `NodePort.placement` so it round-trips
+   * through save / load and survives auto-relayout.
+   */
+  setPortPlacement(
+    nodeId: string,
+    portId: string,
+    placement: { side?: 'top' | 'bottom' | 'left' | 'right' | null; order?: number | null },
+  ) {
+    commit('Move port', () => {
+      const node = diagram.nodes.get(nodeId)
+      if (!node) return
+      const ports = node.ports
+      if (!ports?.length) return
+      const idx = ports.findIndex((p) => p.id === portId)
+      if (idx < 0) return
+      const port = ports[idx]
+      if (!port) return
+      const prev = port.placement
+      const nextSide = placement.side === null ? undefined : (placement.side ?? prev?.side)
+      const nextOrder = placement.order === null ? undefined : (placement.order ?? prev?.order)
+      // No-op early-out — nothing changed.
+      if (nextSide === prev?.side && nextOrder === prev?.order) return
+      const nextPlacement =
+        nextSide === undefined && nextOrder === undefined
+          ? undefined
+          : { side: nextSide, order: nextOrder }
+      const nextPort = { ...port, placement: nextPlacement }
+      const nextPorts = [...ports]
+      nextPorts[idx] = nextPort
+      diagram.nodes.set(nodeId, { ...node, ports: nextPorts })
+      // Recompute port positions so the move is reflected immediately.
+      rebuildPortsAndEdges()
+    })
+  },
+  /**
    * Remove a port by its raw NodePort.id (not the ResolvedPort form).
    * Use this when the port may have no layout entry — e.g. an unwired
    * custom port the user added but never connected. Falls back to the

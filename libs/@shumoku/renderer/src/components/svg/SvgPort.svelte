@@ -18,6 +18,8 @@
     onselect,
     onlabeledit,
     oncontextmenu: onctx,
+    onportdragmove,
+    onportdragend,
   }: {
     port: ResolvedPort
     colors: RenderColors
@@ -31,6 +33,12 @@
     onselect?: (portId: string) => void
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (portId: string, e: MouseEvent) => void
+    /** Drag a linked port to a different placement on the same node.
+     *  Fires after a small movement threshold so a plain click still
+     *  selects without entering drag mode. Coordinates are screen pixels
+     *  (clientX/clientY); host translates and computes the target side. */
+    onportdragmove?: (portId: string, screenX: number, screenY: number) => void
+    onportdragend?: (portId: string, screenX: number, screenY: number) => void
   } = $props()
 
   const px = $derived(port.absolutePosition.x)
@@ -60,18 +68,58 @@
 
   let hovered = $state(false)
 
+  // Port-move drag state. A linked port enters drag mode if the user
+  // moves more than DRAG_THRESHOLD px after pressing it; otherwise the
+  // pointerdown was just a click for selection. Unlinked ports keep
+  // the link-draw behaviour (pointerdown immediately starts a link).
+  const DRAG_THRESHOLD = 5
+  let dragPointerId: number | null = null
+  let dragStartX = 0
+  let dragStartY = 0
+  let dragging = $state(false)
+
   function onpointerdown(e: PointerEvent) {
     if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
-    // Select always; link-start only in edit mode
     onselect?.(port.id)
-    if (interactive && !linked) {
+    if (!interactive) return
+
+    if (linked && onportdragend) {
+      dragPointerId = e.pointerId
+      dragStartX = e.clientX
+      dragStartY = e.clientY
+      const el = e.currentTarget as Element
+      el.setPointerCapture?.(e.pointerId)
+    } else {
       onlinkstart?.(port.id, px, py)
     }
   }
 
+  function onpointermove(e: PointerEvent) {
+    if (dragPointerId === null || e.pointerId !== dragPointerId) return
+    if (!dragging) {
+      const dx = e.clientX - dragStartX
+      const dy = e.clientY - dragStartY
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
+      dragging = true
+    }
+    onportdragmove?.(port.id, e.clientX, e.clientY)
+  }
+
   function onpointerup(e: PointerEvent) {
+    if (dragPointerId !== null && e.pointerId === dragPointerId) {
+      const el = e.currentTarget as Element
+      el.releasePointerCapture?.(e.pointerId)
+      const wasDragging = dragging
+      dragPointerId = null
+      dragging = false
+      if (wasDragging) {
+        e.stopPropagation()
+        onportdragend?.(port.id, e.clientX, e.clientY)
+        return
+      }
+    }
     if (!interactive) return
     e.stopPropagation()
     onlinkend?.(port.id)
@@ -95,13 +143,14 @@
 >
   <!-- Hit area (CSS controls pointer-events via .interactive) -->
   <rect
-    class="port-hit {linked ? 'linked' : ''}"
+    class="port-hit {linked ? 'linked' : ''} {dragging ? 'dragging' : ''}"
     x={px - 12}
     y={py - 12}
     width={24}
     height={24}
     fill="transparent"
     {onpointerdown}
+    {onpointermove}
     {onpointerup}
   />
 
