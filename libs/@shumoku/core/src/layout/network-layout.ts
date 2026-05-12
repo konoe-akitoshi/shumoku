@@ -224,14 +224,57 @@ function flowSides(direction: 'TB' | 'BT' | 'LR' | 'RL'): { source: Side; dest: 
 }
 
 /**
- * For a single link, decide whether the user-placed port sides
- * disagree with the direction-derived defaults strongly enough to
- * flip the link's layer ordering for layout purposes. Returns
- * `false` (no flip) for perpendicular / HA-side placements — those
- * carry no flow information.
+ * Device types that should always be downstream (leaf side) of any
+ * connection to an intermediate device, regardless of how the link
+ * was declared. APs / IoT / printers / servers usually only have
+ * one uplink and belong visually at the bottom of a TB diagram —
+ * users routinely create `ap → switch` links in input forms and
+ * expect the layout to do the right thing.
+ */
+const LEAF_DEVICE_TYPES: ReadonlySet<string> = new Set([
+  'access-point',
+  'cpe',
+  'server',
+  'database',
+  'console-server',
+])
+
+/**
+ * Device types that anchor at the upstream edge of the network
+ * (WAN side in TB). `Internet` and `Cloud` represent the outside
+ * world and should sit at the top.
+ */
+const UPSTREAM_DEVICE_TYPES: ReadonlySet<string> = new Set(['internet', 'cloud'])
+
+function deviceType(node: Node | undefined): string | undefined {
+  const spec = node?.spec
+  if (!spec) return undefined
+  if (spec.kind === 'hardware' || spec.kind === 'compute') return spec.type
+  return undefined
+}
+
+/**
+ * For a single link, decide whether the layout should swap its
+ * (source, target) pair when feeding Sugiyama. Two signals, in
+ * priority order:
  *
- * The actual `Link.from` / `Link.to` records are not mutated; only
- * the (source, target) pair used to feed Sugiyama is swapped.
+ *   1. **Per-port placement** — if the user has pinned a port to
+ *      the opposite of the direction-derived default (e.g. a
+ *      source port on the dest side in TB), respect that override.
+ *      This is the manual escape hatch from PR #220.
+ *   2. **Device-type heuristic** — if neither port has an explicit
+ *      placement, look at `Node.spec.type`. A leaf-type endpoint
+ *      (AccessPoint / CPE / Server / Database / ConsoleServer) on
+ *      the `from` side, paired with an intermediate `to`, is the
+ *      "AP → switch" reversal pattern users routinely create
+ *      without realising. Flipping puts the leaf back at the
+ *      downstream layer where network engineers expect it.
+ *      An upstream-type endpoint (Internet / Cloud) on `to`
+ *      similarly flips to keep WAN edges at the top.
+ *
+ * The actual `Link.from` / `Link.to` records are never mutated;
+ * only the (source, target) pair used inside `buildCompoundEdges`
+ * is swapped, so user-facing data stays exactly as authored.
  */
 function shouldFlipForLayout(
   link: NetworkGraph['links'][number],
@@ -243,11 +286,30 @@ function shouldFlipForLayout(
   const toNode = nodes.get(link.to.node)
   const fromSide = fromNode?.ports?.find((p) => p.id === link.from.port)?.placement?.side
   const toSide = toNode?.ports?.find((p) => p.id === link.to.port)?.placement?.side
-  // From port pinned to the dest side → "from" wants to live downstream.
-  // To port pinned to the source side → "to" wants to live upstream.
-  // Either alone is enough to flip; both agreeing also flips (idempotent).
+  // 1. Explicit placement override — wins over everything.
   if (fromSide === sides.dest) return true
   if (toSide === sides.source) return true
+  // Honour the opposite intent too: if either port is pinned to the
+  // expected source/dest side, the link as authored is already
+  // correctly oriented for layout — skip the type-based check so we
+  // never undo a deliberate placement.
+  if (fromSide === sides.source) return false
+  if (toSide === sides.dest) return false
+  // 2. Device-type heuristic. Only flips when both ports are
+  //    placement-neutral, so a single manual pin always wins.
+  const fromType = deviceType(fromNode)
+  const toType = deviceType(toNode)
+  if (fromType && LEAF_DEVICE_TYPES.has(fromType) && toType && !LEAF_DEVICE_TYPES.has(toType)) {
+    return true
+  }
+  if (
+    toType &&
+    UPSTREAM_DEVICE_TYPES.has(toType) &&
+    fromType &&
+    !UPSTREAM_DEVICE_TYPES.has(fromType)
+  ) {
+    return true
+  }
   return false
 }
 

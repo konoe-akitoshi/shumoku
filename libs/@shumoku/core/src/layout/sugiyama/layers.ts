@@ -4,23 +4,41 @@
 /**
  * Layer assignment for Sugiyama-style layered layout.
  *
- * Given a DAG, assign each node an integer layer index so every edge
- * goes from a lower layer to a higher one. We use the longest-path
- * method: layer(v) = max over all predecessors u of layer(u) + 1.
+ * Two modes:
  *
- * Longest-path is O(V + E), trivially correct, and produces
- * layer-compact layouts for the small-to-medium graphs typical of
- * network topologies. Coffman-Graham or network-simplex would give
- * tighter width bounds but aren't justified here.
+ *  - **ASAP** ("As Soon As Possible") — `layer(v) = max(layer(u)) + 1`
+ *    over predecessors. Each node sits at the *shallowest* layer
+ *    compatible with the DAG. Leaves end up at varying depths
+ *    depending on how long their longest path from a root is.
+ *    Standard Sugiyama default.
  *
- * Disconnected components are all laid out with their longest-path
- * layers starting at 0; the caller can shift or pack them in a later
- * step if needed.
+ *  - **ALAP** ("As Late As Possible") — each node sits at the
+ *    *deepest* layer compatible with the DAG, computed as
+ *    `layer(v) = totalDepth - longestPathToLeaf(v)`. Every leaf
+ *    lands on the bottom row regardless of how it got there, which
+ *    matches what network-engineer users expect from a topology
+ *    diagram (APs at the bottom, ONU at the top, etc.). One
+ *    drawback: edges crossing many ranks become longer; with no
+ *    dummy-node insertion they remain direct straight bends.
+ *
+ * The longest-path implementations are O(V + E); the choice is a
+ * single boolean knob, so we pay nothing for keeping both around.
  */
 
 import type { Edge, LayerAssignment, NodeId } from './types.js'
 
-export function assignLayers(nodes: NodeId[], dag: Edge[]): LayerAssignment {
+export interface AssignLayersOptions {
+  /** 'asap' = leaves spread by depth; 'alap' = all leaves at the
+   *  bottom. Default 'alap' — better suited to network diagrams. */
+  mode?: 'asap' | 'alap'
+}
+
+export function assignLayers(
+  nodes: NodeId[],
+  dag: Edge[],
+  options: AssignLayersOptions = {},
+): LayerAssignment {
+  const mode = options.mode ?? 'alap'
   // Build predecessor list. In a DAG this lets us compute
   // layer(v) = 1 + max(layer(u) for u in preds(v)) via topological order.
   const preds = new Map<NodeId, NodeId[]>()
@@ -64,19 +82,50 @@ export function assignLayers(nodes: NodeId[], dag: Edge[]): LayerAssignment {
     }
   }
 
-  // If topo length < nodes length we have a cycle the caller forgot to
-  // remove — treat remaining nodes as layer 0 rather than crashing.
-  const layerOf = new Map<NodeId, number>()
+  // Forward longest path from any root (ASAP layer).
+  const asap = new Map<NodeId, number>()
   for (const u of topo) {
     let maxPred = -1
     for (const p of preds.get(u) ?? []) {
-      const lp = layerOf.get(p)
+      const lp = asap.get(p)
       if (lp !== undefined && lp > maxPred) maxPred = lp
     }
-    layerOf.set(u, maxPred + 1)
+    asap.set(u, maxPred + 1)
   }
   for (const n of nodes) {
-    if (!layerOf.has(n)) layerOf.set(n, 0)
+    if (!asap.has(n)) asap.set(n, 0)
+  }
+
+  let layerOf: Map<NodeId, number>
+  if (mode === 'alap') {
+    // Reverse longest path: distance from each node to its furthest
+    // leaf. Walk topo in reverse so successors are resolved first.
+    const reverseDepth = new Map<NodeId, number>()
+    for (let i = topo.length - 1; i >= 0; i--) {
+      const u = topo[i]
+      if (u === undefined) continue
+      let maxSucc = -1
+      for (const v of succ.get(u) ?? []) {
+        const lv = reverseDepth.get(v)
+        if (lv !== undefined && lv > maxSucc) maxSucc = lv
+      }
+      reverseDepth.set(u, maxSucc + 1)
+    }
+    for (const n of nodes) {
+      if (!reverseDepth.has(n)) reverseDepth.set(n, 0)
+    }
+    let totalDepth = 0
+    for (const n of nodes) {
+      const d = (asap.get(n) ?? 0) + (reverseDepth.get(n) ?? 0)
+      if (d > totalDepth) totalDepth = d
+    }
+    layerOf = new Map<NodeId, number>()
+    for (const n of nodes) {
+      const layer = totalDepth - (reverseDepth.get(n) ?? 0)
+      layerOf.set(n, layer)
+    }
+  } else {
+    layerOf = asap
   }
 
   // Bucket into layers[i].
