@@ -1,3 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-  <path d="M12 2L4 5v6.5c0 5.3 3.4 10 8 11.5 4.6-1.5 8-6.2 8-11.5V5l-8-3zm0 4a3 3 0 110 6 3 3 0 010-6zm-4 8h8v1c0 2-1.8 3-4 3s-4-1-4-3v-1z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="g-vpn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <rect width="24" height="24" rx="5" fill="url(#g-vpn)"/>
+  <path d="M8.3 10.5V8.8a3.7 3.7 0 0 1 7.4 0v1.7" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round"/>
+  <rect x="6.2" y="10" width="11.6" height="8.3" rx="2.2" fill="#FFFFFF"/>
+  <path d="M8.5 14.2c1.8-1.4 5.2-1.4 7 0" fill="none" stroke="#059669" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
+  <circle cx="12" cy="14.3" r="1" fill="#059669" opacity=".75"/>
+  <path d="M5.5 3.4h13" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round" opacity=".16"/>
 </svg>

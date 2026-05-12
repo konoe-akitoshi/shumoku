@@ -71,7 +71,11 @@ function generateTypeScript(icons: Record<string, string>): string {
   ]
 
   for (const [name, content] of Object.entries(icons)) {
-    lines.push(`  '${name}': \`${content}\`,`)
+    // Biome's `useLiteralKeys` rule wants identifiers unquoted when
+    // possible. SVG filenames map to identifier-safe names except
+    // when they contain a hyphen.
+    const key = /^[A-Za-z_$][\w$]*$/.test(name) ? name : `'${name}'`
+    lines.push(`  ${key}: \`${content}\`,`)
   }
 
   lines.push('}')
@@ -87,6 +91,8 @@ function generateTypeScript(icons: Record<string, string>): string {
   lines.push("  [DeviceType.LoadBalancer]: 'load-balancer',")
   lines.push("  [DeviceType.Server]: 'server',")
   lines.push("  [DeviceType.AccessPoint]: 'access-point',")
+  lines.push("  [DeviceType.CPE]: 'cpe',")
+  lines.push("  [DeviceType.ConsoleServer]: 'console-server',")
   lines.push("  [DeviceType.Cloud]: 'cloud',")
   lines.push("  [DeviceType.Internet]: 'internet',")
   lines.push("  [DeviceType.VPN]: 'vpn',")
