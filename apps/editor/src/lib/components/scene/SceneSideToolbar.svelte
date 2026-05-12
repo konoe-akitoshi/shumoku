@@ -97,6 +97,7 @@
 </script>
 
 <div
+  data-print-hide
   class="flex flex-col gap-1.5 rounded-xl border border-neutral-200 bg-white/90 p-1.5 shadow-lg backdrop-blur-sm transition-all duration-200 dark:border-neutral-700 dark:bg-neutral-800/90"
 >
   {#if editing}

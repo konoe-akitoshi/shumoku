@@ -134,3 +134,113 @@ body {
     color: var(--color-foreground);
   }
 }
+
+/*
+ * ─── Print ────────────────────────────────────────────────────────
+ *
+ * Cmd+P (or the in-app "Print" button) should produce a single
+ * landscape page suitable for use as a paper working document during
+ * network install / cabling work.
+ *
+ * Strategy: hide every interactive UI chrome element (toolbars,
+ * panels, dropdowns) and let the canvas fill the printable area.
+ * Components opt out of print by adding the `data-print-hide`
+ * attribute on their outermost wrapper. The canvas itself opts IN
+ * via `data-print-canvas`; everything inside it prints.
+ *
+ * Color: VLAN colors, port labels, link styles must survive print.
+ * `print-color-adjust: exact` is a hint, not a guarantee — users
+ * may override in their browser's print dialog. We additionally
+ * thicken strokes and add halo to small text so the output remains
+ * legible in monochrome.
+ */
+@page {
+  size: A4 landscape;
+  margin: 8mm;
+}
+
+@media print {
+  /* Color / background fidelity. Browsers may still override per
+   * user setting in the print dialog. */
+  html,
+  body,
+  [data-print-canvas],
+  [data-print-canvas] * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Hide interactive UI chrome — toolbars, panels, dropdowns,
+   * floating buttons. Add `data-print-hide` on the outermost
+   * wrapper of any new component that shouldn't print. */
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Hide the interactive Svelte Flow canvas; the print-only static
+   * surface (data-print-canvas + data-print-only) renders instead. */
+  [data-screen-canvas] {
+    display: none !important;
+  }
+  [data-print-only] {
+    display: block !important;
+  }
+
+  /* Canvas fills the printable area. The renderer-emitted SVG has
+   * its own viewBox so it scales naturally with the page. */
+  html,
+  body,
+  body > div,
+  body > div > div {
+    background: white !important;
+    color: black !important;
+  }
+  [data-print-canvas] {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: calc(100vh - 16mm);
+    background: white !important;
+  }
+  [data-print-canvas] svg {
+    width: 100% !important;
+    height: auto !important;
+    max-height: calc(100vh - 16mm);
+    background: white !important;
+  }
+
+  /* Make small SVG text more legible in print: white halo so labels
+   * remain readable even when they overlap colored strokes. */
+  [data-print-canvas] text {
+    paint-order: stroke fill;
+    stroke: white;
+    stroke-width: 2.5px;
+  }
+
+  /* Reset reactflow's internal absolute layering so the static
+   * print surface (a single SVG) fills the page. */
+  .svelte-flow,
+  .svelte-flow__renderer,
+  .svelte-flow__viewport {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Reset the diagram renderer's pan/zoom viewport transform so
+   * print shows the full diagram (per its viewBox), not whatever
+   * the user happened to zoom to onscreen. The renderer wraps
+   * everything in `<g class="viewport">` and applies a transform
+   * via the `attachCamera` runtime. */
+  [data-print-canvas] svg g.viewport {
+    transform: none !important;
+  }
+}
+
+/* By default the static print-only surfaces are hidden onscreen.
+ * `display: none` keeps them out of the layout; `@media print`
+ * above flips them back on. */
+[data-print-only] {
+  display: none;
+}

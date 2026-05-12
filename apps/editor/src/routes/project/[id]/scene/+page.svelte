@@ -10,6 +10,7 @@
   import HeaderBar from '$lib/components/HeaderBar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import SceneCanvas from '$lib/components/scene/SceneCanvas.svelte'
+  import ScenePrintSurface from '$lib/components/scene/ScenePrintSurface.svelte'
   import SceneSideToolbar from '$lib/components/scene/SceneSideToolbar.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState } from '$lib/context.svelte'
@@ -96,7 +97,10 @@
     canvasMenuOpen = true
   }}
 >
-  <div class="absolute inset-0">
+  <!-- Onscreen: interactive Svelte Flow canvas. `data-screen-canvas`
+       hides this in print so the static `<ScenePrintSurface>` below
+       takes over and gives a clean, viewport-independent layout. -->
+  <div data-screen-canvas class="absolute inset-0">
     {#if diagramState.currentScene}
       <SceneCanvas scene={diagramState.currentScene} />
     {:else}
@@ -106,27 +110,36 @@
     {/if}
   </div>
 
-  <div class="fixed top-3 left-3 z-20"><HeaderBar /></div>
+  <!-- Print-only: static composite of background image + node
+       placements + cable wires. Hidden onscreen via `[data-print-only]
+       { display: none }` in app.css, shown by @media print. -->
+  {#if diagramState.currentScene}
+    <div data-print-only data-print-canvas class="absolute inset-0">
+      <ScenePrintSurface scene={diagramState.currentScene} />
+    </div>
+  {/if}
 
-  <div class="fixed top-3 right-3 z-20">
+  <div data-print-hide class="fixed top-3 left-3 z-20"><HeaderBar /></div>
+
+  <div data-print-hide class="fixed top-3 right-3 z-20">
     <ExportMenu onexportjson={handleExportJson} onexportsvg={handleExportSvg} />
   </div>
 
-  <div class="fixed top-1/2 right-3 z-20 -translate-y-1/2">
+  <div data-print-hide class="fixed top-1/2 right-3 z-20 -translate-y-1/2">
     {#if diagramState.currentSceneId !== null}
       <SceneSideToolbar sceneId={diagramState.currentSceneId} />
     {/if}
   </div>
 
-  <div class="fixed bottom-3 left-3 z-20">
+  <div data-print-hide class="fixed bottom-3 left-3 z-20">
     <StatusBadge status={diagramState.status} stats={diagramState.stats} selected={null} />
   </div>
 
-  <div class="fixed top-1/2 left-3 z-20 flex h-[80vh] -translate-y-1/2">
+  <div data-print-hide class="fixed top-1/2 left-3 z-20 flex h-[80vh] -translate-y-1/2">
     <CodePanel bind:isOpen={codePanelOpen} />
   </div>
 
-  <div class="fixed bottom-3 left-1/2 z-20 -translate-x-1/2"><ViewBar /></div>
+  <div data-print-hide class="fixed bottom-3 left-1/2 z-20 -translate-x-1/2"><ViewBar /></div>
 
   <DetailPanel
     open={detailTarget !== null}

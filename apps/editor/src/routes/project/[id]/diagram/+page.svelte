@@ -172,9 +172,12 @@
 </script>
 
 <div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
-  <!-- Canvas (full screen, z-0) -->
+  <!-- Canvas (full screen, z-0). `data-print-canvas` marks this as
+       the surface that survives Print; everything outside it is
+       hidden by `@media print` in app.css. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
+    data-print-canvas
     class="absolute inset-0"
     ondblclick={() => {
       if (selected) openDetail(selected.id, selected.type)
@@ -237,15 +240,17 @@
   </div>
 
   <!-- Top-left: Undo / Redo header bar -->
-  <div class="fixed top-3 left-3 z-20"><HeaderBar /></div>
+  <div data-print-hide class="fixed top-3 left-3 z-20"><HeaderBar /></div>
 
-  <!-- Top-right: Export -->
-  <div class="fixed top-3 right-3 z-20">
+  <!-- Top-right: Export. The menu itself stays in the DOM during
+       print (its dropdown is closed and its trigger button hidden),
+       but the ⌘+P binding inside it is still active. -->
+  <div data-print-hide class="fixed top-3 right-3 z-20">
     <ExportMenu onexportjson={handleExportJson} onexportsvg={handleExportSvg} />
   </div>
 
   <!-- Right: diagram-side tools. -->
-  <div class="fixed right-3 top-1/2 -translate-y-1/2 z-20">
+  <div data-print-hide class="fixed right-3 top-1/2 -translate-y-1/2 z-20">
     <SideToolbar
       mode={editorState.mode}
       isDark={editorState.isDark}
@@ -257,17 +262,17 @@
   </div>
 
   <!-- Bottom-left: Status -->
-  <div class="fixed bottom-3 left-3 z-20">
+  <div data-print-hide class="fixed bottom-3 left-3 z-20">
     <StatusBadge status={diagramState.status} stats={diagramState.stats} {selected} />
   </div>
 
   <!-- Left side: Code panel (slide-out) -->
-  <div class="fixed left-3 top-1/2 -translate-y-1/2 z-20 h-[80vh] flex">
+  <div data-print-hide class="fixed left-3 top-1/2 -translate-y-1/2 z-20 h-[80vh] flex">
     <CodePanel bind:isOpen={codePanelOpen} />
   </div>
 
   <!-- Bottom-center: segmented Diagram | Scene view picker. -->
-  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"><ViewBar /></div>
+  <div data-print-hide class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"><ViewBar /></div>
 
   <!-- Overlays -->
 

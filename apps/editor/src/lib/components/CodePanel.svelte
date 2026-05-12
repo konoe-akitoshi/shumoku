@@ -48,7 +48,7 @@
   }
 </script>
 
-<div class="flex h-full items-stretch gap-1">
+<div data-print-hide class="flex h-full items-stretch gap-1">
   {#if isOpen}
     <div
       class="w-[400px] bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-xl flex flex-col overflow-hidden"
