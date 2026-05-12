@@ -1,15 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-generic)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <defs>
     <linearGradient id="g-generic" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#D1D5DB"/>
       <stop offset="1" stop-color="#6B7280"/>
     </linearGradient>
   </defs>
-  <rect width="24" height="24" rx="5" fill="url(#g-generic)"/>
-  <rect x="6.2" y="6.2" width="11.6" height="11.6" rx="2.4" fill="#FFFFFF"/>
-  <circle cx="9.4" cy="9.4" r="1.1" fill="#6B7280" opacity=".7"/>
-  <circle cx="14.6" cy="9.4" r="1.1" fill="#6B7280" opacity=".7"/>
-  <circle cx="9.4" cy="14.6" r="1.1" fill="#6B7280" opacity=".7"/>
-  <circle cx="14.6" cy="14.6" r="1.1" fill="#6B7280" opacity=".7"/>
-  <path d="M5.5 3.4h13" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round" opacity=".15"/>
+  <path d="M12 2.5 L 20.5 7 V 17 L 12 21.5 L 3.5 17 V 7 Z"/>
+  <circle cx="12" cy="12" r="2.5" fill="url(#g-generic)" stroke="none"/>
 </svg>

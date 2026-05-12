@@ -1,14 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-vpn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <defs>
     <linearGradient id="g-vpn" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#34D399"/>
       <stop offset="1" stop-color="#059669"/>
     </linearGradient>
   </defs>
-  <rect width="24" height="24" rx="5" fill="url(#g-vpn)"/>
-  <path d="M8.3 10.5V8.8a3.7 3.7 0 0 1 7.4 0v1.7" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round"/>
-  <rect x="6.2" y="10" width="11.6" height="8.3" rx="2.2" fill="#FFFFFF"/>
-  <path d="M8.5 14.2c1.8-1.4 5.2-1.4 7 0" fill="none" stroke="#059669" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
-  <circle cx="12" cy="14.3" r="1" fill="#059669" opacity=".75"/>
-  <path d="M5.5 3.4h13" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round" opacity=".16"/>
+  <path d="M8 10 V 7 A 4 4 0 0 1 16 7 V 10"/>
+  <rect x="5" y="10" width="14" height="11" rx="2"/>
+  <circle cx="12" cy="14.5" r="1.5" fill="url(#g-vpn)" stroke="none"/>
+  <path d="M12 16 V 18.5"/>
 </svg>

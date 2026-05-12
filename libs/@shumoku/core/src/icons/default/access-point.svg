@@ -1,14 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#g-access-point)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <defs>
     <linearGradient id="g-access-point" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#60A5FA"/>
       <stop offset="1" stop-color="#2563EB"/>
     </linearGradient>
   </defs>
-  <rect width="24" height="24" rx="5" fill="url(#g-access-point)"/>
-  <path d="M5 7.4C6.9 5.8 9.3 5 12 5s5.1.8 7 2.4" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round"/>
-  <path d="M7.7 10c1.2-1 2.7-1.5 4.3-1.5s3.1.5 4.3 1.5" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" opacity=".85"/>
-  <ellipse cx="12" cy="15.1" rx="5.7" ry="3.5" fill="#FFFFFF"/>
-  <circle cx="12" cy="14.6" r="1.2" fill="#2563EB" opacity=".75"/>
-  <path d="M5.5 3.4h13" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round" opacity=".16"/>
+  <path d="M3 10 A 13 13 0 0 1 21 10"/>
+  <path d="M6.5 13 A 8 8 0 0 1 17.5 13"/>
+  <path d="M10 16 A 3 3 0 0 1 14 16"/>
+  <circle cx="12" cy="19" r="1.5" fill="url(#g-access-point)" stroke="none"/>
 </svg>
