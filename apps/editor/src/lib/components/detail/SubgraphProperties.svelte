@@ -13,29 +13,23 @@
   } = $props()
 
   let colorDialogOpen = $state(false)
-  let swatchEl: HTMLButtonElement | null = $state(null)
+  let moreEl: HTMLButtonElement | null = $state(null)
 
-  // Map known accent / surface tokens to a representative preview
-  // color for the swatch chip. Custom hex values render directly.
-  const TOKEN_PREVIEW: Record<string, string> = {
-    'accent-blue': '#bfdbfe',
-    'accent-green': '#bbf7d0',
-    'accent-red': '#fecdd3',
-    'accent-amber': '#fcd34d',
-    'accent-purple': '#e9d5ff',
-    'surface-1': '#e2e8f0',
-    'surface-2': '#cbd5e1',
-    'surface-3': '#94a3b8',
-  }
+  // Theme palette rendered inline in the Color row. Token id is what
+  // gets stored; preview is the light-mode hex shown on the chip.
+  // Keep in sync with SubgraphColorDialog.svelte and the theme files.
+  const PALETTE = [
+    { token: 'accent-blue', label: 'Blue', preview: '#bfdbfe' },
+    { token: 'accent-green', label: 'Green', preview: '#bbf7d0' },
+    { token: 'accent-red', label: 'Red', preview: '#fecdd3' },
+    { token: 'accent-amber', label: 'Amber', preview: '#fcd34d' },
+    { token: 'accent-purple', label: 'Purple', preview: '#e9d5ff' },
+    { token: 'surface-1', label: 'Neutral 1', preview: '#e2e8f0' },
+    { token: 'surface-2', label: 'Neutral 2', preview: '#cbd5e1' },
+    { token: 'surface-3', label: 'Neutral 3', preview: '#94a3b8' },
+  ] as const
 
-  const swatchColor = $derived.by(() => {
-    const fill = subgraph.style?.fill
-    if (!fill) return '#e2e8f0'
-    if (fill.startsWith('#')) return fill
-    return TOKEN_PREVIEW[fill] ?? '#e2e8f0'
-  })
-
-  const swatchLabel = $derived(subgraph.style?.fill ?? 'default')
+  const currentFill = $derived(subgraph.style?.fill ?? '')
 
   function pickColor(fill: string | undefined) {
     const nextStyle = { ...(subgraph.style ?? {}) }
@@ -101,31 +95,39 @@
     </dd>
   </div>
 
-  <!-- Color — the swatch is the affordance and the popover anchor.
-       Color editing is allowed even outside edit mode (low-risk
-       visual tweak that doesn't need the edit gate). -->
+  <!-- Color — inline palette. Each swatch is a one-click set. A
+       small "…" button at the end opens the popover for custom hex
+       or clear. Always interactive (no edit-mode gate). -->
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Color</dt>
-    <dd class="flex items-center gap-2">
+    <dd class="flex items-center gap-1">
+      {#each PALETTE as opt (opt.token)}
+        {@const selected = currentFill === opt.token}
+        <button
+          type="button"
+          class="block h-4 w-4 rounded-sm border border-black/15 outline-none transition-shadow hover:ring-2 hover:ring-blue-300"
+          class:ring-2={selected}
+          class:ring-foreground={selected}
+          style="background-color: {opt.preview};"
+          onclick={() => pickColor(opt.token)}
+          title={opt.label}
+          aria-label={opt.label}
+        ></button>
+      {/each}
       <button
-        bind:this={swatchEl}
+        bind:this={moreEl}
         type="button"
-        class="block h-5 w-5 rounded border border-black/15 outline-none transition-shadow hover:ring-2 hover:ring-blue-300 focus:ring-2 focus:ring-blue-400"
-        style="background-color: {swatchColor};"
+        class="ml-0.5 flex h-4 w-4 items-center justify-center rounded-sm border border-black/15 text-[10px] leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
         onclick={() => {
           colorDialogOpen = !colorDialogOpen
         }}
-        title="Change color"
-        aria-label="Change color"
-      ></button>
-      <span class={valueClass}>{swatchLabel}</span>
+        title="Custom color"
+        aria-label="Custom color"
+      >
+        …
+      </button>
     </dd>
   </div>
 </dl>
 
-<SubgraphColorDialog
-  bind:open={colorDialogOpen}
-  currentFill={subgraph.style?.fill ?? ''}
-  anchor={swatchEl}
-  onpick={pickColor}
-/>
+<SubgraphColorDialog bind:open={colorDialogOpen} {currentFill} anchor={moreEl} onpick={pickColor} />
