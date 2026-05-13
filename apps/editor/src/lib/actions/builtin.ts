@@ -9,6 +9,7 @@ import {
   ClipboardText,
   Copy,
   CopySimple,
+  FolderSimplePlus,
   Info,
   MagnifyingGlass,
   Trash,
@@ -16,6 +17,7 @@ import {
 import { diagramState } from '../context.svelte'
 import { clipboard } from '../state/clipboard.svelte'
 import { detailPanel } from '../state/detail-panel.svelte'
+import { movePicker } from '../state/move-picker.svelte'
 import { openPalette } from './palette.svelte'
 import { defineAction } from './registry'
 import type { Action, ActionContext } from './types'
@@ -240,6 +242,37 @@ const builtinActions: Action[] = [
     group: 'arrange',
     when: inDiagram,
     run: () => diagramState.autoArrange(),
+  },
+  {
+    // Restore of the legacy "Move to group" sub-menu that lived in
+    // NodeContextMenu before PR-5 absorbed it into the unified
+    // CanvasContextMenu. The new flat menu can't host a submenu, so
+    // this action opens a separate popover with the subgraph list
+    // (see MoveToGroupPicker.svelte). The picker calls
+    // `diagramState.moveNodeToGroup`, which is still wired up — the
+    // legacy state-layer API never went away.
+    id: 'arrange.moveToGroup',
+    label: 'Move to group…',
+    icon: FolderSimplePlus,
+    group: 'arrange',
+    when: inDiagram,
+    enabled: (ctx) =>
+      ctx.selection.ids.length === 1 &&
+      ctx.selection.types[0] === 'node' &&
+      diagramState.subgraphs.size > 0,
+    run: (ctx) => {
+      const id = ctx.selection.ids[0]
+      if (!id) return
+      // Anchor the popover to the right-click position when invoked
+      // from the canvas menu; fall back to viewport center for
+      // keyboard / palette invocations.
+      const fallback = ctx.renderer?.viewportCenter() ?? { x: 200, y: 200 }
+      movePicker.show({
+        nodeId: id,
+        x: ctx.canvasPos?.x ?? fallback.x,
+        y: ctx.canvasPos?.y ?? fallback.y,
+      })
+    },
   },
 
   // ----- UI ---------------------------------------------------------------

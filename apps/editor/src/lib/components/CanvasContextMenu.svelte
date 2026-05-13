@@ -27,8 +27,18 @@
 
   async function pick(a: Action) {
     if (!isEnabled(a)) return
+    // Snapshot canvasPos before closing — setting `open = false`
+    // causes the parent's reactive ctx to re-derive with
+    // canvasPos=undefined (canvasMenuOpen flips), and that re-read
+    // lands at the action call site. Paste and arrange.moveToGroup
+    // both anchor follow-up UI to the right-click position; they
+    // need this value preserved across the close.
+    const ctxAtPick: ActionContext = {
+      ...ctx,
+      canvasPos: ctx.canvasPos ? { ...ctx.canvasPos } : undefined,
+    }
     open = false
-    await runAction(a.id, ctx)
+    await runAction(a.id, ctxAtPick)
   }
 
   function onkeydown(e: KeyboardEvent) {
