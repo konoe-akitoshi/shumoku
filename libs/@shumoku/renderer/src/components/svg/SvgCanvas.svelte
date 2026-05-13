@@ -219,13 +219,14 @@
     /* Edit-only UI (hidden in view mode) */
     .edge-zone { pointer-events: none; }
 
-    /* Marquee selection rectangle (drag-on-background). Outline-only,
-       solid line, non-scaling so the 1.5px stroke stays legible at any
-       camera zoom. */
+    /* Marquee selection rectangle (drag-on-background). Hairline solid
+       stroke with a faint translucent fill — non-scaling so it stays
+       legible at any camera zoom. */
     .marquee {
-      fill: none;
+      fill: ${colors.selection};
+      fill-opacity: 0.08;
       stroke: ${colors.selection};
-      stroke-width: 1.5;
+      stroke-width: 1;
       vector-effect: non-scaling-stroke;
       pointer-events: none;
     }
