@@ -13,23 +13,30 @@
   } = $props()
 
   let colorDialogOpen = $state(false)
-  let moreEl: HTMLButtonElement | null = $state(null)
+  let swatchEl: HTMLButtonElement | null = $state(null)
 
-  // Theme palette rendered inline in the Color row. Token id is what
-  // gets stored; preview is the light-mode hex shown on the chip.
-  // Keep in sync with SubgraphColorDialog.svelte and the theme files.
-  const PALETTE = [
-    { token: 'accent-blue', label: 'Blue', preview: '#bfdbfe' },
-    { token: 'accent-green', label: 'Green', preview: '#bbf7d0' },
-    { token: 'accent-red', label: 'Red', preview: '#fecdd3' },
-    { token: 'accent-amber', label: 'Amber', preview: '#fcd34d' },
-    { token: 'accent-purple', label: 'Purple', preview: '#e9d5ff' },
-    { token: 'surface-1', label: 'Neutral 1', preview: '#e2e8f0' },
-    { token: 'surface-2', label: 'Neutral 2', preview: '#cbd5e1' },
-    { token: 'surface-3', label: 'Neutral 3', preview: '#94a3b8' },
-  ] as const
+  // Map known accent / surface tokens to a representative preview
+  // color for the swatch chip. Custom hex values render directly.
+  const TOKEN_PREVIEW: Record<string, string> = {
+    'accent-blue': '#bfdbfe',
+    'accent-green': '#bbf7d0',
+    'accent-red': '#fecdd3',
+    'accent-amber': '#fcd34d',
+    'accent-purple': '#e9d5ff',
+    'surface-1': '#e2e8f0',
+    'surface-2': '#cbd5e1',
+    'surface-3': '#94a3b8',
+  }
 
   const currentFill = $derived(subgraph.style?.fill ?? '')
+
+  const swatchColor = $derived.by(() => {
+    if (!currentFill) return '#e2e8f0'
+    if (currentFill.startsWith('#')) return currentFill
+    return TOKEN_PREVIEW[currentFill] ?? '#e2e8f0'
+  })
+
+  const swatchLabel = $derived(currentFill || 'default')
 
   function pickColor(fill: string | undefined) {
     const nextStyle = { ...(subgraph.style ?? {}) }
@@ -95,39 +102,32 @@
     </dd>
   </div>
 
-  <!-- Color — inline palette. Each swatch is a one-click set. A
-       small "…" button at the end opens the popover for custom hex
-       or clear. Always interactive (no edit-mode gate). -->
+  <!-- Color — wide chip showing the selected color as a horizontal
+       bar with the token name overlaid. The whole bar is clickable
+       and opens the popover picker. Always interactive. -->
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Color</dt>
-    <dd class="flex items-center gap-1">
-      {#each PALETTE as opt (opt.token)}
-        {@const selected = currentFill === opt.token}
-        <button
-          type="button"
-          class="block h-4 w-4 rounded-sm border border-black/15 outline-none transition-shadow hover:ring-2 hover:ring-blue-300"
-          class:ring-2={selected}
-          class:ring-foreground={selected}
-          style="background-color: {opt.preview};"
-          onclick={() => pickColor(opt.token)}
-          title={opt.label}
-          aria-label={opt.label}
-        ></button>
-      {/each}
+    <dd>
       <button
-        bind:this={moreEl}
+        bind:this={swatchEl}
         type="button"
-        class="ml-0.5 flex h-4 w-4 items-center justify-center rounded-sm border border-black/15 text-[10px] leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
+        class="flex h-5 min-w-[8rem] items-center justify-end rounded border border-black/15 px-2 font-mono text-[10px] text-neutral-700 outline-none transition-shadow hover:ring-2 hover:ring-blue-300 focus:ring-2 focus:ring-blue-400 dark:text-neutral-200"
+        style="background-color: {swatchColor};"
         onclick={() => {
           colorDialogOpen = !colorDialogOpen
         }}
-        title="Custom color"
-        aria-label="Custom color"
+        title="Change color"
+        aria-label="Change color"
       >
-        …
+        <span class="rounded bg-white/70 px-1 dark:bg-neutral-900/60">{swatchLabel}</span>
       </button>
     </dd>
   </div>
 </dl>
 
-<SubgraphColorDialog bind:open={colorDialogOpen} {currentFill} anchor={moreEl} onpick={pickColor} />
+<SubgraphColorDialog
+  bind:open={colorDialogOpen}
+  {currentFill}
+  anchor={swatchEl}
+  onpick={pickColor}
+/>
