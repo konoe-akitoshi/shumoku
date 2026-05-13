@@ -5,10 +5,10 @@
 
   // In-canvas color legend for scene wires. The wire stroke palette
   // lives in `cable-colors.ts`; this component is the visual readout
-  // for it. Always expanded, always filtered: shows just the grades
-  // referenced by links in the current scene, and hides entirely
-  // when no link has a `cable.category` set — the legend follows the
-  // data, no toggling, no reference mode.
+  // for it. Always expanded, always present (so the user always
+  // knows where to look). The body filters to grades referenced by
+  // links in the current scene; when no link has `cable.category`
+  // set yet, the body shows a small placeholder hint instead.
   //
   // Positioning is Svelte Flow `<Panel>` (canvas-fixed, opts out of
   // viewport zoom/pan). Inner styling is plain Tailwind so the card
@@ -27,16 +27,16 @@
   })
 </script>
 
-{#if sortedGrades.length > 0}
-  <Panel position="bottom-right">
+<Panel position="bottom-right">
+  <div
+    class="flex flex-col rounded-md border border-neutral-200 bg-white text-slate-800 shadow-md dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+  >
     <div
-      class="flex flex-col rounded-md border border-neutral-200 bg-white text-slate-800 shadow-md dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+      class="border-b border-neutral-200 px-3 py-1.5 text-[11px] font-medium dark:border-neutral-700"
     >
-      <div
-        class="border-b border-neutral-200 px-3 py-1.5 text-[11px] font-medium dark:border-neutral-700"
-      >
-        Cable colors
-      </div>
+      Cable colors
+    </div>
+    {#if sortedGrades.length > 0}
       <ul class="flex flex-col gap-1 px-3 py-2">
         {#each sortedGrades as grade (grade)}
           <li class="flex items-center gap-2 text-[11px]">
@@ -49,6 +49,10 @@
           </li>
         {/each}
       </ul>
-    </div>
-  </Panel>
-{/if}
+    {:else}
+      <div class="px-3 py-2 text-[11px] text-neutral-500 dark:text-neutral-400">
+        No categories set
+      </div>
+    {/if}
+  </div>
+</Panel>
