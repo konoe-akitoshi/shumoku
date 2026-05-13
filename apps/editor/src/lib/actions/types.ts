@@ -119,4 +119,28 @@ export interface Action {
   enabled?: (ctx: ActionContext) => boolean
   /** Side-effecting work — calls into editor state or camera. */
   run: (ctx: ActionContext) => void | Promise<void>
+  /**
+   * When set, this action is a *parent* in the context menu — the
+   * menu renders it with a `›` indicator and reveals the returned
+   * items as a flyout on hover (or focus). The action's own `run`
+   * is unused on those surfaces; submenu items handle their own
+   * `pick`. Keyboard / command-palette surfaces skip submenu
+   * actions (there's no single default to fire), so don't set
+   * `shortcut` on a submenu parent.
+   */
+  submenu?: (ctx: ActionContext) => SubmenuItem[]
+}
+
+/** One item in a flyout submenu. */
+export interface SubmenuItem {
+  /** Stable id within the parent's submenu — Svelte uses it as the each-block key. */
+  id: string
+  /** Display label. */
+  label: string
+  /** Render disabled when false. Defaults to true. */
+  enabled?: boolean
+  /** Visual hint for placeholder-style items like "(top level)". */
+  muted?: boolean
+  /** Side-effect when the user picks this item. */
+  pick: (ctx: ActionContext) => void | Promise<void>
 }

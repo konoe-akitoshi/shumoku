@@ -12,7 +12,6 @@
   import ExportMenu from '$lib/components/ExportMenu.svelte'
   import HeaderBar from '$lib/components/HeaderBar.svelte'
   import LabelEditPopover from '$lib/components/LabelEditPopover.svelte'
-  import MoveToGroupPicker from '$lib/components/MoveToGroupPicker.svelte'
   import SideToolbar from '$lib/components/SideToolbar.svelte'
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
@@ -290,12 +289,6 @@
       onclose={() => { labelEdit = null }}
     />
   {/if}
-
-  <!-- Move to group: target picker popover. Opened by the
-       `arrange.moveToGroup` action; state lives in
-       `state/move-picker.svelte` so the action can show it without
-       a page-side callback. -->
-  <MoveToGroupPicker />
 
   <!-- Element right-click and empty-canvas right-click both flow into
        the same registry-driven menu. Element right-click first sets
