@@ -2,6 +2,7 @@
   import type { Node, ResolvedEdge, ResolvedPort, Subgraph, Theme } from '@shumoku/core'
   import type { RendererOverlaySnippets } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
+  import { screenToSvg } from '../../lib/svg-coords'
   import SvgEdge from './SvgEdge.svelte'
   import SvgLinkPreview from './SvgLinkPreview.svelte'
   import SvgNode from './SvgNode.svelte'
@@ -44,6 +45,7 @@
     onlabeledit,
     oncontextmenu: onctx,
     onbackgroundclick,
+    onmarquee,
     preventContextMenuDefault = true,
   }: RendererOverlaySnippets & {
     nodes: Map<string, Node>
@@ -71,6 +73,11 @@
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (id: string, type: string, e: MouseEvent) => void
     onbackgroundclick?: () => void
+    /** Marquee rectangle drag finished on empty canvas. The rect is in SVG
+     *  world coords (post-camera transform). `additive` is true when the
+     *  user held Shift/Cmd/Ctrl, so the host should merge with the existing
+     *  selection rather than replace. */
+    onmarquee?: (rect: { x: number; y: number; w: number; h: number }, additive: boolean) => void
     /** Suppress browser native menu via `e.preventDefault()`. See ShumokuRenderer. */
     preventContextMenuDefault?: boolean
   } = $props()
@@ -88,6 +95,61 @@
   // Per-node d3-drag still lives inside each SvgNode/SvgSubgraph via
   // the `use:elementDrag` directive — it only fires in edit mode and
   // concerns element manipulation rather than viewport camera.
+
+  // =========================================================================
+  // Marquee (drag empty canvas to box-select)
+  // =========================================================================
+  // Plain left-click + drag on the background creates a selection rectangle.
+  // Alt+drag is reserved for camera panning (camera.ts's filter), so we
+  // explicitly skip those events. Shift / Cmd / Ctrl held at the start
+  // makes the marquee additive (merge with existing selection).
+  let marquee = $state<{
+    x0: number
+    y0: number
+    x1: number
+    y1: number
+    additive: boolean
+  } | null>(null)
+
+  function bgPointerDown(e: PointerEvent) {
+    if (e.button !== 0 || e.altKey || !svgEl) return
+    const p = screenToSvg(svgEl, e.clientX, e.clientY)
+    marquee = {
+      x0: p.x,
+      y0: p.y,
+      x1: p.x,
+      y1: p.y,
+      additive: e.shiftKey || e.metaKey || e.ctrlKey,
+    }
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+  }
+
+  function bgPointerMove(e: PointerEvent) {
+    if (!marquee || !svgEl) return
+    const p = screenToSvg(svgEl, e.clientX, e.clientY)
+    marquee = { ...marquee, x1: p.x, y1: p.y }
+  }
+
+  function bgPointerUp(_e: PointerEvent) {
+    if (!marquee) return
+    const w = Math.abs(marquee.x1 - marquee.x0)
+    const h = Math.abs(marquee.y1 - marquee.y0)
+    // Drags shorter than a couple of world units are treated as background
+    // clicks — let the click handler clear the selection instead. 3 is a
+    // bit arbitrary but it matches the visual feedback threshold.
+    if (w > 3 || h > 3) {
+      onmarquee?.(
+        {
+          x: Math.min(marquee.x0, marquee.x1),
+          y: Math.min(marquee.y0, marquee.y1),
+          w,
+          h,
+        },
+        marquee.additive,
+      )
+    }
+    marquee = null
+  }
 </script>
 
 <svg
@@ -142,7 +204,8 @@
 
   <!-- Viewport group: d3-zoom applies transform here -->
   <g class="viewport">
-    <!-- Background: grid in edit mode, transparent in view mode -->
+    <!-- Background: grid in edit mode, transparent in view mode.
+         Plain click clears selection; drag starts a marquee box-select. -->
     <rect
       class="canvas-bg"
       x="-99999"
@@ -152,6 +215,9 @@
       fill="url(#grid)"
       pointer-events="fill"
       onclick={() => onbackgroundclick?.()}
+      onpointerdown={bgPointerDown}
+      onpointermove={bgPointerMove}
+      onpointerup={bgPointerUp}
     />
     {#each subgraphs.values() as subgraph (subgraph.id)}
       <SvgSubgraph
@@ -228,6 +294,25 @@
         fromY={linkPreview.fromY}
         toX={linkPreview.toX}
         toY={linkPreview.toY}
+      />
+    {/if}
+
+    {#if marquee}
+      <!-- Marquee overlay. Lives inside the viewport group so it scales
+           with the camera transform. pointer-events:none lets the
+           background rect keep receiving pointer events for drag. -->
+      <rect
+        class="marquee"
+        x={Math.min(marquee.x0, marquee.x1)}
+        y={Math.min(marquee.y0, marquee.y1)}
+        width={Math.abs(marquee.x1 - marquee.x0)}
+        height={Math.abs(marquee.y1 - marquee.y0)}
+        fill={colors.selection}
+        fill-opacity="0.1"
+        stroke={colors.selection}
+        stroke-width="1"
+        stroke-dasharray="3 2"
+        pointer-events="none"
       />
     {/if}
   </g>
