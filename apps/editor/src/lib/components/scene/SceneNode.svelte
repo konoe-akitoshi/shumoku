@@ -55,7 +55,18 @@
     'scene'
   >
 
-  let { data, selected }: NodeProps<SceneNodeT> = $props()
+  let { data, selected, width }: NodeProps<SceneNodeT> = $props()
+
+  // Label font scales with the node width so per-element / per-scene
+  // display scale carries the typography along with the icon. A 52 px
+  // base node renders 10 px text; bigger nodes get proportionally
+  // larger labels, clamped so the extremes stay readable. Matches the
+  // ratio used by NodeResizer's baseW / scale math.
+  const labelFontSize = $derived.by(() => {
+    const w = width ?? 52
+    return Math.max(8, Math.min(24, w / 5.2))
+  })
+  const labelMaxWidth = $derived((width ?? 52) * 3)
 
   // Inline rename state. While editing we swap the read-only label
   // chip for an <input>; on commit we route through `data.onRename`
@@ -294,25 +305,30 @@
     <!-- Inline rename input. Replaces the read-only label chip while
          editing; commits on Enter / blur, cancels on Escape. The
          outer `nodrag` class keeps Svelte Flow from interpreting
-         pointer drags inside the input as a node move. -->
+         pointer drags inside the input as a node move. Font size
+         tracks `labelFontSize` so the input chip matches what the
+         label was just showing — no jump when you double-click in. -->
     <input
       bind:this={inputEl}
       bind:value={editValue}
       onkeydown={onRenameKey}
       onblur={commitRename}
       type="text"
-      class="nodrag absolute left-1/2 top-full max-w-[200px] -translate-x-1/2 rounded-[3px] border border-blue-500 bg-white px-1 text-[10px] leading-[14px] text-slate-900 outline-none focus:ring-1 focus:ring-blue-400"
-      style="margin-top: 2px; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
+      class="nodrag absolute left-1/2 top-full -translate-x-1/2 rounded-[3px] border border-blue-500 bg-white px-1 text-slate-900 outline-none focus:ring-1 focus:ring-blue-400"
+      style="margin-top: 2px; font-size: {labelFontSize}px; line-height: 1.4em; max-width: {labelMaxWidth +
+        40}px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);"
     >
   {:else if data.label}
     <!-- Label floats beneath the icon, absolutely positioned so it
          doesn't extend the node's hit area — handles + wires stay
          locked to the icon. Double-click opens the rename input
-         (same handler as the toolbar Rename button). -->
+         (same handler as the toolbar Rename button). Font size and
+         max-width scale with the node — see `labelFontSize` /
+         `labelMaxWidth` derivations above. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="absolute left-1/2 top-full max-w-[160px] -translate-x-1/2 truncate rounded-[3px] border border-black/15 bg-white px-1 text-[10px] leading-[14px] text-slate-900"
-      style="margin-top: 2px; pointer-events: auto; cursor: text; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.2);"
+      class="absolute left-1/2 top-full -translate-x-1/2 truncate rounded-[3px] border border-black/15 bg-white px-1 text-slate-900"
+      style="margin-top: 2px; font-size: {labelFontSize}px; line-height: 1.4em; max-width: {labelMaxWidth}px; pointer-events: auto; cursor: text; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);"
       ondblclick={(e) => {
         e.stopPropagation()
         startRename()

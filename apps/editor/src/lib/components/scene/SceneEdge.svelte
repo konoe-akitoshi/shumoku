@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BaseEdge, type Edge, EdgeLabel, type EdgeProps, useSvelteFlow } from '@xyflow/svelte'
+  import { BaseEdge, type Edge, type EdgeProps, useSvelteFlow } from '@xyflow/svelte'
   import { editorState } from '$lib/context.svelte'
   import { formatMeters } from '$lib/scene/cable-length'
   import { WIRE_CORNER_RADIUS } from '$lib/scene/node-geometry'
@@ -119,10 +119,22 @@
   />
 {/if}
 
+<!-- Cable-length pill uses BaseEdge's built-in `label` prop instead
+     of a separate EdgeLabel block. Same DOM result (Svelte Flow
+     portals it into the edge-labels layer), but no double-wrapping
+     <span> and no custom halo box-shadow — the white fill + thin
+     border gives enough contrast on its own. Hidden while selected
+     to keep wire-edit space uncluttered. -->
 <BaseEdge
   path={pathD}
   {markerEnd}
   interactionWidth={0}
+  label={!selected && labelAnchor && data?.lengthMeters != null
+    ? `${formatMeters(data.lengthMeters)}m`
+    : undefined}
+  labelX={labelAnchor?.x}
+  labelY={labelAnchor?.y}
+  labelStyle="background:white;padding:0 6px;border-radius:3px;border:1px solid rgba(0,0,0,0.15);font-size:10px;line-height:14px;font-weight:500;color:#1e293b;box-shadow:0 1px 2px rgba(0,0,0,0.15);"
   style="stroke: {selected ? '#3b82f6' : '#475569'}; stroke-width: {(selected ? 3.5 : 3) *
     (data?.wireScale ?? 1)}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
 />
@@ -138,16 +150,3 @@
   style="cursor: grab; pointer-events: stroke;"
   onpointerdown={onLinePointerDown}
 />
-
-<!-- Cable length pill, hidden while selected to keep the
-     wire-edit space uncluttered. -->
-{#if !selected && labelAnchor && data?.lengthMeters !== null && data?.lengthMeters !== undefined}
-  <EdgeLabel x={labelAnchor.x} y={labelAnchor.y}>
-    <span
-      class="block rounded-[3px] border border-black/15 bg-white px-1.5 text-[10px] leading-[14px] font-medium text-slate-800 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.2)]"
-      style="transform: translate(-50%, -50%); pointer-events: none;"
-    >
-      {formatMeters(data.lengthMeters)}m
-    </span>
-  </EdgeLabel>
-{/if}
