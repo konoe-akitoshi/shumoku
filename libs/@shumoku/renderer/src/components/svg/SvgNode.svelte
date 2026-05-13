@@ -149,6 +149,7 @@
 
 <g
   class="node"
+  class:selected
   data-id={node.id}
   data-device-type={specDeviceType(node.spec) ?? ''}
   filter="url(#{shadowFilterId})"

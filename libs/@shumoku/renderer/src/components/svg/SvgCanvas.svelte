@@ -213,6 +213,16 @@
 
     /* Edit-only UI (hidden in view mode) */
     .edge-zone { pointer-events: none; }
+
+    /* Selection feedback. The node/subgraph already paints a selection-coloured
+       stroke; this rule keeps that stroke visible at any camera zoom. Without
+       non-scaling-stroke the outline of icon-style nodes vanishes below 1px
+       when the camera is zoomed out to fit a busy diagram. */
+    .node.selected .node-bg > *,
+    .subgraph.selected > .subgraph-bg {
+      vector-effect: non-scaling-stroke;
+      stroke-width: 3;
+    }
   </style>`}
 
   <!-- Viewport group: d3-zoom applies transform here -->
