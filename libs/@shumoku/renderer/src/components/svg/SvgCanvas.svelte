@@ -124,6 +124,15 @@
     additive: boolean
   } | null>(null)
 
+  // After a real pointerdown→pointerup on the same element, the
+  // browser synthesises a `click` — which the canvas-bg's
+  // `onclick={onbackgroundclick}` interprets as "clear selection".
+  // For an empty (sub-threshold) drag that's correct, but for a
+  // successful marquee it would wipe the selection we just made,
+  // making the marquee look like it did nothing. Flag a recently
+  // committed marquee and suppress the click that follows it.
+  let suppressNextBgClick = false
+
   function bgPointerDown(e: PointerEvent) {
     if (e.button !== 0 || e.altKey || !svgEl) return
     const p = screenToWorld(svgEl, e.clientX, e.clientY)
@@ -160,8 +169,17 @@
         },
         marquee.additive,
       )
+      suppressNextBgClick = true
     }
     marquee = null
+  }
+
+  function bgClick() {
+    if (suppressNextBgClick) {
+      suppressNextBgClick = false
+      return
+    }
+    onbackgroundclick?.()
   }
 </script>
 
@@ -237,7 +255,7 @@
       height="199998"
       fill="url(#grid)"
       pointer-events="fill"
-      onclick={() => onbackgroundclick?.()}
+      onclick={bgClick}
       onpointerdown={bgPointerDown}
       onpointermove={bgPointerMove}
       onpointerup={bgPointerUp}
