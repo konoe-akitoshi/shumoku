@@ -25,6 +25,7 @@
     onaddport,
     onselect,
     oncontextmenu: onctx,
+    preventContextMenuDefault = true,
   }: {
     node: Node
     colors: RenderColors
@@ -40,6 +41,8 @@
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onselect?: (id: string) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
+    /** Suppress browser native menu via preventDefault. See ShumokuRenderer. */
+    preventContextMenuDefault?: boolean
   } = $props()
 
   const cx = $derived(node.position?.x ?? 0)
@@ -129,8 +132,14 @@
   }
 
   function handleContextMenu(ev: MouseEvent) {
-    ev.preventDefault()
-    ev.stopPropagation()
+    // No stopPropagation: the contextmenu event must bubble to the
+    // canvas wrapper so any registry-driven menu (shadcn ContextMenu /
+    // bits-ui) can detect it. preventDefault is opt-in because those
+    // libraries bail when the event arrives with defaultPrevented=true
+    // — hosts that wrap the renderer in such a menu set
+    // `preventContextMenuDefault={false}` and let the wrapper handle
+    // browser-menu suppression itself.
+    if (preventContextMenuDefault) ev.preventDefault()
     onctx?.(node.id, ev)
   }
 </script>

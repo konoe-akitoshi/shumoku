@@ -20,6 +20,7 @@
     oncontextmenu: onctx,
     onportdragmove,
     onportdragend,
+    preventContextMenuDefault = true,
   }: {
     port: ResolvedPort
     colors: RenderColors
@@ -39,6 +40,7 @@
      *  (clientX/clientY); host translates and computes the target side. */
     onportdragmove?: (portId: string, screenX: number, screenY: number) => void
     onportdragend?: (portId: string, screenX: number, screenY: number) => void
+    preventContextMenuDefault?: boolean
   } = $props()
 
   const px = $derived(port.absolutePosition.x)
@@ -126,8 +128,7 @@
   }
 
   function handleContextMenu(e: MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
+    if (preventContextMenuDefault) e.preventDefault()
     onselect?.(port.id)
     onctx?.(port.id, e)
   }

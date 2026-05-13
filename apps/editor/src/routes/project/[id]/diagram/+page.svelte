@@ -69,15 +69,12 @@
     }
   })
   let selected = $state<{ id: string; type: string } | null>(null)
-  // Canvas right-click menu — registry-driven for both empty
-  // canvas and per-element clicks. The renderer's per-element
-  // `oncontextmenu` callback first sets `selected = { id, type }`
-  // so action gating sees the clicked item; then the wrapper div's
-  // `oncontextmenu` opens this menu (per-element handlers
-  // stopPropagation so only one path fires).
-  let canvasMenuOpen = $state(false)
-  let canvasMenuX = $state(0)
-  let canvasMenuY = $state(0)
+  // Canvas right-click menu — registry-driven for both empty canvas
+  // and per-element clicks. The renderer's per-element handler sets
+  // `selected = { id, type }` before the contextmenu event bubbles
+  // to the shadcn ContextMenu wrapper (`CanvasContextMenu`); the
+  // wrapper then opens at the actual cursor position and reads the
+  // current selection for action gating.
 
   // Adapter that lets registry-side actions (copy / paste) talk to
   // the renderer instance without each action grabbing the bound
@@ -106,7 +103,9 @@
           types: [selected.type as ActionContext['selection']['types'][number]],
         }
       : { ids: [], types: [] },
-    canvasPos: canvasMenuOpen ? { x: canvasMenuX, y: canvasMenuY } : undefined,
+    // canvasPos is filled in by `CanvasContextMenu` from the live
+    // contextmenu event, since shadcn ContextMenu handles its own
+    // positioning. The page-level ctx is just the rest of the state.
     camera: cameraHandle ?? undefined,
     renderer: rendererHandle,
   })
@@ -174,70 +173,63 @@
 <div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
   <!-- Canvas (full screen, z-0). `data-print-canvas` marks this as
        the surface that survives Print; everything outside it is
-       hidden by `@media print` in app.css. -->
+       hidden by `@media print` in app.css. The ContextMenu wraps the
+       canvas: per-element right-clicks set `selected` via the
+       renderer's `oncontextmenu` callback (no longer stopPropagation
+       so it bubbles), and shadcn handles menu positioning. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    data-print-canvas
-    class="absolute inset-0"
-    ondblclick={() => {
-      if (selected) openDetail(selected.id, selected.type)
-    }}
-    oncontextmenu={(e) => {
-      // Per-element handlers stopPropagation, so this only fires on
-      // the empty canvas. Open the action-registry-driven menu in
-      // place of the browser default.
-      e.preventDefault()
-      canvasMenuX = e.clientX
-      canvasMenuY = e.clientY
-      canvasMenuOpen = true
-    }}
-  >
-    {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
-      <ShumokuRenderer
-        bind:this={renderer}
-        bind:svgElement={rendererSvg}
-        bind:nodes={diagramState.activeView.nodes}
-        bind:ports={diagramState.activeView.ports}
-        bind:edges={diagramState.activeView.edges}
-        bind:subgraphs={diagramState.activeView.subgraphs}
-        bind:bounds={diagramState.activeView.bounds}
-        bind:links={diagramState.activeView.links}
-        theme={editorState.theme}
-        mode={diagramState.currentSheetId === null ? editorState.mode : 'view'}
-        hideNode={(n) => !!n.termination}
-        ondragstart={() => diagramState.beginTx('Move node')}
-        ondragend={() => diagramState.endTx()}
-        onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}
-        onchange={() => {}}
-        onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
-        oncontextmenu={(id: string, type: string, screenX: number, screenY: number) => {
-          // Right-click selects the element so the registry-driven
-          // menu sees it as the current selection, then opens the
-          // canvas-level menu at the click position. Same component
-          // as empty-canvas right-click — one menu, two trigger paths.
-          selected = { id, type }
-          canvasMenuX = screenX
-          canvasMenuY = screenY
-          canvasMenuOpen = true
-        }}
-        onnodeadd={(_id: string) => {
-          // The renderer mutated diagram.nodes directly (via $bindable)
-          // before emitting this event — invalidate cached sheets now.
-          diagramState.invalidateSheetCache()
-        }}
-        oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
-          diagramState.addLink({ id: newId('link'), from, to })
-        }}
-        onportmove={(nodeId: string, portId: string, side: 'top' | 'bottom' | 'left' | 'right') => {
-          diagramState.setPortPlacement(nodeId, portId, { side })
-        }}
-      />
-    {:else}
-      <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">
-        {diagramState.status}
-      </div>
-    {/if}
-  </div>
+  <CanvasContextMenu ctx={actionCtx}>
+    <div
+      data-print-canvas
+      class="absolute inset-0"
+      ondblclick={() => {
+        if (selected) openDetail(selected.id, selected.type)
+      }}
+    >
+      {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
+        <ShumokuRenderer
+          bind:this={renderer}
+          bind:svgElement={rendererSvg}
+          preventContextMenuDefault={false}
+          bind:nodes={diagramState.activeView.nodes}
+          bind:ports={diagramState.activeView.ports}
+          bind:edges={diagramState.activeView.edges}
+          bind:subgraphs={diagramState.activeView.subgraphs}
+          bind:bounds={diagramState.activeView.bounds}
+          bind:links={diagramState.activeView.links}
+          theme={editorState.theme}
+          mode={diagramState.currentSheetId === null ? editorState.mode : 'view'}
+          hideNode={(n) => !!n.termination}
+          ondragstart={() => diagramState.beginTx('Move node')}
+          ondragend={() => diagramState.endTx()}
+          onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}
+          onchange={() => {}}
+          onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
+          oncontextmenu={(id: string, type: string) => {
+            // Update selection before the contextmenu event bubbles
+            // up to the ContextMenu trigger so action gating sees
+            // the right item when the menu opens.
+            selected = { id, type }
+          }}
+          onnodeadd={(_id: string) => {
+            // The renderer mutated diagram.nodes directly (via $bindable)
+            // before emitting this event — invalidate cached sheets now.
+            diagramState.invalidateSheetCache()
+          }}
+          oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
+            diagramState.addLink({ id: newId('link'), from, to })
+          }}
+          onportmove={(nodeId: string, portId: string, side: 'top' | 'bottom' | 'left' | 'right') => {
+            diagramState.setPortPlacement(nodeId, portId, { side })
+          }}
+        />
+      {:else}
+        <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">
+          {diagramState.status}
+        </div>
+      {/if}
+    </div>
+  </CanvasContextMenu>
 
   <!-- Top-left: Undo / Redo header bar -->
   <div data-print-hide class="fixed top-3 left-3 z-20"><HeaderBar /></div>
@@ -290,18 +282,10 @@
     />
   {/if}
 
-  <!-- Element right-click and empty-canvas right-click both flow into
-       the same registry-driven menu. Element right-click first sets
-       `selected` so registry actions see the clicked element as the
-       active selection (Copy / Delete / Information / Duplicate gate
-       on selection). -->
-
   <DetailPanel
     open={detailPanel.open}
     elementType={detailPanel.target?.type ?? null}
     elementId={detailPanel.target?.id ?? null}
     onclose={() => detailPanel.close()}
   />
-
-  <CanvasContextMenu bind:open={canvasMenuOpen} x={canvasMenuX} y={canvasMenuY} ctx={actionCtx} />
 </div>

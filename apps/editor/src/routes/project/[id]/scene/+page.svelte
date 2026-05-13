@@ -69,14 +69,11 @@
   // Canvas-level right-click menu (registry-driven). v1: no camera
   // handle from scene yet — view actions render disabled. Wiring
   // a CameraHandle through SceneCanvas → useSvelteFlow is a
-  // follow-up.
-  let canvasMenuOpen = $state(false)
-  let canvasMenuX = $state(0)
-  let canvasMenuY = $state(0)
+  // follow-up. canvasPos is supplied by `CanvasContextMenu` itself
+  // (shadcn ContextMenu captures the live cursor position).
   const actionCtx = $derived<ActionContext>({
     mode: 'scene',
     selection: { ids: [], types: [] },
-    canvasPos: canvasMenuOpen ? { x: canvasMenuX, y: canvasMenuY } : undefined,
   })
   $effect(() => {
     provideActionContext(actionCtx)
@@ -85,31 +82,23 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950"
-  oncontextmenu={(e) => {
-    // Per-element handlers in Svelte Flow stopPropagation so this
-    // only fires for empty-canvas right-clicks.
-    e.preventDefault()
-    canvasMenuX = e.clientX
-    canvasMenuY = e.clientY
-    canvasMenuOpen = true
-  }}
->
+<div class="relative h-screen w-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
   <!-- Single canvas: same Svelte Flow instance both onscreen and in
        print. `data-print-canvas` keeps it visible during print; a
        `beforeprint` listener inside SceneCanvas calls `fitView()` so
        the print captures the whole scene regardless of the current
        pan/zoom state. -->
-  <div data-print-canvas class="absolute inset-0">
-    {#if diagramState.currentScene}
-      <SceneCanvas scene={diagramState.currentScene} />
-    {:else}
-      <div class="flex h-full items-center justify-center text-neutral-400 dark:text-neutral-500">
-        {diagramState.status}
-      </div>
-    {/if}
-  </div>
+  <CanvasContextMenu ctx={actionCtx}>
+    <div data-print-canvas class="absolute inset-0">
+      {#if diagramState.currentScene}
+        <SceneCanvas scene={diagramState.currentScene} />
+      {:else}
+        <div class="flex h-full items-center justify-center text-neutral-400 dark:text-neutral-500">
+          {diagramState.status}
+        </div>
+      {/if}
+    </div>
+  </CanvasContextMenu>
 
   <div data-print-hide class="fixed top-3 left-3 z-20"><HeaderBar /></div>
 
@@ -141,6 +130,4 @@
       detailTarget = null
     }}
   />
-
-  <CanvasContextMenu bind:open={canvasMenuOpen} x={canvasMenuX} y={canvasMenuY} ctx={actionCtx} />
 </div>
