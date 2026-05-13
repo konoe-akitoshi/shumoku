@@ -10,7 +10,12 @@
   import { onDestroy, onMount } from 'svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
   import { cableSegmentLengths, visibleCableSegments } from '$lib/scene/cable-length'
-  import { pickSideForDirection, sceneNodeSize } from '$lib/scene/node-geometry'
+  import {
+    effectiveNodeSize,
+    nodeCenterFromTopLeft,
+    pickSideForDirection,
+    sceneNodeSize,
+  } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
   import EpsRoutingModal from './EpsRoutingModal.svelte'
@@ -113,42 +118,33 @@
     return node?.position ?? { x: 100, y: 100 }
   }
 
-  // Per-scene visual tuning. The scene-level multipliers are the
-  // baseline; individual nodes / wires can override them via
-  // `Node.metadata.displayScale` and `Link.metadata.wireScale`.
-  const sceneNodeScale = $derived(scene.display?.nodeScale ?? 1)
+  // Per-scene visual tuning. Node size is computed via the shared
+  // `effectiveNodeSize` helper so length math sees identical
+  // dimensions; here we just keep the wire-scale resolver (no
+  // analogous helper in node-geometry — wires aren't placeable
+  // shapes, so the scale lookup lives at the call site).
   const sceneWireScale = $derived(scene.display?.wireScale ?? 1)
 
-  function effectiveNodeScale(nodeId: string): number {
-    const ov = diagramState.nodes.get(nodeId)?.metadata?.displayScale
-    if (typeof ov === 'number' && ov > 0) return ov
-    return sceneNodeScale
-  }
   function effectiveWireScale(link: { metadata?: Record<string, unknown> }): number {
     const ov = link.metadata?.wireScale
     if (typeof ov === 'number' && ov > 0) return ov
     return sceneWireScale
   }
 
-  // Effective rendered dimensions for a node — base role size times
-  // its effective scale. We pass these to Svelte Flow as
-  // `Node.width`/`Node.height` so the library positions handles
-  // and computes sourceX/Y / targetX/Y itself; SceneNode just fills
-  // the wrapper with `w-full h-full`.
+  // Effective rendered dimensions for a node. We pass these to Svelte
+  // Flow as `Node.width`/`Node.height` so the library positions
+  // handles and computes sourceX/Y / targetX/Y itself; SceneNode just
+  // fills the wrapper with `w-full h-full`.
   function effSize(nodeId: string): { w: number; h: number } {
-    const base = sceneNodeSize(diagramState.nodes.get(nodeId))
-    const s = effectiveNodeScale(nodeId)
-    return { w: base.w * s, h: base.h * s }
+    return effectiveNodeSize(scene, diagramState.nodes.get(nodeId))
   }
 
   // Center of a node's icon in flow coords. Used for via TP positions
   // — Svelte Flow doesn't expose those automatically (they're not
   // edge endpoints). Reads the same effective size we hand to Svelte
-  // Flow for the node, so layouts stay in sync.
+  // Flow for the node, so layouts stay in sync with length math.
   function centerOf(nodeId: string): { x: number; y: number } {
-    const tl = positionFor(nodeId)
-    const { w, h } = effSize(nodeId)
-    return { x: tl.x + w / 2, y: tl.y + h / 2 }
+    return nodeCenterFromTopLeft(scene, diagramState.nodes.get(nodeId), positionFor(nodeId))
   }
 
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
