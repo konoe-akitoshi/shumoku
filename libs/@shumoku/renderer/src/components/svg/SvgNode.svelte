@@ -39,7 +39,10 @@
     /** Fires once on release — host closes the transaction (undo push + DB sync). */
     ondragend?: (id: string) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
-    onselect?: (id: string) => void
+    /** Click / right-click on this node. Receives the original event so the
+     *  renderer can read modifier keys (shift / cmd / ctrl) for additive
+     *  multi-selection. */
+    onselect?: (id: string, e?: MouseEvent) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
     /** Suppress browser native menu via preventDefault. See ShumokuRenderer. */
     preventContextMenuDefault?: boolean
@@ -158,7 +161,7 @@
     onDrag: (dx, dy) => ondragmove?.(node.id, (node.position?.x ?? 0) + dx, (node.position?.y ?? 0) + dy),
     onEnd: () => ondragend?.(node.id),
   })}
-  onclick={(e) => { e.stopPropagation(); onselect?.(node.id) }}
+  onclick={(e) => { e.stopPropagation(); onselect?.(node.id, e) }}
   onpointerenter={() => { if (interactive) hovered = true }}
   onpointerleave={() => { hovered = false }}
   oncontextmenu={handleContextMenu}

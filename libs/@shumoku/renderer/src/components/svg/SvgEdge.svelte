@@ -17,7 +17,9 @@
     colors: RenderColors
     selected?: boolean
     overlay?: LinkOverlaySnippet
-    onselect?: (edgeId: string) => void
+    /** Click / right-click on this edge. Receives the original event so the
+     *  renderer can read modifier keys for additive multi-selection. */
+    onselect?: (edgeId: string, e?: MouseEvent) => void
     oncontextmenu?: (edgeId: string, e: MouseEvent) => void
     preventContextMenuDefault?: boolean
   } = $props()
@@ -85,12 +87,12 @@
 
   function onclick(e: MouseEvent) {
     e.stopPropagation()
-    onselect?.(edge.id)
+    onselect?.(edge.id, e)
   }
 
   function handleContextMenu(e: MouseEvent) {
     if (preventContextMenuDefault) e.preventDefault()
-    onselect?.(edge.id)
+    onselect?.(edge.id, e)
     onctx?.(edge.id, e)
   }
 </script>

@@ -27,7 +27,9 @@
     ondragstart?: (sgId: string) => void
     ondragmove?: (sgId: string, x: number, y: number) => void
     ondragend?: (sgId: string) => void
-    onselect?: (sgId: string) => void
+    /** Click / right-click on this subgraph. Receives the original event so
+     *  the renderer can read modifier keys for additive multi-selection. */
+    onselect?: (sgId: string, e?: MouseEvent) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
     preventContextMenuDefault?: boolean
   } = $props()
@@ -86,8 +88,8 @@
     stroke={selected ? '#3b82f6' : resolved().stroke}
     stroke-width={selected ? 3 : strokeWidth}
     stroke-dasharray={selected ? undefined : (strokeDasharray || undefined)}
-    onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id) }}
-    oncontextmenu={(e) => { if (preventContextMenuDefault) e.preventDefault(); onselect?.(subgraph.id); onctx?.(subgraph.id, e) }}
+    onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id, e) }}
+    oncontextmenu={(e) => { if (preventContextMenuDefault) e.preventDefault(); onselect?.(subgraph.id, e); onctx?.(subgraph.id, e) }}
     use:elementDrag={() => ({
       filter: (e) => e.button === 0 && interactive,
       onStart: () => ondragstart?.(subgraph.id),
