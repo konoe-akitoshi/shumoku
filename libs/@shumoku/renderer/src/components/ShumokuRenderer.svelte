@@ -99,6 +99,16 @@
      * computed by the renderer — order-within-side is a follow-up.
      */
     onportmove?: (nodeId: string, portId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
+    /**
+     * Per-element right-clicks call `preventDefault()` by default to
+     * suppress the browser's native context menu. Set this to `false`
+     * when the host wraps the renderer in its own contextmenu UI
+     * (e.g. shadcn ContextMenu / bits-ui) — those libraries bail on
+     * events whose default is already prevented, so they need the
+     * event to reach them with `defaultPrevented=false` and handle
+     * suppression themselves.
+     */
+    preventContextMenuDefault?: boolean
   }
 
   let {
@@ -127,6 +137,7 @@
     linkOverlay,
     nodeOverlay,
     portOverlay,
+    preventContextMenuDefault = true,
   }: RendererProps = $props()
 
   const colors = $derived(themeToColors(theme))
@@ -571,5 +582,6 @@
     {onlabeledit}
     oncontextmenu={handleContextMenu}
     onbackgroundclick={handleBackgroundClick}
+    {preventContextMenuDefault}
   />
 </div>

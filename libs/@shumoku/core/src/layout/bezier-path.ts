@@ -55,6 +55,69 @@ export function bezierEdgePath(
   return `M ${a.x} ${a.y} C ${a.x + ax} ${a.y + ay} ${b.x + bx} ${b.y + by} ${b.x} ${b.y}`
 }
 
+/**
+ * `bezierEdgePath` translated as a whole by `offset` SVG units along the
+ * chord-perpendicular direction. Used to draw parallel "in" / "out"
+ * lanes for weathermap-style flow overlays.
+ *
+ * This is a *parallel translate*, NOT a true cubic offset curve (which
+ * cannot in general be represented exactly as another cubic). All four
+ * control points shift by the same vector, so:
+ *   • lane spacing is exactly `2 * |offset|` everywhere along the curve,
+ *   • the offset curve never crosses the base curve or the opposite lane
+ *     regardless of port-side configuration (incl. same-side U-turns
+ *     and adjacent-side L-turns),
+ *   • tangents are preserved at every point — but the lane endpoint is
+ *     shifted off the port by `(nx, ny)`. Lanes are decorative; they
+ *     are not meant to "connect to" the port.
+ *
+ * The shift direction is the chord normal (perpendicular to b-a). Sign
+ * convention: in screen coordinates (y-down), `+offset` shifts to the
+ * right-hand side of the chord A→B, `-offset` to the left. Pass
+ * `+offset` and `-offset` for the two lanes; which one ends up labelled
+ * "in" is a data-source semantic, not enforced here.
+ *
+ * Computed analytically — no DOM measurement, so callers don't need a
+ * mounted SVGPathElement.
+ */
+export function bezierOffsetPath(
+  from: { absolutePosition: { x: number; y: number }; side?: PortSide },
+  to: { absolutePosition: { x: number; y: number }; side?: PortSide },
+  offset: number,
+): string {
+  if (!Number.isFinite(offset) || offset === 0) return bezierEdgePath(from, to)
+
+  const a = from.absolutePosition
+  const b = to.absolutePosition
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const chordLen = Math.hypot(dx, dy)
+  // Degenerate (coincident endpoints): no meaningful chord direction.
+  if (chordLen === 0) return bezierEdgePath(from, to)
+
+  // Right-hand chord normal × offset → uniform translation vector.
+  const nx = -(dy / chordLen) * offset
+  const ny = (dx / chordLen) * offset
+
+  const fromSide = from.side ?? 'bottom'
+  const toSide = to.side ?? 'top'
+  const normalGap = projectAlongNormal(fromSide, dx, dy)
+  const reach = clamp(normalGap * REACH_RATIO, MIN_REACH, MAX_REACH)
+  const [ax, ay] = tangentOffset(fromSide, reach)
+  const [bx, by] = tangentOffset(toSide, reach)
+
+  const p0x = a.x + nx
+  const p0y = a.y + ny
+  const p1x = a.x + ax + nx
+  const p1y = a.y + ay + ny
+  const p2x = b.x + bx + nx
+  const p2y = b.y + by + ny
+  const p3x = b.x + nx
+  const p3y = b.y + ny
+
+  return `M ${p0x} ${p0y} C ${p1x} ${p1y} ${p2x} ${p2y} ${p3x} ${p3y}`
+}
+
 /** Absolute distance from a port along its outward normal direction. */
 function projectAlongNormal(side: PortSide, dx: number, dy: number): number {
   switch (side) {

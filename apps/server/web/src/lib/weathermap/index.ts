@@ -2,6 +2,13 @@
  * Structural shape accepted by WeathermapLinkOverlay. Looser than
  * `@shumoku/core`'s `LinkMetrics` so the dashboard's richer statuses
  * (e.g. 'degraded') flow through — we only branch on 'down'.
+ *
+ * Direction note: `inBps` / `outBps` (and the `*Utilization` variants)
+ * are data-source-defined. The overlay renders them as two visually
+ * distinct lanes flowing in opposite directions, but does NOT claim
+ * either lane corresponds to `fromPort → toPort`. Plugins are expected
+ * to be consistent within themselves; cross-plugin direction semantics
+ * are not unified.
  */
 export interface LinkFlowMetrics {
   status: string
@@ -24,59 +31,45 @@ const UTILIZATION_COLORS: readonly (readonly [number, string])[] = [
   [100, '#dc2626'],
 ]
 export const DOWN_COLOR = '#ef4444'
+const NO_DATA_COLOR = '#6b7280'
 
 export function getUtilizationColor(utilization: number): string {
+  // NaN/Infinity would silently fall through every `<=` comparison and
+  // land on DOWN_COLOR (red). Treat bad input as "no data" (gray).
+  if (!Number.isFinite(utilization)) return NO_DATA_COLOR
+  const u = Math.max(0, Math.min(100, utilization))
   for (const [max, color] of UTILIZATION_COLORS) {
-    if (utilization <= max) return color
+    if (u <= max) return color
   }
+  // Unreachable given the clamp + 100 ceiling, but keeps the return type total.
   return DOWN_COLOR
 }
 
-export function bpsToDurationMs(bps: number): number {
-  if (bps <= 0) return 0
-  const speed = Math.min(1, Math.log10(bps + 1) / 9)
-  return Math.max(300, (2 - speed * 1.5) * 1000)
+// --- Bandwidth/utilization → animation duration ---
+
+// log10(bps) denominator: 11 puts 100 Gbps at full speed, covering modern
+// link rates. Previously 9 saturated at ~1 Gbps so 10G/100G all looked alike.
+const BPS_LOG_DENOM = 11
+const DURATION_MIN_MS = 400
+const DURATION_MAX_MS = 2000
+
+function speedToDurationMs(speed01: number): number {
+  const s = Math.max(0, Math.min(1, speed01))
+  return DURATION_MIN_MS + (DURATION_MAX_MS - DURATION_MIN_MS) * (1 - s)
 }
 
-// --- Offset-path geometry (sample path normals to build parallel in/out lanes) ---
+export function bpsToDurationMs(bps: number): number {
+  if (!Number.isFinite(bps) || bps <= 0) return 0
+  const speed = Math.log10(bps + 1) / BPS_LOG_DENOM
+  return speedToDurationMs(speed)
+}
 
-export function createOffsetPathD(path: SVGPathElement, offset: number): string {
-  const len = path.getTotalLength()
-  if (len === 0) return path.getAttribute('d') ?? ''
-
-  const start = path.getPointAtLength(0)
-  const end = path.getPointAtLength(len)
-  const angle = Math.atan2(end.y - start.y, end.x - start.x)
-  const nx = -Math.sin(angle) * offset
-  const ny = Math.cos(angle) * offset
-
-  // Straight segment fast path — no sampling needed.
-  const mid = path.getPointAtLength(len / 2)
-  const deviation =
-    Math.abs(mid.x - (start.x + end.x) / 2) + Math.abs(mid.y - (start.y + end.y) / 2)
-  if (deviation < 1) {
-    return (
-      `M ${(start.x + nx).toFixed(2)} ${(start.y + ny).toFixed(2)}` +
-      ` L ${(end.x + nx).toFixed(2)} ${(end.y + ny).toFixed(2)}`
-    )
-  }
-
-  // Curved path: sample along normals.
-  const numSamples = Math.max(30, Math.ceil(len / 4))
-  const pts: string[] = []
-  for (let i = 0; i <= numSamples; i++) {
-    const t = (i / numSamples) * len
-    const p = path.getPointAtLength(t)
-    const dt = Math.min(1, len * 0.001)
-    const p1 = path.getPointAtLength(Math.max(0, t - dt))
-    const p2 = path.getPointAtLength(Math.min(len, t + dt))
-    const a = Math.atan2(p2.y - p1.y, p2.x - p1.x)
-    pts.push(
-      `${(p.x - Math.sin(a) * offset).toFixed(2)} ${(p.y + Math.cos(a) * offset).toFixed(2)}`,
-    )
-  }
-  return `M ${pts[0]}${pts
-    .slice(1)
-    .map((p) => ` L ${p}`)
-    .join('')}`
+/**
+ * Fallback for data sources that report utilization but not bps. Maps
+ * 0–100% to the same duration band as `bpsToDurationMs`, so the visual
+ * speed scale stays comparable.
+ */
+export function utilizationToDurationMs(util: number): number {
+  if (!Number.isFinite(util) || util <= 0) return 0
+  return speedToDurationMs(util / 100)
 }

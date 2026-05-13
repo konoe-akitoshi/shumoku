@@ -1,104 +1,106 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte'
   import { runAction, visibleActionsByGroup } from '$lib/actions/registry'
-  import type { Action, ActionContext } from '$lib/actions/types'
+  import type { Action, ActionContext, SubmenuItem } from '$lib/actions/types'
+  import * as ContextMenu from '$lib/components/ui/context-menu'
 
-  // Right-click menu on canvas surfaces. Renders whatever actions
-  // the registry exposes for the given context, grouped by their
-  // `group` field. Surfaces choose what `ctx` to pass (selection,
-  // canvas position, mode, camera handle).
+  // Canvas right-click menu. Wraps the canvas surface in
+  // shadcn-svelte's ContextMenu (which delegates to bits-ui's
+  // accessible Radix-style primitives). Empty-canvas right-click and
+  // per-element right-click both bubble up to the Trigger; the
+  // renderer's per-element handler is responsible for updating
+  // `selected` before the event bubbles (so the menu sees the right
+  // selection when it opens).
+  //
+  // Items come from the action registry: each action renders as a
+  // `ContextMenu.Item`; actions with a `submenu(ctx)` callback
+  // render as `ContextMenu.Sub` with a hover-revealed flyout.
 
   let {
-    open = $bindable(false),
-    x = 0,
-    y = 0,
     ctx,
+    children,
   }: {
-    open: boolean
-    x: number
-    y: number
     ctx: ActionContext
+    children: Snippet
   } = $props()
 
-  const groups = $derived(open ? visibleActionsByGroup(ctx) : [])
+  let open = $state(false)
+
+  // The shadcn ContextMenu owns positioning itself, so the only
+  // thing we need to capture is the cursor — actions like
+  // `edit.paste` still need the original right-click point. The
+  // derived `openCtx` rebuilds whenever ctx or the cursor changes,
+  // so action-gating (`enabled`, `submenu`) stays reactive without
+  // a separate `$state` snapshot.
+  let cursorPoint = $state<{ x: number; y: number } | null>(null)
+  const openCtx = $derived<ActionContext>({
+    ...ctx,
+    canvasPos: cursorPoint ?? ctx.canvasPos,
+  })
+
+  function captureCursor(e: MouseEvent) {
+    cursorPoint = { x: e.clientX, y: e.clientY }
+  }
+
+  const groups = $derived(open ? visibleActionsByGroup(openCtx) : [])
 
   function isEnabled(a: Action): boolean {
-    return a.enabled ? a.enabled(ctx) : true
+    return a.enabled ? a.enabled(openCtx) : true
   }
 
-  async function pick(a: Action) {
-    if (!isEnabled(a)) return
-    open = false
-    await runAction(a.id, ctx)
+  async function pickAction(a: Action) {
+    if (a.submenu) return
+    await runAction(a.id, openCtx)
   }
 
-  function onkeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      open = false
-    }
+  async function pickItem(item: SubmenuItem) {
+    if (item.enabled === false) return
+    await item.pick(openCtx)
   }
-
-  // Bind to the menu root so the close-on-outside-click handler
-  // can tell "click inside menu" from "click on the page".
-  let menuEl = $state<HTMLDivElement | null>(null)
-
-  // Close on click outside. `capture: true` so we see the event
-  // before the underlying canvas handlers (otherwise SVG / Svelte
-  // Flow nodes' own pointerdown can swallow it). Inside-menu
-  // clicks (button picks) are filtered by the target check —
-  // closing on the click itself would race with the button's
-  // pointerdown→click sequence and the click would never reach.
-  function onWindowPointerDown(e: PointerEvent) {
-    if (!open) return
-    const t = e.target
-    if (menuEl && t instanceof Node && menuEl.contains(t)) return
-    open = false
-  }
-
-  $effect(() => {
-    if (!open) return
-    window.addEventListener('pointerdown', onWindowPointerDown, { capture: true })
-    window.addEventListener('keydown', onkeydown)
-    return () => {
-      window.removeEventListener('pointerdown', onWindowPointerDown, { capture: true })
-      window.removeEventListener('keydown', onkeydown)
-    }
-  })
 </script>
 
-{#if open}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    bind:this={menuEl}
-    class="fixed z-50 min-w-[200px] rounded-lg border border-neutral-200 bg-white py-1 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
-    style="left: {x}px; top: {y}px"
-    role="menu"
-    tabindex="-1"
-  >
+<ContextMenu.Root bind:open>
+  <ContextMenu.Trigger oncontextmenu={captureCursor} class="block h-full w-full">
+    {@render children()}
+  </ContextMenu.Trigger>
+  <ContextMenu.Content class="min-w-[220px]">
     {#each groups as [ group, items ], i (group)}
       {#if i > 0}
-        <div class="my-1 h-px bg-neutral-200 dark:bg-neutral-700"></div>
+        <ContextMenu.Separator />
       {/if}
       {#each items as a (a.id)}
         {@const enabled = isEnabled(a)}
-        <button
-          type="button"
-          class="flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
-          disabled={!enabled}
-          onclick={() => pick(a)}
-        >
-          <span class="flex items-center gap-2">
+        {#if a.submenu}
+          {@const subItems = a.submenu(openCtx)}
+          <ContextMenu.Sub>
+            <ContextMenu.SubTrigger disabled={!enabled}>
+              {#if a.icon}
+                <a.icon class="h-4 w-4 text-muted-foreground" />
+              {/if}
+              <span>{a.label}</span>
+            </ContextMenu.SubTrigger>
+            <ContextMenu.SubContent class="min-w-[180px]">
+              {#each subItems as item (item.id)}
+                <ContextMenu.Item disabled={item.enabled === false} onSelect={() => pickItem(item)}>
+                  <span class:italic={item.muted} class:text-muted-foreground={item.muted}>
+                    {item.label}
+                  </span>
+                </ContextMenu.Item>
+              {/each}
+            </ContextMenu.SubContent>
+          </ContextMenu.Sub>
+        {:else}
+          <ContextMenu.Item disabled={!enabled} onSelect={() => pickAction(a)}>
             {#if a.icon}
-              <a.icon class="h-4 w-4 text-neutral-500" />
+              <a.icon class="h-4 w-4 text-muted-foreground" />
             {/if}
-            {a.label}
-          </span>
-          {#if a.shortcut || a.shortcutHint}
-            <span class="text-[10px] font-mono text-muted-foreground">
-              {a.shortcut ?? a.shortcutHint}
-            </span>
-          {/if}
-        </button>
+            <span>{a.label}</span>
+            {#if a.shortcut || a.shortcutHint}
+              <ContextMenu.Shortcut>{a.shortcut ?? a.shortcutHint}</ContextMenu.Shortcut>
+            {/if}
+          </ContextMenu.Item>
+        {/if}
       {/each}
     {/each}
-  </div>
-{/if}
+  </ContextMenu.Content>
+</ContextMenu.Root>

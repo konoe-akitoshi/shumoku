@@ -16,6 +16,7 @@
     ondragend,
     onselect,
     oncontextmenu: onctx,
+    preventContextMenuDefault = true,
   }: {
     subgraph: Subgraph
     colors: RenderColors
@@ -28,6 +29,7 @@
     ondragend?: (sgId: string) => void
     onselect?: (sgId: string) => void
     oncontextmenu?: (id: string, e: MouseEvent) => void
+    preventContextMenuDefault?: boolean
   } = $props()
 
   const style = $derived(subgraph.style ?? {})
@@ -85,7 +87,7 @@
     stroke-width={selected ? 3 : strokeWidth}
     stroke-dasharray={selected ? undefined : (strokeDasharray || undefined)}
     onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id) }}
-    oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); onselect?.(subgraph.id); onctx?.(subgraph.id, e) }}
+    oncontextmenu={(e) => { if (preventContextMenuDefault) e.preventDefault(); onselect?.(subgraph.id); onctx?.(subgraph.id, e) }}
     use:elementDrag={() => ({
       filter: (e) => e.button === 0 && interactive,
       onStart: () => ondragstart?.(subgraph.id),

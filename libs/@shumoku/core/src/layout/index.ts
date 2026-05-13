@@ -7,7 +7,7 @@
  */
 
 // Bezier edge geometry (shared by interactive renderer + SSR renderer-svg)
-export { bezierEdgePath, type PortSide } from './bezier-path.js'
+export { bezierEdgePath, bezierOffsetPath, type PortSide } from './bezier-path.js'
 // Interactive operations (node move, collision detection)
 export {
   addLink,

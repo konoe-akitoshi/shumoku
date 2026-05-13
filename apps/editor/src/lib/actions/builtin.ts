@@ -9,6 +9,7 @@ import {
   ClipboardText,
   Copy,
   CopySimple,
+  FolderSimplePlus,
   Info,
   MagnifyingGlass,
   Trash,
@@ -240,6 +241,54 @@ const builtinActions: Action[] = [
     group: 'arrange',
     when: inDiagram,
     run: () => diagramState.autoArrange(),
+  },
+  {
+    // Restore of the legacy "Move to group" sub-menu that lived in
+    // NodeContextMenu before PR-5 absorbed it into the unified
+    // CanvasContextMenu. Exposed as a `submenu` parent: the menu
+    // renders it with a `›` indicator and reveals subgraph choices
+    // as a flyout on hover. The items themselves call
+    // `diagramState.moveNodeToGroup` — the legacy state-layer API
+    // never went away.
+    id: 'arrange.moveToGroup',
+    label: 'Move to group',
+    icon: FolderSimplePlus,
+    group: 'arrange',
+    when: inDiagram,
+    enabled: (ctx) =>
+      ctx.selection.ids.length === 1 &&
+      ctx.selection.types[0] === 'node' &&
+      diagramState.subgraphs.size > 0,
+    // Parent-only entry. `run` is unused on menu surfaces that
+    // recognise `submenu`, but registry types still require it —
+    // wire it to a no-op so keyboard / palette invocations don't
+    // misfire.
+    run: () => {},
+    submenu: (ctx) => {
+      const nodeId = ctx.selection.ids[0]
+      if (!nodeId) return []
+      const currentParent = diagramState.nodes.get(nodeId)?.parent
+      const items = [
+        {
+          id: '__top__',
+          label: '(top level)',
+          muted: true,
+          enabled: currentParent !== undefined,
+          pick: () => diagramState.moveNodeToGroup(nodeId, undefined),
+        },
+      ]
+      for (const sg of diagramState.subgraphs.values()) {
+        if (sg.id === currentParent) continue
+        items.push({
+          id: sg.id,
+          label: sg.label ?? sg.id,
+          muted: false,
+          enabled: true,
+          pick: () => diagramState.moveNodeToGroup(nodeId, sg.id),
+        })
+      }
+      return items
+    },
   },
 
   // ----- UI ---------------------------------------------------------------

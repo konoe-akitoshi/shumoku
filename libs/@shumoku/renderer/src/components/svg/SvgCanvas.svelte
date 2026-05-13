@@ -44,6 +44,7 @@
     onlabeledit,
     oncontextmenu: onctx,
     onbackgroundclick,
+    preventContextMenuDefault = true,
   }: RendererOverlaySnippets & {
     nodes: Map<string, Node>
     ports: Map<string, ResolvedPort>
@@ -70,6 +71,8 @@
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (id: string, type: string, e: MouseEvent) => void
     onbackgroundclick?: () => void
+    /** Suppress browser native menu via `e.preventDefault()`. See ShumokuRenderer. */
+    preventContextMenuDefault?: boolean
   } = $props()
 
   const viewBox = $derived(
@@ -163,6 +166,7 @@
         {ondragend}
         {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'subgraph', e)}
+        {preventContextMenuDefault}
       />
     {/each}
 
@@ -174,6 +178,7 @@
         overlay={linkOverlay}
         {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'edge', e)}
+        {preventContextMenuDefault}
       />
     {/each}
 
@@ -192,6 +197,7 @@
           {onselect}
           {onaddport}
           oncontextmenu={(id, e) => onctx?.(id, 'node', e)}
+          {preventContextMenuDefault}
         />
       {/if}
     {/each}
@@ -212,6 +218,7 @@
         {onselect}
         {onlabeledit}
         oncontextmenu={(id, e) => onctx?.(id, 'port', e)}
+        {preventContextMenuDefault}
       />
     {/each}
 

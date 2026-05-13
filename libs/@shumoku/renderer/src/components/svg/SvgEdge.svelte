@@ -11,6 +11,7 @@
     overlay,
     onselect,
     oncontextmenu: onctx,
+    preventContextMenuDefault = true,
   }: {
     edge: ResolvedEdge
     colors: RenderColors
@@ -18,6 +19,7 @@
     overlay?: LinkOverlaySnippet
     onselect?: (edgeId: string) => void
     oncontextmenu?: (edgeId: string, e: MouseEvent) => void
+    preventContextMenuDefault?: boolean
   } = $props()
 
   // Every edge renders as a cubic Bezier flowing out of the source
@@ -87,8 +89,7 @@
   }
 
   function handleContextMenu(e: MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
+    if (preventContextMenuDefault) e.preventDefault()
     onselect?.(edge.id)
     onctx?.(edge.id, e)
   }
@@ -99,6 +100,7 @@
     {@const gap = Math.max(3, Math.round(edge.width * 0.9))}
     <path
       bind:this={basePathElement}
+      class="link"
       d={pathD}
       fill="none"
       stroke={strokeColor}

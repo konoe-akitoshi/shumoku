@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { LinkOverlayContext } from '@shumoku/renderer'
+  import { bezierOffsetPath } from '@shumoku/renderer'
   import {
     bpsToDurationMs,
-    createOffsetPathD,
     DOWN_COLOR,
     getUtilizationColor,
     type LinkFlowMetrics,
+    utilizationToDurationMs,
   } from '$lib/weathermap'
 
   export type WeathermapAnimation = 'full' | 'reduced' | 'off'
@@ -23,18 +24,50 @@
   const down = $derived(metrics?.status === 'down')
   const inUtil = $derived(metrics?.inUtilization ?? metrics?.utilization ?? 0)
   const outUtil = $derived(metrics?.outUtilization ?? metrics?.utilization ?? 0)
+  // Lane geometry: keep half-stroke + a 0.5px gap between lanes so the
+  // two colored streams never collide regardless of `context.width`.
+  // The previous `width/4` offset overlapped at width ≤ 4, masking the
+  // in lane behind the out lane.
+  const LANE_GAP = 0.5
   const laneWidth = $derived(Math.max(context.width / 2, 2))
-  const laneOffset = $derived(context.width / 4)
+  const laneOffset = $derived(laneWidth / 2 + LANE_GAP)
   const baseColor = $derived(down ? DOWN_COLOR : getUtilizationColor(Math.max(inUtil, outUtil)))
   const inColor = $derived(down ? DOWN_COLOR : getUtilizationColor(inUtil))
   const outColor = $derived(down ? DOWN_COLOR : getUtilizationColor(outUtil))
-  const inDuration = $derived(bpsToDurationMs(metrics?.inBps ?? 0))
-  const outDuration = $derived(bpsToDurationMs(metrics?.outBps ?? 0))
+  // Prefer bps for animation speed; fall back to utilization% when the
+  // data source only reports a percentage (legacy / partial plugins).
+  const inDuration = $derived(
+    (metrics?.inBps ?? 0) > 0
+      ? bpsToDurationMs(metrics?.inBps ?? 0)
+      : utilizationToDurationMs(inUtil),
+  )
+  const outDuration = $derived(
+    (metrics?.outBps ?? 0) > 0
+      ? bpsToDurationMs(metrics?.outBps ?? 0)
+      : utilizationToDurationMs(outUtil),
+  )
+  // Lane geometry is computed analytically from port positions/sides,
+  // so we don't need a mounted SVGPathElement and don't pay for any
+  // DOM sampling. When port data is missing (degenerate / non-port
+  // edges) we collapse to a single combined overlay — see template —
+  // because there's no geometric anchor to split lanes from.
+  const hasPorts = $derived(!!(context.fromPort && context.toPort))
   const inPathD = $derived(
-    context.pathElement ? createOffsetPathD(context.pathElement, laneOffset) : context.pathD,
+    hasPorts && context.fromPort && context.toPort
+      ? bezierOffsetPath(context.fromPort, context.toPort, laneOffset)
+      : context.pathD,
   )
   const outPathD = $derived(
-    context.pathElement ? createOffsetPathD(context.pathElement, -laneOffset) : context.pathD,
+    hasPorts && context.fromPort && context.toPort
+      ? bezierOffsetPath(context.fromPort, context.toPort, -laneOffset)
+      : context.pathD,
+  )
+  // Combined-lane duration for the port-less fallback: pick whichever
+  // direction is moving fastest so the user still sees activity.
+  const combinedDuration = $derived(
+    inDuration > 0 && outDuration > 0
+      ? Math.min(inDuration, outDuration)
+      : Math.max(inDuration, outDuration),
   )
 
   $effect(() => {
@@ -58,30 +91,46 @@
 </script>
 
 {#if active}
-  <path
-    class="wm-overlay"
-    class:wm-static={animation === 'reduced'}
-    data-direction="in"
-    d={inPathD}
-    style:--wm-color={inColor}
-    style:--wm-width={String(laneWidth)}
-    style:--wm-dash={down ? '8 4' : '3 21'}
-    style:--wm-opacity={down ? '0.5' : '0.9'}
-    style:--wm-play={down || inDuration <= 0 ? 'paused' : 'running'}
-    style:--wm-duration={down || inDuration <= 0 ? '0ms' : `${inDuration}ms`}
-  />
-  <path
-    class="wm-overlay"
-    class:wm-static={animation === 'reduced'}
-    data-direction="out"
-    d={outPathD}
-    style:--wm-color={outColor}
-    style:--wm-width={String(laneWidth)}
-    style:--wm-dash={down ? '8 4' : '3 21'}
-    style:--wm-opacity={down ? '0.5' : '0.9'}
-    style:--wm-play={down || outDuration <= 0 ? 'paused' : 'running'}
-    style:--wm-duration={down || outDuration <= 0 ? '0ms' : `${outDuration}ms`}
-  />
+  {#if hasPorts}
+    <path
+      class="wm-overlay"
+      class:wm-static={animation === 'reduced'}
+      data-direction="in"
+      d={inPathD}
+      style:--wm-color={inColor}
+      style:--wm-width={String(laneWidth)}
+      style:--wm-dash={down ? '8 4' : '3 21'}
+      style:--wm-opacity={down ? '0.5' : '0.9'}
+      style:--wm-play={down || inDuration <= 0 ? 'paused' : 'running'}
+      style:--wm-duration={down || inDuration <= 0 ? '0ms' : `${inDuration}ms`}
+    />
+    <path
+      class="wm-overlay"
+      class:wm-static={animation === 'reduced'}
+      data-direction="out"
+      d={outPathD}
+      style:--wm-color={outColor}
+      style:--wm-width={String(laneWidth)}
+      style:--wm-dash={down ? '8 4' : '3 21'}
+      style:--wm-opacity={down ? '0.5' : '0.9'}
+      style:--wm-play={down || outDuration <= 0 ? 'paused' : 'running'}
+      style:--wm-duration={down || outDuration <= 0 ? '0ms' : `${outDuration}ms`}
+    />
+  {:else}
+    <!-- Port-less edge: render one combined lane (no direction split). -->
+    <path
+      class="wm-overlay"
+      class:wm-static={animation === 'reduced'}
+      data-direction="in"
+      d={context.pathD}
+      style:--wm-color={baseColor}
+      style:--wm-width={String(laneWidth)}
+      style:--wm-dash={down ? '8 4' : '3 21'}
+      style:--wm-opacity={down ? '0.5' : '0.9'}
+      style:--wm-play={down || combinedDuration <= 0 ? 'paused' : 'running'}
+      style:--wm-duration={down || combinedDuration <= 0 ? '0ms' : `${combinedDuration}ms`}
+    />
+  {/if}
 {/if}
 
 <style>
@@ -141,7 +190,9 @@
 
   @media (prefers-reduced-motion: reduce) {
     .wm-overlay {
+      stroke-dasharray: none;
       animation: none !important;
+      opacity: 0.7;
     }
   }
 </style>
