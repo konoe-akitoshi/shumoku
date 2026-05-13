@@ -3,6 +3,7 @@
 
 import type { Link, Node } from '@shumoku/core'
 import type { Scene } from '../types'
+import { nodeCenterFromTopLeft } from './node-geometry'
 
 /**
  * Single source of truth for cable length number formatting:
@@ -14,7 +15,13 @@ export function formatMeters(m: number): string {
 }
 
 /**
- * Endpoint position in a scene. Order:
+ * Endpoint position in a scene as the **icon center** — matches
+ * exactly where SceneCanvas anchors wires. Without the center
+ * offset, two different-sized nodes would have their length-math
+ * endpoints at mismatched corners, putting the reported cable length
+ * out of sync with the polyline that's actually drawn.
+ *
+ * Top-left priority:
  *   1. explicit placement (user dragged the pin somewhere)
  *   2. Node.position fallback (auto-layout coords)
  *
@@ -30,9 +37,11 @@ function endpointPos(
   nodeId: string,
   nodes: Map<string, Node>,
 ): { x: number; y: number } | null {
+  const node = nodes.get(nodeId)
   const placement = scene.nodePlacements.find((p) => p.nodeId === nodeId)
-  if (placement) return placement.position
-  return nodes.get(nodeId)?.position ?? null
+  const tl = placement?.position ?? node?.position
+  if (!tl) return null
+  return nodeCenterFromTopLeft(scene, node, tl)
 }
 
 /** Pixel distance between two scene endpoints, or null if either
