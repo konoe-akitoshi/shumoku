@@ -124,6 +124,15 @@
     additive: boolean
   } | null>(null)
 
+  // After a real pointerdown→pointerup on the same element, the
+  // browser synthesises a `click` — which the canvas-bg's
+  // `onclick={onbackgroundclick}` interprets as "clear selection".
+  // For an empty (sub-threshold) drag that's correct, but for a
+  // successful marquee it would wipe the selection we just made,
+  // making the marquee look like it did nothing. Flag a recently
+  // committed marquee and suppress the click that follows it.
+  let suppressNextBgClick = false
+
   function bgPointerDown(e: PointerEvent) {
     if (e.button !== 0 || e.altKey || !svgEl) return
     const p = screenToWorld(svgEl, e.clientX, e.clientY)
@@ -160,8 +169,17 @@
         },
         marquee.additive,
       )
+      suppressNextBgClick = true
     }
     marquee = null
+  }
+
+  function bgClick() {
+    if (suppressNextBgClick) {
+      suppressNextBgClick = false
+      return
+    }
+    onbackgroundclick?.()
   }
 </script>
 
@@ -213,6 +231,16 @@
 
     /* Edit-only UI (hidden in view mode) */
     .edge-zone { pointer-events: none; }
+
+    /* Selection feedback. The node/subgraph already paints a selection-coloured
+       stroke; this rule keeps that stroke visible at any camera zoom. Without
+       non-scaling-stroke the outline of icon-style nodes vanishes below 1px
+       when the camera is zoomed out to fit a busy diagram. */
+    .node.selected .node-bg > *,
+    .subgraph.selected > .subgraph-bg {
+      vector-effect: non-scaling-stroke;
+      stroke-width: 3;
+    }
   </style>`}
 
   <!-- Viewport group: d3-zoom applies transform here -->
@@ -227,7 +255,7 @@
       height="199998"
       fill="url(#grid)"
       pointer-events="fill"
-      onclick={() => onbackgroundclick?.()}
+      onclick={bgClick}
       onpointerdown={bgPointerDown}
       onpointermove={bgPointerMove}
       onpointerup={bgPointerUp}
