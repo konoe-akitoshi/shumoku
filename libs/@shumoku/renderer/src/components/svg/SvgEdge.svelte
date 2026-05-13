@@ -99,6 +99,7 @@
     {@const gap = Math.max(3, Math.round(edge.width * 0.9))}
     <path
       bind:this={basePathElement}
+      class="link"
       d={pathD}
       fill="none"
       stroke={strokeColor}

@@ -27,6 +27,7 @@ export {
 } from './lib/serialization'
 export {
   bezierEdgePath,
+  bezierOffsetPath,
   computePortLabelPosition,
   getNodeLabel,
   getVlanStroke,

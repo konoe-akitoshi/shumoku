@@ -8,7 +8,7 @@
 
 import type { PortSide } from '@shumoku/core'
 
-export { bezierEdgePath } from '@shumoku/core'
+export { bezierEdgePath, bezierOffsetPath } from '@shumoku/core'
 
 type Side = PortSide
 

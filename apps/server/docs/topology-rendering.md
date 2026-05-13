@@ -443,7 +443,8 @@ flowchart LR
     CAM["attachCamera 関数<br/>renderer/lib/camera.ts"]
   end
 
-  WML -->|createOffsetPathD<br/>getUtilizationColor<br/>bpsToDurationMs| WMG
+  WML -->|getUtilizationColor<br/>bpsToDurationMs<br/>utilizationToDurationMs| WMG
+  WML -->|bezierOffsetPath| BEZ["@shumoku/core<br/>layout/bezier-path.ts"]
   TTO -. addEventListener .-> SVG[svgElement]
   HLO -. classList + querySelector .-> SVG
   NSO -. classList + querySelector .-> SVG
