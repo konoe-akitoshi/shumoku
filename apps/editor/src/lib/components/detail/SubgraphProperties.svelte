@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Subgraph } from '@shumoku/core'
+  import SubgraphColorDialog from '../SubgraphColorDialog.svelte'
 
   let {
     subgraph,
@@ -10,6 +11,37 @@
     editing?: boolean
     onupdate?: (field: string, value: unknown) => void
   } = $props()
+
+  let colorDialogOpen = $state(false)
+
+  // Map known accent / surface tokens to a representative preview
+  // color for the swatch chip. Custom hex values render directly.
+  const TOKEN_PREVIEW: Record<string, string> = {
+    'accent-blue': '#bfdbfe',
+    'accent-green': '#bbf7d0',
+    'accent-red': '#fecdd3',
+    'accent-amber': '#fcd34d',
+    'accent-purple': '#e9d5ff',
+    'surface-1': '#e2e8f0',
+    'surface-2': '#cbd5e1',
+    'surface-3': '#94a3b8',
+  }
+
+  const swatchColor = $derived.by(() => {
+    const fill = subgraph.style?.fill
+    if (!fill) return '#e2e8f0'
+    if (fill.startsWith('#')) return fill
+    return TOKEN_PREVIEW[fill] ?? '#e2e8f0'
+  })
+
+  const swatchLabel = $derived(subgraph.style?.fill ?? 'default')
+
+  function pickColor(fill: string | undefined) {
+    const nextStyle = { ...(subgraph.style ?? {}) }
+    if (fill === undefined) delete nextStyle.fill
+    else nextStyle.fill = fill
+    onupdate?.('style', nextStyle)
+  }
 
   const inputClass =
     'w-full text-[11px] px-2 py-1 bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono'
@@ -67,4 +99,33 @@
       {/if}
     </dd>
   </div>
+
+  <!-- Color -->
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>Color</dt>
+    <dd class="flex items-center gap-2">
+      <span
+        class="block h-4 w-4 rounded border border-black/15"
+        style="background-color: {swatchColor};"
+      ></span>
+      <span class={valueClass}>{swatchLabel}</span>
+      {#if editing}
+        <button
+          type="button"
+          class="rounded border border-neutral-200 px-2 py-0.5 text-[10px] hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-700"
+          onclick={() => {
+            colorDialogOpen = true
+          }}
+        >
+          Change…
+        </button>
+      {/if}
+    </dd>
+  </div>
 </dl>
+
+<SubgraphColorDialog
+  bind:open={colorDialogOpen}
+  currentFill={subgraph.style?.fill ?? ''}
+  onpick={pickColor}
+/>
