@@ -2,25 +2,12 @@
   import type { Node, ResolvedEdge, ResolvedPort, Subgraph, Theme } from '@shumoku/core'
   import type { RendererOverlaySnippets } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
+  import { screenToWorld } from '../../lib/svg-coords'
   import SvgEdge from './SvgEdge.svelte'
   import SvgLinkPreview from './SvgLinkPreview.svelte'
   import SvgNode from './SvgNode.svelte'
   import SvgPort from './SvgPort.svelte'
   import SvgSubgraph from './SvgSubgraph.svelte'
-
-  // Marquee uses world-space coords: convert screen → world via the
-  // viewport <g>'s screen CTM so the camera's pan/zoom is included.
-  // The svg-coords helper's `screenToSvg` only inverts the SVG root's
-  // CTM, so it would skip d3-zoom and the marquee would lag behind the
-  // cursor whenever the canvas is panned. Mirrors the same approach
-  // ShumokuRenderer takes in its own `screenToSvg` export.
-  function screenToWorld(el: SVGSVGElement, sx: number, sy: number): { x: number; y: number } {
-    const viewport = el.querySelector('.viewport') as SVGGraphicsElement | null
-    const ctm = (viewport ?? el).getScreenCTM()
-    if (!ctm) return { x: sx, y: sy }
-    const p = new DOMPoint(sx, sy).matrixTransform(ctm.inverse())
-    return { x: p.x, y: p.y }
-  }
 
   let {
     nodes,
@@ -232,6 +219,18 @@
     /* Edit-only UI (hidden in view mode) */
     .edge-zone { pointer-events: none; }
 
+    /* Marquee selection rectangle (drag-on-background). Hairline solid
+       stroke with a faint translucent fill — non-scaling so it stays
+       legible at any camera zoom. */
+    .marquee {
+      fill: ${colors.selection};
+      fill-opacity: 0.08;
+      stroke: ${colors.selection};
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+      pointer-events: none;
+    }
+
     /* Selection feedback. The node/subgraph already paints a selection-coloured
        stroke; this rule keeps that stroke visible at any camera zoom. Without
        non-scaling-stroke the outline of icon-style nodes vanishes below 1px
@@ -340,24 +339,14 @@
 
     {#if marquee}
       <!-- Marquee overlay. Lives inside the viewport group so its
-           position scales with the camera. `vector-effect=non-scaling-stroke`
-           keeps the outline visible at any zoom level — otherwise
-           stroke-width=1 in world coords becomes sub-pixel when the
-           camera zooms out to fit a large diagram. pointer-events:none
-           lets the background rect keep receiving pointer events. -->
+           position scales with the camera; the `.marquee` class above
+           handles all styling (outline-only, non-scaling-stroke). -->
       <rect
         class="marquee"
         x={Math.min(marquee.x0, marquee.x1)}
         y={Math.min(marquee.y0, marquee.y1)}
         width={Math.abs(marquee.x1 - marquee.x0)}
         height={Math.abs(marquee.y1 - marquee.y0)}
-        fill={colors.selection}
-        fill-opacity="0.12"
-        stroke={colors.selection}
-        stroke-width="1.5"
-        stroke-dasharray="4 3"
-        vector-effect="non-scaling-stroke"
-        pointer-events="none"
       />
     {/if}
   </g>

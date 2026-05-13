@@ -94,6 +94,28 @@ export function screenToSvg(
   return { x: p.x, y: p.y }
 }
 
+/**
+ * Convert screen (client) coordinates to *world* coordinates — the
+ * space used by node positions / layout output — by inverting the
+ * viewport `<g>`'s screen CTM. Unlike `screenToSvg` (which only
+ * inverts the SVG root's CTM), this includes any pan / zoom transform
+ * the host attached to the viewport, so a cursor at a given client
+ * position maps to the world point under that pixel regardless of
+ * camera state. Falls back to the SVG root's CTM when no viewport
+ * group exists (e.g. minimal viewer rendering).
+ */
+export function screenToWorld(
+  svg: SVGSVGElement,
+  screenX: number,
+  screenY: number,
+): { x: number; y: number } {
+  const viewport = svg.querySelector('.viewport') as SVGGraphicsElement | null
+  const ctm = (viewport ?? svg).getScreenCTM()
+  if (!ctm) return { x: screenX, y: screenY }
+  const p = new DOMPoint(screenX, screenY).matrixTransform(ctm.inverse())
+  return { x: p.x, y: p.y }
+}
+
 /** Convert an SVG rect (center + size) to screen DOMRect, relative to a container element */
 export function svgRectToContainer(
   svg: SVGSVGElement,

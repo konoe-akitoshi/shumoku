@@ -29,6 +29,7 @@
   import { SvelteMap } from 'svelte/reactivity'
   import type { RendererOverlaySnippets } from '../lib/overlays'
   import { themeToColors } from '../lib/render-colors'
+  import { screenToWorld as screenToWorldUtil } from '../lib/svg-coords'
   import SvgCanvas from './svg/SvgCanvas.svelte'
 
   /**
@@ -198,19 +199,16 @@
   // Coordinate helpers
   // =========================================================================
 
-  /** Get the SVG viewport's inverse screen CTM (for screen → SVG conversion) */
-  function getViewportInverseCTM(): DOMMatrix | null {
-    if (!svgElement) return null
-    const viewport = svgElement.querySelector('.viewport') as SVGGraphicsElement | null
-    return (viewport ?? svgElement).getScreenCTM()?.inverse() ?? null
-  }
-
-  /** Convert screen (clientX/Y) coordinates to SVG coordinates */
+  /**
+   * Convert screen (clientX/Y) coordinates to world coords (post
+   * camera transform). Exported so hosts that don't bind the renderer
+   * directly can still translate pointer events into model space
+   * (e.g. paste-at-cursor in the editor's action registry). Returns
+   * the input untransformed when the renderer hasn't mounted yet.
+   */
   export function screenToSvg(screenX: number, screenY: number): { x: number; y: number } {
-    const ctm = getViewportInverseCTM()
-    if (!ctm) return { x: screenX, y: screenY }
-    const pt = new DOMPoint(screenX, screenY).matrixTransform(ctm)
-    return { x: pt.x, y: pt.y }
+    if (!svgElement) return { x: screenX, y: screenY }
+    return screenToWorldUtil(svgElement, screenX, screenY)
   }
 
   // =========================================================================
