@@ -2,12 +2,25 @@
   import type { Node, ResolvedEdge, ResolvedPort, Subgraph, Theme } from '@shumoku/core'
   import type { RendererOverlaySnippets } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
-  import { screenToSvg } from '../../lib/svg-coords'
   import SvgEdge from './SvgEdge.svelte'
   import SvgLinkPreview from './SvgLinkPreview.svelte'
   import SvgNode from './SvgNode.svelte'
   import SvgPort from './SvgPort.svelte'
   import SvgSubgraph from './SvgSubgraph.svelte'
+
+  // Marquee uses world-space coords: convert screen → world via the
+  // viewport <g>'s screen CTM so the camera's pan/zoom is included.
+  // The svg-coords helper's `screenToSvg` only inverts the SVG root's
+  // CTM, so it would skip d3-zoom and the marquee would lag behind the
+  // cursor whenever the canvas is panned. Mirrors the same approach
+  // ShumokuRenderer takes in its own `screenToSvg` export.
+  function screenToWorld(el: SVGSVGElement, sx: number, sy: number): { x: number; y: number } {
+    const viewport = el.querySelector('.viewport') as SVGGraphicsElement | null
+    const ctm = (viewport ?? el).getScreenCTM()
+    if (!ctm) return { x: sx, y: sy }
+    const p = new DOMPoint(sx, sy).matrixTransform(ctm.inverse())
+    return { x: p.x, y: p.y }
+  }
 
   let {
     nodes,
@@ -113,7 +126,7 @@
 
   function bgPointerDown(e: PointerEvent) {
     if (e.button !== 0 || e.altKey || !svgEl) return
-    const p = screenToSvg(svgEl, e.clientX, e.clientY)
+    const p = screenToWorld(svgEl, e.clientX, e.clientY)
     marquee = {
       x0: p.x,
       y0: p.y,
@@ -126,7 +139,7 @@
 
   function bgPointerMove(e: PointerEvent) {
     if (!marquee || !svgEl) return
-    const p = screenToSvg(svgEl, e.clientX, e.clientY)
+    const p = screenToWorld(svgEl, e.clientX, e.clientY)
     marquee = { ...marquee, x1: p.x, y1: p.y }
   }
 
@@ -298,9 +311,12 @@
     {/if}
 
     {#if marquee}
-      <!-- Marquee overlay. Lives inside the viewport group so it scales
-           with the camera transform. pointer-events:none lets the
-           background rect keep receiving pointer events for drag. -->
+      <!-- Marquee overlay. Lives inside the viewport group so its
+           position scales with the camera. `vector-effect=non-scaling-stroke`
+           keeps the outline visible at any zoom level — otherwise
+           stroke-width=1 in world coords becomes sub-pixel when the
+           camera zooms out to fit a large diagram. pointer-events:none
+           lets the background rect keep receiving pointer events. -->
       <rect
         class="marquee"
         x={Math.min(marquee.x0, marquee.x1)}
@@ -308,10 +324,11 @@
         width={Math.abs(marquee.x1 - marquee.x0)}
         height={Math.abs(marquee.y1 - marquee.y0)}
         fill={colors.selection}
-        fill-opacity="0.1"
+        fill-opacity="0.12"
         stroke={colors.selection}
-        stroke-width="1"
-        stroke-dasharray="3 2"
+        stroke-width="1.5"
+        stroke-dasharray="4 3"
+        vector-effect="non-scaling-stroke"
         pointer-events="none"
       />
     {/if}
