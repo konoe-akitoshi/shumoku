@@ -88,15 +88,22 @@
       </ul>
     </div>
   {:else}
-    <Button
-      variant="outline"
-      size="sm"
-      class="h-7 px-2 text-[11px]"
+    <button
+      type="button"
+      class="flex h-7 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 text-[11px] font-medium text-slate-800 shadow-md hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
       onclick={() => {
-          expanded = true
-        }}
+        expanded = true
+      }}
+      aria-label="Show cable color legend"
     >
+      <!-- 4 swatch pips so the trigger itself hints at the content -->
+      <span class="flex gap-0.5" aria-hidden="true">
+        <span class="h-2 w-1 rounded-[1px]" style="background:#2563EB"></span>
+        <span class="h-2 w-1 rounded-[1px]" style="background:#10B981"></span>
+        <span class="h-2 w-1 rounded-[1px]" style="background:#06B6D4"></span>
+        <span class="h-2 w-1 rounded-[1px]" style="background:#EAB308"></span>
+      </span>
       Cable colors
-    </Button>
+    </button>
   {/if}
 </Panel>
