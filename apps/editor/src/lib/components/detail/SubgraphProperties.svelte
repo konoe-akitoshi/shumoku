@@ -100,26 +100,29 @@
     </dd>
   </div>
 
-  <!-- Color -->
+  <!-- Color — the swatch itself is the affordance. Click to open the
+       picker dialog in edit mode; in read mode it's a passive chip. -->
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Color</dt>
     <dd class="flex items-center gap-2">
-      <span
-        class="block h-4 w-4 rounded border border-black/15"
-        style="background-color: {swatchColor};"
-      ></span>
-      <span class={valueClass}>{swatchLabel}</span>
       {#if editing}
         <button
           type="button"
-          class="rounded border border-neutral-200 px-2 py-0.5 text-[10px] hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-700"
+          class="block h-5 w-5 rounded border border-black/15 outline-none transition-shadow hover:ring-2 hover:ring-blue-300 focus:ring-2 focus:ring-blue-400"
+          style="background-color: {swatchColor};"
           onclick={() => {
             colorDialogOpen = true
           }}
-        >
-          Change…
-        </button>
+          title="Change color"
+          aria-label="Change color"
+        ></button>
+      {:else}
+        <span
+          class="block h-5 w-5 rounded border border-black/15"
+          style="background-color: {swatchColor};"
+        ></span>
       {/if}
+      <span class={valueClass}>{swatchLabel}</span>
     </dd>
   </div>
 </dl>
