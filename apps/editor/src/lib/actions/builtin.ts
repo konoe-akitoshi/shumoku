@@ -255,36 +255,45 @@ const builtinActions: Action[] = [
     icon: FolderSimplePlus,
     group: 'arrange',
     when: inDiagram,
-    enabled: (ctx) =>
-      ctx.selection.ids.length === 1 &&
-      ctx.selection.types[0] === 'node' &&
-      diagramState.subgraphs.size > 0,
+    // Available when at least one node is selected. Multi-selection is
+    // OK — the submenu iterates over every selected node id.
+    enabled: (ctx) => {
+      if (diagramState.subgraphs.size === 0) return false
+      const nodeIds = ctx.selection.ids.filter((_id, i) => ctx.selection.types[i] === 'node')
+      return nodeIds.length > 0
+    },
     // Parent-only entry. `run` is unused on menu surfaces that
     // recognise `submenu`, but registry types still require it —
     // wire it to a no-op so keyboard / palette invocations don't
     // misfire.
     run: () => {},
     submenu: (ctx) => {
-      const nodeId = ctx.selection.ids[0]
-      if (!nodeId) return []
-      const currentParent = diagramState.nodes.get(nodeId)?.parent
+      const nodeIds = ctx.selection.ids.filter((_id, i) => ctx.selection.types[i] === 'node')
+      if (nodeIds.length === 0) return []
+      // Multi-selection: "(top level)" stays available whenever any
+      // selected node is nested somewhere. Subgraphs are excluded from
+      // the choices only if every selected node already lives there.
+      const parents = new Set(nodeIds.map((id) => diagramState.nodes.get(id)?.parent))
+      const move = async (target: string | undefined) => {
+        for (const id of nodeIds) await diagramState.moveNodeToGroup(id, target)
+      }
       const items = [
         {
           id: '__top__',
           label: '(top level)',
           muted: true,
-          enabled: currentParent !== undefined,
-          pick: () => diagramState.moveNodeToGroup(nodeId, undefined),
+          enabled: !(parents.size === 1 && parents.has(undefined)),
+          pick: () => move(undefined),
         },
       ]
       for (const sg of diagramState.subgraphs.values()) {
-        if (sg.id === currentParent) continue
+        if (parents.size === 1 && parents.has(sg.id)) continue
         items.push({
           id: sg.id,
           label: sg.label ?? sg.id,
           muted: false,
           enabled: true,
-          pick: () => diagramState.moveNodeToGroup(nodeId, sg.id),
+          pick: () => move(sg.id),
         })
       }
       return items

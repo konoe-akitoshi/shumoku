@@ -309,8 +309,40 @@
   }
 
   // =========================================================================
-  // Drag (unified for nodes and subgraphs)
+  // Drag (unified for nodes and subgraphs; supports multi-selection)
   // =========================================================================
+  //
+  // Multi-drag strategy: when the user starts dragging a node that's part
+  // of a multi-selection, snapshot every selected element's origin at
+  // dragstart. On every tick, compute how far the *dragged* element
+  // actually moved (after its own collision resolution), then translate
+  // the other selected elements by that delta. This keeps the group
+  // visually rigid — drag two nodes apart, both move together; bump into
+  // an obstacle, the entire group is held back by the dragged one.
+  let multiDragOrigin: Map<string, { x: number; y: number }> | null = null
+
+  function handleDragStart(id: string) {
+    if (selection.has(id) && selection.size > 1) {
+      multiDragOrigin = new Map()
+      for (const sid of selection) {
+        if (nodes.has(sid)) {
+          const p = nodes.get(sid)?.position
+          if (p) multiDragOrigin.set(sid, { x: p.x, y: p.y })
+        } else if (subgraphs.has(sid)) {
+          const b = subgraphs.get(sid)?.bounds
+          if (b) multiDragOrigin.set(sid, { x: b.x, y: b.y })
+        }
+      }
+    } else {
+      multiDragOrigin = null
+    }
+    ondragstart?.(id)
+  }
+
+  function handleDragEnd(id: string) {
+    multiDragOrigin = null
+    ondragend?.(id)
+  }
 
   async function handleDragMove(id: string, x: number, y: number) {
     const state = { nodes, ports, subgraphs }
@@ -324,6 +356,56 @@
     replaceMap(ports, result.ports)
     replaceMap(edges, result.edges)
     if (result.subgraphs) replaceMap(subgraphs, result.subgraphs)
+
+    if (!multiDragOrigin || !multiDragOrigin.has(id)) return
+    // Where the dragged element ended up after collision resolution.
+    const draggedNow = nodes.get(id)?.position ?? subgraphs.get(id)?.bounds
+    const origin = multiDragOrigin.get(id)
+    if (!draggedNow || !origin) return
+    const dx = draggedNow.x - origin.x
+    const dy = draggedNow.y - origin.y
+    for (const [sid, sorigin] of multiDragOrigin) {
+      if (sid === id) continue
+      const tx = sorigin.x + dx
+      const ty = sorigin.y + dy
+      const st = { nodes, ports, subgraphs }
+      const r = nodes.has(sid)
+        ? await moveNode(sid, tx, ty, st, links)
+        : subgraphs.has(sid)
+          ? await moveSubgraph(sid, tx, ty, st, links)
+          : null
+      if (!r) continue
+      replaceMap(nodes, r.nodes)
+      replaceMap(ports, r.ports)
+      replaceMap(edges, r.edges)
+      if (r.subgraphs) replaceMap(subgraphs, r.subgraphs)
+    }
+  }
+
+  function handleMarquee(rect: { x: number; y: number; w: number; h: number }, additive: boolean) {
+    const hits = new Set<string>()
+    const rx1 = rect.x
+    const ry1 = rect.y
+    const rx2 = rect.x + rect.w
+    const ry2 = rect.y + rect.h
+    const intersects = (ex1: number, ey1: number, ex2: number, ey2: number) =>
+      ex1 < rx2 && ex2 > rx1 && ey1 < ry2 && ey2 > ry1
+    for (const [id, node] of nodes) {
+      if (hideNode?.(node)) continue
+      const p = node.position
+      if (!p) continue
+      const size = resolveNodeSize(node)
+      const hw = size.width / 2
+      const hh = size.height / 2
+      if (intersects(p.x - hw, p.y - hh, p.x + hw, p.y + hh)) hits.add(id)
+    }
+    for (const [id, sg] of subgraphs) {
+      const b = sg.bounds
+      if (!b) continue
+      if (intersects(b.x, b.y, b.x + b.width, b.y + b.height)) hits.add(id)
+    }
+    selection = additive ? new Set([...selection, ...hits]) : hits
+    emitSelection()
   }
 
   // =========================================================================
@@ -638,9 +720,9 @@
     {portOverlay}
     linkPreview={linkDrag}
     bind:svgEl={svgElement}
-    {ondragstart}
+    ondragstart={handleDragStart}
     ondragmove={handleDragMove}
-    {ondragend}
+    ondragend={handleDragEnd}
     {hideNode}
     onselect={handleSelect}
     onaddport={handleAddPort}
@@ -650,6 +732,7 @@
     {onlabeledit}
     oncontextmenu={handleContextMenu}
     onbackgroundclick={handleBackgroundClick}
+    onmarquee={handleMarquee}
     {preventContextMenuDefault}
   />
 </div>
