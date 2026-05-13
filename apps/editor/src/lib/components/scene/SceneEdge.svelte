@@ -1,6 +1,8 @@
 <script lang="ts">
+  import type { CableGrade } from '@shumoku/core'
   import { BaseEdge, type Edge, type EdgeProps, useSvelteFlow } from '@xyflow/svelte'
   import { editorState } from '$lib/context.svelte'
+  import { cableCategoryColor } from '$lib/scene/cable-colors'
   import { formatMeters } from '$lib/scene/cable-length'
   import { WIRE_CORNER_RADIUS } from '$lib/scene/node-geometry'
   import { bendOnDrag, polylinePath, type Waypoint } from './wire-edit'
@@ -32,6 +34,9 @@
     lengthMeters: number | null
     /** Per-scene stroke width multiplier (Scene.display.wireScale). */
     wireScale?: number
+    /** Cable jacket grade, drives stroke color via
+     *  `cableCategoryColor()`. Undefined → slate default. */
+    cableCategory?: CableGrade
   }
   type SceneEdgeT = Edge<SceneEdgeData, 'wire'>
 
@@ -135,7 +140,9 @@
   labelX={labelAnchor?.x}
   labelY={labelAnchor?.y}
   labelStyle="background:white;padding:0 6px;border-radius:3px;border:1px solid rgba(0,0,0,0.15);font-size:10px;line-height:14px;font-weight:500;color:#1e293b;box-shadow:0 1px 2px rgba(0,0,0,0.15);"
-  style="stroke: {selected ? '#3b82f6' : '#475569'}; stroke-width: {(selected ? 3.5 : 3) *
+  style="stroke: {selected
+    ? '#3b82f6'
+    : cableCategoryColor(data?.cableCategory)}; stroke-width: {(selected ? 3.5 : 3) *
     (data?.wireScale ?? 1)}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
 />
 

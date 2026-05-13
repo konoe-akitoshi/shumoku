@@ -648,6 +648,7 @@ export const sampleDiagram = {
       label: 'DMZ',
       type: 'solid',
       vlan: [100],
+      cable: { category: 'om3' },
     },
     {
       id: 'link-3',
@@ -666,6 +667,7 @@ export const sampleDiagram = {
       },
       label: 'Active',
       type: 'solid',
+      cable: { category: 'om3' },
     },
     {
       id: 'link-4',
@@ -684,6 +686,7 @@ export const sampleDiagram = {
       },
       label: 'Standby',
       type: 'solid',
+      cable: { category: 'om3' },
     },
     {
       id: 'cloud/link-0',
@@ -711,6 +714,7 @@ export const sampleDiagram = {
         ip: '203.0.113.1/30',
       },
       type: 'solid',
+      cable: { category: 'os2' },
     },
     {
       id: 'perimeter/link-1',
@@ -727,6 +731,7 @@ export const sampleDiagram = {
         plug: { module: { standard: '10GBASE-SR' } },
       },
       type: 'solid',
+      cable: { category: 'os2' },
     },
     {
       id: 'perimeter/link-2',
@@ -746,6 +751,7 @@ export const sampleDiagram = {
       style: {
         minLength: 300,
       },
+      cable: { category: 'cat6' },
     },
     {
       id: 'perimeter/link-3',
@@ -762,6 +768,7 @@ export const sampleDiagram = {
         plug: { module: { standard: '10GBASE-SR' } },
       },
       type: 'solid',
+      cable: { category: 'om3' },
     },
     {
       id: 'perimeter/link-4',
@@ -778,6 +785,7 @@ export const sampleDiagram = {
         plug: { module: { standard: '10GBASE-SR' } },
       },
       type: 'solid',
+      cable: { category: 'om3' },
     },
     {
       id: 'perimeter/link-5',
@@ -795,6 +803,7 @@ export const sampleDiagram = {
       style: {
         minLength: 300,
       },
+      cable: { category: 'cat6' },
     },
     {
       id: 'dmz/link-0',
@@ -810,6 +819,7 @@ export const sampleDiagram = {
       },
       type: 'solid',
       vlan: [100],
+      cable: { category: 'cat6a' },
     },
     {
       id: 'dmz/link-1',
@@ -825,6 +835,7 @@ export const sampleDiagram = {
       },
       type: 'solid',
       vlan: [100],
+      cable: { category: 'cat6a' },
     },
     {
       id: 'campus/link-0',
@@ -842,6 +853,7 @@ export const sampleDiagram = {
       },
       label: '40G LACP',
       type: 'solid',
+      cable: { category: 'om4' },
     },
     {
       id: 'campus/link-1',
@@ -860,6 +872,7 @@ export const sampleDiagram = {
       label: 'Trunk',
       type: 'solid',
       vlan: [10, 20],
+      cable: { category: 'om3' },
     },
     {
       id: 'campus/link-2',
@@ -878,6 +891,7 @@ export const sampleDiagram = {
       label: 'Trunk',
       type: 'solid',
       vlan: [10, 30],
+      cable: { category: 'om3' },
     },
     {
       id: 'campus/link-3',
@@ -893,6 +907,7 @@ export const sampleDiagram = {
       },
       type: 'solid',
       vlan: [20],
+      cable: { category: 'cat6' },
     },
     {
       id: 'campus/link-4',
@@ -908,6 +923,7 @@ export const sampleDiagram = {
       },
       type: 'solid',
       vlan: [20],
+      cable: { category: 'cat6' },
     },
     {
       id: 'campus/link-5',
@@ -923,6 +939,7 @@ export const sampleDiagram = {
       },
       type: 'solid',
       vlan: [30],
+      cable: { category: 'cat6' },
     },
     {
       id: 'campus/link-6',
@@ -938,6 +955,7 @@ export const sampleDiagram = {
       },
       type: 'solid',
       vlan: [30],
+      cable: { category: 'cat6' },
     },
     {
       id: 'campus/link-7',
@@ -952,6 +970,7 @@ export const sampleDiagram = {
         plug: { module: { standard: '1000BASE-T' } },
       },
       type: 'solid',
+      cable: { category: 'cat5e' },
     },
   ],
   subgraphs: [
