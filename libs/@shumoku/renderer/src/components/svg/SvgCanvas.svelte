@@ -62,7 +62,7 @@
     ondragstart?: (id: string) => void
     ondragmove?: (id: string, x: number, y: number) => void
     ondragend?: (id: string) => void
-    onselect?: (id: string) => void
+    onselect?: (id: string, e?: MouseEvent) => void
     onaddport?: (nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
     onlinkstart?: (portId: string, x: number, y: number) => void
     onlinkend?: (portId: string) => void

@@ -31,7 +31,9 @@
     overlay?: PortOverlaySnippet
     onlinkstart?: (portId: string, x: number, y: number) => void
     onlinkend?: (portId: string) => void
-    onselect?: (portId: string) => void
+    /** Click on this port. Receives the original event so the renderer can
+     *  read modifier keys for additive multi-selection. */
+    onselect?: (portId: string, e?: MouseEvent) => void
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (portId: string, e: MouseEvent) => void
     /** Drag a linked port to a different placement on the same node.
@@ -84,7 +86,7 @@
     if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
-    onselect?.(port.id)
+    onselect?.(port.id, e)
     if (!interactive) return
 
     if (linked && onportdragend) {
@@ -129,7 +131,7 @@
 
   function handleContextMenu(e: MouseEvent) {
     if (preventContextMenuDefault) e.preventDefault()
-    onselect?.(port.id)
+    onselect?.(port.id, e)
     onctx?.(port.id, e)
   }
 </script>

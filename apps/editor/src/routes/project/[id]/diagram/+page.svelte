@@ -68,13 +68,18 @@
       diagramState.setCurrentScene(null)
     }
   })
-  let selected = $state<{ id: string; type: string } | null>(null)
-  // Canvas right-click menu — registry-driven for both empty canvas
-  // and per-element clicks. The renderer's per-element handler sets
-  // `selected = { id, type }` before the contextmenu event bubbles
-  // to the shadcn ContextMenu wrapper (`CanvasContextMenu`); the
-  // wrapper then opens at the actual cursor position and reads the
-  // current selection for action gating.
+  // Multi-selection state. The renderer drives this via
+  // `onselectionchange`; the page just mirrors it so the action
+  // registry / status bar / detail panel can react. `selected`
+  // (singular) is a derived convenience for surfaces that only care
+  // about the focused single item (StatusBadge, double-click detail).
+  type SelType = ActionContext['selection']['types'][number]
+  let selection = $state<{ ids: string[]; types: SelType[] }>({ ids: [], types: [] })
+  const selected = $derived<{ id: string; type: string } | null>(
+    selection.ids[0] && selection.types[0]
+      ? { id: selection.ids[0], type: selection.types[0] }
+      : null,
+  )
 
   // Adapter that lets registry-side actions (copy / paste) talk to
   // the renderer instance without each action grabbing the bound
@@ -97,12 +102,7 @@
 
   const actionCtx = $derived<ActionContext>({
     mode: 'diagram',
-    selection: selected
-      ? {
-          ids: [selected.id],
-          types: [selected.type as ActionContext['selection']['types'][number]],
-        }
-      : { ids: [], types: [] },
+    selection,
     // canvasPos is filled in by `CanvasContextMenu` from the live
     // contextmenu event, since shadcn ContextMenu handles its own
     // positioning. The page-level ctx is just the rest of the state.
@@ -202,15 +202,16 @@
           hideNode={(n) => !!n.termination}
           ondragstart={() => diagramState.beginTx('Move node')}
           ondragend={() => diagramState.endTx()}
-          onselect={(id: string | null, type: string | null) => { selected = id ? { id, type: type ?? 'node' } : null }}
+          onselectionchange={(ids: string[], types: string[]) => {
+            // Mirror the renderer's selection set so the action
+            // registry / status bar see the live state. Fires
+            // synchronously inside the renderer's click /
+            // right-click handler, so the ContextMenu wrapper
+            // sees the right selection when it opens.
+            selection = { ids, types: types as SelType[] }
+          }}
           onchange={() => {}}
           onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
-          oncontextmenu={(id: string, type: string) => {
-            // Update selection before the contextmenu event bubbles
-            // up to the ContextMenu trigger so action gating sees
-            // the right item when the menu opens.
-            selected = { id, type }
-          }}
           onnodeadd={(_id: string) => {
             // The renderer mutated diagram.nodes directly (via $bindable)
             // before emitting this event — invalidate cached sheets now.
@@ -255,7 +256,12 @@
 
   <!-- Bottom-left: Status -->
   <div data-print-hide class="fixed bottom-3 left-3 z-20">
-    <StatusBadge status={diagramState.status} stats={diagramState.stats} {selected} />
+    <StatusBadge
+      status={diagramState.status}
+      stats={diagramState.stats}
+      {selected}
+      selectionCount={selection.ids.length}
+    />
   </div>
 
   <!-- Left side: Code panel (slide-out) -->

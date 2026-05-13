@@ -3,10 +3,14 @@
     status = 'Ready',
     stats = { nodes: 0, links: 0, subgraphs: 0 },
     selected = null,
+    selectionCount = 0,
   }: {
     status: string
     stats: { nodes: number; links: number; subgraphs: number }
+    /** First selected element for label/id display (single-target detail). */
     selected: { id: string; type: string } | null
+    /** Total size of the selection set. >1 means multi-select active. */
+    selectionCount?: number
   } = $props()
 </script>
 
@@ -30,8 +34,11 @@
     <span>{stats.subgraphs}G</span>
   </div>
 
-  <!-- Selection -->
-  {#if selected}
+  <!-- Selection: show id when single, count when multi. -->
+  {#if selectionCount > 1}
+    <div class="text-neutral-300 dark:text-neutral-600">|</div>
+    <div class="font-medium text-blue-600 dark:text-blue-400">{selectionCount} selected</div>
+  {:else if selected}
     <div class="text-neutral-300 dark:text-neutral-600">|</div>
     <div class="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
       <span class="capitalize">{selected.type}</span>

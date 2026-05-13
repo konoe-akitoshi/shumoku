@@ -66,7 +66,21 @@
      */
     svgElement?: SVGSVGElement | null
     onchange?: (links: Link[]) => void
+    /**
+     * Single-selection callback. Fires whenever the selection changes,
+     * with the first selected element's id/type (or null/null on clear).
+     * Kept stable for backward-compat with consumers that only care
+     * about a single item (e.g. server/web TopologyViewer). For the
+     * full selection set use `onselectionchange`.
+     */
     onselect?: (id: string | null, type: string | null) => void
+    /**
+     * Multi-selection callback. Fires whenever the selection set
+     * changes, with parallel `ids` / `types` arrays (empty when cleared).
+     * Hosts that support multi-select (editor) listen here; viewer-only
+     * surfaces can ignore it.
+     */
+    onselectionchange?: (ids: string[], types: string[]) => void
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
     onnodeadd?: (id: string) => void
@@ -125,6 +139,7 @@
     svgElement = $bindable<SVGSVGElement | null>(null),
     onchange,
     onselect,
+    onselectionchange,
     onlabeledit,
     oncontextmenu: onctx,
     onnodeadd,
@@ -209,35 +224,87 @@
     return () => el.removeEventListener('keydown', handleKeyDown)
   })
 
+  function classifyId(id: string): 'node' | 'edge' | 'subgraph' | 'port' {
+    if (edges.has(id)) return 'edge'
+    if (ports.has(id)) return 'port'
+    if (subgraphs.has(id)) return 'subgraph'
+    return 'node'
+  }
+
+  /** Emit both callbacks in lockstep after a selection mutation.
+   *  Called synchronously inside event handlers so consumers' state
+   *  is up to date before the event finishes bubbling — important
+   *  for context-menu wrappers that read selection on right-click. */
+  function emitSelection() {
+    const ids = [...selection]
+    const types = ids.map(classifyId)
+    onselectionchange?.(ids, types)
+    onselect?.(ids[0] ?? null, types[0] ?? null)
+  }
+
+  // Drop selection entries whose target was removed from the model
+  // (e.g. after multi-delete or undo). Without this, StatusBadge would
+  // keep showing a stale "N selected" until the user clicks elsewhere.
   $effect(() => {
-    if (selection.size === 0) {
-      onselect?.(null, null)
-    } else {
-      const id = [...selection][0] ?? null
-      if (!id) return
-      let type: string = 'node'
-      if (edges.has(id)) type = 'edge'
-      else if (ports.has(id)) type = 'port'
-      else if (subgraphs.has(id)) type = 'subgraph'
-      onselect?.(id, type)
+    let changed = false
+    const next = new Set<string>()
+    for (const id of selection) {
+      if (nodes.has(id) || edges.has(id) || subgraphs.has(id) || ports.has(id)) {
+        next.add(id)
+      } else {
+        changed = true
+      }
+    }
+    if (changed) {
+      selection = next
+      emitSelection()
     }
   })
 
-  function handleSelect(id: string) {
-    selection = new Set([id])
+  function handleSelect(id: string, ev?: MouseEvent) {
+    // Shift / Cmd (macOS) / Ctrl (Windows-Linux) → additive toggle.
+    // Plain click → replace.
+    const additive = !!ev && (ev.shiftKey || ev.metaKey || ev.ctrlKey)
+    if (additive) {
+      const next = new Set(selection)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      selection = next
+    } else {
+      selection = new Set([id])
+    }
+    emitSelection()
   }
   function handleBackgroundClick() {
     selection = new Set()
+    emitSelection()
   }
   function handleContextMenu(id: string, type: string, e: MouseEvent) {
-    selection = new Set([id])
+    // Right-click on an unselected item reduces the selection to that
+    // single item; right-click on something already selected keeps the
+    // existing multi-selection so the menu applies to the whole set.
+    if (!selection.has(id)) {
+      selection = new Set([id])
+      emitSelection()
+    }
     onctx?.(id, type, e.clientX, e.clientY)
   }
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       selection = new Set()
+      emitSelection()
       linkDrag = null
+    } else if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A')) {
+      // Cmd/Ctrl+A → select every node + subgraph. Edges and ports
+      // intentionally excluded; they're rarely the target of bulk
+      // operations and including them clutters Delete behavior.
+      e.preventDefault()
+      const next = new Set<string>()
+      for (const id of nodes.keys()) next.add(id)
+      for (const id of subgraphs.keys()) next.add(id)
+      selection = next
+      emitSelection()
     }
   }
 
@@ -292,6 +359,7 @@
     // we now use a SvelteMap the mutations are picked up without any reassign.
     rebalanceSubgraphs(nodes, subgraphs, ports)
     selection = new Set([id])
+    emitSelection()
   }
 
   export function addNewNode(opts: {
