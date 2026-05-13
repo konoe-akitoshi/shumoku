@@ -305,6 +305,9 @@
             innerWaypoints,
             lengthMeters: meters,
             wireScale,
+            // Cable grade drives wire stroke color in SceneEdge —
+            // see lib/scene/cable-colors.ts + CABLE_COLORS.md.
+            cableCategory: link.cable?.category,
           },
           animated: false,
           style: crossBoundary ? 'stroke-dasharray: 5 3;' : '',
