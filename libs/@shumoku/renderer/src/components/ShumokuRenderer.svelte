@@ -412,6 +412,35 @@
   // Add element (shared: parent detection → collision resolve → rebalance)
   // =========================================================================
 
+  // Tokens defined in the theme surface palette (see themes/light.ts,
+  // themes/dark.ts). Adding a new accent here will require adding it
+  // to both theme files.
+  const ACCENT_TOKENS = [
+    'accent-blue',
+    'accent-green',
+    'accent-red',
+    'accent-amber',
+    'accent-purple',
+  ] as const
+
+  /**
+   * Pick a random accent token, biased away from any accent already
+   * used by an immediate-sibling subgraph so adjacent groups don't
+   * end up the same color. Falls back to pure random when the
+   * palette is exhausted.
+   */
+  function pickAccentToken(parent?: string): string {
+    const used = new Set<string>()
+    for (const [, sg] of subgraphs) {
+      if (sg.parent !== parent) continue
+      const fill = sg.style?.fill
+      if (fill && (ACCENT_TOKENS as readonly string[]).includes(fill)) used.add(fill)
+    }
+    const fresh = ACCENT_TOKENS.filter((t) => !used.has(t))
+    const pool = fresh.length > 0 ? fresh : ACCENT_TOKENS
+    return pool[Math.floor(Math.random() * pool.length)] ?? ACCENT_TOKENS[0]
+  }
+
   function resolveParentAndPosition(
     position: { x: number; y: number } | undefined,
     w: number,
@@ -494,6 +523,11 @@
       label: opts.label ?? 'New Group',
       parent,
       bounds: { x: pos.x - w / 2, y: pos.y - h / 2, width: w, height: h },
+      // Pick a random accent token so freshly placed groups are
+      // visually distinct out of the box. Tokens resolve per theme
+      // so light/dark modes pick up matching shades automatically.
+      // User can override via the detail panel.
+      style: { fill: pickAccentToken(parent) },
     })
     finalizeAdd(id)
     return id
