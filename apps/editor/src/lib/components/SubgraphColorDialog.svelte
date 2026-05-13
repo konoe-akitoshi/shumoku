@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { Dialog } from 'bits-ui'
-  import { X } from 'phosphor-svelte'
+  import { Popover } from 'bits-ui'
 
   // Tokens defined in the theme palette (libs/@shumoku/core/src/themes/*.ts).
   // The renderer resolves these per-theme, so we list both the token id
@@ -21,10 +20,13 @@
   let {
     open = $bindable(false),
     currentFill = '',
+    anchor,
     onpick,
   }: {
     open?: boolean
     currentFill?: string
+    /** Element the popover anchors to (the clicked swatch). */
+    anchor?: HTMLElement | null
     onpick: (fill: string | undefined) => void
   } = $props()
 
@@ -54,73 +56,74 @@
   }
 </script>
 
-<Dialog.Root bind:open>
-  <Dialog.Portal>
-    <Dialog.Overlay class="fixed inset-0 z-50 bg-black/40" />
-    <Dialog.Content
-      class="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[260px] rounded-md border bg-background p-3 shadow-xl"
-    >
-      <div class="mb-2 flex items-center justify-between">
-        <Dialog.Title class="text-[11px] font-medium text-muted-foreground">Color</Dialog.Title>
-        <Dialog.Close class="text-muted-foreground/60 hover:text-foreground" aria-label="Close"
-          ><X class="h-3 w-3" /></Dialog.Close
-        >
-      </div>
-
-      <!-- Swatch grid — square tiles, no labels (token in tooltip). Selected
-           tile gets an inset ring so the palette stays a flat continuous
-           strip without chrome. -->
-      <div class="mb-2 grid grid-cols-8 gap-1">
-        {#each ACCENT_OPTIONS as opt (opt.token)}
-          {@const selected = currentFill === opt.token}
-          <button
-            type="button"
-            class="h-6 w-6 rounded-sm border border-black/10 outline-none transition-shadow hover:ring-2 hover:ring-blue-300"
-            class:ring-2={selected}
-            class:ring-foreground={selected}
-            style="background-color: {opt.preview};"
-            onclick={() => pick(opt.token)}
-            title={opt.token}
-            aria-label={opt.token}
-          ></button>
-        {/each}
-      </div>
-
-      <!-- Custom hex — single inline row, no header. Live preview swatch
-           on the left mirrors the typed value once it's a valid hex. -->
-      {@const validHex = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(customHex.trim())}
-      <div class="flex items-center gap-1.5">
-        <span
-          class="h-6 w-6 shrink-0 rounded-sm border border-black/10"
-          style={validHex ? `background-color: ${customHex.trim()};` : 'background: repeating-linear-gradient(45deg,#f8fafc,#f8fafc 4px,#e2e8f0 4px,#e2e8f0 8px);'}
-        ></span>
-        <input
-          type="text"
-          bind:value={customHex}
-          placeholder="#abcdef"
-          class="flex-1 rounded-sm border border-input bg-background px-1.5 py-1 font-mono text-[11px] outline-none focus:ring-1 focus:ring-ring"
-          onkeydown={(e) => {
-            if (e.key === 'Enter') applyCustom()
-          }}
-        >
+<Popover.Root bind:open>
+  <!-- Invisible trigger — the consumer (SubgraphProperties) supplies
+       its own swatch button and opens the popover by toggling `open`.
+       The customAnchor lets the popover position relative to that
+       external swatch element. -->
+  <Popover.Trigger class="sr-only" aria-hidden="true" tabindex={-1}
+    >open color picker</Popover.Trigger
+  >
+  <Popover.Content
+    class="z-50 w-[240px] rounded-md border bg-background p-2.5 shadow-xl"
+    side="bottom"
+    align="end"
+    sideOffset={6}
+    customAnchor={anchor ?? null}
+  >
+    <!-- Swatch grid — flat strip of square tiles. Selected tile gets a
+         foreground-color ring so the palette reads as a single chip row
+         without dialog chrome. -->
+    <div class="mb-2 grid grid-cols-8 gap-1">
+      {#each ACCENT_OPTIONS as opt (opt.token)}
+        {@const selected = currentFill === opt.token}
         <button
           type="button"
-          class="rounded-sm px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-          disabled={!validHex}
-          onclick={applyCustom}
-        >
-          Set
-        </button>
-      </div>
+          class="h-6 w-6 rounded-sm border border-black/10 outline-none transition-shadow hover:ring-2 hover:ring-blue-300"
+          class:ring-2={selected}
+          class:ring-foreground={selected}
+          style="background-color: {opt.preview};"
+          onclick={() => pick(opt.token)}
+          title={opt.label}
+          aria-label={opt.label}
+        ></button>
+      {/each}
+    </div>
 
-      <!-- Reset link — tertiary action, no border, no button chrome. -->
+    <!-- Custom hex — inline row. Live preview swatch mirrors the typed
+         value once it's a valid hex; otherwise a transparent checker. -->
+    {@const validHex = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(customHex.trim())}
+    <div class="flex items-center gap-1.5">
+      <span
+        class="h-6 w-6 shrink-0 rounded-sm border border-black/10"
+        style={validHex ? `background-color: ${customHex.trim()};` : 'background: repeating-linear-gradient(45deg,#f8fafc,#f8fafc 4px,#e2e8f0 4px,#e2e8f0 8px);'}
+      ></span>
+      <input
+        type="text"
+        bind:value={customHex}
+        placeholder="#abcdef"
+        class="flex-1 rounded-sm border border-input bg-background px-1.5 py-1 font-mono text-[11px] outline-none focus:ring-1 focus:ring-ring"
+        onkeydown={(e) => {
+          if (e.key === 'Enter') applyCustom()
+        }}
+      >
       <button
         type="button"
-        class="mt-2 text-[10px] text-muted-foreground hover:text-foreground"
-        onclick={clear}
+        class="rounded-sm px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+        disabled={!validHex}
+        onclick={applyCustom}
       >
-        Clear color
+        Set
       </button>
-    </Dialog.Content>
-  </Dialog.Portal>
-</Dialog.Root>
+    </div>
+
+    <!-- Reset link — tertiary action. -->
+    <button
+      type="button"
+      class="mt-2 text-[10px] text-muted-foreground hover:text-foreground"
+      onclick={clear}
+    >
+      Clear color
+    </button>
+  </Popover.Content>
+</Popover.Root>

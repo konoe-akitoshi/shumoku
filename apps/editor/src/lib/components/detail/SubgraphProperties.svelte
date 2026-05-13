@@ -13,6 +13,7 @@
   } = $props()
 
   let colorDialogOpen = $state(false)
+  let swatchEl: HTMLButtonElement | null = $state(null)
 
   // Map known accent / surface tokens to a representative preview
   // color for the swatch chip. Custom hex values render directly.
@@ -100,28 +101,23 @@
     </dd>
   </div>
 
-  <!-- Color — the swatch itself is the affordance. Click to open the
-       picker dialog in edit mode; in read mode it's a passive chip. -->
+  <!-- Color — the swatch is the affordance and the popover anchor.
+       Color editing is allowed even outside edit mode (low-risk
+       visual tweak that doesn't need the edit gate). -->
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Color</dt>
     <dd class="flex items-center gap-2">
-      {#if editing}
-        <button
-          type="button"
-          class="block h-5 w-5 rounded border border-black/15 outline-none transition-shadow hover:ring-2 hover:ring-blue-300 focus:ring-2 focus:ring-blue-400"
-          style="background-color: {swatchColor};"
-          onclick={() => {
-            colorDialogOpen = true
-          }}
-          title="Change color"
-          aria-label="Change color"
-        ></button>
-      {:else}
-        <span
-          class="block h-5 w-5 rounded border border-black/15"
-          style="background-color: {swatchColor};"
-        ></span>
-      {/if}
+      <button
+        bind:this={swatchEl}
+        type="button"
+        class="block h-5 w-5 rounded border border-black/15 outline-none transition-shadow hover:ring-2 hover:ring-blue-300 focus:ring-2 focus:ring-blue-400"
+        style="background-color: {swatchColor};"
+        onclick={() => {
+          colorDialogOpen = !colorDialogOpen
+        }}
+        title="Change color"
+        aria-label="Change color"
+      ></button>
       <span class={valueClass}>{swatchLabel}</span>
     </dd>
   </div>
@@ -130,5 +126,6 @@
 <SubgraphColorDialog
   bind:open={colorDialogOpen}
   currentFill={subgraph.style?.fill ?? ''}
+  anchor={swatchEl}
   onpick={pickColor}
 />
