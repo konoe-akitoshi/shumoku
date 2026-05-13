@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { CableGrade } from '@shumoku/core'
   import {
     type Connection,
     ConnectionMode,
@@ -18,6 +19,7 @@
   } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
   import type { Scene } from '$lib/types'
+  import CableLegend from './CableLegend.svelte'
   import EpsRoutingModal from './EpsRoutingModal.svelte'
   import NodeRoutingModal from './NodeRoutingModal.svelte'
   import SceneBackgroundNode from './SceneBackgroundNode.svelte'
@@ -61,6 +63,18 @@
         (inScopeIds.has(l.from.node) || inScopeIds.has(l.to.node)),
     ),
   )
+  // Cable grades referenced by visible links — feeds the in-canvas
+  // legend so it only lists grades actually used in this scene.
+  // Links without `cable.category` contribute nothing and keep the
+  // default slate stroke.
+  const presentCableGrades = $derived.by(() => {
+    const set = new Set<CableGrade>()
+    for (const l of visibleLinks) {
+      const cat = l.cable?.category
+      if (cat) set.add(cat)
+    }
+    return set
+  })
   // Nodes to render as pins in this scene = scope-internal nodes
   // PLUS any external endpoint referenced by a visible cross-boundary
   // link. Externals are normal SceneNodes (draggable, length-bearing);
@@ -492,6 +506,7 @@
     <ScenePrintFitter />
     <SceneCalibrationCapture sceneId={scene.id} paneClick={paneClickEvent} />
     <SceneClickPlace sceneId={scene.id} paneClick={paneClickEvent} />
+    <CableLegend presentGrades={presentCableGrades} />
   </SvelteFlow>
 
   <!-- Status hint: shown while the user is mid-action. Calibration UI

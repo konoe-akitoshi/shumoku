@@ -4,6 +4,48 @@
 import type { CableGrade } from '@shumoku/core'
 
 /**
+ * Canonical display order for cable grades — copper before fiber,
+ * legacy before modern, and DAC / AOC tail since they're rack-level
+ * not building-level cabling. Used by the in-canvas legend so the
+ * column always reads top-to-bottom by familiarity rather than alpha.
+ */
+export const CABLE_GRADE_ORDER: readonly CableGrade[] = [
+  'cat5e',
+  'cat6',
+  'cat6a',
+  'cat7',
+  'cat8',
+  'om3',
+  'om4',
+  'om5',
+  'os1',
+  'os2',
+  'dac',
+  'aoc',
+]
+
+/**
+ * Human-friendly label for a grade. We capitalize the family ("Cat",
+ * "OM", "OS") and keep the numeric tier as-is so existing terminology
+ * survives. DAC / AOC stay all-caps — those are acronyms in the wild.
+ */
+export function cableGradeLabel(grade: CableGrade): string {
+  if (grade === 'cat5e') return 'Cat 5e'
+  if (grade === 'cat6') return 'Cat 6'
+  if (grade === 'cat6a') return 'Cat 6a'
+  if (grade === 'cat7') return 'Cat 7'
+  if (grade === 'cat8') return 'Cat 8'
+  if (grade === 'om3') return 'OM3 (MMF)'
+  if (grade === 'om4') return 'OM4 (MMF)'
+  if (grade === 'om5') return 'OM5 (MMF)'
+  if (grade === 'os1') return 'OS1 (SMF)'
+  if (grade === 'os2') return 'OS2 (SMF)'
+  if (grade === 'dac') return 'DAC'
+  if (grade === 'aoc') return 'AOC'
+  return grade
+}
+
+/**
  * Wire stroke color for a given cable grade in Scene mode.
  *
  * The palette mixes two sources:
