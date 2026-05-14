@@ -122,16 +122,22 @@
     </dd>
   </div>
 
-  <!-- Spec Binding -->
+  <!-- Spec — the node's intrinsic type / role. Read-only here; it's
+       determined by how the node was placed (typed placeholder from
+       the Add Node menu, or snapshotted from a Product binding). -->
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Spec</dt>
+    <dd><span class={valueClass}>{node.spec ? specSummary(node.spec) : 'None'}</span></dd>
+  </div>
+
+  <!-- Product binding — orthogonal to Spec. A node can have a Spec
+       without a Product (typed placeholder like Internet / ONU) and
+       a Product binding additionally specifies which procured item
+       this node maps to in Materials / BOM. -->
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>Product</dt>
     <dd>
       {#if editing}
-        <!-- Show the current binding (Product label) or generic spec
-             summary above the Combobox so the user can tell at a
-             glance what's already assigned — the Combobox itself is
-             empty until typed into, which used to make the row look
-             blank for generic nodes. -->
         {@const boundProductInList = node.productId
           ? products.find((p) => p.id === node.productId)
           : null}
@@ -139,10 +145,8 @@
           <div class="mb-1 text-[10px] font-mono text-neutral-500 dark:text-neutral-400">
             current: {productLabel(boundProductInList)}
           </div>
-        {:else if node.spec}
-          <div class="mb-1 text-[10px] font-mono text-neutral-500 dark:text-neutral-400">
-            current: {specSummary(node.spec)} <span class="text-neutral-400">(generic)</span>
-          </div>
+        {:else}
+          <div class="mb-1 text-[10px] font-mono text-neutral-400 italic">no product bound</div>
         {/if}
         <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindproduct?.(v) }}>
           <div class="relative">
@@ -176,7 +180,12 @@
           </Combobox.Content>
         </Combobox.Root>
       {:else}
-        <span class={valueClass}> {node.spec ? specSummary(node.spec) : 'None'} </span>
+        {@const boundProductInList = node.productId
+          ? products.find((p) => p.id === node.productId)
+          : null}
+        <span class={valueClass}>
+          {boundProductInList ? productLabel(boundProductInList) : 'None'}
+        </span>
       {/if}
     </dd>
   </div>
