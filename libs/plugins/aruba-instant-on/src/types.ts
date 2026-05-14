@@ -30,19 +30,42 @@ export interface AruSitesResponse {
 }
 
 export interface AruInventoryDevice {
+  /** Primary id used by the portal (typically the MAC). */
+  id?: string
   serialNumber?: string
   macAddress?: string
-  /** Display name (operator-assigned). */
+  /** Display name (operator-assigned). Falls back to `defaultName` (e.g. "CNJ6K9T736"). */
   name?: string
-  /** "AP", "SW", possibly others — used to classify topology nodes later. */
-  productLine?: string
-  /** Model string, e.g. "AP22", "JL678A". */
-  modelName?: string
-  /** Per-device status. Known values: "ACTIVE", "INACTIVE", "OFFLINE". */
+  defaultName?: string
+  /** Device category: 'accessPoint' / 'switch' / 'gateway'. */
+  deviceType?: string
+  /** Model code, e.g. "AP-303", "JL678A". */
+  model?: string
+  /** Per-device status. Observed values: 'up', 'down' (lowercase). */
   status?: string
+  operationalState?: string
+  /** Health summary: 'good' / 'poor' etc. */
+  health?: string
   ipAddress?: string
-  /** ISO timestamp of last seen — used as `lastSeen` ms in NodeMetrics. */
-  lastUpdated?: string
+  /** Seconds since the portal last heard from the device. Used to derive lastSeen. */
+  numberOfSecondsSinceLastCommunication?: number
+  /** Alerts the portal currently has open against this device. */
+  activeAlerts?: AruEmbeddedAlert[]
+}
+
+/** Subset of the alert shape embedded in inventory device records. */
+export interface AruEmbeddedAlert {
+  id: string
+  type?: string
+  severity?: string
+  /** Unix seconds. */
+  raisedTime?: number
+  /** Unix seconds; null when still active. */
+  clearedTime?: number | null
+  alertTypeProperties?: {
+    deviceNames?: string[]
+    deviceIds?: string[]
+  }
 }
 
 export interface AruInventoryResponse {

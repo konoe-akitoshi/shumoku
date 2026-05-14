@@ -32,9 +32,8 @@ import type {
 } from '@shumoku/core'
 import { ArubaInstantOnApi } from './api.js'
 import type {
-  AruAlertItem,
-  AruAlertsResponse,
   ArubaInstantOnConfig,
+  AruEmbeddedAlert,
   AruInventoryDevice,
   AruInventoryResponse,
   AruSite,
@@ -95,12 +94,14 @@ export class ArubaInstantOnPlugin
     for (const site of sites) {
       const inv = await this.api.get<AruInventoryResponse>(`/sites/${site.id}/inventory`)
       for (const d of inv.elements ?? []) {
-        const id = d.serialNumber || d.macAddress
+        // Prefer serial number (stable, human-recognisable on Aruba's part
+        // numbers) then fall back to the portal's id (MAC) or macAddress.
+        const id = d.serialNumber || d.id || d.macAddress
         if (!id) continue
         out.push({
           id,
-          name: d.name || id,
-          displayName: d.name,
+          name: d.name || d.defaultName || id,
+          displayName: d.name || d.defaultName,
           status: classifyDeviceStatus(d.status) === 'up' ? 'up' : 'down',
           ip: d.ipAddress,
         })
@@ -131,8 +132,7 @@ export class ArubaInstantOnPlugin
     const hasMappedHost = Object.values(mapping.nodes ?? {}).some((n) => n.hostId)
     if (!hasMappedHost || !this.api) return metrics
 
-    // Build a lookup: deviceId (serial or MAC) → inventory record
-    const byId = await this.deviceLookup()
+    const { byId } = await this.deviceLookup()
 
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
       if (!nodeMapping.hostId) continue
@@ -159,17 +159,15 @@ export class ArubaInstantOnPlugin
 
   async getAlerts(_options?: AlertQueryOptions): Promise<Alert[]> {
     if (!this.api) return []
-    const sites = await this.fetchSites()
+    // Inventory devices embed their own `activeAlerts` array — pull alerts
+    // from there rather than the site /alerts endpoint, since the inventory
+    // call is already required by pollMetrics and the embedded shape carries
+    // the device name/serial we need for cross-widget highlighting.
+    const { devices } = await this.deviceLookup()
     const out: Alert[] = []
-    for (const site of sites) {
-      try {
-        const resp = await this.api.get<AruAlertsResponse>(`/sites/${site.id}/alerts`)
-        for (const a of resp.elements ?? []) {
-          out.push(toAlert(a, site))
-        }
-      } catch {
-        // One bad site shouldn't poison the others — alerts widget shows
-        // what we could get.
+    for (const d of devices) {
+      for (const a of d.activeAlerts ?? []) {
+        out.push(embeddedAlertToAlert(a, d))
       }
     }
     return out
@@ -195,18 +193,32 @@ export class ArubaInstantOnPlugin
     return this.config?.siteId ? all.filter((s) => s.id === this.config?.siteId) : all
   }
 
-  private async deviceLookup(): Promise<Map<string, AruInventoryDevice>> {
-    if (!this.api) return new Map()
+  /**
+   * Fetch every device across all configured sites, keyed by the identifiers
+   * the operator might have stored in the mapping (serial number, MAC, or
+   * the portal-issued id). One lookup serves both pollMetrics and getAlerts.
+   */
+  private async deviceLookup(): Promise<{
+    devices: AruInventoryDevice[]
+    bySite: Map<string, AruSite>
+    byId: Map<string, AruInventoryDevice>
+  }> {
     const sites = await this.fetchSites()
-    const map = new Map<string, AruInventoryDevice>()
+    const byId = new Map<string, AruInventoryDevice>()
+    const bySite = new Map<string, AruSite>()
+    const devices: AruInventoryDevice[] = []
+    if (!this.api) return { devices, bySite, byId }
     for (const site of sites) {
+      bySite.set(site.id, site)
       const inv = await this.api.get<AruInventoryResponse>(`/sites/${site.id}/inventory`)
       for (const d of inv.elements ?? []) {
-        if (d.serialNumber) map.set(d.serialNumber, d)
-        if (d.macAddress) map.set(d.macAddress, d)
+        devices.push(d)
+        if (d.serialNumber) byId.set(d.serialNumber, d)
+        if (d.macAddress) byId.set(d.macAddress, d)
+        if (d.id) byId.set(d.id, d)
       }
     }
-    return map
+    return { devices, bySite, byId }
   }
 }
 
@@ -231,29 +243,43 @@ function classifyDeviceStatus(raw: string | undefined): 'up' | 'down' | 'unknown
 
 function deviceToMetrics(d: AruInventoryDevice): NodeMetrics {
   const status = classifyDeviceStatus(d.status)
-  const lastSeen = d.lastUpdated ? Date.parse(d.lastUpdated) : undefined
+  const secsSince = d.numberOfSecondsSinceLastCommunication
+  const lastSeen =
+    typeof secsSince === 'number' && Number.isFinite(secsSince)
+      ? Date.now() - secsSince * 1000
+      : undefined
   return {
     status,
-    ...(Number.isFinite(lastSeen) && { lastSeen }),
+    ...(lastSeen !== undefined && { lastSeen }),
     // Cloud-managed: as long as we can read the inventory, monitoring is
     // working. The device's `status` carries the actual up/down verdict.
     monitoring: 'healthy',
   }
 }
 
-function toAlert(a: AruAlertItem, site: AruSite): Alert {
-  const isActive = !a.endTime
+function embeddedAlertToAlert(a: AruEmbeddedAlert, device: AruInventoryDevice): Alert {
+  const isActive = !a.clearedTime
+  const startMs = a.raisedTime ? a.raisedTime * 1000 : Date.now()
   return {
-    id: a.id ?? `${site.id}:${a.startTime ?? Date.now()}`,
+    id: a.id,
     severity: mapSeverity(a.severity),
-    title: a.description ?? 'Aruba Instant On alert',
-    host: a.deviceName,
-    hostId: a.deviceSerial,
-    startTime: a.startTime ? Date.parse(a.startTime) : Date.now(),
-    endTime: a.endTime ? Date.parse(a.endTime) : undefined,
+    title: a.type ? humanizeAlertType(a.type) : 'Aruba Instant On alert',
+    host: device.name || device.defaultName,
+    hostId: device.serialNumber || device.id,
+    startTime: startMs,
+    endTime: a.clearedTime ? a.clearedTime * 1000 : undefined,
     status: isActive ? 'active' : 'resolved',
     source: 'aruba-instant-on' as const,
   }
+}
+
+/** Turn portal alert type codes ('deviceDown', etc.) into something human-readable. */
+function humanizeAlertType(type: string): string {
+  // camelCase → space-separated words, first letter capitalised
+  return type
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (c) => c.toUpperCase())
+    .trim()
 }
 
 function mapSeverity(raw: string | undefined): AlertSeverity {
@@ -261,9 +287,11 @@ function mapSeverity(raw: string | undefined): AlertSeverity {
     case 'CRITICAL':
     case 'DISASTER':
       return 'disaster'
+    case 'MAJOR':
     case 'HIGH':
     case 'ERROR':
       return 'high'
+    case 'MINOR':
     case 'AVERAGE':
     case 'MEDIUM':
       return 'average'
