@@ -46,6 +46,7 @@ import {
   inheritProductIconFromCatalog,
   migrateBendNodesToLinkBends,
   migrateLegacyWireRoutes,
+  migrateTerminationNodesToGraphTerminations,
 } from './migrations'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
@@ -1611,6 +1612,11 @@ export const diagramState = {
       nodes: [...diagram.nodes.values()],
       links: [...diagram.links],
       subgraphs: [...diagram.subgraphs.values()],
+      // Cabling waypoints live separately from logical nodes — see
+      // the `Termination` type doc. Only emit the field when there's
+      // actually something to round-trip, so the JSON stays clean for
+      // projects without scenes.
+      terminations: diagram.terminations.length > 0 ? [...diagram.terminations] : undefined,
     }
   },
   /**
@@ -2024,12 +2030,28 @@ async function applyProject(data: Partial<NetedProject>) {
     // and strip the now-orphan placements.
     scenes: scenesStore.list,
   })
+  // EPS / Outlet / Panel were also `Node`s for the same reuse-of-
+  // infrastructure reason. They're routing waypoints with shared
+  // identity (multiple wires can pass through one EPS), not network
+  // equipment — so they move to their own `NetworkGraph.terminations`
+  // registry. `Link.via` keeps referencing them by id. Same scene-
+  // placement recovery trick as the bend migration above.
+  migrateTerminationNodesToGraphTerminations({
+    nodes: diagram.nodes,
+    terminations: diagram.terminations,
+    scenes: scenesStore.list,
+  })
 }
 
 async function applyGraph(graph: NetworkGraph) {
   invalidateSheetCache()
   const { nodes, subgraphs, links } = sanitizeGraph(graph)
   const direction = graph.settings?.direction ?? 'TB'
+  // Load the cabling waypoints first — they're consumed by the
+  // scene canvas, not by Sugiyama, and we want the store to be
+  // populated before the post-load migration runs (which can also
+  // append to this array when it sees legacy bend Nodes).
+  diagram.terminations = [...(graph.terminations ?? [])]
   const hasAnyNode = nodes.size > 0
   const allPositioned = hasAnyNode && [...nodes.values()].every((n) => n.position)
 

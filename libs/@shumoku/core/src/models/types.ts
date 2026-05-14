@@ -926,13 +926,46 @@ export interface GraphSettings {
   legend?: boolean | LegendSettings
 }
 
+/**
+ * Physical cabling termination — a passive transit point on a wire
+ * path. Includes wall outlets, EPS (electrical pipe shaft) risers,
+ * and patch panels. Unlike `Node`, terminations carry no logical
+ * configuration, no ports, and no data role — they're cabling-plan
+ * waypoints with stable identity (multiple wires can transit the
+ * same EPS, and the user labels them).
+ *
+ * Lives in its own `NetworkGraph.terminations` array (separate from
+ * `nodes`) so consumers of the logical topology — JSON export,
+ * Sugiyama layout, BOM "Equipment" — don't see them as devices.
+ * `Link.via` still references terminations by id; the scene canvas
+ * synthesizes draggable handles from this array so the UX of
+ * placing / labelling / moving them on a floor plan is unchanged.
+ */
+export interface Termination {
+  id: string
+  /** Display label. User can edit. */
+  label: string
+  /** Termination kind — drives the rendered glyph. */
+  role: 'eps' | 'outlet' | 'panel'
+  /**
+   * Position on the scene canvas. Like bends, terminations carry
+   * their own coordinates rather than relying on per-scene
+   * `nodePlacements`. Multiple scenes referencing the same
+   * termination share one position.
+   */
+  position?: { x: number; y: number }
+}
+
 export interface NetworkGraph {
   version: string
   name?: string
   description?: string
 
   /**
-   * All nodes (flat list)
+   * All nodes (flat list). Only logical entities — devices, compute,
+   * services. Physical cabling waypoints live separately:
+   * - bends → `Link.bends`
+   * - EPS / Outlet / Panel → `NetworkGraph.terminations`
    */
   nodes: Node[]
 
@@ -945,6 +978,13 @@ export interface NetworkGraph {
    * Subgraph definitions
    */
   subgraphs?: Subgraph[]
+
+  /**
+   * Physical cabling terminations referenced by `Link.via`. Each
+   * entry has stable identity so multiple wires can pass through
+   * the same EPS / patch panel.
+   */
+  terminations?: Termination[]
 
   /**
    * Global settings
