@@ -35,6 +35,10 @@
   let formTagFilter = $state('')
   let formPrometheusPreset = $state<'snmp' | 'node_exporter'>('snmp')
   let formInsecure = $state(false)
+  // Aruba Instant On uses portal account (email + password) instead of URL + token
+  let formArubaUsername = $state('')
+  let formArubaPassword = $state('')
+  let formArubaSiteId = $state('')
   let formError = $state('')
   let formSubmitting = $state(false)
   // Dynamic config values for external plugins
@@ -81,6 +85,9 @@
     formTagFilter = ''
     formInsecure = false
     formPrometheusPreset = 'snmp'
+    formArubaUsername = ''
+    formArubaPassword = ''
+    formArubaSiteId = ''
     // Initialize dynamic config from schema defaults
     dynamicConfig = {}
     if (plugin.configSchema?.properties) {
@@ -130,6 +137,14 @@
       })
     }
 
+    if (selectedPlugin.type === 'aruba-instant-on') {
+      return JSON.stringify({
+        username: formArubaUsername.trim(),
+        password: formArubaPassword,
+        siteId: formArubaSiteId.trim() || undefined,
+      })
+    }
+
     // External plugins with configSchema - use dynamicConfig
     if (selectedPlugin.configSchema?.properties) {
       const config: Record<string, unknown> = {}
@@ -165,6 +180,11 @@
     if (['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)) {
       if (!formName.trim() || !formUrl.trim()) {
         formError = 'Name and URL are required'
+        return
+      }
+    } else if (selectedPlugin.type === 'aruba-instant-on') {
+      if (!formName.trim() || !formArubaUsername.trim() || !formArubaPassword) {
+        formError = 'Name, portal email, and password are required'
         return
       }
     } else if (selectedPlugin.configSchema?.properties) {
@@ -499,7 +519,7 @@
           >
         </div>
 
-        {#if !selectedPlugin.configSchema?.properties || ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)}
+        {#if ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type) || (!selectedPlugin.configSchema?.properties && selectedPlugin.type !== 'aruba-instant-on')}
           <div>
             <label for="url" class="label">URL</label>
             <input
@@ -562,6 +582,56 @@
           </div>
         {/if}
 
+        {#if selectedPlugin.type === 'aruba-instant-on'}
+          <div>
+            <label for="arubaUsername" class="label">Portal Email</label>
+            <input
+              type="email"
+              id="arubaUsername"
+              class="input"
+              placeholder="account@example.com"
+              autocomplete="username"
+              bind:value={formArubaUsername}
+            >
+            <p class="text-xs text-muted-foreground mt-1">
+              Aruba Instant On account email. <strong>MFA must be disabled</strong> on this account
+              — the (undocumented) API auth flow doesn't support MFA.
+            </p>
+          </div>
+
+          <div>
+            <label for="arubaPassword" class="label">Portal Password</label>
+            <input
+              type="password"
+              id="arubaPassword"
+              class="input"
+              placeholder="Account password"
+              autocomplete="current-password"
+              bind:value={formArubaPassword}
+            >
+          </div>
+
+          <div>
+            <label for="arubaSiteId" class="label">Site ID (optional)</label>
+            <input
+              type="text"
+              id="arubaSiteId"
+              class="input"
+              placeholder="Leave blank for all sites"
+              bind:value={formArubaSiteId}
+            >
+            <p class="text-xs text-muted-foreground mt-1">
+              Restrict polling to a single site. Leave empty to include every site the account can
+              access.
+            </p>
+          </div>
+
+          <div class="rounded border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
+            ⚠️ Aruba Instant On API is unofficial / unsupported by HPE. It may stop working without
+            notice.
+          </div>
+        {/if}
+
         {#if selectedPlugin.type === 'netbox'}
           <div>
             <label for="siteFilter" class="label">Site Filter (optional)</label>
@@ -595,7 +665,7 @@
         {/if}
 
         <!-- Dynamic fields from configSchema (external plugins) -->
-        {#if selectedPlugin.configSchema?.properties && !['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)}
+        {#if selectedPlugin.configSchema?.properties && !['zabbix', 'netbox', 'prometheus', 'grafana', 'aruba-instant-on'].includes(selectedPlugin.type)}
           {#each Object.entries(selectedPlugin.configSchema.properties) as [ key, prop ]}
             <div>
               <label for="config-{key}" class="label">
