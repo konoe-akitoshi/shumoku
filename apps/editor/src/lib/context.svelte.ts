@@ -42,7 +42,11 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
-import { inheritProductIconFromCatalog, migrateLegacyWireRoutes } from './migrations'
+import {
+  inheritProductIconFromCatalog,
+  migrateBendNodesToLinkBends,
+  migrateLegacyWireRoutes,
+} from './migrations'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
 import { applySync, diffSnapshots } from './persistence/sync'
@@ -293,14 +297,12 @@ function setNodePortsFromProduct(
 }
 
 /**
- * Pick a default label for a new termination placement. Bends stay
- * anonymous ("Bend") — they're not labelled on the canvas. EPS /
+ * Pick a default label for a new termination placement. EPS /
  * Outlet / Panel get a numeric suffix ("EPS 1", "EPS 2"…) scoped to
  * existing same-role nodes anywhere in the diagram, so concurrent
  * placements stay distinguishable before the user renames them.
  */
-function nextTerminationLabel(role: 'outlet' | 'eps' | 'panel' | 'bend'): string {
-  if (role === 'bend') return 'Bend'
+function nextTerminationLabel(role: 'outlet' | 'eps' | 'panel'): string {
   const base = role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : 'Panel'
   // Walk existing same-role nodes and collect any "Base N" suffix
   // they already carry; the new label takes max+1 (or 1 when none).
@@ -1238,13 +1240,12 @@ export const diagramState = {
   addTerminationInScene(
     sceneId: string,
     position: { x: number; y: number },
-    role: 'outlet' | 'eps' | 'panel' | 'bend',
+    role: 'outlet' | 'eps' | 'panel',
   ): string {
     return commit('Add termination in scene', () => {
       // Auto-number same-role terminations so multiple placements stay
       // distinguishable ("EPS 1", "EPS 2"…) before the user gets around
-      // to renaming them. Bends stay anonymous — they're not labelled
-      // on the canvas.
+      // to renaming them.
       const defaultLabel = nextTerminationLabel(role)
       const id = diagramState.addEmptyNode(defaultLabel)
       const scene = scenesStore.find(sceneId)
@@ -1268,19 +1269,71 @@ export const diagramState = {
    * the new bend Node's id so the drag handler can move it.
    */
   insertBendInLink(
-    sceneId: string,
+    _sceneId: string,
     linkId: string,
     position: { x: number; y: number },
-    viaIndex: number,
+    afterIndex: number,
   ): string {
-    return commit('Bend wire', () => {
-      const id = diagramState.addTerminationInScene(sceneId, position, 'bend')
-      const link = diagram.links.find((l) => l.id === linkId)
-      const oldVia = link?.via ?? []
-      const idx = Math.max(0, Math.min(viaIndex, oldVia.length))
-      const newVia = [...oldVia.slice(0, idx), id, ...oldVia.slice(idx)]
-      diagramState.updateLink(linkId, { via: newVia })
-      return id
+    // Bends live on `link.bends` now, not on `diagram.nodes`. The
+    // scene argument is kept for callsite compatibility but unused —
+    // bends are link-level data, not per-scene.
+    return diagramState.addLinkBend(linkId, position, afterIndex) ?? ''
+  },
+  /**
+   * Append a bend waypoint to a link's polyline. `afterIndex` is the
+   * insertion slot relative to the (terminations-only) `via` chain:
+   *   -1  → between `from` and `via[0]` (or `from`→`to` directly)
+   *    i  → between `via[i]` and `via[i+1]` (or `via[i]`→`to`)
+   * Returns the new bend's id (empty string if the link is missing).
+   */
+  addLinkBend(linkId: string, position: { x: number; y: number }, afterIndex: number): string {
+    return commit('Add bend', () => {
+      const idx = diagram.links.findIndex((l) => l.id === linkId)
+      if (idx < 0) return ''
+      const link = diagram.links[idx]
+      if (!link) return ''
+      const bendId = newId('bend')
+      const next = {
+        ...link,
+        bends: [...(link.bends ?? []), { id: bendId, x: position.x, y: position.y, afterIndex }],
+      }
+      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
+      return bendId
+    })
+  },
+  /**
+   * Move a bend to a new position. Pure data update — bends don't
+   * affect routing or port resolution, so no `rebuildPortsAndEdges`.
+   */
+  updateLinkBend(linkId: string, bendId: string, position: { x: number; y: number }): void {
+    commit('Move bend', () => {
+      const idx = diagram.links.findIndex((l) => l.id === linkId)
+      if (idx < 0) return
+      const link = diagram.links[idx]
+      if (!link?.bends) return
+      const next = {
+        ...link,
+        bends: link.bends.map((b) =>
+          b.id === bendId ? { ...b, x: position.x, y: position.y } : b,
+        ),
+      }
+      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
+    })
+  },
+  /**
+   * Drop a bend from a link. When the link has no bends left, the
+   * `bends` field is cleared back to undefined so the saved JSON
+   * doesn't carry empty arrays.
+   */
+  removeLinkBend(linkId: string, bendId: string): void {
+    commit('Remove bend', () => {
+      const idx = diagram.links.findIndex((l) => l.id === linkId)
+      if (idx < 0) return
+      const link = diagram.links[idx]
+      if (!link?.bends) return
+      const filtered = link.bends.filter((b) => b.id !== bendId)
+      const next = { ...link, bends: filtered.length > 0 ? filtered : undefined }
+      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
     })
   },
   /**
@@ -1953,9 +2006,23 @@ async function applyProject(data: Partial<NetedProject>) {
   scenesStore.setCurrentId(null)
   migrateLegacyWireRoutes(data.scenes ?? [], {
     links: diagram.links,
-    addTerminationInScene: (sceneId, position, role) =>
-      diagramState.addTerminationInScene(sceneId, position, role),
-    updateLink: (linkId, updates) => diagramState.updateLink(linkId, updates),
+    newBendId: () => newId('bend'),
+  })
+  // Older project files stored bends as `Node`s with
+  // `termination.role === 'bend'` and spliced them into `Link.via`.
+  // That polluted every consumer of `diagram.nodes` (JSON export,
+  // BOM, Connections, …). The current model puts bends on the
+  // link itself via `Link.bends`. This migration lifts any bend
+  // Nodes from a legacy save into the new home and deletes them
+  // from `nodes`. Idempotent — already-migrated graphs no-op.
+  migrateBendNodesToLinkBends({
+    nodes: diagram.nodes,
+    links: diagram.links,
+    // Scenes carry the bend's actual position via `nodePlacements`
+    // (legacy bend Nodes never had `node.position` set). Pass the
+    // live scenesStore so the migration can recover real coords
+    // and strip the now-orphan placements.
+    scenes: scenesStore.list,
   })
 }
 

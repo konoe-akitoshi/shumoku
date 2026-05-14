@@ -161,6 +161,53 @@
     return nodeCenterFromTopLeft(scene, diagramState.nodes.get(nodeId), positionFor(nodeId))
   }
 
+  // Reverse lookup so the drag / delete intercepts can tell whether
+  // an sf-node id refers to a real `Node` or a bend on a link. Built
+  // once per derive cycle and cheap to query — bends are sparse.
+  const bendIdToLinkId = $derived.by(() => {
+    const m = new Map<string, string>()
+    for (const link of diagramState.links) {
+      if (!link.id || !link.bends) continue
+      for (const b of link.bends) m.set(b.id, link.id)
+    }
+    return m
+  })
+
+  /**
+   * Inner waypoints between segment endpoints, with bends interleaved
+   * at their `afterIndex` slots. Mirrors the polyline that
+   * `cableSegmentLengths` walks so visual and accounting agree.
+   */
+  function innerWaypointsForSegment(
+    link: import('@shumoku/core').Link,
+    segIds: string[],
+  ): Array<{ x: number; y: number }> {
+    const out: Array<{ x: number; y: number }> = []
+    const bends = link.bends ?? []
+    const via = link.via ?? []
+    const linkFromNode = link.from.node
+    const globalViaIndex = new Map<string, number>(via.map((id, i) => [id, i]))
+    // segIds is [segStart, ...inner via terminations..., segEnd].
+    // Walk adjacent pairs; for each gap insert bends whose
+    // `afterIndex` matches the left side's global position.
+    for (let k = 0; k < segIds.length - 1; k++) {
+      const left = segIds[k]
+      if (!left) continue
+      const leftAfter = left === linkFromNode ? -1 : (globalViaIndex.get(left) ?? -1)
+      for (const b of bends) {
+        if (b.afterIndex === leftAfter) out.push({ x: b.x, y: b.y })
+      }
+      const nextId = segIds[k + 1]
+      // The right end of this gap is either an inner via point
+      // (push its center) or the segment's last node (handled by
+      // the edge target — don't double-push).
+      if (k + 1 < segIds.length - 1 && nextId) {
+        out.push(centerOf(nextId))
+      }
+    }
+    return out
+  }
+
   // ── Svelte Flow nodes/edges (derived) ────────────────────────────
   const sfNodes = $derived.by<SfNode[]>(() => {
     const out: SfNode[] = []
@@ -247,6 +294,34 @@
         selectable: true,
       })
     }
+    // Virtual sf nodes for every link bend. Bends are not in
+    // `diagram.nodes` (they live on `link.bends`), so the canvas
+    // synthesizes one sf node per bend so the user can still drag /
+    // select / delete them through the standard Svelte Flow path.
+    // The drag and delete intercepts (persistDragged, onnodesdelete)
+    // route these synthetic ids back to `updateLinkBend` /
+    // `removeLinkBend` instead of the real-Node store.
+    for (const link of visibleLinks) {
+      const bends = link.bends
+      if (!link.id || !bends) continue
+      for (const b of bends) {
+        out.push({
+          id: b.id,
+          type: 'scene',
+          position: { x: b.x, y: b.y },
+          width: 16,
+          height: 16,
+          data: {
+            label: '',
+            termination: { role: 'bend' },
+            baseW: 16,
+            baseH: 16,
+          },
+          draggable: interactive,
+          selectable: true,
+        })
+      }
+    }
     return out
   })
 
@@ -284,11 +359,12 @@
         if (!segFrom || !segTo || segFrom === segTo) continue
         const segFromPos = centerOf(segFrom)
         const segToPos = centerOf(segTo)
-        // Inner via points (between segFrom and segTo) target each
-        // icon's center.
-        const innerWaypoints: Array<{ x: number; y: number }> = segIds
-          .slice(1, -1)
-          .map((id) => centerOf(id))
+        // Inner waypoints between segFrom and segTo. Includes:
+        //   - centers of inner via terminations (eps / outlet / panel)
+        //   - bend positions interleaved at their `afterIndex` slots
+        // Order is the polyline the user sees, so cable length math
+        // and the rendered curve stay in sync.
+        const innerWaypoints = innerWaypointsForSegment(link, segIds)
         // Handle side: out from segFrom toward the next visible
         // point; into segTo from the previous one.
         const firstInner = innerWaypoints[0] ?? segToPos
@@ -353,10 +429,19 @@
   // of one per selected node.
   function persistDragged(nodes: SfNode[] | null | undefined) {
     if (!nodes || nodes.length === 0) return
-    diagramState.placeNodesInScene(
-      scene.id,
-      nodes.map((n) => ({ nodeId: n.id, position: n.position })),
-    )
+    // Partition by id: bend ids belong to a link's `bends` array,
+    // not the scene placement map. Real Node ids go through
+    // `placeNodesInScene` as before.
+    const placements: Array<{ nodeId: string; position: { x: number; y: number } }> = []
+    for (const n of nodes) {
+      const linkId = bendIdToLinkId.get(n.id)
+      if (linkId) {
+        diagramState.updateLinkBend(linkId, n.id, n.position)
+      } else {
+        placements.push({ nodeId: n.id, position: n.position })
+      }
+    }
+    if (placements.length > 0) diagramState.placeNodesInScene(scene.id, placements)
   }
   function onNodeDragStart(_args: { targetNode: SfNode | null; nodes: SfNode[] }) {
     diagramState.beginTx('Move item')
@@ -498,7 +583,11 @@
         if (linkId) linkIds.add(linkId)
       }
       for (const id of linkIds) diagramState.removeLink(id)
-      for (const n of nodes) diagramState.removeNode(n.id)
+      for (const n of nodes) {
+        const linkId = bendIdToLinkId.get(n.id)
+        if (linkId) diagramState.removeLinkBend(linkId, n.id)
+        else diagramState.removeNode(n.id)
+      }
     }}
     proOptions={{ hideAttribution: true }}
   >
@@ -548,7 +637,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                                           plan is set, but otherwise let its theming through. */
+                                             plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -556,8 +645,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-                                         to drag from. Otherwise the fully-transparent handles leave the
-                                         "how do I draw a wire" UX a guess. */
+                                           to drag from. Otherwise the fully-transparent handles leave the
+                                           "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 1 !important;
@@ -567,15 +656,15 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-                               mode. Keep size + DOM presence so Svelte Flow can still resolve
-                               edge endpoint positions from each handle's bounding rect — only
-                               opacity is dropped. */
+                                 mode. Keep size + DOM presence so Svelte Flow can still resolve
+                                 edge endpoint positions from each handle's bounding rect — only
+                                 opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
-                               "click somewhere to drop the item". */
+                                 "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     cursor: crosshair !important;

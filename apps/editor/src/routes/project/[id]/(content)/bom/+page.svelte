@@ -134,14 +134,10 @@
 
       const aEnd = endpointString(link.from.node, link.from.port)
       const bEnd = endpointString(link.to.node, link.to.port)
-      // Skip bend waypoints — they're visual-only and don't correspond
-      // to a physical hand-off (no patch panel, no outlet box). Real
-      // terminations (EPS / Outlet / Panel) carry the hand-off info
-      // the technician needs.
-      const via = (link.via ?? []).filter((id) => {
-        const role = diagramState.nodes.get(id)?.termination?.role
-        return role && role !== 'bend'
-      })
+      // `via` is terminations-only by construction now — bends live on
+      // `link.bends` and don't represent a physical hand-off, so they
+      // never appear here.
+      const via = link.via ?? []
       // Via-chain from A's perspective is the recorded order; from B's
       // perspective it's the reverse.
       const viaFromA = via

@@ -71,12 +71,6 @@ export function buildAssignmentRows(args: {
   const rows: AssignmentRow[] = []
 
   for (const [nodeId, node] of nodes) {
-    // Bend waypoints are wire-path artifacts (a click-place to push a
-    // wire around an obstacle), not procurement items — skip them so
-    // the BOM doesn't fill up with phantom "Bend, incomplete" rows.
-    // EPS / Outlet / Panel terminations DO map to physical procured
-    // items (wall plates, riser panels, patch panels), so they stay.
-    if (node.termination?.role === 'bend') continue
     rows.push({
       id: `node:${nodeId}`,
       target: { kind: 'node', nodeId },

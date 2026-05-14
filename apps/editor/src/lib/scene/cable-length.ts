@@ -44,20 +44,6 @@ function endpointPos(
   return nodeCenterFromTopLeft(scene, node, tl)
 }
 
-/** Pixel distance between two scene endpoints, or null if either
- *  endpoint can't be resolved. */
-function segmentPx(
-  scene: Scene,
-  aId: string,
-  bId: string,
-  nodes: Map<string, Node>,
-): number | null {
-  const a = endpointPos(scene, aId, nodes)
-  const b = endpointPos(scene, bId, nodes)
-  if (!a || !b) return null
-  return Math.hypot(b.x - a.x, b.y - a.y)
-}
-
 /**
  * Effective real-world cable length for a link.
  *
@@ -102,6 +88,36 @@ export function visibleCableSegments(link: Link, nodes: Map<string, Node>): stri
 }
 
 /**
+ * Waypoint kinds used when summing the polyline that's actually
+ * rendered on the canvas. Both `node` (icon center) and `bend` (raw
+ * x/y) waypoints contribute to length.
+ */
+type Waypoint = { kind: 'node'; nodeId: string } | { kind: 'bend'; x: number; y: number }
+
+/**
+ * Walk the link's full visible polyline as an ordered list of
+ * waypoints, interleaving `link.bends` at their `afterIndex` slots.
+ *
+ *   [from] → bends(afterIndex=-1) → via[0] → bends(0) → ... → [to]
+ */
+function linkPolylineWaypoints(link: Link): Waypoint[] {
+  const out: Waypoint[] = []
+  const via = link.via ?? []
+  const bends = link.bends ?? []
+  const bendsAfter = (i: number): Waypoint[] =>
+    bends.filter((b) => b.afterIndex === i).map((b) => ({ kind: 'bend', x: b.x, y: b.y }))
+  out.push({ kind: 'node', nodeId: link.from.node })
+  out.push(...bendsAfter(-1))
+  for (let i = 0; i < via.length; i++) {
+    const id = via[i]
+    if (id) out.push({ kind: 'node', nodeId: id })
+    out.push(...bendsAfter(i))
+  }
+  out.push({ kind: 'node', nodeId: link.to.node })
+  return out
+}
+
+/**
  * Per-visible-segment cable lengths. EPS-routed wires return one
  * entry per "side of the chase" — physically you order one cable per
  * segment, so BOM / Connections breakdowns match what the installer
@@ -114,31 +130,78 @@ export function cableSegmentLengths(
   scenes: Scene[],
   nodes: Map<string, Node>,
 ): Array<{ fromId: string; toId: string; meters: number }> {
-  const segments = visibleCableSegments(link, nodes)
-  if (segments.length === 0) return []
-  const out: Array<{ fromId: string; toId: string; meters: number }> = []
-  for (const seg of segments) {
-    let segMeters = 0
+  // Walk the full polyline (nodes interleaved with bends), splitting
+  // into visible cable segments at every EPS waypoint — the cable
+  // physically enters the chase there and starts again on the other
+  // side. Bends inside a segment contribute straight-line distance
+  // between adjacent waypoints, matching the curved polyline the
+  // canvas draws.
+  const polyline = linkPolylineWaypoints(link)
+  if (polyline.length < 2) return []
+
+  // Group the polyline into per-segment runs split at every EPS
+  // waypoint. EPS membership belongs to the segment it closes; the
+  // next segment starts after it (the cable physically ends at the
+  // EPS panel and a fresh cable starts on the other side).
+  const segmentRuns: Waypoint[][] = []
+  let run: Waypoint[] = []
+  for (const w of polyline) {
+    run.push(w)
+    if (w.kind === 'node' && nodes.get(w.nodeId)?.termination?.role === 'eps') {
+      segmentRuns.push(run)
+      run = []
+    }
+  }
+  if (run.length > 0) segmentRuns.push(run)
+
+  function resolve(w: Waypoint, scene: Scene): { x: number; y: number } | null {
+    if (w.kind === 'bend') return { x: w.x, y: w.y }
+    return endpointPos(scene, w.nodeId, nodes)
+  }
+
+  function pixelLengthAcrossScenes(seg: Waypoint[], sceneList: Scene[]): number | null {
+    let total = 0
     let any = false
     for (let i = 0; i < seg.length - 1; i++) {
-      const aId = seg[i]
-      const bId = seg[i + 1]
-      if (!aId || !bId) continue
-      for (const scene of scenes) {
-        const ratio = scene.calibration?.pxPerMeter
+      const a = seg[i]
+      const b = seg[i + 1]
+      if (!a || !b) continue
+      for (const sc of sceneList) {
+        const ratio = sc.calibration?.pxPerMeter
         if (!ratio || ratio <= 0) continue
-        const px = segmentPx(scene, aId, bId, nodes)
-        if (px === null) continue
-        segMeters += px / ratio
+        const pa = resolve(a, sc)
+        const pb = resolve(b, sc)
+        if (!pa || !pb) continue
+        total += Math.hypot(pb.x - pa.x, pb.y - pa.y) / ratio
         any = true
         break
       }
     }
-    if (any) {
-      const fromId = seg[0]
-      const toId = seg[seg.length - 1]
-      if (fromId && toId) out.push({ fromId, toId, meters: segMeters })
+    return any ? total : null
+  }
+
+  // First and last *node* of a run — bends can't serve as the
+  // segment's reported endpoint id (BOM groups by node).
+  function bookendNodes(seg: Waypoint[]): { fromId: string; toId: string } | null {
+    let fromId: string | null = null
+    let toId: string | null = null
+    for (const w of seg) {
+      if (w.kind === 'node') {
+        if (fromId === null) fromId = w.nodeId
+        toId = w.nodeId
+      }
     }
+    if (!fromId || !toId || fromId === toId) return null
+    return { fromId, toId }
+  }
+
+  const out: Array<{ fromId: string; toId: string; meters: number }> = []
+  for (const seg of segmentRuns) {
+    const ends = bookendNodes(seg)
+    if (!ends) continue
+    const meters = pixelLengthAcrossScenes(seg, scenes)
+    if (meters === null) continue
+    out.push({ fromId: ends.fromId, toId: ends.toId, meters })
   }
   return out
 }

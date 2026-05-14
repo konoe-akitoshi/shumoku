@@ -105,32 +105,26 @@ export function bendOnDrag(args: {
     threshold = 4,
     snapTol = 18,
   } = args
-  let dragNodeId: string | null = null
+  let dragBendId: string | null = null
   let txOpen = false
 
   function nearestExistingBend(at: Waypoint): { id: string; dist: number } | null {
     const link = diagramState.links.find((l) => l.id === linkId)
-    const via = link?.via ?? []
-    const scene = diagramState.scenes.find((s) => s.id === sceneId)
+    const bends = link?.bends ?? []
     let bestId: string | null = null
     let bestDist = Infinity
-    for (const id of via) {
-      const node = diagramState.nodes.get(id)
-      if (node?.termination?.role !== 'bend') continue
-      const placement =
-        scene?.nodePlacements.find((p) => p.nodeId === id)?.position ?? node.position
-      if (!placement) continue
-      const dist = Math.hypot(placement.x - at.x, placement.y - at.y)
+    for (const b of bends) {
+      const dist = Math.hypot(b.x - at.x, b.y - at.y)
       if (dist < bestDist) {
         bestDist = dist
-        bestId = id
+        bestId = b.id
       }
     }
     return bestId ? { id: bestId, dist: bestDist } : null
   }
 
   const onMove = (ev: PointerEvent) => {
-    if (dragNodeId === null) {
+    if (dragBendId === null) {
       const moved = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y)
       if (moved < threshold) return
       const flowStart = toFlow(startClient.x, startClient.y)
@@ -139,19 +133,22 @@ export function bendOnDrag(args: {
       if (near && near.dist <= snapTol) {
         diagramState.beginTx('Adjust wire')
         txOpen = true
-        dragNodeId = near.id
+        dragBendId = near.id
       } else {
+        // New bend: `viaOffset + localIdx - 1` is the `afterIndex`
+        // slot inside the (terminations-only) via chain. The segment
+        // index from this edge already references via positions.
         const localIdx = nearestSegmentIndex(points, flowStart)
-        const segIdx = viaOffset + localIdx
-        // insertBendInLink wraps the create + via splice in its own
-        // commit, so we don't double-wrap with our drag tx.
-        dragNodeId = diagramState.insertBendInLink(sceneId, linkId, flowStart, segIdx)
+        const afterIndex = viaOffset + localIdx - 1
+        // addLinkBend wraps create in its own commit; the subsequent
+        // drag moves get their own tx below.
+        dragBendId = diagramState.addLinkBend(linkId, flowStart, afterIndex) || null
         diagramState.beginTx('Adjust wire')
         txOpen = true
       }
     }
     const fp = toFlow(ev.clientX, ev.clientY)
-    if (dragNodeId) diagramState.placeNodeInScene(sceneId, dragNodeId, fp)
+    if (dragBendId) diagramState.updateLinkBend(linkId, dragBendId, fp)
   }
   const onUp = () => {
     document.removeEventListener('pointermove', onMove)
