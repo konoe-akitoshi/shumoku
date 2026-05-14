@@ -113,13 +113,20 @@ export class ArubaInstantOnPlugin
   }
 
   /**
-   * Instant On exposes per-device telemetry through fields baked into the
-   * inventory record (status, lastUpdated). There's no rich per-host item
-   * list to enumerate — return empty so the mapping UI doesn't spin trying
-   * to fetch interface items.
+   * Per-host interface items, two per ethernet port (in/out throughput).
+   * Populates the mapping UI's "interface" dropdown when the operator is
+   * matching a topology link to a real port on the monitored device.
+   *
+   * The portal exposes one record per port with both directions inside
+   * `portDataTraffic`; we expand that into a pair of HostItem rows so the
+   * existing UI (which expects per-direction items, modeled after Zabbix's
+   * net.if.in / net.if.out) keeps working unchanged.
    */
-  async getHostItems(_hostId: string): Promise<HostItem[]> {
-    return []
+  async getHostItems(hostId: string): Promise<HostItem[]> {
+    const { byId } = await this.deviceLookup()
+    const device = byId.get(hostId)
+    if (!device) return []
+    return buildHostItems(device)
   }
 
   /**
@@ -331,6 +338,45 @@ function portToLinkMetrics(
     inBps,
     outBps,
   }
+}
+
+/**
+ * Expand a device's ethernet ports into the in/out HostItem pairs the
+ * mapping UI expects. The id has to be stable so the operator's link
+ * mapping (which stores the item id) survives re-fetches — combine
+ * device id with the port number and direction.
+ */
+function buildHostItems(d: AruInventoryDevice): HostItem[] {
+  const out: HostItem[] = []
+  const hostId = d.serialNumber || d.id || d.macAddress
+  if (!hostId) return out
+  for (const port of d.ethernetPorts ?? []) {
+    const portNum = port.portNumber ?? port.faceplatePortNumber
+    if (portNum === undefined) continue
+    // The portal usually leaves `port.name` null; use the port number as
+    // the interface label so the mapping UI shows "0", "1", ... — those
+    // values also round-trip through `findPortByName` at poll time.
+    const ifaceName = port.name && port.name.trim() ? port.name : String(portNum)
+    const displayLabel = port.name && port.name.trim() ? port.name : `Port ${portNum}`
+    const t = port.portDataTraffic
+    const dirs: Array<{ direction: 'in' | 'out'; bps: number | undefined }> = [
+      { direction: 'in', bps: t?.downstreamThroughputInBitsPerSecond },
+      { direction: 'out', bps: t?.upstreamThroughputInBitsPerSecond },
+    ]
+    for (const { direction, bps } of dirs) {
+      out.push({
+        id: `${hostId}:port${portNum}:${direction}`,
+        hostId,
+        name: `${displayLabel} ${direction === 'in' ? 'received' : 'sent'}`,
+        key: `aruba.port.${direction}[${portNum}]`,
+        lastValue: typeof bps === 'number' ? String(bps) : undefined,
+        unit: 'bps',
+        interfaceName: ifaceName,
+        direction,
+      })
+    }
+  }
+  return out
 }
 
 /**
