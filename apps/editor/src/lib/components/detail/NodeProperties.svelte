@@ -78,7 +78,12 @@
   // Reactive flags consumed by the Type row template. `@const` can't
   // sit at the top level of the markup tree in Svelte 5, so we
   // surface these as plain `$derived` values in the script.
-  const isHardware = $derived(node.spec?.kind === 'hardware')
+  // Type dropdown is shown for nodes that are (or could become) a
+  // hardware kind: spec absent (Generic Node — first assignment
+  // promotes it to hardware) or already hardware. Compute / service
+  // specs are out of the DeviceType palette so editing them here
+  // would silently rewrite the kind — keep those read-only.
+  const isHardwareEditable = $derived(!node.spec || node.spec.kind === 'hardware')
   // Live Product registry lookup for the binding. Used by both the
   // read-mode label and the Combobox's `defaultValue` — sharing this
   // derived value keeps the two surfaces in sync (renames in
@@ -162,7 +167,7 @@
   <div class="flex items-center justify-between">
     <dt class={labelClass}>Type</dt>
     <dd>
-      {#if editing && isHardware && !productBound}
+      {#if editing && isHardwareEditable && !productBound}
         <select
           class={selectClass}
           value={specDeviceType(node.spec) ?? DeviceType.Generic}
