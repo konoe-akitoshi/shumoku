@@ -68,12 +68,24 @@
       diagramState.setCurrentScene(null)
     }
   })
-  // Multi-selection state. The renderer drives this via
-  // `onselectionchange`; the page just mirrors it so the action
-  // registry / status bar / detail panel can react. `selected`
-  // (singular) is a derived convenience for surfaces that only care
-  // about the focused single item (StatusBadge, double-click detail).
+  // Multi-selection state.
+  //
+  // `selectionIds` is the page-owned source of truth, two-way bound
+  // into the renderer (which used to own it internally — see
+  // ShumokuRenderer's `selection` prop). Keeping it on the page
+  // means the set survives any remount of <ShumokuRenderer> (sheet
+  // switches, mount-gate flips, dev-server HMR) so the user doesn't
+  // lose their working selection across an invisible reactive blip.
+  //
+  // `selection` is the typed mirror the rest of the page consumes
+  // (ActionContext, StatusBadge, detail panel). The renderer still
+  // emits `onselectionchange` so we don't have to re-derive the
+  // type per id here — it has the same lookup data and emits once
+  // synchronously per mutation. `selected` (singular) is the
+  // convenience read for surfaces that care only about the focused
+  // single item.
   type SelType = ActionContext['selection']['types'][number]
+  let selectionIds = $state<Set<string>>(new Set())
   let selection = $state<{ ids: string[]; types: SelType[] }>({ ids: [], types: [] })
   const selected = $derived<{ id: string; type: string } | null>(
     selection.ids[0] && selection.types[0]
@@ -207,6 +219,7 @@
           bind:subgraphs={diagramState.activeView.subgraphs}
           bind:bounds={diagramState.activeView.bounds}
           bind:links={diagramState.activeView.links}
+          bind:selection={selectionIds}
           theme={editorState.theme}
           mode={diagramState.currentSheetId === null ? editorState.mode : 'view'}
           hideNode={(n) => !!n.termination}

@@ -134,6 +134,21 @@
      * suppression themselves.
      */
     preventContextMenuDefault?: boolean
+    /**
+     * Selected element ids. Bindable so the host can own the
+     * selection lifecycle independently of this renderer instance:
+     * when the renderer unmounts and remounts (e.g. its `{#if}`
+     * mount gate flips, or it's swapped between sheets), the
+     * selection survives. When the host doesn't bind, a fresh Set
+     * is created at instantiation and the renderer behaves as the
+     * sole owner — same UX as before this prop existed.
+     *
+     * Mutations from inside the renderer always assign a NEW Set
+     * reference (never `clear()` / `add()` on the existing one) so
+     * reactivity downstream sees a single atomic change instead of
+     * a transient empty state.
+     */
+    selection?: Set<string>
   }
 
   let {
@@ -164,6 +179,7 @@
     nodeOverlay,
     portOverlay,
     preventContextMenuDefault = true,
+    selection = $bindable(new Set<string>()),
   }: RendererProps = $props()
 
   const colors = $derived(themeToColors(theme))
@@ -187,7 +203,10 @@
   // Edit state
   // =========================================================================
 
-  let selection = $state(new Set<string>())
+  // `selection` lives on the host via $bindable (declared in $props
+  // above) so it survives renderer unmount / remount cycles. Other
+  // instance state (linkDrag, hover) is intentionally local — those
+  // are transient gestures that mean nothing across a remount.
   let linkDrag = $state<{
     fromPortId: string
     fromX: number
