@@ -68,27 +68,22 @@
   )
 
   function changeHardwareType(value: string) {
+    const type = value as DeviceType
     const next: NodeSpec =
-      node.spec && 'kind' in node.spec && node.spec.kind === 'hardware'
-        ? { ...node.spec, type: value as DeviceType }
-        : { kind: 'hardware', type: value as DeviceType }
+      node.spec?.kind === 'hardware' ? { ...node.spec, type } : { kind: 'hardware', type }
     onupdate?.('spec', next)
   }
 
-  // Reactive flags consumed by the Type row template. `@const` can't
-  // sit at the top level of the markup tree in Svelte 5, so we
-  // surface these as plain `$derived` values in the script.
-  // Type dropdown is shown for nodes that are (or could become) a
-  // hardware kind: spec absent (Generic Node — first assignment
-  // promotes it to hardware) or already hardware. Compute / service
-  // specs are out of the DeviceType palette so editing them here
-  // would silently rewrite the kind — keep those read-only.
+  // Type dropdown is editable for nodes that are (or could become)
+  // hardware: spec absent (Generic Node — the first pick promotes
+  // it via `changeHardwareType`) or already hardware. Compute /
+  // service kinds are outside the DeviceType palette so editing
+  // them here would silently rewrite the kind.
   const isHardwareEditable = $derived(!node.spec || node.spec.kind === 'hardware')
-  // Live Product registry lookup for the binding. Used by both the
-  // read-mode label and the Combobox's `defaultValue` — sharing this
-  // derived value keeps the two surfaces in sync (renames in
-  // Materials reflect immediately) and avoids re-doing the
-  // `products.find` in template `@const` blocks.
+
+  // Live Product registry lookup. Shared between the read-mode
+  // label and the Combobox `defaultValue` so renames / deletes in
+  // Materials reflect on both surfaces in one place.
   const boundProduct = $derived(
     node.productId ? (products.find((p) => p.id === node.productId) ?? null) : null,
   )
@@ -221,8 +216,7 @@
                   {productLabel(product)}
                 </div>
                 <div class="text-[9px] font-mono text-neutral-400">
-                  {product.spec.kind}
-                  / {product.spec.vendor ?? ''}
+                  {[product.spec.kind, product.spec.vendor].filter(Boolean).join(' / ')}
                 </div>
               </Combobox.Item>
             {/each}

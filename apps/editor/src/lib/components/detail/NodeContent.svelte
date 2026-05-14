@@ -21,10 +21,11 @@
   }
 
   /** Compact identity string for a NodeSpec — vendor / model
-   *  (or vendor / service / resource) — used when the node carries a
-   *  spec directly rather than a Product binding. Falls back to the
-   *  device type (e.g. "internet", "router") when only kind+type are
-   *  set, so generic placeholders still read sensibly. */
+   *  (or vendor / platform, vendor / service / resource). Falls back
+   *  to the device type (e.g. "internet", "router") when only
+   *  kind+type are set so typed placeholders still read sensibly.
+   *  Product-bound nodes work the same: their spec was snapshotted
+   *  from Product.spec at bind time, so no separate branch needed. */
   function specSummary(spec: NodeSpec): string {
     if ('model' in spec) {
       const parts = [spec.vendor, spec.model].filter(Boolean).join(' / ')
