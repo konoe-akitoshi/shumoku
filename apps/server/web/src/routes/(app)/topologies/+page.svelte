@@ -1,32 +1,17 @@
 <script lang="ts">
-  import { YamlParser } from '@shumoku/core'
   import { GearSixIcon, PlusIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
+  import { Input } from '$lib/components/ui/input'
+  import { Label } from '$lib/components/ui/label'
   import { topologies, topologiesError, topologiesList, topologiesLoading } from '$lib/stores'
 
   let showCreateModal = $state(false)
-
-  // Form state
   let formName = $state('')
-  let formYaml = $state('')
   let formError = $state('')
   let formSubmitting = $state(false)
-
-  const sampleYaml = `name: My Network
-    nodes:
-      - id: router1
-        label: Core Router
-        type: router
-      - id: switch1
-        label: Switch 1
-        type: switch
-    links:
-      - from: router1
-        to: switch1
-        bandwidth: 1G
-    `
 
   onMount(() => {
     topologies.load()
@@ -34,14 +19,14 @@
 
   function openCreateModal() {
     formName = ''
-    formYaml = sampleYaml
     formError = ''
     showCreateModal = true
   }
 
   async function handleCreate() {
-    if (!formName.trim() || !formYaml.trim()) {
-      formError = 'Name and YAML content are required'
+    const name = formName.trim()
+    if (!name) {
+      formError = 'Name is required'
       return
     }
 
@@ -49,17 +34,10 @@
     formError = ''
 
     try {
-      // Parse YAML to NetworkGraph
-      const parser = new YamlParser()
-      const result = parser.parse(formYaml)
-
-      // Send NetworkGraph JSON
-      const contentJson = JSON.stringify(result.graph)
-      await topologies.create({
-        name: formName.trim(),
-        contentJson,
-      })
+      const contentJson = JSON.stringify({ name, nodes: [], links: [] })
+      const topology = await topologies.create({ name, contentJson })
       showCreateModal = false
+      await goto(`/topologies/${topology.id}/edit`)
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to create topology'
     } finally {
@@ -71,10 +49,9 @@
 <svelte:head> <title>Topologies - Shumoku</title> </svelte:head>
 
 <div class="p-6">
-  <!-- Actions -->
   <div class="flex items-center justify-end mb-6">
     <Button onclick={openCreateModal}>
-      <PlusIcon size={20} class="mr-1" />
+      <PlusIcon size={20} />
       Add Topology
     </Button>
   </div>
@@ -98,7 +75,6 @@
       <Button onclick={openCreateModal}>Add Topology</Button>
     </div>
   {:else}
-    <!-- Topologies Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {#each $topologiesList as topo}
         <div class="card hover:border-primary/50 transition-colors">
@@ -142,61 +118,48 @@
   {/if}
 </div>
 
-<!-- Create Modal -->
 <Dialog.Root bind:open={showCreateModal}>
-  <Dialog.Content class="sm:max-w-2xl max-h-[90vh] flex flex-col">
+  <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
       <Dialog.Title>Add Topology</Dialog.Title>
       <Dialog.Description>
-        Create a new network topology diagram using YAML definition.
+        Give your topology a name. You can edit its content on the next screen.
       </Dialog.Description>
     </Dialog.Header>
 
     <form
-      class="space-y-4 overflow-auto flex-1"
-      onsubmit={(e) => { e.preventDefault(); handleCreate(); }}
+      class="space-y-4"
+      onsubmit={(e) => {
+        e.preventDefault()
+        handleCreate()
+      }}
     >
       {#if formError}
         <div
-          class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm"
+          class="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm"
         >
           {formError}
         </div>
       {/if}
 
-      <div>
-        <label for="name" class="label">Name</label>
-        <input type="text" id="name" class="input" placeholder="My Network" bind:value={formName}>
-      </div>
-
-      <div>
-        <label for="yaml" class="label">YAML Definition</label>
-        <textarea
-          id="yaml"
-          class="input font-mono text-sm"
-          rows="15"
-          placeholder="Enter your network YAML..."
-          bind:value={formYaml}
-        ></textarea>
-        <p class="text-xs text-muted-foreground mt-1">
-          Define your network topology using YAML format.
-          <a
-            href="https://shumoku-docs.dev/yaml-spec"
-            target="_blank"
-            class="text-primary hover:underline"
-          >
-            View documentation
-          </a>
-        </p>
+      <div class="space-y-2">
+        <Label for="name">Name</Label>
+        <Input
+          id="name"
+          placeholder="My Network"
+          bind:value={formName}
+          autofocus
+          disabled={formSubmitting}
+        />
       </div>
     </form>
 
     <Dialog.Footer>
-      <Button variant="outline" onclick={() => showCreateModal = false}>Cancel</Button>
-      <Button onclick={handleCreate} disabled={formSubmitting}>
+      <Button variant="outline" onclick={() => (showCreateModal = false)}>Cancel</Button>
+      <Button onclick={handleCreate} disabled={formSubmitting || !formName.trim()}>
         {#if formSubmitting}
           <span
-            class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+            class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"
           ></span>
         {/if}
         Create
