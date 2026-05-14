@@ -220,9 +220,13 @@ export function createDataSourcesApi(): Hono {
 
   // Dev-only: raw upstream-API passthrough for debugging. Lets a developer
   // call any native method (e.g. Zabbix's `item.get`, `host.get`) with arbitrary
-  // params from the browser devtools without re-deploying server code. Disabled
-  // in production so credentials and arbitrary upstream methods aren't exposed.
-  if (process.env['NODE_ENV'] !== 'production') {
+  // params from the browser devtools without re-deploying server code.
+  //
+  // Gate is opt-in (must be NODE_ENV=development) rather than opt-out so a
+  // forgotten env var in production doesn't expose credentials/upstream
+  // arbitrary methods. The dev scripts already set NODE_ENV=development;
+  // Dockerfile / start scripts deliberately leave it unset.
+  if (process.env['NODE_ENV'] === 'development') {
     app.post('/:id/_native', async (c) => {
       const id = c.req.param('id')
       const plugin = service.getPlugin(id)

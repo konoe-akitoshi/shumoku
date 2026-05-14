@@ -209,7 +209,7 @@ POST /api/datasources/:id/_native
 { "method": "<native method name>", "params": { ... } }
 ```
 
-- **production では無効** (`NODE_ENV === 'production'` のとき endpoint そのものが登録されない)
+- **`NODE_ENV=development` のときだけ登録される opt-in** (production など他環境では route 自体無い)
 - プラグインが `nativeApi(method, params)` を実装していれば動作 (現状: Zabbix のみ実装)
 - レスポンスは `{ "result": <upstream の生レスポンス> }` をそのまま返す
 
