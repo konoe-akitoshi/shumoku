@@ -297,14 +297,12 @@ function setNodePortsFromProduct(
 }
 
 /**
- * Pick a default label for a new termination placement. Bends stay
- * anonymous ("Bend") — they're not labelled on the canvas. EPS /
+ * Pick a default label for a new termination placement. EPS /
  * Outlet / Panel get a numeric suffix ("EPS 1", "EPS 2"…) scoped to
  * existing same-role nodes anywhere in the diagram, so concurrent
  * placements stay distinguishable before the user renames them.
  */
-function nextTerminationLabel(role: 'outlet' | 'eps' | 'panel' | 'bend'): string {
-  if (role === 'bend') return 'Bend'
+function nextTerminationLabel(role: 'outlet' | 'eps' | 'panel'): string {
   const base = role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : 'Panel'
   // Walk existing same-role nodes and collect any "Base N" suffix
   // they already carry; the new label takes max+1 (or 1 when none).
@@ -1242,13 +1240,12 @@ export const diagramState = {
   addTerminationInScene(
     sceneId: string,
     position: { x: number; y: number },
-    role: 'outlet' | 'eps' | 'panel' | 'bend',
+    role: 'outlet' | 'eps' | 'panel',
   ): string {
     return commit('Add termination in scene', () => {
       // Auto-number same-role terminations so multiple placements stay
       // distinguishable ("EPS 1", "EPS 2"…) before the user gets around
-      // to renaming them. Bends stay anonymous — they're not labelled
-      // on the canvas.
+      // to renaming them.
       const defaultLabel = nextTerminationLabel(role)
       const id = diagramState.addEmptyNode(defaultLabel)
       const scene = scenesStore.find(sceneId)
