@@ -305,7 +305,9 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
       output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'r_clock'],
       recent: true,
       time_from: timeFrom,
-      sortfield: ['clock'],
+      // problem.get only accepts 'eventid' here. Event ids are monotonic, so
+      // DESC sort by eventid is equivalent to newest-first.
+      sortfield: ['eventid'],
       sortorder: 'DESC',
     }
 
