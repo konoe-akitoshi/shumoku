@@ -11,6 +11,19 @@
   import type { Product } from '$lib/types'
   import { productLabel } from '$lib/types'
 
+  /** Vendor / model summary from a spec — Product.spec is snapshotted
+   *  onto node.spec at bind time, so this gives the same display
+   *  string as `productLabel(product)` would for bound nodes, without
+   *  needing a Product registry lookup. Falls back to role / kind
+   *  when vendor or model is absent (e.g. typed placeholders). */
+  function specProductSummary(spec: NodeSpec | undefined): string {
+    if (!spec) return 'None'
+    if (spec.kind === 'hardware' && spec.vendor && spec.model) {
+      return `${spec.vendor} / ${spec.model}`
+    }
+    return specDeviceType(spec) ?? spec.kind
+  }
+
   let {
     node,
     editing = false,
@@ -183,14 +196,11 @@
     <dt class={labelClass}>Product</dt>
     <dd>
       {#if editing}
-        {@const boundProductInList = node.productId
-          ? products.find((p) => p.id === node.productId)
-          : null}
         <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindproduct?.(v) }}>
           <div class="relative">
             <Combobox.Input
-              placeholder={boundProductInList ? '' : 'Assign product...'}
-              defaultValue={boundProductInList ? productLabel(boundProductInList) : ''}
+              placeholder={node.productId ? '' : 'Assign product...'}
+              defaultValue={node.productId ? specProductSummary(node.spec) : ''}
               class="w-full pl-2 pr-7 py-1 text-[11px] bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono"
               oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
             />
@@ -219,12 +229,7 @@
           </Combobox.Content>
         </Combobox.Root>
       {:else}
-        {@const boundProductInList = node.productId
-          ? products.find((p) => p.id === node.productId)
-          : null}
-        <span class={valueClass}>
-          {boundProductInList ? productLabel(boundProductInList) : 'None'}
-        </span>
+        <span class={valueClass}> {node.productId ? specProductSummary(node.spec) : 'None'} </span>
       {/if}
     </dd>
   </div>
