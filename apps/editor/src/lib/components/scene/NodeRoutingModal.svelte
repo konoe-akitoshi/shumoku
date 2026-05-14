@@ -9,7 +9,6 @@
     buildViaForLink,
     findAutoOutlet,
   } from '$lib/scene/auto-outlets'
-  import { descendantSubgraphIds } from '$lib/scene/scope'
 
   // Per-node routing modal. One row per wire incident to this node,
   // labeled by destination. Each row picks ONE EPS to route through
@@ -33,19 +32,6 @@
     const l = node.label
     return Array.isArray(l) ? l[0] : (l ?? node.id)
   })
-
-  function ancestorChain(parentId: string | undefined): string[] {
-    const out: string[] = []
-    let cur = parentId
-    const safety = 64
-    let i = 0
-    while (cur && i < safety) {
-      out.push(cur)
-      cur = diagramState.subgraphs.get(cur)?.parent
-      i++
-    }
-    return out
-  }
 
   // Both EPS and patch panels are valid via choices for a wire from
   // this node. With terminations now living in the global registry

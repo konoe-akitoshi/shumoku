@@ -46,30 +46,6 @@ export function polylinePath(points: Waypoint[], radius = 12): string {
   return d
 }
 
-/** Index of the polyline segment closest to `p`. */
-function nearestSegmentIndex(points: Waypoint[], p: Waypoint): number {
-  let best = 0
-  let bestDist = Infinity
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i]
-    const b = points[i + 1]
-    if (!a || !b) continue
-    const dx = b.x - a.x
-    const dy = b.y - a.y
-    const len2 = dx * dx + dy * dy
-    const t =
-      len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
-    const px = a.x + t * dx
-    const py = a.y + t * dy
-    const d = (p.x - px) ** 2 + (p.y - py) ** 2
-    if (d < bestDist) {
-      bestDist = d
-      best = i
-    }
-  }
-  return best
-}
-
 /**
  * Drag-to-bend: pointerdown on a wire's hit path. Creates a bend
  * Node in the link's `via` chain at the right insertion index,
@@ -135,11 +111,18 @@ export function bendOnDrag(args: {
         txOpen = true
         dragBendId = near.id
       } else {
-        // New bend: `viaOffset + localIdx - 1` is the `afterIndex`
-        // slot inside the (terminations-only) via chain. The segment
-        // index from this edge already references via positions.
-        const localIdx = nearestSegmentIndex(points, flowStart)
-        const afterIndex = viaOffset + localIdx - 1
+        // New bend: stamp `afterIndex` to the segment's leading via
+        // slot. `viaOffset` is the via index AFTER which this
+        // segment lives (source-rooted = 0, post-EPS = via index of
+        // the EPS at segment head + 1), so `viaOffset - 1` is the
+        // slot for any bend inside this segment.
+        //
+        // Limitation: when a segment crosses multiple non-EPS
+        // terminations (e.g. switch → outletA → outletB → to),
+        // clicks at different positions all land in the leading
+        // slot, so a bend dragged past a via boundary won't relayer
+        // visually. Acceptable for the common single-slot segment.
+        const afterIndex = viaOffset - 1
         // addLinkBend wraps create in its own commit; the subsequent
         // drag moves get their own tx below.
         dragBendId = diagramState.addLinkBend(linkId, flowStart, afterIndex) || null
