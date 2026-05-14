@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Subgraph } from '@shumoku/core'
+import type { Link, Node, Subgraph, Termination } from '@shumoku/core'
 import { rehydrateEntity, serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
@@ -51,6 +51,11 @@ interface SceneRow {
   projectId: string
   id: string
   data: Scene
+}
+interface TerminationRow {
+  projectId: string
+  id: string
+  data: Termination
 }
 export interface AssetRow {
   projectId: string
@@ -142,12 +147,13 @@ export const projectsDb = {
           | ProjectMeta
           | undefined
         if (!meta) return null
-        const [nodes, subgraphs, links, products, scenes] = await Promise.all([
+        const [nodes, subgraphs, links, products, scenes, terminations] = await Promise.all([
           getAllByProject<NodeRow>(txn.objectStore(STORES.nodes), projectId),
           getAllByProject<SubgraphRow>(txn.objectStore(STORES.subgraphs), projectId),
           getAllByProject<LinkRow>(txn.objectStore(STORES.links), projectId),
           getAllByProject<ProductRow>(txn.objectStore(STORES.products), projectId),
           getAllByProject<SceneRow>(txn.objectStore(STORES.scenes), projectId),
+          getAllByProject<TerminationRow>(txn.objectStore(STORES.terminations), projectId),
         ])
         // Rehydrate `asset:` refs back to live blob URLs (caller
         // must have populated AssetStore from per-project asset
@@ -160,6 +166,7 @@ export const projectsDb = {
             links: links.map((r) => rehydrateEntity(r.data)),
             products: products.map((r) => rehydrateEntity(r.data)),
             scenes: scenes.map((r) => rehydrateEntity(r.data)),
+            terminations: terminations.map((r) => rehydrateEntity(r.data)),
           },
         }
       },
@@ -206,6 +213,10 @@ export const projectsDb = {
           txn
             .objectStore(STORES.scenes)
             .put({ projectId: meta.id, id: scene.id, data: serializeEntity(scene) })
+        for (const term of snapshot.terminations)
+          txn
+            .objectStore(STORES.terminations)
+            .put({ projectId: meta.id, id: term.id, data: serializeEntity(term) })
       },
     )
   },

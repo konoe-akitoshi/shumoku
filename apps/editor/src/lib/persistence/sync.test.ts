@@ -15,6 +15,7 @@ function snap(parts: Partial<ProjectSnapshot> = {}): ProjectSnapshot {
     links: parts.links ?? [],
     products: parts.products ?? [],
     scenes: parts.scenes ?? [],
+    terminations: parts.terminations ?? [],
   }
 }
 

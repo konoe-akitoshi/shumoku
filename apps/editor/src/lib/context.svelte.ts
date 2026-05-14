@@ -388,6 +388,7 @@ function getProjectSnapshot(): ProjectSnapshot {
     nodes: [...diagram.nodes.entries()],
     subgraphs: [...diagram.subgraphs.entries()],
     links: diagram.links,
+    terminations: diagram.terminations,
     products: productsStore.list,
     scenes: scenesStore.list,
   }) as ProjectSnapshot
@@ -398,6 +399,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
   replaceMap(diagram.nodes, cloned.nodes)
   replaceMap(diagram.subgraphs, cloned.subgraphs)
   diagram.links = cloned.links
+  diagram.terminations = cloned.terminations ?? []
   productsStore.set(cloned.products)
   scenesStore.set(cloned.scenes)
   if (scenesStore.currentId && !scenesStore.find(scenesStore.currentId)) {
@@ -1950,6 +1952,7 @@ const EMPTY_SNAP: ProjectSnapshot = {
   nodes: [],
   subgraphs: [],
   links: [],
+  terminations: [],
   products: [],
   scenes: [],
 }
@@ -1960,6 +1963,7 @@ function projectToSnapshot(data: NetedProject): ProjectSnapshot {
     nodes: graph.nodes.map((n) => [n.id, n] as [string, Node]),
     subgraphs: (graph.subgraphs ?? []).map((sg) => [sg.id, sg] as [string, Subgraph]),
     links: graph.links,
+    terminations: graph.terminations ?? [],
     products: data.products ?? [],
     scenes: data.scenes ?? [],
   }
@@ -1979,6 +1983,7 @@ function snapshotToProject(
       nodes: snap.nodes.map(([_id, n]) => n),
       links: snap.links,
       subgraphs: snap.subgraphs.map(([_id, sg]) => sg),
+      terminations: snap.terminations.length > 0 ? snap.terminations : undefined,
     },
     scenes: snap.scenes,
   }

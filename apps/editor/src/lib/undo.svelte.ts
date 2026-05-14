@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Subgraph } from '@shumoku/core'
+import type { Link, Node, Subgraph, Termination } from '@shumoku/core'
 import type { Product, Scene } from './types'
 
 /**
@@ -14,6 +14,10 @@ export interface ProjectSnapshot {
   nodes: [string, Node][]
   subgraphs: [string, Subgraph][]
   links: Link[]
+  /** Physical cabling registry (EPS / Outlet / Panel). Captured here
+   *  so undo / redo / persistence round-trip preserves them — they're
+   *  not under `nodes` after the registry refactor. */
+  terminations: Termination[]
   products: Product[]
   scenes: Scene[]
 }
