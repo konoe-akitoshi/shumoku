@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Subgraph } from '@shumoku/core'
+  import SubgraphColorPopover from '../SubgraphColorPopover.svelte'
+  import { previewFor } from '../subgraph-palette'
 
   let {
     subgraph,
@@ -10,6 +12,20 @@
     editing?: boolean
     onupdate?: (field: string, value: unknown) => void
   } = $props()
+
+  let colorPopoverOpen = $state(false)
+  let swatchEl: HTMLButtonElement | null = $state(null)
+
+  const currentFill = $derived(subgraph.style?.fill ?? '')
+  const swatchColor = $derived(previewFor(currentFill))
+  const swatchLabel = $derived(currentFill || 'default')
+
+  function pickColor(fill: string | undefined) {
+    const nextStyle = { ...(subgraph.style ?? {}) }
+    if (fill === undefined) delete nextStyle.fill
+    else nextStyle.fill = fill
+    onupdate?.('style', nextStyle)
+  }
 
   const inputClass =
     'w-full text-[11px] px-2 py-1 bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono'
@@ -67,4 +83,33 @@
       {/if}
     </dd>
   </div>
+
+  <!-- Color — wide chip showing the selected color as a horizontal
+       bar with the token name overlaid. The whole bar is clickable
+       and opens the popover picker. Always interactive. -->
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>Color</dt>
+    <dd>
+      <button
+        bind:this={swatchEl}
+        type="button"
+        class="flex h-5 min-w-[8rem] items-center justify-end rounded border border-black/15 px-2 font-mono text-[10px] text-neutral-700 outline-none transition-shadow hover:ring-2 hover:ring-blue-300 focus:ring-2 focus:ring-blue-400 dark:text-neutral-200"
+        style="background-color: {swatchColor};"
+        onclick={() => {
+          colorPopoverOpen = !colorPopoverOpen
+        }}
+        title="Change color"
+        aria-label="Change color"
+      >
+        <span class="rounded bg-white/70 px-1 dark:bg-neutral-900/60">{swatchLabel}</span>
+      </button>
+    </dd>
+  </div>
 </dl>
+
+<SubgraphColorPopover
+  bind:open={colorPopoverOpen}
+  {currentFill}
+  anchor={swatchEl}
+  onpick={pickColor}
+/>
