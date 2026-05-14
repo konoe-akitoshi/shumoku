@@ -299,12 +299,10 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
       severity: string
       clock: string
       r_clock: string
-      hosts?: Array<{ hostid: string; host: string; name: string }>
     }
 
     const params: Record<string, unknown> = {
       output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'r_clock'],
-      selectHosts: ['hostid', 'host', 'name'],
       recent: true,
       time_from: timeFrom,
       sortfield: ['clock'],
@@ -323,20 +321,27 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
 
     const problems = await this.apiRequest<ZabbixProblem[]>('problem.get', params)
 
-    const alerts: Alert[] = problems.map((p) => ({
-      id: p.eventid,
-      severity: this.mapZabbixSeverity(p.severity),
-      title: p.name,
-      host: p.hosts?.[0]?.host,
-      hostId: p.hosts?.[0]?.hostid,
-      startTime: Number.parseInt(p.clock, 10) * 1000,
-      endTime: p.r_clock && p.r_clock !== '0' ? Number.parseInt(p.r_clock, 10) * 1000 : undefined,
-      status: p.r_clock && p.r_clock !== '0' ? 'resolved' : 'active',
-      source: 'zabbix' as const,
-      url: this.config
-        ? `${this.config.url.replace(/\/$/, '')}/tr_events.php?triggerid=${p.objectid}&eventid=${p.eventid}`
-        : undefined,
-    }))
+    // problem.get doesn't support selectHosts. Resolve trigger → hosts in a
+    // second call (one batch query) when we actually have problems to enrich.
+    const triggerHosts = await this.fetchHostsForTriggers(problems.map((p) => p.objectid))
+
+    const alerts: Alert[] = problems.map((p) => {
+      const host = triggerHosts.get(p.objectid)
+      return {
+        id: p.eventid,
+        severity: this.mapZabbixSeverity(p.severity),
+        title: p.name,
+        host: host?.host,
+        hostId: host?.hostid,
+        startTime: Number.parseInt(p.clock, 10) * 1000,
+        endTime: p.r_clock && p.r_clock !== '0' ? Number.parseInt(p.r_clock, 10) * 1000 : undefined,
+        status: p.r_clock && p.r_clock !== '0' ? 'resolved' : 'active',
+        source: 'zabbix' as const,
+        url: this.config
+          ? `${this.config.url.replace(/\/$/, '')}/tr_events.php?triggerid=${p.objectid}&eventid=${p.eventid}`
+          : undefined,
+      }
+    })
 
     // Filter active only if requested
     if (options?.activeOnly) {
@@ -344,6 +349,35 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
     }
 
     return alerts
+  }
+
+  /**
+   * Resolve trigger ids → primary host. `problem.get` doesn't accept
+   * `selectHosts`, so we batch a `trigger.get` call to enrich. Each trigger
+   * may technically have multiple hosts (cross-host triggers); we surface
+   * the first one to match what an operator typically sees in Zabbix.
+   */
+  private async fetchHostsForTriggers(
+    triggerIds: string[],
+  ): Promise<Map<string, { hostid: string; host: string; name: string }>> {
+    const result = new Map<string, { hostid: string; host: string; name: string }>()
+    if (triggerIds.length === 0) return result
+
+    interface ZabbixTrigger {
+      triggerid: string
+      hosts?: Array<{ hostid: string; host: string; name: string }>
+    }
+    const uniqueIds = Array.from(new Set(triggerIds))
+    const triggers = await this.apiRequest<ZabbixTrigger[]>('trigger.get', {
+      output: ['triggerid'],
+      triggerids: uniqueIds,
+      selectHosts: ['hostid', 'host', 'name'],
+    })
+    for (const t of triggers) {
+      const host = t.hosts?.[0]
+      if (host) result.set(t.triggerid, host)
+    }
+    return result
   }
 
   private mapZabbixSeverity(severity: string): AlertSeverity {
