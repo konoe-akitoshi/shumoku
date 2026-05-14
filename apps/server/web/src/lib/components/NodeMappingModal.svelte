@@ -340,7 +340,7 @@
               </div>
               <div class="border rounded-lg divide-y max-h-48 overflow-y-auto">
                 {#each nodeData.connectedLinks as link}
-                  {@const isFrom = link.from === nodeData.node.id}
+                  {@const isFrom = link.from.id === nodeData.node.id}
                   {@const otherNode = isFrom ? link.to : link.from}
                   {@const metrics = linkMetricsMap[link.id]}
                   <div class="p-3 space-y-1">
@@ -350,7 +350,7 @@
                           class="w-2 h-2 rounded-full {getStatusBgColor(metrics?.status)}"
                         ></span>
                         {isFrom ? '→' : '←'}
-                        {otherNode}
+                        {otherNode.label}
                       </span>
                       {#if link.standard}
                         <span class="text-xs text-muted-foreground">{link.standard}</span>

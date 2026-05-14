@@ -42,6 +42,7 @@
     TopologyDataSource,
     TopologyDataSourceInput,
   } from '$lib/types'
+  import { nodeLabelById, nodeLabel as resolveNodeLabel } from '$lib/utils/node-label'
 
   // ============================================
   // State
@@ -594,20 +595,12 @@
   // Mapping Tab Functions
   // ============================================
 
-  function getNodeLabel(node: { label?: string | string[] }): string {
-    let label: string
-    if (Array.isArray(node.label)) {
-      label = node.label[0] || 'Unnamed'
-    } else {
-      label = node.label || 'Unnamed'
-    }
-    return label.replace(/<[^>]*>/g, '')
+  function getNodeLabel(node: { id: string; label?: string | string[] }): string {
+    return resolveNodeLabel(node)
   }
 
   function getNodeLabelById(nodeId: string): string {
-    const node = parsedTopology?.graph.nodes.find((n) => n.id === nodeId)
-    if (!node) return nodeId
-    return getNodeLabel(node)
+    return nodeLabelById(parsedTopology?.graph.nodes, nodeId)
   }
 
   function loadInterfacesForMappedNodes() {
