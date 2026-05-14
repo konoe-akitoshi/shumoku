@@ -49,8 +49,45 @@ export interface AruInventoryDevice {
   ipAddress?: string
   /** Seconds since the portal last heard from the device. Used to derive lastSeen. */
   numberOfSecondsSinceLastCommunication?: number
+  /** Cumulative seconds since the device booted. */
+  uptimeInSeconds?: number
+  wiredClientsCount?: number
+  groupedWiredClientsCount?: number
+  vpnClientsCount?: number
+  /** True when the device is reporting it's running on too little PoE budget. */
+  isUnderpowered?: boolean
+  inputPowerSource?: string
   /** Alerts the portal currently has open against this device. */
   activeAlerts?: AruEmbeddedAlert[]
+  /** Per-port telemetry (uplink port + LAN ports on switches). */
+  ethernetPorts?: AruEthernetPort[]
+}
+
+export interface AruEthernetPort {
+  /** Logical port index, 0-based. APs have one; switches have many. */
+  portNumber?: number
+  /** Marking on the device's faceplate. Matches `portNumber` in practice. */
+  faceplatePortNumber?: number
+  /** Operator-assigned label (rare on Instant On — usually `null`). */
+  name?: string | null
+  /** Negotiated speed token: "mbps100", "mbps1000", "mbps10000". */
+  speed?: string
+  /** Cap from the hardware: "mbps1000" etc. — used when `speed` is null on link-down ports. */
+  maxSpeed?: string
+  /** "full" / "half" — when present, hints at duplex. */
+  duplex?: string
+  isLinkUp?: boolean
+  isUplink?: boolean
+  isProvidingPower?: boolean
+  /** Live throughput counters. */
+  portDataTraffic?: AruPortDataTraffic
+}
+
+export interface AruPortDataTraffic {
+  downstreamThroughputInBitsPerSecond?: number
+  upstreamThroughputInBitsPerSecond?: number
+  downstreamDataTransferredInBytesInLast24Hours?: number
+  upstreamDataTransferredInBytesInLast24Hours?: number
 }
 
 /** Subset of the alert shape embedded in inventory device records. */

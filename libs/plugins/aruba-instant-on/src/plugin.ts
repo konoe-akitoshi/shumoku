@@ -21,6 +21,7 @@ import type {
   ConnectionResult,
   DataSourceCapability,
   DataSourcePlugin,
+  DiscoveredMetric,
   Host,
   HostItem,
   HostsCapable,
@@ -34,6 +35,7 @@ import { ArubaInstantOnApi } from './api.js'
 import type {
   ArubaInstantOnConfig,
   AruEmbeddedAlert,
+  AruEthernetPort,
   AruInventoryDevice,
   AruInventoryResponse,
   AruSite,
@@ -120,6 +122,22 @@ export class ArubaInstantOnPlugin
     return []
   }
 
+  /**
+   * Discover gauge-style metrics for a given host. Used by the node-detail
+   * modal's "All metrics" panel — operators see what's exposed for the
+   * device they're about to map, so blank means "we have nothing to show".
+   *
+   * Pulls everything from the cached inventory call: device-level (clients,
+   * uptime, power) and per-port (throughput, link state, PoE). One round
+   * trip even if the panel opens for many hosts in a row.
+   */
+  async discoverMetrics(hostId: string): Promise<DiscoveredMetric[]> {
+    const { byId } = await this.deviceLookup()
+    const device = byId.get(hostId)
+    if (!device) return []
+    return buildDeviceMetrics(device)
+  }
+
   // ============================================================
   // MetricsCapable — per-device status from the inventory snapshot
   // ============================================================
@@ -130,10 +148,14 @@ export class ArubaInstantOnPlugin
     // Skip the upstream fetch entirely if nothing is mapped — saves a
     // round trip per poll for tenants that haven't wired this plugin in.
     const hasMappedHost = Object.values(mapping.nodes ?? {}).some((n) => n.hostId)
-    if (!hasMappedHost || !this.api) return metrics
+    const hasMappedLink = Object.values(mapping.links ?? {}).some(
+      (l) => l.monitoredNodeId && l.interface,
+    )
+    if ((!hasMappedHost && !hasMappedLink) || !this.api) return metrics
 
     const { byId } = await this.deviceLookup()
 
+    // ---- Nodes -----------------------------------------------------------
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
       if (!nodeMapping.hostId) continue
       const device = byId.get(nodeMapping.hostId)
@@ -145,10 +167,19 @@ export class ArubaInstantOnPlugin
       }
       metrics.nodes[nodeId] = deviceToMetrics(device)
     }
-    // Links aren't represented in the Instant On API (switch port maps are
-    // limited), so we don't populate `metrics.links` here. Operators can
-    // still get link traffic through another plugin (e.g. Zabbix) if they
-    // want — shumoku merges per-source.
+
+    // ---- Links -----------------------------------------------------------
+    // Each device's inventory record carries per-ethernet-port throughput.
+    // For a link mapped to (monitoredNode, interfaceName), pull traffic from
+    // the device's ethernetPorts[] entry whose port matches.
+    for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
+      const link = portLinkLookup(linkMapping, mapping, byId)
+      if (!link) {
+        metrics.links[linkId] = { status: 'unknown' }
+        continue
+      }
+      metrics.links[linkId] = portToLinkMetrics(link.port, linkMapping.bandwidth ?? link.bandwidth)
+    }
 
     return metrics
   }
@@ -225,6 +256,182 @@ export class ArubaInstantOnPlugin
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Resolve a link mapping into the actual ethernet port telemetry record on
+ * the monitored device. Returns null when the mapping can't be satisfied
+ * (unmapped node, host not in inventory, no matching port).
+ */
+function portLinkLookup(
+  linkMapping: { monitoredNodeId?: string; interface?: string },
+  mapping: MetricsMapping,
+  byId: Map<string, AruInventoryDevice>,
+): { port: AruEthernetPort; bandwidth: number | undefined } | null {
+  const monitoredNodeId = linkMapping.monitoredNodeId
+  const ifaceName = linkMapping.interface
+  if (!monitoredNodeId || !ifaceName) return null
+  const hostId = mapping.nodes[monitoredNodeId]?.hostId
+  if (!hostId) return null
+  const device = byId.get(hostId)
+  if (!device?.ethernetPorts?.length) return null
+  const port = findPortByName(device.ethernetPorts, ifaceName)
+  if (!port) return null
+  return { port, bandwidth: portSpeedBps(port) }
+}
+
+/**
+ * Match a free-form interface name against Aruba's port records.
+ *
+ * The mapping UI accepts whatever the operator types, which for Aruba
+ * Instant On typically means a port number ("0", "1") or — when copied
+ * from a Cisco-formatted neighbour — something like "Gi1/0/3" we want to
+ * tolerate via "trailing digit" extraction. We try, in order:
+ *   1. Exact match on the port's `name` (rare on Instant On).
+ *   2. Exact match on `portNumber` / `faceplatePortNumber` as a string.
+ *   3. The last run of digits in the operator's input vs. either number.
+ */
+function findPortByName(ports: AruEthernetPort[], ifaceName: string): AruEthernetPort | undefined {
+  const lower = ifaceName.trim().toLowerCase()
+  for (const p of ports) {
+    if (typeof p.name === 'string' && p.name.toLowerCase() === lower) return p
+    if (p.portNumber !== undefined && String(p.portNumber) === lower) return p
+    if (p.faceplatePortNumber !== undefined && String(p.faceplatePortNumber) === lower) return p
+  }
+  return undefined
+}
+
+/**
+ * Convert Aruba's `speed` token ("mbps1000") to bits-per-second so we can
+ * compute utilization without yet another lookup table. Falls back to
+ * `maxSpeed` when the port is link-down (speed nulls out then).
+ */
+function portSpeedBps(port: AruEthernetPort): number | undefined {
+  const token = port.speed || port.maxSpeed
+  if (!token) return undefined
+  const m = token.match(/^mbps(\d+)$/i)
+  if (!m?.[1]) return undefined
+  return Number.parseInt(m[1], 10) * 1_000_000
+}
+
+function portToLinkMetrics(
+  port: AruEthernetPort,
+  bandwidthBps: number | undefined,
+): import('@shumoku/core').LinkMetrics {
+  const inBps = port.portDataTraffic?.downstreamThroughputInBitsPerSecond ?? 0
+  const outBps = port.portDataTraffic?.upstreamThroughputInBitsPerSecond ?? 0
+  const cap = bandwidthBps && bandwidthBps > 0 ? bandwidthBps : 1_000_000_000
+  const inUtil = (inBps / cap) * 100
+  const outUtil = (outBps / cap) * 100
+  const maxUtil = Math.max(inUtil, outUtil)
+  return {
+    status: port.isLinkUp === false ? 'down' : maxUtil > 0 ? 'up' : 'unknown',
+    utilization: Math.ceil(maxUtil),
+    inUtilization: Math.ceil(inUtil),
+    outUtilization: Math.ceil(outUtil),
+    inBps,
+    outBps,
+  }
+}
+
+/**
+ * Flatten an inventory record into individual numeric metrics the "All
+ * metrics" panel can list. Each entry is a Prometheus-style sample: a
+ * name, a value, optional labels for sub-dimensions (e.g. port number).
+ *
+ * Skip any field that's missing on the device — the API leaves nulls
+ * around for capabilities a particular model doesn't have.
+ */
+function buildDeviceMetrics(d: AruInventoryDevice): DiscoveredMetric[] {
+  const out: DiscoveredMetric[] = []
+  const push = (
+    name: string,
+    value: number | undefined,
+    help: string,
+    type: string = 'gauge',
+    labels: Record<string, string> = {},
+  ): void => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return
+    out.push({ name, value, help, type, labels })
+  }
+  const boolValue = (b: boolean | undefined): number | undefined =>
+    typeof b === 'boolean' ? (b ? 1 : 0) : undefined
+
+  // Device-level
+  push('aruba_device_up', boolValue(d.status === 'up'), 'Device reported as up by the portal')
+  push(
+    'aruba_device_underpowered',
+    boolValue(d.isUnderpowered),
+    'Device is currently underpowered (PoE budget insufficient)',
+  )
+  push('aruba_device_uptime_seconds', d.uptimeInSeconds, 'Seconds since the device last booted')
+  push(
+    'aruba_device_seconds_since_last_communication',
+    d.numberOfSecondsSinceLastCommunication,
+    'Age of the last device check-in seen by the portal',
+  )
+  push('aruba_wired_clients', d.wiredClientsCount, 'Currently connected wired clients')
+  push(
+    'aruba_grouped_wired_clients',
+    d.groupedWiredClientsCount,
+    'Wired clients aggregated behind another device',
+  )
+  push('aruba_vpn_clients', d.vpnClientsCount, 'Currently connected VPN clients')
+
+  // Per-port
+  for (const port of d.ethernetPorts ?? []) {
+    const labels: Record<string, string> = {
+      port: String(port.portNumber ?? port.faceplatePortNumber ?? '?'),
+    }
+    push('aruba_port_link_up', boolValue(port.isLinkUp), 'Port has link up', 'gauge', labels)
+    push(
+      'aruba_port_uplink',
+      boolValue(port.isUplink),
+      'Port is acting as the uplink',
+      'gauge',
+      labels,
+    )
+    push(
+      'aruba_port_providing_power',
+      boolValue(port.isProvidingPower),
+      'Port is currently supplying PoE to a downstream device',
+      'gauge',
+      labels,
+    )
+    const speed = portSpeedBps(port)
+    push('aruba_port_speed_bps', speed, 'Negotiated port speed in bits per second', 'gauge', labels)
+    const traffic = port.portDataTraffic
+    push(
+      'aruba_port_throughput_downstream_bps',
+      traffic?.downstreamThroughputInBitsPerSecond,
+      'Inbound port throughput (bps)',
+      'gauge',
+      labels,
+    )
+    push(
+      'aruba_port_throughput_upstream_bps',
+      traffic?.upstreamThroughputInBitsPerSecond,
+      'Outbound port throughput (bps)',
+      'gauge',
+      labels,
+    )
+    push(
+      'aruba_port_bytes_last_24h_downstream',
+      traffic?.downstreamDataTransferredInBytesInLast24Hours,
+      'Inbound bytes over the last 24h',
+      'counter',
+      labels,
+    )
+    push(
+      'aruba_port_bytes_last_24h_upstream',
+      traffic?.upstreamDataTransferredInBytesInLast24Hours,
+      'Outbound bytes over the last 24h',
+      'counter',
+      labels,
+    )
+  }
+
+  return out
+}
 
 function classifyDeviceStatus(raw: string | undefined): 'up' | 'down' | 'unknown' {
   switch ((raw ?? '').toUpperCase()) {
