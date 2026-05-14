@@ -10,7 +10,7 @@
 // what an installer actually orders.
 // =========================================================================
 
-import type { Link, Node } from '@shumoku/core'
+import type { Link, Node, Termination } from '@shumoku/core'
 import { cableLengthMeters, cableSegmentLengths, formatMeters } from '../scene/cable-length'
 import type { AssignmentRow, Scene } from '../types'
 import { nodeDisplayLabel } from '../utils/labels'
@@ -38,9 +38,10 @@ export function cableRequirementKeys(
   link: Link,
   scenes: Scene[],
   nodes: Map<string, Node>,
+  terminations: readonly Termination[] = [],
 ): Array<{ key: string; lengthM: number | null }> {
   const cable = link.cable
-  const segs = cableSegmentLengths(link, scenes, nodes)
+  const segs = cableSegmentLengths(link, scenes, nodes, terminations)
   const baseParts = [cable?.category, cable?.medium].filter(Boolean) as string[]
 
   if (segs.length > 1) {
@@ -50,7 +51,7 @@ export function cableRequirementKeys(
     }))
   }
 
-  const eff = cableLengthMeters(link, scenes, nodes)
+  const eff = cableLengthMeters(link, scenes, nodes, terminations)
   if (!cable && !eff) return []
   const lengthLabel = eff
     ? formatLength(eff.meters)
@@ -66,8 +67,9 @@ export function buildAssignmentRows(args: {
   nodes: Map<string, Node>
   links: Link[]
   scenes: Scene[]
+  terminations?: readonly Termination[]
 }): AssignmentRow[] {
-  const { nodes, links, scenes } = args
+  const { nodes, links, scenes, terminations = [] } = args
   const rows: AssignmentRow[] = []
 
   for (const [nodeId, node] of nodes) {
@@ -104,7 +106,7 @@ export function buildAssignmentRows(args: {
         status: endpoint.plug?.module?.productId ? 'resolved' : 'generic',
       })
     }
-    const cableReqs = cableRequirementKeys(link, scenes, nodes)
+    const cableReqs = cableRequirementKeys(link, scenes, nodes, terminations)
     for (const [i, req] of cableReqs.entries()) {
       // Multi-segment wires get a "1/2" / "2/2" suffix on the row id
       // and label so the BOM can show which side of the chase each

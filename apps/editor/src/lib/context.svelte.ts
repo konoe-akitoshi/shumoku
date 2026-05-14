@@ -125,6 +125,7 @@ function buildAssignmentRows(): AssignmentRow[] {
     nodes: diagram.nodes,
     links: diagram.links,
     scenes: scenesStore.list,
+    terminations: diagram.terminations,
   })
 }
 
@@ -559,6 +560,9 @@ export const diagramState = {
   set links(v: Link[]) {
     diagram.links = v
   },
+  get terminations() {
+    return diagram.terminations
+  },
 
   // ----- Diagram mutations (commit-wrapped) ---------------------------
   addLink(link: Link) {
@@ -962,7 +966,7 @@ export const diagramState = {
   cableLengthMeters(linkId: string): { meters: number; source: 'scene' | 'stored' } | null {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return null
-    return cableLengthMeters(link, scenesStore.list, diagram.nodes)
+    return cableLengthMeters(link, scenesStore.list, diagram.nodes, diagram.terminations)
   },
   /**
    * Per-visible-segment cable lengths for a link. EPS-routed wires
@@ -972,7 +976,7 @@ export const diagramState = {
   cableSegmentLengths(linkId: string): Array<{ fromId: string; toId: string; meters: number }> {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return []
-    return cableSegmentLengths(link, scenesStore.list, diagram.nodes)
+    return cableSegmentLengths(link, scenesStore.list, diagram.nodes, diagram.terminations)
   },
   placedCount(productId: string): number {
     let n = 0
@@ -1272,7 +1276,11 @@ export const diagramState = {
    */
   updateTermination(
     id: string,
-    updates: Partial<{ label: string; position: { x: number; y: number } }>,
+    updates: Partial<{
+      label: string
+      position: { x: number; y: number }
+      metadata: Record<string, unknown>
+    }>,
   ): void {
     commit('Update termination', () => {
       const idx = diagram.terminations.findIndex((t) => t.id === id)

@@ -139,23 +139,21 @@
       let createdOutletId: string | null = null
       if (want) {
         viaTail.push(epsId)
-        let outletId = findAutoOutlet(diagramState.nodes, linkId, epsId)
+        let outletId = findAutoOutlet(diagramState.terminations, linkId, epsId)
         if (!outletId) {
-          // Pick the device-side endpoint as the outlet anchor — for
-          // an EPS-side modal that's whichever wire end isn't a TP.
-          const fromN = diagramState.nodes.get(w.from.node)
-          const toN = diagramState.nodes.get(w.to.node)
-          let farId = w.to.node
-          if (fromN?.termination && !toN?.termination) farId = w.to.node
-          else if (!fromN?.termination && toN?.termination) farId = w.from.node
+          // Pick the device-side endpoint as the outlet anchor —
+          // wire endpoints are always real Nodes (terminations are
+          // never wire endpoints), so both `from` and `to` are
+          // device-side here. Bias toward `to`.
+          const farId = w.to.node
           const farNode = diagramState.nodes.get(farId)
           const farPos =
             scene?.nodePlacements.find((p) => p.nodeId === farId)?.position ??
             farNode?.position ??
             null
           const outletPos = autoOutletPosition(epsPos, farPos)
-          outletId = diagramState.addTerminationInScene(sceneId, outletPos, 'outlet')
-          diagramState.updateNode(outletId, {
+          outletId = diagramState.addTermination('outlet', outletPos)
+          diagramState.updateTermination(outletId, {
             metadata: { autoFor: autoOutletTag(linkId, epsId) },
           })
         }
@@ -166,7 +164,7 @@
       const orphanOutlets: string[] = []
       const oldVia = w.via ?? []
       if (!want && oldVia.includes(epsId)) {
-        const tagged = findAutoOutlet(diagramState.nodes, linkId, epsId)
+        const tagged = findAutoOutlet(diagramState.terminations, linkId, epsId)
         if (tagged) orphanOutlets.push(tagged)
       }
 
@@ -175,7 +173,7 @@
       const finalVia = buildViaForLink(w, managedIds, viaTail)
       diagramState.updateLink(linkId, { via: finalVia.length > 0 ? finalVia : undefined })
 
-      for (const orphan of orphanOutlets) diagramState.removeNode(orphan)
+      for (const orphan of orphanOutlets) diagramState.removeTermination(orphan)
     }
     onclose()
   }

@@ -954,6 +954,13 @@ export interface Termination {
    * termination share one position.
    */
   position?: { x: number; y: number }
+  /**
+   * Free-form metadata. The auto-outlet flow (EpsRoutingModal,
+   * NodeRoutingModal) stores `{ autoFor: "<linkId>:<epsId>" }` here
+   * so the inverse op (uncheck → cleanup) can find and remove the
+   * matching outlet without a separate registry.
+   */
+  metadata?: Record<string, unknown>
 }
 
 export interface NetworkGraph {
