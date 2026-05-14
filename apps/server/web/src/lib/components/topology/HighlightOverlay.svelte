@@ -124,8 +124,14 @@
   })
 
   $effect(() => {
+    // Capture the svg reference at effect-run time. Reading the prop
+    // in the teardown can throw if the parent's snippet context has
+    // already been torn down (the prop getter dereferences a now-null
+    // context). An unhandled error during navigation teardown causes
+    // SvelteKit to fall back to a full page reload.
+    const svg = svgElement
     return () => {
-      if (svgElement) clear(svgElement)
+      if (svg?.isConnected) clear(svg)
     }
   })
 </script>
