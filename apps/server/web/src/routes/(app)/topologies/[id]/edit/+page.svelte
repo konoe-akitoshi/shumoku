@@ -5,6 +5,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
+  import { topologies } from '$lib/stores'
   import type { Topology } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
@@ -24,6 +25,7 @@
   onMount(async () => {
     try {
       topology = await api.topologies.get(id)
+      topologies.upsert(topology)
 
       // Parse stored JSON and display as YAML for editing
       const graph = JSON.parse(topology.contentJson)

@@ -38,6 +38,17 @@ function createTopologiesStore() {
       return api.topologies.get(id)
     },
 
+    /** Insert or replace a topology in the cached list (used by detail pages). */
+    upsert(topology: Topology) {
+      update((s) => {
+        const idx = s.items.findIndex((t) => t.id === topology.id)
+        if (idx === -1) return { ...s, items: [topology, ...s.items] }
+        const items = s.items.slice()
+        items[idx] = topology
+        return { ...s, items }
+      })
+    },
+
     async create(input: TopologyInput) {
       const topology = await api.topologies.create(input)
       update((s) => ({ ...s, items: [topology, ...s.items] }))
