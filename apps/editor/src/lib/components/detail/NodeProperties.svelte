@@ -51,26 +51,21 @@
     return specDeviceType(spec) ?? spec.kind
   }
 
-  // Hardware role options for the editable Type dropdown. Listed in
-  // the same order as the SideToolbar's Add-Node menu so the user
-  // sees a consistent palette. Used only when the node isn't bound
-  // to a Product — bound nodes inherit their type from `Product.spec`.
-  const hardwareTypeOptions: { value: DeviceType; label: string }[] = [
-    { value: DeviceType.Router, label: 'Router' },
-    { value: DeviceType.Firewall, label: 'Firewall' },
-    { value: DeviceType.L2Switch, label: 'L2 Switch' },
-    { value: DeviceType.L3Switch, label: 'L3 Switch' },
-    { value: DeviceType.Server, label: 'Server' },
-    { value: DeviceType.AccessPoint, label: 'Access Point' },
-    { value: DeviceType.CPE, label: 'CPE / Phone' },
-    { value: DeviceType.Internet, label: 'Internet' },
-    { value: DeviceType.LoadBalancer, label: 'Load Balancer' },
-    { value: DeviceType.ConsoleServer, label: 'Console Server' },
-    { value: DeviceType.Cloud, label: 'Cloud' },
-    { value: DeviceType.VPN, label: 'VPN' },
-    { value: DeviceType.Database, label: 'Database' },
-    { value: DeviceType.Generic, label: 'Generic' },
-  ]
+  // Hardware role options for the Type dropdown, derived directly
+  // from the `DeviceType` enum so adding a new role in core
+  // automatically surfaces it here without a second hardcoded list.
+  // Used only when the node isn't bound to a Product — bound nodes
+  // inherit their type from `Product.spec`.
+  const hardwareTypeOptions: { value: DeviceType; label: string }[] = Object.values(DeviceType).map(
+    (value) => ({
+      value,
+      // "l3-switch" → "L3 Switch", "access-point" → "Access Point"
+      label: value
+        .split('-')
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' '),
+    }),
+  )
 
   function changeHardwareType(value: string) {
     const next: NodeSpec =
