@@ -315,9 +315,23 @@ export interface NodeContext {
   metadata?: Record<string, unknown>
 }
 
+/** Port info resolved from a NodePort so callers can match without looking up the node. */
+export interface NodePortInfo {
+  id: string
+  /** Canonical port label (e.g. "Gi1/0/1"). May be empty if unset on the node. */
+  label?: string
+  /** Full OS/API interface name (e.g. "GigabitEthernet1/0/1"). */
+  interfaceName?: string
+  /** Alternative names accepted for matching. */
+  aliases?: string[]
+}
+
 export interface EdgeEndpoint {
   nodeId: string
+  /** Port id reference (random, not human-readable). Use `portInfo` for display/matching. */
   port?: string
+  /** Resolved port metadata. Absent when the port can't be found on the node. */
+  portInfo?: NodePortInfo
   ip?: string
 }
 
