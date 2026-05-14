@@ -56,6 +56,9 @@
   let spotlight = $state(false)
   let highlightTimeout: ReturnType<typeof setTimeout> | null = null
   let unsubscribeEvents: (() => void) | null = null
+  let viewer = $state<TopologyViewer | null>(null)
+  /** Camera transform snapshot for transient zooms (hover previews). */
+  let savedTransform: { x: number; y: number; k: number } | null = null
 
   const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
   const editMode = $derived($dashboardEditMode)
@@ -137,9 +140,34 @@
       case 'highlight-node':
       case 'select-node':
       case 'zoom-to-node': {
-        const nodeId = event.payload.nodeId
+        // Resolve nodeId from either explicit nodeId or a host via mapping.
+        const nodeId =
+          event.payload.nodeId ??
+          (event.payload.host ? hostToNodeId.get(event.payload.host) : undefined)
         if (!nodeId) break
         applyHighlight(new Set([nodeId]), event.payload.duration ?? 3000)
+        if (event.type === 'zoom-to-node') {
+          if (event.payload.transient) {
+            // Snapshot only the first transient pan in a sequence so a chain
+            // of hovers restores to the pre-hover view, not the previous
+            // hover's target.
+            if (savedTransform === null) {
+              savedTransform = viewer?.getCameraTransform() ?? null
+            }
+          } else {
+            // Non-transient (committed) zoom — discard the snapshot so a
+            // later restore-camera doesn't unwind past this point.
+            savedTransform = null
+          }
+          viewer?.panToNode(nodeId)
+        }
+        break
+      }
+      case 'restore-camera': {
+        if (savedTransform) {
+          viewer?.setCameraTransform(savedTransform)
+          savedTransform = null
+        }
         break
       }
       case 'highlight-nodes': {
@@ -292,6 +320,7 @@
     {:else if rootGraph}
       <div class="h-full w-full relative group">
         <TopologyViewer
+          bind:this={viewer}
           graph={rootGraph}
           sheetId={config.sheetId || 'root'}
           theme={currentTheme}

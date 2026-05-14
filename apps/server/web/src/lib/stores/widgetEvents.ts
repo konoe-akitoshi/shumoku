@@ -15,6 +15,7 @@ export type WidgetEventType =
   | 'clear-highlight'
   | 'highlight-nodes'
   | 'highlight-by-attribute'
+  | 'restore-camera'
 
 /**
  * Widget event payload
@@ -26,6 +27,11 @@ export interface WidgetEvent {
     topologyId: string
     /** Target node ID (for single-node events) */
     nodeId?: string
+    /**
+     * Target monitoring host name (single-node events). Resolved to a node id
+     * via the topology's mapping. Use this when the emitter only knows hosts.
+     */
+    host?: string
     /** Target node IDs (for multi-node events) */
     nodeIds?: string[]
     /**
@@ -43,6 +49,11 @@ export interface WidgetEvent {
     duration?: number
     /** Custom highlight color (CSS color string) */
     highlightColor?: string
+    /**
+     * Transient zoom: receiver snapshots the camera before panning so a later
+     * `restore-camera` event can roll back. Use for hover-style previews.
+     */
+    transient?: boolean
     /** Source widget ID that triggered the event */
     sourceWidgetId?: string
   }
@@ -118,6 +129,37 @@ export function emitZoomToNode(topologyId: string, nodeId: string, sourceWidgetI
   widgetEvents.emit({
     type: 'zoom-to-node',
     payload: { topologyId, nodeId, sourceWidgetId },
+  })
+}
+
+/**
+ * Zoom to the node mapped to a monitoring host. The receiving widget resolves
+ * the host via its mapping (mapping.nodes[].hostName).
+ *
+ * Pass `transient: true` (hover-style previews) so the receiver snapshots the
+ * camera before panning and a later `restore-camera` event rolls it back.
+ */
+export function emitZoomToHost(
+  topologyId: string,
+  host: string,
+  options?: { transient?: boolean; sourceWidgetId?: string },
+): void {
+  widgetEvents.emit({
+    type: 'zoom-to-node',
+    payload: {
+      topologyId,
+      host,
+      transient: options?.transient,
+      sourceWidgetId: options?.sourceWidgetId,
+    },
+  })
+}
+
+/** Roll back the camera to the last snapshot taken by a transient zoom. */
+export function emitRestoreCamera(topologyId: string, sourceWidgetId?: string): void {
+  widgetEvents.emit({
+    type: 'restore-camera',
+    payload: { topologyId, sourceWidgetId },
   })
 }
 

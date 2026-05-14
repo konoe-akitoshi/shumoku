@@ -341,6 +341,18 @@
     return svgElement
   }
 
+  /** Snapshot the current camera transform so it can be restored later. */
+  export function getCameraTransform(): { x: number; y: number; k: number } | null {
+    return camera?.getTransform() ?? null
+  }
+
+  /** Restore a previously snapshotted transform (pan + zoom level). */
+  export function setCameraTransform(t: { x: number; y: number; k: number }): void {
+    if (!camera) return
+    camera.panTo(t.x, t.y)
+    camera.zoomTo(t.k)
+  }
+
   // Only constructed when the template branch below has already
   // checked that `graph` is defined, so the `graph!` non-null cast is
   // safe. This keeps ViewerContext's `graph` non-nullable for
@@ -400,16 +412,16 @@
   }
 
   /* Interaction gating via pointer-events on specific element types.
-                       Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
-                       propagation on the canvas background. d3-zoom's filter already
-                       handles wheel requiring ctrl/meta, but we also kill the background
-                       grid's clickability when selection is off. */
+                           Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
+                           propagation on the canvas background. d3-zoom's filter already
+                           handles wheel requiring ctrl/meta, but we also kill the background
+                           grid's clickability when selection is off. */
   .topology-viewer.no-panzoom :global(.canvas-bg) {
     pointer-events: none;
   }
 
   /* LOD: toggleable ornament classes. Rules match @shumoku/renderer's
-                       output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
+                           output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
   .topology-viewer.hide-port-labels :global(.port-label),
   .topology-viewer.hide-port-labels :global(.port-label-bg) {
     display: none;
