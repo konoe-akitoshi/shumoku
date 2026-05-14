@@ -9,8 +9,17 @@ import { derived, get, writable } from 'svelte/store'
 export type NodeStatus = 'up' | 'down' | 'unknown' | 'warning'
 export type EdgeStatus = 'up' | 'down' | 'unknown' | 'degraded'
 
+/** State of the monitoring path itself — see core plugin-types for details. */
+export type MonitoringHealth = 'healthy' | 'failing' | 'pending' | 'paused'
+
 export interface NodeMetrics {
   status: NodeStatus
+  /** Last time the host was confirmed reachable (epoch ms). */
+  lastSeen?: number
+  /** Whether monitoring is succeeding (orthogonal to device status). */
+  monitoring?: MonitoringHealth
+  /** Short reason when monitoring !== 'healthy' (e.g. SNMP timeout text). */
+  monitoringError?: string
 }
 
 export interface EdgeMetrics {

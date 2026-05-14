@@ -243,6 +243,62 @@
     }
   }
 
+  function getDeviceLabel(status: string | undefined): string {
+    switch (status) {
+      case 'up':
+        return 'Up'
+      case 'down':
+        return 'Down'
+      default:
+        return 'Unknown'
+    }
+  }
+
+  // ----- Monitoring health (orthogonal to device status) ------------------
+
+  function getMonitoringBgColor(monitoring: string | undefined): string {
+    switch (monitoring) {
+      case 'healthy':
+        return 'bg-success'
+      case 'failing':
+        return 'bg-destructive'
+      case 'paused':
+        return 'bg-info'
+      case 'pending':
+        return 'bg-muted-foreground'
+      default:
+        return 'bg-muted-foreground'
+    }
+  }
+
+  function getMonitoringTextColor(monitoring: string | undefined): string {
+    switch (monitoring) {
+      case 'healthy':
+        return 'text-success'
+      case 'failing':
+        return 'text-destructive'
+      case 'paused':
+        return 'text-info'
+      default:
+        return 'text-muted-foreground'
+    }
+  }
+
+  function getMonitoringLabel(monitoring: string | undefined): string {
+    switch (monitoring) {
+      case 'healthy':
+        return 'Healthy'
+      case 'failing':
+        return 'Failing'
+      case 'pending':
+        return 'Pending'
+      case 'paused':
+        return 'Paused'
+      default:
+        return '—'
+    }
+  }
+
   function stripHtmlTags(text: string | undefined): string {
     if (!text) return ''
     return text.replace(/<[^>]*>/g, '')
@@ -272,25 +328,12 @@
         <div class="space-y-4">
           <!-- Node Info & Status -->
           <div class="bg-muted/50 rounded-lg p-4 space-y-3">
-            <!-- Status Row -->
+            <!-- Mapping row -->
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span
-                  class="w-2.5 h-2.5 rounded-full {getStatusBgColor(nodeMetrics?.status)}"
-                ></span>
-                <span class="font-medium {getStatusColor(nodeMetrics?.status)}">
-                  {#if nodeMetrics?.status === 'up'}
-                    Up
-                  {:else if nodeMetrics?.status === 'down'}
-                    Down
-                  {:else}
-                    Unknown
-                  {/if}
-                </span>
-              </div>
+              <span class="text-xs uppercase tracking-wide text-muted-foreground">Mapping</span>
               {#if currentNodeMapping?.hostId}
-                <span class="text-xs text-muted-foreground">
-                  Mapped to: {currentNodeMapping.hostName || currentNodeMapping.hostId}
+                <span class="text-xs text-foreground">
+                  {currentNodeMapping.hostName || currentNodeMapping.hostId}
                 </span>
               {:else}
                 <span class="inline-flex items-center gap-1 text-xs text-warning">
@@ -299,6 +342,50 @@
                 </span>
               {/if}
             </div>
+
+            <!-- Device status row -->
+            <div class="flex items-center justify-between">
+              <span class="text-xs uppercase tracking-wide text-muted-foreground">Device</span>
+              <div class="flex items-center gap-2">
+                <span
+                  class="w-2.5 h-2.5 rounded-full {getStatusBgColor(nodeMetrics?.status)}"
+                ></span>
+                <span class="text-sm font-medium {getStatusColor(nodeMetrics?.status)}">
+                  {getDeviceLabel(nodeMetrics?.status)}
+                </span>
+              </div>
+            </div>
+
+            <!-- Monitoring health row (orthogonal to device) -->
+            {#if currentNodeMapping?.hostId}
+              <div class="flex items-center justify-between">
+                <span class="text-xs uppercase tracking-wide text-muted-foreground">
+                  Monitoring
+                </span>
+                <div class="flex flex-col items-end gap-0.5">
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="w-2.5 h-2.5 rounded-full {getMonitoringBgColor(
+                        nodeMetrics?.monitoring,
+                      )}"
+                    ></span>
+                    <span
+                      class="text-sm font-medium {getMonitoringTextColor(nodeMetrics?.monitoring)}"
+                    >
+                      {getMonitoringLabel(nodeMetrics?.monitoring)}
+                    </span>
+                  </div>
+                  {#if nodeMetrics?.monitoringError}
+                    <span
+                      class="text-xs text-muted-foreground max-w-[16rem] truncate"
+                      title={nodeMetrics.monitoringError}
+                    >
+                      {nodeMetrics.monitoringError}
+                    </span>
+                  {/if}
+                </div>
+              </div>
+            {/if}
 
             <!-- Device Info -->
             <div class="flex flex-wrap gap-2 text-xs text-muted-foreground">

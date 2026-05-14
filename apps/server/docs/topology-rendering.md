@@ -389,9 +389,10 @@ flowchart TD
   WMI["path.wm-overlay direction=in<br/>(WeathermapLinkOverlay)"]
   WMO["path.wm-overlay direction=out<br/>(WeathermapLinkOverlay)"]
   LH["path.link-hit"]
-  N["g.node<br/>+ .status-up/down/...<br/>+ .node-highlighted/dimmed"]
+  N["g.node<br/>+ .status-up/down/...<br/>+ .monitoring-healthy/failing/...<br/>+ .node-highlighted/dimmed"]
   NB["g.node-bg rect"]
   NF["g.node-fg<br/>(icon, label)"]
+  MB["g.shumoku-monitoring-badge<br/>(injected by NodeStatusOverlay)"]
   P["g.port<br/>(port box + label)"]
 
   SVG --> VP
@@ -405,6 +406,7 @@ flowchart TD
   VP --> N
   N --> NB
   N --> NF
+  N --> MB
   VP --> P
 ```
 
@@ -489,11 +491,18 @@ $effect(() => {
   if (!svgElement || !enabled) return
   const svg = svgElement
   for (const [id, meta] of Object.entries(status ?? {})) {
-    svg.querySelector(`g.node[data-id="${CSS.escape(id)}"]`)
-      ?.classList.add(`status-${meta.status}`)
+    const node = svg.querySelector(`g.node[data-id="${CSS.escape(id)}"]`)
+    if (!node) continue
+    // Device 状態 = 枠 (stroke)
+    node.classList.add(`status-${meta.status}`)
+    // Monitoring 健全性 = 角バッジ (separate SVG element)
+    if (meta.monitoring) {
+      node.classList.add(`monitoring-${meta.monitoring}`)
+      ensureBadge(node)  // <g class="shumoku-monitoring-badge"><circle/></g>
+    }
   }
   return () => {
-    /* clear classes on cleanup */
+    /* clear classes + remove badges on cleanup */
   }
 })
 ```
@@ -671,19 +680,35 @@ out lane:  offset = -laneOffset  (stroke 下半分)
 
 ### 6.2 Node Status(サイドカー、`<svelte:head>` で CSS 注入)
 
-**用途**: ノードに up/down/warning/degraded/unknown の状態色を反映。
+**用途**: ノードの状態を **3 軸独立** で可視化する。
+
+| 軸 | 意味 | どこに出る |
+|---|---|---|
+| **Mapping** | このノードがモニタリング側のホストに割り当て済みか | metrics 入力に entry が無ければ装飾なし |
+| **Device 状態** | 機材自体が up/down か (= ICMP 等の直接信号) | `g.node` に `status-*` クラス → 枠(stroke) |
+| **Monitoring 健全性** | 監視路自体が機能してるか (= データ収集できてるか) | `g.node` に `monitoring-*` クラス + 右下に小バッジ inject |
+
+3 軸が独立してるので、`status-up + monitoring-paused`(動いてるけど
+メンテ中で値は捨ててる)や `status-unknown + monitoring-failing`
+(監視到達不能、機材状態は不明)のような状態が**互いに上書きせず**
+共存する。
 
 **入力**:
 - `svgElement: SVGSVGElement`
-- `status: Record<nodeId, { status: string }>`
+- `status: Record<nodeId, { status: string; monitoring?: string }>`
 - `allowedStatuses?` (default: `['up', 'down', 'unknown', 'warning', 'degraded']`)
 
-**DOM 操作**: 各 `g.node[data-id]` に `status-up` / `status-down` 等の
-クラスを付与。要素自体は作らない、classList 操作だけ。
+**DOM 操作**:
+- 各 `g.node[data-id]` に `status-*` と `monitoring-*` のクラスを付与
+- `monitoring-*` が付くノードには `<g class="shumoku-monitoring-badge">`
+  を append。中身は `<circle r=5>` 一枚で、右下角に `transform` で
+  位置決め。塗り色は CSS が `monitoring-*` クラスから決める
+- バッジは冪等に再利用(re-render で要素が増えない)、cleanup で削除
 
 **CSS**(`<svelte:head>` で `<style id="shumoku-node-status-css">` を注入):
 
 ```css
+/* === Device 状態 (枠) === */
 g.node.status-up    .node-bg rect { stroke: #22c55e; stroke-width: 2px; }
 g.node.status-down  .node-bg rect {
   stroke: #ef4444; stroke-width: 2.5px;
@@ -693,13 +718,45 @@ g.node.status-down  .node-bg rect {
 g.node.status-warning  .node-bg rect { stroke: #f97316; ... }
 g.node.status-degraded .node-bg rect { stroke: #eab308; ... }
 g.node.status-unknown  .node-bg rect { stroke: #6b7280; stroke-dasharray: 4 3; }
+
+/* === Monitoring 健全性 (角バッジ) === */
+g.node g.shumoku-monitoring-badge { pointer-events: none; }
+g.node g.shumoku-monitoring-badge circle { stroke: #fff; stroke-width: 1.5; }
+g.node.monitoring-healthy g.shumoku-monitoring-badge circle { fill: #22c55e; }
+g.node.monitoring-failing g.shumoku-monitoring-badge circle { fill: #ef4444; }
+g.node.monitoring-pending g.shumoku-monitoring-badge circle { fill: #9ca3af; }
+g.node.monitoring-paused  g.shumoku-monitoring-badge circle { fill: #3b82f6; }
 ```
+
+CSS セレクタが `.node-bg rect`(枠側)と `g.shumoku-monitoring-badge circle`
+(バッジ側)で完全に分離してるので、片方の rule が片方を上書きしない。
 
 `<svelte:head>` 注入を使う理由は、複数の Svelte コンポーネントが
 同じ rule 集合を共有するため(scoped style だと各コンポーネントで
 重複定義になる)。
 
-`@media print` と `prefers-reduced-motion` も同じ block で扱う。
+`@media print` と `prefers-reduced-motion` も同じ block で扱う
+(バッジは print 時に `display: none`)。
+
+#### プラグイン契約
+
+プラグインが返す `NodeMetrics`(`@shumoku/core` の `plugin-types.ts`):
+
+```ts
+{
+  status: 'up' | 'down' | 'unknown' | 'warning' | 'degraded'
+  monitoring?: 'healthy' | 'failing' | 'pending' | 'paused'
+  monitoringError?: string  // failing 時に "なぜ失敗したか" を残す
+  lastSeen?: number
+}
+```
+
+`monitoring` は optional。プラグインが対応してない場合 undefined を
+返してOK(その場合はバッジが出ず、枠だけで表現される)。
+
+`unmapped` は entry を**そもそも作らない**ことで表現する
+(オーバーレイは entry の無いノードに対しては何もしない)。「mapped
+だけど不明」と「mapped されてない」を視覚的に区別できる。
 
 ### 6.3 Highlight(サイドカー、reactive + imperative)
 

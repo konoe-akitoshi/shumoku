@@ -111,8 +111,27 @@ export interface DataSourcePlugin {
  */
 export type MetricsStatus = 'up' | 'down' | 'unknown' | 'warning' | 'degraded'
 
+/**
+ * Health of the monitoring path itself — orthogonal to `status` (which is the
+ * device's operational state). Lets the UI distinguish "device is down" from
+ * "we can't reach the device to find out".
+ *
+ * - `healthy`: monitoring is collecting data
+ * - `failing`: monitoring has tried and explicitly failed (e.g. SNMP timeout,
+ *   agent unreachable). The reported `status` is best-effort.
+ * - `pending`: monitoring hasn't reached a verdict yet (e.g. host just added,
+ *   first poll not run, or backoff)
+ * - `paused`: monitoring intentionally muted by the operator (maintenance
+ *   window, host disabled). Not an error condition.
+ */
+export type MonitoringHealth = 'healthy' | 'failing' | 'pending' | 'paused'
+
 export interface NodeMetrics {
   status: MetricsStatus
+  /** State of the monitoring path (not the device). Omit if irrelevant. */
+  monitoring?: MonitoringHealth
+  /** Short human-readable reason when `monitoring !== 'healthy'`. */
+  monitoringError?: string
   cpu?: number
   memory?: number
   lastSeen?: number
