@@ -130,16 +130,25 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
           const itemIds = [inItemId, outItemId].filter(Boolean) as string[]
           const items = await this.getItemsByIds(itemIds)
 
+          // Drop stale items — when a host goes unreachable Zabbix keeps the
+          // last polled value indefinitely. Without this check we'd paint
+          // utilization bars for a dead link from values minutes/hours old.
+          const nowSec = Math.floor(Date.now() / 1000)
           let inBps = 0
           let outBps = 0
-
+          let anyFresh = false
           for (const item of items) {
+            const lastclock = (item as ZabbixItem & { lastclock?: string }).lastclock ?? '0'
+            if (!ZabbixPlugin.isFreshClock(lastclock, nowSec)) continue
+            anyFresh = true
             const value = Number.parseFloat(item.lastvalue) || 0
-            if (item.itemid === inItemId) {
-              inBps = value
-            } else if (item.itemid === outItemId) {
-              outBps = value
-            }
+            if (item.itemid === inItemId) inBps = value
+            else if (item.itemid === outItemId) outBps = value
+          }
+
+          if (!anyFresh) {
+            metrics.links[linkId] = { status: 'unknown' }
+            continue
           }
 
           const capacity = linkMapping.bandwidth || 1_000_000_000
@@ -453,6 +462,25 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
   /** Maximum staleness (seconds) for an item value to count as "fresh". */
   private static readonly LIVE_DATA_WINDOW_SEC = 300
 
+  /** True iff a Zabbix `lastclock` timestamp falls within the freshness window. */
+  private static isFreshClock(lastclock: string, nowSec: number): boolean {
+    const t = Number(lastclock)
+    return t > 0 && nowSec - t < ZabbixPlugin.LIVE_DATA_WINDOW_SEC
+  }
+
+  /** Item keys produced by Zabbix's ICMP poller. */
+  private static isIcmpKey(key: string): boolean {
+    return key === 'icmpping' || key.startsWith('icmpping[')
+  }
+
+  /**
+   * Item keys whose `lastclock` reflects Zabbix server activity rather than
+   * the device responding. Excluded from "device is alive" inference.
+   */
+  private static isZabbixInternalKey(key: string): boolean {
+    return key.startsWith('zabbix[')
+  }
+
   /**
    * Decide whether a Zabbix host is reachable.
    *
@@ -522,26 +550,45 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
   // ---- Pure classifiers -------------------------------------------------
 
   /**
-   * Map raw items into a device-state verdict. ICMP ping is the strongest
-   * "device is alive / dead" signal we have — favour it when present.
+   * Map raw items into a device-state verdict.
+   *
+   * Rules in priority order:
+   *
+   * 1. **Fresh ICMP wins.** `icmpping=1` → up, `icmpping=0` → down.
+   *    Zabbix's own ICMP poller is the cleanest direct "the device is on
+   *    the network" signal — when it has a recent verdict, trust it over
+   *    anything else, including SNMP polls that may be returning cached or
+   *    Zabbix-internal data after the device disappeared.
+   * 2. **No ICMP, but real device data is fresh → up.** SNMP / agent items
+   *    polled *from* the device count, but we exclude `zabbix[...]` keys
+   *    (Zabbix server's internal metrics about the host, e.g. the
+   *    `zabbix[host,snmp,available]` flag) — those stay fresh even after
+   *    the device goes offline because they reflect the *poller's* state,
+   *    not the device's.
+   * 3. **No fresh signals at all → `unknown`.**
+   *
+   * Note: ICMP false-positive cases (ping filtered by ACL while SNMP works
+   * fine) are not handled here — the operator should disable / remove the
+   * misleading icmpping item if the device's ICMP is intentionally blocked.
    */
   private static classifyDevice(
     items: HealthItem[],
     nowSec: number,
   ): { status: MetricsStatus; lastSeen?: number } {
-    const fresh = (t: string) => {
-      const n = Number(t)
-      return n > 0 && nowSec - n < ZabbixPlugin.LIVE_DATA_WINDOW_SEC
+    const fresh = (i: HealthItem) => ZabbixPlugin.isFreshClock(i.lastclock, nowSec)
+    // 1. Fresh ICMP — authoritative.
+    const icmp = items.find((i) => ZabbixPlugin.isIcmpKey(i.key_) && fresh(i))
+    if (icmp) {
+      return icmp.lastvalue === '0' ? { status: 'down' } : { status: 'up', lastSeen: Date.now() }
     }
-    // 1. icmpping value of 0 from a recent poll = device unreachable.
-    const icmp = items.find((i) => i.key_ === 'icmpping' || i.key_.startsWith('icmpping['))
-    if (icmp && fresh(icmp.lastclock)) {
-      if (icmp.lastvalue === '0') return { status: 'down' }
-      if (icmp.lastvalue === '1') return { status: 'up', lastSeen: Date.now() }
-    }
-    // 2. Any other fresh data implies the device responded to monitoring,
-    //    so it must be alive even if we don't have a direct ICMP signal.
-    if (items.some((i) => fresh(i.lastclock))) {
+    // 2. No ICMP signal — fall back to any real device data, skipping Zabbix
+    //    server-internal items that don't actually prove the device is up.
+    if (
+      items.some(
+        (i) =>
+          !ZabbixPlugin.isIcmpKey(i.key_) && !ZabbixPlugin.isZabbixInternalKey(i.key_) && fresh(i),
+      )
+    ) {
       return { status: 'up', lastSeen: Date.now() }
     }
     // 3. No evidence either way.
@@ -562,10 +609,7 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
     if (failingIface) {
       return { health: 'failing', error: failingIface.error || undefined }
     }
-    const hasFreshData = items.some((i) => {
-      const t = Number(i.lastclock)
-      return t > 0 && nowSec - t < ZabbixPlugin.LIVE_DATA_WINDOW_SEC
-    })
+    const hasFreshData = items.some((i) => ZabbixPlugin.isFreshClock(i.lastclock, nowSec))
     return { health: hasFreshData ? 'healthy' : 'pending' }
   }
 

@@ -100,26 +100,29 @@
      mounts this overlay gets the visuals automatically. -->
 <svelte:head>
   {@html `<style id="shumoku-node-status-css">
-    /* === Device status (border on the node-bg rect) === */
-    g.node.status-up .node-bg rect {
+    /* === Device status (border on the node-bg rect) ===
+       Suppressed when the node is selected so the renderer's selection
+       stroke (passed via the SVG attribute) stays visible — without this,
+       a colored node clicked by the operator gives no visual feedback. */
+    g.node.status-up:not(.selected) .node-bg rect {
       stroke: #22c55e;
       stroke-width: 2px;
     }
-    g.node.status-down .node-bg rect {
+    g.node.status-down:not(.selected) .node-bg rect {
       stroke: #ef4444;
       stroke-width: 2.5px;
       filter: drop-shadow(0 0 6px color-mix(in srgb, #ef4444 60%, transparent));
       animation: shumoku-status-down-pulse 1.6s ease-in-out infinite alternate;
     }
-    g.node.status-warning .node-bg rect {
+    g.node.status-warning:not(.selected) .node-bg rect {
       stroke: #f97316;
       stroke-width: 2px;
     }
-    g.node.status-degraded .node-bg rect {
+    g.node.status-degraded:not(.selected) .node-bg rect {
       stroke: #eab308;
       stroke-width: 2px;
     }
-    g.node.status-unknown .node-bg rect {
+    g.node.status-unknown:not(.selected) .node-bg rect {
       stroke: #6b7280;
       stroke-width: 2px;
       stroke-dasharray: 4 3;
