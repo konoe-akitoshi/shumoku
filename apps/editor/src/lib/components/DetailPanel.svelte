@@ -134,7 +134,6 @@
                     <NodeContent
                       {node}
                       poeBudget={diagramState.poeBudgets.find((b) => b.nodeId === node?.id)}
-                      products={diagramState.products}
                       links={diagramState.links}
                       nodes={diagramState.nodes}
                     />

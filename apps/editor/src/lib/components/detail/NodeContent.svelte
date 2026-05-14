@@ -3,19 +3,15 @@
   import { X } from 'phosphor-svelte'
   import { diagramState } from '$lib/context.svelte'
   import type { PoEBudget } from '$lib/poe-analysis'
-  import type { Product } from '$lib/types'
-  import { productLabel } from '$lib/types'
 
   let {
     node,
     poeBudget,
-    products = [],
     links = [],
     nodes = new Map(),
   }: {
     node: Node
     poeBudget?: PoEBudget
-    products: Product[]
     links: Link[]
     nodes?: Map<string, Node>
   } = $props()
@@ -61,12 +57,6 @@
         : stripHtml(String(node.label))
       : '',
   )
-
-  const boundProduct = $derived.by(() => {
-    if (!node.productId) return null
-    const p = products.find((e) => e.id === node.productId)
-    return p?.kind === 'device' ? p : null
-  })
 
   interface PortConnection {
     portLabel: string
@@ -180,19 +170,12 @@
     <div class="text-sm font-semibold text-neutral-800 dark:text-neutral-100 truncate">
       {nodeLabel || node.id}
     </div>
-    {#if boundProduct}
-      <div class="flex items-center gap-1.5 text-[11px]">
-        <span
-          class="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-[9px] font-medium uppercase text-neutral-500 dark:text-neutral-400"
-          >{boundProduct.spec.kind}</span
-        >
-        <span class="text-neutral-600 dark:text-neutral-300">{productLabel(boundProduct)}</span>
-      </div>
-    {:else if node.spec}
-      <!-- Catalog-less node: show whatever spec the user authored
-           directly on the node so the Detail panel doesn't say
-           "No spec assigned" for legitimately spec'd nodes that
-           just haven't been bound to a Product yet. -->
+    <!-- node.spec is the canonical identity source. For Product-bound
+         nodes the spec was snapshotted from `Product.spec` at bind
+         time, so a single `specSummary` call covers both Product-
+         bound ("cisco / c9300") and generic placeholder ("internet")
+         cases without a fallback branch. -->
+    {#if node.spec}
       <div class="flex items-center gap-1.5 text-[11px]">
         <span
           class="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-[9px] font-medium uppercase text-neutral-500 dark:text-neutral-400"
