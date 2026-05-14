@@ -41,10 +41,20 @@
   /**
    * Replace the contents of a Map in place (used when core helpers return
    * fresh Maps but we want to keep our reactive SvelteMap identity).
+   *
+   * Diff-apply, NOT clear-then-set: clear() makes the map flash
+   * to `size === 0`, and any host gated on `size > 0` (e.g. an
+   * `{#if nodes.size > 0}` mount around <ShumokuRenderer>) sees
+   * the empty state and tears the renderer down — taking the
+   * local selection / drag state with it. Diffing keeps `size`
+   * monotonic w.r.t. the real change set.
    */
   function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
-    target.clear()
-    for (const [k, v] of source) target.set(k, v)
+    const next = source instanceof Map ? source : new Map(source)
+    for (const k of [...target.keys()]) {
+      if (!next.has(k)) target.delete(k)
+    }
+    for (const [k, v] of next) target.set(k, v)
   }
 
   interface RendererProps extends RendererOverlaySnippets {

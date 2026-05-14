@@ -14,6 +14,7 @@ import {
   type Termination,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
+import { replaceMap } from './replace-map'
 
 // Root diagram + sub-sheet mirror state. Pure store — primitives
 // only, no commit wrapping. Composer (`context.svelte.ts`) layers
@@ -81,14 +82,10 @@ export function currentSheetCacheGeneration() {
   return sheetCacheGeneration
 }
 
-/**
- * Replace the contents of a SvelteMap in place, preserving its
- * identity so bindings and downstream reactivity stay attached.
- */
-export function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
-  target.clear()
-  for (const [k, v] of source) target.set(k, v)
-}
+// `replaceMap` lives in a plain `.ts` neighbour so vitest can import
+// it without booting the Svelte runes runtime. Re-exported here for
+// the existing call sites that consume it from this module.
+export { replaceMap }
 
 /**
  * Assign a `ResolvedLayout` into the given mirror state, preserving
