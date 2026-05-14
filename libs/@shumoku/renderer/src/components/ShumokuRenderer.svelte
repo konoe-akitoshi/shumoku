@@ -26,7 +26,7 @@
     routeEdges,
     specDeviceType,
   } from '@shumoku/core'
-  import { SvelteMap } from 'svelte/reactivity'
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import type { RendererOverlaySnippets } from '../lib/overlays'
   import { themeToColors } from '../lib/render-colors'
   import { screenToWorld as screenToWorldUtil } from '../lib/svg-coords'
@@ -139,14 +139,19 @@
      * selection lifecycle independently of this renderer instance:
      * when the renderer unmounts and remounts (e.g. its `{#if}`
      * mount gate flips, or it's swapped between sheets), the
-     * selection survives. When the host doesn't bind, a fresh Set
-     * is created at instantiation and the renderer behaves as the
-     * sole owner — same UX as before this prop existed.
+     * selection survives. When the host doesn't bind, a fresh
+     * SvelteSet is created at instantiation and the renderer
+     * behaves as the sole owner — same UX as before this prop
+     * existed.
      *
-     * Mutations from inside the renderer always assign a NEW Set
-     * reference (never `clear()` / `add()` on the existing one) so
-     * reactivity downstream sees a single atomic change instead of
-     * a transient empty state.
+     * Typed as `Set<string>` so non-Svelte consumers can pass a
+     * plain Set, but the renderer's internal reassignments use
+     * `SvelteSet` so in-place ops (`.add` / `.delete` from a host
+     * that mutates rather than replaces) stay reactive. The
+     * renderer itself never mutates in place — every change
+     * produces a fresh SvelteSet and reassigns — so the bound
+     * value seen by `$derived` downstream is a single atomic
+     * snapshot per mutation.
      */
     selection?: Set<string>
   }
@@ -179,7 +184,7 @@
     nodeOverlay,
     portOverlay,
     preventContextMenuDefault = true,
-    selection = $bindable(new Set<string>()),
+    selection = $bindable<Set<string>>(new SvelteSet()),
   }: RendererProps = $props()
 
   const colors = $derived(themeToColors(theme))
@@ -274,7 +279,7 @@
   // keep showing a stale "N selected" until the user clicks elsewhere.
   $effect(() => {
     let changed = false
-    const next = new Set<string>()
+    const next = new SvelteSet<string>()
     for (const id of selection) {
       if (nodes.has(id) || edges.has(id) || subgraphs.has(id) || ports.has(id)) {
         next.add(id)
@@ -293,17 +298,17 @@
     // Plain click → replace.
     const additive = !!ev && (ev.shiftKey || ev.metaKey || ev.ctrlKey)
     if (additive) {
-      const next = new Set(selection)
+      const next = new SvelteSet(selection)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       selection = next
     } else {
-      selection = new Set([id])
+      selection = new SvelteSet([id])
     }
     emitSelection()
   }
   function handleBackgroundClick() {
-    selection = new Set()
+    selection = new SvelteSet()
     emitSelection()
   }
   function handleContextMenu(id: string, type: string, e: MouseEvent) {
@@ -311,7 +316,7 @@
     // single item; right-click on something already selected keeps the
     // existing multi-selection so the menu applies to the whole set.
     if (!selection.has(id)) {
-      selection = new Set([id])
+      selection = new SvelteSet([id])
       emitSelection()
     }
     onctx?.(id, type, e.clientX, e.clientY)
@@ -319,7 +324,7 @@
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      selection = new Set()
+      selection = new SvelteSet()
       emitSelection()
       linkDrag = null
     } else if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A')) {
@@ -327,7 +332,7 @@
       // intentionally excluded; they're rarely the target of bulk
       // operations and including them clutters Delete behavior.
       e.preventDefault()
-      const next = new Set<string>()
+      const next = new SvelteSet<string>()
       for (const id of nodes.keys()) next.add(id)
       for (const id of subgraphs.keys()) next.add(id)
       selection = next
@@ -431,7 +436,7 @@
       if (!b) continue
       if (intersects(b.x, b.y, b.x + b.width, b.y + b.height)) hits.add(id)
     }
-    selection = additive ? new Set([...selection, ...hits]) : hits
+    selection = additive ? new SvelteSet([...selection, ...hits]) : new SvelteSet(hits)
     emitSelection()
   }
 
@@ -496,7 +501,7 @@
     // rebalanceSubgraphs mutates the subgraphs map's entries in place; since
     // we now use a SvelteMap the mutations are picked up without any reassign.
     rebalanceSubgraphs(nodes, subgraphs, ports)
-    selection = new Set([id])
+    selection = new SvelteSet([id])
     emitSelection()
   }
 

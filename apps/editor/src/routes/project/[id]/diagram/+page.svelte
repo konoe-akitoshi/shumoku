@@ -3,6 +3,7 @@
   import { attachCamera } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
+  import { SvelteSet } from 'svelte/reactivity'
   import { page } from '$app/stores'
   import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
   import type { ActionContext, CameraHandle, RendererHandle } from '$lib/actions/types'
@@ -71,22 +72,30 @@
   // Multi-selection state.
   //
   // `selectionIds` is the page-owned source of truth, two-way bound
-  // into the renderer (which used to own it internally — see
-  // ShumokuRenderer's `selection` prop). Keeping it on the page
-  // means the set survives any remount of <ShumokuRenderer> (sheet
-  // switches, mount-gate flips, dev-server HMR) so the user doesn't
-  // lose their working selection across an invisible reactive blip.
+  // into the renderer (which used to own it internally). Keeping it
+  // on the page means the set survives any remount of
+  // <ShumokuRenderer> — sheet switches, mount-gate flips, dev-server
+  // HMR — so the user doesn't lose their working selection across
+  // an invisible reactive blip. SvelteSet so in-place mutations
+  // from any future caller stay reactive; today the renderer always
+  // reassigns with a fresh SvelteSet.
   //
-  // `selection` is the typed mirror the rest of the page consumes
-  // (ActionContext, StatusBadge, detail panel). The renderer still
-  // emits `onselectionchange` so we don't have to re-derive the
-  // type per id here — it has the same lookup data and emits once
-  // synchronously per mutation. `selected` (singular) is the
-  // convenience read for surfaces that care only about the focused
-  // single item.
+  // `selection` (typed) is `$derived` from `selectionIds` plus the
+  // diagramState lookup maps — single source of truth, no callback
+  // mirror to drift out of sync. The classifier mirrors the
+  // renderer's: edges > ports > subgraphs > nodes (default).
   type SelType = ActionContext['selection']['types'][number]
-  let selectionIds = $state<Set<string>>(new Set())
-  let selection = $state<{ ids: string[]; types: SelType[] }>({ ids: [], types: [] })
+  let selectionIds = $state<SvelteSet<string>>(new SvelteSet())
+  function classifyId(id: string): SelType {
+    if (diagramState.edges.has(id)) return 'edge'
+    if (diagramState.ports.has(id)) return 'port'
+    if (diagramState.subgraphs.has(id)) return 'subgraph'
+    return 'node'
+  }
+  const selection = $derived.by<{ ids: string[]; types: SelType[] }>(() => {
+    const ids = [...selectionIds]
+    return { ids, types: ids.map(classifyId) }
+  })
   const selected = $derived<{ id: string; type: string } | null>(
     selection.ids[0] && selection.types[0]
       ? { id: selection.ids[0], type: selection.types[0] }
@@ -225,14 +234,6 @@
           hideNode={(n) => !!n.termination}
           ondragstart={() => diagramState.beginTx('Move node')}
           ondragend={() => diagramState.endTx()}
-          onselectionchange={(ids: string[], types: string[]) => {
-            // Mirror the renderer's selection set so the action
-            // registry / status bar see the live state. Fires
-            // synchronously inside the renderer's click /
-            // right-click handler, so the ContextMenu wrapper
-            // sees the right selection when it opens.
-            selection = { ids, types: types as SelType[] }
-          }}
           onchange={() => {}}
           onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
           onnodeadd={(_id: string) => {
