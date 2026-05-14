@@ -15,6 +15,7 @@ export type WidgetEventType =
   | 'clear-highlight'
   | 'highlight-nodes'
   | 'highlight-by-attribute'
+  | 'restore-camera'
 
 /**
  * Widget event payload
@@ -26,8 +27,20 @@ export interface WidgetEvent {
     topologyId: string
     /** Target node ID (for single-node events) */
     nodeId?: string
+    /**
+     * Target monitoring host name (single-node events). Resolved to a node id
+     * via the topology's mapping. Use this when the emitter only knows hosts.
+     */
+    host?: string
     /** Target node IDs (for multi-node events) */
     nodeIds?: string[]
+    /**
+     * Target monitoring host names. The receiving topology resolves these to
+     * node ids via its own mapping (mapping.nodes[].hostName). Use this when
+     * the emitter only knows about hosts (e.g. AlertWidget) and isn't aware
+     * of per-topology node ids.
+     */
+    hosts?: string[]
     /** Attribute filter (for attribute-based highlight) */
     attribute?: { key: string; value: string }
     /** Enable spotlight (dim non-highlighted nodes) */
@@ -36,6 +49,11 @@ export interface WidgetEvent {
     duration?: number
     /** Custom highlight color (CSS color string) */
     highlightColor?: string
+    /**
+     * Transient zoom: receiver snapshots the camera before panning so a later
+     * `restore-camera` event can roll back. Use for hover-style previews.
+     */
+    transient?: boolean
     /** Source widget ID that triggered the event */
     sourceWidgetId?: string
   }
@@ -115,6 +133,37 @@ export function emitZoomToNode(topologyId: string, nodeId: string, sourceWidgetI
 }
 
 /**
+ * Zoom to the node mapped to a monitoring host. The receiving widget resolves
+ * the host via its mapping (mapping.nodes[].hostName).
+ *
+ * Pass `transient: true` (hover-style previews) so the receiver snapshots the
+ * camera before panning and a later `restore-camera` event rolls it back.
+ */
+export function emitZoomToHost(
+  topologyId: string,
+  host: string,
+  options?: { transient?: boolean; sourceWidgetId?: string },
+): void {
+  widgetEvents.emit({
+    type: 'zoom-to-node',
+    payload: {
+      topologyId,
+      host,
+      transient: options?.transient,
+      sourceWidgetId: options?.sourceWidgetId,
+    },
+  })
+}
+
+/** Roll back the camera to the last snapshot taken by a transient zoom. */
+export function emitRestoreCamera(topologyId: string, sourceWidgetId?: string): void {
+  widgetEvents.emit({
+    type: 'restore-camera',
+    payload: { topologyId, sourceWidgetId },
+  })
+}
+
+/**
  * Helper to emit a highlight-node event
  */
 export function emitHighlightNode(
@@ -157,6 +206,34 @@ export function emitHighlightNodes(
     payload: {
       topologyId,
       nodeIds,
+      spotlight: options?.spotlight,
+      duration: options?.duration,
+      highlightColor: options?.highlightColor,
+      sourceWidgetId: options?.sourceWidgetId,
+    },
+  })
+}
+
+/**
+ * Highlight nodes by their mapped monitoring host name. The receiving widget
+ * resolves hosts to node ids via its topology's mapping. Use this from
+ * widgets that only know hosts (e.g. AlertWidget).
+ */
+export function emitHighlightHosts(
+  topologyId: string,
+  hosts: string[],
+  options?: {
+    spotlight?: boolean
+    duration?: number
+    highlightColor?: string
+    sourceWidgetId?: string
+  },
+): void {
+  widgetEvents.emit({
+    type: 'highlight-nodes',
+    payload: {
+      topologyId,
+      hosts,
       spotlight: options?.spotlight,
       duration: options?.duration,
       highlightColor: options?.highlightColor,

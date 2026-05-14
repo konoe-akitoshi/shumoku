@@ -13,7 +13,12 @@
   import { api } from '$lib/api'
   import * as Dialog from '$lib/components/ui/dialog'
   import { currentLayout, dashboardStore } from '$lib/stores/dashboards'
-  import { emitClearHighlight, emitHighlightNodes } from '$lib/stores/widgetEvents'
+  import {
+    emitClearHighlight,
+    emitHighlightHosts,
+    emitRestoreCamera,
+    emitZoomToHost,
+  } from '$lib/stores/widgetEvents'
   import type { Alert, AlertSeverity, DataSource } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
@@ -183,7 +188,7 @@
           if (newHosts.length > 0) {
             forEachTopology((tid) => emitClearHighlight(tid, id))
             forEachTopology((tid) =>
-              emitHighlightNodes(tid, newHosts, {
+              emitHighlightHosts(tid, newHosts, {
                 duration: 15000,
                 highlightColor: SEVERITY_HIGHLIGHT_COLORS[highestSeverity],
                 sourceWidgetId: id,
@@ -224,7 +229,7 @@
 
     forEachTopology((tid) => emitClearHighlight(tid, id))
     forEachTopology((tid) =>
-      emitHighlightNodes(tid, [host], {
+      emitHighlightHosts(tid, [host], {
         highlightColor: SEVERITY_HIGHLIGHT_COLORS[severity],
         sourceWidgetId: id,
       }),
@@ -234,22 +239,38 @@
   function handleAlertHover(alert: Alert) {
     if (!alert.host) return
     const host = alert.host
-    forEachTopology((tid) =>
-      emitHighlightNodes(tid, [host], {
+    forEachTopology((tid) => {
+      emitHighlightHosts(tid, [host], {
         highlightColor: SEVERITY_HIGHLIGHT_COLORS[alert.severity],
         sourceWidgetId: id,
-      }),
-    )
+      })
+      // Peek the node — TopologyWidget snapshots the camera so leaving the
+      // alert row rolls it back.
+      emitZoomToHost(tid, host, { transient: true, sourceWidgetId: id })
+    })
   }
 
   function handleAlertLeave() {
     if (showDetailModal) return
+    // Roll back the transient peek-zoom from handleAlertHover regardless of
+    // pin mode (camera is independent of which highlight is active).
+    forEachTopology((tid) => emitRestoreCamera(tid, id))
     if (config.persistHighlight) {
       // Restore pinned alert highlight
       emitPinnedHighlight()
       return
     }
     forEachTopology((tid) => emitClearHighlight(tid, id))
+  }
+
+  function handleAlertClick(alert: Alert) {
+    selectedAlert = alert
+    showDetailModal = true
+    if (!alert.host) return
+    const host = alert.host
+    // Non-transient (committed) zoom — TopologyWidget drops the prior hover
+    // snapshot so the view stays put after the modal is dismissed.
+    forEachTopology((tid) => emitZoomToHost(tid, host, { sourceWidgetId: id }))
   }
 
   function handleRefresh() {
@@ -408,7 +429,7 @@
               class="w-full text-left p-2 rounded transition-colors cursor-pointer hover:brightness-90 {getAlertBgColor(
                 alert
               )}"
-              onclick={() => { selectedAlert = alert; showDetailModal = true }}
+              onclick={() => handleAlertClick(alert)}
               onmouseenter={() => handleAlertHover(alert)}
               onmouseleave={handleAlertLeave}
             >

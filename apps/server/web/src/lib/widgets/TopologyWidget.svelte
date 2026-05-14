@@ -56,9 +56,34 @@
   let spotlight = $state(false)
   let highlightTimeout: ReturnType<typeof setTimeout> | null = null
   let unsubscribeEvents: (() => void) | null = null
+  let viewer = $state<TopologyViewer | null>(null)
+  /** Camera transform snapshot for transient zooms (hover previews). */
+  let savedTransform: { x: number; y: number; k: number } | null = null
 
   const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
   const editMode = $derived($dashboardEditMode)
+
+  /**
+   * Reverse lookup: monitoring host name → topology node id. Built from the
+   * topology's saved mapping. Used to resolve cross-widget highlight events
+   * that arrive with hostnames (e.g. from AlertWidget) into node ids that
+   * HighlightOverlay can match against `data-id` in the SVG.
+   */
+  const hostToNodeId = $derived.by(() => {
+    const map = new Map<string, string>()
+    if (!topology?.mappingJson) return map
+    try {
+      const m = JSON.parse(topology.mappingJson) as {
+        nodes?: Record<string, { hostName?: string }>
+      }
+      for (const [nodeId, info] of Object.entries(m.nodes ?? {})) {
+        if (info?.hostName) map.set(info.hostName, nodeId)
+      }
+    } catch {
+      // ignore malformed mappingJson
+    }
+    return map
+  })
 
   async function loadTopologies() {
     try {
@@ -115,17 +140,46 @@
       case 'highlight-node':
       case 'select-node':
       case 'zoom-to-node': {
-        const nodeId = event.payload.nodeId
+        // Resolve nodeId from either explicit nodeId or a host via mapping.
+        const nodeId =
+          event.payload.nodeId ??
+          (event.payload.host ? hostToNodeId.get(event.payload.host) : undefined)
         if (!nodeId) break
         applyHighlight(new Set([nodeId]), event.payload.duration ?? 3000)
+        if (event.type === 'zoom-to-node') {
+          if (event.payload.transient) {
+            // Snapshot only the first transient pan in a sequence so a chain
+            // of hovers restores to the pre-hover view, not the previous
+            // hover's target.
+            if (savedTransform === null) {
+              savedTransform = viewer?.getCameraTransform() ?? null
+            }
+          } else {
+            // Non-transient (committed) zoom — discard the snapshot so a
+            // later restore-camera doesn't unwind past this point.
+            savedTransform = null
+          }
+          viewer?.panToNode(nodeId)
+        }
+        break
+      }
+      case 'restore-camera': {
+        if (savedTransform) {
+          viewer?.setCameraTransform(savedTransform)
+          savedTransform = null
+        }
         break
       }
       case 'highlight-nodes': {
-        const ids = event.payload.nodeIds
-        if (!ids?.length) break
+        const resolved = new Set<string>(event.payload.nodeIds ?? [])
+        for (const host of event.payload.hosts ?? []) {
+          const nodeId = hostToNodeId.get(host)
+          if (nodeId) resolved.add(nodeId)
+        }
+        if (resolved.size === 0) break
         highlightColor = event.payload.highlightColor
         spotlight = event.payload.spotlight ?? false
-        applyHighlight(new Set(ids), event.payload.duration)
+        applyHighlight(resolved, event.payload.duration)
         break
       }
       case 'clear-highlight':
@@ -266,6 +320,7 @@
     {:else if rootGraph}
       <div class="h-full w-full relative group">
         <TopologyViewer
+          bind:this={viewer}
           graph={rootGraph}
           sheetId={config.sheetId || 'root'}
           theme={currentTheme}
