@@ -14,6 +14,7 @@ export {
   addPort,
   collectObstacles,
   detectClickSide,
+  isPortLinked,
   linkExists,
   moveNode,
   movePort,
