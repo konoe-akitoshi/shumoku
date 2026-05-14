@@ -10,12 +10,19 @@
     }
   }
 
+  export interface ConnectedLinkEndpoint {
+    /** Node id (used to match against metrics / mapping data). */
+    id: string
+    /** Human-readable node label (falls back to id when no label is set). */
+    label: string
+  }
+
   export interface NodeSelectEvent {
     node: NodeInfo
     connectedLinks: Array<{
       id: string
-      from: string
-      to: string
+      from: ConnectedLinkEndpoint
+      to: ConnectedLinkEndpoint
       standard?: string
     }>
   }
@@ -73,6 +80,7 @@
   } from '$lib/stores'
   import { resolvedTheme } from '$lib/stores/theme'
   import { formatTraffic } from '$lib/utils/format'
+  import { nodeLabel, nodeLabelById } from '$lib/utils/node-label'
   import { getUtilizationColor } from '$lib/weathermap'
 
   // --- Props (Svelte 5 runes) ---
@@ -188,6 +196,7 @@
     if (!graph || !onNodeSelect) return
     const node = graph.nodes.find((n) => n.id === nodeId)
     if (!node) return
+    const nodes = graph.nodes
     const connectedLinks = graph.links
       .filter((l) => {
         const from = typeof l.from === 'string' ? l.from : l.from.node
@@ -195,20 +204,19 @@
         return from === nodeId || to === nodeId
       })
       .map((l) => {
-        const from = l.from.node
-        const to = l.to.node
+        const fromId = l.from.node
+        const toId = l.to.node
         return {
-          id: l.id ?? `${from}->${to}`,
-          from,
-          to,
+          id: l.id ?? `${fromId}->${toId}`,
+          from: { id: fromId, label: nodeLabelById(nodes, fromId) },
+          to: { id: toId, label: nodeLabelById(nodes, toId) },
           standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
         }
       })
-    const nodeLabel = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
     onNodeSelect({
       node: {
         id: node.id,
-        label: nodeLabel,
+        label: nodeLabel(node),
         spec: node.spec
           ? {
               type: 'type' in node.spec ? node.spec.type : undefined,
@@ -251,9 +259,7 @@
 
   function buildTooltip(hovered: HoveredElement, g: NetworkGraph): string {
     if (hovered.kind === 'node') {
-      const n = g.nodes.find((x) => x.id === hovered.id)
-      const label = Array.isArray(n?.label) ? n?.label.join(' / ') : n?.label
-      return `<strong>${escapeHtml(label ?? hovered.id)}</strong>`
+      return `<strong>${escapeHtml(nodeLabelById(g.nodes, hovered.id))}</strong>`
     }
     if (hovered.kind === 'subgraph') {
       const sg = g.subgraphs?.find((x) => x.id === hovered.id)
@@ -262,8 +268,8 @@
     // Link: show endpoints + live metrics if available
     const link = g.links.find((x) => x.id === hovered.id)
     if (!link) return `<strong>${escapeHtml(hovered.id)}</strong>`
-    const from = link.from.node
-    const to = link.to.node
+    const from = nodeLabelById(g.nodes, link.from.node)
+    const to = nodeLabelById(g.nodes, link.to.node)
     let out = `<strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong>`
     const std = link.from.plug?.module?.standard ?? link.to.plug?.module?.standard
     if (std) out += `<br><span class="muted">Standard: ${escapeHtml(String(std))}</span>`
