@@ -8,7 +8,6 @@ import type { NetworkGraph } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import {
   hasAlertsCapability,
-  hasAutoMappingCapability,
   hasHostsCapability,
   hasTopologyCapability,
   pluginRegistry,
@@ -20,7 +19,6 @@ import type {
   DiscoveredMetric,
   Host,
   HostItem,
-  MappingHint,
 } from '../plugins/types.js'
 import type { DataSource, DataSourceInput, DataSourceStatus, DataSourceType } from '../types.js'
 
@@ -342,18 +340,6 @@ export class DataSourceService {
       return null
     }
     return (plugin as import('shumoku-plugin-netbox').NetBoxPlugin).getFilterOptions()
-  }
-
-  /**
-   * Get auto-mapping hints for a graph (if supported)
-   */
-  async getMappingHints(id: string, graph: NetworkGraph): Promise<MappingHint[]> {
-    const plugin = this.getPlugin(id)
-    if (!plugin || !hasAutoMappingCapability(plugin)) {
-      return []
-    }
-
-    return plugin.getMappingHints(graph)
   }
 
   /**

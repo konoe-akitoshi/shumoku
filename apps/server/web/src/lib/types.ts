@@ -7,7 +7,7 @@ import type { MetricsData } from './stores/metrics'
 export type DataSourceType = 'zabbix' | 'netbox' | 'prometheus' | 'grafana'
 export type DataSourceStatus = 'connected' | 'disconnected' | 'unknown'
 
-export type DataSourceCapability = 'topology' | 'metrics' | 'hosts' | 'auto-mapping' | 'alerts'
+export type DataSourceCapability = 'topology' | 'metrics' | 'hosts' | 'alerts'
 
 export interface DataSourcePluginInfo {
   type: string
@@ -89,13 +89,6 @@ export interface HostItem {
   interfaceName?: string
   /** Traffic direction */
   direction?: 'in' | 'out'
-}
-
-export interface MappingHint {
-  nodeId: string
-  suggestedHostId?: string
-  suggestedHostName?: string
-  confidence: number // 0-1
 }
 
 /**

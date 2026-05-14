@@ -595,27 +595,6 @@ export function createTopologiesApi(): Hono {
     }
   })
 
-  // Get auto-mapping hints for a topology
-  app.get('/:id/mapping-hints', async (c) => {
-    const id = c.req.param('id')
-    try {
-      const parsed = await service.getParsed(id)
-      if (!parsed) {
-        return c.json({ error: 'Topology not found' }, 404)
-      }
-
-      if (!parsed.metricsSourceId) {
-        return c.json({ error: 'No metrics source configured' }, 400)
-      }
-
-      const hints = await dataSourceService.getMappingHints(parsed.metricsSourceId, parsed.graph)
-      return c.json(hints)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 500)
-    }
-  })
-
   // Enable sharing (generate token)
   app.post('/:id/share', async (c) => {
     const id = c.req.param('id')

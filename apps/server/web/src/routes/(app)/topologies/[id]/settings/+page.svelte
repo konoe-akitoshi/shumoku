@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { findBestInterfaceMatch } from '@shumoku/core'
   import {
     ArrowDownIcon,
     ArrowLeftIcon,
@@ -19,6 +18,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
+  import { findBestInterfaceMatch } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
   import {
     displaySettings,

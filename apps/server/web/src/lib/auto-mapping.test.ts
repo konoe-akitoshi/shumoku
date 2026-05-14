@@ -271,7 +271,7 @@ describe('rankInterfaceMatches', () => {
     const candidates = ['Gi1/0/1', 'Gi1/0/2', 'Te1/1/1']
     const ranked = rankInterfaceMatches('GE0/1', candidates)
     expect(ranked.length).toBeGreaterThan(0)
-    expect(ranked[0].name).toBe('Gi1/0/1')
+    expect(ranked[0]?.name).toBe('Gi1/0/1')
   })
 
   it('filters out below threshold', () => {

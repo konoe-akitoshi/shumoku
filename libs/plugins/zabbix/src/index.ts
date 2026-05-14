@@ -5,14 +5,9 @@ import type { PluginRegistryInterface } from '@shumoku/core'
 import { ZabbixPlugin } from './plugin.js'
 
 export function register(registry: PluginRegistryInterface): void {
-  registry.register(
-    'zabbix',
-    'Zabbix',
-    ['metrics', 'hosts', 'auto-mapping', 'alerts'],
-    (config) => {
-      const plugin = new ZabbixPlugin()
-      plugin.initialize(config)
-      return plugin
-    },
-  )
+  registry.register('zabbix', 'Zabbix', ['metrics', 'hosts', 'alerts'], (config) => {
+    const plugin = new ZabbixPlugin()
+    plugin.initialize(config)
+    return plugin
+  })
 }
