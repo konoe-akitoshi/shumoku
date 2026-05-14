@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { findBestInterfaceMatch } from '@shumoku/core'
   import {
     ArrowDownIcon,
     ArrowLeftIcon,
@@ -19,6 +18,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
+  import { findBestInterfaceMatch } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
   import {
     displaySettings,
@@ -35,6 +35,7 @@
   } from '$lib/stores'
   import type {
     DataSource,
+    EdgeEndpoint,
     ParsedTopologyResponse,
     SyncMode,
     Topology,
@@ -103,11 +104,23 @@
 
   interface EdgeData {
     id: string
-    from: { nodeId: string; port?: string }
-    to: { nodeId: string; port?: string }
+    from: EdgeEndpoint
+    to: EdgeEndpoint
     standard?: string
   }
   let edges = $state<EdgeData[]>([])
+
+  /** Best human-readable name for a port endpoint: label > interfaceName > id */
+  function portDisplay(ep: EdgeEndpoint): string | undefined {
+    return ep.portInfo?.label || ep.portInfo?.interfaceName || ep.port
+  }
+
+  /** All names worth trying when matching this port against host interfaces. */
+  function portMatchCandidates(ep: EdgeEndpoint): string[] {
+    const info = ep.portInfo
+    if (!info) return []
+    return [info.interfaceName, info.label, ...(info.aliases ?? [])].filter((n): n is string => !!n)
+  }
 
   // ============================================
   // Types
@@ -716,15 +729,15 @@
       let monitoredNodeId: string | null = null
       let matchedInterface: string | null = null
 
-      if (fromHostId && fromInterfaces.length > 0 && edge.from.port) {
-        const match = findMatchingInterface(edge.from.port, fromInterfaces)
+      if (fromHostId && fromInterfaces.length > 0) {
+        const match = findMatchingInterface(portMatchCandidates(edge.from), fromInterfaces)
         if (match) {
           monitoredNodeId = edge.from.nodeId
           matchedInterface = match
         }
       }
-      if (!matchedInterface && toHostId && toInterfaces.length > 0 && edge.to.port) {
-        const match = findMatchingInterface(edge.to.port, toInterfaces)
+      if (!matchedInterface && toHostId && toInterfaces.length > 0) {
+        const match = findMatchingInterface(portMatchCandidates(edge.to), toInterfaces)
         if (match) {
           monitoredNodeId = edge.to.nodeId
           matchedInterface = match
@@ -749,15 +762,31 @@
     return matched
   }
 
+  /**
+   * Try each candidate name (label, interfaceName, aliases) against the host's
+   * interfaces and pick the best-scoring match. Falls back to a single-candidate
+   * heuristic if enabled and we have no signal.
+   */
   function findMatchingInterface(
-    portName: string,
+    portNames: string[],
     interfaces: Array<{ name: string }>,
   ): string | null {
-    return findBestInterfaceMatch(
-      portName,
-      interfaces.map((i) => i.name),
-      { singleCandidateFallback },
-    )
+    if (portNames.length === 0) {
+      return singleCandidateFallback && interfaces.length === 1
+        ? (interfaces[0]?.name ?? null)
+        : null
+    }
+    const candidateNames = interfaces.map((i) => i.name)
+    let best: string | null = null
+    for (const name of portNames) {
+      const match = findBestInterfaceMatch(name, candidateNames, { singleCandidateFallback })
+      if (match) {
+        // First successful match wins (candidates are ordered most→least specific)
+        best = match
+        break
+      }
+    }
+    return best
   }
 
   const componentId = $props.id()
@@ -1603,13 +1632,13 @@
                         {currentMapping.monitoredNodeId && currentMapping.interface ? 'bg-success' : currentMapping.monitoredNodeId ? 'bg-warning' : 'bg-theme-text-muted'}"
                       ></span>
                       <span class="font-medium">{getNodeLabelById(edge.from.nodeId)}</span>
-                      {#if edge.from.port}
-                        <span class="text-theme-text-muted">({edge.from.port})</span>
+                      {#if portDisplay(edge.from)}
+                        <span class="text-theme-text-muted">({portDisplay(edge.from)})</span>
                       {/if}
                       <ArrowRightIcon size={14} class="text-theme-text-muted" />
                       <span class="font-medium">{getNodeLabelById(edge.to.nodeId)}</span>
-                      {#if edge.to.port}
-                        <span class="text-theme-text-muted">({edge.to.port})</span>
+                      {#if portDisplay(edge.to)}
+                        <span class="text-theme-text-muted">({portDisplay(edge.to)})</span>
                       {/if}
                     </div>
                     {#if hasAnyMappedNode}

@@ -7,7 +7,7 @@ import type { MetricsData } from './stores/metrics'
 export type DataSourceType = 'zabbix' | 'netbox' | 'prometheus' | 'grafana'
 export type DataSourceStatus = 'connected' | 'disconnected' | 'unknown'
 
-export type DataSourceCapability = 'topology' | 'metrics' | 'hosts' | 'auto-mapping' | 'alerts'
+export type DataSourceCapability = 'topology' | 'metrics' | 'hosts' | 'alerts'
 
 export interface DataSourcePluginInfo {
   type: string
@@ -89,13 +89,6 @@ export interface HostItem {
   interfaceName?: string
   /** Traffic direction */
   direction?: 'in' | 'out'
-}
-
-export interface MappingHint {
-  nodeId: string
-  suggestedHostId?: string
-  suggestedHostName?: string
-  confidence: number // 0-1
 }
 
 /**
@@ -322,9 +315,23 @@ export interface NodeContext {
   metadata?: Record<string, unknown>
 }
 
+/** Port info resolved from a NodePort so callers can match without looking up the node. */
+export interface NodePortInfo {
+  id: string
+  /** Canonical port label (e.g. "Gi1/0/1"). May be empty if unset on the node. */
+  label?: string
+  /** Full OS/API interface name (e.g. "GigabitEthernet1/0/1"). */
+  interfaceName?: string
+  /** Alternative names accepted for matching. */
+  aliases?: string[]
+}
+
 export interface EdgeEndpoint {
   nodeId: string
+  /** Port id reference (random, not human-readable). Use `portInfo` for display/matching. */
   port?: string
+  /** Resolved port metadata. Absent when the port can't be found on the node. */
+  portInfo?: NodePortInfo
   ip?: string
 }
 

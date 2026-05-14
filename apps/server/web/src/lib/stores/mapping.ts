@@ -3,9 +3,9 @@
  * Shared state for topology node/link mapping across pages
  */
 
-import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '@shumoku/core'
 import { derived, get, writable } from 'svelte/store'
 import { api } from '$lib/api'
+import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '$lib/auto-mapping'
 import type { Host, HostItem, MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
 interface MappingState {

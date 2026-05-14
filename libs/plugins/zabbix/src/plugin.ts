@@ -1,7 +1,7 @@
 /**
  * Zabbix Data Source Plugin
  *
- * Provides metrics, hosts, and auto-mapping capabilities.
+ * Provides metrics, hosts, and alerts capabilities.
  */
 
 import type {
@@ -9,7 +9,6 @@ import type {
   AlertQueryOptions,
   AlertSeverity,
   AlertsCapable,
-  AutoMappingCapable,
   ConnectionResult,
   DataSourceCapability,
   DataSourcePlugin,
@@ -18,11 +17,9 @@ import type {
   HostItem,
   HostsCapable,
   LinkMetricsMapping,
-  MappingHint,
   MetricsCapable,
   MetricsData,
   MetricsMapping,
-  NetworkGraph,
 } from '@shumoku/core'
 import { addHttpWarning } from '@shumoku/core'
 import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
@@ -33,17 +30,10 @@ interface ZabbixLinkMapping extends LinkMetricsMapping {
   out?: string
 }
 
-export class ZabbixPlugin
-  implements DataSourcePlugin, MetricsCapable, HostsCapable, AutoMappingCapable, AlertsCapable
-{
+export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapable, AlertsCapable {
   readonly type = 'zabbix'
   readonly displayName = 'Zabbix'
-  readonly capabilities: readonly DataSourceCapability[] = [
-    'metrics',
-    'hosts',
-    'auto-mapping',
-    'alerts',
-  ]
+  readonly capabilities: readonly DataSourceCapability[] = ['metrics', 'hosts', 'alerts']
 
   private config: ZabbixPluginConfig | null = null
   private requestId = 0
@@ -290,63 +280,6 @@ export class ZabbixPlugin
         type: VALUE_TYPE_MAP[item.value_type] || 'unknown',
       }
     })
-  }
-
-  // ============================================
-  // AutoMappingCapable Implementation
-  // ============================================
-
-  async getMappingHints(graph: NetworkGraph): Promise<MappingHint[]> {
-    const hints: MappingHint[] = []
-    const allHosts = await this.getHosts()
-
-    for (const node of graph.nodes) {
-      const labelToTry = Array.isArray(node.label) ? node.label[0] : node.label
-      const namesToTry = [node.id, labelToTry].filter(Boolean) as string[]
-
-      let bestMatch: Host | null = null
-      let bestConfidence = 0
-
-      for (const name of namesToTry) {
-        const normalizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '')
-
-        for (const host of allHosts) {
-          const normalizedHostName = host.name.toLowerCase().replace(/[^a-z0-9]/g, '')
-          const normalizedDisplayName =
-            host.displayName?.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
-
-          // Exact match
-          if (normalizedHostName === normalizedName || normalizedDisplayName === normalizedName) {
-            bestMatch = host
-            bestConfidence = 1.0
-            break
-          }
-
-          // Partial match
-          if (
-            normalizedHostName.includes(normalizedName) ||
-            normalizedName.includes(normalizedHostName)
-          ) {
-            const confidence = 0.7
-            if (confidence > bestConfidence) {
-              bestMatch = host
-              bestConfidence = confidence
-            }
-          }
-        }
-
-        if (bestConfidence === 1.0) break
-      }
-
-      hints.push({
-        nodeId: node.id,
-        suggestedHostId: bestMatch?.id,
-        suggestedHostName: bestMatch?.name,
-        confidence: bestConfidence,
-      })
-    }
-
-    return hints
   }
 
   // ============================================

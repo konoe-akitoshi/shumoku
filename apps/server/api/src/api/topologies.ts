@@ -263,6 +263,20 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
+      // Build a node lookup so we can resolve link endpoints to their port objects.
+      const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
+      const resolvePort = (nodeId: string, portId: string | undefined) => {
+        if (!portId) return undefined
+        const port = nodeById.get(nodeId)?.ports?.find((p) => p.id === portId)
+        if (!port) return undefined
+        return {
+          id: port.id,
+          label: port.label || undefined,
+          interfaceName: port.interfaceName,
+          aliases: port.aliases,
+        }
+      }
+
       // Return simplified context with node/edge info from graph
       return c.json({
         id: parsed.id,
@@ -274,8 +288,16 @@ export function createTopologiesApi(): Hono {
         })),
         edges: parsed.graph.links.map((l, i) => ({
           id: l.id || `link-${i}`,
-          from: { nodeId: l.from.node, port: l.from.port },
-          to: { nodeId: l.to.node, port: l.to.port },
+          from: {
+            nodeId: l.from.node,
+            port: l.from.port,
+            portInfo: resolvePort(l.from.node, l.from.port),
+          },
+          to: {
+            nodeId: l.to.node,
+            port: l.to.port,
+            portInfo: resolvePort(l.to.node, l.to.port),
+          },
           standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
         })),
         subgraphs: parsed.graph.subgraphs || [],
@@ -590,27 +612,6 @@ export function createTopologiesApi(): Hono {
       })
     } catch (err) {
       console.error('[sync-from-source] Error:', err)
-      const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 500)
-    }
-  })
-
-  // Get auto-mapping hints for a topology
-  app.get('/:id/mapping-hints', async (c) => {
-    const id = c.req.param('id')
-    try {
-      const parsed = await service.getParsed(id)
-      if (!parsed) {
-        return c.json({ error: 'Topology not found' }, 404)
-      }
-
-      if (!parsed.metricsSourceId) {
-        return c.json({ error: 'No metrics source configured' }, 400)
-      }
-
-      const hints = await dataSourceService.getMappingHints(parsed.metricsSourceId, parsed.graph)
-      return c.json(hints)
-    } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
     }

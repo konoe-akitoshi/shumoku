@@ -176,8 +176,6 @@
         return 'Hosts'
       case 'alerts':
         return 'Alerts'
-      case 'auto-mapping':
-        return 'Auto-mapping'
       default:
         return cap
     }

@@ -22,7 +22,6 @@ export type DataSourceCapability =
   | 'topology' // Can provide NetworkGraph
   | 'metrics' // Can provide MetricsData
   | 'hosts' // Can list hosts (for mapping UI)
-  | 'auto-mapping' // Can suggest mappings automatically
   | 'alerts' // Can provide alerts from monitoring system
 
 // ============================================
@@ -72,13 +71,6 @@ export interface DiscoveredMetric {
   help?: string
   /** Metric type (counter, gauge, histogram, summary) */
   type?: string
-}
-
-export interface MappingHint {
-  nodeId: string
-  suggestedHostId?: string
-  suggestedHostName?: string
-  confidence: number // 0-1
 }
 
 // ============================================
@@ -271,16 +263,6 @@ export interface HostsCapable {
 }
 
 /**
- * Plugin can suggest automatic mappings
- */
-export interface AutoMappingCapable {
-  /**
-   * Get mapping suggestions for a graph
-   */
-  getMappingHints(graph: NetworkGraph): Promise<MappingHint[]>
-}
-
-/**
  * Plugin can provide metrics data
  */
 export interface MetricsCapable {
@@ -320,12 +302,6 @@ export function hasHostsCapability(
   plugin: DataSourcePlugin,
 ): plugin is DataSourcePlugin & HostsCapable {
   return plugin.capabilities.includes('hosts')
-}
-
-export function hasAutoMappingCapability(
-  plugin: DataSourcePlugin,
-): plugin is DataSourcePlugin & AutoMappingCapable {
-  return plugin.capabilities.includes('auto-mapping')
 }
 
 export function hasMetricsCapability(
