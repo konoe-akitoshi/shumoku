@@ -6,7 +6,7 @@
 import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '@shumoku/core'
 import { derived, get, writable } from 'svelte/store'
 import { api } from '$lib/api'
-import type { Host, HostItem, MetricsMapping } from '$lib/types'
+import type { Host, HostItem, MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
 interface MappingState {
   topologyId: string | null
@@ -40,7 +40,44 @@ function createMappingStore() {
     subscribe,
 
     /**
-     * Load mapping data for a topology
+     * Hydrate from already-fetched topology + sources. Use this when the
+     * caller has already fetched the data (avoids duplicate API calls).
+     * Triggers host loading in the background.
+     */
+    hydrate: (topologyId: string, topo: Topology, sources: TopologyDataSource[]) => {
+      let mapping: MetricsMapping = { nodes: {}, links: {} }
+      if (topo.mappingJson) {
+        try {
+          mapping = JSON.parse(topo.mappingJson)
+        } catch {
+          // Ignore parse error
+        }
+      }
+
+      const metricsSource = sources.find((s) => s.purpose === 'metrics')
+      const metricsSourceId = metricsSource?.dataSourceId || null
+
+      update((s) => ({
+        ...s,
+        topologyId,
+        mapping,
+        metricsSourceId,
+        loading: false,
+        error: null,
+      }))
+
+      if (metricsSourceId) {
+        update((s) => ({ ...s, hostsLoading: true }))
+        api.dataSources
+          .getHosts(metricsSourceId)
+          .then((hosts) => update((s) => ({ ...s, hosts, hostsLoading: false })))
+          .catch(() => update((s) => ({ ...s, hostsLoading: false })))
+      }
+    },
+
+    /**
+     * Load mapping data for a topology (fetches topology + sources itself).
+     * Prefer `hydrate()` when the caller already has the data.
      */
     load: async (topologyId: string, forceReload = false) => {
       const current = get({ subscribe })

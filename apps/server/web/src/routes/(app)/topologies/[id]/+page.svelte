@@ -54,11 +54,12 @@
         api.topologies.get(topologyId),
         fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
         api.topologies.sources.list(topologyId),
-        // Load mapping via shared store
-        mappingStore.load(topologyId),
       ])
       topology = topoData
       renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
+
+      // Hand off to the shared mapping store without re-fetching
+      mappingStore.hydrate(topologyId, topoData, sources)
 
       // Find NetBox topology source for device links
       const netboxSource = sources.find(
