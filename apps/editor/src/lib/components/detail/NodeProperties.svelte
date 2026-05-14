@@ -84,9 +84,7 @@
   // sit at the top level of the markup tree in Svelte 5, so we
   // surface these as plain `$derived` values in the script.
   const isHardware = $derived(node.spec?.kind === 'hardware')
-  const productBound = $derived(
-    !!node.productId && products.some((p) => p.id === node.productId),
-  )
+  const productBound = $derived(!!node.productId && products.some((p) => p.id === node.productId))
 
   const subgraphOptions = $derived(
     [...subgraphs.entries()].map(([id, sg]) => ({ id, label: sg.label || id })),
@@ -193,17 +191,11 @@
         {@const boundProductInList = node.productId
           ? products.find((p) => p.id === node.productId)
           : null}
-        {#if boundProductInList}
-          <div class="mb-1 text-[10px] font-mono text-neutral-500 dark:text-neutral-400">
-            current: {productLabel(boundProductInList)}
-          </div>
-        {:else}
-          <div class="mb-1 text-[10px] font-mono text-neutral-400 italic">no product bound</div>
-        {/if}
         <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindproduct?.(v) }}>
           <div class="relative">
             <Combobox.Input
-              placeholder="Assign product..."
+              placeholder={boundProductInList ? '' : 'Assign product...'}
+              defaultValue={boundProductInList ? productLabel(boundProductInList) : ''}
               class="w-full pl-2 pr-7 py-1 text-[11px] bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono"
               oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
             />
