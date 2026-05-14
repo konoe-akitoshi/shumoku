@@ -1,21 +1,6 @@
 <script lang="ts">
   import { Popover } from 'bits-ui'
-
-  // Tokens defined in the theme palette (libs/@shumoku/core/src/themes/*.ts).
-  // The renderer resolves these per-theme, so we list both the token id
-  // and a representative light-mode preview color for the swatch button.
-  // Adding a new accent here requires adding it to themes/light.ts +
-  // themes/dark.ts.
-  const ACCENT_OPTIONS = [
-    { token: 'accent-blue', label: 'Blue', preview: '#bfdbfe' },
-    { token: 'accent-green', label: 'Green', preview: '#bbf7d0' },
-    { token: 'accent-red', label: 'Red', preview: '#fecdd3' },
-    { token: 'accent-amber', label: 'Amber', preview: '#fcd34d' },
-    { token: 'accent-purple', label: 'Purple', preview: '#e9d5ff' },
-    { token: 'surface-1', label: 'Neutral 1', preview: '#e2e8f0' },
-    { token: 'surface-2', label: 'Neutral 2', preview: '#cbd5e1' },
-    { token: 'surface-3', label: 'Neutral 3', preview: '#94a3b8' },
-  ] as const
+  import { SUBGRAPH_PALETTE } from './subgraph-palette'
 
   let {
     open = $bindable(false),
@@ -78,7 +63,7 @@
     <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-2">
       <span class="text-[10px] uppercase tracking-wider text-muted-foreground">Theme</span>
       <div class="flex flex-wrap gap-1">
-        {#each ACCENT_OPTIONS as opt (opt.token)}
+        {#each SUBGRAPH_PALETTE as opt (opt.token)}
           {@const selected = currentFill === opt.token}
           <button
             type="button"

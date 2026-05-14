@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Subgraph } from '@shumoku/core'
-  import SubgraphColorDialog from '../SubgraphColorDialog.svelte'
+  import SubgraphColorPopover from '../SubgraphColorPopover.svelte'
+  import { previewFor } from '../subgraph-palette'
 
   let {
     subgraph,
@@ -12,30 +13,11 @@
     onupdate?: (field: string, value: unknown) => void
   } = $props()
 
-  let colorDialogOpen = $state(false)
+  let colorPopoverOpen = $state(false)
   let swatchEl: HTMLButtonElement | null = $state(null)
 
-  // Map known accent / surface tokens to a representative preview
-  // color for the swatch chip. Custom hex values render directly.
-  const TOKEN_PREVIEW: Record<string, string> = {
-    'accent-blue': '#bfdbfe',
-    'accent-green': '#bbf7d0',
-    'accent-red': '#fecdd3',
-    'accent-amber': '#fcd34d',
-    'accent-purple': '#e9d5ff',
-    'surface-1': '#e2e8f0',
-    'surface-2': '#cbd5e1',
-    'surface-3': '#94a3b8',
-  }
-
   const currentFill = $derived(subgraph.style?.fill ?? '')
-
-  const swatchColor = $derived.by(() => {
-    if (!currentFill) return '#e2e8f0'
-    if (currentFill.startsWith('#')) return currentFill
-    return TOKEN_PREVIEW[currentFill] ?? '#e2e8f0'
-  })
-
+  const swatchColor = $derived(previewFor(currentFill))
   const swatchLabel = $derived(currentFill || 'default')
 
   function pickColor(fill: string | undefined) {
@@ -114,7 +96,7 @@
         class="flex h-5 min-w-[8rem] items-center justify-end rounded border border-black/15 px-2 font-mono text-[10px] text-neutral-700 outline-none transition-shadow hover:ring-2 hover:ring-blue-300 focus:ring-2 focus:ring-blue-400 dark:text-neutral-200"
         style="background-color: {swatchColor};"
         onclick={() => {
-          colorDialogOpen = !colorDialogOpen
+          colorPopoverOpen = !colorPopoverOpen
         }}
         title="Change color"
         aria-label="Change color"
@@ -125,8 +107,8 @@
   </div>
 </dl>
 
-<SubgraphColorDialog
-  bind:open={colorDialogOpen}
+<SubgraphColorPopover
+  bind:open={colorPopoverOpen}
   {currentFill}
   anchor={swatchEl}
   onpick={pickColor}
