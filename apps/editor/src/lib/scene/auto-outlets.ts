@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node } from '@shumoku/core'
+import type { Link, Termination } from '@shumoku/core'
 
 /**
  * Auto-created outlets carry a stable metadata tag pointing at the
@@ -15,14 +15,14 @@ export function autoOutletTag(linkId: string, epsId: string): string {
 }
 
 export function findAutoOutlet(
-  nodes: Map<string, Node>,
+  terminations: readonly Termination[],
   linkId: string,
   epsId: string,
 ): string | null {
   const tag = autoOutletTag(linkId, epsId)
-  for (const n of nodes.values()) {
-    if (n.termination?.role !== 'outlet') continue
-    if (n.metadata?.autoFor === tag) return n.id
+  for (const t of terminations) {
+    if (t.role !== 'outlet') continue
+    if (t.metadata?.autoFor === tag) return t.id
   }
   return null
 }

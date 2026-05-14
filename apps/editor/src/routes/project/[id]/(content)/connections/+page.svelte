@@ -76,7 +76,10 @@
   })
 
   function nodeLabelOf(id: string): string {
-    return nodeDisplayLabel(diagramState.nodes.get(id), id)
+    const real = diagramState.nodes.get(id)
+    if (real) return nodeDisplayLabel(real, id)
+    const term = diagramState.terminations.find((t) => t.id === id)
+    return term?.label ?? id
   }
 
   function getPortLabel(p: PortOption) {

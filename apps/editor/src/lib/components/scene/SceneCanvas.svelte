@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CableGrade } from '@shumoku/core'
+  import type { CableGrade, Node } from '@shumoku/core'
   import {
     type Connection,
     ConnectionMode,
@@ -153,12 +153,20 @@
     return effectiveNodeSize(scene, diagramState.nodes.get(nodeId))
   }
 
-  // Center of a node's icon in flow coords. Used for via TP positions
-  // — Svelte Flow doesn't expose those automatically (they're not
-  // edge endpoints). Reads the same effective size we hand to Svelte
-  // Flow for the node, so layouts stay in sync with length math.
+  // Center of a node-or-termination's icon in flow coords. Used for
+  // via waypoint positions — Svelte Flow doesn't expose those
+  // automatically (they're not edge endpoints). Terminations no
+  // longer live in `diagram.nodes`; resolve them through the
+  // registry and the position they carry on themselves.
   function centerOf(nodeId: string): { x: number; y: number } {
-    return nodeCenterFromTopLeft(scene, diagramState.nodes.get(nodeId), positionFor(nodeId))
+    const real = diagramState.nodes.get(nodeId)
+    if (real) return nodeCenterFromTopLeft(scene, real, positionFor(nodeId))
+    const term = diagramState.terminations.find((t) => t.id === nodeId)
+    if (term?.position) {
+      const shadow = { id: term.id, label: term.label, termination: { role: term.role } } as Node
+      return nodeCenterFromTopLeft(scene, shadow, term.position)
+    }
+    return nodeCenterFromTopLeft(scene, undefined, { x: 0, y: 0 })
   }
 
   // Reverse lookup so the drag / delete intercepts can tell whether
@@ -172,6 +180,11 @@
     }
     return m
   })
+
+  // Termination ids — used by drag / delete / rename intercepts to
+  // tell sf-node ids referring to entries in the global termination
+  // registry apart from real `Node` ids.
+  const terminationIds = $derived.by(() => new Set(diagramState.terminations.map((t) => t.id)))
 
   /**
    * Inner waypoints between segment endpoints, with bends interleaved
@@ -294,6 +307,42 @@
         selectable: true,
       })
     }
+    // Virtual sf nodes for every termination in the global registry.
+    // Terminations no longer live in `diagram.nodes`, so the canvas
+    // synthesizes one sf node per entry to keep drag / select /
+    // rename / delete flowing through Svelte Flow as before. The
+    // drag and delete intercepts route synthetic ids back to
+    // `updateTermination` / `removeTermination`. Same trick as bends
+    // below, but terminations carry shared identity so they live in
+    // their own global array rather than per-link.
+    for (const t of diagramState.terminations) {
+      if (!t.position) continue
+      const size =
+        t.role === 'eps'
+          ? { w: 22, h: 32 }
+          : t.role === 'outlet'
+            ? { w: 28, h: 28 }
+            : { w: 44, h: 22 }
+      out.push({
+        id: t.id,
+        type: 'scene',
+        position: { x: t.position.x, y: t.position.y },
+        width: size.w,
+        height: size.h,
+        data: {
+          label: t.label,
+          editableLabel: t.label,
+          termination: { role: t.role },
+          baseW: size.w,
+          baseH: size.h,
+          onDelete: () => diagramState.removeTermination(t.id),
+          onRename: (label: string) =>
+            diagramState.updateTermination(t.id, { label: label || t.label }),
+        },
+        draggable: interactive,
+        selectable: true,
+      })
+    }
     // Virtual sf nodes for every link bend. Bends are not in
     // `diagram.nodes` (they live on `link.bends`), so the canvas
     // synthesizes one sf node per bend so the user can still drag /
@@ -340,7 +389,7 @@
       const linkFrom = link.from.node
       const linkTo = link.to.node
       const crossBoundary = !inScopeIds.has(linkFrom) || !inScopeIds.has(linkTo)
-      const idSegments = visibleCableSegments(link, diagramState.nodes)
+      const idSegments = visibleCableSegments(link, diagramState.nodes, diagramState.terminations)
       // Per-segment via offset — global via index of the segment's
       // left endpoint. Source-rooted segment = 0; room-side (after
       // EPS) = (viaIndex of head) + 1. Drag-to-bend uses this to
@@ -350,7 +399,12 @@
       const viaIndexOf = new Map<string, number>(via.map((id, i) => [id, i] as const))
       // Cable length per segment (already computed by
       // cableSegmentLengths in the same order as visibleCableSegments).
-      const segParts = cableSegmentLengths(link, [scene], diagramState.nodes)
+      const segParts = cableSegmentLengths(
+        link,
+        [scene],
+        diagramState.nodes,
+        diagramState.terminations,
+      )
       const wireScale = effectiveWireScale(link)
       for (let i = 0; i < idSegments.length; i++) {
         const segIds = idSegments[i] ?? []
@@ -429,17 +483,22 @@
   // of one per selected node.
   function persistDragged(nodes: SfNode[] | null | undefined) {
     if (!nodes || nodes.length === 0) return
-    // Partition by id: bend ids belong to a link's `bends` array,
-    // not the scene placement map. Real Node ids go through
-    // `placeNodesInScene` as before.
+    // Partition by id kind:
+    //   - bend ids → link.bends array
+    //   - termination ids → global termination registry
+    //   - real Node ids → scene placement map (as before)
     const placements: Array<{ nodeId: string; position: { x: number; y: number } }> = []
     for (const n of nodes) {
       const linkId = bendIdToLinkId.get(n.id)
       if (linkId) {
         diagramState.updateLinkBend(linkId, n.id, n.position)
-      } else {
-        placements.push({ nodeId: n.id, position: n.position })
+        continue
       }
+      if (terminationIds.has(n.id)) {
+        diagramState.updateTermination(n.id, { position: n.position })
+        continue
+      }
+      placements.push({ nodeId: n.id, position: n.position })
     }
     if (placements.length > 0) diagramState.placeNodesInScene(scene.id, placements)
   }
@@ -586,6 +645,7 @@
       for (const n of nodes) {
         const linkId = bendIdToLinkId.get(n.id)
         if (linkId) diagramState.removeLinkBend(linkId, n.id)
+        else if (terminationIds.has(n.id)) diagramState.removeTermination(n.id)
         else diagramState.removeNode(n.id)
       }
     }}
@@ -637,7 +697,7 @@
 
 <style>
   /* Soften Svelte Flow's default dotted background when no floor
-                                             plan is set, but otherwise let its theming through. */
+                                               plan is set, but otherwise let its theming through. */
   :global(.svelte-flow__background) {
     background: #f8fafc;
   }
@@ -645,8 +705,8 @@
     stroke-linecap: round;
   }
   /* Make connection handles visible on hover so users can see where
-                                           to drag from. Otherwise the fully-transparent handles leave the
-                                           "how do I draw a wire" UX a guess. */
+                                             to drag from. Otherwise the fully-transparent handles leave the
+                                             "how do I draw a wire" UX a guess. */
   :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 1 !important;
@@ -656,15 +716,15 @@
     height: 8px;
   }
   /* Read-only cue: don't reveal connection handles on hover in view
-                                 mode. Keep size + DOM presence so Svelte Flow can still resolve
-                                 edge endpoint positions from each handle's bounding rect — only
-                                 opacity is dropped. */
+                                   mode. Keep size + DOM presence so Svelte Flow can still resolve
+                                   edge endpoint positions from each handle's bounding rect — only
+                                   opacity is dropped. */
   .scene-canvas-readonly :global(.svelte-flow__node:hover .svelte-flow__handle) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     opacity: 0 !important;
   }
   /* Placement-pending: crosshair cursor on the pane so users see
-                                 "click somewhere to drop the item". */
+                                   "click somewhere to drop the item". */
   .scene-canvas-placing :global(.svelte-flow__pane) {
     /* biome-ignore lint/complexity/noImportantStyles: overrides Svelte Flow defaults */
     cursor: crosshair !important;

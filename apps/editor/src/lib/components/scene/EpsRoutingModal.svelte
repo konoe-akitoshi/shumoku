@@ -9,7 +9,6 @@
     buildViaForLink,
     findAutoOutlet,
   } from '$lib/scene/auto-outlets'
-  import { descendantSubgraphIds } from '$lib/scene/scope'
 
   // Per-EPS routing modal. Progressive: shows only the nodes the user
   // has chosen to inspect (or that already have wires through this
@@ -27,31 +26,31 @@
     onclose: () => void
   } = $props()
 
-  const eps = $derived(epsId ? (diagramState.nodes.get(epsId) ?? null) : null)
-  const epsLabel = $derived.by(() => {
-    if (!eps) return ''
-    const l = eps.label
-    return Array.isArray(l) ? l[0] : (l ?? eps.id)
-  })
+  const eps = $derived(
+    epsId ? (diagramState.terminations.find((t) => t.id === epsId) ?? null) : null,
+  )
+  const epsLabel = $derived(eps?.label ?? '')
 
-  // Devices in the EPS's scope that could plausibly send wires through
-  // this chase. We exclude TPs (they're passive transit, not sources).
+  // Devices that could plausibly send wires through this chase. The
+  // previous scope filter used the EPS's `parent` subgraph; the
+  // termination registry is global (no parent), so we list every
+  // non-termination Node. The wire list itself is the more useful
+  // affordance now — users typically pick "send wires through EPS
+  // by selecting them in the wire list" rather than scrolling all
+  // candidate devices.
   const candidateNodes = $derived.by(() => {
     if (!eps) return []
-    const scopeIds = eps.parent ? descendantSubgraphIds(diagramState.subgraphs, eps.parent) : null
-    return [...diagramState.nodes.values()].filter((n) => {
-      if (n.id === epsId) return false
-      if (n.termination) return false
-      if (scopeIds === null) return !n.parent
-      return !!n.parent && scopeIds.has(n.parent)
-    })
+    return [...diagramState.nodes.values()].filter((n) => n.id !== epsId && !n.termination)
   })
 
   function nodeLabelOf(id: string): string {
     const n = diagramState.nodes.get(id)
-    if (!n) return id
-    const l = n.label
-    return Array.isArray(l) ? l[0] : (l ?? id)
+    if (n) {
+      const l = n.label
+      return Array.isArray(l) ? l[0] : (l ?? id)
+    }
+    const term = diagramState.terminations.find((t) => t.id === id)
+    return term?.label ?? id
   }
 
   // Wires touching a given node (only id-bearing).
@@ -122,9 +121,10 @@
   function save() {
     if (!epsId) return
     const scene = diagramState.scenes.find((s) => s.id === sceneId)
-    const epsNode = diagramState.nodes.get(epsId)
-    const epsPos =
-      scene?.nodePlacements.find((p) => p.nodeId === epsId)?.position ?? epsNode?.position ?? null
+    // EPS position comes from the registry now — terminations carry
+    // their own coords, no longer relying on scene placements.
+    const epsT = diagramState.terminations.find((t) => t.id === epsId)
+    const epsPos = epsT?.position ?? null
 
     // Walk every wire we have an entry for. Entries we've never
     // touched stay out of `routing` and we don't disturb them — that
@@ -139,23 +139,21 @@
       let createdOutletId: string | null = null
       if (want) {
         viaTail.push(epsId)
-        let outletId = findAutoOutlet(diagramState.nodes, linkId, epsId)
+        let outletId = findAutoOutlet(diagramState.terminations, linkId, epsId)
         if (!outletId) {
-          // Pick the device-side endpoint as the outlet anchor — for
-          // an EPS-side modal that's whichever wire end isn't a TP.
-          const fromN = diagramState.nodes.get(w.from.node)
-          const toN = diagramState.nodes.get(w.to.node)
-          let farId = w.to.node
-          if (fromN?.termination && !toN?.termination) farId = w.to.node
-          else if (!fromN?.termination && toN?.termination) farId = w.from.node
+          // Pick the device-side endpoint as the outlet anchor —
+          // wire endpoints are always real Nodes (terminations are
+          // never wire endpoints), so both `from` and `to` are
+          // device-side here. Bias toward `to`.
+          const farId = w.to.node
           const farNode = diagramState.nodes.get(farId)
           const farPos =
             scene?.nodePlacements.find((p) => p.nodeId === farId)?.position ??
             farNode?.position ??
             null
           const outletPos = autoOutletPosition(epsPos, farPos)
-          outletId = diagramState.addTerminationInScene(sceneId, outletPos, 'outlet')
-          diagramState.updateNode(outletId, {
+          outletId = diagramState.addTermination('outlet', outletPos)
+          diagramState.updateTermination(outletId, {
             metadata: { autoFor: autoOutletTag(linkId, epsId) },
           })
         }
@@ -166,7 +164,7 @@
       const orphanOutlets: string[] = []
       const oldVia = w.via ?? []
       if (!want && oldVia.includes(epsId)) {
-        const tagged = findAutoOutlet(diagramState.nodes, linkId, epsId)
+        const tagged = findAutoOutlet(diagramState.terminations, linkId, epsId)
         if (tagged) orphanOutlets.push(tagged)
       }
 
@@ -175,7 +173,7 @@
       const finalVia = buildViaForLink(w, managedIds, viaTail)
       diagramState.updateLink(linkId, { via: finalVia.length > 0 ? finalVia : undefined })
 
-      for (const orphan of orphanOutlets) diagramState.removeNode(orphan)
+      for (const orphan of orphanOutlets) diagramState.removeTermination(orphan)
     }
     onclose()
   }

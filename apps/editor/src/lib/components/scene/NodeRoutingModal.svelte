@@ -9,7 +9,6 @@
     buildViaForLink,
     findAutoOutlet,
   } from '$lib/scene/auto-outlets'
-  import { descendantSubgraphIds } from '$lib/scene/scope'
 
   // Per-node routing modal. One row per wire incident to this node,
   // labeled by destination. Each row picks ONE EPS to route through
@@ -34,34 +33,22 @@
     return Array.isArray(l) ? l[0] : (l ?? node.id)
   })
 
-  function ancestorChain(parentId: string | undefined): string[] {
-    const out: string[] = []
-    let cur = parentId
-    const safety = 64
-    let i = 0
-    while (cur && i < safety) {
-      out.push(cur)
-      cur = diagramState.subgraphs.get(cur)?.parent
-      i++
-    }
-    return out
-  }
-
   // Both EPS and patch panels are valid via choices for a wire from
-  // this node. We surface them in scope (ancestor or sibling of this
-  // node's parent subgraph). Outlets are excluded — they're auto-
-  // created downstream of EPS routing, never user-picked from here.
+  // this node. With terminations now living in the global registry
+  // (no `parent` subgraph), all are reachable in principle — the
+  // routing modal lists every entry of the requested role. The
+  // returned shape mirrors the old `Node`-shaped objects the rest of
+  // this component expects.
   function tpsInScope(role: 'eps' | 'panel') {
     if (!node) return []
-    const all = [...diagramState.nodes.values()].filter((n) => n.termination?.role === role)
-    if (!node.parent) return all
-    return all.filter((tp) => {
-      if (!tp.parent) return true
-      const tpScope = descendantSubgraphIds(diagramState.subgraphs, tp.parent)
-      const nodeAncestors = ancestorChain(node.parent)
-      for (const a of nodeAncestors) if (tpScope.has(a)) return true
-      return tpScope.has(node.parent ?? '')
-    })
+    return diagramState.terminations
+      .filter((t) => t.role === role)
+      .map((t) => ({
+        id: t.id,
+        label: t.label,
+        termination: { role: t.role },
+        position: t.position,
+      }))
   }
   const epsInScope = $derived.by(() => tpsInScope('eps'))
   const panelsInScope = $derived.by(() => tpsInScope('panel'))
@@ -184,16 +171,13 @@
       let createdOutletId: string | null = null
       if (wantTpId && wantRole === 'eps') {
         viaTail.push(wantTpId)
-        let outletId = findAutoOutlet(diagramState.nodes, wireId, wantTpId)
+        let outletId = findAutoOutlet(diagramState.terminations, wireId, wantTpId)
         if (!outletId) {
-          const epsNode = diagramState.nodes.get(wantTpId)
-          const epsPos =
-            scene?.nodePlacements.find((p) => p.nodeId === wantTpId)?.position ??
-            epsNode?.position ??
-            null
+          const epsT = diagramState.terminations.find((t) => t.id === wantTpId)
+          const epsPos = epsT?.position ?? null
           const outletPos = autoOutletPosition(epsPos, farPos)
-          outletId = diagramState.addTerminationInScene(sceneId, outletPos, 'outlet')
-          diagramState.updateNode(outletId, {
+          outletId = diagramState.addTermination('outlet', outletPos)
+          diagramState.updateTermination(outletId, {
             metadata: { autoFor: autoOutletTag(wireId, wantTpId) },
           })
         }
@@ -210,7 +194,7 @@
       for (const eps of epsInScope) {
         if (eps.id === wantTpId) continue
         if (oldVia.includes(eps.id)) {
-          const tagged = findAutoOutlet(diagramState.nodes, wireId, eps.id)
+          const tagged = findAutoOutlet(diagramState.terminations, wireId, eps.id)
           if (tagged) orphanOutlets.push(tagged)
         }
       }
@@ -223,7 +207,7 @@
       const finalVia = buildViaForLink(w, managedIds, viaTail)
       diagramState.updateLink(wireId, { via: finalVia.length > 0 ? finalVia : undefined })
 
-      for (const orphan of orphanOutlets) diagramState.removeNode(orphan)
+      for (const orphan of orphanOutlets) diagramState.removeTermination(orphan)
     }
     onclose()
   }

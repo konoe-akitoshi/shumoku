@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Subgraph } from '@shumoku/core'
+import type { Link, Node, Subgraph, Termination } from '@shumoku/core'
 import { serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
@@ -23,6 +23,7 @@ type EntityCollections = {
   links: Map<string, Link>
   products: Map<string, Product>
   scenes: Map<string, Scene>
+  terminations: Map<string, Termination>
 }
 
 function indexBySnapshot(snap: ProjectSnapshot): EntityCollections {
@@ -39,6 +40,7 @@ function indexBySnapshot(snap: ProjectSnapshot): EntityCollections {
     ),
     products: new Map(snap.products.map((p) => [p.id, p] as const)),
     scenes: new Map(snap.scenes.map((s) => [s.id, s] as const)),
+    terminations: new Map(snap.terminations.map((t) => [t.id, t] as const)),
   }
 }
 
@@ -65,6 +67,7 @@ interface SnapshotDiff {
   links: KindDiff<Link>
   products: KindDiff<Product>
   scenes: KindDiff<Scene>
+  terminations: KindDiff<Termination>
 }
 
 export function diffSnapshots(before: ProjectSnapshot, after: ProjectSnapshot): SnapshotDiff {
@@ -76,6 +79,7 @@ export function diffSnapshots(before: ProjectSnapshot, after: ProjectSnapshot): 
     links: diffKind(b.links, a.links),
     products: diffKind(b.products, a.products),
     scenes: diffKind(b.scenes, a.scenes),
+    terminations: diffKind(b.terminations, a.terminations),
   }
 }
 
@@ -119,6 +123,7 @@ export async function applySync(projectId: string, diff: SnapshotDiff): Promise<
         links: txn.objectStore(STORES.links),
         products: txn.objectStore(STORES.products),
         scenes: txn.objectStore(STORES.scenes),
+        terminations: txn.objectStore(STORES.terminations),
       }
       for (const kind of ENTITY_STORES) {
         const store = writers[kind]

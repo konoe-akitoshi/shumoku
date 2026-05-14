@@ -1,9 +1,10 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node } from '@shumoku/core'
+import type { Link, Node, Termination } from '@shumoku/core'
 import type { Scene } from '../types'
 import { nodeCenterFromTopLeft } from './node-geometry'
+import { viaLookup } from './via-lookup'
 
 /**
  * Single source of truth for cable length number formatting:
@@ -69,12 +70,17 @@ function endpointPos(
  *   from=A, via=[outlet1, eps, outlet2], to=B
  *   → segments: [[A, outlet1, eps], [outlet2, B]]
  */
-export function visibleCableSegments(link: Link, nodes: Map<string, Node>): string[][] {
+export function visibleCableSegments(
+  link: Link,
+  nodes: Map<string, Node>,
+  terminations: readonly Termination[] = [],
+): string[][] {
+  const lookup = terminations.length > 0 ? viaLookup(nodes, terminations) : nodes
   const sequence = [link.from.node, ...(link.via ?? []), link.to.node]
   const segments: string[][] = []
   let current: string[] = []
   for (const id of sequence) {
-    const n = nodes.get(id)
+    const n = lookup.get(id)
     if (n?.termination?.role === 'eps') {
       current.push(id)
       segments.push(current)
@@ -129,6 +135,7 @@ export function cableSegmentLengths(
   link: Link,
   scenes: Scene[],
   nodes: Map<string, Node>,
+  terminations: readonly Termination[] = [],
 ): Array<{ fromId: string; toId: string; meters: number }> {
   // Walk the full polyline (nodes interleaved with bends), splitting
   // into visible cable segments at every EPS waypoint — the cable
@@ -136,6 +143,7 @@ export function cableSegmentLengths(
   // side. Bends inside a segment contribute straight-line distance
   // between adjacent waypoints, matching the curved polyline the
   // canvas draws.
+  const lookup = terminations.length > 0 ? viaLookup(nodes, terminations) : nodes
   const polyline = linkPolylineWaypoints(link)
   if (polyline.length < 2) return []
 
@@ -147,7 +155,7 @@ export function cableSegmentLengths(
   let run: Waypoint[] = []
   for (const w of polyline) {
     run.push(w)
-    if (w.kind === 'node' && nodes.get(w.nodeId)?.termination?.role === 'eps') {
+    if (w.kind === 'node' && lookup.get(w.nodeId)?.termination?.role === 'eps') {
       segmentRuns.push(run)
       run = []
     }
@@ -156,7 +164,7 @@ export function cableSegmentLengths(
 
   function resolve(w: Waypoint, scene: Scene): { x: number; y: number } | null {
     if (w.kind === 'bend') return { x: w.x, y: w.y }
-    return endpointPos(scene, w.nodeId, nodes)
+    return endpointPos(scene, w.nodeId, lookup)
   }
 
   function pixelLengthAcrossScenes(seg: Waypoint[], sceneList: Scene[]): number | null {
@@ -210,10 +218,11 @@ export function cableLengthMeters(
   link: Link,
   scenes: Scene[],
   nodes: Map<string, Node>,
+  terminations: readonly Termination[] = [],
 ): { meters: number; source: 'scene' | 'stored' } | null {
   // Length follows what's drawn: sum the visible segments. EPS internal
   // (chase-internal) length isn't modeled here.
-  const parts = cableSegmentLengths(link, scenes, nodes)
+  const parts = cableSegmentLengths(link, scenes, nodes, terminations)
   if (parts.length > 0) {
     const total = parts.reduce((s, p) => s + p.meters, 0)
     return { meters: total, source: 'scene' }

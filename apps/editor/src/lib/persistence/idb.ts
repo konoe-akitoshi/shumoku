@@ -25,7 +25,7 @@
 // No in-place migration: v1 rows are abandoned on upgrade.
 
 const DB_NAME = 'shumoku'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 export const STORES = {
   projects: 'projects',
@@ -34,12 +34,20 @@ export const STORES = {
   links: 'links',
   products: 'products',
   scenes: 'scenes',
+  terminations: 'terminations',
   assets: 'assets',
 } as const
 
 export type EntityStore = Exclude<keyof typeof STORES, 'projects' | 'assets'>
 
-export const ENTITY_STORES: EntityStore[] = ['nodes', 'subgraphs', 'links', 'products', 'scenes']
+export const ENTITY_STORES: EntityStore[] = [
+  'nodes',
+  'subgraphs',
+  'links',
+  'products',
+  'scenes',
+  'terminations',
+]
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -65,13 +73,22 @@ export function openDb(): Promise<IDBDatabase> {
       if (oldVersion < 2) {
         for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name)
       }
-      db.createObjectStore(STORES.projects, { keyPath: 'id' })
+      // From v2 → v3 we just need to add the `terminations` store —
+      // existing data stays. The bootstrap below uses `if not exists`
+      // semantics by skipping creation when the store already lives
+      // on the upgraded DB.
+      if (!db.objectStoreNames.contains(STORES.projects)) {
+        db.createObjectStore(STORES.projects, { keyPath: 'id' })
+      }
       for (const kind of ENTITY_STORES) {
+        if (db.objectStoreNames.contains(STORES[kind])) continue
         const store = db.createObjectStore(STORES[kind], { keyPath: ['projectId', 'id'] })
         store.createIndex('projectId', 'projectId')
       }
-      const assets = db.createObjectStore(STORES.assets, { keyPath: ['projectId', 'hash'] })
-      assets.createIndex('projectId', 'projectId')
+      if (!db.objectStoreNames.contains(STORES.assets)) {
+        const assets = db.createObjectStore(STORES.assets, { keyPath: ['projectId', 'hash'] })
+        assets.createIndex('projectId', 'projectId')
+      }
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)

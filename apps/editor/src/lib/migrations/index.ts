@@ -9,3 +9,7 @@ export {
 } from './bend-nodes-to-link-bends'
 export { type LegacyScene, migrateLegacyWireRoutes } from './legacy-wire-routes'
 export { inheritProductIconFromCatalog } from './product-icon-inheritance'
+export {
+  migrateTerminationNodesToGraphTerminations,
+  type TerminationMigrationStats,
+} from './termination-nodes-to-graph-terminations'

@@ -46,6 +46,7 @@ import {
   inheritProductIconFromCatalog,
   migrateBendNodesToLinkBends,
   migrateLegacyWireRoutes,
+  migrateTerminationNodesToGraphTerminations,
 } from './migrations'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
@@ -124,6 +125,7 @@ function buildAssignmentRows(): AssignmentRow[] {
     nodes: diagram.nodes,
     links: diagram.links,
     scenes: scenesStore.list,
+    terminations: diagram.terminations,
   })
 }
 
@@ -299,27 +301,26 @@ function setNodePortsFromProduct(
 /**
  * Pick a default label for a new termination placement. EPS /
  * Outlet / Panel get a numeric suffix ("EPS 1", "EPS 2"…) scoped to
- * existing same-role nodes anywhere in the diagram, so concurrent
+ * existing same-role terminations in the registry, so concurrent
  * placements stay distinguishable before the user renames them.
  */
 function nextTerminationLabel(role: 'outlet' | 'eps' | 'panel'): string {
   const base = role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : 'Panel'
-  // Walk existing same-role nodes and collect any "Base N" suffix
-  // they already carry; the new label takes max+1 (or 1 when none).
+  // Walk existing same-role terminations and collect any "Base N"
+  // suffix they already carry; the new label takes max+1 (or 1 when
+  // none).
   const re = new RegExp(`^${base}(?:\\s+(\\d+))?$`)
   let max = 0
   let baseSeen = false
-  for (const [, node] of diagram.nodes) {
-    if (node.termination?.role !== role) continue
-    const label = Array.isArray(node.label) ? node.label[0] : node.label
-    if (typeof label !== 'string') continue
-    const m = label.match(re)
+  for (const t of diagram.terminations) {
+    if (t.role !== role) continue
+    const m = t.label.match(re)
     if (!m) continue
     if (m[1]) max = Math.max(max, Number.parseInt(m[1], 10))
     else baseSeen = true
   }
   // If a bare "EPS" exists with no number yet, the first numbered one
-  // should be "EPS 2" so the existing one effectively becomes #1.
+  // should be "EPS 2" so the existing one effectively occupies #1.
   const next = baseSeen ? Math.max(max, 1) + 1 : max + 1
   return `${base} ${next}`
 }
@@ -387,6 +388,7 @@ function getProjectSnapshot(): ProjectSnapshot {
     nodes: [...diagram.nodes.entries()],
     subgraphs: [...diagram.subgraphs.entries()],
     links: diagram.links,
+    terminations: diagram.terminations,
     products: productsStore.list,
     scenes: scenesStore.list,
   }) as ProjectSnapshot
@@ -397,6 +399,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
   replaceMap(diagram.nodes, cloned.nodes)
   replaceMap(diagram.subgraphs, cloned.subgraphs)
   diagram.links = cloned.links
+  diagram.terminations = cloned.terminations ?? []
   productsStore.set(cloned.products)
   scenesStore.set(cloned.scenes)
   if (scenesStore.currentId && !scenesStore.find(scenesStore.currentId)) {
@@ -558,6 +561,9 @@ export const diagramState = {
   },
   set links(v: Link[]) {
     diagram.links = v
+  },
+  get terminations() {
+    return diagram.terminations
   },
 
   // ----- Diagram mutations (commit-wrapped) ---------------------------
@@ -962,7 +968,7 @@ export const diagramState = {
   cableLengthMeters(linkId: string): { meters: number; source: 'scene' | 'stored' } | null {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return null
-    return cableLengthMeters(link, scenesStore.list, diagram.nodes)
+    return cableLengthMeters(link, scenesStore.list, diagram.nodes, diagram.terminations)
   },
   /**
    * Per-visible-segment cable lengths for a link. EPS-routed wires
@@ -972,7 +978,7 @@ export const diagramState = {
   cableSegmentLengths(linkId: string): Array<{ fromId: string; toId: string; meters: number }> {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return []
-    return cableSegmentLengths(link, scenesStore.list, diagram.nodes)
+    return cableSegmentLengths(link, scenesStore.list, diagram.nodes, diagram.terminations)
   },
   placedCount(productId: string): number {
     let n = 0
@@ -1238,28 +1244,72 @@ export const diagramState = {
    * renders them differently and the logical diagram filters them out.
    */
   addTerminationInScene(
-    sceneId: string,
+    _sceneId: string,
     position: { x: number; y: number },
     role: 'outlet' | 'eps' | 'panel',
   ): string {
-    return commit('Add termination in scene', () => {
-      // Auto-number same-role terminations so multiple placements stay
-      // distinguishable ("EPS 1", "EPS 2"…) before the user gets around
-      // to renaming them.
-      const defaultLabel = nextTerminationLabel(role)
-      const id = diagramState.addEmptyNode(defaultLabel)
-      const scene = scenesStore.find(sceneId)
-      const node = diagram.nodes.get(id)
-      if (node) {
-        diagram.nodes.set(id, {
-          ...node,
-          termination: { role },
-          parent: scene?.scopeSubgraphId ?? node.parent,
-        })
-        invalidateSheetCache()
-      }
-      diagramState.placeNodeInScene(sceneId, id, position)
+    // Sceneless internally — terminations live in the global registry
+    // now, not as scene-placed Nodes. The first argument is kept for
+    // callsite compatibility.
+    return diagramState.addTermination(role, position)
+  },
+  /**
+   * Add a physical cabling termination (EPS / Outlet / Panel) to the
+   * diagram's shared registry. Position is stored on the termination
+   * itself; the scene canvas reads it when synthesizing draggable
+   * handles. Auto-numbers the label so multiple placements stay
+   * distinguishable until the user renames them.
+   */
+  addTermination(role: 'outlet' | 'eps' | 'panel', position: { x: number; y: number }): string {
+    return commit('Add termination', () => {
+      const id = newId('node')
+      const label = nextTerminationLabel(role)
+      diagram.terminations = [
+        ...diagram.terminations,
+        { id, role, label, position: { x: position.x, y: position.y } },
+      ]
       return id
+    })
+  },
+  /**
+   * Edit any field on an existing termination (typically label or
+   * position). Returns silently if the id is unknown so callers can
+   * route node-or-termination updates through a single funnel.
+   */
+  updateTermination(
+    id: string,
+    updates: Partial<{
+      label: string
+      position: { x: number; y: number }
+      metadata: Record<string, unknown>
+    }>,
+  ): void {
+    commit('Update termination', () => {
+      const idx = diagram.terminations.findIndex((t) => t.id === id)
+      if (idx < 0) return
+      const t = diagram.terminations[idx]
+      if (!t) return
+      diagram.terminations = diagram.terminations.map((entry, i) =>
+        i === idx ? { ...entry, ...updates } : entry,
+      )
+    })
+  },
+  /**
+   * Remove a termination from the registry and strip its id from
+   * every link's `via` chain — keeps the data layer consistent in
+   * the same way `removeNode` does for real Nodes.
+   */
+  removeTermination(id: string): void {
+    commit('Remove termination', () => {
+      const before = diagram.terminations.length
+      diagram.terminations = diagram.terminations.filter((t) => t.id !== id)
+      if (diagram.terminations.length === before) return
+      diagram.links = diagram.links.map((l) => {
+        if (!l.via?.length) return l
+        const nextVia = l.via.filter((v) => v !== id)
+        if (nextVia.length === l.via.length) return l
+        return { ...l, via: nextVia.length > 0 ? nextVia : undefined }
+      })
     })
   },
   /**
@@ -1611,6 +1661,11 @@ export const diagramState = {
       nodes: [...diagram.nodes.values()],
       links: [...diagram.links],
       subgraphs: [...diagram.subgraphs.values()],
+      // Cabling waypoints live separately from logical nodes — see
+      // the `Termination` type doc. Only emit the field when there's
+      // actually something to round-trip, so the JSON stays clean for
+      // projects without scenes.
+      terminations: diagram.terminations.length > 0 ? [...diagram.terminations] : undefined,
     }
   },
   /**
@@ -1897,6 +1952,7 @@ const EMPTY_SNAP: ProjectSnapshot = {
   nodes: [],
   subgraphs: [],
   links: [],
+  terminations: [],
   products: [],
   scenes: [],
 }
@@ -1907,6 +1963,7 @@ function projectToSnapshot(data: NetedProject): ProjectSnapshot {
     nodes: graph.nodes.map((n) => [n.id, n] as [string, Node]),
     subgraphs: (graph.subgraphs ?? []).map((sg) => [sg.id, sg] as [string, Subgraph]),
     links: graph.links,
+    terminations: graph.terminations ?? [],
     products: data.products ?? [],
     scenes: data.scenes ?? [],
   }
@@ -1926,6 +1983,7 @@ function snapshotToProject(
       nodes: snap.nodes.map(([_id, n]) => n),
       links: snap.links,
       subgraphs: snap.subgraphs.map(([_id, sg]) => sg),
+      terminations: snap.terminations.length > 0 ? snap.terminations : undefined,
     },
     scenes: snap.scenes,
   }
@@ -2024,12 +2082,28 @@ async function applyProject(data: Partial<NetedProject>) {
     // and strip the now-orphan placements.
     scenes: scenesStore.list,
   })
+  // EPS / Outlet / Panel were also `Node`s for the same reuse-of-
+  // infrastructure reason. They're routing waypoints with shared
+  // identity (multiple wires can pass through one EPS), not network
+  // equipment — so they move to their own `NetworkGraph.terminations`
+  // registry. `Link.via` keeps referencing them by id. Same scene-
+  // placement recovery trick as the bend migration above.
+  migrateTerminationNodesToGraphTerminations({
+    nodes: diagram.nodes,
+    terminations: diagram.terminations,
+    scenes: scenesStore.list,
+  })
 }
 
 async function applyGraph(graph: NetworkGraph) {
   invalidateSheetCache()
   const { nodes, subgraphs, links } = sanitizeGraph(graph)
   const direction = graph.settings?.direction ?? 'TB'
+  // Load the cabling waypoints first — they're consumed by the
+  // scene canvas, not by Sugiyama, and we want the store to be
+  // populated before the post-load migration runs (which can also
+  // append to this array when it sees legacy bend Nodes).
+  diagram.terminations = [...(graph.terminations ?? [])]
   const hasAnyNode = nodes.size > 0
   const allPositioned = hasAnyNode && [...nodes.values()].every((n) => n.position)
 

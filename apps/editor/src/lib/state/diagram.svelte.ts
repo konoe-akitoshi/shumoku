@@ -11,6 +11,7 @@ import {
   type ResolvedPort,
   routeEdges,
   type Subgraph,
+  type Termination,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
 
@@ -25,6 +26,11 @@ export const diagram = $state({
   subgraphs: new SvelteMap<string, Subgraph>(),
   bounds: { x: 0, y: 0, width: 0, height: 0 },
   links: [] as Link[],
+  // Physical cabling waypoints with shared identity (EPS / Outlet /
+  // Panel). Referenced by `Link.via` ids — same lookup pattern as
+  // before, but the entries no longer live in `nodes` so the logical
+  // diagram view / JSON export / BOM Equipment section don't see them.
+  terminations: [] as Termination[],
 })
 
 /**

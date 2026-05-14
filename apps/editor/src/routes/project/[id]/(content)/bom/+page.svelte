@@ -89,7 +89,12 @@
   // so the tech can scan the label quickly.
 
   function nodeLabelOf(nodeId: string): string {
-    return nodeDisplayLabel(diagramState.nodes.get(nodeId), nodeId)
+    const real = diagramState.nodes.get(nodeId)
+    if (real) return nodeDisplayLabel(real, nodeId)
+    // Terminations live in their own registry now; fall back so via
+    // chain prefixes still read as "EPS 1 / Outlet 2: switch-B" etc.
+    const term = diagramState.terminations.find((t) => t.id === nodeId)
+    return term?.label ?? nodeId
   }
 
   function portLabelOf(nodeId: string, portId: string | undefined): string | null {
