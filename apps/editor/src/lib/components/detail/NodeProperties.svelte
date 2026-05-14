@@ -79,7 +79,15 @@
   // sit at the top level of the markup tree in Svelte 5, so we
   // surface these as plain `$derived` values in the script.
   const isHardware = $derived(node.spec?.kind === 'hardware')
-  const productBound = $derived(!!node.productId && products.some((p) => p.id === node.productId))
+  // Live Product registry lookup for the binding. Used by both the
+  // read-mode label and the Combobox's `defaultValue` — sharing this
+  // derived value keeps the two surfaces in sync (renames in
+  // Materials reflect immediately) and avoids re-doing the
+  // `products.find` in template `@const` blocks.
+  const boundProduct = $derived(
+    node.productId ? (products.find((p) => p.id === node.productId) ?? null) : null,
+  )
+  const productBound = $derived(boundProduct !== null)
 
   const subgraphOptions = $derived(
     [...subgraphs.entries()].map(([id, sg]) => ({ id, label: sg.label || id })),
@@ -183,14 +191,11 @@
     <dt class={labelClass}>Product</dt>
     <dd>
       {#if editing}
-        {@const boundProductInList = node.productId
-          ? products.find((p) => p.id === node.productId)
-          : null}
         <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindproduct?.(v) }}>
           <div class="relative">
             <Combobox.Input
-              placeholder={boundProductInList ? '' : 'Assign product...'}
-              defaultValue={boundProductInList ? productLabel(boundProductInList) : ''}
+              placeholder={boundProduct ? '' : 'Assign product...'}
+              defaultValue={boundProduct ? productLabel(boundProduct) : ''}
               class="w-full pl-2 pr-7 py-1 text-[11px] bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono"
               oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
             />
@@ -219,12 +224,7 @@
           </Combobox.Content>
         </Combobox.Root>
       {:else}
-        {@const boundProductInList = node.productId
-          ? products.find((p) => p.id === node.productId)
-          : null}
-        <span class={valueClass}>
-          {boundProductInList ? productLabel(boundProductInList) : 'None'}
-        </span>
+        <span class={valueClass}>{boundProduct ? productLabel(boundProduct) : 'None'}</span>
       {/if}
     </dd>
   </div>
