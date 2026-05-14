@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Node, Subgraph } from '@shumoku/core'
+  import { type Node, type NodeSpec, type Subgraph, specDeviceType } from '@shumoku/core'
   import { Combobox } from 'bits-ui'
   import { CaretUpDown } from 'phosphor-svelte'
   import type { Product } from '$lib/types'
@@ -35,6 +35,27 @@
   const nodeLabel = $derived(
     node.label ? (Array.isArray(node.label) ? node.label.join(' / ') : String(node.label)) : '',
   )
+
+  /** Compact identity string for a NodeSpec. Falls back to device
+   *  type when only kind+type are populated so generic nodes (no
+   *  vendor / model) still read sensibly. Same shape as the helper
+   *  in NodeContent.svelte's Content tab — kept inline to avoid a
+   *  shared util just for two callsites. */
+  function specSummary(spec: NodeSpec): string {
+    if ('model' in spec) {
+      const parts = [spec.vendor, spec.model].filter(Boolean).join(' / ')
+      if (parts) return parts
+    }
+    if ('platform' in spec) {
+      const parts = [spec.vendor, spec.platform].filter(Boolean).join(' / ')
+      if (parts) return parts
+    }
+    if ('service' in spec) {
+      const parts = [spec.vendor, spec.service, spec.resource].filter(Boolean).join(' / ')
+      if (parts) return parts
+    }
+    return specDeviceType(spec) ?? spec.vendor ?? spec.kind
+  }
 
   const subgraphOptions = $derived(
     [...subgraphs.entries()].map(([id, sg]) => ({ id, label: sg.label || id })),
@@ -106,6 +127,23 @@
     <dt class={labelClass}>Spec</dt>
     <dd>
       {#if editing}
+        <!-- Show the current binding (Product label) or generic spec
+             summary above the Combobox so the user can tell at a
+             glance what's already assigned — the Combobox itself is
+             empty until typed into, which used to make the row look
+             blank for generic nodes. -->
+        {@const boundProductInList = node.productId
+          ? products.find((p) => p.id === node.productId)
+          : null}
+        {#if boundProductInList}
+          <div class="mb-1 text-[10px] font-mono text-neutral-500 dark:text-neutral-400">
+            current: {productLabel(boundProductInList)}
+          </div>
+        {:else if node.spec}
+          <div class="mb-1 text-[10px] font-mono text-neutral-500 dark:text-neutral-400">
+            current: {specSummary(node.spec)} <span class="text-neutral-400">(generic)</span>
+          </div>
+        {/if}
         <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindproduct?.(v) }}>
           <div class="relative">
             <Combobox.Input
@@ -138,9 +176,7 @@
           </Combobox.Content>
         </Combobox.Root>
       {:else}
-        <span class={valueClass}>
-          {node.spec ? `${node.spec.kind} / ${node.spec.vendor ?? ''}` : 'None'}
-        </span>
+        <span class={valueClass}> {node.spec ? specSummary(node.spec) : 'None'} </span>
       {/if}
     </dd>
   </div>
