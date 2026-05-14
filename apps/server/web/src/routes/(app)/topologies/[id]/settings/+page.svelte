@@ -31,6 +31,7 @@
     nodeMapping,
     showNodeStatus,
     showTrafficFlow,
+    topologies,
   } from '$lib/stores'
   import type {
     DataSource,
@@ -204,6 +205,7 @@
       ])
 
       topology = topoData
+      topologies.upsert(topoData)
       renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
       currentSources = sources
       topologyDataSources = topoSources

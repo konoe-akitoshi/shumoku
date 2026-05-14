@@ -1,7 +1,10 @@
 <script lang="ts">
   import { CaretRightIcon, MoonIcon, SunIcon } from 'phosphor-svelte'
+  import { derived } from 'svelte/store'
   import { page } from '$app/stores'
+  import { dashboards } from '$lib/stores/dashboards'
   import { resolvedTheme, themeSetting } from '$lib/stores/theme'
+  import { topologiesList } from '$lib/stores/topologies'
 
   // Generate breadcrumbs from current path
   interface Breadcrumb {
@@ -14,13 +17,40 @@
     dashboards: 'Dashboards',
     topologies: 'Topologies',
     datasources: 'Data Sources',
+    plugins: 'Plugins',
     settings: 'Settings',
     edit: 'Edit',
   }
 
-  $: breadcrumbs = generateBreadcrumbs($page.url.pathname)
+  // ID-shaped segments (e.g. "msy3HM05AczI") get resolved via the
+  // matching store. Shows "…" while the entity hasn't been loaded yet.
+  const ID_PATTERN = /^[A-Za-z0-9_-]{8,}$/
 
-  function generateBreadcrumbs(pathname: string): Breadcrumb[] {
+  const idLabels = derived(
+    [topologiesList, dashboards, page],
+    ([$topologies, $dashboards, $page]) => {
+      const parts = $page.url.pathname.split('/').filter(Boolean)
+      const labels: Record<string, string> = {}
+      // Map id segments based on the parent route segment
+      for (let i = 0; i < parts.length; i++) {
+        const seg = parts[i]
+        if (!seg || !ID_PATTERN.test(seg)) continue
+        const parent = parts[i - 1]
+        if (parent === 'topologies') {
+          const t = $topologies.find((x) => x.id === seg)
+          if (t) labels[seg] = t.name
+        } else if (parent === 'dashboards') {
+          const d = $dashboards.find((x) => x.id === seg)
+          if (d) labels[seg] = d.name
+        }
+      }
+      return labels
+    },
+  )
+
+  $: breadcrumbs = generateBreadcrumbs($page.url.pathname, $idLabels)
+
+  function generateBreadcrumbs(pathname: string, labels: Record<string, string>): Breadcrumb[] {
     const parts = pathname.split('/').filter(Boolean)
 
     if (parts.length === 0) {
@@ -32,7 +62,10 @@
     let currentPath = ''
     for (const part of parts) {
       currentPath += `/${part}`
-      const label = routeLabels[part] || decodeURIComponent(part)
+      let label = routeLabels[part] ?? labels[part]
+      if (!label) {
+        label = ID_PATTERN.test(part) ? '…' : decodeURIComponent(part)
+      }
       crumbs.push({ label, href: currentPath })
     }
 

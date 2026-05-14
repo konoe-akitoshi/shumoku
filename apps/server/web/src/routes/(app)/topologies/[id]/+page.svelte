@@ -14,7 +14,7 @@
   import ShareButton from '$lib/components/ShareButton.svelte'
   import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
   import TopologySettings from '$lib/components/TopologySettings.svelte'
-  import { mappingStore, metricsConnected } from '$lib/stores'
+  import { mappingStore, metricsConnected, topologies } from '$lib/stores'
   import type { Topology, TopologyDataSource } from '$lib/types'
 
   let topology: Topology | null = null
@@ -57,6 +57,7 @@
       ])
       topology = topoData
       renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
+      topologies.upsert(topoData)
 
       // Hand off to the shared mapping store without re-fetching
       mappingStore.hydrate(topologyId, topoData, sources)

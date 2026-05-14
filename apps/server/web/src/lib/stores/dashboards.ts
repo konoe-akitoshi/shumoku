@@ -73,12 +73,20 @@ function createDashboardStore() {
       try {
         const dashboard = await api.dashboards.get(id)
         const layout = parseDashboardLayout(dashboard)
-        update((s) => ({
-          ...s,
-          current: dashboard,
-          currentLayout: layout,
-          loading: false,
-        }))
+        update((s) => {
+          const idx = s.items.findIndex((d) => d.id === dashboard.id)
+          const items =
+            idx === -1
+              ? [dashboard, ...s.items]
+              : s.items.map((d, i) => (i === idx ? dashboard : d))
+          return {
+            ...s,
+            items,
+            current: dashboard,
+            currentLayout: layout,
+            loading: false,
+          }
+        })
         return dashboard
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load dashboard'
