@@ -3,5 +3,9 @@
 
 // Load-time migrations entry point. See ./README.md for the rules.
 
+export {
+  type BendMigrationStats,
+  migrateBendNodesToLinkBends,
+} from './bend-nodes-to-link-bends'
 export { type LegacyScene, migrateLegacyWireRoutes } from './legacy-wire-routes'
 export { inheritProductIconFromCatalog } from './product-icon-inheritance'

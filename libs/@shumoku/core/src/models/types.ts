@@ -516,6 +516,33 @@ export interface Link {
   via?: string[]
 
   /**
+   * Visual-only bend waypoints along the cable's polyline. Each
+   * entry has its own coordinates and an `afterIndex` slot:
+   *
+   *   afterIndex = -1     → bend lies between `from` and `via[0]`
+   *                          (or between `from` and `to` if `via` is empty)
+   *   afterIndex =  i     → bend lies between `via[i]` and `via[i+1]`
+   *                          (or between `via[i]` and `to` if i is the
+   *                          last via index)
+   *
+   * Within the same slot the order of `bends` entries is the order
+   * they're rendered along the wire. Bends never affect cable length
+   * accounting at the segment level — they're routing-only artifacts
+   * to push the polyline around obstacles on the floor plan.
+   *
+   * Unlike `via`, bend ids are NOT Node ids — they live entirely
+   * inside the link record. The scene canvas synthesizes virtual
+   * Svelte-Flow nodes from this array so drag / select continue to
+   * work, but no entry appears in `NetworkGraph.nodes`.
+   */
+  bends?: Array<{
+    id: string
+    x: number
+    y: number
+    afterIndex: number
+  }>
+
+  /**
    * Link label - can be multiple lines (displayed at center)
    */
   label?: string | string[]

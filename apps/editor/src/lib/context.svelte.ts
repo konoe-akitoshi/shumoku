@@ -42,7 +42,11 @@ import {
   type Theme,
 } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
-import { inheritProductIconFromCatalog, migrateLegacyWireRoutes } from './migrations'
+import {
+  inheritProductIconFromCatalog,
+  migrateBendNodesToLinkBends,
+  migrateLegacyWireRoutes,
+} from './migrations'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
 import { applySync, diffSnapshots } from './persistence/sync'
@@ -1957,6 +1961,16 @@ async function applyProject(data: Partial<NetedProject>) {
       diagramState.addTerminationInScene(sceneId, position, role),
     updateLink: (linkId, updates) => diagramState.updateLink(linkId, updates),
   })
+  // Bends used to live as `Node`s with termination.role === 'bend'
+  // so they could ride the Svelte Flow drag/select machinery.
+  // That polluted every consumer of `diagram.nodes` (JSON export,
+  // BOM, Connections, …). This migration lifts each bend out of
+  // `nodes` + `via` into the link's own `bends` array, leaving
+  // `nodes` and `via` to mean "real logical entities" only. Runs
+  // after the legacy wire-routes migration so any bend Nodes it
+  // just produced are immediately cleaned up too. Idempotent —
+  // already-migrated graphs no-op.
+  migrateBendNodesToLinkBends({ nodes: diagram.nodes, links: diagram.links })
 }
 
 async function applyGraph(graph: NetworkGraph) {
