@@ -4,6 +4,7 @@
  * Data source plugin system for Shumoku.
  */
 
+export { ArubaInstantOnPlugin } from 'shumoku-plugin-aruba-instant-on'
 export { GrafanaPlugin } from 'shumoku-plugin-grafana'
 // Re-export plugin classes from bundled plugins
 export { NetBoxPlugin } from 'shumoku-plugin-netbox'
@@ -29,6 +30,7 @@ export {
 export * from './registry.js'
 export * from './types.js'
 
+import { register as registerArubaInstantOn } from 'shumoku-plugin-aruba-instant-on'
 import { register as registerGrafana } from 'shumoku-plugin-grafana'
 import { register as registerNetBox } from 'shumoku-plugin-netbox'
 import { register as registerPrometheus } from 'shumoku-plugin-prometheus'
@@ -41,6 +43,7 @@ export function registerBundledPlugins(): void {
   registerZabbix(pluginRegistry)
   registerPrometheus(pluginRegistry)
   registerGrafana(pluginRegistry)
+  registerArubaInstantOn(pluginRegistry)
 
   console.log('[Plugins] Bundled plugins registered')
 }

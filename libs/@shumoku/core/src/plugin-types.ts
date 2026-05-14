@@ -213,7 +213,7 @@ export interface Alert {
   /** Current alert status */
   status: AlertStatus
   /** Source system */
-  source: 'zabbix' | 'prometheus' | 'grafana'
+  source: 'zabbix' | 'prometheus' | 'grafana' | 'aruba-instant-on'
   /** When the alert was received via webhook (Unix timestamp in ms) */
   receivedAt?: number
   /** URL to the alert details in the source system */
