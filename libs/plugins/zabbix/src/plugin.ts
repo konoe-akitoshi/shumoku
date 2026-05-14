@@ -176,6 +176,21 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
   }
 
   // ============================================
+  // NativeApiCapable (dev-only debug surface)
+  // ============================================
+
+  /**
+   * Raw passthrough to Zabbix's JSON-RPC. Plugin author exposes this so
+   * developers can call arbitrary methods (`item.get`, `host.get`,
+   * `trigger.get`, …) with arbitrary params from the dev-mode
+   * `/api/datasources/:id/_native` endpoint without needing a code
+   * deploy each time the question changes shape during an investigation.
+   */
+  async nativeApi(method: string, params: Record<string, unknown>): Promise<unknown> {
+    return this.apiRequest<unknown>(method, params)
+  }
+
+  // ============================================
   // HostsCapable Implementation
   // ============================================
 

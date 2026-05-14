@@ -200,6 +200,68 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 | DELETE | `/api/topologies/:id` | トポロジー削除 |
 | GET | `/api/topologies/:id/render` | SVG レンダリング |
 
+## デバッグ: プラグインの native API パススルー
+
+データソースの調査中、プラグインが**実際に upstream の何を取ってきてるか**を確認したいときに使える dev-only エンドポイント。
+
+```
+POST /api/datasources/:id/_native
+{ "method": "<native method name>", "params": { ... } }
+```
+
+- **production では無効** (`NODE_ENV === 'production'` のとき endpoint そのものが登録されない)
+- プラグインが `nativeApi(method, params)` を実装していれば動作 (現状: Zabbix のみ実装)
+- レスポンスは `{ "result": <upstream の生レスポンス> }` をそのまま返す
+
+### 使用例 (Zabbix)
+
+devtools コンソールから:
+
+```js
+// host 10808 の全 item の lastclock / lastvalue を見たい
+const r = await fetch('/api/datasources/zzu66Ydv-k2O/_native', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    method: 'item.get',
+    params: {
+      hostids: ['10808'],
+      output: ['itemid', 'key_', 'lastclock', 'lastvalue', 'status', 'state'],
+    },
+  }),
+})
+console.log(await r.json())
+```
+
+```js
+// host の interface availability を確認
+fetch('/api/datasources/zzu66Ydv-k2O/_native', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    method: 'host.get',
+    params: {
+      hostids: ['10808'],
+      output: ['hostid', 'maintenance_status'],
+      selectInterfaces: ['available', 'error'],
+    },
+  }),
+}).then(r => r.json()).then(console.log)
+```
+
+### 新しいプラグインで対応するには
+
+`NativeApiCapable` interface を implement するだけ:
+
+```ts
+// libs/@shumoku/core/src/plugin-types.ts で定義済み
+export interface NativeApiCapable {
+  nativeApi(method: string, params: Record<string, unknown>): Promise<unknown>
+}
+```
+
+プラグインの class に `async nativeApi(method, params) { return this.apiRequest(method, params) }` のような実装を足せば自動的に endpoint が反応する (duck-typing 検出)。
+
 ## WebSocket
 
 ### 接続

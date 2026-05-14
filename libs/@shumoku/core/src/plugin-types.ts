@@ -307,6 +307,22 @@ export interface AlertsCapable {
   getAlerts(options?: AlertQueryOptions): Promise<Alert[]>
 }
 
+/**
+ * Plugin exposes a raw passthrough to the upstream native API. Intended for
+ * **developer-time debugging** — the server routes that call this MUST gate
+ * themselves on a non-production environment so credentials and arbitrary
+ * upstream methods aren't surfaced to end users.
+ *
+ * The shape of `method` and `params` is plugin-defined (e.g. Zabbix expects
+ * a JSON-RPC method name + params object; a REST plugin might interpret
+ * `method` as an HTTP verb). Returning the raw upstream response unchanged
+ * is intentional — the consumer is a developer who wants to see exactly
+ * what the upstream system said.
+ */
+export interface NativeApiCapable {
+  nativeApi(method: string, params: Record<string, unknown>): Promise<unknown>
+}
+
 // ============================================
 // Type Guards
 // ============================================
@@ -333,6 +349,18 @@ export function hasAlertsCapability(
   plugin: DataSourcePlugin,
 ): plugin is DataSourcePlugin & AlertsCapable {
   return plugin.capabilities.includes('alerts')
+}
+
+/**
+ * Duck-type check: does this plugin expose a native-API passthrough?
+ * Intentionally not bound to a `DataSourceCapability` literal — this is a
+ * developer-only escape hatch, not a product feature, so it stays off the
+ * advertised capability list.
+ */
+export function hasNativeApi(
+  plugin: DataSourcePlugin,
+): plugin is DataSourcePlugin & NativeApiCapable {
+  return typeof (plugin as Partial<NativeApiCapable>).nativeApi === 'function'
 }
 
 // ============================================

@@ -6,6 +6,7 @@
 import { Hono } from 'hono'
 import { getAllPlugins } from '../plugins/loader.js'
 import type { AlertQueryOptions } from '../plugins/types.js'
+import { hasNativeApi } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import type { DataSourceInput } from '../types.js'
 
@@ -216,6 +217,41 @@ export function createDataSourcesApi(): Hono {
       return c.json({ error: message }, 500)
     }
   })
+
+  // Dev-only: raw upstream-API passthrough for debugging. Lets a developer
+  // call any native method (e.g. Zabbix's `item.get`, `host.get`) with arbitrary
+  // params from the browser devtools without re-deploying server code. Disabled
+  // in production so credentials and arbitrary upstream methods aren't exposed.
+  if (process.env['NODE_ENV'] !== 'production') {
+    app.post('/:id/_native', async (c) => {
+      const id = c.req.param('id')
+      const plugin = service.getPlugin(id)
+      if (!plugin) return c.json({ error: 'Data source not found' }, 404)
+      if (!hasNativeApi(plugin)) {
+        return c.json({ error: 'Plugin does not expose a native API' }, 400)
+      }
+      let body: { method?: unknown; params?: unknown }
+      try {
+        body = (await c.req.json()) as { method?: unknown; params?: unknown }
+      } catch {
+        return c.json({ error: 'Body must be JSON: {method, params}' }, 400)
+      }
+      if (typeof body.method !== 'string') {
+        return c.json({ error: '`method` must be a string' }, 400)
+      }
+      const params =
+        body.params && typeof body.params === 'object'
+          ? (body.params as Record<string, unknown>)
+          : {}
+      try {
+        const result = await plugin.nativeApi(body.method, params)
+        return c.json({ result })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return c.json({ error: message }, 500)
+      }
+    })
+  }
 
   // Get filter options (NetBox: sites & tags)
   app.get('/:id/filter-options', async (c) => {
