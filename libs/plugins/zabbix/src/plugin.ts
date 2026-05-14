@@ -20,6 +20,9 @@ import type {
   MetricsCapable,
   MetricsData,
   MetricsMapping,
+  MetricsStatus,
+  MonitoringHealth,
+  NodeMetrics,
 } from '@shumoku/core'
 import { addHttpWarning } from '@shumoku/core'
 import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
@@ -28,6 +31,21 @@ import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
 interface ZabbixLinkMapping extends LinkMetricsMapping {
   in?: string
   out?: string
+}
+
+/** Subset of item fields used by the health classifier. */
+interface HealthItem {
+  itemid: string
+  key_: string
+  lastclock: string
+  lastvalue: string
+}
+
+/** Subset of host fields used by the health classifier. */
+interface HostMeta {
+  hostid: string
+  maintenance_status?: string
+  interfaces?: Array<{ available: string; error?: string }>
 }
 
 export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapable, AlertsCapable {
@@ -81,20 +99,13 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
       timestamp: Date.now(),
     }
 
-    // Poll node metrics
+    // Poll node metrics. Unmapped nodes get no entry — "no data" = unmapped.
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
-      if (nodeMapping.hostId) {
-        try {
-          const isAvailable = await this.getHostAvailability(nodeMapping.hostId)
-          metrics.nodes[nodeId] = {
-            status: isAvailable ? 'up' : 'down',
-            lastSeen: isAvailable ? Date.now() : undefined,
-          }
-        } catch {
-          metrics.nodes[nodeId] = { status: 'unknown' }
-        }
-      } else {
-        metrics.nodes[nodeId] = { status: 'unknown' }
+      if (!nodeMapping.hostId) continue
+      try {
+        metrics.nodes[nodeId] = await this.evaluateHostHealth(nodeMapping.hostId)
+      } catch {
+        metrics.nodes[nodeId] = { status: 'unknown', monitoring: 'pending' }
       }
     }
 
@@ -439,21 +450,123 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
     return result.result as T
   }
 
-  private async getHostAvailability(hostId: string): Promise<boolean> {
-    const items = await this.apiRequest<ZabbixItem[]>('item.get', {
-      output: ['itemid', 'key_', 'lastvalue'],
-      hostids: [hostId],
-      search: { key_: ['agent.ping', 'icmpping'] },
-      searchByAny: true,
-    })
+  /** Maximum staleness (seconds) for an item value to count as "fresh". */
+  private static readonly LIVE_DATA_WINDOW_SEC = 300
 
-    for (const item of items) {
-      if (item.lastvalue === '1') {
-        return true
-      }
+  /**
+   * Decide whether a Zabbix host is reachable.
+   *
+   * We treat the host as up when **any enabled item has fresh data** within
+   * the last few minutes. This is monitoring-style agnostic: Agent, SNMP,
+   * IPMI, and external scripts all stamp `lastclock` when they store a
+   * value, so we don't need separate logic per protocol.
+   *
+   * Earlier approaches were too narrow:
+   * - `agent.ping`/`icmpping` lookup: missed SNMP-only network gear which
+   *   has neither item, marking healthy switches as down.
+   * - Per-interface `available` flag: not reliably updated on SNMP-only
+   *   interfaces in some Zabbix configurations — interfaces stay at
+   *   "unknown" even while items poll successfully.
+   */
+  /**
+   * Compute a node's device-state + monitoring-path health by combining two
+   * independent signals from Zabbix.
+   *
+   *  - **Device state** is whether the equipment itself is responding. The
+   *    cleanest direct evidence is an ICMP-ping item value — non-zero =
+   *    reachable, zero = unreachable. Otherwise we infer `up` from any fresh
+   *    item data, and fall back to `unknown` when we have no evidence.
+   *  - **Monitoring path** is whether Zabbix can collect data at all. The
+   *    host's maintenance flag wins (operator-driven mute); otherwise we
+   *    read per-interface `available` (the same value Zabbix paints in its
+   *    own UI as the green/red/grey dot).
+   *
+   * Issued as two parallel API calls so a 50-host topology doesn't pay a
+   * sequential round-trip cost per node.
+   */
+  private async evaluateHostHealth(hostId: string): Promise<NodeMetrics> {
+    const [items, host] = await Promise.all([
+      this.fetchHealthItems(hostId),
+      this.fetchHostMeta(hostId),
+    ])
+    const nowSec = Math.floor(Date.now() / 1000)
+    const device = ZabbixPlugin.classifyDevice(items, nowSec)
+    const monitoring = ZabbixPlugin.classifyMonitoring(host, items, nowSec)
+    return {
+      status: device.status,
+      ...(device.lastSeen !== undefined && { lastSeen: device.lastSeen }),
+      monitoring: monitoring.health,
+      ...(monitoring.error !== undefined && { monitoringError: monitoring.error }),
     }
+  }
 
-    return false
+  // ---- Signal collection ------------------------------------------------
+
+  private async fetchHealthItems(hostId: string): Promise<HealthItem[]> {
+    return this.apiRequest<HealthItem[]>('item.get', {
+      output: ['itemid', 'key_', 'lastclock', 'lastvalue'],
+      hostids: [hostId],
+      filter: { status: '0', state: '0' },
+    })
+  }
+
+  private async fetchHostMeta(hostId: string): Promise<HostMeta | undefined> {
+    const hosts = await this.apiRequest<HostMeta[]>('host.get', {
+      output: ['hostid', 'maintenance_status'],
+      hostids: [hostId],
+      selectInterfaces: ['available', 'error'],
+    })
+    return hosts[0]
+  }
+
+  // ---- Pure classifiers -------------------------------------------------
+
+  /**
+   * Map raw items into a device-state verdict. ICMP ping is the strongest
+   * "device is alive / dead" signal we have — favour it when present.
+   */
+  private static classifyDevice(
+    items: HealthItem[],
+    nowSec: number,
+  ): { status: MetricsStatus; lastSeen?: number } {
+    const fresh = (t: string) => {
+      const n = Number(t)
+      return n > 0 && nowSec - n < ZabbixPlugin.LIVE_DATA_WINDOW_SEC
+    }
+    // 1. icmpping value of 0 from a recent poll = device unreachable.
+    const icmp = items.find((i) => i.key_ === 'icmpping' || i.key_.startsWith('icmpping['))
+    if (icmp && fresh(icmp.lastclock)) {
+      if (icmp.lastvalue === '0') return { status: 'down' }
+      if (icmp.lastvalue === '1') return { status: 'up', lastSeen: Date.now() }
+    }
+    // 2. Any other fresh data implies the device responded to monitoring,
+    //    so it must be alive even if we don't have a direct ICMP signal.
+    if (items.some((i) => fresh(i.lastclock))) {
+      return { status: 'up', lastSeen: Date.now() }
+    }
+    // 3. No evidence either way.
+    return { status: 'unknown' }
+  }
+
+  /**
+   * Map raw host info → monitoring-path health. Mirrors what Zabbix shows
+   * the operator in its host list (green/red/grey + "in maintenance").
+   */
+  private static classifyMonitoring(
+    host: HostMeta | undefined,
+    items: HealthItem[],
+    nowSec: number,
+  ): { health: MonitoringHealth; error?: string } {
+    if (host?.maintenance_status === '1') return { health: 'paused' }
+    const failingIface = host?.interfaces?.find((i) => i.available === '2')
+    if (failingIface) {
+      return { health: 'failing', error: failingIface.error || undefined }
+    }
+    const hasFreshData = items.some((i) => {
+      const t = Number(i.lastclock)
+      return t > 0 && nowSec - t < ZabbixPlugin.LIVE_DATA_WINDOW_SEC
+    })
+    return { health: hasFreshData ? 'healthy' : 'pending' }
   }
 
   private async getItemsByIds(itemIds: string[]): Promise<ZabbixItem[]> {
