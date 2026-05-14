@@ -502,6 +502,22 @@ export function linkExists(
 }
 
 /**
+ * Whether the given port already appears as an endpoint of any link.
+ *
+ * A physical port models one cable termination, so it can host at most
+ * one link at a time. Callers use this to reject attempts to wire a
+ * second link onto an already-connected port — `linkExists` only
+ * catches exact-duplicate links, which isn't enough for the "1 port =
+ * 1 link" invariant.
+ */
+export function isPortLinked(links: Link[], nodeId: string, portId: string): boolean {
+  return links.some(
+    ({ from, to }) =>
+      (from.node === nodeId && from.port === portId) || (to.node === nodeId && to.port === portId),
+  )
+}
+
+/**
  * Add a link between two ports (existing or new).
  *
  * If fromPortId/toPortId refer to existing ports, use them.

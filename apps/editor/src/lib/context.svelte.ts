@@ -25,6 +25,7 @@ import {
   computeNodeBodySize,
   createMemoryFileResolver,
   HierarchicalParser,
+  isPortLinked,
   type Link,
   moveNode,
   type NetworkGraph,
@@ -559,6 +560,17 @@ export const diagramState = {
 
   // ----- Diagram mutations (commit-wrapped) ---------------------------
   addLink(link: Link) {
+    // Defensive guard. Renderer's link-creation flow already rejects
+    // drops on linked ports, but this is the canonical API every other
+    // caller (imports, scripts, future surfaces) goes through — keep
+    // the invariant enforced here so a single bypass can't corrupt the
+    // model. Either endpoint already in use → drop silently.
+    if (
+      isPortLinked(diagram.links, link.from.node, link.from.port) ||
+      isPortLinked(diagram.links, link.to.node, link.to.port)
+    ) {
+      return
+    }
     commit('Add link', () => {
       diagram.links = [...diagram.links, link]
       invalidateSheetCache()

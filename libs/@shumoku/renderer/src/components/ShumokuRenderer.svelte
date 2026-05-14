@@ -667,6 +667,10 @@
     const fromPortId = linkDrag.fromPortId
     linkCleanup?.()
     if (fromPortId === portId) return
+    // Reject drops on an already-linked target. A port is one physical
+    // termination — it can host at most one link. linkedPorts derives
+    // from the live edges set so this is in sync with what the user sees.
+    if (linkedPorts.has(portId)) return
     const fromPort = ports.get(fromPortId)
     const toPort = ports.get(portId)
     if (fromPort && toPort && fromPort.nodeId === toPort.nodeId) return
