@@ -60,6 +60,28 @@
   const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
   const editMode = $derived($dashboardEditMode)
 
+  /**
+   * Reverse lookup: monitoring host name → topology node id. Built from the
+   * topology's saved mapping. Used to resolve cross-widget highlight events
+   * that arrive with hostnames (e.g. from AlertWidget) into node ids that
+   * HighlightOverlay can match against `data-id` in the SVG.
+   */
+  const hostToNodeId = $derived.by(() => {
+    const map = new Map<string, string>()
+    if (!topology?.mappingJson) return map
+    try {
+      const m = JSON.parse(topology.mappingJson) as {
+        nodes?: Record<string, { hostName?: string }>
+      }
+      for (const [nodeId, info] of Object.entries(m.nodes ?? {})) {
+        if (info?.hostName) map.set(info.hostName, nodeId)
+      }
+    } catch {
+      // ignore malformed mappingJson
+    }
+    return map
+  })
+
   async function loadTopologies() {
     try {
       topologies = await api.topologies.list()
@@ -121,11 +143,15 @@
         break
       }
       case 'highlight-nodes': {
-        const ids = event.payload.nodeIds
-        if (!ids?.length) break
+        const resolved = new Set<string>(event.payload.nodeIds ?? [])
+        for (const host of event.payload.hosts ?? []) {
+          const nodeId = hostToNodeId.get(host)
+          if (nodeId) resolved.add(nodeId)
+        }
+        if (resolved.size === 0) break
         highlightColor = event.payload.highlightColor
         spotlight = event.payload.spotlight ?? false
-        applyHighlight(new Set(ids), event.payload.duration)
+        applyHighlight(resolved, event.payload.duration)
         break
       }
       case 'clear-highlight':

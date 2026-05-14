@@ -13,7 +13,7 @@
   import { api } from '$lib/api'
   import * as Dialog from '$lib/components/ui/dialog'
   import { currentLayout, dashboardStore } from '$lib/stores/dashboards'
-  import { emitClearHighlight, emitHighlightNodes } from '$lib/stores/widgetEvents'
+  import { emitClearHighlight, emitHighlightHosts } from '$lib/stores/widgetEvents'
   import type { Alert, AlertSeverity, DataSource } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
@@ -183,7 +183,7 @@
           if (newHosts.length > 0) {
             forEachTopology((tid) => emitClearHighlight(tid, id))
             forEachTopology((tid) =>
-              emitHighlightNodes(tid, newHosts, {
+              emitHighlightHosts(tid, newHosts, {
                 duration: 15000,
                 highlightColor: SEVERITY_HIGHLIGHT_COLORS[highestSeverity],
                 sourceWidgetId: id,
@@ -224,7 +224,7 @@
 
     forEachTopology((tid) => emitClearHighlight(tid, id))
     forEachTopology((tid) =>
-      emitHighlightNodes(tid, [host], {
+      emitHighlightHosts(tid, [host], {
         highlightColor: SEVERITY_HIGHLIGHT_COLORS[severity],
         sourceWidgetId: id,
       }),
@@ -235,7 +235,7 @@
     if (!alert.host) return
     const host = alert.host
     forEachTopology((tid) =>
-      emitHighlightNodes(tid, [host], {
+      emitHighlightHosts(tid, [host], {
         highlightColor: SEVERITY_HIGHLIGHT_COLORS[alert.severity],
         sourceWidgetId: id,
       }),

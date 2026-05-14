@@ -28,6 +28,13 @@ export interface WidgetEvent {
     nodeId?: string
     /** Target node IDs (for multi-node events) */
     nodeIds?: string[]
+    /**
+     * Target monitoring host names. The receiving topology resolves these to
+     * node ids via its own mapping (mapping.nodes[].hostName). Use this when
+     * the emitter only knows about hosts (e.g. AlertWidget) and isn't aware
+     * of per-topology node ids.
+     */
+    hosts?: string[]
     /** Attribute filter (for attribute-based highlight) */
     attribute?: { key: string; value: string }
     /** Enable spotlight (dim non-highlighted nodes) */
@@ -157,6 +164,34 @@ export function emitHighlightNodes(
     payload: {
       topologyId,
       nodeIds,
+      spotlight: options?.spotlight,
+      duration: options?.duration,
+      highlightColor: options?.highlightColor,
+      sourceWidgetId: options?.sourceWidgetId,
+    },
+  })
+}
+
+/**
+ * Highlight nodes by their mapped monitoring host name. The receiving widget
+ * resolves hosts to node ids via its topology's mapping. Use this from
+ * widgets that only know hosts (e.g. AlertWidget).
+ */
+export function emitHighlightHosts(
+  topologyId: string,
+  hosts: string[],
+  options?: {
+    spotlight?: boolean
+    duration?: number
+    highlightColor?: string
+    sourceWidgetId?: string
+  },
+): void {
+  widgetEvents.emit({
+    type: 'highlight-nodes',
+    payload: {
+      topologyId,
+      hosts,
       spotlight: options?.spotlight,
       duration: options?.duration,
       highlightColor: options?.highlightColor,
