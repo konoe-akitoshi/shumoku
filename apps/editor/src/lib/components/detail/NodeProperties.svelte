@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { type Node, type NodeSpec, type Subgraph, specDeviceType } from '@shumoku/core'
+  import {
+    DeviceType,
+    type Node,
+    type NodeSpec,
+    type Subgraph,
+    specDeviceType,
+  } from '@shumoku/core'
   import { Combobox } from 'bits-ui'
   import { CaretUpDown } from 'phosphor-svelte'
   import type { Product } from '$lib/types'
@@ -36,26 +42,51 @@
     node.label ? (Array.isArray(node.label) ? node.label.join(' / ') : String(node.label)) : '',
   )
 
-  /** Compact identity string for a NodeSpec. Falls back to device
-   *  type when only kind+type are populated so generic nodes (no
-   *  vendor / model) still read sensibly. Same shape as the helper
-   *  in NodeContent.svelte's Content tab — kept inline to avoid a
-   *  shared util just for two callsites. */
-  function specSummary(spec: NodeSpec): string {
-    if ('model' in spec) {
-      const parts = [spec.vendor, spec.model].filter(Boolean).join(' / ')
-      if (parts) return parts
-    }
-    if ('platform' in spec) {
-      const parts = [spec.vendor, spec.platform].filter(Boolean).join(' / ')
-      if (parts) return parts
-    }
-    if ('service' in spec) {
-      const parts = [spec.vendor, spec.service, spec.resource].filter(Boolean).join(' / ')
-      if (parts) return parts
-    }
-    return specDeviceType(spec) ?? spec.vendor ?? spec.kind
+  /** Role label for the Type row. Returns the device type when set
+   *  (e.g. "router", "internet", "l3-switch"), otherwise the broader
+   *  kind ("hardware", "compute", "service"). Intentionally drops
+   *  vendor / model — those belong to the Product row. */
+  function roleLabel(spec: NodeSpec | undefined): string {
+    if (!spec) return 'None'
+    return specDeviceType(spec) ?? spec.kind
   }
+
+  // Hardware role options for the editable Type dropdown. Listed in
+  // the same order as the SideToolbar's Add-Node menu so the user
+  // sees a consistent palette. Used only when the node isn't bound
+  // to a Product — bound nodes inherit their type from `Product.spec`.
+  const hardwareTypeOptions: { value: DeviceType; label: string }[] = [
+    { value: DeviceType.Router, label: 'Router' },
+    { value: DeviceType.Firewall, label: 'Firewall' },
+    { value: DeviceType.L2Switch, label: 'L2 Switch' },
+    { value: DeviceType.L3Switch, label: 'L3 Switch' },
+    { value: DeviceType.Server, label: 'Server' },
+    { value: DeviceType.AccessPoint, label: 'Access Point' },
+    { value: DeviceType.CPE, label: 'CPE / Phone' },
+    { value: DeviceType.Internet, label: 'Internet' },
+    { value: DeviceType.LoadBalancer, label: 'Load Balancer' },
+    { value: DeviceType.ConsoleServer, label: 'Console Server' },
+    { value: DeviceType.Cloud, label: 'Cloud' },
+    { value: DeviceType.VPN, label: 'VPN' },
+    { value: DeviceType.Database, label: 'Database' },
+    { value: DeviceType.Generic, label: 'Generic' },
+  ]
+
+  function changeHardwareType(value: string) {
+    const next: NodeSpec =
+      node.spec && 'kind' in node.spec && node.spec.kind === 'hardware'
+        ? { ...node.spec, type: value as DeviceType }
+        : { kind: 'hardware', type: value as DeviceType }
+    onupdate?.('spec', next)
+  }
+
+  // Reactive flags consumed by the Type row template. `@const` can't
+  // sit at the top level of the markup tree in Svelte 5, so we
+  // surface these as plain `$derived` values in the script.
+  const isHardware = $derived(node.spec?.kind === 'hardware')
+  const productBound = $derived(
+    !!node.productId && products.some((p) => p.id === node.productId),
+  )
 
   const subgraphOptions = $derived(
     [...subgraphs.entries()].map(([id, sg]) => ({ id, label: sg.label || id })),
@@ -122,12 +153,33 @@
     </dd>
   </div>
 
-  <!-- Spec — the node's intrinsic type / role. Read-only here; it's
-       determined by how the node was placed (typed placeholder from
-       the Add Node menu, or snapshotted from a Product binding). -->
+  <!-- Type — the node's role. When the node is bound to a Product
+       the type is derived from `Product.spec` and is read-only;
+       otherwise the user picks freely from the role palette. This
+       mirrors the data flow: Product binding implies the spec,
+       generic placeholders need a manual role choice. -->
   <div class="flex items-center justify-between">
-    <dt class={labelClass}>Spec</dt>
-    <dd><span class={valueClass}>{node.spec ? specSummary(node.spec) : 'None'}</span></dd>
+    <dt class={labelClass}>Type</dt>
+    <dd>
+      {#if editing && isHardware && !productBound}
+        <select
+          class={selectClass}
+          value={specDeviceType(node.spec) ?? DeviceType.Generic}
+          onchange={(e) => changeHardwareType((e.target as HTMLSelectElement).value)}
+        >
+          {#each hardwareTypeOptions as opt}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+      {:else}
+        <span class={valueClass}>
+          {roleLabel(node.spec)}
+          {#if productBound}
+            <span class="ml-1 text-[9px] text-neutral-400">(from Product)</span>
+          {/if}
+        </span>
+      {/if}
+    </dd>
   </div>
 
   <!-- Product binding — orthogonal to Spec. A node can have a Spec
