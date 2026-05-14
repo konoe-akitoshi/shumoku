@@ -186,7 +186,17 @@
         if (selected) openDetail(selected.id, selected.type)
       }}
     >
-      {#if diagramState.nodes.size > 0 || diagramState.status !== 'Loading...'}
+      <!-- Mount the renderer for any non-loading status, regardless of
+           node count. The legacy `nodes.size > 0 || status !== 'Loading...'`
+           gate also rendered an empty project once loaded, but the OR with
+           `size > 0` was a footgun: any update path that briefly flashed
+           the map empty (replaceMap, mid-flight reroutes) would tear the
+           renderer down and lose its instance state — selection, hover,
+           drag — between two reactive frames. `replaceMap` is now
+           diff-apply so it can no longer cause that, but the gate stays
+           gated only on status so a future regression in the update path
+           can't reintroduce the same class of bug. -->
+      {#if diagramState.status !== 'Loading...'}
         <ShumokuRenderer
           bind:this={renderer}
           bind:svgElement={rendererSvg}
