@@ -1,5 +1,11 @@
 <script lang="ts">
-  import type { Node, Subgraph } from '@shumoku/core'
+  import {
+    DeviceType,
+    type Node,
+    type NodeSpec,
+    type Subgraph,
+    specDeviceType,
+  } from '@shumoku/core'
   import { Combobox } from 'bits-ui'
   import { CaretUpDown } from 'phosphor-svelte'
   import type { Product } from '$lib/types'
@@ -35,6 +41,53 @@
   const nodeLabel = $derived(
     node.label ? (Array.isArray(node.label) ? node.label.join(' / ') : String(node.label)) : '',
   )
+
+  /** Role label for the Type row. Returns the device type when set
+   *  (e.g. "router", "internet", "l3-switch"), otherwise the broader
+   *  kind ("hardware", "compute", "service"). Intentionally drops
+   *  vendor / model — those belong to the Product row. */
+  function roleLabel(spec: NodeSpec | undefined): string {
+    if (!spec) return 'None'
+    return specDeviceType(spec) ?? spec.kind
+  }
+
+  // Hardware role options for the Type dropdown, derived directly
+  // from the `DeviceType` enum so adding a new role in core
+  // automatically surfaces it here without a second hardcoded list.
+  // Used only when the node isn't bound to a Product — bound nodes
+  // inherit their type from `Product.spec`.
+  const hardwareTypeOptions: { value: DeviceType; label: string }[] = Object.values(DeviceType).map(
+    (value) => ({
+      value,
+      // "l3-switch" → "L3 Switch", "access-point" → "Access Point"
+      label: value
+        .split('-')
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' '),
+    }),
+  )
+
+  function changeHardwareType(value: string) {
+    const type = value as DeviceType
+    const next: NodeSpec =
+      node.spec?.kind === 'hardware' ? { ...node.spec, type } : { kind: 'hardware', type }
+    onupdate?.('spec', next)
+  }
+
+  // Type dropdown is editable for nodes that are (or could become)
+  // hardware: spec absent (Generic Node — the first pick promotes
+  // it via `changeHardwareType`) or already hardware. Compute /
+  // service kinds are outside the DeviceType palette so editing
+  // them here would silently rewrite the kind.
+  const isHardwareEditable = $derived(!node.spec || node.spec.kind === 'hardware')
+
+  // Live Product registry lookup. Shared between the read-mode
+  // label and the Combobox `defaultValue` so renames / deletes in
+  // Materials reflect on both surfaces in one place.
+  const boundProduct = $derived(
+    node.productId ? (products.find((p) => p.id === node.productId) ?? null) : null,
+  )
+  const productBound = $derived(boundProduct !== null)
 
   const subgraphOptions = $derived(
     [...subgraphs.entries()].map(([id, sg]) => ({ id, label: sg.label || id })),
@@ -101,15 +154,48 @@
     </dd>
   </div>
 
-  <!-- Spec Binding -->
+  <!-- Type — the node's role. When the node is bound to a Product
+       the type is derived from `Product.spec` and is read-only;
+       otherwise the user picks freely from the role palette. This
+       mirrors the data flow: Product binding implies the spec,
+       generic placeholders need a manual role choice. -->
   <div class="flex items-center justify-between">
-    <dt class={labelClass}>Spec</dt>
+    <dt class={labelClass}>Type</dt>
+    <dd>
+      {#if editing && isHardwareEditable && !productBound}
+        <select
+          class={selectClass}
+          value={specDeviceType(node.spec) ?? DeviceType.Generic}
+          onchange={(e) => changeHardwareType((e.target as HTMLSelectElement).value)}
+        >
+          {#each hardwareTypeOptions as opt}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+      {:else}
+        <span class={valueClass}>
+          {roleLabel(node.spec)}
+          {#if productBound}
+            <span class="ml-1 text-[9px] text-neutral-400">(from Product)</span>
+          {/if}
+        </span>
+      {/if}
+    </dd>
+  </div>
+
+  <!-- Product binding — orthogonal to Spec. A node can have a Spec
+       without a Product (typed placeholder like Internet / ONU) and
+       a Product binding additionally specifies which procured item
+       this node maps to in Materials / BOM. -->
+  <div class="flex items-center justify-between">
+    <dt class={labelClass}>Product</dt>
     <dd>
       {#if editing}
         <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindproduct?.(v) }}>
           <div class="relative">
             <Combobox.Input
-              placeholder="Assign product..."
+              placeholder={boundProduct ? '' : 'Assign product...'}
+              defaultValue={boundProduct ? productLabel(boundProduct) : ''}
               class="w-full pl-2 pr-7 py-1 text-[11px] bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono"
               oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
             />
@@ -130,17 +216,14 @@
                   {productLabel(product)}
                 </div>
                 <div class="text-[9px] font-mono text-neutral-400">
-                  {product.spec.kind}
-                  / {product.spec.vendor ?? ''}
+                  {[product.spec.kind, product.spec.vendor].filter(Boolean).join(' / ')}
                 </div>
               </Combobox.Item>
             {/each}
           </Combobox.Content>
         </Combobox.Root>
       {:else}
-        <span class={valueClass}>
-          {node.spec ? `${node.spec.kind} / ${node.spec.vendor ?? ''}` : 'None'}
-        </span>
+        <span class={valueClass}>{boundProduct ? productLabel(boundProduct) : 'None'}</span>
       {/if}
     </dd>
   </div>
