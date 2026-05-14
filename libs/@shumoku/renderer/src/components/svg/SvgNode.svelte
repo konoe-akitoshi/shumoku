@@ -128,7 +128,12 @@
   }
 
   function onEdgeDown(e: PointerEvent) {
-    if (!droplet) return
+    // Left-click only. Right / middle clicks need to bubble so the
+    // host's context menu (and pan / etc.) sees them — otherwise a
+    // two-finger trackpad right-click that lands in the 10px
+    // edge-zone halo would add a stray port and tear down the
+    // multi-selection via the addPort → replaceMap path.
+    if (e.button !== 0 || !droplet) return
     e.stopPropagation()
     e.preventDefault()
     onaddport?.(node.id, droplet.side)
