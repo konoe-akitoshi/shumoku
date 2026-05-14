@@ -1272,19 +1272,71 @@ export const diagramState = {
    * the new bend Node's id so the drag handler can move it.
    */
   insertBendInLink(
-    sceneId: string,
+    _sceneId: string,
     linkId: string,
     position: { x: number; y: number },
-    viaIndex: number,
+    afterIndex: number,
   ): string {
-    return commit('Bend wire', () => {
-      const id = diagramState.addTerminationInScene(sceneId, position, 'bend')
-      const link = diagram.links.find((l) => l.id === linkId)
-      const oldVia = link?.via ?? []
-      const idx = Math.max(0, Math.min(viaIndex, oldVia.length))
-      const newVia = [...oldVia.slice(0, idx), id, ...oldVia.slice(idx)]
-      diagramState.updateLink(linkId, { via: newVia })
-      return id
+    // Bends live on `link.bends` now, not on `diagram.nodes`. The
+    // scene argument is kept for callsite compatibility but unused —
+    // bends are link-level data, not per-scene.
+    return diagramState.addLinkBend(linkId, position, afterIndex) ?? ''
+  },
+  /**
+   * Append a bend waypoint to a link's polyline. `afterIndex` is the
+   * insertion slot relative to the (terminations-only) `via` chain:
+   *   -1  → between `from` and `via[0]` (or `from`→`to` directly)
+   *    i  → between `via[i]` and `via[i+1]` (or `via[i]`→`to`)
+   * Returns the new bend's id (empty string if the link is missing).
+   */
+  addLinkBend(linkId: string, position: { x: number; y: number }, afterIndex: number): string {
+    return commit('Add bend', () => {
+      const idx = diagram.links.findIndex((l) => l.id === linkId)
+      if (idx < 0) return ''
+      const link = diagram.links[idx]
+      if (!link) return ''
+      const bendId = newId('bend')
+      const next = {
+        ...link,
+        bends: [...(link.bends ?? []), { id: bendId, x: position.x, y: position.y, afterIndex }],
+      }
+      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
+      return bendId
+    })
+  },
+  /**
+   * Move a bend to a new position. Pure data update — bends don't
+   * affect routing or port resolution, so no `rebuildPortsAndEdges`.
+   */
+  updateLinkBend(linkId: string, bendId: string, position: { x: number; y: number }): void {
+    commit('Move bend', () => {
+      const idx = diagram.links.findIndex((l) => l.id === linkId)
+      if (idx < 0) return
+      const link = diagram.links[idx]
+      if (!link?.bends) return
+      const next = {
+        ...link,
+        bends: link.bends.map((b) =>
+          b.id === bendId ? { ...b, x: position.x, y: position.y } : b,
+        ),
+      }
+      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
+    })
+  },
+  /**
+   * Drop a bend from a link. When the link has no bends left, the
+   * `bends` field is cleared back to undefined so the saved JSON
+   * doesn't carry empty arrays.
+   */
+  removeLinkBend(linkId: string, bendId: string): void {
+    commit('Remove bend', () => {
+      const idx = diagram.links.findIndex((l) => l.id === linkId)
+      if (idx < 0) return
+      const link = diagram.links[idx]
+      if (!link?.bends) return
+      const filtered = link.bends.filter((b) => b.id !== bendId)
+      const next = { ...link, bends: filtered.length > 0 ? filtered : undefined }
+      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
     })
   },
   /**
@@ -1957,19 +2009,15 @@ async function applyProject(data: Partial<NetedProject>) {
   scenesStore.setCurrentId(null)
   migrateLegacyWireRoutes(data.scenes ?? [], {
     links: diagram.links,
-    addTerminationInScene: (sceneId, position, role) =>
-      diagramState.addTerminationInScene(sceneId, position, role),
-    updateLink: (linkId, updates) => diagramState.updateLink(linkId, updates),
+    newBendId: () => newId('bend'),
   })
-  // Bends used to live as `Node`s with termination.role === 'bend'
-  // so they could ride the Svelte Flow drag/select machinery.
+  // Older project files stored bends as `Node`s with
+  // `termination.role === 'bend'` and spliced them into `Link.via`.
   // That polluted every consumer of `diagram.nodes` (JSON export,
-  // BOM, Connections, …). This migration lifts each bend out of
-  // `nodes` + `via` into the link's own `bends` array, leaving
-  // `nodes` and `via` to mean "real logical entities" only. Runs
-  // after the legacy wire-routes migration so any bend Nodes it
-  // just produced are immediately cleaned up too. Idempotent —
-  // already-migrated graphs no-op.
+  // BOM, Connections, …). The current model puts bends on the
+  // link itself via `Link.bends`. This migration lifts any bend
+  // Nodes from a legacy save into the new home and deletes them
+  // from `nodes`. Idempotent — already-migrated graphs no-op.
   migrateBendNodesToLinkBends({ nodes: diagram.nodes, links: diagram.links })
 }
 

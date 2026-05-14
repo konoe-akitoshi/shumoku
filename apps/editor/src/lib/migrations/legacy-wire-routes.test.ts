@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Link } from '@shumoku/core'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { type LegacyScene, migrateLegacyWireRoutes } from './legacy-wire-routes'
 
 function makeLink(id: string, via?: string[]): Link {
@@ -15,31 +15,17 @@ function makeLink(id: string, via?: string[]): Link {
 }
 
 function makeDeps(links: Link[] = []) {
-  const added: Array<{ sceneId: string; position: { x: number; y: number }; role: string }> = []
-  const updated: Array<{ linkId: string; via: string[] }> = []
   let counter = 0
   return {
-    added,
-    updated,
-    deps: {
-      links,
-      addTerminationInScene: vi.fn((sceneId: string, position, role) => {
-        counter++
-        const id = `bend-${counter}`
-        added.push({ sceneId, position, role })
-        return id
-      }),
-      updateLink: vi.fn((linkId: string, updates: { via: string[] }) => {
-        updated.push({ linkId, via: updates.via })
-      }),
-    },
+    links,
+    newBendId: () => `bend-${++counter}`,
   }
 }
 
 describe('migrateLegacyWireRoutes', () => {
-  it('converts each controlPoint into a bend Node and prepends to Link.via', () => {
-    const link = makeLink('L1', ['existing-tp'])
-    const { deps, added, updated } = makeDeps([link])
+  it('converts each controlPoint into a Link.bends entry at afterIndex -1', () => {
+    const links = [makeLink('L1', ['existing-tp'])]
+    const deps = makeDeps(links)
     const scene: LegacyScene = {
       id: 'S1',
       wireRoutes: [
@@ -55,17 +41,18 @@ describe('migrateLegacyWireRoutes', () => {
 
     migrateLegacyWireRoutes([scene], deps)
 
-    expect(added).toEqual([
-      { sceneId: 'S1', position: { x: 10, y: 20 }, role: 'bend' },
-      { sceneId: 'S1', position: { x: 30, y: 40 }, role: 'bend' },
+    expect(links[0]?.bends).toEqual([
+      { id: 'bend-1', x: 10, y: 20, afterIndex: -1 },
+      { id: 'bend-2', x: 30, y: 40, afterIndex: -1 },
     ])
-    // Bends placed BEFORE the pre-existing via entry — preserves the
-    // visual order from when bends were first-class waypoints.
-    expect(updated).toEqual([{ linkId: 'L1', via: ['bend-1', 'bend-2', 'existing-tp'] }])
+    // The existing via chain is untouched — bends migrated to their
+    // own field, not interleaved into via.
+    expect(links[0]?.via).toEqual(['existing-tp'])
   })
 
   it('no-ops for scenes without wireRoutes, empty routes, or empty points', () => {
-    const { deps, added, updated } = makeDeps([makeLink('L1')])
+    const links = [makeLink('L1')]
+    const deps = makeDeps(links)
     migrateLegacyWireRoutes(
       [
         { id: 'S1' } as LegacyScene,
@@ -75,29 +62,29 @@ describe('migrateLegacyWireRoutes', () => {
       ],
       deps,
     )
-    expect(added).toEqual([])
-    expect(updated).toEqual([])
+    expect(links[0]?.bends).toBeUndefined()
   })
 
   it('skips routes whose link is missing (orphan reference)', () => {
-    const { deps, added, updated } = makeDeps([makeLink('L1')])
+    const links = [makeLink('L1')]
+    const deps = makeDeps(links)
     const scene: LegacyScene = {
       id: 'S1',
       wireRoutes: [{ linkId: 'L-missing', controlPoints: [{ x: 1, y: 2 }] }],
     }
     migrateLegacyWireRoutes([scene], deps)
-    expect(added).toEqual([])
-    expect(updated).toEqual([])
+    expect(links[0]?.bends).toBeUndefined()
   })
 
   it('handles a link without prior via (undefined)', () => {
-    const link = makeLink('L1')
-    const { deps, updated } = makeDeps([link])
+    const links = [makeLink('L1')]
+    const deps = makeDeps(links)
     const scene: LegacyScene = {
       id: 'S1',
       wireRoutes: [{ linkId: 'L1', controlPoints: [{ x: 1, y: 2 }] }],
     }
     migrateLegacyWireRoutes([scene], deps)
-    expect(updated).toEqual([{ linkId: 'L1', via: ['bend-1'] }])
+    expect(links[0]?.bends).toEqual([{ id: 'bend-1', x: 1, y: 2, afterIndex: -1 }])
+    expect(links[0]?.via).toBeUndefined()
   })
 })
