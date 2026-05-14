@@ -3,7 +3,16 @@
 
 import type { Link, Node } from '@shumoku/core'
 import { describe, expect, test } from 'vitest'
+import type { Scene } from '../types'
 import { migrateBendNodesToLinkBends } from './bend-nodes-to-link-bends'
+
+function scene(id: string, placements: Array<{ nodeId: string; x: number; y: number }>): Scene {
+  return {
+    id,
+    name: id,
+    nodePlacements: placements.map((p) => ({ nodeId: p.nodeId, position: { x: p.x, y: p.y } })),
+  }
+}
 
 function termination(id: string, role: 'eps' | 'outlet' | 'panel' | 'bend'): Node {
   return {
@@ -97,6 +106,25 @@ describe('migrateBendNodesToLinkBends', () => {
     const stats2 = migrateBendNodesToLinkBends({ nodes, links })
     expect(stats2).toEqual({ nodesRemoved: 0, linksTouched: 0, bendsAdded: 0 })
     expect(links[0]?.bends).toHaveLength(1)
+  })
+
+  test('reads bend position from scene placement when node.position is missing', () => {
+    // Legacy bends were placed via `placeNodeInScene`, which only
+    // wrote to `scene.nodePlacements`. Their `node.position` is
+    // undefined — the migration has to look in scenes to recover
+    // real coordinates, otherwise every bend lands at (0, 0).
+    const bend: Node = { id: 'bend-1', label: 'Bend', termination: { role: 'bend' } } as Node
+    const nodes = nodesMap(device('a'), device('b'), bend)
+    const links: Link[] = [
+      { id: 'l1', from: { node: 'a', port: 'p' }, to: { node: 'b', port: 'p' }, via: ['bend-1'] },
+    ]
+    const scenes = [scene('s1', [{ nodeId: 'bend-1', x: 42, y: 84 }])]
+
+    migrateBendNodesToLinkBends({ nodes, links, scenes })
+
+    expect(links[0]?.bends?.[0]).toMatchObject({ id: 'bend-1', x: 42, y: 84 })
+    // Orphan placement removed from the scene so the next save is clean.
+    expect(scenes[0]?.nodePlacements.find((p) => p.nodeId === 'bend-1')).toBeUndefined()
   })
 
   test('preserves an existing bends array (append, not replace)', () => {

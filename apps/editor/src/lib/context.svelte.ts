@@ -2015,7 +2015,15 @@ async function applyProject(data: Partial<NetedProject>) {
   // link itself via `Link.bends`. This migration lifts any bend
   // Nodes from a legacy save into the new home and deletes them
   // from `nodes`. Idempotent — already-migrated graphs no-op.
-  migrateBendNodesToLinkBends({ nodes: diagram.nodes, links: diagram.links })
+  migrateBendNodesToLinkBends({
+    nodes: diagram.nodes,
+    links: diagram.links,
+    // Scenes carry the bend's actual position via `nodePlacements`
+    // (legacy bend Nodes never had `node.position` set). Pass the
+    // live scenesStore so the migration can recover real coords
+    // and strip the now-orphan placements.
+    scenes: scenesStore.list,
+  })
 }
 
 async function applyGraph(graph: NetworkGraph) {

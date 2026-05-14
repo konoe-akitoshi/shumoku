@@ -24,6 +24,7 @@
  */
 
 import type { Link, NetworkGraph, Node } from '@shumoku/core'
+import type { Scene } from '../types'
 
 export interface BendMigrationStats {
   /** Bend Nodes removed from `nodes`. */
@@ -51,8 +52,16 @@ export interface BendMigrationStats {
 export function migrateBendNodesToLinkBends(args: {
   nodes: Map<string, Node>
   links: Link[]
+  /**
+   * Optional scenes — used to recover per-scene placements when the
+   * bend Node itself has no `position` field. Bends were created
+   * via `placeNodeInScene` which only wrote `scene.nodePlacements`,
+   * never `node.position`, so without this hint every legacy bend
+   * would migrate to (0, 0).
+   */
+  scenes?: Scene[]
 }): BendMigrationStats {
-  const { nodes, links } = args
+  const { nodes, links, scenes } = args
   const stats: BendMigrationStats = {
     nodesRemoved: 0,
     linksTouched: 0,
@@ -66,6 +75,23 @@ export function migrateBendNodesToLinkBends(args: {
     if (node.termination?.role === 'bend') bendNodeById.set(node.id, node)
   }
   if (bendNodeById.size === 0) return stats
+
+  // First-seen scene placement per node id — bends placed in
+  // multiple scenes collapse to whichever scene appears first in
+  // the array. `Link.bends` is link-level (one position per bend),
+  // so this is the best we can do without inventing scene-keyed
+  // bend storage.
+  const placementById = new Map<string, { x: number; y: number }>()
+  for (const scene of scenes ?? []) {
+    for (const p of scene.nodePlacements ?? []) {
+      if (placementById.has(p.nodeId)) continue
+      placementById.set(p.nodeId, p.position)
+    }
+  }
+
+  function positionOf(node: Node): { x: number; y: number } {
+    return placementById.get(node.id) ?? node.position ?? { x: 0, y: 0 }
+  }
 
   const usedBendIds = new Set<string>()
 
@@ -87,7 +113,7 @@ export function migrateBendNodesToLinkBends(args: {
       // bend in the original via — equal to the current length of
       // `nextVia` minus 1 (-1 means "before the first termination").
       const afterIndex = nextVia.length - 1
-      const pos = bendNode.position ?? { x: 0, y: 0 }
+      const pos = positionOf(bendNode)
       nextBends.push({ id: bendNode.id, x: pos.x, y: pos.y, afterIndex })
       usedBendIds.add(bendNode.id)
       extracted = true
@@ -110,6 +136,18 @@ export function migrateBendNodesToLinkBends(args: {
   for (const [id] of bendNodeById) {
     nodes.delete(id)
     stats.nodesRemoved++
+  }
+
+  // Strip the now-orphan placements from each scene so the next
+  // save doesn't carry them. sanitizeScenes would drop them on the
+  // next load anyway, but doing it here keeps the in-memory state
+  // clean immediately (and the saved file too once any change is
+  // committed).
+  if (scenes) {
+    for (const scene of scenes) {
+      if (!scene.nodePlacements?.length) continue
+      scene.nodePlacements = scene.nodePlacements.filter((p) => !bendNodeById.has(p.nodeId))
+    }
   }
 
   return stats
