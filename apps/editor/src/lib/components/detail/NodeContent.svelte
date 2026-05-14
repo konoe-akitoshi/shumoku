@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getDeviceIcon, type Link, type Node, specDeviceType } from '@shumoku/core'
+  import { getDeviceIcon, type Link, type Node, type NodeSpec, specDeviceType } from '@shumoku/core'
   import { X } from 'phosphor-svelte'
   import { diagramState } from '$lib/context.svelte'
   import type { PoEBudget } from '$lib/poe-analysis'
@@ -22,6 +22,27 @@
 
   function stripHtml(s: string): string {
     return s.replace(/<[^>]*>/g, '')
+  }
+
+  /** Compact identity string for a NodeSpec — vendor / model
+   *  (or vendor / service / resource) — used when the node carries a
+   *  spec directly rather than a Product binding. Falls back to the
+   *  device type (e.g. "internet", "router") when only kind+type are
+   *  set, so generic placeholders still read sensibly. */
+  function specSummary(spec: NodeSpec): string {
+    if ('model' in spec) {
+      const parts = [spec.vendor, spec.model].filter(Boolean).join(' / ')
+      if (parts) return parts
+    }
+    if ('platform' in spec) {
+      const parts = [spec.vendor, spec.platform].filter(Boolean).join(' / ')
+      if (parts) return parts
+    }
+    if ('service' in spec) {
+      const parts = [spec.vendor, spec.service, spec.resource].filter(Boolean).join(' / ')
+      if (parts) return parts
+    }
+    return specDeviceType(spec) ?? spec.vendor ?? spec.kind
   }
 
   const iconPath = $derived(node.spec ? getDeviceIcon(specDeviceType(node.spec)) : undefined)
@@ -166,6 +187,18 @@
           >{boundProduct.spec.kind}</span
         >
         <span class="text-neutral-600 dark:text-neutral-300">{productLabel(boundProduct)}</span>
+      </div>
+    {:else if node.spec}
+      <!-- Catalog-less node: show whatever spec the user authored
+           directly on the node so the Detail panel doesn't say
+           "No spec assigned" for legitimately spec'd nodes that
+           just haven't been bound to a Product yet. -->
+      <div class="flex items-center gap-1.5 text-[11px]">
+        <span
+          class="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-[9px] font-medium uppercase text-neutral-500 dark:text-neutral-400"
+          >{node.spec.kind}</span
+        >
+        <span class="text-neutral-600 dark:text-neutral-300">{specSummary(node.spec)}</span>
       </div>
     {:else}
       <div class="text-[11px] text-neutral-400 dark:text-neutral-500 italic">No spec assigned</div>
