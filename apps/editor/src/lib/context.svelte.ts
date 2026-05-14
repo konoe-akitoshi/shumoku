@@ -300,27 +300,26 @@ function setNodePortsFromProduct(
 /**
  * Pick a default label for a new termination placement. EPS /
  * Outlet / Panel get a numeric suffix ("EPS 1", "EPS 2"…) scoped to
- * existing same-role nodes anywhere in the diagram, so concurrent
+ * existing same-role terminations in the registry, so concurrent
  * placements stay distinguishable before the user renames them.
  */
 function nextTerminationLabel(role: 'outlet' | 'eps' | 'panel'): string {
   const base = role === 'outlet' ? 'Outlet' : role === 'eps' ? 'EPS' : 'Panel'
-  // Walk existing same-role nodes and collect any "Base N" suffix
-  // they already carry; the new label takes max+1 (or 1 when none).
+  // Walk existing same-role terminations and collect any "Base N"
+  // suffix they already carry; the new label takes max+1 (or 1 when
+  // none).
   const re = new RegExp(`^${base}(?:\\s+(\\d+))?$`)
   let max = 0
   let baseSeen = false
-  for (const [, node] of diagram.nodes) {
-    if (node.termination?.role !== role) continue
-    const label = Array.isArray(node.label) ? node.label[0] : node.label
-    if (typeof label !== 'string') continue
-    const m = label.match(re)
+  for (const t of diagram.terminations) {
+    if (t.role !== role) continue
+    const m = t.label.match(re)
     if (!m) continue
     if (m[1]) max = Math.max(max, Number.parseInt(m[1], 10))
     else baseSeen = true
   }
   // If a bare "EPS" exists with no number yet, the first numbered one
-  // should be "EPS 2" so the existing one effectively becomes #1.
+  // should be "EPS 2" so the existing one effectively occupies #1.
   const next = baseSeen ? Math.max(max, 1) + 1 : max + 1
   return `${base} ${next}`
 }
@@ -1239,28 +1238,68 @@ export const diagramState = {
    * renders them differently and the logical diagram filters them out.
    */
   addTerminationInScene(
-    sceneId: string,
+    _sceneId: string,
     position: { x: number; y: number },
     role: 'outlet' | 'eps' | 'panel',
   ): string {
-    return commit('Add termination in scene', () => {
-      // Auto-number same-role terminations so multiple placements stay
-      // distinguishable ("EPS 1", "EPS 2"…) before the user gets around
-      // to renaming them.
-      const defaultLabel = nextTerminationLabel(role)
-      const id = diagramState.addEmptyNode(defaultLabel)
-      const scene = scenesStore.find(sceneId)
-      const node = diagram.nodes.get(id)
-      if (node) {
-        diagram.nodes.set(id, {
-          ...node,
-          termination: { role },
-          parent: scene?.scopeSubgraphId ?? node.parent,
-        })
-        invalidateSheetCache()
-      }
-      diagramState.placeNodeInScene(sceneId, id, position)
+    // Sceneless internally — terminations live in the global registry
+    // now, not as scene-placed Nodes. The first argument is kept for
+    // callsite compatibility.
+    return diagramState.addTermination(role, position)
+  },
+  /**
+   * Add a physical cabling termination (EPS / Outlet / Panel) to the
+   * diagram's shared registry. Position is stored on the termination
+   * itself; the scene canvas reads it when synthesizing draggable
+   * handles. Auto-numbers the label so multiple placements stay
+   * distinguishable until the user renames them.
+   */
+  addTermination(role: 'outlet' | 'eps' | 'panel', position: { x: number; y: number }): string {
+    return commit('Add termination', () => {
+      const id = newId('node')
+      const label = nextTerminationLabel(role)
+      diagram.terminations = [
+        ...diagram.terminations,
+        { id, role, label, position: { x: position.x, y: position.y } },
+      ]
       return id
+    })
+  },
+  /**
+   * Edit any field on an existing termination (typically label or
+   * position). Returns silently if the id is unknown so callers can
+   * route node-or-termination updates through a single funnel.
+   */
+  updateTermination(
+    id: string,
+    updates: Partial<{ label: string; position: { x: number; y: number } }>,
+  ): void {
+    commit('Update termination', () => {
+      const idx = diagram.terminations.findIndex((t) => t.id === id)
+      if (idx < 0) return
+      const t = diagram.terminations[idx]
+      if (!t) return
+      diagram.terminations = diagram.terminations.map((entry, i) =>
+        i === idx ? { ...entry, ...updates } : entry,
+      )
+    })
+  },
+  /**
+   * Remove a termination from the registry and strip its id from
+   * every link's `via` chain — keeps the data layer consistent in
+   * the same way `removeNode` does for real Nodes.
+   */
+  removeTermination(id: string): void {
+    commit('Remove termination', () => {
+      const before = diagram.terminations.length
+      diagram.terminations = diagram.terminations.filter((t) => t.id !== id)
+      if (diagram.terminations.length === before) return
+      diagram.links = diagram.links.map((l) => {
+        if (!l.via?.length) return l
+        const nextVia = l.via.filter((v) => v !== id)
+        if (nextVia.length === l.via.length) return l
+        return { ...l, via: nextVia.length > 0 ? nextVia : undefined }
+      })
     })
   },
   /**
