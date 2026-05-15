@@ -160,28 +160,29 @@ export class ArubaInstantOnPlugin
     const { byId } = await this.deviceLookup()
 
     // ---- Nodes -----------------------------------------------------------
+    //
+    // Stay silent on hosts whose `hostId` isn't in *our* inventory —
+    // either the mapping points at a different source's host (multi-
+    // source case), or the operator typed a bad id. Either way, another
+    // plugin in the poll loop may have the real answer, so emitting a
+    // fake `{ status: unknown, monitoring: pending }` here would
+    // clobber that real result during merge. The server uses absence
+    // (no metrics from any plugin) to render "unknown" / "pending".
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
       if (!nodeMapping.hostId) continue
       const device = byId.get(nodeMapping.hostId)
-      if (!device) {
-        // Mapped to a host we couldn't find — treat as monitoring pending
-        // rather than down, since absence is plausibly a transient API miss.
-        metrics.nodes[nodeId] = { status: 'unknown', monitoring: 'pending' }
-        continue
-      }
+      if (!device) continue
       metrics.nodes[nodeId] = deviceToMetrics(device)
     }
 
     // ---- Links -----------------------------------------------------------
-    // Each device's inventory record carries per-ethernet-port throughput.
-    // For a link mapped to (monitoredNode, interfaceName), pull traffic from
-    // the device's ethernetPorts[] entry whose port matches.
+    // Same silence rule: only emit traffic for links whose monitored
+    // node sits in our inventory. Links pointing at another source's
+    // host (or unmapped) are left to other plugins / the default
+    // "unknown" rendering.
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
       const link = portLinkLookup(linkMapping, mapping, byId)
-      if (!link) {
-        metrics.links[linkId] = { status: 'unknown' }
-        continue
-      }
+      if (!link) continue
       metrics.links[linkId] = portToLinkMetrics(link.port, linkMapping.bandwidth ?? link.bandwidth)
     }
 
