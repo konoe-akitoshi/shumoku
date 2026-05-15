@@ -176,13 +176,20 @@ export class ArubaInstantOnPlugin
     }
 
     // ---- Links -----------------------------------------------------------
-    // Same silence rule: only emit traffic for links whose monitored
-    // node sits in our inventory. Links pointing at another source's
-    // host (or unmapped) are left to other plugins / the default
-    // "unknown" rendering.
+    // A link's metrics come from the device its `monitoredNodeId` maps
+    // to. Two distinct outcomes, mirroring the node loop:
+    //   - monitored node isn't an Aruba device  → silent (another
+    //     source owns it; emitting here would clobber on merge).
+    //   - monitored node IS ours but the port can't be resolved →
+    //     emit `{ status: 'unknown' }`. A link is owned by exactly one
+    //     source, so this is a real signal, not a merge hazard.
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
       const link = portLinkLookup(linkMapping, mapping, byId)
-      if (!link) continue
+      if (link === 'not-ours') continue
+      if (link === 'port-unresolved') {
+        metrics.links[linkId] = { status: 'unknown' }
+        continue
+      }
       metrics.links[linkId] = portToLinkMetrics(link.port, linkMapping.bandwidth ?? link.bandwidth)
     }
 
@@ -263,24 +270,35 @@ export class ArubaInstantOnPlugin
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve a link mapping into the actual ethernet port telemetry record on
- * the monitored device. Returns null when the mapping can't be satisfied
- * (unmapped node, host not in inventory, no matching port).
+ * Resolve a link mapping into the ethernet port telemetry record on the
+ * monitored device. Three outcomes:
+ *
+ * - `'not-ours'` — the monitored node isn't an Aruba device (or the link
+ *   isn't fully mapped). The caller stays silent so another metrics
+ *   source can answer.
+ * - `'port-unresolved'` — the monitored node *is* an Aruba device, but
+ *   the mapped interface name doesn't match any of its ports. The caller
+ *   emits an explicit `unknown` — a real signal, and safe because a link
+ *   is owned by exactly one source.
+ * - `{ port, bandwidth }` — resolved.
  */
 function portLinkLookup(
   linkMapping: { monitoredNodeId?: string; interface?: string },
   mapping: MetricsMapping,
   byId: Map<string, AruInventoryDevice>,
-): { port: AruEthernetPort; bandwidth: number | undefined } | null {
+): { port: AruEthernetPort; bandwidth: number | undefined } | 'not-ours' | 'port-unresolved' {
   const monitoredNodeId = linkMapping.monitoredNodeId
   const ifaceName = linkMapping.interface
-  if (!monitoredNodeId || !ifaceName) return null
+  if (!monitoredNodeId || !ifaceName) return 'not-ours'
   const hostId = mapping.nodes[monitoredNodeId]?.hostId
-  if (!hostId) return null
+  if (!hostId) return 'not-ours'
   const device = byId.get(hostId)
-  if (!device?.ethernetPorts?.length) return null
-  const port = findPortByName(device.ethernetPorts, ifaceName)
-  if (!port) return null
+  if (!device) return 'not-ours'
+  // The monitored device is in our inventory — the link is ours from here.
+  const port = device.ethernetPorts?.length
+    ? findPortByName(device.ethernetPorts, ifaceName)
+    : undefined
+  if (!port) return 'port-unresolved'
   return { port, bandwidth: portSpeedBps(port) }
 }
 
