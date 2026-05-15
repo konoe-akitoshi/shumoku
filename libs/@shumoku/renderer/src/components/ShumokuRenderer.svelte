@@ -389,7 +389,7 @@
     replaceMap(edges, result.edges)
     if (result.subgraphs) replaceMap(subgraphs, result.subgraphs)
 
-    if (!multiDragOrigin || !multiDragOrigin.has(id)) return
+    if (!multiDragOrigin?.has(id)) return
     // Where the dragged element ended up after collision resolution.
     const draggedNow = nodes.get(id)?.position ?? subgraphs.get(id)?.bounds
     const origin = multiDragOrigin.get(id)
