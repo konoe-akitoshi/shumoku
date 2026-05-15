@@ -27,6 +27,29 @@ import { TopologySourcesService } from './services/topology-sources.js'
 import { TopologyManager } from './topology.js'
 import type { ClientMessage, ClientState, Config, MetricsData, MetricsMapping } from './types.js'
 
+/**
+ * Merge metrics from a later poll into an accumulator. Sources are
+ * polled in priority order, so the later result is **lower-priority**
+ * — earlier values win on conflicts. Plugin host-id namespaces are
+ * structurally disjoint in practice so the typical case is that
+ * `incoming` fills slots that `acc` doesn't have yet.
+ *
+ * `warnings` is concatenated (every source's warnings get surfaced);
+ * the timestamp tracks the latest poll so consumers see freshness.
+ */
+function mergeMetricsData(acc: MetricsData | null, incoming: MetricsData): MetricsData {
+  if (!acc) return incoming
+  const nodes = { ...incoming.nodes, ...acc.nodes }
+  const links = { ...incoming.links, ...acc.links }
+  const warnings = [...(acc.warnings ?? []), ...(incoming.warnings ?? [])]
+  return {
+    nodes,
+    links,
+    timestamp: Math.max(acc.timestamp, incoming.timestamp),
+    warnings: warnings.length > 0 ? warnings : undefined,
+  }
+}
+
 export class Server {
   private app: Hono
   private config: Config
@@ -338,52 +361,55 @@ export class Server {
 
       let metrics: MetricsData | null = null
 
-      // Try to get metrics from configured data source
+      // Poll every attached metrics source and merge their results.
+      // Plugin host-id namespaces are structurally disjoint in practice
+      // (Zabbix numeric ids vs Aruba serials vs NetBox integers), so
+      // each plugin naturally answers for the subset of mapped nodes
+      // it recognizes and ignores the rest. Sources iterate in
+      // priority order (low number = high precedence); when two
+      // sources happen to return metrics for the same nodeId/linkId,
+      // the higher-priority result wins.
       const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
-      if (metricsSources[0]) {
-        const source = metricsSources[0] // Use first metrics source
-        const dataSource = this.dataSourceService.get(source.dataSourceId)
-
-        if (dataSource) {
+      if (metricsSources.length > 0) {
+        // Parse mapping once — every plugin sees the same view.
+        let mapping: MetricsMapping = { nodes: {}, links: {} }
+        if (topology.mappingJson) {
           try {
-            // Get or create plugin instance
+            mapping = JSON.parse(topology.mappingJson)
+          } catch {
+            // Invalid mapping JSON, use empty
+          }
+        }
+
+        // Backfill link bandwidth from the topology spec exactly once.
+        // The plugin sees a single authoritative bps per link.
+        if (parsed?.graph?.links) {
+          for (const [i, link] of parsed.graph.links.entries()) {
+            const linkId = link.id || `link-${i}`
+            const linkMapping = mapping.links?.[linkId]
+            if (linkMapping && linkMapping.bandwidth === undefined) {
+              const bps = linkSpeedBps(link)
+              if (bps !== undefined) linkMapping.bandwidth = bps
+            }
+          }
+        }
+
+        for (const source of metricsSources) {
+          const dataSource = this.dataSourceService.get(source.dataSourceId)
+          if (!dataSource) continue
+          try {
             const config = JSON.parse(dataSource.configJson)
             const plugin = pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
+            if (!hasMetricsCapability(plugin)) continue
 
-            if (hasMetricsCapability(plugin)) {
-              // Parse mapping from topology
-              let mapping: MetricsMapping = { nodes: {}, links: {} }
-              if (topology.mappingJson) {
-                try {
-                  mapping = JSON.parse(topology.mappingJson)
-                } catch {
-                  // Invalid mapping JSON, use empty
-                }
-              }
-
-              // Backfill mapping.bandwidth from the topology's link spec
-              // (Ethernet standard) when the operator hasn't set an explicit
-              // override. The plugin sees a single authoritative bps per link.
-              if (parsed?.graph?.links) {
-                for (const [i, link] of parsed.graph.links.entries()) {
-                  const linkId = link.id || `link-${i}`
-                  const linkMapping = mapping.links?.[linkId]
-                  if (linkMapping && linkMapping.bandwidth === undefined) {
-                    const bps = linkSpeedBps(link)
-                    if (bps !== undefined) linkMapping.bandwidth = bps
-                  }
-                }
-              }
-
-              // Poll real metrics
-              metrics = await plugin.pollMetrics(mapping)
-              console.log(
-                `[Server] Polled real metrics for topology "${topology.name}" from ${dataSource.type}`,
-              )
-            }
+            const m = await plugin.pollMetrics(mapping)
+            metrics = mergeMetricsData(metrics, m)
+            console.log(
+              `[Server] Polled metrics for topology "${topology.name}" from ${dataSource.type}`,
+            )
           } catch (err) {
             console.error(
-              `[Server] Failed to poll metrics for topology "${topology.name}":`,
+              `[Server] Failed to poll metrics from ${dataSource.type} for topology "${topology.name}":`,
               err instanceof Error ? err.message : err,
             )
           }

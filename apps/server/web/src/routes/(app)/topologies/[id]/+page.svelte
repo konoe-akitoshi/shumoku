@@ -45,7 +45,6 @@
   $: topologyId = $page.params.id!
 
   // Get mapping from store
-  $: metricsSourceId = $mappingStore.metricsSourceId ?? undefined
   $: currentMapping = $mappingStore.mapping
 
   onMount(async () => {
@@ -235,7 +234,6 @@
   <NodeMappingModal
     bind:open={mappingModalOpen}
     {topologyId}
-    {metricsSourceId}
     {netboxBaseUrl}
     nodeData={selectedNodeData}
     {currentMapping}

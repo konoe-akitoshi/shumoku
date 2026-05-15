@@ -1,6 +1,19 @@
 /**
  * Mapping Store
- * Shared state for topology node/link mapping across pages
+ * Shared state for topology node/link mapping across pages.
+ *
+ * A topology can have multiple `metrics`-purpose data sources attached.
+ * Each plugin uses its own host-id namespace (Zabbix host ids, Aruba
+ * serials, NetBox device ids, …) so they partition naturally — a host
+ * id is unambiguous about which source owns it. The store keeps each
+ * loaded host tagged with its `sourceId` so the mapping UI can:
+ *
+ * 1. group dropdowns by source for the operator,
+ * 2. resolve which source to ask for a given host's interfaces.
+ *
+ * The persisted mapping shape (`MetricsMapping` from `@shumoku/core`)
+ * is intentionally source-agnostic — see `docs/plugin-authoring.md`'s
+ * "core defines the display contract" principle.
  */
 
 import { derived, get, writable } from 'svelte/store'
@@ -8,29 +21,99 @@ import { api } from '$lib/api'
 import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '$lib/auto-mapping'
 import type { Host, HostItem, MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
+/**
+ * A `Host` annotated with its origin data source. Web-local — does not
+ * leak into the persisted mapping shape, which stays plugin-agnostic.
+ */
+export interface MappingHost extends Host {
+  /** Data source this host came from. */
+  sourceId: string
+  /** Human-readable source name for UI grouping (`<optgroup>` label). */
+  sourceName: string
+}
+
+interface MetricsSourceInfo {
+  id: string
+  name: string
+  /** Higher precedence wins on metrics merge conflicts. Lower number = higher precedence. */
+  priority: number
+}
+
 interface MappingState {
   topologyId: string | null
   mapping: MetricsMapping
-  hosts: Host[]
+  /** Flat list of hosts across all metrics sources, each tagged with its source. */
+  hosts: MappingHost[]
+  /** Metrics sources for this topology (id + display name). Empty when none configured. */
+  metricsSources: MetricsSourceInfo[]
   // Interfaces per host (hostId -> interfaces)
   hostInterfaces: Record<string, HostItem[]>
   hostInterfacesLoading: Record<string, boolean>
   loading: boolean
   hostsLoading: boolean
   error: string | null
-  metricsSourceId: string | null
 }
 
 const initialState: MappingState = {
   topologyId: null,
   mapping: { nodes: {}, links: {} },
   hosts: [],
+  metricsSources: [],
   hostInterfaces: {},
   hostInterfacesLoading: {},
   loading: false,
   hostsLoading: false,
   error: null,
-  metricsSourceId: null,
+}
+
+/**
+ * Look up which metrics source owns a host. Plugin host-id namespaces
+ * are structurally disjoint in practice (Zabbix numbers vs Aruba
+ * serials vs NetBox ids), so the first match wins. Returns undefined
+ * if the host isn't currently in the loaded set.
+ */
+function sourceIdForHost(hosts: MappingHost[], hostId: string): string | undefined {
+  return hosts.find((h) => h.id === hostId)?.sourceId
+}
+
+async function loadHostsForSources(
+  sources: MetricsSourceInfo[],
+  dataSourceLookup: Map<string, TopologyDataSource>,
+): Promise<MappingHost[]> {
+  // Fetch every source in parallel. A single source failing must not
+  // block the others — the UI shows whatever loaded successfully.
+  const results = await Promise.allSettled(
+    sources.map(async (src) => {
+      const hosts = await api.dataSources.getHosts(src.id)
+      const name = dataSourceLookup.get(src.id)?.dataSource?.name ?? src.name
+      return hosts.map<MappingHost>((h) => ({ ...h, sourceId: src.id, sourceName: name }))
+    }),
+  )
+  const out: MappingHost[] = []
+  for (const r of results) {
+    if (r.status === 'fulfilled') out.push(...r.value)
+  }
+  return out
+}
+
+function buildSourcesFromTopology(sources: TopologyDataSource[]): {
+  metricsSources: MetricsSourceInfo[]
+  lookup: Map<string, TopologyDataSource>
+} {
+  const lookup = new Map<string, TopologyDataSource>()
+  for (const s of sources) lookup.set(s.dataSourceId, s)
+
+  const metricsSources: MetricsSourceInfo[] = sources
+    .filter((s) => s.purpose === 'metrics')
+    .map((s) => ({
+      id: s.dataSourceId,
+      name: s.dataSource?.name ?? s.dataSourceId,
+      priority: s.priority,
+    }))
+    // Sort by priority ascending (lower number = higher precedence) so the
+    // UI presents sources in operator-defined order.
+    .sort((a, b) => a.priority - b.priority)
+  return { metricsSources, lookup }
 }
 
 function createMappingStore() {
@@ -54,22 +137,20 @@ function createMappingStore() {
         }
       }
 
-      const metricsSource = sources.find((s) => s.purpose === 'metrics')
-      const metricsSourceId = metricsSource?.dataSourceId || null
+      const { metricsSources, lookup } = buildSourcesFromTopology(sources)
 
       update((s) => ({
         ...s,
         topologyId,
         mapping,
-        metricsSourceId,
+        metricsSources,
         loading: false,
         error: null,
       }))
 
-      if (metricsSourceId) {
+      if (metricsSources.length > 0) {
         update((s) => ({ ...s, hostsLoading: true }))
-        api.dataSources
-          .getHosts(metricsSourceId)
+        loadHostsForSources(metricsSources, lookup)
           .then((hosts) => update((s) => ({ ...s, hosts, hostsLoading: false })))
           .catch(() => update((s) => ({ ...s, hostsLoading: false })))
       }
@@ -105,22 +186,19 @@ function createMappingStore() {
           }
         }
 
-        // Find metrics source
-        const metricsSource = sources.find((s) => s.purpose === 'metrics')
-        const metricsSourceId = metricsSource?.dataSourceId || null
+        const { metricsSources, lookup } = buildSourcesFromTopology(sources)
 
         update((s) => ({
           ...s,
           mapping,
-          metricsSourceId,
+          metricsSources,
           loading: false,
         }))
 
-        // Load hosts if metrics source is available
-        if (metricsSourceId) {
+        if (metricsSources.length > 0) {
           update((s) => ({ ...s, hostsLoading: true }))
           try {
-            const hosts = await api.dataSources.getHosts(metricsSourceId)
+            const hosts = await loadHostsForSources(metricsSources, lookup)
             update((s) => ({ ...s, hosts, hostsLoading: false }))
           } catch {
             update((s) => ({ ...s, hostsLoading: false }))
@@ -191,11 +269,14 @@ function createMappingStore() {
     },
 
     /**
-     * Load interfaces for a specific host
+     * Load interfaces for a specific host. Picks the source the host
+     * was loaded from (recorded in the `MappingHost` tag) — important
+     * because the host-id namespace is plugin-defined.
      */
     loadHostInterfaces: async (hostId: string) => {
       const current = get({ subscribe })
-      if (!current.metricsSourceId) return
+      const sourceId = sourceIdForHost(current.hosts, hostId)
+      if (!sourceId) return
 
       // Skip if already loaded or loading
       if (current.hostInterfaces[hostId] || current.hostInterfacesLoading[hostId]) {
@@ -208,7 +289,7 @@ function createMappingStore() {
       }))
 
       try {
-        const items = await api.dataSources.getHostItems(current.metricsSourceId, hostId)
+        const items = await api.dataSources.getHostItems(sourceId, hostId)
         // Filter to unique interface names (remove :in/:out suffix)
         const interfaceNames = new Set<string>()
         const interfaces: HostItem[] = []
@@ -280,8 +361,11 @@ function createMappingStore() {
         const nodeLabel = Array.isArray(node.label) ? node.label[0] : node.label
         if (!nodeLabel) continue
 
-        // Find best matching host by score
-        let bestHost: Host | null = null
+        // Find best matching host across all sources by score. Ties are
+        // broken by source priority via the order of `current.hosts`
+        // (hosts are loaded source-by-source in priority order, so a
+        // higher-priority source's host wins on equal scores).
+        let bestHost: MappingHost | null = null
         let bestScore = 0
         for (const host of current.hosts) {
           const score = nodeNameMatchScore(nodeLabel, host.name, host.displayName)
@@ -339,5 +423,6 @@ export const mappingError = derived(mappingStore, ($s) => $s.error)
 export const nodeMapping = derived(mappingStore, ($s) => $s.mapping.nodes)
 export const linkMapping = derived(mappingStore, ($s) => $s.mapping.links)
 export const mappingHosts = derived(mappingStore, ($s) => $s.hosts)
+export const metricsSources = derived(mappingStore, ($s) => $s.metricsSources)
 export const hostInterfaces = derived(mappingStore, ($s) => $s.hostInterfaces)
 export const hostInterfacesLoading = derived(mappingStore, ($s) => $s.hostInterfacesLoading)

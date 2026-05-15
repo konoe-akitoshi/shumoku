@@ -169,26 +169,27 @@ export class PrometheusPlugin
       }
     }
 
-    // Poll node metrics (up/down status)
+    // Poll node metrics (up/down status). Stay silent on host ids
+    // Prometheus has no data for — in a multi-source setup another
+    // plugin owns the node and a fake `{ status: unknown }` here would
+    // clobber its real result during merge.
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
       const instance = nodeMapping.hostId
-
-      if (instance) {
-        try {
-          const isUp = await this.checkHostUp(instance)
-          metrics.nodes[nodeId] = {
-            status: isUp ? 'up' : 'down',
-            lastSeen: isUp ? Date.now() : undefined,
-          }
-        } catch {
-          metrics.nodes[nodeId] = { status: 'unknown' }
+      if (!instance) continue
+      try {
+        const isUp = await this.checkHostUp(instance)
+        if (isUp === undefined) continue // no data for this instance
+        metrics.nodes[nodeId] = {
+          status: isUp ? 'up' : 'down',
+          lastSeen: isUp ? Date.now() : undefined,
         }
-      } else {
-        metrics.nodes[nodeId] = { status: 'unknown' }
+      } catch {
+        // Transport failure — leave silent (future: emit failing once
+        // we can distinguish transport from "instance not in this Prom").
       }
     }
 
-    // Poll link metrics (interface traffic)
+    // Poll link metrics (interface traffic) — same silence rule.
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
       // Get instance via monitoredNodeId -> node mapping
       let instance: string | undefined
@@ -196,34 +197,31 @@ export class PrometheusPlugin
       if (monitoredNodeId && mapping.nodes?.[monitoredNodeId]) {
         instance = mapping.nodes[monitoredNodeId].hostId
       }
-
       const interfaceName = linkMapping.interface
+      if (!instance || !interfaceName) continue
 
-      if (instance && interfaceName) {
-        try {
-          const traffic = await this.getInterfaceTraffic(instance, interfaceName)
-          const capacity = linkMapping.bandwidth || 1_000_000_000 // Default 1Gbps
+      try {
+        const traffic = await this.getInterfaceTraffic(instance, interfaceName)
+        // No samples for either direction → not a Prometheus link;
+        // leave silent so another source can fill the slot.
+        if (!traffic.hasData) continue
+        const capacity = linkMapping.bandwidth || 1_000_000_000 // Default 1Gbps
+        const inBps = traffic.inBytesPerSec * 8
+        const outBps = traffic.outBytesPerSec * 8
+        const inUtil = (inBps / capacity) * 100
+        const outUtil = (outBps / capacity) * 100
+        const maxUtil = Math.max(inUtil, outUtil)
 
-          // Calculate utilization (traffic is in bytes/sec, convert to bits)
-          const inBps = traffic.inBytesPerSec * 8
-          const outBps = traffic.outBytesPerSec * 8
-          const inUtil = (inBps / capacity) * 100
-          const outUtil = (outBps / capacity) * 100
-          const maxUtil = Math.max(inUtil, outUtil)
-
-          metrics.links[linkId] = {
-            status: 'up',
-            utilization: Math.ceil(maxUtil),
-            inUtilization: Math.ceil(inUtil),
-            outUtilization: Math.ceil(outUtil),
-            inBps,
-            outBps,
-          }
-        } catch {
-          metrics.links[linkId] = { status: 'unknown' }
+        metrics.links[linkId] = {
+          status: 'up',
+          utilization: Math.ceil(maxUtil),
+          inUtilization: Math.ceil(inUtil),
+          outUtilization: Math.ceil(outUtil),
+          inBps,
+          outBps,
         }
-      } else {
-        metrics.links[linkId] = { status: 'unknown' }
+      } catch {
+        // Transport failure — leave silent.
       }
     }
 
@@ -648,9 +646,9 @@ export class PrometheusPlugin
    * then falls back to standard "up" metric for non-SNMP devices (e.g. APs).
    * For others: up == 1 means the scrape target is reachable.
    */
-  private async checkHostUp(instance: string): Promise<boolean> {
+  private async checkHostUp(instance: string): Promise<boolean | undefined> {
     if (!this.config || !this.metrics) {
-      return false
+      return undefined
     }
 
     const hostLabel = this.config.hostLabel || 'instance'
@@ -663,6 +661,10 @@ export class PrometheusPlugin
       return `${metric}{${hostLabel}="${instance}"}`
     }
 
+    // Empty result = "Prometheus has no series matching this instance"
+    // which we surface as `undefined` so the caller can stay silent
+    // (multi-source merge correctness). `false` is reserved for "we
+    // have data and it says the host is down".
     try {
       const result = await this.instantQuery(buildQuery(upMetric))
 
@@ -673,12 +675,14 @@ export class PrometheusPlugin
         }
         // No SNMP metrics for this host — fall back to standard "up" metric
         const fallback = await this.instantQuery(buildQuery('up'))
+        if (fallback.result.length === 0) return undefined
         return fallback.result.some((r) => r.value[1] === '1')
       }
 
+      if (result.result.length === 0) return undefined
       return result.result.some((r) => r.value[1] === '1')
     } catch {
-      return false
+      return undefined
     }
   }
 
@@ -689,9 +693,9 @@ export class PrometheusPlugin
   private async getInterfaceTraffic(
     instance: string,
     interfaceName: string,
-  ): Promise<{ inBytesPerSec: number; outBytesPerSec: number }> {
+  ): Promise<{ inBytesPerSec: number; outBytesPerSec: number; hasData: boolean }> {
     if (!this.config || !this.metrics) {
-      return { inBytesPerSec: 0, outBytesPerSec: 0 }
+      return { inBytesPerSec: 0, outBytesPerSec: 0, hasData: false }
     }
 
     const hostLabel = this.config.hostLabel || 'instance'
@@ -709,11 +713,13 @@ export class PrometheusPlugin
 
     let inBytesPerSec = 0
     let outBytesPerSec = 0
+    let hasData = false
 
     try {
       const inResult = await this.instantQuery(inQuery)
       if (inResult.result[0]) {
         inBytesPerSec = parseFloat(inResult.result[0].value[1]) || 0
+        hasData = true
       }
     } catch {
       // Ignore errors for individual metrics
@@ -723,12 +729,13 @@ export class PrometheusPlugin
       const outResult = await this.instantQuery(outQuery)
       if (outResult.result[0]) {
         outBytesPerSec = parseFloat(outResult.result[0].value[1]) || 0
+        hasData = true
       }
     } catch {
       // Ignore errors for individual metrics
     }
 
-    return { inBytesPerSec, outBytesPerSec }
+    return { inBytesPerSec, outBytesPerSec, hasData }
   }
 
   /**

@@ -16,7 +16,7 @@
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
-  import { mappingHosts, mappingStore, metricsData } from '$lib/stores'
+  import { mappingHosts, mappingStore, metricsData, metricsSources } from '$lib/stores'
   import type { DiscoveredMetric, MetricsMapping } from '$lib/types'
   import { formatTraffic } from '$lib/utils/format'
   import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
@@ -24,7 +24,6 @@
   interface Props {
     open: boolean
     topologyId: string
-    metricsSourceId: string | undefined
     netboxBaseUrl: string | undefined
     nodeData: NodeSelectEvent | null
     currentMapping: MetricsMapping | null
@@ -34,7 +33,6 @@
   let {
     open = $bindable(false),
     topologyId,
-    metricsSourceId,
     netboxBaseUrl,
     nodeData = null,
     currentMapping = null,
@@ -72,8 +70,29 @@
       : hosts,
   )
 
+  // Group filtered hosts by source so the radio list can render a
+  // header per data source when 2+ are attached. With a single source
+  // the header is suppressed to keep the simpler look.
+  let groupedFilteredHosts = $derived.by(() => {
+    const groups = new Map<string, { sourceName: string; items: typeof filteredHosts }>()
+    for (const h of filteredHosts) {
+      const g = groups.get(h.sourceId)
+      if (g) g.items.push(h)
+      else groups.set(h.sourceId, { sourceName: h.sourceName, items: [h] })
+    }
+    return [...groups.values()]
+  })
+
   let currentNodeMapping = $derived(nodeData && currentMapping?.nodes?.[nodeData.node.id])
-  let hasMetricsSource = $derived(!!metricsSourceId)
+  let hasMetricsSource = $derived($metricsSources.length > 0)
+  // Resolve which source owns the mapped host so discoverMetrics can
+  // call the right plugin. Plugin host-id namespaces are disjoint, so
+  // the host's recorded source tag is unambiguous.
+  let mappedHostSourceId = $derived(
+    currentNodeMapping?.hostId
+      ? hosts.find((h) => h.id === currentNodeMapping.hostId)?.sourceId
+      : undefined,
+  )
 
   // Filter discovered metrics by search query
   let filteredMetrics = $derived(
@@ -151,13 +170,13 @@
   // Hosts are loaded via shared store
 
   async function loadDiscoveredMetrics() {
-    if (!metricsSourceId || !currentNodeMapping?.hostId) return
+    if (!mappedHostSourceId || !currentNodeMapping?.hostId) return
 
     loadingMetrics = true
     metricsError = ''
     try {
       discoveredMetrics = await api.dataSources.discoverMetrics(
-        metricsSourceId,
+        mappedHostSourceId,
         currentNodeMapping.hostId,
       )
     } catch (e) {
@@ -669,7 +688,7 @@
                 >
               </div>
 
-              <!-- Host List -->
+              <!-- Host List (grouped by source when 2+ sources are attached) -->
               <div class="max-h-48 overflow-y-auto border rounded-md">
                 {#if filteredHosts.length === 0}
                   <div class="p-3 text-sm text-muted-foreground text-center">
@@ -677,31 +696,40 @@
                   </div>
                 {:else}
                   <div class="divide-y">
-                    {#each filteredHosts as host}
-                      <label
-                        class="flex items-center gap-3 p-2 hover:bg-muted/50 cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="radio"
-                          name="host"
-                          value={host.id}
-                          bind:group={selectedHostId}
-                          class="w-4 h-4"
+                    {#each groupedFilteredHosts as group}
+                      {#if groupedFilteredHosts.length > 1}
+                        <div
+                          class="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/30 sticky top-0"
                         >
-                        <div class="flex-1 min-w-0">
-                          <div class="text-sm font-medium truncate">
-                            {host.displayName || host.name}
-                          </div>
-                          {#if host.ip}
-                            <div class="text-xs text-muted-foreground">{host.ip}</div>
-                          {/if}
+                          {group.sourceName}
                         </div>
-                        {#if host.status === 'up'}
-                          <span class="w-2 h-2 bg-success rounded-full flex-shrink-0"></span>
-                        {:else if host.status === 'down'}
-                          <span class="w-2 h-2 bg-destructive rounded-full flex-shrink-0"></span>
-                        {/if}
-                      </label>
+                      {/if}
+                      {#each group.items as host}
+                        <label
+                          class="flex items-center gap-3 p-2 hover:bg-muted/50 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="radio"
+                            name="host"
+                            value={host.id}
+                            bind:group={selectedHostId}
+                            class="w-4 h-4"
+                          >
+                          <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium truncate">
+                              {host.displayName || host.name}
+                            </div>
+                            {#if host.ip}
+                              <div class="text-xs text-muted-foreground">{host.ip}</div>
+                            {/if}
+                          </div>
+                          {#if host.status === 'up'}
+                            <span class="w-2 h-2 bg-success rounded-full flex-shrink-0"></span>
+                          {:else if host.status === 'down'}
+                            <span class="w-2 h-2 bg-destructive rounded-full flex-shrink-0"></span>
+                          {/if}
+                        </label>
+                      {/each}
                     {/each}
                   </div>
                 {/if}

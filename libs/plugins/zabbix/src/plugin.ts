@@ -100,16 +100,26 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
     }
 
     // Poll node metrics. Unmapped nodes get no entry — "no data" = unmapped.
+    //
+    // We also stay silent on host ids Zabbix doesn't know — in a
+    // multi-source setup another plugin (Aruba, Prometheus, …) may be
+    // the actual owner, and emitting a fake `pending` here would
+    // clobber its real result during merge in the server.
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
       if (!nodeMapping.hostId) continue
       try {
-        metrics.nodes[nodeId] = await this.evaluateHostHealth(nodeMapping.hostId)
+        const node = await this.evaluateHostHealth(nodeMapping.hostId)
+        if (node) metrics.nodes[nodeId] = node
       } catch {
-        metrics.nodes[nodeId] = { status: 'unknown', monitoring: 'pending' }
+        // Transport / auth failure — let the absence speak. Future
+        // work: emit `{ monitoring: 'failing' }` once we can tell
+        // a transport error apart from "host not in this Zabbix".
       }
     }
 
-    // Poll link metrics
+    // Poll link metrics. Same silence rule as nodes — emit nothing
+    // when the link doesn't resolve to a Zabbix-owned interface, so
+    // another metrics source can fill it.
     for (const [linkId, baseLinkMapping] of Object.entries(mapping.links || {})) {
       try {
         const linkMapping = baseLinkMapping as ZabbixLinkMapping
@@ -126,49 +136,44 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
           }
         }
 
-        if (inItemId || outItemId) {
-          const itemIds = [inItemId, outItemId].filter(Boolean) as string[]
-          const items = await this.getItemsByIds(itemIds)
+        if (!inItemId && !outItemId) continue // not a Zabbix-monitored link
 
-          // Drop stale items — when a host goes unreachable Zabbix keeps the
-          // last polled value indefinitely. Without this check we'd paint
-          // utilization bars for a dead link from values minutes/hours old.
-          const nowSec = Math.floor(Date.now() / 1000)
-          let inBps = 0
-          let outBps = 0
-          let anyFresh = false
-          for (const item of items) {
-            const lastclock = (item as ZabbixItem & { lastclock?: string }).lastclock ?? '0'
-            if (!ZabbixPlugin.isFreshClock(lastclock, nowSec)) continue
-            anyFresh = true
-            const value = Number.parseFloat(item.lastvalue) || 0
-            if (item.itemid === inItemId) inBps = value
-            else if (item.itemid === outItemId) outBps = value
-          }
+        const itemIds = [inItemId, outItemId].filter(Boolean) as string[]
+        const items = await this.getItemsByIds(itemIds)
 
-          if (!anyFresh) {
-            metrics.links[linkId] = { status: 'unknown' }
-            continue
-          }
+        // Drop stale items — when a host goes unreachable Zabbix keeps the
+        // last polled value indefinitely. Without this check we'd paint
+        // utilization bars for a dead link from values minutes/hours old.
+        const nowSec = Math.floor(Date.now() / 1000)
+        let inBps = 0
+        let outBps = 0
+        let anyFresh = false
+        for (const item of items) {
+          const lastclock = (item as ZabbixItem & { lastclock?: string }).lastclock ?? '0'
+          if (!ZabbixPlugin.isFreshClock(lastclock, nowSec)) continue
+          anyFresh = true
+          const value = Number.parseFloat(item.lastvalue) || 0
+          if (item.itemid === inItemId) inBps = value
+          else if (item.itemid === outItemId) outBps = value
+        }
 
-          const capacity = linkMapping.bandwidth || 1_000_000_000
-          const inUtil = (inBps / capacity) * 100
-          const outUtil = (outBps / capacity) * 100
-          const maxUtil = Math.max(inUtil, outUtil)
+        if (!anyFresh) continue // stale data on a Zabbix link → leave silent
 
-          metrics.links[linkId] = {
-            status: maxUtil > 0 ? 'up' : 'unknown',
-            utilization: Math.ceil(maxUtil),
-            inUtilization: Math.ceil(inUtil),
-            outUtilization: Math.ceil(outUtil),
-            inBps,
-            outBps,
-          }
-        } else {
-          metrics.links[linkId] = { status: 'unknown' }
+        const capacity = linkMapping.bandwidth || 1_000_000_000
+        const inUtil = (inBps / capacity) * 100
+        const outUtil = (outBps / capacity) * 100
+        const maxUtil = Math.max(inUtil, outUtil)
+
+        metrics.links[linkId] = {
+          status: maxUtil > 0 ? 'up' : 'unknown',
+          utilization: Math.ceil(maxUtil),
+          inUtilization: Math.ceil(inUtil),
+          outUtilization: Math.ceil(outUtil),
+          inBps,
+          outBps,
         }
       } catch {
-        metrics.links[linkId] = { status: 'unknown' }
+        // Transport / auth failure — let the absence speak.
       }
     }
 
@@ -530,11 +535,15 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
    * Issued as two parallel API calls so a 50-host topology doesn't pay a
    * sequential round-trip cost per node.
    */
-  private async evaluateHostHealth(hostId: string): Promise<NodeMetrics> {
+  private async evaluateHostHealth(hostId: string): Promise<NodeMetrics | undefined> {
     const [items, host] = await Promise.all([
       this.fetchHealthItems(hostId),
       this.fetchHostMeta(hostId),
     ])
+    // Zabbix returns no host record + no items → this hostId isn't in
+    // *this* Zabbix tenant. Stay silent so a different metrics source
+    // in the poll loop can own the node.
+    if (!host && items.length === 0) return undefined
     const nowSec = Math.floor(Date.now() / 1000)
     const device = ZabbixPlugin.classifyDevice(items, nowSec)
     const monitoring = ZabbixPlugin.classifyMonitoring(host, items, nowSec)
