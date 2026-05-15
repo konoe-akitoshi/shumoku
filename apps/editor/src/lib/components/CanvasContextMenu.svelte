@@ -41,26 +41,76 @@
   // Trackpad two-finger right-clicks land both a `contextmenu`
   // (opens the menu at the cursor) and a `pointerup` (~60-100ms
   // later) in one fast gesture. If the pointerup happens to fall
-  // on a freshly rendered menu item, bits-ui's onSelect fires and
-  // the user activates an action they never meant to — typically
-  // the top item (Undo), which rolls back recent edits and looks
-  // like "nodes disappeared". Browser semantics for right-click
-  // would only fire `auxclick`, not `click`, but Radix/bits-ui's
-  // menu activates on pointerup regardless of button.
+  // on a freshly rendered menu item, bits-ui's MenuItem fires
+  // `onSelect` via a synthesised click — the user activates an
+  // item they never meant to (Delete being the worst case).
+  // Known upstream bug: bits-ui #1955 (Radix React's MenuItem
+  // tracks `isPointerDownRef` per-item to suppress this; bits-ui's
+  // port omits the guard).
   //
-  // Guard: ignore any pickAction/pickItem call that fires within
-  // a short window of menu open. Deliberate click activations
-  // come ≥250ms after open (humans don't move and click that
-  // fast); the trackpad gesture's trailing release is reliably
-  // under 150ms.
-  const RIGHT_CLICK_GUARD_MS = 250
-  let openedAt = 0
-  // Use `onOpenChange` (synchronous, fires inside the contextmenu
-  // event handler) instead of `$effect` so the timestamp is in
-  // place before the menu finishes rendering. A `$effect` would
-  // also work in practice — microtasks drain before the next event
-  // — but the synchronous path leaves no scheduling assumption to
-  // regress on.
+  // Block at the event layer instead of gating pickAction by time:
+  // while the menu is open, capture every `pointerup` on the way
+  // down and swallow any with a non-zero button (right / middle
+  // release) that lands inside the menu. bits-ui's pointerup
+  // handler never runs, no synthesised click, no stray onSelect.
+  // Deliberate left-click activations (button === 0) pass through
+  // untouched, including fast clicks — no threshold to tune.
+  // Keyboard activations don't involve pointerup so they're
+  // unaffected.
+  let strayGuardDetach: (() => void) | null = null
+  function attachStrayGuard() {
+    // Three layers of defence, all running at capture phase so
+    // bits-ui's MenuItem handlers never see the event:
+    //
+    //   (a) `pointerup` with non-zero button inside the menu —
+    //       the canonical stray (Kobalte's level of defence).
+    //   (b) `auxclick` inside the menu — Chrome fires this on
+    //       middle / right release; if bits-ui's onSelect path
+    //       ever listens to it (or grows to), we're already
+    //       covered.
+    //   (c) The very next `click` after a `contextmenu` on the
+    //       menu's subtree — covers Firefox's documented
+    //       click-leak after right-release (bugzilla 990614) and
+    //       any other browser that synthesises `click button=0`
+    //       directly after the opening gesture.
+    const inMenu = (target: EventTarget | null) =>
+      !!(target as Element | null)?.closest('[role="menu"], [role="menuitem"]')
+
+    let swallowNextClick = false
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.button === 0 || !inMenu(e.target)) return
+      e.stopImmediatePropagation()
+      swallowNextClick = true
+    }
+    const onAuxClick = (e: MouseEvent) => {
+      if (!inMenu(e.target)) return
+      e.stopImmediatePropagation()
+      swallowNextClick = true
+    }
+    const onContextMenu = (e: MouseEvent) => {
+      if (!inMenu(e.target)) return
+      swallowNextClick = true
+    }
+    const onClick = (e: MouseEvent) => {
+      if (!swallowNextClick) return
+      swallowNextClick = false
+      if (!inMenu(e.target)) return
+      e.stopImmediatePropagation()
+    }
+
+    document.addEventListener('pointerup', onPointerUp, { capture: true })
+    document.addEventListener('auxclick', onAuxClick, { capture: true })
+    document.addEventListener('contextmenu', onContextMenu, { capture: true })
+    document.addEventListener('click', onClick, { capture: true })
+
+    return () => {
+      document.removeEventListener('pointerup', onPointerUp, { capture: true })
+      document.removeEventListener('auxclick', onAuxClick, { capture: true })
+      document.removeEventListener('contextmenu', onContextMenu, { capture: true })
+      document.removeEventListener('click', onClick, { capture: true })
+    }
+  }
 
   function captureCursor(e: MouseEvent) {
     cursorPoint = { x: e.clientX, y: e.clientY }
@@ -72,24 +122,21 @@
     return a.enabled ? a.enabled(openCtx) : true
   }
 
-  function isStrayRightClickActivation(): boolean {
-    return performance.now() - openedAt < RIGHT_CLICK_GUARD_MS
-  }
-
   async function pickAction(a: Action) {
     if (a.submenu) return
-    if (isStrayRightClickActivation()) return
     await runAction(a.id, openCtx)
   }
 
   async function pickItem(item: SubmenuItem) {
     if (item.enabled === false) return
-    if (isStrayRightClickActivation()) return
     await item.pick(openCtx)
   }
 </script>
 
-<ContextMenu.Root bind:open onOpenChange={(o) => { if (o) openedAt = performance.now() }}>
+<ContextMenu.Root
+  bind:open
+  onOpenChange={(o) => { strayGuardDetach?.(); strayGuardDetach = o ? attachStrayGuard() : null }}
+>
   <ContextMenu.Trigger oncontextmenu={captureCursor} class="block h-full w-full">
     {@render children()}
   </ContextMenu.Trigger>
