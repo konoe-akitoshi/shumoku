@@ -76,17 +76,17 @@ function sourceIdForHost(hosts: MappingHost[], hostId: string): string | undefin
   return hosts.find((h) => h.id === hostId)?.sourceId
 }
 
-async function loadHostsForSources(
-  sources: MetricsSourceInfo[],
-  dataSourceLookup: Map<string, TopologyDataSource>,
-): Promise<MappingHost[]> {
+async function loadHostsForSources(sources: MetricsSourceInfo[]): Promise<MappingHost[]> {
   // Fetch every source in parallel. A single source failing must not
   // block the others — the UI shows whatever loaded successfully.
   const results = await Promise.allSettled(
     sources.map(async (src) => {
       const hosts = await api.dataSources.getHosts(src.id)
-      const name = dataSourceLookup.get(src.id)?.dataSource?.name ?? src.name
-      return hosts.map<MappingHost>((h) => ({ ...h, sourceId: src.id, sourceName: name }))
+      return hosts.map<MappingHost>((h) => ({
+        ...h,
+        sourceId: src.id,
+        sourceName: src.name,
+      }))
     }),
   )
   const out: MappingHost[] = []
@@ -96,24 +96,20 @@ async function loadHostsForSources(
   return out
 }
 
-function buildSourcesFromTopology(sources: TopologyDataSource[]): {
-  metricsSources: MetricsSourceInfo[]
-  lookup: Map<string, TopologyDataSource>
-} {
-  const lookup = new Map<string, TopologyDataSource>()
-  for (const s of sources) lookup.set(s.dataSourceId, s)
-
-  const metricsSources: MetricsSourceInfo[] = sources
-    .filter((s) => s.purpose === 'metrics')
-    .map((s) => ({
-      id: s.dataSourceId,
-      name: s.dataSource?.name ?? s.dataSourceId,
-      priority: s.priority,
-    }))
-    // Sort by priority ascending (lower number = higher precedence) so the
-    // UI presents sources in operator-defined order.
-    .sort((a, b) => a.priority - b.priority)
-  return { metricsSources, lookup }
+/** Extract the `metrics`-purpose sources, resolved + priority-sorted. */
+function metricsSourcesOf(sources: TopologyDataSource[]): MetricsSourceInfo[] {
+  return (
+    sources
+      .filter((s) => s.purpose === 'metrics')
+      .map((s) => ({
+        id: s.dataSourceId,
+        name: s.dataSource?.name ?? s.dataSourceId,
+        priority: s.priority,
+      }))
+      // Sort by priority ascending (lower number = higher precedence) so the
+      // UI presents sources in operator-defined order.
+      .sort((a, b) => a.priority - b.priority)
+  )
 }
 
 function createMappingStore() {
@@ -137,7 +133,7 @@ function createMappingStore() {
         }
       }
 
-      const { metricsSources, lookup } = buildSourcesFromTopology(sources)
+      const metricsSources = metricsSourcesOf(sources)
 
       update((s) => ({
         ...s,
@@ -150,7 +146,7 @@ function createMappingStore() {
 
       if (metricsSources.length > 0) {
         update((s) => ({ ...s, hostsLoading: true }))
-        loadHostsForSources(metricsSources, lookup)
+        loadHostsForSources(metricsSources)
           .then((hosts) => update((s) => ({ ...s, hosts, hostsLoading: false })))
           .catch(() => update((s) => ({ ...s, hostsLoading: false })))
       }
@@ -186,7 +182,7 @@ function createMappingStore() {
           }
         }
 
-        const { metricsSources, lookup } = buildSourcesFromTopology(sources)
+        const metricsSources = metricsSourcesOf(sources)
 
         update((s) => ({
           ...s,
@@ -198,7 +194,7 @@ function createMappingStore() {
         if (metricsSources.length > 0) {
           update((s) => ({ ...s, hostsLoading: true }))
           try {
-            const hosts = await loadHostsForSources(metricsSources, lookup)
+            const hosts = await loadHostsForSources(metricsSources)
             update((s) => ({ ...s, hosts, hostsLoading: false }))
           } catch {
             update((s) => ({ ...s, hostsLoading: false }))

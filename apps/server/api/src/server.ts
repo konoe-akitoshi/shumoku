@@ -394,6 +394,7 @@ export class Server {
           }
         }
 
+        const polledFrom: string[] = []
         for (const source of metricsSources) {
           const dataSource = this.dataSourceService.get(source.dataSourceId)
           if (!dataSource) continue
@@ -404,15 +405,20 @@ export class Server {
 
             const m = await plugin.pollMetrics(mapping)
             metrics = mergeMetricsData(metrics, m)
-            console.log(
-              `[Server] Polled metrics for topology "${topology.name}" from ${dataSource.type}`,
-            )
+            polledFrom.push(dataSource.type)
           } catch (err) {
             console.error(
               `[Server] Failed to poll metrics from ${dataSource.type} for topology "${topology.name}":`,
               err instanceof Error ? err.message : err,
             )
           }
+        }
+        // One line per topology per poll cycle, not one per source —
+        // keeps the log readable when many topologies × sources poll.
+        if (polledFrom.length > 0) {
+          console.log(
+            `[Server] Polled metrics for topology "${topology.name}" from ${polledFrom.join(', ')}`,
+          )
         }
       }
 
