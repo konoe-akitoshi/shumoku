@@ -59,14 +59,57 @@
   // unaffected.
   let strayGuardDetach: (() => void) | null = null
   function attachStrayGuard() {
-    const handler = (e: PointerEvent) => {
-      if (e.button === 0) return
-      const target = e.target as Element | null
-      if (!target?.closest('[role="menu"], [role="menuitem"]')) return
+    // Three layers of defence, all running at capture phase so
+    // bits-ui's MenuItem handlers never see the event:
+    //
+    //   (a) `pointerup` with non-zero button inside the menu —
+    //       the canonical stray (Kobalte's level of defence).
+    //   (b) `auxclick` inside the menu — Chrome fires this on
+    //       middle / right release; if bits-ui's onSelect path
+    //       ever listens to it (or grows to), we're already
+    //       covered.
+    //   (c) The very next `click` after a `contextmenu` on the
+    //       menu's subtree — covers Firefox's documented
+    //       click-leak after right-release (bugzilla 990614) and
+    //       any other browser that synthesises `click button=0`
+    //       directly after the opening gesture.
+    const inMenu = (target: EventTarget | null) =>
+      !!(target as Element | null)?.closest('[role="menu"], [role="menuitem"]')
+
+    let swallowNextClick = false
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.button === 0 || !inMenu(e.target)) return
+      e.stopImmediatePropagation()
+      swallowNextClick = true
+    }
+    const onAuxClick = (e: MouseEvent) => {
+      if (!inMenu(e.target)) return
+      e.stopImmediatePropagation()
+      swallowNextClick = true
+    }
+    const onContextMenu = (e: MouseEvent) => {
+      if (!inMenu(e.target)) return
+      swallowNextClick = true
+    }
+    const onClick = (e: MouseEvent) => {
+      if (!swallowNextClick) return
+      swallowNextClick = false
+      if (!inMenu(e.target)) return
       e.stopImmediatePropagation()
     }
-    document.addEventListener('pointerup', handler, { capture: true })
-    return () => document.removeEventListener('pointerup', handler, { capture: true })
+
+    document.addEventListener('pointerup', onPointerUp, { capture: true })
+    document.addEventListener('auxclick', onAuxClick, { capture: true })
+    document.addEventListener('contextmenu', onContextMenu, { capture: true })
+    document.addEventListener('click', onClick, { capture: true })
+
+    return () => {
+      document.removeEventListener('pointerup', onPointerUp, { capture: true })
+      document.removeEventListener('auxclick', onAuxClick, { capture: true })
+      document.removeEventListener('contextmenu', onContextMenu, { capture: true })
+      document.removeEventListener('click', onClick, { capture: true })
+    }
   }
 
   function captureCursor(e: MouseEvent) {
