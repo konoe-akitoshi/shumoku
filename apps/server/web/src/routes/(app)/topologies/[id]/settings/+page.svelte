@@ -185,8 +185,7 @@
   // Derived
   // ============================================
 
-  let metricsSourceId = $derived($mappingStore.metricsSourceId)
-  let hasMetricsSource = $derived(!!metricsSourceId)
+  let hasMetricsSource = $derived($mappingStore.metricsSources.length > 0)
 
   let topologySources = $derived(editableSources.filter((s) => s.purpose === 'topology'))
   let metricsSources = $derived(editableSources.filter((s) => s.purpose === 'metrics'))
@@ -215,6 +214,19 @@
     }).length,
   )
   let totalLinks = $derived(edges.length)
+
+  /** Hosts grouped by their owning data source, in source priority
+   *  order. Drives `<optgroup>` rendering in the host dropdown so the
+   *  operator sees which source each candidate comes from. */
+  let hostsBySource = $derived.by(() => {
+    const groups = new Map<string, { sourceName: string; items: typeof $mappingHosts }>()
+    for (const h of $mappingHosts) {
+      const g = groups.get(h.sourceId)
+      if (g) g.items.push(h)
+      else groups.set(h.sourceId, { sourceName: h.sourceName, items: [h] })
+    }
+    return [...groups.values()]
+  })
 
   // ============================================
   // Lifecycle
@@ -1588,8 +1600,18 @@
                       onchange={(e) => handleNodeMappingChange(node.id, e.currentTarget.value)}
                     >
                       <option value="">Not mapped</option>
-                      {#each $mappingHosts as host}
-                        <option value={host.id}>{host.displayName || host.name}</option>
+                      {#each hostsBySource as group}
+                        {#if hostsBySource.length > 1}
+                          <optgroup label={group.sourceName}>
+                            {#each group.items as host}
+                              <option value={host.id}>{host.displayName || host.name}</option>
+                            {/each}
+                          </optgroup>
+                        {:else}
+                          {#each group.items as host}
+                            <option value={host.id}>{host.displayName || host.name}</option>
+                          {/each}
+                        {/if}
                       {/each}
                     </select>
                   </div>

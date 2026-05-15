@@ -20,10 +20,12 @@ export {
   hostInterfaces,
   hostInterfacesLoading,
   linkMapping,
+  type MappingHost,
   mappingError,
   mappingHosts,
   mappingLoading,
   mappingStore,
+  metricsSources,
   nodeMapping,
 } from './mapping'
 export {
