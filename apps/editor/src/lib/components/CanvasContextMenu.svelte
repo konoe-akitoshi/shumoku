@@ -55,9 +55,12 @@
   // under 150ms.
   const RIGHT_CLICK_GUARD_MS = 250
   let openedAt = 0
-  $effect(() => {
-    if (open) openedAt = performance.now()
-  })
+  // Use `onOpenChange` (synchronous, fires inside the contextmenu
+  // event handler) instead of `$effect` so the timestamp is in
+  // place before the menu finishes rendering. A `$effect` would
+  // also work in practice — microtasks drain before the next event
+  // — but the synchronous path leaves no scheduling assumption to
+  // regress on.
 
   function captureCursor(e: MouseEvent) {
     cursorPoint = { x: e.clientX, y: e.clientY }
@@ -86,7 +89,10 @@
   }
 </script>
 
-<ContextMenu.Root bind:open>
+<ContextMenu.Root
+  bind:open
+  onOpenChange={(o) => { if (o) openedAt = performance.now() }}
+>
   <ContextMenu.Trigger oncontextmenu={captureCursor} class="block h-full w-full">
     {@render children()}
   </ContextMenu.Trigger>
