@@ -16,6 +16,7 @@ this doc focuses on the flows that span packages.
 - [Placement APIs — when to use which](#placement-apis--when-to-use-which)
 - [End-to-end use cases](#end-to-end-use-cases)
 - [Package boundaries](#package-boundaries)
+  - [Plugin contract](#plugin-contract)
 - [Camera (pan/zoom)](#camera-panzoom)
 - [Known gaps](#known-gaps)
 
@@ -532,6 +533,27 @@ The **canonical data shape** at every boundary is `NetworkGraph`
 (core's type). YAML and the project JSON (`NetedProject`, which wraps
 `NetworkGraph`) are boundary formats; everything inside the system
 speaks `NetworkGraph`.
+
+### Plugin contract
+
+Data-source plugins (Zabbix, NetBox, Prometheus, Grafana, Aruba
+Instant On) connect shumoku to external systems through a small
+contract in `@shumoku/core`. The rule is **core defines the display
+contract; plugins conform**. Concretely:
+
+- Core types describe what the UI consumes — `Host`, `Alert`,
+  `LinkMetrics`, etc. — and contain no plugin-name enums.
+- Plugins translate upstream vocabularies (Zabbix priorities,
+  Prometheus severities, Aruba health tokens) into core vocab at
+  their own boundary — never the other way.
+- The web app renders plugins generically via `configSchema`; it
+  must not branch on `plugin.type`. (Issue #270 tracks fixing the
+  remaining hardcoded forms.)
+
+For the full author-facing reference — capability mixins, data
+shapes, severity translation table, the three node-state axes, the
+passthrough `discoverMetrics` pattern, dev-only `nativeApi` — see
+[`plugin-authoring.md`](./plugin-authoring.md).
 
 ---
 

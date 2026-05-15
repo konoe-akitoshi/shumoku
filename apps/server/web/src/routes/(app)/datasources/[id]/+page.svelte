@@ -11,7 +11,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
-  import type { ConnectionTestResult, DataSource, DataSourceType } from '$lib/types'
+  import type { ConnectionResult, DataSource } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
   // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
@@ -21,7 +21,7 @@
   let loading = $state(true)
   let error = $state('')
   let saving = $state(false)
-  let testResult = $state<ConnectionTestResult | null>(null)
+  let testResult = $state<ConnectionResult | null>(null)
   let testing = $state(false)
 
   // Form state
@@ -55,7 +55,7 @@
     }
   }
 
-  function getConfigFromForm(type: DataSourceType): string {
+  function getConfigFromForm(type: string): string {
     const config: Record<string, unknown> = {
       url: formUrl.trim(),
     }

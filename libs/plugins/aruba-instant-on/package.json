@@ -1,0 +1,55 @@
+{
+  "name": "shumoku-plugin-aruba-instant-on",
+  "version": "0.1.0",
+  "description": "Aruba Instant On (cloud-managed AP / switch) data source plugin for Shumoku. Uses the undocumented portal.arubainstanton.com API.",
+  "license": "AGPL-3.0-only",
+  "author": "konoe-akitoshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/plugins/aruba-instant-on"
+  },
+  "homepage": "https://shumoku.packof.me/",
+  "bugs": {
+    "url": "https://github.com/konoe-akitoshi/shumoku/issues"
+  },
+  "keywords": [
+    "aruba",
+    "instant-on",
+    "wifi",
+    "switch",
+    "network",
+    "topology",
+    "shumoku",
+    "plugin"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*"
+  },
+  "devDependencies": {},
+  "publishConfig": {
+    "access": "public"
+  }
+}

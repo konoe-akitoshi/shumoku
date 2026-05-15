@@ -108,6 +108,24 @@ Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on cor
 - **netbox**: Topology and hosts from NetBox DCIM/IPAM
 - **prometheus**: Metrics, hosts, alerts from Prometheus/Alertmanager
 - **zabbix**: Metrics, hosts, auto-mapping, alerts from Zabbix
+- **aruba-instant-on**: Hosts, metrics, alerts from the (unofficial) Aruba Instant On portal API
+
+**Plugin contract invariants** (see `docs/plugin-authoring.md` for the full reference):
+- Core types are the display contract. Plugins translate their upstream vocabulary
+  (Zabbix priorities, Prometheus severities, Aruba health tokens) into core's
+  vocab at the plugin boundary — never widen core types with plugin-name literals.
+- `Alert.source` is `string`, not a union of plugin names. New plugins must not
+  require edits to `@shumoku/core` or `apps/server/web/src/lib/types.ts`.
+- `AlertSeverity` is the neutral CVSS-style scale `'critical' | 'high' | 'medium' | 'low' | 'info' | 'ok'`.
+  Don't reintroduce Zabbix-flavored values (`disaster` / `average` / `information`).
+- `DiscoveredMetric.value` is `number | string | boolean`. The "All metrics" panel
+  is a passthrough dump — plugins should walk the upstream record generically
+  (see `flattenObject` in aruba-instant-on) rather than enumerating fields.
+- The web app must render plugins through `configSchema`, not via per-plugin
+  branches. Hardcoded forms are tracked for cleanup in issue #270.
+
+When in doubt, refuse to add `plugin.type === 'foo'` branches anywhere outside
+the plugin's own `libs/plugins/foo/` directory.
 
 ### Data Flow
 ```

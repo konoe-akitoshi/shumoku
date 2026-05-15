@@ -7,7 +7,7 @@ import type { NetworkGraph } from '@shumoku/core'
 import type {
   Alert,
   AlertQueryOptions,
-  ConnectionTestResult,
+  ConnectionResult,
   Dashboard,
   DashboardInput,
   DataSource,
@@ -97,7 +97,7 @@ export const dataSources = {
     }),
 
   test: (id: string) =>
-    request<ConnectionTestResult>(`/datasources/${id}/test`, {
+    request<ConnectionResult>(`/datasources/${id}/test`, {
       method: 'POST',
     }),
 

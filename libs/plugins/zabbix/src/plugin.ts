@@ -250,15 +250,6 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
   }
 
   async discoverMetrics(hostId: string): Promise<DiscoveredMetric[]> {
-    /** Zabbix value_type to human-readable type name */
-    const VALUE_TYPE_MAP: Record<string, string> = {
-      '0': 'gauge', // Numeric (float)
-      '1': 'text', // Character
-      '2': 'log', // Log
-      '3': 'counter', // Numeric (unsigned integer)
-      '4': 'text', // Text
-    }
-
     interface ZabbixDiscoverItem {
       itemid: string
       name: string
@@ -307,12 +298,23 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
         }
       }
 
+      // Surface Zabbix's value_type as a label so callers that care
+      // (e.g. for filtering non-numeric items out of charts) still see it
+      // without core having to bless a "metric type" vocabulary.
+      const ZABBIX_VALUE_TYPE: Record<string, string> = {
+        '0': 'numeric_float',
+        '1': 'character',
+        '2': 'log',
+        '3': 'numeric_unsigned',
+        '4': 'text',
+      }
+      labels['__value_type'] = ZABBIX_VALUE_TYPE[item.value_type] || 'unknown'
+
       return {
         name: item.name,
         labels,
         value: Number.parseFloat(item.lastvalue) || 0,
         help: item.description || undefined,
-        type: VALUE_TYPE_MAP[item.value_type] || 'unknown',
       }
     })
   }
@@ -384,29 +386,30 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
   }
 
   private mapZabbixSeverity(severity: string): AlertSeverity {
+    // Zabbix priorities 0-5 → neutral severity buckets.
     const severityMap: Record<string, AlertSeverity> = {
-      '0': 'information', // Not classified
-      '1': 'information', // Information
-      '2': 'warning', // Warning
-      '3': 'average', // Average
+      '0': 'info', // Not classified
+      '1': 'info', // Information
+      '2': 'low', // Warning
+      '3': 'medium', // Average
       '4': 'high', // High
-      '5': 'disaster', // Disaster
+      '5': 'critical', // Disaster
     }
-    return severityMap[severity] || 'information'
+    return severityMap[severity] || 'info'
   }
 
   private getSeverityFilter(minSeverity?: AlertSeverity): number[] {
     if (!minSeverity) return []
 
-    const severityOrder: AlertSeverity[] = ['information', 'warning', 'average', 'high', 'disaster']
+    const severityOrder: AlertSeverity[] = ['info', 'low', 'medium', 'high', 'critical']
 
     // Map our severity to Zabbix numeric values
     const severityToZabbix: Record<AlertSeverity, number[]> = {
-      information: [0, 1],
-      warning: [2],
-      average: [3],
+      info: [0, 1],
+      low: [2],
+      medium: [3],
       high: [4],
-      disaster: [5],
+      critical: [5],
       ok: [],
     }
 

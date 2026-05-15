@@ -1,13 +1,39 @@
 /**
- * Frontend type definitions
+ * Frontend type definitions.
+ *
+ * Domain types (Host, HostItem, Alert, MetricsMapping, …) are owned by
+ * `@shumoku/core` so plugins and the web app share one display contract.
+ * This file only defines the web's wire-format / UI-local shapes (DB rows,
+ * widget configs, render context) and re-exports the core types under the
+ * `$lib/types` import path for convenience.
  */
+
+import type {
+  DataSourceCapability,
+  LayoutResult,
+  MetricsMapping,
+  NetworkGraph,
+} from '@shumoku/core'
 
 import type { MetricsData } from './stores/metrics'
 
-export type DataSourceType = 'zabbix' | 'netbox' | 'prometheus' | 'grafana'
-export type DataSourceStatus = 'connected' | 'disconnected' | 'unknown'
+// Re-export core types so consumers can keep importing from `$lib/types`.
+export type {
+  Alert,
+  AlertQueryOptions,
+  AlertSeverity,
+  AlertStatus,
+  ConnectionResult,
+  DataSourceCapability,
+  DiscoveredMetric,
+  Host,
+  HostItem,
+  LinkMetricsMapping,
+  MetricsMapping,
+  NodeMetricsMapping,
+} from '@shumoku/core'
 
-export type DataSourceCapability = 'topology' | 'metrics' | 'hosts' | 'alerts'
+export type DataSourceStatus = 'connected' | 'disconnected' | 'unknown'
 
 export interface DataSourcePluginInfo {
   type: string
@@ -33,7 +59,10 @@ export interface DataSourcePluginInfo {
 export interface DataSource {
   id: string
   name: string
-  type: DataSourceType
+  /** Plugin `type` identifier. Open string — bundled plugins emit
+   *  'zabbix' / 'netbox' / 'prometheus' / 'grafana' / 'aruba-instant-on',
+   *  external plugins supply their own. */
+  type: string
   configJson: string // Plugin-specific configuration as JSON
   status: DataSourceStatus
   statusMessage?: string
@@ -45,7 +74,7 @@ export interface DataSource {
 
 export interface DataSourceInput {
   name: string
-  type: DataSourceType
+  type: string
   configJson: string
 }
 
@@ -67,44 +96,6 @@ export interface TopologyInput {
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string
-}
-
-// Host and item types for mapping UI
-export interface Host {
-  id: string
-  name: string
-  displayName?: string
-  status?: 'up' | 'down' | 'unknown'
-  ip?: string
-}
-
-export interface HostItem {
-  id: string
-  hostId: string
-  name: string
-  key: string
-  lastValue?: string
-  unit?: string
-  /** Extracted interface name (e.g., "GigabitEthernet0/0", "eth0") */
-  interfaceName?: string
-  /** Traffic direction */
-  direction?: 'in' | 'out'
-}
-
-/**
- * A metric discovered from a data source for a specific host
- */
-export interface DiscoveredMetric {
-  /** Metric name (e.g., "ifHCInOctets", "node_cpu_seconds_total") */
-  name: string
-  /** Labels associated with this metric */
-  labels: Record<string, string>
-  /** Current value */
-  value: number
-  /** Human-readable description (from HELP) */
-  help?: string
-  /** Metric type (counter, gauge, histogram, summary) */
-  type?: string
 }
 
 /**
@@ -135,32 +126,6 @@ export function parseMultiFileContent(contentJson: string): TopologyFile[] {
  */
 export function serializeMultiFileContent(files: TopologyFile[]): string {
   return JSON.stringify({ files }, null, 2)
-}
-
-export interface NodeMetricsMapping {
-  hostId?: string
-  hostName?: string
-}
-
-export interface LinkMetricsMapping {
-  monitoredNodeId?: string
-  interface?: string
-  /** Per-link bandwidth override in bits per second. Wins over
-   * the topology's `link.bandwidth` for both stroke-width and
-   * utilization calculation. */
-  bandwidth?: number
-}
-
-export interface MetricsMapping {
-  nodes: Record<string, NodeMetricsMapping>
-  links: Record<string, LinkMetricsMapping>
-}
-
-export interface ConnectionTestResult {
-  success: boolean
-  message: string
-  version?: string
-  warnings?: string[]
 }
 
 // ============================================
@@ -408,69 +373,6 @@ export interface TopologyContext {
   mapping?: MetricsMapping
 }
 
-// NetworkGraph types for Cytoscape converter
-export interface NetworkNode {
-  id: string
-  label?: string | string[]
-  parent?: string
-  metadata?: Record<string, unknown>
-  spec?: {
-    type?: string
-    vendor?: string
-    model?: string
-    icon?: string
-  }
-}
-
-export interface NetworkLinkEndpoint {
-  node: string
-  port?: string
-  ip?: string
-}
-
-export interface NetworkLink {
-  id?: string
-  from: string | NetworkLinkEndpoint
-  to: string | NetworkLinkEndpoint
-  label?: string
-  standard?: string
-  vlan?: number | number[]
-  type?: 'solid' | 'dashed'
-  arrow?: 'forward' | 'backward' | 'both' | 'none'
-  redundancy?: string
-  metadata?: Record<string, unknown>
-}
-
-export interface NetworkSubgraph {
-  id: string
-  label?: string
-  parent?: string
-  file?: string
-  spec?: {
-    vendor?: string
-    service?: string
-    resource?: string
-  }
-  style?: {
-    fill?: string
-    stroke?: string
-    strokeWidth?: number
-    strokeDasharray?: string
-  }
-}
-
-export interface NetworkGraph {
-  name?: string
-  nodes: NetworkNode[]
-  links: NetworkLink[]
-  subgraphs?: NetworkSubgraph[]
-}
-
-export interface LayoutResult {
-  nodes: Record<string, { x: number; y: number }>
-  subgraphs?: Record<string, { x: number; y: number; width: number; height: number }>
-}
-
 export interface ParsedTopologyResponse {
   id: string
   name: string
@@ -481,38 +383,7 @@ export interface ParsedTopologyResponse {
   mapping?: MetricsMapping
 }
 
-// ============================================
-// Alert Types
-// ============================================
-
-export type AlertSeverity = 'disaster' | 'high' | 'average' | 'warning' | 'information' | 'ok'
-export type AlertStatus = 'active' | 'resolved'
-
-export interface Alert {
-  id: string
-  severity: AlertSeverity
-  title: string
-  description?: string
-  host?: string
-  hostId?: string
-  nodeId?: string
-  startTime: number
-  endTime?: number
-  receivedAt?: number
-  status: AlertStatus
-  source: 'zabbix' | 'prometheus' | 'grafana'
-  url?: string
-  labels?: Record<string, string>
-}
-
-export interface AlertQueryOptions {
-  timeRange?: number
-  minSeverity?: AlertSeverity
-  activeOnly?: boolean
-  hostIds?: string[]
-}
-
-// Alert widget config
+// Alert widget config (web UI-only, not a core domain concept)
 export interface AlertWidgetConfig {
   dataSourceId: string
   title?: string

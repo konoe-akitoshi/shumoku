@@ -142,6 +142,7 @@ npx shumoku render network.yaml -f html -o diagram.html
 - [Vendor Icons](https://www.shumoku.dev/docs/npm/vendor-icons) — Available icons
 - [Playground](https://www.shumoku.dev/) — Try without installation
 - [Architecture](docs/ARCHITECTURE.md) — Monorepo overview, load pipeline, layout engine (Mermaid diagrams)
+- [Plugin Authoring](docs/plugin-authoring.md) — Writing a `DataSourcePlugin`: capability mixins, data shapes, severity mapping, security practices
 
 ## Development
 

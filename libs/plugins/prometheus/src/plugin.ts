@@ -388,12 +388,18 @@ export class PrometheusPlugin
             const labels = { ...series.metric }
             delete labels['__name__']
 
+            // Prometheus exposes a native counter/gauge/histogram/summary
+            // type per metric. Park it on a label so the UI's free-form
+            // dump can surface it without core having to bless a "type"
+            // field on the display contract.
+            const promType = metadataMap[metricName]?.type
+            if (promType) labels['__type'] = promType
+
             metrics.push({
               name: metricName,
               labels,
               value: parseFloat(series.value[1]) || 0,
               help: metadataMap[metricName]?.help,
-              type: metadataMap[metricName]?.type,
             })
           }
         } catch {
@@ -517,38 +523,41 @@ export class PrometheusPlugin
   }
 
   private mapAlertmanagerSeverity(severity?: string): AlertSeverity {
-    if (!severity) return 'information'
+    if (!severity) return 'info'
 
     const severityLower = severity.toLowerCase()
+    // Translate common upstream vocabularies into our neutral scale.
+    // Position-preserving against the historical Zabbix-flavored mapping.
     const severityMap: Record<string, AlertSeverity> = {
-      critical: 'disaster',
-      disaster: 'disaster',
+      critical: 'critical',
+      disaster: 'critical',
       high: 'high',
       major: 'high',
       error: 'high',
-      average: 'average',
-      medium: 'average',
-      warning: 'warning',
-      warn: 'warning',
-      minor: 'warning',
-      low: 'information',
-      info: 'information',
-      information: 'information',
+      medium: 'medium',
+      average: 'medium',
+      moderate: 'medium',
+      warning: 'low',
+      warn: 'low',
+      minor: 'low',
+      low: 'info',
+      info: 'info',
+      information: 'info',
       none: 'ok',
       ok: 'ok',
     }
 
-    return severityMap[severityLower] || 'information'
+    return severityMap[severityLower] || 'info'
   }
 
   private getSeverityOrder(severity: AlertSeverity): number {
     const order: Record<AlertSeverity, number> = {
       ok: 0,
-      information: 1,
-      warning: 2,
-      average: 3,
+      info: 1,
+      low: 2,
+      medium: 3,
       high: 4,
-      disaster: 5,
+      critical: 5,
     }
     return order[severity] ?? 1
   }

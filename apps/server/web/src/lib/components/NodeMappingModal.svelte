@@ -174,7 +174,9 @@
     }
   }
 
-  function formatMetricValue(value: number): string {
+  function formatMetricValue(value: number | string | boolean): string {
+    if (typeof value === 'boolean') return value ? 'true' : 'false'
+    if (typeof value === 'string') return value
     if (value === 0) return '0'
     if (Math.abs(value) >= 1e12) return `${(value / 1e12).toFixed(2)}T`
     if (Math.abs(value) >= 1e9) return `${(value / 1e9).toFixed(2)}G`
@@ -561,11 +563,6 @@
                                   {key}=<span class="text-muted-foreground">{value}</span>
                                 </span>
                               {/each}
-                            </div>
-                          {/if}
-                          {#if metric.type}
-                            <div class="text-muted-foreground">
-                              Type: <span class="text-foreground">{metric.type}</span>
                             </div>
                           {/if}
                         </div>
