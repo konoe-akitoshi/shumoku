@@ -130,13 +130,10 @@ export class ArubaInstantOnPlugin
   }
 
   /**
-   * Discover gauge-style metrics for a given host. Used by the node-detail
-   * modal's "All metrics" panel — operators see what's exposed for the
-   * device they're about to map, so blank means "we have nothing to show".
-   *
-   * Pulls everything from the cached inventory call: device-level (clients,
-   * uptime, power) and per-port (throughput, link state, PoE). One round
-   * trip even if the panel opens for many hosts in a row.
+   * Dump every primitive field of the device's inventory record for the
+   * node-detail modal's "All metrics" panel. Passthrough by design —
+   * what the portal returns is what the operator sees, so new API fields
+   * surface automatically and an empty list genuinely means "no record".
    */
   async discoverMetrics(hostId: string): Promise<DiscoveredMetric[]> {
     const { byId } = await this.deviceLookup()
@@ -380,102 +377,54 @@ function buildHostItems(d: AruInventoryDevice): HostItem[] {
 }
 
 /**
- * Flatten an inventory record into individual numeric metrics the "All
- * metrics" panel can list. Each entry is a Prometheus-style sample: a
- * name, a value, optional labels for sub-dimensions (e.g. port number).
+ * Dump every primitive leaf of the raw inventory record as a
+ * `DiscoveredMetric`. The "All metrics" panel is a debug passthrough —
+ * what the portal returned is what the operator sees, including fields
+ * we don't (yet) model in `types.ts`. Adding a new field to the API
+ * surface automatically makes it visible; nothing has to be enumerated
+ * by hand.
  *
- * Skip any field that's missing on the device — the API leaves nulls
- * around for capabilities a particular model doesn't have.
+ * Object children are joined with `_` into the metric name. Array
+ * children are expanded one entry per element, with the index pinned to
+ * a label (`ethernetPorts_0` becomes name `…_ethernetPorts_<field>`
+ * with `ethernetPorts_index=0` in labels). Null/undefined/empty-string
+ * leaves are skipped — they'd just be noise.
  */
 function buildDeviceMetrics(d: AruInventoryDevice): DiscoveredMetric[] {
+  return flattenObject(d, 'aruba')
+}
+
+function flattenObject(
+  obj: unknown,
+  prefix: string,
+  labels: Record<string, string> = {},
+): DiscoveredMetric[] {
+  if (obj == null || typeof obj !== 'object') return []
   const out: DiscoveredMetric[] = []
-  const push = (
-    name: string,
-    value: number | undefined,
-    help: string,
-    type: string = 'gauge',
-    labels: Record<string, string> = {},
-  ): void => {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return
-    out.push({ name, value, help, type, labels })
-  }
-  const boolValue = (b: boolean | undefined): number | undefined =>
-    typeof b === 'boolean' ? (b ? 1 : 0) : undefined
-
-  // Device-level
-  push('aruba_device_up', boolValue(d.status === 'up'), 'Device reported as up by the portal')
-  push(
-    'aruba_device_underpowered',
-    boolValue(d.isUnderpowered),
-    'Device is currently underpowered (PoE budget insufficient)',
-  )
-  push('aruba_device_uptime_seconds', d.uptimeInSeconds, 'Seconds since the device last booted')
-  push(
-    'aruba_device_seconds_since_last_communication',
-    d.numberOfSecondsSinceLastCommunication,
-    'Age of the last device check-in seen by the portal',
-  )
-  push('aruba_wired_clients', d.wiredClientsCount, 'Currently connected wired clients')
-  push(
-    'aruba_grouped_wired_clients',
-    d.groupedWiredClientsCount,
-    'Wired clients aggregated behind another device',
-  )
-  push('aruba_vpn_clients', d.vpnClientsCount, 'Currently connected VPN clients')
-
-  // Per-port
-  for (const port of d.ethernetPorts ?? []) {
-    const labels: Record<string, string> = {
-      port: String(port.portNumber ?? port.faceplatePortNumber ?? '?'),
+  for (const [key, value] of Object.entries(obj)) {
+    const name = `${prefix}_${key}`
+    if (value == null) continue
+    if (Array.isArray(value)) {
+      // Array of primitives → emit count plus join (rare in this API).
+      // Array of objects → expand each with `<key>_index` label.
+      if (value.every((v) => typeof v !== 'object' || v === null)) {
+        out.push({ name: `${name}_count`, value: value.length, labels })
+        continue
+      }
+      out.push({ name: `${name}_count`, value: value.length, labels })
+      for (const [i, child] of value.entries()) {
+        out.push(...flattenObject(child, name, { ...labels, [`${key}_index`]: String(i) }))
+      }
+      continue
     }
-    push('aruba_port_link_up', boolValue(port.isLinkUp), 'Port has link up', 'gauge', labels)
-    push(
-      'aruba_port_uplink',
-      boolValue(port.isUplink),
-      'Port is acting as the uplink',
-      'gauge',
-      labels,
-    )
-    push(
-      'aruba_port_providing_power',
-      boolValue(port.isProvidingPower),
-      'Port is currently supplying PoE to a downstream device',
-      'gauge',
-      labels,
-    )
-    const speed = portSpeedBps(port)
-    push('aruba_port_speed_bps', speed, 'Negotiated port speed in bits per second', 'gauge', labels)
-    const traffic = port.portDataTraffic
-    push(
-      'aruba_port_throughput_downstream_bps',
-      traffic?.downstreamThroughputInBitsPerSecond,
-      'Inbound port throughput (bps)',
-      'gauge',
-      labels,
-    )
-    push(
-      'aruba_port_throughput_upstream_bps',
-      traffic?.upstreamThroughputInBitsPerSecond,
-      'Outbound port throughput (bps)',
-      'gauge',
-      labels,
-    )
-    push(
-      'aruba_port_bytes_last_24h_downstream',
-      traffic?.downstreamDataTransferredInBytesInLast24Hours,
-      'Inbound bytes over the last 24h',
-      'counter',
-      labels,
-    )
-    push(
-      'aruba_port_bytes_last_24h_upstream',
-      traffic?.upstreamDataTransferredInBytesInLast24Hours,
-      'Outbound bytes over the last 24h',
-      'counter',
-      labels,
-    )
+    if (typeof value === 'object') {
+      out.push(...flattenObject(value, name, labels))
+      continue
+    }
+    if (typeof value === 'string' && value.length === 0) continue
+    if (typeof value === 'number' && !Number.isFinite(value)) continue
+    out.push({ name, value: value as number | string | boolean, labels })
   }
-
   return out
 }
 
@@ -539,23 +488,25 @@ function mapSeverity(raw: string | undefined): AlertSeverity {
   switch ((raw ?? '').toUpperCase()) {
     case 'CRITICAL':
     case 'DISASTER':
-      return 'disaster'
+      return 'critical'
     case 'MAJOR':
     case 'HIGH':
     case 'ERROR':
       return 'high'
-    case 'MINOR':
     case 'AVERAGE':
     case 'MEDIUM':
-      return 'average'
+    case 'MODERATE':
+      return 'medium'
+    case 'MINOR':
     case 'WARNING':
-      return 'warning'
+    case 'LOW':
+      return 'low'
     case 'INFORMATION':
     case 'INFO':
-      return 'information'
+      return 'info'
     case 'OK':
       return 'ok'
     default:
-      return 'information'
+      return 'info'
   }
 }

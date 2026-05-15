@@ -11,16 +11,11 @@
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
   import { dataSources, dataSourcesError, dataSourcesList, dataSourcesLoading } from '$lib/stores'
-  import type {
-    ConnectionTestResult,
-    DataSource,
-    DataSourcePluginInfo,
-    DataSourceType,
-  } from '$lib/types'
+  import type { ConnectionResult, DataSource, DataSourcePluginInfo } from '$lib/types'
 
   let showCreateModal = $state(false)
   let testingId = $state<string | null>(null)
-  let testResults = $state<Record<string, ConnectionTestResult>>({})
+  let testResults = $state<Record<string, ConnectionResult>>({})
 
   // Plugin types from API
   let pluginTypes = $state<DataSourcePluginInfo[]>([])
@@ -214,7 +209,7 @@
     try {
       const created = await dataSources.create({
         name: formName.trim(),
-        type: selectedPlugin.type as DataSourceType,
+        type: selectedPlugin.type,
         configJson: getConfigFromForm(),
       })
       showCreateModal = false

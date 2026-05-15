@@ -33,16 +33,38 @@
     showTrafficFlow,
     topologies,
   } from '$lib/stores'
+  import type { MetricsData } from '$lib/stores/metrics'
   import type {
     DataSource,
     EdgeEndpoint,
-    ParsedTopologyResponse,
+    MetricsMapping,
     SyncMode,
     Topology,
     TopologyDataSource,
     TopologyDataSourceInput,
   } from '$lib/types'
   import { nodeLabelById, nodeLabel as resolveNodeLabel } from '$lib/utils/node-label'
+
+  /**
+   * Local UI-side snapshot synthesized from `/api/topologies/:id/context`.
+   * Not the same as core's `NetworkGraph` — the mapping UI only reads a few
+   * fields per node/link and doesn't need the canonical model's full shape.
+   */
+  interface SettingsTopologySnapshot {
+    id: string
+    name: string
+    graph: {
+      nodes: Array<{
+        id: string
+        label?: string | string[]
+        spec?: { type?: string; vendor?: string }
+      }>
+      links: Array<{ id: string; from: string; to: string; standard?: string }>
+    }
+    metrics: MetricsData
+    dataSourceId?: string
+    mapping?: MetricsMapping
+  }
 
   // ============================================
   // State
@@ -95,7 +117,7 @@
   let overlayConfigs = $state<Record<string, OverlayConfig>>({})
 
   // Mapping state
-  let parsedTopology = $state<ParsedTopologyResponse | null>(null)
+  let parsedTopology = $state<SettingsTopologySnapshot | null>(null)
   let savingMapping = $state(false)
   let nodeSearchQuery = $state('')
   let autoMapResult = $state<{ matched: number; total: number; kind: 'nodes' | 'links' } | null>(
@@ -293,7 +315,6 @@
             standard: e.standard,
           })),
         },
-        layout: { nodes: {} },
         metrics: contextData.metrics,
         dataSourceId: contextData.dataSourceId,
         mapping: contextData.mapping,

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { type Node as NetworkNode, specDeviceType } from '@shumoku/core'
   import { CpuIcon, SpinnerIcon } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
   import { api } from '$lib/api'
@@ -8,7 +9,7 @@
     emitHighlightByAttribute,
     emitHighlightNodes,
   } from '$lib/stores/widgetEvents'
-  import type { NetworkNode, Topology } from '$lib/types'
+  import type { Topology } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
   // --- Props ---
@@ -181,7 +182,7 @@
       { nodes: NetworkNode[]; up: number; down: number; unknown: number }
     >()
     for (const node of nodes) {
-      const type = node.spec?.type || 'unknown'
+      const type = specDeviceType(node.spec) || 'unknown'
       const g = groups.get(type) ?? { nodes: [], up: 0, down: 0, unknown: 0 }
       g.nodes.push(node)
       groups.set(type, g)
@@ -320,7 +321,7 @@
     const ids = nodes
       .filter(
         (n) =>
-          (n.spec?.type || 'unknown') === type &&
+          (specDeviceType(n.spec) || 'unknown') === type &&
           (nodeMetrics[n.id]?.status || 'unknown') === status,
       )
       .map((n) => n.id)

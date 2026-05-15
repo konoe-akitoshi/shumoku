@@ -22,35 +22,36 @@ import type { AlertStoreService, GrafanaPluginConfig } from './types.js'
 // ============================================
 
 const SEVERITY_MAP: Record<string, AlertSeverity> = {
-  critical: 'disaster',
-  disaster: 'disaster',
+  critical: 'critical',
+  disaster: 'critical',
   high: 'high',
   major: 'high',
   error: 'high',
-  average: 'average',
-  medium: 'average',
-  warning: 'warning',
-  warn: 'warning',
-  minor: 'warning',
-  low: 'information',
-  info: 'information',
-  information: 'information',
+  medium: 'medium',
+  average: 'medium',
+  moderate: 'medium',
+  warning: 'low',
+  warn: 'low',
+  minor: 'low',
+  low: 'info',
+  info: 'info',
+  information: 'info',
   none: 'ok',
   ok: 'ok',
 }
 
 export const SEVERITY_ORDER: Record<AlertSeverity, number> = {
   ok: 0,
-  information: 1,
-  warning: 2,
-  average: 3,
+  info: 1,
+  low: 2,
+  medium: 3,
   high: 4,
-  disaster: 5,
+  critical: 5,
 }
 
 export function mapSeverity(severity?: string): AlertSeverity {
-  if (!severity) return 'information'
-  return SEVERITY_MAP[severity.toLowerCase()] || 'information'
+  if (!severity) return 'info'
+  return SEVERITY_MAP[severity.toLowerCase()] || 'info'
 }
 
 export function buildTitle(labels: Record<string, string>): string {

@@ -50,53 +50,54 @@
 
   // Severity configuration
   const SEVERITY_COLORS: Record<AlertSeverity, string> = {
-    disaster: '#dc2626', // red-600
+    critical: '#dc2626', // red-600
     high: '#ea580c', // orange-600
-    average: '#d97706', // amber-600
-    warning: '#ca8a04', // yellow-600
-    information: '#eab308', // yellow-500
+    medium: '#d97706', // amber-600
+    low: '#ca8a04', // yellow-600
+    info: '#eab308', // yellow-500
     ok: '#6b7280', // gray-500
   }
 
   const SEVERITY_HIGHLIGHT_COLORS: Record<AlertSeverity, string> = {
-    disaster: '#dc2626',
+    critical: '#dc2626',
     high: '#ea580c',
-    average: '#d97706',
-    warning: '#ca8a04',
-    information: '#eab308',
+    medium: '#d97706',
+    low: '#ca8a04',
+    info: '#eab308',
     ok: '#6b7280',
   }
 
   const SEVERITY_BG_COLORS: Record<AlertSeverity, string> = {
-    disaster: 'bg-red-500/10',
+    critical: 'bg-red-500/10',
     high: 'bg-orange-500/10',
-    average: 'bg-amber-500/10',
-    warning: 'bg-yellow-500/10',
-    information: 'bg-yellow-400/10',
+    medium: 'bg-amber-500/10',
+    low: 'bg-yellow-500/10',
+    info: 'bg-yellow-400/10',
     ok: 'bg-gray-500/10',
   }
 
   const RESOLVED_COLOR = '#16a34a' // green-600
   const RESOLVED_BG_COLOR = 'bg-green-500/10'
 
+  // Severity rank: 0 = most severe (used to pick the "worst" of a batch).
   const SEVERITY_RANK: Record<AlertSeverity, number> = {
-    disaster: 0,
+    critical: 0,
     high: 1,
-    average: 2,
-    warning: 3,
-    information: 4,
+    medium: 2,
+    low: 3,
+    info: 4,
     ok: 5,
   }
 
   function getSeverityIcon(severity: AlertSeverity) {
     switch (severity) {
-      case 'disaster':
+      case 'critical':
         return FireIcon
       case 'high':
-      case 'average':
+      case 'medium':
         return WarningIcon
-      case 'warning':
-      case 'information':
+      case 'low':
+      case 'info':
         return InfoIcon
       case 'ok':
         return CheckCircleIcon

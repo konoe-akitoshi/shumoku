@@ -77,20 +77,21 @@
     const group = context.groupElement
     if (!group) return
     if (!active) {
-      group.classList.remove('wm-active')
+      group.classList.remove('wm-active', 'wm-down')
       group.style.removeProperty('--wm-base-color')
       return
     }
     group.classList.add('wm-active')
+    group.classList.toggle('wm-down', down)
     group.style.setProperty('--wm-base-color', baseColor)
     return () => {
-      group.classList.remove('wm-active')
+      group.classList.remove('wm-active', 'wm-down')
       group.style.removeProperty('--wm-base-color')
     }
   })
 </script>
 
-{#if active}
+{#if active && !down}
   {#if hasPorts}
     <path
       class="wm-overlay"
@@ -99,10 +100,8 @@
       d={inPathD}
       style:--wm-color={inColor}
       style:--wm-width={String(laneWidth)}
-      style:--wm-dash={down ? '8 4' : '3 21'}
-      style:--wm-opacity={down ? '0.5' : '0.9'}
-      style:--wm-play={down || inDuration <= 0 ? 'paused' : 'running'}
-      style:--wm-duration={down || inDuration <= 0 ? '0ms' : `${inDuration}ms`}
+      style:--wm-play={inDuration <= 0 ? 'paused' : 'running'}
+      style:--wm-duration={inDuration <= 0 ? '0ms' : `${inDuration}ms`}
     />
     <path
       class="wm-overlay"
@@ -111,10 +110,8 @@
       d={outPathD}
       style:--wm-color={outColor}
       style:--wm-width={String(laneWidth)}
-      style:--wm-dash={down ? '8 4' : '3 21'}
-      style:--wm-opacity={down ? '0.5' : '0.9'}
-      style:--wm-play={down || outDuration <= 0 ? 'paused' : 'running'}
-      style:--wm-duration={down || outDuration <= 0 ? '0ms' : `${outDuration}ms`}
+      style:--wm-play={outDuration <= 0 ? 'paused' : 'running'}
+      style:--wm-duration={outDuration <= 0 ? '0ms' : `${outDuration}ms`}
     />
   {:else}
     <!-- Port-less edge: render one combined lane (no direction split). -->
@@ -125,10 +122,8 @@
       d={context.pathD}
       style:--wm-color={baseColor}
       style:--wm-width={String(laneWidth)}
-      style:--wm-dash={down ? '8 4' : '3 21'}
-      style:--wm-opacity={down ? '0.5' : '0.9'}
-      style:--wm-play={down || combinedDuration <= 0 ? 'paused' : 'running'}
-      style:--wm-duration={down || combinedDuration <= 0 ? '0ms' : `${combinedDuration}ms`}
+      style:--wm-play={combinedDuration <= 0 ? 'paused' : 'running'}
+      style:--wm-duration={combinedDuration <= 0 ? '0ms' : `${combinedDuration}ms`}
     />
   {/if}
 {/if}
@@ -168,6 +163,14 @@
     transition:
       stroke 200ms ease,
       opacity 200ms ease;
+  }
+
+  /* Down: no lane overlay; the base link itself is the indicator —
+       solid red dashed line, full opacity, so it can never be confused
+       with the animated red lanes of a 90-100% utilized link. */
+  :global(.wm-active.wm-down > path.link) {
+    opacity: 1;
+    stroke-dasharray: 8 4;
   }
 
   @keyframes wm-flow-in {

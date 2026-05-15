@@ -58,19 +58,28 @@ export interface HostItem {
 }
 
 /**
- * A metric discovered from a data source for a specific host
+ * A metric discovered from a data source for a specific host.
+ *
+ * The "All metrics" tab in the mapping UI dumps these for browsing —
+ * the contract is intentionally just the bits the UI renders: a name,
+ * a current value, optional labels for sub-dimensions, and a help blurb.
+ * Plugin-specific metadata (Prometheus type, Zabbix value_type, SNMP OID,
+ * …) can ride in `labels` if the plugin wants to surface it.
  */
 export interface DiscoveredMetric {
   /** Metric name (e.g., "ifHCInOctets", "node_cpu_seconds_total") */
   name: string
   /** Labels associated with this metric */
   labels: Record<string, string>
-  /** Current value */
-  value: number
+  /**
+   * Current value. Widened beyond `number` because the "All metrics"
+   * tab is a dump of *everything* a plugin can surface — numeric gauges
+   * coexist with categorical attributes (model strings, link state
+   * tokens, boolean health flags). UI branches on `typeof value`.
+   */
+  value: number | string | boolean
   /** Human-readable description (from HELP) */
   help?: string
-  /** Metric type (counter, gauge, histogram, summary) */
-  type?: string
 }
 
 // ============================================
@@ -179,9 +188,11 @@ export interface MetricsMapping {
 // ============================================
 
 /**
- * Alert severity levels
+ * Alert severity levels — neutral scale (CVSS-style) so plugins map their
+ * native vocabularies onto a display contract instead of bending toward any
+ * one upstream's terminology. Ordered ok < info < low < medium < high < critical.
  */
-export type AlertSeverity = 'disaster' | 'high' | 'average' | 'warning' | 'information' | 'ok'
+export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'ok'
 
 /**
  * Alert status
@@ -212,8 +223,9 @@ export interface Alert {
   endTime?: number
   /** Current alert status */
   status: AlertStatus
-  /** Source system */
-  source: 'zabbix' | 'prometheus' | 'grafana' | 'aruba-instant-on'
+  /** Source plugin `type` (e.g. 'zabbix', 'prometheus'). Open string so
+   *  external plugins can supply their own identifier without core edits. */
+  source: string
   /** When the alert was received via webhook (Unix timestamp in ms) */
   receivedAt?: number
   /** URL to the alert details in the source system */
