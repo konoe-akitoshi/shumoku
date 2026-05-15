@@ -89,10 +89,7 @@
   }
 </script>
 
-<ContextMenu.Root
-  bind:open
-  onOpenChange={(o) => { if (o) openedAt = performance.now() }}
->
+<ContextMenu.Root bind:open onOpenChange={(o) => { if (o) openedAt = performance.now() }}>
   <ContextMenu.Trigger oncontextmenu={captureCursor} class="block h-full w-full">
     {@render children()}
   </ContextMenu.Trigger>
