@@ -38,6 +38,27 @@
     canvasPos: cursorPoint ?? ctx.canvasPos,
   })
 
+  // Trackpad two-finger right-clicks land both a `contextmenu`
+  // (opens the menu at the cursor) and a `pointerup` (~60-100ms
+  // later) in one fast gesture. If the pointerup happens to fall
+  // on a freshly rendered menu item, bits-ui's onSelect fires and
+  // the user activates an action they never meant to — typically
+  // the top item (Undo), which rolls back recent edits and looks
+  // like "nodes disappeared". Browser semantics for right-click
+  // would only fire `auxclick`, not `click`, but Radix/bits-ui's
+  // menu activates on pointerup regardless of button.
+  //
+  // Guard: ignore any pickAction/pickItem call that fires within
+  // a short window of menu open. Deliberate click activations
+  // come ≥250ms after open (humans don't move and click that
+  // fast); the trackpad gesture's trailing release is reliably
+  // under 150ms.
+  const RIGHT_CLICK_GUARD_MS = 250
+  let openedAt = 0
+  $effect(() => {
+    if (open) openedAt = performance.now()
+  })
+
   function captureCursor(e: MouseEvent) {
     cursorPoint = { x: e.clientX, y: e.clientY }
   }
@@ -48,13 +69,19 @@
     return a.enabled ? a.enabled(openCtx) : true
   }
 
+  function isStrayRightClickActivation(): boolean {
+    return performance.now() - openedAt < RIGHT_CLICK_GUARD_MS
+  }
+
   async function pickAction(a: Action) {
     if (a.submenu) return
+    if (isStrayRightClickActivation()) return
     await runAction(a.id, openCtx)
   }
 
   async function pickItem(item: SubmenuItem) {
     if (item.enabled === false) return
+    if (isStrayRightClickActivation()) return
     await item.pick(openCtx)
   }
 </script>
