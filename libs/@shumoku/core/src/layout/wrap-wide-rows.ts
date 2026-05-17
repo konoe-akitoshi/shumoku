@@ -2,101 +2,129 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /**
- * Multi-row wrap post-process.
+ * Logical-parent re-grouping + multi-row wrap for leaf subgraphs.
  *
- * Tidy-tree gives every parent's children a single horizontal row,
- * which is correct in the textbook sense but produces visually
- * unreasonable layouts when a single tier carries 10+ subgraphs.
- * The user's reported pain (50N / 11 area subgraphs at one row,
- * canvas widening past 4500px) is exactly this case.
+ * The compound layout flattens every same-depth subgraph into one
+ * horizontal row regardless of which uplink it actually serves. For a
+ * network diagram with two distribution switches that each feed 5-7
+ * area subgraphs, that produces a "10+ wide" single row even though
+ * half hang off one uplink and half off another. This pass moves
+ * each subgraph below the node that actually uplinks to it.
  *
- * This pass detects rows of subgraphs that exceed `maxPerRow`,
- * leaves the first chunk where it sits, and shifts each subsequent
- * chunk down by `rowGap`. The shift cascades through the subgraph's
- * internal contents (nodes, ports, nested subgraph bounds) so the
- * inside of a wrapped subgraph travels with its container.
- *
- * Heuristic: rows are detected by approximate Y bucketing
- * (`yBucket`) rather than strict equality, because the layout
- * sometimes rounds positions slightly differently per subgraph.
- * Subgraphs whose tops land within the bucket are treated as one
- * row, regardless of compound parent — for the screenshot case
- * this correctly groups eps-sw01's 5 area-subgraphs and eps-sw02's
- * 7 into one logical row of 12.
- *
- * The pass returns the updated root bounds so the renderer's
- * viewport / camera fits the new vertical extent.
+ * Pass shape:
+ *   1. Identify **leaf subgraphs** — subgraphs that do not contain
+ *      other subgraphs. Container subgraphs (anything wrapping a
+ *      nested subgraph) are left strictly alone; touching them
+ *      would invalidate the compound nesting that the original
+ *      tidy-tree pass already settled on.
+ *   2. For each leaf subgraph, find its **logical parent** — a node
+ *      outside the subgraph that connects to one of its internal
+ *      nodes via a link. The logical parent is required to live
+ *      outside the leaf subgraph's own enclosing container, so
+ *      moving the leaf doesn't conflict with the container's
+ *      bounds.
+ *   3. Group leaf subgraphs by logical parent.
+ *   4. Sort parents top-to-bottom by their y position. Each group
+ *      is placed directly below the parent (or below the previous
+ *      group's floor — whichever is lower), so groups whose parents
+ *      share an x column don't overlap.
+ *   5. Inside a group, if the children exceed `maxPerRow`, fold
+ *      into multiple sub-rows centred under the parent's x.
+ *   6. Cascade the (dx, dy) shift through every parented node,
+ *      port, and (rare) nested subgraph beneath each leaf.
  */
 
-import type { Bounds, Node, Subgraph } from '../models/types.js'
+import type { Bounds, Link, Node, Subgraph } from '../models/types.js'
 import type { ResolvedPort } from './resolved-types.js'
 
 export interface WrapWideRowsOptions {
-  /** Subgraphs per row above which a wrap kicks in. Default 5. */
+  /** Subgraphs per sub-row above which a wrap kicks in. Default 5. */
   maxPerRow?: number
-  /** Vertical gap added between wrapped rows. Default 280. */
+  /** Vertical gap between sub-rows of one group. Default 200. */
   rowGap?: number
-  /** Y buckets are this tall — subgraphs whose top.y lands in the
-   *  same bucket are considered one row. Default 40. */
-  yBucket?: number
-  /** Horizontal gap between subgraphs within a wrapped row.
-   *  Default 60. */
+  /** Horizontal gap between subgraphs within a sub-row. Default 60. */
   intraRowGap?: number
+  /** Y drop below the parent (or previous group floor) before this group's first sub-row. Default 240. */
+  groupYDrop?: number
 }
 
-/**
- * Detect wide rows of subgraphs in `subgraphs` and wrap the
- * overflow downward. Mutates `nodes`, `ports`, and `subgraphs` in
- * place. Returns the updated bounds covering the new layout.
- */
+interface LayoutContext {
+  nodes: Map<string, Node>
+  ports: Map<string, ResolvedPort>
+  subgraphs: Map<string, Subgraph>
+  links: readonly Link[]
+}
+
 export function wrapWideRows(
   nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   subgraphs: Map<string, Subgraph>,
+  links: readonly Link[],
   bounds: Bounds,
   options: WrapWideRowsOptions = {},
 ): Bounds {
   const maxPerRow = options.maxPerRow ?? 5
-  const rowGap = options.rowGap ?? 280
-  const yBucket = options.yBucket ?? 40
+  const rowGap = options.rowGap ?? 200
   const intraRowGap = options.intraRowGap ?? 60
+  const groupYDrop = options.groupYDrop ?? 240
 
-  // Group subgraphs by Y bucket (top of bounds).
-  const rows = new Map<number, string[]>()
-  for (const [id, sg] of subgraphs) {
-    if (!sg.bounds) continue
-    const bucket = Math.round(sg.bounds.y / yBucket) * yBucket
-    const list = rows.get(bucket)
-    if (list) list.push(id)
-    else rows.set(bucket, [id])
+  const ctx: LayoutContext = { nodes, ports, subgraphs, links }
+
+  // Leaf subgraphs only. Anything that contains another subgraph
+  // is a structural container (e.g. the "NEW GROUP" + "NOC" pair
+  // in the user's screenshot wrapping the core gear) and must stay
+  // where the tidy-tree placed it — moving the container would
+  // also have to move its internal sub-layout, and we already gave
+  // up on that path because it broke compound nesting.
+  const isLeafSubgraph = new Set<string>(subgraphs.keys())
+  for (const sg of subgraphs.values()) {
+    if (sg.parent && isLeafSubgraph.has(sg.parent)) {
+      isLeafSubgraph.delete(sg.parent)
+    }
   }
 
-  for (const [_y, sgIds] of [...rows.entries()].sort((a, b) => a[0] - b[0])) {
-    if (sgIds.length <= maxPerRow) continue
+  const logicalParentOf = buildLogicalParentMap(ctx, isLeafSubgraph)
 
-    // Stable sort by x (left to right) for predictable wrap groupings.
-    const ordered = [...sgIds].sort((a, b) => {
-      const ax = subgraphs.get(a)?.bounds?.x ?? 0
-      const bx = subgraphs.get(b)?.bounds?.x ?? 0
-      return ax - bx
-    })
+  // Bucket leaf subgraphs by logical parent. Subgraphs without an
+  // outside uplink (root-level isolated areas etc.) are skipped.
+  const groups = new Map<string, string[]>()
+  for (const [sgId, parentNodeId] of logicalParentOf) {
+    const list = groups.get(parentNodeId)
+    if (list) list.push(sgId)
+    else groups.set(parentNodeId, [sgId])
+  }
 
-    // Determine an even chunk size that produces visually balanced
-    // rows. Splitting 11 into 4+4+3 reads better than 5+5+1.
-    const chunkCount = Math.ceil(ordered.length / maxPerRow)
+  // Sort logical parents top-to-bottom by y. Each group is then
+  // placed strictly below earlier groups' floors so parents that
+  // share an x column don't crash into each other.
+  const sortedParents = [...groups.keys()]
+    .filter((id) => nodes.get(id)?.position)
+    .sort((a, b) => (nodes.get(a)?.position?.y ?? 0) - (nodes.get(b)?.position?.y ?? 0))
+
+  let floorY = -Infinity
+
+  for (const parentNodeId of sortedParents) {
+    const sgIds = groups.get(parentNodeId)
+    if (!sgIds || sgIds.length === 0) continue
+    const parentNode = nodes.get(parentNodeId)
+    if (!parentNode?.position) continue
+
+    const ordered = [...sgIds]
+      .filter((id) => subgraphs.get(id)?.bounds)
+      .sort((a, b) => {
+        const ax = subgraphs.get(a)?.bounds?.x ?? 0
+        const bx = subgraphs.get(b)?.bounds?.x ?? 0
+        return ax - bx
+      })
+    if (ordered.length === 0) continue
+
+    const anchorX = parentNode.position.x
+    const startY = Math.max(parentNode.position.y + groupYDrop, floorY + groupYDrop)
+
+    const chunkCount = Math.max(1, Math.ceil(ordered.length / maxPerRow))
     const chunkSize = Math.ceil(ordered.length / chunkCount)
 
-    // Original row span and centroid — wrapped chunks will be
-    // re-centred on the same x mid-point so the layout stays
-    // visually anchored to where the original row was.
-    const originalLeft = subgraphs.get(ordered[0] ?? '')?.bounds?.x ?? 0
-    const lastSg = subgraphs.get(ordered[ordered.length - 1] ?? '')
-    const originalRight = (lastSg?.bounds?.x ?? 0) + (lastSg?.bounds?.width ?? 0)
-    const rowCentreX = (originalLeft + originalRight) / 2
-
-    // For each chunk, compute target left edge so the chunk's own
-    // width is centred on `rowCentreX`. Then walk the chunk and
-    // shift each subgraph from its current x to the target slot.
+    let lastChunkBottom = startY
     for (let chunkIdx = 0; chunkIdx < chunkCount; chunkIdx++) {
       const start = chunkIdx * chunkSize
       const end = Math.min(start + chunkSize, ordered.length)
@@ -107,7 +135,9 @@ export function wrapWideRows(
         chunkWidth += subgraphs.get(ordered[i] ?? '')?.bounds?.width ?? 0
         if (i < end - 1) chunkWidth += intraRowGap
       }
-      const chunkStartX = rowCentreX - chunkWidth / 2
+      const chunkStartX = anchorX - chunkWidth / 2
+      const chunkTopY = chunkIdx === 0 ? startY : lastChunkBottom + rowGap
+      let maxChunkBottom = chunkTopY
 
       let cursorX = chunkStartX
       for (let i = start; i < end; i++) {
@@ -116,44 +146,138 @@ export function wrapWideRows(
         const sg = subgraphs.get(id)
         if (!sg?.bounds) continue
         const dx = cursorX - sg.bounds.x
-        const dy = chunkIdx * rowGap
+        const dy = chunkTopY - sg.bounds.y
         if (dx !== 0 || dy !== 0) {
-          shiftSubgraphSubtree(id, dx, dy, nodes, ports, subgraphs)
+          shiftSubgraphSubtree(id, dx, dy, ctx)
         }
         cursorX += sg.bounds.width + intraRowGap
+        maxChunkBottom = Math.max(maxChunkBottom, chunkTopY + sg.bounds.height)
       }
+      lastChunkBottom = maxChunkBottom
     }
+    floorY = Math.max(floorY, lastChunkBottom)
   }
 
-  // Bounds may have grown vertically. Recompute height by sweeping
-  // every node and subgraph after the shifts.
+  // Recompute bounds covering the final layout.
   let maxY = bounds.y + bounds.height
+  let minY = bounds.y
+  let maxX = bounds.x + bounds.width
+  let minX = bounds.x
   for (const node of nodes.values()) {
-    if (node.position && node.size) {
-      maxY = Math.max(maxY, node.position.y + node.size.height / 2)
-    }
+    if (!node.position) continue
+    const half = node.size ? { w: node.size.width / 2, h: node.size.height / 2 } : { w: 60, h: 30 }
+    minX = Math.min(minX, node.position.x - half.w)
+    maxX = Math.max(maxX, node.position.x + half.w)
+    minY = Math.min(minY, node.position.y - half.h)
+    maxY = Math.max(maxY, node.position.y + half.h)
   }
   for (const sg of subgraphs.values()) {
-    if (sg.bounds) {
-      maxY = Math.max(maxY, sg.bounds.y + sg.bounds.height)
-    }
+    if (!sg.bounds) continue
+    minX = Math.min(minX, sg.bounds.x)
+    maxX = Math.max(maxX, sg.bounds.x + sg.bounds.width)
+    minY = Math.min(minY, sg.bounds.y)
+    maxY = Math.max(maxY, sg.bounds.y + sg.bounds.height)
   }
-  return { ...bounds, height: maxY - bounds.y + 50 }
+  const pad = 50
+  return {
+    x: minX - pad,
+    y: minY - pad,
+    width: maxX - minX + pad * 2,
+    height: maxY - minY + pad * 2,
+  }
 }
 
 /**
- * Recursively shift a subgraph, every node parented to it, every
- * resolved port of those nodes, and every nested subgraph beneath
- * it by `dy`. The X coordinate is untouched.
+ * For each *leaf* subgraph, find a node outside that subgraph (and
+ * outside its enclosing compound container, if any) that connects
+ * to one of the subgraph's internal nodes via a link.
+ *
+ * Excluding the enclosing container's other inhabitants is what
+ * stops the algorithm from picking, say, the central router as a
+ * "parent" for some nested area subgraph just because they share
+ * the outer container.
+ *
+ * Tie-break order: highest cross-link count → highest overall
+ * degree → lexicographic id.
  */
+function buildLogicalParentMap(
+  ctx: LayoutContext,
+  isLeafSubgraph: ReadonlySet<string>,
+): Map<string, string> {
+  const { nodes, subgraphs, links } = ctx
+  const subgraphOf = new Map<string, string>()
+  for (const [id, node] of nodes) {
+    subgraphOf.set(id, node.parent ?? '')
+  }
+
+  const degree = new Map<string, number>()
+  for (const l of links) {
+    degree.set(l.from.node, (degree.get(l.from.node) ?? 0) + 1)
+    degree.set(l.to.node, (degree.get(l.to.node) ?? 0) + 1)
+  }
+
+  const result = new Map<string, string>()
+  for (const sg of subgraphs.values()) {
+    if (!isLeafSubgraph.has(sg.id)) continue
+
+    const insiders = new Set<string>()
+    for (const [nodeId, parent] of subgraphOf) {
+      if (parent === sg.id) insiders.add(nodeId)
+    }
+    if (insiders.size === 0) continue
+
+    const enclosingId = sg.parent ?? ''
+
+    const candidates = new Map<string, number>()
+    for (const l of links) {
+      const fromIn = insiders.has(l.from.node)
+      const toIn = insiders.has(l.to.node)
+      if (fromIn === toIn) continue
+      const outside = fromIn ? l.to.node : l.from.node
+      if (insiders.has(outside)) continue
+      // Skip candidates that live inside our own enclosing
+      // container — moving the leaf inside its own enclosing
+      // container would collide with the container's bounds.
+      // Candidates living in *other* subgraphs are fine; moving
+      // the leaf below them places it outside that subgraph, not
+      // inside it.
+      const outsideParent = subgraphOf.get(outside) ?? ''
+      if (enclosingId && outsideParent === enclosingId) continue
+      candidates.set(outside, (candidates.get(outside) ?? 0) + 1)
+    }
+    // Only re-arrange subgraphs with an unambiguous logical
+    // parent. A subgraph that uplinks to multiple distinct
+    // outside peers (e.g. NOC connecting to both ONU and the
+    // distribution switch; the central NEW GROUP connecting to
+    // every area below) is structurally a hub — moving it
+    // anywhere would just relocate the mess. Leaf area subgraphs
+    // have exactly one outside peer (their uplink target).
+    if (candidates.size !== 1) continue
+
+    let best: { id: string; count: number; deg: number } | null = null
+    for (const [id, count] of candidates) {
+      const deg = degree.get(id) ?? 0
+      if (
+        !best ||
+        count > best.count ||
+        (count === best.count && deg > best.deg) ||
+        (count === best.count && deg === best.deg && id < best.id)
+      ) {
+        best = { id, count, deg }
+      }
+    }
+    if (best) result.set(sg.id, best.id)
+  }
+  return result
+}
+
 function shiftSubgraphSubtree(
   subgraphId: string,
   dx: number,
   dy: number,
-  nodes: Map<string, Node>,
-  ports: Map<string, ResolvedPort>,
-  subgraphs: Map<string, Subgraph>,
+  ctx: LayoutContext,
 ): void {
+  const { nodes, ports, subgraphs } = ctx
   const sg = subgraphs.get(subgraphId)
   if (!sg?.bounds) return
   subgraphs.set(subgraphId, {
@@ -161,7 +285,6 @@ function shiftSubgraphSubtree(
     bounds: { ...sg.bounds, x: sg.bounds.x + dx, y: sg.bounds.y + dy },
   })
 
-  // Shift child nodes parented to this subgraph.
   for (const [nodeId, node] of nodes) {
     if (node.parent !== subgraphId) continue
     if (node.position) {
@@ -171,7 +294,6 @@ function shiftSubgraphSubtree(
       })
     }
   }
-  // Shift their ports (port id format is `nodeId:portKey`).
   for (const [portId, port] of ports) {
     const colon = portId.indexOf(':')
     if (colon < 0) continue
@@ -185,11 +307,9 @@ function shiftSubgraphSubtree(
       },
     })
   }
-
-  // Recurse into nested subgraphs.
   for (const [innerId, innerSg] of subgraphs) {
     if (innerSg.parent === subgraphId) {
-      shiftSubgraphSubtree(innerId, dx, dy, nodes, ports, subgraphs)
+      shiftSubgraphSubtree(innerId, dx, dy, ctx)
     }
   }
 }

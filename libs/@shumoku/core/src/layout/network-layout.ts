@@ -628,12 +628,16 @@ export function layoutNetwork(
           height: rb.height + pad * 2,
         }
 
-  // Wrap overly wide rows of subgraphs into multiple visual rows.
-  // Default tuned so that the "10+ area subgraphs at one tier"
-  // case from the user's screenshot folds into two compact rows
-  // rather than sprawling across 4500px+ of canvas. The pass is a
-  // no-op for graphs that don't have a wide row.
-  bounds = wrapWideRows(nodes, ports, subgraphs, bounds)
+  // Re-group leaf subgraphs by their logical uplink parent
+  // (link-based) and place each group's children directly below
+  // that parent. For the user's screenshot this separates hall
+  // family (uplinked to eps-sw01) from lobby family (uplinked to
+  // eps-sw02) into distinct vertical bands. Container subgraphs
+  // (anything with a nested subgraph inside) are left alone so we
+  // don't disturb compound nesting that the tidy-tree already
+  // settled. Within a group, children that exceed `maxPerRow`
+  // fold into balanced sub-rows centred on the parent's x.
+  bounds = wrapWideRows(nodes, ports, subgraphs, graph.links, bounds)
 
   return { nodes, ports, subgraphs, bounds }
 }
