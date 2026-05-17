@@ -3,32 +3,40 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Flat-tree network layout.
+ * Subgraph-block tidy-tree layout.
  *
- * Lays out the entire node graph as a single Buchheim tidy-tree
- * driven by the link topology. Subgraphs are *not* layout
- * containers in this pass — they are computed as post-process
- * hulls around their member nodes (see `computeSubgraphHulls`).
+ * Each subgraph collapses into one (or more) "blocks" that the
+ * outer tidy-tree operates on. The split rule:
  *
- * Why: the previous compound layout treated each subgraph as an
- * independent placement box, which forced sibling subgraphs into a
- * single horizontal row regardless of how much downstream subtree
- * each contained. A core switch fanning out to many subgraphs
- * couldn't naturally route some children "to the side" — every
- * subgraph had to fit on the same row, so the layout produced
- * long wide rows even when a different topology shape was a
- * better fit.
+ *   - 1 emitter (member with a tree-child outside the subgraph)
+ *     → one block for the whole subgraph. The typical leaf
+ *     subgraph (switches + APs, only the switches face up).
  *
- * Treating node and subgraph as the same "block" via flat-tree
- * placement lets a switch's subtree expand wherever the topology
- * needs it: shallow subtrees take less width, deep subtrees take
- * more depth, the parent sits naturally above the centroid of its
- * subtree. Subgraph rectangles get drawn around their members as
- * a visual hull and don't constrain the layout.
+ *   - N > 1 emitters → one block per emitter. Non-emitter
+ *     members get assigned to the block of their nearest tree-
+ *     parent emitter inside the same subgraph. This lets the
+ *     outer tidy-tree place children emitted from the top of
+ *     the subgraph at a shallower depth than children emitted
+ *     from the bottom — e.g. New Group with eps-sw01 → eps-sw02
+ *     internal chain becomes two blocks {eps-sw01} and
+ *     {eps-sw02}, with HALL/FOYER/RECEPTION as children of
+ *     eps-sw01 and LOBBY/ROOM2/etc as children of eps-sw02.
  *
- * Sibling order is biased by subgraph membership so members of
- * the same subgraph stay contiguous in the layout — without this
- * the hull rectangles would interleave and overlap.
+ * Same-subgraph parent-child blocks (eps-sw01 → eps-sw02) get
+ * spine-aligned to share an x column after the outer layout
+ * settles, so the visual New Group rectangle reads as a narrow
+ * vertical chain instead of a wide horizontal one.
+ *
+ * Block internal layout (for multi-member blocks):
+ *   - Pick intra-subgraph roots (members whose tree-parent is
+ *     outside the subgraph or absent).
+ *   - Each root sits at the top, descendants wrap into rows of
+ *     up to `SUBGRAPH_ROW_WRAP` to keep block shape compact.
+ *   - Multiple roots sit side-by-side.
+ *
+ * Subgraph hulls are computed as a post-process bounding box
+ * over each subgraph's member positions, after the outer
+ * tidy-tree and spine alignment.
  */
 
 import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../models/types.js'
@@ -50,12 +58,15 @@ export interface FlatTreeLayoutResult {
   rootBounds: Bounds
 }
 
-/**
- * Build the parent map (node → its tree parent in the layout
- * sense). Reuses the same link-direction normalisation as the
- * compound layout: leaf-type devices (AP, server) end up at the
- * downstream side regardless of how the link was authored.
- */
+/** Maximum nodes per row inside a subgraph block before wrapping to the next row. */
+const SUBGRAPH_ROW_WRAP = 4
+/** Horizontal gap between members inside a subgraph block. */
+const INTERNAL_NODE_GAP = 16
+/** Vertical gap between layers (or wrapped rows) inside a subgraph block. */
+const INTERNAL_LAYER_GAP = 36
+/** Horizontal gap between sibling subtrees inside a multi-root subgraph block. */
+const INTERNAL_ROOT_GAP = 28
+
 function buildPrimaryParents(
   links: readonly Link[],
   nodesById: Map<string, Node>,
@@ -75,51 +86,6 @@ function buildPrimaryParents(
   return primary
 }
 
-/**
- * Stable sort siblings so members of the same subgraph stay
- * contiguous in the tidy-tree. Walks the subgraph hierarchy from
- * deepest ancestor down to the immediate parent so two siblings
- * end up adjacent iff they share the *innermost* subgraph
- * ancestor possible — preserves nesting in the visual hull.
- *
- * Tiebreaker by node id keeps the result deterministic across
- * runs even when the input order differs (important for tests).
- */
-function sortChildrenBySubgraphMembership(
-  childIds: string[],
-  nodesById: Map<string, Node>,
-  subgraphsById: Map<string, Subgraph>,
-): string[] {
-  const ancestry = (id: string): string[] => {
-    const chain: string[] = []
-    let cur: string | undefined = nodesById.get(id)?.parent
-    while (cur) {
-      chain.push(cur)
-      cur = subgraphsById.get(cur)?.parent
-    }
-    return chain.reverse() // deepest ancestor last; root container first
-  }
-  const cmpChain = (a: string[], b: string[]): number => {
-    const n = Math.min(a.length, b.length)
-    for (let i = 0; i < n; i++) {
-      const ai = a[i]
-      const bi = b[i]
-      if (ai === bi) continue
-      return (ai ?? '').localeCompare(bi ?? '')
-    }
-    return a.length - b.length
-  }
-  const decorated = childIds.map((id) => ({ id, chain: ancestry(id) }))
-  decorated.sort((a, b) => cmpChain(a.chain, b.chain) || a.id.localeCompare(b.id))
-  return decorated.map((d) => d.id)
-}
-
-/**
- * Detect cycles in the primary-parent map and break them by
- * dropping the offending edge. Buchheim requires an acyclic input
- * — multi-parent (redundant uplink) graphs need their secondary
- * uplinks treated as overlays before this point.
- */
 function breakCycles(parents: Map<string, string>): void {
   for (const start of [...parents.keys()]) {
     const seen = new Set<string>()
@@ -136,71 +102,275 @@ function breakCycles(parents: Map<string, string>): void {
 }
 
 /**
- * Walk each parent and, if any of its tree-children sits inside
- * the same subgraph, shift the *entire* sibling cluster so that
- * the same-subgraph child lands at the parent's x. The other
- * siblings (and their subtrees) move uniformly by the same delta
- * so their internal layout is preserved; only the cluster as a
- * whole pans sideways.
- *
- * Why: tidy-tree centres a parent over the centroid of its
- * subtree, which means a heavy child (large downstream subtree)
- * sits far to the side of the parent's column. When the parent
- * and that heavy child share a subgraph, the user expects the
- * pair to form a vertical chain with the heavy child's subtree
- * spreading below; aligning the columns delivers exactly that
- * without disturbing the relative arrangement of the other
- * siblings.
- *
- * Side effect: the parent no longer sits over the centroid of
- * *all* its children — it sits over the same-subgraph child
- * column. The cluster's overall extent grows (or stays the same)
- * but the visual reading is cleaner.
+ * Lay out a subtree (one intra-subgraph root + its descendants
+ * inside the subgraph) with rows wrapped to keep the bounding
+ * box roughly square. Children fan out in rows of up to
+ * SUBGRAPH_ROW_WRAP per row; deeper descendants follow the same
+ * wrapping per parent.
+ */
+function layoutWrappedSubtree(
+  rootId: string,
+  childrenOf: Map<string, string[]>,
+  sizeById: Map<string, { width: number; height: number }>,
+): {
+  positions: Map<string, { x: number; y: number }>
+  width: number
+  height: number
+} {
+  const positions = new Map<string, { x: number; y: number }>()
+  const rootSize = sizeById.get(rootId) ?? { width: 80, height: 60 }
+
+  const kids = childrenOf.get(rootId) ?? []
+  const childLayouts = kids.map((c) => ({
+    id: c,
+    layout: layoutWrappedSubtree(c, childrenOf, sizeById),
+  }))
+
+  if (childLayouts.length === 0) {
+    positions.set(rootId, { x: rootSize.width / 2, y: rootSize.height / 2 })
+    return { positions, width: rootSize.width, height: rootSize.height }
+  }
+
+  const perRow = Math.min(SUBGRAPH_ROW_WRAP, childLayouts.length)
+  const rows: Array<typeof childLayouts> = []
+  for (let i = 0; i < childLayouts.length; i += perRow) {
+    rows.push(childLayouts.slice(i, i + perRow))
+  }
+  const rowWidths = rows.map((row) =>
+    row.reduce((sum, c, idx) => sum + c.layout.width + (idx > 0 ? INTERNAL_NODE_GAP : 0), 0),
+  )
+  const bandWidth = Math.max(0, ...rowWidths)
+  const subtreeWidth = Math.max(rootSize.width, bandWidth)
+  positions.set(rootId, { x: subtreeWidth / 2, y: rootSize.height / 2 })
+
+  let cursorY = rootSize.height + INTERNAL_LAYER_GAP
+  for (const [rowIdx, row] of rows.entries()) {
+    const rowW = rowWidths[rowIdx] ?? 0
+    const rowH = row.reduce((m, c) => Math.max(m, c.layout.height), 0)
+    let cursorX = (subtreeWidth - rowW) / 2
+    for (const c of row) {
+      for (const [id, pos] of c.layout.positions) {
+        positions.set(id, { x: pos.x + cursorX, y: pos.y + cursorY })
+      }
+      cursorX += c.layout.width + INTERNAL_NODE_GAP
+    }
+    cursorY += rowH
+    if (rowIdx < rows.length - 1) cursorY += INTERNAL_LAYER_GAP
+  }
+
+  return { positions, width: subtreeWidth, height: cursorY }
+}
+
+/**
+ * Lay out a block (set of member nodes belonging to one
+ * subgraph-block) in a compact 2D arrangement. Roots within
+ * the block (members whose tree-parent is not inside this
+ * block) sit at the top; their descendants wrap into rows.
+ */
+function layoutBlockInternal(
+  memberIds: readonly string[],
+  parents: Map<string, string>,
+  sizeById: Map<string, { width: number; height: number }>,
+): {
+  positions: Map<string, { x: number; y: number }>
+  width: number
+  height: number
+} {
+  if (memberIds.length === 1) {
+    const id = memberIds[0]
+    if (id === undefined) {
+      return { positions: new Map(), width: 0, height: 0 }
+    }
+    const sz = sizeById.get(id) ?? { width: 80, height: 60 }
+    const positions = new Map<string, { x: number; y: number }>()
+    positions.set(id, { x: sz.width / 2, y: sz.height / 2 })
+    return { positions, width: sz.width, height: sz.height }
+  }
+
+  const memberSet = new Set(memberIds)
+  const intraChildren = new Map<string, string[]>()
+  for (const id of memberIds) intraChildren.set(id, [])
+  for (const id of memberIds) {
+    const p = parents.get(id)
+    if (p && memberSet.has(p)) intraChildren.get(p)?.push(id)
+  }
+
+  const intraRoots: string[] = []
+  for (const id of memberIds) {
+    const p = parents.get(id)
+    if (!p || !memberSet.has(p)) intraRoots.push(id)
+  }
+  intraRoots.sort((a, b) => a.localeCompare(b))
+
+  const positions = new Map<string, { x: number; y: number }>()
+  let cursorX = 0
+  let totalHeight = 0
+  for (const root of intraRoots) {
+    const sub = layoutWrappedSubtree(root, intraChildren, sizeById)
+    for (const [id, pos] of sub.positions) {
+      positions.set(id, { x: pos.x + cursorX, y: pos.y })
+    }
+    cursorX += sub.width
+    cursorX += INTERNAL_ROOT_GAP
+    if (sub.height > totalHeight) totalHeight = sub.height
+  }
+  if (intraRoots.length > 0) cursorX -= INTERNAL_ROOT_GAP
+  return { positions, width: Math.max(0, cursorX), height: totalHeight }
+}
+
+/**
+ * Build the block partition of the node set. See file-level
+ * comment for the split rule.
+ */
+function buildBlocks(
+  graph: NetworkGraph,
+  parents: Map<string, string>,
+): {
+  blockOfNode: Map<string, string>
+  blockMembers: Map<string, string[]>
+} {
+  const subgraphMembers = new Map<string, string[]>()
+  for (const n of graph.nodes) {
+    if (!n.parent) continue
+    const list = subgraphMembers.get(n.parent) ?? []
+    list.push(n.id)
+    subgraphMembers.set(n.parent, list)
+  }
+  const childrenOfNode = new Map<string, string[]>()
+  for (const [child, par] of parents) {
+    const list = childrenOfNode.get(par) ?? []
+    list.push(child)
+    childrenOfNode.set(par, list)
+  }
+  const isEmitter = new Set<string>()
+  for (const [, members] of subgraphMembers) {
+    const memberSet = new Set(members)
+    for (const m of members) {
+      for (const c of childrenOfNode.get(m) ?? []) {
+        if (!memberSet.has(c)) {
+          isEmitter.add(m)
+          break
+        }
+      }
+    }
+  }
+  const blockOfNode = new Map<string, string>()
+  const blockMembers = new Map<string, string[]>()
+  for (const n of graph.nodes) {
+    if (!n.parent) {
+      blockOfNode.set(n.id, n.id)
+      blockMembers.set(n.id, [n.id])
+    }
+  }
+  for (const [sg, members] of subgraphMembers) {
+    const memberSet = new Set(members)
+    const emitters = members.filter((m) => isEmitter.has(m))
+    if (emitters.length <= 1) {
+      const blockId = sg
+      for (const m of members) blockOfNode.set(m, blockId)
+      blockMembers.set(blockId, [...members])
+    } else {
+      for (const e of emitters) {
+        blockOfNode.set(e, e)
+        blockMembers.set(e, [e])
+      }
+      for (const m of members) {
+        if (isEmitter.has(m)) continue
+        let cur: string | undefined = parents.get(m)
+        while (cur !== undefined && memberSet.has(cur) && !isEmitter.has(cur)) {
+          cur = parents.get(cur)
+        }
+        if (cur !== undefined && memberSet.has(cur) && isEmitter.has(cur)) {
+          blockOfNode.set(m, cur)
+          blockMembers.get(cur)?.push(m)
+        } else {
+          blockOfNode.set(m, m)
+          blockMembers.set(m, [m])
+        }
+      }
+    }
+  }
+  return { blockOfNode, blockMembers }
+}
+
+/**
+ * Sort block ids by the subgraph-membership signature of their
+ * primary member, then by id — keeps deterministic ordering and
+ * clusters same-subgraph siblings.
+ */
+function sortBlocksBySubgraphMembership(
+  blockIds: readonly string[],
+  blockMembers: Map<string, string[]>,
+  nodesById: Map<string, Node>,
+): string[] {
+  const keyOf = (block: string): string => {
+    const primary = blockMembers.get(block)?.[0] ?? block
+    return nodesById.get(primary)?.parent ?? ''
+  }
+  return [...blockIds].sort((a, b) => {
+    const ka = keyOf(a)
+    const kb = keyOf(b)
+    if (ka !== kb) return ka.localeCompare(kb)
+    return a.localeCompare(b)
+  })
+}
+
+/**
+ * Shift sibling clusters so any same-subgraph parent-child
+ * block pair shares an x column. Cluster panning preserves the
+ * relative positions among siblings; the side branches drift
+ * uniformly to keep the spine vertical.
  */
 function alignSameSubgraphSpine(
   positions: Map<string, { x: number; y: number }>,
-  parents: Map<string, string>,
+  blockChildren: Map<string, string[]>,
+  blockMembers: Map<string, string[]>,
   nodesById: Map<string, Node>,
 ): void {
-  const childrenOf = new Map<string, string[]>()
-  for (const [c, p] of parents) {
-    const list = childrenOf.get(p) ?? []
-    list.push(c)
-    childrenOf.set(p, list)
+  const subgraphOf = (block: string): string | null => {
+    const primary = blockMembers.get(block)?.[0]
+    return primary ? (nodesById.get(primary)?.parent ?? null) : null
   }
-  // Process top-down so a shifted parent has already been moved
-  // before we adjust its own children.
-  const visited = new Set<string>()
   const queue: string[] = []
-  for (const n of nodesById.values()) if (!parents.has(n.id)) queue.push(n.id)
+  for (const b of blockMembers.keys()) {
+    // Roots of the outer tree.
+    let isChild = false
+    for (const kids of blockChildren.values()) {
+      if (kids.includes(b)) {
+        isChild = true
+        break
+      }
+    }
+    if (!isChild) queue.push(b)
+  }
+  const visited = new Set<string>()
   while (queue.length > 0) {
-    const id = queue.shift()
-    if (id === undefined || visited.has(id)) continue
-    visited.add(id)
-    const parentSg = nodesById.get(id)?.parent
-    const kids = childrenOf.get(id) ?? []
+    const block = queue.shift()
+    if (block === undefined || visited.has(block)) continue
+    visited.add(block)
+    const parentSg = subgraphOf(block)
+    const kids = blockChildren.get(block) ?? []
     let spine: string | null = null
     if (parentSg) {
       for (const c of kids) {
-        if (nodesById.get(c)?.parent === parentSg) {
+        if (subgraphOf(c) === parentSg) {
           spine = c
           break
         }
       }
     }
     if (spine) {
-      const parentX = positions.get(id)?.x
+      const parentX = positions.get(block)?.x
       const spineX = positions.get(spine)?.x
       if (parentX !== undefined && spineX !== undefined && parentX !== spineX) {
         const dx = parentX - spineX
-        // Shift every descendant (children + their subtrees) by dx.
         const stack: string[] = [...kids]
         while (stack.length > 0) {
           const cur = stack.pop()
           if (cur === undefined) break
           const p = positions.get(cur)
           if (p) positions.set(cur, { x: p.x + dx, y: p.y })
-          for (const cc of childrenOf.get(cur) ?? []) stack.push(cc)
+          for (const cc of blockChildren.get(cur) ?? []) stack.push(cc)
         }
       }
     }
@@ -208,49 +378,78 @@ function alignSameSubgraphSpine(
   }
 }
 
-/**
- * Lay out every node in the graph as one tidy-tree using
- * link-derived parent pointers. Subgraph membership only
- * influences sibling order so hulls stay non-overlapping.
- */
 export function layoutFlatTree(
   graph: NetworkGraph,
   nodesById: Map<string, Node>,
-  subgraphsById: Map<string, Subgraph>,
+  _subgraphsById: Map<string, Subgraph>,
   sizeById: Map<string, { width: number; height: number }>,
   shouldFlip: (link: Link) => boolean,
   options: FlatTreeLayoutOptions = {},
 ): FlatTreeLayoutResult {
   const nodeGap = options.nodeGap ?? 40
-  const layerGap = options.layerGap ?? 60
+  const layerGap = options.layerGap ?? 80
   const padding = options.subgraphPadding ?? 20
   const labelHeight = options.subgraphLabelHeight ?? 28
 
   const parents = buildPrimaryParents(graph.links, nodesById, shouldFlip)
   breakCycles(parents)
 
-  // Group nodes by parent (or null for roots) so we can sort each
-  // sibling cluster by subgraph membership before feeding edges
-  // into layoutTree in that order.
-  const childrenOf = new Map<string | null, string[]>()
-  for (const n of graph.nodes) {
-    const p = parents.get(n.id) ?? null
-    const list = childrenOf.get(p) ?? []
-    list.push(n.id)
-    childrenOf.set(p, list)
-  }
-  for (const [p, list] of childrenOf) {
-    childrenOf.set(p, sortChildrenBySubgraphMembership(list, nodesById, subgraphsById))
+  const { blockOfNode, blockMembers } = buildBlocks(graph, parents)
+
+  // Internal layout per block.
+  const internal = new Map<
+    string,
+    {
+      positions: Map<string, { x: number; y: number }>
+      width: number
+      height: number
+    }
+  >()
+  for (const [block, members] of blockMembers) {
+    internal.set(block, layoutBlockInternal(members, parents, sizeById))
   }
 
-  const treeNodes: TreeLayoutNode[] = graph.nodes.map((n) => ({
-    id: n.id,
-    size: sizeById.get(n.id) ?? { width: 80, height: 60 },
-  }))
+  // Outer block-level parent-of map. The parent of a block is
+  // the block containing the cross-block primary parent of the
+  // block's "entry" member (any member whose primary parent
+  // sits outside this block).
+  const blockParent = new Map<string, string>()
+  for (const [block, members] of blockMembers) {
+    let entry: string | null = null
+    for (const m of members) {
+      const p = parents.get(m)
+      if (!p) continue
+      const pBlock = blockOfNode.get(p)
+      if (pBlock && pBlock !== block) {
+        entry = m
+        break
+      }
+    }
+    if (!entry) continue
+    const externalParent = parents.get(entry)
+    if (!externalParent) continue
+    const parentBlock = blockOfNode.get(externalParent)
+    if (parentBlock && parentBlock !== block) {
+      blockParent.set(block, parentBlock)
+    }
+  }
+  const blockChildren = new Map<string, string[]>()
+  for (const [block, par] of blockParent) {
+    const list = blockChildren.get(par) ?? []
+    list.push(block)
+    blockChildren.set(par, list)
+  }
+  for (const [par, kids] of blockChildren) {
+    blockChildren.set(par, sortBlocksBySubgraphMembership(kids, blockMembers, nodesById))
+  }
+
+  const treeNodes: TreeLayoutNode[] = []
+  for (const [block, layout] of internal) {
+    treeNodes.push({ id: block, size: { width: layout.width, height: layout.height } })
+  }
   const treeEdges: TreeLayoutEdge[] = []
-  for (const [parent, kids] of childrenOf) {
-    if (parent === null) continue
-    for (const c of kids) treeEdges.push({ parent, child: c })
+  for (const [par, kids] of blockChildren) {
+    for (const c of kids) treeEdges.push({ parent: par, child: c })
   }
 
   const tree = layoutTree(treeNodes, treeEdges, {
@@ -259,12 +458,24 @@ export function layoutFlatTree(
     layerGap,
   })
 
-  const nodePositions = new Map(tree.positions)
-  alignSameSubgraphSpine(nodePositions, parents, nodesById)
+  // Mutable copy for spine alignment.
+  const blockPositions = new Map(tree.positions)
+  alignSameSubgraphSpine(blockPositions, blockChildren, blockMembers, nodesById)
+
+  // Expand block positions to member positions.
+  const nodePositions = new Map<string, { x: number; y: number }>()
+  for (const [block, layout] of internal) {
+    const center = blockPositions.get(block)
+    if (!center) continue
+    const left = center.x - layout.width / 2
+    const top = center.y - layout.height / 2
+    for (const [id, pos] of layout.positions) {
+      nodePositions.set(id, { x: left + pos.x, y: top + pos.y })
+    }
+  }
 
   const subgraphBounds = computeSubgraphHulls(graph, nodePositions, sizeById, padding, labelHeight)
 
-  // Root bounds: union of node positions and subgraph hulls.
   let minX = Number.POSITIVE_INFINITY
   let minY = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
@@ -289,16 +500,6 @@ export function layoutFlatTree(
   return { nodePositions, subgraphBounds, rootBounds }
 }
 
-/**
- * Compute each subgraph's bounding rectangle from the positions
- * of its member nodes (and the hulls of any nested subgraphs).
- * Recursive depth-first so an outer subgraph correctly contains
- * all of its inner hulls plus its directly-owned nodes.
- *
- * The top of every hull reserves `labelHeight` for the subgraph
- * label, matching the renderer's expectation (label is drawn
- * just inside the top edge).
- */
 export function computeSubgraphHulls(
   graph: NetworkGraph,
   nodePositions: Map<string, { x: number; y: number }>,
@@ -321,7 +522,6 @@ export function computeSubgraphHulls(
     list.push(s.id)
     memberSubgraphs.set(s.parent, list)
   }
-
   const hulls = new Map<string, Bounds>()
   const compute = (sgId: string): Bounds | null => {
     const cached = hulls.get(sgId)
