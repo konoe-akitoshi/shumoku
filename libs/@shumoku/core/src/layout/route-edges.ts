@@ -227,6 +227,22 @@ function assignBusRoutes(
   for (const group of groups.values()) {
     if (group.length < BUS_MIN_GROUP_SIZE) continue
 
+    // Bus only when source and EVERY target sit in the same parent
+    // container. A T-shaped backbone is the right abstraction for
+    // "switch fans out to its APs inside the same room"; it's the
+    // wrong abstraction for "core switch fans out to subgraphs
+    // across the building" — those should render as individual
+    // curves so the eye can follow each wire to its destination.
+    // Mixed-parent fan-outs fall through to the bezier+lane-offset
+    // path.
+    const sourceNode = nodes.get(group[0]?.fromNodeId ?? '')
+    const sourceParent = sourceNode?.parent ?? null
+    const allSameParent = group.every((e) => {
+      const targetNode = nodes.get(e.toNodeId)
+      return (targetNode?.parent ?? null) === sourceParent
+    })
+    if (!allSameParent) continue
+
     const side = group[0]?.fromPort.side as 'top' | 'bottom'
     const fromY = group[0]?.fromPort.absolutePosition.y ?? 0
     const targetYs = group.map((e) => e.toPort.absolutePosition.y)
