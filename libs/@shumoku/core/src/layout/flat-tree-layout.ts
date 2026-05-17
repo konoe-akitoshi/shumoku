@@ -466,9 +466,22 @@ export function layoutFlatTree(
     )
   }
 
+  // Pad each block by the subgraph-hull padding (and label
+  // height on the top) when reporting its size to tidy-tree.
+  // The hull rectangle drawn later extends `padding` beyond the
+  // member bbox on every side, plus `labelHeight` at the top;
+  // without inflating here, tidy-tree's nodeGap would be the
+  // gap between member bboxes — leaving the hulls themselves
+  // overlapping by 2*padding minus nodeGap.
   const treeNodes: TreeLayoutNode[] = []
   for (const [block, layout] of internal) {
-    treeNodes.push({ id: block, size: { width: layout.width, height: layout.height } })
+    treeNodes.push({
+      id: block,
+      size: {
+        width: layout.width + padding * 2,
+        height: layout.height + padding * 2 + labelHeight,
+      },
+    })
   }
   const treeEdges: TreeLayoutEdge[] = []
   for (const [par, kids] of blockChildren) {
