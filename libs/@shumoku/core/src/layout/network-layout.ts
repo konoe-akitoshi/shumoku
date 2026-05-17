@@ -55,6 +55,7 @@ import {
   layoutCompound,
 } from './sugiyama/index.js'
 import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tree-layout.js'
+import { wrapWideRows } from './wrap-wide-rows.js'
 
 // ============================================================================
 // Options
@@ -617,7 +618,7 @@ export function layoutNetwork(
   // relied on the default canvas size aren't surprised.
   const pad = 50
   const rb = result.rootBounds
-  const bounds: Bounds =
+  let bounds: Bounds =
     rb.width === 0 && rb.height === 0
       ? { x: 0, y: 0, width: 400, height: 300 }
       : {
@@ -626,6 +627,13 @@ export function layoutNetwork(
           width: rb.width + pad * 2,
           height: rb.height + pad * 2,
         }
+
+  // Wrap overly wide rows of subgraphs into multiple visual rows.
+  // Default tuned so that the "10+ area subgraphs at one tier"
+  // case from the user's screenshot folds into two compact rows
+  // rather than sprawling across 4500px+ of canvas. The pass is a
+  // no-op for graphs that don't have a wide row.
+  bounds = wrapWideRows(nodes, ports, subgraphs, bounds)
 
   return { nodes, ports, subgraphs, bounds }
 }
