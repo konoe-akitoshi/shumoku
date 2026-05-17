@@ -158,6 +158,16 @@ const TANGENT_BIAS_FACTOR = 4
  *
  * Bus-routed edges already specify their own polyline shape, so
  * the bias is skipped for them.
+ *
+ * Corridor coupling: when the source has bias but the target's
+ * port sits centred on its node (no natural bias of its own),
+ * inherit the same lateral lean to the target side too. Both
+ * control points end up shifted laterally by the same amount,
+ * so the bezier stretches into "curve out → near-straight middle
+ * → curve in" instead of one continuous lateral arc — matches
+ * how a network-diagram cable visually exits a router on the
+ * left, runs straight down, and enters the downstream switch
+ * from above.
  */
 function assignTangentBias(edges: Map<string, ResolvedEdge>, nodes: Map<string, Node>): void {
   for (const edge of edges.values()) {
@@ -182,6 +192,24 @@ function assignTangentBias(edges: Map<string, ResolvedEdge>, nodes: Map<string, 
           : edge.toPort.absolutePosition.y - toNode.position.y
       if (Math.abs(offset) > 1) {
         edge.toTangentBias = offset * TANGENT_BIAS_FACTOR
+      }
+    }
+    // Corridor coupling: source-only bias → mirror to target so
+    // both control points share the lateral offset. The sign
+    // flips because `tangentOffset` defines lateral lean with
+    // opposite conventions for opposing sides (top vs bottom,
+    // left vs right) — same absolute direction in canvas space
+    // requires opposite sign in tangent-bias terms.
+    if (edge.fromTangentBias !== undefined && edge.toTangentBias === undefined) {
+      const fromSide = edge.fromPort.side
+      const toSide = edge.toPort.side
+      const opposingPair =
+        (fromSide === 'bottom' && toSide === 'top') ||
+        (fromSide === 'top' && toSide === 'bottom') ||
+        (fromSide === 'left' && toSide === 'right') ||
+        (fromSide === 'right' && toSide === 'left')
+      if (opposingPair) {
+        edge.toTangentBias = -edge.fromTangentBias
       }
     }
   }
