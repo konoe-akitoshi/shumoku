@@ -365,10 +365,7 @@ export class Server {
       // Plugin host-id namespaces are structurally disjoint in practice
       // (Zabbix numeric ids vs Aruba serials vs NetBox integers), so
       // each plugin naturally answers for the subset of mapped nodes
-      // it recognizes and ignores the rest. Sources iterate in
-      // priority order (low number = high precedence); when two
-      // sources happen to return metrics for the same nodeId/linkId,
-      // the higher-priority result wins.
+      // it recognizes and ignores the rest.
       const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
       if (metricsSources.length > 0) {
         // Parse mapping once — every plugin sees the same view.
@@ -394,24 +391,41 @@ export class Server {
           }
         }
 
-        const polledFrom: string[] = []
-        for (const source of metricsSources) {
-          const dataSource = this.dataSourceService.get(source.dataSourceId)
-          if (!dataSource) continue
-          try {
+        // Poll all sources concurrently — they're independent plugin
+        // instances hitting independent upstreams, so a poll cycle
+        // should cost max(source latency), not the sum. `allSettled`
+        // keeps one source's failure from sinking the others.
+        const polled = await Promise.allSettled(
+          metricsSources.map(async (source) => {
+            const dataSource = this.dataSourceService?.get(source.dataSourceId)
+            if (!dataSource) return null
             const config = JSON.parse(dataSource.configJson)
             const plugin = pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
-            if (!hasMetricsCapability(plugin)) continue
+            if (!hasMetricsCapability(plugin)) return null
+            const data = await plugin.pollMetrics(mapping)
+            return { type: dataSource.type, data }
+          }),
+        )
 
-            const m = await plugin.pollMetrics(mapping)
-            metrics = mergeMetricsData(metrics, m)
-            polledFrom.push(dataSource.type)
-          } catch (err) {
+        // Merge in source order. `metricsSources` is priority-sorted
+        // (low number = high precedence) and `allSettled` preserves
+        // input order, so on the rare nodeId/linkId conflict the
+        // higher-priority source wins (see `mergeMetricsData`).
+        const polledFrom: string[] = []
+        for (const [i, result] of polled.entries()) {
+          if (result.status === 'rejected') {
+            const type = metricsSources[i]
+              ? (this.dataSourceService.get(metricsSources[i].dataSourceId)?.type ?? 'unknown')
+              : 'unknown'
             console.error(
-              `[Server] Failed to poll metrics from ${dataSource.type} for topology "${topology.name}":`,
-              err instanceof Error ? err.message : err,
+              `[Server] Failed to poll metrics from ${type} for topology "${topology.name}":`,
+              result.reason instanceof Error ? result.reason.message : result.reason,
             )
+            continue
           }
+          if (!result.value) continue
+          metrics = mergeMetricsData(metrics, result.value.data)
+          polledFrom.push(result.value.type)
         }
         // One line per topology per poll cycle, not one per source —
         // keeps the log readable when many topologies × sources poll.
