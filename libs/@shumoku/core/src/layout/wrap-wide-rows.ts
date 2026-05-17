@@ -130,7 +130,19 @@ export function wrapWideRows(
     if (ordered.length === 0) continue
 
     const anchorX = parentNode.position.x
-    const startY = Math.max(parentNode.position.y + groupYDrop, floorY + groupYDrop)
+    // Drop below the effective bottom of the parent: if the parent
+    // sits inside a compound subgraph, use the subgraph's bottom
+    // edge (so wires have room below the container before the
+    // children's row starts). Otherwise fall back to the node's
+    // own bottom (centre + half-height).
+    const parentSize = parentNode.size
+    const parentHalfH = parentSize ? parentSize.height / 2 : 30
+    let parentBottom = parentNode.position.y + parentHalfH
+    const enclosingSg = parentNode.parent ? subgraphs.get(parentNode.parent) : undefined
+    if (enclosingSg?.bounds) {
+      parentBottom = Math.max(parentBottom, enclosingSg.bounds.y + enclosingSg.bounds.height)
+    }
+    const startY = Math.max(parentBottom + groupYDrop, floorY + groupYDrop)
 
     // Decide chunk count from total width *and* hard count cap.
     // Width-based keeps small fan-outs on a single row even when

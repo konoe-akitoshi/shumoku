@@ -154,15 +154,18 @@ function assignBusRoutes(edges: Map<string, ResolvedEdge>): void {
     const maxTargetY = Math.max(...targetYs)
     if (maxTargetY - minTargetY > BUS_MAX_TARGET_Y_SPREAD) continue
 
-    // For bottom-side fan-out the trunk runs below the source, just
-    // above the target row. For top-side fan-out the trunk runs above
-    // the source. The drop direction is the port's outward normal.
+    // Trunk runs just before the target row (not just below the
+    // source). Putting the trunk near the targets means each branch
+    // is short and only the *single* source-to-trunk leg traverses
+    // the rows in between; the alternative (trunk near source) gives
+    // every branch its own long vertical run, each of which would
+    // cross any intervening row of nodes/subgraphs separately.
     const outwardSign = side === 'bottom' ? 1 : -1
     const targetY = side === 'bottom' ? minTargetY : maxTargetY
     const trunkY =
       side === 'bottom'
-        ? Math.min(fromY + BUS_TRUNK_DROP, targetY - BUS_TRUNK_DROP / 2)
-        : Math.max(fromY - BUS_TRUNK_DROP, targetY + BUS_TRUNK_DROP / 2)
+        ? Math.max(fromY + BUS_TRUNK_DROP, targetY - BUS_TRUNK_DROP / 2)
+        : Math.min(fromY - BUS_TRUNK_DROP, targetY + BUS_TRUNK_DROP / 2)
 
     // Sanity: trunk must lie between source and target on the
     // outward axis. If it doesn't (degenerate or inverted layout) we
