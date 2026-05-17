@@ -136,6 +136,79 @@ function breakCycles(parents: Map<string, string>): void {
 }
 
 /**
+ * Walk each parent and, if any of its tree-children sits inside
+ * the same subgraph, shift the *entire* sibling cluster so that
+ * the same-subgraph child lands at the parent's x. The other
+ * siblings (and their subtrees) move uniformly by the same delta
+ * so their internal layout is preserved; only the cluster as a
+ * whole pans sideways.
+ *
+ * Why: tidy-tree centres a parent over the centroid of its
+ * subtree, which means a heavy child (large downstream subtree)
+ * sits far to the side of the parent's column. When the parent
+ * and that heavy child share a subgraph, the user expects the
+ * pair to form a vertical chain with the heavy child's subtree
+ * spreading below; aligning the columns delivers exactly that
+ * without disturbing the relative arrangement of the other
+ * siblings.
+ *
+ * Side effect: the parent no longer sits over the centroid of
+ * *all* its children — it sits over the same-subgraph child
+ * column. The cluster's overall extent grows (or stays the same)
+ * but the visual reading is cleaner.
+ */
+function alignSameSubgraphSpine(
+  positions: Map<string, { x: number; y: number }>,
+  parents: Map<string, string>,
+  nodesById: Map<string, Node>,
+): void {
+  const childrenOf = new Map<string, string[]>()
+  for (const [c, p] of parents) {
+    const list = childrenOf.get(p) ?? []
+    list.push(c)
+    childrenOf.set(p, list)
+  }
+  // Process top-down so a shifted parent has already been moved
+  // before we adjust its own children.
+  const visited = new Set<string>()
+  const queue: string[] = []
+  for (const n of nodesById.values()) if (!parents.has(n.id)) queue.push(n.id)
+  while (queue.length > 0) {
+    const id = queue.shift()
+    if (id === undefined || visited.has(id)) continue
+    visited.add(id)
+    const parentSg = nodesById.get(id)?.parent
+    const kids = childrenOf.get(id) ?? []
+    let spine: string | null = null
+    if (parentSg) {
+      for (const c of kids) {
+        if (nodesById.get(c)?.parent === parentSg) {
+          spine = c
+          break
+        }
+      }
+    }
+    if (spine) {
+      const parentX = positions.get(id)?.x
+      const spineX = positions.get(spine)?.x
+      if (parentX !== undefined && spineX !== undefined && parentX !== spineX) {
+        const dx = parentX - spineX
+        // Shift every descendant (children + their subtrees) by dx.
+        const stack: string[] = [...kids]
+        while (stack.length > 0) {
+          const cur = stack.pop()
+          if (cur === undefined) break
+          const p = positions.get(cur)
+          if (p) positions.set(cur, { x: p.x + dx, y: p.y })
+          for (const cc of childrenOf.get(cur) ?? []) stack.push(cc)
+        }
+      }
+    }
+    for (const c of kids) queue.push(c)
+  }
+}
+
+/**
  * Lay out every node in the graph as one tidy-tree using
  * link-derived parent pointers. Subgraph membership only
  * influences sibling order so hulls stay non-overlapping.
@@ -186,14 +259,17 @@ export function layoutFlatTree(
     layerGap,
   })
 
-  const subgraphBounds = computeSubgraphHulls(graph, tree.positions, sizeById, padding, labelHeight)
+  const nodePositions = new Map(tree.positions)
+  alignSameSubgraphSpine(nodePositions, parents, nodesById)
+
+  const subgraphBounds = computeSubgraphHulls(graph, nodePositions, sizeById, padding, labelHeight)
 
   // Root bounds: union of node positions and subgraph hulls.
   let minX = Number.POSITIVE_INFINITY
   let minY = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
   let maxY = Number.NEGATIVE_INFINITY
-  for (const [id, pos] of tree.positions) {
+  for (const [id, pos] of nodePositions) {
     const size = sizeById.get(id) ?? { width: 0, height: 0 }
     minX = Math.min(minX, pos.x - size.width / 2)
     minY = Math.min(minY, pos.y - size.height / 2)
@@ -210,7 +286,7 @@ export function layoutFlatTree(
     ? { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
     : { x: 0, y: 0, width: 0, height: 0 }
 
-  return { nodePositions: tree.positions, subgraphBounds, rootBounds }
+  return { nodePositions, subgraphBounds, rootBounds }
 }
 
 /**
