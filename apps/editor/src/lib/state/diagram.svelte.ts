@@ -119,7 +119,7 @@ let routeGeneration = 0
 /** Recompute edges from current nodes/ports/links (async WASM router). */
 export async function rerouteEdges() {
   const gen = ++routeGeneration
-  const result = await routeEdges(diagram.nodes, diagram.ports, diagram.links)
+  const result = await routeEdges(diagram.nodes, diagram.ports, diagram.links, diagram.subgraphs)
   if (gen === routeGeneration) {
     replaceMap(diagram.edges, result)
   }

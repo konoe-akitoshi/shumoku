@@ -41,7 +41,7 @@
  * mixed graphs (some bus, some Bezier) work without extra wiring.
  */
 
-import type { Link, Node } from '../models/types.js'
+import type { Bounds, Link, Node, Subgraph } from '../models/types.js'
 import { getLinkWidth } from './link-utils.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
 
@@ -71,6 +71,11 @@ const BUS_TRUNK_DROP = 28
  */
 const BUS_MAX_TARGET_Y_SPREAD = 40
 
+/** Horizontal clearance between an obstacle's edge and the deflected corridor. */
+const OBSTACLE_CORRIDOR_MARGIN = 20
+/** Vertical clearance between an obstacle's edge and the L-shape jog row. */
+const OBSTACLE_JOG_MARGIN = 14
+
 /**
  * Produce a `ResolvedEdge` for every link whose endpoints resolve to
  * known ports. Links pointing at a missing port are dropped (matches
@@ -85,9 +90,10 @@ const BUS_MAX_TARGET_Y_SPREAD = 40
  * `ports` directly via each `ResolvedPort.absolutePosition`.
  */
 export async function routeEdges(
-  _nodes: Map<string, Node>,
+  nodes: Map<string, Node>,
   ports: Map<string, ResolvedPort>,
   links: readonly Link[],
+  subgraphs?: Map<string, Subgraph>,
 ): Promise<Map<string, ResolvedEdge>> {
   const edges = new Map<string, ResolvedEdge>()
   for (const [i, link] of links.entries()) {
@@ -117,9 +123,69 @@ export async function routeEdges(
       link,
     })
   }
-  assignBusRoutes(edges)
+  assignBusRoutes(edges, nodes, subgraphs)
   assignLaneOffsets(edges)
   return edges
+}
+
+/**
+ * Bounds-merged union of obstacles that all sit in the same vertical
+ * band as the bus source-to-trunk corridor. We treat a tight stack of
+ * obstacles as one wider blocker so the deflection corridor lands
+ * cleanly to one side of the whole cluster.
+ */
+function findBlockingObstacles(
+  fromY: number,
+  trunkY: number,
+  sourceXMin: number,
+  sourceXMax: number,
+  exclude: Set<string>,
+  subgraphs: Map<string, Subgraph>,
+): Bounds | null {
+  const yMin = Math.min(fromY, trunkY)
+  const yMax = Math.max(fromY, trunkY)
+  let merged: Bounds | null = null
+  for (const [id, sg] of subgraphs) {
+    if (exclude.has(id)) continue
+    const b = sg.bounds
+    if (!b) continue
+    // y-band overlap with the bus's source-to-trunk corridor
+    if (b.y + b.height <= yMin) continue
+    if (b.y >= yMax) continue
+    // x overlap with any source port column
+    if (b.x + b.width <= sourceXMin) continue
+    if (b.x >= sourceXMax) continue
+    if (!merged) {
+      merged = { x: b.x, y: b.y, width: b.width, height: b.height }
+    } else {
+      const left = Math.min(merged.x, b.x)
+      const right = Math.max(merged.x + merged.width, b.x + b.width)
+      const top = Math.min(merged.y, b.y)
+      const bottom = Math.max(merged.y + merged.height, b.y + b.height)
+      merged = { x: left, y: top, width: right - left, height: bottom - top }
+    }
+  }
+  return merged
+}
+
+/**
+ * Collect every subgraph that contains `nodeId` directly or
+ * transitively, plus that node's parent chain. Used to mark a bus's
+ * own source/target ancestors as non-obstacles — a child crossing
+ * its own container is by definition not a routing problem.
+ */
+function collectAncestors(
+  nodeId: string,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
+  out: Set<string>,
+): void {
+  let cur: string | undefined = nodes.get(nodeId)?.parent
+  while (cur) {
+    if (out.has(cur)) return
+    out.add(cur)
+    cur = subgraphs.get(cur)?.parent
+  }
 }
 
 /**
@@ -130,7 +196,11 @@ export async function routeEdges(
  * the router prefers to leave noisy edges as Bezier rather than
  * synthesise a misleading bus.
  */
-function assignBusRoutes(edges: Map<string, ResolvedEdge>): void {
+function assignBusRoutes(
+  edges: Map<string, ResolvedEdge>,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph> | undefined,
+): void {
   // Group by source node + source port side. Children of the same
   // physical node naturally bus together; "side" prevents top-port
   // siblings from being lumped with bottom-port siblings (those
@@ -181,20 +251,81 @@ function assignBusRoutes(edges: Map<string, ResolvedEdge>): void {
     )
 
     const busId = `bus:${group[0]?.fromNodeId ?? 'unknown'}:${side}:${sorted[0]?.id ?? 'x'}`
+
+    // Obstacle-aware deflection. The default bus shape drops each
+    // source port straight down to the trunk; when that vertical run
+    // would punch through an intervening subgraph (e.g. a row of
+    // siblings sitting between the source's row and the target's
+    // row), we re-shape the source-to-trunk leg as an L: jog out to
+    // a corridor that runs to one side of the obstacle, then descend
+    // through that corridor before joining the trunk. All branches
+    // share the same corridor so the visual still reads as one bus.
+    const sourceXs = sorted.map((e) => e.fromPort.absolutePosition.x)
+    const sourceXMin = Math.min(...sourceXs)
+    const sourceXMax = Math.max(...sourceXs)
+    let corridor: { x: number; jogY: number } | null = null
+    if (subgraphs && subgraphs.size > 0) {
+      const exclude = new Set<string>()
+      const sourceNodeId = group[0]?.fromNodeId
+      if (sourceNodeId) collectAncestors(sourceNodeId, nodes, subgraphs, exclude)
+      for (const e of sorted) collectAncestors(e.toNodeId, nodes, subgraphs, exclude)
+      const blocker = findBlockingObstacles(
+        fromY,
+        trunkY,
+        sourceXMin,
+        sourceXMax,
+        exclude,
+        subgraphs,
+      )
+      if (blocker) {
+        const targetXs = sorted.map((e) => e.toPort.absolutePosition.x)
+        const targetCentroid = targetXs.reduce((a, b) => a + b, 0) / targetXs.length
+        const blockerCenter = blocker.x + blocker.width / 2
+        // Pick the side that keeps the corridor on the same side as
+        // the bulk of the targets — avoids the trunk doubling back
+        // across the obstacle after we deflect.
+        const goLeft = targetCentroid < blockerCenter
+        const corridorX = goLeft
+          ? blocker.x - OBSTACLE_CORRIDOR_MARGIN
+          : blocker.x + blocker.width + OBSTACLE_CORRIDOR_MARGIN
+        const jogY =
+          side === 'bottom'
+            ? blocker.y - OBSTACLE_JOG_MARGIN
+            : blocker.y + blocker.height + OBSTACLE_JOG_MARGIN
+        // Sanity: jog row must lie between source and obstacle on
+        // the outward axis. If the source already sits past the
+        // obstacle's near edge (unlikely but possible with deeply
+        // nested layouts) the L-shape would invert — fall back to
+        // the straight bus rather than draw a bad route.
+        const jogValid = side === 'bottom' ? jogY > fromY : jogY < fromY
+        if (jogValid) corridor = { x: corridorX, jogY }
+      }
+    }
+
     for (const [i, edge] of sorted.entries()) {
       const source = edge.fromPort.absolutePosition
       const target = edge.toPort.absolutePosition
+      const points = corridor
+        ? [
+            { x: source.x, y: source.y },
+            { x: source.x, y: corridor.jogY },
+            { x: corridor.x, y: corridor.jogY },
+            { x: corridor.x, y: trunkY },
+            { x: target.x, y: trunkY },
+            { x: target.x, y: target.y },
+          ]
+        : [
+            { x: source.x, y: source.y },
+            { x: source.x, y: trunkY },
+            { x: target.x, y: trunkY },
+            { x: target.x, y: target.y },
+          ]
       edge.route = {
         kind: 'bus',
         busId,
         branchIndex: i,
         branchCount: sorted.length,
-        points: [
-          { x: source.x, y: source.y },
-          { x: source.x, y: trunkY },
-          { x: target.x, y: trunkY },
-          { x: target.x, y: target.y },
-        ],
+        points,
       }
       // Bus routes already handle the per-branch fan-out; lane offset
       // on the source side would visually fight with the trunk attach
