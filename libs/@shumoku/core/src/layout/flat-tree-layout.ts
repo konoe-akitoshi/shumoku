@@ -294,23 +294,54 @@ function buildBlocks(
 }
 
 /**
- * Sort block ids by the subgraph-membership signature of their
- * primary member, then by id — keeps deterministic ordering and
- * clusters same-subgraph siblings.
+ * Sort sibling blocks by the source-port label of the link
+ * from their parent block. When the parent's downlinks have
+ * labels like `Gi1/0/1`, `Gi1/0/2`, …, sorting children by the
+ * source port means port placement (which orders ports along
+ * the side by peer x-coord) ends up emitting ports in the same
+ * sequence as their label numbering — no zig-zag crossings AND
+ * no surprising label order.
+ *
+ * Tie-breakers: same subgraph stays clustered, then id.
  */
-function sortBlocksBySubgraphMembership(
+function sortBlocksBySourcePort(
   blockIds: readonly string[],
+  parentBlockId: string,
   blockMembers: Map<string, string[]>,
+  links: readonly Link[],
   nodesById: Map<string, Node>,
+  shouldFlip: (link: Link) => boolean,
 ): string[] {
+  const parentMembers = new Set(blockMembers.get(parentBlockId) ?? [])
+  const portLabelOf = (nodeId: string, portId: string): string => {
+    const port = nodesById.get(nodeId)?.ports?.find((p) => p.id === portId)
+    return port?.label ?? portId
+  }
   const keyOf = (block: string): string => {
+    const members = new Set(blockMembers.get(block) ?? [])
+    let best: string | null = null
+    for (const link of links) {
+      if (link.redundancy) continue
+      const flip = shouldFlip(link)
+      const from = flip ? link.to : link.from
+      const to = flip ? link.from : link.to
+      if (!parentMembers.has(from.node) || !members.has(to.node)) continue
+      const label = portLabelOf(from.node, from.port)
+      if (best === null || label.localeCompare(best, undefined, { numeric: true }) < 0) {
+        best = label
+      }
+    }
+    return best ?? '~~~'
+  }
+  const subgraphOf = (block: string): string => {
     const primary = blockMembers.get(block)?.[0] ?? block
     return nodesById.get(primary)?.parent ?? ''
   }
   return [...blockIds].sort((a, b) => {
-    const ka = keyOf(a)
-    const kb = keyOf(b)
-    if (ka !== kb) return ka.localeCompare(kb)
+    const portCmp = keyOf(a).localeCompare(keyOf(b), undefined, { numeric: true })
+    if (portCmp !== 0) return portCmp
+    const sgCmp = subgraphOf(a).localeCompare(subgraphOf(b))
+    if (sgCmp !== 0) return sgCmp
     return a.localeCompare(b)
   })
 }
@@ -440,7 +471,10 @@ export function layoutFlatTree(
     blockChildren.set(par, list)
   }
   for (const [par, kids] of blockChildren) {
-    blockChildren.set(par, sortBlocksBySubgraphMembership(kids, blockMembers, nodesById))
+    blockChildren.set(
+      par,
+      sortBlocksBySourcePort(kids, par, blockMembers, graph.links, nodesById, shouldFlip),
+    )
   }
 
   const treeNodes: TreeLayoutNode[] = []
