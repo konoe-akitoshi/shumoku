@@ -33,29 +33,11 @@ import {
   SMALL_LABEL_CHAR_WIDTH,
 } from '../constants.js'
 import { getDeviceIcon } from '../icons/index.js'
-import type {
-  Bounds,
-  Direction,
-  LinkEndpoint,
-  NetworkGraph,
-  Node,
-  NodeSpec,
-  Position,
-  Size,
-  Subgraph,
-} from '../models/types.js'
+import type { Bounds, Direction, NetworkGraph, Node, NodeSpec, Subgraph } from '../models/types.js'
+import { layoutFlatTree } from './flat-tree-layout.js'
 import { rebalanceSubgraphs } from './interaction.js'
 import { decidePortSides, placePorts } from './port-placement.js'
 import type { ResolvedPort } from './resolved-types.js'
-import {
-  type CompoundLayoutResult,
-  type CompoundNode,
-  type CompoundSubgraph,
-  type Edge,
-  layoutCompound,
-} from './sugiyama/index.js'
-import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tree-layout.js'
-import { wrapWideRows } from './wrap-wide-rows.js'
 
 // ============================================================================
 // Options
@@ -260,40 +242,9 @@ export function computeNodeSize(
 }
 
 // ============================================================================
-// Link-endpoint helpers
+// Link-direction normalisation
 // ============================================================================
 
-function epId(ep: LinkEndpoint) {
-  return ep.node
-}
-
-// ============================================================================
-// NetworkGraph → Sugiyama conversion
-// ============================================================================
-
-/**
- * Build a parent-pointer map covering both nodes and subgraphs. `null`
- * means top level.
- */
-function buildParentOf(graph: NetworkGraph): Map<string, string | null> {
-  const parentOf = new Map<string, string | null>()
-  for (const sg of graph.subgraphs ?? []) parentOf.set(sg.id, sg.parent ?? null)
-  for (const n of graph.nodes) parentOf.set(n.id, n.parent ?? null)
-  return parentOf
-}
-
-/**
- * Convert links to Sugiyama edges, **promoting cross-container links
- * to their common ancestor**. A link from a node deep in sg1 to a node
- * deep in sg2 becomes an edge between sg1 and sg2 at the top level —
- * that way containers are arranged with awareness of inter-container
- * connectivity, rather than drifting apart because the raw link drops
- * out of every container's filter.
- *
- * Redundancy (HA) links are skipped: they don't represent a flow
- * direction, so we don't want them driving layer assignment. Their
- * port sides are still handled separately by `placePorts`.
- */
 /**
  * Direction-derived "this side means upstream" map. Sugiyama lays
  * out the flow along this axis, so a port pinned to the dest side
@@ -405,63 +356,6 @@ function shouldFlipForLayout(
   return false
 }
 
-function buildCompoundEdges(
-  graph: NetworkGraph,
-  parentOf: Map<string, string | null>,
-  direction: 'TB' | 'BT' | 'LR' | 'RL',
-  nodesById: Map<string, Node>,
-): Edge[] {
-  const commonAncestor = (a: string, b: string): string | null => {
-    const aChain = new Set<string | null>()
-    let cur: string | null = a
-    while (true) {
-      aChain.add(cur)
-      if (cur === null) break
-      cur = parentOf.get(cur) ?? null
-    }
-    cur = b
-    while (true) {
-      if (aChain.has(cur)) return cur
-      if (cur === null) break
-      cur = parentOf.get(cur) ?? null
-    }
-    return null
-  }
-
-  // Walk up from `id` until its parent equals `level`. The returned
-  // id is the direct child of `level` on the path to `id` (possibly
-  // `id` itself).
-  const resolveChild = (id: string, level: string | null): string => {
-    let cur = id
-    while (true) {
-      const parent = parentOf.get(cur) ?? null
-      if (parent === level) return cur
-      if (parent === null) return cur
-      cur = parent
-    }
-  }
-
-  const edges: Edge[] = []
-  for (const [i, link] of graph.links.entries()) {
-    if (link.redundancy) continue
-    const flip = shouldFlipForLayout(link, nodesById, direction)
-    const from = flip ? link.to : link.from
-    const to = flip ? link.from : link.to
-    const s = epId(from)
-    const t = epId(to)
-    const level = commonAncestor(s, t)
-    const srcAtLevel = resolveChild(s, level)
-    const tgtAtLevel = resolveChild(t, level)
-    if (srcAtLevel === tgtAtLevel) continue
-    edges.push({
-      id: (link as { id?: string }).id ?? `link-${i}`,
-      source: srcAtLevel,
-      target: tgtAtLevel,
-    })
-  }
-  return edges
-}
-
 // ============================================================================
 // Fixed-position post-process
 // ============================================================================
@@ -556,35 +450,8 @@ export function layoutNetwork(
       maxLabelCharsById.set(a.nodeId, labelLen)
     }
   }
-  const compoundNodes: CompoundNode[] = graph.nodes.map((n) => ({
-    id: n.id,
-    parent: n.parent ?? null,
-    size: computeNodeFootprint(n, portsBySideById.get(n.id), maxLabelCharsById.get(n.id) ?? 0),
-  }))
-  const compoundSubgraphs: CompoundSubgraph[] = (graph.subgraphs ?? []).map((s) => ({
-    id: s.id,
-    parent: s.parent ?? null,
-  }))
-  const parentOf = buildParentOf(graph)
-  const edges = buildCompoundEdges(graph, parentOf, opts.direction, nodesById)
-
-  // Choose between Buchheim tidy-tree (preferred for tree-dominant
-  // network topologies) and full Sugiyama (fallback for graphs with
-  // subgraphs, hints, or non-tree structure).
-  const result =
-    tryTreeLayout(compoundNodes, compoundSubgraphs, edges, opts) ??
-    layoutCompound(compoundNodes, compoundSubgraphs, edges, {
-      direction: opts.direction,
-      nodeGap: opts.gap,
-      layerGap: opts.topLevelGap,
-      subgraphPadding: opts.subgraphPadding,
-      subgraphLabelHeight: opts.subgraphLabelHeight,
-      hints: opts.hints.size > 0 ? opts.hints : undefined,
-    })
-
-  // Fold positions + computed footprint back onto Node records.
-  // Consumers read `node.size` from here on; computeNodeBodySize is a
-  // fallback only for nodes that haven't been through layout.
+  // Footprints come from per-side port counts so the box reserves
+  // room for ports along whichever side carries them.
   const sizeById = new Map(
     graph.nodes.map(
       (n) =>
@@ -593,6 +460,29 @@ export function layoutNetwork(
           computeNodeFootprint(n, portsBySideById.get(n.id), maxLabelCharsById.get(n.id) ?? 0),
         ] as const,
     ),
+  )
+  const subgraphsById = new Map((graph.subgraphs ?? []).map((s) => [s.id, s] as const))
+
+  // Flat-tree layout: lay out the entire node graph as one tidy-tree
+  // driven by link topology, then compute subgraph rectangles as
+  // hulls around their members. Subgraphs are *not* layout
+  // containers — they're a visual grouping computed after placement.
+  // This lets each switch's downstream subtree expand in whatever
+  // direction the topology needs, rather than being forced into a
+  // single row of sibling containers.
+  const result = layoutFlatTree(
+    graph,
+    nodesById,
+    subgraphsById,
+    sizeById,
+    (link) => shouldFlipForLayout(link, nodesById, opts.direction),
+    {
+      direction: opts.direction,
+      nodeGap: opts.gap,
+      layerGap: opts.topLevelGap,
+      subgraphPadding: opts.subgraphPadding,
+      subgraphLabelHeight: opts.subgraphLabelHeight,
+    },
   )
   const nodes = new Map<string, Node>()
   for (const n of graph.nodes) {
@@ -618,7 +508,7 @@ export function layoutNetwork(
   // relied on the default canvas size aren't surprised.
   const pad = 50
   const rb = result.rootBounds
-  let bounds: Bounds =
+  const bounds: Bounds =
     rb.width === 0 && rb.height === 0
       ? { x: 0, y: 0, width: 400, height: 300 }
       : {
@@ -628,265 +518,5 @@ export function layoutNetwork(
           height: rb.height + pad * 2,
         }
 
-  // Re-group leaf subgraphs by their logical uplink parent
-  // (link-based) and place each group's children directly below
-  // that parent. For the user's screenshot this separates hall
-  // family (uplinked to eps-sw01) from lobby family (uplinked to
-  // eps-sw02) into distinct vertical bands. Container subgraphs
-  // (anything with a nested subgraph inside) are left alone so we
-  // don't disturb compound nesting that the tidy-tree already
-  // settled. Within a group, children that exceed `maxPerRow`
-  // fold into balanced sub-rows centred on the parent's x.
-  bounds = wrapWideRows(nodes, ports, subgraphs, graph.links, bounds)
-
   return { nodes, ports, subgraphs, bounds }
-}
-
-// ============================================================================
-// Tree layout dispatcher
-// ============================================================================
-
-/**
- * Maximum fraction of edges that can be "overlay" (non-structural) and
- * still let Buchheim drive the layout. Overlay edges are rendered but
- * don't constrain placement (Graphviz-style `constraint=false`).
- *
- * Beyond this ratio, the graph has enough non-tree structure that
- * Sugiyama's global crossing minimisation is the better tool.
- */
-const TREE_DOMINANT_OVERLAY_RATIO = 0.1
-const TREE_DOMINANT_OVERLAY_HARD_CAP = 5
-
-/**
- * Pick the primary parent for each child node and run Buchheim's
- * tidy-tree algorithm. Returns null if the graph isn't tree-dominant
- * — caller falls back to Sugiyama in that case.
- *
- * Compound subgraphs are handled bottom-up (deepest first): each
- * subgraph is laid out as its own tree with `layoutTree`, then
- * treated as a single node at its parent's level with size = its
- * computed inner bounds + padding + label height. This mirrors
- * `layoutCompound` but swaps Sugiyama for Buchheim per container so
- * subtree contiguity is preserved — siblings of the same parent
- * stay contiguous, whether they're inside a subgraph or above it.
- *
- * Disqualifiers (forced fallback to Sugiyama):
- *
- *   - **`hints` or `fixed` supplied.** User-driven coordinate
- *     overrides flow more naturally through Sugiyama's coord
- *     assignment than through Buchheim's contour-based packing.
- *   - **Any container's overlay ratio above threshold.** When too
- *     many edges in some container fail the "primary parent" test,
- *     that level has real mesh-like structure and Sugiyama's
- *     barycenter ordering is more appropriate. All-or-nothing: if
- *     one container falls back, the whole graph does (mixing two
- *     algorithms across the hierarchy would produce inconsistent
- *     spacing rules).
- */
-function tryTreeLayout(
-  nodes: CompoundNode[],
-  subgraphs: CompoundSubgraph[],
-  edges: Edge[],
-  opts: typeof DEFAULTS,
-): CompoundLayoutResult | null {
-  if (opts.fixed.size > 0) return null
-  if (opts.hints.size > 0) return null
-
-  const padding = opts.subgraphPadding
-  const labelHeight = opts.subgraphLabelHeight
-  const defaultSize: Size = { width: 160, height: 60 }
-
-  const nodeById = new Map<string, CompoundNode>()
-  for (const n of nodes) nodeById.set(n.id, n)
-  const subgraphById = new Map<string, CompoundSubgraph>()
-  for (const s of subgraphs) subgraphById.set(s.id, s)
-
-  // childrenOf: container id (or null = top level) → direct children
-  // (mixed nodes and subgraphs in declaration order).
-  const childrenOf = new Map<string | null, (CompoundNode | CompoundSubgraph)[]>()
-  const push = (parent: string | null, item: CompoundNode | CompoundSubgraph) => {
-    const list = childrenOf.get(parent)
-    if (list) list.push(item)
-    else childrenOf.set(parent, [item])
-  }
-  for (const n of nodes) push(n.parent ?? null, n)
-  for (const s of subgraphs) push(s.parent ?? null, s)
-
-  const depthOf = (id: string, visited = new Set<string>()): number => {
-    if (visited.has(id)) return 0
-    visited.add(id)
-    const sg = subgraphById.get(id)
-    if (!sg?.parent) return 0
-    return 1 + depthOf(sg.parent, visited)
-  }
-
-  interface LocalLayout {
-    positions: Map<string, Position>
-    width: number
-    height: number
-  }
-  const localLayouts = new Map<string | null, LocalLayout>()
-  const subgraphSize = new Map<string, Size>()
-
-  // Run Buchheim for a single container. Returns null when the
-  // container's edges aren't tree-dominant — caller propagates the
-  // null up so the whole graph falls back to Sugiyama (consistent
-  // spacing across the hierarchy).
-  const runContainer = (containerId: string | null): LocalLayout | null => {
-    const children = childrenOf.get(containerId) ?? []
-    if (children.length === 0) {
-      return { positions: new Map(), width: 0, height: 0 }
-    }
-    const childIds = new Set(children.map((c) => c.id))
-
-    // Edges between direct children of this container only. Edges
-    // escaping the container were already promoted to their common
-    // ancestor by `buildCompoundEdges`, so they'll surface at the
-    // appropriate level instead of leaking down here.
-    const innerEdges = edges.filter(
-      (e) => childIds.has(e.source) && childIds.has(e.target) && e.source !== e.target,
-    )
-
-    // Pick a primary parent per child; remaining incoming edges
-    // become overlay (rendered but non-structural).
-    const incoming = new Map<string, Edge[]>()
-    for (const e of innerEdges) {
-      const list = incoming.get(e.target) ?? []
-      list.push(e)
-      incoming.set(e.target, list)
-    }
-    const treeEdges: TreeLayoutEdge[] = []
-    let overlayCount = 0
-    for (const [child, list] of incoming) {
-      const primary = list[0]
-      if (!primary) continue
-      treeEdges.push({ parent: primary.source, child })
-      overlayCount += list.length - 1
-    }
-    if (
-      overlayCount > TREE_DOMINANT_OVERLAY_HARD_CAP &&
-      overlayCount / Math.max(innerEdges.length, 1) > TREE_DOMINANT_OVERLAY_RATIO
-    ) {
-      return null
-    }
-    if (hasCycleAfterPrimaryPick(treeEdges)) return null
-
-    // Build TreeLayoutNode set: leaves use their intrinsic size,
-    // subgraphs use their already-computed inner bounds expanded by
-    // padding + label.
-    const treeNodes: TreeLayoutNode[] = children.map((c) => {
-      const sg = subgraphById.get(c.id)
-      if (sg) {
-        const inner = subgraphSize.get(c.id) ?? { width: 0, height: 0 }
-        return {
-          id: c.id,
-          size: {
-            width: inner.width + padding * 2,
-            height: inner.height + padding * 2 + labelHeight,
-          },
-        }
-      }
-      const n = nodeById.get(c.id)
-      return { id: c.id, size: n?.size ?? defaultSize }
-    })
-
-    const result = layoutTree(treeNodes, treeEdges, {
-      direction: opts.direction,
-      nodeGap: opts.gap,
-      layerGap: opts.topLevelGap,
-    })
-
-    // Shift so the container origin is (0, 0). `flatten` translates
-    // by the container's absolute origin to produce final coords.
-    const shiftX = -result.bounds.x
-    const shiftY = -result.bounds.y
-    const shifted = new Map<string, Position>()
-    for (const [id, p] of result.positions) {
-      shifted.set(id, { x: p.x + shiftX, y: p.y + shiftY })
-    }
-    return { positions: shifted, width: result.bounds.width, height: result.bounds.height }
-  }
-
-  // Bottom-up: deepest subgraphs first, then walk up. Any failure
-  // bails the whole tree attempt.
-  const sortedSubgraphs = [...subgraphs].sort((a, b) => depthOf(b.id) - depthOf(a.id))
-  for (const sg of sortedSubgraphs) {
-    const layout = runContainer(sg.id)
-    if (!layout) return null
-    localLayouts.set(sg.id, layout)
-    subgraphSize.set(sg.id, { width: layout.width, height: layout.height })
-  }
-  const top = runContainer(null)
-  if (!top) return null
-  localLayouts.set(null, top)
-
-  // Flatten: walk top-down, accumulating each container's origin into
-  // absolute coords. Same shape as layoutCompound's flatten.
-  const nodePositions = new Map<string, Position>()
-  const subgraphBounds = new Map<string, Bounds>()
-  const flatten = (containerId: string | null, originX: number, originY: number) => {
-    const local = localLayouts.get(containerId)
-    if (!local) return
-    const children = childrenOf.get(containerId) ?? []
-    for (const c of children) {
-      const localPos = local.positions.get(c.id)
-      if (!localPos) continue
-      const absX = originX + localPos.x
-      const absY = originY + localPos.y
-      const sg = subgraphById.get(c.id)
-      if (sg) {
-        const inner = subgraphSize.get(c.id) ?? { width: 0, height: 0 }
-        const width = inner.width + padding * 2
-        const height = inner.height + padding * 2 + labelHeight
-        const bx = absX - width / 2
-        const by = absY - height / 2
-        subgraphBounds.set(c.id, { x: bx, y: by, width, height })
-        flatten(c.id, bx + padding, by + padding + labelHeight)
-      } else {
-        nodePositions.set(c.id, { x: absX, y: absY })
-      }
-    }
-  }
-  flatten(null, 0, 0)
-
-  // Root bounds — same union pass as layoutCompound.
-  let minX = Number.POSITIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-  for (const [id, { x, y }] of nodePositions) {
-    const n = nodeById.get(id)
-    const size = n?.size ?? defaultSize
-    minX = Math.min(minX, x - size.width / 2)
-    minY = Math.min(minY, y - size.height / 2)
-    maxX = Math.max(maxX, x + size.width / 2)
-    maxY = Math.max(maxY, y + size.height / 2)
-  }
-  for (const bounds of subgraphBounds.values()) {
-    minX = Math.min(minX, bounds.x)
-    minY = Math.min(minY, bounds.y)
-    maxX = Math.max(maxX, bounds.x + bounds.width)
-    maxY = Math.max(maxY, bounds.y + bounds.height)
-  }
-  const rootBounds: Bounds =
-    minX === Number.POSITIVE_INFINITY
-      ? { x: 0, y: 0, width: 0, height: 0 }
-      : { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
-
-  return { nodePositions, subgraphBounds, rootBounds }
-}
-
-function hasCycleAfterPrimaryPick(treeEdges: readonly TreeLayoutEdge[]): boolean {
-  const parentOf = new Map<string, string>()
-  for (const e of treeEdges) parentOf.set(e.child, e.parent)
-  for (const start of parentOf.keys()) {
-    const seen = new Set<string>()
-    let cur: string | undefined = start
-    while (cur !== undefined) {
-      if (seen.has(cur)) return true
-      seen.add(cur)
-      cur = parentOf.get(cur)
-    }
-  }
-  return false
 }
