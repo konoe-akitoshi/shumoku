@@ -38,8 +38,18 @@ import type { Bounds, Link, Node, Subgraph } from '../models/types.js'
 import type { ResolvedPort } from './resolved-types.js'
 
 export interface WrapWideRowsOptions {
-  /** Subgraphs per sub-row above which a wrap kicks in. Default 5. */
+  /** Hard cap on sub-row count — overrides the width heuristic.
+   *  Default 8. Most real network deployments don't have more than
+   *  this many access subgraphs hanging off one distribution
+   *  switch; beyond it the wrap kicks in regardless of width. */
   maxPerRow?: number
+  /** Sub-row width budget. A group whose total laid-out width
+   *  (subgraphs + gaps) stays under this number renders as a
+   *  single row; over it the group folds into multiple sub-rows.
+   *  Default 4000 — wide enough to keep typical 5-6-subgraph
+   *  distributions on one row, narrow enough to fold the
+   *  pathological 12+ case. */
+  maxRowWidth?: number
   /** Vertical gap between sub-rows of one group. Default 200. */
   rowGap?: number
   /** Horizontal gap between subgraphs within a sub-row. Default 60. */
@@ -63,7 +73,8 @@ export function wrapWideRows(
   bounds: Bounds,
   options: WrapWideRowsOptions = {},
 ): Bounds {
-  const maxPerRow = options.maxPerRow ?? 5
+  const maxPerRow = options.maxPerRow ?? 8
+  const maxRowWidth = options.maxRowWidth ?? 4000
   const rowGap = options.rowGap ?? 200
   const intraRowGap = options.intraRowGap ?? 60
   const groupYDrop = options.groupYDrop ?? 240
@@ -121,7 +132,18 @@ export function wrapWideRows(
     const anchorX = parentNode.position.x
     const startY = Math.max(parentNode.position.y + groupYDrop, floorY + groupYDrop)
 
-    const chunkCount = Math.max(1, Math.ceil(ordered.length / maxPerRow))
+    // Decide chunk count from total width *and* hard count cap.
+    // Width-based keeps small fan-outs on a single row even when
+    // the count is mildly higher than the legacy maxPerRow=5;
+    // count-based caps the pathological "30 subgraphs at one
+    // tier" case so we don't try to draw a 12000px row.
+    const totalWidth = ordered.reduce((acc, id, idx) => {
+      const w = subgraphs.get(id)?.bounds?.width ?? 0
+      return acc + w + (idx < ordered.length - 1 ? intraRowGap : 0)
+    }, 0)
+    const widthChunks = Math.max(1, Math.ceil(totalWidth / maxRowWidth))
+    const countChunks = Math.max(1, Math.ceil(ordered.length / maxPerRow))
+    const chunkCount = Math.max(widthChunks, countChunks)
     const chunkSize = Math.ceil(ordered.length / chunkCount)
 
     let lastChunkBottom = startY
