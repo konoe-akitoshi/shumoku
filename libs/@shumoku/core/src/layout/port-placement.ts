@@ -37,7 +37,7 @@ import type { ResolvedPort } from './resolved-types.js'
 /** Default port visual size */
 const PORT_SIZE = { width: 8, height: 8 }
 
-type Side = 'top' | 'bottom' | 'left' | 'right'
+export type Side = 'top' | 'bottom' | 'left' | 'right'
 
 /** One port's assignment after phase 1 (`decidePortSides`). */
 export interface PortAssignment {
@@ -110,6 +110,14 @@ export function decidePortSides(
   links: Link[],
   nodes: Map<string, Node>,
   direction: Direction,
+  /**
+   * Runtime overrides keyed by `nodeId:portId`. Wins over both the
+   * direction-derived default and any `NodePort.placement.side`
+   * declared on the data. Used by wire-aware refinement to push
+   * cross-subgraph escape ports onto a side that gives a clear
+   * path out, without mutating the input graph.
+   */
+  sideOverrides?: Map<string, Side>,
 ): PortAssignment[] {
   const haPairs = detectHAPairs(links)
   const assignments: PortAssignment[] = []
@@ -127,11 +135,12 @@ export function decidePortSides(
     const fromKey = `${fromNode}:${link.from.port}`
     if (!seen.has(fromKey)) {
       seen.add(fromKey)
-      const override = getPortPlacement(nodes.get(fromNode), link.from.port)?.side
+      const runtime = sideOverrides?.get(fromKey)
+      const dataOverride = getPortPlacement(nodes.get(fromNode), link.from.port)?.side
       assignments.push({
         nodeId: fromNode,
         portId: link.from.port,
-        side: override ?? sides.sourceSide,
+        side: runtime ?? dataOverride ?? sides.sourceSide,
         peerNodeId: toNode,
       })
     }
@@ -139,11 +148,12 @@ export function decidePortSides(
     const toKey = `${toNode}:${link.to.port}`
     if (!seen.has(toKey)) {
       seen.add(toKey)
-      const override = getPortPlacement(nodes.get(toNode), link.to.port)?.side
+      const runtime = sideOverrides?.get(toKey)
+      const dataOverride = getPortPlacement(nodes.get(toNode), link.to.port)?.side
       assignments.push({
         nodeId: toNode,
         portId: link.to.port,
-        side: override ?? sides.destSide,
+        side: runtime ?? dataOverride ?? sides.destSide,
         peerNodeId: fromNode,
       })
     }
@@ -244,8 +254,9 @@ export function placePorts(
   nodes: Map<string, Node>,
   links: Link[],
   direction: Direction = 'TB',
+  sideOverrides?: Map<string, Side>,
 ): Map<string, ResolvedPort> {
-  const assignments = decidePortSides(links, nodes, direction)
+  const assignments = decidePortSides(links, nodes, direction, sideOverrides)
 
   const bySide = new Map<string, PortAssignment[]>()
   for (const a of assignments) {
