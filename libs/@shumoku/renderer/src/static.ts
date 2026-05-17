@@ -210,9 +210,51 @@ function renderPort(port: ResolvedPort, colors: RenderColors): string {
 </g>`
 }
 
+/**
+ * Right-angle polyline with light corner rounding, mirroring the
+ * interactive renderer in `components/svg/SvgEdge.svelte`. Kept inline
+ * here (rather than a shared util) because static SSR has no DOM and
+ * the two contexts don't otherwise overlap on path helpers.
+ */
+function polylineSvgPath(pts: ReadonlyArray<{ x: number; y: number }>): string {
+  if (pts.length === 0) return ''
+  if (pts.length === 1) return `M ${pts[0]?.x ?? 0} ${pts[0]?.y ?? 0}`
+  const r = 6
+  let d = `M ${pts[0]?.x ?? 0} ${pts[0]?.y ?? 0}`
+  for (let i = 1; i < pts.length - 1; i++) {
+    const prev = pts[i - 1]
+    const curr = pts[i]
+    const next = pts[i + 1]
+    if (!prev || !curr || !next) continue
+    const dxIn = curr.x - prev.x
+    const dyIn = curr.y - prev.y
+    const dxOut = next.x - curr.x
+    const dyOut = next.y - curr.y
+    const lenIn = Math.hypot(dxIn, dyIn)
+    const lenOut = Math.hypot(dxOut, dyOut)
+    if (lenIn < 1 || lenOut < 1) {
+      d += ` L ${curr.x} ${curr.y}`
+      continue
+    }
+    const ri = Math.min(r, lenIn / 2, lenOut / 2)
+    const inX = curr.x - (dxIn / lenIn) * ri
+    const inY = curr.y - (dyIn / lenIn) * ri
+    const outX = curr.x + (dxOut / lenOut) * ri
+    const outY = curr.y + (dyOut / lenOut) * ri
+    d += ` L ${inX} ${inY} Q ${curr.x} ${curr.y} ${outX} ${outY}`
+  }
+  const last = pts[pts.length - 1]
+  if (last) d += ` L ${last.x} ${last.y}`
+  return d
+}
+
 function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
-  const pathD =
-    edge.fromPort && edge.toPort
+  // Orthogonal (bus / polyline) routes are drawn as right-angle
+  // polylines with light corner rounding; everything else falls back
+  // to the standard port-anchored Bezier.
+  const pathD = edge.route
+    ? polylineSvgPath(edge.route.points)
+    : edge.fromPort && edge.toPort
       ? bezierEdgePath(
           { ...edge.fromPort, lateralOffset: edge.fromLateralOffset },
           { ...edge.toPort, lateralOffset: edge.toLateralOffset },

@@ -11,11 +11,7 @@ import { bezierEdgePath } from './bezier-path.js'
 
 function parseSvgPath(d: string): number[] {
   // "M x y C cx1 cy1 cx2 cy2 ex ey" → [x, y, cx1, cy1, cx2, cy2, ex, ey]
-  return d
-    .replace(/[MC]/g, '')
-    .trim()
-    .split(/\s+/)
-    .map(Number)
+  return d.replace(/[MC]/g, '').trim().split(/\s+/).map(Number)
 }
 
 test('lateralOffset=0 matches the no-offset path verbatim', () => {

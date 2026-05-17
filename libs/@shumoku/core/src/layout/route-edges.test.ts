@@ -6,10 +6,16 @@
 
 import { describe, expect, test } from 'vitest'
 import type { Link, Node } from '../models/types.js'
-import { routeEdges } from './route-edges.js'
 import type { ResolvedPort } from './resolved-types.js'
+import { routeEdges } from './route-edges.js'
 
-function port(id: string, nodeId: string, x: number, y: number, side: ResolvedPort['side']): ResolvedPort {
+function port(
+  id: string,
+  nodeId: string,
+  x: number,
+  y: number,
+  side: ResolvedPort['side'],
+): ResolvedPort {
   return {
     id,
     nodeId,
@@ -47,46 +53,127 @@ describe('routeEdges — lane offset', () => {
     expect(edge?.toLateralOffset).toBeUndefined()
   })
 
-  test('fan-out: three edges from one bottom port get symmetric lateral offsets', async () => {
+  test('fan-out of 2 (below bus threshold) gets symmetric lateral offsets', async () => {
+    // 2 edges stay below the bus-routing threshold (=3) and fall
+    // through to the lane-offset path.
     const ports = makePorts([
       ['hub:p1', port('hub:p1', 'hub', 100, 0, 'bottom')],
       ['c1:p1', port('c1:p1', 'c1', 50, 100, 'top')],
-      ['c2:p1', port('c2:p1', 'c2', 100, 100, 'top')],
-      ['c3:p1', port('c3:p1', 'c3', 150, 100, 'top')],
+      ['c2:p1', port('c2:p1', 'c2', 150, 100, 'top')],
     ])
     const edges = await routeEdges(NOOP_NODES, ports, [
       link('hub:p1', 'c1:p1'),
       link('hub:p1', 'c2:p1'),
-      link('hub:p1', 'c3:p1'),
     ])
     const list = [...edges.values()]
     const offsets = list
       .sort((a, b) => a.toPort.absolutePosition.x - b.toPort.absolutePosition.x)
       .map((e) => e.fromLateralOffset)
-    expect(offsets).toEqual([-8, 0, 8])
-    // None of these should have target-side offsets because each peer port is unique.
-    for (const e of list) expect(e.toLateralOffset).toBeUndefined()
+    expect(offsets).toEqual([-4, 4])
+    for (const e of list) {
+      expect(e.toLateralOffset).toBeUndefined()
+      expect(e.route).toBeUndefined()
+    }
   })
 
   test('lane order follows peer x for top/bottom ports', async () => {
-    // hub at x=100, three children at x=200, 0, 100 (i.e. right, left, middle)
-    // Lanes should run -8, 0, +8 when sorted left-to-right.
+    // 2 edges (under bus threshold). hub at x=100, two children at
+    // x=200 (right) and x=0 (left). Lanes should run -4, +4 sorted
+    // left-to-right.
     const ports = makePorts([
       ['hub:p1', port('hub:p1', 'hub', 100, 0, 'bottom')],
       ['c1:p1', port('c1:p1', 'c1', 200, 100, 'top')],
       ['c2:p1', port('c2:p1', 'c2', 0, 100, 'top')],
-      ['c3:p1', port('c3:p1', 'c3', 100, 100, 'top')],
     ])
     const edges = await routeEdges(NOOP_NODES, ports, [
       link('hub:p1', 'c1:p1'),
       link('hub:p1', 'c2:p1'),
-      link('hub:p1', 'c3:p1'),
     ])
     const get = (id: string) => [...edges.values()].find((e) => e.toPortId === id)
-    // c2 is leftmost target → leftmost lane (-8)
-    expect(get('c2:p1')?.fromLateralOffset).toBe(-8)
-    expect(get('c3:p1')?.fromLateralOffset).toBe(0)
-    expect(get('c1:p1')?.fromLateralOffset).toBe(8)
+    // c2 is leftmost target → leftmost lane
+    expect(get('c2:p1')?.fromLateralOffset).toBe(-4)
+    expect(get('c1:p1')?.fromLateralOffset).toBe(4)
+  })
+
+  test('fan-out of 3+ from one node triggers bus routing (not lateral offset)', async () => {
+    // 3 edges crosses the bus threshold. Even though the source
+    // ports are unique, all three share the same source node + bottom
+    // side, so they get bundled into a bus instead of getting lateral
+    // offsets.
+    const ports = makePorts([
+      ['hub:p1', port('hub:p1', 'hub', 100, 0, 'bottom')],
+      ['hub:p2', port('hub:p2', 'hub', 110, 0, 'bottom')],
+      ['hub:p3', port('hub:p3', 'hub', 120, 0, 'bottom')],
+      ['c1:p', port('c1:p', 'c1', 50, 100, 'top')],
+      ['c2:p', port('c2:p', 'c2', 100, 100, 'top')],
+      ['c3:p', port('c3:p', 'c3', 150, 100, 'top')],
+    ])
+    const edges = await routeEdges(NOOP_NODES, ports, [
+      link('hub:p1', 'c1:p'),
+      link('hub:p2', 'c2:p'),
+      link('hub:p3', 'c3:p'),
+    ])
+    const list = [...edges.values()]
+    expect(list.length).toBe(3)
+    for (const e of list) {
+      expect(e.route?.kind).toBe('bus')
+      expect(e.route?.points.length).toBe(4)
+      expect(e.fromLateralOffset).toBeUndefined()
+    }
+    // All branches share one busId.
+    const busIds = new Set(list.map((e) => (e.route?.kind === 'bus' ? e.route.busId : '')))
+    expect(busIds.size).toBe(1)
+  })
+
+  test('bus trunk Y sits between source and targets, branches ordered by target x', async () => {
+    const ports = makePorts([
+      ['hub:p1', port('hub:p1', 'hub', 50, 0, 'bottom')],
+      ['hub:p2', port('hub:p2', 'hub', 100, 0, 'bottom')],
+      ['hub:p3', port('hub:p3', 'hub', 150, 0, 'bottom')],
+      ['c1:p', port('c1:p', 'c1', 250, 100, 'top')],
+      ['c2:p', port('c2:p', 'c2', 50, 100, 'top')],
+      ['c3:p', port('c3:p', 'c3', 150, 100, 'top')],
+    ])
+    const edges = await routeEdges(NOOP_NODES, ports, [
+      link('hub:p1', 'c1:p'),
+      link('hub:p2', 'c2:p'),
+      link('hub:p3', 'c3:p'),
+    ])
+    const list = [...edges.values()]
+    for (const e of list) {
+      expect(e.route?.kind).toBe('bus')
+      const pts = e.route?.points ?? []
+      // Trunk Y is the same across all branches; source y is 0, target y is 100.
+      const trunkY = pts[1]?.y ?? -1
+      expect(trunkY).toBeGreaterThan(0)
+      expect(trunkY).toBeLessThan(100)
+      expect(pts[2]?.y).toBe(trunkY)
+    }
+    // Branch order: c2 (target x=50) → c3 (150) → c1 (250).
+    const byTarget = new Map(list.map((e) => [e.toPortId, e]))
+    expect(byTarget.get('c2:p')?.route?.branchIndex).toBe(0)
+    expect(byTarget.get('c3:p')?.route?.branchIndex).toBe(1)
+    expect(byTarget.get('c1:p')?.route?.branchIndex).toBe(2)
+  })
+
+  test('bus rejected when targets straddle different layers (Y spread too large)', async () => {
+    // Two targets at y=100, one at y=500. Spread > BUS_MAX_TARGET_Y_SPREAD → no bus.
+    const ports = makePorts([
+      ['hub:p1', port('hub:p1', 'hub', 100, 0, 'bottom')],
+      ['hub:p2', port('hub:p2', 'hub', 110, 0, 'bottom')],
+      ['hub:p3', port('hub:p3', 'hub', 120, 0, 'bottom')],
+      ['c1:p', port('c1:p', 'c1', 50, 100, 'top')],
+      ['c2:p', port('c2:p', 'c2', 100, 100, 'top')],
+      ['c3:p', port('c3:p', 'c3', 150, 500, 'top')],
+    ])
+    const edges = await routeEdges(NOOP_NODES, ports, [
+      link('hub:p1', 'c1:p'),
+      link('hub:p2', 'c2:p'),
+      link('hub:p3', 'c3:p'),
+    ])
+    for (const e of edges.values()) {
+      expect(e.route).toBeUndefined()
+    }
   })
 
   test('fan-in: edges converging on one target port get target-side offsets', async () => {
