@@ -157,7 +157,15 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
           else if (item.itemid === outItemId) outBps = value
         }
 
-        if (!anyFresh) continue // stale data on a Zabbix link → leave silent
+        // Stale data on a link Zabbix *does* own (items resolved) — emit
+        // an explicit `unknown` so the renderer drops the weathermap flow
+        // rather than animating hours-old values. Not the silence rule:
+        // a link is owned by exactly one source (its monitoredNode maps
+        // to one hostId), so this can't clobber another source.
+        if (!anyFresh) {
+          metrics.links[linkId] = { status: 'unknown' }
+          continue
+        }
 
         const capacity = linkMapping.bandwidth || 1_000_000_000
         const inUtil = (inBps / capacity) * 100
