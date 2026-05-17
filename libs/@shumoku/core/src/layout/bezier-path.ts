@@ -31,14 +31,6 @@ export type PortSide = 'top' | 'bottom' | 'left' | 'right'
 const MIN_REACH = 40
 const MAX_REACH = 320
 const REACH_RATIO = 0.6
-/**
- * Tangent-bias cap relative to the curve's reach. Keeps the
- * emission angle bounded (~atan(0.4) ≈ 22°) even when the port
- * sits far off the node centre — without this, a short edge from
- * an off-centre port produces a wild S-curve because the lateral
- * lean overpowers the normal component.
- */
-const MAX_BIAS_RATIO = 0.4
 
 /**
  * Build a cubic-Bezier SVG path `d` string from one port to another.
@@ -59,32 +51,8 @@ const MAX_BIAS_RATIO = 0.4
  * decoration but not for tight-tolerance hit testing on the port itself.
  */
 export function bezierEdgePath(
-  from: {
-    absolutePosition: { x: number; y: number }
-    side?: PortSide
-    lateralOffset?: number
-    /**
-     * Lateral component added to the tangent at this endpoint, in
-     * pixels, perpendicular to the port's outward normal. Positive
-     * = same direction as `lateralShift`'s positive sign (right of
-     * outward normal, screen-coords y-down).
-     *
-     * Use this to make a port that sits off-centre on its node
-     * emit the curve diagonally outward, like a physical cable
-     * leaving the connector at an angle. Two downlinks coming out
-     * of the bottom of a router naturally diverge instead of both
-     * heading straight down — visually separating their fan-outs
-     * and avoiding clashes with intermediate nodes between source
-     * and target.
-     */
-    tangentBias?: number
-  },
-  to: {
-    absolutePosition: { x: number; y: number }
-    side?: PortSide
-    lateralOffset?: number
-    tangentBias?: number
-  },
+  from: { absolutePosition: { x: number; y: number }; side?: PortSide; lateralOffset?: number },
+  to: { absolutePosition: { x: number; y: number }; side?: PortSide; lateralOffset?: number },
 ): string {
   const fromSide = from.side ?? 'bottom'
   const toSide = to.side ?? 'top'
@@ -94,17 +62,9 @@ export function bezierEdgePath(
   const b = { x: to.absolutePosition.x + bShiftX, y: to.absolutePosition.y + bShiftY }
   const normalGap = projectAlongNormal(fromSide, b.x - a.x, b.y - a.y)
   const reach = clamp(normalGap * REACH_RATIO, MIN_REACH, MAX_REACH)
-  const [ax, ay] = tangentOffset(fromSide, reach, capBias(from.tangentBias ?? 0, reach))
-  const [bx, by] = tangentOffset(toSide, reach, capBias(to.tangentBias ?? 0, reach))
+  const [ax, ay] = tangentOffset(fromSide, reach)
+  const [bx, by] = tangentOffset(toSide, reach)
   return `M ${a.x} ${a.y} C ${a.x + ax} ${a.y + ay} ${b.x + bx} ${b.y + by} ${b.x} ${b.y}`
-}
-
-/** Clamp the tangent bias so the emission angle stays bounded. */
-function capBias(bias: number, reach: number): number {
-  const cap = reach * MAX_BIAS_RATIO
-  if (bias > cap) return cap
-  if (bias < -cap) return -cap
-  return bias
 }
 
 /**
@@ -176,8 +136,8 @@ export function bezierOffsetPath(
   const toSide = to.side ?? 'top'
   const normalGap = projectAlongNormal(fromSide, dx, dy)
   const reach = clamp(normalGap * REACH_RATIO, MIN_REACH, MAX_REACH)
-  const [ax, ay] = tangentOffset(fromSide, reach, 0)
-  const [bx, by] = tangentOffset(toSide, reach, 0)
+  const [ax, ay] = tangentOffset(fromSide, reach)
+  const [bx, by] = tangentOffset(toSide, reach)
 
   const p0x = a.x + nx
   const p0y = a.y + ny
@@ -205,16 +165,16 @@ function projectAlongNormal(side: PortSide, dx: number, dy: number): number {
   }
 }
 
-function tangentOffset(side: PortSide, magnitude: number, bias: number): [number, number] {
+function tangentOffset(side: PortSide, magnitude: number): [number, number] {
   switch (side) {
     case 'top':
-      return [-bias, -magnitude]
+      return [0, -magnitude]
     case 'bottom':
-      return [bias, magnitude]
+      return [0, magnitude]
     case 'left':
-      return [-magnitude, bias]
+      return [-magnitude, 0]
     case 'right':
-      return [magnitude, -bias]
+      return [magnitude, 0]
   }
 }
 

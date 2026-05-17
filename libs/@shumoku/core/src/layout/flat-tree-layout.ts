@@ -160,6 +160,19 @@ function layoutBlockInternal(
   memberIds: readonly string[],
   parents: Map<string, string>,
   sizeById: Map<string, { width: number; height: number }>,
+  /**
+   * When true, the block's intra root is also an *external*
+   * emitter (it has tree-children outside this block). The block
+   * is laid out with the chain shifted to the right of the root
+   * so the root's column stays clear for the external downlink
+   * wire to pass through, then the block is padded symmetrically
+   * on the left so the root sits at the block's centre — that
+   * way the external child placed below the block ends up
+   * directly below the root, and the wire goes straight down
+   * through the block's left gutter without crossing chain
+   * members.
+   */
+  transitShift = false,
 ): {
   positions: Map<string, { x: number; y: number }>
   width: number
@@ -191,6 +204,11 @@ function layoutBlockInternal(
   }
   intraRoots.sort((a, b) => a.localeCompare(b))
 
+  if (transitShift && intraRoots.length === 1) {
+    const rootId = intraRoots[0]
+    if (rootId) return layoutTransitShiftedChain(rootId, intraChildren, sizeById)
+  }
+
   const positions = new Map<string, { x: number; y: number }>()
   let cursorX = 0
   let totalHeight = 0
@@ -205,6 +223,74 @@ function layoutBlockInternal(
   }
   if (intraRoots.length > 0) cursorX -= INTERNAL_ROOT_GAP
   return { positions, width: Math.max(0, cursorX), height: totalHeight }
+}
+
+/**
+ * Lay out a single-root chain such that the root sits at the
+ * block's horizontal centre but the chain members hang off to
+ * the right, leaving the column directly below the root clear
+ * for an external downlink wire. The block is padded with a
+ * mirror gutter on the left so the root is exactly centred —
+ * required so the outer tidy-tree, which positions children
+ * under the centre of the parent block, lands the downstream
+ * subgraph at the root's x.
+ */
+function layoutTransitShiftedChain(
+  rootId: string,
+  intraChildren: Map<string, string[]>,
+  sizeById: Map<string, { width: number; height: number }>,
+): {
+  positions: Map<string, { x: number; y: number }>
+  width: number
+  height: number
+} {
+  const rootSize = sizeById.get(rootId) ?? { width: 80, height: 60 }
+  // Walk the chain from root downward, picking the first child
+  // at each step (chains are linear in the cases this branch
+  // handles).
+  const chain: string[] = []
+  let cur: string | undefined = (intraChildren.get(rootId) ?? [])[0]
+  while (cur !== undefined) {
+    chain.push(cur)
+    cur = (intraChildren.get(cur) ?? [])[0]
+  }
+
+  const positions = new Map<string, { x: number; y: number }>()
+  // Root at (rootSize.width/2, rootSize.height/2) in local
+  // coords. The chain hangs to the right, with each member
+  // descending one INTERNAL_LAYER_GAP further below.
+  const rootLocalX = rootSize.width / 2
+  positions.set(rootId, { x: rootLocalX, y: rootSize.height / 2 })
+
+  let cursorY = rootSize.height + INTERNAL_LAYER_GAP
+  const chainColumnLeft = rootSize.width + INTERNAL_ROOT_GAP
+  let chainMaxRight = chainColumnLeft
+  for (const m of chain) {
+    const ms = sizeById.get(m) ?? { width: 80, height: 60 }
+    positions.set(m, { x: chainColumnLeft + ms.width / 2, y: cursorY + ms.height / 2 })
+    cursorY += ms.height + INTERNAL_LAYER_GAP
+    chainMaxRight = Math.max(chainMaxRight, chainColumnLeft + ms.width)
+  }
+  // Strip the trailing INTERNAL_LAYER_GAP — the block's height
+  // ends at the bottom member, not at the next would-be slot.
+  if (chain.length > 0) cursorY -= INTERNAL_LAYER_GAP
+
+  // Make the block symmetric around the root's column: pad
+  // the left side so the total width is 2 × right-extent. The
+  // gutter is unused canvas, but the outer layout treats the
+  // block as one rectangle, so the gutter is what makes the
+  // root land at block centre.
+  const rightExtent = chainMaxRight - rootLocalX
+  const halfWidth = Math.max(rightExtent, rootLocalX)
+  const blockWidth = halfWidth * 2
+  const shiftX = halfWidth - rootLocalX
+  if (shiftX > 0) {
+    for (const [id, pos] of positions) {
+      positions.set(id, { x: pos.x + shiftX, y: pos.y })
+    }
+  }
+  const blockHeight = Math.max(rootSize.height, cursorY)
+  return { positions, width: blockWidth, height: blockHeight }
 }
 
 /**
@@ -416,6 +502,31 @@ export function layoutFlatTree(
 
   const { blockOfNode, blockMembers } = buildBlocks(graph, parents)
 
+  // Identify blocks whose intra-root has an *external* tree-child
+  // (another block lives below this one in the outer tree). For
+  // these blocks the internal chain shifts to the right so the
+  // root's column stays clear for the transit wire.
+  const transitBlocks = new Set<string>()
+  for (const [blockId, members] of blockMembers) {
+    if (members.length < 2) continue
+    const memberSet = new Set(members)
+    const intraRoot = members.find((m) => {
+      const p = parents.get(m)
+      return !p || !memberSet.has(p)
+    })
+    if (!intraRoot) continue
+    // Does intraRoot have a tree-child outside this block?
+    let hasExternal = false
+    for (const [child, par] of parents) {
+      if (par !== intraRoot) continue
+      if (!memberSet.has(child)) {
+        hasExternal = true
+        break
+      }
+    }
+    if (hasExternal) transitBlocks.add(blockId)
+  }
+
   // Internal layout per block.
   const internal = new Map<
     string,
@@ -426,7 +537,7 @@ export function layoutFlatTree(
     }
   >()
   for (const [block, members] of blockMembers) {
-    internal.set(block, layoutBlockInternal(members, parents, sizeById))
+    internal.set(block, layoutBlockInternal(members, parents, sizeById, transitBlocks.has(block)))
   }
 
   // Outer block-level parent-of map. The parent of a block is

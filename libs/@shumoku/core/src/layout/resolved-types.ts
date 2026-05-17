@@ -87,17 +87,6 @@ export interface ResolvedEdge {
   /** Same for the destination endpoint. */
   toLateralOffset?: number
   /**
-   * Tangent-bias for the source endpoint, in SVG units. Tilts the
-   * emission direction perpendicular to the port's outward normal —
-   * a port sitting off-centre on its node emits the curve diagonally
-   * outward instead of straight along the normal, like a cable
-   * leaving the connector at an angle. Computed by the router from
-   * the port's offset from its node centre.
-   */
-  fromTangentBias?: number
-  /** Same for the destination endpoint. */
-  toTangentBias?: number
-  /**
    * How the renderer should draw this edge. When absent, the renderer
    * falls back to the standard port-anchored Bezier (today's default).
    *
