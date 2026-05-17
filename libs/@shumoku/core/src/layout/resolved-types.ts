@@ -77,6 +77,15 @@ export interface ResolvedEdge {
   width: number
   /** Original link data (bandwidth, redundancy, vlan, etc.) */
   link: Link
+  /**
+   * Lateral offset for the source endpoint, in SVG units, perpendicular
+   * to the source port's outward normal. Positive = right-hand side of
+   * the normal. Used to fan multiple edges sharing one port apart so the
+   * curves don't visually stack. `0` / `undefined` = no offset.
+   */
+  fromLateralOffset?: number
+  /** Same for the destination endpoint. */
+  toLateralOffset?: number
 }
 
 // ============================================================================

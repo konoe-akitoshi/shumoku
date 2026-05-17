@@ -213,7 +213,10 @@ function renderPort(port: ResolvedPort, colors: RenderColors): string {
 function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
   const pathD =
     edge.fromPort && edge.toPort
-      ? bezierEdgePath(edge.fromPort, edge.toPort)
+      ? bezierEdgePath(
+          { ...edge.fromPort, lateralOffset: edge.fromLateralOffset },
+          { ...edge.toPort, lateralOffset: edge.toLateralOffset },
+        )
       : `M ${edge.points[0]?.x ?? 0} ${edge.points[0]?.y ?? 0} L ${edge.points[1]?.x ?? 0} ${edge.points[1]?.y ?? 0}`
   const link = edge.link
   const stroke = link?.style?.stroke ?? getVlanStroke(link?.vlan) ?? colors.linkStroke

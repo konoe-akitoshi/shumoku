@@ -30,9 +30,16 @@
   // is no longer consulted for the drawn stroke (it's still on the
   // edge for label midpoint + hit testing, but reduced to a degenerate
   // 2-point line by the router pass).
+  // Lateral offsets fan multiple edges sharing one port apart at the
+  // shared endpoint. Router (`route-edges.ts`) assigns offsets per
+  // group of edges; the bezier path computer applies them perpendicular
+  // to the port's outward normal.
   const pathD = $derived(
     edge.fromPort && edge.toPort
-      ? bezierEdgePath(edge.fromPort, edge.toPort)
+      ? bezierEdgePath(
+          { ...edge.fromPort, lateralOffset: edge.fromLateralOffset },
+          { ...edge.toPort, lateralOffset: edge.toLateralOffset },
+        )
       : `M ${edge.points[0]?.x ?? 0} ${edge.points[0]?.y ?? 0} L ${edge.points[1]?.x ?? 0} ${edge.points[1]?.y ?? 0}`,
   )
   const link = $derived(edge.link)
