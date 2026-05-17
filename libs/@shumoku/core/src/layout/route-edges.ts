@@ -135,7 +135,56 @@ export async function routeEdges(
   }
   assignBusRoutes(edges, nodes, subgraphs)
   assignLaneOffsets(edges)
+  assignTangentBias(edges, nodes)
   return edges
+}
+
+/**
+ * Multiplier applied to a port's offset from its node centre when
+ * computing the tangent bias. Higher = more diagonal emission. The
+ * value is empirical — at the default node size and port spacing,
+ * 4× produces an obvious "two cables coming out the bottom of a
+ * router diverge to opposite sides" effect without making the
+ * curve so steep that it crosses adjacent siblings.
+ */
+const TANGENT_BIAS_FACTOR = 4
+
+/**
+ * Tilt each edge's bezier emission direction by the port's offset
+ * from its node centre. Ports near a node's edge fan their wires
+ * outward; centred ports stay perpendicular. The effect is most
+ * visible when a node has multiple downlinks: each emerges at its
+ * own angle instead of all heading straight down.
+ *
+ * Bus-routed edges already specify their own polyline shape, so
+ * the bias is skipped for them.
+ */
+function assignTangentBias(edges: Map<string, ResolvedEdge>, nodes: Map<string, Node>): void {
+  for (const edge of edges.values()) {
+    if (edge.route?.kind === 'bus') continue
+    const fromNode = nodes.get(edge.fromNodeId)
+    const toNode = nodes.get(edge.toNodeId)
+    if (fromNode?.position && fromNode?.size) {
+      const side = edge.fromPort.side
+      const offset =
+        side === 'top' || side === 'bottom'
+          ? edge.fromPort.absolutePosition.x - fromNode.position.x
+          : edge.fromPort.absolutePosition.y - fromNode.position.y
+      if (Math.abs(offset) > 1) {
+        edge.fromTangentBias = offset * TANGENT_BIAS_FACTOR
+      }
+    }
+    if (toNode?.position && toNode?.size) {
+      const side = edge.toPort.side
+      const offset =
+        side === 'top' || side === 'bottom'
+          ? edge.toPort.absolutePosition.x - toNode.position.x
+          : edge.toPort.absolutePosition.y - toNode.position.y
+      if (Math.abs(offset) > 1) {
+        edge.toTangentBias = offset * TANGENT_BIAS_FACTOR
+      }
+    }
+  }
 }
 
 /**

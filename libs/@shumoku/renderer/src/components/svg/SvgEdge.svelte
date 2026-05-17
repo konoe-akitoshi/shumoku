@@ -43,8 +43,16 @@
       ? polylinePath(edge.route.points)
       : edge.fromPort && edge.toPort
         ? bezierEdgePath(
-            { ...edge.fromPort, lateralOffset: edge.fromLateralOffset },
-            { ...edge.toPort, lateralOffset: edge.toLateralOffset },
+            {
+              ...edge.fromPort,
+              lateralOffset: edge.fromLateralOffset,
+              tangentBias: edge.fromTangentBias,
+            },
+            {
+              ...edge.toPort,
+              lateralOffset: edge.toLateralOffset,
+              tangentBias: edge.toTangentBias,
+            },
           )
         : `M ${edge.points[0]?.x ?? 0} ${edge.points[0]?.y ?? 0} L ${edge.points[1]?.x ?? 0} ${edge.points[1]?.y ?? 0}`,
   )

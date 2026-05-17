@@ -51,8 +51,32 @@ const REACH_RATIO = 0.6
  * decoration but not for tight-tolerance hit testing on the port itself.
  */
 export function bezierEdgePath(
-  from: { absolutePosition: { x: number; y: number }; side?: PortSide; lateralOffset?: number },
-  to: { absolutePosition: { x: number; y: number }; side?: PortSide; lateralOffset?: number },
+  from: {
+    absolutePosition: { x: number; y: number }
+    side?: PortSide
+    lateralOffset?: number
+    /**
+     * Lateral component added to the tangent at this endpoint, in
+     * pixels, perpendicular to the port's outward normal. Positive
+     * = same direction as `lateralShift`'s positive sign (right of
+     * outward normal, screen-coords y-down).
+     *
+     * Use this to make a port that sits off-centre on its node
+     * emit the curve diagonally outward, like a physical cable
+     * leaving the connector at an angle. Two downlinks coming out
+     * of the bottom of a router naturally diverge instead of both
+     * heading straight down — visually separating their fan-outs
+     * and avoiding clashes with intermediate nodes between source
+     * and target.
+     */
+    tangentBias?: number
+  },
+  to: {
+    absolutePosition: { x: number; y: number }
+    side?: PortSide
+    lateralOffset?: number
+    tangentBias?: number
+  },
 ): string {
   const fromSide = from.side ?? 'bottom'
   const toSide = to.side ?? 'top'
@@ -62,8 +86,8 @@ export function bezierEdgePath(
   const b = { x: to.absolutePosition.x + bShiftX, y: to.absolutePosition.y + bShiftY }
   const normalGap = projectAlongNormal(fromSide, b.x - a.x, b.y - a.y)
   const reach = clamp(normalGap * REACH_RATIO, MIN_REACH, MAX_REACH)
-  const [ax, ay] = tangentOffset(fromSide, reach)
-  const [bx, by] = tangentOffset(toSide, reach)
+  const [ax, ay] = tangentOffset(fromSide, reach, from.tangentBias ?? 0)
+  const [bx, by] = tangentOffset(toSide, reach, to.tangentBias ?? 0)
   return `M ${a.x} ${a.y} C ${a.x + ax} ${a.y + ay} ${b.x + bx} ${b.y + by} ${b.x} ${b.y}`
 }
 
@@ -136,8 +160,8 @@ export function bezierOffsetPath(
   const toSide = to.side ?? 'top'
   const normalGap = projectAlongNormal(fromSide, dx, dy)
   const reach = clamp(normalGap * REACH_RATIO, MIN_REACH, MAX_REACH)
-  const [ax, ay] = tangentOffset(fromSide, reach)
-  const [bx, by] = tangentOffset(toSide, reach)
+  const [ax, ay] = tangentOffset(fromSide, reach, 0)
+  const [bx, by] = tangentOffset(toSide, reach, 0)
 
   const p0x = a.x + nx
   const p0y = a.y + ny
@@ -165,16 +189,16 @@ function projectAlongNormal(side: PortSide, dx: number, dy: number): number {
   }
 }
 
-function tangentOffset(side: PortSide, magnitude: number): [number, number] {
+function tangentOffset(side: PortSide, magnitude: number, bias: number): [number, number] {
   switch (side) {
     case 'top':
-      return [0, -magnitude]
+      return [-bias, -magnitude]
     case 'bottom':
-      return [0, magnitude]
+      return [bias, magnitude]
     case 'left':
-      return [-magnitude, 0]
+      return [-magnitude, bias]
     case 'right':
-      return [magnitude, 0]
+      return [magnitude, -bias]
   }
 }
 

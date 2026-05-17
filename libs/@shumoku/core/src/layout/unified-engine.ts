@@ -17,10 +17,8 @@
 import type { LayoutEngine } from '../hierarchical.js'
 import type { LayoutResult, NetworkGraph } from '../models/types.js'
 import { layoutNetwork, resolveNodeSize } from './network-layout.js'
-import { placePorts } from './port-placement.js'
 import type { ResolvedLayout } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
-import { buildSideOverrides, detectWireConflicts } from './wire-aware-refinement.js'
 
 /**
  * Create a LayoutEngine that uses the custom network layout + libavoid routing.
@@ -48,34 +46,8 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
 }> {
   const direction = graph.settings?.direction ?? 'TB'
 
-  const { nodes, subgraphs, bounds } = layoutNetwork(graph, { direction })
-  let ports = placePorts(nodes, graph.links, direction)
-  let edges = await routeEdges(nodes, ports, graph.links, subgraphs)
-
-  // Wire-aware refinement loop. Each iteration: detect wires
-  // whose default bezier overlaps a non-endpoint node or
-  // subgraph hull, then reassign the conflicting source-port
-  // sides and re-place ports + re-route. Positions don't
-  // change so the loop is cheap; we cap at a few iterations to
-  // avoid pathological oscillation when no side is clearly
-  // better.
-  const MAX_REFINEMENT_ITERS = 3
-  const cumulativeOverrides = new Map<string, 'top' | 'bottom' | 'left' | 'right'>()
-  for (let i = 0; i < MAX_REFINEMENT_ITERS; i++) {
-    const conflicts = detectWireConflicts(edges, nodes, subgraphs)
-    if (conflicts.length === 0) break
-    const overrides = buildSideOverrides(conflicts)
-    let changed = false
-    for (const [k, side] of overrides) {
-      if (cumulativeOverrides.get(k) !== side) {
-        cumulativeOverrides.set(k, side)
-        changed = true
-      }
-    }
-    if (!changed) break
-    ports = placePorts(nodes, graph.links, direction, cumulativeOverrides)
-    edges = await routeEdges(nodes, ports, graph.links, subgraphs)
-  }
+  const { nodes, ports, subgraphs, bounds } = layoutNetwork(graph, { direction })
+  const edges = await routeEdges(nodes, ports, graph.links, subgraphs)
 
   const resolved: ResolvedLayout = {
     nodes,
