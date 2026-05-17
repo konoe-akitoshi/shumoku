@@ -58,11 +58,9 @@ export interface FlatTreeLayoutResult {
   rootBounds: Bounds
 }
 
-/** Maximum nodes per row inside a subgraph block before wrapping to the next row. */
-const SUBGRAPH_ROW_WRAP = 4
 /** Horizontal gap between members inside a subgraph block. */
 const INTERNAL_NODE_GAP = 16
-/** Vertical gap between layers (or wrapped rows) inside a subgraph block. */
+/** Vertical gap between layers inside a subgraph block. */
 const INTERNAL_LAYER_GAP = 36
 /** Horizontal gap between sibling subtrees inside a multi-root subgraph block. */
 const INTERNAL_ROOT_GAP = 28
@@ -103,10 +101,11 @@ function breakCycles(parents: Map<string, string>): void {
 
 /**
  * Lay out a subtree (one intra-subgraph root + its descendants
- * inside the subgraph) with rows wrapped to keep the bounding
- * box roughly square. Children fan out in rows of up to
- * SUBGRAPH_ROW_WRAP per row; deeper descendants follow the same
- * wrapping per parent.
+ * inside the subgraph). The root sits at the top, its direct
+ * children sit in a single row beneath, and deeper descendants
+ * follow recursively. No row wrapping — subgraph hulls grow
+ * horizontally with fan-out, matching how a network engineer
+ * usually reads "this switch has N APs" left-to-right.
  */
 function layoutWrappedSubtree(
   rootId: string,
@@ -131,34 +130,24 @@ function layoutWrappedSubtree(
     return { positions, width: rootSize.width, height: rootSize.height }
   }
 
-  const perRow = Math.min(SUBGRAPH_ROW_WRAP, childLayouts.length)
-  const rows: Array<typeof childLayouts> = []
-  for (let i = 0; i < childLayouts.length; i += perRow) {
-    rows.push(childLayouts.slice(i, i + perRow))
-  }
-  const rowWidths = rows.map((row) =>
-    row.reduce((sum, c, idx) => sum + c.layout.width + (idx > 0 ? INTERNAL_NODE_GAP : 0), 0),
+  const bandWidth = childLayouts.reduce(
+    (sum, c, idx) => sum + c.layout.width + (idx > 0 ? INTERNAL_NODE_GAP : 0),
+    0,
   )
-  const bandWidth = Math.max(0, ...rowWidths)
+  const rowHeight = childLayouts.reduce((m, c) => Math.max(m, c.layout.height), 0)
   const subtreeWidth = Math.max(rootSize.width, bandWidth)
   positions.set(rootId, { x: subtreeWidth / 2, y: rootSize.height / 2 })
 
-  let cursorY = rootSize.height + INTERNAL_LAYER_GAP
-  for (const [rowIdx, row] of rows.entries()) {
-    const rowW = rowWidths[rowIdx] ?? 0
-    const rowH = row.reduce((m, c) => Math.max(m, c.layout.height), 0)
-    let cursorX = (subtreeWidth - rowW) / 2
-    for (const c of row) {
-      for (const [id, pos] of c.layout.positions) {
-        positions.set(id, { x: pos.x + cursorX, y: pos.y + cursorY })
-      }
-      cursorX += c.layout.width + INTERNAL_NODE_GAP
+  const cursorY = rootSize.height + INTERNAL_LAYER_GAP
+  let cursorX = (subtreeWidth - bandWidth) / 2
+  for (const c of childLayouts) {
+    for (const [id, pos] of c.layout.positions) {
+      positions.set(id, { x: pos.x + cursorX, y: pos.y + cursorY })
     }
-    cursorY += rowH
-    if (rowIdx < rows.length - 1) cursorY += INTERNAL_LAYER_GAP
+    cursorX += c.layout.width + INTERNAL_NODE_GAP
   }
 
-  return { positions, width: subtreeWidth, height: cursorY }
+  return { positions, width: subtreeWidth, height: cursorY + rowHeight }
 }
 
 /**
