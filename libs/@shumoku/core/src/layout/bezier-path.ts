@@ -31,6 +31,14 @@ export type PortSide = 'top' | 'bottom' | 'left' | 'right'
 const MIN_REACH = 40
 const MAX_REACH = 320
 const REACH_RATIO = 0.6
+/**
+ * Tangent-bias cap relative to the curve's reach. Keeps the
+ * emission angle bounded (~atan(0.4) ≈ 22°) even when the port
+ * sits far off the node centre — without this, a short edge from
+ * an off-centre port produces a wild S-curve because the lateral
+ * lean overpowers the normal component.
+ */
+const MAX_BIAS_RATIO = 0.4
 
 /**
  * Build a cubic-Bezier SVG path `d` string from one port to another.
@@ -86,9 +94,17 @@ export function bezierEdgePath(
   const b = { x: to.absolutePosition.x + bShiftX, y: to.absolutePosition.y + bShiftY }
   const normalGap = projectAlongNormal(fromSide, b.x - a.x, b.y - a.y)
   const reach = clamp(normalGap * REACH_RATIO, MIN_REACH, MAX_REACH)
-  const [ax, ay] = tangentOffset(fromSide, reach, from.tangentBias ?? 0)
-  const [bx, by] = tangentOffset(toSide, reach, to.tangentBias ?? 0)
+  const [ax, ay] = tangentOffset(fromSide, reach, capBias(from.tangentBias ?? 0, reach))
+  const [bx, by] = tangentOffset(toSide, reach, capBias(to.tangentBias ?? 0, reach))
   return `M ${a.x} ${a.y} C ${a.x + ax} ${a.y + ay} ${b.x + bx} ${b.y + by} ${b.x} ${b.y}`
+}
+
+/** Clamp the tangent bias so the emission angle stays bounded. */
+function capBias(bias: number, reach: number): number {
+  const cap = reach * MAX_BIAS_RATIO
+  if (bias > cap) return cap
+  if (bias < -cap) return -cap
+  return bias
 }
 
 /**
