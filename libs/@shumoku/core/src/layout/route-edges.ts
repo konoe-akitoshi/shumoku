@@ -71,10 +71,20 @@ const BUS_TRUNK_DROP = 28
  */
 const BUS_MAX_TARGET_Y_SPREAD = 40
 
-/** Horizontal clearance between an obstacle's edge and the deflected corridor. */
+/** Horizontal clearance between an obstacle's edge and the innermost corridor lane. */
 const OBSTACLE_CORRIDOR_MARGIN = 20
-/** Vertical clearance between an obstacle's edge and the L-shape jog row. */
+/** Vertical clearance between an obstacle's edge and the innermost L-shape jog row. */
 const OBSTACLE_JOG_MARGIN = 14
+/**
+ * When a bus must deflect around an obstacle, each branch gets its
+ * own parallel lane instead of all converging on a single corridor.
+ * `CORRIDOR_LANE_STRIDE` is the centre-to-centre x spacing between
+ * adjacent vertical corridors; `JOG_LANE_STRIDE` is the y spacing
+ * between adjacent horizontal jog rows. Stride values picked so the
+ * fan reads as N distinct cables rather than one fat smudge.
+ */
+const CORRIDOR_LANE_STRIDE = 12
+const JOG_LANE_STRIDE = 6
 
 /**
  * Produce a `ResolvedEdge` for every link whose endpoints resolve to
@@ -263,7 +273,7 @@ function assignBusRoutes(
     const sourceXs = sorted.map((e) => e.fromPort.absolutePosition.x)
     const sourceXMin = Math.min(...sourceXs)
     const sourceXMax = Math.max(...sourceXs)
-    let corridor: { x: number; jogY: number } | null = null
+    let corridor: { baseX: number; baseJogY: number; goLeft: boolean } | null = null
     if (subgraphs && subgraphs.size > 0) {
       const exclude = new Set<string>()
       const sourceNodeId = group[0]?.fromNodeId
@@ -298,28 +308,42 @@ function assignBusRoutes(
         // nested layouts) the L-shape would invert — fall back to
         // the straight bus rather than draw a bad route.
         const jogValid = side === 'bottom' ? jogY > fromY : jogY < fromY
-        if (jogValid) corridor = { x: corridorX, jogY }
+        if (jogValid) corridor = { baseX: corridorX, baseJogY: jogY, goLeft }
       }
     }
 
+    const N = sorted.length
     for (const [i, edge] of sorted.entries()) {
       const source = edge.fromPort.absolutePosition
       const target = edge.toPort.absolutePosition
-      const points = corridor
-        ? [
-            { x: source.x, y: source.y },
-            { x: source.x, y: corridor.jogY },
-            { x: corridor.x, y: corridor.jogY },
-            { x: corridor.x, y: trunkY },
-            { x: target.x, y: trunkY },
-            { x: target.x, y: target.y },
-          ]
-        : [
-            { x: source.x, y: source.y },
-            { x: source.x, y: trunkY },
-            { x: target.x, y: trunkY },
-            { x: target.x, y: target.y },
-          ]
+      let points: { x: number; y: number }[]
+      if (corridor) {
+        // Per-branch lanes. Lane 0 = leftmost target → corridor lane
+        // *furthest* from the obstacle (outermost); lane N-1 = closest
+        // target → corridor lane just outside the obstacle. The jog
+        // row strides in the matching direction so each branch's
+        // horizontal jog sits above the next branch's vertical
+        // corridor — no two segments share coordinates, no
+        // crossings between lanes.
+        const corridorSign = corridor.goLeft ? -1 : 1
+        const corridorX = corridor.baseX + corridorSign * (N - 1 - i) * CORRIDOR_LANE_STRIDE
+        const jogY = corridor.baseJogY - outwardSign * (N - 1 - i) * JOG_LANE_STRIDE
+        points = [
+          { x: source.x, y: source.y },
+          { x: source.x, y: jogY },
+          { x: corridorX, y: jogY },
+          { x: corridorX, y: trunkY },
+          { x: target.x, y: trunkY },
+          { x: target.x, y: target.y },
+        ]
+      } else {
+        points = [
+          { x: source.x, y: source.y },
+          { x: source.x, y: trunkY },
+          { x: target.x, y: trunkY },
+          { x: target.x, y: target.y },
+        ]
+      }
       edge.route = {
         kind: 'bus',
         busId,
