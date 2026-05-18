@@ -14,7 +14,6 @@
 import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
 import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from '../tree-layout.js'
 import { buildBlocks, findExternalEmitterBlocks } from './blocks.js'
-import { DEFAULTS } from './constants.js'
 import { type Diagnostic, missingSizeDiagnostic, validateGraph } from './diagnostics.js'
 import { computeSubgraphHulls } from './hulls.js'
 import { layoutBlockInternal } from './internal.js'
@@ -22,6 +21,7 @@ import { buildBlockChildren, buildBlockParents } from './outer.js'
 import { breakCycles, buildPrimaryParents } from './parents.js'
 import { applyPinnedPositions } from './pin.js'
 import { rotateLayoutResult } from './rotate.js'
+import { deriveSpacing, type LayoutMetrics } from './spacing.js'
 import { alignSameSubgraphSpine } from './spine.js'
 import type { FlatTreeLayoutResult, InternalLayout, Position, Size } from './types.js'
 
@@ -45,11 +45,20 @@ export interface FlatTreeLayoutOptions {
    * coords.
    */
   pinned?: ReadonlyMap<string, Position>
+  /**
+   * Renderer-supplied measurements. Drives the engine's spacing
+   * (port-label gap, font-em-based clearance, subgraph label
+   * band height). Absent → engine uses its standalone defaults
+   * (em = 12, port-label reach from the core constant). See
+   * {@link ./spacing.ts | LayoutMetrics}.
+   */
+  metrics?: LayoutMetrics
 }
 
-export type { FlatTreeLayoutResult } from './types.js'
 export type { Diagnostic, DiagnosticSeverity } from './diagnostics.js'
 export { createFlatTreeEngine, type FlatTreeEngine, type LayoutRequest } from './engine.js'
+export { deriveSpacing, type LayoutMetrics, type Spacing } from './spacing.js'
+export type { FlatTreeLayoutResult } from './types.js'
 
 /**
  * Lay out the network with the flat-tree engine.
@@ -86,10 +95,11 @@ export function layoutFlatTree(
   shouldFlip: (link: Link) => boolean,
   options: FlatTreeLayoutOptions = {},
 ): FlatTreeLayoutResult {
-  const nodeGap = options.nodeGap ?? DEFAULTS.nodeGap
-  const layerGap = options.layerGap ?? DEFAULTS.layerGap
-  const padding = options.subgraphPadding ?? DEFAULTS.subgraphPadding
-  const labelHeight = options.subgraphLabelHeight ?? DEFAULTS.subgraphLabelHeight
+  // Single source of truth for spacing. All pipeline phases
+  // read from `spacing`; nothing else in the engine touches a
+  // gap literal.
+  const spacing = deriveSpacing(options.metrics, options)
+  const { outerNodeGap, outerLayerGap, subgraphPadding, subgraphLabelHeight } = spacing
 
   // 0. Validate input.
   const diagnostics: Diagnostic[] = validateGraph(graph)
@@ -110,7 +120,7 @@ export function layoutFlatTree(
   for (const [block, members] of blockMembers) {
     internal.set(
       block,
-      layoutBlockInternal(members, parents, sizeById, blockEmitsExternal.has(block)),
+      layoutBlockInternal(members, parents, sizeById, blockEmitsExternal.has(block), spacing),
     )
   }
 
@@ -131,8 +141,8 @@ export function layoutFlatTree(
     treeNodes.push({
       id: block,
       size: {
-        width: layout.width + padding * 2,
-        height: layout.height + padding * 2 + labelHeight,
+        width: layout.width + subgraphPadding * 2,
+        height: layout.height + subgraphPadding * 2 + subgraphLabelHeight,
       },
     })
   }
@@ -147,8 +157,8 @@ export function layoutFlatTree(
   // branching on direction.
   const tree = layoutTree(treeNodes, treeEdges, {
     direction: 'TB',
-    nodeGap,
-    layerGap,
+    nodeGap: outerNodeGap,
+    layerGap: outerLayerGap,
   })
 
   // 5. Spine alignment.
@@ -172,8 +182,8 @@ export function layoutFlatTree(
     graph,
     nodePositions,
     sizeById,
-    padding,
-    labelHeight,
+    subgraphPadding,
+    subgraphLabelHeight,
   )
   const rootBoundsTB = computeRootBounds(nodePositions, sizeById, subgraphBoundsTB)
 
@@ -194,8 +204,8 @@ export function layoutFlatTree(
       graph,
       rotated.nodePositions,
       sizeById,
-      padding,
-      labelHeight,
+      subgraphPadding,
+      subgraphLabelHeight,
     )
     const finalRoot = computeRootBounds(rotated.nodePositions, sizeById, finalSubgraphBounds)
     return {

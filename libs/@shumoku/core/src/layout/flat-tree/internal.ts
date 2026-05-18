@@ -36,12 +36,8 @@
  * + block bbox width and height.
  */
 
-import {
-  DEFAULT_NODE_SIZE,
-  INTERNAL_LAYER_GAP,
-  INTERNAL_NODE_GAP,
-  INTERNAL_ROOT_GAP,
-} from './constants.js'
+import { DEFAULT_NODE_SIZE } from './constants.js'
+import { deriveSpacing, type Spacing } from './spacing.js'
 import type { InternalLayout, Position, Size } from './types.js'
 
 /**
@@ -56,12 +52,17 @@ import type { InternalLayout, Position, Size } from './types.js'
  * - `rootIsExternalEmitter`: when true, switch to the emitter-
  *   with-side-chain variant. Caller can compute this once via
  *   {@link ../blocks.ts | findExternalEmitterBlocks}.
+ * - `spacing`: concrete gap values from {@link ./spacing.ts |
+ *   deriveSpacing}. Optional; absent argument falls back to the
+ *   default derivation (em = 12, port-label reach from core
+ *   constants).
  */
 export function layoutBlockInternal(
   memberIds: readonly string[],
   parents: Map<string, string>,
   sizeById: Map<string, Size>,
   rootIsExternalEmitter = false,
+  spacing: Spacing = deriveSpacing(),
 ): InternalLayout {
   if (memberIds.length === 1) return layoutSingleMember(memberIds[0], sizeById)
 
@@ -72,11 +73,11 @@ export function layoutBlockInternal(
   if (rootIsExternalEmitter && intraRoots.length === 1) {
     const rootId = intraRoots[0]
     if (rootId !== undefined) {
-      return layoutEmitterWithSideChain(rootId, intraChildren, sizeById)
+      return layoutEmitterWithSideChain(rootId, intraChildren, sizeById, spacing)
     }
   }
 
-  return layoutMultiRootRow(intraRoots, intraChildren, sizeById)
+  return layoutMultiRootRow(intraRoots, intraChildren, sizeById, spacing)
 }
 
 /** Trivial layout for a single-node block. */
@@ -100,19 +101,20 @@ function layoutMultiRootRow(
   intraRoots: readonly string[],
   intraChildren: Map<string, string[]>,
   sizeById: Map<string, Size>,
+  spacing: Spacing,
 ): InternalLayout {
   const positions = new Map<string, Position>()
   let cursorX = 0
   let totalHeight = 0
   for (const root of intraRoots) {
-    const sub = layoutWrappedSubtree(root, intraChildren, sizeById)
+    const sub = layoutWrappedSubtree(root, intraChildren, sizeById, spacing)
     for (const [id, pos] of sub.positions) {
       positions.set(id, { x: pos.x + cursorX, y: pos.y })
     }
-    cursorX += sub.width + INTERNAL_ROOT_GAP
+    cursorX += sub.width + spacing.internalRootGap
     if (sub.height > totalHeight) totalHeight = sub.height
   }
-  if (intraRoots.length > 0) cursorX -= INTERNAL_ROOT_GAP
+  if (intraRoots.length > 0) cursorX -= spacing.internalRootGap
   return { positions, width: Math.max(0, cursorX), height: totalHeight }
 }
 
@@ -127,6 +129,7 @@ export function layoutWrappedSubtree(
   rootId: string,
   childrenOf: Map<string, string[]>,
   sizeById: Map<string, Size>,
+  spacing: Spacing = deriveSpacing(),
 ): InternalLayout {
   const positions = new Map<string, Position>()
   const rootSize = sizeById.get(rootId) ?? DEFAULT_NODE_SIZE
@@ -134,7 +137,7 @@ export function layoutWrappedSubtree(
   const kids = childrenOf.get(rootId) ?? []
   const childLayouts = kids.map((c) => ({
     id: c,
-    layout: layoutWrappedSubtree(c, childrenOf, sizeById),
+    layout: layoutWrappedSubtree(c, childrenOf, sizeById, spacing),
   }))
 
   if (childLayouts.length === 0) {
@@ -143,20 +146,20 @@ export function layoutWrappedSubtree(
   }
 
   const bandWidth = childLayouts.reduce(
-    (sum, c, idx) => sum + c.layout.width + (idx > 0 ? INTERNAL_NODE_GAP : 0),
+    (sum, c, idx) => sum + c.layout.width + (idx > 0 ? spacing.internalNodeGap : 0),
     0,
   )
   const rowHeight = childLayouts.reduce((m, c) => Math.max(m, c.layout.height), 0)
   const subtreeWidth = Math.max(rootSize.width, bandWidth)
   positions.set(rootId, { x: subtreeWidth / 2, y: rootSize.height / 2 })
 
-  const cursorY = rootSize.height + INTERNAL_LAYER_GAP
+  const cursorY = rootSize.height + spacing.internalLayerGap
   let cursorX = (subtreeWidth - bandWidth) / 2
   for (const c of childLayouts) {
     for (const [id, pos] of c.layout.positions) {
       positions.set(id, { x: pos.x + cursorX, y: pos.y + cursorY })
     }
-    cursorX += c.layout.width + INTERNAL_NODE_GAP
+    cursorX += c.layout.width + spacing.internalNodeGap
   }
 
   return { positions, width: subtreeWidth, height: cursorY + rowHeight }
@@ -178,6 +181,7 @@ export function layoutEmitterWithSideChain(
   rootId: string,
   intraChildren: Map<string, string[]>,
   sizeById: Map<string, Size>,
+  spacing: Spacing = deriveSpacing(),
 ): InternalLayout {
   const rootSize = sizeById.get(rootId) ?? DEFAULT_NODE_SIZE
   const chain = walkFirstChildChain(rootId, intraChildren)
@@ -192,19 +196,19 @@ export function layoutEmitterWithSideChain(
   positions.set(rootId, { x: rootLocalX, y: rootSize.height / 2 })
 
   // Chain column anchored at the right edge of the root.
-  let cursorY = rootSize.height + INTERNAL_LAYER_GAP
-  const chainColumnLeft = rootSize.width + INTERNAL_ROOT_GAP
+  let cursorY = rootSize.height + spacing.internalLayerGap
+  const chainColumnLeft = rootSize.width + spacing.internalRootGap
   let chainMaxRight = chainColumnLeft
   for (const m of chain) {
     const ms = sizeById.get(m) ?? DEFAULT_NODE_SIZE
     positions.set(m, { x: chainColumnLeft + ms.width / 2, y: cursorY + ms.height / 2 })
-    cursorY += ms.height + INTERNAL_LAYER_GAP
+    cursorY += ms.height + spacing.internalLayerGap
     chainMaxRight = Math.max(chainMaxRight, chainColumnLeft + ms.width)
   }
   // Drop the trailing layer gap — block height ends at the
   // bottom of the last chain member, not at the next would-be
   // slot.
-  if (chain.length > 0) cursorY -= INTERNAL_LAYER_GAP
+  if (chain.length > 0) cursorY -= spacing.internalLayerGap
 
   // Pad left so the root sits at the block's horizontal centre.
   const rightExtent = chainMaxRight - rootLocalX

@@ -15,8 +15,13 @@
  *   shouldFlip,
  *   direction: 'TB',
  *   pinned: new Map([['router-1', { x: 0, y: 0 }]]),
+ *   metrics: { fontEmSize: 14, portLabelOuterReach: 24 },
  * })
  * ```
+ *
+ * `metrics` are renderer-supplied measurements that drive the
+ * engine's spacing derivation (see `./spacing.ts`). Omit them
+ * and the engine falls back to standalone defaults.
  *
  * Callers don't need to construct the `nodesById` map (the
  * facade does it). They still pass `sizeById` because node
@@ -60,14 +65,7 @@ export function createFlatTreeEngine(): FlatTreeEngine {
       const nodesById = new Map(graph.nodes.map((n) => [n.id, n]))
       const subgraphsById = new Map((graph.subgraphs ?? []).map((s) => [s.id, s]))
       const shouldFlip = request.shouldFlip ?? (() => false)
-      return layoutFlatTree(
-        graph,
-        nodesById,
-        subgraphsById,
-        request.sizeById,
-        shouldFlip,
-        request,
-      )
+      return layoutFlatTree(graph, nodesById, subgraphsById, request.sizeById, shouldFlip, request)
     },
   }
 }

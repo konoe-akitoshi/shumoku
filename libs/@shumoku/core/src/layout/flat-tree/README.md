@@ -125,6 +125,11 @@ const result = engine.layout(graph, {
   pinned: new Map([    // optional pin map
     ['router-1', { x: 100, y: 200 }],
   ]),
+  metrics: {           // optional renderer-supplied measurements
+    fontEmSize: 12,
+    portLabelOuterReach: 21,
+    subgraphLabelHeight: 28,
+  },
 })
 
 result.nodePositions       // Map<string, {x,y}>
@@ -147,10 +152,23 @@ The engine computes everything in TB orientation internally and rotates the fina
 
 Pinning a node snaps it to the target position. The node's subgraph cluster shifts together so the group stays intact; other subgraphs are unaffected. Subgraph hulls re-compute after pin application.
 
+### Metrics-driven spacing
+
+Every gap, padding and label-band height the engine uses is computed by `deriveSpacing(metrics, overrides)` in `./spacing.ts`. The pipeline never reads a hardcoded gap value — `index.ts` derives a `Spacing` object once and threads it through every phase.
+
+`LayoutMetrics` are renderer-supplied (all optional):
+
+- `portLabelOuterReach` — actual reach of the renderer's port-label boxes. Drives the internal node/layer/root gaps.
+- `fontEmSize` — base font em-size. Drives `labelClearance` (= em × 2/3) and the default subgraph label-band height.
+- `subgraphLabelHeight` — pre-measured label band height; overrides em-based derivation.
+
+Without metrics, the engine falls back to historical defaults (em = 12, port-label reach from the core `PORT_LABEL_OUTER_REACH` constant). The four spacing fields on `FlatTreeLayoutOptions` (`nodeGap`, `layerGap`, `subgraphPadding`, `subgraphLabelHeight`) always win over the derivation.
+
 ## See also
 
+- `./spacing.ts` — single source of truth for every spacing value
+- `./constants.ts` — `DEFAULT_NODE_SIZE` only; everything else moved to `spacing.ts`
 - `./types.ts` — shared internal types
-- `./constants.ts` — gap derivations from `PORT_LABEL_OUTER_REACH`, `DEFAULTS` for the option defaults
 - `./engine.ts` — public facade
 - `../tree-layout.ts` — the Buchheim implementation the outer tree calls
 - `apps/editor/docs/design/auto-layout-redesign.md` — broader design exploration

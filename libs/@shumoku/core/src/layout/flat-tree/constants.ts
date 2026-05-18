@@ -3,69 +3,15 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Layout constants for the flat-tree engine.
+ * Static fallback constants for the flat-tree engine.
  *
- * Spacing values derive from `PORT_LABEL_OUTER_REACH` so the
- * layout reserves exactly enough room for the renderer's port-
- * label boxes. If the renderer changes its label geometry, the
- * gaps follow automatically.
- *
- * Network-engineering convention: vertical layer gap must fit
- * two facing labels (parent's bottom + child's top); horizontal
- * gap must fit two side labels.
+ * Every spacing value the pipeline reads at runtime is computed
+ * by {@link ./spacing.ts | deriveSpacing}. The only static
+ * constant left here is the fallback node footprint — used when
+ * `sizeById` is missing an entry and no other source can supply
+ * a measured size. Make that a literal because there is, by
+ * definition, no "real" measurement to derive it from.
  */
 
-import { PORT_LABEL_OUTER_REACH } from '../../constants.js'
-
-/**
- * Visible breathing room between adjacent label boxes (or
- * between a label and the next node body). 8 px reads as
- * "clearly separate" without wasting canvas.
- */
-export const LABEL_CLEARANCE = 8
-
-/**
- * Vertical gap between two layers of nodes inside a block.
- * Sized to fit two facing port labels with `LABEL_CLEARANCE`
- * of air between them so the wire curving between the labels
- * stays visible.
- */
-export const INTERNAL_LAYER_GAP = PORT_LABEL_OUTER_REACH * 2 + LABEL_CLEARANCE
-
-/**
- * Horizontal gap between sibling subtrees inside a block.
- * Each sibling may carry a port label on the facing side, so
- * the gap fits one label extent + a little air.
- */
-export const INTERNAL_NODE_GAP = PORT_LABEL_OUTER_REACH + LABEL_CLEARANCE
-
-/**
- * Horizontal gap between an emitter root and its side chain
- * inside a block (the {@link
- * ./internal.ts | layoutEmitterWithSideChain} case). Same
- * reasoning as `INTERNAL_NODE_GAP`.
- */
-export const INTERNAL_ROOT_GAP = PORT_LABEL_OUTER_REACH + LABEL_CLEARANCE
-
-/** Default node footprint when sizeById is missing the entry. */
+/** Fallback node footprint when `sizeById` is missing the entry. */
 export const DEFAULT_NODE_SIZE = { width: 80, height: 60 } as const
-
-/**
- * Engine-wide default option values. Single source of truth so
- * the public `layoutFlatTree` and the test fixtures agree on
- * what "no option supplied" means.
- *
- * Tuned for typical network-diagram sizes (80×60 px nodes,
- * port labels ~30 px wide). Adjust both together if you
- * change the typical scale.
- */
-export const DEFAULTS = {
-  /** Horizontal gap between sibling blocks in the outer tidy-tree. */
-  nodeGap: 40,
-  /** Vertical gap between layers in the outer tidy-tree. */
-  layerGap: 80,
-  /** Padding inside a subgraph hull. */
-  subgraphPadding: 20,
-  /** Reserved vertical space at the top of a subgraph hull for the label. */
-  subgraphLabelHeight: 28,
-} as const
