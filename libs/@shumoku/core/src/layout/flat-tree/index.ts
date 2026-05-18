@@ -14,10 +14,14 @@
 import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
 import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from '../tree-layout.js'
 import { buildBlocks, findExternalEmitterBlocks } from './blocks.js'
+import { DEFAULTS } from './constants.js'
+import { type Diagnostic, missingSizeDiagnostic, validateGraph } from './diagnostics.js'
 import { computeSubgraphHulls } from './hulls.js'
 import { layoutBlockInternal } from './internal.js'
 import { buildBlockChildren, buildBlockParents } from './outer.js'
 import { breakCycles, buildPrimaryParents } from './parents.js'
+import { applyPinnedPositions } from './pin.js'
+import { rotateLayoutResult } from './rotate.js'
 import { alignSameSubgraphSpine } from './spine.js'
 import type { FlatTreeLayoutResult, InternalLayout, Position, Size } from './types.js'
 
@@ -31,9 +35,21 @@ export interface FlatTreeLayoutOptions {
   subgraphPadding?: number
   /** Reserved vertical space at the top of a subgraph hull for the label. */
   subgraphLabelHeight?: number
+  /**
+   * Node positions the caller wants honoured exactly. Each
+   * pinned node snaps to its target after the engine produces
+   * an initial layout; the rest of the node's subgraph shifts
+   * by the same delta so the cluster stays together. Pin
+   * positions are interpreted in the *final output* coordinate
+   * system (after `direction` rotation), not in TB-internal
+   * coords.
+   */
+  pinned?: ReadonlyMap<string, Position>
 }
 
 export type { FlatTreeLayoutResult } from './types.js'
+export type { Diagnostic, DiagnosticSeverity } from './diagnostics.js'
+export { createFlatTreeEngine, type FlatTreeEngine, type LayoutRequest } from './engine.js'
 
 /**
  * Lay out the network with the flat-tree engine.
@@ -70,10 +86,16 @@ export function layoutFlatTree(
   shouldFlip: (link: Link) => boolean,
   options: FlatTreeLayoutOptions = {},
 ): FlatTreeLayoutResult {
-  const nodeGap = options.nodeGap ?? 40
-  const layerGap = options.layerGap ?? 80
-  const padding = options.subgraphPadding ?? 20
-  const labelHeight = options.subgraphLabelHeight ?? 28
+  const nodeGap = options.nodeGap ?? DEFAULTS.nodeGap
+  const layerGap = options.layerGap ?? DEFAULTS.layerGap
+  const padding = options.subgraphPadding ?? DEFAULTS.subgraphPadding
+  const labelHeight = options.subgraphLabelHeight ?? DEFAULTS.subgraphLabelHeight
+
+  // 0. Validate input.
+  const diagnostics: Diagnostic[] = validateGraph(graph)
+  for (const n of graph.nodes) {
+    if (!sizeById.has(n.id)) diagnostics.push(missingSizeDiagnostic(n.id))
+  }
 
   // 1. Parents.
   const parents = buildPrimaryParents(graph.links, nodesById, shouldFlip)
@@ -118,8 +140,13 @@ export function layoutFlatTree(
   for (const [par, kids] of blockChildren) {
     for (const c of kids) treeEdges.push({ parent: par, child: c })
   }
+  // Force TB internally — the engine computes everything in TB
+  // orientation and rotates the final result via rotate.ts.
+  // Lets the block-internal layouts stay TB-specific (root at
+  // top, chain to the right) without each layout module
+  // branching on direction.
   const tree = layoutTree(treeNodes, treeEdges, {
-    direction: options.direction,
+    direction: 'TB',
     nodeGap,
     layerGap,
   })
@@ -140,11 +167,45 @@ export function layoutFlatTree(
     }
   }
 
-  // 7. Subgraph hulls + root bbox.
-  const subgraphBounds = computeSubgraphHulls(graph, nodePositions, sizeById, padding, labelHeight)
-  const rootBounds = computeRootBounds(nodePositions, sizeById, subgraphBounds)
+  // 7. Subgraph hulls + root bbox (still in TB internal coords).
+  const subgraphBoundsTB = computeSubgraphHulls(
+    graph,
+    nodePositions,
+    sizeById,
+    padding,
+    labelHeight,
+  )
+  const rootBoundsTB = computeRootBounds(nodePositions, sizeById, subgraphBoundsTB)
 
-  return { nodePositions, subgraphBounds, rootBounds }
+  // 8. Rotate to the requested direction, if any.
+  const rotated = rotateLayoutResult(
+    options.direction ?? 'TB',
+    nodePositions,
+    subgraphBoundsTB,
+    rootBoundsTB,
+  )
+
+  // 9. Apply pinned positions (in final coord system) and
+  //    re-derive the hulls + root bbox so they follow the
+  //    pinned shifts.
+  if (options.pinned && options.pinned.size > 0) {
+    applyPinnedPositions(graph, options.pinned, rotated.nodePositions)
+    const finalSubgraphBounds = computeSubgraphHulls(
+      graph,
+      rotated.nodePositions,
+      sizeById,
+      padding,
+      labelHeight,
+    )
+    const finalRoot = computeRootBounds(rotated.nodePositions, sizeById, finalSubgraphBounds)
+    return {
+      nodePositions: rotated.nodePositions,
+      subgraphBounds: finalSubgraphBounds,
+      rootBounds: finalRoot,
+      diagnostics,
+    }
+  }
+  return { ...rotated, diagnostics }
 }
 
 /** Bbox covering every node footprint and every subgraph hull. */

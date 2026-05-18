@@ -49,3 +49,23 @@ export const INTERNAL_ROOT_GAP = PORT_LABEL_OUTER_REACH + LABEL_CLEARANCE
 
 /** Default node footprint when sizeById is missing the entry. */
 export const DEFAULT_NODE_SIZE = { width: 80, height: 60 } as const
+
+/**
+ * Engine-wide default option values. Single source of truth so
+ * the public `layoutFlatTree` and the test fixtures agree on
+ * what "no option supplied" means.
+ *
+ * Tuned for typical network-diagram sizes (80×60 px nodes,
+ * port labels ~30 px wide). Adjust both together if you
+ * change the typical scale.
+ */
+export const DEFAULTS = {
+  /** Horizontal gap between sibling blocks in the outer tidy-tree. */
+  nodeGap: 40,
+  /** Vertical gap between layers in the outer tidy-tree. */
+  layerGap: 80,
+  /** Padding inside a subgraph hull. */
+  subgraphPadding: 20,
+  /** Reserved vertical space at the top of a subgraph hull for the label. */
+  subgraphLabelHeight: 28,
+} as const

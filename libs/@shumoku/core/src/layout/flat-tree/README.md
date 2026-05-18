@@ -112,9 +112,45 @@ A few cases the engine *deliberately* doesn't optimise:
 
 - **Heuristic re-balancing.** No multi-start search, no simulated annealing, no quality-function-driven re-layout. The deterministic output is good enough on typical network fixtures; making it better requires either (a) explicit user intent on individual nodes or (b) accepting non-determinism.
 
+## Public API
+
+```ts
+import { createFlatTreeEngine } from '@shumoku/core/layout/flat-tree'
+
+const engine = createFlatTreeEngine()
+const result = engine.layout(graph, {
+  sizeById,            // Map<string, { width: number; height: number }>
+  shouldFlip,          // optional, defaults to never flipping
+  direction: 'TB',     // 'TB' | 'BT' | 'LR' | 'RL', default 'TB'
+  pinned: new Map([    // optional pin map
+    ['router-1', { x: 100, y: 200 }],
+  ]),
+})
+
+result.nodePositions       // Map<string, {x,y}>
+result.subgraphBounds      // Map<string, Bounds>
+result.rootBounds          // Bounds
+result.diagnostics         // Diagnostic[]
+```
+
+The factory `createFlatTreeEngine()` is the recommended entry point. The lower-level `layoutFlatTree(graph, nodesById, subgraphsById, sizeById, shouldFlip, options)` stays exported for callers that need the unwrapped form (existing `network-layout.ts` wiring).
+
+### Direction
+
+The engine computes everything in TB orientation internally and rotates the final result. Pin positions are interpreted in the final coord system.
+
+### Diagnostics
+
+`result.diagnostics` reports input-validation warnings (duplicate node ids, dangling subgraph parents, links to missing nodes, missing node sizes) and engine info (self-loops, cycle breaks). Empty array means clean input.
+
+### Pinned positions
+
+Pinning a node snaps it to the target position. The node's subgraph cluster shifts together so the group stays intact; other subgraphs are unaffected. Subgraph hulls re-compute after pin application.
+
 ## See also
 
 - `./types.ts` — shared internal types
-- `./constants.ts` — gap derivations from `PORT_LABEL_OUTER_REACH`
+- `./constants.ts` — gap derivations from `PORT_LABEL_OUTER_REACH`, `DEFAULTS` for the option defaults
+- `./engine.ts` — public facade
 - `../tree-layout.ts` — the Buchheim implementation the outer tree calls
 - `apps/editor/docs/design/auto-layout-redesign.md` — broader design exploration

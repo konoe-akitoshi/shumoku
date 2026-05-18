@@ -12,6 +12,7 @@
  */
 
 import type { Bounds } from '../../models/types.js'
+import type { Diagnostic } from './diagnostics.js'
 
 /** Node centre position in SVG units. */
 export interface Position {
@@ -66,4 +67,9 @@ export interface FlatTreeLayoutResult {
   subgraphBounds: Map<string, Bounds>
   /** Tight bounding box around everything. */
   rootBounds: Bounds
+  /**
+   * Engine diagnostics — input validation warnings and notable
+   * decisions worth surfacing. Empty array means clean input.
+   */
+  diagnostics: Diagnostic[]
 }
