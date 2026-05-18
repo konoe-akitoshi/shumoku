@@ -158,8 +158,13 @@ export function computeNodeBodySize(node: { label?: string | string[]; spec?: No
  * Falls back to body size when `portsBySide` is omitted (e.g. for
  * a node that hasn't picked port sides yet).
  */
-/** Minimum gap between adjacent port labels so they don't touch. */
-const PORT_LABEL_GAP = 6
+/**
+ * Minimum gap between adjacent port labels so they don't
+ * touch. 12 (was 6) — the bigger value gives visible breathing
+ * room between long labels on densely-packed multi-port nodes
+ * (typical access switch with 4-7 Gi1/0/N ports on its bottom).
+ */
+const PORT_LABEL_GAP = 12
 
 /**
  * Slot width chosen so two adjacent port labels of the given char

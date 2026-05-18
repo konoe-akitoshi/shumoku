@@ -24,11 +24,15 @@ export const NODE_HORIZONTAL_PADDING = 16
 export const MIN_PORT_SPACING = 48
 
 /**
- * Estimated average character width for port/endpoint labels (font-size: 9px).
- * Used by both layout engine (spacing calculation) and renderer (background rect sizing).
- * Derived from empirical measurement of proportional fonts at 9px.
+ * Estimated average character width for port/endpoint labels
+ * (font-size: 9px). Used by both layout engine (spacing
+ * calculation) and renderer (background rect sizing). Slightly
+ * over-estimates a typical proportional-font 9px character —
+ * the safety margin is intentional: when the layout under-
+ * estimates the width, adjacent port labels collide visually,
+ * and there's no recovery once positions are set.
  */
-export const SMALL_LABEL_CHAR_WIDTH = 5.5
+export const SMALL_LABEL_CHAR_WIDTH = 6.5
 
 /** Padding around port label for spacing calculation */
 export const PORT_LABEL_PADDING = 16
