@@ -77,6 +77,39 @@ export interface ResolvedEdge {
   width: number
   /** Original link data (bandwidth, redundancy, vlan, etc.) */
   link: Link
+  /**
+   * Lateral offset for the source endpoint, in SVG units, perpendicular
+   * to the source port's outward normal. Positive = right-hand side of
+   * the normal. Used to fan multiple edges sharing one port apart so the
+   * curves don't visually stack. `0` / `undefined` = no offset.
+   */
+  fromLateralOffset?: number
+  /** Same for the destination endpoint. */
+  toLateralOffset?: number
+  /**
+   * How the renderer should draw this edge. When absent, the renderer
+   * falls back to the standard port-anchored Bezier (today's default).
+   *
+   * Variants:
+   *   - `bus`      — orthogonal T / Christmas-tree polyline sharing
+   *                 a horizontal backbone with siblings of the same
+   *                 fan-out group. `points` carries the polyline
+   *                 (source endpoint → trunk-attach → backbone-leave →
+   *                 target endpoint). `busId` ties this edge to the
+   *                 sibling set so renderers can draw the backbone
+   *                 once and the branches as stubs.
+   *   - `polyline` — orthogonal multi-segment path, no shared backbone.
+   *                 Used for edges that the router preferred to draw
+   *                 with right angles for clarity but didn't qualify
+   *                 as a bus.
+   *
+   * The hit-test geometry continues to live on `points`; `route` is
+   * purely a drawing hint and never invalidates the existing 2-point
+   * fallback used by labels / hit testing / cable-length / BOM.
+   */
+  route?:
+    | { kind: 'bus'; points: Position[]; busId: string; branchIndex: number; branchCount: number }
+    | { kind: 'polyline'; points: Position[] }
 }
 
 // ============================================================================

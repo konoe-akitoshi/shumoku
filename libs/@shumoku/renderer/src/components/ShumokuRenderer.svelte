@@ -651,7 +651,7 @@
     if (!result) return
     replaceMap(nodes, result.nodes)
     replaceMap(ports, result.ports)
-    replaceMap(edges, await routeEdges(result.nodes, result.ports, links))
+    replaceMap(edges, await routeEdges(result.nodes, result.ports, links, subgraphs))
   }
 
   export function commitLabel(portId: string, newLabel: string) {
@@ -767,7 +767,7 @@
   export async function appendLink(link: Link) {
     if (linkExists(links, link.from.node, link.from.port, link.to.node, link.to.port)) return
     links = [...links, link]
-    replaceMap(edges, await routeEdges(nodes, ports, links))
+    replaceMap(edges, await routeEdges(nodes, ports, links, subgraphs))
     onchange?.(links)
   }
 </script>

@@ -30,11 +30,62 @@
   // is no longer consulted for the drawn stroke (it's still on the
   // edge for label midpoint + hit testing, but reduced to a degenerate
   // 2-point line by the router pass).
+  // Lateral offsets fan multiple edges sharing one port apart at the
+  // shared endpoint. Router (`route-edges.ts`) assigns offsets per
+  // group of edges; the bezier path computer applies them perpendicular
+  // to the port's outward normal.
+  //
+  // Edges with `edge.route` set were routed orthogonally (bus / polyline)
+  // by the router and override the default Bezier; the polyline points
+  // are drawn as right-angle segments with rounded corners.
   const pathD = $derived(
-    edge.fromPort && edge.toPort
-      ? bezierEdgePath(edge.fromPort, edge.toPort)
-      : `M ${edge.points[0]?.x ?? 0} ${edge.points[0]?.y ?? 0} L ${edge.points[1]?.x ?? 0} ${edge.points[1]?.y ?? 0}`,
+    edge.route
+      ? polylinePath(edge.route.points)
+      : edge.fromPort && edge.toPort
+        ? bezierEdgePath(
+            { ...edge.fromPort, lateralOffset: edge.fromLateralOffset },
+            { ...edge.toPort, lateralOffset: edge.toLateralOffset },
+          )
+        : `M ${edge.points[0]?.x ?? 0} ${edge.points[0]?.y ?? 0} L ${edge.points[1]?.x ?? 0} ${edge.points[1]?.y ?? 0}`,
   )
+
+  /**
+   * Polyline path with optional corner rounding. Standard SVG L
+   * segments at every joint give a hard 90° look; in practice
+   * network-diagram convention prefers a small radius so the eye
+   * registers the corner without it being aggressively crisp.
+   */
+  function polylinePath(pts: { x: number; y: number }[]): string {
+    if (pts.length === 0) return ''
+    if (pts.length === 1) return `M ${pts[0]?.x ?? 0} ${pts[0]?.y ?? 0}`
+    const r = 6
+    let d = `M ${pts[0]?.x ?? 0} ${pts[0]?.y ?? 0}`
+    for (let i = 1; i < pts.length - 1; i++) {
+      const prev = pts[i - 1]
+      const curr = pts[i]
+      const next = pts[i + 1]
+      if (!prev || !curr || !next) continue
+      const dxIn = curr.x - prev.x
+      const dyIn = curr.y - prev.y
+      const dxOut = next.x - curr.x
+      const dyOut = next.y - curr.y
+      const lenIn = Math.hypot(dxIn, dyIn)
+      const lenOut = Math.hypot(dxOut, dyOut)
+      if (lenIn < 1 || lenOut < 1) {
+        d += ` L ${curr.x} ${curr.y}`
+        continue
+      }
+      const ri = Math.min(r, lenIn / 2, lenOut / 2)
+      const inX = curr.x - (dxIn / lenIn) * ri
+      const inY = curr.y - (dyIn / lenIn) * ri
+      const outX = curr.x + (dxOut / lenOut) * ri
+      const outY = curr.y + (dyOut / lenOut) * ri
+      d += ` L ${inX} ${inY} Q ${curr.x} ${curr.y} ${outX} ${outY}`
+    }
+    const last = pts[pts.length - 1]
+    if (last) d += ` L ${last.x} ${last.y}`
+    return d
+  }
   const link = $derived(edge.link)
   const linkType = $derived(link?.type ?? 'solid')
   const dasharray = $derived(() => {

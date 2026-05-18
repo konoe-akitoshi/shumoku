@@ -27,8 +27,16 @@
 
 export type PortSide = 'top' | 'bottom' | 'left' | 'right'
 
-/** Minimum / maximum "stalk" length in pixels. */
-const MIN_REACH = 40
+/**
+ * Minimum / maximum "stalk" length in pixels.
+ *
+ * MIN_REACH was 40 historically; that was too long for short
+ * cross-row edges where the normal-axis gap was 20-30 px, so
+ * the control point ended up *past* the target node and the
+ * curve had to bend backwards (visible squiggle). 12 is just
+ * enough to register as a curve without overshooting.
+ */
+const MIN_REACH = 12
 const MAX_REACH = 320
 const REACH_RATIO = 0.6
 
@@ -39,20 +47,53 @@ const REACH_RATIO = 0.6
  * side of the node it sits on. The path leaves `from` along that
  * side's outward normal, sweeps through two symmetric control points,
  * and enters `to` along its own side's inward normal.
+ *
+ * `lateralOffset` (optional, on either endpoint) shifts that endpoint
+ * **and** its control point perpendicular to the port's outward
+ * normal, so the curve still leaves / arrives straight along the
+ * normal but starts (or ends) sideways from the port centre. Used by
+ * the router to fan multiple edges sharing one port apart visually
+ * without rerouting through orthogonal segments. Positive = right of
+ * the outward normal in screen coords (y-down). The endpoint *visibly
+ * detaches from the port centre* by the offset — fine for fan-out
+ * decoration but not for tight-tolerance hit testing on the port itself.
  */
 export function bezierEdgePath(
-  from: { absolutePosition: { x: number; y: number }; side?: PortSide },
-  to: { absolutePosition: { x: number; y: number }; side?: PortSide },
+  from: { absolutePosition: { x: number; y: number }; side?: PortSide; lateralOffset?: number },
+  to: { absolutePosition: { x: number; y: number }; side?: PortSide; lateralOffset?: number },
 ): string {
-  const a = from.absolutePosition
-  const b = to.absolutePosition
   const fromSide = from.side ?? 'bottom'
   const toSide = to.side ?? 'top'
+  const [aShiftX, aShiftY] = lateralShift(fromSide, from.lateralOffset ?? 0)
+  const [bShiftX, bShiftY] = lateralShift(toSide, to.lateralOffset ?? 0)
+  const a = { x: from.absolutePosition.x + aShiftX, y: from.absolutePosition.y + aShiftY }
+  const b = { x: to.absolutePosition.x + bShiftX, y: to.absolutePosition.y + bShiftY }
   const normalGap = projectAlongNormal(fromSide, b.x - a.x, b.y - a.y)
   const reach = clamp(normalGap * REACH_RATIO, MIN_REACH, MAX_REACH)
   const [ax, ay] = tangentOffset(fromSide, reach)
   const [bx, by] = tangentOffset(toSide, reach)
   return `M ${a.x} ${a.y} C ${a.x + ax} ${a.y + ay} ${b.x + bx} ${b.y + by} ${b.x} ${b.y}`
+}
+
+/**
+ * Vector that shifts a point sideways from a port by `offset` SVG
+ * units. The shift is perpendicular to the port's outward normal —
+ * for top/bottom ports that's horizontal, for left/right it's
+ * vertical. Sign convention: positive = right of the outward normal
+ * in screen coords (y-down). The 90° rotation matches `bezierOffsetPath`.
+ */
+function lateralShift(side: PortSide, offset: number): [number, number] {
+  if (!offset) return [0, 0]
+  switch (side) {
+    case 'top':
+      return [-offset, 0]
+    case 'bottom':
+      return [offset, 0]
+    case 'left':
+      return [0, offset]
+    case 'right':
+      return [0, -offset]
+  }
 }
 
 /**
