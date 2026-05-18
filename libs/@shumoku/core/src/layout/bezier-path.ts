@@ -27,8 +27,16 @@
 
 export type PortSide = 'top' | 'bottom' | 'left' | 'right'
 
-/** Minimum / maximum "stalk" length in pixels. */
-const MIN_REACH = 40
+/**
+ * Minimum / maximum "stalk" length in pixels.
+ *
+ * MIN_REACH was 40 historically; that was too long for short
+ * cross-row edges where the normal-axis gap was 20-30 px, so
+ * the control point ended up *past* the target node and the
+ * curve had to bend backwards (visible squiggle). 12 is just
+ * enough to register as a curve without overshooting.
+ */
+const MIN_REACH = 12
 const MAX_REACH = 320
 const REACH_RATIO = 0.6
 
