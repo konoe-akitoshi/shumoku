@@ -30,12 +30,12 @@ import {
   LABEL_LINE_HEIGHT,
   NODE_HORIZONTAL_PADDING,
   NODE_VERTICAL_PADDING,
-  SMALL_LABEL_CHAR_WIDTH,
 } from '../constants.js'
 import { getDeviceIcon } from '../icons/index.js'
 import type { Bounds, Direction, NetworkGraph, Node, NodeSpec, Subgraph } from '../models/types.js'
 import { layoutFlatTree } from './flat-tree-layout.js'
 import { rebalanceSubgraphs } from './interaction.js'
+import { measureTextWidth } from './measure-text.js'
 import { decidePortSides, placePorts } from './port-placement.js'
 import type { ResolvedPort } from './resolved-types.js'
 
@@ -158,33 +158,34 @@ export function computeNodeBodySize(node: { label?: string | string[]; spec?: No
  * Falls back to body size when `portsBySide` is omitted (e.g. for
  * a node that hasn't picked port sides yet).
  */
-/**
- * Minimum gap between adjacent port labels so they don't
- * touch. 12 (was 6) — the bigger value gives visible breathing
- * room between long labels on densely-packed multi-port nodes
- * (typical access switch with 4-7 Gi1/0/N ports on its bottom).
- */
+/** Minimum gap between adjacent port labels so they don't touch. */
 const PORT_LABEL_GAP = 12
 
+/** Font size (px) used by the renderer for port labels. */
+const PORT_LABEL_FONT_PX = 9
+
 /**
- * Slot width chosen so two adjacent port labels of the given char
- * count don't visually touch. Falls back to `minPortSpacing` for
- * short labels (e.g. `eth0`) — only inflates for verbose names
- * like `port1.0.1` (9 chars ≈ 50 px text + gap).
+ * Slot width chosen so two adjacent port labels of the given
+ * actual rendered width don't touch. Caller passes the
+ * maximum measured label width across the node's ports;
+ * function returns slot = max(minPortSpacing, labelWidth +
+ * gap). Falls back to `minPortSpacing` for short labels.
  */
-function portSlotWidth(maxLabelChars: number): number {
-  const labelWidth = maxLabelChars * SMALL_LABEL_CHAR_WIDTH + PORT_LABEL_GAP
-  return Math.max(DEFAULTS.minPortSpacing, labelWidth)
+function portSlotWidth(maxLabelPx: number): number {
+  return Math.max(DEFAULTS.minPortSpacing, maxLabelPx + PORT_LABEL_GAP)
 }
 
 export function computeNodeFootprint(
   node: { label?: string | string[]; spec?: NodeSpec },
   portsBySide: PortsBySide = EMPTY_PORTS_BY_SIDE,
-  /** Longest port label on this node, in characters. When 0/omitted
-   *  the slot uses `minPortSpacing` (good for nodes with short
-   *  labels like `eth0`). Pass the max length across ALL sides so
-   *  every side gets a slot wide enough for the widest port. */
-  maxPortLabelChars = 0,
+  /**
+   * Widest port label on this node, in SVG units (px). When 0
+   * /omitted the slot uses `minPortSpacing` (good for nodes
+   * with short labels like `eth0`). Pass the max actual
+   * rendered width across ALL sides so every side gets a slot
+   * wide enough for the widest port.
+   */
+  maxPortLabelPx = 0,
 ): { width: number; height: number } {
   const body = computeNodeBodySize(node)
   const horizPorts = Math.max(portsBySide.top, portsBySide.bottom)
@@ -195,7 +196,7 @@ export function computeNodeFootprint(
   // neighbouring port centres we need side_length ≥ (N + 1) × slot.
   // The N+1 factor also leaves a half-slot margin on each end so
   // the first / last port doesn't sit right on the node corner.
-  const slot = portSlotWidth(maxPortLabelChars)
+  const slot = portSlotWidth(maxPortLabelPx)
   const horizPortReq = horizPorts > 0 ? (horizPorts + 1) * slot : 0
   const vertPortReq = vertPorts > 0 ? (vertPorts + 1) * slot : 0
   return {
@@ -440,7 +441,7 @@ export function layoutNetwork(
   const nodesById = new Map(graph.nodes.map((n) => [n.id, n]))
   const portAssignments = decidePortSides(graph.links, nodesById, opts.direction)
   const portsBySideById = new Map<string, PortsBySide>()
-  const maxLabelCharsById = new Map<string, number>()
+  const maxLabelPxById = new Map<string, number>()
   for (const a of portAssignments) {
     let bucket = portsBySideById.get(a.nodeId)
     if (!bucket) {
@@ -450,9 +451,10 @@ export function layoutNetwork(
     bucket[a.side]++
     const node = nodesById.get(a.nodeId)
     const port = node?.ports?.find((p) => p.id === a.portId)
-    const labelLen = (port?.label ?? a.portId).length
-    if (labelLen > (maxLabelCharsById.get(a.nodeId) ?? 0)) {
-      maxLabelCharsById.set(a.nodeId, labelLen)
+    const labelText = port?.label ?? a.portId
+    const labelPx = measureTextWidth(labelText, PORT_LABEL_FONT_PX)
+    if (labelPx > (maxLabelPxById.get(a.nodeId) ?? 0)) {
+      maxLabelPxById.set(a.nodeId, labelPx)
     }
   }
   // Footprints come from per-side port counts so the box reserves
@@ -462,7 +464,7 @@ export function layoutNetwork(
       (n) =>
         [
           n.id,
-          computeNodeFootprint(n, portsBySideById.get(n.id), maxLabelCharsById.get(n.id) ?? 0),
+          computeNodeFootprint(n, portsBySideById.get(n.id), maxLabelPxById.get(n.id) ?? 0),
         ] as const,
     ),
   )
