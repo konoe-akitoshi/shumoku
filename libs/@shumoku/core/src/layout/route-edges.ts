@@ -145,9 +145,18 @@ export async function routeEdges(
       link,
     })
   }
-  assignBusRoutes(edges, nodes, subgraphs)
+  // Bus routing and obstacle-aware polyline detour are
+  // disabled — every edge renders as the default port-anchored
+  // bezier. Bus produced visually-overlapping trunk lines that
+  // hid which source port maps to which target; the obstacle
+  // detour produced angular polyline shapes inconsistent with
+  // the otherwise smooth bezier look. Keep the helpers
+  // available for future re-enable if needed.
+  void assignBusRoutes
+  void detourAroundObstacles
   assignLaneOffsets(edges)
-  if (subgraphs) detourAroundObstacles(edges, nodes, subgraphs)
+  void nodes
+  void subgraphs
   return edges
 }
 

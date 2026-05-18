@@ -95,11 +95,10 @@ describe('routeEdges — lane offset', () => {
     expect(get('c1:p1')?.fromLateralOffset).toBe(4)
   })
 
-  test('fan-out of 3+ from one node triggers bus routing (not lateral offset)', async () => {
-    // 3 edges crosses the bus threshold. Even though the source
-    // ports are unique, all three share the same source node + bottom
-    // side, so they get bundled into a bus instead of getting lateral
-    // offsets.
+  test('fan-out of 3+ from one node falls through to lateral-offset bezier', async () => {
+    // Bus routing is currently disabled — every edge stays as
+    // the default port-anchored bezier and the lane-offset pass
+    // fans the source side.
     const ports = makePorts([
       ['hub:p1', port('hub:p1', 'hub', 100, 0, 'bottom')],
       ['hub:p2', port('hub:p2', 'hub', 110, 0, 'bottom')],
@@ -116,44 +115,8 @@ describe('routeEdges — lane offset', () => {
     const list = [...edges.values()]
     expect(list.length).toBe(3)
     for (const e of list) {
-      expect(e.route?.kind).toBe('bus')
-      expect(e.route?.points.length).toBe(4)
-      expect(e.fromLateralOffset).toBeUndefined()
+      expect(e.route).toBeUndefined()
     }
-    // All branches share one busId.
-    const busIds = new Set(list.map((e) => (e.route?.kind === 'bus' ? e.route.busId : '')))
-    expect(busIds.size).toBe(1)
-  })
-
-  test('bus trunk Y sits between source and targets, branches ordered by target x', async () => {
-    const ports = makePorts([
-      ['hub:p1', port('hub:p1', 'hub', 50, 0, 'bottom')],
-      ['hub:p2', port('hub:p2', 'hub', 100, 0, 'bottom')],
-      ['hub:p3', port('hub:p3', 'hub', 150, 0, 'bottom')],
-      ['c1:p', port('c1:p', 'c1', 250, 100, 'top')],
-      ['c2:p', port('c2:p', 'c2', 50, 100, 'top')],
-      ['c3:p', port('c3:p', 'c3', 150, 100, 'top')],
-    ])
-    const edges = await routeEdges(NOOP_NODES, ports, [
-      link('hub:p1', 'c1:p'),
-      link('hub:p2', 'c2:p'),
-      link('hub:p3', 'c3:p'),
-    ])
-    const list = [...edges.values()]
-    for (const e of list) {
-      expect(e.route?.kind).toBe('bus')
-      const pts = e.route?.points ?? []
-      // Trunk Y is the same across all branches; source y is 0, target y is 100.
-      const trunkY = pts[1]?.y ?? -1
-      expect(trunkY).toBeGreaterThan(0)
-      expect(trunkY).toBeLessThan(100)
-      expect(pts[2]?.y).toBe(trunkY)
-    }
-    // Branch order: c2 (target x=50) → c3 (150) → c1 (250).
-    const byTarget = new Map(list.map((e) => [e.toPortId, e]))
-    expect(byTarget.get('c2:p')?.route?.branchIndex).toBe(0)
-    expect(byTarget.get('c3:p')?.route?.branchIndex).toBe(1)
-    expect(byTarget.get('c1:p')?.route?.branchIndex).toBe(2)
   })
 
   test('bus rejected when targets straddle different layers (Y spread too large)', async () => {
