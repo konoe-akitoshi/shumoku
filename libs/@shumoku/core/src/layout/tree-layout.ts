@@ -85,6 +85,11 @@ export function layoutTree(
   edges: TreeLayoutEdge[],
   options: TreeLayoutOptions = {},
 ): TreeLayoutResult {
+  // Fallback gap values for callers that don't pass any. The
+  // flat-tree engine — the main consumer — always supplies
+  // these from `deriveSpacing`, so these literals only matter
+  // for direct-callers / tests. Kept as plain literals because
+  // they're a UX-density baseline, not a layout invariant.
   const nodeGap = options.nodeGap ?? 40
   const layerGap = options.layerGap ?? 60
   const direction: Direction = options.direction ?? 'TB'

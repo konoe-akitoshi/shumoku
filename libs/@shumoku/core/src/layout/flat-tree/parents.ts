@@ -53,22 +53,42 @@ export function buildPrimaryParents(
  * Drop the entry for any node whose parent chain leads back to
  * itself. After this pass `parents` is a forest (no cycles).
  *
- * The break is conservative — we walk each start node's chain
- * and remove the entry that closes the cycle. Multi-node cycles
- * are broken by removing one edge per traversal start that
- * sees the cycle; this might over-remove for highly cyclic
- * graphs but those don't arise in real network topologies.
+ * Algorithm:
+ *
+ *   1. Iterate start nodes in stable lexical order so the choice
+ *      of which edge to break is independent of Map insertion
+ *      order (i.e. of YAML / API call ordering).
+ *   2. For each unbroken node, walk the parent chain, remembering
+ *      the path. When a node is revisited, slice the cycle out
+ *      of the path.
+ *   3. Break the edge from the *lexically-last* node in the
+ *      cycle. That heuristic keeps shorter / alphabetically-
+ *      earlier ids (often the "canonical" or "core" devices in
+ *      a network) as the surviving parents and pushes the break
+ *      onto the leaf-ish end. Stable + a mild semantic bias.
+ *   4. Skip nodes that became roots in earlier iterations so we
+ *      don't over-remove edges in tangled graphs.
  */
 export function breakCycles(parents: Map<string, string>): void {
-  for (const start of [...parents.keys()]) {
+  const startNodes = [...parents.keys()].sort((a, b) => a.localeCompare(b))
+  for (const start of startNodes) {
+    if (!parents.has(start)) continue
+    const path: string[] = []
     const seen = new Set<string>()
     let cur: string | undefined = start
     while (cur !== undefined) {
       if (seen.has(cur)) {
-        parents.delete(start)
+        const cycleStart = path.indexOf(cur)
+        const cycleNodes = path.slice(cycleStart)
+        let victim = cycleNodes[0] ?? cur
+        for (const c of cycleNodes) {
+          if (c.localeCompare(victim) > 0) victim = c
+        }
+        parents.delete(victim)
         break
       }
       seen.add(cur)
+      path.push(cur)
       cur = parents.get(cur)
     }
   }

@@ -108,7 +108,7 @@ A few cases the engine *deliberately* doesn't optimise:
 
 - **Wire routing.** The engine produces node positions only. Edge routing is a separate pass (currently per-port bezier).
 
-- **Disconnected components.** Each gets laid out from its own root. The outer bbox covers them all, but there's no explicit "compact packing" pass.
+- **Disconnected components.** Each gets laid out from its own root, then tidy-tree's apportion packs them horizontally without contour overlap. There is **no 2D bin-packing** — when a deep narrow component sits next to a shallow wide one, the vertical space under the wide component is left empty. A post-process bin-pack would reduce wasted canvas at the cost of breaking left-to-right reading order; the engine deliberately preserves the reading order.
 
 - **Heuristic re-balancing.** No multi-start search, no simulated annealing, no quality-function-driven re-layout. The deterministic output is good enough on typical network fixtures; making it better requires either (a) explicit user intent on individual nodes or (b) accepting non-determinism.
 
