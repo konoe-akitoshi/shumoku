@@ -39,13 +39,34 @@ export const PORT_LABEL_PADDING = 16
 
 /**
  * Rendered height of a port label box (font + small bg
- * padding). Used by layout to ensure adjacent nodes are far
- * enough apart vertically (top label of lower node + bottom
- * label of upper node) and horizontally (port labels on
- * left/right sides). Keep in sync with the renderer's
- * port-label-bg rect height.
+ * padding). Keep in sync with the renderer's port-label-bg
+ * rect height.
  */
 export const PORT_LABEL_HEIGHT = 12
+
+/**
+ * Distance from a port's centre to its label's centre, along
+ * the port's outward normal. The renderer offsets the label
+ * away from the port body so the cable line stays clear of
+ * the text. Keep in sync with the renderer's `LABEL_OFFSET`
+ * in `svg-coords.ts`.
+ *
+ * Total per-side label extent (from port to far edge of
+ * label background) ≈ PORT_LABEL_OFFSET + PORT_LABEL_HEIGHT/2
+ * + a small bg padding the renderer adds, ~= 21 px in
+ * practice.
+ */
+export const PORT_LABEL_OFFSET = 12
+
+/**
+ * Outer extent of a port label measured from the port itself,
+ * along the port's outward normal. Includes LABEL_OFFSET,
+ * half the bg rect height, and the renderer's small extra
+ * padding so the result matches the visible label box's far
+ * edge. Layout uses this when reserving inter-layer space so
+ * two facing labels stop touching.
+ */
+export const PORT_LABEL_OUTER_REACH = PORT_LABEL_OFFSET + PORT_LABEL_HEIGHT / 2 + 3
 
 /** Maximum icon width as percentage of node width (0.0 - 1.0) */
 export const MAX_ICON_WIDTH_RATIO = 0.6

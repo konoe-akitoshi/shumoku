@@ -39,7 +39,7 @@
  * tidy-tree and spine alignment.
  */
 
-import { PORT_LABEL_HEIGHT } from '../constants.js'
+import { PORT_LABEL_OUTER_REACH } from '../constants.js'
 import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../models/types.js'
 import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tree-layout.js'
 
@@ -67,29 +67,23 @@ export interface FlatTreeLayoutResult {
 const LABEL_CLEARANCE = 8
 
 /**
- * Horizontal gap between sibling subtrees inside a multi-root
- * subgraph block. Two adjacent siblings may each carry port
- * labels on the facing sides (right of the left sibling, left
- * of the right sibling). We need room for both labels plus a
- * little breathing space.
+ * Vertical gap between layers inside a subgraph block.
+ * Two facing port labels (parent's bottom and child's top)
+ * each extend `PORT_LABEL_OUTER_REACH` from the respective
+ * port — those are the visible boxes the gap has to fit. Add
+ * a small clearance so the wire curving between them is also
+ * visible.
  */
-const INTERNAL_NODE_GAP = PORT_LABEL_HEIGHT + LABEL_CLEARANCE
+const INTERNAL_LAYER_GAP = PORT_LABEL_OUTER_REACH * 2 + LABEL_CLEARANCE
 /**
- * Vertical gap between layers inside a subgraph block. The
- * parent's bottom port label and the child's top port label
- * each occupy `PORT_LABEL_HEIGHT` of vertical space outside
- * their respective node bodies, so the minimum layer gap that
- * keeps both labels readable is `2 * PORT_LABEL_HEIGHT`. We
- * add a small clearance so the wire's curve is also visible
- * between them.
+ * Horizontal gap between sibling subtrees / between an
+ * emitter root and its side chain. Two adjacent nodes may
+ * each carry port labels on the facing sides, so the gap has
+ * to fit `PORT_LABEL_OUTER_REACH` from each plus a tiny
+ * clearance.
  */
-const INTERNAL_LAYER_GAP = PORT_LABEL_HEIGHT * 2 + LABEL_CLEARANCE
-/**
- * Horizontal gap between an emitter root and its side chain.
- * Same rationale as INTERNAL_NODE_GAP: each node may carry a
- * port label on the facing side.
- */
-const INTERNAL_ROOT_GAP = PORT_LABEL_HEIGHT + LABEL_CLEARANCE
+const INTERNAL_NODE_GAP = PORT_LABEL_OUTER_REACH + LABEL_CLEARANCE
+const INTERNAL_ROOT_GAP = PORT_LABEL_OUTER_REACH + LABEL_CLEARANCE
 
 function buildPrimaryParents(
   links: readonly Link[],
