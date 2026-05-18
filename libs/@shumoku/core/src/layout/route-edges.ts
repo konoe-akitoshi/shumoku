@@ -201,10 +201,17 @@ function detourAroundObstacles(
     const blocker = findBezierObstacle(edge, nodes, subgraphs)
     if (!blocker) continue
 
-    // Pick the side of the blocker closer to the target's x so
-    // the trunk of the detour doesn't have to double back.
+    // Pick the side of the blocker that matches the source
+    // port's offset from its node centre. A port sitting on the
+    // left bottom of its node naturally emits the cable leftward;
+    // detouring to the right would force a sharp reverse-jog at
+    // the source. The source-side choice produces the most
+    // visually continuous path.
+    const sourceNode = nodes.get(edge.fromNodeId)
+    const sourceNodeX = sourceNode?.position?.x ?? src.x
+    const portOffsetX = src.x - sourceNodeX
     const blockerCentre = blocker.x + blocker.width / 2
-    const goLeft = tgt.x < blockerCentre
+    const goLeft = portOffsetX !== 0 ? portOffsetX < 0 : tgt.x < blockerCentre
     const corridorX = goLeft
       ? blocker.x - DETOUR_CLEARANCE
       : blocker.x + blocker.width + DETOUR_CLEARANCE
