@@ -52,11 +52,7 @@ describe('layoutFlatTree — pinned positions', () => {
   })
 
   test('pinned node inside subgraph drags the cluster', () => {
-    const env = setUp(
-      [node('a', 'sg'), node('b', 'sg')],
-      [link('a', 'b')],
-      [subgraph('sg')],
-    )
+    const env = setUp([node('a', 'sg'), node('b', 'sg')], [link('a', 'b')], [subgraph('sg')])
     const baseline = layoutFlatTree(
       env.graph,
       env.nodesById,
@@ -64,8 +60,9 @@ describe('layoutFlatTree — pinned positions', () => {
       env.sizeById,
       () => false,
     )
-    const baselineA = baseline.nodePositions.get('a')!
-    const baselineB = baseline.nodePositions.get('b')!
+    const baselineA = baseline.nodePositions.get('a')
+    const baselineB = baseline.nodePositions.get('b')
+    if (!baselineA || !baselineB) throw new Error('expected baseline positions')
     const relativeBA = { x: baselineB.x - baselineA.x, y: baselineB.y - baselineA.y }
 
     const pinned = layoutFlatTree(
@@ -76,8 +73,9 @@ describe('layoutFlatTree — pinned positions', () => {
       () => false,
       { pinned: new Map([['a', { x: 1000, y: 1000 }]]) },
     )
-    const pinnedA = pinned.nodePositions.get('a')!
-    const pinnedB = pinned.nodePositions.get('b')!
+    const pinnedA = pinned.nodePositions.get('a')
+    const pinnedB = pinned.nodePositions.get('b')
+    if (!pinnedA || !pinnedB) throw new Error('expected pinned positions')
     expect(pinnedA).toEqual({ x: 1000, y: 1000 })
     // b's relative position to a is preserved.
     expect(pinnedB.x - pinnedA.x).toBeCloseTo(relativeBA.x, 1)
@@ -85,11 +83,7 @@ describe('layoutFlatTree — pinned positions', () => {
   })
 
   test('subgraph hull moves along with the pinned cluster', () => {
-    const env = setUp(
-      [node('a', 'sg'), node('b', 'sg')],
-      [link('a', 'b')],
-      [subgraph('sg')],
-    )
+    const env = setUp([node('a', 'sg'), node('b', 'sg')], [link('a', 'b')], [subgraph('sg')])
     const baseline = layoutFlatTree(
       env.graph,
       env.nodesById,
@@ -97,7 +91,8 @@ describe('layoutFlatTree — pinned positions', () => {
       env.sizeById,
       () => false,
     )
-    const baselineHull = baseline.subgraphBounds.get('sg')!
+    const baselineHull = baseline.subgraphBounds.get('sg')
+    if (!baselineHull) throw new Error('expected baseline hull')
 
     const pinned = layoutFlatTree(
       env.graph,
@@ -107,7 +102,8 @@ describe('layoutFlatTree — pinned positions', () => {
       () => false,
       { pinned: new Map([['a', { x: 1000, y: 1000 }]]) },
     )
-    const pinnedHull = pinned.subgraphBounds.get('sg')!
+    const pinnedHull = pinned.subgraphBounds.get('sg')
+    if (!pinnedHull) throw new Error('expected pinned hull')
     // Hull moved; size unchanged.
     expect(pinnedHull.width).toBe(baselineHull.width)
     expect(pinnedHull.height).toBe(baselineHull.height)
@@ -116,7 +112,13 @@ describe('layoutFlatTree — pinned positions', () => {
 
   test('empty pin map → identical to no pin', () => {
     const env = setUp([node('a'), node('b')], [link('a', 'b')])
-    const noPin = layoutFlatTree(env.graph, env.nodesById, env.subgraphsById, env.sizeById, () => false)
+    const noPin = layoutFlatTree(
+      env.graph,
+      env.nodesById,
+      env.subgraphsById,
+      env.sizeById,
+      () => false,
+    )
     const emptyPin = layoutFlatTree(
       env.graph,
       env.nodesById,

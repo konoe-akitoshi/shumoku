@@ -73,7 +73,9 @@ function buildFixture(): {
   }
 }
 
-function roundPositions(map: Map<string, { x: number; y: number }>): Record<string, [number, number]> {
+function roundPositions(
+  map: Map<string, { x: number; y: number }>,
+): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {}
   for (const [k, v] of [...map.entries()].sort()) {
     out[k] = [Math.round(v.x), Math.round(v.y)]

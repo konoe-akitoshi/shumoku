@@ -29,7 +29,13 @@ describe('buildBlocks', () => {
     // sg1 contains {root, child1, child2}. root has no external children,
     // so the subgraph has 0 emitters → still one block.
     const graph = makeGraph([node('root', 'sg1'), node('c1', 'sg1'), node('c2', 'sg1')], ['sg1'])
-    const { blockMembers, blockOfNode } = buildBlocks(graph, new Map([['c1', 'root'], ['c2', 'root']]))
+    const { blockMembers, blockOfNode } = buildBlocks(
+      graph,
+      new Map([
+        ['c1', 'root'],
+        ['c2', 'root'],
+      ]),
+    )
     expect(blockMembers.get('sg1')).toEqual(['root', 'c1', 'c2'])
     expect(blockOfNode.get('root')).toBe('sg1')
     expect(blockOfNode.get('c1')).toBe('sg1')
@@ -59,13 +65,7 @@ describe('buildBlocks', () => {
     // child. Let's make it explicit: e1 → extA, e2 → extB. nm is in
     // between e1 and e2 in the tree.
     const graph = makeGraph(
-      [
-        node('e1', 'sg1'),
-        node('nm', 'sg1'),
-        node('e2', 'sg1'),
-        node('extA'),
-        node('extB'),
-      ],
+      [node('e1', 'sg1'), node('nm', 'sg1'), node('e2', 'sg1'), node('extA'), node('extB')],
       ['sg1'],
     )
     const parents = new Map([

@@ -75,7 +75,10 @@ describe('layoutFlatTree — edge cases', () => {
   })
 
   test('disconnected components both lay out', () => {
-    const env = setUp([node('a'), node('b'), node('c'), node('d')], [link('a', 'b'), link('c', 'd')])
+    const env = setUp(
+      [node('a'), node('b'), node('c'), node('d')],
+      [link('a', 'b'), link('c', 'd')],
+    )
     const r = layoutFlatTree(env.graph, env.nodesById, env.subgraphsById, env.sizeById, noFlip)
     expect(r.nodePositions.size).toBe(4)
     // Different roots ⇒ different x columns.
@@ -113,11 +116,7 @@ describe('layoutFlatTree — edge cases', () => {
   })
 
   test('nested subgraph: inner sits inside outer', () => {
-    const env = setUp(
-      [node('a', 'inner')],
-      [],
-      [subgraph('outer'), subgraph('inner', 'outer')],
-    )
+    const env = setUp([node('a', 'inner')], [], [subgraph('outer'), subgraph('inner', 'outer')])
     const r = layoutFlatTree(env.graph, env.nodesById, env.subgraphsById, env.sizeById, noFlip)
     const inner = r.subgraphBounds.get('inner')
     const outer = r.subgraphBounds.get('outer')
@@ -153,12 +152,7 @@ describe('layoutFlatTree — edge cases', () => {
   test('multi-emitter subgraph: two emitters share an x column via spine alignment', () => {
     // sg has two internal members e1 → e2; each emits an external child.
     const env = setUp(
-      [
-        node('e1', 'sg'),
-        node('e2', 'sg'),
-        node('extA'),
-        node('extB'),
-      ],
+      [node('e1', 'sg'), node('e2', 'sg'), node('extA'), node('extB')],
       [link('e1', 'e2'), link('e1', 'extA'), link('e2', 'extB')],
       [subgraph('sg')],
     )
@@ -177,12 +171,7 @@ describe('layoutFlatTree — edge cases', () => {
   test('emitter-with-side-chain: in-subgraph chain sits to the side', () => {
     // sg has root → chain1 → chain2 internally; root emits to external.
     const env = setUp(
-      [
-        node('root', 'sg'),
-        node('chain1', 'sg'),
-        node('chain2', 'sg'),
-        node('ext'),
-      ],
+      [node('root', 'sg'), node('chain1', 'sg'), node('chain2', 'sg'), node('ext')],
       [link('root', 'chain1'), link('chain1', 'chain2'), link('root', 'ext')],
       [subgraph('sg')],
     )

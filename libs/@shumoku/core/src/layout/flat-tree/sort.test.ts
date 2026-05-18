@@ -42,7 +42,11 @@ describe('sortBlocksBySourcePort', () => {
       ['c3', ['c3']],
     ])
     // c1 ← Gi1/0/2, c2 ← Gi1/0/10, c3 ← Gi1/0/1
-    const links = [link('p', 'p1', 'c1', 'p'), link('p', 'p2', 'c2', 'p'), link('p', 'p3', 'c3', 'p')]
+    const links = [
+      link('p', 'p1', 'c1', 'p'),
+      link('p', 'p2', 'c2', 'p'),
+      link('p', 'p3', 'c3', 'p'),
+    ]
     const sorted = sortBlocksBySourcePort(
       ['c1', 'c2', 'c3'],
       'p',
@@ -99,11 +103,7 @@ describe('sortBlocksBySourcePort', () => {
       ['b', ['b']],
       ['c', ['c']],
     ])
-    const links = [
-      link('p', 'p1', 'a', 'p'),
-      link('p', 'p1', 'b', 'p'),
-      link('p', 'p2', 'c', 'p'),
-    ]
+    const links = [link('p', 'p1', 'a', 'p'), link('p', 'p1', 'b', 'p'), link('p', 'p2', 'c', 'p')]
     const sorted = sortBlocksBySourcePort(
       ['b', 'a', 'c'],
       'p',

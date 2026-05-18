@@ -45,8 +45,9 @@ describe('createFlatTreeEngine', () => {
     }
     const sizeById = new Map(graph.nodes.map((n) => [n.id, { width: 80, height: 60 }]))
     const lr = engine.layout(graph, { sizeById, direction: 'LR' })
-    const lrA = lr.nodePositions.get('a')!
-    const lrB = lr.nodePositions.get('b')!
+    const lrA = lr.nodePositions.get('a')
+    const lrB = lr.nodePositions.get('b')
+    if (!lrA || !lrB) throw new Error('expected both positions')
     expect(lrB.x).toBeGreaterThan(lrA.x)
 
     const pinned = engine.layout(graph, {
@@ -68,7 +69,10 @@ describe('createFlatTreeEngine', () => {
       sizeById: new Map(graph.nodes.map((n) => [n.id, { width: 80, height: 60 }])),
     })
     // b sits below a, so a is the tree root and b is its child.
-    expect(result.nodePositions.get('b')!.y).toBeGreaterThan(result.nodePositions.get('a')!.y)
+    const a = result.nodePositions.get('a')
+    const b = result.nodePositions.get('b')
+    if (!a || !b) throw new Error('expected both positions')
+    expect(b.y).toBeGreaterThan(a.y)
   })
 
   test('surfaces diagnostics for missing-size + invalid subgraph parent', () => {

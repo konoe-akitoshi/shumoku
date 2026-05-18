@@ -7,7 +7,9 @@ import {
   layoutWrappedSubtree,
 } from './internal.js'
 
-function sizes(...entries: Array<[string, number, number]>): Map<string, { width: number; height: number }> {
+function sizes(
+  ...entries: Array<[string, number, number]>
+): Map<string, { width: number; height: number }> {
   return new Map(entries.map(([id, w, h]) => [id, { width: w, height: h }]))
 }
 
@@ -114,7 +116,11 @@ describe('layoutWrappedSubtree', () => {
 
   test('root with one child stacks vertically', () => {
     const children = new Map([['root', ['child']]])
-    const layout = layoutWrappedSubtree('root', children, sizes(['root', 80, 60], ['child', 80, 60]))
+    const layout = layoutWrappedSubtree(
+      'root',
+      children,
+      sizes(['root', 80, 60], ['child', 80, 60]),
+    )
     const root = layout.positions.get('root')
     const child = layout.positions.get('child')
     expect(root?.x).toBe(child?.x)
@@ -141,12 +147,7 @@ describe('layoutWrappedSubtree', () => {
 
 describe('layoutEmitterWithSideChain direct', () => {
   test('block width grows with chain depth', () => {
-    const sizesMap = sizes(
-      ['root', 80, 60],
-      ['c1', 60, 40],
-      ['c2', 60, 40],
-      ['c3', 60, 40],
-    )
+    const sizesMap = sizes(['root', 80, 60], ['c1', 60, 40], ['c2', 60, 40], ['c3', 60, 40])
     const shortChain = layoutEmitterWithSideChain('root', new Map([['root', ['c1']]]), sizesMap)
     const longChain = layoutEmitterWithSideChain(
       'root',

@@ -12,7 +12,10 @@ import { layoutFlatTree } from './index.js'
  *   - N access switches in N rooms (subgraphs), each with K APs
  *   total nodes = 2 + N + N*K = 2 + N(1+K)
  */
-function buildCampus(rooms: number, apsPerRoom: number): {
+function buildCampus(
+  rooms: number,
+  apsPerRoom: number,
+): {
   graph: NetworkGraph
   nodesById: Map<string, Node>
   subgraphsById: Map<string, Subgraph>
@@ -94,8 +97,20 @@ describe('flat-tree engine performance smoke', () => {
   test('determinism: repeated calls produce identical positions', () => {
     const env1 = buildCampus(5, 4)
     const env2 = buildCampus(5, 4)
-    const r1 = layoutFlatTree(env1.graph, env1.nodesById, env1.subgraphsById, env1.sizeById, () => false)
-    const r2 = layoutFlatTree(env2.graph, env2.nodesById, env2.subgraphsById, env2.sizeById, () => false)
+    const r1 = layoutFlatTree(
+      env1.graph,
+      env1.nodesById,
+      env1.subgraphsById,
+      env1.sizeById,
+      () => false,
+    )
+    const r2 = layoutFlatTree(
+      env2.graph,
+      env2.nodesById,
+      env2.subgraphsById,
+      env2.sizeById,
+      () => false,
+    )
     for (const [id, pos] of r1.nodePositions) {
       const other = r2.nodePositions.get(id)
       expect(other).toEqual(pos)
