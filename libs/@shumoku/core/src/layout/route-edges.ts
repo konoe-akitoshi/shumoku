@@ -135,7 +135,187 @@ export async function routeEdges(
   }
   assignBusRoutes(edges, nodes, subgraphs)
   assignLaneOffsets(edges)
+  if (subgraphs) detourAroundObstacles(edges, nodes, subgraphs)
   return edges
+}
+
+/** Margin (in SVG units) between the detoured wire and the obstacle bbox. */
+const DETOUR_CLEARANCE = 24
+/** Length of the "stalk" between source/target port and the corridor segment. */
+const DETOUR_STALK = 36
+/** Number of bezier samples to use when checking for obstacle crossings. */
+const DETOUR_SAMPLES = 16
+
+/**
+ * Replace each bezier whose path crosses a non-endpoint node or
+ * subgraph hull with an orthogonal polyline that routes around
+ * the obstacle. Only the edges that actually conflict get
+ * rerouted — most edges keep their clean default bezier.
+ *
+ * This is the layout-level enforcement of the "wires never
+ * overlap non-endpoint geometry" invariant (#280). The detection
+ * is purely geometric: sample the bezier the renderer would
+ * draw, and if any sample sits inside an obstacle bbox, build a
+ * detour. Layout doesn't need to know about routing details, and
+ * routing doesn't need to feed back into placement — the two
+ * concerns stay separate but visually coherent.
+ */
+function detourAroundObstacles(
+  edges: Map<string, ResolvedEdge>,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
+): void {
+  for (const edge of edges.values()) {
+    if (edge.route) continue // bus / lane / preassigned routes are explicit
+    const fromSide = edge.fromPort.side
+    const toSide = edge.toPort.side
+    // Only handle vertical-flow cases for now — they're where the
+    // transit-through-chain pattern shows up. Horizontal flow (LR
+    // direction) would need symmetric treatment along the x axis.
+    const isVerticalFlow =
+      (fromSide === 'bottom' && toSide === 'top') || (fromSide === 'top' && toSide === 'bottom')
+    if (!isVerticalFlow) continue
+
+    const blocker = findBezierObstacle(edge, nodes, subgraphs)
+    if (!blocker) continue
+
+    const src = edge.fromPort.absolutePosition
+    const tgt = edge.toPort.absolutePosition
+    // Pick the side of the blocker closer to the target's x so
+    // the trunk of the detour doesn't have to double back.
+    const blockerCentre = blocker.x + blocker.width / 2
+    const goLeft = tgt.x < blockerCentre
+    const corridorX = goLeft
+      ? blocker.x - DETOUR_CLEARANCE
+      : blocker.x + blocker.width + DETOUR_CLEARANCE
+    const sign = fromSide === 'bottom' ? 1 : -1
+    const stalkOutY = src.y + sign * DETOUR_STALK
+    const stalkInY = tgt.y - sign * DETOUR_STALK
+    const points = [
+      { x: src.x, y: src.y },
+      { x: src.x, y: stalkOutY },
+      { x: corridorX, y: stalkOutY },
+      { x: corridorX, y: stalkInY },
+      { x: tgt.x, y: stalkInY },
+      { x: tgt.x, y: tgt.y },
+    ]
+    edge.route = { kind: 'polyline', points }
+    // Lane offsets are applied at the bezier port — they fight
+    // the polyline corner shape, so clear them for this edge.
+    edge.fromLateralOffset = undefined
+    edge.toLateralOffset = undefined
+  }
+}
+
+/**
+ * Sample the bezier the renderer would draw for `edge` and find
+ * any non-endpoint node or subgraph hull whose bbox the curve
+ * enters. Multiple blockers are merged into one bounding box so
+ * the detour wraps the whole cluster.
+ */
+function findBezierObstacle(
+  edge: ResolvedEdge,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
+): { x: number; y: number; width: number; height: number } | null {
+  const samples = sampleBezier(edge)
+  const sourceAncestors = nodeAncestorSubgraphs(edge.fromNodeId, nodes, subgraphs)
+  const targetAncestors = nodeAncestorSubgraphs(edge.toNodeId, nodes, subgraphs)
+  let merged: { x: number; y: number; width: number; height: number } | null = null
+  const grow = (b: { x: number; y: number; width: number; height: number }) => {
+    if (!merged) {
+      merged = { ...b }
+    } else {
+      const left = Math.min(merged.x, b.x)
+      const top = Math.min(merged.y, b.y)
+      const right = Math.max(merged.x + merged.width, b.x + b.width)
+      const bottom = Math.max(merged.y + merged.height, b.y + b.height)
+      merged = { x: left, y: top, width: right - left, height: bottom - top }
+    }
+  }
+  // Non-endpoint node bodies.
+  for (const [nodeId, node] of nodes) {
+    if (nodeId === edge.fromNodeId || nodeId === edge.toNodeId) continue
+    const bbox = nodeBounds(node)
+    if (!bbox) continue
+    if (samples.some((s) => pointInRect(s.x, s.y, bbox))) grow(bbox)
+  }
+  // Non-endpoint subgraph hulls — but only flag subgraphs that
+  // aren't ancestors of either endpoint. A wire is allowed to
+  // cross the subgraph hull of its own source/target chain;
+  // that's just it leaving / entering the visual group.
+  for (const [sgId, sg] of subgraphs) {
+    if (sourceAncestors.has(sgId) || targetAncestors.has(sgId)) continue
+    if (!sg.bounds) continue
+    if (samples.some((s) => pointInRect(s.x, s.y, sg.bounds as Bounds))) grow(sg.bounds)
+  }
+  return merged
+}
+
+/** Approximate the renderer's port-anchored bezier with N samples. */
+function sampleBezier(edge: ResolvedEdge): Array<{ x: number; y: number }> {
+  const fp = edge.fromPort.absolutePosition
+  const tp = edge.toPort.absolutePosition
+  const dx = tp.x - fp.x
+  const dy = tp.y - fp.y
+  const dist = Math.hypot(dx, dy)
+  const cpDist = Math.max(40, dist * 0.5)
+  const normal = (side: ResolvedPort['side']): { x: number; y: number } => {
+    if (side === 'top') return { x: 0, y: -1 }
+    if (side === 'bottom') return { x: 0, y: 1 }
+    if (side === 'left') return { x: -1, y: 0 }
+    return { x: 1, y: 0 }
+  }
+  const fn = normal(edge.fromPort.side)
+  const tn = normal(edge.toPort.side)
+  const c1 = { x: fp.x + fn.x * cpDist, y: fp.y + fn.y * cpDist }
+  const c2 = { x: tp.x + tn.x * cpDist, y: tp.y + tn.y * cpDist }
+  const out: Array<{ x: number; y: number }> = []
+  for (let i = 0; i <= DETOUR_SAMPLES; i++) {
+    const t = i / DETOUR_SAMPLES
+    const mt = 1 - t
+    out.push({
+      x: mt ** 3 * fp.x + 3 * mt ** 2 * t * c1.x + 3 * mt * t ** 2 * c2.x + t ** 3 * tp.x,
+      y: mt ** 3 * fp.y + 3 * mt ** 2 * t * c1.y + 3 * mt * t ** 2 * c2.y + t ** 3 * tp.y,
+    })
+  }
+  return out
+}
+
+/** Point-in-rectangle test (strict — touching the edge doesn't count). */
+function pointInRect(
+  x: number,
+  y: number,
+  rect: { x: number; y: number; width: number; height: number },
+): boolean {
+  return x > rect.x && x < rect.x + rect.width && y > rect.y && y < rect.y + rect.height
+}
+
+/** Bounding box of a positioned node, or null if it has no position/size. */
+function nodeBounds(node: Node): { x: number; y: number; width: number; height: number } | null {
+  if (!node.position || !node.size) return null
+  return {
+    x: node.position.x - node.size.width / 2,
+    y: node.position.y - node.size.height / 2,
+    width: node.size.width,
+    height: node.size.height,
+  }
+}
+
+/** Set of subgraph ids that contain `nodeId` directly or transitively. */
+function nodeAncestorSubgraphs(
+  nodeId: string,
+  nodes: Map<string, Node>,
+  subgraphs: Map<string, Subgraph>,
+): Set<string> {
+  const out = new Set<string>()
+  let cur: string | undefined = nodes.get(nodeId)?.parent
+  while (cur) {
+    if (out.has(cur)) break
+    out.add(cur)
+    cur = subgraphs.get(cur)?.parent
+  }
+  return out
 }
 
 /**
