@@ -33,6 +33,16 @@ export const SMALL_LABEL_CHAR_WIDTH = 5.5
 /** Padding around port label for spacing calculation */
 export const PORT_LABEL_PADDING = 16
 
+/**
+ * Rendered height of a port label box (font + small bg
+ * padding). Used by layout to ensure adjacent nodes are far
+ * enough apart vertically (top label of lower node + bottom
+ * label of upper node) and horizontally (port labels on
+ * left/right sides). Keep in sync with the renderer's
+ * port-label-bg rect height.
+ */
+export const PORT_LABEL_HEIGHT = 12
+
 /** Maximum icon width as percentage of node width (0.0 - 1.0) */
 export const MAX_ICON_WIDTH_RATIO = 0.6
 
