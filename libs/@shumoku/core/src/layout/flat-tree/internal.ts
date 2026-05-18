@@ -80,7 +80,10 @@ export function layoutBlockInternal(
 }
 
 /** Trivial layout for a single-node block. */
-function layoutSingleMember(id: string | undefined, sizeById: Map<string, Size>): InternalLayout {
+export function layoutSingleMember(
+  id: string | undefined,
+  sizeById: Map<string, Size>,
+): InternalLayout {
   if (id === undefined) return { positions: new Map(), width: 0, height: 0 }
   const sz = sizeById.get(id) ?? DEFAULT_NODE_SIZE
   const positions = new Map<string, Position>()
@@ -178,6 +181,11 @@ export function layoutEmitterWithSideChain(
 ): InternalLayout {
   const rootSize = sizeById.get(rootId) ?? DEFAULT_NODE_SIZE
   const chain = walkFirstChildChain(rootId, intraChildren)
+
+  // No chain → degenerate to a single-member block. Otherwise
+  // the empty chain column would inflate the block width with
+  // a gutter for a chain that isn't there.
+  if (chain.length === 0) return layoutSingleMember(rootId, sizeById)
 
   const positions = new Map<string, Position>()
   const rootLocalX = rootSize.width / 2

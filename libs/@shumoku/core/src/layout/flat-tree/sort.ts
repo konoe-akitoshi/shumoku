@@ -41,7 +41,7 @@ export function sortBlocksBySourcePort(
     const port = nodesById.get(nodeId)?.ports?.find((p) => p.id === portId)
     return port?.label ?? portId
   }
-  const keyOf = (block: BlockId): string => {
+  const keyOf = (block: BlockId): string | null => {
     const members = new Set(blockMembers.get(block) ?? [])
     let best: string | null = null
     for (const link of links) {
@@ -55,16 +55,26 @@ export function sortBlocksBySourcePort(
         best = label
       }
     }
-    // No port link found — push to the end of the sort.
-    return best ?? '~~~'
+    return best
   }
   const subgraphOf = (block: BlockId): string => {
     const primary = blockMembers.get(block)?.[0] ?? block
     return nodesById.get(primary)?.parent ?? ''
   }
   return [...blockIds].sort((a, b) => {
-    const portCmp = keyOf(a).localeCompare(keyOf(b), undefined, { numeric: true })
-    if (portCmp !== 0) return portCmp
+    const ka = keyOf(a)
+    const kb = keyOf(b)
+    // Blocks with no matching source link sort last.
+    if (ka === null && kb === null) {
+      // Both unlinked → fall through to subgraph + id tiebreakers below.
+    } else if (ka === null) {
+      return 1
+    } else if (kb === null) {
+      return -1
+    } else {
+      const portCmp = ka.localeCompare(kb, undefined, { numeric: true })
+      if (portCmp !== 0) return portCmp
+    }
     const sgCmp = subgraphOf(a).localeCompare(subgraphOf(b))
     if (sgCmp !== 0) return sgCmp
     return a.localeCompare(b)
