@@ -30,6 +30,7 @@ import {
   LABEL_LINE_HEIGHT,
   NODE_HORIZONTAL_PADDING,
   NODE_VERTICAL_PADDING,
+  PORT_LABEL_OUTER_REACH,
 } from '../constants.js'
 import { getDeviceIcon } from '../icons/index.js'
 import type { Bounds, Direction, NetworkGraph, Node, NodeSpec, Subgraph } from '../models/types.js'
@@ -477,6 +478,13 @@ export function layoutNetwork(
   // This lets each switch's downstream subtree expand in whatever
   // direction the topology needs, rather than being forced into a
   // single row of sibling containers.
+  // Renderer-derived metrics give the engine an explicit handle
+  // on the label geometry it should size its internal gaps for.
+  // Currently only `portLabelOuterReach` is forwarded (matching
+  // the engine's default, so no visual change), but the seam
+  // exists for future per-renderer tuning. Outer gaps and the
+  // subgraph hull dimensions remain explicit UX choices owned
+  // by this wrapper.
   const result = layoutFlatTree(
     graph,
     nodesById,
@@ -489,6 +497,9 @@ export function layoutNetwork(
       layerGap: opts.topLevelGap,
       subgraphPadding: opts.subgraphPadding,
       subgraphLabelHeight: opts.subgraphLabelHeight,
+      metrics: {
+        portLabelOuterReach: PORT_LABEL_OUTER_REACH,
+      },
     },
   )
   const nodes = new Map<string, Node>()
