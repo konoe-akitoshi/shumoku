@@ -128,3 +128,108 @@ describe('layoutFlatTree diagnostics integration', () => {
     expect(result.diagnostics).toEqual([])
   })
 })
+
+describe('explainability diagnostics (opt-in via { explain: true })', () => {
+  const baseSize = new Map<string, { width: number; height: number }>()
+
+  function setUp(nodes: Node[], links: Link[], subgraphs: Subgraph[] = []) {
+    const graph: NetworkGraph = { name: 't', nodes, links, subgraphs }
+    const nodesById = new Map(nodes.map((n) => [n.id, n]))
+    const subgraphsById = new Map(subgraphs.map((s) => [s.id, s]))
+    const sizeById = new Map<string, { width: number; height: number }>(
+      nodes.map((n) => [n.id, { width: 80, height: 60 }]),
+    )
+    return { graph, nodesById, subgraphsById, sizeById }
+  }
+
+  test('default (no explain) keeps info diagnostics empty for clean input', () => {
+    const env = setUp([node('a'), node('b')], [link('a', 'b')])
+    const result = layoutFlatTree(
+      env.graph,
+      env.nodesById,
+      env.subgraphsById,
+      env.sizeById,
+      () => false,
+    )
+    expect(result.diagnostics.filter((d) => d.severity === 'info')).toEqual([])
+  })
+
+  test('explain emits block-join diagnostic per node', () => {
+    const env = setUp([node('a'), node('b')], [link('a', 'b')])
+    const result = layoutFlatTree(
+      env.graph,
+      env.nodesById,
+      env.subgraphsById,
+      env.sizeById,
+      () => false,
+      { explain: true },
+    )
+    const joins = result.diagnostics.filter((d) => d.code === 'block-join')
+    expect(joins.length).toBe(2)
+    expect(joins.every((d) => d.severity === 'info')).toBe(true)
+  })
+
+  test('explain emits sibling-order with source-port-label reason when port labels differ', () => {
+    const env = setUp(
+      [node('p'), node('a'), node('b')],
+      [
+        // Distinct source ports — sort decided by port label.
+        {
+          from: { node: 'p', port: 'p1' },
+          to: { node: 'a', port: 'q' },
+        },
+        {
+          from: { node: 'p', port: 'p2' },
+          to: { node: 'b', port: 'q' },
+        },
+      ],
+    )
+    const result = layoutFlatTree(
+      env.graph,
+      env.nodesById,
+      env.subgraphsById,
+      env.sizeById,
+      () => false,
+      { explain: true },
+    )
+    const ord = result.diagnostics.find((d) => d.code === 'sibling-order')
+    expect(ord).toBeDefined()
+    expect(ord?.message.includes('source-port-label')).toBe(true)
+  })
+
+  test('explain emits spine-aligned when multi-emitter subgraph forces a shift', () => {
+    const env = setUp(
+      [node('e1', 'sg'), node('e2', 'sg'), node('extA'), node('extB')],
+      [link('e1', 'e2'), link('e1', 'extA'), link('e2', 'extB')],
+      [subgraph('sg')],
+    )
+    const result = layoutFlatTree(
+      env.graph,
+      env.nodesById,
+      env.subgraphsById,
+      env.sizeById,
+      () => false,
+      { explain: true },
+    )
+    expect(result.diagnostics.some((d) => d.code === 'spine-aligned')).toBe(true)
+  })
+
+  test('explain emits cycle-broken when a cycle is detected', () => {
+    const env = setUp(
+      [node('a'), node('b'), node('c')],
+      [link('a', 'b'), link('b', 'c'), link('c', 'a')],
+    )
+    const result = layoutFlatTree(
+      env.graph,
+      env.nodesById,
+      env.subgraphsById,
+      env.sizeById,
+      () => false,
+      { explain: true },
+    )
+    const broken = result.diagnostics.find((d) => d.code === 'cycle-broken')
+    expect(broken).toBeDefined()
+    // The cycle list should appear in the message.
+    expect(broken?.message.includes('→')).toBe(true)
+  })
+})

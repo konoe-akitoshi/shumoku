@@ -25,6 +25,7 @@
  */
 
 import type { Link, Node } from '../../models/types.js'
+import type { Diagnostic } from './diagnostics.js'
 import { sortBlocksBySourcePort } from './sort.js'
 import type { BlockChildren, BlockMembers, BlockOfNode, BlockParents } from './types.js'
 
@@ -64,6 +65,7 @@ export function buildBlockChildren(
   links: readonly Link[],
   nodesById: Map<string, Node>,
   shouldFlip: (link: Link) => boolean,
+  diagnostics?: Diagnostic[],
 ): BlockChildren {
   const out: BlockChildren = new Map()
   for (const [block, par] of blockParents) {
@@ -72,7 +74,10 @@ export function buildBlockChildren(
     out.set(par, list)
   }
   for (const [par, kids] of out) {
-    out.set(par, sortBlocksBySourcePort(kids, par, blockMembers, links, nodesById, shouldFlip))
+    out.set(
+      par,
+      sortBlocksBySourcePort(kids, par, blockMembers, links, nodesById, shouldFlip, diagnostics),
+    )
   }
   return out
 }

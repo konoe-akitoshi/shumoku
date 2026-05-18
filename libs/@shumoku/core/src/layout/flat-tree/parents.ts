@@ -24,6 +24,7 @@
  */
 
 import type { Link, Node } from '../../models/types.js'
+import { cycleBreakDiagnostic, type Diagnostic } from './diagnostics.js'
 
 /**
  * Build the primary tree-parent for each node. The map is
@@ -69,7 +70,7 @@ export function buildPrimaryParents(
  *   4. Skip nodes that became roots in earlier iterations so we
  *      don't over-remove edges in tangled graphs.
  */
-export function breakCycles(parents: Map<string, string>): void {
+export function breakCycles(parents: Map<string, string>, diagnostics?: Diagnostic[]): void {
   const startNodes = [...parents.keys()].sort((a, b) => a.localeCompare(b))
   for (const start of startNodes) {
     if (!parents.has(start)) continue
@@ -85,6 +86,7 @@ export function breakCycles(parents: Map<string, string>): void {
           if (c.localeCompare(victim) > 0) victim = c
         }
         parents.delete(victim)
+        diagnostics?.push(cycleBreakDiagnostic(victim, cycleNodes))
         break
       }
       seen.add(cur)

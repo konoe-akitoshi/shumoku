@@ -39,6 +39,7 @@
  */
 
 import type { NetworkGraph } from '../../models/types.js'
+import { blockJoinDiagnostic, type Diagnostic } from './diagnostics.js'
 import type { BlockMembers, BlockOfNode } from './types.js'
 
 export interface BlockPartition {
@@ -56,7 +57,11 @@ export interface BlockPartition {
  *   - `parents` — primary-parent map from {@link
  *     ./parents.ts | buildPrimaryParents}.
  */
-export function buildBlocks(graph: NetworkGraph, parents: Map<string, string>): BlockPartition {
+export function buildBlocks(
+  graph: NetworkGraph,
+  parents: Map<string, string>,
+  diagnostics?: Diagnostic[],
+): BlockPartition {
   const subgraphMembers = groupBySubgraph(graph)
   const isEmitter = findEmitters(subgraphMembers, parents)
 
@@ -68,6 +73,7 @@ export function buildBlocks(graph: NetworkGraph, parents: Map<string, string>): 
     if (!n.parent) {
       blockOfNode.set(n.id, n.id)
       blockMembers.set(n.id, [n.id])
+      diagnostics?.push(blockJoinDiagnostic(n.id, n.id, 'top-level-singleton'))
     }
   }
 
@@ -76,13 +82,17 @@ export function buildBlocks(graph: NetworkGraph, parents: Map<string, string>): 
     if (emitters.length <= 1) {
       // Collapse: one block holds the whole subgraph.
       const blockId = sg
-      for (const m of members) blockOfNode.set(m, blockId)
+      for (const m of members) {
+        blockOfNode.set(m, blockId)
+        diagnostics?.push(blockJoinDiagnostic(m, blockId, 'single-emitter-subgraph'))
+      }
       blockMembers.set(blockId, [...members])
     } else {
       // Split: each emitter becomes its own block.
       for (const e of emitters) {
         blockOfNode.set(e, e)
         blockMembers.set(e, [e])
+        diagnostics?.push(blockJoinDiagnostic(e, e, 'emitter-of-multi-emitter-subgraph'))
       }
       // Non-emitter members join the block of their nearest
       // tree-parent emitter inside the same subgraph. If none
@@ -98,9 +108,11 @@ export function buildBlocks(graph: NetworkGraph, parents: Map<string, string>): 
         if (cur !== undefined && memberSet.has(cur) && isEmitter.has(cur)) {
           blockOfNode.set(m, cur)
           blockMembers.get(cur)?.push(m)
+          diagnostics?.push(blockJoinDiagnostic(m, cur, 'non-emitter-joined-nearest-emitter'))
         } else {
           blockOfNode.set(m, m)
           blockMembers.set(m, [m])
+          diagnostics?.push(blockJoinDiagnostic(m, m, 'top-level-singleton'))
         }
       }
     }

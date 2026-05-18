@@ -146,7 +146,9 @@ The engine computes everything in TB orientation internally and rotates the fina
 
 ### Diagnostics
 
-`result.diagnostics` reports input-validation warnings (duplicate node ids, dangling subgraph parents, links to missing nodes, missing node sizes) and engine info (self-loops, cycle breaks). Empty array means clean input.
+`result.diagnostics` reports input-validation warnings (duplicate node ids, dangling subgraph parents, links to missing nodes, missing node sizes) and engine info (self-loops). Empty array means clean input.
+
+Pass `{ explain: true }` to additionally surface per-decision *explainability* diagnostics — `block-join` (why each node ended up in its block), `sibling-order` (what key decided the order under each parent), `spine-aligned` (where the spine pass fired), `cycle-broken` (which edge was dropped to break a primary-parent cycle). These are info-level and verbose; off by default so production callers don't pay the cost. Useful when investigating a layout that looks wrong.
 
 ### Pinned positions
 

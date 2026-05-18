@@ -125,11 +125,71 @@ export function missingSizeDiagnostic(nodeId: string): Diagnostic {
 }
 
 /** Diagnostic for cycle breaking. */
-export function cycleBreakDiagnostic(nodeId: string): Diagnostic {
+export function cycleBreakDiagnostic(nodeId: string, cycle: readonly string[]): Diagnostic {
   return {
     severity: 'info',
     code: 'cycle-broken',
-    message: `Primary-parent cycle through node '${nodeId}' was broken to keep the graph acyclic.`,
+    message: `Primary-parent cycle through [${cycle.join(' → ')}] was broken by dropping the parent edge of node '${nodeId}' (lexically-last member of the cycle).`,
     ref: { kind: 'node', id: nodeId },
+  }
+}
+
+/**
+ * Why a node ended up in a particular block. Most cases are
+ * structural (one block per single-emitter subgraph, etc.) but
+ * non-emitter joins to the nearest emitter ancestor are worth
+ * surfacing when debugging a multi-emitter subgraph's split.
+ */
+export function blockJoinDiagnostic(
+  nodeId: string,
+  blockId: string,
+  reason:
+    | 'top-level-singleton'
+    | 'single-emitter-subgraph'
+    | 'emitter-of-multi-emitter-subgraph'
+    | 'non-emitter-joined-nearest-emitter',
+): Diagnostic {
+  return {
+    severity: 'info',
+    code: 'block-join',
+    message: `Node '${nodeId}' joined block '${blockId}' (reason: ${reason}).`,
+    ref: { kind: 'node', id: nodeId },
+  }
+}
+
+/**
+ * Why a sibling-block sort ordering was chosen. Emitted at most
+ * once per parent block whose children were sorted.
+ */
+export function siblingOrderDiagnostic(
+  parentBlockId: string,
+  reason: 'source-port-label' | 'id-tiebreaker' | 'singleton',
+  order: readonly string[],
+): Diagnostic {
+  return {
+    severity: 'info',
+    code: 'sibling-order',
+    message: `Sibling blocks under '${parentBlockId}' ordered by ${reason}: [${order.join(', ')}].`,
+  }
+}
+
+/**
+ * Spine alignment shifted a child block onto its same-subgraph
+ * parent's x column. Useful when investigating "why is this
+ * subgraph rendering as a narrow strip?" — when present, it's
+ * working as designed; when absent for a vertical-strip case,
+ * the spine detection missed.
+ */
+export function spineAlignedDiagnostic(
+  parentBlockId: string,
+  childBlockId: string,
+  subgraphId: string,
+  shift: number,
+): Diagnostic {
+  return {
+    severity: 'info',
+    code: 'spine-aligned',
+    message: `Spine alignment pulled block '${childBlockId}' onto x of '${parentBlockId}' (subgraph '${subgraphId}', shift ${shift.toFixed(1)}px).`,
+    ref: { kind: 'subgraph', id: subgraphId },
   }
 }

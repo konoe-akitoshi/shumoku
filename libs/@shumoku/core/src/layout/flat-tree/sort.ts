@@ -15,6 +15,7 @@
  */
 
 import type { Link, Node } from '../../models/types.js'
+import { type Diagnostic, siblingOrderDiagnostic } from './diagnostics.js'
 import type { BlockId, BlockMembers } from './types.js'
 
 /**
@@ -35,6 +36,7 @@ export function sortBlocksBySourcePort(
   links: readonly Link[],
   nodesById: Map<string, Node>,
   shouldFlip: (link: Link) => boolean,
+  diagnostics?: Diagnostic[],
 ): BlockId[] {
   const parentMembers = new Set(blockMembers.get(parentBlockId) ?? [])
   const portLabelOf = (nodeId: string, portId: string): string => {
@@ -61,7 +63,8 @@ export function sortBlocksBySourcePort(
     const primary = blockMembers.get(block)?.[0] ?? block
     return nodesById.get(primary)?.parent ?? ''
   }
-  return [...blockIds].sort((a, b) => {
+  let portLabelDecided = false
+  const ordered = [...blockIds].sort((a, b) => {
     const ka = keyOf(a)
     const kb = keyOf(b)
     // Blocks with no matching source link sort last.
@@ -73,10 +76,23 @@ export function sortBlocksBySourcePort(
       return -1
     } else {
       const portCmp = ka.localeCompare(kb, undefined, { numeric: true })
-      if (portCmp !== 0) return portCmp
+      if (portCmp !== 0) {
+        portLabelDecided = true
+        return portCmp
+      }
     }
     const sgCmp = subgraphOf(a).localeCompare(subgraphOf(b))
     if (sgCmp !== 0) return sgCmp
     return a.localeCompare(b)
   })
+  if (diagnostics && ordered.length > 1) {
+    diagnostics.push(
+      siblingOrderDiagnostic(
+        parentBlockId,
+        portLabelDecided ? 'source-port-label' : 'id-tiebreaker',
+        ordered,
+      ),
+    )
+  }
+  return ordered
 }

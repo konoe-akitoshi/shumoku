@@ -53,6 +53,18 @@ export interface FlatTreeLayoutOptions {
    * {@link ./spacing.ts | LayoutMetrics}.
    */
   metrics?: LayoutMetrics
+  /**
+   * When true, every pipeline phase appends explainability
+   * `Diagnostic`s describing why decisions were made (which
+   * cycle edge was broken, why a node joined its block, what
+   * sort key drove sibling order, when spine alignment fired,
+   * etc.). Default false — these are info-level and verbose,
+   * useful for debugging snapshots that look wrong but noise
+   * for production callers. Input-validation diagnostics
+   * (missing-node-size, link-endpoint-missing, …) are emitted
+   * regardless of this flag.
+   */
+  explain?: boolean
 }
 
 export type { Diagnostic, DiagnosticSeverity } from './diagnostics.js'
@@ -106,13 +118,17 @@ export function layoutFlatTree(
   for (const n of graph.nodes) {
     if (!sizeById.has(n.id)) diagnostics.push(missingSizeDiagnostic(n.id))
   }
+  // Explainability bucket — only populated when the caller
+  // opted in. Separate sink so the input-validation bucket
+  // stays clean for callers who don't want the verbosity.
+  const explain = options.explain ? diagnostics : undefined
 
   // 1. Parents.
   const parents = buildPrimaryParents(graph.links, nodesById, shouldFlip)
-  breakCycles(parents)
+  breakCycles(parents, explain)
 
   // 2. Blocks.
-  const { blockOfNode, blockMembers } = buildBlocks(graph, parents)
+  const { blockOfNode, blockMembers } = buildBlocks(graph, parents, explain)
   const blockEmitsExternal = findExternalEmitterBlocks(blockMembers, parents)
 
   // 3. Internal layout per block.
@@ -132,6 +148,7 @@ export function layoutFlatTree(
     graph.links,
     nodesById,
     shouldFlip,
+    explain,
   )
 
   // Block size for tidy-tree includes the hull padding + label
@@ -163,7 +180,7 @@ export function layoutFlatTree(
 
   // 5. Spine alignment.
   const blockPositions = new Map(tree.positions)
-  alignSameSubgraphSpine(blockPositions, blockChildren, blockMembers, nodesById)
+  alignSameSubgraphSpine(blockPositions, blockChildren, blockMembers, nodesById, explain)
 
   // 6. Expand to absolute node positions.
   const nodePositions = new Map<string, Position>()

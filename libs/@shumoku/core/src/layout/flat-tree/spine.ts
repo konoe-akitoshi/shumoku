@@ -26,6 +26,7 @@
  */
 
 import type { Node } from '../../models/types.js'
+import { type Diagnostic, spineAlignedDiagnostic } from './diagnostics.js'
 import type { BlockChildren, BlockId, BlockMembers, Position } from './types.js'
 
 /**
@@ -38,6 +39,7 @@ export function alignSameSubgraphSpine(
   blockChildren: BlockChildren,
   blockMembers: BlockMembers,
   nodesById: Map<string, Node>,
+  diagnostics?: Diagnostic[],
 ): void {
   const subgraphOf = (block: BlockId): string | null => {
     const primary = blockMembers.get(block)?.[0]
@@ -57,7 +59,11 @@ export function alignSameSubgraphSpine(
       const parentX = positions.get(block)?.x
       const spineX = positions.get(spine)?.x
       if (parentX !== undefined && spineX !== undefined && parentX !== spineX) {
-        shiftCluster(kids, blockChildren, positions, parentX - spineX)
+        const shift = parentX - spineX
+        shiftCluster(kids, blockChildren, positions, shift)
+        if (parentSg) {
+          diagnostics?.push(spineAlignedDiagnostic(block, spine, parentSg, shift))
+        }
       }
     }
     for (const c of kids) queue.push(c)
