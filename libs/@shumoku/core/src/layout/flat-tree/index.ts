@@ -18,6 +18,7 @@ import { type Diagnostic, missingSizeDiagnostic, validateGraph } from './diagnos
 import { computeSubgraphHulls } from './hulls.js'
 import { layoutBlockInternal } from './internal.js'
 import { buildBlockChildren, buildBlockParents } from './outer.js'
+import { reorderForOverlay } from './overlay-reorder.js'
 import { breakCycles, buildPrimaryParents } from './parents.js'
 import { applyPinnedPositions } from './pin.js'
 import { rotateLayoutResult } from './rotate.js'
@@ -65,6 +66,17 @@ export interface FlatTreeLayoutOptions {
    * regardless of this flag.
    */
   explain?: boolean
+  /**
+   * When true, after the primary source-port sort the engine
+   * runs a one-pass overlay-aware reorder over each parent's
+   * children to bring overlay-edge-connected siblings closer.
+   * Reduces crossings caused by HA / redundancy / multi-parent
+   * edges in topologies where the primary sort placed peers
+   * far apart. Deterministic (stable barycenter with id
+   * tiebreak). Off by default — opt in once validated against
+   * the quality harness for your topology shape.
+   */
+  overlayReorder?: boolean
 }
 
 export type { Diagnostic, DiagnosticSeverity } from './diagnostics.js'
@@ -150,6 +162,14 @@ export function layoutFlatTree(
     shouldFlip,
     explain,
   )
+  // Optional overlay-aware reorder. Runs *after* the primary
+  // port-label sort so port-label-sorted topologies stay
+  // untouched; the reorder only takes effect on parents whose
+  // overlay edges suggest a tighter packing.
+  if (options.overlayReorder) {
+    const overlayLinks = graph.links.filter((link) => link.redundancy)
+    reorderForOverlay(blockChildren, overlayLinks, blockOfNode, explain)
+  }
 
   // Block size for tidy-tree includes the hull padding + label
   // height so adjacent hulls don't overlap.

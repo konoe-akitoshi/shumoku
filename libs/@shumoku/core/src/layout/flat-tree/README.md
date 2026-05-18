@@ -154,6 +154,14 @@ Pass `{ explain: true }` to additionally surface per-decision *explainability* d
 
 Pinning a node snaps it to the target position. The node's subgraph cluster shifts together so the group stays intact; other subgraphs are unaffected. Subgraph hulls re-compute after pin application.
 
+### Overlay-aware sibling reorder
+
+When `options.overlayReorder` is set, after the primary source-port sort the engine runs a one-pass overlay-aware reorder over each parent's children. The pass uses a greedy adjacent-swap that strictly reduces the *total overlay span* — the sum of ordinal distances between sibling subtrees connected by an overlay edge (`link.redundancy`).
+
+Span captures both the readability of overlay edges (adjacent HA peers read cleanly; distant ones snake across siblings) and indirectly crossings (longer-span edges are more likely to cross). The strict-decrease guard makes the pass safe to run by default: it only changes the layout when there's a measurable improvement, and the algorithm is deterministic (left-to-right adjacent swap with stable tiebreak).
+
+Off by default. Opt in once you've validated the corpus shape via the quality harness.
+
 ### Metrics-driven spacing
 
 Every gap, padding and label-band height the engine uses is computed by `deriveSpacing(metrics, overrides)` in `./spacing.ts`. The pipeline never reads a hardcoded gap value — `index.ts` derives a `Spacing` object once and threads it through every phase.

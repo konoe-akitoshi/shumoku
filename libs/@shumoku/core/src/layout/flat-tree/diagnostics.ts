@@ -171,6 +171,11 @@ export function blockJoinDiagnostic(
  *     to subgraph-clustering + lexical id. The diagnostic
  *     surfaces this so an editor / harness can flag fixtures
  *     where the engine had no primary signal to rely on.
+ *   - `overlay-barycenter` — after the primary sort, the
+ *     overlay-aware reorder pass shifted these children to
+ *     bring overlay-edge-connected pairs closer. Only emitted
+ *     when `options.overlayReorder` is on AND the pass
+ *     actually changed the order.
  *   - `id-tiebreaker` — deprecated; emitted by the previous
  *     diagnostics PR. New runs use `source-port-label` or
  *     `port-label-absent-fallback`.
@@ -178,7 +183,12 @@ export function blockJoinDiagnostic(
  */
 export function siblingOrderDiagnostic(
   parentBlockId: string,
-  reason: 'source-port-label' | 'port-label-absent-fallback' | 'id-tiebreaker' | 'singleton',
+  reason:
+    | 'source-port-label'
+    | 'port-label-absent-fallback'
+    | 'overlay-barycenter'
+    | 'id-tiebreaker'
+    | 'singleton',
   order: readonly string[],
 ): Diagnostic {
   return {

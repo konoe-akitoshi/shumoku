@@ -191,6 +191,22 @@ export const CORPUS: readonly CorpusFixture[] = [
     ),
   },
   {
+    name: 'ha-crossing',
+    description:
+      'core with 4 sibling switches; sw1 and sw3 are HA peers — without overlay-reorder the HA edge has to span sw2',
+    graph: graph(
+      'ha-crossing',
+      ['core', 'sw1', 'sw2', 'sw3', 'sw4'].map((id) => n(id)),
+      [
+        l('core', 'sw1'),
+        l('core', 'sw2'),
+        l('core', 'sw3'),
+        l('core', 'sw4'),
+        l('sw1', 'sw3', { redundancy: 'ha' }),
+      ],
+    ),
+  },
+  {
     name: 'no-port-labels',
     description:
       'star with every link using the same port name → sibling sort hits port-label fallback',
