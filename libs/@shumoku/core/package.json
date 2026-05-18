@@ -58,6 +58,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest --passWithNoTests",
+    "quality": "vitest run src/layout/quality/harness.test.ts --reporter verbose",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write ."
