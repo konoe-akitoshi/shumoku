@@ -251,31 +251,43 @@ function buildBlocks(
       blockMembers.set(n.id, [n.id])
     }
   }
-  for (const [sg, members] of subgraphMembers) {
+  // Every emitter is its own single-member block. Non-emitter
+  // members are grouped by the nearest non-emitter chain root
+  // (the deepest non-emitter member with no non-emitter
+  // tree-parent inside the same subgraph). This way an
+  // emitter that sits above a downstream chain (e.g. NOC's
+  // noc01-rt01 above noc-sw01 -> noc-ap01) presents to the
+  // outer tidy-tree as a parent with N outer children: one
+  // child for each non-emitter chain hanging off it, plus one
+  // child for each external downlink target. Tidy-tree then
+  // spreads them all symmetrically — no special case needed
+  // for the "transit wire vs internal chain" conflict; the
+  // chain just sits on one side and the external target on
+  // the other.
+  for (const [, members] of subgraphMembers) {
     const memberSet = new Set(members)
-    const emitters = members.filter((m) => isEmitter.has(m))
-    if (emitters.length <= 1) {
-      const blockId = sg
-      for (const m of members) blockOfNode.set(m, blockId)
-      blockMembers.set(blockId, [...members])
-    } else {
-      for (const e of emitters) {
-        blockOfNode.set(e, e)
-        blockMembers.set(e, [e])
+    for (const m of members) {
+      if (!isEmitter.has(m)) continue
+      blockOfNode.set(m, m)
+      blockMembers.set(m, [m])
+    }
+    for (const m of members) {
+      if (isEmitter.has(m)) continue
+      // Walk up to find this non-emitter's chain root: the
+      // topmost non-emitter ancestor still inside the subgraph.
+      let chainRoot = m
+      let walker: string | undefined = parents.get(m)
+      while (walker !== undefined && memberSet.has(walker) && !isEmitter.has(walker)) {
+        chainRoot = walker
+        walker = parents.get(walker)
       }
-      for (const m of members) {
-        if (isEmitter.has(m)) continue
-        let cur: string | undefined = parents.get(m)
-        while (cur !== undefined && memberSet.has(cur) && !isEmitter.has(cur)) {
-          cur = parents.get(cur)
-        }
-        if (cur !== undefined && memberSet.has(cur) && isEmitter.has(cur)) {
-          blockOfNode.set(m, cur)
-          blockMembers.get(cur)?.push(m)
-        } else {
-          blockOfNode.set(m, m)
-          blockMembers.set(m, [m])
-        }
+      const existing = blockMembers.get(chainRoot)
+      if (existing) {
+        if (!existing.includes(m)) existing.push(m)
+        blockOfNode.set(m, chainRoot)
+      } else {
+        blockOfNode.set(m, chainRoot)
+        blockMembers.set(chainRoot, m === chainRoot ? [chainRoot] : [chainRoot, m])
       }
     }
   }
@@ -370,14 +382,19 @@ function alignSameSubgraphSpine(
     visited.add(block)
     const parentSg = subgraphOf(block)
     const kids = blockChildren.get(block) ?? []
+    // Spine-align only when the parent has exactly one child:
+    // a pure chain reads naturally as a vertical column. When
+    // the parent has multiple children, let tidy-tree's natural
+    // sibling spread distribute them — forcing one child onto
+    // the parent's column would push the other siblings (and
+    // their subtrees) sideways and crowd them against unrelated
+    // neighbours. The "RT with two downlinks should fan out
+    // evenly, with the chain on one side as just another child"
+    // intuition.
     let spine: string | null = null
-    if (parentSg) {
-      for (const c of kids) {
-        if (subgraphOf(c) === parentSg) {
-          spine = c
-          break
-        }
-      }
+    if (parentSg && kids.length === 1) {
+      const onlyKid = kids[0]
+      if (onlyKid && subgraphOf(onlyKid) === parentSg) spine = onlyKid
     }
     if (spine) {
       const parentX = positions.get(block)?.x
