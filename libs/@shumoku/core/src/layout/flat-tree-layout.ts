@@ -160,6 +160,17 @@ function layoutBlockInternal(
   memberIds: readonly string[],
   parents: Map<string, string>,
   sizeById: Map<string, { width: number; height: number }>,
+  /**
+   * When true, the block's intra-root member emits a tree-edge
+   * to a node outside the block (typical for the upstream
+   * switch of an access subgraph linking to a core router
+   * below). Internal layout then places the root at the top
+   * centre of the block with the in-subgraph chain hanging off
+   * to one side, so the root's bottom column stays free for
+   * the external downlink to leave straight down without
+   * having to detour around the chain.
+   */
+  rootIsExternalEmitter = false,
 ): {
   positions: Map<string, { x: number; y: number }>
   width: number
@@ -191,6 +202,11 @@ function layoutBlockInternal(
   }
   intraRoots.sort((a, b) => a.localeCompare(b))
 
+  if (rootIsExternalEmitter && intraRoots.length === 1) {
+    const rootId = intraRoots[0]
+    if (rootId) return layoutEmitterWithSideChain(rootId, intraChildren, sizeById)
+  }
+
   const positions = new Map<string, { x: number; y: number }>()
   let cursorX = 0
   let totalHeight = 0
@@ -205,6 +221,73 @@ function layoutBlockInternal(
   }
   if (intraRoots.length > 0) cursorX -= INTERNAL_ROOT_GAP
   return { positions, width: Math.max(0, cursorX), height: totalHeight }
+}
+
+/**
+ * Internal layout for a block whose intra-root sends a tree
+ * edge outside the block. The root sits at the top centre, its
+ * in-block descendants hang off to the right, and the block is
+ * padded symmetrically on the left so the root lands at the
+ * block's horizontal centre — that way the outer tidy-tree (and
+ * any external child placed under this block) lines up with the
+ * root, not with the chain. The transit wire from the root to
+ * that external child then runs straight down through the empty
+ * left side of the block.
+ *
+ * Block dimensions include the in-block chain width, so the
+ * outer tidy-tree's spacing reserves room for the side branch
+ * — no subgraph-hull overlap with neighbouring subgraphs.
+ */
+function layoutEmitterWithSideChain(
+  rootId: string,
+  intraChildren: Map<string, string[]>,
+  sizeById: Map<string, { width: number; height: number }>,
+): {
+  positions: Map<string, { x: number; y: number }>
+  width: number
+  height: number
+} {
+  const rootSize = sizeById.get(rootId) ?? { width: 80, height: 60 }
+  // Walk the in-block chain (first-child each step).
+  const chain: string[] = []
+  let cur: string | undefined = (intraChildren.get(rootId) ?? [])[0]
+  while (cur !== undefined) {
+    chain.push(cur)
+    cur = (intraChildren.get(cur) ?? [])[0]
+  }
+
+  const positions = new Map<string, { x: number; y: number }>()
+  // Root local: at (rootSize.width / 2, rootSize.height / 2).
+  const rootLocalX = rootSize.width / 2
+  positions.set(rootId, { x: rootLocalX, y: rootSize.height / 2 })
+
+  // Chain column to the right of root.
+  let cursorY = rootSize.height + INTERNAL_LAYER_GAP
+  const chainColumnLeft = rootSize.width + INTERNAL_ROOT_GAP
+  let chainMaxRight = chainColumnLeft
+  for (const m of chain) {
+    const ms = sizeById.get(m) ?? { width: 80, height: 60 }
+    positions.set(m, { x: chainColumnLeft + ms.width / 2, y: cursorY + ms.height / 2 })
+    cursorY += ms.height + INTERNAL_LAYER_GAP
+    chainMaxRight = Math.max(chainMaxRight, chainColumnLeft + ms.width)
+  }
+  if (chain.length > 0) cursorY -= INTERNAL_LAYER_GAP
+
+  // Pad left so root sits at block centre — outer tidy-tree
+  // places downstream children under the centre, so the
+  // transit wire from root.bottom lands on the downstream
+  // child's top.
+  const rightExtent = chainMaxRight - rootLocalX
+  const halfWidth = Math.max(rightExtent, rootLocalX)
+  const blockWidth = halfWidth * 2
+  const shiftX = halfWidth - rootLocalX
+  if (shiftX > 0) {
+    for (const [id, pos] of positions) {
+      positions.set(id, { x: pos.x + shiftX, y: pos.y })
+    }
+  }
+  const blockHeight = Math.max(rootSize.height, cursorY)
+  return { positions, width: blockWidth, height: blockHeight }
 }
 
 /**
@@ -424,6 +507,30 @@ export function layoutFlatTree(
   const { blockOfNode, blockMembers } = buildBlocks(graph, parents)
 
   // Internal layout per block.
+  // Pre-compute: does this block's intra-root member emit an
+  // outgoing tree-edge outside the block? Used to switch the
+  // internal layout to "emitter on top, chain on the side" so
+  // the root's downlink column stays clear.
+  const blockEmitsExternal = new Set<string>()
+  for (const [blockId, members] of blockMembers) {
+    if (members.length < 2) continue
+    const memberSet = new Set(members)
+    const intraRoot = members.find((m) => {
+      const p = parents.get(m)
+      return !p || !memberSet.has(p)
+    })
+    if (!intraRoot) continue
+    let hasExternal = false
+    for (const [child, par] of parents) {
+      if (par !== intraRoot) continue
+      if (!memberSet.has(child)) {
+        hasExternal = true
+        break
+      }
+    }
+    if (hasExternal) blockEmitsExternal.add(blockId)
+  }
+
   const internal = new Map<
     string,
     {
@@ -433,7 +540,10 @@ export function layoutFlatTree(
     }
   >()
   for (const [block, members] of blockMembers) {
-    internal.set(block, layoutBlockInternal(members, parents, sizeById))
+    internal.set(
+      block,
+      layoutBlockInternal(members, parents, sizeById, blockEmitsExternal.has(block)),
+    )
   }
 
   // Outer block-level parent-of map. The parent of a block is
