@@ -145,6 +145,16 @@ const DETOUR_CLEARANCE = 24
 const DETOUR_STALK = 36
 /** Number of bezier samples to use when checking for obstacle crossings. */
 const DETOUR_SAMPLES = 16
+/**
+ * Max |target.x - source.x| (in SVG units) for which the
+ * obstacle-aware detour runs. Wires that travel mostly straight
+ * down their column (small lateral component) get detoured
+ * around chains they pass through; diagonal cross-row wires
+ * keep their bezier — the natural curve weaves between
+ * subgraphs and any node it grazes is just an intermediate
+ * column the wire passes alongside, not a real obstacle.
+ */
+const DETOUR_MAX_LATERAL = 80
 
 /**
  * Replace each bezier whose path crosses a non-endpoint node or
@@ -176,11 +186,21 @@ function detourAroundObstacles(
       (fromSide === 'bottom' && toSide === 'top') || (fromSide === 'top' && toSide === 'bottom')
     if (!isVerticalFlow) continue
 
+    // Only detour wires that go (mostly) straight down their
+    // own column. Diagonal cross-row wires naturally curve
+    // between subgraphs; treating any node body they graze on
+    // the way as a routing obstacle produces wildly long
+    // detours around the entire intermediate row, which looks
+    // worse than the original bezier passing close to a node.
+    // The transit-through-chain pattern this pass is designed
+    // for has source.x almost equal to target.x.
+    const src = edge.fromPort.absolutePosition
+    const tgt = edge.toPort.absolutePosition
+    if (Math.abs(tgt.x - src.x) > DETOUR_MAX_LATERAL) continue
+
     const blocker = findBezierObstacle(edge, nodes, subgraphs)
     if (!blocker) continue
 
-    const src = edge.fromPort.absolutePosition
-    const tgt = edge.toPort.absolutePosition
     // Pick the side of the blocker closer to the target's x so
     // the trunk of the detour doesn't have to double back.
     const blockerCentre = blocker.x + blocker.width / 2
@@ -209,18 +229,22 @@ function detourAroundObstacles(
 
 /**
  * Sample the bezier the renderer would draw for `edge` and find
- * any non-endpoint node or subgraph hull whose bbox the curve
- * enters. Multiple blockers are merged into one bounding box so
- * the detour wraps the whole cluster.
+ * any non-endpoint node whose body the curve enters. Multiple
+ * blockers are merged into one bounding box so the detour wraps
+ * the whole cluster.
+ *
+ * Subgraph hulls are NOT obstacles — they're visual groupings,
+ * not physical barriers. A wire that grazes the corner of an
+ * intervening subgraph on its way to its target is a normal
+ * cross-subgraph link, not a routing conflict. Only the actual
+ * boxes drawn for nodes block.
  */
 function findBezierObstacle(
   edge: ResolvedEdge,
   nodes: Map<string, Node>,
-  subgraphs: Map<string, Subgraph>,
+  _subgraphs: Map<string, Subgraph>,
 ): { x: number; y: number; width: number; height: number } | null {
   const samples = sampleBezier(edge)
-  const sourceAncestors = nodeAncestorSubgraphs(edge.fromNodeId, nodes, subgraphs)
-  const targetAncestors = nodeAncestorSubgraphs(edge.toNodeId, nodes, subgraphs)
   let merged: { x: number; y: number; width: number; height: number } | null = null
   const grow = (b: { x: number; y: number; width: number; height: number }) => {
     if (!merged) {
@@ -233,21 +257,11 @@ function findBezierObstacle(
       merged = { x: left, y: top, width: right - left, height: bottom - top }
     }
   }
-  // Non-endpoint node bodies.
   for (const [nodeId, node] of nodes) {
     if (nodeId === edge.fromNodeId || nodeId === edge.toNodeId) continue
     const bbox = nodeBounds(node)
     if (!bbox) continue
     if (samples.some((s) => pointInRect(s.x, s.y, bbox))) grow(bbox)
-  }
-  // Non-endpoint subgraph hulls — but only flag subgraphs that
-  // aren't ancestors of either endpoint. A wire is allowed to
-  // cross the subgraph hull of its own source/target chain;
-  // that's just it leaving / entering the visual group.
-  for (const [sgId, sg] of subgraphs) {
-    if (sourceAncestors.has(sgId) || targetAncestors.has(sgId)) continue
-    if (!sg.bounds) continue
-    if (samples.some((s) => pointInRect(s.x, s.y, sg.bounds as Bounds))) grow(sg.bounds)
   }
   return merged
 }
@@ -300,22 +314,6 @@ function nodeBounds(node: Node): { x: number; y: number; width: number; height: 
     width: node.size.width,
     height: node.size.height,
   }
-}
-
-/** Set of subgraph ids that contain `nodeId` directly or transitively. */
-function nodeAncestorSubgraphs(
-  nodeId: string,
-  nodes: Map<string, Node>,
-  subgraphs: Map<string, Subgraph>,
-): Set<string> {
-  const out = new Set<string>()
-  let cur: string | undefined = nodes.get(nodeId)?.parent
-  while (cur) {
-    if (out.has(cur)) break
-    out.add(cur)
-    cur = subgraphs.get(cur)?.parent
-  }
-  return out
 }
 
 /**
