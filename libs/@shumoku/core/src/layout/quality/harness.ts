@@ -25,6 +25,15 @@ export interface FixtureReport {
   metrics: QualityReport
   /** Wall-clock milliseconds spent in `engine.layout`. */
   elapsedMs: number
+  /**
+   * Count of sibling-sort groups that hit the
+   * `port-label-absent-fallback` path. Non-zero means the
+   * fixture didn't carry enough port-label signal to drive
+   * the primary sort — a target for future signal extraction
+   * (e.g. inferring labels from port ids, sub-graph
+   * ordering, …).
+   */
+  portLabelFallbackGroups: number
 }
 
 export interface HarnessReport {
@@ -55,8 +64,11 @@ export function runHarness(fixtures: readonly CorpusFixture[] = CORPUS): Harness
       fx.graph.nodes.map((node) => [node.id, node.size ?? { width: 80, height: 60 }]),
     )
     const t0 = performance.now()
-    const result = engine.layout(fx.graph, { sizeById })
+    const result = engine.layout(fx.graph, { sizeById, explain: true })
     const elapsedMs = performance.now() - t0
+    const portLabelFallbackGroups = result.diagnostics.filter(
+      (d) => d.code === 'sibling-order' && d.message.includes('port-label-absent-fallback'),
+    ).length
     out.push({
       name: fx.name,
       description: fx.description,
@@ -65,6 +77,7 @@ export function runHarness(fixtures: readonly CorpusFixture[] = CORPUS): Harness
       result,
       metrics: summarize(fx.graph, result),
       elapsedMs,
+      portLabelFallbackGroups,
     })
   }
   return {
@@ -114,7 +127,19 @@ function aggregate(rows: FixtureReport[]): HarnessReport['totals'] {
  * the `bun run quality` script.
  */
 export function formatReport(report: HarnessReport): string {
-  const header = ['fixture', 'N', 'L', 'edge_tot', 'area', 'ar', 'xings', 'xov', 'hull_ov', 'ms']
+  const header = [
+    'fixture',
+    'N',
+    'L',
+    'edge_tot',
+    'area',
+    'ar',
+    'xings',
+    'xov',
+    'hull_ov',
+    'pl_fb',
+    'ms',
+  ]
   const rows: string[][] = [header.map((h) => h)]
   for (const fx of report.fixtures) {
     rows.push([
@@ -127,6 +152,7 @@ export function formatReport(report: HarnessReport): string {
       String(fx.metrics.crossings.total),
       String(fx.metrics.crossings.overlay),
       fx.metrics.siblingHullOverlap.toFixed(0),
+      String(fx.portLabelFallbackGroups),
       fx.elapsedMs.toFixed(2),
     ])
   }
@@ -140,6 +166,7 @@ export function formatReport(report: HarnessReport): string {
     String(report.totals.crossingsTotal),
     String(report.totals.crossingsOverlay),
     report.totals.siblingHullOverlapTotal.toFixed(0),
+    String(report.fixtures.reduce((s, f) => s + f.portLabelFallbackGroups, 0)),
     report.totals.elapsedMs.toFixed(2),
   ])
   const widths = header.map((_, col) => Math.max(...rows.map((r) => (r[col] ?? '').length)))

@@ -12,6 +12,24 @@
  * parent and children appear in a monotonic sequence with no
  * zig-zags, even when port labels follow non-alphabetical
  * device conventions (`Gi1/0/1`, `Gi1/0/2`, `Te1/1/1`, ...).
+ *
+ * Adaptive observability: when the port-label signal is fully
+ * absent — every sibling pair has identical keys or no key at
+ * all — the sort still falls back to the subgraph + id
+ * tiebreaker (preserving "kind-grouped" reading order: leaves
+ * cluster, switches cluster). A `sibling-order` diagnostic with
+ * reason `subtree-weight-fallback` flags the case so the
+ * harness can identify low-signal fixtures, but the engine
+ * deliberately does NOT reorder them — past experiments with a
+ * centred-fan-out heuristic broke the typical "APs together
+ * then switches together" expectation that network engineers
+ * read from network-layout output (test: 'switch with mixed
+ * downstream depths keeps leaves contiguous').
+ *
+ * If a future PR wants to actually exploit the no-port-signal
+ * case it needs a heuristic that respects kind clustering — e.g.
+ * cluster by leaf-vs-internal first, then by subtree weight
+ * within each cluster.
  */
 
 import type { Link, Node } from '../../models/types.js'
@@ -63,13 +81,16 @@ export function sortBlocksBySourcePort(
     const primary = blockMembers.get(block)?.[0] ?? block
     return nodesById.get(primary)?.parent ?? ''
   }
+
+  // Single pass: try the port-label sort. Track whether any
+  // pair was decided by port labels; when none was, mark the
+  // sort as having fallen back so the diagnostic captures it.
   let portLabelDecided = false
   const ordered = [...blockIds].sort((a, b) => {
     const ka = keyOf(a)
     const kb = keyOf(b)
-    // Blocks with no matching source link sort last.
     if (ka === null && kb === null) {
-      // Both unlinked → fall through to subgraph + id tiebreakers below.
+      // both unlinked
     } else if (ka === null) {
       return 1
     } else if (kb === null) {
@@ -85,11 +106,12 @@ export function sortBlocksBySourcePort(
     if (sgCmp !== 0) return sgCmp
     return a.localeCompare(b)
   })
+
   if (diagnostics && ordered.length > 1) {
     diagnostics.push(
       siblingOrderDiagnostic(
         parentBlockId,
-        portLabelDecided ? 'source-port-label' : 'id-tiebreaker',
+        portLabelDecided ? 'source-port-label' : 'port-label-absent-fallback',
         ordered,
       ),
     )

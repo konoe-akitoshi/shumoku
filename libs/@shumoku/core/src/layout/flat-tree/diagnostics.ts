@@ -160,10 +160,25 @@ export function blockJoinDiagnostic(
 /**
  * Why a sibling-block sort ordering was chosen. Emitted at most
  * once per parent block whose children were sorted.
+ *
+ * Reasons:
+ *
+ *   - `source-port-label` — at least one pair was decided by
+ *     the parent's source-port label sequence (the primary
+ *     intended signal).
+ *   - `port-label-absent-fallback` — every sibling pair tied
+ *     on port labels (all-equal or all-null). Sort fell back
+ *     to subgraph-clustering + lexical id. The diagnostic
+ *     surfaces this so an editor / harness can flag fixtures
+ *     where the engine had no primary signal to rely on.
+ *   - `id-tiebreaker` — deprecated; emitted by the previous
+ *     diagnostics PR. New runs use `source-port-label` or
+ *     `port-label-absent-fallback`.
+ *   - `singleton` — only one child; ordering is vacuous.
  */
 export function siblingOrderDiagnostic(
   parentBlockId: string,
-  reason: 'source-port-label' | 'id-tiebreaker' | 'singleton',
+  reason: 'source-port-label' | 'port-label-absent-fallback' | 'id-tiebreaker' | 'singleton',
   order: readonly string[],
 ): Diagnostic {
   return {

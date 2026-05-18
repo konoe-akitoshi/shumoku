@@ -169,6 +169,30 @@ describe('explainability diagnostics (opt-in via { explain: true })', () => {
     expect(joins.every((d) => d.severity === 'info')).toBe(true)
   })
 
+  test('explain emits sibling-order with port-label-absent-fallback when all port labels collide', () => {
+    // All ports are 'p' → keyOf returns 'p' for every block →
+    // port label can't distinguish → falls back diagnostic.
+    const env = setUp(
+      [node('hub'), node('l1'), node('l2'), node('l3')],
+      [
+        { from: { node: 'hub', port: 'p' }, to: { node: 'l1', port: 'p' } },
+        { from: { node: 'hub', port: 'p' }, to: { node: 'l2', port: 'p' } },
+        { from: { node: 'hub', port: 'p' }, to: { node: 'l3', port: 'p' } },
+      ],
+    )
+    const result = layoutFlatTree(
+      env.graph,
+      env.nodesById,
+      env.subgraphsById,
+      env.sizeById,
+      () => false,
+      { explain: true },
+    )
+    const ord = result.diagnostics.find((d) => d.code === 'sibling-order')
+    expect(ord).toBeDefined()
+    expect(ord?.message.includes('port-label-absent-fallback')).toBe(true)
+  })
+
   test('explain emits sibling-order with source-port-label reason when port labels differ', () => {
     const env = setUp(
       [node('p'), node('a'), node('b')],

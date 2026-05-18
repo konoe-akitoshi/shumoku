@@ -40,6 +40,7 @@ describe('layout quality harness', () => {
       'multi-emitter-sg': 0,
       'nested-subgraph': 0,
       'noc-like': 2,
+      'no-port-labels': 0,
     }
     const report = runHarness()
     for (const fx of report.fixtures) {

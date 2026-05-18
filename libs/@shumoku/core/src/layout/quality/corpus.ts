@@ -63,6 +63,18 @@ function l(from: string, to: string, opts: Partial<Link> = {}): Link {
   }
 }
 
+/**
+ * Link with a fixed port name on both sides — used to build
+ * port-label-collision fixtures so the sibling-sort fallback
+ * fires and the harness's `pl_fb` column shows non-zero.
+ */
+function lp(from: string, to: string, port: string): Link {
+  return {
+    from: { node: from, port },
+    to: { node: to, port },
+  }
+}
+
 export interface CorpusFixture {
   name: string
   description: string
@@ -176,6 +188,16 @@ export const CORPUS: readonly CorpusFixture[] = [
       [n('a', 'inner'), n('b'), n('c')],
       [l('b', 'a'), l('a', 'c')],
       [sg('outer'), sg('inner', 'outer')],
+    ),
+  },
+  {
+    name: 'no-port-labels',
+    description:
+      'star with every link using the same port name → sibling sort hits port-label fallback',
+    graph: graph(
+      'no-port-labels',
+      ['hub', 'a', 'b', 'c'].map((id) => n(id)),
+      [lp('hub', 'a', 'p'), lp('hub', 'b', 'p'), lp('hub', 'c', 'p')],
     ),
   },
   {
