@@ -71,6 +71,18 @@ const BUS_TRUNK_DROP = 28
  */
 const BUS_MAX_TARGET_Y_SPREAD = 40
 
+/**
+ * Vertical stride between adjacent branches' trunk Y values
+ * inside a single bus. Without this stride, every branch
+ * polyline shares the exact same horizontal trunk segment and
+ * the N strokes overlap visually as one line — the viewer
+ * can't tell which source port connects to which target. The
+ * stride spreads the trunks into N parallel horizontal lanes,
+ * preserving the "fan-out from one node" visual while keeping
+ * each individual connection traceable.
+ */
+const BUS_TRUNK_LANE_STRIDE = 6
+
 /** Horizontal clearance between an obstacle's edge and the innermost corridor lane. */
 const OBSTACLE_CORRIDOR_MARGIN = 20
 /** Vertical clearance between an obstacle's edge and the innermost L-shape jog row. */
@@ -517,6 +529,15 @@ function assignBusRoutes(
     for (const [i, edge] of sorted.entries()) {
       const source = edge.fromPort.absolutePosition
       const target = edge.toPort.absolutePosition
+      // Branch-specific trunk Y so the N polylines don't all
+      // overlap on the same horizontal segment. Branches stride
+      // outward from the base trunk by BUS_TRUNK_LANE_STRIDE.
+      // Order along the stride follows branch index (== target-
+      // x order), so the leftmost target gets the trunk lane
+      // furthest from the target row and the rightmost target
+      // gets the lane closest to the targets — keeps the lanes
+      // monotonic and avoids crossings.
+      const branchTrunkY = trunkY - outwardSign * (N - 1 - i) * BUS_TRUNK_LANE_STRIDE
       let points: { x: number; y: number }[]
       if (corridor) {
         // Per-branch lanes. Lane 0 = leftmost target → corridor lane
@@ -533,15 +554,15 @@ function assignBusRoutes(
           { x: source.x, y: source.y },
           { x: source.x, y: jogY },
           { x: corridorX, y: jogY },
-          { x: corridorX, y: trunkY },
-          { x: target.x, y: trunkY },
+          { x: corridorX, y: branchTrunkY },
+          { x: target.x, y: branchTrunkY },
           { x: target.x, y: target.y },
         ]
       } else {
         points = [
           { x: source.x, y: source.y },
-          { x: source.x, y: trunkY },
-          { x: target.x, y: trunkY },
+          { x: source.x, y: branchTrunkY },
+          { x: target.x, y: branchTrunkY },
           { x: target.x, y: target.y },
         ]
       }
