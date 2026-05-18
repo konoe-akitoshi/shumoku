@@ -61,7 +61,7 @@ export interface FlatTreeLayoutResult {
 /** Horizontal gap between members inside a subgraph block. */
 const INTERNAL_NODE_GAP = 12
 /** Vertical gap between layers inside a subgraph block. */
-const INTERNAL_LAYER_GAP = 20
+const INTERNAL_LAYER_GAP = 28
 /** Horizontal gap between sibling subtrees inside a multi-root subgraph block. */
 const INTERNAL_ROOT_GAP = 8
 
