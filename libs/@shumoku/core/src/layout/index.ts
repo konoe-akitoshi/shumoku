@@ -26,6 +26,10 @@ export {
   type AutoLayoutResult,
   autoLayoutFlatTree,
 } from './auto-placement/flat-tree/auto-layout.js'
+// Port placement (decides which side, places ports) — lives
+// inside the flat-tree algorithm but re-exported here for
+// editor consumers that call it directly during link edits.
+export { placePorts } from './auto-placement/flat-tree/port-placement.js'
 // Bezier edge geometry (shared by interactive renderer + SSR renderer-svg)
 export { bezierEdgePath, bezierOffsetPath, type PortSide } from './bezier-path.js'
 export type {
@@ -76,8 +80,6 @@ export {
   linkSpeedBps,
   resolveBandwidthBps,
 } from './link-utils.js'
-// Port placement (decides which side, places ports)
-export { placePorts } from './port-placement.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
 // Resolved layout model (Port/Edge as computed objects, Node/Subgraph used directly)

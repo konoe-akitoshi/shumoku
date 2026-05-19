@@ -30,9 +30,9 @@
  *   the main flow.)
  */
 
-import type { Direction, Link, Node, Position } from '../models/types.js'
-import { resolveNodeSize } from './engine/index.js'
-import type { ResolvedPort } from './resolved-types.js'
+import type { Direction, Link, Node, Position } from '../../../models/types.js'
+import { resolveNodeSize } from '../../engine/index.js'
+import type { ResolvedPort } from '../../resolved-types.js'
 
 /** Default port visual size */
 const PORT_SIZE = { width: 8, height: 8 }

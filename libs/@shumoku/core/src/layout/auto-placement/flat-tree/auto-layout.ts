@@ -26,9 +26,9 @@
 import type { Bounds, Direction, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
 import type { LayoutEngine, PortInfo, PortsBySide } from '../../engine/index.js'
 import { rebalanceSubgraphs } from '../../interaction.js'
-import { decidePortSides, placePorts } from '../../port-placement.js'
 import type { ResolvedPort } from '../../resolved-types.js'
 import { layoutFlatTree } from './index.js'
+import { decidePortSides, placePorts } from './port-placement.js'
 
 export interface AutoLayoutOptions {
   direction?: Direction
