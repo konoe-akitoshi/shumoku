@@ -67,8 +67,8 @@ export function createEngine(config: EngineConfig = {}): LayoutEngine {
   }
 }
 
-export type { LayoutRules } from './rules.js'
 export type { PlacementPolicy } from './placement.js'
+export type { LayoutRules } from './rules.js'
 export { deriveSpacing, type Spacing } from './spacing.js'
 export type {
   EngineConfig,

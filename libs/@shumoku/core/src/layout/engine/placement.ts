@@ -18,8 +18,8 @@ import type {
   NodeWithPosition,
   PlacementConflict,
   PlacementResult,
-  Position,
   PortsBySide,
+  Position,
   Rect,
 } from './types.js'
 

@@ -89,11 +89,7 @@ function portSlotWidth(maxLabelPx: number): number {
  * so a node with `Gi1/0/24-trunk` on bottom and `1` on top
  * gets a narrow top lane and a wide bottom lane.
  */
-export function nodeFootprint(
-  node: NodeLike,
-  portsBySide: PortsBySide,
-  text: TextMeasurer,
-): Size {
+export function nodeFootprint(node: NodeLike, portsBySide: PortsBySide, text: TextMeasurer): Size {
   const body = nodeBodySize(node, text)
 
   const widest = (ports: { label?: string }[]): number =>

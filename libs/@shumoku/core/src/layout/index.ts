@@ -4,10 +4,48 @@
 
 /**
  * Shumoku Layout Engines
+ *
+ * Public surface:
+ *
+ *   - `createEngine(config)` — rule authority. Provides sizing,
+ *     placement-policy queries, text measurement.
+ *   - `autoLayoutFlatTree(graph, engine, options)` — the flat-
+ *     tree auto-placement algorithm wrapped behind an engine.
+ *
+ * The legacy `layoutNetwork(graph, options)` entry is kept for
+ * callers that haven't migrated yet; new code should construct
+ * an engine and call `autoLayoutFlatTree`.
  */
 
+export {
+  type AutoLayoutOptions,
+  type AutoLayoutResult,
+  autoLayoutFlatTree,
+} from './auto-placement/flat-tree/auto-layout.js'
 // Bezier edge geometry (shared by interactive renderer + SSR renderer-svg)
 export { bezierEdgePath, bezierOffsetPath, type PortSide } from './bezier-path.js'
+export type {
+  LayoutEngine as ShumokuLayoutEngine,
+  PortsBySide as EnginePortsBySide,
+} from './engine/index.js'
+// New engine + auto-placement surface. Conflicting names
+// (LayoutEngine, Size, Position) are NOT re-exported here —
+// import from `@shumoku/core/layout/engine` deeply if you need
+// them, or alias on import.
+export {
+  createEngine,
+  type EngineConfig,
+  type LayoutMetrics,
+  type LayoutRules,
+  type NodeWithPosition,
+  type PlacementConflict,
+  type PlacementPolicy,
+  type PlacementResult,
+  type PortInfo,
+  type Rect,
+  type Side,
+  type TextMeasurer,
+} from './engine/index.js'
 // Interactive operations (node move, collision detection)
 export {
   addLink,
