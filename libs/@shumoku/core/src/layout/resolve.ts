@@ -18,8 +18,8 @@ import type {
   Node,
   Subgraph,
 } from '../models/types.js'
+import { resolveNodeSize } from './engine/index.js'
 import { getLinkWidth } from './link-utils.js'
-import { resolveNodeSize } from './network-layout.js'
 import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
 
 // ============================================================================

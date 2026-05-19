@@ -1,13 +1,18 @@
 <script lang="ts">
   import type { Node } from '@shumoku/core'
   import {
+    createEngine,
     DEFAULT_ICON_SIZE,
     ICON_LABEL_GAP,
     LABEL_LINE_HEIGHT,
     resolveIcon,
-    resolveNodeSize,
     specDeviceType,
   } from '@shumoku/core'
+
+  /** Shared sizing engine. */
+  const engine = createEngine()
+  const resolveNodeSize = (n: Node) => n.size ?? engine.nodeBodySize(n)
+
   import type { NodeOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
   import { elementDrag } from '../../lib/use-drag'

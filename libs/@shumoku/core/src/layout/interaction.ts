@@ -12,7 +12,7 @@
 
 import { newId } from '../ids.js'
 import type { Link, NetworkGraph, Node, NodePort, Subgraph } from '../models/types.js'
-import { resolveNodeSize } from './network-layout.js'
+import { resolveNodeSize } from './engine/index.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 

@@ -70,6 +70,34 @@ export function createEngine(config: EngineConfig = {}): LayoutEngine {
 export type { PlacementPolicy } from './placement.js'
 export type { LayoutRules } from './rules.js'
 export { deriveSpacing, type Spacing } from './spacing.js'
+
+let _defaultEngine: LayoutEngine | null = null
+
+/**
+ * Resolve a node's display size — returns the node's own
+ * `size` if set, otherwise asks the engine for its body size.
+ *
+ * Pass `engine` to share its TextMeasurer cache with other
+ * queries. Without one, a process-wide default engine is
+ * created lazily; this is fine for one-off helpers but not
+ * ideal for hot loops where explicit control matters.
+ */
+export function resolveNodeSize(
+  node: {
+    label?: string | string[]
+    spec?: import('../../models/types.js').NodeSpec
+    size?: { width: number; height: number }
+  },
+  engine?: LayoutEngine,
+): { width: number; height: number } {
+  if (node.size) return node.size
+  let e = engine
+  if (!e) {
+    if (!_defaultEngine) _defaultEngine = createEngine()
+    e = _defaultEngine
+  }
+  return e.nodeBodySize(node as Parameters<typeof e.nodeBodySize>[0])
+}
 export type {
   EngineConfig,
   LayoutMetrics,
