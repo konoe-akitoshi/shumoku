@@ -71,5 +71,8 @@ export const PORT_LABEL_OUTER_REACH = PORT_LABEL_OFFSET + PORT_LABEL_HEIGHT / 2 
 /** Maximum icon width as percentage of node width (0.0 - 1.0) */
 export const MAX_ICON_WIDTH_RATIO = 0.6
 
-/** Estimated character width for node label width calculation (larger font, ~14px) */
+/** Body label font size in pixels — matches the renderer's `.node-label` CSS. */
+export const BODY_LABEL_FONT_PX = 14
+
+/** @deprecated use `measureTextWidth(label, BODY_LABEL_FONT_PX)` instead. */
 export const ESTIMATED_CHAR_WIDTH = 7
