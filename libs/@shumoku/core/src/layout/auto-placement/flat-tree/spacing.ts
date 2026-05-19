@@ -39,7 +39,7 @@
  * breathing room.
  */
 
-import { PORT_LABEL_OUTER_REACH } from '../../constants.js'
+import { PORT_LABEL_OUTER_REACH } from '../../../constants.js'
 
 /**
  * Renderer-supplied measurements that drive engine spacing.

@@ -1,7 +1,7 @@
 // Source-port-label sibling sort.
 
 import { describe, expect, test } from 'vitest'
-import type { Link, Node } from '../../models/types.js'
+import type { Link, Node } from '../../../models/types.js'
 import { sortBlocksBySourcePort } from './sort.js'
 
 function node(id: string, parent: string | undefined, ports: Array<[string, string]>): Node {

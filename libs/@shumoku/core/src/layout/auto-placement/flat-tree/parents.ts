@@ -23,7 +23,7 @@
  * link aren't in the map (they're roots of the forest).
  */
 
-import type { Link, Node } from '../../models/types.js'
+import type { Link, Node } from '../../../models/types.js'
 
 /**
  * Build the primary tree-parent for each node. The map is

@@ -1,7 +1,7 @@
 // Same-subgraph spine alignment.
 
 import { describe, expect, test } from 'vitest'
-import type { Node } from '../../models/types.js'
+import type { Node } from '../../../models/types.js'
 import { alignSameSubgraphSpine } from './spine.js'
 
 function node(id: string, parent?: string): Node {

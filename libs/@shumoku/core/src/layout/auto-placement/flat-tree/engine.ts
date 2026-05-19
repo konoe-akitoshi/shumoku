@@ -30,7 +30,7 @@
  * shouldn't duplicate that logic.
  */
 
-import type { Link, NetworkGraph } from '../../models/types.js'
+import type { Link, NetworkGraph } from '../../../models/types.js'
 import { type FlatTreeLayoutOptions, type FlatTreeLayoutResult, layoutFlatTree } from './index.js'
 import type { Size } from './types.js'
 

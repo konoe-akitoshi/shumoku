@@ -1,7 +1,7 @@
 // Integration tests for the flat-tree engine.
 
 import { describe, expect, test } from 'vitest'
-import type { Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
+import type { Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
 import { layoutFlatTree } from './index.js'
 
 function node(id: string, parent?: string, size = { width: 80, height: 60 }): Node {

@@ -37,7 +37,7 @@
  * virtual root for the layout pass and unwrapped before output.
  */
 
-import type { Direction, Position } from '../models/types.js'
+import type { Direction, Position } from '../../../models/types.js'
 
 export interface TreeLayoutNode {
   id: string

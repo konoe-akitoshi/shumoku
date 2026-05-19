@@ -1,7 +1,7 @@
 // Validation + diagnostics.
 
 import { describe, expect, test } from 'vitest'
-import type { Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
+import type { Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
 import { validateGraph } from './diagnostics.js'
 import { layoutFlatTree } from './index.js'
 

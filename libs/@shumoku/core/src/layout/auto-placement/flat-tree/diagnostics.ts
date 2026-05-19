@@ -22,7 +22,7 @@
  *     to users with `--verbose` editors (e.g. cycle break).
  */
 
-import type { NetworkGraph } from '../../models/types.js'
+import type { NetworkGraph } from '../../../models/types.js'
 
 export type DiagnosticSeverity = 'error' | 'warning' | 'info'
 

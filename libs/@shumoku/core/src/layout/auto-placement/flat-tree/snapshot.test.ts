@@ -6,7 +6,7 @@
 //   bun run test src/layout/flat-tree/snapshot.test.ts -u
 
 import { describe, expect, test } from 'vitest'
-import type { Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
+import type { Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
 import { layoutFlatTree } from './index.js'
 
 /**

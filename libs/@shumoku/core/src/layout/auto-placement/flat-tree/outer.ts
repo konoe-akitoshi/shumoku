@@ -24,7 +24,7 @@
  * adjacent hulls touch but don't overlap (#279).
  */
 
-import type { Link, Node } from '../../models/types.js'
+import type { Link, Node } from '../../../models/types.js'
 import { sortBlocksBySourcePort } from './sort.js'
 import type { BlockChildren, BlockMembers, BlockOfNode, BlockParents } from './types.js'
 

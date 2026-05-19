@@ -30,7 +30,7 @@
  * (0, 0) — same convention the outer tidy-tree uses.
  */
 
-import type { Bounds, Direction } from '../../models/types.js'
+import type { Bounds, Direction } from '../../../models/types.js'
 import type { Position } from './types.js'
 
 /** Rotate a single point from TB-internal coords to the target direction. */

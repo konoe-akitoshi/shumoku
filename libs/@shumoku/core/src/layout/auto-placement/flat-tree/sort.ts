@@ -14,7 +14,7 @@
  * device conventions (`Gi1/0/1`, `Gi1/0/2`, `Te1/1/1`, ...).
  */
 
-import type { Link, Node } from '../../models/types.js'
+import type { Link, Node } from '../../../models/types.js'
 import type { BlockId, BlockMembers } from './types.js'
 
 /**

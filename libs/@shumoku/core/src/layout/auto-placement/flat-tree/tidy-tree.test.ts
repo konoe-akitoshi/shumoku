@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest'
-import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tree-layout.js'
+import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tidy-tree.js'
 
 const sz = { width: 100, height: 50 }
 function n(id: string): TreeLayoutNode {

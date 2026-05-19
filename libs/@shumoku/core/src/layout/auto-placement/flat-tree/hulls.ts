@@ -18,7 +18,7 @@
  * owned member nodes.
  */
 
-import type { Bounds, NetworkGraph } from '../../models/types.js'
+import type { Bounds, NetworkGraph } from '../../../models/types.js'
 import type { Position, Size } from './types.js'
 
 /**

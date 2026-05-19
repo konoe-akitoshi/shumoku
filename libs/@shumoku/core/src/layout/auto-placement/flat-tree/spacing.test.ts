@@ -1,7 +1,7 @@
 // deriveSpacing — derivation rules and override behaviour.
 
 import { describe, expect, test } from 'vitest'
-import { PORT_LABEL_OUTER_REACH } from '../../constants.js'
+import { PORT_LABEL_OUTER_REACH } from '../../../constants.js'
 import { deriveSpacing } from './spacing.js'
 
 describe('deriveSpacing — defaults', () => {

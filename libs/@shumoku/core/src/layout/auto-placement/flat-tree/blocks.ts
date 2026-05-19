@@ -38,7 +38,7 @@
  * block has ≥1 member.
  */
 
-import type { NetworkGraph } from '../../models/types.js'
+import type { NetworkGraph } from '../../../models/types.js'
 import type { BlockMembers, BlockOfNode } from './types.js'
 
 export interface BlockPartition {

@@ -25,7 +25,7 @@
  *     between siblings.
  */
 
-import type { Node } from '../../models/types.js'
+import type { Node } from '../../../models/types.js'
 import type { BlockChildren, BlockId, BlockMembers, Position } from './types.js'
 
 /**

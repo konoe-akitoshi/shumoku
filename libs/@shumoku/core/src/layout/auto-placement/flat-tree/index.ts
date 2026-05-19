@@ -11,8 +11,8 @@
  * for tests and advanced callers.
  */
 
-import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
-import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from '../tree-layout.js'
+import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
+import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tidy-tree.js'
 import { buildBlocks, findExternalEmitterBlocks } from './blocks.js'
 import { type Diagnostic, missingSizeDiagnostic, validateGraph } from './diagnostics.js'
 import { computeSubgraphHulls } from './hulls.js'

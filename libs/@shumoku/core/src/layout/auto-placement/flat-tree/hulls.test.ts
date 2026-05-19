@@ -1,7 +1,7 @@
 // Subgraph hull bbox computation.
 
 import { describe, expect, test } from 'vitest'
-import type { NetworkGraph, Node, Subgraph } from '../../models/types.js'
+import type { NetworkGraph, Node, Subgraph } from '../../../models/types.js'
 import { computeSubgraphHulls } from './hulls.js'
 
 function node(id: string, parent?: string): Node {

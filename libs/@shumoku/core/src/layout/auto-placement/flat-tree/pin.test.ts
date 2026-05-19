@@ -1,7 +1,7 @@
 // Pinned positions.
 
 import { describe, expect, test } from 'vitest'
-import type { Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
+import type { Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
 import { layoutFlatTree } from './index.js'
 
 function node(id: string, parent?: string): Node {

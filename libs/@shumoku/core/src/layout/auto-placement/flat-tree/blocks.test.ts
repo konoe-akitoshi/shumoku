@@ -1,7 +1,7 @@
 // Block partition (emitter rules).
 
 import { describe, expect, test } from 'vitest'
-import type { NetworkGraph, Node } from '../../models/types.js'
+import type { NetworkGraph, Node } from '../../../models/types.js'
 import { buildBlocks, findExternalEmitterBlocks } from './blocks.js'
 
 function node(id: string, parent?: string): Node {

@@ -2,7 +2,7 @@
 // Verifies the layout scales (roughly) linearly with node count.
 
 import { describe, expect, test } from 'vitest'
-import type { Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
+import type { Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
 import { layoutFlatTree } from './index.js'
 
 /**

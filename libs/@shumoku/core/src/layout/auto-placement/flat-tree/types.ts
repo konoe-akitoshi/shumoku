@@ -11,7 +11,7 @@
  * not in the type system.
  */
 
-import type { Bounds } from '../../models/types.js'
+import type { Bounds } from '../../../models/types.js'
 import type { Diagnostic } from './diagnostics.js'
 
 /** Node centre position in SVG units. */

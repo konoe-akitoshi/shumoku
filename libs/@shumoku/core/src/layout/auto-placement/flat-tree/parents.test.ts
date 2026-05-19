@@ -1,7 +1,7 @@
 // Primary parent extraction and cycle breaking.
 
 import { describe, expect, test } from 'vitest'
-import type { Link, Node } from '../../models/types.js'
+import type { Link, Node } from '../../../models/types.js'
 import { breakCycles, buildChildrenOf, buildPrimaryParents } from './parents.js'
 
 function node(id: string, parent?: string): Node {

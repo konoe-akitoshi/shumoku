@@ -18,7 +18,7 @@
  * we have a real incremental-edit story.
  */
 
-import type { NetworkGraph } from '../../models/types.js'
+import type { NetworkGraph } from '../../../models/types.js'
 import type { Position } from './types.js'
 
 /**
