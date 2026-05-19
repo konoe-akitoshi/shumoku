@@ -37,6 +37,12 @@
  */
 
 import { DEFAULT_NODE_SIZE } from './constants.js'
+import {
+  horizontalSiblingGap,
+  type PortsBySideMap,
+  rootToChainHorizontalGap,
+  verticalLayerGap,
+} from './port-extent.js'
 import { deriveSpacing, type Spacing } from './spacing.js'
 import type { InternalLayout, Position, Size } from './types.js'
 
@@ -63,6 +69,7 @@ export function layoutBlockInternal(
   sizeById: Map<string, Size>,
   rootIsExternalEmitter = false,
   spacing: Spacing = deriveSpacing(),
+  portsBySideById?: PortsBySideMap,
 ): InternalLayout {
   if (memberIds.length === 1) return layoutSingleMember(memberIds[0], sizeById)
 
@@ -73,11 +80,11 @@ export function layoutBlockInternal(
   if (rootIsExternalEmitter && intraRoots.length === 1) {
     const rootId = intraRoots[0]
     if (rootId !== undefined) {
-      return layoutEmitterWithSideChain(rootId, intraChildren, sizeById, spacing)
+      return layoutEmitterWithSideChain(rootId, intraChildren, sizeById, spacing, portsBySideById)
     }
   }
 
-  return layoutMultiRootRow(intraRoots, intraChildren, sizeById, spacing)
+  return layoutMultiRootRow(intraRoots, intraChildren, sizeById, spacing, portsBySideById)
 }
 
 /** Trivial layout for a single-node block. */
@@ -102,19 +109,28 @@ function layoutMultiRootRow(
   intraChildren: Map<string, string[]>,
   sizeById: Map<string, Size>,
   spacing: Spacing,
+  portsBySideById?: PortsBySideMap,
 ): InternalLayout {
   const positions = new Map<string, Position>()
   let cursorX = 0
   let totalHeight = 0
+  let lastRootId: string | undefined
   for (const root of intraRoots) {
-    const sub = layoutWrappedSubtree(root, intraChildren, sizeById, spacing)
+    const sub = layoutWrappedSubtree(root, intraChildren, sizeById, spacing, portsBySideById)
+    // Gap between this intra-root and the previous one. Uses
+    // port info if available; otherwise falls back to the
+    // legacy `internalRootGap` (one-label-could-face-the-other
+    // assumption).
+    if (lastRootId !== undefined) {
+      cursorX += rootToChainHorizontalGap(lastRootId, root, spacing, portsBySideById)
+    }
     for (const [id, pos] of sub.positions) {
       positions.set(id, { x: pos.x + cursorX, y: pos.y })
     }
-    cursorX += sub.width + spacing.internalRootGap
+    cursorX += sub.width
     if (sub.height > totalHeight) totalHeight = sub.height
+    lastRootId = root
   }
-  if (intraRoots.length > 0) cursorX -= spacing.internalRootGap
   return { positions, width: Math.max(0, cursorX), height: totalHeight }
 }
 
@@ -130,6 +146,7 @@ export function layoutWrappedSubtree(
   childrenOf: Map<string, string[]>,
   sizeById: Map<string, Size>,
   spacing: Spacing = deriveSpacing(),
+  portsBySideById?: PortsBySideMap,
 ): InternalLayout {
   const positions = new Map<string, Position>()
   const rootSize = sizeById.get(rootId) ?? DEFAULT_NODE_SIZE
@@ -137,7 +154,7 @@ export function layoutWrappedSubtree(
   const kids = childrenOf.get(rootId) ?? []
   const childLayouts = kids.map((c) => ({
     id: c,
-    layout: layoutWrappedSubtree(c, childrenOf, sizeById, spacing),
+    layout: layoutWrappedSubtree(c, childrenOf, sizeById, spacing, portsBySideById),
   }))
 
   if (childLayouts.length === 0) {
@@ -145,21 +162,55 @@ export function layoutWrappedSubtree(
     return { positions, width: rootSize.width, height: rootSize.height }
   }
 
+  // Pairwise sibling gaps. Uses port info when available;
+  // falls back to legacy `internalNodeGap` per pair.
+  const siblingGaps: number[] = []
+  for (let i = 1; i < childLayouts.length; i++) {
+    const prev = childLayouts[i - 1]
+    const curr = childLayouts[i]
+    if (!prev || !curr) {
+      siblingGaps.push(spacing.internalNodeGap)
+      continue
+    }
+    siblingGaps.push(horizontalSiblingGap(prev.id, curr.id, spacing, portsBySideById))
+  }
   const bandWidth = childLayouts.reduce(
-    (sum, c, idx) => sum + c.layout.width + (idx > 0 ? spacing.internalNodeGap : 0),
+    (sum, c, idx) => sum + c.layout.width + (idx > 0 ? (siblingGaps[idx - 1] ?? 0) : 0),
     0,
   )
   const rowHeight = childLayouts.reduce((m, c) => Math.max(m, c.layout.height), 0)
   const subtreeWidth = Math.max(rootSize.width, bandWidth)
   positions.set(rootId, { x: subtreeWidth / 2, y: rootSize.height / 2 })
 
-  const cursorY = rootSize.height + spacing.internalLayerGap
+  // Vertical gap from root.bottom to the row of children. We
+  // use the worst-case child (any child with a top-port forces
+  // the full reach) so the layer height respects every
+  // descendant's port labels. Falls back to
+  // `spacing.internalLayerGap` when no port info is supplied.
+  const layerGap = (() => {
+    // If port info is absent we want the legacy constant
+    // exactly, not the gapBetween(true, true) value (which
+    // matches by construction but explicit is clearer).
+    if (!portsBySideById) return spacing.internalLayerGap
+    // Compute the worst child top-side reach.
+    let worstChildGap = 0
+    for (const c of childLayouts) {
+      worstChildGap = Math.max(
+        worstChildGap,
+        verticalLayerGap(rootId, c.id, spacing, portsBySideById),
+      )
+    }
+    return worstChildGap
+  })()
+  const cursorY = rootSize.height + layerGap
   let cursorX = (subtreeWidth - bandWidth) / 2
-  for (const c of childLayouts) {
+  for (let idx = 0; idx < childLayouts.length; idx++) {
+    const c = childLayouts[idx]
+    if (!c) continue
     for (const [id, pos] of c.layout.positions) {
       positions.set(id, { x: pos.x + cursorX, y: pos.y + cursorY })
     }
-    cursorX += c.layout.width + spacing.internalNodeGap
+    cursorX += c.layout.width + (siblingGaps[idx] ?? 0)
   }
 
   return { positions, width: subtreeWidth, height: cursorY + rowHeight }
@@ -182,6 +233,7 @@ export function layoutEmitterWithSideChain(
   intraChildren: Map<string, string[]>,
   sizeById: Map<string, Size>,
   spacing: Spacing = deriveSpacing(),
+  portsBySideById?: PortsBySideMap,
 ): InternalLayout {
   const rootSize = sizeById.get(rootId) ?? DEFAULT_NODE_SIZE
   const chain = walkFirstChildChain(rootId, intraChildren)
@@ -195,20 +247,32 @@ export function layoutEmitterWithSideChain(
   const rootLocalX = rootSize.width / 2
   positions.set(rootId, { x: rootLocalX, y: rootSize.height / 2 })
 
-  // Chain column anchored at the right edge of the root.
-  let cursorY = rootSize.height + spacing.internalLayerGap
-  const chainColumnLeft = rootSize.width + spacing.internalRootGap
+  // Horizontal root-to-chain gap from the actual ports on
+  // root.right and the chain head's left side. For network
+  // topologies these are usually BOTH empty (root has bottom
+  // ports for chain edge, chain head has top ports), so the
+  // gap shrinks to just one `labelClearance`. Falls back to
+  // legacy `internalRootGap` when no port info is supplied.
+  const chainHead = chain[0]
+  const horizGap = chainHead
+    ? rootToChainHorizontalGap(rootId, chainHead, spacing, portsBySideById)
+    : spacing.internalRootGap
+
+  // Chain column anchored at the right edge of the root. Each
+  // vertical layer gap sized from the bottom-↔-top facing
+  // ports of the two members it sits between.
+  const chainColumnLeft = rootSize.width + horizGap
   let chainMaxRight = chainColumnLeft
+  let cursorY = rootSize.height
+  let prevId: string = rootId
   for (const m of chain) {
     const ms = sizeById.get(m) ?? DEFAULT_NODE_SIZE
+    cursorY += verticalLayerGap(prevId, m, spacing, portsBySideById)
     positions.set(m, { x: chainColumnLeft + ms.width / 2, y: cursorY + ms.height / 2 })
-    cursorY += ms.height + spacing.internalLayerGap
+    cursorY += ms.height
     chainMaxRight = Math.max(chainMaxRight, chainColumnLeft + ms.width)
+    prevId = m
   }
-  // Drop the trailing layer gap — block height ends at the
-  // bottom of the last chain member, not at the next would-be
-  // slot.
-  if (chain.length > 0) cursorY -= spacing.internalLayerGap
 
   // Pad left so the root sits at the block's horizontal centre.
   const rightExtent = chainMaxRight - rootLocalX
