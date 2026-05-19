@@ -15,17 +15,27 @@
   import {
     addPort,
     collectObstacles,
-    computeNodeBodySize,
+    createEngine,
     detectClickSide,
     linkExists,
     moveNode,
     moveSubgraph,
     rebalanceSubgraphs,
-    resolveNodeSize,
     resolvePosition,
     routeEdges,
     specDeviceType,
   } from '@shumoku/core'
+
+  /** Shared sizing engine for this renderer. */
+  const engine = createEngine()
+  const computeNodeBodySize = (n: { label?: string | string[]; spec?: NodeSpec }) =>
+    engine.nodeBodySize(n as Parameters<typeof engine.nodeBodySize>[0])
+  const resolveNodeSize = (n: {
+    label?: string | string[]
+    spec?: NodeSpec
+    size?: { width: number; height: number }
+  }) => n.size ?? computeNodeBodySize(n)
+
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import type { RendererOverlaySnippets } from '../lib/overlays'
   import { themeToColors } from '../lib/render-colors'

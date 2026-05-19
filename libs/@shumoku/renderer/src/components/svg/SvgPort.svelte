@@ -1,6 +1,9 @@
 <script lang="ts">
-  import type { ResolvedPort } from '@shumoku/core'
-  import { SMALL_LABEL_CHAR_WIDTH } from '@shumoku/core'
+  import { createEngine, type ResolvedPort } from '@shumoku/core'
+
+  /** Shared sizing engine for label-width measurement. */
+  const engine = createEngine()
+
   import type { PortOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
   import { computePortLabelPosition } from '../../lib/svg-coords'
@@ -52,7 +55,7 @@
   const labelPos = $derived(computePortLabelPosition(port))
 
   const hasLabel = $derived(port.label.trim().length > 0)
-  const labelWidth = $derived(port.label.length * SMALL_LABEL_CHAR_WIDTH + 4)
+  const labelWidth = $derived(engine.text.measure(port.label, 'port') + 4)
   const labelHeight = 12
   const bgX = $derived(() => {
     if (labelPos.textAnchor === 'middle') return labelPos.x - labelWidth / 2

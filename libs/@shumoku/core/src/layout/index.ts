@@ -3,20 +3,24 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Shumoku Layout Engines
- *
- * Public surface:
+ * Shumoku Layout — public surface.
  *
  *   - `createEngine(config)` — rule authority. Provides sizing,
  *     placement-policy queries, text measurement.
- *   - `autoLayoutFlatTree(graph, engine, options)` — the flat-
- *     tree auto-placement algorithm wrapped behind an engine.
+ *   - `autoLayoutFlatTree(graph, engine, options)` — the
+ *     flat-tree auto-placement algorithm. Most callers go
+ *     through `computeNetworkLayout` (below), which sets up
+ *     a default engine + edge routing.
+ *   - `computeNetworkLayout(graph)` — convenience entry that
+ *     internally calls `autoLayoutFlatTree` and routes edges.
+ *   - `resolveNodeSize(node)` — returns `node.size` if set,
+ *     otherwise asks an engine for the body size.
  *
- * The legacy `layoutNetwork(graph, options)` entry is kept for
- * callers that haven't migrated yet; new code should construct
- * an engine and call `autoLayoutFlatTree`.
+ * Manual placement uses the same engine via `engine.tryPlace`
+ * so layout and drag-snap stay consistent.
  */
 
+// Auto-placement
 export {
   type AutoLayoutOptions,
   type AutoLayoutResult,
@@ -28,7 +32,7 @@ export type {
   LayoutEngine as ShumokuLayoutEngine,
   PortsBySide as EnginePortsBySide,
 } from './engine/index.js'
-// New engine + auto-placement surface. Conflicting names
+// Engine — rule authority + placement policy. Conflicting names
 // (LayoutEngine, Size, Position) are NOT re-exported here —
 // import from `@shumoku/core/layout/engine` deeply if you need
 // them, or alias on import.
@@ -43,6 +47,7 @@ export {
   type PlacementResult,
   type PortInfo,
   type Rect,
+  resolveNodeSize,
   type Side,
   type TextMeasurer,
 } from './engine/index.js'
@@ -71,20 +76,13 @@ export {
   linkSpeedBps,
   resolveBandwidthBps,
 } from './link-utils.js'
-// Custom network layout (Sugiyama 4-alignment) + bezier edge wrapping
-export type { NetworkLayoutOptions, NetworkLayoutResult, PortsBySide } from './network-layout.js'
-export {
-  computeNodeBodySize,
-  computeNodeFootprint,
-  computeNodeSize,
-  layoutNetwork,
-  resolveNodeSize,
-} from './network-layout.js'
+// Port placement (decides which side, places ports)
 export { placePorts } from './port-placement.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
 // Resolved layout model (Port/Edge as computed objects, Node/Subgraph used directly)
 export type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
 export { routeEdges } from './route-edges.js'
-// Unified layout engine (wraps network layout + bezier edge wrapping)
+// Top-level convenience entry that runs autoLayoutFlatTree +
+// edge routing in one call. Used by the editor / server / CLI.
 export { computeNetworkLayout, createNetworkLayoutEngine } from './unified-engine.js'

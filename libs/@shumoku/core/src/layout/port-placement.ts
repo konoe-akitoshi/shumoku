@@ -31,7 +31,7 @@
  */
 
 import type { Direction, Link, Node, Position } from '../models/types.js'
-import { resolveNodeSize } from './network-layout.js'
+import { resolveNodeSize } from './engine/index.js'
 import type { ResolvedPort } from './resolved-types.js'
 
 /** Default port visual size */

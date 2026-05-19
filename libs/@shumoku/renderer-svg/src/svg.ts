@@ -26,6 +26,7 @@ import type {
 import {
   bezierEdgePath,
   bpsToLinkWidth,
+  createEngine,
   DEFAULT_ICON_SIZE,
   darkTheme,
   ICON_LABEL_GAP,
@@ -33,8 +34,6 @@ import {
   lightTheme,
   linkSpeedBps,
   resolveIcon,
-  resolveNodeSize,
-  SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   specDeviceType,
   type Theme,
@@ -222,6 +221,16 @@ export class SVGRenderer {
   private options: Required<SVGRendererOptions>
   private theme: Theme = lightTheme
   private renderColors: RenderColors = themeToRenderColors(lightTheme)
+  /** Sizing engine used for label-width measurement and node body sizing fallback. */
+  private engine = createEngine()
+  private resolveNodeSize(node: {
+    label?: string | string[]
+    size?: { width: number; height: number }
+  }) {
+    return (
+      node.size ?? this.engine.nodeBodySize(node as Parameters<typeof this.engine.nodeBodySize>[0])
+    )
+  }
   constructor(options?: SVGRendererOptions) {
     this.options = { ...DEFAULT_OPTIONS, ...options }
   }
@@ -323,7 +332,7 @@ export class SVGRenderer {
           {
             id,
             position: node.position ?? { x: 0, y: 0 },
-            size: resolveNodeSize(node),
+            size: this.resolveNodeSize(node),
             node,
           },
         ]),
@@ -923,7 +932,9 @@ ${fg}
     }
 
     const labelText = this.escapeXml(port.label)
-    const labelWidth = labelText.length * SMALL_LABEL_CHAR_WIDTH + 4
+    // Width comes from the engine's real measurement so the
+    // background rect matches the rendered text width exactly.
+    const labelWidth = this.engine.text.measure(port.label, 'port') + 4
     const labelHeight = 12
 
     let bgX = labelX - 2
@@ -1378,9 +1389,11 @@ ${fg}
     const lineHeight = 12
     const paddingX = 4
 
-    // Calculate dimensions
-    const maxLen = Math.max(...lines.map((l) => l.length))
-    const rectWidth = maxLen * SMALL_LABEL_CHAR_WIDTH + paddingX
+    // Calculate dimensions. Endpoint labels use the same 9 px
+    // sans-serif as port labels, so we measure them via the
+    // engine's 'port' kind for consistency.
+    const rectWidth =
+      lines.reduce((max, l) => Math.max(max, this.engine.text.measure(l, 'port')), 0) + paddingX
     const rectHeight = lines.length * lineHeight
 
     // Adjust rect position based on text anchor

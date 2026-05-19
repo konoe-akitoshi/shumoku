@@ -21,8 +21,7 @@
 import type { LayoutEngine } from '../hierarchical.js'
 import type { LayoutResult, NetworkGraph } from '../models/types.js'
 import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
-import { createEngine } from './engine/index.js'
-import { resolveNodeSize } from './network-layout.js'
+import { createEngine, resolveNodeSize } from './engine/index.js'
 import type { ResolvedLayout } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 

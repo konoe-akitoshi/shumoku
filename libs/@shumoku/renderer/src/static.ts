@@ -18,16 +18,23 @@ import type {
   Theme,
 } from '@shumoku/core'
 import {
+  createEngine,
   DEFAULT_ICON_SIZE,
   getDeviceIcon,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
-  resolveNodeSize,
-  SMALL_LABEL_CHAR_WIDTH,
   type SurfaceToken,
   specDeviceType,
 } from '@shumoku/core'
+
+/** Shared sizing engine for static SSR / CLI rendering. */
+const engine = createEngine()
+const resolveNodeSize = (n: {
+  label?: string | string[]
+  size?: { width: number; height: number }
+}) => n.size ?? engine.nodeBodySize(n as Parameters<typeof engine.nodeBodySize>[0])
+
 import { type RenderColors, themeToColors } from './lib/render-colors'
 import { bezierEdgePath, computePortLabelPosition, getVlanStroke } from './lib/svg-coords'
 
@@ -195,7 +202,7 @@ function renderNode(node: Node, colors: RenderColors): string {
 function renderPort(port: ResolvedPort, colors: RenderColors): string {
   const { absolutePosition: pos, size } = port
   const labelPos = computePortLabelPosition(port)
-  const labelWidth = port.label.length * SMALL_LABEL_CHAR_WIDTH + 4
+  const labelWidth = engine.text.measure(port.label, 'port') + 4
   const labelHeight = 12
 
   let bgX = labelPos.x - 2
