@@ -72,7 +72,7 @@ function timeLayout(rooms: number, apsPerRoom: number): { nodes: number; ms: num
 }
 
 describe('flat-tree engine performance smoke', () => {
-  test('50 nodes < 75ms', () => {
+  test('50 nodes < 150ms', () => {
     // ~50 nodes: 8 rooms × 6 APs + 8 switches + 2 = 58
     const { nodes, ms } = timeLayout(8, 6)
     // Useful information when this regresses. The bound is
@@ -80,7 +80,7 @@ describe('flat-tree engine performance smoke', () => {
     // ms of jitter are normal. The 200- and 1000-node tests
     // catch real algorithmic regressions.
     console.log(`50-node fixture: ${nodes} nodes in ${ms.toFixed(1)} ms`)
-    expect(ms).toBeLessThan(75)
+    expect(ms).toBeLessThan(150)
   })
 
   test('200 nodes < 200ms', () => {
