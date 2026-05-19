@@ -5,18 +5,24 @@
 /**
  * Unified layout engine adapter
  *
- * Wraps `layoutNetwork` (custom Sugiyama with 4-alignment BK coords)
- * plus the trivial `routeEdges` pass that just attaches port-anchored
- * `ResolvedEdge` records. Edge geometry is computed in the renderer
- * as cubic Beziers from the port positions, so no routing solver is
+ * Wraps the engine-driven `autoLayoutFlatTree` plus the trivial
+ * `routeEdges` pass that attaches port-anchored `ResolvedEdge`
+ * records. Edge geometry is computed in the renderer as cubic
+ * Beziers from the port positions, so no routing solver is
  * involved at this layer anymore.
  *
- * Used by server, CLI, renderer-html, and renderer-svg for consistent layout.
+ * Used by server, CLI, renderer-html, and renderer-svg for
+ * consistent layout. The `LayoutEngine` interface here is the
+ * legacy async wrapper from `hierarchical.ts`; the underlying
+ * spatial-rule engine (`@shumoku/core/layout/engine`) is
+ * instantiated inside `computeNetworkLayout`.
  */
 
 import type { LayoutEngine } from '../hierarchical.js'
 import type { LayoutResult, NetworkGraph } from '../models/types.js'
-import { layoutNetwork, resolveNodeSize } from './network-layout.js'
+import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
+import { createEngine } from './engine/index.js'
+import { resolveNodeSize } from './network-layout.js'
 import type { ResolvedLayout } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 
@@ -46,7 +52,12 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
 }> {
   const direction = graph.settings?.direction ?? 'TB'
 
-  const { nodes, ports, subgraphs, bounds } = layoutNetwork(graph, { direction })
+  // Create a spatial-rule engine once per layout call. Engines
+  // are stateless beyond memoization, so this is cheap; in
+  // contexts that lay out repeatedly (drag, animation) the
+  // engine instance can be hoisted to caller scope.
+  const engine = createEngine()
+  const { nodes, ports, subgraphs, bounds } = autoLayoutFlatTree(graph, engine, { direction })
   const edges = await routeEdges(nodes, ports, graph.links, subgraphs)
 
   const resolved: ResolvedLayout = {
