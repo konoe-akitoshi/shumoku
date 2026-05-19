@@ -1,7 +1,14 @@
 // Direction rotation pass.
 
 import { describe, expect, test } from 'vitest'
-import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
+import type {
+  Bounds,
+  Direction,
+  Link,
+  NetworkGraph,
+  Node,
+  Subgraph,
+} from '../../../models/types.js'
 import { layoutFlatTree } from './index.js'
 import { rotateBounds, rotatePoint } from './rotate.js'
 

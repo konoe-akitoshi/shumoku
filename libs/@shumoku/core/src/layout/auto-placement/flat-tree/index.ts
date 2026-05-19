@@ -11,8 +11,14 @@
  * for tests and advanced callers.
  */
 
-import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
-import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tidy-tree.js'
+import type {
+  Bounds,
+  Direction,
+  Link,
+  NetworkGraph,
+  Node,
+  Subgraph,
+} from '../../../models/types.js'
 import { buildBlocks, findExternalEmitterBlocks } from './blocks.js'
 import { type Diagnostic, missingSizeDiagnostic, validateGraph } from './diagnostics.js'
 import { computeSubgraphHulls } from './hulls.js'
@@ -24,6 +30,7 @@ import type { PortsBySideMap } from './port-extent.js'
 import { rotateLayoutResult } from './rotate.js'
 import { deriveSpacing, type LayoutMetrics } from './spacing.js'
 import { alignSameSubgraphSpine } from './spine.js'
+import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from './tidy-tree.js'
 import type { FlatTreeLayoutResult, InternalLayout, Position, Size } from './types.js'
 
 export interface FlatTreeLayoutOptions {
