@@ -22,7 +22,7 @@ import {
   buildChildSheetGraph,
   collectObstacles,
   computeNetworkLayout,
-  computeNodeBodySize,
+  createEngine,
   createMemoryFileResolver,
   HierarchicalParser,
   isPortLinked,
@@ -36,11 +36,24 @@ import {
   placePorts,
   rebalanceSubgraphs,
   removePort as removePortCore,
-  resolveNodeSize,
   resolvePosition,
   type Subgraph,
   type Theme,
 } from '@shumoku/core'
+
+/**
+ * Shared engine instance for sizing queries. Stateless beyond
+ * memoization, so a single instance is fine across the whole
+ * editor session.
+ */
+const sizingEngine = createEngine()
+const computeNodeBodySize = (node: { label?: string | string[]; spec?: NodeSpec }) =>
+  sizingEngine.nodeBodySize(node as Parameters<typeof sizingEngine.nodeBodySize>[0])
+const resolveNodeSize = (node: {
+  label?: string | string[]
+  spec?: NodeSpec
+  size?: { width: number; height: number }
+}) => node.size ?? computeNodeBodySize(node)
 import { SvelteMap } from 'svelte/reactivity'
 import {
   inheritProductIconFromCatalog,
