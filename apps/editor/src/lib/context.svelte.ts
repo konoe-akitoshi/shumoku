@@ -54,6 +54,7 @@ const resolveNodeSize = (node: {
   spec?: NodeSpec
   size?: { width: number; height: number }
 }) => node.size ?? computeNodeBodySize(node)
+
 import { SvelteMap } from 'svelte/reactivity'
 import {
   inheritProductIconFromCatalog,
