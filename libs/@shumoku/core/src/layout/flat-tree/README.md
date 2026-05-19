@@ -26,6 +26,10 @@ NetworkGraph
     │       buildBlocks
     │       findExternalEmitterBlocks
     │
+    ▼ ── 2a. Peer-emitter groups ───── emitter-groups.ts
+    │       detectPeerEmitterGroups
+    │       buildPeerEmitterAnchorMap
+    │
     ▼ ── 3. Internal layouts ───────── internal.ts
     │       layoutBlockInternal
     │       │   ├── single-member
@@ -67,7 +71,9 @@ Each phase is a pure function; together they implement `layoutFlatTree`.
 
 - **Intra-root.** A block member whose primary parent lives outside the block (or absent). Blocks have ≥1 intra-root; multi-root blocks lay out side-by-side subtrees.
 
-- **Spine.** A child block in the same subgraph as its outer-tree parent. The spine-alignment pass shifts the sibling cluster so the spine shares the parent's x — multi-emitter subgraphs render as narrow vertical strips instead of wide L-shapes.
+- **Spine.** A child block in the same subgraph as its outer-tree parent. The spine-alignment pass shifts the sibling cluster so the spine shares the parent's x — multi-emitter subgraphs that survive as a cascade render as narrow vertical strips instead of wide L-shapes.
+
+- **Peer-emitter group.** A set of exactly 2 single-member emitter blocks in the same subgraph, connected by a primary tree-edge. Peer-emitter groups are rerouted in `buildBlockParents` so both members share the same outer-tree parent — they render as a horizontal sibling row at the same depth, each with its own downstream column. Captures the "two distribution switches each serving a different floor" pattern without forcing it through the cascade machinery. Limited to exactly 2 emitters for now; 3+ emitter cascades stay vertical because false-horizontal misreads cascade flow as peer redundancy.
 
 ## Invariants
 

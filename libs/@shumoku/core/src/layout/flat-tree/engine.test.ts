@@ -149,8 +149,12 @@ describe('layoutFlatTree — edge cases', () => {
     }
   })
 
-  test('multi-emitter subgraph: two emitters share an x column via spine alignment', () => {
+  test('multi-emitter subgraph: two emitters render as a horizontal peer row', () => {
     // sg has two internal members e1 → e2; each emits an external child.
+    // The peer-emitter detector treats this as a 2-emitter same-subgraph
+    // group and reroutes e2's outer parent to share e1's, so the pair
+    // sits side-by-side at the same outer-tree depth instead of cascading
+    // vertically. Each emitter's external child fans below it.
     const env = setUp(
       [node('e1', 'sg'), node('e2', 'sg'), node('extA'), node('extB')],
       [link('e1', 'e2'), link('e1', 'extA'), link('e2', 'extB')],
@@ -159,12 +163,18 @@ describe('layoutFlatTree — edge cases', () => {
     const r = layoutFlatTree(env.graph, env.nodesById, env.subgraphsById, env.sizeById, noFlip)
     const e1 = r.nodePositions.get('e1')
     const e2 = r.nodePositions.get('e2')
-    expect(e1 && e2).toBeTruthy()
-    if (e1 && e2) {
-      // Spine alignment pulls e2 onto e1's x.
-      expect(e2.x).toBeCloseTo(e1.x, 1)
-      // e2 sits below e1.
-      expect(e2.y).toBeGreaterThan(e1.y)
+    const extA = r.nodePositions.get('extA')
+    const extB = r.nodePositions.get('extB')
+    expect(e1 && e2 && extA && extB).toBeTruthy()
+    if (e1 && e2 && extA && extB) {
+      // Peer row: e1 and e2 share a y, separated horizontally.
+      expect(e1.y).toBeCloseTo(e2.y, 1)
+      expect(e1.x).not.toBe(e2.x)
+      // Each external child sits below its emitter, sharing x with it.
+      expect(extA.y).toBeGreaterThan(e1.y)
+      expect(extB.y).toBeGreaterThan(e2.y)
+      expect(extA.x).toBeCloseTo(e1.x, 1)
+      expect(extB.x).toBeCloseTo(e2.x, 1)
     }
   })
 

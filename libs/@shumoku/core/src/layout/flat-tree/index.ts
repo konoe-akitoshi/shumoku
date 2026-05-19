@@ -15,6 +15,7 @@ import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../.
 import { layoutTree, type TreeLayoutEdge, type TreeLayoutNode } from '../tree-layout.js'
 import { buildBlocks, findExternalEmitterBlocks } from './blocks.js'
 import { type Diagnostic, missingSizeDiagnostic, validateGraph } from './diagnostics.js'
+import { buildPeerEmitterAnchorMap, detectPeerEmitterGroups } from './emitter-groups.js'
 import { computeSubgraphHulls } from './hulls.js'
 import { layoutBlockInternal } from './internal.js'
 import { buildBlockChildren, buildBlockParents } from './outer.js'
@@ -125,7 +126,12 @@ export function layoutFlatTree(
   }
 
   // 4. Outer block tree.
-  const blockParents = buildBlockParents(blockMembers, blockOfNode, parents)
+  // Detect peer-emitter groups (2-emitter same-subgraph cases)
+  // and reroute non-anchor blocks so the pair renders as a
+  // horizontal sibling row instead of a vertical cascade.
+  const peerGroups = detectPeerEmitterGroups(blockMembers, parents, nodesById)
+  const peerAnchorMap = buildPeerEmitterAnchorMap(peerGroups)
+  const blockParents = buildBlockParents(blockMembers, blockOfNode, parents, peerAnchorMap)
   const blockChildren = buildBlockChildren(
     blockParents,
     blockMembers,

@@ -33,11 +33,20 @@ import type { BlockChildren, BlockMembers, BlockOfNode, BlockParents } from './t
  * parent is the block containing the primary parent of the
  * block's entry member (the member crossing into the block
  * from outside).
+ *
+ * When `peerAnchorMap` is supplied (from
+ * {@link ./emitter-groups.ts | detectPeerEmitterGroups}),
+ * non-anchor blocks in a peer-emitter group are rerouted to
+ * share the anchor's outer-tree parent. The net effect: the
+ * two emitters become siblings in the outer tidy-tree instead
+ * of a parent-child chain, and render as a horizontal peer row
+ * instead of a vertical cascade strip.
  */
 export function buildBlockParents(
   blockMembers: BlockMembers,
   blockOfNode: BlockOfNode,
   parents: Map<string, string>,
+  peerAnchorMap?: ReadonlyMap<string, string>,
 ): BlockParents {
   const out: BlockParents = new Map()
   for (const [block, members] of blockMembers) {
@@ -46,8 +55,26 @@ export function buildBlockParents(
     const externalParent = parents.get(entry)
     if (!externalParent) continue
     const parentBlock = blockOfNode.get(externalParent)
-    if (parentBlock && parentBlock !== block) {
-      out.set(block, parentBlock)
+    if (!parentBlock || parentBlock === block) continue
+    // If this block is a non-anchor member of a peer-emitter
+    // group, redirect its outer parent to whatever the anchor's
+    // outer parent is. We resolve the anchor's parent lazily
+    // below since we may not have built it yet.
+    out.set(block, parentBlock)
+  }
+  // Second pass: rewrite non-anchor entries to point at the
+  // anchor's outer parent. Done after the first pass so we can
+  // see the anchor's resolved parent.
+  if (peerAnchorMap && peerAnchorMap.size > 0) {
+    for (const [nonAnchor, anchor] of peerAnchorMap) {
+      const anchorParent = out.get(anchor)
+      if (anchorParent) {
+        out.set(nonAnchor, anchorParent)
+      } else {
+        // Anchor itself is an outer-tree root → non-anchor
+        // also becomes a root.
+        out.delete(nonAnchor)
+      }
     }
   }
   return out
