@@ -16,4 +16,4 @@ export {
   type FlatTreeLayoutOptions,
   type FlatTreeLayoutResult,
   layoutFlatTree,
-} from './flat-tree/index.js'
+} from './auto-placement/flat-tree/index.js'
