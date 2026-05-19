@@ -78,13 +78,14 @@ interface LayoutRules {
   nodeBodySize(node: Node): Size
   /**
    * Footprint including port-lane allowance. `portsBySide`
-   * describes the *state of affairs* (how many ports are on
-   * each side); the rule layer doesn't decide WHICH side, it
-   * just accepts a count and sizes the box accordingly.
+   * describes the *state of affairs* — which ports sit on
+   * which side, with their labels. The rule layer reads the
+   * labels via the injected TextMeasurer and sizes the box;
+   * it does not decide which side each port is on.
    * Algorithm-specific port-side decisions (direction-aware,
    * device-type heuristics, …) live in the algorithm.
    */
-  nodeFootprint(node: Node, ctx?: { portsBySide?: PortsBySide; maxPortLabelPx?: number }): Size
+  nodeFootprint(node: Node, ctx?: { portsBySide?: PortsBySide }): Size
   /** Axis-aligned obstacle rect for collision / gap math. */
   nodeObstacle(node: Node, pos: Position, ctx?: { portsBySide?: PortsBySide }): Rect
 
@@ -96,15 +97,74 @@ interface LayoutRules {
    */
   minSeparation(a: Rect, b: Rect, axis: 'x' | 'y'): number
 
-  // Subgraph framing
-  subgraphPadding(): number
-  subgraphLabelHeight(): number
+  // Subgraph framing — config accessors
+  readonly subgraphPadding: number
+  readonly subgraphLabelHeight: number
 
   // Introspection
   readonly metrics: LayoutMetrics
-  readonly direction: Direction
   /** Stable hash of config — usable as cache key. */
   readonly fingerprint: string
+}
+```
+
+Note that `direction` is **not** on `LayoutRules`. Direction (TB/BT/LR/RL) only affects two things and both are algorithm-coupled: it drives which side ports get assigned to (`decidePortSide` in flat-tree), and it triggers the final rotation pass (`rotate.ts` in flat-tree). Rules — sizes, gaps, padding — are direction-neutral by construction.
+
+### Shared types (sketch)
+
+```ts
+type Side = 'top' | 'bottom' | 'left' | 'right'
+
+interface Size { width: number; height: number }
+interface Position { x: number; y: number }
+interface Rect { x: number; y: number; width: number; height: number }
+
+/**
+ * Engine config — drives the rule layer. Direction is not
+ * here: it's an algorithm option (passed to
+ * `autoLayoutFlatTree`), because rules are direction-neutral.
+ */
+interface EngineConfig {
+  metrics?: LayoutMetrics
+  density?: 'compact' | 'normal' | 'comfortable'
+  textMeasurer?: TextMeasurer
+}
+
+/**
+ * Per-side port lists, with each port's id and optional label.
+ * Richer than a count-only map so the rule layer can size each
+ * side correctly when port labels have very different widths
+ * (e.g. `Gi1/0/1` on top, longer `40G-uplink-spare` on bottom).
+ */
+interface PortsBySide {
+  top: PortInfo[]
+  bottom: PortInfo[]
+  left: PortInfo[]
+  right: PortInfo[]
+}
+interface PortInfo {
+  id: string
+  label?: string
+}
+
+/** Placement-policy result for one tryPlace call. */
+interface PlacementResult {
+  valid: boolean
+  requested: Position
+  snapped: Position
+  footprint: Rect
+  conflicts: PlacementConflict[] // empty when valid
+}
+interface PlacementConflict {
+  withNodeId: string
+  overlap: Rect
+}
+
+/** An occupant of the canvas — what `tryPlace` checks against. */
+interface NodeWithPosition {
+  id: string
+  position: Position
+  footprint: Rect
 }
 ```
 
@@ -112,14 +172,14 @@ interface LayoutRules {
 
 | Concept | Where | Why |
 |---|---|---|
-| `PortsBySide` (per-side counts) | **`LayoutRules` public** | A neutral *state-of-affairs* type. Every layout algorithm that draws ports on sides needs to express "this node has N horizontal ports" — even force-directed. The rule layer reads it to size obstacles; it does not decide its content. |
+| `PortsBySide` (per-side port lists with labels) | **`LayoutRules` public** | A neutral *state-of-affairs* type. Every layout algorithm that draws ports on sides needs to express "this node has these ports on these sides" — even force-directed. The rule layer reads it to size obstacles via the TextMeasurer; it does not decide its content. |
 | `decidePortSide(link, role)` | flat-tree | The *decision* of which side a port lives on is algorithm-coupled: it depends on layout direction, parent/child role, and shumoku's device-type heuristics. A force-directed layout would decide differently. |
 | `SideExtent` ("does this side have a port?") | flat-tree | A derived view used by flat-tree's *facing-side* gap calculation. The "facing side" framing is itself algorithm-coupled (it presumes tree-like sibling adjacency). |
 | `gap(right, left)` (port-aware facing-side gap) | flat-tree | Flat-tree-specific adapter that consumes `SideExtent` and emits a number. Internally it calls `LayoutRules.minSeparation` on two derived rects. |
 
 Net: the rule layer accepts `PortsBySide` as a public input but does not own the algorithm-coupled vocabulary of "right / left / facing sides".
 
-**Implementation watchpoint**: `LayoutRules` documentation and JSDoc examples must not imply the rule layer *computes* or *normalizes* port-side assignment. It only *consumes* counts. Anything that decides "which side this port goes on" lives in the algorithm.
+**Implementation watchpoint**: `LayoutRules` documentation and JSDoc examples must not imply the rule layer *computes* or *normalizes* port-side assignment. It only *consumes* the per-side port lists supplied via `PortsBySide`. Anything that decides "which side this port goes on" lives in the algorithm.
 
 ### `PlacementPolicy` — manual-placement policy
 
@@ -129,6 +189,8 @@ interface PlacementPolicy {
    * Try to place `node` at `pos` given the current occupants.
    * Returns a structured result so the editor can show why
    * placement failed and offer the snapped alternative.
+   * `PlacementResult` and `NodeWithPosition` are defined in
+   * the shared types sketch above.
    */
   tryPlace(
     node: Node,
@@ -138,14 +200,6 @@ interface PlacementPolicy {
 
   /** Snap a position to the policy's grid / alignment. */
   snapTo(pos: Position): Position
-}
-
-interface PlacementResult {
-  valid: boolean
-  requested: Position
-  snapped: Position
-  footprint: Rect
-  conflicts: PlacementConflict[]   // empty when valid
 }
 ```
 
@@ -248,7 +302,7 @@ Made explicit so they don't infect every API by accident:
 
 - Origin top-left, +x right, +y down.
 - All positions are **node centres**. Rect / footprint return four sides.
-- `Direction` (TB/BT/LR/RL) is **only** a config of the rules layer and an option to auto-placement. Manual placement and rendering see absolute coords already in the chosen direction.
+- `Direction` (TB/BT/LR/RL) is **only** an option to auto-placement. `LayoutRules` is direction-neutral (sizes, gaps, padding don't change with direction). Manual placement and rendering see absolute coords already in the chosen direction.
 - The flat-tree algorithm computes in TB internally and rotates at the end (existing `rotate.ts`). That pipeline stays.
 
 ## Migration
