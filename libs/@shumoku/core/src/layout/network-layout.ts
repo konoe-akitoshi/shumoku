@@ -500,6 +500,11 @@ export function layoutNetwork(
       metrics: {
         portLabelOuterReach: PORT_LABEL_OUTER_REACH,
       },
+      // Pass per-node port-side counts. The engine uses them
+      // to shrink horizontal gaps when neither facing side has
+      // a port (typical for AP chains where ports are on top/
+      // bottom only). Absent in callers that skip the wrapper.
+      portsBySideById,
     },
   )
   const nodes = new Map<string, Node>()

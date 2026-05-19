@@ -20,6 +20,7 @@ import { layoutBlockInternal } from './internal.js'
 import { buildBlockChildren, buildBlockParents } from './outer.js'
 import { breakCycles, buildPrimaryParents } from './parents.js'
 import { applyPinnedPositions } from './pin.js'
+import type { PortsBySideMap } from './port-extent.js'
 import { rotateLayoutResult } from './rotate.js'
 import { deriveSpacing, type LayoutMetrics } from './spacing.js'
 import { alignSameSubgraphSpine } from './spine.js'
@@ -53,10 +54,24 @@ export interface FlatTreeLayoutOptions {
    * {@link ./spacing.ts | LayoutMetrics}.
    */
   metrics?: LayoutMetrics
+  /**
+   * Per-node port-side counts. When present, internal layout
+   * gaps shrink for pairs whose facing sides have no port —
+   * e.g. a switch-to-AP chain where neither member has
+   * left/right ports gets a tight horizontal gutter instead of
+   * the worst-case constant. Absent → engine uses the legacy
+   * constants, preserving every existing snapshot.
+   *
+   * Source: `network-layout.ts:decidePortSides`. The wrapper
+   * already computes this for footprint sizing; this option
+   * just threads the same map into the engine.
+   */
+  portsBySideById?: PortsBySideMap
 }
 
 export type { Diagnostic, DiagnosticSeverity } from './diagnostics.js'
 export { createFlatTreeEngine, type FlatTreeEngine, type LayoutRequest } from './engine.js'
+export type { PortsBySide, PortsBySideMap } from './port-extent.js'
 export { deriveSpacing, type LayoutMetrics, type Spacing } from './spacing.js'
 export type { FlatTreeLayoutResult } from './types.js'
 
@@ -120,7 +135,14 @@ export function layoutFlatTree(
   for (const [block, members] of blockMembers) {
     internal.set(
       block,
-      layoutBlockInternal(members, parents, sizeById, blockEmitsExternal.has(block), spacing),
+      layoutBlockInternal(
+        members,
+        parents,
+        sizeById,
+        blockEmitsExternal.has(block),
+        spacing,
+        options.portsBySideById,
+      ),
     )
   }
 
