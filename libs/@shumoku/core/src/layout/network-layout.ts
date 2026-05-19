@@ -485,6 +485,15 @@ export function layoutNetwork(
   // exists for future per-renderer tuning. Outer gaps and the
   // subgraph hull dimensions remain explicit UX choices owned
   // by this wrapper.
+  //
+  // `overlayReorder` is enabled here. The flat-tree engine
+  // ships it opt-in because it changes block ordering when
+  // overlay edges (link.redundancy) span sibling subtrees,
+  // and that's a meaningful default-flip. The quality harness
+  // in `../quality` verifies this doesn't increase straight-
+  // line edge crossings on any corpus fixture. For HA-heavy
+  // network topologies the win is concrete: HA peer pairs end
+  // up adjacent instead of separated by unrelated siblings.
   const result = layoutFlatTree(
     graph,
     nodesById,
@@ -500,6 +509,7 @@ export function layoutNetwork(
       metrics: {
         portLabelOuterReach: PORT_LABEL_OUTER_REACH,
       },
+      overlayReorder: true,
     },
   )
   const nodes = new Map<string, Node>()
