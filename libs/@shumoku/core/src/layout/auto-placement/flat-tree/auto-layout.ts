@@ -267,6 +267,16 @@ export function autoLayoutFlatTree(
 
   applyFixedOverride(nodes, ports, subgraphs, opts.fixed, graph.nodes)
 
+  // 5b. Final safety pass — recompute subgraph hulls from
+  // children, resolve sibling-subgraph overlaps via the engine,
+  // and push free nodes away from subgraphs they don't belong
+  // to. The flat-tree's own block-sizing should already satisfy
+  // invariant 2 (sibling hulls disjoint), but it currently
+  // leaks overlaps on real samples; we rely on the engine's
+  // collision resolver as the authoritative final check so
+  // layout output never violates the contract.
+  rebalanceSubgraphs(nodes, subgraphs, ports)
+
   // 6. Bounds with comfortable margin.
   const pad = 50
   const rb = result.rootBounds
