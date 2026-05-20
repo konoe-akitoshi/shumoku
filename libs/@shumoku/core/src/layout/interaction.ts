@@ -228,7 +228,10 @@ export function rebalanceSubgraphs(
   nodes: Map<string, Node>,
   subgraphs: Map<string, Subgraph>,
   ports: Map<string, ResolvedPort>,
+  opts: { subgraphPadding?: number; subgraphLabelHeight?: number } = {},
 ): void {
+  const padding = opts.subgraphPadding ?? SUBGRAPH_PADDING
+  const labelHeight = opts.subgraphLabelHeight ?? SUBGRAPH_LABEL_HEIGHT
   // Build depth map
   const depthOf = (sgId: string, visited = new Set<string>()): number => {
     if (visited.has(sgId)) return 0
@@ -280,10 +283,10 @@ export function rebalanceSubgraphs(
     subgraphs.set(sgId, {
       ...sg,
       bounds: {
-        x: minX - SUBGRAPH_PADDING,
-        y: minY - SUBGRAPH_PADDING - SUBGRAPH_LABEL_HEIGHT,
-        width: maxX - minX + SUBGRAPH_PADDING * 2,
-        height: maxY - minY + SUBGRAPH_PADDING * 2 + SUBGRAPH_LABEL_HEIGHT,
+        x: minX - padding,
+        y: minY - padding - labelHeight,
+        width: maxX - minX + padding * 2,
+        height: maxY - minY + padding * 2 + labelHeight,
       },
     })
   }
