@@ -22,6 +22,7 @@
     colors,
     shadowFilterId = 'node-shadow',
     selected = false,
+    bumping = false,
     interactive = false,
     overlay,
     ondragstart,
@@ -36,6 +37,10 @@
     colors: RenderColors
     shadowFilterId?: string
     selected?: boolean
+    /** True when another element is currently being dragged
+     *  against this node — surfaces a red-ish "you're in the
+     *  way" affordance. */
+    bumping?: boolean
     interactive?: boolean
     overlay?: NodeOverlaySnippet
     /** Fires once when a drag begins — host opens an undo/sync transaction here. */
@@ -160,6 +165,7 @@
 <g
   class="node"
   class:selected
+  class:bumping
   data-id={node.id}
   data-device-type={specDeviceType(node.spec) ?? ''}
   filter="url(#{shadowFilterId})"

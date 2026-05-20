@@ -120,6 +120,64 @@ export function resolveNodePosition(
 }
 
 /**
+ * Like `collectObstacles` but keeps the obstacle's id, so
+ * callers (drag-time feedback) can map a conflict rect back
+ * to the entity that owns it.
+ */
+function collectObstaclesWithIds(
+  excludeId: string,
+  excludeParent: string | undefined,
+  nodes: Map<string, Node>,
+  subgraphs?: Map<string, Subgraph>,
+): { id: string; rect: { x: number; y: number; w: number; h: number } }[] {
+  const obstacles: { id: string; rect: { x: number; y: number; w: number; h: number } }[] = []
+
+  for (const [nid, n] of nodes) {
+    if (nid === excludeId) continue
+    if (!n.position) continue
+    const size = resolveNodeSize(n)
+    obstacles.push({
+      id: nid,
+      rect: { x: n.position.x, y: n.position.y, w: size.width, h: size.height },
+    })
+  }
+
+  if (subgraphs) {
+    for (const [sgId, sg] of subgraphs) {
+      if (sgId === excludeId) continue
+      if (!sg.bounds) continue
+      if (excludeParent && isChildOf(excludeParent, sgId, subgraphs)) continue
+      obstacles.push({ id: sgId, rect: boundsToRect(sg.bounds) })
+    }
+  }
+
+  return obstacles
+}
+
+/**
+ * Identify which existing nodes / subgraphs would overlap the
+ * candidate placement of `id` at (`x`, `y`). The candidate is
+ * the **requested** position, not the resolved one — so this
+ * is what the editor uses to show "you're bumping against X"
+ * mid-drag, even though `moveNode` slides the node to a
+ * non-overlapping spot.
+ */
+export function placementConflicts(
+  id: string,
+  x: number,
+  y: number,
+  nodes: Map<string, Node>,
+  subgraphs?: Map<string, Subgraph>,
+  gap = DEFAULT_NODE_GAP,
+): string[] {
+  const node = nodes.get(id)
+  if (!node) return []
+  const size = resolveNodeSize(node)
+  const obstacles = collectObstaclesWithIds(id, node.parent, nodes, subgraphs)
+  return defaultEngine().findConflicts({ x, y, w: size.width, h: size.height }, obstacles, gap)
+}
+
+/**
  * **Geometric** placement for a single unpositioned node: find the
  * point nearest `initial` that doesn't overlap any existing node or
  * subgraph. The graph's link structure is deliberately ignored — this

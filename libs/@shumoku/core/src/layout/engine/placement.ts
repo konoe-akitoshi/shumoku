@@ -76,6 +76,20 @@ export interface PlacementPolicy {
   ): Position
 
   /**
+   * Pure geometric conflict check: given a candidate rect and
+   * a list of obstacles tagged with ids, return the ids of
+   * obstacles whose rect overlaps the candidate (with `gap`).
+   * Symmetric to `resolveAgainstObstacles` — same predicate,
+   * different return shape. Used by drag-time UI to highlight
+   * which neighbour is being bumped.
+   */
+  findConflicts(
+    rect: { x: number; y: number; w: number; h: number },
+    obstacles: { id: string; rect: { x: number; y: number; w: number; h: number } }[],
+    gap?: number,
+  ): string[]
+
+  /**
    * Snap a position to the policy's grid / alignment. Default
    * is identity (no grid). Editors may install a stricter
    * policy via future config.
@@ -171,6 +185,13 @@ export function createPlacementPolicy(rules: LayoutRules): PlacementPolicy {
         }
       }
       return { x: fx, y: fy }
+    },
+    findConflicts(rect, obstacles, gap = DEFAULT_GAP) {
+      const blocked: string[] = []
+      for (const obs of obstacles) {
+        if (rectsOverlapCenter(rect, obs.rect, gap)) blocked.push(obs.id)
+      }
+      return blocked
     },
     snapTo(pos) {
       // Identity for now. Grid / alignment policy can be

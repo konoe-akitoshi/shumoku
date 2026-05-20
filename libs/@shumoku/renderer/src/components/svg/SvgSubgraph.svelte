@@ -9,6 +9,7 @@
     colors,
     theme,
     selected = false,
+    bumping = false,
     interactive = false,
     overlay,
     ondragstart,
@@ -22,6 +23,9 @@
     colors: RenderColors
     theme?: Theme
     selected?: boolean
+    /** True when another element is being dragged against this
+     *  subgraph — surfaces a red outline as drag-time feedback. */
+    bumping?: boolean
     interactive?: boolean
     overlay?: SubgraphOverlaySnippet
     ondragstart?: (sgId: string) => void
@@ -74,7 +78,7 @@
   })
 </script>
 
-<g class="subgraph" class:selected data-id={subgraph.id}>
+<g class="subgraph" class:selected class:bumping data-id={subgraph.id}>
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <rect
     class="subgraph-bg"

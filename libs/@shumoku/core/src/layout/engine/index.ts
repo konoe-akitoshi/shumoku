@@ -63,6 +63,7 @@ export function createEngine(config: EngineConfig = {}): LayoutEngine {
     tryPlace: placement.tryPlace.bind(placement),
     resolvePosition: placement.resolvePosition.bind(placement),
     resolveAgainstObstacles: placement.resolveAgainstObstacles.bind(placement),
+    findConflicts: placement.findConflicts.bind(placement),
     snapTo: placement.snapTo.bind(placement),
   }
 }

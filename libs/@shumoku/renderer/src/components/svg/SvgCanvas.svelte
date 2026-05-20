@@ -19,6 +19,7 @@
     theme,
     interactive = false,
     selection = new Set<string>(),
+    bumping = new Set<string>(),
     linkedPorts = new Set<string>(),
     subgraphOverlay,
     linkOverlay,
@@ -57,6 +58,10 @@
     theme?: Theme
     interactive?: boolean
     selection?: Set<string>
+    /** Ids of nodes / subgraphs the dragged element is currently
+     *  pushing against. Used to flash a "being bumped" affordance
+     *  on those neighbours mid-drag. */
+    bumping?: Set<string>
     linkedPorts?: Set<string>
     linkPreview?: { fromX: number; fromY: number; toX: number; toY: number } | null
     svgEl?: SVGSVGElement | null
@@ -240,6 +245,18 @@
       vector-effect: non-scaling-stroke;
       stroke-width: 3;
     }
+
+    /* Bumping feedback. Painted only on neighbours that the
+       currently-dragged element is pushing against — surfaces a
+       red, non-scaling outline so the user can see *why* their
+       drag is being held back. */
+    .node.bumping .node-bg > *,
+    .subgraph.bumping > .subgraph-bg {
+      vector-effect: non-scaling-stroke;
+      stroke: #ef4444;
+      stroke-width: 3;
+      stroke-dasharray: 4 3;
+    }
   </style>`}
 
   <!-- Viewport group: d3-zoom applies transform here -->
@@ -265,6 +282,7 @@
         {colors}
         {theme}
         selected={selection.has(subgraph.id)}
+        bumping={bumping.has(subgraph.id)}
         {interactive}
         overlay={subgraphOverlay}
         {ondragstart}
@@ -295,6 +313,7 @@
           {node}
           {colors}
           selected={selection.has(node.id)}
+          bumping={bumping.has(node.id)}
           {interactive}
           overlay={nodeOverlay}
           {ondragstart}

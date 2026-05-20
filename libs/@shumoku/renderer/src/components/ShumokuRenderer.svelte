@@ -20,6 +20,7 @@
     linkExists,
     moveNode,
     moveSubgraph,
+    placementConflicts,
     rebalanceSubgraphs,
     resolvePosition,
     routeEdges,
@@ -65,6 +66,15 @@
       if (!next.has(k)) target.delete(k)
     }
     for (const [k, v] of next) target.set(k, v)
+  }
+
+  /** Diff-apply for sets — same reasoning as replaceMap. */
+  function replaceSet<T>(target: Set<T>, source: Iterable<T>) {
+    const next = source instanceof Set ? source : new Set(source)
+    for (const v of [...target]) {
+      if (!next.has(v)) target.delete(v)
+    }
+    for (const v of next) target.add(v)
   }
 
   interface RendererProps extends RendererOverlaySnippets {
@@ -363,6 +373,12 @@
   // an obstacle, the entire group is held back by the dragged one.
   let multiDragOrigin: Map<string, { x: number; y: number }> | null = null
 
+  // Ids the dragged element is currently bumping into. Updated
+  // every drag tick via `placementConflicts` so neighbours can
+  // surface a "being pushed against" affordance. Cleared on
+  // dragend.
+  let bumping = $state(new SvelteSet<string>())
+
   function handleDragStart(id: string) {
     if (selection.has(id) && selection.size > 1) {
       multiDragOrigin = new Map()
@@ -383,10 +399,19 @@
 
   function handleDragEnd(id: string) {
     multiDragOrigin = null
+    bumping.clear()
     ondragend?.(id)
   }
 
   async function handleDragMove(id: string, x: number, y: number) {
+    // Update bump set against the *requested* (cursor) position
+    // — moveNode below will slide the entity to a free spot,
+    // but the user is still pushing against these neighbours.
+    if (nodes.has(id)) {
+      const conflicts = placementConflicts(id, x, y, nodes, subgraphs)
+      replaceSet(bumping, conflicts)
+    }
+
     const state = { nodes, ports, subgraphs }
     const result = nodes.has(id)
       ? await moveNode(id, x, y, state, links)
@@ -793,6 +818,7 @@
     {theme}
     {interactive}
     {selection}
+    {bumping}
     {linkedPorts}
     {subgraphOverlay}
     {linkOverlay}
