@@ -280,6 +280,7 @@ export function autoLayoutFlatTree(
   rebalanceSubgraphs(nodes, subgraphs, ports, {
     subgraphPadding: opts.subgraphPadding,
     subgraphLabelHeight: opts.subgraphLabelHeight,
+    direction: opts.direction,
   })
 
   // 6. Bounds with comfortable margin. Recompute from the

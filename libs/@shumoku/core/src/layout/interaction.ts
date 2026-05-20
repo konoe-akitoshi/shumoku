@@ -228,10 +228,20 @@ export function rebalanceSubgraphs(
   nodes: Map<string, Node>,
   subgraphs: Map<string, Subgraph>,
   ports: Map<string, ResolvedPort>,
-  opts: { subgraphPadding?: number; subgraphLabelHeight?: number } = {},
+  opts: {
+    subgraphPadding?: number
+    subgraphLabelHeight?: number
+    /**
+     * Layout direction. Decides which side the subgraph label
+     * band sits on: TB → top, BT → bottom, LR → left, RL →
+     * right. Defaults to 'TB' (the manual-placement convention).
+     */
+    direction?: 'TB' | 'BT' | 'LR' | 'RL'
+  } = {},
 ): void {
   const padding = opts.subgraphPadding ?? SUBGRAPH_PADDING
   const labelHeight = opts.subgraphLabelHeight ?? SUBGRAPH_LABEL_HEIGHT
+  const direction = opts.direction ?? 'TB'
   // Build depth map
   const depthOf = (sgId: string, visited = new Set<string>()): number => {
     if (visited.has(sgId)) return 0
@@ -280,15 +290,43 @@ export function rebalanceSubgraphs(
 
     if (!hasChildren) continue
 
-    subgraphs.set(sgId, {
-      ...sg,
-      bounds: {
-        x: minX - padding,
-        y: minY - padding - labelHeight,
-        width: maxX - minX + padding * 2,
-        height: maxY - minY + padding * 2 + labelHeight,
-      },
-    })
+    // Direction decides which side gets the label-band offset.
+    // TB → above children; BT → below; LR → left; RL → right.
+    let bounds: { x: number; y: number; width: number; height: number }
+    switch (direction) {
+      case 'BT':
+        bounds = {
+          x: minX - padding,
+          y: minY - padding,
+          width: maxX - minX + padding * 2,
+          height: maxY - minY + padding * 2 + labelHeight,
+        }
+        break
+      case 'LR':
+        bounds = {
+          x: minX - padding - labelHeight,
+          y: minY - padding,
+          width: maxX - minX + padding * 2 + labelHeight,
+          height: maxY - minY + padding * 2,
+        }
+        break
+      case 'RL':
+        bounds = {
+          x: minX - padding,
+          y: minY - padding,
+          width: maxX - minX + padding * 2 + labelHeight,
+          height: maxY - minY + padding * 2,
+        }
+        break
+      default:
+        bounds = {
+          x: minX - padding,
+          y: minY - padding - labelHeight,
+          width: maxX - minX + padding * 2,
+          height: maxY - minY + padding * 2 + labelHeight,
+        }
+    }
+    subgraphs.set(sgId, { ...sg, bounds })
   }
 
   // Second pass: resolve sibling collisions (shallowest first = reverse order)
