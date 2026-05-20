@@ -267,18 +267,67 @@ export function autoLayoutFlatTree(
 
   applyFixedOverride(nodes, ports, subgraphs, opts.fixed, graph.nodes)
 
-  // 6. Bounds with comfortable margin.
-  const pad = 50
-  const rb = result.rootBounds
-  const bounds: Bounds =
-    rb.width === 0 && rb.height === 0
-      ? { x: 0, y: 0, width: 400, height: 300 }
-      : {
-          x: rb.x - pad,
-          y: rb.y - pad,
-          width: rb.width + pad * 2,
-          height: rb.height + pad * 2,
-        }
+  // 5b. Final safety pass — recompute subgraph hulls from
+  // children, resolve sibling-subgraph overlaps via the engine,
+  // and push free nodes away from subgraphs they don't belong
+  // to. The flat-tree's own block-sizing should already satisfy
+  // invariant 2 (sibling hulls disjoint), but it currently
+  // leaks overlaps on real samples; we rely on the engine's
+  // collision resolver as the authoritative final check so
+  // layout output never violates the contract. Pass through the
+  // caller-supplied subgraph spacing so the rebalance honours
+  // it instead of falling back to the interaction defaults.
+  rebalanceSubgraphs(nodes, subgraphs, ports, {
+    subgraphPadding: opts.subgraphPadding,
+    subgraphLabelHeight: opts.subgraphLabelHeight,
+    direction: opts.direction,
+  })
+
+  // 6. Bounds with comfortable margin. Recompute from the
+  // post-rebalance state — `result.rootBounds` describes the
+  // pre-rebalance layout, so any shift from 5b would otherwise
+  // leave shifted entities outside the returned bounds.
+  const bounds = computeBounds(nodes, subgraphs)
 
   return { nodes, ports, subgraphs, bounds }
+}
+
+/**
+ * Tight bbox over every positioned node + every subgraph
+ * hull, expanded by a comfortable margin so the caller's
+ * viewport doesn't clip the outermost elements.
+ */
+function computeBounds(nodes: Map<string, Node>, subgraphs: Map<string, Subgraph>): Bounds {
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  let any = false
+  for (const n of nodes.values()) {
+    if (!n.position) continue
+    const size = n.size ?? { width: 0, height: 0 }
+    const hw = size.width / 2
+    const hh = size.height / 2
+    minX = Math.min(minX, n.position.x - hw)
+    minY = Math.min(minY, n.position.y - hh)
+    maxX = Math.max(maxX, n.position.x + hw)
+    maxY = Math.max(maxY, n.position.y + hh)
+    any = true
+  }
+  for (const sg of subgraphs.values()) {
+    if (!sg.bounds) continue
+    minX = Math.min(minX, sg.bounds.x)
+    minY = Math.min(minY, sg.bounds.y)
+    maxX = Math.max(maxX, sg.bounds.x + sg.bounds.width)
+    maxY = Math.max(maxY, sg.bounds.y + sg.bounds.height)
+    any = true
+  }
+  if (!any) return { x: 0, y: 0, width: 400, height: 300 }
+  const pad = 50
+  return {
+    x: minX - pad,
+    y: minY - pad,
+    width: maxX - minX + pad * 2,
+    height: maxY - minY + pad * 2,
+  }
 }

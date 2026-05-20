@@ -228,7 +228,20 @@ export function rebalanceSubgraphs(
   nodes: Map<string, Node>,
   subgraphs: Map<string, Subgraph>,
   ports: Map<string, ResolvedPort>,
+  opts: {
+    subgraphPadding?: number
+    subgraphLabelHeight?: number
+    /**
+     * Layout direction. Decides which side the subgraph label
+     * band sits on: TB → top, BT → bottom, LR → left, RL →
+     * right. Defaults to 'TB' (the manual-placement convention).
+     */
+    direction?: 'TB' | 'BT' | 'LR' | 'RL'
+  } = {},
 ): void {
+  const padding = opts.subgraphPadding ?? SUBGRAPH_PADDING
+  const labelHeight = opts.subgraphLabelHeight ?? SUBGRAPH_LABEL_HEIGHT
+  const direction = opts.direction ?? 'TB'
   // Build depth map
   const depthOf = (sgId: string, visited = new Set<string>()): number => {
     if (visited.has(sgId)) return 0
@@ -241,107 +254,176 @@ export function rebalanceSubgraphs(
   // Sort subgraphs deepest-first
   const sorted = [...subgraphs.keys()].sort((a, b) => depthOf(b) - depthOf(a))
 
-  // Bottom-up pass: recompute bounds, then resolve sibling collisions
-  for (const sgId of sorted) {
-    const sg = subgraphs.get(sgId)
-    if (!sg) continue
+  /**
+   * Bottom-up hull recompute: each subgraph's bounds are the
+   * tight bbox of its positioned children + padding + a label
+   * band offset placed per `direction`. Factored out so we can
+   * run it once initially and again after pass 3 in case
+   * pushing free nodes shifted any subgraph's children.
+   */
+  const recomputeHulls = () => {
+    for (const sgId of sorted) {
+      const sg = subgraphs.get(sgId)
+      if (!sg) continue
 
-    // Recompute bounds from children (nodes + child subgraphs)
-    let minX = Number.POSITIVE_INFINITY
-    let minY = Number.POSITIVE_INFINITY
-    let maxX = Number.NEGATIVE_INFINITY
-    let maxY = Number.NEGATIVE_INFINITY
-    let hasChildren = false
+      let minX = Number.POSITIVE_INFINITY
+      let minY = Number.POSITIVE_INFINITY
+      let maxX = Number.NEGATIVE_INFINITY
+      let maxY = Number.NEGATIVE_INFINITY
+      let hasChildren = false
 
-    for (const n of nodes.values()) {
-      if (n.parent !== sgId) continue
-      if (!n.position) continue
-      hasChildren = true
-      const size = resolveNodeSize(n)
-      const hw = size.width / 2
-      const hh = size.height / 2
-      minX = Math.min(minX, n.position.x - hw)
-      minY = Math.min(minY, n.position.y - hh)
-      maxX = Math.max(maxX, n.position.x + hw)
-      maxY = Math.max(maxY, n.position.y + hh)
+      for (const n of nodes.values()) {
+        if (n.parent !== sgId) continue
+        if (!n.position) continue
+        hasChildren = true
+        const size = resolveNodeSize(n)
+        const hw = size.width / 2
+        const hh = size.height / 2
+        minX = Math.min(minX, n.position.x - hw)
+        minY = Math.min(minY, n.position.y - hh)
+        maxX = Math.max(maxX, n.position.x + hw)
+        maxY = Math.max(maxY, n.position.y + hh)
+      }
+      for (const child of subgraphs.values()) {
+        if (child.parent !== sgId) continue
+        if (!child.bounds) continue
+        hasChildren = true
+        minX = Math.min(minX, child.bounds.x)
+        minY = Math.min(minY, child.bounds.y)
+        maxX = Math.max(maxX, child.bounds.x + child.bounds.width)
+        maxY = Math.max(maxY, child.bounds.y + child.bounds.height)
+      }
+
+      if (!hasChildren) continue
+
+      // Direction decides which side gets the label-band offset.
+      // TB → above children; BT → below; LR → left; RL → right.
+      let bounds: { x: number; y: number; width: number; height: number }
+      switch (direction) {
+        case 'BT':
+          bounds = {
+            x: minX - padding,
+            y: minY - padding,
+            width: maxX - minX + padding * 2,
+            height: maxY - minY + padding * 2 + labelHeight,
+          }
+          break
+        case 'LR':
+          bounds = {
+            x: minX - padding - labelHeight,
+            y: minY - padding,
+            width: maxX - minX + padding * 2 + labelHeight,
+            height: maxY - minY + padding * 2,
+          }
+          break
+        case 'RL':
+          bounds = {
+            x: minX - padding,
+            y: minY - padding,
+            width: maxX - minX + padding * 2 + labelHeight,
+            height: maxY - minY + padding * 2,
+          }
+          break
+        default:
+          bounds = {
+            x: minX - padding,
+            y: minY - padding - labelHeight,
+            width: maxX - minX + padding * 2,
+            height: maxY - minY + padding * 2 + labelHeight,
+          }
+      }
+      subgraphs.set(sgId, { ...sg, bounds })
     }
-    for (const child of subgraphs.values()) {
-      if (child.parent !== sgId) continue
-      if (!child.bounds) continue
-      hasChildren = true
-      minX = Math.min(minX, child.bounds.x)
-      minY = Math.min(minY, child.bounds.y)
-      maxX = Math.max(maxX, child.bounds.x + child.bounds.width)
-      maxY = Math.max(maxY, child.bounds.y + child.bounds.height)
-    }
-
-    if (!hasChildren) continue
-
-    subgraphs.set(sgId, {
-      ...sg,
-      bounds: {
-        x: minX - SUBGRAPH_PADDING,
-        y: minY - SUBGRAPH_PADDING - SUBGRAPH_LABEL_HEIGHT,
-        width: maxX - minX + SUBGRAPH_PADDING * 2,
-        height: maxY - minY + SUBGRAPH_PADDING * 2 + SUBGRAPH_LABEL_HEIGHT,
-      },
-    })
   }
 
-  // Second pass: resolve sibling collisions (shallowest first = reverse order)
-  // Using shallowest-first so parent-level collisions are resolved before children
-  for (const sgId of [...sorted].reverse()) {
-    // Re-fetch from map (may have been shifted by earlier iterations)
-    const sg = subgraphs.get(sgId)
-    if (!sg?.bounds) continue
-    const parentId = sg.parent
+  /**
+   * Sibling-subgraph collision pass. Shallowest-first so a
+   * shift at level N propagates correctly to deeper checks.
+   * Returns true iff anything moved.
+   */
+  const resolveSiblingCollisions = (): boolean => {
+    let moved = false
+    for (const sgId of [...sorted].reverse()) {
+      const sg = subgraphs.get(sgId)
+      if (!sg?.bounds) continue
+      const parentId = sg.parent
 
-    for (const [otherId] of subgraphs) {
-      if (otherId === sgId) continue
-      const other = subgraphs.get(otherId)
-      if (!other?.bounds || other.parent !== parentId) continue
+      for (const [otherId] of subgraphs) {
+        if (otherId === sgId) continue
+        const other = subgraphs.get(otherId)
+        if (!other?.bounds || other.parent !== parentId) continue
 
-      const a = boundsToRect(sg.bounds)
-      const b = boundsToRect(other.bounds)
-      // resolveAgainstObstacles returns the input unchanged
-      // when no overlap, so a separate nodesOverlap guard
-      // is unnecessary.
-      const resolved = defaultEngine().resolveAgainstObstacles(b, [a], DEFAULT_NODE_GAP)
-      const dx = resolved.x - b.x
-      const dy = resolved.y - b.y
-      if (dx === 0 && dy === 0) continue
+        const a = boundsToRect(sg.bounds)
+        const b = boundsToRect(other.bounds)
+        const resolved = defaultEngine().resolveAgainstObstacles(b, [a], DEFAULT_NODE_GAP)
+        const dx = resolved.x - b.x
+        const dy = resolved.y - b.y
+        if (dx === 0 && dy === 0) continue
 
-      subgraphs.set(otherId, {
-        ...other,
-        bounds: { ...other.bounds, x: other.bounds.x + dx, y: other.bounds.y + dy },
-      })
-      shiftContents(otherId, dx, dy, nodes, subgraphs, ports)
-    }
-  }
-
-  // Third pass: push free nodes away from subgraphs they don't belong to
-  for (const [nodeId, node] of nodes) {
-    if (!node.position) continue
-    const size = resolveNodeSize(node)
-    const obstacles = collectObstacles(nodeId, node.parent, nodes, subgraphs)
-    const resolved = resolvePosition(
-      { x: node.position.x, y: node.position.y, w: size.width, h: size.height },
-      obstacles,
-    )
-    if (resolved.x !== node.position.x || resolved.y !== node.position.y) {
-      const dx = resolved.x - node.position.x
-      const dy = resolved.y - node.position.y
-      nodes.set(nodeId, { ...node, position: resolved })
-      // Shift ports
-      for (const [portId, port] of ports) {
-        if (port.nodeId !== nodeId) continue
-        ports.set(portId, {
-          ...port,
-          absolutePosition: { x: port.absolutePosition.x + dx, y: port.absolutePosition.y + dy },
+        subgraphs.set(otherId, {
+          ...other,
+          bounds: { ...other.bounds, x: other.bounds.x + dx, y: other.bounds.y + dy },
         })
+        shiftContents(otherId, dx, dy, nodes, subgraphs, ports)
+        moved = true
       }
     }
+    return moved
   }
+
+  /**
+   * Push free nodes away from subgraphs they don't belong to.
+   * Returns true iff anything moved.
+   */
+  const pushFreeNodes = (): boolean => {
+    let moved = false
+    for (const [nodeId, node] of nodes) {
+      if (!node.position) continue
+      const size = resolveNodeSize(node)
+      const obstacles = collectObstacles(nodeId, node.parent, nodes, subgraphs)
+      const resolved = resolvePosition(
+        { x: node.position.x, y: node.position.y, w: size.width, h: size.height },
+        obstacles,
+      )
+      if (resolved.x !== node.position.x || resolved.y !== node.position.y) {
+        const dx = resolved.x - node.position.x
+        const dy = resolved.y - node.position.y
+        nodes.set(nodeId, { ...node, position: resolved })
+        moved = true
+        for (const [portId, port] of ports) {
+          if (port.nodeId !== nodeId) continue
+          ports.set(portId, {
+            ...port,
+            absolutePosition: {
+              x: port.absolutePosition.x + dx,
+              y: port.absolutePosition.y + dy,
+            },
+          })
+        }
+      }
+    }
+    return moved
+  }
+
+  // Iterate until the layout stabilises. Each round:
+  //   1. recompute hulls (bottom-up)
+  //   2. resolve subgraph sibling collisions
+  //   3. push free nodes away from foreign subgraphs
+  // Either mutation can invalidate the other (e.g. shifting a
+  // deep child grows its parent, which may now collide with the
+  // parent's own sibling). The cap is intentionally low — for
+  // shumoku-typical nesting depth ≤3 the layout converges
+  // within 2–3 rounds; anything beyond suggests pathological
+  // input we'd rather degrade than spin on.
+  const MAX_ROUNDS = 5
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    recomputeHulls()
+    const a = resolveSiblingCollisions()
+    const b = pushFreeNodes()
+    if (!a && !b) break
+  }
+  // Final recompute so the hulls reflect the post-converge state.
+  recomputeHulls()
 }
 
 export async function moveNode(
