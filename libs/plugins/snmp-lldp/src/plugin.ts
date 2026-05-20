@@ -45,7 +45,7 @@ export interface SnmpLldpConfig {
 
 export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
   readonly type = 'snmp-lldp'
-  readonly displayName = 'SNMP / LLDP'
+  readonly displayName = 'Network Discovery'
   readonly capabilities: readonly DataSourceCapability[] = ['autoscan', 'topology']
 
   private config: SnmpLldpConfig = {}

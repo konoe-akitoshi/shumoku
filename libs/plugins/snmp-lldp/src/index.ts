@@ -16,7 +16,7 @@ export { spikeBunCompat } from './bun-compat.js'
 export { SnmpLldpPlugin } from './plugin.js'
 
 export function register(registry: PluginRegistryInterface): void {
-  registry.register('snmp-lldp', 'SNMP / LLDP', ['autoscan', 'topology'], (config) => {
+  registry.register('snmp-lldp', 'Network Discovery', ['autoscan', 'topology'], (config) => {
     const plugin = new SnmpLldpPlugin()
     plugin.initialize(config)
     return plugin
