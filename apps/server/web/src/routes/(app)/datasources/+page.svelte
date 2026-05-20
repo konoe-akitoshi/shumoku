@@ -16,6 +16,20 @@
   let showCreateModal = $state(false)
   let testingId = $state<string | null>(null)
   let testResults = $state<Record<string, ConnectionResult>>({})
+  let scanningId = $state<string | null>(null)
+  /** Per-source last-scan result for surfacing in the table. */
+  let scanResults = $state<
+    Record<
+      string,
+      {
+        status: 'ok' | 'partial' | 'failed' | 'empty'
+        nodeCount: number
+        linkCount: number
+        portCount: number
+        message?: string
+      }
+    >
+  >({})
 
   // Plugin types from API
   let pluginTypes = $state<DataSourcePluginInfo[]>([])
@@ -242,6 +256,54 @@
     testingId = null
   }
 
+  /**
+   * Ad-hoc autoscan against a data source. The snapshot is NOT persisted
+   * here because no topology context is supplied — this is a "preview"
+   * scan used to confirm credentials / network reachability / what the
+   * source can actually see. To persist, scan from inside a topology.
+   */
+  async function handleScan(ds: DataSource) {
+    scanningId = ds.id
+    try {
+      const result = await api.dataSources.scan(ds.id)
+      const counts = result.snapshot.graph ?? { nodes: [], links: [] }
+      const nodeCount = counts.nodes?.length ?? 0
+      const linkCount = counts.links?.length ?? 0
+      let portCount = 0
+      for (const n of counts.nodes ?? []) {
+        portCount += n.ports?.length ?? 0
+      }
+      scanResults = {
+        ...scanResults,
+        [ds.id]: {
+          status: result.snapshot.status,
+          nodeCount,
+          linkCount,
+          portCount,
+          message: result.snapshot.statusMessage,
+        },
+      }
+    } catch (e) {
+      scanResults = {
+        ...scanResults,
+        [ds.id]: {
+          status: 'failed',
+          nodeCount: 0,
+          linkCount: 0,
+          portCount: 0,
+          message: e instanceof Error ? e.message : 'Scan failed',
+        },
+      }
+    } finally {
+      scanningId = null
+    }
+  }
+
+  /** Does the registered plugin advertise the `autoscan` capability? */
+  function hasAutoscan(type: string): boolean {
+    return pluginTypeMap[type]?.capabilities?.includes('autoscan') ?? false
+  }
+
   async function handleDelete(ds: DataSource) {
     if (!confirm(`Delete data source "${ds.name}"?`)) {
       return
@@ -375,6 +437,22 @@
                 </td>
                 <td class="text-right datasources-actions-cell">
                   <div class="flex items-center justify-end gap-2 datasources-actions">
+                    {#if hasAutoscan(ds.type)}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onclick={() => handleScan(ds)}
+                        disabled={scanningId === ds.id}
+                        title="Run an ad-hoc autoscan (preview — not persisted)"
+                      >
+                        {#if scanningId === ds.id}
+                          <span
+                            class="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1"
+                          ></span>
+                        {/if}
+                        Scan
+                      </Button>
+                    {/if}
                     <Button
                       variant="outline"
                       size="sm"
@@ -391,7 +469,7 @@
                     <Button
                       variant="outline"
                       size="sm"
-                      onclick={() => window.location.href = `/datasources/${ds.id}`}
+                      onclick={() => (window.location.href = `/datasources/${ds.id}`)}
                     >
                       Edit
                     </Button>
@@ -399,6 +477,27 @@
                       Delete
                     </Button>
                   </div>
+                  {#each scanResults[ds.id] ? [scanResults[ds.id]] : [] as r (ds.id)}
+                    {#if r}
+                      <div class="mt-1 text-xs">
+                        {#if r.status === 'ok'}
+                          <span class="text-theme-text-muted">
+                            ✓ {r.nodeCount} nodes / {r.linkCount} links / {r.portCount} ports
+                          </span>
+                        {:else if r.status === 'partial'}
+                          <span class="text-theme-text-muted">
+                            ⚠ partial: {r.nodeCount} nodes / {r.linkCount} links
+                          </span>
+                        {:else if r.status === 'empty'}
+                          <span class="text-theme-text-muted">no devices observed</span>
+                        {:else}
+                          <span class="text-red-500" title={r.message}
+                            >✗ {r.message ?? 'failed'}</span
+                          >
+                        {/if}
+                      </div>
+                    {/if}
+                  {/each}
                 </td>
               </tr>
             {/each}

@@ -131,6 +131,31 @@ export const dataSources = {
     request<{ sites: { slug: string; name: string }[]; tags: { slug: string; name: string }[] }>(
       `/datasources/${id}/filter-options`,
     ),
+
+  /**
+   * Trigger an ad-hoc autoscan. If `topologyId` is provided the snapshot
+   * is persisted to `topology_observations`; otherwise it 's returned but
+   * not stored (useful for "test scan" previews).
+   */
+  scan: (id: string, body?: { topologyId?: string; seeds?: string[] }) =>
+    request<{
+      snapshot: {
+        status: 'ok' | 'partial' | 'failed' | 'empty'
+        statusMessage?: string
+        capturedAt: number
+        graph: NetworkGraph | null
+        warnings?: string[]
+      }
+      observation?: {
+        id: string
+        nodeCount: number
+        linkCount: number
+        portCount: number
+      }
+    }>(`/datasources/${id}/scan`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    }),
 }
 
 // Topologies API
@@ -192,6 +217,44 @@ export const topologies = {
 
   getGraph: (id: string) =>
     request<{ id: string; name: string; graph: NetworkGraph }>(`/topologies/${id}/graph`),
+
+  /** Resolved graph = authored layer folded with latest snapshot per source. */
+  getResolved: (id: string) =>
+    request<{ graph: NetworkGraph; snapshotCount: number }>(`/topologies/${id}/resolved`),
+
+  /** Recent observation snapshots for this topology (counters only). */
+  listObservations: (id: string, limit?: number) => {
+    const params = limit ? `?limit=${limit}` : ''
+    return request<
+      {
+        id: string
+        topologyId: string
+        sourceId: string
+        capturedAt: number
+        status: 'ok' | 'partial' | 'failed' | 'empty'
+        statusMessage?: string
+        nodeCount: number
+        linkCount: number
+        portCount: number
+        createdAt: number
+      }[]
+    >(`/topologies/${id}/observations${params}`)
+  },
+
+  getObservation: (id: string, obsId: string) =>
+    request<{
+      id: string
+      topologyId: string
+      sourceId: string
+      capturedAt: number
+      status: 'ok' | 'partial' | 'failed' | 'empty'
+      statusMessage?: string
+      graph: NetworkGraph | null
+      nodeCount: number
+      linkCount: number
+      portCount: number
+      createdAt: number
+    }>(`/topologies/${id}/observations/${obsId}`),
 
   getContext: (id: string, theme?: 'light' | 'dark') => {
     const params = theme ? `?theme=${theme}` : ''
