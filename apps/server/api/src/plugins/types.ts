@@ -12,6 +12,9 @@ export {
   type AlertSeverity,
   type AlertStatus,
   type AlertsCapable,
+  type AutoscanCapable,
+  type AutoscanInput,
+  type AutoscanProgress,
   addHttpWarning,
   type ConnectionResult,
   type DataSourceCapability,
@@ -21,6 +24,7 @@ export {
   type HostItem,
   type HostsCapable,
   hasAlertsCapability,
+  hasAutoscanCapability,
   hasHostsCapability,
   hasMetricsCapability,
   hasNativeApi,
@@ -38,6 +42,8 @@ export {
   type PluginManifest,
   type PluginRegistration,
   type PluginRegistryInterface,
+  type ScopePolicy,
+  type Snapshot,
   type TopologyCapable,
 } from '@shumoku/core'
 

@@ -23,6 +23,7 @@ export type DataSourceCapability =
   | 'metrics' // Can provide MetricsData
   | 'hosts' // Can list hosts (for mapping UI)
   | 'alerts' // Can provide alerts from monitoring system
+  | 'autoscan' // Can perform seed-crawl network discovery (SNMP/LLDP etc.)
 
 // ============================================
 // Common Types
@@ -320,6 +321,90 @@ export interface AlertsCapable {
 }
 
 /**
+ * One source's observation at a point in time. Returned by autoscan-type
+ * plugins; consumed by the server's resolver. See
+ * `apps/server/docs/design/topology-foundation-plugin-contract.md`.
+ *
+ * The graph is `null` when status is `'failed'`. All elements in the
+ * graph should carry `provenance.source` stamped with the plugin
+ * instance id and (where available) `identity` keys so the resolver can
+ * cluster observations across sources.
+ */
+export interface Snapshot {
+  /** Aggregate status. Retraction gating: only `'ok'` / `'partial'` /
+   *  `'empty'` are treated as authoritative about presence. */
+  status: 'ok' | 'partial' | 'failed' | 'empty'
+  /** Human-readable message when status !== 'ok'. */
+  statusMessage?: string
+  /** Unix ms — when the source captured the snapshot. */
+  capturedAt: number
+  /** The observed graph. `null` only when status === 'failed'. */
+  graph: NetworkGraph | null
+  /** Non-fatal warnings (e.g., timeouts on individual devices). */
+  warnings?: string[]
+}
+
+/**
+ * Crawl-scope policy for seed-crawl autoscans. Inspired by Netdisco
+ * `discover_only` / `discover_no` semantics.
+ */
+export interface ScopePolicy {
+  /** Restrict crawl to these CIDRs. */
+  includeCidrs?: string[]
+  /** Skip these CIDRs even if reachable. */
+  excludeCidrs?: string[]
+  /** "Do not crawl past these nodes" — stops neighbor expansion. */
+  boundaryNodes?: string[]
+  /** Skip devices whose CDP/LLDP type matches these regex patterns. */
+  noTypesPatterns?: string[]
+}
+
+/** Hints from the catalog about which discovery protocols / MIBs to try
+ *  for a given identified device. v1 keeps this loose; the catalog
+ *  surface will tighten in v2. */
+export interface DiscoveryCapabilityHints {
+  snmp?: { versions?: string[]; mibs?: string[] }
+  netconf?: { yang?: string[] }
+  cli?: { family?: string }
+}
+
+export interface AutoscanInput {
+  /** Crawl seed devices (IP or hostname). */
+  seeds: string[]
+  /** Where the crawl may go. */
+  scope?: ScopePolicy
+  /** Optional per-device catalog hints. */
+  capabilityHints?: DiscoveryCapabilityHints
+}
+
+/** Optional progress event stream during a long scan. */
+export interface AutoscanProgress {
+  phase: 'reachability' | 'identify' | 'walk' | 'finalize'
+  totalCandidates: number
+  processed: number
+  failed: number
+  messages: string[]
+}
+
+/**
+ * Plugin can perform seed-crawl network discovery (SNMP/LLDP, ARP,
+ * etc.). Distinct from `TopologyCapable` because autoscan has its own
+ * scope/seed semantics and emits a `Snapshot` (with status + identity
+ * + provenance) rather than a bare `NetworkGraph`.
+ *
+ * The same plugin class MAY implement both `TopologyCapable` and
+ * `AutoscanCapable`. NetBox provides only `topology`; an SNMP plugin
+ * provides only `autoscan`; nothing prevents a future plugin from
+ * doing both.
+ */
+export interface AutoscanCapable {
+  /** Run the scan and return a snapshot. */
+  scan(input: AutoscanInput): Promise<Snapshot>
+  /** Subscribe to per-phase progress events (optional). */
+  subscribeProgress?(input: AutoscanInput, onProgress: (p: AutoscanProgress) => void): () => void
+}
+
+/**
  * Plugin exposes a raw passthrough to the upstream native API. Intended for
  * **developer-time debugging** — the server routes that call this MUST gate
  * themselves on a non-production environment so credentials and arbitrary
@@ -361,6 +446,12 @@ export function hasAlertsCapability(
   plugin: DataSourcePlugin,
 ): plugin is DataSourcePlugin & AlertsCapable {
   return plugin.capabilities.includes('alerts')
+}
+
+export function hasAutoscanCapability(
+  plugin: DataSourcePlugin,
+): plugin is DataSourcePlugin & AutoscanCapable {
+  return plugin.capabilities.includes('autoscan')
 }
 
 /**

@@ -9,6 +9,7 @@ import { authMiddleware } from '../middleware/auth.js'
 import { createAuthApi } from './auth.js'
 import { createDashboardsApi } from './dashboards.js'
 import { createDataSourcesApi } from './datasources.js'
+import { createObservationsRoute, createScanRoute } from './observations.js'
 import { createPluginsApi } from './plugins.js'
 import { createSettingsApi } from './settings.js'
 import { createShareApi } from './share.js'
@@ -29,9 +30,11 @@ export function createApiRouter(): Hono {
   // Mount API routes
   api.route('/dashboards', createDashboardsApi())
   api.route('/datasources', createDataSourcesApi())
+  api.route('/datasources', createScanRoute()) // POST /datasources/:id/scan
   api.route('/plugins', createPluginsApi())
   api.route('/topologies', createTopologiesApi())
   api.route('/topologies', topologySourcesApi) // Nested: /topologies/:id/sources
+  api.route('/topologies', createObservationsRoute()) // /topologies/:id/observations + /resolved
   api.route('/settings', createSettingsApi())
   api.route('/webhooks', webhooksApi)
 

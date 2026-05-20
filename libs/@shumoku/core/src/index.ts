@@ -22,6 +22,8 @@ export * from './layout/index.js'
 export * from './merge.js'
 // Models
 export * from './models/index.js'
+// Observation (discovery / resolve)
+export * from './observation/index.js'
 // Parser
 export * from './parser/index.js'
 // Plugin types

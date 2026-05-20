@@ -18,6 +18,64 @@ export interface IconDimensions {
 }
 
 // ============================================
+// Observation Model — provenance & identity
+// ============================================
+
+/**
+ * Where a node / link / port / subgraph value came from in the
+ * observation model. A `NetworkGraph` snapshot returned by a discovery
+ * source stamps its `<sourceId>` here. The resolver fills `state` when
+ * folding multiple snapshots into a resolved graph. See
+ * `apps/server/docs/design/topology-foundation*.md` for the full design.
+ *
+ * The field is optional on every entity — a NetworkGraph that doesn't
+ * use the observation model (legacy YAML import, hand-authored without
+ * a binding) simply omits it, and consumers fall back to the
+ * pre-existing behavior.
+ *
+ * `source` is an open string (not a union) so external plugins can
+ * supply their own identifier without core edits — same regime as
+ * `Alert.source` (see `@shumoku/core/plugin-types.ts`).
+ */
+export interface Provenance {
+  /** Source identifier. `'authored'` is a reserved value for human edits. */
+  source: string
+  /** Set by the resolver. Snapshots leave this undefined. */
+  state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'
+  /** Unix ms — when the source observed this value. */
+  observedAt?: number
+}
+
+/**
+ * Stable identifiers used to match the same physical entity across
+ * multiple snapshots and across sources. The display `id` on each
+ * entity is opaque to consumers; identity keys here are what the
+ * resolver uses to cluster observations.
+ *
+ * Node keys (device-identifying): `mgmtIp`, `chassisId`, `sysName`,
+ * `vendorIds`. Port keys (interface-identifying): `ifName`, `ifIndex`,
+ * `mac`. `ifIndex` is intentionally treated as a weak fallback because
+ * many devices renumber it across reboots — see
+ * `apps/server/docs/design/topology-foundation-identity.md`.
+ */
+export interface Identity {
+  /** Management IP (v4 or v6 as a string). Node key. */
+  mgmtIp?: string
+  /** LLDP chassisId (MAC or vendor string). Node key. */
+  chassisId?: string
+  /** SNMP sysName. Node key (fallback). */
+  sysName?: string
+  /** ifIndex — weak Port key (unstable across reboots). */
+  ifIndex?: number
+  /** ifName ("GigabitEthernet1/0/1"). Strong Port key. */
+  ifName?: string
+  /** Interface MAC. Aux Port key; for shared-MAC chassis, Node aux too. */
+  mac?: string
+  /** Source-specific identifiers, e.g. `{ 'netbox-device-id': '42' }`. */
+  vendorIds?: Record<string, string>
+}
+
+// ============================================
 // Node Types
 // ============================================
 
@@ -148,6 +206,16 @@ export interface NodePort {
     side?: 'top' | 'bottom' | 'left' | 'right'
     order?: number
   }
+  /**
+   * Observation provenance (which source last asserted this port).
+   * See `Provenance` type. Optional — omitted on hand-authored ports.
+   */
+  provenance?: Provenance
+  /**
+   * Identity keys for cross-source / cross-rescan matching. Filled by
+   * discovery plugins (SNMP → ifIndex/ifName/mac, etc.). See `Identity`.
+   */
+  identity?: Identity
 }
 
 /**
@@ -356,6 +424,20 @@ export interface Node {
    *     bend along with its neighbors.
    */
   termination?: { role: 'outlet' | 'eps' | 'panel' | 'bend' }
+
+  /**
+   * Observation provenance (which source last asserted this node).
+   * See `Provenance`. Optional — omitted on authored nodes that pre-date
+   * the observation model.
+   */
+  provenance?: Provenance
+
+  /**
+   * Identity keys for cross-source / cross-rescan matching. Discovery
+   * plugins fill mgmtIp / chassisId / sysName / vendorIds. The resolver
+   * clusters observations by these. See `Identity`.
+   */
+  identity?: Identity
 }
 
 // ============================================
@@ -596,6 +678,13 @@ export interface Link {
    * Custom metadata for extensions
    */
   metadata?: Record<string, unknown>
+
+  /**
+   * Observation provenance (which source last asserted this link).
+   * See `Provenance`. Links are identified by their endpoints rather
+   * than by a stable identity record, so no `identity` field here.
+   */
+  provenance?: Provenance
 }
 
 /**
@@ -718,6 +807,14 @@ export interface Subgraph {
    * Derived from child node positions — not persisted.
    */
   bounds?: Bounds
+
+  /**
+   * Observation provenance (which source last asserted this subgraph).
+   * See `Provenance`. Subgraphs are logical groupings — typically
+   * authored — so this stays undefined for hand-drawn diagrams. Workload
+   * sources (k8s namespaces, Proxmox clusters) may populate it later.
+   */
+  provenance?: Provenance
 }
 
 // ============================================
