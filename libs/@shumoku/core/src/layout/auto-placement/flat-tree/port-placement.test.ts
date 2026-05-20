@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Link, Node } from '../models/types.js'
+import type { Link, Node } from '../../../models/types.js'
 import { placePorts } from './port-placement.js'
 
 // Test fixture: nodes mimic post-layout state with `.size` already
