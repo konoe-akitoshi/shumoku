@@ -118,6 +118,7 @@
         "shumoku-plugin-grafana": "workspace:*",
         "shumoku-plugin-netbox": "workspace:*",
         "shumoku-plugin-prometheus": "workspace:*",
+        "shumoku-plugin-snmp-lldp": "workspace:*",
         "shumoku-plugin-zabbix": "workspace:*",
         "tar": "^7.5.7",
       },
