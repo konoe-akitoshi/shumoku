@@ -14,6 +14,7 @@ import migration004 from './migrations/004_topology_source_options.sql'
 import migration005 from './migrations/005_auth.sql'
 import migration006 from './migrations/006_share_tokens.sql'
 import migration007 from './migrations/007_grafana_alerts.sql'
+import migration008 from './migrations/008_topology_observations.sql'
 
 /** Ordered list of all migrations */
 const MIGRATIONS: { name: string; sql: string }[] = [
@@ -24,6 +25,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '005_auth.sql', sql: migration005 },
   { name: '006_share_tokens.sql', sql: migration006 },
   { name: '007_grafana_alerts.sql', sql: migration007 },
+  { name: '008_topology_observations.sql', sql: migration008 },
 ]
 
 interface MigrationRecord {
