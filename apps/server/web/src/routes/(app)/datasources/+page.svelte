@@ -48,6 +48,11 @@
   let formArubaUsername = $state('')
   let formArubaPassword = $state('')
   let formArubaSiteId = $state('')
+  // Network Discovery (snmp-lldp) uses community + seeds, no URL.
+  let formSnmpCommunity = $state('public')
+  /** Newline- or comma-separated list of seed device addresses. */
+  let formSnmpSeeds = $state('')
+  let formSnmpTimeoutMs = $state(2000)
   let formError = $state('')
   let formSubmitting = $state(false)
   // Dynamic config values for external plugins
@@ -97,6 +102,9 @@
     formArubaUsername = ''
     formArubaPassword = ''
     formArubaSiteId = ''
+    formSnmpCommunity = 'public'
+    formSnmpSeeds = ''
+    formSnmpTimeoutMs = 2000
     // Initialize dynamic config from schema defaults
     dynamicConfig = {}
     if (plugin.configSchema?.properties) {
@@ -154,6 +162,23 @@
       })
     }
 
+    if (selectedPlugin.type === 'snmp-lldp') {
+      // Seeds are entered as one per line (or comma-separated). Normalize
+      // both. Per-seed community override isn't surfaced in this minimal
+      // form — every seed uses the default community.
+      const community = formSnmpCommunity.trim() || 'public'
+      const seeds = formSnmpSeeds
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((address) => ({ address, community }))
+      return JSON.stringify({
+        community,
+        seeds,
+        timeoutMs: formSnmpTimeoutMs,
+      })
+    }
+
     // External plugins with configSchema - use dynamicConfig
     if (selectedPlugin.configSchema?.properties) {
       const config: Record<string, unknown> = {}
@@ -194,6 +219,11 @@
     } else if (selectedPlugin.type === 'aruba-instant-on') {
       if (!formName.trim() || !formArubaUsername.trim() || !formArubaPassword) {
         formError = 'Name, portal email, and password are required'
+        return
+      }
+    } else if (selectedPlugin.type === 'snmp-lldp') {
+      if (!formName.trim() || !formSnmpSeeds.trim()) {
+        formError = 'Name and at least one seed device are required'
         return
       }
     } else if (selectedPlugin.configSchema?.properties) {
@@ -613,7 +643,7 @@
           >
         </div>
 
-        {#if ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type) || (!selectedPlugin.configSchema?.properties && selectedPlugin.type !== 'aruba-instant-on')}
+        {#if ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type) || (!selectedPlugin.configSchema?.properties && !['aruba-instant-on', 'snmp-lldp'].includes(selectedPlugin.type))}
           <div>
             <label for="url" class="label">URL</label>
             <input
@@ -673,6 +703,57 @@
               <option value={60000}>1 minute</option>
               <option value={300000}>5 minutes</option>
             </select>
+          </div>
+        {/if}
+
+        {#if selectedPlugin.type === 'snmp-lldp'}
+          <div>
+            <label for="snmpCommunity" class="label">SNMP Community</label>
+            <input
+              type="text"
+              id="snmpCommunity"
+              class="input"
+              placeholder="public"
+              bind:value={formSnmpCommunity}
+            >
+            <p class="text-xs text-muted-foreground mt-1">
+              SNMPv2c community string used for every seed.
+            </p>
+          </div>
+
+          <div>
+            <label for="snmpSeeds" class="label">Seed Devices</label>
+            <textarea
+              id="snmpSeeds"
+              class="input min-h-24 font-mono"
+              placeholder="10.0.0.1&#10;10.0.0.2&#10;core-rtr-01.example.net"
+              bind:value={formSnmpSeeds}
+            ></textarea>
+            <p class="text-xs text-muted-foreground mt-1">
+              One IP or hostname per line. The plugin walks System / IF / LLDP-MIB on each seed. v1
+              does <strong>not</strong> auto-expand to LLDP neighbors — list every device you want
+              scanned.
+            </p>
+          </div>
+
+          <div>
+            <label for="snmpTimeout" class="label">Per-Device Timeout (ms)</label>
+            <input
+              type="number"
+              id="snmpTimeout"
+              class="input"
+              min="500"
+              max="30000"
+              step="500"
+              bind:value={formSnmpTimeoutMs}
+            >
+          </div>
+
+          <div
+            class="rounded border border-theme-border bg-theme-surface p-3 text-xs text-theme-text-muted"
+          >
+            v1 scope: SNMP only (System-MIB, IF-MIB, ifXTable, LLDP-MIB). CDP / BRIDGE-MIB / ARP /
+            NETCONF / gNMI / CLI scraping land in v2.
           </div>
         {/if}
 
