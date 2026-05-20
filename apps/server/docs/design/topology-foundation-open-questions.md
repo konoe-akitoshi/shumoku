@@ -11,7 +11,7 @@
 
 ## 🔴 必須
 
-### Q1. メトリクスは v1 で persist するか
+### Q1. メトリクスは v1 で persist するか  ✅ **回答済**: (a) v1 は realtime push のみ、persist は v2
 
 User の感覚「更新情報やメトリクス情報はログとして残る」を真面目に受けると TSDB が要る。
 v1 でどこまでやる？
@@ -24,7 +24,7 @@ v1 でどこまでやる？
 **推奨**: (a)。MVP の検証は観測モデルが動くことであり、TSDB は独立に積める。
 ただし `metrics_samples` テーブルだけ migration で先に切っておくのは安価。
 
-### Q2. MVP スライスのスコープ妥当性
+### Q2. MVP スライスのスコープ妥当性  ✅ **回答済**: catalog 統合 (sysObjectID → model 引き) も v1 に含める → `topology-foundation-mvp.md § 2.4` 追加済
 
 `topology-foundation-mvp.md` で定義した v1 スコープ：
 
@@ -38,7 +38,7 @@ v1 でどこまでやる？
 
 **推奨**: このスコープのまま。広げると検証が遅れる。
 
-### Q3. conflict 解決操作の v1 スコープ
+### Q3. conflict 解決操作の v1 スコープ  ✅ **回答済**: (a) v1 は表示のみ、操作 UI は v2
 
 `topology-foundation.md` の Element inspector ワイヤフレームに `[Use SNMP] [Use NetBox]`
 等のボタンを書いたが、v1 でこれをどこまで実装するか。
@@ -50,7 +50,7 @@ v1 でどこまでやる？
 
 **推奨**: (a)。永続化メカニズム（sticky-decision）は設計が深く、MVP の検証外。
 
-### Q4. v1 で editor をどう扱うか
+### Q4. v1 で editor をどう扱うか  ✅ **回答済**: (a) v1 は editor 改修ゼロ
 
 editor (neted) は authored layer の編集器だが、observation モデルとの接点をどこまで持たせるか。
 
@@ -102,7 +102,7 @@ Bun で SNMP を扱う決定打が無い。
 
 **推奨**: (a) をまずスパイクで試し、ダメなら (c)。(b) は MVP には重すぎる。
 
-### Q8. v1 で catalog 統合はどこまで
+### Q8. v1 で catalog 統合はどこまで  ✅ **回答済**（Q2 で）: sysObjectID → vendor/model 同梱辞書まで v1。capability 宣言は v2
 
 `topology-foundation.md § 2.4` のカタログ駆動探索は v2 棚上げにしたが、
 sysObjectID による識別は v1 でも要る。
