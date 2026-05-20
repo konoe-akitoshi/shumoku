@@ -5,9 +5,20 @@
 /**
  * Shumoku SNMP / LLDP discovery plugin.
  *
- * Skeleton — Bun compatibility spike for the `net-snmp` library is
- * present in `bun-compat.ts`. The full plugin lands in a follow-up
- * commit alongside the `AutoscanCapable` capability addition to core.
+ * Implements `AutoscanCapable` from `@shumoku/core` for seed-crawl
+ * network discovery. See `topology-foundation-plugin-contract.md`.
  */
 
+import type { PluginRegistryInterface } from '@shumoku/core'
+import { SnmpLldpPlugin } from './plugin.js'
+
 export { spikeBunCompat } from './bun-compat.js'
+export { SnmpLldpPlugin } from './plugin.js'
+
+export function register(registry: PluginRegistryInterface): void {
+  registry.register('snmp-lldp', 'SNMP / LLDP', ['autoscan', 'topology'], (config) => {
+    const plugin = new SnmpLldpPlugin()
+    plugin.initialize(config)
+    return plugin
+  })
+}
