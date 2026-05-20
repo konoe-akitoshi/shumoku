@@ -372,6 +372,43 @@ Listed in expected order of usefulness; not part of this PR.
 
 5. **Diagnostics drive layout debugging**: when a snapshot looks wrong, the engine reports which rule was at play.
 
+## Adding a new constraint
+
+When the layout grows a new constraint (a new gap value, a "must
+stay inside region R" rule, a sibling-ordering preference, an
+edge-crossing minimiser, etc.), the wiring cost depends on what
+kind of constraint it is. This table is the decision tree —
+locate your constraint, then touch only the listed surfaces.
+
+| Constraint kind | Examples | Engine | Auto-placement | Manual placement |
+|---|---|---|---|---|
+| **Metric / spacing** | `minGap`, `subgraphPadding`, `fontSize`, `nodeBodyMinWidth` | Update the value in `engine/spacing.ts` or `engine/rules.ts` | Picks up automatically via `nodeFootprint` / `minSeparation` | Picks up automatically via the engine resolver |
+| **Obstacle / containment** | "no overlap with X", "stay inside parent", "min gap from N" | Express as a rect-vs-rect check on `engine.placement` (mirrors `findConflicts` / `resolveAgainstObstacles`) | Run as a final pass after the algorithm | Run inside the drag handler / `moveNode` |
+| **Ordering / ranking** | "siblings sorted by id", "tier-0 nodes pinned to top", "spine alignment" | Add a `rules` query if the value is reusable, otherwise leave it algorithm-local | Integrate into the algorithm itself (Buchheim's apportion step, sort key, etc.) — cannot be enforced post-hoc | Best effort: `validate` and warn; the drag UI can't undo a structural decision |
+| **Aesthetic / global** | "minimise edge crossings", "compact width / favourable aspect ratio" | Out of scope for the engine | Belongs to the algorithm's objective function | Not enforceable from a single-element drag |
+
+Two rules of thumb:
+
+1. **Does it reduce to a rect / point / distance check?** If yes,
+   it's an obstacle-class constraint — add a primitive on
+   `PlacementPolicy` and call it from both auto and manual. Single
+   source of truth in the engine, same enforcement on both paths.
+
+2. **Does it constrain the *search space* of where things can
+   go?** If yes, it's an algorithm-coupled constraint —
+   auto-placement must know about it to consider it during
+   placement, and manual placement can only validate / warn. No
+   amount of abstraction makes this free, because the algorithm
+   has to evaluate against the constraint while generating
+   candidates.
+
+The 80/20 of constraints in network diagrams (sizing, spacing,
+overlap, containment) land in the top two rows and propagate
+through both paths with minimal new wiring. The remaining 20%
+(ordering, aesthetics) genuinely need algorithm-side work;
+that's a property of the problem, not a defect of this
+architecture.
+
 ## Open questions (post-review)
 
 - **Density preset** (`compact|normal|comfortable`) — left for follow-up. Default to `normal`.
