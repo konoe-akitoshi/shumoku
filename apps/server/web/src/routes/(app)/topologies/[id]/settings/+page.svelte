@@ -125,6 +125,33 @@
   )
   let singleCandidateFallback = $state(true)
 
+  // Transient UI timers — tracked so we can cancel them on unmount.
+  let copiedTimer: ReturnType<typeof setTimeout> | null = null
+  let autoMapTimer: ReturnType<typeof setTimeout> | null = null
+
+  $effect(() => {
+    return () => {
+      if (copiedTimer) clearTimeout(copiedTimer)
+      if (autoMapTimer) clearTimeout(autoMapTimer)
+    }
+  })
+
+  function scheduleClearCopiedSecret() {
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => {
+      copiedSecret = null
+      copiedTimer = null
+    }, 2000)
+  }
+
+  function scheduleClearAutoMapResult() {
+    if (autoMapTimer) clearTimeout(autoMapTimer)
+    autoMapTimer = setTimeout(() => {
+      autoMapResult = null
+      autoMapTimer = null
+    }, 5000)
+  }
+
   interface EdgeData {
     id: string
     from: EdgeEndpoint
@@ -363,7 +390,7 @@
       } else {
         delete graph.settings.splineMode
       }
-      const updated = await api.topologies.update(topology.id, {
+      const updated = await topologies.update(topology.id, {
         contentJson: JSON.stringify(graph),
       })
       if (updated) topology = updated
@@ -379,7 +406,7 @@
     if (!confirm(`Delete topology "${topology.name}"? This action cannot be undone.`)) return
     deleting = true
     try {
-      await api.topologies.delete(topology.id)
+      await topologies.delete(topology.id)
       goto('/topologies')
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete')
@@ -534,6 +561,8 @@
         optionsJson: s.optionsJson,
       }))
       hasSourceChanges = false
+      // Sources changed — mapping store's metricsSources/hosts are now stale
+      await mappingStore.load(topologyId, true)
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to save'
     } finally {
@@ -548,6 +577,10 @@
       const result = await api.topologies.sources.syncAll(topologyId)
       syncResult = { nodeCount: result.nodeCount, linkCount: result.linkCount }
       topology = result.topology
+      topologies.upsert(result.topology)
+      // Topology contentJson likely changed — mapping may reference nodes that
+      // no longer exist (or vice versa). Force a mapping reload.
+      await mappingStore.load(topologyId, true)
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Sync failed')
     } finally {
@@ -562,9 +595,7 @@
   async function copyWebhookUrl(source: TopologyDataSource) {
     await navigator.clipboard.writeText(getWebhookUrl(source))
     copiedSecret = source.id
-    setTimeout(() => {
-      copiedSecret = null
-    }, 2000)
+    scheduleClearCopiedSecret()
   }
 
   // Merge functions
@@ -664,9 +695,7 @@
       ...mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false }),
       kind: 'nodes',
     }
-    setTimeout(() => {
-      autoMapResult = null
-    }, 5000)
+    scheduleClearAutoMapResult()
   }
 
   function handleClearAll() {
@@ -1636,12 +1665,12 @@
                     variant="outline"
                     size="sm"
                     onclick={() => {
-                    const matched = handleAutoMapLinks()
-                    if (matched > 0) {
-                      autoMapResult = { matched, total: edges.length, kind: 'links' }
-                      setTimeout(() => { autoMapResult = null }, 5000)
-                    }
-                  }}
+                      const matched = handleAutoMapLinks()
+                      if (matched > 0) {
+                        autoMapResult = { matched, total: edges.length, kind: 'links' }
+                        scheduleClearAutoMapResult()
+                      }
+                    }}
                   >
                     <LightningIcon size={14} class="mr-1" />
                     Auto-map

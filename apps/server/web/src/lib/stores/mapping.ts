@@ -19,6 +19,7 @@
 import { derived, get, writable } from 'svelte/store'
 import { api } from '$lib/api'
 import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '$lib/auto-mapping'
+import { topologies } from '$lib/stores/topologies'
 import type { Host, HostItem, MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
 /**
@@ -229,9 +230,13 @@ function createMappingStore() {
 
       // Save to backend
       try {
-        await api.topologies.updateNodeMapping(current.topologyId, nodeId, hostMapping)
+        const result = await api.topologies.updateNodeMapping(
+          current.topologyId,
+          nodeId,
+          hostMapping,
+        )
+        topologies.upsert(result.topology)
       } catch (e) {
-        // Revert on error
         update((s) => ({
           ...s,
           error: e instanceof Error ? e.message : 'Failed to save mapping',
@@ -328,7 +333,8 @@ function createMappingStore() {
       if (!current.topologyId) return
 
       try {
-        await api.topologies.updateMapping(current.topologyId, current.mapping)
+        const updated = await api.topologies.updateMapping(current.topologyId, current.mapping)
+        topologies.upsert(updated)
       } catch (e) {
         update((s) => ({
           ...s,

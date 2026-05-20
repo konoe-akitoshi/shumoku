@@ -10,6 +10,7 @@
     metricsConnected,
     showNodeStatus,
     showTrafficFlow,
+    topologies,
   } from '$lib/stores'
   import type { MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
@@ -54,7 +55,7 @@
       } else {
         delete graph.settings.splineMode
       }
-      const updatedTopology = await api.topologies.update(topology.id, {
+      const updatedTopology = await topologies.update(topology.id, {
         contentJson: JSON.stringify(graph),
       })
       if (updatedTopology && onUpdated) {
@@ -105,7 +106,7 @@
     }
     deleting = true
     try {
-      await api.topologies.delete(topology.id)
+      await topologies.delete(topology.id)
       if (onDeleted) {
         onDeleted()
       } else {

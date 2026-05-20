@@ -42,11 +42,9 @@
   let mountedComponents = new Map<string, ReturnType<typeof mount>>()
   let gridStackReady = false
 
-  // Initialize on mount
+  // Register available widget types once (idempotent).
   onMount(() => {
     initializeWidgets()
-    dashboardStore.get(id)
-
     return () => {
       cleanupAllWidgets()
       if (grid) {
@@ -55,6 +53,21 @@
       }
       dashboardStore.clearCurrent()
     }
+  })
+
+  // Re-fetch the dashboard whenever the route id changes. SvelteKit reuses
+  // this component for navigations within /dashboards/[id], so onMount alone
+  // would leave the previous dashboard's grid on screen.
+  $effect(() => {
+    const currentId = id
+    if (!currentId) return
+    // Tear down the existing grid so the next layout rebuilds cleanly.
+    cleanupAllWidgets()
+    if (grid) {
+      grid.destroy(true)
+      grid = null
+    }
+    dashboardStore.get(currentId)
   })
 
   // --- Helper Functions ---

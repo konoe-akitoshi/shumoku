@@ -20,6 +20,25 @@ function createTopologiesStore() {
     error: null,
   })
 
+  async function applyShareToken(id: string, shareToken: string | undefined): Promise<Topology> {
+    let updated: Topology | undefined
+    update((s) => ({
+      ...s,
+      items: s.items.map((t) => {
+        if (t.id !== id) return t
+        updated = { ...t, shareToken }
+        return updated
+      }),
+    }))
+    if (updated) return updated
+    // Item wasn't cached — fetch fresh, then ensure the just-applied shareToken
+    // wins over whatever GET happened to return.
+    const fetched = await api.topologies.get(id)
+    const merged = { ...fetched, shareToken }
+    update((s) => ({ ...s, items: [merged, ...s.items.filter((t) => t.id !== id)] }))
+    return merged
+  }
+
   return {
     subscribe,
 
@@ -79,6 +98,16 @@ function createTopologiesStore() {
         items: s.items.map((t) => (t.id === id ? topology : t)),
       }))
       return topology
+    },
+
+    async share(id: string): Promise<Topology> {
+      const result = await api.topologies.share(id)
+      return applyShareToken(id, result.shareToken)
+    },
+
+    async unshare(id: string): Promise<Topology> {
+      await api.topologies.unshare(id)
+      return applyShareToken(id, undefined)
     },
 
     async renderSvg(id: string) {

@@ -1,35 +1,49 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { page } from '$app/stores'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import Logo from '$lib/components/Logo.svelte'
 
-  let name = ''
-  let loading = true
-  let error = ''
+  let name = $state('')
+  let loading = $state(true)
+  let error = $state('')
 
-  $: token = $page.params.token
-  $: loadShared = async () => {
+  const token = $derived($page.params.token)
+  const loadShared = $derived(async () => {
     const res = await fetch(`/api/share/topologies/${token}/graph`)
     if (!res.ok) throw new Error(`Failed to load shared topology: ${res.status}`)
     return res.json()
-  }
+  })
 
-  onMount(async () => {
-    try {
-      // Fetch context to get the name (lightweight call)
-      const res = await fetch(`/api/share/topologies/${token}`)
-      if (!res.ok) {
-        error =
-          res.status === 404 ? 'This shared link is no longer valid.' : 'Failed to load topology'
-        return
+  $effect(() => {
+    const currentToken = token
+    if (!currentToken) return
+    let cancelled = false
+    loading = true
+    error = ''
+    name = ''
+
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/share/topologies/${currentToken}`)
+        if (cancelled) return
+        if (!res.ok) {
+          error =
+            res.status === 404 ? 'This shared link is no longer valid.' : 'Failed to load topology'
+          return
+        }
+        const data = await res.json()
+        if (cancelled) return
+        name = data.name || 'Shared Topology'
+      } catch {
+        if (cancelled) return
+        error = 'Failed to load topology'
+      } finally {
+        if (!cancelled) loading = false
       }
-      const data = await res.json()
-      name = data.name || 'Shared Topology'
-    } catch {
-      error = 'Failed to load topology'
-    } finally {
-      loading = false
+    })()
+
+    return () => {
+      cancelled = true
     }
   })
 </script>
