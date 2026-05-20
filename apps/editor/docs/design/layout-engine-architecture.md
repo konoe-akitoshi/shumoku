@@ -372,6 +372,65 @@ Listed in expected order of usefulness; not part of this PR.
 
 5. **Diagnostics drive layout debugging**: when a snapshot looks wrong, the engine reports which rule was at play.
 
+## Architectural invariants
+
+A few invariants are easy to violate by accident and expensive
+to recover from once code accumulates around the violation.
+List them here so future contributors don't have to rediscover
+them.
+
+### Coordinate convention
+
+Rotation to a user-requested direction (`BT` / `LR` / `RL`)
+happens at exactly **one place**: the end of
+`autoLayoutFlatTree` (via `rotateLayoutResult`). Everything
+else is direction-agnostic in different senses:
+
+- **Rule queries** (`nodeFootprint`, `minSeparation`,
+  `subgraphPadding`, `engine.text.measure`, …) return values
+  that are coordinate-frame independent. They don't take or
+  return direction-aware results.
+- **Placement primitives** (`tryPlace`, `resolveAgainstObstacles`,
+  …) operate in whatever coordinate frame the caller passes
+  in. Auto-placement calls them with TB-internal coords;
+  manual placement calls them with post-rotation canvas
+  coords (saved bounds already describe the final
+  orientation).
+- **Auto-placement algorithms** compute positions in TB-internal
+  coords, then rotate once at the end. No direction logic
+  inside inner passes (block partition, tidy-tree, etc.).
+- **`rebalanceSubgraphs`** takes an explicit `direction` arg
+  because it's called after rotation — it has to place the
+  label band on the correct edge of the rotated hull
+  (`TB → top`, `BT → bottom`, `LR → left`, `RL → right`).
+  Manual placement defaults to `'TB'` since the saved bounds
+  already describe the final orientation.
+
+The "one rotation, at the boundary" rule keeps every internal
+algorithm direction-agnostic. Don't introduce direction logic
+inside rule queries or inner algorithm passes; don't pre-
+transform drag coordinates before calling placement primitives
+(they're frame-agnostic).
+
+### Engine ↔ algorithm contract boundary
+
+The engine is a passive rule authority. What it provides and
+what it deliberately doesn't:
+
+| Engine provides | Engine does NOT provide |
+|---|---|
+| Node sizing (`nodeBodySize`, `nodeFootprint`) | Layout algorithm (Buchheim, force-directed, …) |
+| Spacing values (`minSeparation`, `spacing`, `subgraphPadding`) | Port-side decision (algorithm-coupled) |
+| Obstacle / placement primitives (`tryPlace`, `resolveAgainstObstacles`) | Edge routing (separate post-layout pass) |
+| Text measurement (`engine.text.measure`) | Direction / rotation logic |
+| Subgraph hull arithmetic (`subgraphLabelHeight`) | Tree / graph structure analysis (parent extraction, block partitioning) |
+
+When tempted to add something to the engine, check the right
+column first. The engine grows surface area easily; algorithm-
+coupled concepts belong next to the algorithm so a future
+second algorithm (rack layout, etc.) doesn't have to share
+the engine's flat-tree-specific scaffolding.
+
 ## Adding a new constraint
 
 When the layout grows a new constraint (a new gap value, a "must

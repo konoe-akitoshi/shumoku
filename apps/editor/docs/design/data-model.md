@@ -208,7 +208,7 @@ classDiagram
   }
 
   class NetedProject {
-    version: 2
+    version: 1
     name: string
     products: Product[]
     diagram: NetworkGraph
@@ -328,7 +328,7 @@ snapshot のおかげで、Product を消した後も diagram は読める（壊
 
 ```ts
 interface NetedProject {
-  version: 2
+  version: 1
   name: string
   settings?: Record<string, unknown>
   products: Product[]
@@ -336,7 +336,19 @@ interface NetedProject {
 }
 ```
 
-Product は kind 毎の discriminated union。version=2 で確定。
+Product は kind 毎の discriminated union。version=1 で運用中。
+
+### 5.1 シリアライゼーションの規律
+
+`NetworkGraph` / `Product` などのデータ構造はファイル経由でユーザーの手元に残るので、進化させる際は以下の規律を守る:
+
+1. **新フィールドは optional のみ追加**。既存ファイルが新コードで開ける状態を保つ。
+2. **既存フィールドの rename / remove は禁止**（major version 内では）。値の解釈を変えるのも禁止。意味を変えたい時は新フィールドを追加して、旧フィールドは deprecated comment 付きで残す。
+3. **真に breaking な change が必要になったら、`version` を bump**。`NetedProject.version: 1 → 2` で reader を切り替え。旧版は read-only サポート or migration を提供。Docker Compose の v1/v2/v3 反省を踏まえ、bump は**極力避ける** — additive で済むなら version は据え置く。
+
+要するに `version` フィールドは「破壊的変更の保険」であって、軽い気持ちで bump しない。ほとんどの進化は additive で済むはずで、それが破綻した時に初めて version を動かす。
+
+なお、現状の `exportGraph()` は known fields のみから出力を再構成する作りなので、未知フィールドが付いたファイルを開いて再保存すると未知フィールドは drop される。「unknown を round-trip 保持する」という強い保証は今は約束していない — 必要になった時点で export 経路を保持型に改める判断とする。
 
 ---
 
