@@ -370,7 +370,6 @@ export function rebalanceSubgraphs(
   }
 
   // Third pass: push free nodes away from subgraphs they don't belong to
-  let anyNodeMoved = false
   for (const [nodeId, node] of nodes) {
     if (!node.position) continue
     const size = resolveNodeSize(node)
@@ -383,7 +382,6 @@ export function rebalanceSubgraphs(
       const dx = resolved.x - node.position.x
       const dy = resolved.y - node.position.y
       nodes.set(nodeId, { ...node, position: resolved })
-      anyNodeMoved = true
       // Shift ports
       for (const [portId, port] of ports) {
         if (port.nodeId !== nodeId) continue
@@ -395,12 +393,14 @@ export function rebalanceSubgraphs(
     }
   }
 
-  // Pass 3 may have moved a node belonging to a subgraph (push
-  // it out of a sibling's hull, etc.). The parent subgraph's
-  // bounds computed in pass 1 are now stale, so re-run the
-  // bottom-up hull recompute to restore the containment
-  // contract.
-  if (anyNodeMoved) recomputeHulls()
+  // Final containment safety: pass 2 (subgraph shifts) and
+  // pass 3 (free-node shifts) both mutate child positions
+  // after the initial bottom-up hull pass, so the bounds
+  // recorded above may no longer cover their children. Run
+  // the hull recompute once more so the returned subgraph
+  // bounds always contain their members. O(N+S) — cheap
+  // compared to either pass it follows.
+  recomputeHulls()
 }
 
 export async function moveNode(
