@@ -12,7 +12,7 @@
 
 import { newId } from '../ids.js'
 import type { Link, NetworkGraph, Node, NodePort, Subgraph } from '../models/types.js'
-import { resolveNodeSize } from './engine/index.js'
+import { createEngine, resolveNodeSize } from './engine/index.js'
 import type { ResolvedEdge, ResolvedPort } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 
@@ -20,13 +20,31 @@ import { routeEdges } from './route-edges.js'
 const DEFAULT_NODE_GAP = 8
 
 /**
- * Check if two rectangles (center-based) overlap with a gap.
+ * Process-wide engine used for the free helpers below
+ * (nodesOverlap / resolvePosition / collectObstacles / etc.).
+ * Callers that hold their own engine can use its methods
+ * (engine.tryPlace / engine.resolvePosition /
+ * engine.resolveAgainstObstacles) instead.
+ */
+let _engine: ReturnType<typeof createEngine> | null = null
+function defaultEngine() {
+  if (!_engine) _engine = createEngine()
+  return _engine
+}
+
+/**
+ * Check if two centre-based rectangles overlap with a gap.
+ * Free function for callers that want to do their own
+ * collision math; the engine's `tryPlace` is preferred for
+ * full placement validation.
  */
 export function nodesOverlap(
   a: { x: number; y: number; w: number; h: number },
   b: { x: number; y: number; w: number; h: number },
   gap = DEFAULT_NODE_GAP,
 ): boolean {
+  // Same predicate the engine uses internally for
+  // resolveAgainstObstacles.
   return (
     a.x - a.w / 2 - gap < b.x + b.w / 2 &&
     a.x + a.w / 2 + gap > b.x - b.w / 2 &&
@@ -36,35 +54,9 @@ export function nodesOverlap(
 }
 
 /**
- * Resolve a collision by pushing the moving node to the nearest escape direction.
- */
-function resolveCollision(
-  moving: { x: number; y: number; w: number; h: number },
-  obstacle: { x: number; y: number; w: number; h: number },
-  gap = DEFAULT_NODE_GAP,
-): { x: number; y: number } {
-  const escapes = [
-    { x: obstacle.x - obstacle.w / 2 - moving.w / 2 - gap, y: moving.y },
-    { x: obstacle.x + obstacle.w / 2 + moving.w / 2 + gap, y: moving.y },
-    { x: moving.x, y: obstacle.y - obstacle.h / 2 - moving.h / 2 - gap },
-    { x: moving.x, y: obstacle.y + obstacle.h / 2 + moving.h / 2 + gap },
-  ]
-
-  let best = escapes[0]
-  let bestDist = Number.POSITIVE_INFINITY
-  for (const esc of escapes) {
-    const dist = Math.hypot(esc.x - moving.x, esc.y - moving.y)
-    if (dist < bestDist) {
-      bestDist = dist
-      best = esc
-    }
-  }
-  return best ?? { x: moving.x, y: moving.y }
-}
-
-/**
- * Collect all obstacles as center-based rects, excluding entities related to `excludeId`.
- * Unified: both nodes and subgraphs are treated as rectangles.
+ * Collect all obstacles as centre-based rects, excluding
+ * entities related to `excludeId`. Both nodes and subgraphs
+ * are treated as rectangles.
  */
 export function collectObstacles(
   excludeId: string,
@@ -85,7 +77,6 @@ export function collectObstacles(
     for (const [sgId, sg] of subgraphs) {
       if (sgId === excludeId) continue
       if (!sg.bounds) continue
-      // Skip if the moving entity belongs to this subgraph
       if (excludeParent && isChildOf(excludeParent, sgId, subgraphs)) continue
       obstacles.push(boundsToRect(sg.bounds))
     }
@@ -95,30 +86,23 @@ export function collectObstacles(
 }
 
 /**
- * Resolve position of any rectangle against all obstacles (nodes + subgraphs).
- * Used for both node placement and subgraph placement.
+ * Resolve position of any rectangle against all obstacles
+ * (nodes + subgraphs). Delegates to the engine's geometric
+ * solver so editor / renderer / layout all use the same
+ * collision rules.
  */
 export function resolvePosition(
   rect: { x: number; y: number; w: number; h: number },
   obstacles: { x: number; y: number; w: number; h: number }[],
   gap = DEFAULT_NODE_GAP,
 ): { x: number; y: number } {
-  let fx = rect.x
-  let fy = rect.y
-  for (const obs of obstacles) {
-    const moving = { x: fx, y: fy, w: rect.w, h: rect.h }
-    if (nodesOverlap(moving, obs, gap)) {
-      const resolved = resolveCollision(moving, obs, gap)
-      fx = resolved.x
-      fy = resolved.y
-    }
-  }
-  return { x: fx, y: fy }
+  return defaultEngine().resolveAgainstObstacles(rect, obstacles, gap)
 }
 
 /**
  * Resolve a node's position against all other entities.
- * Wrapper around resolvePosition for backward compatibility.
+ * Wrapper around `resolvePosition` for the legacy id-based
+ * API.
  */
 export function resolveNodePosition(
   id: string,
@@ -319,9 +303,10 @@ export function rebalanceSubgraphs(
 
       const a = boundsToRect(sg.bounds)
       const b = boundsToRect(other.bounds)
-      if (!nodesOverlap(a, b, DEFAULT_NODE_GAP)) continue
-
-      const resolved = resolveCollision(b, a, DEFAULT_NODE_GAP)
+      // resolveAgainstObstacles returns the input unchanged
+      // when no overlap, so a separate nodesOverlap guard
+      // is unnecessary.
+      const resolved = defaultEngine().resolveAgainstObstacles(b, [a], DEFAULT_NODE_GAP)
       const dx = resolved.x - b.x
       const dy = resolved.y - b.y
       if (dx === 0 && dy === 0) continue

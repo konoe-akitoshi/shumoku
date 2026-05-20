@@ -59,10 +59,10 @@ export function createEngine(config: EngineConfig = {}): LayoutEngine {
     fingerprint: rules.fingerprint,
     spacing: rules.spacing,
     text: rules.text,
-    // PlacementPolicy — note `tryPlace` is `function` (not
-    // arrow) inside createPlacementPolicy so we re-bind it
-    // here through the closure object.
+    // PlacementPolicy
     tryPlace: placement.tryPlace.bind(placement),
+    resolvePosition: placement.resolvePosition.bind(placement),
+    resolveAgainstObstacles: placement.resolveAgainstObstacles.bind(placement),
     snapTo: placement.snapTo.bind(placement),
   }
 }
