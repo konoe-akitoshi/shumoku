@@ -7,10 +7,10 @@
     WarningIcon,
     XCircleIcon,
   } from 'phosphor-svelte'
-  import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
+  import { dataSources } from '$lib/stores'
   import type { ConnectionResult, DataSource } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
@@ -37,6 +37,23 @@
   let webhookUrl = $state('')
   let webhookLoading = $state(false)
   let copied = $state(false)
+  let copiedTimer: ReturnType<typeof setTimeout> | null = null
+
+  function copyWebhookUrl() {
+    navigator.clipboard.writeText(webhookUrl)
+    copied = true
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => {
+      copied = false
+      copiedTimer = null
+    }, 2000)
+  }
+
+  $effect(() => {
+    return () => {
+      if (copiedTimer) clearTimeout(copiedTimer)
+    }
+  })
 
   interface ParsedConfig {
     url?: string
@@ -97,25 +114,44 @@
     }
   }
 
-  onMount(async () => {
-    try {
-      dataSource = await api.dataSources.get(id)
-      formName = dataSource.name
-      const config = parseConfig(dataSource.configJson)
-      formUrl = config.url || ''
-      formToken = '' // Don't show existing token
-      formPollInterval = config.pollInterval || 30000
-      hasExistingToken = !!config.token
-      formInsecure = !!config.insecure
-      formUseWebhook = !!config.useWebhook
+  // Re-fetch whenever the route id changes (the component is reused across
+  // /datasources/[id] navigations).
+  $effect(() => {
+    const currentId = id
+    let cancelled = false
+    loading = true
+    error = ''
+    dataSource = null
+    testResult = null
+    webhookUrl = ''
 
-      if (formUseWebhook) {
-        await loadWebhookUrl()
+    ;(async () => {
+      try {
+        const ds = await api.dataSources.get(currentId)
+        if (cancelled) return
+        dataSource = ds
+        formName = ds.name
+        const config = parseConfig(ds.configJson)
+        formUrl = config.url || ''
+        formToken = ''
+        formPollInterval = config.pollInterval || 30000
+        hasExistingToken = !!config.token
+        formInsecure = !!config.insecure
+        formUseWebhook = !!config.useWebhook
+
+        if (formUseWebhook) {
+          await loadWebhookUrl()
+        }
+      } catch (e) {
+        if (cancelled) return
+        error = e instanceof Error ? e.message : 'Failed to load data source'
+      } finally {
+        if (!cancelled) loading = false
       }
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load data source'
-    } finally {
-      loading = false
+    })()
+
+    return () => {
+      cancelled = true
     }
   })
 
@@ -139,7 +175,7 @@
         configJson: getConfigFromForm(dataSource.type),
       }
 
-      dataSource = await api.dataSources.update(id, updates)
+      dataSource = await dataSources.update(id, updates)
       // Update hasExistingToken state
       const newConfig = parseConfig(dataSource.configJson)
       hasExistingToken = !!newConfig.token
@@ -177,7 +213,7 @@
       return
     }
     try {
-      await api.dataSources.delete(id)
+      await dataSources.delete(id)
       goto('/datasources')
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to delete'
@@ -315,7 +351,7 @@
                           type="button"
                           class="btn btn-secondary p-2"
                           title="Copy to clipboard"
-                          onclick={() => { navigator.clipboard.writeText(webhookUrl); copied = true; setTimeout(() => copied = false, 2000); }}
+                          onclick={copyWebhookUrl}
                         >
                           {#if copied}
                             <CheckIcon size={16} class="text-success" />

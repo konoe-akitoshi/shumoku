@@ -1,6 +1,5 @@
 <script lang="ts">
   import { XIcon } from 'phosphor-svelte'
-  import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
@@ -17,66 +16,78 @@
   import { mappingStore, metricsConnected, topologies } from '$lib/stores'
   import type { Topology, TopologyDataSource } from '$lib/types'
 
-  let topology: Topology | null = null
-  let renderData: { nodeCount: number; edgeCount: number } | null = null
-  let loading = true
-  let error = ''
+  let topology = $state<Topology | null>(null)
+  let renderData = $state<{ nodeCount: number; edgeCount: number } | null>(null)
+  let loading = $state(true)
+  let error = $state('')
 
   // Settings panel state
-  let settingsOpen = false
+  let settingsOpen = $state(false)
 
   // Node mapping modal state
-  let mappingModalOpen = false
-  let selectedNodeData: NodeSelectEvent | null = null
-  let netboxBaseUrl: string | undefined
+  let mappingModalOpen = $state(false)
+  let selectedNodeData = $state<NodeSelectEvent | null>(null)
+  let netboxBaseUrl = $state<string | undefined>(undefined)
 
   // Node search palette state
-  let searchPaletteOpen = false
+  let searchPaletteOpen = $state(false)
 
   // Subgraph info modal state
-  let subgraphModalOpen = false
-  let selectedSubgraphData: SubgraphSelectEvent | null = null
+  let subgraphModalOpen = $state(false)
+  let selectedSubgraphData = $state<SubgraphSelectEvent | null>(null)
 
   // Diagram component reference for drill-down
-  let diagramComponent: InteractiveSvgDiagram
+  let diagramComponent: InteractiveSvgDiagram | undefined = $state()
 
-  // Get ID from route params
-  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
-  $: topologyId = $page.params.id!
+  // biome-ignore lint/style/noNonNullAssertion: $page.params.id is always defined for this route
+  const topologyId = $derived($page.params.id!)
+  const currentMapping = $derived($mappingStore.mapping)
 
-  // Get mapping from store
-  $: currentMapping = $mappingStore.mapping
+  // Re-fetch whenever the route id changes (SvelteKit reuses this component
+  // for navigations within /topologies/[id], so onMount alone would leave
+  // the previous topology's data on screen).
+  $effect(() => {
+    const id = topologyId
+    let cancelled = false
+    loading = true
+    error = ''
+    topology = null
+    netboxBaseUrl = undefined
 
-  onMount(async () => {
-    try {
-      const [topoData, renderResponse, sources] = await Promise.all([
-        api.topologies.get(topologyId),
-        fetch(`/api/topologies/${topologyId}/render`).then((r) => r.json()),
-        api.topologies.sources.list(topologyId),
-      ])
-      topology = topoData
-      renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
-      topologies.upsert(topoData)
+    ;(async () => {
+      try {
+        const [topoData, renderResponse, sources] = await Promise.all([
+          api.topologies.get(id),
+          fetch(`/api/topologies/${id}/render`).then((r) => r.json()),
+          api.topologies.sources.list(id),
+        ])
+        if (cancelled) return
+        topology = topoData
+        renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
+        topologies.upsert(topoData)
+        mappingStore.hydrate(id, topoData, sources)
 
-      // Hand off to the shared mapping store without re-fetching
-      mappingStore.hydrate(topologyId, topoData, sources)
-
-      // Find NetBox topology source for device links
-      const netboxSource = sources.find(
-        (s: TopologyDataSource) => s.purpose === 'topology' && s.dataSource?.type === 'netbox',
-      )
-      if (netboxSource?.dataSource?.configJson) {
-        try {
-          const config = JSON.parse(netboxSource.dataSource.configJson)
-          netboxBaseUrl = config.url?.replace(/\/$/, '') // Remove trailing slash
-        } catch {
-          // Ignore parse errors
+        const netboxSource = sources.find(
+          (s: TopologyDataSource) => s.purpose === 'topology' && s.dataSource?.type === 'netbox',
+        )
+        if (netboxSource?.dataSource?.configJson) {
+          try {
+            const config = JSON.parse(netboxSource.dataSource.configJson)
+            netboxBaseUrl = config.url?.replace(/\/$/, '')
+          } catch {
+            // Ignore parse errors
+          }
         }
+      } catch (e) {
+        if (cancelled) return
+        error = e instanceof Error ? e.message : 'Failed to load topology'
+      } finally {
+        if (!cancelled) loading = false
       }
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load topology'
-    } finally {
-      loading = false
+    })()
+
+    return () => {
+      cancelled = true
     }
   })
 
@@ -112,14 +123,17 @@
 
   async function handleShare() {
     if (!topology) return
-    const result = await api.topologies.share(topologyId)
-    topology = { ...topology, shareToken: result.shareToken }
+    topology = await topologies.share(topologyId)
   }
 
   async function handleUnshare() {
     if (!topology) return
-    await api.topologies.unshare(topologyId)
-    topology = { ...topology, shareToken: undefined }
+    topology = await topologies.unshare(topologyId)
+  }
+
+  function handleTopologyUpdated(updated: Topology) {
+    topology = updated
+    diagramComponent?.refreshGraph()
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -130,7 +144,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head> <title>{topology?.name || 'Topology'} - Shumoku</title> </svelte:head>
 
@@ -209,7 +223,12 @@
 
       <!-- Panel content -->
       <div class="flex-1 overflow-y-auto p-4">
-        <TopologySettings {topology} {renderData} onDeleted={handleDeleted} />
+        <TopologySettings
+          {topology}
+          {renderData}
+          onDeleted={handleDeleted}
+          onUpdated={handleTopologyUpdated}
+        />
       </div>
     </div>
   {/if}

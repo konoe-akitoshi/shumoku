@@ -60,7 +60,6 @@
     MagnifyingGlassMinusIcon,
     MagnifyingGlassPlusIcon,
   } from 'phosphor-svelte'
-  import { onDestroy, onMount } from 'svelte'
   import { api } from '$lib/api'
   import {
     HighlightOverlay,
@@ -162,6 +161,10 @@
 
   export function getGraph(): NetworkGraph | undefined {
     return graph
+  }
+
+  export async function refreshGraph(): Promise<void> {
+    await loadGraph()
   }
 
   export function panToNode(nodeId: string): void {
@@ -299,18 +302,24 @@
       .replace(/"/g, '&quot;')
   }
 
-  // --- Live metrics subscription ---
+  // --- Data loading: re-fetch when topologyId changes (component reused on
+  // same-route navigation) ---
 
-  onMount(async () => {
-    await loadGraph()
-    if (!readOnly && $liveUpdatesEnabled && topologyId) {
-      metricsStore.connect()
-      metricsStore.subscribeToTopology(topologyId)
-    }
+  $effect(() => {
+    // Track topologyId so the effect re-runs when the route id changes.
+    topologyId
+    loadGraph()
   })
 
-  onDestroy(() => {
-    if (!readOnly) metricsStore.unsubscribe()
+  // --- Live metrics subscription ---
+
+  $effect(() => {
+    if (readOnly || !$liveUpdatesEnabled || !topologyId) return
+    metricsStore.connect()
+    metricsStore.subscribeToTopology(topologyId)
+    return () => {
+      metricsStore.unsubscribe()
+    }
   })
 
   // --- Keyboard shortcut for search palette ---

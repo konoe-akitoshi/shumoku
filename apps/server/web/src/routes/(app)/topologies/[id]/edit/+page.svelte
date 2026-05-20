@@ -1,42 +1,52 @@
 <script lang="ts">
   import { YamlParser } from '@shumoku/core'
   import { ArrowLeftIcon } from 'phosphor-svelte'
-  import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
   import { topologies } from '$lib/stores'
   import type { Topology } from '$lib/types'
 
-  // Get ID from route params (always defined for this route)
-  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
-  $: id = $page.params.id!
+  // biome-ignore lint/style/noNonNullAssertion: $page.params.id is always defined for this route
+  const id = $derived($page.params.id!)
 
-  let topology: Topology | null = null
-  let loading = true
-  let error = ''
-  let saving = false
+  let topology = $state<Topology | null>(null)
+  let loading = $state(true)
+  let error = $state('')
+  let saving = $state(false)
 
   // Editor state
-  let editorMode: 'yaml' | 'json' = 'yaml'
-  let yamlContent = ''
-  let jsonContent = ''
+  let editorMode = $state<'yaml' | 'json'>('yaml')
+  let yamlContent = $state('')
+  let jsonContent = $state('')
 
-  onMount(async () => {
-    try {
-      topology = await api.topologies.get(id)
-      topologies.upsert(topology)
+  // Reload on id change (same-route navigation keeps this component mounted).
+  $effect(() => {
+    const currentId = id
+    let cancelled = false
+    loading = true
+    error = ''
+    topology = null
 
-      // Parse stored JSON and display as YAML for editing
-      const graph = JSON.parse(topology.contentJson)
-      jsonContent = JSON.stringify(graph, null, 2)
+    ;(async () => {
+      try {
+        const t = await api.topologies.get(currentId)
+        if (cancelled) return
+        topology = t
+        topologies.upsert(t)
+        const graph = JSON.parse(t.contentJson)
+        jsonContent = JSON.stringify(graph, null, 2)
+        yamlContent = graphToYaml(graph)
+      } catch (e) {
+        if (cancelled) return
+        error = e instanceof Error ? e.message : 'Failed to load topology'
+      } finally {
+        if (!cancelled) loading = false
+      }
+    })()
 
-      // Convert to YAML for display (simple conversion)
-      yamlContent = graphToYaml(graph)
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load topology'
-    } finally {
-      loading = false
+    return () => {
+      cancelled = true
     }
   })
 
@@ -145,7 +155,7 @@
         contentJson = jsonContent
       }
 
-      await api.topologies.update(id, { contentJson })
+      await topologies.update(id, { contentJson })
       goto(`/topologies/${id}`)
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to save'

@@ -48,7 +48,7 @@
     },
   )
 
-  $: breadcrumbs = generateBreadcrumbs($page.url.pathname, $idLabels)
+  const breadcrumbs = $derived(generateBreadcrumbs($page.url.pathname, $idLabels))
 
   function generateBreadcrumbs(pathname: string, labels: Record<string, string>): Breadcrumb[] {
     const parts = pathname.split('/').filter(Boolean)
