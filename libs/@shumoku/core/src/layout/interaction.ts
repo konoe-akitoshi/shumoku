@@ -254,80 +254,89 @@ export function rebalanceSubgraphs(
   // Sort subgraphs deepest-first
   const sorted = [...subgraphs.keys()].sort((a, b) => depthOf(b) - depthOf(a))
 
-  // Bottom-up pass: recompute bounds, then resolve sibling collisions
-  for (const sgId of sorted) {
-    const sg = subgraphs.get(sgId)
-    if (!sg) continue
+  /**
+   * Bottom-up hull recompute: each subgraph's bounds are the
+   * tight bbox of its positioned children + padding + a label
+   * band offset placed per `direction`. Factored out so we can
+   * run it once initially and again after pass 3 in case
+   * pushing free nodes shifted any subgraph's children.
+   */
+  const recomputeHulls = () => {
+    for (const sgId of sorted) {
+      const sg = subgraphs.get(sgId)
+      if (!sg) continue
 
-    // Recompute bounds from children (nodes + child subgraphs)
-    let minX = Number.POSITIVE_INFINITY
-    let minY = Number.POSITIVE_INFINITY
-    let maxX = Number.NEGATIVE_INFINITY
-    let maxY = Number.NEGATIVE_INFINITY
-    let hasChildren = false
+      let minX = Number.POSITIVE_INFINITY
+      let minY = Number.POSITIVE_INFINITY
+      let maxX = Number.NEGATIVE_INFINITY
+      let maxY = Number.NEGATIVE_INFINITY
+      let hasChildren = false
 
-    for (const n of nodes.values()) {
-      if (n.parent !== sgId) continue
-      if (!n.position) continue
-      hasChildren = true
-      const size = resolveNodeSize(n)
-      const hw = size.width / 2
-      const hh = size.height / 2
-      minX = Math.min(minX, n.position.x - hw)
-      minY = Math.min(minY, n.position.y - hh)
-      maxX = Math.max(maxX, n.position.x + hw)
-      maxY = Math.max(maxY, n.position.y + hh)
+      for (const n of nodes.values()) {
+        if (n.parent !== sgId) continue
+        if (!n.position) continue
+        hasChildren = true
+        const size = resolveNodeSize(n)
+        const hw = size.width / 2
+        const hh = size.height / 2
+        minX = Math.min(minX, n.position.x - hw)
+        minY = Math.min(minY, n.position.y - hh)
+        maxX = Math.max(maxX, n.position.x + hw)
+        maxY = Math.max(maxY, n.position.y + hh)
+      }
+      for (const child of subgraphs.values()) {
+        if (child.parent !== sgId) continue
+        if (!child.bounds) continue
+        hasChildren = true
+        minX = Math.min(minX, child.bounds.x)
+        minY = Math.min(minY, child.bounds.y)
+        maxX = Math.max(maxX, child.bounds.x + child.bounds.width)
+        maxY = Math.max(maxY, child.bounds.y + child.bounds.height)
+      }
+
+      if (!hasChildren) continue
+
+      // Direction decides which side gets the label-band offset.
+      // TB → above children; BT → below; LR → left; RL → right.
+      let bounds: { x: number; y: number; width: number; height: number }
+      switch (direction) {
+        case 'BT':
+          bounds = {
+            x: minX - padding,
+            y: minY - padding,
+            width: maxX - minX + padding * 2,
+            height: maxY - minY + padding * 2 + labelHeight,
+          }
+          break
+        case 'LR':
+          bounds = {
+            x: minX - padding - labelHeight,
+            y: minY - padding,
+            width: maxX - minX + padding * 2 + labelHeight,
+            height: maxY - minY + padding * 2,
+          }
+          break
+        case 'RL':
+          bounds = {
+            x: minX - padding,
+            y: minY - padding,
+            width: maxX - minX + padding * 2 + labelHeight,
+            height: maxY - minY + padding * 2,
+          }
+          break
+        default:
+          bounds = {
+            x: minX - padding,
+            y: minY - padding - labelHeight,
+            width: maxX - minX + padding * 2,
+            height: maxY - minY + padding * 2 + labelHeight,
+          }
+      }
+      subgraphs.set(sgId, { ...sg, bounds })
     }
-    for (const child of subgraphs.values()) {
-      if (child.parent !== sgId) continue
-      if (!child.bounds) continue
-      hasChildren = true
-      minX = Math.min(minX, child.bounds.x)
-      minY = Math.min(minY, child.bounds.y)
-      maxX = Math.max(maxX, child.bounds.x + child.bounds.width)
-      maxY = Math.max(maxY, child.bounds.y + child.bounds.height)
-    }
-
-    if (!hasChildren) continue
-
-    // Direction decides which side gets the label-band offset.
-    // TB → above children; BT → below; LR → left; RL → right.
-    let bounds: { x: number; y: number; width: number; height: number }
-    switch (direction) {
-      case 'BT':
-        bounds = {
-          x: minX - padding,
-          y: minY - padding,
-          width: maxX - minX + padding * 2,
-          height: maxY - minY + padding * 2 + labelHeight,
-        }
-        break
-      case 'LR':
-        bounds = {
-          x: minX - padding - labelHeight,
-          y: minY - padding,
-          width: maxX - minX + padding * 2 + labelHeight,
-          height: maxY - minY + padding * 2,
-        }
-        break
-      case 'RL':
-        bounds = {
-          x: minX - padding,
-          y: minY - padding,
-          width: maxX - minX + padding * 2 + labelHeight,
-          height: maxY - minY + padding * 2,
-        }
-        break
-      default:
-        bounds = {
-          x: minX - padding,
-          y: minY - padding - labelHeight,
-          width: maxX - minX + padding * 2,
-          height: maxY - minY + padding * 2 + labelHeight,
-        }
-    }
-    subgraphs.set(sgId, { ...sg, bounds })
   }
+
+  recomputeHulls()
 
   // Second pass: resolve sibling collisions (shallowest first = reverse order)
   // Using shallowest-first so parent-level collisions are resolved before children
@@ -361,6 +370,7 @@ export function rebalanceSubgraphs(
   }
 
   // Third pass: push free nodes away from subgraphs they don't belong to
+  let anyNodeMoved = false
   for (const [nodeId, node] of nodes) {
     if (!node.position) continue
     const size = resolveNodeSize(node)
@@ -373,6 +383,7 @@ export function rebalanceSubgraphs(
       const dx = resolved.x - node.position.x
       const dy = resolved.y - node.position.y
       nodes.set(nodeId, { ...node, position: resolved })
+      anyNodeMoved = true
       // Shift ports
       for (const [portId, port] of ports) {
         if (port.nodeId !== nodeId) continue
@@ -383,6 +394,13 @@ export function rebalanceSubgraphs(
       }
     }
   }
+
+  // Pass 3 may have moved a node belonging to a subgraph (push
+  // it out of a sibling's hull, etc.). The parent subgraph's
+  // bounds computed in pass 1 are now stale, so re-run the
+  // bottom-up hull recompute to restore the containment
+  // contract.
+  if (anyNodeMoved) recomputeHulls()
 }
 
 export async function moveNode(
