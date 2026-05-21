@@ -51,7 +51,7 @@
   // Network Discovery (snmp-lldp) uses community + seeds, no URL.
   let formSnmpCommunity = $state('public')
   /** Newline- or comma-separated list of seed device addresses. */
-  let formSnmpSeeds = $state('')
+  let formSnmpTargets = $state('')
   let formSnmpTimeoutMs = $state(2000)
   let formError = $state('')
   let formSubmitting = $state(false)
@@ -103,7 +103,7 @@
     formArubaPassword = ''
     formArubaSiteId = ''
     formSnmpCommunity = 'public'
-    formSnmpSeeds = ''
+    formSnmpTargets = ''
     formSnmpTimeoutMs = 2000
     // Initialize dynamic config from schema defaults
     dynamicConfig = {}
@@ -163,18 +163,18 @@
     }
 
     if (selectedPlugin.type === 'snmp-lldp') {
-      // Seeds are entered as one per line (or comma-separated). Normalize
-      // both. Per-seed community override isn't surfaced in this minimal
-      // form — every seed uses the default community.
+      // Targets are entered as one per line (or comma-separated). Each
+      // entry may be an IP, hostname, or CIDR — the plugin expands CIDR
+      // and liveness-probes before the full walk. Community is shared
+      // across all targets in v1 (per-target community is a v2 item).
       const community = formSnmpCommunity.trim() || 'public'
-      const seeds = formSnmpSeeds
+      const targets = formSnmpTargets
         .split(/[\s,]+/)
         .map((s) => s.trim())
         .filter(Boolean)
-        .map((address) => ({ address, community }))
       return JSON.stringify({
         community,
-        seeds,
+        targets,
         timeoutMs: formSnmpTimeoutMs,
       })
     }
@@ -222,8 +222,8 @@
         return
       }
     } else if (selectedPlugin.type === 'snmp-lldp') {
-      if (!formName.trim() || !formSnmpSeeds.trim()) {
-        formError = 'Name and at least one seed device are required'
+      if (!formName.trim() || !formSnmpTargets.trim()) {
+        formError = 'Name and at least one target are required'
         return
       }
     } else if (selectedPlugin.configSchema?.properties) {
@@ -722,17 +722,18 @@
           </div>
 
           <div>
-            <label for="snmpSeeds" class="label">Seed Devices</label>
+            <label for="snmpTargets" class="label">Targets</label>
             <textarea
-              id="snmpSeeds"
+              id="snmpTargets"
               class="input min-h-24 font-mono"
-              placeholder="10.0.0.1&#10;10.0.0.2&#10;core-rtr-01.example.net"
-              bind:value={formSnmpSeeds}
+              placeholder="10.0.0.0/24&#10;192.168.5.1&#10;core-rtr-01.example.net"
+              bind:value={formSnmpTargets}
             ></textarea>
             <p class="text-xs text-muted-foreground mt-1">
-              One IP or hostname per line. The plugin walks System / IF / LLDP-MIB on each seed. v1
-              does <strong>not</strong> auto-expand to LLDP neighbors — list every device you want
-              scanned.
+              One per line. Each entry can be a <strong>CIDR block</strong> (e.g. 10.0.0.0/24), a
+              single IP, or a hostname. CIDR is expanded and a short SNMP liveness probe runs in
+              parallel before the full walk — dead addresses are silently skipped. Up to /16 per
+              entry.
             </p>
           </div>
 
@@ -752,8 +753,9 @@
           <div
             class="rounded border border-theme-border bg-theme-surface p-3 text-xs text-theme-text-muted"
           >
-            v1 scope: SNMP only (System-MIB, IF-MIB, ifXTable, LLDP-MIB). CDP / BRIDGE-MIB / ARP /
-            NETCONF / gNMI / CLI scraping land in v2.
+            v1 scope: SNMP only (System-MIB, IF-MIB, ifXTable, LLDP-MIB). CIDR sweep + liveness
+            probe is supported. CDP / BRIDGE-MIB / ENTITY-MIB / NETCONF / gNMI / CLI scraping and
+            LLDP-neighbor auto-expansion land in v2.
           </div>
         {/if}
 

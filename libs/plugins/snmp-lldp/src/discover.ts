@@ -3,20 +3,22 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Seed-crawl discovery against one or more devices.
+ * Network discovery against a list of targets.
  *
  * Algorithm:
- *   1. Identify each seed via System-MIB (sysName / sysObjectID / sysDescr)
- *   2. Walk IF-MIB / ifXTable to materialize ports with identity
- *   3. Walk LLDP-MIB to harvest neighbor (chassisId, portId, sysName)
- *   4. For neighbors we haven 't visited yet, only record the **link**;
- *      crossing to other devices requires an explicit seed list (v1)
+ *   1. Expand any CIDR entries to individual addresses (`expandTargets`)
+ *   2. Liveness probe — concurrent short-timeout SNMP `sysName` get.
+ *      Silently drop addresses that do not respond.
+ *   3. For each live address: identify via System-MIB, walk IF-MIB /
+ *      ifXTable for ports
+ *   4. Second pass: walk LLDP-MIB on each visited device, emit Links
+ *      between cluster members. Cross-cluster neighbors are recorded
+ *      (chassisId in link metadata) but the Link itself is skipped if
+ *      the peer wasn 't visited.
  *
- * v1 deliberately does NOT auto-expand the seed set with discovered
- * neighbors — that requires reachability assumptions and address
- * resolution that we punt to v2 (`shumoku-probe` / `ScopePolicy`
- * include-CIDR). v1 produces a useful snapshot from a fixed seed list
- * already.
+ * v1 does NOT auto-expand from LLDP neighbors — every device must be in
+ * `targets` (either as IP, hostname, or via a CIDR that covers it). The
+ * follow-on PR adds neighbor-driven expansion.
  */
 
 import {
@@ -27,22 +29,37 @@ import {
   type NodePort,
   vendorFromSysObjectID,
 } from '@shumoku/core'
+import { expandTargets } from './cidr.js'
 import { asMacString, asNumber, asString, indexByRow, SnmpClient } from './client.js'
 import { IF_TABLE, IF_X_TABLE, LLDP_REM_TABLE, SYSTEM_MIB } from './mib.js'
 
+/** How many addresses to probe in parallel during the liveness pass. */
+const LIVENESS_CONCURRENCY = 32
+/** Liveness probe timeout — much shorter than the deep-scan timeout
+ *  because we 're triaging many candidates at once. */
+const LIVENESS_TIMEOUT_MS = 1000
+
 export interface DiscoverInput {
-  seeds: Array<{ address: string; community: string }>
+  /** Mixed list of targets: IPs, hostnames, or CIDR blocks. CIDR is
+   *  expanded to host addresses; non-CIDR entries pass through. */
+  targets: readonly string[]
+  /** SNMP community string used for every target. */
+  community: string
   /** Source id stamped into provenance on every produced element. */
   sourceId: string
-  /** Per-device timeout in ms (default 2000). */
+  /** Deep-scan timeout in ms (full SNMP walk per device). Default 2000. */
   timeoutMs?: number
 }
 
 export interface DiscoverResult {
   graph: NetworkGraph
   warnings: string[]
-  /** True if every seed responded successfully. */
-  allOk: boolean
+  /** Counts surfaced in the snapshot summary. */
+  stats: {
+    expanded: number
+    alive: number
+    walked: number
+  }
 }
 
 interface VisitedDevice {
@@ -58,35 +75,59 @@ interface VisitedDevice {
 
 export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   const warnings: string[] = []
-  const visited = new Map<string, VisitedDevice>() // seed-address → device
+  const visited = new Map<string, VisitedDevice>() // address → device
   const allLinks: Link[] = []
-  let okCount = 0
 
-  for (const seed of input.seeds) {
+  // 1. Expand CIDRs. Per-entry errors (oversized CIDR) become warnings,
+  //    not exceptions, so a typo in one target doesn 't abort the run.
+  let expanded: string[]
+  try {
+    expanded = expandTargets(input.targets)
+  } catch (err) {
+    warnings.push(err instanceof Error ? err.message : String(err))
+    return emptyResult(warnings)
+  }
+  if (expanded.length === 0) {
+    warnings.push('No targets to scan.')
+    return emptyResult(warnings)
+  }
+
+  // 2. Liveness probe — short SNMP get for sysName in parallel chunks.
+  //    Silently drops non-responders. This is the key behavior that
+  //    makes a /24 scan tolerable: ~250 addresses, ~250ms RTT each,
+  //    32-way parallel → ~2s instead of ~250s sequential.
+  const alive = await probeAlive(expanded, input.community)
+
+  if (alive.length === 0) {
+    warnings.push(
+      `Probed ${expanded.length} address${expanded.length === 1 ? '' : 'es'}, none responded ` +
+        `to SNMP. Check community / network reachability / firewall.`,
+    )
+    return emptyResult(warnings, { expanded: expanded.length, alive: 0, walked: 0 })
+  }
+
+  // 3. Full SNMP walk on live targets only.
+  for (const address of alive) {
     const client = new SnmpClient({
-      address: seed.address,
-      community: seed.community,
+      address,
+      community: input.community,
       timeoutMs: input.timeoutMs,
     })
-
     try {
-      const device = await scanOne(client, seed.address, input.sourceId)
-      visited.set(seed.address, device)
-      okCount++
+      const device = await scanOne(client, address, input.sourceId)
+      visited.set(address, device)
     } catch (err) {
-      warnings.push(`Seed ${seed.address}: ${err instanceof Error ? err.message : String(err)}`)
+      warnings.push(`Walk ${address}: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       client.close()
     }
   }
 
-  // 2nd pass: walk LLDP for each visited device and emit Links.
-  // Done in a second pass because link endpoints can reference the
-  // *peer* device only if that peer was also visited as a seed.
+  // 4. Second pass: walk LLDP for each visited device and emit Links.
   for (const [address, device] of visited) {
     const client = new SnmpClient({
       address,
-      community: input.seeds.find((s) => s.address === address)?.community ?? 'public',
+      community: input.community,
       timeoutMs: input.timeoutMs,
     })
     try {
@@ -108,7 +149,49 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   return {
     graph,
     warnings,
-    allOk: okCount === input.seeds.length && warnings.length === 0,
+    stats: { expanded: expanded.length, alive: alive.length, walked: visited.size },
+  }
+}
+
+/** Liveness sweep — short-timeout SNMP `sysName` get against many
+ *  candidates in bounded-concurrency chunks. Returns the subset that
+ *  responded. Errors are swallowed (non-responders are not warnings;
+ *  the whole point is to silently drop dead addresses). */
+async function probeAlive(addresses: readonly string[], community: string): Promise<string[]> {
+  const alive: string[] = []
+  for (let i = 0; i < addresses.length; i += LIVENESS_CONCURRENCY) {
+    const chunk = addresses.slice(i, i + LIVENESS_CONCURRENCY)
+    const settled = await Promise.all(
+      chunk.map(async (addr) => {
+        const client = new SnmpClient({
+          address: addr,
+          community,
+          timeoutMs: LIVENESS_TIMEOUT_MS,
+          retries: 0,
+        })
+        try {
+          const vbs = await client.get([SYSTEM_MIB.sysName])
+          return vbs.length > 0 ? addr : null
+        } catch {
+          return null
+        } finally {
+          client.close()
+        }
+      }),
+    )
+    for (const r of settled) if (r) alive.push(r)
+  }
+  return alive
+}
+
+function emptyResult(
+  warnings: string[],
+  stats: DiscoverResult['stats'] = { expanded: 0, alive: 0, walked: 0 },
+): DiscoverResult {
+  return {
+    graph: { version: '1.0', nodes: [], links: [] },
+    warnings,
+    stats,
   }
 }
 
