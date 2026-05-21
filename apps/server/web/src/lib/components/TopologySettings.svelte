@@ -272,123 +272,93 @@
     <hr class="border-theme-border">
   {/if}
 
-  <!-- Sync — only meaningful when at least one topology source is attached -->
-  {#if topologySources.length > 0}
-    <div class="space-y-3">
-      <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">
-        Sync sources
-      </h3>
-      <p class="text-xs text-theme-text-muted">
-        Trigger an immediate fetch from each topology source. Results land as observation snapshots
-        and the diagram re-renders through the resolver.
-      </p>
+  <!-- Sources — unified section: list every attached source (topology +
+       metrics), let user trigger sync inline. Replaces the older split
+       between two summary boxes and a separate "Sync sources" panel. -->
+  <div class="space-y-3">
+    <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">Sources</h3>
+
+    {#if topologySources.length === 0 && metricsSources.length === 0}
+      <p class="text-xs text-theme-text-muted">Manual (YAML). No data sources attached.</p>
+    {:else}
       <div class="space-y-2">
-        {#each topologySources as src (src.id)}
+        {#each [...topologySources, ...metricsSources] as src (src.id)}
+          {@const isTopology = src.purpose === 'topology'}
+          {@const canSync = isTopology}
+          {@const result = lastSyncResult[src.dataSourceId]}
           <div class="rounded-lg border border-theme-border p-3">
             <div class="flex items-center justify-between gap-2">
-              <div class="min-w-0">
-                <p class="text-sm text-theme-text-emphasis truncate">
-                  {src.dataSource?.name ?? src.dataSourceId}
-                </p>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <p class="text-sm text-theme-text-emphasis truncate">
+                    {src.dataSource?.name ?? src.dataSourceId}
+                  </p>
+                  <span
+                    class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded {isTopology
+                      ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                      : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}"
+                  >
+                    {src.purpose}
+                  </span>
+                </div>
                 <p class="text-xs font-mono text-theme-text-muted">
                   {src.dataSource?.type ?? '—'}
-                  {hasAutoscan(src.dataSource?.type) ? '· autoscan' : '· fetch'}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={() => handleSync(src)}
-                disabled={syncingId === src.dataSourceId}
-              >
-                {syncingId === src.dataSourceId ? 'Syncing…' : 'Sync now'}
-              </Button>
-            </div>
-            {#if lastSyncResult[src.dataSourceId]}
-              {@const r = lastSyncResult[src.dataSourceId]}
-              {#if r}
-                <p class="mt-2 text-xs">
-                  {#if r.status === 'ok'}
-                    <span class="text-theme-text-muted">
-                      ✓ {r.nodeCount} nodes / {r.linkCount} links
-                      {#if r.portCount > 0}
-                        / {r.portCount} ports
-                      {/if}
-                      · {formatAgo(r.at)}
-                    </span>
-                  {:else if r.status === 'partial'}
-                    <span class="text-amber-500" title={r.message}>
-                      ⚠ partial: {r.nodeCount} nodes / {r.linkCount} links · {formatAgo(r.at)}
-                    </span>
-                  {:else if r.status === 'empty'}
-                    <span class="text-theme-text-muted"
-                      >no devices observed · {formatAgo(r.at)}</span
-                    >
-                  {:else}
-                    <span class="text-red-500" title={r.message}>✗ {r.message ?? 'failed'}</span>
+                  {#if isTopology}
+                    · {hasAutoscan(src.dataSource?.type) ? 'autoscan' : 'fetch'}
                   {/if}
                 </p>
+              </div>
+              {#if canSync}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onclick={() => handleSync(src)}
+                  disabled={syncingId === src.dataSourceId}
+                >
+                  {syncingId === src.dataSourceId ? 'Syncing…' : 'Sync now'}
+                </Button>
               {/if}
+            </div>
+            {#if result}
+              <p class="mt-2 text-xs">
+                {#if result.status === 'ok'}
+                  <span class="text-theme-text-muted">
+                    ✓ {result.nodeCount} nodes / {result.linkCount} links
+                    {#if result.portCount > 0}
+                      / {result.portCount} ports
+                    {/if}
+                    · {formatAgo(result.at)}
+                  </span>
+                {:else if result.status === 'partial'}
+                  <span class="text-amber-500" title={result.message}>
+                    ⚠ partial: {result.nodeCount} nodes / {result.linkCount} links ·
+                    {formatAgo(
+                      result.at,
+                    )}
+                  </span>
+                {:else if result.status === 'empty'}
+                  <span class="text-theme-text-muted">
+                    no devices observed · {formatAgo(result.at)}
+                  </span>
+                {:else}
+                  <span class="text-red-500" title={result.message}>
+                    ✗ {result.message ?? 'failed'}
+                  </span>
+                {/if}
+              </p>
             {/if}
           </div>
         {/each}
       </div>
-    </div>
+    {/if}
 
-    <hr class="border-theme-border">
-  {/if}
-
-  <!-- Data Sources -->
-  <div class="space-y-3">
-    <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">Data Sources</h3>
-    <div class="space-y-3">
-      <!-- Topology Sources Summary -->
-      <div class="bg-theme-bg rounded-lg p-3">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-theme-text">Topology Sources</p>
-            <p class="text-xs text-theme-text-muted">
-              {#if topologySources.length === 0}
-                Manual (YAML)
-              {:else}
-                {topologySources.length}
-                source{topologySources.length > 1 ? 's' : ''}
-                configured
-              {/if}
-            </p>
-          </div>
-          <DatabaseIcon size={20} class="text-theme-text-muted" />
-        </div>
-      </div>
-
-      <!-- Metrics Sources Summary -->
-      <div class="bg-theme-bg rounded-lg p-3">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-theme-text">Metrics Sources</p>
-            <p class="text-xs text-theme-text-muted">
-              {#if metricsSources.length === 0}
-                Not configured
-              {:else}
-                {metricsSources.length}
-                source{metricsSources.length > 1 ? 's' : ''}
-                configured
-              {/if}
-            </p>
-          </div>
-          <DatabaseIcon size={20} class="text-theme-text-muted" />
-        </div>
-      </div>
-
-      <!-- Configure button -->
-      <a
-        href="/topologies/{topology.id}/settings#sources"
-        class="btn btn-secondary w-full justify-center"
-      >
-        <DatabaseIcon size={16} class="mr-2" />
-        Configure Data Sources
-      </a>
-    </div>
+    <a
+      href="/topologies/{topology.id}/settings#sources"
+      class="btn btn-secondary w-full justify-center"
+    >
+      <DatabaseIcon size={16} class="mr-2" />
+      Configure sources
+    </a>
   </div>
 
   <hr class="border-theme-border">
