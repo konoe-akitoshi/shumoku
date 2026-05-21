@@ -74,7 +74,7 @@
   let topologyId = $derived($page.params.id!)
 
   // Tab state - check URL hash for initial tab
-  let activeTab = $state<'general' | 'sources' | 'mapping'>('general')
+  let activeTab = $state<'general' | 'sources' | 'discovery' | 'mapping'>('general')
 
   // General data
   let topology = $state<Topology | null>(null)
@@ -262,7 +262,7 @@
   onMount(async () => {
     // Check URL hash for initial tab
     const hash = window.location.hash.slice(1)
-    if (hash === 'sources' || hash === 'mapping') {
+    if (hash === 'sources' || hash === 'mapping' || hash === 'discovery') {
       activeTab = hash
     }
 
@@ -896,16 +896,34 @@
           {activeTab === 'sources'
             ? 'text-primary border-primary'
             : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
-        onclick={() => { activeTab = 'sources'; history.replaceState(null, '', '#sources') }}
+        onclick={() => {
+          activeTab = 'sources'
+          history.replaceState(null, '', '#sources')
+        }}
       >
-        Data Sources
+        Sources
+      </button>
+      <button
+        class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+          {activeTab === 'discovery'
+            ? 'text-primary border-primary'
+            : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+        onclick={() => {
+          activeTab = 'discovery'
+          history.replaceState(null, '', '#discovery')
+        }}
+      >
+        Discovery
       </button>
       <button
         class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
           {activeTab === 'mapping'
             ? 'text-primary border-primary'
             : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
-        onclick={() => { activeTab = 'mapping'; history.replaceState(null, '', '#mapping') }}
+        onclick={() => {
+          activeTab = 'mapping'
+          history.replaceState(null, '', '#mapping')
+        }}
       >
         Mapping
       </button>
@@ -1126,40 +1144,17 @@
           </Button>
         </div>
 
-        <!-- Topology Sources -->
+        <!-- Topology Sources — declarative: which sources are attached and
+             how they 're configured. The "go grab data" actions (Sync now /
+             Sync all) live in the Discovery tab. -->
         <div class="card">
           <div class="card-header flex items-center justify-between">
             <h2 class="font-medium text-theme-text-emphasis">Topology Sources</h2>
-            <div class="flex items-center gap-2">
-              {#if topologySources.length > 0}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onclick={handleSyncAll}
-                  disabled={syncing || hasSourceChanges}
-                >
-                  {#if syncing}
-                    <span
-                      class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
-                    ></span>
-                  {:else}
-                    <ArrowsClockwiseIcon size={14} class="mr-1" />
-                  {/if}
-                  Sync All
-                </Button>
-              {/if}
-              <Button variant="outline" size="sm" onclick={() => addSource('topology')}>
-                <PlusIcon size={16} class="mr-1" />
-                Add
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onclick={() => addSource('topology')}>
+              <PlusIcon size={16} class="mr-1" />
+              Add
+            </Button>
           </div>
-
-          {#if syncResult}
-            <div class="px-4 py-2 bg-success/10 border-b border-success/20 text-success text-sm">
-              Synced: {syncResult.nodeCount} nodes, {syncResult.linkCount} links
-            </div>
-          {/if}
 
           <div class="card-body">
             {#if topologySources.length === 0}
@@ -1518,6 +1513,101 @@
             {/if}
           </div>
         </div>
+      </div>
+    {/if}
+
+    <!-- ============================================ -->
+    <!-- Discovery Tab — imperative: run sources to fetch fresh data.   -->
+    <!-- The act of "going to grab" — distinct from the Sources tab     -->
+    <!-- which declares what 's attached.                                -->
+    <!-- ============================================ -->
+    {#if activeTab === 'discovery'}
+      <div class="space-y-6">
+        {#if topologySources.length === 0}
+          <div class="card p-6 text-center">
+            <p class="text-theme-text-muted mb-4">No topology sources attached.</p>
+            <button
+              class="text-primary hover:underline"
+              onclick={() => {
+                activeTab = 'sources'
+                history.replaceState(null, '', '#sources')
+              }}
+            >
+              Attach a source in Sources →
+            </button>
+          </div>
+        {:else}
+          <div class="card">
+            <div class="card-header flex items-center justify-between">
+              <div>
+                <h2 class="font-medium text-theme-text-emphasis">Sync</h2>
+                <p class="text-xs text-theme-text-muted mt-0.5">
+                  Drive each topology source. Results land as observation snapshots and the diagram
+                  re-renders through the resolver.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onclick={handleSyncAll}
+                disabled={syncing || hasSourceChanges}
+              >
+                {#if syncing}
+                  <span
+                    class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
+                  ></span>
+                {:else}
+                  <ArrowsClockwiseIcon size={14} class="mr-1" />
+                {/if}
+                Sync all
+              </Button>
+            </div>
+
+            {#if hasSourceChanges}
+              <div class="px-4 py-2 bg-warning/10 border-b border-warning/20 text-warning text-sm">
+                You have unsaved changes in Sources. Save them before syncing.
+              </div>
+            {/if}
+
+            {#if syncResult}
+              <div class="px-4 py-2 bg-success/10 border-b border-success/20 text-success text-sm">
+                ✓ {syncResult.nodeCount} nodes / {syncResult.linkCount} links observed
+              </div>
+            {/if}
+
+            <div class="card-body">
+              <div class="space-y-3">
+                {#each currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
+                  {@const dataSource = getDataSource(source.dataSourceId)}
+                  <div
+                    class="flex items-center justify-between gap-3 py-2 border-b border-theme-border last:border-0"
+                  >
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm text-theme-text-emphasis truncate">
+                        {dataSource?.name ?? source.dataSourceId}
+                      </p>
+                      <p class="text-xs font-mono text-theme-text-muted">
+                        {dataSource?.type ?? '—'}
+                        {#if source.lastSyncedAt}
+                          · last {new Date(source.lastSyncedAt).toLocaleString()}
+                        {:else}
+                          · never synced
+                        {/if}
+                      </p>
+                    </div>
+                    {#if dataSource?.status === 'connected'}
+                      <span class="badge badge-success text-xs">connected</span>
+                    {:else if dataSource?.status === 'disconnected'}
+                      <span class="badge badge-danger text-xs">disconnected</span>
+                    {:else}
+                      <span class="badge badge-secondary text-xs">unknown</span>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            </div>
+          </div>
+        {/if}
       </div>
     {/if}
 
