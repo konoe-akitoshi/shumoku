@@ -71,13 +71,25 @@ export class DataSourceService {
   }
 
   /**
-   * Get data sources by capability
+   * Get data sources by capability.
+   *
+   * `topology` is special-cased to also match `autoscan`-capable plugins
+   * because an autoscan plugin (e.g. SNMP discovery) produces a topology
+   * snapshot via `scan()` rather than `fetchTopology()`. From the
+   * attachment surface 's perspective both are valid "topology providers."
    */
   listByCapability(capability: 'topology' | 'metrics' | 'alerts'): DataSource[] {
     const all = this.list()
     return all.filter((ds) => {
       const pluginInfo = pluginRegistry.getInfo(ds.type)
-      return pluginInfo?.capabilities.includes(capability)
+      if (!pluginInfo) return false
+      if (capability === 'topology') {
+        return (
+          pluginInfo.capabilities.includes('topology') ||
+          pluginInfo.capabilities.includes('autoscan')
+        )
+      }
+      return pluginInfo.capabilities.includes(capability)
     })
   }
 

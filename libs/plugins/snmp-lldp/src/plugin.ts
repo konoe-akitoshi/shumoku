@@ -42,7 +42,11 @@ export interface SnmpLldpConfig {
 export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
   readonly type = 'snmp-lldp'
   readonly displayName = 'Network Discovery'
-  readonly capabilities: readonly DataSourceCapability[] = ['autoscan', 'topology']
+  // `autoscan` is the load-bearing capability — the plugin produces a
+  // Snapshot via `scan()`. The plugin does NOT implement `fetchTopology()`
+  // (that 's `TopologyCapable`); the server 's /sync-from-source dispatches
+  // to `scan()` when it sees `autoscan` capability.
+  readonly capabilities: readonly DataSourceCapability[] = ['autoscan']
 
   private config: SnmpLldpConfig = {}
 
