@@ -22,24 +22,20 @@ import { SnmpClient } from './client.js'
 import { discover } from './discover.js'
 import { SYSTEM_MIB } from './mib.js'
 
-/**
- * Seed entry as expected on plugin config. UI surfaces these as a
- * repeatable list (address + community).
- */
-export interface SnmpLldpSeed {
-  address: string
-  community: string
-}
-
 export interface SnmpLldpConfig {
   /** Plugin instance id, stamped into provenance.source. Supplied by
    *  the server when constructing the plugin. */
   instanceId?: string
-  /** Default community used when a seed doesn 't specify one. */
+  /** SNMPv2c community string used for every target. */
   community?: string
-  /** Seed devices to crawl. */
-  seeds?: SnmpLldpSeed[]
-  /** Per-device SNMP timeout in ms (default 2000). */
+  /**
+   * Mixed list of scan targets. Each entry is an IPv4 address, a
+   * hostname, or a CIDR block (`10.0.0.0/24`). CIDR is expanded to
+   * individual host addresses and triaged via a liveness probe before
+   * the full SNMP walk runs.
+   */
+  targets?: string[]
+  /** Deep-scan timeout in ms per device (default 2000). */
   timeoutMs?: number
 }
 
@@ -54,16 +50,24 @@ export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
     this.config = (config as SnmpLldpConfig) ?? {}
   }
 
-  /** `testConnection` probes the first seed for System-MIB scalars.
-   *  Reports identity-coverage diagnostics back so the UI can advise. */
+  /** `testConnection` probes the first concrete (non-CIDR) target for
+   *  System-MIB scalars. CIDR-only configurations have no obvious
+   *  "single target" to test against — the user runs a real scan to verify. */
   async testConnection(): Promise<ConnectionResult> {
-    const seed = this.config.seeds?.[0]
-    if (!seed) {
-      return { success: false, message: 'No seed devices configured' }
+    const targets = this.config.targets ?? []
+    const firstConcrete = targets.find((t) => !t.includes('/'))
+    if (!firstConcrete) {
+      return {
+        success: false,
+        message:
+          targets.length === 0
+            ? 'No targets configured'
+            : 'No single-address target — run a scan to verify CIDR reachability',
+      }
     }
     const client = new SnmpClient({
-      address: seed.address,
-      community: seed.community || this.config.community || 'public',
+      address: firstConcrete,
+      community: this.config.community || 'public',
       timeoutMs: this.config.timeoutMs ?? 2000,
     })
     try {
@@ -76,7 +80,7 @@ export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
       const sysObjectID = vbs[1]?.value
       return {
         success: true,
-        message: `Reached ${seed.address} (sysName=${String(sysName)})`,
+        message: `Reached ${firstConcrete} (sysName=${String(sysName)})`,
         version: typeof sysObjectID === 'string' ? sysObjectID : undefined,
       }
     } catch (err) {
@@ -90,27 +94,22 @@ export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
   }
 
   /**
-   * AutoscanCapable.scan — perform the seed-crawl and return a Snapshot.
-   * The `input` from the caller can override the configured seeds; if
-   * absent we fall back to `this.config.seeds`.
+   * AutoscanCapable.scan — expand targets (incl. CIDR), liveness probe,
+   * then full SNMP walk on responders.
+   *
+   * `input.seeds` from the caller (if any) overrides the configured
+   * targets — useful for ad-hoc scans of a specific subset.
    */
   async scan(input: AutoscanInput): Promise<Snapshot> {
     const capturedAt = Date.now()
     const sourceId = this.config.instanceId ?? 'snmp-lldp'
-    const seeds = (
-      input.seeds.length > 0 ? input.seeds : (this.config.seeds ?? []).map((s) => s.address)
-    ).map((addr) => ({
-      address: addr,
-      community:
-        this.config.seeds?.find((s) => s.address === addr)?.community ??
-        this.config.community ??
-        'public',
-    }))
+    const targets = input.seeds.length > 0 ? input.seeds : (this.config.targets ?? [])
+    const community = this.config.community || 'public'
 
-    if (seeds.length === 0) {
+    if (targets.length === 0) {
       return {
         status: 'failed',
-        statusMessage: 'No seed devices configured',
+        statusMessage: 'No targets configured',
         capturedAt,
         graph: null,
       }
@@ -118,12 +117,13 @@ export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
 
     try {
       const result = await discover({
-        seeds,
+        targets,
+        community,
         sourceId,
         timeoutMs: this.config.timeoutMs,
       })
       const status: Snapshot['status'] =
-        result.graph.nodes.length === 0 ? 'empty' : result.allOk ? 'ok' : 'partial'
+        result.graph.nodes.length === 0 ? 'empty' : result.warnings.length === 0 ? 'ok' : 'partial'
       return {
         status,
         capturedAt,
