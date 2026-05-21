@@ -67,6 +67,9 @@ export function createScanRoute(): Hono {
           snapshot.status === 'failed' ? 'failed' : 'ok',
           snapshot.capturedAt,
         )
+        // Invalidate the parsed-topology cache so the next /render / /graph
+        // call re-runs resolve() with the new snapshot.
+        getTopologyService().clearCacheEntry(topologyId)
         return c.json({ snapshot, observation })
       }
 

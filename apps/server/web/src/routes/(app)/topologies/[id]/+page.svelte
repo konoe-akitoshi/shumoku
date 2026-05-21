@@ -10,7 +10,6 @@
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
-  import ObservationPanel from '$lib/components/ObservationPanel.svelte'
   import ShareButton from '$lib/components/ShareButton.svelte'
   import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
   import TopologySettings from '$lib/components/TopologySettings.svelte'
@@ -24,7 +23,6 @@
 
   // Settings panel state
   let settingsOpen = $state(false)
-  let observationsOpen = $state(false)
 
   // Node mapping modal state
   let mappingModalOpen = $state(false)
@@ -95,12 +93,6 @@
 
   function toggleSettings() {
     settingsOpen = !settingsOpen
-    if (settingsOpen) observationsOpen = false
-  }
-
-  function toggleObservations() {
-    observationsOpen = !observationsOpen
-    if (observationsOpen) settingsOpen = false
   }
 
   function handleDeleted() {
@@ -185,18 +177,8 @@
         />
       </div>
 
-      <!-- Share + Observations toggle -->
-      <div class="absolute top-4 right-4 z-10 flex items-center gap-2">
-        <button
-          type="button"
-          onclick={toggleObservations}
-          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-theme-bg-elevated/90 backdrop-blur border border-theme-border text-xs hover:bg-theme-bg-hover transition-colors {observationsOpen
-            ? 'border-blue-500 text-blue-500'
-            : ''}"
-          title="View resolved graph state + observations"
-        >
-          Observations
-        </button>
+      <!-- Share button -->
+      <div class="absolute top-4 right-4 z-10">
         <ShareButton
           shareToken={topology.shareToken}
           shareType="topologies"
@@ -248,27 +230,6 @@
           onUpdated={handleTopologyUpdated}
         />
       </div>
-    </div>
-  {/if}
-
-  <!-- Observations panel -->
-  {#if topology && observationsOpen}
-    <div
-      class="w-96 border-l border-theme-border bg-theme-bg-elevated flex flex-col overflow-hidden"
-    >
-      <div
-        class="h-14 flex items-center justify-between px-4 border-b border-theme-border flex-shrink-0"
-      >
-        <h2 class="font-medium text-theme-text-emphasis">Observations</h2>
-        <button
-          onclick={toggleObservations}
-          class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer"
-          aria-label="Close observations"
-        >
-          <XIcon size={20} />
-        </button>
-      </div>
-      <div class="flex-1 overflow-y-auto p-4"><ObservationPanel {topologyId} /></div>
     </div>
   {/if}
 </div>

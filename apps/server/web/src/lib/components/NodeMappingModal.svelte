@@ -439,6 +439,68 @@
             {/if}
           </div>
 
+          <!-- Discovery (observation-model identity + provenance) -->
+          {#if nodeData.node.identity || nodeData.node.provenance}
+            <div class="bg-muted/30 rounded-lg p-4 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs uppercase tracking-wide text-muted-foreground">Discovery</span>
+                {#if nodeData.node.provenance?.state}
+                  {@const state = nodeData.node.provenance.state}
+                  <span
+                    class="text-xs font-medium {state === 'confirmed'
+                      ? 'text-green-600 dark:text-green-400'
+                      : state === 'conflicting'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : state === 'discovered-only'
+                          ? 'text-blue-500 dark:text-blue-400'
+                          : 'text-muted-foreground'}"
+                  >
+                    {state}
+                  </span>
+                {/if}
+              </div>
+
+              {#if nodeData.node.provenance}
+                <div class="grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-xs">
+                  <span class="text-muted-foreground">source</span>
+                  <span class="font-mono">{nodeData.node.provenance.source}</span>
+                  {#if nodeData.node.provenance.observedAt}
+                    <span class="text-muted-foreground">observed</span>
+                    <span> {new Date(nodeData.node.provenance.observedAt).toLocaleString()} </span>
+                  {/if}
+                </div>
+              {/if}
+
+              {#if nodeData.node.identity}
+                {@const id = nodeData.node.identity}
+                <div
+                  class="grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-xs pt-2 border-t border-border"
+                >
+                  {#if id.mgmtIp}
+                    <span class="text-muted-foreground">mgmtIp</span>
+                    <span class="font-mono">{id.mgmtIp}</span>
+                  {/if}
+                  {#if id.chassisId}
+                    <span class="text-muted-foreground">chassisId</span>
+                    <span class="font-mono">{id.chassisId}</span>
+                  {/if}
+                  {#if id.sysName}
+                    <span class="text-muted-foreground">sysName</span>
+                    <span>{id.sysName}</span>
+                  {/if}
+                  {#if id.vendorIds}
+                    <span class="text-muted-foreground">vendorIds</span>
+                    <span class="font-mono break-all">
+                      {Object.entries(id.vendorIds)
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(' / ')}
+                    </span>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
           <!-- Connected Links with Traffic -->
           {#if nodeData.connectedLinks.length > 0}
             <div class="space-y-2">

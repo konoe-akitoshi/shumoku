@@ -7,17 +7,25 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import type { IconDimensions, LayoutResult, NetworkGraph, ResolvedLayout } from '@shumoku/core'
+import type {
+  IconDimensions,
+  LayoutResult,
+  NetworkGraph,
+  ResolvedLayout,
+  SnapshotEntry,
+} from '@shumoku/core'
 import {
   computeNetworkLayout,
   createMemoryFileResolver,
   HierarchicalParser,
+  resolve as resolveObservations,
   sampleNetwork,
   YamlParser,
 } from '@shumoku/core'
 import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
+import { ObservationsService } from './observations.js'
 
 interface TopologyRow {
   id: string
@@ -372,10 +380,30 @@ export class TopologyService {
   }
 
   /**
-   * Parse a topology and generate layout
+   * Parse a topology and generate layout.
+   *
+   * Crucially, this is also where the **observation resolver** runs. The
+   * authored layer (`content_json`) is folded with every source's latest
+   * snapshot (`topology_observations`) so that everything downstream —
+   * /render, /graph, layout, metrics binding — sees the same resolved
+   * NetworkGraph. Discovered-only nodes show up in the diagram, conflict
+   * state is carried on `provenance`, etc.
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
-    const graph = this.parseContent(topology.contentJson)
+    const authored = this.parseContent(topology.contentJson)
+
+    // Fold in latest observations per attached source. resolve() handles
+    // the empty-snapshot case (returns authored unchanged but with
+    // provenance.source='authored' stamped).
+    const observations = new ObservationsService()
+    const latest = observations.latestPerSource(topology.id)
+    const snapshots: SnapshotEntry[] = latest.map((o) => ({
+      sourceId: o.sourceId,
+      capturedAt: o.capturedAt,
+      status: o.status,
+      graph: o.graph,
+    }))
+    const graph = resolveObservations(authored, snapshots)
 
     // Resolve icon dimensions for URL icons (used by renderer for
     // aspect-preserving sizing).
