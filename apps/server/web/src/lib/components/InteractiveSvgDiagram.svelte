@@ -8,6 +8,24 @@
       vendor?: string
       model?: string
     }
+    /** Observation-model provenance / state, stamped by the server's
+     *  resolver. Optional — undefined for graphs that pre-date the model. */
+    provenance?: {
+      source: string
+      state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'
+      observedAt?: number
+    }
+    /** Identity keys used by the resolver to match this node across
+     *  sources / re-scans. */
+    identity?: {
+      mgmtIp?: string
+      chassisId?: string
+      sysName?: string
+      ifIndex?: number
+      ifName?: string
+      mac?: string
+      vendorIds?: Record<string, string>
+    }
   }
 
   export interface ConnectedLinkEndpoint {
@@ -227,6 +245,8 @@
               model: 'model' in node.spec ? node.spec.model : undefined,
             }
           : undefined,
+        provenance: node.provenance,
+        identity: node.identity,
       },
       connectedLinks,
     })
