@@ -14,6 +14,7 @@
 - `topology-foundation-resolve.md` — resolve() アルゴリズム
 - `topology-foundation-metrics.md` — メトリクスログ永続化
 - `topology-foundation-mvp.md` — v1 最小スライス
+- `topology-foundation-protocol-probes.md` — **v2 probe アーキテクチャ**
 - `topology-foundation-open-questions.md` — **user 決定待ちの論点**
 
 ## 0. 前提
