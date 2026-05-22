@@ -418,7 +418,7 @@
     if (!topology) return
     savingEdgeStyle = true
     try {
-      const graph = JSON.parse(topology.contentJson)
+      const graph = JSON.parse(topology.contentJson ?? '{}')
       graph.settings = graph.settings || {}
       graph.settings.edgeStyle = edgeStyle
       if (edgeStyle === 'splines') {

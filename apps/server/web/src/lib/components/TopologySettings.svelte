@@ -35,7 +35,7 @@
   // Parse graph settings from contentJson
   function parseGraphSettings() {
     try {
-      const graph = JSON.parse(topology.contentJson)
+      const graph = JSON.parse(topology.contentJson ?? '{}')
       edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
       splineMode = graph.settings?.splineMode || 'sloppy'
     } catch {
@@ -47,7 +47,7 @@
   async function updateEdgeStyle() {
     savingEdgeStyle = true
     try {
-      const graph = JSON.parse(topology.contentJson)
+      const graph = JSON.parse(topology.contentJson ?? '{}')
       graph.settings = graph.settings || {}
       graph.settings.edgeStyle = edgeStyle
       if (edgeStyle === 'splines') {

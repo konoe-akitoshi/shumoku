@@ -34,7 +34,9 @@
         if (cancelled) return
         topology = t
         topologies.upsert(t)
-        const graph = JSON.parse(t.contentJson)
+        // If no Manual source is attached yet, the editor starts blank.
+        // Save will lazily create one server-side (see TopologyService.update).
+        const graph = JSON.parse(t.contentJson ?? '{"version":"1","nodes":[],"links":[]}')
         jsonContent = JSON.stringify(graph, null, 2)
         yamlContent = graphToYaml(graph)
       } catch (e) {

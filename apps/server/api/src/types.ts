@@ -74,7 +74,18 @@ export interface DataSourceInput {
 export interface Topology {
   id: string
   name: string
-  contentJson: string // Multi-file JSON: {"files": [{name, content}, ...]}
+  /**
+   * Synthesized from the latest observation of the topology 's Manual
+   * source, if one is attached. Undefined when there 's no Manual source
+   * — that 's the case for topologies whose graph comes only from
+   * NetBox / SNMP / etc. The editor reads this to populate its buffer
+   * and writes through `update()` (which records a new Manual observation).
+   *
+   * Not a real database column; see migration 010.
+   */
+  contentJson?: string
+  /** Id of the Manual source attached to this topology, if any. */
+  manualSourceId?: string
   topologySourceId?: string // Data source for structure (e.g., NetBox)
   metricsSourceId?: string // Data source for metrics (e.g., Zabbix)
   mappingJson?: string
@@ -85,7 +96,14 @@ export interface Topology {
 
 export interface TopologyInput {
   name: string
-  contentJson: string // Multi-file JSON: {"files": [{name, content}, ...]}
+  /**
+   * Optional initial Manual graph. When present, `create()` (or
+   * `update()` on an existing topology) creates / reuses a Manual data
+   * source for the topology and records a new observation. When absent,
+   * no Manual source is attached — the editor 's Save button surfaces a
+   * "no Manual source" CTA.
+   */
+  contentJson?: string
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string

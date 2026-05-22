@@ -322,9 +322,12 @@ export function createTopologiesApi(): Hono {
   app.post('/', async (c) => {
     try {
       const body = (await c.req.json()) as TopologyInput
-      if (!body.name || !body.contentJson) {
-        return c.json({ error: 'name and contentJson are required' }, 400)
+      if (!body.name) {
+        return c.json({ error: 'name is required' }, 400)
       }
+      // contentJson is optional — when present, create() attaches a
+      // Manual source and records the first observation. See
+      // TopologyService.create().
 
       const topology = await service.create(body)
       return c.json(topology, 201)
