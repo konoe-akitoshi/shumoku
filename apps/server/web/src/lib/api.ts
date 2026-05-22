@@ -315,6 +315,30 @@ export const topologies = {
         `/topologies/${topologyId}/sync-from-source`,
         { method: 'POST' },
       ),
+
+    /**
+     * Sync exactly one attached topology source. Dispatches by
+     * capability server-side (autoscan → scan, otherwise fetchTopology)
+     * and records the result as an observation snapshot.
+     */
+    syncOne: (topologyId: string, sourceId: string) =>
+      request<{
+        snapshot: {
+          status: 'ok' | 'partial' | 'failed' | 'empty'
+          statusMessage?: string
+          capturedAt: number
+          warnings?: string[]
+          graph: NetworkGraph | null
+        }
+        observation: {
+          id: string
+          nodeCount: number
+          linkCount: number
+          portCount: number
+        }
+      }>(`/topologies/${topologyId}/sources/${sourceId}/sync`, { method: 'POST' }).catch((err) => {
+        throw err
+      }),
   },
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { nodeIdentityQuality } from '@shumoku/core'
   import {
     ArrowDownIcon,
     ArrowLeftIcon,
@@ -95,9 +96,44 @@
   let metricsDataSources = $state<DataSource[]>([])
   let savingSources = $state(false)
   let hasSourceChanges = $state(false)
-  let syncing = $state(false)
-  let syncResult = $state<{ nodeCount: number; linkCount: number } | null>(null)
   let copiedSecret = $state<string | null>(null)
+
+  // ----- Discovery tab state -----
+  /** Per-source sync result chips (keyed by sourceId). */
+  let perSourceSync = $state<
+    Record<
+      string,
+      {
+        status: 'ok' | 'partial' | 'failed' | 'empty'
+        nodeCount: number
+        linkCount: number
+        message?: string
+        at: number
+      }
+    >
+  >({})
+  let syncingSourceId = $state<string | null>(null)
+  /** Identity-quality counts across the resolved topology. */
+  let identityQuality = $state<{ stable: number; weak: number; unbound: number; total: number }>({
+    stable: 0,
+    weak: 0,
+    unbound: 0,
+    total: 0,
+  })
+  /** Recent observation snapshots for this topology. */
+  let recentObservations = $state<
+    Array<{
+      id: string
+      sourceId: string
+      capturedAt: number
+      status: 'ok' | 'partial' | 'failed' | 'empty'
+      statusMessage?: string
+      nodeCount: number
+      linkCount: number
+      portCount: number
+    }>
+  >([])
+  let discoveryLoading = $state(false)
 
   // Filter options cache
   let filterOptionsCache = $state<
@@ -570,23 +606,85 @@
     }
   }
 
-  async function handleSyncAll() {
-    syncing = true
-    syncResult = null
+  /**
+   * Load the resolved graph (for identity quality counts) and the
+   * observation history. Called whenever the Discovery tab is opened
+   * and after each per-source sync.
+   */
+  async function refreshDiscovery() {
+    discoveryLoading = true
     try {
-      const result = await api.topologies.sources.syncAll(topologyId)
-      syncResult = { nodeCount: result.nodeCount, linkCount: result.linkCount }
-      topology = result.topology
-      topologies.upsert(result.topology)
-      // Topology contentJson likely changed — mapping may reference nodes that
-      // no longer exist (or vice versa). Force a mapping reload.
-      await mappingStore.load(topologyId, true)
+      const [graphResp, obsList] = await Promise.all([
+        api.topologies.getGraph(topologyId),
+        api.topologies.listObservations(topologyId, 20),
+      ])
+      // Count identity quality across resolved nodes.
+      const counts = { stable: 0, weak: 0, unbound: 0, total: 0 }
+      for (const node of graphResp.graph.nodes ?? []) {
+        const q = nodeIdentityQuality(node.identity)
+        counts[q]++
+        counts.total++
+      }
+      identityQuality = counts
+      recentObservations = obsList
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Sync failed')
+      console.error('[Discovery] failed to refresh', e)
     } finally {
-      syncing = false
+      discoveryLoading = false
     }
   }
+
+  /** Sync exactly one attached topology source. */
+  async function handleSyncOne(source: TopologyDataSource) {
+    syncingSourceId = source.dataSourceId
+    try {
+      const result = await api.topologies.sources.syncOne(topologyId, source.dataSourceId)
+      const counts = result.snapshot.graph ?? { nodes: [], links: [] }
+      perSourceSync = {
+        ...perSourceSync,
+        [source.dataSourceId]: {
+          status: result.snapshot.status,
+          nodeCount: counts.nodes?.length ?? 0,
+          linkCount: counts.links?.length ?? 0,
+          message: result.snapshot.statusMessage,
+          at: Date.now(),
+        },
+      }
+      // Update topology re-render through the resolver.
+      const updatedTopology = await api.topologies.get(topologyId)
+      topology = updatedTopology
+      topologies.upsert(updatedTopology)
+      await refreshDiscovery()
+    } catch (e) {
+      perSourceSync = {
+        ...perSourceSync,
+        [source.dataSourceId]: {
+          status: 'failed',
+          nodeCount: 0,
+          linkCount: 0,
+          message: e instanceof Error ? e.message : 'Sync failed',
+          at: Date.now(),
+        },
+      }
+    } finally {
+      syncingSourceId = null
+    }
+  }
+
+  function formatAgo(ts: number): string {
+    const diff = Date.now() - ts
+    if (diff < 60_000) return 'just now'
+    if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
+    if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
+    return new Date(ts).toLocaleString()
+  }
+
+  // Re-load Discovery data whenever the tab is opened.
+  $effect(() => {
+    if (activeTab === 'discovery' && topology) {
+      void refreshDiscovery()
+    }
+  })
 
   function getWebhookUrl(source: TopologyDataSource): string {
     return `${window.location.origin}/api/webhooks/topology/${source.webhookSecret}`
@@ -1545,53 +1643,68 @@
             </div>
           </div>
         {:else}
-          <!-- Header card with the master Sync All action -->
+          <!-- Identity binding (掴み) gauge — top of the tab. Counts every
+               resolved node by how reliably it can be re-matched across
+               sources / re-scans. -->
           <div class="card">
-            <div class="card-body flex items-center justify-between gap-4">
-              <div>
-                <h2 class="font-medium text-theme-text-emphasis">Sync all attached sources</h2>
-                <p class="text-xs text-theme-text-muted mt-1">
-                  Each source is invoked by capability — autoscan plugins probe their targets,
-                  fetch-style plugins (NetBox etc.) pull the latest snapshot. Results land as
-                  observations; the diagram re-renders through the resolver.
-                </p>
-              </div>
-              <Button
-                variant="default"
-                size="sm"
-                onclick={handleSyncAll}
-                disabled={syncing || hasSourceChanges}
-              >
-                {#if syncing}
-                  <span
-                    class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
-                  ></span>
-                  Syncing…
-                {:else}
-                  <ArrowsClockwiseIcon size={14} class="mr-2" />
-                  Sync all
-                {/if}
-              </Button>
+            <div class="card-header">
+              <h2 class="font-medium text-theme-text-emphasis">Identity binding (掴み)</h2>
+              <p class="text-xs text-theme-text-muted mt-0.5">
+                How well each resolved node is locked-on. More identity keys (mgmtIp / chassisId /
+                sysName / vendorIds) → more reliable across re-scans and source changes.
+              </p>
             </div>
+            <div class="card-body">
+              <div class="grid grid-cols-3 gap-3 text-center">
+                <div class="rounded-lg border border-theme-border p-3">
+                  <p class="text-2xl font-semibold text-green-600 dark:text-green-400">
+                    {identityQuality.stable}
+                  </p>
+                  <p class="text-xs text-theme-text-muted mt-1">🟢 stable</p>
+                  <p class="text-[10px] text-theme-text-muted mt-0.5">multiple keys</p>
+                </div>
+                <div class="rounded-lg border border-theme-border p-3">
+                  <p class="text-2xl font-semibold text-amber-600 dark:text-amber-400">
+                    {identityQuality.weak}
+                  </p>
+                  <p class="text-xs text-theme-text-muted mt-1">🟡 weak</p>
+                  <p class="text-[10px] text-theme-text-muted mt-0.5">single key</p>
+                </div>
+                <div class="rounded-lg border border-theme-border p-3">
+                  <p class="text-2xl font-semibold text-theme-text-muted">
+                    {identityQuality.unbound}
+                  </p>
+                  <p class="text-xs text-theme-text-muted mt-1">🔴 unbound</p>
+                  <p class="text-[10px] text-theme-text-muted mt-0.5">no identity</p>
+                </div>
+              </div>
+              {#if identityQuality.total === 0 && !discoveryLoading}
+                <p class="text-xs text-theme-text-muted text-center mt-3">
+                  No nodes resolved yet. Sync a source below to populate.
+                </p>
+              {/if}
+            </div>
+          </div>
 
+          <!-- Per-source sync — per-row Sync now. -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="font-medium text-theme-text-emphasis">Sources</h2>
+              <p class="text-xs text-theme-text-muted mt-0.5">
+                Drive each attached source. Results land as observation snapshots and the diagram
+                re-renders through the resolver.
+              </p>
+            </div>
             {#if hasSourceChanges}
               <div class="px-4 py-2 bg-warning/10 border-t border-warning/20 text-warning text-sm">
                 You have unsaved changes in Sources. Save them before syncing.
               </div>
             {/if}
-            {#if syncResult}
-              <div class="px-4 py-2 bg-success/10 border-t border-success/20 text-success text-sm">
-                ✓ Last sync: {syncResult.nodeCount} nodes / {syncResult.linkCount} links observed
-              </div>
-            {/if}
-          </div>
-
-          <!-- Per-source state cards -->
-          <div class="space-y-3">
-            {#each currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
-              {@const dataSource = getDataSource(source.dataSourceId)}
-              <div class="card">
-                <div class="card-body space-y-3">
+            <div class="card-body space-y-2">
+              {#each currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
+                {@const dataSource = getDataSource(source.dataSourceId)}
+                {@const lastResult = perSourceSync[source.dataSourceId]}
+                <div class="rounded-lg border border-theme-border p-3 space-y-2">
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-2 flex-wrap">
@@ -1603,47 +1716,126 @@
                         >
                           {dataSource?.type ?? '—'}
                         </span>
+                        {#if dataSource?.status === 'connected'}
+                          <span class="badge badge-success text-xs">connected</span>
+                        {:else if dataSource?.status === 'disconnected'}
+                          <span class="badge badge-danger text-xs" title={dataSource.statusMessage}>
+                            disconnected
+                          </span>
+                        {:else}
+                          <span class="badge badge-secondary text-xs">unknown</span>
+                        {/if}
                       </div>
                       <p class="text-xs text-theme-text-muted mt-1">
-                        Sync mode: <span class="font-mono">{source.syncMode ?? 'manual'}</span>
-                      </p>
-                    </div>
-                    {#if dataSource?.status === 'connected'}
-                      <span class="badge badge-success text-xs">connected</span>
-                    {:else if dataSource?.status === 'disconnected'}
-                      <span class="badge badge-danger text-xs" title={dataSource.statusMessage}>
-                        disconnected
-                      </span>
-                    {:else}
-                      <span class="badge badge-secondary text-xs">unknown</span>
-                    {/if}
-                  </div>
-
-                  <div class="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p class="text-theme-text-muted">Last synced</p>
-                      <p class="text-theme-text">
                         {#if source.lastSyncedAt}
-                          {new Date(source.lastSyncedAt).toLocaleString()}
+                          last synced {formatAgo(source.lastSyncedAt)}
                         {:else}
-                          <span class="text-theme-text-muted italic">never</span>
+                          never synced
                         {/if}
                       </p>
                     </div>
-                    <div>
-                      <p class="text-theme-text-muted">Health check</p>
-                      <p class="text-theme-text">
-                        {#if dataSource?.lastCheckedAt}
-                          {new Date(dataSource.lastCheckedAt).toLocaleString()}
-                        {:else}
-                          <span class="text-theme-text-muted italic">—</span>
-                        {/if}
-                      </p>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onclick={() => handleSyncOne(source)}
+                      disabled={syncingSourceId === source.dataSourceId || hasSourceChanges}
+                    >
+                      {#if syncingSourceId === source.dataSourceId}
+                        <span
+                          class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
+                        ></span>
+                        Syncing…
+                      {:else}
+                        <ArrowsClockwiseIcon size={12} class="mr-1" />
+                        Sync now
+                      {/if}
+                    </Button>
                   </div>
+                  {#if lastResult}
+                    <p class="text-xs">
+                      {#if lastResult.status === 'ok'}
+                        <span class="text-theme-text-muted">
+                          ✓ {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
+                          {formatAgo(
+                            lastResult.at,
+                          )}
+                        </span>
+                      {:else if lastResult.status === 'partial'}
+                        <span class="text-amber-600 dark:text-amber-400" title={lastResult.message}>
+                          ⚠ partial: {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
+                          {formatAgo(lastResult.at)}
+                        </span>
+                      {:else if lastResult.status === 'empty'}
+                        <span class="text-theme-text-muted">
+                          no devices observed · {formatAgo(lastResult.at)}
+                        </span>
+                      {:else}
+                        <span class="text-red-500" title={lastResult.message}>
+                          ✗ {lastResult.message ?? 'failed'}
+                        </span>
+                      {/if}
+                    </p>
+                  {/if}
                 </div>
-              </div>
-            {/each}
+              {/each}
+            </div>
+          </div>
+
+          <!-- Observation history -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="font-medium text-theme-text-emphasis">Recent observations</h2>
+              <p class="text-xs text-theme-text-muted mt-0.5">
+                Last 20 snapshots across all sources.
+              </p>
+            </div>
+            <div class="card-body">
+              {#if recentObservations.length === 0}
+                <p class="text-xs text-theme-text-muted text-center py-4">
+                  No observations yet. Sync a source above to record one.
+                </p>
+              {:else}
+                <div class="overflow-x-auto">
+                  <table class="w-full text-xs">
+                    <thead>
+                      <tr class="border-b border-theme-border text-left text-theme-text-muted">
+                        <th class="py-1.5 font-medium">When</th>
+                        <th class="py-1.5 font-medium">Source</th>
+                        <th class="py-1.5 font-medium">Status</th>
+                        <th class="py-1.5 font-medium text-right">Nodes</th>
+                        <th class="py-1.5 font-medium text-right">Links</th>
+                        <th class="py-1.5 font-medium text-right">Ports</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each recentObservations as o (o.id)}
+                        {@const ds = getDataSource(o.sourceId)}
+                        <tr class="border-b border-theme-border last:border-0">
+                          <td class="py-1.5">{formatAgo(o.capturedAt)}</td>
+                          <td class="py-1.5 font-mono text-theme-text-muted">
+                            {ds?.name ?? o.sourceId}
+                          </td>
+                          <td class="py-1.5">
+                            {#if o.status === 'ok'}
+                              <span class="text-green-600 dark:text-green-400">✓ ok</span>
+                            {:else if o.status === 'partial'}
+                              <span class="text-amber-600 dark:text-amber-400">⚠ partial</span>
+                            {:else if o.status === 'empty'}
+                              <span class="text-theme-text-muted">empty</span>
+                            {:else}
+                              <span class="text-red-500" title={o.statusMessage}>✗ failed</span>
+                            {/if}
+                          </td>
+                          <td class="py-1.5 text-right">{o.nodeCount}</td>
+                          <td class="py-1.5 text-right">{o.linkCount}</td>
+                          <td class="py-1.5 text-right">{o.portCount}</td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {/if}
+            </div>
           </div>
         {/if}
       </div>
