@@ -76,7 +76,43 @@
   let topologyId = $derived($page.params.id!)
 
   // Tab state - check URL hash for initial tab
-  let activeTab = $state<'general' | 'sources' | 'discovery' | 'mapping'>('general')
+  let activeTab = $state<'general' | 'sources' | 'discovery' | 'mapping' | 'resolved'>('general')
+
+  // Resolved JSON viewer state. The resolver folds all source observations
+  // (NetBox / SNMP) plus Manual 's source-level graph into one project
+  // graph — this is what the diagram actually renders against.
+  let resolvedJson = $state('')
+  let resolvedSnapshotCount = $state(0)
+  let resolvedLoading = $state(false)
+  let resolvedError = $state('')
+  let resolvedCopied = $state(false)
+
+  async function loadResolved() {
+    if (!topology) return
+    resolvedLoading = true
+    resolvedError = ''
+    try {
+      const { graph, snapshotCount } = await api.topologies.getResolved(topology.id)
+      resolvedJson = JSON.stringify(graph, null, 2)
+      resolvedSnapshotCount = snapshotCount
+    } catch (e) {
+      resolvedError = e instanceof Error ? e.message : 'Failed to load resolved graph'
+    } finally {
+      resolvedLoading = false
+    }
+  }
+
+  async function copyResolved() {
+    try {
+      await navigator.clipboard.writeText(resolvedJson)
+      resolvedCopied = true
+      setTimeout(() => {
+        resolvedCopied = false
+      }, 1500)
+    } catch (e) {
+      console.error('[Resolved] Copy failed:', e)
+    }
+  }
 
   // General data
   let topology = $state<Topology | null>(null)
@@ -299,7 +335,7 @@
   onMount(async () => {
     // Check URL hash for initial tab
     const hash = window.location.hash.slice(1)
-    if (hash === 'sources' || hash === 'mapping' || hash === 'discovery') {
+    if (hash === 'sources' || hash === 'mapping' || hash === 'discovery' || hash === 'resolved') {
       activeTab = hash
     }
 
@@ -703,6 +739,14 @@
     }
   })
 
+  // Re-fetch the resolved graph whenever the Resolved tab is opened.
+  // Cheap — server already caches the parsed topology and re-uses it.
+  $effect(() => {
+    if (activeTab === 'resolved' && topology) {
+      void loadResolved()
+    }
+  })
+
   function getWebhookUrl(source: TopologyDataSource): string {
     return `${window.location.origin}/api/webhooks/topology/${source.webhookSecret}`
   }
@@ -1041,6 +1085,18 @@
         }}
       >
         Mapping
+      </button>
+      <button
+        class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+          {activeTab === 'resolved'
+            ? 'text-primary border-primary'
+            : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+        onclick={() => {
+          activeTab = 'resolved'
+          history.replaceState(null, '', '#resolved')
+        }}
+      >
+        Resolved
       </button>
     </div>
 
@@ -2115,6 +2171,71 @@
             </div>
           </div>
         {/if}
+      </div>
+    {/if}
+
+    <!-- ============================================ -->
+    <!-- Resolved Tab -->
+    <!-- ============================================ -->
+    <!-- The project 's current rendered graph. This is the output of
+         `resolve()` folding Manual 's source-level graph with every
+         attached source 's latest observation snapshot. Read-only —
+         to change anything, edit the input sources. -->
+    {#if activeTab === 'resolved'}
+      <div class="space-y-3">
+        <div class="flex items-start justify-between">
+          <div>
+            <h2 class="font-medium text-theme-text-emphasis">Resolved project graph</h2>
+            <p class="text-sm text-theme-text-muted mt-0.5">
+              Output of <code>resolve()</code> over Manual + every attached source 's latest
+              snapshot. This is the JSON the diagram renders.
+              {#if resolvedSnapshotCount > 0}
+                <span class="text-xs"
+                  >({resolvedSnapshotCount}
+                  source snapshot{resolvedSnapshotCount === 1 ? '' : 's'}
+                  folded in)</span
+                >
+              {/if}
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onclick={() => void loadResolved()}
+              disabled={resolvedLoading}
+            >
+              {resolvedLoading ? 'Refreshing…' : 'Refresh'}
+            </Button>
+            <Button variant="outline" size="sm" onclick={copyResolved} disabled={!resolvedJson}>
+              {resolvedCopied ? 'Copied ✓' : 'Copy'}
+            </Button>
+          </div>
+        </div>
+
+        {#if resolvedError}
+          <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
+            {resolvedError}
+          </div>
+        {/if}
+
+        <div class="card">
+          {#if resolvedLoading && !resolvedJson}
+            <div class="card-body flex items-center justify-center py-12">
+              <div
+                class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"
+              ></div>
+            </div>
+          {:else if !resolvedJson}
+            <div class="card-body text-sm text-theme-text-muted text-center">
+              No resolved graph yet.
+            </div>
+          {:else}
+            <pre
+              class="p-4 text-xs font-mono overflow-auto max-h-[70vh] text-theme-text"
+            ><code>{resolvedJson}</code></pre>
+          {/if}
+        </div>
       </div>
     {/if}
   {/if}
