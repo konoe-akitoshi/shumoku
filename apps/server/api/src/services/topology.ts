@@ -25,7 +25,7 @@ import {
 import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
-import { MANUAL_SOURCE_ID, ObservationsService } from './observations.js'
+import { ObservationsService } from './observations.js'
 
 interface TopologyRow {
   id: string
@@ -193,45 +193,11 @@ export class TopologyService {
         now,
       )
 
-    // Record the initial Manual snapshot so the resolver can fold it
-    // through observations like any other source.
-    await this.recordManualObservation(id, contentJson, now)
-
     // Clear cache to force re-parse
     this.cache.delete(id)
     this.renderCache.delete(id)
 
     return topology
-  }
-
-  /**
-   * Write a `topology_observations` row for the Manual (editor) source.
-   * Called on create/update whenever content_json changes — Manual is
-   * just another source in the observation model.
-   */
-  private async recordManualObservation(
-    topologyId: string,
-    contentJson: string,
-    capturedAt: number,
-  ): Promise<void> {
-    try {
-      const graph = this.parseContent(contentJson)
-      const observations = new ObservationsService()
-      await observations.record({
-        topologyId,
-        sourceId: MANUAL_SOURCE_ID,
-        capturedAt,
-        status: 'ok',
-        graph,
-      })
-    } catch (err) {
-      // Manual snapshot recording is best-effort. content_json parse
-      // failures already surface to the caller via the explicit
-      // `parseContent()` call earlier in create/update; here we just
-      // log and continue so a transient DB hiccup doesn 't block the
-      // primary write.
-      console.warn(`[TopologyService] Failed to record Manual observation for ${topologyId}:`, err)
-    }
   }
 
   /**
@@ -281,12 +247,6 @@ export class TopologyService {
     values.push(id)
 
     this.db.query(`UPDATE topologies SET ${updates.join(', ')} WHERE id = ?`).run(...values)
-
-    // When the editor saves new content, record it as a Manual observation
-    // so the resolver, history, and Discovery UI all see the change.
-    if (input.contentJson !== undefined) {
-      await this.recordManualObservation(id, input.contentJson, timestamp())
-    }
 
     // Clear cache to force re-parse
     this.cache.delete(id)
@@ -435,20 +395,14 @@ export class TopologyService {
     // Fold in latest observations per attached source. resolve() handles
     // the empty-snapshot case (returns authored unchanged but with
     // provenance.source='authored' stamped).
-    //
-    // Skip the Manual observation here: `authored` already carries that
-    // graph (we recorded the Manual snapshot for UI history / Discovery
-    // surfaces, not as a second copy for the resolver).
     const observations = new ObservationsService()
     const latest = observations.latestPerSource(topology.id)
-    const snapshots: SnapshotEntry[] = latest
-      .filter((o) => o.sourceId !== MANUAL_SOURCE_ID)
-      .map((o) => ({
-        sourceId: o.sourceId,
-        capturedAt: o.capturedAt,
-        status: o.status,
-        graph: o.graph,
-      }))
+    const snapshots: SnapshotEntry[] = latest.map((o) => ({
+      sourceId: o.sourceId,
+      capturedAt: o.capturedAt,
+      status: o.status,
+      graph: o.graph,
+    }))
     const graph = resolveObservations(authored, snapshots)
 
     // Resolve icon dimensions for URL icons (used by renderer for

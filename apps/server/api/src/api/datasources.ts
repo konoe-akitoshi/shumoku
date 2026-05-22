@@ -60,15 +60,11 @@ export function createDataSourcesApi(): Hono {
   // List all data sources
   app.get('/', (c) => {
     const dataSources = service.list()
-    // Hide internal/synthetic sources (e.g. the Manual editor source)
-    // from the user-facing list — they 're not configurable as Data
-    // Sources, only surfaced through their parent topology 's Sources tab.
-    const sanitized = dataSources
-      .filter((ds) => ds.type !== 'manual')
-      .map((ds) => ({
-        ...ds,
-        configJson: maskConfigSecrets(ds.configJson),
-      }))
+    // Mask sensitive config values
+    const sanitized = dataSources.map((ds) => ({
+      ...ds,
+      configJson: maskConfigSecrets(ds.configJson),
+    }))
     return c.json(sanitized)
   })
 
@@ -82,12 +78,10 @@ export function createDataSourcesApi(): Hono {
       )
     }
     const dataSources = service.listByCapability(capability)
-    const sanitized = dataSources
-      .filter((ds) => ds.type !== 'manual')
-      .map((ds) => ({
-        ...ds,
-        configJson: maskConfigSecrets(ds.configJson),
-      }))
+    const sanitized = dataSources.map((ds) => ({
+      ...ds,
+      configJson: maskConfigSecrets(ds.configJson),
+    }))
     return c.json(sanitized)
   })
 
