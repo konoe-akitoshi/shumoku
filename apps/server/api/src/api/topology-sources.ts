@@ -50,8 +50,16 @@ topologySourcesApi.get('/:topologyId/sources', async (c) => {
 })
 
 /**
- * Add a data source to a topology
+ * Add a data source to a topology.
  * POST /api/topologies/:topologyId/sources
+ *
+ * Two shapes:
+ *  (a) `{ dataSourceId, purpose, ... }` — attach an existing source
+ *      (NetBox, SNMP, etc. shared across topologies).
+ *  (b) `{ type: 'manual', purpose? }` — inline-create a Manual data
+ *      source dedicated to this topology, then attach it. Manual is
+ *      per-topology; cardinality is enforced as one-per-topology
+ *      (409 on second attempt).
  */
 topologySourcesApi.post('/:topologyId/sources', async (c) => {
   const { topologyId } = c.req.param()
@@ -62,9 +70,29 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
     return c.json({ error: 'Topology not found' }, 404)
   }
 
-  const body = await c.req.json<TopologyDataSourceInput>()
+  const body = (await c.req.json()) as TopologyDataSourceInput & {
+    type?: string
+  }
 
-  // Validate required fields
+  // Inline-create path: `{ type: 'manual' }` (purpose defaults to 'topology').
+  // Manual is per-topology — only one allowed.
+  if (body.type === 'manual') {
+    const purpose = body.purpose ?? 'topology'
+    if (topology.manualSourceId) {
+      return c.json({ error: 'Topology already has a Manual source attached' }, 409)
+    }
+    try {
+      const newSource = await getTopologyService().attachManualSource(topologyId, purpose)
+      return c.json(newSource, 201)
+    } catch (error) {
+      return c.json(
+        { error: error instanceof Error ? error.message : 'Failed to attach Manual' },
+        500,
+      )
+    }
+  }
+
+  // Existing-data-source path
   if (!body.dataSourceId || !body.purpose) {
     return c.json({ error: 'dataSourceId and purpose are required' }, 400)
   }

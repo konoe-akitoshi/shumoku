@@ -339,6 +339,47 @@ export const topologies = {
       }>(`/topologies/${topologyId}/sources/${sourceId}/sync`, { method: 'POST' }).catch((err) => {
         throw err
       }),
+
+    /**
+     * Latest observation graph for a specific source attached to this
+     * topology. `graph` is null when the source has no observation yet
+     * (e.g. a freshly-attached source). This is what the Manual editor
+     * loads — explicitly the *source 's* snapshot, not the resolved
+     * project graph.
+     */
+    latestSnapshot: (topologyId: string, sourceId: string) =>
+      request<{
+        graph: NetworkGraph | null
+        capturedAt: number | null
+        status?: 'ok' | 'partial' | 'failed' | 'empty'
+        observationId?: string
+      }>(`/topologies/${topologyId}/sources/${sourceId}/latest-snapshot`),
+
+    /**
+     * Record a new observation against a specific source. Manual
+     * editor save goes through this; any caller pushing a snapshot
+     * (e.g. webhook receivers) can use it too.
+     */
+    recordObservation: (
+      topologyId: string,
+      sourceId: string,
+      graph: NetworkGraph,
+      status?: 'ok' | 'partial' | 'failed' | 'empty',
+    ) =>
+      request<{ observation: { id: string } }>(
+        `/topologies/${topologyId}/sources/${sourceId}/observation`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ graph, status: status ?? 'ok' }),
+        },
+      ),
+
+    /** Attach a brand-new Manual source to a topology. 409 if one exists. */
+    attachManual: (topologyId: string) =>
+      request<{ dataSourceId: string }>(`/topologies/${topologyId}/sources`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'manual', purpose: 'topology' }),
+      }),
   },
 }
 

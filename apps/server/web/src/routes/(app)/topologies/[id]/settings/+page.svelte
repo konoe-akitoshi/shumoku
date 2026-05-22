@@ -404,32 +404,44 @@
   // General Tab Functions
   // ============================================
 
-  function parseGraphSettings() {
+  // edgeStyle / splineMode live on `NetworkGraph.settings`, which means
+  // they sit inside the Manual source 's observation. Loading and
+  // saving here goes through the per-source snapshot endpoint, not
+  // through the topology shell.
+  async function parseGraphSettings() {
+    if (!topology?.manualSourceId) return
     try {
-      const graph = JSON.parse(topology?.contentJson || '{}')
-      edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
-      splineMode = graph.settings?.splineMode || 'sloppy'
+      const snap = await api.topologies.sources.latestSnapshot(topology.id, topology.manualSourceId)
+      const settings = (snap.graph as { settings?: { edgeStyle?: string; splineMode?: string } })
+        ?.settings
+      edgeStyle = settings?.edgeStyle || 'orthogonal'
+      splineMode = settings?.splineMode || 'sloppy'
     } catch {
       // Use defaults
     }
   }
 
   async function updateEdgeStyle() {
-    if (!topology) return
+    if (!topology?.manualSourceId) return
     savingEdgeStyle = true
     try {
-      const graph = JSON.parse(topology.contentJson ?? '{}')
-      graph.settings = graph.settings || {}
-      graph.settings.edgeStyle = edgeStyle
-      if (edgeStyle === 'splines') {
-        graph.settings.splineMode = splineMode
-      } else {
-        delete graph.settings.splineMode
+      const snap = await api.topologies.sources.latestSnapshot(topology.id, topology.manualSourceId)
+      const graph = (snap.graph ?? { version: '1', nodes: [], links: [] }) as unknown as {
+        settings?: Record<string, unknown>
+        [k: string]: unknown
       }
-      const updated = await topologies.update(topology.id, {
-        contentJson: JSON.stringify(graph),
-      })
-      if (updated) topology = updated
+      graph.settings = (graph.settings ?? {}) as Record<string, unknown>
+      graph.settings['edgeStyle'] = edgeStyle
+      if (edgeStyle === 'splines') {
+        graph.settings['splineMode'] = splineMode
+      } else {
+        delete graph.settings['splineMode']
+      }
+      await api.topologies.sources.recordObservation(
+        topology.id,
+        topology.manualSourceId,
+        graph as unknown as import('@shumoku/core').NetworkGraph,
+      )
     } catch (e) {
       console.error('Failed to update edge style:', e)
     } finally {

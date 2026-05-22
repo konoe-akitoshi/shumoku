@@ -2,6 +2,7 @@
   import { GearSixIcon, PlusIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
+  import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Input } from '$lib/components/ui/input'
@@ -34,18 +35,13 @@
     formError = ''
 
     try {
-      // Create with an initial Manual graph — the server attaches a
-      // Manual source and records the first observation in one shot.
-      const contentJson = JSON.stringify({ version: '1', name, nodes: [], links: [] })
-      const topology = await topologies.create({ name, contentJson })
+      // Two-step: create the topology shell, then attach a Manual
+      // source. Manual now owns the graph content; the topology row
+      // just owns name / mapping / share state.
+      const topology = await topologies.create({ name })
+      const { dataSourceId } = await api.topologies.sources.attachManual(topology.id)
       showCreateModal = false
-      // The freshly-created topology comes back with manualSourceId
-      // populated from the just-attached Manual source.
-      if (topology.manualSourceId) {
-        await goto(`/datasources/${topology.manualSourceId}?topology=${topology.id}`)
-      } else {
-        await goto(`/topologies/${topology.id}`)
-      }
+      await goto(`/datasources/${dataSourceId}?topology=${topology.id}`)
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to create topology'
     } finally {

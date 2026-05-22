@@ -32,35 +32,45 @@
   let edgeStyle = $state('orthogonal')
   let splineMode = $state('sloppy')
 
-  // Parse graph settings from contentJson
-  function parseGraphSettings() {
+  // edgeStyle / splineMode live on `NetworkGraph.settings` inside the
+  // Manual source 's snapshot. We route reads/writes through the
+  // per-source observation endpoint — same pattern as the dedicated
+  // Manual editor page.
+  async function parseGraphSettings() {
+    if (!topology.manualSourceId) return
     try {
-      const graph = JSON.parse(topology.contentJson ?? '{}')
-      edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
-      splineMode = graph.settings?.splineMode || 'sloppy'
+      const snap = await api.topologies.sources.latestSnapshot(topology.id, topology.manualSourceId)
+      const settings = (snap.graph as { settings?: { edgeStyle?: string; splineMode?: string } })
+        ?.settings
+      edgeStyle = settings?.edgeStyle || 'orthogonal'
+      splineMode = settings?.splineMode || 'sloppy'
     } catch {
       // Use defaults
     }
   }
 
-  // Update edge style in topology
   async function updateEdgeStyle() {
+    if (!topology.manualSourceId) return
     savingEdgeStyle = true
     try {
-      const graph = JSON.parse(topology.contentJson ?? '{}')
-      graph.settings = graph.settings || {}
-      graph.settings.edgeStyle = edgeStyle
+      const snap = await api.topologies.sources.latestSnapshot(topology.id, topology.manualSourceId)
+      const graph = (snap.graph ?? { version: '1', nodes: [], links: [] }) as unknown as {
+        settings?: Record<string, unknown>
+        [k: string]: unknown
+      }
+      graph.settings = (graph.settings ?? {}) as Record<string, unknown>
+      graph.settings['edgeStyle'] = edgeStyle
       if (edgeStyle === 'splines') {
-        graph.settings.splineMode = splineMode
+        graph.settings['splineMode'] = splineMode
       } else {
-        delete graph.settings.splineMode
+        delete graph.settings['splineMode']
       }
-      const updatedTopology = await topologies.update(topology.id, {
-        contentJson: JSON.stringify(graph),
-      })
-      if (updatedTopology && onUpdated) {
-        onUpdated(updatedTopology)
-      }
+      await api.topologies.sources.recordObservation(
+        topology.id,
+        topology.manualSourceId,
+        graph as unknown as import('@shumoku/core').NetworkGraph,
+      )
+      if (onUpdated) onUpdated(topology)
     } catch (e) {
       console.error('Failed to update edge style:', e)
     } finally {

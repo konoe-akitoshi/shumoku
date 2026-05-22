@@ -78,20 +78,19 @@ export interface DataSourceInput {
   configJson: string
 }
 
+/**
+ * Topology shell — name, mapping, share state, source pointers.
+ * Graph content lives in source observations, not here. Read the
+ * Manual snapshot via api.topologies.sources.latestSnapshot(...),
+ * write a new one via api.topologies.sources.recordObservation(...).
+ * The resolved project graph: api.topologies.getResolved(...).
+ */
 export interface Topology {
   id: string
   name: string
-  /**
-   * Hydrated from the latest Manual observation when the topology has a
-   * Manual source attached; undefined otherwise. The editor reads this
-   * to populate its buffer and writes via PUT (which records a new
-   * Manual observation server-side). See server `services/topology.ts`.
-   */
-  contentJson?: string
-  /** Id of the Manual source attached to this topology, if any. */
   manualSourceId?: string
-  topologySourceId?: string // Data source for structure (e.g., NetBox)
-  metricsSourceId?: string // Data source for metrics (e.g., Zabbix)
+  topologySourceId?: string
+  metricsSourceId?: string
   mappingJson?: string
   shareToken?: string
   createdAt: number
@@ -100,8 +99,6 @@ export interface Topology {
 
 export interface TopologyInput {
   name: string
-  /** Optional initial Manual graph; server attaches Manual + records observation. */
-  contentJson?: string
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string

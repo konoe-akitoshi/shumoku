@@ -11,7 +11,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
-  import { dataSources, topologies } from '$lib/stores'
+  import { dataSources } from '$lib/stores'
   import type { ConnectionResult, DataSource, Topology } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
@@ -174,21 +174,23 @@
         formSnmpTargets = (config.targets ?? []).join('\n')
         formSnmpTimeoutMs = config.timeoutMs ?? 2000
 
-        // Manual sources: pull the parent topology 's contentJson (which
-        // is itself derived from this Manual source 's latest observation
-        // server-side — see TopologyService.withManual). Save routes
-        // back through PUT /api/topologies/:id so a new observation is
-        // recorded.
+        // Manual sources: read the source 's own latest snapshot via
+        // the per-source observation endpoint. Save records a new
+        // observation against the same source. Explicitly source-scoped
+        // — not the resolved project graph.
         if (ds.type === 'manual' && parentTopologyId) {
           try {
             const t = await api.topologies.get(parentTopologyId)
             if (cancelled) return
             manualTopology = t
-            const graph = JSON.parse(t.contentJson ?? '{"version":"1","nodes":[],"links":[]}')
+            const snap = await api.topologies.sources.latestSnapshot(parentTopologyId, currentId)
+            if (cancelled) return
+            const graph =
+              snap.graph ?? ({ version: '1', nodes: [], links: [] } as Record<string, unknown>)
             jsonContent = JSON.stringify(graph, null, 2)
-            yamlContent = graphToYaml(graph)
+            yamlContent = graphToYaml(graph as Record<string, unknown>)
           } catch (err) {
-            console.warn('[Manual] Failed to load parent topology:', err)
+            console.warn('[Manual] Failed to load source snapshot:', err)
           }
         }
 
@@ -286,16 +288,17 @@
     saving = true
     error = ''
     try {
-      let contentJson: string
+      let graph: import('@shumoku/core').NetworkGraph
       if (editorMode === 'yaml') {
         const parser = new YamlParser()
         const result = parser.parse(yamlContent)
-        contentJson = JSON.stringify(result.graph)
+        graph = result.graph
       } else {
-        JSON.parse(jsonContent) // validate
-        contentJson = jsonContent
+        graph = JSON.parse(jsonContent)
       }
-      await topologies.update(manualTopology.id, { contentJson })
+      // Record a new observation against THIS Manual source. The
+      // resolved project graph re-folds on the next render call.
+      await api.topologies.sources.recordObservation(manualTopology.id, id, graph)
       goto(`/topologies/${manualTopology.id}`)
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to save'
