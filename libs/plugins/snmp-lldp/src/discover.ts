@@ -25,7 +25,16 @@ import { builtinEntries, Catalog, type CatalogEntry, vendorFromOid } from '@shum
 import type { Identity, Link, NetworkGraph, Node, NodePort, NodeSpec } from '@shumoku/core'
 import { expandTargets } from './cidr.js'
 import { asMacString, asNumber, asString, indexByRow, SnmpClient } from './client.js'
-import { IF_TABLE, IF_X_TABLE, LLDP_REM_TABLE, SYSTEM_MIB } from './mib.js'
+import {
+  ENTITY_CLASS_CHASSIS,
+  ENTITY_TABLE,
+  IF_TABLE,
+  IF_X_TABLE,
+  IP_ADDR_TABLE,
+  LLDP_REM_TABLE,
+  SYSTEM_MIB,
+} from './mib.js'
+import { type DeviceInterfaceIp, groupBySubnet, inferLinksFromSubnets } from './subnet-inference.js'
 
 /** How many addresses to probe in parallel during the liveness pass. */
 const LIVENESS_CONCURRENCY = 32
@@ -68,7 +77,14 @@ interface VisitedDevice {
   catalogEntry?: CatalogEntry
   /** Raw sysObjectID — useful for surfacing on unmatched nodes. */
   sysObjectID?: string
+  /** Chassis model from ENTITY-MIB (entPhysicalModelName on the chassis row). */
+  chassisModel?: string
   ports: Map<string, NodePort> // keyed by ifIndex string
+  /**
+   * IPv4 interface bindings from `ipAddrTable`. Used by the subnet-
+   * inference pass after every device has been walked.
+   */
+  ifaceIps: Array<{ ip: string; netmask: string; ifIndex: number }>
 }
 
 /**
@@ -138,6 +154,11 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   }
 
   // 4. Second pass: walk LLDP for each visited device and emit Links.
+  // We track per-device LLDP outcomes so a "0 links overall" snapshot
+  // can carry a useful diagnostic ("LLDP empty on every device" reads
+  // very differently from "LLDP errored on every device").
+  let lldpDevicesEmpty = 0
+  let lldpDevicesErrored = 0
   for (const [address, device] of visited) {
     const client = new SnmpClient({
       address,
@@ -146,11 +167,61 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     })
     try {
       const links = await fetchLldpNeighbors(client, device, visited, input.sourceId)
+      if (links.length === 0) lldpDevicesEmpty++
       allLinks.push(...links)
     } catch (err) {
+      lldpDevicesErrored++
       warnings.push(`LLDP walk on ${address}: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       client.close()
+    }
+  }
+
+  // 5. Subnet-membership inference. For networks where the scanned
+  // devices don 't speak LLDP, the IP layer is the universal fallback:
+  // two interfaces in the same subnet are reachable through some L2
+  // segment, so we emit a "logical" link between every pair of devices
+  // that share a subnet. See `subnet-inference.ts` for the algorithm
+  // and its caveats.
+  const allIfaceIps: DeviceInterfaceIp[] = []
+  for (const [address, device] of visited) {
+    for (const ip of device.ifaceIps) {
+      allIfaceIps.push({
+        ...ip,
+        nodeId: device.nodeId,
+        // Mirrors the id format scanOne used when building NodePort entries.
+        portId: `${input.sourceId}:port:${address}:${ip.ifIndex}`,
+      })
+    }
+  }
+  const subnetGroups = groupBySubnet(allIfaceIps)
+  const inferredLinks = inferLinksFromSubnets(subnetGroups)
+  for (const link of inferredLinks) {
+    allLinks.push({
+      from: { node: link.from.nodeId, port: link.from.portId },
+      to: { node: link.to.nodeId, port: link.to.portId },
+      provenance: { source: input.sourceId, observedAt: Date.now() },
+      metadata: {
+        linkType: 'subnet-inferred',
+        subnet: link.subnet,
+      },
+    })
+  }
+
+  // Diagnostic warnings. The distinction matters: "LLDP errored" means
+  // configure your community / view permissions; "LLDP empty" means
+  // turn LLDP on (or accept the L3-only view).
+  if (visited.size > 0) {
+    if (lldpDevicesErrored === visited.size) {
+      warnings.push(
+        `LLDP-MIB unreachable on every device — community may not grant access to lldpRemTable.`,
+      )
+    } else if (lldpDevicesEmpty === visited.size - lldpDevicesErrored) {
+      warnings.push(
+        inferredLinks.length > 0
+          ? `LLDP returned no neighbors on any device — falling back to subnet-membership inference (${inferredLinks.length} logical link(s) from ${subnetGroups.length} shared subnet(s)).`
+          : `LLDP returned no neighbors and no shared IP subnets across the scanned devices — no links could be derived.`,
+      )
     }
   }
 
@@ -221,27 +292,97 @@ async function scanOne(
   const sysObjectID = asString(sys[1]?.value)
   const sysDescr = asString(sys[2]?.value)
 
-  // Catalog lookup first — an exact / family match gives us vendor +
-  // device type + icon all at once. Falls back to vendor-only lookup
-  // via the IANA enterprise-number registry when the OID has no
-  // catalog entry yet.
-  const catalogEntry = sysObjectID ? getCatalog().findBySysObjectId(sysObjectID) : undefined
+  // ENTITY-MIB + IF-MIB + IP-MIB walks in parallel.
+  //   ENTITY-MIB → chassis serial / chassis model (best identity key
+  //                  and a secondary catalog binding fallback)
+  //   IF-MIB    → port list + per-port name + base MAC (identity
+  //                  fallback when ENTITY-MIB is empty)
+  //   IP-MIB ipAddrTable → IPv4 (ifIndex, ip, mask) tuples for the
+  //                  subnet-membership inference pass that derives
+  //                  L3 links downstream from LLDP-less environments.
+  const [physClasses, physSerials, physModels, ifDescrs, ifNames, ifMacs, ipIfIndex, ipMask] =
+    await Promise.all([
+      client
+        .walk(ENTITY_TABLE.entPhysicalClass)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalClass)),
+      client
+        .walk(ENTITY_TABLE.entPhysicalSerialNum)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalSerialNum)),
+      client
+        .walk(ENTITY_TABLE.entPhysicalModelName)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalModelName)),
+      client.walk(IF_TABLE.ifDescr).then((vbs) => indexByRow(vbs, IF_TABLE.ifDescr)),
+      client.walk(IF_X_TABLE.ifName).then((vbs) => indexByRow(vbs, IF_X_TABLE.ifName)),
+      client.walk(IF_TABLE.ifPhysAddress).then((vbs) => indexByRow(vbs, IF_TABLE.ifPhysAddress)),
+      client
+        .walk(IP_ADDR_TABLE.ipAdEntIfIndex)
+        .then((vbs) => indexByRow(vbs, IP_ADDR_TABLE.ipAdEntIfIndex)),
+      client
+        .walk(IP_ADDR_TABLE.ipAdEntNetMask)
+        .then((vbs) => indexByRow(vbs, IP_ADDR_TABLE.ipAdEntNetMask)),
+    ])
+
+  // Stitch the ipAddrTable rows back together. Both columns are
+  // keyed by the IPv4 address (dotted-quad in the OID suffix).
+  const ifaceIps: VisitedDevice['ifaceIps'] = []
+  for (const [ip, idxVal] of Object.entries(ipIfIndex)) {
+    const ifIndexNum = asNumber(idxVal)
+    const netmask = asString(ipMask[ip])
+    if (ifIndexNum === undefined || !netmask) continue
+    ifaceIps.push({ ip, netmask, ifIndex: ifIndexNum })
+  }
+  const chassisIdx = Object.entries(physClasses).find(
+    ([, v]) => asNumber(v) === ENTITY_CLASS_CHASSIS,
+  )?.[0]
+  const chassisSerial = chassisIdx ? asString(physSerials[chassisIdx]) : undefined
+  const chassisModel = chassisIdx ? asString(physModels[chassisIdx]) : undefined
+
+  // Universal MAC-based identity fallback. Pick the lowest-ifIndex
+  // interface that publishes a non-zero hardware MAC; this is almost
+  // always the device 's base / first physical NIC and is hardware-
+  // burned (operators can change IP / hostname / VLAN but not the
+  // baked-in MAC). Less authoritative than ENTITY-MIB serial — a
+  // virtual machine 's MAC can change on rebuild — but a big step up
+  // from mgmtIp / sysName alone.
+  let baseMac: string | undefined
+  if (!chassisSerial) {
+    const sortedIfIndices = Object.keys(ifMacs).sort((a, b) => Number(a) - Number(b))
+    for (const idx of sortedIfIndices) {
+      const mac = asMacString(ifMacs[idx])
+      if (mac && mac !== '00:00:00:00:00:00') {
+        baseMac = mac
+        break
+      }
+    }
+  }
+  const chassisId = chassisSerial ?? baseMac
+
+  // Catalog lookup. First try `sysObjectID` (the canonical product OID
+  // for SNMP-discoverable devices). If that misses, try the chassis
+  // model name as a part number — many devices expose a clean SKU
+  // through ENTITY-MIB (e.g. `TS-453BU-RP` for QNAP NAS) even when
+  // their sysObjectID isn 't yet seeded in the catalog. Falls back to
+  // vendor-only lookup via the IANA enterprise-number registry when
+  // both miss.
+  const catalogEntry =
+    (sysObjectID ? getCatalog().findBySysObjectId(sysObjectID) : undefined) ??
+    (chassisModel ? getCatalog().findByPartNumber(chassisModel) : undefined)
   const vendor =
     catalogEntry?.spec.vendor ??
     (sysObjectID ? (vendorFromOid(sysObjectID) ?? undefined) : undefined)
 
+  // sysObjectID is a *product family* identifier (same value across
+  // every device of the same model), so it must NOT live in `identity`
+  // — the resolver clusters nodes by identity keys, and feeding it the
+  // sysObjectID would collapse every QNAP NAS / every Cisco 9300 into
+  // a single node. Catalog binding info goes in `metadata.sysObjectID`
+  // on the produced Node; per-device identity is mgmtIp / sysName /
+  // chassisId (when ENTITY-MIB gives us one).
   const identity: Identity = {
     mgmtIp: address,
     sysName,
-    vendorIds: sysObjectID ? { 'snmp-sys-object-id': sysObjectID } : undefined,
+    ...(chassisId ? { chassisId } : {}),
   }
-
-  // IF-MIB walks — get names, MACs, oper status
-  const [ifDescrs, ifNames, ifMacs] = await Promise.all([
-    client.walk(IF_TABLE.ifDescr).then((vbs) => indexByRow(vbs, IF_TABLE.ifDescr)),
-    client.walk(IF_X_TABLE.ifName).then((vbs) => indexByRow(vbs, IF_X_TABLE.ifName)),
-    client.walk(IF_TABLE.ifPhysAddress).then((vbs) => indexByRow(vbs, IF_TABLE.ifPhysAddress)),
-  ])
 
   const ports = new Map<string, NodePort>()
   for (const [ifIndex, descr] of Object.entries(ifDescrs)) {
@@ -271,7 +412,9 @@ async function scanOne(
     vendor,
     catalogEntry,
     sysObjectID,
+    chassisModel,
     ports,
+    ifaceIps,
   }
 }
 
@@ -309,6 +452,7 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
       sysDescr: device.sysDescr,
       catalogId: device.catalogEntry?.id,
       sysObjectID: device.sysObjectID,
+      chassisModel: device.chassisModel,
     },
     ports: Array.from(device.ports.values()),
     provenance: { source: sourceId, observedAt: Date.now() },

@@ -46,6 +46,29 @@ export const IP_NET_TO_MEDIA = {
 } as const
 
 /**
+ * RFC 1213 legacy IP-MIB `ipAddrTable` (IPv4 only).
+ *
+ * One row per IPv4 address bound to the device, keyed by the address
+ * itself. Used by the L3 topology inference pass: an interface 's
+ * (address, mask) tuple identifies which subnet the interface sits in,
+ * and any two interfaces sharing a subnet are taken as a "logical"
+ * link between their parent devices. This is the universal
+ * SNMP-standard fallback when LLDP / CDP isn 't available — covered by
+ * essentially every IP-capable device.
+ *
+ * The modernised `ipAddressTable` (1.3.6.1.2.1.4.34, RFC 4293) supports
+ * IPv6 too but is implemented less universally. v1 sticks to the
+ * legacy table; v6 awareness is a follow-on.
+ */
+export const IP_ADDR_TABLE = {
+  base: '1.3.6.1.2.1.4.20.1',
+  /** Key: the IP itself; value: ifIndex this address is bound to. */
+  ipAdEntIfIndex: '1.3.6.1.2.1.4.20.1.2',
+  /** Key: the IP; value: dotted-quad netmask (e.g. 255.255.255.0). */
+  ipAdEntNetMask: '1.3.6.1.2.1.4.20.1.3',
+} as const
+
+/**
  * IEEE 802.1AB LLDP-MIB — lldpRemTable (remote / neighbor info).
  *
  * Indexes: `lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex`
@@ -66,6 +89,32 @@ export const LLDP_REM_TABLE = {
   lldpRemSysName: '1.0.8802.1.1.2.1.4.1.1.9',
   lldpRemSysDesc: '1.0.8802.1.1.2.1.4.1.1.10',
 } as const
+
+/**
+ * RFC 4133 ENTITY-MIB — `entPhysicalTable` (physical components).
+ *
+ * Each row is a physical entity (chassis / module / port / sensor / …).
+ * We mainly want the chassis row 's serial number — it 's the most
+ * stable per-device identifier we can get over standard SNMP without
+ * relying on LLDP-MIB. `entPhysicalClass = 3` marks the chassis.
+ *
+ * Many enterprise devices implement this; some smaller / legacy
+ * devices don 't (the walk returns empty). The plugin treats either
+ * outcome gracefully — devices without ENTITY-MIB just stay
+ * `identity.chassisId`-less and remain `weak` in the identity-quality
+ * gauge.
+ */
+export const ENTITY_TABLE = {
+  base: '1.3.6.1.2.1.47.1.1.1.1',
+  entPhysicalDescr: '1.3.6.1.2.1.47.1.1.1.1.2',
+  /** Enum: 3 = chassis, 9 = module, 10 = port, etc. */
+  entPhysicalClass: '1.3.6.1.2.1.47.1.1.1.1.5',
+  entPhysicalSerialNum: '1.3.6.1.2.1.47.1.1.1.1.11',
+  entPhysicalModelName: '1.3.6.1.2.1.47.1.1.1.1.13',
+} as const
+
+/** Numeric value of `entPhysicalClass` for the chassis row. */
+export const ENTITY_CLASS_CHASSIS = 3
 
 /** LLDP local port translation table. Maps LLDP local port nums
  *  (used as the middle index in lldpRemTable) to actual port info.
