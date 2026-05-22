@@ -47,6 +47,10 @@ const deviceTypeToIcon: Record<DeviceType, string> = {
   [DeviceType.Internet]: 'internet',
   [DeviceType.VPN]: 'vpn',
   [DeviceType.Database]: 'database',
+  // No dedicated icon yet — segments are synthetic L2 transit nodes
+  // produced by SNMP subnet inference. Fall back to the cloud icon
+  // until a proper "bus segment" icon lands.
+  [DeviceType.Segment]: 'cloud',
   [DeviceType.Generic]: 'generic',
 }
 
