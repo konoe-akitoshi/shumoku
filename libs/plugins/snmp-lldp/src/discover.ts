@@ -254,14 +254,11 @@ async function scanOne(
   const sysObjectID = asString(sys[1]?.value)
   const sysDescr = asString(sys[2]?.value)
 
-  // ENTITY-MIB walk — primarily for the chassis serial number, which
-  // is the most stable per-device identifier we can get without
-  // LLDP-MIB. Also captures the chassis-row model name as a backup
-  // catalog binding key.
-  // Many enterprise devices implement this; some smaller / legacy
-  // devices don 't (returns empty). Devices that don 't return rows
-  // stay `chassisId`-less and remain `weak` in the identity gauge.
-  const [physClasses, physSerials, physModels] = await Promise.all([
+  // ENTITY-MIB + IF-MIB walks in parallel. ENTITY-MIB gives us the
+  // chassis serial (best identity key); IF-MIB ifPhysAddress on the
+  // lowest non-loopback interface is the universal fallback when
+  // ENTITY-MIB is empty.
+  const [physClasses, physSerials, physModels, ifDescrs, ifNames, ifMacs] = await Promise.all([
     client
       .walk(ENTITY_TABLE.entPhysicalClass)
       .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalClass)),
@@ -271,12 +268,35 @@ async function scanOne(
     client
       .walk(ENTITY_TABLE.entPhysicalModelName)
       .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalModelName)),
+    client.walk(IF_TABLE.ifDescr).then((vbs) => indexByRow(vbs, IF_TABLE.ifDescr)),
+    client.walk(IF_X_TABLE.ifName).then((vbs) => indexByRow(vbs, IF_X_TABLE.ifName)),
+    client.walk(IF_TABLE.ifPhysAddress).then((vbs) => indexByRow(vbs, IF_TABLE.ifPhysAddress)),
   ])
   const chassisIdx = Object.entries(physClasses).find(
     ([, v]) => asNumber(v) === ENTITY_CLASS_CHASSIS,
   )?.[0]
   const chassisSerial = chassisIdx ? asString(physSerials[chassisIdx]) : undefined
   const chassisModel = chassisIdx ? asString(physModels[chassisIdx]) : undefined
+
+  // Universal MAC-based identity fallback. Pick the lowest-ifIndex
+  // interface that publishes a non-zero hardware MAC; this is almost
+  // always the device 's base / first physical NIC and is hardware-
+  // burned (operators can change IP / hostname / VLAN but not the
+  // baked-in MAC). Less authoritative than ENTITY-MIB serial — a
+  // virtual machine 's MAC can change on rebuild — but a big step up
+  // from mgmtIp / sysName alone.
+  let baseMac: string | undefined
+  if (!chassisSerial) {
+    const sortedIfIndices = Object.keys(ifMacs).sort((a, b) => Number(a) - Number(b))
+    for (const idx of sortedIfIndices) {
+      const mac = asMacString(ifMacs[idx])
+      if (mac && mac !== '00:00:00:00:00:00') {
+        baseMac = mac
+        break
+      }
+    }
+  }
+  const chassisId = chassisSerial ?? baseMac
 
   // Catalog lookup. First try `sysObjectID` (the canonical product OID
   // for SNMP-discoverable devices). If that misses, try the chassis
@@ -302,15 +322,8 @@ async function scanOne(
   const identity: Identity = {
     mgmtIp: address,
     sysName,
-    ...(chassisSerial ? { chassisId: chassisSerial } : {}),
+    ...(chassisId ? { chassisId } : {}),
   }
-
-  // IF-MIB walks — get names, MACs, oper status
-  const [ifDescrs, ifNames, ifMacs] = await Promise.all([
-    client.walk(IF_TABLE.ifDescr).then((vbs) => indexByRow(vbs, IF_TABLE.ifDescr)),
-    client.walk(IF_X_TABLE.ifName).then((vbs) => indexByRow(vbs, IF_X_TABLE.ifName)),
-    client.walk(IF_TABLE.ifPhysAddress).then((vbs) => indexByRow(vbs, IF_TABLE.ifPhysAddress)),
-  ])
 
   const ports = new Map<string, NodePort>()
   for (const [ifIndex, descr] of Object.entries(ifDescrs)) {
