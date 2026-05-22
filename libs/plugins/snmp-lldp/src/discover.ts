@@ -25,7 +25,14 @@ import { builtinEntries, Catalog, type CatalogEntry, vendorFromOid } from '@shum
 import type { Identity, Link, NetworkGraph, Node, NodePort, NodeSpec } from '@shumoku/core'
 import { expandTargets } from './cidr.js'
 import { asMacString, asNumber, asString, indexByRow, SnmpClient } from './client.js'
-import { IF_TABLE, IF_X_TABLE, LLDP_REM_TABLE, SYSTEM_MIB } from './mib.js'
+import {
+  ENTITY_CLASS_CHASSIS,
+  ENTITY_TABLE,
+  IF_TABLE,
+  IF_X_TABLE,
+  LLDP_REM_TABLE,
+  SYSTEM_MIB,
+} from './mib.js'
 
 /** How many addresses to probe in parallel during the liveness pass. */
 const LIVENESS_CONCURRENCY = 32
@@ -68,6 +75,8 @@ interface VisitedDevice {
   catalogEntry?: CatalogEntry
   /** Raw sysObjectID — useful for surfacing on unmatched nodes. */
   sysObjectID?: string
+  /** Chassis model from ENTITY-MIB (entPhysicalModelName on the chassis row). */
+  chassisModel?: string
   ports: Map<string, NodePort> // keyed by ifIndex string
 }
 
@@ -245,11 +254,40 @@ async function scanOne(
   const sysObjectID = asString(sys[1]?.value)
   const sysDescr = asString(sys[2]?.value)
 
-  // Catalog lookup first — an exact / family match gives us vendor +
-  // device type + icon all at once. Falls back to vendor-only lookup
-  // via the IANA enterprise-number registry when the OID has no
-  // catalog entry yet.
-  const catalogEntry = sysObjectID ? getCatalog().findBySysObjectId(sysObjectID) : undefined
+  // ENTITY-MIB walk — primarily for the chassis serial number, which
+  // is the most stable per-device identifier we can get without
+  // LLDP-MIB. Also captures the chassis-row model name as a backup
+  // catalog binding key.
+  // Many enterprise devices implement this; some smaller / legacy
+  // devices don 't (returns empty). Devices that don 't return rows
+  // stay `chassisId`-less and remain `weak` in the identity gauge.
+  const [physClasses, physSerials, physModels] = await Promise.all([
+    client
+      .walk(ENTITY_TABLE.entPhysicalClass)
+      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalClass)),
+    client
+      .walk(ENTITY_TABLE.entPhysicalSerialNum)
+      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalSerialNum)),
+    client
+      .walk(ENTITY_TABLE.entPhysicalModelName)
+      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalModelName)),
+  ])
+  const chassisIdx = Object.entries(physClasses).find(
+    ([, v]) => asNumber(v) === ENTITY_CLASS_CHASSIS,
+  )?.[0]
+  const chassisSerial = chassisIdx ? asString(physSerials[chassisIdx]) : undefined
+  const chassisModel = chassisIdx ? asString(physModels[chassisIdx]) : undefined
+
+  // Catalog lookup. First try `sysObjectID` (the canonical product OID
+  // for SNMP-discoverable devices). If that misses, try the chassis
+  // model name as a part number — many devices expose a clean SKU
+  // through ENTITY-MIB (e.g. `TS-453BU-RP` for QNAP NAS) even when
+  // their sysObjectID isn 't yet seeded in the catalog. Falls back to
+  // vendor-only lookup via the IANA enterprise-number registry when
+  // both miss.
+  const catalogEntry =
+    (sysObjectID ? getCatalog().findBySysObjectId(sysObjectID) : undefined) ??
+    (chassisModel ? getCatalog().findByPartNumber(chassisModel) : undefined)
   const vendor =
     catalogEntry?.spec.vendor ??
     (sysObjectID ? (vendorFromOid(sysObjectID) ?? undefined) : undefined)
@@ -260,10 +298,11 @@ async function scanOne(
   // sysObjectID would collapse every QNAP NAS / every Cisco 9300 into
   // a single node. Catalog binding info goes in `metadata.sysObjectID`
   // on the produced Node; per-device identity is mgmtIp / sysName /
-  // (later) chassisId / mac.
+  // chassisId (when ENTITY-MIB gives us one).
   const identity: Identity = {
     mgmtIp: address,
     sysName,
+    ...(chassisSerial ? { chassisId: chassisSerial } : {}),
   }
 
   // IF-MIB walks — get names, MACs, oper status
@@ -301,6 +340,7 @@ async function scanOne(
     vendor,
     catalogEntry,
     sysObjectID,
+    chassisModel,
     ports,
   }
 }
@@ -339,6 +379,7 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
       sysDescr: device.sysDescr,
       catalogId: device.catalogEntry?.id,
       sysObjectID: device.sysObjectID,
+      chassisModel: device.chassisModel,
     },
     ports: Array.from(device.ports.values()),
     provenance: { source: sourceId, observedAt: Date.now() },
