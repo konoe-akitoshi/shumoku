@@ -23,6 +23,9 @@
   let saving = $state(false)
   let testResult = $state<ConnectionResult | null>(null)
   let testing = $state(false)
+  // For Manual sources: the topologies this source is attached to.
+  // Used to render direct links into the per-topology content editor.
+  let attachedTopologies = $state<{ topologyId: string; name: string }[]>([])
 
   // Form state
   let formName = $state('')
@@ -169,6 +172,14 @@
         if (formUseWebhook) {
           await loadWebhookUrl()
         }
+
+        if (ds.type === 'manual') {
+          try {
+            attachedTopologies = await api.dataSources.listAttachedTopologies(currentId)
+          } catch (err) {
+            console.warn('[Manual] Failed to list attached topologies:', err)
+          }
+        }
       } catch (e) {
         if (cancelled) return
         error = e instanceof Error ? e.message : 'Failed to load data source'
@@ -308,10 +319,27 @@
             </div>
 
             {#if dataSource.type === 'manual'}
-              <p class="text-xs text-theme-text-muted">
-                Manual has no upstream — content is edited per-topology under
-                <code>/topologies/&lt;id&gt;/sources/&lt;sourceId&gt;/edit</code>.
-              </p>
+              <div class="text-xs text-theme-text-muted space-y-1">
+                <p>Manual has no upstream — content is edited per-topology.</p>
+                {#if attachedTopologies.length === 0}
+                  <p>Not attached to any topology yet. Attach from a topology 's Sources tab.</p>
+                {:else}
+                  <p>
+                    Edit content in:
+                    {#each attachedTopologies as t, i}
+                      <a
+                        class="text-primary hover:underline"
+                        href="/topologies/{t.topologyId}/sources/{dataSource.id}/edit"
+                      >
+                        {t.name}
+                      </a>
+                      {#if i < attachedTopologies.length - 1}
+                        ,{' '}
+                      {/if}
+                    {/each}
+                  </p>
+                {/if}
+              </div>
             {:else if dataSource.type !== 'snmp-lldp'}
               <div>
                 <label for="url" class="label">URL</label>

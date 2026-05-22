@@ -101,6 +101,10 @@ export const dataSources = {
       method: 'POST',
     }),
 
+  /** Topologies this data source is currently attached to. */
+  listAttachedTopologies: (id: string) =>
+    request<{ topologyId: string; name: string }[]>(`/datasources/${id}/topologies`),
+
   getHosts: (id: string) => request<Host[]>(`/datasources/${id}/hosts`),
 
   getHostItems: (id: string, hostId: string) =>

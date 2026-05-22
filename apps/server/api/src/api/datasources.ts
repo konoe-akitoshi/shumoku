@@ -92,6 +92,27 @@ export function createDataSourcesApi(): Hono {
     return c.json(sanitized)
   })
 
+  // Topologies that this data source is currently attached to.
+  // Mainly used by the Manual datasource page to render "edit content
+  // in <topology>" links — the editor itself lives under
+  // /topologies/:topoId/sources/:sourceId/edit, so we need a way to
+  // discover the parent(s) from the source side.
+  app.get('/:id/topologies', (c) => {
+    const id = c.req.param('id')
+    if (!service.get(id)) return c.json({ error: 'Data source not found' }, 404)
+    const db = (service as unknown as { db: import('bun:sqlite').Database }).db
+    const rows = db
+      .query(
+        `SELECT t.id AS topology_id, t.name
+         FROM topology_data_sources tds
+         JOIN topologies t ON t.id = tds.topology_id
+         WHERE tds.data_source_id = ?
+         ORDER BY t.name ASC`,
+      )
+      .all(id) as { topology_id: string; name: string }[]
+    return c.json(rows.map((r) => ({ topologyId: r.topology_id, name: r.name })))
+  })
+
   // Get single data source
   app.get('/:id', (c) => {
     const id = c.req.param('id')

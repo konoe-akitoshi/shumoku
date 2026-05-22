@@ -391,6 +391,19 @@
                             {/if}
                           </span>
                         {/each}
+                        {#if ds.type === 'manual'}
+                          <!-- Manual has no capability flag but it does
+                               contribute topology content; surface a
+                               topology chip so the row reads consistently
+                               with NetBox / SNMP. Same convention as
+                               DataSourceService.listByCapability("topology"). -->
+                          <span
+                            class="text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted"
+                            title="topology"
+                          >
+                            <TreeStructureIcon size={12} />
+                          </span>
+                        {/if}
                       </div>
                     {/if}
                   </div>
