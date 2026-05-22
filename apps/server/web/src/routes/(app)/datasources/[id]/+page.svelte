@@ -80,6 +80,8 @@
   }
 
   function getConfigFromForm(type: string): string {
+    // Manual has no upstream → config is empty.
+    if (type === 'manual') return '{}'
     // snmp-lldp uses a different config shape (no URL).
     if (type === 'snmp-lldp') {
       const community = formSnmpCommunity.trim() || 'public'
@@ -190,7 +192,9 @@
       error = 'Name is required'
       return
     }
-    if (dataSource.type === 'snmp-lldp') {
+    if (dataSource.type === 'manual') {
+      // Manual has no upstream — name is the only configurable field.
+    } else if (dataSource.type === 'snmp-lldp') {
       if (!formSnmpTargets.trim()) {
         error = 'At least one target is required'
         return
@@ -303,7 +307,12 @@
               <input type="text" id="name" class="input" bind:value={formName}>
             </div>
 
-            {#if dataSource.type !== 'snmp-lldp'}
+            {#if dataSource.type === 'manual'}
+              <p class="text-xs text-theme-text-muted">
+                Manual has no upstream — content is edited per-topology under
+                <code>/topologies/&lt;id&gt;/sources/&lt;sourceId&gt;/edit</code>.
+              </p>
+            {:else if dataSource.type !== 'snmp-lldp'}
               <div>
                 <label for="url" class="label">URL</label>
                 <input type="url" id="url" class="input" bind:value={formUrl}>

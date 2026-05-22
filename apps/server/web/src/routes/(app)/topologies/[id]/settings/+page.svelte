@@ -483,7 +483,7 @@
     const existing = editableSources.filter((s) => s.purpose === purpose).map((s) => s.dataSourceId)
     const available = availableSources.filter((ds) => !existing.includes(ds.id))
     if (!available[0]) {
-      alert('No more data sources available to add')
+      alert('No data sources available. Create one on /datasources first.')
       return
     }
     editableSources = [
