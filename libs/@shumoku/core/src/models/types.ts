@@ -349,9 +349,14 @@ export interface Node {
   label: string | string[]
 
   /**
-   * Node shape
+   * Node shape. Optional — the renderer defaults to `'rounded'` when
+   * omitted (and uses `spec.icon` / `specDeviceType(spec)` to overlay
+   * the right device icon on top). Producers should only set this
+   * when they actually want a non-default background (e.g. `'cylinder'`
+   * for a database, `'cloud'` for a cloud boundary). The default
+   * carries shape away from being "data the plugin must invent".
    */
-  shape: NodeShape
+  shape?: NodeShape
 
   /**
    * Parent subgraph ID
