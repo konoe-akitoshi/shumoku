@@ -31,6 +31,10 @@
   let formPollInterval = $state(30000)
   let hasExistingToken = $state(false)
   let formInsecure = $state(false)
+  // SNMP / Network Discovery — community + targets, no URL.
+  let formSnmpCommunity = $state('public')
+  let formSnmpTargets = $state('')
+  let formSnmpTimeoutMs = $state(2000)
 
   // Grafana webhook state
   let formUseWebhook = $state(false)
@@ -62,6 +66,9 @@
     insecure?: boolean
     useWebhook?: boolean
     webhookSecret?: string
+    community?: string
+    targets?: string[]
+    timeoutMs?: number
   }
 
   function parseConfig(configJson: string): ParsedConfig {
@@ -73,6 +80,20 @@
   }
 
   function getConfigFromForm(type: string): string {
+    // snmp-lldp uses a different config shape (no URL).
+    if (type === 'snmp-lldp') {
+      const community = formSnmpCommunity.trim() || 'public'
+      const targets = formSnmpTargets
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+      return JSON.stringify({
+        community,
+        targets,
+        timeoutMs: formSnmpTimeoutMs,
+      })
+    }
+
     const config: Record<string, unknown> = {
       url: formUrl.trim(),
     }
@@ -138,6 +159,10 @@
         hasExistingToken = !!config.token
         formInsecure = !!config.insecure
         formUseWebhook = !!config.useWebhook
+        // snmp-lldp specific
+        formSnmpCommunity = config.community || 'public'
+        formSnmpTargets = (config.targets ?? []).join('\n')
+        formSnmpTimeoutMs = config.timeoutMs ?? 2000
 
         if (formUseWebhook) {
           await loadWebhookUrl()
@@ -161,8 +186,17 @@
       return
     }
 
-    if (!formName.trim() || !formUrl.trim()) {
-      error = 'Name and URL are required'
+    if (!formName.trim()) {
+      error = 'Name is required'
+      return
+    }
+    if (dataSource.type === 'snmp-lldp') {
+      if (!formSnmpTargets.trim()) {
+        error = 'At least one target is required'
+        return
+      }
+    } else if (!formUrl.trim()) {
+      error = 'URL is required'
       return
     }
 
@@ -269,10 +303,49 @@
               <input type="text" id="name" class="input" bind:value={formName}>
             </div>
 
-            <div>
-              <label for="url" class="label">URL</label>
-              <input type="url" id="url" class="input" bind:value={formUrl}>
-            </div>
+            {#if dataSource.type !== 'snmp-lldp'}
+              <div>
+                <label for="url" class="label">URL</label>
+                <input type="url" id="url" class="input" bind:value={formUrl}>
+              </div>
+            {/if}
+
+            {#if dataSource.type === 'snmp-lldp'}
+              <div>
+                <label for="snmpCommunity" class="label">SNMP Community</label>
+                <input
+                  type="text"
+                  id="snmpCommunity"
+                  class="input"
+                  placeholder="public"
+                  bind:value={formSnmpCommunity}
+                >
+              </div>
+              <div>
+                <label for="snmpTargets" class="label">Targets</label>
+                <textarea
+                  id="snmpTargets"
+                  class="input min-h-24 font-mono"
+                  placeholder="10.0.0.0/24&#10;192.168.5.1&#10;core-rtr-01.example.net"
+                  bind:value={formSnmpTargets}
+                ></textarea>
+                <p class="text-xs text-theme-text-muted mt-1">
+                  One per line. CIDR / single IP / hostname all accepted.
+                </p>
+              </div>
+              <div>
+                <label for="snmpTimeout" class="label">Per-Device Timeout (ms)</label>
+                <input
+                  type="number"
+                  id="snmpTimeout"
+                  class="input"
+                  min="500"
+                  max="30000"
+                  step="500"
+                  bind:value={formSnmpTimeoutMs}
+                >
+              </div>
+            {/if}
 
             {#if dataSource.type === 'zabbix' || dataSource.type === 'netbox' || dataSource.type === 'grafana'}
               <div>

@@ -1517,95 +1517,133 @@
     {/if}
 
     <!-- ============================================ -->
-    <!-- Discovery Tab — imperative: run sources to fetch fresh data.   -->
-    <!-- The act of "going to grab" — distinct from the Sources tab     -->
-    <!-- which declares what 's attached.                                -->
+    <!-- Discovery Tab — imperative: drive attached sources to fetch     -->
+    <!-- fresh data. Each source 's last observation lands as a snapshot -->
+    <!-- in topology_observations and the diagram re-renders through    -->
+    <!-- resolve(). Sources tab is declarative; this tab is action.     -->
     <!-- ============================================ -->
     {#if activeTab === 'discovery'}
       <div class="space-y-6">
         {#if topologySources.length === 0}
-          <div class="card p-6 text-center">
-            <p class="text-theme-text-muted mb-4">No topology sources attached.</p>
-            <button
-              class="text-primary hover:underline"
-              onclick={() => {
-                activeTab = 'sources'
-                history.replaceState(null, '', '#sources')
-              }}
-            >
-              Attach a source in Sources →
-            </button>
+          <div class="card p-8 text-center space-y-2">
+            <p class="text-theme-text-emphasis font-medium">No sources to discover from</p>
+            <p class="text-sm text-theme-text-muted">
+              Discovery runs against attached topology sources — NetBox, Network Discovery, Zabbix
+              and so on. Attach one first.
+            </p>
+            <div class="pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onclick={() => {
+                  activeTab = 'sources'
+                  history.replaceState(null, '', '#sources')
+                }}
+              >
+                Go to Sources →
+              </Button>
+            </div>
           </div>
         {:else}
+          <!-- Header card with the master Sync All action -->
           <div class="card">
-            <div class="card-header flex items-center justify-between">
+            <div class="card-body flex items-center justify-between gap-4">
               <div>
-                <h2 class="font-medium text-theme-text-emphasis">Sync</h2>
-                <p class="text-xs text-theme-text-muted mt-0.5">
-                  Drive each topology source. Results land as observation snapshots and the diagram
-                  re-renders through the resolver.
+                <h2 class="font-medium text-theme-text-emphasis">Sync all attached sources</h2>
+                <p class="text-xs text-theme-text-muted mt-1">
+                  Each source is invoked by capability — autoscan plugins probe their targets,
+                  fetch-style plugins (NetBox etc.) pull the latest snapshot. Results land as
+                  observations; the diagram re-renders through the resolver.
                 </p>
               </div>
               <Button
-                variant="secondary"
+                variant="default"
                 size="sm"
                 onclick={handleSyncAll}
                 disabled={syncing || hasSourceChanges}
               >
                 {#if syncing}
                   <span
-                    class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
+                    class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
                   ></span>
+                  Syncing…
                 {:else}
-                  <ArrowsClockwiseIcon size={14} class="mr-1" />
+                  <ArrowsClockwiseIcon size={14} class="mr-2" />
+                  Sync all
                 {/if}
-                Sync all
               </Button>
             </div>
 
             {#if hasSourceChanges}
-              <div class="px-4 py-2 bg-warning/10 border-b border-warning/20 text-warning text-sm">
+              <div class="px-4 py-2 bg-warning/10 border-t border-warning/20 text-warning text-sm">
                 You have unsaved changes in Sources. Save them before syncing.
               </div>
             {/if}
-
             {#if syncResult}
-              <div class="px-4 py-2 bg-success/10 border-b border-success/20 text-success text-sm">
-                ✓ {syncResult.nodeCount} nodes / {syncResult.linkCount} links observed
+              <div class="px-4 py-2 bg-success/10 border-t border-success/20 text-success text-sm">
+                ✓ Last sync: {syncResult.nodeCount} nodes / {syncResult.linkCount} links observed
               </div>
             {/if}
+          </div>
 
-            <div class="card-body">
-              <div class="space-y-3">
-                {#each currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
-                  {@const dataSource = getDataSource(source.dataSourceId)}
-                  <div
-                    class="flex items-center justify-between gap-3 py-2 border-b border-theme-border last:border-0"
-                  >
+          <!-- Per-source state cards -->
+          <div class="space-y-3">
+            {#each currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
+              {@const dataSource = getDataSource(source.dataSourceId)}
+              <div class="card">
+                <div class="card-body space-y-3">
+                  <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
-                      <p class="text-sm text-theme-text-emphasis truncate">
-                        {dataSource?.name ?? source.dataSourceId}
-                      </p>
-                      <p class="text-xs font-mono text-theme-text-muted">
-                        {dataSource?.type ?? '—'}
-                        {#if source.lastSyncedAt}
-                          · last {new Date(source.lastSyncedAt).toLocaleString()}
-                        {:else}
-                          · never synced
-                        {/if}
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <h3 class="text-sm font-medium text-theme-text-emphasis truncate">
+                          {dataSource?.name ?? source.dataSourceId}
+                        </h3>
+                        <span
+                          class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-theme-bg font-mono text-theme-text-muted"
+                        >
+                          {dataSource?.type ?? '—'}
+                        </span>
+                      </div>
+                      <p class="text-xs text-theme-text-muted mt-1">
+                        Sync mode: <span class="font-mono">{source.syncMode ?? 'manual'}</span>
                       </p>
                     </div>
                     {#if dataSource?.status === 'connected'}
                       <span class="badge badge-success text-xs">connected</span>
                     {:else if dataSource?.status === 'disconnected'}
-                      <span class="badge badge-danger text-xs">disconnected</span>
+                      <span class="badge badge-danger text-xs" title={dataSource.statusMessage}>
+                        disconnected
+                      </span>
                     {:else}
                       <span class="badge badge-secondary text-xs">unknown</span>
                     {/if}
                   </div>
-                {/each}
+
+                  <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p class="text-theme-text-muted">Last synced</p>
+                      <p class="text-theme-text">
+                        {#if source.lastSyncedAt}
+                          {new Date(source.lastSyncedAt).toLocaleString()}
+                        {:else}
+                          <span class="text-theme-text-muted italic">never</span>
+                        {/if}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-theme-text-muted">Health check</p>
+                      <p class="text-theme-text">
+                        {#if dataSource?.lastCheckedAt}
+                          {new Date(dataSource.lastCheckedAt).toLocaleString()}
+                        {:else}
+                          <span class="text-theme-text-muted italic">—</span>
+                        {/if}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            {/each}
           </div>
         {/if}
       </div>
