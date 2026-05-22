@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { YamlParser } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -12,20 +11,11 @@
   import { page } from '$app/stores'
   import { api } from '$lib/api'
   import { dataSources } from '$lib/stores'
-  import type { ConnectionResult, DataSource, Topology } from '$lib/types'
+  import type { ConnectionResult, DataSource } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
   // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
   let id = $derived($page.params.id!)
-  // Manual sources are per-topology; the link that brought us here
-  // includes ?topology=<id> so we know which topology 's content to load.
-  let parentTopologyId = $derived($page.url.searchParams.get('topology') ?? '')
-
-  // Manual-editor state
-  let manualTopology = $state<Topology | null>(null)
-  let editorMode = $state<'yaml' | 'json'>('yaml')
-  let yamlContent = $state('')
-  let jsonContent = $state('')
 
   let dataSource = $state<DataSource | null>(null)
   let loading = $state(true)
@@ -174,26 +164,6 @@
         formSnmpTargets = (config.targets ?? []).join('\n')
         formSnmpTimeoutMs = config.timeoutMs ?? 2000
 
-        // Manual sources: read the source 's own latest snapshot via
-        // the per-source observation endpoint. Save records a new
-        // observation against the same source. Explicitly source-scoped
-        // — not the resolved project graph.
-        if (ds.type === 'manual' && parentTopologyId) {
-          try {
-            const t = await api.topologies.get(parentTopologyId)
-            if (cancelled) return
-            manualTopology = t
-            const snap = await api.topologies.sources.latestSnapshot(parentTopologyId, currentId)
-            if (cancelled) return
-            const graph =
-              snap.graph ?? ({ version: '1', nodes: [], links: [] } as Record<string, unknown>)
-            jsonContent = JSON.stringify(graph, null, 2)
-            yamlContent = graphToYaml(graph as Record<string, unknown>)
-          } catch (err) {
-            console.warn('[Manual] Failed to load source snapshot:', err)
-          }
-        }
-
         if (formUseWebhook) {
           await loadWebhookUrl()
         }
@@ -210,111 +180,9 @@
     }
   })
 
-  // YAML stringification helper, lifted from the old /edit page. Walks
-  // the NetworkGraph 's well-known top-level shape — anything not in
-  // this list round-trips via the JSON tab instead.
-  function graphToYaml(graph: Record<string, unknown>): string {
-    const lines: string[] = []
-    if (graph['name']) lines.push(`name: ${graph['name']}`)
-    if (graph['version']) lines.push(`version: "${graph['version']}"`)
-    if (graph['description']) lines.push(`description: ${graph['description']}`)
-    lines.push('')
-    lines.push('nodes:')
-    const nodes = (graph['nodes'] as Array<Record<string, unknown>>) || []
-    for (const node of nodes) {
-      lines.push(`  - id: ${node['id']}`)
-      if (node['label']) lines.push(`    label: ${node['label']}`)
-      if (node['type']) lines.push(`    type: ${node['type']}`)
-      if (node['vendor']) lines.push(`    vendor: ${node['vendor']}`)
-      if (node['model']) lines.push(`    model: ${node['model']}`)
-      if (node['parent']) lines.push(`    parent: ${node['parent']}`)
-    }
-    lines.push('')
-    lines.push('links:')
-    const links = (graph['links'] as Array<Record<string, unknown>>) || []
-    for (const link of links) {
-      const from = link['from'] as string | { node: string; port?: string }
-      const to = link['to'] as string | { node: string; port?: string }
-      if (typeof from === 'string') lines.push(`  - from: ${from}`)
-      else {
-        lines.push(`  - from:`)
-        lines.push(`      node: ${from.node}`)
-        if (from.port) lines.push(`      port: ${from.port}`)
-      }
-      if (typeof to === 'string') lines.push(`    to: ${to}`)
-      else {
-        lines.push(`    to:`)
-        lines.push(`      node: ${to.node}`)
-        if (to.port) lines.push(`      port: ${to.port}`)
-      }
-      if (link['bandwidth']) lines.push(`    bandwidth: ${link['bandwidth']}`)
-    }
-    const subgraphs = graph['subgraphs'] as Array<Record<string, unknown>> | undefined
-    if (subgraphs && subgraphs.length > 0) {
-      lines.push('')
-      lines.push('subgraphs:')
-      for (const sg of subgraphs) {
-        lines.push(`  - id: ${sg['id']}`)
-        if (sg['label']) lines.push(`    label: ${sg['label']}`)
-        if (sg['parent']) lines.push(`    parent: ${sg['parent']}`)
-      }
-    }
-    return lines.join('\n')
-  }
-
-  function switchMode(mode: 'yaml' | 'json') {
-    if (mode === editorMode) return
-    try {
-      if (mode === 'json') {
-        const parser = new YamlParser()
-        const result = parser.parse(yamlContent)
-        jsonContent = JSON.stringify(result.graph, null, 2)
-      } else {
-        const graph = JSON.parse(jsonContent)
-        yamlContent = graphToYaml(graph)
-      }
-      editorMode = mode
-      error = ''
-    } catch (e) {
-      error = e instanceof Error ? e.message : `Failed to convert to ${mode.toUpperCase()}`
-    }
-  }
-
-  async function handleSaveManual() {
-    if (!manualTopology) {
-      error = `No parent topology — open this page from a topology's Sources tab.`
-      return
-    }
-    saving = true
-    error = ''
-    try {
-      let graph: import('@shumoku/core').NetworkGraph
-      if (editorMode === 'yaml') {
-        const parser = new YamlParser()
-        const result = parser.parse(yamlContent)
-        graph = result.graph
-      } else {
-        graph = JSON.parse(jsonContent)
-      }
-      // Record a new observation against THIS Manual source. The
-      // resolved project graph re-folds on the next render call.
-      await api.topologies.sources.recordObservation(manualTopology.id, id, graph)
-      goto(`/topologies/${manualTopology.id}`)
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to save'
-    } finally {
-      saving = false
-    }
-  }
-
   async function handleSave() {
     if (!dataSource) {
       error = 'dataSource is null'
-      return
-    }
-
-    if (dataSource.type === 'manual') {
-      await handleSaveManual()
       return
     }
 
@@ -417,345 +285,251 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {#if dataSource.type === 'manual'}
-        <!-- Manual source: YAML/JSON editor for the parent topology -->
-        <div class="lg:col-span-3">
-          <div class="card flex flex-col" style="min-height: 70vh">
-            <div class="card-header flex items-center justify-between">
-              <div>
-                <h2 class="font-medium text-theme-text-emphasis">
-                  Edit {manualTopology?.name ?? 'topology'}
-                </h2>
-                <p class="text-xs text-theme-text-muted mt-0.5">
-                  Editing the Manual source. Save records a new observation.
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-theme-text-muted">Format:</span>
-                <button
-                  type="button"
-                  class="px-3 py-1 text-sm rounded-lg {editorMode === 'yaml' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
-                  onclick={() => switchMode('yaml')}
-                >
-                  YAML
-                </button>
-                <button
-                  type="button"
-                  class="px-3 py-1 text-sm rounded-lg {editorMode === 'json' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
-                  onclick={() => switchMode('json')}
-                >
-                  JSON
-                </button>
-              </div>
-            </div>
+      <!-- Edit Form -->
+      <div class="lg:col-span-2">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="font-medium text-theme-text-emphasis">Configuration</h2>
+          </div>
+          <form class="card-body space-y-4" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
             {#if error}
-              <div
-                class="mx-4 mt-3 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm"
-              >
+              <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
                 {error}
               </div>
             {/if}
-            {#if !manualTopology}
-              <div class="card-body text-sm text-theme-text-muted">
-                No parent topology context. Open this page from a topology's Sources tab (it appends
-                <code>?topology=…</code>
-                for us).
-              </div>
-            {:else}
-              <div class="flex-1 overflow-hidden flex flex-col">
-                {#if editorMode === 'yaml'}
-                  <textarea
-                    class="w-full flex-1 p-4 font-mono text-sm bg-theme-bg-elevated border-0 resize-none focus:outline-none"
-                    bind:value={yamlContent}
-                    placeholder="Enter YAML content..."
-                  ></textarea>
-                {:else}
-                  <textarea
-                    class="w-full flex-1 p-4 font-mono text-sm bg-theme-bg-elevated border-0 resize-none focus:outline-none"
-                    bind:value={jsonContent}
-                    placeholder="Enter JSON content..."
-                  ></textarea>
-                {/if}
-              </div>
-              <div class="flex justify-between items-center gap-2 p-4 border-t border-theme-border">
-                <p class="text-xs text-theme-text-muted">Editing as {editorMode.toUpperCase()}</p>
-                <div class="flex gap-2">
-                  <a href="/topologies/{manualTopology.id}" class="btn btn-secondary">Cancel</a>
-                  <button
-                    type="button"
-                    class="btn btn-primary"
-                    disabled={saving}
-                    onclick={handleSaveManual}
-                  >
-                    {#if saving}
-                      <span
-                        class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
-                      ></span>
-                    {/if}
-                    Save Changes
-                  </button>
-                </div>
+
+            <div>
+              <label for="name" class="label">Name</label>
+              <input type="text" id="name" class="input" bind:value={formName}>
+            </div>
+
+            {#if dataSource.type !== 'snmp-lldp'}
+              <div>
+                <label for="url" class="label">URL</label>
+                <input type="url" id="url" class="input" bind:value={formUrl}>
               </div>
             {/if}
-          </div>
-        </div>
-      {:else}
-        <!-- Edit Form -->
-        <div class="lg:col-span-2">
-          <div class="card">
-            <div class="card-header">
-              <h2 class="font-medium text-theme-text-emphasis">Configuration</h2>
-            </div>
-            <form
-              class="card-body space-y-4"
-              onsubmit={(e) => { e.preventDefault(); handleSave(); }}
-            >
-              {#if error}
-                <div
-                  class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm"
-                >
-                  {error}
-                </div>
-              {/if}
 
+            {#if dataSource.type === 'snmp-lldp'}
               <div>
-                <label for="name" class="label">Name</label>
-                <input type="text" id="name" class="input" bind:value={formName}>
+                <label for="snmpCommunity" class="label">SNMP Community</label>
+                <input
+                  type="text"
+                  id="snmpCommunity"
+                  class="input"
+                  placeholder="public"
+                  bind:value={formSnmpCommunity}
+                >
               </div>
+              <div>
+                <label for="snmpTargets" class="label">Targets</label>
+                <textarea
+                  id="snmpTargets"
+                  class="input min-h-24 font-mono"
+                  placeholder="10.0.0.0/24&#10;192.168.5.1&#10;core-rtr-01.example.net"
+                  bind:value={formSnmpTargets}
+                ></textarea>
+                <p class="text-xs text-theme-text-muted mt-1">
+                  One per line. CIDR / single IP / hostname all accepted.
+                </p>
+              </div>
+              <div>
+                <label for="snmpTimeout" class="label">Per-Device Timeout (ms)</label>
+                <input
+                  type="number"
+                  id="snmpTimeout"
+                  class="input"
+                  min="500"
+                  max="30000"
+                  step="500"
+                  bind:value={formSnmpTimeoutMs}
+                >
+              </div>
+            {/if}
 
-              {#if dataSource.type !== 'snmp-lldp'}
-                <div>
-                  <label for="url" class="label">URL</label>
-                  <input type="url" id="url" class="input" bind:value={formUrl}>
-                </div>
-              {/if}
+            {#if dataSource.type === 'zabbix' || dataSource.type === 'netbox' || dataSource.type === 'grafana'}
+              <div>
+                <label for="token" class="label">API Token</label>
+                <input
+                  type="password"
+                  id="token"
+                  class="input"
+                  placeholder="Enter new token to update"
+                  bind:value={formToken}
+                >
+                <p class="text-xs text-theme-text-muted mt-1">
+                  {hasExistingToken ? 'Token is set. Enter a new value to update.' : 'No token set.'}
+                </p>
+              </div>
+            {/if}
 
-              {#if dataSource.type === 'snmp-lldp'}
-                <div>
-                  <label for="snmpCommunity" class="label">SNMP Community</label>
-                  <input
-                    type="text"
-                    id="snmpCommunity"
-                    class="input"
-                    placeholder="public"
-                    bind:value={formSnmpCommunity}
-                  >
-                </div>
-                <div>
-                  <label for="snmpTargets" class="label">Targets</label>
-                  <textarea
-                    id="snmpTargets"
-                    class="input min-h-24 font-mono"
-                    placeholder="10.0.0.0/24&#10;192.168.5.1&#10;core-rtr-01.example.net"
-                    bind:value={formSnmpTargets}
-                  ></textarea>
-                  <p class="text-xs text-theme-text-muted mt-1">
-                    One per line. CIDR / single IP / hostname all accepted.
-                  </p>
-                </div>
-                <div>
-                  <label for="snmpTimeout" class="label">Per-Device Timeout (ms)</label>
-                  <input
-                    type="number"
-                    id="snmpTimeout"
-                    class="input"
-                    min="500"
-                    max="30000"
-                    step="500"
-                    bind:value={formSnmpTimeoutMs}
-                  >
-                </div>
-              {/if}
+            {#if dataSource.type === 'zabbix'}
+              <div>
+                <label for="pollInterval" class="label">Poll Interval</label>
+                <select id="pollInterval" class="input" bind:value={formPollInterval}>
+                  <option value={5000}>5 seconds</option>
+                  <option value={10000}>10 seconds</option>
+                  <option value={30000}>30 seconds</option>
+                  <option value={60000}>1 minute</option>
+                  <option value={300000}>5 minutes</option>
+                </select>
+              </div>
+            {/if}
 
-              {#if dataSource.type === 'zabbix' || dataSource.type === 'netbox' || dataSource.type === 'grafana'}
-                <div>
-                  <label for="token" class="label">API Token</label>
-                  <input
-                    type="password"
-                    id="token"
-                    class="input"
-                    placeholder="Enter new token to update"
-                    bind:value={formToken}
-                  >
-                  <p class="text-xs text-theme-text-muted mt-1">
-                    {hasExistingToken ? 'Token is set. Enter a new value to update.' : 'No token set.'}
-                  </p>
-                </div>
-              {/if}
+            {#if dataSource.type === 'netbox'}
+              <div class="flex items-center gap-2">
+                <input type="checkbox" id="insecure" bind:checked={formInsecure}>
+                <label for="insecure" class="text-sm">Skip TLS certificate verification</label>
+                <p class="text-xs text-muted-foreground">(for self-signed certificates)</p>
+              </div>
+            {/if}
 
-              {#if dataSource.type === 'zabbix'}
-                <div>
-                  <label for="pollInterval" class="label">Poll Interval</label>
-                  <select id="pollInterval" class="input" bind:value={formPollInterval}>
-                    <option value={5000}>5 seconds</option>
-                    <option value={10000}>10 seconds</option>
-                    <option value={30000}>30 seconds</option>
-                    <option value={60000}>1 minute</option>
-                    <option value={300000}>5 minutes</option>
-                  </select>
-                </div>
-              {/if}
-
-              {#if dataSource.type === 'netbox'}
-                <div class="flex items-center gap-2">
-                  <input type="checkbox" id="insecure" bind:checked={formInsecure}>
-                  <label for="insecure" class="text-sm">Skip TLS certificate verification</label>
-                  <p class="text-xs text-muted-foreground">(for self-signed certificates)</p>
-                </div>
-              {/if}
-
-              {#if dataSource.type === 'grafana'}
-                <div class="pt-2 border-t border-theme-border">
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <p class="text-sm font-medium text-theme-text-emphasis">Webhook Alerts</p>
-                      <p class="text-xs text-theme-text-muted mt-0.5">
-                        Receive alerts via Grafana Contact Point instead of polling Alertmanager
-                        API.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={formUseWebhook}
-                      aria-label="Toggle webhook alerts"
-                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {formUseWebhook ? 'bg-primary' : 'bg-theme-border'}"
-                      onclick={() => { formUseWebhook = !formUseWebhook; if (formUseWebhook) loadWebhookUrl(); else webhookUrl = ''; }}
-                    >
-                      <span
-                        class="inline-block h-4 w-4 rounded-full bg-white transition-transform {formUseWebhook ? 'translate-x-6' : 'translate-x-1'}"
-                      ></span>
-                    </button>
+            {#if dataSource.type === 'grafana'}
+              <div class="pt-2 border-t border-theme-border">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm font-medium text-theme-text-emphasis">Webhook Alerts</p>
+                    <p class="text-xs text-theme-text-muted mt-0.5">
+                      Receive alerts via Grafana Contact Point instead of polling Alertmanager API.
+                    </p>
                   </div>
-
-                  {#if formUseWebhook}
-                    <div class="mt-3 p-3 rounded-lg bg-theme-bg-canvas border border-theme-border">
-                      {#if webhookUrl}
-                        <p class="text-xs text-theme-text-muted mb-1.5">
-                          Set this URL as a Grafana Contact Point (Webhook type, POST method).
-                        </p>
-                        <div class="flex items-center gap-2">
-                          <input
-                            type="text"
-                            class="input flex-1 font-mono text-xs"
-                            value={webhookUrl}
-                            readonly
-                          >
-                          <button
-                            type="button"
-                            class="btn btn-secondary p-2"
-                            title="Copy to clipboard"
-                            onclick={copyWebhookUrl}
-                          >
-                            {#if copied}
-                              <CheckIcon size={16} class="text-success" />
-                            {:else}
-                              <CopyIcon size={16} />
-                            {/if}
-                          </button>
-                        </div>
-                      {:else if webhookLoading}
-                        <p class="text-xs text-theme-text-muted">Loading webhook URL...</p>
-                      {:else}
-                        <p class="text-xs text-theme-text-muted">
-                          Click <strong>Save Changes</strong> to generate the Webhook URL.
-                        </p>
-                      {/if}
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-
-              <div class="flex justify-end pt-4 border-t border-theme-border">
-                <button type="submit" class="btn btn-primary" disabled={saving}>
-                  {#if saving}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={formUseWebhook}
+                    aria-label="Toggle webhook alerts"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {formUseWebhook ? 'bg-primary' : 'bg-theme-border'}"
+                    onclick={() => { formUseWebhook = !formUseWebhook; if (formUseWebhook) loadWebhookUrl(); else webhookUrl = ''; }}
+                  >
                     <span
-                      class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+                      class="inline-block h-4 w-4 rounded-full bg-white transition-transform {formUseWebhook ? 'translate-x-6' : 'translate-x-1'}"
                     ></span>
-                  {/if}
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+                  </button>
+                </div>
 
-        <!-- Connection Test -->
-        <div>
-          <div class="card">
-            <div class="card-header">
-              <h2 class="font-medium text-theme-text-emphasis">Connection Test</h2>
-            </div>
-            <div class="card-body">
-              <button class="btn btn-secondary w-full mb-4" onclick={handleTest} disabled={testing}>
-                {#if testing}
+                {#if formUseWebhook}
+                  <div class="mt-3 p-3 rounded-lg bg-theme-bg-canvas border border-theme-border">
+                    {#if webhookUrl}
+                      <p class="text-xs text-theme-text-muted mb-1.5">
+                        Set this URL as a Grafana Contact Point (Webhook type, POST method).
+                      </p>
+                      <div class="flex items-center gap-2">
+                        <input
+                          type="text"
+                          class="input flex-1 font-mono text-xs"
+                          value={webhookUrl}
+                          readonly
+                        >
+                        <button
+                          type="button"
+                          class="btn btn-secondary p-2"
+                          title="Copy to clipboard"
+                          onclick={copyWebhookUrl}
+                        >
+                          {#if copied}
+                            <CheckIcon size={16} class="text-success" />
+                          {:else}
+                            <CopyIcon size={16} />
+                          {/if}
+                        </button>
+                      </div>
+                    {:else if webhookLoading}
+                      <p class="text-xs text-theme-text-muted">Loading webhook URL...</p>
+                    {:else}
+                      <p class="text-xs text-theme-text-muted">
+                        Click <strong>Save Changes</strong> to generate the Webhook URL.
+                      </p>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            <div class="flex justify-end pt-4 border-t border-theme-border">
+              <button type="submit" class="btn btn-primary" disabled={saving}>
+                {#if saving}
                   <span
                     class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
                   ></span>
                 {/if}
-                Test Connection
+                Save Changes
               </button>
+            </div>
+          </form>
+        </div>
+      </div>
 
-              {#if testResult}
-                <div class="p-4 rounded-lg {testResult.success ? 'bg-success/10' : 'bg-danger/10'}">
-                  <div class="flex items-center gap-2 mb-2">
-                    {#if testResult.success}
-                      <CheckCircleIcon size={20} class="text-success" />
-                      <span class="font-medium text-success">Connected</span>
-                    {:else}
-                      <XCircleIcon size={20} class="text-danger" />
-                      <span class="font-medium text-danger">Failed</span>
-                    {/if}
-                  </div>
-                  <p class="text-sm text-theme-text-muted">{testResult.message}</p>
-                  {#if testResult.version}
-                    <p class="text-xs text-theme-text-muted mt-1">Version: {testResult.version}</p>
-                  {/if}
-                  {#if testResult.warnings?.length}
-                    <div class="mt-2 pt-2 border-t border-warning/30">
-                      {#each testResult.warnings as warning}
-                        <div class="flex items-center gap-1 text-xs text-warning">
-                          <WarningIcon size={14} />
-                          <span>{warning}</span>
-                        </div>
-                      {/each}
-                    </div>
+      <!-- Connection Test -->
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="font-medium text-theme-text-emphasis">Connection Test</h2>
+          </div>
+          <div class="card-body">
+            <button class="btn btn-secondary w-full mb-4" onclick={handleTest} disabled={testing}>
+              {#if testing}
+                <span
+                  class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+                ></span>
+              {/if}
+              Test Connection
+            </button>
+
+            {#if testResult}
+              <div class="p-4 rounded-lg {testResult.success ? 'bg-success/10' : 'bg-danger/10'}">
+                <div class="flex items-center gap-2 mb-2">
+                  {#if testResult.success}
+                    <CheckCircleIcon size={20} class="text-success" />
+                    <span class="font-medium text-success">Connected</span>
+                  {:else}
+                    <XCircleIcon size={20} class="text-danger" />
+                    <span class="font-medium text-danger">Failed</span>
                   {/if}
                 </div>
-              {/if}
-            </div>
+                <p class="text-sm text-theme-text-muted">{testResult.message}</p>
+                {#if testResult.version}
+                  <p class="text-xs text-theme-text-muted mt-1">Version: {testResult.version}</p>
+                {/if}
+                {#if testResult.warnings?.length}
+                  <div class="mt-2 pt-2 border-t border-warning/30">
+                    {#each testResult.warnings as warning}
+                      <div class="flex items-center gap-1 text-xs text-warning">
+                        <WarningIcon size={14} />
+                        <span>{warning}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
           </div>
+        </div>
 
-          <!-- Info -->
-          <div class="card mt-4">
-            <div class="card-header">
-              <h2 class="font-medium text-theme-text-emphasis">Info</h2>
+        <!-- Info -->
+        <div class="card mt-4">
+          <div class="card-header">
+            <h2 class="font-medium text-theme-text-emphasis">Info</h2>
+          </div>
+          <div class="card-body text-sm space-y-2">
+            <div class="flex justify-between">
+              <span class="text-theme-text-muted">ID</span>
+              <span class="font-mono text-theme-text">{dataSource.id}</span>
             </div>
-            <div class="card-body text-sm space-y-2">
-              <div class="flex justify-between">
-                <span class="text-theme-text-muted">ID</span>
-                <span class="font-mono text-theme-text">{dataSource.id}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-theme-text-muted">Type</span>
-                <span class="text-theme-text">{dataSource.type}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-theme-text-muted">Created</span>
-                <span class="text-theme-text"
-                  >{new Date(dataSource.createdAt).toLocaleString()}</span
-                >
-              </div>
-              <div class="flex justify-between">
-                <span class="text-theme-text-muted">Updated</span>
-                <span class="text-theme-text"
-                  >{new Date(dataSource.updatedAt).toLocaleString()}</span
-                >
-              </div>
+            <div class="flex justify-between">
+              <span class="text-theme-text-muted">Type</span>
+              <span class="text-theme-text">{dataSource.type}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-theme-text-muted">Created</span>
+              <span class="text-theme-text">{new Date(dataSource.createdAt).toLocaleString()}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-theme-text-muted">Updated</span>
+              <span class="text-theme-text">{new Date(dataSource.updatedAt).toLocaleString()}</span>
             </div>
           </div>
         </div>
-      {/if}
+      </div>
     </div>
   {/if}
 </div>

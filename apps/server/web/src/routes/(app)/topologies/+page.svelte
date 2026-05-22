@@ -36,12 +36,15 @@
 
     try {
       // Two-step: create the topology shell, then attach a Manual
-      // source. Manual now owns the graph content; the topology row
+      // source. Manual owns the graph content; the topology row
       // just owns name / mapping / share state.
       const topology = await topologies.create({ name })
       const { dataSourceId } = await api.topologies.sources.attachManual(topology.id)
       showCreateModal = false
-      await goto(`/datasources/${dataSourceId}?topology=${topology.id}`)
+      // Editor for the (topology, source) pair lives under the topology
+      // namespace — observations are per-topology, the data-source page
+      // is purely for source configuration.
+      await goto(`/topologies/${topology.id}/sources/${dataSourceId}/edit`)
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to create topology'
     } finally {
@@ -110,7 +113,7 @@
               </a>
               {#if topo.manualSourceId}
                 <a
-                  href="/datasources/{topo.manualSourceId}?topology={topo.id}"
+                  href="/topologies/{topo.id}/sources/{topo.manualSourceId}/edit"
                   class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
                 >
                   Edit

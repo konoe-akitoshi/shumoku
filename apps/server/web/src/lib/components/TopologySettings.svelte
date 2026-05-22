@@ -403,11 +403,11 @@
     <div class="space-y-2">
       {#if topology.manualSourceId}
         <a
-          href="/datasources/{topology.manualSourceId}?topology={topology.id}"
+          href="/topologies/{topology.id}/sources/{topology.manualSourceId}/edit"
           class="btn btn-secondary w-full justify-center"
         >
           <PencilSimpleIcon size={16} class="mr-2" />
-          Edit Manual source
+          Edit Manual content
         </a>
       {/if}
     </div>
