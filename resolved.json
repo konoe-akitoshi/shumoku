@@ -1,0 +1,614 @@
+{
+  "graph": {
+    "version": "1",
+    "name": "test2",
+    "nodes": [
+      {
+        "id": "discovered:0",
+        "label": ["tun-gw01"],
+        "shape": "rect",
+        "identity": {
+          "mgmtIp": "192.168.13.15",
+          "sysName": "tun-gw01",
+          "vendorIds": { "snmp-sys-object-id": "1.3.6.1.4.1.119.1.84.10.1" }
+        },
+        "metadata": {
+          "sysDescr": "NEC Portable Internetwork Core Operating System Software, IX Series IX3100 (magellan-sec) Software, Version 9.4.17, RELEASE SOFTWARE, Compiled Nov 14-Mon-2016 17:24:14 JST #2, IX3110"
+        },
+        "ports": [
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1",
+            "label": "GigaEthernet0",
+            "interfaceName": "GigaEthernet0",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0", "mac": "00:60:b9:a4:de:25", "ifIndex": 1 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:2",
+            "label": "GigaEthernet1",
+            "interfaceName": "GigaEthernet1",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet1", "mac": "00:60:b9:a4:de:a5", "ifIndex": 2 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:3",
+            "label": "GigaEthernet2",
+            "interfaceName": "GigaEthernet2",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet2", "mac": "00:60:b9:a4:de:65", "ifIndex": 3 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:4",
+            "label": "GigaEthernet3",
+            "interfaceName": "GigaEthernet3",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet3", "mac": "00:60:b9:a4:de:e5", "ifIndex": 4 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:5",
+            "label": "GigaEthernet0-Multiplexor",
+            "interfaceName": "GigaEthernet0-Multiplexor",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0-Multiplexor", "ifIndex": 5 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:6",
+            "label": "GigaEthernet1-Multiplexor",
+            "interfaceName": "GigaEthernet1-Multiplexor",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet1-Multiplexor", "ifIndex": 6 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:7",
+            "label": "GigaEthernet2-Multiplexor",
+            "interfaceName": "GigaEthernet2-Multiplexor",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet2-Multiplexor", "ifIndex": 7 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:8",
+            "label": "GigaEthernet3-Multiplexor",
+            "interfaceName": "GigaEthernet3-Multiplexor",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet3-Multiplexor", "ifIndex": 8 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:17",
+            "label": "GigaEthernet0.0-LAN",
+            "interfaceName": "GigaEthernet0.0-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.0-LAN", "ifIndex": 17 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:18",
+            "label": "GigaEthernet1.0-LAN",
+            "interfaceName": "GigaEthernet1.0-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet1.0-LAN", "ifIndex": 18 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:19",
+            "label": "GigaEthernet2.0-LAN",
+            "interfaceName": "GigaEthernet2.0-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet2.0-LAN", "ifIndex": 19 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:20",
+            "label": "GigaEthernet3.0-LAN",
+            "interfaceName": "GigaEthernet3.0-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet3.0-LAN", "ifIndex": 20 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:21",
+            "label": "GigaEthernet0.1-LAN",
+            "interfaceName": "GigaEthernet0.1-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.1-LAN", "ifIndex": 21 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:22",
+            "label": "GigaEthernet0.2-LAN",
+            "interfaceName": "GigaEthernet0.2-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.2-LAN", "ifIndex": 22 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:23",
+            "label": "GigaEthernet0.3-LAN",
+            "interfaceName": "GigaEthernet0.3-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.3-LAN", "ifIndex": 23 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:24",
+            "label": "GigaEthernet0.4-LAN",
+            "interfaceName": "GigaEthernet0.4-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.4-LAN", "ifIndex": 24 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:25",
+            "label": "GigaEthernet0.5-LAN",
+            "interfaceName": "GigaEthernet0.5-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.5-LAN", "ifIndex": 25 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:26",
+            "label": "GigaEthernet0.6-LAN",
+            "interfaceName": "GigaEthernet0.6-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.6-LAN", "ifIndex": 26 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:27",
+            "label": "GigaEthernet0.7-LAN",
+            "interfaceName": "GigaEthernet0.7-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.7-LAN", "ifIndex": 27 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:28",
+            "label": "GigaEthernet0.8-LAN",
+            "interfaceName": "GigaEthernet0.8-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.8-LAN", "ifIndex": 28 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:29",
+            "label": "GigaEthernet0.9-LAN",
+            "interfaceName": "GigaEthernet0.9-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.9-LAN", "ifIndex": 29 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:30",
+            "label": "GigaEthernet1.1-LAN",
+            "interfaceName": "GigaEthernet1.1-LAN",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet1.1-LAN", "ifIndex": 30 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:283",
+            "label": "Tunnel0",
+            "interfaceName": "Tunnel0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel0", "ifIndex": 283 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:284",
+            "label": "Tunnel1",
+            "interfaceName": "Tunnel1",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel1", "ifIndex": 284 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:286",
+            "label": "Tunnel3",
+            "interfaceName": "Tunnel3",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel3", "ifIndex": 286 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:287",
+            "label": "Tunnel4",
+            "interfaceName": "Tunnel4",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel4", "ifIndex": 287 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:288",
+            "label": "Tunnel5",
+            "interfaceName": "Tunnel5",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel5", "ifIndex": 288 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:289",
+            "label": "Tunnel6",
+            "interfaceName": "Tunnel6",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel6", "ifIndex": 289 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:290",
+            "label": "Tunnel7",
+            "interfaceName": "Tunnel7",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel7", "ifIndex": 290 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:291",
+            "label": "Tunnel8",
+            "interfaceName": "Tunnel8",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel8", "ifIndex": 291 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1307",
+            "label": "Loopback0",
+            "interfaceName": "Loopback0",
+            "connectors": [],
+            "identity": { "ifName": "Loopback0", "ifIndex": 1307 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1309",
+            "label": "Null0",
+            "interfaceName": "Null0",
+            "connectors": [],
+            "identity": { "ifName": "Null0", "ifIndex": 1309 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1311",
+            "label": "GigaEthernet0.0",
+            "interfaceName": "GigaEthernet0.0",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.0", "ifIndex": 1311 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1312",
+            "label": "GigaEthernet1.0",
+            "interfaceName": "GigaEthernet1.0",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet1.0", "ifIndex": 1312 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1313",
+            "label": "GigaEthernet2.0",
+            "interfaceName": "GigaEthernet2.0",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet2.0", "ifIndex": 1313 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1314",
+            "label": "GigaEthernet3.0",
+            "interfaceName": "GigaEthernet3.0",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet3.0", "ifIndex": 1314 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1315",
+            "label": "GigaEthernet0.1",
+            "interfaceName": "GigaEthernet0.1",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.1", "ifIndex": 1315 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1316",
+            "label": "GigaEthernet0.2",
+            "interfaceName": "GigaEthernet0.2",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.2", "ifIndex": 1316 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1317",
+            "label": "GigaEthernet0.3",
+            "interfaceName": "GigaEthernet0.3",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.3", "ifIndex": 1317 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1318",
+            "label": "GigaEthernet0.4",
+            "interfaceName": "GigaEthernet0.4",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.4", "ifIndex": 1318 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1319",
+            "label": "GigaEthernet0.5",
+            "interfaceName": "GigaEthernet0.5",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.5", "ifIndex": 1319 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1320",
+            "label": "GigaEthernet0.6",
+            "interfaceName": "GigaEthernet0.6",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.6", "ifIndex": 1320 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1321",
+            "label": "GigaEthernet0.7",
+            "interfaceName": "GigaEthernet0.7",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.7", "ifIndex": 1321 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1322",
+            "label": "GigaEthernet0.8",
+            "interfaceName": "GigaEthernet0.8",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.8", "ifIndex": 1322 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1323",
+            "label": "GigaEthernet0.9",
+            "interfaceName": "GigaEthernet0.9",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet0.9", "ifIndex": 1323 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1348",
+            "label": "GigaEthernet1.1",
+            "interfaceName": "GigaEthernet1.1",
+            "connectors": [],
+            "identity": { "ifName": "GigaEthernet1.1", "ifIndex": 1348 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1455",
+            "label": "Loopback0.0",
+            "interfaceName": "Loopback0.0",
+            "connectors": [],
+            "identity": { "ifName": "Loopback0.0", "ifIndex": 1455 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1457",
+            "label": "Null0.0",
+            "interfaceName": "Null0.0",
+            "connectors": [],
+            "identity": { "ifName": "Null0.0", "ifIndex": 1457 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1714",
+            "label": "Tunnel0.0",
+            "interfaceName": "Tunnel0.0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel0.0", "ifIndex": 1714 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1715",
+            "label": "Tunnel1.0",
+            "interfaceName": "Tunnel1.0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel1.0", "ifIndex": 1715 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1717",
+            "label": "Tunnel3.0",
+            "interfaceName": "Tunnel3.0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel3.0", "ifIndex": 1717 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1718",
+            "label": "Tunnel4.0",
+            "interfaceName": "Tunnel4.0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel4.0", "ifIndex": 1718 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1719",
+            "label": "Tunnel5.0",
+            "interfaceName": "Tunnel5.0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel5.0", "ifIndex": 1719 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1720",
+            "label": "Tunnel6.0",
+            "interfaceName": "Tunnel6.0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel6.0", "ifIndex": 1720 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1721",
+            "label": "Tunnel7.0",
+            "interfaceName": "Tunnel7.0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel7.0", "ifIndex": 1721 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.15:1722",
+            "label": "Tunnel8.0",
+            "interfaceName": "Tunnel8.0",
+            "connectors": [],
+            "identity": { "ifName": "Tunnel8.0", "ifIndex": 1722 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          }
+        ],
+        "provenance": { "source": "authored", "state": "confirmed" }
+      },
+      {
+        "id": "discovered:1",
+        "label": ["gw03.bb.as38649.net"],
+        "shape": "rect",
+        "identity": {
+          "mgmtIp": "192.168.13.22",
+          "sysName": "gw03.bb.as38649.net",
+          "vendorIds": { "snmp-sys-object-id": "1.3.6.1.4.1.44641" }
+        },
+        "metadata": { "sysDescr": "VyOS 1.4.4" },
+        "ports": [
+          {
+            "id": "snmp-lldp:port:192.168.13.22:1",
+            "label": "lo",
+            "interfaceName": "lo",
+            "connectors": [],
+            "identity": { "ifName": "lo", "ifIndex": 1 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.22:2",
+            "label": "eth0",
+            "interfaceName": "eth0",
+            "connectors": [],
+            "identity": { "ifName": "eth0", "mac": "bc:24:11:e1:b9:ca", "ifIndex": 2 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.22:3",
+            "label": "eth1",
+            "interfaceName": "eth1",
+            "connectors": [],
+            "identity": { "ifName": "eth1", "mac": "bc:24:11:71:d3:f2", "ifIndex": 3 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.22:4",
+            "label": "pim6reg",
+            "interfaceName": "pim6reg",
+            "connectors": [],
+            "identity": { "ifName": "pim6reg", "ifIndex": 4 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          }
+        ],
+        "provenance": { "source": "authored", "state": "confirmed" }
+      },
+      {
+        "id": "discovered:2",
+        "label": ["QNAS-02"],
+        "shape": "rect",
+        "identity": {
+          "mgmtIp": "192.168.13.27",
+          "sysName": "QNAS-02",
+          "vendorIds": { "snmp-sys-object-id": "1.3.6.1.4.1.24681" }
+        },
+        "metadata": { "sysDescr": "Linux TS-X53BU 4.3.6" },
+        "ports": [
+          {
+            "id": "snmp-lldp:port:192.168.13.27:1",
+            "label": "lo",
+            "interfaceName": "lo",
+            "connectors": [],
+            "identity": { "ifName": "lo", "ifIndex": 1 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:2",
+            "label": "eth0",
+            "interfaceName": "eth0",
+            "connectors": [],
+            "identity": { "ifName": "eth0", "mac": "24:5e:be:41:e5:37", "ifIndex": 2 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:3",
+            "label": "eth1",
+            "interfaceName": "eth1",
+            "connectors": [],
+            "identity": { "ifName": "eth1", "mac": "24:5e:be:41:e5:38", "ifIndex": 3 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:4",
+            "label": "eth2",
+            "interfaceName": "eth2",
+            "connectors": [],
+            "identity": { "ifName": "eth2", "mac": "24:5e:be:41:e5:39", "ifIndex": 4 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:5",
+            "label": "eth3",
+            "interfaceName": "eth3",
+            "connectors": [],
+            "identity": { "ifName": "eth3", "mac": "24:5e:be:41:e5:3a", "ifIndex": 5 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:6",
+            "label": "bond0",
+            "interfaceName": "bond0",
+            "connectors": [],
+            "identity": { "ifName": "bond0", "mac": "5e:b1:49:ad:a0:72", "ifIndex": 6 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:7",
+            "label": "bond1",
+            "interfaceName": "bond1",
+            "connectors": [],
+            "identity": { "ifName": "bond1", "mac": "92:d0:71:60:63:cd", "ifIndex": 7 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:8",
+            "label": "bond2",
+            "interfaceName": "bond2",
+            "connectors": [],
+            "identity": { "ifName": "bond2", "mac": "92:f3:25:02:a0:f1", "ifIndex": 8 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:9",
+            "label": "bond3",
+            "interfaceName": "bond3",
+            "connectors": [],
+            "identity": { "ifName": "bond3", "mac": "92:6d:a7:bc:76:c2", "ifIndex": 9 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          },
+          {
+            "id": "snmp-lldp:port:192.168.13.27:10",
+            "label": "dummy0",
+            "interfaceName": "dummy0",
+            "connectors": [],
+            "identity": { "ifName": "dummy0", "mac": "92:92:de:13:56:22", "ifIndex": 10 },
+            "provenance": { "source": "authored", "state": "confirmed" }
+          }
+        ],
+        "provenance": { "source": "authored", "state": "confirmed" }
+      }
+    ],
+    "links": []
+  },
+  "snapshotCount": 1
+}

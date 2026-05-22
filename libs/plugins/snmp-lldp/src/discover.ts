@@ -138,6 +138,11 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   }
 
   // 4. Second pass: walk LLDP for each visited device and emit Links.
+  // We track per-device LLDP outcomes so a "0 links overall" snapshot
+  // can carry a useful diagnostic ("LLDP empty on every device" reads
+  // very differently from "LLDP errored on every device").
+  let lldpDevicesEmpty = 0
+  let lldpDevicesErrored = 0
   for (const [address, device] of visited) {
     const client = new SnmpClient({
       address,
@@ -146,11 +151,30 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     })
     try {
       const links = await fetchLldpNeighbors(client, device, visited, input.sourceId)
+      if (links.length === 0) lldpDevicesEmpty++
       allLinks.push(...links)
     } catch (err) {
+      lldpDevicesErrored++
       warnings.push(`LLDP walk on ${address}: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       client.close()
+    }
+  }
+
+  // No links across the entire scan is usually a deployment property
+  // (the network just doesn 't run LLDP between these devices —
+  // common with routers / NAS / firewalls) rather than a plugin bug.
+  // Surface that explicitly so the user doesn 't think the scan
+  // "worked but found nothing useful" without context.
+  if (allLinks.length === 0 && visited.size > 0) {
+    if (lldpDevicesErrored === visited.size) {
+      warnings.push(
+        `LLDP-MIB unreachable on every device — community may not grant access to lldpRemTable.`,
+      )
+    } else if (lldpDevicesEmpty === visited.size - lldpDevicesErrored) {
+      warnings.push(
+        `LLDP returned no neighbors on any device — LLDP probably isn 't enabled (common for routers / NAS / firewalls). v1 derives links from LLDP only; IP/MAC-table-based discovery is v2.`,
+      )
     }
   }
 
@@ -230,10 +254,16 @@ async function scanOne(
     catalogEntry?.spec.vendor ??
     (sysObjectID ? (vendorFromOid(sysObjectID) ?? undefined) : undefined)
 
+  // sysObjectID is a *product family* identifier (same value across
+  // every device of the same model), so it must NOT live in `identity`
+  // — the resolver clusters nodes by identity keys, and feeding it the
+  // sysObjectID would collapse every QNAP NAS / every Cisco 9300 into
+  // a single node. Catalog binding info goes in `metadata.sysObjectID`
+  // on the produced Node; per-device identity is mgmtIp / sysName /
+  // (later) chassisId / mac.
   const identity: Identity = {
     mgmtIp: address,
     sysName,
-    vendorIds: sysObjectID ? { 'snmp-sys-object-id': sysObjectID } : undefined,
   }
 
   // IF-MIB walks — get names, MACs, oper status

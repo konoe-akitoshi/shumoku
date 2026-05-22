@@ -1,0 +1,123 @@
+[
+  {
+    "id": "ORvPmEVqdCB0",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779448395868,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779448403957
+  },
+  {
+    "id": "MgP-zMrZ32KT",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779448004823,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779448012904
+  },
+  {
+    "id": "AFqn3uIlAHVE",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779443751202,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779443759310
+  },
+  {
+    "id": "E7XSLAECKVwY",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779435980785,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779435988888
+  },
+  {
+    "id": "ykY2eKWVgyuo",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779431817498,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779431825588
+  },
+  {
+    "id": "RPAaduQ9Zjpd",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779429965754,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779429973847
+  },
+  {
+    "id": "UsUQmtl1cajr",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779429134982,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779429143055
+  },
+  {
+    "id": "zVOOrLOC22I8",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779429110780,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779429118880
+  },
+  {
+    "id": "iArS7UqXqDW6",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779378674559,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779378682653
+  },
+  {
+    "id": "mBD11ck4ACfA",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779376931026,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779376939164
+  },
+  {
+    "id": "X7gBaAY3gBIx",
+    "topologyId": "X-SWyD5E7fRy",
+    "sourceId": "q52SmV8fuT4t",
+    "capturedAt": 1779358780762,
+    "status": "ok",
+    "nodeCount": 4,
+    "linkCount": 0,
+    "portCount": 75,
+    "createdAt": 1779358788823
+  }
+]
