@@ -1146,6 +1146,15 @@ export enum DeviceType {
   Internet = 'internet',
   VPN = 'vpn',
   Database = 'database',
+  /**
+   * Layer-2 broadcast domain / subnet. Used by discovery plugins that
+   * can see a set of devices on the same IP subnet but can 't see the
+   * physical L2 switch in the middle. Modeled as a virtual transit
+   * node so each device 's link to "the segment" stays a clean 1-port
+   * = 1-link relationship, instead of producing a mesh that violates
+   * the editor / renderer 's "1 port owns 1 link endpoint" invariant.
+   */
+  Segment = 'segment',
   Generic = 'generic',
 }
 

@@ -34,7 +34,7 @@ import {
   LLDP_REM_TABLE,
   SYSTEM_MIB,
 } from './mib.js'
-import { type DeviceInterfaceIp, groupBySubnet, inferLinksFromSubnets } from './subnet-inference.js'
+import { buildSegmentInference, type DeviceInterfaceIp, groupBySubnet } from './subnet-inference.js'
 
 /** How many addresses to probe in parallel during the liveness pass. */
 const LIVENESS_CONCURRENCY = 32
@@ -216,18 +216,8 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     }
   }
   const subnetGroups = groupBySubnet(allIfaceIps)
-  const inferredLinks = inferLinksFromSubnets(subnetGroups)
-  for (const link of inferredLinks) {
-    allLinks.push({
-      from: { node: link.from.nodeId, port: link.from.portId },
-      to: { node: link.to.nodeId, port: link.to.portId },
-      provenance: { source: input.sourceId, observedAt: Date.now() },
-      metadata: {
-        linkType: 'subnet-inferred',
-        subnet: link.subnet,
-      },
-    })
-  }
+  const inference = buildSegmentInference(subnetGroups, input.sourceId)
+  for (const link of inference.spokeLinks) allLinks.push(link)
 
   // Diagnostic warnings. The distinction matters: "LLDP errored" means
   // configure your community / view permissions; "LLDP empty" means
@@ -239,8 +229,8 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
       )
     } else if (lldpDevicesEmpty === visited.size - lldpDevicesErrored) {
       warnings.push(
-        inferredLinks.length > 0
-          ? `LLDP returned no neighbors on any device — falling back to subnet-membership inference (${inferredLinks.length} logical link(s) from ${subnetGroups.length} shared subnet(s)).`
+        inference.segmentNodes.length > 0
+          ? `LLDP returned no neighbors on any device — synthesised ${inference.segmentNodes.length} L2 segment node(s) from shared subnets (${inference.spokeLinks.length} spoke link(s)).`
           : `LLDP returned no neighbors and no shared IP subnets across the scanned devices — no links could be derived.`,
       )
     }
@@ -248,7 +238,10 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
 
   const graph: NetworkGraph = {
     version: '1.0',
-    nodes: Array.from(visited.values()).map((d) => visitedToNode(d, input.sourceId)),
+    nodes: [
+      ...Array.from(visited.values()).map((d) => visitedToNode(d, input.sourceId)),
+      ...inference.segmentNodes,
+    ],
     links: allLinks,
   }
 

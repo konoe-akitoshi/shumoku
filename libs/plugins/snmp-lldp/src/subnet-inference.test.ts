@@ -1,11 +1,12 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { DeviceType } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import {
+  buildSegmentInference,
   type DeviceInterfaceIp,
   groupBySubnet,
-  inferLinksFromSubnets,
   subnetCidr,
 } from './subnet-inference.js'
 
@@ -13,7 +14,7 @@ describe('subnetCidr', () => {
   it('computes the CIDR of a /24', () => {
     expect(subnetCidr('192.168.13.15', '255.255.255.0')).toBe('192.168.13.0/24')
   })
-  it('computes the CIDR of a /22 (the actual lab subnet)', () => {
+  it('computes the CIDR of a /22 (the lab subnet)', () => {
     expect(subnetCidr('192.168.13.15', '255.255.252.0')).toBe('192.168.12.0/22')
   })
   it('skips loopback', () => {
@@ -31,10 +32,7 @@ describe('subnetCidr', () => {
   })
 })
 
-describe('groupBySubnet + inferLinksFromSubnets', () => {
-  // Mirrors the lab setup: four devices all on 192.168.12.0/22, plus
-  // one device with a second interface in its own /24 (a router
-  // interface that doesn 't see anyone else in the scan).
+describe('groupBySubnet', () => {
   const ifaces: DeviceInterfaceIp[] = [
     { nodeId: 'ix', portId: 'ix:p1', ip: '192.168.13.15', netmask: '255.255.252.0', ifIndex: 1314 },
     {
@@ -50,13 +48,6 @@ describe('groupBySubnet + inferLinksFromSubnets', () => {
       ip: '192.168.13.22',
       netmask: '255.255.252.0',
       ifIndex: 2,
-    },
-    {
-      nodeId: 'vyos',
-      portId: 'vyos:eth5',
-      ip: '192.168.20.13',
-      netmask: '255.255.255.0',
-      ifIndex: 5,
     },
     {
       nodeId: 'qnas-02',
@@ -76,53 +67,81 @@ describe('groupBySubnet + inferLinksFromSubnets', () => {
     { nodeId: 'vyos', portId: 'vyos:lo', ip: '127.0.0.1', netmask: '255.0.0.0', ifIndex: 1 },
   ]
 
-  it('groups all four devices into the shared /22 and drops singletons', () => {
+  it('groups all four devices into the shared /22 and drops singleton subnets', () => {
     const groups = groupBySubnet(ifaces)
     expect(groups).toHaveLength(1)
     expect(groups[0]?.cidr).toBe('192.168.12.0/22')
     expect(groups[0]?.members).toHaveLength(4)
-    // 163.220.228.32/29 and 192.168.20.0/24 each have only one device → dropped.
     expect(groups.map((g) => g.cidr)).toEqual(['192.168.12.0/22'])
   })
+})
 
-  it('emits a mesh of pairwise inferred links across distinct devices', () => {
+describe('buildSegmentInference', () => {
+  const ifaces: DeviceInterfaceIp[] = [
+    { nodeId: 'ix', portId: 'ix:p1', ip: '192.168.13.15', netmask: '255.255.252.0', ifIndex: 1314 },
+    {
+      nodeId: 'vyos',
+      portId: 'vyos:eth0',
+      ip: '192.168.13.22',
+      netmask: '255.255.252.0',
+      ifIndex: 2,
+    },
+    {
+      nodeId: 'qnas-02',
+      portId: 'qnas-02:eth0',
+      ip: '192.168.13.27',
+      netmask: '255.255.252.0',
+      ifIndex: 2,
+    },
+    {
+      nodeId: 'qnas-03',
+      portId: 'qnas-03:eth0',
+      ip: '192.168.13.28',
+      netmask: '255.255.252.0',
+      ifIndex: 2,
+    },
+  ]
+
+  it('emits one segment node + one spoke link per device for each shared subnet', () => {
     const groups = groupBySubnet(ifaces)
-    const links = inferLinksFromSubnets(groups)
-    // 4 distinct nodes on the shared subnet → 4·3/2 = 6 unordered pairs.
-    expect(links).toHaveLength(6)
-    const pairs = new Set(links.map((l) => [l.from.nodeId, l.to.nodeId].sort().join('|')))
-    expect(pairs).toEqual(
-      new Set([
-        'ix|vyos',
-        'ix|qnas-02',
-        'ix|qnas-03',
-        'qnas-02|vyos',
-        'qnas-03|vyos',
-        'qnas-02|qnas-03',
-      ]),
-    )
-    // Every link declares the subnet it was inferred from.
-    for (const link of links) expect(link.subnet).toBe('192.168.12.0/22')
+    const inference = buildSegmentInference(groups, 'snmp-lldp')
+    expect(inference.segmentNodes).toHaveLength(1)
+    expect(inference.spokeLinks).toHaveLength(4)
+    const seg = inference.segmentNodes[0]
+    expect(seg?.spec?.kind).toBe('hardware')
+    expect((seg?.spec as { type?: string })?.type).toBe(DeviceType.Segment)
+    expect(seg?.label).toBe('192.168.12.0/22')
+    expect(seg?.ports).toHaveLength(4)
   })
 
-  it('skips intra-device pairs even when both interfaces share a subnet', () => {
-    const intra: DeviceInterfaceIp[] = [
-      {
-        nodeId: 'bridge',
-        portId: 'bridge:a',
-        ip: '10.0.0.1',
-        netmask: '255.255.255.0',
-        ifIndex: 1,
-      },
-      {
-        nodeId: 'bridge',
-        portId: 'bridge:b',
-        ip: '10.0.0.2',
-        netmask: '255.255.255.0',
-        ifIndex: 2,
-      },
-    ]
-    expect(groupBySubnet(intra)).toEqual([])
-    expect(inferLinksFromSubnets(groupBySubnet(intra))).toEqual([])
+  it('respects the "1 port = 1 link endpoint" invariant', () => {
+    const groups = groupBySubnet(ifaces)
+    const inference = buildSegmentInference(groups, 'snmp-lldp')
+    // No port id should appear twice across the spoke links — both the
+    // device-side and the segment-side.
+    const portUses = new Map<string, number>()
+    for (const link of inference.spokeLinks) {
+      for (const endpoint of [link.from, link.to]) {
+        const key = `${endpoint.node}|${endpoint.port}`
+        portUses.set(key, (portUses.get(key) ?? 0) + 1)
+      }
+    }
+    for (const [_, count] of portUses) expect(count).toBe(1)
+  })
+
+  it('stamps subnet metadata on the segment node and each spoke link', () => {
+    const groups = groupBySubnet(ifaces)
+    const inference = buildSegmentInference(groups, 'snmp-lldp')
+    expect(inference.segmentNodes[0]?.metadata?.['subnet']).toBe('192.168.12.0/22')
+    for (const link of inference.spokeLinks) {
+      expect(link.metadata?.['linkType']).toBe('subnet-inferred')
+      expect(link.metadata?.['subnet']).toBe('192.168.12.0/22')
+    }
+  })
+
+  it('produces deterministic segment node ids from the CIDR', () => {
+    const groups = groupBySubnet(ifaces)
+    const inference = buildSegmentInference(groups, 'snmp-lldp')
+    expect(inference.segmentNodes[0]?.id).toBe('snmp-lldp:segment:192.168.12.0_22')
   })
 })

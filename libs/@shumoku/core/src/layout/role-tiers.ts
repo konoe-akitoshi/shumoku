@@ -72,6 +72,9 @@ export const DEVICE_TYPE_TIER: Readonly<Record<DeviceType, number>> = Object.fre
   [DeviceType.Database]: 70,
   [DeviceType.AccessPoint]: 50,
   [DeviceType.CPE]: 50,
+  // Synthetic L2 segment from subnet inference — same tier as a
+  // physical L2 switch since that 's what it stands in for.
+  [DeviceType.Segment]: 40,
   [DeviceType.Generic]: 60,
 })
 
