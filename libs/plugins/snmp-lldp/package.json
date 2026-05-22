@@ -44,6 +44,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
+    "@shumoku/catalog": "workspace:*",
     "@shumoku/core": "workspace:*",
     "net-snmp": "^3.26.3"
   },

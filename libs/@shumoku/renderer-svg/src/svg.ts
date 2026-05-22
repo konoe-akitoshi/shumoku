@@ -843,7 +843,7 @@ ${fg}
     const strokeDasharray = style.strokeDasharray || ''
 
     const shape = this.renderNodeShape(
-      node.shape,
+      node.shape ?? 'rounded',
       x,
       y,
       w,

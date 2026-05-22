@@ -267,6 +267,7 @@
       "name": "shumoku-plugin-snmp-lldp",
       "version": "0.0.0",
       "dependencies": {
+        "@shumoku/catalog": "workspace:*",
         "@shumoku/core": "workspace:*",
         "net-snmp": "^3.26.3",
       },

@@ -21,14 +21,8 @@
  * follow-on PR adds neighbor-driven expansion.
  */
 
-import {
-  type Identity,
-  type Link,
-  type NetworkGraph,
-  type Node,
-  type NodePort,
-  vendorFromSysObjectID,
-} from '@shumoku/core'
+import { builtinEntries, Catalog, type CatalogEntry, vendorFromOid } from '@shumoku/catalog'
+import type { Identity, Link, NetworkGraph, Node, NodePort, NodeSpec } from '@shumoku/core'
 import { expandTargets } from './cidr.js'
 import { asMacString, asNumber, asString, indexByRow, SnmpClient } from './client.js'
 import { IF_TABLE, IF_X_TABLE, LLDP_REM_TABLE, SYSTEM_MIB } from './mib.js'
@@ -70,7 +64,27 @@ interface VisitedDevice {
   sysName?: string
   sysDescr?: string
   vendor?: string
+  /** Resolved catalog entry, if the device 's sysObjectID matched. */
+  catalogEntry?: CatalogEntry
+  /** Raw sysObjectID — useful for surfacing on unmatched nodes. */
+  sysObjectID?: string
   ports: Map<string, NodePort> // keyed by ifIndex string
+}
+
+/**
+ * Module-level catalog instance. The SNMP discover path is read-only
+ * against the catalog and the builtin entries are static, so a single
+ * shared instance is fine. If the server later wires in a project-
+ * local catalog override we can accept it via `DiscoverInput`.
+ */
+let _catalog: Catalog | null = null
+function getCatalog(): Catalog {
+  if (!_catalog) {
+    const c = new Catalog()
+    c.registerAll(builtinEntries)
+    _catalog = c
+  }
+  return _catalog
 }
 
 export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
@@ -206,7 +220,15 @@ async function scanOne(
   const sysName = asString(sys[0]?.value)
   const sysObjectID = asString(sys[1]?.value)
   const sysDescr = asString(sys[2]?.value)
-  const vendor = sysObjectID ? (vendorFromSysObjectID(sysObjectID) ?? undefined) : undefined
+
+  // Catalog lookup first — an exact / family match gives us vendor +
+  // device type + icon all at once. Falls back to vendor-only lookup
+  // via the IANA enterprise-number registry when the OID has no
+  // catalog entry yet.
+  const catalogEntry = sysObjectID ? getCatalog().findBySysObjectId(sysObjectID) : undefined
+  const vendor =
+    catalogEntry?.spec.vendor ??
+    (sysObjectID ? (vendorFromOid(sysObjectID) ?? undefined) : undefined)
 
   const identity: Identity = {
     mgmtIp: address,
@@ -247,6 +269,8 @@ async function scanOne(
     sysName,
     sysDescr,
     vendor,
+    catalogEntry,
+    sysObjectID,
     ports,
   }
 }
@@ -256,14 +280,35 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
   if (device.sysName) labelParts.push(device.sysName)
   else if (device.identity.mgmtIp) labelParts.push(device.identity.mgmtIp)
 
+  // When the catalog matched the device by its sysObjectID, copy that
+  // entry 's spec onto the node (same pattern editor Product-binding
+  // uses). Renderer 's `resolveIcon(spec)` then picks up the correct
+  // device-type icon. When no catalog match, fall back to a thin
+  // HardwareSpec carrying just vendor so at least the chip shows the
+  // right manufacturer.
+  const spec: NodeSpec | undefined = device.catalogEntry
+    ? {
+        ...device.catalogEntry.spec,
+        ...(device.catalogEntry.icon ? { icon: device.catalogEntry.icon } : {}),
+      }
+    : device.vendor
+      ? { kind: 'hardware', vendor: device.vendor }
+      : undefined
+
   return {
     id: device.nodeId,
     label: labelParts.length > 0 ? labelParts : (device.identity.mgmtIp ?? 'unknown'),
-    shape: 'rect',
+    // `shape` is intentionally omitted — the renderer defaults to
+    // `'rounded'`, which is what a discovered device should look
+    // like. Shape is presentation data; plugins shouldn 't be
+    // inventing it on every node.
     identity: device.identity,
+    ...(spec ? { spec } : {}),
     metadata: {
       vendor: device.vendor,
       sysDescr: device.sysDescr,
+      catalogId: device.catalogEntry?.id,
+      sysObjectID: device.sysObjectID,
     },
     ports: Array.from(device.ports.values()),
     provenance: { source: sourceId, observedAt: Date.now() },

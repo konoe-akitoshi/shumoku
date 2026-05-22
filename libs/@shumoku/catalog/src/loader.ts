@@ -27,6 +27,8 @@ export function parseCatalogYaml(content: string): CatalogEntry {
     extends: raw.extends,
     tags: raw.tags ?? [],
     properties: raw.properties ?? {},
+    ...(raw.identifiers ? { identifiers: raw.identifiers } : {}),
+    ...(raw.icon ? { icon: raw.icon } : {}),
   }
 }
 
@@ -46,6 +48,8 @@ export function parseCatalogYamlMulti(content: string): CatalogEntry[] {
       extends: raw.extends,
       tags: raw.tags ?? [],
       properties: raw.properties ?? {},
+      ...(raw.identifiers ? { identifiers: raw.identifiers } : {}),
+      ...(raw.icon ? { icon: raw.icon } : {}),
     }
   })
 }

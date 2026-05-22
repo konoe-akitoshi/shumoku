@@ -228,6 +228,37 @@ export type PropertiesFor<K extends NodeSpec['kind']> = K extends 'hardware'
 // Catalog Entry
 // ============================================
 
+/**
+ * Standard, protocol-issued identifiers for a device family or product.
+ *
+ * The catalog is the central identity service: any plugin that knows a
+ * device by some industry-standard tag (SNMP `sysObjectID`, vendor
+ * part number, IEEE OUI prefix, …) can look the catalog entry up by
+ * that tag and inherit the entry 's spec / properties / icon.
+ *
+ * All identifiers are optional — entries only declare the ones their
+ * vendor or protocol assigns. New identifier kinds get added here as
+ * new protocols are integrated; the Catalog class indexes whatever is
+ * present.
+ */
+export interface CatalogIdentifiers {
+  /**
+   * SNMP MIB-II `sysObjectID`(s) this entry matches, as dotted OID
+   * strings (e.g. `1.3.6.1.4.1.9.1.2030`). An entry can list several
+   * — common when one catalog entry covers a product family whose
+   * individual models each have their own OID (e.g. Catalyst 9300-24T
+   * / 48T / 24P / 48P all share the same spec characteristics).
+   * `Catalog.findBySysObjectId` matches exactly or against a longer
+   * descendant OID (some platforms publish a deeper OID than the
+   * family OID we record here).
+   */
+  sysObjectIDs?: string[]
+  /** Vendor part number(s) / SKU(s) (e.g. `C9300-24UX`). */
+  partNumbers?: string[]
+  /** IANA Private Enterprise Number assigned to the vendor (e.g. 9 for Cisco). */
+  ianaEnterpriseId?: number
+}
+
 export interface CatalogEntry {
   /** Unique ID: "vendor/series/model" or "vendor/model" */
   id: string
@@ -241,6 +272,12 @@ export interface CatalogEntry {
   tags: string[]
   /** Detailed properties — use kind to narrow */
   properties: HardwareProperties | ComputeProperties | ServiceProperties
+  /**
+   * Standard, protocol-issued identifiers — SNMP sysObjectID, vendor
+   * part number, IANA enterprise number, etc. Plugins look entries up
+   * via these.
+   */
+  identifiers?: CatalogIdentifiers
   /**
    * Default icon for this entry. Either an inline SVG path string
    * (e.g. `<path d="..."/>`, rendered inside a `viewBox="0 0 24 24"`)
