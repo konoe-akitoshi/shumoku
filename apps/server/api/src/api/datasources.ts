@@ -40,9 +40,13 @@ export function createDataSourcesApi(): Hono {
   const app = new Hono()
   const service = new DataSourceService()
 
-  // Get available plugin types
+  // Get available plugin types for the global "+ Add Source" picker.
+  // Manual is excluded: Manual sources are per-topology and only
+  // creatable through `POST /api/topologies/:id/sources { type: 'manual' }`
+  // — surfacing it here would offer a URL-field form for a source
+  // that has no upstream.
   app.get('/types', (c) => {
-    const types = service.getRegisteredTypes()
+    const types = service.getRegisteredTypes().filter((t) => t.type !== 'manual')
     // Get loaded plugin info for configSchema
     const loadedPlugins = getAllPlugins()
     const pluginSchemas = new Map(loadedPlugins.map((p) => [p.id, p.configSchema]))
