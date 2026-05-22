@@ -184,25 +184,22 @@ export class TopologyService {
   ): Promise<{ dataSourceId: string }> {
     const now = timestamp()
     const dsId = await generateId()
+    // Seed config_json with an empty graph so the editor opens on a
+    // blank canvas. Manual content lives here, not in observations
+    // (see migration 011).
+    const emptyConfig = JSON.stringify({
+      graph: { version: '1', nodes: [], links: [] },
+    })
     this.db
       .prepare(
         `INSERT INTO data_sources (id, name, type, config_json, status, fail_count, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(dsId, 'Manual', 'manual', '{}', 'connected', 0, now, now)
+      .run(dsId, 'Manual', 'manual', emptyConfig, 'connected', 0, now, now)
     await this.topologySources.add(topologyId, {
       dataSourceId: dsId,
       purpose,
       syncMode: 'manual',
-    })
-    // Empty initial observation — gives the editor something to load
-    // and the resolver something to fold without special-casing.
-    await this.observations.record({
-      topologyId,
-      sourceId: dsId,
-      capturedAt: now,
-      status: 'ok',
-      graph: { version: '1', nodes: [], links: [] },
     })
     this.cache.delete(topologyId)
     return { dataSourceId: dsId }
@@ -462,27 +459,32 @@ export class TopologyService {
   /**
    * Parse a topology and generate layout.
    *
-   * This is also where the **observation resolver** runs. The Manual
-   * source 's latest snapshot fills the `authored` slot of `resolve()`;
-   * every other source contributes through the `snapshots` array. When
-   * a topology has no Manual source attached, `authored` is the empty
-   * graph (the diagram shows whatever the other sources produced).
+   * The observation resolver runs here. Two pools feed it:
+   *   - The Manual source 's graph (read from `data_sources.config_json.graph`
+   *     — it 's stored on the source, not in observations; see
+   *     migration 011). Fills the `authored` slot.
+   *   - Every other attached source 's latest observation snapshot.
+   *     Goes into the `snapshots` array.
    *
-   * Discovered-only nodes show up in the diagram, conflict state is
-   * carried on `provenance`, etc.
+   * When no Manual is attached, `authored` is an empty graph — the
+   * diagram is whatever the other sources produced.
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
     const latest = this.observations.latestPerSource(topology.id)
     const manualId = topology.manualSourceId
-    const manualObs = manualId
-      ? latest.find((o) => o.sourceId === manualId && o.graph !== null)
-      : undefined
-    const authored: NetworkGraph = manualObs?.graph ?? {
-      version: '1',
-      name: topology.name,
-      nodes: [],
-      links: [],
-    }
+    const authored: NetworkGraph = manualId
+      ? (this.readManualGraph(manualId) ?? {
+          version: '1',
+          name: topology.name,
+          nodes: [],
+          links: [],
+        })
+      : {
+          version: '1',
+          name: topology.name,
+          nodes: [],
+          links: [],
+        }
     const snapshots: SnapshotEntry[] = latest
       .filter((o) => o.sourceId !== manualId)
       .map((o) => ({
@@ -534,6 +536,24 @@ export class TopologyService {
   // parseContent() was removed when content_json stopped flowing
   // through the topology row — observation payloads are now validated
   // at the API boundary (api/observations.ts) and at resolve() time.
+
+  /**
+   * Read the graph stored on a Manual data source 's config_json.
+   * Returns null when the source doesn 't exist, isn 't Manual, or has
+   * no graph (e.g. freshly attached then config cleared by hand).
+   */
+  private readManualGraph(sourceId: string): NetworkGraph | null {
+    const row = this.db
+      .query('SELECT type, config_json FROM data_sources WHERE id = ?')
+      .get(sourceId) as { type: string; config_json: string } | undefined
+    if (!row || row.type !== 'manual') return null
+    try {
+      const config = JSON.parse(row.config_json) as { graph?: NetworkGraph }
+      return config.graph ?? null
+    } catch {
+      return null
+    }
+  }
 
   /**
    * Create empty metrics structure for a graph

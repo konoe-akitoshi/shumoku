@@ -22,6 +22,7 @@
   import { findBestInterfaceMatch } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
   import {
+    dataSources,
     displaySettings,
     hostInterfaces,
     linkMapping,
@@ -404,16 +405,17 @@
   // General Tab Functions
   // ============================================
 
-  // edgeStyle / splineMode live on `NetworkGraph.settings`, which means
-  // they sit inside the Manual source 's observation. Loading and
-  // saving here goes through the per-source snapshot endpoint, not
-  // through the topology shell.
+  // edgeStyle / splineMode live on `NetworkGraph.settings` inside the
+  // Manual source 's stored graph (config_json.graph). Read/write goes
+  // through the data source config, not through observations.
   async function parseGraphSettings() {
     if (!topology?.manualSourceId) return
     try {
-      const snap = await api.topologies.sources.latestSnapshot(topology.id, topology.manualSourceId)
-      const settings = (snap.graph as { settings?: { edgeStyle?: string; splineMode?: string } })
-        ?.settings
+      const ds = await api.dataSources.get(topology.manualSourceId)
+      const config = JSON.parse(ds.configJson || '{}') as {
+        graph?: { settings?: { edgeStyle?: string; splineMode?: string } }
+      }
+      const settings = config.graph?.settings
       edgeStyle = settings?.edgeStyle || 'orthogonal'
       splineMode = settings?.splineMode || 'sloppy'
     } catch {
@@ -425,8 +427,12 @@
     if (!topology?.manualSourceId) return
     savingEdgeStyle = true
     try {
-      const snap = await api.topologies.sources.latestSnapshot(topology.id, topology.manualSourceId)
-      const graph = (snap.graph ?? { version: '1', nodes: [], links: [] }) as unknown as {
+      const ds = await api.dataSources.get(topology.manualSourceId)
+      const config = JSON.parse(ds.configJson || '{}') as {
+        graph?: { settings?: Record<string, unknown>; [k: string]: unknown }
+        [k: string]: unknown
+      }
+      const graph = (config.graph ?? { version: '1', nodes: [], links: [] }) as {
         settings?: Record<string, unknown>
         [k: string]: unknown
       }
@@ -437,11 +443,10 @@
       } else {
         delete graph.settings['splineMode']
       }
-      await api.topologies.sources.recordObservation(
-        topology.id,
-        topology.manualSourceId,
-        graph as unknown as import('@shumoku/core').NetworkGraph,
-      )
+      config.graph = graph
+      await dataSources.update(topology.manualSourceId, {
+        configJson: JSON.stringify(config),
+      })
     } catch (e) {
       console.error('Failed to update edge style:', e)
     } finally {
@@ -1198,7 +1203,7 @@
           <div class="card-body">
             {#if topology.manualSourceId}
               <a
-                href="/topologies/{topology.id}/sources/{topology.manualSourceId}/edit"
+                href="/datasources/{topology.manualSourceId}"
                 class="btn btn-secondary w-full justify-center"
               >
                 <PencilSimpleIcon size={16} class="mr-2" />

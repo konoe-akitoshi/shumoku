@@ -41,10 +41,8 @@
       const topology = await topologies.create({ name })
       const { dataSourceId } = await api.topologies.sources.attachManual(topology.id)
       showCreateModal = false
-      // Editor for the (topology, source) pair lives under the topology
-      // namespace — observations are per-topology, the data-source page
-      // is purely for source configuration.
-      await goto(`/topologies/${topology.id}/sources/${dataSourceId}/edit`)
+      // Manual content lives on the source itself — edit on /datasources/<id>.
+      await goto(`/datasources/${dataSourceId}`)
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to create topology'
     } finally {
@@ -113,7 +111,7 @@
               </a>
               {#if topo.manualSourceId}
                 <a
-                  href="/topologies/{topo.id}/sources/{topo.manualSourceId}/edit"
+                  href="/datasources/{topo.manualSourceId}"
                   class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
                 >
                   Edit

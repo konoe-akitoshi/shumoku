@@ -166,8 +166,8 @@
   }
 
   /* Down: no lane overlay; the base link itself is the indicator —
-           solid red dashed line, full opacity, so it can never be confused
-           with the animated red lanes of a 90-100% utilized link. */
+               solid red dashed line, full opacity, so it can never be confused
+               with the animated red lanes of a 90-100% utilized link. */
   :global(.wm-active.wm-down > path.link) {
     opacity: 1;
     stroke-dasharray: 8 4;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { type NetworkGraph, YamlParser } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -23,9 +24,16 @@
   let saving = $state(false)
   let testResult = $state<ConnectionResult | null>(null)
   let testing = $state(false)
-  // For Manual sources: the topologies this source is attached to.
-  // Used to render direct links into the per-topology content editor.
+  // For Manual sources: the topologies this source is attached to —
+  // shown as a tag list so users see where this content is in use.
   let attachedTopologies = $state<{ topologyId: string; name: string }[]>([])
+
+  // Manual graph editor state (only used when dataSource.type === 'manual').
+  // Manual stores its graph in config_json under the `graph` key — the
+  // graph is the source 's content, shared across all attached topologies.
+  let editorMode = $state<'yaml' | 'json'>('yaml')
+  let yamlContent = $state('')
+  let jsonContent = $state('')
 
   // Form state
   let formName = $state('')
@@ -62,6 +70,75 @@
     }
   })
 
+  function graphToYaml(graph: Record<string, unknown>): string {
+    // Same converter as the dedicated edit page used to have. Walks the
+    // NetworkGraph 's top-level shape; anything not enumerated below
+    // round-trips through the JSON tab instead.
+    const lines: string[] = []
+    if (graph['name']) lines.push(`name: ${graph['name']}`)
+    if (graph['version']) lines.push(`version: "${graph['version']}"`)
+    if (graph['description']) lines.push(`description: ${graph['description']}`)
+    lines.push('')
+    lines.push('nodes:')
+    const nodes = (graph['nodes'] as Array<Record<string, unknown>>) || []
+    for (const node of nodes) {
+      lines.push(`  - id: ${node['id']}`)
+      if (node['label']) lines.push(`    label: ${node['label']}`)
+      if (node['type']) lines.push(`    type: ${node['type']}`)
+      if (node['vendor']) lines.push(`    vendor: ${node['vendor']}`)
+      if (node['model']) lines.push(`    model: ${node['model']}`)
+      if (node['parent']) lines.push(`    parent: ${node['parent']}`)
+    }
+    lines.push('')
+    lines.push('links:')
+    const links = (graph['links'] as Array<Record<string, unknown>>) || []
+    for (const link of links) {
+      const from = link['from'] as string | { node: string; port?: string }
+      const to = link['to'] as string | { node: string; port?: string }
+      if (typeof from === 'string') lines.push(`  - from: ${from}`)
+      else {
+        lines.push(`  - from:`)
+        lines.push(`      node: ${from.node}`)
+        if (from.port) lines.push(`      port: ${from.port}`)
+      }
+      if (typeof to === 'string') lines.push(`    to: ${to}`)
+      else {
+        lines.push(`    to:`)
+        lines.push(`      node: ${to.node}`)
+        if (to.port) lines.push(`      port: ${to.port}`)
+      }
+      if (link['bandwidth']) lines.push(`    bandwidth: ${link['bandwidth']}`)
+    }
+    const subgraphs = graph['subgraphs'] as Array<Record<string, unknown>> | undefined
+    if (subgraphs && subgraphs.length > 0) {
+      lines.push('')
+      lines.push('subgraphs:')
+      for (const sg of subgraphs) {
+        lines.push(`  - id: ${sg['id']}`)
+        if (sg['label']) lines.push(`    label: ${sg['label']}`)
+        if (sg['parent']) lines.push(`    parent: ${sg['parent']}`)
+      }
+    }
+    return lines.join('\n')
+  }
+
+  function switchMode(mode: 'yaml' | 'json') {
+    if (mode === editorMode) return
+    try {
+      if (mode === 'json') {
+        const result = new YamlParser().parse(yamlContent)
+        jsonContent = JSON.stringify(result.graph, null, 2)
+      } else {
+        const graph = JSON.parse(jsonContent)
+        yamlContent = graphToYaml(graph)
+      }
+      editorMode = mode
+      error = ''
+    } catch (e) {
+      error = e instanceof Error ? e.message : `Failed to convert to ${mode.toUpperCase()}`
+    }
+  }
+
   interface ParsedConfig {
     url?: string
     token?: string
@@ -83,8 +160,15 @@
   }
 
   function getConfigFromForm(type: string): string {
-    // Manual has no upstream → config is empty.
-    if (type === 'manual') return '{}'
+    // Manual stores its graph in config_json. Parse whichever editor
+    // pane is active, then serialise the whole config.
+    if (type === 'manual') {
+      const graph =
+        editorMode === 'yaml'
+          ? new YamlParser().parse(yamlContent).graph
+          : (JSON.parse(jsonContent) as NetworkGraph)
+      return JSON.stringify({ graph })
+    }
     // snmp-lldp uses a different config shape (no URL).
     if (type === 'snmp-lldp') {
       const community = formSnmpCommunity.trim() || 'public'
@@ -179,6 +263,14 @@
           } catch (err) {
             console.warn('[Manual] Failed to list attached topologies:', err)
           }
+          // Seed the editor with the source 's stored graph.
+          const graph = (config as unknown as { graph?: Record<string, unknown> }).graph ?? {
+            version: '1',
+            nodes: [],
+            links: [],
+          }
+          jsonContent = JSON.stringify(graph, null, 2)
+          yamlContent = graphToYaml(graph)
         }
       } catch (e) {
         if (cancelled) return
@@ -319,24 +411,57 @@
             </div>
 
             {#if dataSource.type === 'manual'}
-              <div class="text-xs text-theme-text-muted space-y-1">
-                <p>Manual has no upstream — content is edited per-topology.</p>
-                {#if attachedTopologies.length === 0}
-                  <p>Not attached to any topology yet. Attach from a topology 's Sources tab.</p>
+              <!-- Manual stores its graph in config_json. Same source-level
+                   content is shared across every topology it 's attached to. -->
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="label">Graph</span>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="px-2 py-0.5 text-xs rounded {editorMode === 'yaml' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
+                      onclick={() => switchMode('yaml')}
+                    >
+                      YAML
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-0.5 text-xs rounded {editorMode === 'json' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
+                      onclick={() => switchMode('json')}
+                    >
+                      JSON
+                    </button>
+                  </div>
+                </div>
+                {#if editorMode === 'yaml'}
+                  <textarea
+                    class="input min-h-[400px] font-mono text-sm"
+                    bind:value={yamlContent}
+                    placeholder="Enter YAML content..."
+                  ></textarea>
                 {:else}
-                  <p>
-                    Edit content in:
+                  <textarea
+                    class="input min-h-[400px] font-mono text-sm"
+                    bind:value={jsonContent}
+                    placeholder="Enter JSON content..."
+                  ></textarea>
+                {/if}
+                {#if attachedTopologies.length > 0}
+                  <p class="text-xs text-theme-text-muted mt-2">
+                    Used by:
                     {#each attachedTopologies as t, i}
-                      <a
-                        class="text-primary hover:underline"
-                        href="/topologies/{t.topologyId}/sources/{dataSource.id}/edit"
-                      >
+                      <a class="text-primary hover:underline" href="/topologies/{t.topologyId}">
                         {t.name}
                       </a>
                       {#if i < attachedTopologies.length - 1}
                         ,{' '}
                       {/if}
                     {/each}
+                  </p>
+                {:else}
+                  <p class="text-xs text-theme-text-muted mt-2">
+                    Not attached to any topology yet. Attach from a topology 's Sources tab to use
+                    this graph.
                   </p>
                 {/if}
               </div>
