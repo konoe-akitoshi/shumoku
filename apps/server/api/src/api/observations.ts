@@ -13,10 +13,9 @@
 
 import { type NetworkGraph, resolve, type SnapshotEntry } from '@shumoku/core'
 import { Hono } from 'hono'
-import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
+import { hasAutoscanCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { ObservationsService } from '../services/observations.js'
-import { TopologySourcesService } from '../services/topology-sources.js'
 import { getTopologyService } from './topologies.js'
 
 /**
@@ -92,94 +91,10 @@ export function createScanRoute(): Hono {
 export function createObservationsRoute(): Hono {
   const app = new Hono()
   const observations = new ObservationsService()
-  const dataSources = new DataSourceService()
-  const topologySources = new TopologySourcesService()
-
-  /**
-   * POST /api/topologies/:id/sources/:sourceId/sync
-   * Sync a single attached source. Capability dispatch (autoscan vs
-   * topology-capable), records the result as a `topology_observations`
-   * row, invalidates the parsed cache so the next /render re-runs
-   * resolve().
-   */
-  app.post('/:id/sources/:sourceId/sync', async (c) => {
-    const topologyId = c.req.param('id')
-    const sourceId = c.req.param('sourceId')
-
-    try {
-      // Confirm the source is actually attached to this topology
-      // (catches typos / stale UI state and gives a clean 404).
-      const attached = topologySources.find(topologyId, sourceId, 'topology')
-      if (!attached) {
-        return c.json({ error: 'Source is not attached to this topology' }, 404)
-      }
-
-      const plugin = dataSources.getPlugin(sourceId)
-      if (!plugin) {
-        return c.json({ error: 'data source not found' }, 404)
-      }
-
-      const capturedAt = Date.now()
-      let graph: NetworkGraph | null = null
-      let status: 'ok' | 'partial' | 'failed' | 'empty' = 'ok'
-      let statusMessage: string | undefined
-      let warnings: string[] | undefined
-
-      try {
-        if (hasAutoscanCapability(plugin)) {
-          const snapshot = await plugin.scan({ seeds: [] })
-          graph = snapshot.graph
-          status = snapshot.status
-          statusMessage = snapshot.statusMessage
-          warnings = snapshot.warnings
-        } else if (hasTopologyCapability(plugin)) {
-          const opts = attached.optionsJson ? JSON.parse(attached.optionsJson) : undefined
-          graph = await plugin.fetchTopology(opts)
-          status = graph && graph.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
-        } else {
-          return c.json(
-            {
-              error: `Plugin ${plugin.type} cannot supply topology (no autoscan or topology capability)`,
-            },
-            400,
-          )
-        }
-      } catch (err) {
-        status = 'failed'
-        statusMessage = err instanceof Error ? err.message : String(err)
-        graph = null
-      }
-
-      const observation = await observations.record({
-        topologyId,
-        sourceId,
-        capturedAt,
-        status,
-        statusMessage,
-        graph,
-      })
-      observations.updateHysteresis(
-        topologyId,
-        sourceId,
-        status === 'failed' ? 'failed' : 'ok',
-        capturedAt,
-      )
-      getTopologyService().clearCacheEntry(topologyId)
-
-      return c.json({
-        observation,
-        snapshot: {
-          status,
-          statusMessage,
-          capturedAt,
-          warnings,
-          graph,
-        },
-      })
-    } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
-    }
-  })
+  // Note: the per-source sync endpoint
+  // `POST /:topologyId/sources/:sourceId/sync` lives in
+  // `topology-sources.ts` — that route is registered earlier on the
+  // same path prefix and would shadow anything we put here anyway.
 
   // History — recent observations across all sources of this topology
   app.get('/:id/observations', (c) => {
