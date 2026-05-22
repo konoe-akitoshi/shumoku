@@ -107,6 +107,11 @@
   function getConfigFromForm(): string {
     if (!selectedPlugin) return '{}'
 
+    // Manual has no upstream — config is intentionally empty.
+    if (selectedPlugin.type === 'manual') {
+      return '{}'
+    }
+
     // Builtin plugins with hardcoded config
     if (selectedPlugin.type === 'zabbix') {
       return JSON.stringify({
@@ -197,7 +202,13 @@
     }
 
     // Validation for bundled plugins
-    if (['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)) {
+    if (selectedPlugin.type === 'manual') {
+      // Manual: name-only. Attach to topologies separately.
+      if (!formName.trim()) {
+        formError = 'Name is required'
+        return
+      }
+    } else if (['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)) {
       if (!formName.trim() || !formUrl.trim()) {
         formError = 'Name and URL are required'
         return
@@ -544,7 +555,7 @@
           >
         </div>
 
-        {#if ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type) || (!selectedPlugin.configSchema?.properties && !['aruba-instant-on', 'snmp-lldp'].includes(selectedPlugin.type))}
+        {#if ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type) || (!selectedPlugin.configSchema?.properties && !['aruba-instant-on', 'snmp-lldp', 'manual'].includes(selectedPlugin.type))}
           <div>
             <label for="url" class="label">URL</label>
             <input

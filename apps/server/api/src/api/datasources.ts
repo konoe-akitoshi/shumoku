@@ -40,13 +40,12 @@ export function createDataSourcesApi(): Hono {
   const app = new Hono()
   const service = new DataSourceService()
 
-  // Get available plugin types for the global "+ Add Source" picker.
-  // Manual is excluded: Manual sources are per-topology and only
-  // creatable through `POST /api/topologies/:id/sources { type: 'manual' }`
-  // — surfacing it here would offer a URL-field form for a source
-  // that has no upstream.
+  // Get available plugin types for the +Add Source picker. Manual is
+  // included like any other source — the UI renders a name-only form
+  // for it (no URL/token), and topology attachment enforces the
+  // one-Manual-per-topology cardinality separately.
   app.get('/types', (c) => {
-    const types = service.getRegisteredTypes().filter((t) => t.type !== 'manual')
+    const types = service.getRegisteredTypes()
     // Get loaded plugin info for configSchema
     const loadedPlugins = getAllPlugins()
     const pluginSchemas = new Map(loadedPlugins.map((p) => [p.id, p.configSchema]))
@@ -61,23 +60,22 @@ export function createDataSourcesApi(): Hono {
     return c.json(serializable)
   })
 
-  // List all data sources. Manual rows are per-topology and surfaced
-  // through their topology 's own Sources tab — hide them from the
-  // global list so it doesn 't fill up with "Manual" entries (one per
-  // topology).
+  // List all data sources. Manual rows are included like any other
+  // source — they show in the global list, can be attached to topologies,
+  // etc. Migration 010 may have created several "Manual" rows (one per
+  // existing topology) so the list can be noisy at first; users can
+  // rename them from each detail page.
   app.get('/', (c) => {
     const dataSources = service.list()
-    const sanitized = dataSources
-      .filter((ds) => ds.type !== 'manual')
-      .map((ds) => ({
-        ...ds,
-        configJson: maskConfigSecrets(ds.configJson),
-      }))
+    const sanitized = dataSources.map((ds) => ({
+      ...ds,
+      configJson: maskConfigSecrets(ds.configJson),
+    }))
     return c.json(sanitized)
   })
 
   // List data sources by capability. Manual has no capabilities so it
-  // already won 't show up here; the explicit filter is defensive.
+  // won 't appear in any specific-capability list naturally.
   app.get('/by-capability/:capability', (c) => {
     const capability = c.req.param('capability') as 'topology' | 'metrics' | 'alerts'
     if (capability !== 'topology' && capability !== 'metrics' && capability !== 'alerts') {
@@ -87,12 +85,10 @@ export function createDataSourcesApi(): Hono {
       )
     }
     const dataSources = service.listByCapability(capability)
-    const sanitized = dataSources
-      .filter((ds) => ds.type !== 'manual')
-      .map((ds) => ({
-        ...ds,
-        configJson: maskConfigSecrets(ds.configJson),
-      }))
+    const sanitized = dataSources.map((ds) => ({
+      ...ds,
+      configJson: maskConfigSecrets(ds.configJson),
+    }))
     return c.json(sanitized)
   })
 
