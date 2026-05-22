@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { nodeIdentityQuality } from '@shumoku/core'
   import {
     ArrowDownIcon,
     ArrowLeftIcon,
@@ -21,6 +22,7 @@
   import { findBestInterfaceMatch } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
   import {
+    dataSources,
     displaySettings,
     hostInterfaces,
     linkMapping,
@@ -74,7 +76,43 @@
   let topologyId = $derived($page.params.id!)
 
   // Tab state - check URL hash for initial tab
-  let activeTab = $state<'general' | 'sources' | 'mapping'>('general')
+  let activeTab = $state<'general' | 'sources' | 'discovery' | 'mapping' | 'resolved'>('general')
+
+  // Resolved JSON viewer state. The resolver folds all source observations
+  // (NetBox / SNMP) plus Manual 's source-level graph into one project
+  // graph — this is what the diagram actually renders against.
+  let resolvedJson = $state('')
+  let resolvedSnapshotCount = $state(0)
+  let resolvedLoading = $state(false)
+  let resolvedError = $state('')
+  let resolvedCopied = $state(false)
+
+  async function loadResolved() {
+    if (!topology) return
+    resolvedLoading = true
+    resolvedError = ''
+    try {
+      const { graph, snapshotCount } = await api.topologies.getResolved(topology.id)
+      resolvedJson = JSON.stringify(graph, null, 2)
+      resolvedSnapshotCount = snapshotCount
+    } catch (e) {
+      resolvedError = e instanceof Error ? e.message : 'Failed to load resolved graph'
+    } finally {
+      resolvedLoading = false
+    }
+  }
+
+  async function copyResolved() {
+    try {
+      await navigator.clipboard.writeText(resolvedJson)
+      resolvedCopied = true
+      setTimeout(() => {
+        resolvedCopied = false
+      }, 1500)
+    } catch (e) {
+      console.error('[Resolved] Copy failed:', e)
+    }
+  }
 
   // General data
   let topology = $state<Topology | null>(null)
@@ -95,9 +133,44 @@
   let metricsDataSources = $state<DataSource[]>([])
   let savingSources = $state(false)
   let hasSourceChanges = $state(false)
-  let syncing = $state(false)
-  let syncResult = $state<{ nodeCount: number; linkCount: number } | null>(null)
   let copiedSecret = $state<string | null>(null)
+
+  // ----- Discovery tab state -----
+  /** Per-source sync result chips (keyed by sourceId). */
+  let perSourceSync = $state<
+    Record<
+      string,
+      {
+        status: 'ok' | 'partial' | 'failed' | 'empty'
+        nodeCount: number
+        linkCount: number
+        message?: string
+        at: number
+      }
+    >
+  >({})
+  let syncingSourceId = $state<string | null>(null)
+  /** Identity-quality counts across the resolved topology. */
+  let identityQuality = $state<{ stable: number; weak: number; unbound: number; total: number }>({
+    stable: 0,
+    weak: 0,
+    unbound: 0,
+    total: 0,
+  })
+  /** Recent observation snapshots for this topology. */
+  let recentObservations = $state<
+    Array<{
+      id: string
+      sourceId: string
+      capturedAt: number
+      status: 'ok' | 'partial' | 'failed' | 'empty'
+      statusMessage?: string
+      nodeCount: number
+      linkCount: number
+      portCount: number
+    }>
+  >([])
+  let discoveryLoading = $state(false)
 
   // Filter options cache
   let filterOptionsCache = $state<
@@ -262,7 +335,7 @@
   onMount(async () => {
     // Check URL hash for initial tab
     const hash = window.location.hash.slice(1)
-    if (hash === 'sources' || hash === 'mapping') {
+    if (hash === 'sources' || hash === 'mapping' || hash === 'discovery' || hash === 'resolved') {
       activeTab = hash
     }
 
@@ -368,32 +441,48 @@
   // General Tab Functions
   // ============================================
 
-  function parseGraphSettings() {
+  // edgeStyle / splineMode live on `NetworkGraph.settings` inside the
+  // Manual source 's stored graph (config_json.graph). Read/write goes
+  // through the data source config, not through observations.
+  async function parseGraphSettings() {
+    if (!topology?.manualSourceId) return
     try {
-      const graph = JSON.parse(topology?.contentJson || '{}')
-      edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
-      splineMode = graph.settings?.splineMode || 'sloppy'
+      const ds = await api.dataSources.get(topology.manualSourceId)
+      const config = JSON.parse(ds.configJson || '{}') as {
+        graph?: { settings?: { edgeStyle?: string; splineMode?: string } }
+      }
+      const settings = config.graph?.settings
+      edgeStyle = settings?.edgeStyle || 'orthogonal'
+      splineMode = settings?.splineMode || 'sloppy'
     } catch {
       // Use defaults
     }
   }
 
   async function updateEdgeStyle() {
-    if (!topology) return
+    if (!topology?.manualSourceId) return
     savingEdgeStyle = true
     try {
-      const graph = JSON.parse(topology.contentJson)
-      graph.settings = graph.settings || {}
-      graph.settings.edgeStyle = edgeStyle
-      if (edgeStyle === 'splines') {
-        graph.settings.splineMode = splineMode
-      } else {
-        delete graph.settings.splineMode
+      const ds = await api.dataSources.get(topology.manualSourceId)
+      const config = JSON.parse(ds.configJson || '{}') as {
+        graph?: { settings?: Record<string, unknown>; [k: string]: unknown }
+        [k: string]: unknown
       }
-      const updated = await topologies.update(topology.id, {
-        contentJson: JSON.stringify(graph),
+      const graph = (config.graph ?? { version: '1', nodes: [], links: [] }) as {
+        settings?: Record<string, unknown>
+        [k: string]: unknown
+      }
+      graph.settings = (graph.settings ?? {}) as Record<string, unknown>
+      graph.settings['edgeStyle'] = edgeStyle
+      if (edgeStyle === 'splines') {
+        graph.settings['splineMode'] = splineMode
+      } else {
+        delete graph.settings['splineMode']
+      }
+      config.graph = graph
+      await dataSources.update(topology.manualSourceId, {
+        configJson: JSON.stringify(config),
       })
-      if (updated) topology = updated
     } catch (e) {
       console.error('Failed to update edge style:', e)
     } finally {
@@ -435,7 +524,7 @@
     const existing = editableSources.filter((s) => s.purpose === purpose).map((s) => s.dataSourceId)
     const available = availableSources.filter((ds) => !existing.includes(ds.id))
     if (!available[0]) {
-      alert('No more data sources available to add')
+      alert('No data sources available. Create one on /datasources first.')
       return
     }
     editableSources = [
@@ -570,23 +659,93 @@
     }
   }
 
-  async function handleSyncAll() {
-    syncing = true
-    syncResult = null
+  /**
+   * Load the resolved graph (for identity quality counts) and the
+   * observation history. Called whenever the Discovery tab is opened
+   * and after each per-source sync.
+   */
+  async function refreshDiscovery() {
+    discoveryLoading = true
     try {
-      const result = await api.topologies.sources.syncAll(topologyId)
-      syncResult = { nodeCount: result.nodeCount, linkCount: result.linkCount }
-      topology = result.topology
-      topologies.upsert(result.topology)
-      // Topology contentJson likely changed — mapping may reference nodes that
-      // no longer exist (or vice versa). Force a mapping reload.
-      await mappingStore.load(topologyId, true)
+      const [graphResp, obsList] = await Promise.all([
+        api.topologies.getGraph(topologyId),
+        api.topologies.listObservations(topologyId, 20),
+      ])
+      // Count identity quality across resolved nodes.
+      const counts = { stable: 0, weak: 0, unbound: 0, total: 0 }
+      for (const node of graphResp.graph.nodes ?? []) {
+        const q = nodeIdentityQuality(node.identity)
+        counts[q]++
+        counts.total++
+      }
+      identityQuality = counts
+      recentObservations = obsList
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Sync failed')
+      console.error('[Discovery] failed to refresh', e)
     } finally {
-      syncing = false
+      discoveryLoading = false
     }
   }
+
+  /** Sync exactly one attached topology source. */
+  async function handleSyncOne(source: TopologyDataSource) {
+    syncingSourceId = source.dataSourceId
+    try {
+      const result = await api.topologies.sources.syncOne(topologyId, source.dataSourceId)
+      const counts = result.snapshot.graph ?? { nodes: [], links: [] }
+      perSourceSync = {
+        ...perSourceSync,
+        [source.dataSourceId]: {
+          status: result.snapshot.status,
+          nodeCount: counts.nodes?.length ?? 0,
+          linkCount: counts.links?.length ?? 0,
+          message: result.snapshot.statusMessage,
+          at: Date.now(),
+        },
+      }
+      // Update topology re-render through the resolver.
+      const updatedTopology = await api.topologies.get(topologyId)
+      topology = updatedTopology
+      topologies.upsert(updatedTopology)
+      await refreshDiscovery()
+    } catch (e) {
+      perSourceSync = {
+        ...perSourceSync,
+        [source.dataSourceId]: {
+          status: 'failed',
+          nodeCount: 0,
+          linkCount: 0,
+          message: e instanceof Error ? e.message : 'Sync failed',
+          at: Date.now(),
+        },
+      }
+    } finally {
+      syncingSourceId = null
+    }
+  }
+
+  function formatAgo(ts: number): string {
+    const diff = Date.now() - ts
+    if (diff < 60_000) return 'just now'
+    if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
+    if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
+    return new Date(ts).toLocaleString()
+  }
+
+  // Re-load Discovery data whenever the tab is opened.
+  $effect(() => {
+    if (activeTab === 'discovery' && topology) {
+      void refreshDiscovery()
+    }
+  })
+
+  // Re-fetch the resolved graph whenever the Resolved tab is opened.
+  // Cheap — server already caches the parsed topology and re-uses it.
+  $effect(() => {
+    if (activeTab === 'resolved' && topology) {
+      void loadResolved()
+    }
+  })
 
   function getWebhookUrl(source: TopologyDataSource): string {
     return `${window.location.origin}/api/webhooks/topology/${source.webhookSecret}`
@@ -896,18 +1055,48 @@
           {activeTab === 'sources'
             ? 'text-primary border-primary'
             : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
-        onclick={() => { activeTab = 'sources'; history.replaceState(null, '', '#sources') }}
+        onclick={() => {
+          activeTab = 'sources'
+          history.replaceState(null, '', '#sources')
+        }}
       >
-        Data Sources
+        Sources
+      </button>
+      <button
+        class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+          {activeTab === 'discovery'
+            ? 'text-primary border-primary'
+            : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+        onclick={() => {
+          activeTab = 'discovery'
+          history.replaceState(null, '', '#discovery')
+        }}
+      >
+        Discovery
       </button>
       <button
         class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
           {activeTab === 'mapping'
             ? 'text-primary border-primary'
             : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
-        onclick={() => { activeTab = 'mapping'; history.replaceState(null, '', '#mapping') }}
+        onclick={() => {
+          activeTab = 'mapping'
+          history.replaceState(null, '', '#mapping')
+        }}
       >
         Mapping
+      </button>
+      <button
+        class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+          {activeTab === 'resolved'
+            ? 'text-primary border-primary'
+            : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+        onclick={() => {
+          activeTab = 'resolved'
+          history.replaceState(null, '', '#resolved')
+        }}
+      >
+        Resolved
       </button>
     </div>
 
@@ -1068,13 +1257,15 @@
             <h2 class="font-medium text-theme-text-emphasis">Actions</h2>
           </div>
           <div class="card-body">
-            <a
-              href="/topologies/{topology.id}/edit"
-              class="btn btn-secondary w-full justify-center"
-            >
-              <PencilSimpleIcon size={16} class="mr-2" />
-              Edit YAML
-            </a>
+            {#if topology.manualSourceId}
+              <a
+                href="/datasources/{topology.manualSourceId}"
+                class="btn btn-secondary w-full justify-center"
+              >
+                <PencilSimpleIcon size={16} class="mr-2" />
+                Edit Manual content
+              </a>
+            {/if}
           </div>
         </div>
 
@@ -1126,40 +1317,17 @@
           </Button>
         </div>
 
-        <!-- Topology Sources -->
+        <!-- Topology Sources — declarative: which sources are attached and
+             how they 're configured. The "go grab data" actions (Sync now /
+             Sync all) live in the Discovery tab. -->
         <div class="card">
           <div class="card-header flex items-center justify-between">
             <h2 class="font-medium text-theme-text-emphasis">Topology Sources</h2>
-            <div class="flex items-center gap-2">
-              {#if topologySources.length > 0}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onclick={handleSyncAll}
-                  disabled={syncing || hasSourceChanges}
-                >
-                  {#if syncing}
-                    <span
-                      class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
-                    ></span>
-                  {:else}
-                    <ArrowsClockwiseIcon size={14} class="mr-1" />
-                  {/if}
-                  Sync All
-                </Button>
-              {/if}
-              <Button variant="outline" size="sm" onclick={() => addSource('topology')}>
-                <PlusIcon size={16} class="mr-1" />
-                Add
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onclick={() => addSource('topology')}>
+              <PlusIcon size={16} class="mr-1" />
+              Add
+            </Button>
           </div>
-
-          {#if syncResult}
-            <div class="px-4 py-2 bg-success/10 border-b border-success/20 text-success text-sm">
-              Synced: {syncResult.nodeCount} nodes, {syncResult.linkCount} links
-            </div>
-          {/if}
 
           <div class="card-body">
             {#if topologySources.length === 0}
@@ -1522,6 +1690,233 @@
     {/if}
 
     <!-- ============================================ -->
+    <!-- Discovery Tab — imperative: drive attached sources to fetch     -->
+    <!-- fresh data. Each source 's last observation lands as a snapshot -->
+    <!-- in topology_observations and the diagram re-renders through    -->
+    <!-- resolve(). Sources tab is declarative; this tab is action.     -->
+    <!-- ============================================ -->
+    {#if activeTab === 'discovery'}
+      <div class="space-y-6">
+        {#if topologySources.length === 0}
+          <div class="card p-8 text-center space-y-2">
+            <p class="text-theme-text-emphasis font-medium">No sources to discover from</p>
+            <p class="text-sm text-theme-text-muted">
+              Discovery runs against attached topology sources — NetBox, Network Discovery, Zabbix
+              and so on. Attach one first.
+            </p>
+            <div class="pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onclick={() => {
+                  activeTab = 'sources'
+                  history.replaceState(null, '', '#sources')
+                }}
+              >
+                Go to Sources →
+              </Button>
+            </div>
+          </div>
+        {:else}
+          <!-- Identity binding (掴み) gauge — top of the tab. Counts every
+               resolved node by how reliably it can be re-matched across
+               sources / re-scans. -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="font-medium text-theme-text-emphasis">Identity binding (掴み)</h2>
+              <p class="text-xs text-theme-text-muted mt-0.5">
+                How well each resolved node is locked-on. More identity keys (mgmtIp / chassisId /
+                sysName / vendorIds) → more reliable across re-scans and source changes.
+              </p>
+            </div>
+            <div class="card-body">
+              <div class="grid grid-cols-3 gap-3 text-center">
+                <div class="rounded-lg border border-theme-border p-3">
+                  <p class="text-2xl font-semibold text-green-600 dark:text-green-400">
+                    {identityQuality.stable}
+                  </p>
+                  <p class="text-xs text-theme-text-muted mt-1">🟢 stable</p>
+                  <p class="text-[10px] text-theme-text-muted mt-0.5">multiple keys</p>
+                </div>
+                <div class="rounded-lg border border-theme-border p-3">
+                  <p class="text-2xl font-semibold text-amber-600 dark:text-amber-400">
+                    {identityQuality.weak}
+                  </p>
+                  <p class="text-xs text-theme-text-muted mt-1">🟡 weak</p>
+                  <p class="text-[10px] text-theme-text-muted mt-0.5">single key</p>
+                </div>
+                <div class="rounded-lg border border-theme-border p-3">
+                  <p class="text-2xl font-semibold text-theme-text-muted">
+                    {identityQuality.unbound}
+                  </p>
+                  <p class="text-xs text-theme-text-muted mt-1">🔴 unbound</p>
+                  <p class="text-[10px] text-theme-text-muted mt-0.5">no identity</p>
+                </div>
+              </div>
+              {#if identityQuality.total === 0 && !discoveryLoading}
+                <p class="text-xs text-theme-text-muted text-center mt-3">
+                  No nodes resolved yet. Sync a source below to populate.
+                </p>
+              {/if}
+            </div>
+          </div>
+
+          <!-- Per-source sync — per-row Sync now. -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="font-medium text-theme-text-emphasis">Sources</h2>
+              <p class="text-xs text-theme-text-muted mt-0.5">
+                Drive each attached source. Results land as observation snapshots and the diagram
+                re-renders through the resolver.
+              </p>
+            </div>
+            {#if hasSourceChanges}
+              <div class="px-4 py-2 bg-warning/10 border-t border-warning/20 text-warning text-sm">
+                You have unsaved changes in Sources. Save them before syncing.
+              </div>
+            {/if}
+            <div class="card-body space-y-2">
+              {#each currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
+                {@const dataSource = getDataSource(source.dataSourceId)}
+                {@const lastResult = perSourceSync[source.dataSourceId]}
+                <div class="rounded-lg border border-theme-border p-3 space-y-2">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <h3 class="text-sm font-medium text-theme-text-emphasis truncate">
+                          {dataSource?.name ?? source.dataSourceId}
+                        </h3>
+                        <span
+                          class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-theme-bg font-mono text-theme-text-muted"
+                        >
+                          {dataSource?.type ?? '—'}
+                        </span>
+                        {#if dataSource?.status === 'connected'}
+                          <span class="badge badge-success text-xs">connected</span>
+                        {:else if dataSource?.status === 'disconnected'}
+                          <span class="badge badge-danger text-xs" title={dataSource.statusMessage}>
+                            disconnected
+                          </span>
+                        {:else}
+                          <span class="badge badge-secondary text-xs">unknown</span>
+                        {/if}
+                      </div>
+                      <p class="text-xs text-theme-text-muted mt-1">
+                        {#if source.lastSyncedAt}
+                          last synced {formatAgo(source.lastSyncedAt)}
+                        {:else}
+                          never synced
+                        {/if}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onclick={() => handleSyncOne(source)}
+                      disabled={syncingSourceId === source.dataSourceId || hasSourceChanges}
+                    >
+                      {#if syncingSourceId === source.dataSourceId}
+                        <span
+                          class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
+                        ></span>
+                        Syncing…
+                      {:else}
+                        <ArrowsClockwiseIcon size={12} class="mr-1" />
+                        Sync now
+                      {/if}
+                    </Button>
+                  </div>
+                  {#if lastResult}
+                    <p class="text-xs">
+                      {#if lastResult.status === 'ok'}
+                        <span class="text-theme-text-muted">
+                          ✓ {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
+                          {formatAgo(
+                            lastResult.at,
+                          )}
+                        </span>
+                      {:else if lastResult.status === 'partial'}
+                        <span class="text-amber-600 dark:text-amber-400" title={lastResult.message}>
+                          ⚠ partial: {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
+                          {formatAgo(lastResult.at)}
+                        </span>
+                      {:else if lastResult.status === 'empty'}
+                        <span class="text-theme-text-muted">
+                          no devices observed · {formatAgo(lastResult.at)}
+                        </span>
+                      {:else}
+                        <span class="text-red-500" title={lastResult.message}>
+                          ✗ {lastResult.message ?? 'failed'}
+                        </span>
+                      {/if}
+                    </p>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+
+          <!-- Observation history -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="font-medium text-theme-text-emphasis">Recent observations</h2>
+              <p class="text-xs text-theme-text-muted mt-0.5">
+                Last 20 snapshots across all sources.
+              </p>
+            </div>
+            <div class="card-body">
+              {#if recentObservations.length === 0}
+                <p class="text-xs text-theme-text-muted text-center py-4">
+                  No observations yet. Sync a source above to record one.
+                </p>
+              {:else}
+                <div class="overflow-x-auto">
+                  <table class="w-full text-xs">
+                    <thead>
+                      <tr class="border-b border-theme-border text-left text-theme-text-muted">
+                        <th class="py-1.5 font-medium">When</th>
+                        <th class="py-1.5 font-medium">Source</th>
+                        <th class="py-1.5 font-medium">Status</th>
+                        <th class="py-1.5 font-medium text-right">Nodes</th>
+                        <th class="py-1.5 font-medium text-right">Links</th>
+                        <th class="py-1.5 font-medium text-right">Ports</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each recentObservations as o (o.id)}
+                        {@const ds = getDataSource(o.sourceId)}
+                        <tr class="border-b border-theme-border last:border-0">
+                          <td class="py-1.5">{formatAgo(o.capturedAt)}</td>
+                          <td class="py-1.5 font-mono text-theme-text-muted">
+                            {ds?.name ?? o.sourceId}
+                          </td>
+                          <td class="py-1.5">
+                            {#if o.status === 'ok'}
+                              <span class="text-green-600 dark:text-green-400">✓ ok</span>
+                            {:else if o.status === 'partial'}
+                              <span class="text-amber-600 dark:text-amber-400">⚠ partial</span>
+                            {:else if o.status === 'empty'}
+                              <span class="text-theme-text-muted">empty</span>
+                            {:else}
+                              <span class="text-red-500" title={o.statusMessage}>✗ failed</span>
+                            {/if}
+                          </td>
+                          <td class="py-1.5 text-right">{o.nodeCount}</td>
+                          <td class="py-1.5 text-right">{o.linkCount}</td>
+                          <td class="py-1.5 text-right">{o.portCount}</td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- ============================================ -->
     <!-- Mapping Tab -->
     <!-- ============================================ -->
     {#if activeTab === 'mapping'}
@@ -1776,6 +2171,66 @@
             </div>
           </div>
         {/if}
+      </div>
+    {/if}
+
+    <!-- ============================================ -->
+    <!-- Resolved Tab -->
+    <!-- ============================================ -->
+    <!-- The project 's current rendered graph. This is the output of
+         `resolve()` folding Manual 's source-level graph with every
+         attached source 's latest observation snapshot. Read-only —
+         to change anything, edit the input sources. -->
+    {#if activeTab === 'resolved'}
+      <div class="space-y-3">
+        <div class="flex items-start justify-between">
+          <div>
+            <h2 class="font-medium text-theme-text-emphasis">Resolved project graph</h2>
+            <p class="text-sm text-theme-text-muted mt-0.5">
+              Output of <code>resolve()</code> over Manual + every attached source 's latest
+              snapshot. This is the JSON the diagram renders.
+              {#if resolvedSnapshotCount > 0}
+                <span class="text-xs"
+                  >({resolvedSnapshotCount}
+                  source snapshot{resolvedSnapshotCount === 1 ? '' : 's'}
+                  folded in)</span
+                >
+              {/if}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onclick={copyResolved}
+            disabled={!resolvedJson || resolvedLoading}
+          >
+            {resolvedCopied ? 'Copied ✓' : 'Copy'}
+          </Button>
+        </div>
+
+        {#if resolvedError}
+          <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
+            {resolvedError}
+          </div>
+        {/if}
+
+        <div class="card">
+          {#if resolvedLoading && !resolvedJson}
+            <div class="card-body flex items-center justify-center py-12">
+              <div
+                class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"
+              ></div>
+            </div>
+          {:else if !resolvedJson}
+            <div class="card-body text-sm text-theme-text-muted text-center">
+              No resolved graph yet.
+            </div>
+          {:else}
+            <pre
+              class="p-4 text-xs font-mono overflow-auto max-h-[70vh] text-theme-text"
+            ><code>{resolvedJson}</code></pre>
+          {/if}
+        </div>
       </div>
     {/if}
   {/if}

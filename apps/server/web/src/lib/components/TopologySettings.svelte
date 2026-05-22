@@ -5,6 +5,7 @@
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import {
+    dataSources,
     displaySettings,
     liveUpdatesEnabled,
     metricsConnected,
@@ -12,12 +13,7 @@
     showTrafficFlow,
     topologies,
   } from '$lib/stores'
-  import type {
-    DataSourcePluginInfo,
-    MetricsMapping,
-    Topology,
-    TopologyDataSource,
-  } from '$lib/types'
+  import type { MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
   interface Props {
     topology: Topology
@@ -32,65 +28,54 @@
   let savingEdgeStyle = $state(false)
   let topologySources = $state<TopologyDataSource[]>([])
   let metricsSources = $state<TopologyDataSource[]>([])
-  let pluginTypes = $state<DataSourcePluginInfo[]>([])
-  let pluginTypeMap = $derived(
-    pluginTypes.reduce(
-      (acc, p) => {
-        acc[p.type] = p
-        return acc
-      },
-      {} as Record<string, DataSourcePluginInfo>,
-    ),
-  )
-  let syncingId = $state<string | null>(null)
-  /** Per-source last-sync result. */
-  let lastSyncResult = $state<
-    Record<
-      string,
-      {
-        status: 'ok' | 'partial' | 'failed' | 'empty'
-        nodeCount: number
-        linkCount: number
-        portCount: number
-        message?: string
-        at: number
-      }
-    >
-  >({})
 
   // Edge style settings (from topology's graph.settings)
   let edgeStyle = $state('orthogonal')
   let splineMode = $state('sloppy')
 
-  // Parse graph settings from contentJson
-  function parseGraphSettings() {
+  // edgeStyle / splineMode live on `NetworkGraph.settings` inside the
+  // Manual source 's graph (config_json.graph). Read/write via the data
+  // source config — same path as the Manual editor page.
+  async function parseGraphSettings() {
+    if (!topology.manualSourceId) return
     try {
-      const graph = JSON.parse(topology.contentJson)
-      edgeStyle = graph.settings?.edgeStyle || 'orthogonal'
-      splineMode = graph.settings?.splineMode || 'sloppy'
+      const ds = await api.dataSources.get(topology.manualSourceId)
+      const config = JSON.parse(ds.configJson || '{}') as {
+        graph?: { settings?: { edgeStyle?: string; splineMode?: string } }
+      }
+      const settings = config.graph?.settings
+      edgeStyle = settings?.edgeStyle || 'orthogonal'
+      splineMode = settings?.splineMode || 'sloppy'
     } catch {
       // Use defaults
     }
   }
 
-  // Update edge style in topology
   async function updateEdgeStyle() {
+    if (!topology.manualSourceId) return
     savingEdgeStyle = true
     try {
-      const graph = JSON.parse(topology.contentJson)
-      graph.settings = graph.settings || {}
-      graph.settings.edgeStyle = edgeStyle
+      const ds = await api.dataSources.get(topology.manualSourceId)
+      const config = JSON.parse(ds.configJson || '{}') as {
+        graph?: { settings?: Record<string, unknown>; [k: string]: unknown }
+        [k: string]: unknown
+      }
+      const graph = (config.graph ?? { version: '1', nodes: [], links: [] }) as {
+        settings?: Record<string, unknown>
+        [k: string]: unknown
+      }
+      graph.settings = (graph.settings ?? {}) as Record<string, unknown>
+      graph.settings['edgeStyle'] = edgeStyle
       if (edgeStyle === 'splines') {
-        graph.settings.splineMode = splineMode
+        graph.settings['splineMode'] = splineMode
       } else {
-        delete graph.settings.splineMode
+        delete graph.settings['splineMode']
       }
-      const updatedTopology = await topologies.update(topology.id, {
-        contentJson: JSON.stringify(graph),
+      config.graph = graph
+      await dataSources.update(topology.manualSourceId, {
+        configJson: JSON.stringify(config),
       })
-      if (updatedTopology && onUpdated) {
-        onUpdated(updatedTopology)
-      }
+      if (onUpdated) onUpdated(topology)
     } catch (e) {
       console.error('Failed to update edge style:', e)
     } finally {
@@ -122,95 +107,13 @@
     parseGraphSettings()
 
     try {
-      const [sources, types] = await Promise.all([
-        api.topologies.sources.list(topology.id),
-        api.dataSources.getPluginTypes(),
-      ])
+      const sources = await api.topologies.sources.list(topology.id)
       topologySources = sources.filter((s) => s.purpose === 'topology')
       metricsSources = sources.filter((s) => s.purpose === 'metrics')
-      pluginTypes = types
     } catch (e) {
       console.error('Failed to load data sources:', e)
     }
   })
-
-  /** Does the registered plugin advertise the `autoscan` capability? */
-  function hasAutoscan(type: string | undefined): boolean {
-    if (!type) return false
-    return pluginTypeMap[type]?.capabilities?.includes('autoscan') ?? false
-  }
-
-  /**
-   * Trigger sync for a single attached source. Dispatches by capability:
-   *   - autoscan plugins → POST /datasources/:id/scan with this topology
-   *     id → records a `topology_observations` row → server cache is
-   *     invalidated → next /render re-runs resolve()
-   *   - other topology-capable plugins (e.g. NetBox) → existing
-   *     /topologies/:id/sync-from-source path (legacy, edits content_json)
-   */
-  async function handleSync(source: TopologyDataSource) {
-    syncingId = source.dataSourceId
-    try {
-      if (hasAutoscan(source.dataSource?.type)) {
-        const result = await api.dataSources.scan(source.dataSourceId, {
-          topologyId: topology.id,
-        })
-        const counts = result.snapshot.graph ?? { nodes: [], links: [] }
-        let portCount = 0
-        for (const n of counts.nodes ?? []) {
-          portCount += n.ports?.length ?? 0
-        }
-        lastSyncResult = {
-          ...lastSyncResult,
-          [source.dataSourceId]: {
-            status: result.snapshot.status,
-            nodeCount: counts.nodes?.length ?? 0,
-            linkCount: counts.links?.length ?? 0,
-            portCount,
-            message: result.snapshot.statusMessage,
-            at: Date.now(),
-          },
-        }
-      } else {
-        const result = await api.topologies.syncFromSource(topology.id)
-        lastSyncResult = {
-          ...lastSyncResult,
-          [source.dataSourceId]: {
-            status: 'ok',
-            nodeCount: result.nodeCount,
-            linkCount: result.linkCount,
-            portCount: 0,
-            at: Date.now(),
-          },
-        }
-      }
-      // Pull the refreshed topology so the diagram re-renders through the
-      // observation-resolver path.
-      const updated = await api.topologies.get(topology.id)
-      if (onUpdated) onUpdated(updated)
-    } catch (e) {
-      lastSyncResult = {
-        ...lastSyncResult,
-        [source.dataSourceId]: {
-          status: 'failed',
-          nodeCount: 0,
-          linkCount: 0,
-          portCount: 0,
-          message: e instanceof Error ? e.message : 'Sync failed',
-          at: Date.now(),
-        },
-      }
-    } finally {
-      syncingId = null
-    }
-  }
-
-  function formatAgo(ts: number): string {
-    const diff = Date.now() - ts
-    if (diff < 60_000) return 'just now'
-    if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
-    return new Date(ts).toLocaleString()
-  }
 
   async function handleDelete() {
     if (!confirm(`Delete topology "${topology.name}"? This action cannot be undone.`)) {
@@ -272,73 +175,10 @@
     <hr class="border-theme-border">
   {/if}
 
-  <!-- Sync — only meaningful when at least one topology source is attached -->
-  {#if topologySources.length > 0}
-    <div class="space-y-3">
-      <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">
-        Sync sources
-      </h3>
-      <p class="text-xs text-theme-text-muted">
-        Trigger an immediate fetch from each topology source. Results land as observation snapshots
-        and the diagram re-renders through the resolver.
-      </p>
-      <div class="space-y-2">
-        {#each topologySources as src (src.id)}
-          <div class="rounded-lg border border-theme-border p-3">
-            <div class="flex items-center justify-between gap-2">
-              <div class="min-w-0">
-                <p class="text-sm text-theme-text-emphasis truncate">
-                  {src.dataSource?.name ?? src.dataSourceId}
-                </p>
-                <p class="text-xs font-mono text-theme-text-muted">
-                  {src.dataSource?.type ?? '—'}
-                  {hasAutoscan(src.dataSource?.type) ? '· autoscan' : '· fetch'}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={() => handleSync(src)}
-                disabled={syncingId === src.dataSourceId}
-              >
-                {syncingId === src.dataSourceId ? 'Syncing…' : 'Sync now'}
-              </Button>
-            </div>
-            {#if lastSyncResult[src.dataSourceId]}
-              {@const r = lastSyncResult[src.dataSourceId]}
-              {#if r}
-                <p class="mt-2 text-xs">
-                  {#if r.status === 'ok'}
-                    <span class="text-theme-text-muted">
-                      ✓ {r.nodeCount} nodes / {r.linkCount} links
-                      {#if r.portCount > 0}
-                        / {r.portCount} ports
-                      {/if}
-                      · {formatAgo(r.at)}
-                    </span>
-                  {:else if r.status === 'partial'}
-                    <span class="text-amber-500" title={r.message}>
-                      ⚠ partial: {r.nodeCount} nodes / {r.linkCount} links · {formatAgo(r.at)}
-                    </span>
-                  {:else if r.status === 'empty'}
-                    <span class="text-theme-text-muted"
-                      >no devices observed · {formatAgo(r.at)}</span
-                    >
-                  {:else}
-                    <span class="text-red-500" title={r.message}>✗ {r.message ?? 'failed'}</span>
-                  {/if}
-                </p>
-              {/if}
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </div>
-
-    <hr class="border-theme-border">
-  {/if}
-
-  <!-- Data Sources -->
+  <!-- Data Sources — summary + link to the full Settings page. The
+       actual "go grab data" (Sync all / per-source sync) lives in the
+       Discovery tab there. Keeping this drawer thin avoids the
+       2-places-for-the-same-thing problem PR #310/#311 created. -->
   <div class="space-y-3">
     <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">Data Sources</h3>
     <div class="space-y-3">
@@ -380,14 +220,23 @@
         </div>
       </div>
 
-      <!-- Configure button -->
-      <a
-        href="/topologies/{topology.id}/settings#sources"
-        class="btn btn-secondary w-full justify-center"
-      >
-        <DatabaseIcon size={16} class="mr-2" />
-        Configure Data Sources
-      </a>
+      <!-- Configure + Sync links — both go to the full Settings page; the
+           Discovery tab is where "Sync now" lives. -->
+      <div class="grid grid-cols-2 gap-2">
+        <a
+          href="/topologies/{topology.id}/settings#sources"
+          class="btn btn-secondary justify-center"
+        >
+          <DatabaseIcon size={16} class="mr-2" />
+          Configure
+        </a>
+        <a
+          href="/topologies/{topology.id}/settings#discovery"
+          class="btn btn-secondary justify-center"
+        >
+          Discovery →
+        </a>
+      </div>
     </div>
   </div>
 
@@ -557,10 +406,15 @@
   <div class="space-y-3">
     <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">Actions</h3>
     <div class="space-y-2">
-      <a href="/topologies/{topology.id}/edit" class="btn btn-secondary w-full justify-center">
-        <PencilSimpleIcon size={16} class="mr-2" />
-        Edit YAML
-      </a>
+      {#if topology.manualSourceId}
+        <a
+          href="/datasources/{topology.manualSourceId}"
+          class="btn btn-secondary w-full justify-center"
+        >
+          <PencilSimpleIcon size={16} class="mr-2" />
+          Edit Manual content
+        </a>
+      {/if}
     </div>
   </div>
 

@@ -83,13 +83,19 @@ webhooksApi.post('/topology/:secret', async (c) => {
       return c.json({ error: 'Data source does not support topology' }, 400)
     }
 
-    // Update topology content
-    const contentJson = JSON.stringify(graph)
-    const updated = await getTopologyService().update(source.topologyId, { contentJson })
-    if (!updated) {
-      console.log('[Webhook] Failed to update topology')
-      return c.json({ error: 'Failed to update topology' }, 500)
-    }
+    // Record the fetched graph as a new observation against the
+    // *source* itself (NetBox / Zabbix / etc), not against the
+    // topology shell. Resolver re-folds on next read.
+    const { ObservationsService } = await import('../services/observations.js')
+    const observations = new ObservationsService()
+    await observations.record({
+      topologyId: source.topologyId,
+      sourceId: source.dataSourceId,
+      capturedAt: Date.now(),
+      status: graph.nodes && graph.nodes.length > 0 ? 'ok' : 'empty',
+      graph,
+    })
+    getTopologyService().clearCacheEntry(source.topologyId)
 
     // Update last synced timestamp
     getTopologySourcesService().updateLastSynced(source.id)

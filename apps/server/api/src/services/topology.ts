@@ -1,9 +1,18 @@
 /**
  * Topology Service
- * Manages network topologies with database persistence
+ * Manages network topologies with database persistence.
  *
- * Storage format: contentJson stores NetworkGraph JSON directly
- * YAML parsing happens only at import time
+ * Storage model (post-migration-010): the `topologies` table holds
+ * only the topology shell (name, mapping, share_token, etc). All graph
+ * content — including human-authored content from the editor — lives
+ * in `topology_observations`, indexed by source.
+ *
+ * The editor 's "save" routes through this service 's `create()` /
+ * `update()` `contentJson` input. Internally that translates to:
+ * find-or-create a Manual data source attached to this topology, then
+ * record a fresh observation against it. The `Topology.contentJson`
+ * field returned by `get()` is a virtual view of that latest Manual
+ * observation — there is no `content_json` column.
  */
 
 import type { Database } from 'bun:sqlite'
@@ -26,11 +35,12 @@ import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
 import { ObservationsService } from './observations.js'
+import { TopologySourcesService } from './topology-sources.js'
 
+/** Bare topology row — no content_json column post-migration-010. */
 interface TopologyRow {
   id: string
   name: string
-  content_json: string
   topology_source_id: string | null
   metrics_source_id: string | null
   mapping_json: string | null
@@ -43,7 +53,7 @@ function rowToTopology(row: TopologyRow): Topology {
   return {
     id: row.id,
     name: row.name,
-    contentJson: row.content_json,
+    // contentJson + manualSourceId populated by withManual() at the call site
     topologySourceId: row.topology_source_id ?? undefined,
     metricsSourceId: row.metrics_source_id ?? undefined,
     mappingJson: row.mapping_json ?? undefined,
@@ -116,76 +126,152 @@ export class TopologyService {
   private cache: Map<string, ParsedTopology> = new Map()
   private renderCache: Map<string, object> = new Map()
   private errorCache: Map<string, TopologyParseError> = new Map()
+  private observations: ObservationsService
+  private topologySources: TopologySourcesService
 
   constructor() {
     this.db = getDatabase()
+    this.observations = new ObservationsService()
+    this.topologySources = new TopologySourcesService()
   }
 
   /**
-   * Get all topologies from the database
+   * Attach `manualSourceId` to a bare Topology row. Public API
+   * intentionally does NOT carry the Manual snapshot here — the
+   * editor / settings UI reads it through
+   * `GET /api/topologies/:id/sources/:sid/latest-snapshot` instead.
+   * Mixing snapshot content into the Topology shell was structurally
+   * confusing (Topology.contentJson read like "project JSON" when it
+   * was really one source 's input).
+   */
+  private hydrateManualId(topology: Topology): Topology {
+    const manualId = this.findManualSourceId(topology.id)
+    if (!manualId) return topology
+    return { ...topology, manualSourceId: manualId }
+  }
+
+  /**
+   * Find the Manual data source id attached to a topology, if any.
+   * Returns the *data source* id (PK of `data_sources`), not the
+   * junction row id.
+   */
+  private findManualSourceId(topologyId: string): string | undefined {
+    const row = this.db
+      .query(
+        `SELECT ds.id AS id
+         FROM topology_data_sources tds
+         JOIN data_sources ds ON ds.id = tds.data_source_id
+         WHERE tds.topology_id = ? AND ds.type = 'manual'
+         LIMIT 1`,
+      )
+      .get(topologyId) as { id: string } | undefined
+    return row?.id
+  }
+
+  /**
+   * Create-and-attach a new Manual data source to a topology, plus
+   * record an empty initial observation so the editor opens on a
+   * blank canvas rather than 404 / null.
+   *
+   * Public — invoked by the `POST /api/topologies/:id/sources` endpoint
+   * when the body is `{ type: 'manual' }`. Caller should 409 if a
+   * Manual is already attached (we don 't double-check here so the
+   * endpoint can craft a clearer message).
+   */
+  async attachManualSource(
+    topologyId: string,
+    purpose: 'topology' | 'metrics' = 'topology',
+  ): Promise<{ dataSourceId: string }> {
+    const now = timestamp()
+    const dsId = await generateId()
+    // Seed config_json with an empty graph so the editor opens on a
+    // blank canvas. Manual content lives here, not in observations
+    // (see migration 011).
+    const emptyConfig = JSON.stringify({
+      graph: { version: '1', nodes: [], links: [] },
+    })
+    this.db
+      .prepare(
+        `INSERT INTO data_sources (id, name, type, config_json, status, fail_count, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(dsId, 'Manual', 'manual', emptyConfig, 'connected', 0, now, now)
+    await this.topologySources.add(topologyId, {
+      dataSourceId: dsId,
+      purpose,
+      syncMode: 'manual',
+    })
+    this.cache.delete(topologyId)
+    return { dataSourceId: dsId }
+  }
+
+  /**
+   * Get all topologies from the database. Hydrates `manualSourceId`
+   * via a single JOIN so list-page links can point straight at the
+   * Manual source 's detail page.
    */
   list(): Topology[] {
-    const rows = this.db.query('SELECT * FROM topologies ORDER BY name ASC').all() as TopologyRow[]
-    return rows.map(rowToTopology)
+    const rows = this.db
+      .query(
+        `SELECT t.*, ds.id AS manual_source_id
+         FROM topologies t
+         LEFT JOIN topology_data_sources tds ON tds.topology_id = t.id
+         LEFT JOIN data_sources ds ON ds.id = tds.data_source_id AND ds.type = 'manual'
+         GROUP BY t.id
+         ORDER BY t.name ASC`,
+      )
+      .all() as (TopologyRow & { manual_source_id: string | null })[]
+    return rows.map((row) => {
+      const base = rowToTopology(row)
+      if (row.manual_source_id) base.manualSourceId = row.manual_source_id
+      return base
+    })
   }
 
   /**
-   * Get a single topology by ID
+   * Get a single topology by ID, with contentJson hydrated from the
+   * latest Manual observation.
    */
   get(id: string): Topology | null {
     const row = this.db.query('SELECT * FROM topologies WHERE id = ?').get(id) as
       | TopologyRow
       | undefined
-    return row ? rowToTopology(row) : null
+    return row ? this.hydrateManualId(rowToTopology(row)) : null
   }
 
   /**
-   * Get a topology by name
+   * Get a topology by name.
    */
   getByName(name: string): Topology | null {
     const row = this.db.query('SELECT * FROM topologies WHERE name = ?').get(name) as
       | TopologyRow
       | undefined
-    return row ? rowToTopology(row) : null
+    return row ? this.hydrateManualId(rowToTopology(row)) : null
   }
 
   /**
-   * Create a new topology
-   * contentJson should be NetworkGraph JSON
+   * Create a new topology shell. No sources, no content. Callers attach
+   * Manual / NetBox / SNMP via `POST /topologies/:id/sources` afterwards.
+   * Keeping create() to the topology shell only mirrors the structure:
+   * Topology owns name + mapping + share state; sources own graph content.
    */
   async create({
     name,
-    contentJson,
     topologySourceId,
     metricsSourceId,
     mappingJson,
   }: TopologyInput): Promise<Topology> {
-    // Validate content by parsing it
-    this.parseContent(contentJson)
-
     const id = await generateId()
     const now = timestamp()
 
-    const topology: Topology = {
-      id,
-      name,
-      contentJson,
-      topologySourceId,
-      metricsSourceId,
-      mappingJson,
-      createdAt: now,
-      updatedAt: now,
-    }
-
     this.db
       .prepare(
-        `INSERT INTO topologies (id, name, content_json, topology_source_id, metrics_source_id, mapping_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO topologies (id, name, topology_source_id, metrics_source_id, mapping_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         name,
-        contentJson,
         topologySourceId || null,
         metricsSourceId || null,
         mappingJson || null,
@@ -193,25 +279,24 @@ export class TopologyService {
         now,
       )
 
-    // Clear cache to force re-parse
     this.cache.delete(id)
     this.renderCache.delete(id)
 
-    return topology
+    const created = this.get(id)
+    if (!created) throw new Error('Topology disappeared immediately after creation')
+    return created
   }
 
   /**
-   * Update an existing topology
+   * Update a topology 's shell fields (name / mapping / source pointers).
+   * Graph content is NOT updatable through this endpoint — it lives in
+   * source observations and changes via
+   * `POST /topologies/:id/sources/:sid/observation`.
    */
   async update(id: string, input: Partial<TopologyInput>): Promise<Topology | null> {
     const existing = this.get(id)
     if (!existing) {
       return null
-    }
-
-    // If content is being updated, validate it
-    if (input.contentJson !== undefined) {
-      this.parseContent(input.contentJson)
     }
 
     const updates: string[] = []
@@ -220,10 +305,6 @@ export class TopologyService {
     if (input.name !== undefined) {
       updates.push('name = ?')
       values.push(input.name)
-    }
-    if (input.contentJson !== undefined) {
-      updates.push('content_json = ?')
-      values.push(input.contentJson)
     }
     if (input.topologySourceId !== undefined) {
       updates.push('topology_source_id = ?')
@@ -238,17 +319,13 @@ export class TopologyService {
       values.push(input.mappingJson || null)
     }
 
-    if (updates.length === 0) {
-      return existing
+    if (updates.length > 0) {
+      updates.push('updated_at = ?')
+      values.push(timestamp())
+      values.push(id)
+      this.db.query(`UPDATE topologies SET ${updates.join(', ')} WHERE id = ?`).run(...values)
     }
 
-    updates.push('updated_at = ?')
-    values.push(timestamp())
-    values.push(id)
-
-    this.db.query(`UPDATE topologies SET ${updates.join(', ')} WHERE id = ?`).run(...values)
-
-    // Clear cache to force re-parse
     this.cache.delete(id)
     this.renderCache.delete(id)
 
@@ -382,27 +459,40 @@ export class TopologyService {
   /**
    * Parse a topology and generate layout.
    *
-   * Crucially, this is also where the **observation resolver** runs. The
-   * authored layer (`content_json`) is folded with every source's latest
-   * snapshot (`topology_observations`) so that everything downstream —
-   * /render, /graph, layout, metrics binding — sees the same resolved
-   * NetworkGraph. Discovered-only nodes show up in the diagram, conflict
-   * state is carried on `provenance`, etc.
+   * The observation resolver runs here. Two pools feed it:
+   *   - The Manual source 's graph (read from `data_sources.config_json.graph`
+   *     — it 's stored on the source, not in observations; see
+   *     migration 011). Fills the `authored` slot.
+   *   - Every other attached source 's latest observation snapshot.
+   *     Goes into the `snapshots` array.
+   *
+   * When no Manual is attached, `authored` is an empty graph — the
+   * diagram is whatever the other sources produced.
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
-    const authored = this.parseContent(topology.contentJson)
-
-    // Fold in latest observations per attached source. resolve() handles
-    // the empty-snapshot case (returns authored unchanged but with
-    // provenance.source='authored' stamped).
-    const observations = new ObservationsService()
-    const latest = observations.latestPerSource(topology.id)
-    const snapshots: SnapshotEntry[] = latest.map((o) => ({
-      sourceId: o.sourceId,
-      capturedAt: o.capturedAt,
-      status: o.status,
-      graph: o.graph,
-    }))
+    const latest = this.observations.latestPerSource(topology.id)
+    const manualId = topology.manualSourceId
+    const authored: NetworkGraph = manualId
+      ? (this.readManualGraph(manualId) ?? {
+          version: '1',
+          name: topology.name,
+          nodes: [],
+          links: [],
+        })
+      : {
+          version: '1',
+          name: topology.name,
+          nodes: [],
+          links: [],
+        }
+    const snapshots: SnapshotEntry[] = latest
+      .filter((o) => o.sourceId !== manualId)
+      .map((o) => ({
+        sourceId: o.sourceId,
+        capturedAt: o.capturedAt,
+        status: o.status,
+        graph: o.graph,
+      }))
     const graph = resolveObservations(authored, snapshots)
 
     // Resolve icon dimensions for URL icons (used by renderer for
@@ -443,22 +533,26 @@ export class TopologyService {
     }
   }
 
+  // parseContent() was removed when content_json stopped flowing
+  // through the topology row — observation payloads are now validated
+  // at the API boundary (api/observations.ts) and at resolve() time.
+
   /**
-   * Parse content JSON to NetworkGraph
-   * contentJson is NetworkGraph JSON directly
+   * Read the graph stored on a Manual data source 's config_json.
+   * Returns null when the source doesn 't exist, isn 't Manual, or has
+   * no graph (e.g. freshly attached then config cleared by hand).
    */
-  private parseContent(contentJson: string): NetworkGraph {
-    const graph = JSON.parse(contentJson) as NetworkGraph
-
-    // Basic validation
-    if (!graph.nodes || !Array.isArray(graph.nodes)) {
-      throw new Error('Invalid NetworkGraph: nodes array is required')
+  private readManualGraph(sourceId: string): NetworkGraph | null {
+    const row = this.db
+      .query('SELECT type, config_json FROM data_sources WHERE id = ?')
+      .get(sourceId) as { type: string; config_json: string } | undefined
+    if (!row || row.type !== 'manual') return null
+    try {
+      const config = JSON.parse(row.config_json) as { graph?: NetworkGraph }
+      return config.graph ?? null
+    } catch {
+      return null
     }
-    if (!graph.links || !Array.isArray(graph.links)) {
-      throw new Error('Invalid NetworkGraph: links array is required')
-    }
-
-    return graph
   }
 
   /**
@@ -583,22 +677,22 @@ export class TopologyService {
     // Parse YAML to NetworkGraph
     const graph = await parseYamlToNetworkGraph(mainContent, fileMap)
 
-    // Store as JSON
-    const contentJson = JSON.stringify(graph)
-
-    // Insert
-    const id = await generateId()
-    const now = timestamp()
-
-    this.db
-      .prepare(
-        `INSERT INTO topologies (id, name, content_json, topology_source_id, metrics_source_id, mapping_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(id, 'Sample Network', contentJson, null, null, null, now, now)
+    // Three-step seed mirroring the user 's flow: create topology shell,
+    // attach a Manual source, then record the parsed graph as that
+    // source 's first observation.
+    const created = await this.create({ name: 'Sample Network' })
+    const { dataSourceId } = await this.attachManualSource(created.id)
+    await this.observations.record({
+      topologyId: created.id,
+      sourceId: dataSourceId,
+      capturedAt: timestamp(),
+      status: 'ok',
+      graph,
+    })
 
     console.log(
       '[TopologyService] Sample network created:',
+      created.id,
       graph.nodes.length,
       'nodes,',
       graph.links.length,

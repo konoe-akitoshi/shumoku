@@ -71,10 +71,27 @@ export interface DataSourceInput {
   configJson: string
 }
 
+/**
+ * Topology = the shell. Owns name, mapping, share token, source
+ * pointers — NOT graph content. Each source attached to a topology
+ * carries its own observation snapshots in `topology_observations`,
+ * and the displayed graph is computed by `resolve()` over those at
+ * read time.
+ *
+ * No `contentJson` field on purpose: that name conflated "the
+ * Manual source 's input" with "the project 's current graph". The
+ * Manual snapshot is read via
+ *   GET  /api/topologies/:tid/sources/:sid/latest-snapshot
+ * and written via
+ *   POST /api/topologies/:tid/sources/:sid/observation
+ * The resolved project graph has its own endpoint:
+ *   GET  /api/topologies/:tid/resolved
+ */
 export interface Topology {
   id: string
   name: string
-  contentJson: string // Multi-file JSON: {"files": [{name, content}, ...]}
+  /** Id of the Manual source attached to this topology, if any. */
+  manualSourceId?: string
   topologySourceId?: string // Data source for structure (e.g., NetBox)
   metricsSourceId?: string // Data source for metrics (e.g., Zabbix)
   mappingJson?: string
@@ -85,7 +102,6 @@ export interface Topology {
 
 export interface TopologyInput {
   name: string
-  contentJson: string // Multi-file JSON: {"files": [{name, content}, ...]}
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string

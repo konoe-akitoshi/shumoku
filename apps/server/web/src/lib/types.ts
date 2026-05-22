@@ -78,12 +78,19 @@ export interface DataSourceInput {
   configJson: string
 }
 
+/**
+ * Topology shell — name, mapping, share state, source pointers.
+ * Graph content lives in source observations, not here. Read the
+ * Manual snapshot via api.topologies.sources.latestSnapshot(...),
+ * write a new one via api.topologies.sources.recordObservation(...).
+ * The resolved project graph: api.topologies.getResolved(...).
+ */
 export interface Topology {
   id: string
   name: string
-  contentJson: string // Multi-file JSON: {"files": [{name, content}, ...]}
-  topologySourceId?: string // Data source for structure (e.g., NetBox)
-  metricsSourceId?: string // Data source for metrics (e.g., Zabbix)
+  manualSourceId?: string
+  topologySourceId?: string
+  metricsSourceId?: string
   mappingJson?: string
   shareToken?: string
   createdAt: number
@@ -92,7 +99,6 @@ export interface Topology {
 
 export interface TopologyInput {
   name: string
-  contentJson: string // Multi-file JSON: {"files": [{name, content}, ...]}
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string

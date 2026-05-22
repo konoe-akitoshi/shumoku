@@ -3,20 +3,16 @@
  * CRUD endpoints for topology management
  */
 
-import {
-  buildHierarchicalSheets,
-  mergeWithOverlays,
-  type NetworkGraph,
-  type OverlayConfig,
-  specDeviceType,
-} from '@shumoku/core'
+import { buildHierarchicalSheets, type NetworkGraph, specDeviceType } from '@shumoku/core'
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
 import { getLayoutEngine } from '../layout.js'
+import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
+import { ObservationsService } from '../services/observations.js'
 import { TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
-import type { MetricsMapping, TopologyInput, TopologySourceMergeConfig } from '../types.js'
+import type { MetricsMapping, TopologyInput } from '../types.js'
 
 /**
  * Overlay per-link bandwidth from the metrics mapping onto the graph.
@@ -326,9 +322,12 @@ export function createTopologiesApi(): Hono {
   app.post('/', async (c) => {
     try {
       const body = (await c.req.json()) as TopologyInput
-      if (!body.name || !body.contentJson) {
-        return c.json({ error: 'name and contentJson are required' }, 400)
+      if (!body.name) {
+        return c.json({ error: 'name is required' }, 400)
       }
+      // contentJson is optional — when present, create() attaches a
+      // Manual source and records the first observation. See
+      // TopologyService.create().
 
       const topology = await service.create(body)
       return c.json(topology, 201)
@@ -420,195 +419,133 @@ export function createTopologiesApi(): Hono {
     }
   })
 
-  // Sync topology from its topology source(s) (e.g., NetBox, OCX)
-  // Supports multiple topology sources - fetches from all and merges
+  /**
+   * Sync ALL topology-purpose sources for this topology.
+   *
+   * Observation-model dispatch: each source is invoked via its capability
+   * (autoscan plugins → `scan()`, others → `fetchTopology()`). Every
+   * result is recorded as a row in `topology_observations` — we no
+   * longer overwrite `topology.content_json` (that 's the authored
+   * layer, owned by the editor). The diagram surfaces the new snapshots
+   * by re-running `resolve()` on the next render call.
+   *
+   * The legacy "merge multiple source graphs into content_json" path is
+   * gone: with observations, multi-source merging happens at read time
+   * inside `resolve()` rather than at sync time.
+   */
   app.post('/:id/sync-from-source', async (c) => {
     const id = c.req.param('id')
     try {
-      console.log('[sync-from-source] Starting sync for topology:', id)
-
       const topology = service.get(id)
       if (!topology) {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Get all topology sources for this topology
-      const topologySources = getTopologySourcesService().listByPurpose(id, 'topology')
-
-      if (topologySources.length === 0 && !topology.topologySourceId) {
-        return c.json({ error: 'No topology source configured' }, 400)
+      const sourcesToSync = getTopologySourcesService().listByPurpose(id, 'topology')
+      if (sourcesToSync.length === 0) {
+        return c.json({ error: 'No topology sources attached' }, 400)
       }
 
-      // Build list of sources to fetch from
-      // Prefer topology_data_sources table, fall back to legacy topologySourceId
-      const sourcesToFetch =
-        topologySources.length > 0
-          ? topologySources
-          : (() => {
-              if (!topology.topologySourceId) throw new Error('topologySourceId is undefined')
-              return [{ dataSourceId: topology.topologySourceId, optionsJson: undefined }]
-            })()
-
       console.log(
-        '[sync-from-source] Fetching from',
-        sourcesToFetch.length,
-        'source(s):',
-        sourcesToFetch.map((s) => s.dataSourceId).join(', '),
+        `[sync-from-source] ${id}: syncing ${sourcesToSync.length} source(s):`,
+        sourcesToSync.map((s) => s.dataSourceId).join(', '),
       )
 
-      // Fetch topology from each source in parallel
-      const fetchResults = await Promise.allSettled(
-        sourcesToFetch.map(async (source) => {
-          const graph = await dataSourceService.fetchTopologyWithOptionsJson(
-            source.dataSourceId,
-            source.optionsJson,
-          )
-          if (!graph) {
-            throw new Error(`Failed to fetch topology from source ${source.dataSourceId}`)
+      const observationsService = new ObservationsService()
+      const perSourceResults: Array<{
+        sourceId: string
+        status: 'ok' | 'partial' | 'failed' | 'empty'
+        nodeCount: number
+        linkCount: number
+        message?: string
+      }> = []
+      let totalNodes = 0
+      let totalLinks = 0
+
+      // Drive every source in parallel — slow netbox shouldn 't block fast snmp.
+      const settled = await Promise.allSettled(
+        sourcesToSync.map(async (source) => {
+          const plugin = dataSourceService.getPlugin(source.dataSourceId)
+          if (!plugin) {
+            throw new Error('Data source not found / plugin failed to load')
           }
-          return { sourceId: source.dataSourceId, graph }
+          const capturedAt = Date.now()
+          let graph: NetworkGraph | null = null
+          let status: 'ok' | 'partial' | 'failed' | 'empty' = 'ok'
+          let statusMessage: string | undefined
+
+          if (hasAutoscanCapability(plugin)) {
+            // SNMP-LLDP and other autoscan plugins return a Snapshot directly.
+            const snapshot = await plugin.scan({ seeds: [] })
+            graph = snapshot.graph
+            status = snapshot.status
+            statusMessage = snapshot.statusMessage
+          } else if (hasTopologyCapability(plugin)) {
+            // NetBox / Zabbix-topology / etc. — wrap fetchTopology in a snapshot.
+            const opts = source.optionsJson ? JSON.parse(source.optionsJson) : undefined
+            graph = await plugin.fetchTopology(opts)
+            status = graph && graph.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+          } else {
+            throw new Error(
+              `Plugin ${plugin.type} cannot supply topology (no autoscan or topology capability)`,
+            )
+          }
+
+          await observationsService.record({
+            topologyId: id,
+            sourceId: source.dataSourceId,
+            capturedAt,
+            status,
+            statusMessage,
+            graph,
+          })
+          observationsService.updateHysteresis(
+            id,
+            source.dataSourceId,
+            status === 'failed' ? 'failed' : 'ok',
+            capturedAt,
+          )
+
+          return {
+            sourceId: source.dataSourceId,
+            status,
+            nodeCount: graph?.nodes?.length ?? 0,
+            linkCount: graph?.links?.length ?? 0,
+            message: statusMessage,
+          }
         }),
       )
 
-      // Collect successful fetches
-      const successfulFetches: Array<{
-        sourceId: string
-        graph: import('@shumoku/core').NetworkGraph
-      }> = []
-      const failedSources: Array<{ sourceId: string; error: string }> = []
-
-      for (const result of fetchResults) {
-        if (result.status === 'fulfilled') {
-          successfulFetches.push(result.value)
-          console.log(
-            `[sync-from-source] Got graph from ${result.value.sourceId}:`,
-            result.value.graph.nodes.length,
-            'nodes,',
-            result.value.graph.links.length,
-            'links',
-          )
+      for (const r of settled) {
+        if (r.status === 'fulfilled') {
+          perSourceResults.push(r.value)
+          totalNodes += r.value.nodeCount
+          totalLinks += r.value.linkCount
         } else {
-          const error =
-            result.reason instanceof Error ? result.reason.message : String(result.reason)
-          failedSources.push({ sourceId: 'unknown', error })
-          console.error('[sync-from-source] Failed to fetch from source:', error)
-        }
-      }
-
-      if (successfulFetches.length === 0 || !successfulFetches[0]) {
-        return c.json(
-          {
-            error: 'Failed to fetch topology from any source',
-            failedSources,
-          },
-          500,
-        )
-      }
-
-      // Merge graphs if multiple sources
-      let finalGraph: import('@shumoku/core').NetworkGraph
-      let mergeInfo: { skippedNodes: number; skippedLinks: number } | undefined
-
-      if (successfulFetches.length === 1) {
-        finalGraph = successfulFetches[0].graph
-      } else {
-        console.log('[sync-from-source] Merging', successfulFetches.length, 'graphs')
-
-        // Check if we have configurable merge settings
-        const sourceConfigs = new Map<string, TopologySourceMergeConfig>()
-        for (const source of sourcesToFetch) {
-          if (source.optionsJson) {
-            try {
-              const opts = JSON.parse(source.optionsJson) as TopologySourceMergeConfig
-              sourceConfigs.set(source.dataSourceId, opts)
-            } catch {
-              // Ignore parse errors
-            }
-          }
-        }
-
-        // Find base source (first one marked as isBase, or first source)
-        const baseSourceId =
-          Array.from(sourceConfigs.entries()).find(([, cfg]) => cfg.isBase)?.[0] ??
-          successfulFetches[0].sourceId
-        const baseIndex = successfulFetches.findIndex((f) => f.sourceId === baseSourceId)
-
-        // Build overlay configurations
-        const overlayConfigs: OverlayConfig[] = []
-        for (const fetch of successfulFetches) {
-          if (fetch.sourceId === baseSourceId) continue
-
-          const cfg = sourceConfigs.get(fetch.sourceId)
-          overlayConfigs.push({
-            sourceId: fetch.sourceId,
-            match: cfg?.match ?? 'name', // Default to name matching
-            matchAttribute: cfg?.matchAttribute,
-            idMapping: cfg?.idMapping,
-            onMatch: cfg?.onMatch ?? 'merge-properties',
-            onUnmatched: cfg?.onUnmatched ?? 'add-to-subgraph',
-            subgraphName: cfg?.subgraphName,
+          const message = r.reason instanceof Error ? r.reason.message : String(r.reason)
+          perSourceResults.push({
+            sourceId: 'unknown',
+            status: 'failed',
+            nodeCount: 0,
+            linkCount: 0,
+            message,
           })
-        }
-
-        console.log('[sync-from-source] Base source:', baseSourceId)
-        console.log(
-          '[sync-from-source] Overlay configs:',
-          overlayConfigs.map((o) => `${o.sourceId}(${o.match})`).join(', '),
-        )
-
-        // Use configurable merge
-        const mergeResult = mergeWithOverlays(
-          successfulFetches.map((r) => ({ graph: r.graph, sourceId: r.sourceId })),
-          { baseIndex, overlays: overlayConfigs },
-        )
-
-        finalGraph = mergeResult.graph
-        mergeInfo = {
-          skippedNodes: mergeResult.skippedNodes.length,
-          skippedLinks: mergeResult.skippedLinks.length,
-        }
-
-        console.log('[sync-from-source] Merge result by source:')
-        for (const [sourceId, count] of mergeResult.nodeCountBySource) {
-          console.log(`  ${sourceId}: ${count} nodes`)
-        }
-
-        if (mergeResult.skippedNodes.length > 0) {
-          console.log(
-            '[sync-from-source] Merge skipped',
-            mergeResult.skippedNodes.length,
-            'nodes:',
-            mergeResult.skippedNodes
-              .slice(0, 5)
-              .map((n) => n.nodeId)
-              .join(', '),
-          )
+          console.error('[sync-from-source] source failed:', message)
         }
       }
 
-      console.log(
-        '[sync-from-source] Final graph:',
-        finalGraph.nodes.length,
-        'nodes,',
-        finalGraph.links.length,
-        'links',
-      )
-
-      // Update the topology content
-      const updated = await service.update(id, {
-        contentJson: JSON.stringify(finalGraph),
-      })
-
-      console.log('[sync-from-source] Topology updated successfully')
+      // Invalidate parsed-topology cache so the next /render / /graph
+      // call re-runs resolve() across the newly-recorded observations.
+      service.clearCacheEntry(id)
 
       return c.json({
         success: true,
-        topology: updated,
-        nodeCount: finalGraph.nodes.length,
-        linkCount: finalGraph.links.length,
-        sourcesCount: successfulFetches.length,
-        failedSources: failedSources.length > 0 ? failedSources : undefined,
-        mergeInfo,
+        topology,
+        // Legacy keys preserved for any caller that reads them.
+        nodeCount: totalNodes,
+        linkCount: totalLinks,
+        sourcesCount: perSourceResults.filter((r) => r.status !== 'failed').length,
+        results: perSourceResults,
       })
     } catch (err) {
       console.error('[sync-from-source] Error:', err)

@@ -40,7 +40,10 @@ export function createDataSourcesApi(): Hono {
   const app = new Hono()
   const service = new DataSourceService()
 
-  // Get available plugin types
+  // Get available plugin types for the +Add Source picker. Manual is
+  // included like any other source — the UI renders a name-only form
+  // for it (no URL/token), and topology attachment enforces the
+  // one-Manual-per-topology cardinality separately.
   app.get('/types', (c) => {
     const types = service.getRegisteredTypes()
     // Get loaded plugin info for configSchema
@@ -57,10 +60,13 @@ export function createDataSourcesApi(): Hono {
     return c.json(serializable)
   })
 
-  // List all data sources
+  // List all data sources. Manual rows are included like any other
+  // source — they show in the global list, can be attached to topologies,
+  // etc. Migration 010 may have created several "Manual" rows (one per
+  // existing topology) so the list can be noisy at first; users can
+  // rename them from each detail page.
   app.get('/', (c) => {
     const dataSources = service.list()
-    // Mask sensitive config values
     const sanitized = dataSources.map((ds) => ({
       ...ds,
       configJson: maskConfigSecrets(ds.configJson),
@@ -68,7 +74,8 @@ export function createDataSourcesApi(): Hono {
     return c.json(sanitized)
   })
 
-  // List data sources by capability
+  // List data sources by capability. Manual has no capabilities so it
+  // won 't appear in any specific-capability list naturally.
   app.get('/by-capability/:capability', (c) => {
     const capability = c.req.param('capability') as 'topology' | 'metrics' | 'alerts'
     if (capability !== 'topology' && capability !== 'metrics' && capability !== 'alerts') {
@@ -83,6 +90,27 @@ export function createDataSourcesApi(): Hono {
       configJson: maskConfigSecrets(ds.configJson),
     }))
     return c.json(sanitized)
+  })
+
+  // Topologies that this data source is currently attached to.
+  // Mainly used by the Manual datasource page to render "edit content
+  // in <topology>" links — the editor itself lives under
+  // /topologies/:topoId/sources/:sourceId/edit, so we need a way to
+  // discover the parent(s) from the source side.
+  app.get('/:id/topologies', (c) => {
+    const id = c.req.param('id')
+    if (!service.get(id)) return c.json({ error: 'Data source not found' }, 404)
+    const db = (service as unknown as { db: import('bun:sqlite').Database }).db
+    const rows = db
+      .query(
+        `SELECT t.id AS topology_id, t.name
+         FROM topology_data_sources tds
+         JOIN topologies t ON t.id = tds.topology_id
+         WHERE tds.data_source_id = ?
+         ORDER BY t.name ASC`,
+      )
+      .all(id) as { topology_id: string; name: string }[]
+    return c.json(rows.map((r) => ({ topologyId: r.topology_id, name: r.name })))
   })
 
   // Get single data source

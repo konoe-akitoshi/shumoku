@@ -2,6 +2,7 @@
   import { GearSixIcon, PlusIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
+  import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Input } from '$lib/components/ui/input'
@@ -34,10 +35,14 @@
     formError = ''
 
     try {
-      const contentJson = JSON.stringify({ name, nodes: [], links: [] })
-      const topology = await topologies.create({ name, contentJson })
+      // Two-step: create the topology shell, then attach a Manual
+      // source. Manual owns the graph content; the topology row
+      // just owns name / mapping / share state.
+      const topology = await topologies.create({ name })
+      const { dataSourceId } = await api.topologies.sources.attachManual(topology.id)
       showCreateModal = false
-      await goto(`/topologies/${topology.id}/edit`)
+      // Manual content lives on the source itself — edit on /datasources/<id>.
+      await goto(`/datasources/${dataSourceId}`)
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to create topology'
     } finally {
@@ -104,12 +109,14 @@
               >
                 View
               </a>
-              <a
-                href="/topologies/{topo.id}/edit"
-                class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
-              >
-                Edit
-              </a>
+              {#if topo.manualSourceId}
+                <a
+                  href="/datasources/{topo.manualSourceId}"
+                  class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
+                >
+                  Edit
+                </a>
+              {/if}
             </div>
           </div>
         </div>
