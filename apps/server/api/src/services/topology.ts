@@ -197,12 +197,27 @@ export class TopologyService {
   }
 
   /**
-   * Get all topologies from the database. Does NOT hydrate contentJson
-   * (would N+1) — list views show name / counts only.
+   * Get all topologies from the database. Hydrates `manualSourceId`
+   * via a single JOIN so list-page links can point straight at the
+   * Manual source 's detail page; does NOT hydrate `contentJson`
+   * (would N+1 against topology_observations).
    */
   list(): Topology[] {
-    const rows = this.db.query('SELECT * FROM topologies ORDER BY name ASC').all() as TopologyRow[]
-    return rows.map(rowToTopology)
+    const rows = this.db
+      .query(
+        `SELECT t.*, ds.id AS manual_source_id
+         FROM topologies t
+         LEFT JOIN topology_data_sources tds ON tds.topology_id = t.id
+         LEFT JOIN data_sources ds ON ds.id = tds.data_source_id AND ds.type = 'manual'
+         GROUP BY t.id
+         ORDER BY t.name ASC`,
+      )
+      .all() as (TopologyRow & { manual_source_id: string | null })[]
+    return rows.map((row) => {
+      const base = rowToTopology(row)
+      if (row.manual_source_id) base.manualSourceId = row.manual_source_id
+      return base
+    })
   }
 
   /**

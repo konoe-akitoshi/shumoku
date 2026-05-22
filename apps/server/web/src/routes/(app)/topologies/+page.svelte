@@ -34,10 +34,18 @@
     formError = ''
 
     try {
-      const contentJson = JSON.stringify({ name, nodes: [], links: [] })
+      // Create with an initial Manual graph — the server attaches a
+      // Manual source and records the first observation in one shot.
+      const contentJson = JSON.stringify({ version: '1', name, nodes: [], links: [] })
       const topology = await topologies.create({ name, contentJson })
       showCreateModal = false
-      await goto(`/topologies/${topology.id}/edit`)
+      // The freshly-created topology comes back with manualSourceId
+      // populated from the just-attached Manual source.
+      if (topology.manualSourceId) {
+        await goto(`/datasources/${topology.manualSourceId}?topology=${topology.id}`)
+      } else {
+        await goto(`/topologies/${topology.id}`)
+      }
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to create topology'
     } finally {
@@ -104,12 +112,22 @@
               >
                 View
               </a>
-              <a
-                href="/topologies/{topo.id}/edit"
-                class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
-              >
-                Edit
-              </a>
+              {#if topo.manualSourceId}
+                <a
+                  href="/datasources/{topo.manualSourceId}?topology={topo.id}"
+                  class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
+                >
+                  Edit
+                </a>
+              {:else}
+                <a
+                  href="/topologies/{topo.id}/settings"
+                  class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
+                  title="Add a Manual source from the Sources tab to edit content"
+                >
+                  Add Manual
+                </a>
+              {/if}
             </div>
           </div>
         </div>

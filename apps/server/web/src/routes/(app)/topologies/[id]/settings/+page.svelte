@@ -1184,13 +1184,19 @@
             <h2 class="font-medium text-theme-text-emphasis">Actions</h2>
           </div>
           <div class="card-body">
-            <a
-              href="/topologies/{topology.id}/edit"
-              class="btn btn-secondary w-full justify-center"
-            >
-              <PencilSimpleIcon size={16} class="mr-2" />
-              Edit YAML
-            </a>
+            {#if topology.manualSourceId}
+              <a
+                href="/datasources/{topology.manualSourceId}?topology={topology.id}"
+                class="btn btn-secondary w-full justify-center"
+              >
+                <PencilSimpleIcon size={16} class="mr-2" />
+                Edit Manual source
+              </a>
+            {:else}
+              <p class="text-xs text-theme-text-muted text-center">
+                Attach a Manual source from the Sources tab to edit content.
+              </p>
+            {/if}
           </div>
         </div>
 

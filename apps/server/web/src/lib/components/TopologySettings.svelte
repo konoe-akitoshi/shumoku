@@ -391,10 +391,19 @@
   <div class="space-y-3">
     <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">Actions</h3>
     <div class="space-y-2">
-      <a href="/topologies/{topology.id}/edit" class="btn btn-secondary w-full justify-center">
-        <PencilSimpleIcon size={16} class="mr-2" />
-        Edit YAML
-      </a>
+      {#if topology.manualSourceId}
+        <a
+          href="/datasources/{topology.manualSourceId}?topology={topology.id}"
+          class="btn btn-secondary w-full justify-center"
+        >
+          <PencilSimpleIcon size={16} class="mr-2" />
+          Edit Manual source
+        </a>
+      {:else}
+        <p class="text-xs text-theme-text-muted text-center px-2">
+          Attach a Manual source from the Sources tab to edit content.
+        </p>
+      {/if}
     </div>
   </div>
 
