@@ -4,6 +4,11 @@
 
 export { builtinEntries } from './builtin.js'
 export { Catalog } from './catalog.js'
+export {
+  ianaEnterpriseFromOid,
+  vendorFromIanaEnterpriseId,
+  vendorFromOid,
+} from './iana-enterprises.js'
 export { parseCatalogYaml, parseCatalogYamlMulti } from './loader.js'
 export {
   classReservationW,
@@ -15,6 +20,7 @@ export {
 export { type CatalogPortTemplate, expandCatalogPorts } from './ports.js'
 export type {
   CatalogEntry,
+  CatalogIdentifiers,
   ComputeCatalogEntry,
   ComputeProperties,
   HardwareCatalogEntry,

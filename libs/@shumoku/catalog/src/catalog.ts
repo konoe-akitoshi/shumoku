@@ -17,6 +17,15 @@ export class Catalog {
   private entries = new Map<string, CatalogEntry>()
   /** Reverse index: "vendor/model" → entry ID (for shorthand lookup) */
   private byVendorModel = new Map<string, string>()
+  /**
+   * Reverse index: `sysObjectID` → entry ID. Used by SNMP discovery
+   * to match a scanned device to its catalog family entry.
+   * Multiple entries can publish the same prefix — first wins; in
+   * practice OIDs uniquely identify a product family / specific model.
+   */
+  private bySysObjectId = new Map<string, string>()
+  /** Reverse index: vendor part number → entry ID. */
+  private byPartNumber = new Map<string, string>()
 
   /** Register a catalog entry. */
   register(entry: CatalogEntry): void {
@@ -29,6 +38,16 @@ export class Catalog {
         this.byVendorModel.set(`${spec.vendor}/${model}`, entry.id)
       }
     }
+    // Standard-identifier indexes. Skipped silently when absent so
+    // entries that only carry catalog-internal id (no protocol tag)
+    // still register cleanly. Arrays are flattened — the same catalog
+    // entry can sit behind several OIDs / SKUs.
+    for (const oid of entry.identifiers?.sysObjectIDs ?? []) {
+      this.bySysObjectId.set(oid, entry.id)
+    }
+    for (const pn of entry.identifiers?.partNumbers ?? []) {
+      this.byPartNumber.set(pn, entry.id)
+    }
   }
 
   /** Register multiple entries at once. */
@@ -36,6 +55,35 @@ export class Catalog {
     for (const entry of entries) {
       this.register(entry)
     }
+  }
+
+  /**
+   * Find a catalog entry by SNMP `sysObjectID`. Accepts either an
+   * exact match against the entry 's declared `identifiers.sysObjectID`
+   * or any longer descendant OID — some platforms publish a more
+   * specific OID at runtime than the family OID we record. Longer
+   * indexed OIDs win over shorter prefixes (so a per-model entry
+   * masks a family-level entry that shares the prefix).
+   */
+  findBySysObjectId(oid: string): CatalogEntry | undefined {
+    const normalized = oid.startsWith('.') ? oid.slice(1) : oid
+    // Walk indexed OIDs from longest to shortest so the most specific
+    // entry wins. Map iteration order is insertion-order; we sort
+    // explicitly to make the precedence rule independent of registration order.
+    const keys = [...this.bySysObjectId.keys()].sort((a, b) => b.length - a.length)
+    for (const indexed of keys) {
+      if (normalized === indexed || normalized.startsWith(`${indexed}.`)) {
+        const entryId = this.bySysObjectId.get(indexed)
+        if (entryId) return this.lookup(entryId)
+      }
+    }
+    return undefined
+  }
+
+  /** Find by vendor part number / SKU. */
+  findByPartNumber(partNumber: string): CatalogEntry | undefined {
+    const entryId = this.byPartNumber.get(partNumber)
+    return entryId ? this.lookup(entryId) : undefined
   }
 
   /** Look up by ID or vendor/model shorthand, resolving `extends` inheritance. */

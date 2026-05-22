@@ -4,5 +4,4 @@
 
 export * from './identity.js'
 export * from './resolve.js'
-export * from './sys-object-id.js'
 export * from './types.js'
