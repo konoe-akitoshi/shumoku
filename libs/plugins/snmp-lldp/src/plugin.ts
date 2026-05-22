@@ -170,8 +170,14 @@ export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
         sourceId,
         timeoutMs: this.config.timeoutMs,
       })
+      // Status decision uses `partialData` from discover rather than
+      // "is there any warning?". A warning is sometimes diagnostic
+      // commentary ("LLDP not enabled, used subnet inference") which
+      // shouldn 't downgrade the snapshot — that 's a clean fallback,
+      // not partial data. `partialData` is true only when a per-device
+      // walk genuinely failed.
       const status: Snapshot['status'] =
-        result.graph.nodes.length === 0 ? 'empty' : result.warnings.length === 0 ? 'ok' : 'partial'
+        result.graph.nodes.length === 0 ? 'empty' : result.partialData ? 'partial' : 'ok'
       return {
         status,
         capturedAt,

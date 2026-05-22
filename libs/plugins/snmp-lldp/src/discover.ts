@@ -63,6 +63,21 @@ export interface DiscoverResult {
     alive: number
     walked: number
   }
+  /**
+   * True when something genuinely missing from the result happened —
+   * a per-device walk timed out, an LLDP walk errored on a specific
+   * device, etc. False when every device 's tables were read cleanly
+   * (even if those tables were empty / produced fallback inference).
+   *
+   * Drives the `partial` vs `ok` snapshot status downstream: `partial`
+   * tells the resolver "presence trusted, absence not"; `ok` says
+   * "trust everything we did or didn 't find."
+   *
+   * Diagnostic / informational warnings ("LLDP not enabled, falling
+   * back to subnet inference") do NOT set this — they 're commentary
+   * about the discovery path that was used, not data incompleteness.
+   */
+  partialData: boolean
 }
 
 interface VisitedDevice {
@@ -107,6 +122,10 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   const warnings: string[] = []
   const visited = new Map<string, VisitedDevice>() // address → device
   const allLinks: Link[] = []
+  /** Bumped whenever a per-device walk fails — i.e. data we expected
+   *  to read is actually missing, not just empty. Drives the
+   *  `partial` snapshot status. */
+  let walkErrors = 0
 
   // 1. Expand CIDRs. Per-entry errors (oversized CIDR) become warnings,
   //    not exceptions, so a typo in one target doesn 't abort the run.
@@ -147,6 +166,7 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
       const device = await scanOne(client, address, input.sourceId)
       visited.set(address, device)
     } catch (err) {
+      walkErrors++
       warnings.push(`Walk ${address}: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       client.close()
@@ -171,6 +191,7 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
       allLinks.push(...links)
     } catch (err) {
       lldpDevicesErrored++
+      walkErrors++
       warnings.push(`LLDP walk on ${address}: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       client.close()
@@ -235,6 +256,7 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     graph,
     warnings,
     stats: { expanded: expanded.length, alive: alive.length, walked: visited.size },
+    partialData: walkErrors > 0,
   }
 }
 
@@ -277,6 +299,10 @@ function emptyResult(
     graph: { version: '1.0', nodes: [], links: [] },
     warnings,
     stats,
+    // Early-return paths haven 't even started per-device walks, so by
+    // definition no walk-error data is "missing" — the result is
+    // empty-but-clean. Downstream picks `empty` from the graph shape.
+    partialData: false,
   }
 }
 
