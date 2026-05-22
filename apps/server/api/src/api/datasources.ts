@@ -57,18 +57,23 @@ export function createDataSourcesApi(): Hono {
     return c.json(serializable)
   })
 
-  // List all data sources
+  // List all data sources. Manual rows are per-topology and surfaced
+  // through their topology 's own Sources tab — hide them from the
+  // global list so it doesn 't fill up with "Manual" entries (one per
+  // topology).
   app.get('/', (c) => {
     const dataSources = service.list()
-    // Mask sensitive config values
-    const sanitized = dataSources.map((ds) => ({
-      ...ds,
-      configJson: maskConfigSecrets(ds.configJson),
-    }))
+    const sanitized = dataSources
+      .filter((ds) => ds.type !== 'manual')
+      .map((ds) => ({
+        ...ds,
+        configJson: maskConfigSecrets(ds.configJson),
+      }))
     return c.json(sanitized)
   })
 
-  // List data sources by capability
+  // List data sources by capability. Manual has no capabilities so it
+  // already won 't show up here; the explicit filter is defensive.
   app.get('/by-capability/:capability', (c) => {
     const capability = c.req.param('capability') as 'topology' | 'metrics' | 'alerts'
     if (capability !== 'topology' && capability !== 'metrics' && capability !== 'alerts') {
@@ -78,10 +83,12 @@ export function createDataSourcesApi(): Hono {
       )
     }
     const dataSources = service.listByCapability(capability)
-    const sanitized = dataSources.map((ds) => ({
-      ...ds,
-      configJson: maskConfigSecrets(ds.configJson),
-    }))
+    const sanitized = dataSources
+      .filter((ds) => ds.type !== 'manual')
+      .map((ds) => ({
+        ...ds,
+        configJson: maskConfigSecrets(ds.configJson),
+      }))
     return c.json(sanitized)
   })
 
