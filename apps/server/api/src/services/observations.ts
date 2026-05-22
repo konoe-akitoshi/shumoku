@@ -16,6 +16,15 @@ import { generateId, getDatabase, timestamp } from '../db/index.js'
 
 export type ObservationStatus = 'ok' | 'partial' | 'failed' | 'empty'
 
+/**
+ * Reserved source id for the editor-authored content. Created in
+ * migration 009 as a synthetic `data_sources` row so the FK on
+ * `topology_observations.source_id` is satisfied. Treated specially
+ * by the UI (Edit instead of Sync) and by the resolver (its values
+ * win for chosen / human-owned fields).
+ */
+export const MANUAL_SOURCE_ID = '__manual__'
+
 export interface TopologyObservation {
   id: string
   topologyId: string

@@ -1255,9 +1255,34 @@
           </div>
 
           <div class="card-body">
+            <!-- Manual (editor-authored) source — always present, can 't be
+                 detached. Parallel to the other topology sources in the
+                 observation model (its snapshot is recorded the same way). -->
+            <div class="rounded-lg border border-theme-border p-3 mb-4">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="text-sm font-medium text-theme-text-emphasis">📝 Manual</h3>
+                    <span
+                      class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                    >
+                      authored
+                    </span>
+                  </div>
+                  <p class="text-xs text-theme-text-muted mt-1">
+                    YAML / JSON edited in the topology editor. Always present, can 't be detached.
+                  </p>
+                </div>
+                <a href="/topologies/{topologyId}/edit" class="btn btn-secondary btn-sm">
+                  <PencilSimpleIcon size={14} class="mr-1" />
+                  Edit
+                </a>
+              </div>
+            </div>
+
             {#if topologySources.length === 0}
               <p class="text-sm text-theme-text-muted text-center py-4">
-                No topology sources configured. Topology is defined manually.
+                No additional topology sources attached.
               </p>
             {:else}
               <div class="space-y-4">
@@ -1622,27 +1647,11 @@
     <!-- ============================================ -->
     {#if activeTab === 'discovery'}
       <div class="space-y-6">
-        {#if topologySources.length === 0}
-          <div class="card p-8 text-center space-y-2">
-            <p class="text-theme-text-emphasis font-medium">No sources to discover from</p>
-            <p class="text-sm text-theme-text-muted">
-              Discovery runs against attached topology sources — NetBox, Network Discovery, Zabbix
-              and so on. Attach one first.
-            </p>
-            <div class="pt-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onclick={() => {
-                  activeTab = 'sources'
-                  history.replaceState(null, '', '#sources')
-                }}
-              >
-                Go to Sources →
-              </Button>
-            </div>
-          </div>
-        {:else}
+        {#if true}
+          <!-- Manual is always present as the editor-authored source, so
+               Discovery is never truly "empty". Anything to do here? — at
+               minimum you can re-open the editor; with attached sources
+               you also get Sync now and a per-source history. -->
           <!-- Identity binding (掴み) gauge — top of the tab. Counts every
                resolved node by how reliably it can be re-matched across
                sources / re-scans. -->
@@ -1701,6 +1710,32 @@
               </div>
             {/if}
             <div class="card-body space-y-2">
+              <!-- Manual source — synthetic row, parallel to attached sources.
+                   Edit button instead of Sync now. -->
+              <div class="rounded-lg border border-theme-border p-3 space-y-2">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <h3 class="text-sm font-medium text-theme-text-emphasis truncate">
+                        📝 Manual
+                      </h3>
+                      <span
+                        class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                      >
+                        authored
+                      </span>
+                    </div>
+                    <p class="text-xs text-theme-text-muted mt-1">
+                      YAML / JSON · last updated {formatAgo(topology.updatedAt)}
+                    </p>
+                  </div>
+                  <a href="/topologies/{topologyId}/edit" class="btn btn-outline btn-sm">
+                    <PencilSimpleIcon size={12} class="mr-1" />
+                    Edit
+                  </a>
+                </div>
+              </div>
+
               {#each currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
                 {@const dataSource = getDataSource(source.dataSourceId)}
                 {@const lastResult = perSourceSync[source.dataSourceId]}
@@ -1810,10 +1845,15 @@
                     <tbody>
                       {#each recentObservations as o (o.id)}
                         {@const ds = getDataSource(o.sourceId)}
+                        {@const isManual = o.sourceId === '__manual__'}
                         <tr class="border-b border-theme-border last:border-0">
                           <td class="py-1.5">{formatAgo(o.capturedAt)}</td>
-                          <td class="py-1.5 font-mono text-theme-text-muted">
-                            {ds?.name ?? o.sourceId}
+                          <td class="py-1.5 text-theme-text-muted">
+                            {#if isManual}
+                              📝 Manual
+                            {:else}
+                              <span class="font-mono">{ds?.name ?? o.sourceId}</span>
+                            {/if}
                           </td>
                           <td class="py-1.5">
                             {#if o.status === 'ok'}
