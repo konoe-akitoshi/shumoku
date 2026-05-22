@@ -46,6 +46,29 @@ export const IP_NET_TO_MEDIA = {
 } as const
 
 /**
+ * RFC 1213 legacy IP-MIB `ipAddrTable` (IPv4 only).
+ *
+ * One row per IPv4 address bound to the device, keyed by the address
+ * itself. Used by the L3 topology inference pass: an interface 's
+ * (address, mask) tuple identifies which subnet the interface sits in,
+ * and any two interfaces sharing a subnet are taken as a "logical"
+ * link between their parent devices. This is the universal
+ * SNMP-standard fallback when LLDP / CDP isn 't available — covered by
+ * essentially every IP-capable device.
+ *
+ * The modernised `ipAddressTable` (1.3.6.1.2.1.4.34, RFC 4293) supports
+ * IPv6 too but is implemented less universally. v1 sticks to the
+ * legacy table; v6 awareness is a follow-on.
+ */
+export const IP_ADDR_TABLE = {
+  base: '1.3.6.1.2.1.4.20.1',
+  /** Key: the IP itself; value: ifIndex this address is bound to. */
+  ipAdEntIfIndex: '1.3.6.1.2.1.4.20.1.2',
+  /** Key: the IP; value: dotted-quad netmask (e.g. 255.255.255.0). */
+  ipAdEntNetMask: '1.3.6.1.2.1.4.20.1.3',
+} as const
+
+/**
  * IEEE 802.1AB LLDP-MIB — lldpRemTable (remote / neighbor info).
  *
  * Indexes: `lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex`

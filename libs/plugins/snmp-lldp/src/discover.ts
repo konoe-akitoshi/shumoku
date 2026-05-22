@@ -30,9 +30,11 @@ import {
   ENTITY_TABLE,
   IF_TABLE,
   IF_X_TABLE,
+  IP_ADDR_TABLE,
   LLDP_REM_TABLE,
   SYSTEM_MIB,
 } from './mib.js'
+import { type DeviceInterfaceIp, groupBySubnet, inferLinksFromSubnets } from './subnet-inference.js'
 
 /** How many addresses to probe in parallel during the liveness pass. */
 const LIVENESS_CONCURRENCY = 32
@@ -78,6 +80,11 @@ interface VisitedDevice {
   /** Chassis model from ENTITY-MIB (entPhysicalModelName on the chassis row). */
   chassisModel?: string
   ports: Map<string, NodePort> // keyed by ifIndex string
+  /**
+   * IPv4 interface bindings from `ipAddrTable`. Used by the subnet-
+   * inference pass after every device has been walked.
+   */
+  ifaceIps: Array<{ ip: string; netmask: string; ifIndex: number }>
 }
 
 /**
@@ -170,19 +177,50 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     }
   }
 
-  // No links across the entire scan is usually a deployment property
-  // (the network just doesn 't run LLDP between these devices —
-  // common with routers / NAS / firewalls) rather than a plugin bug.
-  // Surface that explicitly so the user doesn 't think the scan
-  // "worked but found nothing useful" without context.
-  if (allLinks.length === 0 && visited.size > 0) {
+  // 5. Subnet-membership inference. For networks where the scanned
+  // devices don 't speak LLDP, the IP layer is the universal fallback:
+  // two interfaces in the same subnet are reachable through some L2
+  // segment, so we emit a "logical" link between every pair of devices
+  // that share a subnet. See `subnet-inference.ts` for the algorithm
+  // and its caveats.
+  const allIfaceIps: DeviceInterfaceIp[] = []
+  for (const [address, device] of visited) {
+    for (const ip of device.ifaceIps) {
+      allIfaceIps.push({
+        ...ip,
+        nodeId: device.nodeId,
+        // Mirrors the id format scanOne used when building NodePort entries.
+        portId: `${input.sourceId}:port:${address}:${ip.ifIndex}`,
+      })
+    }
+  }
+  const subnetGroups = groupBySubnet(allIfaceIps)
+  const inferredLinks = inferLinksFromSubnets(subnetGroups)
+  for (const link of inferredLinks) {
+    allLinks.push({
+      from: { node: link.from.nodeId, port: link.from.portId },
+      to: { node: link.to.nodeId, port: link.to.portId },
+      provenance: { source: input.sourceId, observedAt: Date.now() },
+      metadata: {
+        linkType: 'subnet-inferred',
+        subnet: link.subnet,
+      },
+    })
+  }
+
+  // Diagnostic warnings. The distinction matters: "LLDP errored" means
+  // configure your community / view permissions; "LLDP empty" means
+  // turn LLDP on (or accept the L3-only view).
+  if (visited.size > 0) {
     if (lldpDevicesErrored === visited.size) {
       warnings.push(
         `LLDP-MIB unreachable on every device — community may not grant access to lldpRemTable.`,
       )
     } else if (lldpDevicesEmpty === visited.size - lldpDevicesErrored) {
       warnings.push(
-        `LLDP returned no neighbors on any device — LLDP probably isn 't enabled (common for routers / NAS / firewalls). v1 derives links from LLDP only; IP/MAC-table-based discovery is v2.`,
+        inferredLinks.length > 0
+          ? `LLDP returned no neighbors on any device — falling back to subnet-membership inference (${inferredLinks.length} logical link(s) from ${subnetGroups.length} shared subnet(s)).`
+          : `LLDP returned no neighbors and no shared IP subnets across the scanned devices — no links could be derived.`,
       )
     }
   }
@@ -254,24 +292,45 @@ async function scanOne(
   const sysObjectID = asString(sys[1]?.value)
   const sysDescr = asString(sys[2]?.value)
 
-  // ENTITY-MIB + IF-MIB walks in parallel. ENTITY-MIB gives us the
-  // chassis serial (best identity key); IF-MIB ifPhysAddress on the
-  // lowest non-loopback interface is the universal fallback when
-  // ENTITY-MIB is empty.
-  const [physClasses, physSerials, physModels, ifDescrs, ifNames, ifMacs] = await Promise.all([
-    client
-      .walk(ENTITY_TABLE.entPhysicalClass)
-      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalClass)),
-    client
-      .walk(ENTITY_TABLE.entPhysicalSerialNum)
-      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalSerialNum)),
-    client
-      .walk(ENTITY_TABLE.entPhysicalModelName)
-      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalModelName)),
-    client.walk(IF_TABLE.ifDescr).then((vbs) => indexByRow(vbs, IF_TABLE.ifDescr)),
-    client.walk(IF_X_TABLE.ifName).then((vbs) => indexByRow(vbs, IF_X_TABLE.ifName)),
-    client.walk(IF_TABLE.ifPhysAddress).then((vbs) => indexByRow(vbs, IF_TABLE.ifPhysAddress)),
-  ])
+  // ENTITY-MIB + IF-MIB + IP-MIB walks in parallel.
+  //   ENTITY-MIB → chassis serial / chassis model (best identity key
+  //                  and a secondary catalog binding fallback)
+  //   IF-MIB    → port list + per-port name + base MAC (identity
+  //                  fallback when ENTITY-MIB is empty)
+  //   IP-MIB ipAddrTable → IPv4 (ifIndex, ip, mask) tuples for the
+  //                  subnet-membership inference pass that derives
+  //                  L3 links downstream from LLDP-less environments.
+  const [physClasses, physSerials, physModels, ifDescrs, ifNames, ifMacs, ipIfIndex, ipMask] =
+    await Promise.all([
+      client
+        .walk(ENTITY_TABLE.entPhysicalClass)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalClass)),
+      client
+        .walk(ENTITY_TABLE.entPhysicalSerialNum)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalSerialNum)),
+      client
+        .walk(ENTITY_TABLE.entPhysicalModelName)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalModelName)),
+      client.walk(IF_TABLE.ifDescr).then((vbs) => indexByRow(vbs, IF_TABLE.ifDescr)),
+      client.walk(IF_X_TABLE.ifName).then((vbs) => indexByRow(vbs, IF_X_TABLE.ifName)),
+      client.walk(IF_TABLE.ifPhysAddress).then((vbs) => indexByRow(vbs, IF_TABLE.ifPhysAddress)),
+      client
+        .walk(IP_ADDR_TABLE.ipAdEntIfIndex)
+        .then((vbs) => indexByRow(vbs, IP_ADDR_TABLE.ipAdEntIfIndex)),
+      client
+        .walk(IP_ADDR_TABLE.ipAdEntNetMask)
+        .then((vbs) => indexByRow(vbs, IP_ADDR_TABLE.ipAdEntNetMask)),
+    ])
+
+  // Stitch the ipAddrTable rows back together. Both columns are
+  // keyed by the IPv4 address (dotted-quad in the OID suffix).
+  const ifaceIps: VisitedDevice['ifaceIps'] = []
+  for (const [ip, idxVal] of Object.entries(ipIfIndex)) {
+    const ifIndexNum = asNumber(idxVal)
+    const netmask = asString(ipMask[ip])
+    if (ifIndexNum === undefined || !netmask) continue
+    ifaceIps.push({ ip, netmask, ifIndex: ifIndexNum })
+  }
   const chassisIdx = Object.entries(physClasses).find(
     ([, v]) => asNumber(v) === ENTITY_CLASS_CHASSIS,
   )?.[0]
@@ -355,6 +414,7 @@ async function scanOne(
     sysObjectID,
     chassisModel,
     ports,
+    ifaceIps,
   }
 }
 
