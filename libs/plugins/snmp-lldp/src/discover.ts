@@ -298,7 +298,12 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
   return {
     id: device.nodeId,
     label: labelParts.length > 0 ? labelParts : (device.identity.mgmtIp ?? 'unknown'),
-    shape: 'rect',
+    // Rounded matches the rest of the app — `node.shape ?? 'rounded'`
+    // in the renderer, and the editor diagram view 's default.
+    // `shape: 'rect'` (the previous behaviour) paints a sharp-cornered
+    // background that reads like a bare placeholder even with a
+    // catalog icon on top.
+    shape: 'rounded',
     identity: device.identity,
     ...(spec ? { spec } : {}),
     metadata: {
