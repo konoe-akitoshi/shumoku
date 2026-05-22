@@ -115,14 +115,6 @@
                 >
                   Edit
                 </a>
-              {:else}
-                <a
-                  href="/topologies/{topo.id}/settings"
-                  class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
-                  title="Add a Manual source from the Sources tab to edit content"
-                >
-                  Add Manual
-                </a>
               {/if}
             </div>
           </div>

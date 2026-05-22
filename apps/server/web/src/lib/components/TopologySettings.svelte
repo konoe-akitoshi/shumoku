@@ -409,10 +409,6 @@
           <PencilSimpleIcon size={16} class="mr-2" />
           Edit Manual source
         </a>
-      {:else}
-        <p class="text-xs text-theme-text-muted text-center px-2">
-          Attach a Manual source from the Sources tab to edit content.
-        </p>
       {/if}
     </div>
   </div>
