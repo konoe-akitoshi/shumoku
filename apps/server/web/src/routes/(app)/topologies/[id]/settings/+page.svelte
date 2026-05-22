@@ -2198,19 +2198,14 @@
               {/if}
             </p>
           </div>
-          <div class="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onclick={() => void loadResolved()}
-              disabled={resolvedLoading}
-            >
-              {resolvedLoading ? 'Refreshing…' : 'Refresh'}
-            </Button>
-            <Button variant="outline" size="sm" onclick={copyResolved} disabled={!resolvedJson}>
-              {resolvedCopied ? 'Copied ✓' : 'Copy'}
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onclick={copyResolved}
+            disabled={!resolvedJson || resolvedLoading}
+          >
+            {resolvedCopied ? 'Copied ✓' : 'Copy'}
+          </Button>
         </div>
 
         {#if resolvedError}
