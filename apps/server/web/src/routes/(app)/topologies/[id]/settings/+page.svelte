@@ -220,6 +220,15 @@
   /** Patch in-flight, keyed by node id, so the modal can show a spinner
    *  without blocking other interactions. */
   let policyPatching = $state<Record<string, boolean>>({})
+  /** Last patch error keyed by node id — surfaced in the modal so the
+   *  operator sees why their click didn 't stick (e.g. 409 on
+   *  discovered-only nodes). Cleared on the next successful patch. */
+  let policyError = $state<Record<string, string>>({})
+  /** Bulk-selection set. Click a card 's checkbox to toggle; the action
+   *  bar appears when count > 0. */
+  let bulkSelection = $state<Set<string>>(new Set())
+  /** Bulk PATCH in flight — disables the action bar while running. */
+  let bulkApplying = $state(false)
 
   // Filter options cache
   let filterOptionsCache = $state<
@@ -873,13 +882,61 @@
           nodes: { ...policyView.nodes, [nodeId]: effective },
         }
       }
+      // Clear any stale error from a prior failure on this node.
+      if (policyError[nodeId]) {
+        const next = { ...policyError }
+        delete next[nodeId]
+        policyError = next
+      }
       return { ok: true }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'patch failed'
+      policyError = { ...policyError, [nodeId]: msg }
       return { ok: false, reason: msg }
     } finally {
       policyPatching = { ...policyPatching, [nodeId]: false }
     }
+  }
+
+  /**
+   * Apply a mode to every selected node in parallel. The PATCH endpoint
+   * is per-node, so we fan out and gather. Errors are kept in
+   * `policyError` so the operator can see which ones bounced (e.g.
+   * discovered-only). Selection persists after apply so the operator
+   * can retry / change strategy without re-selecting.
+   */
+  async function handleBulkSetMode(
+    mode: import('$lib/api').DiscoveryMode | 'inherit',
+  ): Promise<void> {
+    if (bulkSelection.size === 0) return
+    bulkApplying = true
+    try {
+      const ids = [...bulkSelection]
+      await Promise.all(
+        ids.map((id) => setNodeDiscoveryMode(id, mode === 'inherit' ? null : { mode })),
+      )
+    } finally {
+      bulkApplying = false
+    }
+  }
+
+  function toggleBulkSelection(nodeId: string): void {
+    const next = new Set(bulkSelection)
+    if (next.has(nodeId)) next.delete(nodeId)
+    else next.add(nodeId)
+    bulkSelection = next
+  }
+
+  /** Add (or remove) every currently-visible card to the selection.
+   *  "Visible" = post-filter, so the operator can scope a bulk action
+   *  by filtering first then "select all". */
+  function toggleBulkSelectAll(): void {
+    const visible = filteredDiscoveredNodes.map((c) => c.id)
+    const allSelected = visible.every((id) => bulkSelection.has(id))
+    const next = new Set(bulkSelection)
+    if (allSelected) for (const id of visible) next.delete(id)
+    else for (const id of visible) next.add(id)
+    bulkSelection = next
   }
 
   /** Modal callback: change the node's discovery mode. `null` clears
@@ -2075,6 +2132,71 @@
                     No nodes match the current filters.
                   </p>
                 {:else}
+                  <!-- Bulk-action bar — appears only when something is
+                       selected. "Select all" toggles every visible card
+                       so filter + select-all = scoped bulk action. -->
+                  <div class="flex items-center justify-between gap-3 mb-3 text-xs flex-wrap">
+                    <button
+                      type="button"
+                      class="text-theme-text-muted hover:text-theme-text-emphasis"
+                      onclick={toggleBulkSelectAll}
+                    >
+                      {filteredDiscoveredNodes.every((c) => bulkSelection.has(c.id))
+                        ? 'Deselect all'
+                        : `Select all (${filteredDiscoveredNodes.length})`}
+                    </button>
+                    {#if bulkSelection.size > 0}
+                      <div class="flex items-center gap-2 ml-auto">
+                        <span class="text-theme-text-muted">
+                          {bulkSelection.size}
+                          selected → set mode:
+                        </span>
+                        <button
+                          type="button"
+                          class="px-2 py-1 rounded border border-theme-border hover:border-primary disabled:opacity-50"
+                          disabled={bulkApplying}
+                          onclick={() => handleBulkSetMode('auto')}
+                        >
+                          auto
+                        </button>
+                        <button
+                          type="button"
+                          class="px-2 py-1 rounded border border-theme-border hover:border-primary disabled:opacity-50"
+                          disabled={bulkApplying}
+                          onclick={() => handleBulkSetMode('observe')}
+                        >
+                          observe
+                        </button>
+                        <button
+                          type="button"
+                          class="px-2 py-1 rounded border border-theme-border hover:border-primary disabled:opacity-50"
+                          disabled={bulkApplying}
+                          onclick={() => handleBulkSetMode('disabled')}
+                        >
+                          disabled
+                        </button>
+                        <button
+                          type="button"
+                          class="px-2 py-1 rounded border border-theme-border hover:border-primary disabled:opacity-50 text-theme-text-muted"
+                          disabled={bulkApplying}
+                          onclick={() => handleBulkSetMode('inherit')}
+                        >
+                          inherit
+                        </button>
+                        <button
+                          type="button"
+                          class="text-theme-text-muted hover:text-theme-text-emphasis ml-1"
+                          disabled={bulkApplying}
+                          onclick={() => (bulkSelection = new Set())}
+                        >
+                          clear
+                        </button>
+                        {#if bulkApplying}
+                          <span class="text-theme-text-muted">applying…</span>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
                   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {#each filteredDiscoveredNodes as card (card.id)}
                       {@const qualityColor =
@@ -2092,53 +2214,69 @@
                             ? 'text-violet-700 dark:text-violet-300 bg-violet-500/10'
                             : 'text-sky-700 dark:text-sky-300 bg-sky-500/10'}
                       {@const inherited = eff && eff.source.mode !== 'node'}
-                      <button
-                        type="button"
-                        class="text-left rounded-lg border border-theme-border p-3 hover:border-primary hover:bg-theme-bg-canvas/30 transition-colors cursor-pointer {effMode ===
-                        'disabled'
-                          ? 'opacity-70'
-                          : ''}"
-                        onclick={() => {
-                          detailNode = card
-                        }}
+                      {@const selected = bulkSelection.has(card.id)}
+                      <div
+                        class="relative rounded-lg border p-3 hover:border-primary hover:bg-theme-bg-canvas/30 transition-colors {selected
+                          ? 'border-primary ring-1 ring-primary/30'
+                          : 'border-theme-border'} {effMode === 'disabled' ? 'opacity-70' : ''}"
                       >
-                        <div class="flex items-start gap-2">
-                          <span
-                            class="inline-block w-2 h-2 rounded-full mt-1.5 flex-shrink-0 {qualityColor}"
-                            title={card.quality}
-                          ></span>
-                          <div class="min-w-0 flex-1">
-                            <p class="font-medium text-sm text-theme-text-emphasis truncate">
-                              {card.label}
-                            </p>
-                            <p class="text-xs text-theme-text-muted truncate">
-                              {card.model ?? card.vendor ?? card.sysDescr?.split(',')[0] ?? '—'}
-                            </p>
-                            <p class="text-xs text-theme-text-muted font-mono mt-0.5">
-                              {card.mgmtIp ?? '—'}
-                            </p>
-                          </div>
-                          <span
-                            class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded {modeTone} whitespace-nowrap"
-                            title={inherited
+                        <!-- Selection checkbox — stopPropagation so
+                             clicking it doesn 't also open the modal. -->
+                        <input
+                          type="checkbox"
+                          class="absolute top-2 right-2 cursor-pointer"
+                          checked={selected}
+                          onclick={(e) => {
+                            e.stopPropagation()
+                            toggleBulkSelection(card.id)
+                          }}
+                          aria-label="Select {card.label}"
+                        >
+                        <button
+                          type="button"
+                          class="text-left w-full cursor-pointer"
+                          onclick={() => {
+                            detailNode = card
+                          }}
+                        >
+                          <div class="flex items-start gap-2 pr-6">
+                            <span
+                              class="inline-block w-2 h-2 rounded-full mt-1.5 flex-shrink-0 {qualityColor}"
+                              title={card.quality}
+                            ></span>
+                            <div class="min-w-0 flex-1">
+                              <p class="font-medium text-sm text-theme-text-emphasis truncate">
+                                {card.label}
+                              </p>
+                              <p class="text-xs text-theme-text-muted truncate">
+                                {card.model ?? card.vendor ?? card.sysDescr?.split(',')[0] ?? '—'}
+                              </p>
+                              <p class="text-xs text-theme-text-muted font-mono mt-0.5">
+                                {card.mgmtIp ?? '—'}
+                              </p>
+                            </div>
+                            <span
+                              class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded {modeTone} whitespace-nowrap"
+                              title={inherited
                               ? `inherited from ${eff?.source.mode}`
                               : 'per-node override'}
+                            >
+                              {effMode}
+                              {#if inherited}
+                                <span class="ml-0.5 opacity-60">·inh</span>
+                              {/if}
+                            </span>
+                          </div>
+                          <div
+                            class="mt-3 pt-2 border-t border-theme-border/50 text-xs text-theme-text-muted"
                           >
-                            {effMode}
-                            {#if inherited}
-                              <span class="ml-0.5 opacity-60">·inh</span>
+                            {card.quality}
+                            {#if card.observedAt}
+                              · {formatAgo(card.observedAt)}
                             {/if}
-                          </span>
-                        </div>
-                        <div
-                          class="mt-3 pt-2 border-t border-theme-border/50 text-xs text-theme-text-muted"
-                        >
-                          {card.quality}
-                          {#if card.observedAt}
-                            · {formatAgo(card.observedAt)}
-                          {/if}
-                        </div>
-                      </button>
+                          </div>
+                        </button>
+                      </div>
                     {/each}
                   </div>
                 {/if}
@@ -2632,6 +2770,7 @@
   probing={detailNode !== null && probingNodeId === detailNode.id}
   effectivePolicy={detailNode ? (policyView?.nodes[detailNode.id] ?? null) : null}
   patchingPolicy={detailNode !== null && policyPatching[detailNode.id] === true}
+  policyErrorMessage={detailNode ? (policyError[detailNode.id] ?? null) : null}
   {formatAgo}
   onProbe={() => {
     if (detailNode) handleProbeNode(detailNode)

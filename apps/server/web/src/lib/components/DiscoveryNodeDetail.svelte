@@ -54,6 +54,10 @@
     patchingPolicy?: boolean
     /** Change mode (or 'inherit' to clear the per-node override). */
     onSetMode?: (mode: DiscoveryMode | 'inherit') => void | Promise<void>
+    /** Last PATCH error for this node, or null. Surfaced as an inline
+     *  banner under the mode buttons so the operator sees why their
+     *  click didn 't stick (e.g. 409 "pin to Manual first"). */
+    policyErrorMessage?: string | null
   }
 
   let {
@@ -66,6 +70,7 @@
     effectivePolicy = null,
     patchingPolicy = false,
     onSetMode,
+    policyErrorMessage = null,
   }: Props = $props()
 
   function originLabel(o: EffectivePolicy['source']['mode']): string {
@@ -224,6 +229,13 @@
                 <span class="text-xs text-theme-text-muted self-center ml-1">saving…</span>
               {/if}
             </div>
+            {#if policyErrorMessage}
+              <div
+                class="mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+              >
+                {policyErrorMessage}
+              </div>
+            {/if}
           {:else}
             <p class="text-xs text-theme-text-muted">Policy view loading…</p>
           {/if}
