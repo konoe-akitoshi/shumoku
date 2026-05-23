@@ -54,11 +54,11 @@ describe('computeEffectivePolicy', () => {
   it('node override beats subgraph and topology', () => {
     const subgraphs = new Map([sg('prod', undefined, { mode: 'auto', intervalMs: 60_000 })])
     const e = computeEffectivePolicy({
-      node: { parent: 'prod', discovery: { mode: 'manual-only' } },
+      node: { parent: 'prod', discovery: { mode: 'disabled' } },
       subgraphs,
       topologyDefault: { mode: 'observe', intervalMs: 600_000 },
     })
-    expect(e.mode).toBe('manual-only')
+    expect(e.mode).toBe('disabled')
     expect(e.source.mode).toBe('node')
     // intervalMs not overridden by node — comes from subgraph.
     expect(e.intervalMs).toBe(60_000)
@@ -104,22 +104,15 @@ describe('computeEffectivePolicy', () => {
     const e = computeEffectivePolicy({
       node: { parent: 'ghost' },
       subgraphs: new Map(),
-      topologyDefault: { mode: 'manual-only' },
+      topologyDefault: { mode: 'disabled' },
     })
-    expect(e.mode).toBe('manual-only')
+    expect(e.mode).toBe('disabled')
     expect(e.source.mode).toBe('topology')
   })
 })
 
 describe('isExcluded', () => {
-  it('excludes manual-only and disabled', () => {
-    expect(
-      isExcluded({
-        mode: 'manual-only',
-        intervalMs: 0,
-        source: { mode: 'default', intervalMs: 'default' },
-      }),
-    ).toBe(true)
+  it('excludes disabled', () => {
     expect(
       isExcluded({
         mode: 'disabled',
@@ -167,9 +160,9 @@ describe('effectivePolicyForNode (NetworkGraph context)', () => {
   it('node override beats the subgraph chain', () => {
     const e = effectivePolicyForNode(graph, {
       parent: 'prod-core',
-      discovery: { mode: 'manual-only' },
+      discovery: { mode: 'disabled' },
     })
-    expect(e.mode).toBe('manual-only')
+    expect(e.mode).toBe('disabled')
     expect(e.source.mode).toBe('node')
   })
 
@@ -213,14 +206,7 @@ describe('absenceImpliesRetraction', () => {
       }),
     ).toBe(true)
   })
-  it('absence is meaningless for manual-only / disabled', () => {
-    expect(
-      absenceImpliesRetraction({
-        mode: 'manual-only',
-        intervalMs: 0,
-        source: { mode: 'default', intervalMs: 'default' },
-      }),
-    ).toBe(false)
+  it('absence is meaningless for disabled', () => {
     expect(
       absenceImpliesRetraction({
         mode: 'disabled',

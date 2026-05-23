@@ -40,11 +40,10 @@ export function resolve(
   //
   // !!! When retraction logic lands here, gate it on
   //     `absenceImpliesRetraction(effectivePolicyForNode(authored, node))`.
-  // A node whose effective policy is `manual-only` or `disabled` must
-  // survive being missing from a `status='ok'` snapshot — for those
-  // modes the source was either never asked (manual-only) or the
-  // operator opted out entirely (disabled), so the absence carries
-  // no information. Codex 's review of the discovery-policy design
+  // A node whose effective policy is `disabled` must survive being
+  // missing from a `status='ok'` snapshot — the operator opted out,
+  // the source was never asked, the absence carries no information.
+  // Codex 's review of the discovery-policy design
   // flagged this as the highest-impact footgun in the area; see
   // `discovery-policy.ts` for the gate predicate and rationale.
   void _staleThreshold

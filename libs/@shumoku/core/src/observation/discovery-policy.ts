@@ -127,7 +127,7 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
  * the mode comparison from callers that just need a yes/no answer.
  */
 export function isExcluded(policy: EffectiveDiscoveryPolicy): boolean {
-  return policy.mode === 'disabled' || policy.mode === 'manual-only'
+  return policy.mode === 'disabled'
 }
 
 /**
