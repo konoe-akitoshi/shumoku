@@ -21,6 +21,7 @@ import {
   registerBundledPlugins,
 } from './plugins/index.js'
 import { DataSourceService } from './services/datasource.js'
+import { startDiscoveryScheduler, stopDiscoveryScheduler } from './services/discovery-scheduler.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
 import type { ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
@@ -483,6 +484,10 @@ export class Server {
 
     // Start background health checker for data sources
     startHealthChecker()
+    // Start the discovery scheduler — periodically syncs every attached
+    // topology source on the cadence its topology default configures.
+    // Set SHUMOKU_DISCOVERY_SCHEDULER=off to disable (dev / debugging).
+    startDiscoveryScheduler()
   }
 
   async start(): Promise<void> {
@@ -529,7 +534,8 @@ export class Server {
   }
 
   stop(): void {
-    // Stop health checker
+    // Stop background loops first so they don't fire mid-shutdown.
+    stopDiscoveryScheduler()
     stopHealthChecker()
 
     if (this.pollInterval) {
