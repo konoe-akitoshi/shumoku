@@ -342,28 +342,32 @@ export function specDeviceType(spec: NodeSpec | undefined): DeviceType | undefin
 /**
  * How a node / subgraph / topology participates in discovery.
  *
- * The enum is intentionally broader than a boolean: codex's review
- * of the discovery-policy design called out that lab / vendor-managed
- * / decommissioned / virtual nodes need different *meanings*, not just
- * "off". Mode determines scheduler behaviour, drift / freshness
- * semantics, and alert suppression downstream.
+ * Mode determines scheduler behaviour, drift / freshness semantics,
+ * and alert suppression downstream. Display behaviour is *separate* —
+ * a `disabled` node still renders if any authored / observed data
+ * exists for it; hiding from the diagram is a future `display` axis.
  *
- *   - `auto`         — scheduled discovery target; freshness and drift
- *                      are tracked, alerts may fire on stale / failure.
- *   - `observe`      — discover, but do NOT auto-adopt observation
- *                      values. Discoveries surface as drift candidates
- *                      that the operator reconciles. Useful for
- *                      "we want to see what 's there but don 't trust
- *                      it as truth yet."
- *   - `manual-only`  — do not discover. Authored / manual content is
- *                      the source of truth. Absence in a source 's
- *                      snapshot does NOT retract this node.
- *   - `disabled`     — unmanaged / excluded. No discovery, no
- *                      freshness ageing, no drift noise. Use for
- *                      vendor-managed gear, decommissioned hardware,
- *                      lab segments you want quiet.
+ *   - `auto`     — scheduled discovery target; freshness and drift
+ *                  are tracked, alerts may fire on stale / failure.
+ *   - `observe`  — discover, but do NOT auto-adopt observation values.
+ *                  Discoveries surface as drift candidates that the
+ *                  operator reconciles.
+ *   - `disabled` — unmanaged / excluded. No probing, no freshness
+ *                  ageing, no drift noise, no stale alerts. Use for
+ *                  vendor-managed gear, decommissioned hardware, lab
+ *                  segments you want quiet. If you want the node to
+ *                  keep displaying with curated values, add it to a
+ *                  Manual source — the authored layer carries through
+ *                  the resolver regardless of mode.
+ *
+ * History: an earlier revision had a fourth mode `manual-only` meaning
+ * "authored content is authoritative". That collapses onto `disabled`
+ * once you realise the authored layer is independent of discovery
+ * mode — the resolver always folds it in. Keeping `manual-only`
+ * around invited an impossible state (the mode is meaningless without
+ * a Manual source attached).
  */
-export type DiscoveryMode = 'auto' | 'observe' | 'manual-only' | 'disabled'
+export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 
 /**
  * Discovery policy applied to a node, a subgraph (inherited by its
@@ -381,8 +385,7 @@ export interface DiscoveryPolicy {
   /**
    * Expected freshness budget in milliseconds. A node is considered
    * fresh when `lastObservedAt + intervalMs ≥ now`. Only meaningful
-   * for `auto` and `observe` modes — ignored for `manual-only` /
-   * `disabled`.
+   * for `auto` and `observe` modes — ignored for `disabled`.
    */
   intervalMs?: number
 }
