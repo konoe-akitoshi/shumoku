@@ -20,6 +20,7 @@
   import { page } from '$app/stores'
   import { api } from '$lib/api'
   import { findBestInterfaceMatch } from '$lib/auto-mapping'
+  import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     dataSources,
@@ -159,7 +160,8 @@
   })
   /**
    * Discovered nodes (the resolved graph 's nodes, minus synthetic
-   * segment nodes). One card per entry in the Discovery tab.
+   * segment nodes). One card per entry in the Discovery tab; the
+   * detail modal pulls from the same shape.
    */
   let discoveredNodes = $state<
     Array<{
@@ -169,11 +171,19 @@
       model?: string
       vendor?: string
       mgmtIp?: string
+      sysName?: string
+      chassisId?: string
+      sysObjectID?: string
+      catalogId?: string
       quality: 'stable' | 'weak' | 'unbound'
       sourceId?: string
+      sourceName?: string
+      sourceType?: string
       observedAt?: number
     }>
   >([])
+  /** Card opened in the detail modal, null when closed. */
+  let detailNode = $state<(typeof discoveredNodes)[number] | null>(null)
   /** Recent observation snapshots for this topology. */
   let recentObservations = $state<
     Array<{
@@ -704,6 +714,8 @@
         counts.total++
         const md = (node.metadata ?? {}) as Record<string, unknown>
         const label = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
+        const sourceId = node.provenance?.source
+        const sourceDs = sourceId ? getDataSource(sourceId) : undefined
         cards.push({
           id: node.id,
           label,
@@ -712,8 +724,15 @@
             typeof md['chassisModel'] === 'string' ? (md['chassisModel'] as string) : undefined,
           vendor: typeof md['vendor'] === 'string' ? (md['vendor'] as string) : undefined,
           mgmtIp: node.identity?.mgmtIp,
+          sysName: node.identity?.sysName,
+          chassisId: node.identity?.chassisId,
+          sysObjectID:
+            typeof md['sysObjectID'] === 'string' ? (md['sysObjectID'] as string) : undefined,
+          catalogId: typeof md['catalogId'] === 'string' ? (md['catalogId'] as string) : undefined,
           quality: q,
-          sourceId: node.provenance?.source,
+          sourceId,
+          sourceName: sourceDs?.name,
+          sourceType: sourceDs?.type,
           observedAt: node.provenance?.observedAt,
         })
       }
@@ -773,11 +792,18 @@
    */
   let probingNodeId = $state<string | null>(null)
   async function handleProbeNode(card: (typeof discoveredNodes)[number]) {
-    if (!card.sourceId) return
+    if (!card.sourceId || !card.mgmtIp) return
     probingNodeId = card.id
     try {
-      await api.topologies.sources.syncOne(topologyId, card.sourceId)
+      await api.topologies.sources.probe(topologyId, card.sourceId, [card.mgmtIp])
       await refreshDiscovery()
+      // The card object we hand the modal isn 't reactive to
+      // discoveredNodes regenerating, so re-bind it explicitly when
+      // the user just probed.
+      if (detailNode?.id === card.id) {
+        const refreshed = discoveredNodes.find((c) => c.id === card.id)
+        if (refreshed) detailNode = refreshed
+      }
     } catch (e) {
       console.error('[Discovery] probe failed', e)
     } finally {
@@ -1846,8 +1872,12 @@
                         : card.quality === 'weak'
                           ? 'bg-amber-500'
                           : 'bg-neutral-500'}
-                    <div
-                      class="rounded-lg border border-theme-border p-3 hover:border-primary/40 transition-colors"
+                    <button
+                      type="button"
+                      class="text-left rounded-lg border border-theme-border p-3 hover:border-primary hover:bg-theme-bg-canvas/30 transition-colors cursor-pointer"
+                      onclick={() => {
+                        detailNode = card
+                      }}
                     >
                       <div class="flex items-start gap-2">
                         <span
@@ -1867,26 +1897,14 @@
                         </div>
                       </div>
                       <div
-                        class="flex items-center justify-between mt-3 pt-2 border-t border-theme-border/50 text-xs"
+                        class="mt-3 pt-2 border-t border-theme-border/50 text-xs text-theme-text-muted"
                       >
-                        <span class="text-theme-text-muted">
-                          {card.quality}
-                          {#if card.observedAt}
-                            · {formatAgo(card.observedAt)}
-                          {/if}
-                        </span>
-                        {#if card.sourceId}
-                          <button
-                            type="button"
-                            class="text-primary hover:underline disabled:opacity-50 disabled:no-underline"
-                            disabled={probingNodeId === card.id}
-                            onclick={() => handleProbeNode(card)}
-                          >
-                            {probingNodeId === card.id ? 'probing…' : '⟳ probe'}
-                          </button>
+                        {card.quality}
+                        {#if card.observedAt}
+                          · {formatAgo(card.observedAt)}
                         {/if}
                       </div>
-                    </div>
+                    </button>
                   {/each}
                 </div>
               </div>
@@ -2367,3 +2385,18 @@
     {/if}
   {/if}
 </div>
+
+<!-- Per-node Discovery detail modal. Card-click in the Discovery tab
+     sets detailNode; closing reverts it to null. -->
+<DiscoveryNodeDetail
+  open={detailNode !== null}
+  onOpenChange={(v) => {
+    if (!v) detailNode = null
+  }}
+  node={detailNode}
+  probing={detailNode !== null && probingNodeId === detailNode.id}
+  {formatAgo}
+  onProbe={() => {
+    if (detailNode) handleProbeNode(detailNode)
+  }}
+/>
