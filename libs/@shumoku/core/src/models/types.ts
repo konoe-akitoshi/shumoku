@@ -339,6 +339,54 @@ export function specDeviceType(spec: NodeSpec | undefined): DeviceType | undefin
   return spec.type
 }
 
+/**
+ * How a node / subgraph / topology participates in discovery.
+ *
+ * The enum is intentionally broader than a boolean: codex's review
+ * of the discovery-policy design called out that lab / vendor-managed
+ * / decommissioned / virtual nodes need different *meanings*, not just
+ * "off". Mode determines scheduler behaviour, drift / freshness
+ * semantics, and alert suppression downstream.
+ *
+ *   - `auto`         — scheduled discovery target; freshness and drift
+ *                      are tracked, alerts may fire on stale / failure.
+ *   - `observe`      — discover, but do NOT auto-adopt observation
+ *                      values. Discoveries surface as drift candidates
+ *                      that the operator reconciles. Useful for
+ *                      "we want to see what 's there but don 't trust
+ *                      it as truth yet."
+ *   - `manual-only`  — do not discover. Authored / manual content is
+ *                      the source of truth. Absence in a source 's
+ *                      snapshot does NOT retract this node.
+ *   - `disabled`     — unmanaged / excluded. No discovery, no
+ *                      freshness ageing, no drift noise. Use for
+ *                      vendor-managed gear, decommissioned hardware,
+ *                      lab segments you want quiet.
+ */
+export type DiscoveryMode = 'auto' | 'observe' | 'manual-only' | 'disabled'
+
+/**
+ * Discovery policy applied to a node, a subgraph (inherited by its
+ * descendants), or as a topology-wide default. The effective policy
+ * at any node is the result of merging `topology default → subgraph
+ * (nearest ancestor wins) → node override`. Compute it via
+ * `computeEffectivePolicy()` rather than walking the chain ad-hoc.
+ *
+ * Both fields are optional so any layer can override just one piece
+ * (e.g. a subgraph that only wants a different interval but inherits
+ * the mode from topology default).
+ */
+export interface DiscoveryPolicy {
+  mode?: DiscoveryMode
+  /**
+   * Expected freshness budget in milliseconds. A node is considered
+   * fresh when `lastObservedAt + intervalMs ≥ now`. Only meaningful
+   * for `auto` and `observe` modes — ignored for `manual-only` /
+   * `disabled`.
+   */
+  intervalMs?: number
+}
+
 export interface Node {
   id: string
 
@@ -443,6 +491,16 @@ export interface Node {
    * clusters observations by these. See `Identity`.
    */
   identity?: Identity
+
+  /**
+   * Per-node discovery override. Merged with the parent subgraph 's
+   * policy and the topology default by `computeEffectivePolicy()`.
+   * Absent fields fall through; an empty object means "inherit
+   * everything". Set on the **resolved** / **authored** node — overrides
+   * should always be bound to a stable identity so they survive
+   * re-scans (see codex review note on policy bind / adopt).
+   */
+  discovery?: DiscoveryPolicy
 }
 
 // ============================================
@@ -820,6 +878,15 @@ export interface Subgraph {
    * sources (k8s namespaces, Proxmox clusters) may populate it later.
    */
   provenance?: Provenance
+
+  /**
+   * Discovery policy inherited by every descendant node (unless that
+   * node overrides specific fields). For nested subgraphs, the nearest
+   * ancestor 's value wins for any given field. Compute the effective
+   * policy with `computeEffectivePolicy()` — don 't walk the chain
+   * by hand.
+   */
+  discovery?: DiscoveryPolicy
 }
 
 // ============================================
@@ -1105,6 +1172,15 @@ export interface NetworkGraph {
    * Defines connection points exposed to parent sheet
    */
   pins?: Pin[]
+
+  /**
+   * Topology-wide discovery defaults. Sits at the root of the
+   * `topology default → subgraph → node` inheritance chain. Subgraphs
+   * and individual nodes override specific fields; absent fields here
+   * fall back to the runtime defaults in
+   * `computeEffectivePolicy()`.
+   */
+  discovery?: DiscoveryPolicy
 }
 
 /**
