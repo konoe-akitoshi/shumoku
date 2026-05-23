@@ -37,6 +37,16 @@ export function resolve(
   const _retractAfter = options.retractAfterMissedScans ?? 3
   // _staleThreshold / _retractAfter are wired through in the full impl;
   // the skeleton leaves them as documented knobs.
+  //
+  // !!! When retraction logic lands here, gate it on
+  //     `absenceImpliesRetraction(effectivePolicyForNode(authored, node))`.
+  // A node whose effective policy is `manual-only` or `disabled` must
+  // survive being missing from a `status='ok'` snapshot — for those
+  // modes the source was either never asked (manual-only) or the
+  // operator opted out entirely (disabled), so the absence carries
+  // no information. Codex 's review of the discovery-policy design
+  // flagged this as the highest-impact footgun in the area; see
+  // `discovery-policy.ts` for the gate predicate and rationale.
   void _staleThreshold
   void _retractAfter
 
