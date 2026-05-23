@@ -345,6 +345,27 @@ export const topologies = {
       }),
 
     /**
+     * Targeted probe of an attached source. Semantically distinct
+     * from `syncOne` — probe re-checks the named seeds only, not the
+     * source 's whole configured scope. Used by the Discovery tab 's
+     * per-node card to re-poke a single device.
+     */
+    probe: (topologyId: string, sourceId: string, seeds: string[]) =>
+      request<{
+        snapshot: {
+          status: 'ok' | 'partial' | 'failed' | 'empty'
+          statusMessage?: string
+          capturedAt: number
+          warnings?: string[]
+          graph: NetworkGraph | null
+        }
+        observation: { id: string; nodeCount: number; linkCount: number; portCount: number }
+      }>(`/topologies/${topologyId}/sources/${sourceId}/probe`, {
+        method: 'POST',
+        body: JSON.stringify({ seeds }),
+      }),
+
+    /**
      * Latest observation graph for a specific source attached to this
      * topology. `graph` is null when the source has no observation yet
      * (e.g. a freshly-attached source). This is what the Manual editor

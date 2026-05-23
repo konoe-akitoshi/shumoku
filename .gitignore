@@ -51,3 +51,4 @@ apps/server/data/plugins.yaml
 # scratch files for ad-hoc API inspection
 obs*.json
 resolved.json
+discovery-tab.png

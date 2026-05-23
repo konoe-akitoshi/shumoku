@@ -235,6 +235,100 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
  * folding now happens at read time inside `resolve()`. Use
  * `/sync-from-source` for the "all sources at once" operation.
  */
+/**
+ * Targeted probe of an attached source.
+ *
+ * POST /api/topologies/:topologyId/sources/:sourceId/probe
+ * body: `{ seeds: string[] }`
+ *
+ * Semantically distinct from `/sync`: probe re-checks a specific
+ * subset of targets ("just this device, right now"), where sync
+ * re-runs the source 's full configured scope. The Discovery tab 's
+ * per-node "Probe" affordance hits this endpoint with the node 's
+ * `mgmtIp` as its single seed.
+ *
+ * Only meaningful for plugins that implement `AutoscanCapable`
+ * (the seeds list maps to `AutoscanInput.seeds`). Other plugin
+ * shapes get a 400 — there 's no "probe this NetBox device" because
+ * NetBox already returns the whole inventory in one go.
+ */
+topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
+  const { topologyId, sourceId } = c.req.param()
+
+  const topology = getTopologyService().get(topologyId)
+  if (!topology) {
+    return c.json({ error: 'Topology not found' }, 404)
+  }
+  const attached = getTopologySourcesService().find(topologyId, sourceId, 'topology')
+  if (!attached) {
+    return c.json({ error: 'Source is not attached to this topology with topology purpose' }, 404)
+  }
+  const plugin = getDataSourceService().getPlugin(sourceId)
+  if (!plugin) {
+    return c.json({ error: 'Data source not found' }, 404)
+  }
+  if (!hasAutoscanCapability(plugin)) {
+    return c.json(
+      {
+        error: `Plugin ${plugin.type} doesn 't support targeted probe (no autoscan capability)`,
+      },
+      400,
+    )
+  }
+
+  let seeds: string[] = []
+  try {
+    const body = (await c.req.json()) as { seeds?: unknown }
+    if (Array.isArray(body.seeds)) {
+      seeds = body.seeds.filter((s): s is string => typeof s === 'string' && s.length > 0)
+    }
+  } catch {
+    // Empty body treated as no-seeds — fall through to the validation below.
+  }
+  if (seeds.length === 0) {
+    return c.json({ error: 'Body must include a non-empty `seeds` array' }, 400)
+  }
+
+  const capturedAt = Date.now()
+  const observations = new ObservationsService()
+  try {
+    const snapshot = await plugin.scan({ seeds })
+    const observation = await observations.record({
+      topologyId,
+      sourceId,
+      capturedAt,
+      status: snapshot.status,
+      statusMessage: snapshot.statusMessage,
+      graph: snapshot.graph,
+    })
+    observations.updateHysteresis(
+      topologyId,
+      sourceId,
+      snapshot.status === 'failed' ? 'failed' : 'ok',
+      capturedAt,
+    )
+    getTopologyService().clearCacheEntry(topologyId)
+    getTopologySourcesService().updateLastSynced(attached.id)
+    return c.json({
+      observation,
+      snapshot: {
+        status: snapshot.status,
+        statusMessage: snapshot.statusMessage,
+        capturedAt: snapshot.capturedAt,
+        warnings: snapshot.warnings,
+        graph: snapshot.graph,
+      },
+    })
+  } catch (err) {
+    return c.json(
+      {
+        error: err instanceof Error ? err.message : String(err),
+      },
+      500,
+    )
+  }
+})
+
 topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
   const { topologyId, sourceId } = c.req.param()
 

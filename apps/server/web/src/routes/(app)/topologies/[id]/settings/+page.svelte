@@ -20,6 +20,7 @@
   import { page } from '$app/stores'
   import { api } from '$lib/api'
   import { findBestInterfaceMatch } from '$lib/auto-mapping'
+  import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     dataSources,
@@ -157,6 +158,32 @@
     unbound: 0,
     total: 0,
   })
+  /**
+   * Discovered nodes (the resolved graph 's nodes, minus synthetic
+   * segment nodes). One card per entry in the Discovery tab; the
+   * detail modal pulls from the same shape.
+   */
+  let discoveredNodes = $state<
+    Array<{
+      id: string
+      label: string
+      sysDescr?: string
+      model?: string
+      vendor?: string
+      mgmtIp?: string
+      sysName?: string
+      chassisId?: string
+      sysObjectID?: string
+      catalogId?: string
+      quality: 'stable' | 'weak' | 'unbound'
+      sourceId?: string
+      sourceName?: string
+      sourceType?: string
+      observedAt?: number
+    }>
+  >([])
+  /** Card opened in the detail modal, null when closed. */
+  let detailNode = $state<(typeof discoveredNodes)[number] | null>(null)
   /** Recent observation snapshots for this topology. */
   let recentObservations = $state<
     Array<{
@@ -671,14 +698,46 @@
         api.topologies.getGraph(topologyId),
         api.topologies.listObservations(topologyId, 20),
       ])
-      // Count identity quality across resolved nodes.
+      // Count identity quality + collect per-node card data.
+      // Segment nodes (synthetic L2 transit, from subnet inference)
+      // are not "grabbed" devices — they 're virtual stand-ins for
+      // unknown L2 fabric. Exclude them from both the gauge and the
+      // card grid.
       const counts = { stable: 0, weak: 0, unbound: 0, total: 0 }
+      const cards: typeof discoveredNodes = []
       for (const node of graphResp.graph.nodes ?? []) {
+        const isSegment =
+          node.spec?.kind === 'hardware' && (node.spec as { type?: string }).type === 'segment'
+        if (isSegment) continue
         const q = nodeIdentityQuality(node.identity)
         counts[q]++
         counts.total++
+        const md = (node.metadata ?? {}) as Record<string, unknown>
+        const label = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
+        const sourceId = node.provenance?.source
+        const sourceDs = sourceId ? getDataSource(sourceId) : undefined
+        cards.push({
+          id: node.id,
+          label,
+          sysDescr: typeof md['sysDescr'] === 'string' ? (md['sysDescr'] as string) : undefined,
+          model:
+            typeof md['chassisModel'] === 'string' ? (md['chassisModel'] as string) : undefined,
+          vendor: typeof md['vendor'] === 'string' ? (md['vendor'] as string) : undefined,
+          mgmtIp: node.identity?.mgmtIp,
+          sysName: node.identity?.sysName,
+          chassisId: node.identity?.chassisId,
+          sysObjectID:
+            typeof md['sysObjectID'] === 'string' ? (md['sysObjectID'] as string) : undefined,
+          catalogId: typeof md['catalogId'] === 'string' ? (md['catalogId'] as string) : undefined,
+          quality: q,
+          sourceId,
+          sourceName: sourceDs?.name,
+          sourceType: sourceDs?.type,
+          observedAt: node.provenance?.observedAt,
+        })
       }
       identityQuality = counts
+      discoveredNodes = cards
       recentObservations = obsList
     } catch (e) {
       console.error('[Discovery] failed to refresh', e)
@@ -721,6 +780,34 @@
       }
     } finally {
       syncingSourceId = null
+    }
+  }
+
+  /**
+   * Probe a single discovered node — re-run discovery against the
+   * source that owns it. v1 just kicks the whole source 's sync
+   * because the SNMP plugin doesn 't yet expose a single-target probe
+   * endpoint; the UI affordance is per-card so a future targeted
+   * scan can land transparently.
+   */
+  let probingNodeId = $state<string | null>(null)
+  async function handleProbeNode(card: (typeof discoveredNodes)[number]) {
+    if (!card.sourceId || !card.mgmtIp) return
+    probingNodeId = card.id
+    try {
+      await api.topologies.sources.probe(topologyId, card.sourceId, [card.mgmtIp])
+      await refreshDiscovery()
+      // The card object we hand the modal isn 't reactive to
+      // discoveredNodes regenerating, so re-bind it explicitly when
+      // the user just probed.
+      if (detailNode?.id === card.id) {
+        const refreshed = discoveredNodes.find((c) => c.id === card.id)
+        if (refreshed) detailNode = refreshed
+      }
+    } catch (e) {
+      console.error('[Discovery] probe failed', e)
+    } finally {
+      probingNodeId = null
     }
   }
 
@@ -1761,6 +1848,69 @@
             </div>
           </div>
 
+          <!-- Grabbed nodes — card grid showing every node that
+               discovery has locked-on. Synthetic L2 segments are
+               filtered out (they 're stand-ins, not grabbed devices). -->
+          {#if discoveredNodes.length > 0}
+            <div class="card">
+              <div class="card-header">
+                <h2 class="font-medium text-theme-text-emphasis">
+                  Grabbed nodes
+                  <span class="text-xs text-theme-text-muted ml-2">({discoveredNodes.length})</span>
+                </h2>
+                <p class="text-xs text-theme-text-muted mt-0.5">
+                  Each device discovery has locked-on to. Probe re-runs the source 's scan; the card
+                  updates on next sync.
+                </p>
+              </div>
+              <div class="card-body">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {#each discoveredNodes as card (card.id)}
+                    {@const qualityColor =
+                      card.quality === 'stable'
+                        ? 'bg-green-500'
+                        : card.quality === 'weak'
+                          ? 'bg-amber-500'
+                          : 'bg-neutral-500'}
+                    <button
+                      type="button"
+                      class="text-left rounded-lg border border-theme-border p-3 hover:border-primary hover:bg-theme-bg-canvas/30 transition-colors cursor-pointer"
+                      onclick={() => {
+                        detailNode = card
+                      }}
+                    >
+                      <div class="flex items-start gap-2">
+                        <span
+                          class="inline-block w-2 h-2 rounded-full mt-1.5 flex-shrink-0 {qualityColor}"
+                          title={card.quality}
+                        ></span>
+                        <div class="min-w-0 flex-1">
+                          <p class="font-medium text-sm text-theme-text-emphasis truncate">
+                            {card.label}
+                          </p>
+                          <p class="text-xs text-theme-text-muted truncate">
+                            {card.model ?? card.vendor ?? card.sysDescr?.split(',')[0] ?? '—'}
+                          </p>
+                          <p class="text-xs text-theme-text-muted font-mono mt-0.5">
+                            {card.mgmtIp ?? '—'}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        class="mt-3 pt-2 border-t border-theme-border/50 text-xs text-theme-text-muted"
+                      >
+                        {card.quality}
+                        {#if card.observedAt}
+                          · {formatAgo(card.observedAt)}
+                        {/if}
+                      </div>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          {/if}
+
           <!-- Per-source sync — per-row Sync now. -->
           <div class="card">
             <div class="card-header">
@@ -2235,3 +2385,18 @@
     {/if}
   {/if}
 </div>
+
+<!-- Per-node Discovery detail modal. Card-click in the Discovery tab
+     sets detailNode; closing reverts it to null. -->
+<DiscoveryNodeDetail
+  open={detailNode !== null}
+  onOpenChange={(v) => {
+    if (!v) detailNode = null
+  }}
+  node={detailNode}
+  probing={detailNode !== null && probingNodeId === detailNode.id}
+  {formatAgo}
+  onProbe={() => {
+    if (detailNode) handleProbeNode(detailNode)
+  }}
+/>
