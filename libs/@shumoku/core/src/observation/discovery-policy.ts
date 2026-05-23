@@ -59,7 +59,7 @@ export interface EffectiveDiscoveryPolicy {
  *     scheduled SNMP scan can comfortably catch up, tight enough that
  *     a missed re-poll surfaces inside an hour.
  */
-const RUNTIME_DEFAULT: { mode: DiscoveryMode; intervalMs: number } = {
+export const RUNTIME_DEFAULT: { mode: DiscoveryMode; intervalMs: number } = {
   mode: 'auto',
   intervalMs: 30 * 60 * 1000,
 }
