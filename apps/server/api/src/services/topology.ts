@@ -541,8 +541,11 @@ export class TopologyService {
    * Read the graph stored on a Manual data source 's config_json.
    * Returns null when the source doesn 't exist, isn 't Manual, or has
    * no graph (e.g. freshly attached then config cleared by hand).
+   *
+   * Public so the discovery-policy API can compute / mutate the authored
+   * layer without poking the data_sources table directly.
    */
-  private readManualGraph(sourceId: string): NetworkGraph | null {
+  readManualGraph(sourceId: string): NetworkGraph | null {
     const row = this.db
       .query('SELECT type, config_json FROM data_sources WHERE id = ?')
       .get(sourceId) as { type: string; config_json: string } | undefined
@@ -553,6 +556,43 @@ export class TopologyService {
     } catch {
       return null
     }
+  }
+
+  /**
+   * Persist a new authored graph onto a Manual data source 's config_json.
+   * Preserves any sibling keys we don 't own. Caller is responsible for
+   * invalidating the topology cache (`clearCacheEntry`).
+   */
+  writeManualGraph(sourceId: string, graph: NetworkGraph): void {
+    const row = this.db
+      .query('SELECT type, config_json FROM data_sources WHERE id = ?')
+      .get(sourceId) as { type: string; config_json: string } | undefined
+    if (!row || row.type !== 'manual') {
+      throw new Error(`Data source ${sourceId} is not a Manual source`)
+    }
+    let config: Record<string, unknown> = {}
+    try {
+      config = JSON.parse(row.config_json) as Record<string, unknown>
+    } catch {
+      // Corrupted config — start fresh.
+    }
+    config['graph'] = graph
+    this.db
+      .query('UPDATE data_sources SET config_json = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(config), timestamp(), sourceId)
+  }
+
+  /**
+   * Find-or-create the Manual data source attached to this topology.
+   * Returns the data-source id. Used by the discovery-policy PATCH
+   * endpoint when the first override on a topology lands before the
+   * operator has explicitly attached Manual.
+   */
+  async ensureManualSource(topologyId: string): Promise<string> {
+    const existing = this.findManualSourceId(topologyId)
+    if (existing) return existing
+    const { dataSourceId } = await this.attachManualSource(topologyId, 'topology')
+    return dataSourceId
   }
 
   /**

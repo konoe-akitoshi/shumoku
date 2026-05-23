@@ -9,6 +9,7 @@ import { authMiddleware } from '../middleware/auth.js'
 import { createAuthApi } from './auth.js'
 import { createDashboardsApi } from './dashboards.js'
 import { createDataSourcesApi } from './datasources.js'
+import { createDiscoveryPolicyApi } from './discovery-policy.js'
 import { createObservationsRoute, createScanRoute } from './observations.js'
 import { createPluginsApi } from './plugins.js'
 import { createSettingsApi } from './settings.js'
@@ -35,6 +36,7 @@ export function createApiRouter(): Hono {
   api.route('/topologies', createTopologiesApi())
   api.route('/topologies', topologySourcesApi) // Nested: /topologies/:id/sources
   api.route('/topologies', createObservationsRoute()) // /topologies/:id/observations + /resolved
+  api.route('/topologies', createDiscoveryPolicyApi()) // /topologies/:id/discovery-policy
   api.route('/settings', createSettingsApi())
   api.route('/webhooks', webhooksApi)
 
