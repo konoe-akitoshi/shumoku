@@ -23,7 +23,13 @@
  *     its output.
  */
 
-import type { DiscoveryMode, DiscoveryPolicy, Node, Subgraph } from '../models/types.js'
+import type {
+  DiscoveryMode,
+  DiscoveryPolicy,
+  NetworkGraph,
+  Node,
+  Subgraph,
+} from '../models/types.js'
 
 /**
  * The fully-resolved policy actually applied at a node — every field
@@ -136,4 +142,27 @@ export function isExcluded(policy: EffectiveDiscoveryPolicy): boolean {
  */
 export function absenceImpliesRetraction(policy: EffectiveDiscoveryPolicy): boolean {
   return policy.mode === 'auto' || policy.mode === 'observe'
+}
+
+/**
+ * Convenience: compute the effective discovery policy for a node in
+ * the context of a full `NetworkGraph`. Walks the graph 's subgraphs
+ * once into a lookup map, then delegates to `computeEffectivePolicy`.
+ *
+ * The resolver, the scheduler, and the API "GET effective policy for
+ * this node" surface all need the same answer; they call this helper.
+ */
+export function effectivePolicyForNode(
+  graph: Pick<NetworkGraph, 'subgraphs' | 'discovery'>,
+  node: Pick<Node, 'discovery' | 'parent'>,
+): EffectiveDiscoveryPolicy {
+  const subgraphs = new Map<string, Pick<Subgraph, 'parent' | 'discovery'>>()
+  for (const sg of graph.subgraphs ?? []) {
+    subgraphs.set(sg.id, { parent: sg.parent, discovery: sg.discovery })
+  }
+  return computeEffectivePolicy({
+    node,
+    subgraphs,
+    topologyDefault: graph.discovery,
+  })
 }

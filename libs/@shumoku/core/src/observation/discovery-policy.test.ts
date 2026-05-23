@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest'
-import type { Subgraph } from '../models/types.js'
-import { absenceImpliesRetraction, computeEffectivePolicy, isExcluded } from './discovery-policy.js'
+import type { NetworkGraph, Subgraph } from '../models/types.js'
+import {
+  absenceImpliesRetraction,
+  computeEffectivePolicy,
+  effectivePolicyForNode,
+  isExcluded,
+} from './discovery-policy.js'
 
 function sg(
   id: string,
@@ -138,6 +143,56 @@ describe('isExcluded', () => {
         source: { mode: 'default', intervalMs: 'default' },
       }),
     ).toBe(false)
+  })
+})
+
+describe('effectivePolicyForNode (NetworkGraph context)', () => {
+  // Realistic-ish graph: nested subgraphs + topology default.
+  // tun-gw01 sits in `prod-core` which sits in `prod`.
+  const graph: Pick<NetworkGraph, 'subgraphs' | 'discovery'> = {
+    discovery: { mode: 'observe', intervalMs: 600_000 },
+    subgraphs: [
+      { id: 'prod', label: 'Production', discovery: { mode: 'auto' } },
+      { id: 'prod-core', label: 'Core', parent: 'prod', discovery: { intervalMs: 60_000 } },
+      { id: 'lab', label: 'Lab', discovery: { mode: 'disabled' } },
+    ],
+  }
+
+  it(`walks the graph's subgraphs and resolves nearest-ancestor + topology default`, () => {
+    const e = effectivePolicyForNode(graph, { parent: 'prod-core' })
+    expect(e.mode).toBe('auto') // from `prod`, since `prod-core` only sets intervalMs
+    expect(e.intervalMs).toBe(60_000) // from `prod-core` (nearest)
+  })
+
+  it('node override beats the subgraph chain', () => {
+    const e = effectivePolicyForNode(graph, {
+      parent: 'prod-core',
+      discovery: { mode: 'manual-only' },
+    })
+    expect(e.mode).toBe('manual-only')
+    expect(e.source.mode).toBe('node')
+  })
+
+  it('falls back to topology default for a node outside any subgraph', () => {
+    const e = effectivePolicyForNode(graph, {})
+    expect(e.mode).toBe('observe')
+    expect(e.intervalMs).toBe(600_000)
+    expect(e.source.mode).toBe('topology')
+  })
+
+  it('lab subgraph propagates disabled to its descendants', () => {
+    const e = effectivePolicyForNode(graph, { parent: 'lab' })
+    expect(e.mode).toBe('disabled')
+    // intervalMs not set in `lab` or in topology default for the lab path
+    // → falls through to topology 's intervalMs.
+    expect(e.intervalMs).toBe(600_000)
+    expect(e.source.intervalMs).toBe('topology')
+  })
+
+  it('handles a graph with no subgraphs at all', () => {
+    const e = effectivePolicyForNode({ discovery: { mode: 'auto' } }, {})
+    expect(e.mode).toBe('auto')
+    expect(e.source.mode).toBe('topology')
   })
 })
 
