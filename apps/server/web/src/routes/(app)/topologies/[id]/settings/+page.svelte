@@ -157,6 +157,23 @@
     unbound: 0,
     total: 0,
   })
+  /**
+   * Discovered nodes (the resolved graph 's nodes, minus synthetic
+   * segment nodes). One card per entry in the Discovery tab.
+   */
+  let discoveredNodes = $state<
+    Array<{
+      id: string
+      label: string
+      sysDescr?: string
+      model?: string
+      vendor?: string
+      mgmtIp?: string
+      quality: 'stable' | 'weak' | 'unbound'
+      sourceId?: string
+      observedAt?: number
+    }>
+  >([])
   /** Recent observation snapshots for this topology. */
   let recentObservations = $state<
     Array<{
@@ -671,14 +688,37 @@
         api.topologies.getGraph(topologyId),
         api.topologies.listObservations(topologyId, 20),
       ])
-      // Count identity quality across resolved nodes.
+      // Count identity quality + collect per-node card data.
+      // Segment nodes (synthetic L2 transit, from subnet inference)
+      // are not "grabbed" devices — they 're virtual stand-ins for
+      // unknown L2 fabric. Exclude them from both the gauge and the
+      // card grid.
       const counts = { stable: 0, weak: 0, unbound: 0, total: 0 }
+      const cards: typeof discoveredNodes = []
       for (const node of graphResp.graph.nodes ?? []) {
+        const isSegment =
+          node.spec?.kind === 'hardware' && (node.spec as { type?: string }).type === 'segment'
+        if (isSegment) continue
         const q = nodeIdentityQuality(node.identity)
         counts[q]++
         counts.total++
+        const md = (node.metadata ?? {}) as Record<string, unknown>
+        const label = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
+        cards.push({
+          id: node.id,
+          label,
+          sysDescr: typeof md['sysDescr'] === 'string' ? (md['sysDescr'] as string) : undefined,
+          model:
+            typeof md['chassisModel'] === 'string' ? (md['chassisModel'] as string) : undefined,
+          vendor: typeof md['vendor'] === 'string' ? (md['vendor'] as string) : undefined,
+          mgmtIp: node.identity?.mgmtIp,
+          quality: q,
+          sourceId: node.provenance?.source,
+          observedAt: node.provenance?.observedAt,
+        })
       }
       identityQuality = counts
+      discoveredNodes = cards
       recentObservations = obsList
     } catch (e) {
       console.error('[Discovery] failed to refresh', e)
@@ -721,6 +761,27 @@
       }
     } finally {
       syncingSourceId = null
+    }
+  }
+
+  /**
+   * Probe a single discovered node — re-run discovery against the
+   * source that owns it. v1 just kicks the whole source 's sync
+   * because the SNMP plugin doesn 't yet expose a single-target probe
+   * endpoint; the UI affordance is per-card so a future targeted
+   * scan can land transparently.
+   */
+  let probingNodeId = $state<string | null>(null)
+  async function handleProbeNode(card: (typeof discoveredNodes)[number]) {
+    if (!card.sourceId) return
+    probingNodeId = card.id
+    try {
+      await api.topologies.sources.syncOne(topologyId, card.sourceId)
+      await refreshDiscovery()
+    } catch (e) {
+      console.error('[Discovery] probe failed', e)
+    } finally {
+      probingNodeId = null
     }
   }
 
@@ -1760,6 +1821,77 @@
               {/if}
             </div>
           </div>
+
+          <!-- Grabbed nodes — card grid showing every node that
+               discovery has locked-on. Synthetic L2 segments are
+               filtered out (they 're stand-ins, not grabbed devices). -->
+          {#if discoveredNodes.length > 0}
+            <div class="card">
+              <div class="card-header">
+                <h2 class="font-medium text-theme-text-emphasis">
+                  Grabbed nodes
+                  <span class="text-xs text-theme-text-muted ml-2">({discoveredNodes.length})</span>
+                </h2>
+                <p class="text-xs text-theme-text-muted mt-0.5">
+                  Each device discovery has locked-on to. Probe re-runs the source 's scan; the card
+                  updates on next sync.
+                </p>
+              </div>
+              <div class="card-body">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {#each discoveredNodes as card (card.id)}
+                    {@const qualityColor =
+                      card.quality === 'stable'
+                        ? 'bg-green-500'
+                        : card.quality === 'weak'
+                          ? 'bg-amber-500'
+                          : 'bg-neutral-500'}
+                    <div
+                      class="rounded-lg border border-theme-border p-3 hover:border-primary/40 transition-colors"
+                    >
+                      <div class="flex items-start gap-2">
+                        <span
+                          class="inline-block w-2 h-2 rounded-full mt-1.5 flex-shrink-0 {qualityColor}"
+                          title={card.quality}
+                        ></span>
+                        <div class="min-w-0 flex-1">
+                          <p class="font-medium text-sm text-theme-text-emphasis truncate">
+                            {card.label}
+                          </p>
+                          <p class="text-xs text-theme-text-muted truncate">
+                            {card.model ?? card.vendor ?? card.sysDescr?.split(',')[0] ?? '—'}
+                          </p>
+                          <p class="text-xs text-theme-text-muted font-mono mt-0.5">
+                            {card.mgmtIp ?? '—'}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        class="flex items-center justify-between mt-3 pt-2 border-t border-theme-border/50 text-xs"
+                      >
+                        <span class="text-theme-text-muted">
+                          {card.quality}
+                          {#if card.observedAt}
+                            · {formatAgo(card.observedAt)}
+                          {/if}
+                        </span>
+                        {#if card.sourceId}
+                          <button
+                            type="button"
+                            class="text-primary hover:underline disabled:opacity-50 disabled:no-underline"
+                            disabled={probingNodeId === card.id}
+                            onclick={() => handleProbeNode(card)}
+                          >
+                            {probingNodeId === card.id ? 'probing…' : '⟳ probe'}
+                          </button>
+                        {/if}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          {/if}
 
           <!-- Per-source sync — per-row Sync now. -->
           <div class="card">
