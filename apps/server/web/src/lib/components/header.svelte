@@ -20,6 +20,14 @@
     plugins: 'Plugins',
     settings: 'Settings',
     edit: 'Edit',
+    // Topology subroute tabs (post routes refactor — each is a real
+    // page, so the breadcrumb needs labels for them). Otherwise the
+    // ID_PATTERN heuristic below treats "discovery"/"resolved" as an
+    // ID and shows "…".
+    sources: 'Sources',
+    discovery: 'Discovery',
+    mapping: 'Mapping',
+    resolved: 'Resolved',
   }
 
   // ID-shaped segments (e.g. "msy3HM05AczI") get resolved via the
