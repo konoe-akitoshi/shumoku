@@ -673,7 +673,7 @@
                   Configure a data source to see live metrics.
                 </p>
                 <a
-                  href="/topologies/{topologyId}/settings#sources"
+                  href="/topologies/{topologyId}/sources"
                   class="text-xs text-primary hover:underline"
                 >
                   Configure Data Sources
