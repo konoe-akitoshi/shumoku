@@ -127,31 +127,25 @@
   }
 </script>
 
+<svelte:head>
+  {#if ctx.topology}
+    {@const tab = TABS.find((t) => t.slug === activeSlug)}
+    <title>{ctx.topology.name}{tab && tab.slug ? ` · ${tab.label}` : ''} - Shumoku</title>
+  {/if}
+</svelte:head>
+
 <div class="h-full flex flex-col min-h-0">
   {#if !isDiagram}
-    <!-- Header — only on subroutes. Diagram keeps the full canvas. -->
-    <header class="border-b border-theme-border bg-theme-bg-canvas px-6 pt-4">
-      <div class="flex items-baseline gap-3 mb-1">
-        <a
-          href="/topologies"
-          class="text-sm text-theme-text-muted hover:text-theme-text transition-colors"
-        >
-          Topologies
-        </a>
-        <span class="text-theme-text-muted">/</span>
-        <a
-          href="/topologies/{ctx.topologyId}"
-          class="text-lg font-semibold text-theme-text-emphasis hover:underline"
-        >
-          {ctx.topology?.name ?? ctx.topologyId}
-        </a>
-        {#if ctx.loading}
-          <span class="text-xs text-theme-text-muted inline-flex items-center gap-1">
-            <ArrowsClockwiseIcon size={12} class="animate-spin" />
-            loading
-          </span>
-        {/if}
-      </div>
+    <!-- Tab bar — the only chrome subroutes need; the (app) layout's
+         breadcrumb already carries "Topologies › <name>", so a second
+         in-page breadcrumb would just be noise. -->
+    <header class="border-b border-theme-border bg-theme-bg-canvas px-6 pt-3">
+      {#if ctx.loading}
+        <div class="text-xs text-theme-text-muted inline-flex items-center gap-1 mb-1">
+          <ArrowsClockwiseIcon size={12} class="animate-spin" />
+          loading
+        </div>
+      {/if}
       <nav class="flex gap-1 -mb-px">
         {#each TABS as tab (tab.slug)}
           {@const href = `/topologies/${ctx.topologyId}${tab.slug ? `/${tab.slug}` : ''}`}
