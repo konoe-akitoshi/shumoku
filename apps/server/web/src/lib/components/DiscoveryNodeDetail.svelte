@@ -12,6 +12,17 @@
    * component does no fetching of its own.
    */
 
+  type DiscoveryMode = 'auto' | 'observe' | 'disabled'
+
+  interface EffectivePolicy {
+    mode: DiscoveryMode
+    intervalMs: number
+    source: {
+      mode: 'node' | 'subgraph' | 'topology' | 'default'
+      intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+    }
+  }
+
   interface Props {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -36,9 +47,42 @@
     probing: boolean
     onProbe: () => void
     formatAgo: (ts: number) => string
+    /** Effective discovery policy for this node — null while loading
+     *  or when the GET hasn 't run yet. */
+    effectivePolicy?: EffectivePolicy | null
+    /** Patch in-flight, drives the spinner on the mode buttons. */
+    patchingPolicy?: boolean
+    /** Change mode (or 'inherit' to clear the per-node override). */
+    onSetMode?: (mode: DiscoveryMode | 'inherit') => void | Promise<void>
   }
 
-  let { open, onOpenChange, node, probing, onProbe, formatAgo }: Props = $props()
+  let {
+    open,
+    onOpenChange,
+    node,
+    probing,
+    onProbe,
+    formatAgo,
+    effectivePolicy = null,
+    patchingPolicy = false,
+    onSetMode,
+  }: Props = $props()
+
+  function originLabel(o: EffectivePolicy['source']['mode']): string {
+    if (o === 'node') return 'this node'
+    if (o === 'subgraph') return 'subgraph'
+    if (o === 'topology') return 'topology default'
+    return 'runtime default'
+  }
+
+  const MODE_OPTIONS: DiscoveryMode[] = ['auto', 'observe', 'disabled']
+
+  function formatInterval(ms: number): string {
+    if (ms < 1000) return `${ms}ms`
+    if (ms < 60_000) return `${Math.round(ms / 1000)}s`
+    if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`
+    return `${Math.round(ms / 3_600_000)}h`
+  }
 
   const qualityColor = $derived(
     node?.quality === 'stable'
@@ -114,6 +158,75 @@
               <dd>{node.observedAt ? formatAgo(node.observedAt) : '—'}</dd>
             </div>
           </dl>
+        </section>
+
+        <!-- Discovery policy. The effective mode + interval the
+             scheduler will use for this node, with the per-field
+             origin so the operator can tell "this came from my
+             override" apart from "this came from the subgraph". The
+             three buttons either pin the override (auto / observe /
+             disabled) or clear it (Inherit). 409 from a discovered-only
+             node is surfaced via the parent 's console warn for now —
+             Phase A2.1 will show it inline. -->
+        <section>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">
+              Discovery policy
+            </h3>
+            {#if effectivePolicy}
+              <span class="text-[10px] text-theme-text-muted">
+                from {originLabel(effectivePolicy.source.mode)}
+              </span>
+            {/if}
+          </div>
+          {#if effectivePolicy}
+            <dl class="space-y-1 mb-3">
+              <div class="flex justify-between gap-3">
+                <dt class="text-theme-text-muted">Mode</dt>
+                <dd class="font-mono">{effectivePolicy.mode}</dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-theme-text-muted">Interval</dt>
+                <dd class="font-mono">
+                  {formatInterval(effectivePolicy.intervalMs)}
+                  <span class="text-theme-text-muted ml-1 text-xs">
+                    ({originLabel(effectivePolicy.source.intervalMs)})
+                  </span>
+                </dd>
+              </div>
+            </dl>
+            <div class="flex gap-1.5 flex-wrap">
+              {#each MODE_OPTIONS as m (m)}
+                {@const active = effectivePolicy.mode === m && effectivePolicy.source.mode === 'node'}
+                <button
+                  type="button"
+                  class="text-xs px-2 py-1 rounded border transition-colors {active
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-theme-border hover:border-primary'}"
+                  disabled={patchingPolicy}
+                  onclick={() => onSetMode?.(m)}
+                >
+                  {m}
+                </button>
+              {/each}
+              <button
+                type="button"
+                class="text-xs px-2 py-1 rounded border border-theme-border hover:border-primary transition-colors text-theme-text-muted"
+                disabled={patchingPolicy || effectivePolicy.source.mode !== 'node'}
+                title={effectivePolicy.source.mode !== 'node'
+                  ? 'No per-node override — already inheriting'
+                  : 'Clear per-node override and inherit'}
+                onclick={() => onSetMode?.('inherit')}
+              >
+                Inherit
+              </button>
+              {#if patchingPolicy}
+                <span class="text-xs text-theme-text-muted self-center ml-1">saving…</span>
+              {/if}
+            </div>
+          {:else}
+            <p class="text-xs text-theme-text-muted">Policy view loading…</p>
+          {/if}
         </section>
 
         <!-- Catalog. Set when sysObjectID or chassis part number

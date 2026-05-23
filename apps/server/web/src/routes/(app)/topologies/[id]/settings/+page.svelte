@@ -198,6 +198,28 @@
     }>
   >([])
   let discoveryLoading = $state(false)
+  /**
+   * Effective-policy view from `GET /discovery-policy`. The server folds
+   * topology default → subgraph chain → node override once; the UI just
+   * renders. Keyed by node id and subgraph id.
+   *
+   * We also keep the topology default + runtime default separately so
+   * the summary strip can display them and the modal can attribute
+   * "Inherits from: topology default" without re-walking the chain.
+   */
+  let policyView = $state<{
+    topologyDefault: { mode?: import('$lib/api').DiscoveryMode; intervalMs?: number } | null
+    runtimeDefault: { mode: import('$lib/api').DiscoveryMode; intervalMs: number }
+    nodes: Record<string, import('$lib/api').EffectivePolicy>
+    subgraphs: Record<string, import('$lib/api').EffectivePolicy>
+  } | null>(null)
+  /** Discovery-grid filters. The grid + summary strip share these. */
+  let discoverySearch = $state('')
+  let modeFilter = $state<'all' | 'auto' | 'observe' | 'disabled'>('all')
+  let qualityFilter = $state<'all' | 'stable' | 'weak' | 'unbound'>('all')
+  /** Patch in-flight, keyed by node id, so the modal can show a spinner
+   *  without blocking other interactions. */
+  let policyPatching = $state<Record<string, boolean>>({})
 
   // Filter options cache
   let filterOptionsCache = $state<
@@ -694,10 +716,12 @@
   async function refreshDiscovery() {
     discoveryLoading = true
     try {
-      const [graphResp, obsList] = await Promise.all([
+      const [graphResp, obsList, policy] = await Promise.all([
         api.topologies.getGraph(topologyId),
         api.topologies.listObservations(topologyId, 20),
+        api.topologies.discoveryPolicy.get(topologyId),
       ])
+      policyView = policy
       // Count identity quality + collect per-node card data.
       // Segment nodes (synthetic L2 transit, from subnet inference)
       // are not "grabbed" devices — they 're virtual stand-ins for
@@ -790,6 +814,88 @@
    * endpoint; the UI affordance is per-card so a future targeted
    * scan can land transparently.
    */
+  /**
+   * Filter + search applied to the grabbed-node card grid. The summary
+   * strip 's counters are derived from `discoveredNodes` (the
+   * unfiltered set) so they always reflect the topology total, not
+   * "what survived my filter".
+   */
+  let filteredDiscoveredNodes = $derived.by(() => {
+    const q = discoverySearch.trim().toLowerCase()
+    return discoveredNodes.filter((c) => {
+      if (qualityFilter !== 'all' && c.quality !== qualityFilter) return false
+      if (modeFilter !== 'all') {
+        const eff = policyView?.nodes[c.id]
+        if ((eff?.mode ?? policyView?.runtimeDefault.mode) !== modeFilter) return false
+      }
+      if (!q) return true
+      const hay = [c.label, c.model, c.vendor, c.mgmtIp, c.sysName]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return hay.includes(q)
+    })
+  })
+
+  /** Per-mode counters for the summary strip — derived from the full
+   *  set, not the filtered set, on purpose (filter = "what to view",
+   *  summary = "what the topology is"). */
+  let modeCounts = $derived.by(() => {
+    const out = { auto: 0, observe: 0, disabled: 0 }
+    for (const c of discoveredNodes) {
+      const m = policyView?.nodes[c.id]?.mode ?? policyView?.runtimeDefault.mode ?? 'auto'
+      if (m === 'auto' || m === 'observe' || m === 'disabled') out[m]++
+    }
+    return out
+  })
+
+  /**
+   * Patch the discovery override for a single node. The server returns
+   * the new effective policy; we splice it into `policyView` so the
+   * grid + modal update without a full refresh. On 409 (discovered-only
+   * node), surface the message — the API contract documents this and
+   * the user has to "pin to Manual" first (Phase A2 next).
+   */
+  async function setNodeDiscoveryMode(
+    nodeId: string,
+    discovery: { mode?: import('$lib/api').DiscoveryMode; intervalMs?: number } | null,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    policyPatching = { ...policyPatching, [nodeId]: true }
+    try {
+      const { effective } = await api.topologies.discoveryPolicy.patch(topologyId, {
+        scope: 'node',
+        id: nodeId,
+        discovery,
+      })
+      if (policyView) {
+        policyView = {
+          ...policyView,
+          nodes: { ...policyView.nodes, [nodeId]: effective },
+        }
+      }
+      return { ok: true }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'patch failed'
+      return { ok: false, reason: msg }
+    } finally {
+      policyPatching = { ...policyPatching, [nodeId]: false }
+    }
+  }
+
+  /** Modal callback: change the node's discovery mode. `null` clears
+   *  the per-node override (falls back through the inheritance chain). */
+  async function handleSetMode(mode: import('$lib/api').DiscoveryMode | 'inherit'): Promise<void> {
+    if (!detailNode) return
+    const result = await setNodeDiscoveryMode(detailNode.id, mode === 'inherit' ? null : { mode })
+    if (!result.ok) {
+      // 409 / discovered-only landing: surface the reason in the modal.
+      // The card row in the grid still shows the inherited mode; nothing
+      // visibly broke, but the operator needs to know why their click
+      // didn 't stick.
+      console.warn('[Discovery] policy patch failed:', result.reason)
+    }
+  }
+
   let probingNodeId = $state<string | null>(null)
   async function handleProbeNode(card: (typeof discoveredNodes)[number]) {
     if (!card.sourceId || !card.mgmtIp) return
@@ -1805,40 +1911,111 @@
             </div>
           </div>
         {:else}
-          <!-- Identity binding (掴み) gauge — top of the tab. Counts every
-               resolved node by how reliably it can be re-matched across
-               sources / re-scans. -->
+          <!-- Summary strip — combines identity-binding (how reliably
+               each node is locked-on across re-scans) with the policy
+               distribution (how the scheduler is configured to treat
+               it). One row, six clickable chips that double as filters
+               so the operator sees the topology shape AND drills down
+               in the same gesture. -->
           <div class="card">
-            <div class="card-header">
-              <h2 class="font-medium text-theme-text-emphasis">Identity binding (掴み)</h2>
-              <p class="text-xs text-theme-text-muted mt-0.5">
-                How well each resolved node is locked-on. More identity keys (mgmtIp / chassisId /
-                sysName / vendorIds) → more reliable across re-scans and source changes.
-              </p>
+            <div class="card-header flex items-center justify-between gap-3">
+              <div>
+                <h2 class="font-medium text-theme-text-emphasis">Overview</h2>
+                <p class="text-xs text-theme-text-muted mt-0.5">
+                  Identity binding (掴み) on the left, scheduler policy on the right. Click a chip
+                  to filter the grid below.
+                </p>
+              </div>
+              {#if policyView}
+                {@const def =
+                  policyView.topologyDefault?.mode ?? policyView.runtimeDefault.mode}
+                <span class="text-xs text-theme-text-muted whitespace-nowrap">
+                  topology default: <span class="font-mono">{def}</span>
+                </span>
+              {/if}
             </div>
             <div class="card-body">
-              <div class="grid grid-cols-3 gap-3 text-center">
-                <div class="rounded-lg border border-theme-border p-3">
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center">
+                <button
+                  type="button"
+                  class="rounded-lg border p-3 transition-colors cursor-pointer text-left {qualityFilter ===
+                  'stable'
+                    ? 'border-primary ring-1 ring-primary/40'
+                    : 'border-theme-border hover:border-theme-text-muted'}"
+                  onclick={() =>
+                    (qualityFilter = qualityFilter === 'stable' ? 'all' : 'stable')}
+                >
                   <p class="text-2xl font-semibold text-green-600 dark:text-green-400">
                     {identityQuality.stable}
                   </p>
                   <p class="text-xs text-theme-text-muted mt-1">🟢 stable</p>
-                  <p class="text-[10px] text-theme-text-muted mt-0.5">multiple keys</p>
-                </div>
-                <div class="rounded-lg border border-theme-border p-3">
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border p-3 transition-colors cursor-pointer text-left {qualityFilter ===
+                  'weak'
+                    ? 'border-primary ring-1 ring-primary/40'
+                    : 'border-theme-border hover:border-theme-text-muted'}"
+                  onclick={() => (qualityFilter = qualityFilter === 'weak' ? 'all' : 'weak')}
+                >
                   <p class="text-2xl font-semibold text-amber-600 dark:text-amber-400">
                     {identityQuality.weak}
                   </p>
                   <p class="text-xs text-theme-text-muted mt-1">🟡 weak</p>
-                  <p class="text-[10px] text-theme-text-muted mt-0.5">single key</p>
-                </div>
-                <div class="rounded-lg border border-theme-border p-3">
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border p-3 transition-colors cursor-pointer text-left {qualityFilter ===
+                  'unbound'
+                    ? 'border-primary ring-1 ring-primary/40'
+                    : 'border-theme-border hover:border-theme-text-muted'}"
+                  onclick={() =>
+                    (qualityFilter = qualityFilter === 'unbound' ? 'all' : 'unbound')}
+                >
                   <p class="text-2xl font-semibold text-theme-text-muted">
                     {identityQuality.unbound}
                   </p>
                   <p class="text-xs text-theme-text-muted mt-1">🔴 unbound</p>
-                  <p class="text-[10px] text-theme-text-muted mt-0.5">no identity</p>
-                </div>
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border p-3 transition-colors cursor-pointer text-left {modeFilter ===
+                  'auto'
+                    ? 'border-primary ring-1 ring-primary/40'
+                    : 'border-theme-border hover:border-theme-text-muted'}"
+                  onclick={() => (modeFilter = modeFilter === 'auto' ? 'all' : 'auto')}
+                >
+                  <p class="text-2xl font-semibold text-sky-600 dark:text-sky-400">
+                    {modeCounts.auto}
+                  </p>
+                  <p class="text-xs text-theme-text-muted mt-1">auto</p>
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border p-3 transition-colors cursor-pointer text-left {modeFilter ===
+                  'observe'
+                    ? 'border-primary ring-1 ring-primary/40'
+                    : 'border-theme-border hover:border-theme-text-muted'}"
+                  onclick={() =>
+                    (modeFilter = modeFilter === 'observe' ? 'all' : 'observe')}
+                >
+                  <p class="text-2xl font-semibold text-violet-600 dark:text-violet-400">
+                    {modeCounts.observe}
+                  </p>
+                  <p class="text-xs text-theme-text-muted mt-1">observe</p>
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border p-3 transition-colors cursor-pointer text-left {modeFilter ===
+                  'disabled'
+                    ? 'border-primary ring-1 ring-primary/40'
+                    : 'border-theme-border hover:border-theme-text-muted'}"
+                  onclick={() =>
+                    (modeFilter = modeFilter === 'disabled' ? 'all' : 'disabled')}
+                >
+                  <p class="text-2xl font-semibold text-theme-text-muted">{modeCounts.disabled}</p>
+                  <p class="text-xs text-theme-text-muted mt-1">disabled</p>
+                </button>
               </div>
               {#if identityQuality.total === 0 && !discoveryLoading}
                 <p class="text-xs text-theme-text-muted text-center mt-3">
@@ -1853,60 +2030,118 @@
                filtered out (they 're stand-ins, not grabbed devices). -->
           {#if discoveredNodes.length > 0}
             <div class="card">
-              <div class="card-header">
-                <h2 class="font-medium text-theme-text-emphasis">
-                  Grabbed nodes
-                  <span class="text-xs text-theme-text-muted ml-2">({discoveredNodes.length})</span>
-                </h2>
-                <p class="text-xs text-theme-text-muted mt-0.5">
-                  Each device discovery has locked-on to. Probe re-runs the source 's scan; the card
-                  updates on next sync.
-                </p>
-              </div>
-              <div class="card-body">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {#each discoveredNodes as card (card.id)}
-                    {@const qualityColor =
-                      card.quality === 'stable'
-                        ? 'bg-green-500'
-                        : card.quality === 'weak'
-                          ? 'bg-amber-500'
-                          : 'bg-neutral-500'}
+              <div class="card-header flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h2 class="font-medium text-theme-text-emphasis">
+                    Grabbed nodes
+                    <span class="text-xs text-theme-text-muted ml-2">
+                      {#if filteredDiscoveredNodes.length === discoveredNodes.length}
+                        ({discoveredNodes.length})
+                      {:else}
+                        ({filteredDiscoveredNodes.length}
+                        of {discoveredNodes.length})
+                      {/if}
+                    </span>
+                  </h2>
+                  <p class="text-xs text-theme-text-muted mt-0.5">
+                    Click to see identity / probe / change discovery mode.
+                  </p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input
+                    type="text"
+                    bind:value={discoverySearch}
+                    placeholder="Search by name, IP, model…"
+                    class="text-sm rounded border border-theme-border bg-theme-bg px-2 py-1 w-56 placeholder:text-theme-text-muted/70"
+                  >
+                  {#if modeFilter !== 'all' || qualityFilter !== 'all' || discoverySearch}
                     <button
                       type="button"
-                      class="text-left rounded-lg border border-theme-border p-3 hover:border-primary hover:bg-theme-bg-canvas/30 transition-colors cursor-pointer"
+                      class="text-xs text-theme-text-muted hover:text-theme-text-emphasis"
                       onclick={() => {
-                        detailNode = card
+                        modeFilter = 'all'
+                        qualityFilter = 'all'
+                        discoverySearch = ''
                       }}
                     >
-                      <div class="flex items-start gap-2">
-                        <span
-                          class="inline-block w-2 h-2 rounded-full mt-1.5 flex-shrink-0 {qualityColor}"
-                          title={card.quality}
-                        ></span>
-                        <div class="min-w-0 flex-1">
-                          <p class="font-medium text-sm text-theme-text-emphasis truncate">
-                            {card.label}
-                          </p>
-                          <p class="text-xs text-theme-text-muted truncate">
-                            {card.model ?? card.vendor ?? card.sysDescr?.split(',')[0] ?? '—'}
-                          </p>
-                          <p class="text-xs text-theme-text-muted font-mono mt-0.5">
-                            {card.mgmtIp ?? '—'}
-                          </p>
-                        </div>
-                      </div>
-                      <div
-                        class="mt-3 pt-2 border-t border-theme-border/50 text-xs text-theme-text-muted"
-                      >
-                        {card.quality}
-                        {#if card.observedAt}
-                          · {formatAgo(card.observedAt)}
-                        {/if}
-                      </div>
+                      Clear filters
                     </button>
-                  {/each}
+                  {/if}
                 </div>
+              </div>
+              <div class="card-body">
+                {#if filteredDiscoveredNodes.length === 0}
+                  <p class="text-xs text-theme-text-muted text-center py-6">
+                    No nodes match the current filters.
+                  </p>
+                {:else}
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {#each filteredDiscoveredNodes as card (card.id)}
+                      {@const qualityColor =
+                        card.quality === 'stable'
+                          ? 'bg-green-500'
+                          : card.quality === 'weak'
+                            ? 'bg-amber-500'
+                            : 'bg-neutral-500'}
+                      {@const eff = policyView?.nodes[card.id]}
+                      {@const effMode = eff?.mode ?? policyView?.runtimeDefault.mode ?? 'auto'}
+                      {@const modeTone =
+                        effMode === 'disabled'
+                          ? 'text-theme-text-muted bg-theme-bg-canvas/60'
+                          : effMode === 'observe'
+                            ? 'text-violet-700 dark:text-violet-300 bg-violet-500/10'
+                            : 'text-sky-700 dark:text-sky-300 bg-sky-500/10'}
+                      {@const inherited = eff && eff.source.mode !== 'node'}
+                      <button
+                        type="button"
+                        class="text-left rounded-lg border border-theme-border p-3 hover:border-primary hover:bg-theme-bg-canvas/30 transition-colors cursor-pointer {effMode ===
+                        'disabled'
+                          ? 'opacity-70'
+                          : ''}"
+                        onclick={() => {
+                          detailNode = card
+                        }}
+                      >
+                        <div class="flex items-start gap-2">
+                          <span
+                            class="inline-block w-2 h-2 rounded-full mt-1.5 flex-shrink-0 {qualityColor}"
+                            title={card.quality}
+                          ></span>
+                          <div class="min-w-0 flex-1">
+                            <p class="font-medium text-sm text-theme-text-emphasis truncate">
+                              {card.label}
+                            </p>
+                            <p class="text-xs text-theme-text-muted truncate">
+                              {card.model ?? card.vendor ?? card.sysDescr?.split(',')[0] ?? '—'}
+                            </p>
+                            <p class="text-xs text-theme-text-muted font-mono mt-0.5">
+                              {card.mgmtIp ?? '—'}
+                            </p>
+                          </div>
+                          <span
+                            class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded {modeTone} whitespace-nowrap"
+                            title={inherited
+                              ? `inherited from ${eff?.source.mode}`
+                              : 'per-node override'}
+                          >
+                            {effMode}
+                            {#if inherited}
+                              <span class="ml-0.5 opacity-60">·inh</span>
+                            {/if}
+                          </span>
+                        </div>
+                        <div
+                          class="mt-3 pt-2 border-t border-theme-border/50 text-xs text-theme-text-muted"
+                        >
+                          {card.quality}
+                          {#if card.observedAt}
+                            · {formatAgo(card.observedAt)}
+                          {/if}
+                        </div>
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
               </div>
             </div>
           {/if}
@@ -2395,8 +2630,11 @@
   }}
   node={detailNode}
   probing={detailNode !== null && probingNodeId === detailNode.id}
+  effectivePolicy={detailNode ? (policyView?.nodes[detailNode.id] ?? null) : null}
+  patchingPolicy={detailNode !== null && policyPatching[detailNode.id] === true}
   {formatAgo}
   onProbe={() => {
     if (detailNode) handleProbeNode(detailNode)
   }}
+  onSetMode={handleSetMode}
 />

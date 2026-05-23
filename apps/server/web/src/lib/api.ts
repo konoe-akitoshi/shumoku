@@ -406,6 +406,48 @@ export const topologies = {
         body: JSON.stringify({ type: 'manual', purpose: 'topology' }),
       }),
   },
+
+  /**
+   * Discovery policy — per-node / per-subgraph / topology-default
+   * overrides for what the scheduler does (auto / observe / disabled)
+   * and how often. The server folds the inheritance chain and returns
+   * the *effective* policy for every entity; the UI just renders it.
+   * See `apps/server/api/src/api/discovery-policy.ts` for the route.
+   */
+  discoveryPolicy: {
+    get: (topologyId: string) =>
+      request<{
+        topologyDefault: { mode?: DiscoveryMode; intervalMs?: number } | null
+        runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
+        nodes: Record<string, EffectivePolicy>
+        subgraphs: Record<string, EffectivePolicy>
+      }>(`/topologies/${topologyId}/discovery-policy`),
+
+    patch: (
+      topologyId: string,
+      body:
+        | { scope: 'topology'; discovery: { mode?: DiscoveryMode; intervalMs?: number } | null }
+        | {
+            scope: 'node' | 'subgraph'
+            id: string
+            discovery: { mode?: DiscoveryMode; intervalMs?: number } | null
+          },
+    ) =>
+      request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+  },
+}
+
+export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
+export interface EffectivePolicy {
+  mode: DiscoveryMode
+  intervalMs: number
+  source: {
+    mode: 'node' | 'subgraph' | 'topology' | 'default'
+    intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+  }
 }
 
 // Settings API
