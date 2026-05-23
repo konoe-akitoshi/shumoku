@@ -220,6 +220,14 @@ export class DiscoveryScheduler {
 
         const intervalMs = Math.max(effective.intervalMs, MIN_SYNC_INTERVAL_MS)
         for (const source of sources) {
+          // Manual is the authored layer, not an observed one — there's
+          // no `scan()` or `fetchTopology()` to call. The plugin
+          // capability check in `syncSource()` would catch this too,
+          // but the catch-all would record a `failed` observation
+          // (misleading: it's not a discovery failure, this source
+          // just doesn't do discovery). Skip at the scheduler instead
+          // so the observation history stays meaningful.
+          if (source.dataSource?.type === 'manual') continue
           if (source.lastSyncedAt && now - source.lastSyncedAt < intervalMs) continue
 
           const consecutiveFailures = this.readConsecutiveFailures(source.id)
