@@ -220,20 +220,14 @@
         </div>
       </div>
 
-      <!-- Configure + Sync links — both go to the full Settings page; the
-           Discovery tab is where "Sync now" lives. -->
+      <!-- Configure + Discovery links — each is its own subroute now
+           (Sources is declarative, Discovery is where "Sync now" lives). -->
       <div class="grid grid-cols-2 gap-2">
-        <a
-          href="/topologies/{topology.id}/settings#sources"
-          class="btn btn-secondary justify-center"
-        >
+        <a href="/topologies/{topology.id}/sources" class="btn btn-secondary justify-center">
           <DatabaseIcon size={16} class="mr-2" />
           Configure
         </a>
-        <a
-          href="/topologies/{topology.id}/settings#discovery"
-          class="btn btn-secondary justify-center"
-        >
+        <a href="/topologies/{topology.id}/discovery" class="btn btn-secondary justify-center">
           Discovery →
         </a>
       </div>
@@ -273,10 +267,7 @@
             </p>
           </div>
         </div>
-        <a
-          href="/topologies/{topology.id}/settings#mapping"
-          class="btn btn-secondary w-full justify-center"
-        >
+        <a href="/topologies/{topology.id}/mapping" class="btn btn-secondary w-full justify-center">
           Configure Mapping
         </a>
         <p class="text-xs text-theme-text-muted">
