@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { XIcon } from 'phosphor-svelte'
-  import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
   import type {
@@ -12,17 +10,12 @@
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
   import ShareButton from '$lib/components/ShareButton.svelte'
   import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
-  import TopologySettings from '$lib/components/TopologySettings.svelte'
   import { mappingStore, metricsConnected, topologies } from '$lib/stores'
   import type { Topology, TopologyDataSource } from '$lib/types'
 
   let topology = $state<Topology | null>(null)
-  let renderData = $state<{ nodeCount: number; edgeCount: number } | null>(null)
   let loading = $state(true)
   let error = $state('')
-
-  // Settings panel state
-  let settingsOpen = $state(false)
 
   // Node mapping modal state
   let mappingModalOpen = $state(false)
@@ -56,14 +49,12 @@
 
     ;(async () => {
       try {
-        const [topoData, renderResponse, sources] = await Promise.all([
+        const [topoData, sources] = await Promise.all([
           api.topologies.get(id),
-          fetch(`/api/topologies/${id}/render`).then((r) => r.json()),
           api.topologies.sources.list(id),
         ])
         if (cancelled) return
         topology = topoData
-        renderData = { nodeCount: renderResponse.nodeCount, edgeCount: renderResponse.edgeCount }
         topologies.upsert(topoData)
         mappingStore.hydrate(id, topoData, sources)
 
@@ -90,14 +81,6 @@
       cancelled = true
     }
   })
-
-  function toggleSettings() {
-    settingsOpen = !settingsOpen
-  }
-
-  function handleDeleted() {
-    goto('/topologies')
-  }
 
   function handleNodeSelect(event: NodeSelectEvent) {
     selectedNodeData = event
@@ -129,11 +112,6 @@
   async function handleUnshare() {
     if (!topology) return
     topology = await topologies.unshare(topologyId)
-  }
-
-  function handleTopologyUpdated(updated: Topology) {
-    topology = updated
-    diagramComponent?.refreshGraph()
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -169,9 +147,7 @@
         <InteractiveSvgDiagram
           bind:this={diagramComponent}
           {topologyId}
-          onToggleSettings={toggleSettings}
-          onSearchOpen={() => searchPaletteOpen = true}
-          {settingsOpen}
+          onSearchOpen={() => (searchPaletteOpen = true)}
           onNodeSelect={handleNodeSelect}
           onSubgraphSelect={handleSubgraphSelect}
         />
@@ -201,37 +177,6 @@
       </div>
     {/if}
   </div>
-
-  <!-- Settings panel -->
-  {#if topology && settingsOpen}
-    <div
-      class="w-80 border-l border-theme-border bg-theme-bg-elevated flex flex-col overflow-hidden"
-    >
-      <!-- Panel header -->
-      <div
-        class="h-14 flex items-center justify-between px-4 border-b border-theme-border flex-shrink-0"
-      >
-        <h2 class="font-medium text-theme-text-emphasis">Settings</h2>
-        <button
-          onclick={toggleSettings}
-          class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer"
-          aria-label="Close settings"
-        >
-          <XIcon size={20} />
-        </button>
-      </div>
-
-      <!-- Panel content -->
-      <div class="flex-1 overflow-y-auto p-4">
-        <TopologySettings
-          {topology}
-          {renderData}
-          onDeleted={handleDeleted}
-          onUpdated={handleTopologyUpdated}
-        />
-      </div>
-    </div>
-  {/if}
 </div>
 
 <!-- Subgraph Info Modal -->

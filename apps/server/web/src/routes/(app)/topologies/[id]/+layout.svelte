@@ -53,12 +53,6 @@
     return m?.[1] ?? ''
   })
 
-  /** True only on the Diagram route — the diagram needs a full-bleed
-   *  canvas, so we shrink-wrap the layout chrome around it (no padding,
-   *  no breadcrumb subtitle, smaller header). Subroutes get the
-   *  standard padded container. */
-  let isDiagram = $derived(activeSlug === '')
-
   onMount(async () => {
     // Honor legacy `/settings#X` deep links. The old route baked the
     // tab into a hash fragment; the tabs are now real subroutes, so
@@ -135,33 +129,34 @@
 </svelte:head>
 
 <div class="h-full flex flex-col min-h-0">
-  {#if !isDiagram}
-    <!-- Tab bar — the only chrome subroutes need; the (app) layout's
-         breadcrumb already carries "Topologies › <name>", so a second
-         in-page breadcrumb would just be noise. -->
-    <header class="border-b border-theme-border bg-theme-bg-canvas px-6 pt-3">
-      {#if ctx.loading}
-        <div class="text-xs text-theme-text-muted inline-flex items-center gap-1 mb-1">
-          <ArrowsClockwiseIcon size={12} class="animate-spin" />
-          loading
-        </div>
-      {/if}
-      <nav class="flex gap-1 -mb-px">
-        {#each TABS as tab (tab.slug)}
-          {@const href = `/topologies/${ctx.topologyId}${tab.slug ? `/${tab.slug}` : ''}`}
-          <a
-            {href}
-            class="px-3 py-2 text-sm font-medium transition-colors border-b-2 {activeSlug ===
-            tab.slug
-              ? 'text-primary border-primary'
-              : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
-          >
-            {tab.label}
-          </a>
-        {/each}
-      </nav>
-    </header>
-  {/if}
+  <!-- Tab bar — shown on every topology route, including the Diagram,
+       so the operator never loses their navigation handle. Costs ~40px
+       of vertical on the Diagram canvas; in exchange the IA stays
+       consistent. The (app) layout's breadcrumb already carries
+       "Topologies › <name>", so a second in-page breadcrumb would
+       just be noise. -->
+  <header class="border-b border-theme-border bg-theme-bg-canvas px-6 pt-3 flex-shrink-0">
+    {#if ctx.loading}
+      <div class="text-xs text-theme-text-muted inline-flex items-center gap-1 mb-1">
+        <ArrowsClockwiseIcon size={12} class="animate-spin" />
+        loading
+      </div>
+    {/if}
+    <nav class="flex gap-1 -mb-px">
+      {#each TABS as tab (tab.slug)}
+        {@const href = `/topologies/${ctx.topologyId}${tab.slug ? `/${tab.slug}` : ''}`}
+        <a
+          {href}
+          class="px-3 py-2 text-sm font-medium transition-colors border-b-2 {activeSlug ===
+          tab.slug
+            ? 'text-primary border-primary'
+            : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+        >
+          {tab.label}
+        </a>
+      {/each}
+    </nav>
+  </header>
 
   {#if ctx.error && !ctx.topology}
     <div class="p-6">
@@ -170,6 +165,6 @@
       </div>
     </div>
   {:else}
-    <main class="flex-1 min-h-0 {isDiagram ? '' : 'overflow-auto'}">{@render children?.()}</main>
+    <main class="flex-1 min-h-0 overflow-auto">{@render children?.()}</main>
   {/if}
 </div>
