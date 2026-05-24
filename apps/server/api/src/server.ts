@@ -500,6 +500,15 @@ export class Server {
       port: this.config.server.port,
       hostname: this.config.server.host,
 
+      // Bun's default idleTimeout is 10s — the connection is closed if no
+      // data flows for that long. SNMP-LLDP `/sync` requests stay quiet
+      // for tens of seconds while the per-device walks (and LLDP walks)
+      // run, then write the response in one go. With the default the
+      // browser saw `ERR_EMPTY_RESPONSE` mid-scan even though the scan
+      // was still running server-side. 5 minutes is a comfortable ceiling
+      // for any single sync — the scheduler's MIN_SYNC_INTERVAL_MS is
+      // also 5 minutes, so the same window applies.
+      idleTimeout: 255, // seconds — Bun caps idleTimeout at 255
       fetch(req, server) {
         // Handle WebSocket upgrade
         if (new URL(req.url).pathname === '/ws') {
