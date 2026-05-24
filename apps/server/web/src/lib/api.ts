@@ -417,7 +417,7 @@ export const topologies = {
   discoveryPolicy: {
     get: (topologyId: string) =>
       request<{
-        topologyDefault: { mode?: DiscoveryMode; intervalMs?: number } | null
+        topologyDefault: DiscoveryPolicyPatch | null
         runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
         nodes: Record<string, EffectivePolicy>
         subgraphs: Record<string, EffectivePolicy>
@@ -426,11 +426,11 @@ export const topologies = {
     patch: (
       topologyId: string,
       body:
-        | { scope: 'topology'; discovery: { mode?: DiscoveryMode; intervalMs?: number } | null }
+        | { scope: 'topology'; discovery: DiscoveryPolicyPatch | null }
         | {
             scope: 'node' | 'subgraph'
             id: string
-            discovery: { mode?: DiscoveryMode; intervalMs?: number } | null
+            discovery: DiscoveryPolicyPatch | null
           },
     ) =>
       request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
@@ -440,14 +440,64 @@ export const topologies = {
   },
 }
 
+/** Shape accepted by the discovery-policy PATCH endpoint. Each field
+ *  optional; `null` for the whole object clears the override. */
+export interface DiscoveryPolicyPatch {
+  mode?: DiscoveryMode
+  intervalMs?: number
+  snmpCredentialId?: string
+}
+
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 export interface EffectivePolicy {
   mode: DiscoveryMode
   intervalMs: number
+  snmpCredentialId?: string
   source: {
     mode: 'node' | 'subgraph' | 'topology' | 'default'
     intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+    snmpCredentialId: 'node' | 'subgraph' | 'topology' | 'default'
   }
+}
+
+/**
+ * SNMP credentials — named community strings the discovery policy
+ * chain can reference per node/subgraph/topology-default. The plugin
+ * uses the resolved credential for that target's community instead of
+ * its own config-wide string.
+ *
+ * `community` comes back masked (`••••••••`) on every response; the
+ * raw value only ever lives server-side.
+ */
+export interface SnmpCredential {
+  id: string
+  name: string
+  community: string
+  createdAt: number
+  updatedAt: number
+}
+export interface SnmpCredentialInput {
+  name: string
+  community?: string
+}
+
+export const snmpCredentials = {
+  list: () => request<SnmpCredential[]>('/snmp-credentials'),
+  get: (id: string) => request<SnmpCredential>(`/snmp-credentials/${id}`),
+  create: (input: SnmpCredentialInput) =>
+    request<SnmpCredential>('/snmp-credentials', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  update: (id: string, input: Partial<SnmpCredentialInput>) =>
+    request<SnmpCredential>(`/snmp-credentials/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  delete: (id: string) =>
+    request<{ success: boolean }>(`/snmp-credentials/${id}`, {
+      method: 'DELETE',
+    }),
 }
 
 // Settings API
@@ -642,6 +692,7 @@ export const api = {
   plugins,
   topologies,
   settings,
+  snmpCredentials,
   health,
   auth,
 }

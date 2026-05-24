@@ -17,10 +17,17 @@
   interface EffectivePolicy {
     mode: DiscoveryMode
     intervalMs: number
+    snmpCredentialId?: string
     source: {
       mode: 'node' | 'subgraph' | 'topology' | 'default'
       intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+      snmpCredentialId: 'node' | 'subgraph' | 'topology' | 'default'
     }
+  }
+
+  interface CredentialOption {
+    id: string
+    name: string
   }
 
   interface Props {
@@ -58,6 +65,14 @@
      *  banner under the mode buttons so the operator sees why their
      *  click didn 't stick (e.g. 409 "pin to Manual first"). */
     policyErrorMessage?: string | null
+    /** Available SNMP credentials for the picker. Caller fetches them
+     *  once and passes the same list to every modal open. Empty array
+     *  is fine — the picker shows an inline link to /settings/snmp-
+     *  credentials. */
+    snmpCredentialOptions?: CredentialOption[]
+    /** Change the per-node SNMP credential override. Pass `''` (empty
+     *  string) to clear the per-node override and inherit. */
+    onSetCredential?: (credentialId: string) => void | Promise<void>
   }
 
   let {
@@ -71,6 +86,8 @@
     patchingPolicy = false,
     onSetMode,
     policyErrorMessage = null,
+    snmpCredentialOptions = [],
+    onSetCredential,
   }: Props = $props()
 
   function originLabel(o: EffectivePolicy['source']['mode']): string {
@@ -234,6 +251,50 @@
                 class="mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
               >
                 {policyErrorMessage}
+              </div>
+            {/if}
+
+            <!-- SNMP credential picker. Inherits through the same
+                 chain as mode/intervalMs. Empty string clears the
+                 per-node override. Empty credentials list shows a
+                 link to create one rather than an empty dropdown. -->
+            {#if onSetCredential}
+              <div class="mt-3">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs text-theme-text-muted">SNMP credential</span>
+                  {#if effectivePolicy.snmpCredentialId}
+                    <span class="text-[10px] text-theme-text-muted">
+                      from {originLabel(effectivePolicy.source.snmpCredentialId)}
+                    </span>
+                  {/if}
+                </div>
+                {#if snmpCredentialOptions.length === 0}
+                  <p class="text-xs text-theme-text-muted">
+                    No credentials defined.
+                    <a href="/settings/snmp-credentials" class="text-primary hover:underline">
+                      Create one →
+                    </a>
+                  </p>
+                {:else}
+                  <select
+                    class="input text-sm w-full"
+                    value={effectivePolicy.source.snmpCredentialId === 'node'
+                      ? (effectivePolicy.snmpCredentialId ?? '')
+                      : ''}
+                    disabled={patchingPolicy}
+                    onchange={(e) => onSetCredential?.(e.currentTarget.value)}
+                  >
+                    <option value="">
+                      — inherit ({effectivePolicy.snmpCredentialId
+                      ? snmpCredentialOptions.find((c) => c.id === effectivePolicy?.snmpCredentialId)
+                          ?.name ?? 'unknown'
+                      : 'plugin default'}) —
+                    </option>
+                    {#each snmpCredentialOptions as opt (opt.id)}
+                      <option value={opt.id}>{opt.name}</option>
+                    {/each}
+                  </select>
+                {/if}
               </div>
             {/if}
           {:else}

@@ -229,6 +229,22 @@
         </div>
       </div>
 
+      <!-- Network credentials -->
+      <div class="card lg:col-span-2">
+        <div class="card-header">
+          <h2 class="font-medium text-theme-text-emphasis">Network credentials</h2>
+        </div>
+        <div class="card-body">
+          <p class="text-theme-text-muted mb-4 text-sm">
+            Named SNMP community strings. Topology nodes reference one via the discovery-policy
+            chain instead of every SNMP-LLDP data source being tied to a single community.
+          </p>
+          <a href="/settings/snmp-credentials" class="btn btn-secondary">
+            Manage SNMP credentials →
+          </a>
+        </div>
+      </div>
+
       <!-- About -->
       <div class="card lg:col-span-2">
         <div class="card-header">

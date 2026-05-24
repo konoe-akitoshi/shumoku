@@ -40,12 +40,19 @@ export interface EffectiveDiscoveryPolicy {
   mode: DiscoveryMode
   intervalMs: number
   /**
+   * Resolved SNMP credential id. `undefined` means "use the
+   * plugin's config-wide community"; consumers should not invent a
+   * fallback id when this is missing.
+   */
+  snmpCredentialId?: string
+  /**
    * Where each field came from in the inheritance chain. Useful for
    * the "Inherits from: Subgraph X" hint in the node detail modal.
    */
   source: {
     mode: 'node' | 'subgraph' | 'topology' | 'default'
     intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+    snmpCredentialId: 'node' | 'subgraph' | 'topology' | 'default'
   }
 }
 
@@ -98,6 +105,8 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
   let modeOrigin: EffectiveDiscoveryPolicy['source']['mode'] | undefined
   let intervalMs: number | undefined
   let intervalOrigin: EffectiveDiscoveryPolicy['source']['intervalMs'] | undefined
+  let snmpCredentialId: string | undefined
+  let credentialOrigin: EffectiveDiscoveryPolicy['source']['snmpCredentialId'] | undefined
 
   for (const layer of layers) {
     if (mode === undefined && layer.policy?.mode !== undefined) {
@@ -108,15 +117,21 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
       intervalMs = layer.policy.intervalMs
       intervalOrigin = layer.origin
     }
-    if (mode !== undefined && intervalMs !== undefined) break
+    if (snmpCredentialId === undefined && layer.policy?.snmpCredentialId !== undefined) {
+      snmpCredentialId = layer.policy.snmpCredentialId
+      credentialOrigin = layer.origin
+    }
+    if (mode !== undefined && intervalMs !== undefined && snmpCredentialId !== undefined) break
   }
 
   return {
     mode: mode ?? RUNTIME_DEFAULT.mode,
     intervalMs: intervalMs ?? RUNTIME_DEFAULT.intervalMs,
+    snmpCredentialId,
     source: {
       mode: modeOrigin ?? 'default',
       intervalMs: intervalOrigin ?? 'default',
+      snmpCredentialId: credentialOrigin ?? 'default',
     },
   }
 }

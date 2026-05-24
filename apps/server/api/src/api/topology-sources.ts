@@ -7,7 +7,9 @@ import type { NetworkGraph } from '@shumoku/core'
 import { Hono } from 'hono'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
+import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
 import { ObservationsService } from '../services/observations.js'
+import { SnmpCredentialsService } from '../services/snmp-credentials.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { SyncMode, TopologyDataSourceInput } from '../types.js'
 import { getTopologyService } from './topologies.js'
@@ -292,7 +294,15 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
   const capturedAt = Date.now()
   const observations = new ObservationsService()
   try {
-    const snapshot = await plugin.scan({ seeds })
+    // Apply per-target credential overrides here too — even the ad-hoc
+    // /probe endpoint (which passes specific seeds) should honor what
+    // the operator configured on those nodes.
+    const credentials = resolveCredentialsForAutoscan(
+      topologyId,
+      getTopologyService(),
+      new SnmpCredentialsService(),
+    )
+    const snapshot = await plugin.scan({ seeds, credentials })
     const observation = await observations.record({
       topologyId,
       sourceId,
@@ -356,7 +366,12 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
 
   try {
     if (hasAutoscanCapability(plugin)) {
-      const snapshot = await plugin.scan({ seeds: [] })
+      const credentials = resolveCredentialsForAutoscan(
+        topologyId,
+        getTopologyService(),
+        new SnmpCredentialsService(),
+      )
+      const snapshot = await plugin.scan({ seeds: [], credentials })
       graph = snapshot.graph
       status = snapshot.status
       statusMessage = snapshot.statusMessage
@@ -364,7 +379,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
     } else if (hasTopologyCapability(plugin)) {
       const opts = attached.optionsJson ? JSON.parse(attached.optionsJson) : undefined
       graph = await plugin.fetchTopology(opts)
-      status = graph && graph.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+      status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
     } else {
       return c.json(
         {

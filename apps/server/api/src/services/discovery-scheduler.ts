@@ -41,6 +41,7 @@ import { getDatabase } from '../db/index.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from './datasource.js'
 import { ObservationsService } from './observations.js'
+import { SnmpCredentialsService } from './snmp-credentials.js'
 import { TopologyService } from './topology.js'
 import { TopologySourcesService } from './topology-sources.js'
 
@@ -62,6 +63,7 @@ export async function syncSource(
     topologySourcesService: TopologySourcesService
     dataSourceService: DataSourceService
     observationsService: ObservationsService
+    snmpCredentialsService: SnmpCredentialsService
   },
 ): Promise<{
   status: 'ok' | 'partial' | 'failed' | 'empty'
@@ -83,14 +85,23 @@ export async function syncSource(
 
   try {
     if (hasAutoscanCapability(plugin)) {
-      const snapshot = await plugin.scan({ seeds: [] })
+      // Resolve per-target SNMP credentials from the authored layer's
+      // discovery-policy chain (topology default → subgraph → node).
+      // The plugin doesn't know about credential entities — we pass it
+      // a flat ip→community map and it uses that wherever a key matches.
+      const credentials = resolveCredentialsForAutoscan(
+        topologyId,
+        deps.topologyService,
+        deps.snmpCredentialsService,
+      )
+      const snapshot = await plugin.scan({ seeds: [], credentials })
       graph = snapshot.graph
       status = snapshot.status
       statusMessage = snapshot.statusMessage
     } else if (hasTopologyCapability(plugin)) {
       const opts = attached.optionsJson ? JSON.parse(attached.optionsJson) : undefined
       graph = await plugin.fetchTopology(opts)
-      status = graph && graph.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+      status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
     } else {
       throw new Error(
         `Plugin ${plugin.type} cannot supply topology (no autoscan or topology capability)`,
@@ -139,11 +150,69 @@ function backoffFor(failCount: number): number {
   return Math.min(backoff, MAX_BACKOFF_MS)
 }
 
+/**
+ * Walk a topology's authored Manual graph and resolve every node's
+ * effective discovery policy. For nodes with both an `identity.mgmtIp`
+ * and a resolved `snmpCredentialId`, look up the credential and emit
+ * an entry in the returned map keyed by the mgmt IP. Nodes that
+ * don't resolve to a credential (or have no mgmt IP) are absent from
+ * the map — the plugin falls back to its config-wide community for
+ * those.
+ *
+ * Why mgmtIp as the key: the SNMP-LLDP plugin probes by IP/hostname
+ * strings exactly as they appear in its `targets` config. mgmtIp is
+ * the closest stable thing we have to those strings; the operator
+ * typically lists targets by IP. A future refinement could match by
+ * hostname or other identity keys.
+ */
+export function resolveCredentialsForAutoscan(
+  topologyId: string,
+  topologyService: TopologyService,
+  credentialsService: SnmpCredentialsService,
+): Record<string, string> {
+  const topology = topologyService.get(topologyId)
+  if (!topology?.manualSourceId) return {}
+  const graph = topologyService.readManualGraph(topology.manualSourceId)
+  if (!graph) return {}
+
+  // Pre-collect every credentialId mentioned anywhere in the graph,
+  // then do one batched DB read. Avoids N round-trips when a topology
+  // has dozens of nodes pointing at the same handful of credentials.
+  const subgraphLookup = new Map(
+    (graph.subgraphs ?? []).map((sg) => [sg.id, { parent: sg.parent, discovery: sg.discovery }]),
+  )
+  const ipToCredentialId = new Map<string, string>()
+  const credentialIds = new Set<string>()
+  for (const node of graph.nodes) {
+    const ip = node.identity?.mgmtIp
+    if (!ip) continue
+    const eff = computeEffectivePolicy({
+      node: { discovery: node.discovery, parent: node.parent },
+      subgraphs: subgraphLookup,
+      topologyDefault: graph.discovery,
+    })
+    if (eff.snmpCredentialId) {
+      ipToCredentialId.set(ip, eff.snmpCredentialId)
+      credentialIds.add(eff.snmpCredentialId)
+    }
+  }
+  if (credentialIds.size === 0) return {}
+
+  const creds = credentialsService.getMany([...credentialIds])
+  const result: Record<string, string> = {}
+  for (const [ip, credId] of ipToCredentialId) {
+    const cred = creds.get(credId)
+    if (cred) result[ip] = cred.community
+  }
+  return result
+}
+
 export class DiscoveryScheduler {
   private topologyService: TopologyService
   private topologySourcesService: TopologySourcesService
   private dataSourceService: DataSourceService
   private observationsService: ObservationsService
+  private snmpCredentialsService: SnmpCredentialsService
   private intervalId: ReturnType<typeof setInterval> | null = null
   private isRunning = false
   private tickInFlight = false
@@ -153,6 +222,7 @@ export class DiscoveryScheduler {
     this.topologySourcesService = new TopologySourcesService()
     this.dataSourceService = new DataSourceService()
     this.observationsService = new ObservationsService()
+    this.snmpCredentialsService = new SnmpCredentialsService()
   }
 
   start(): void {
@@ -242,6 +312,7 @@ export class DiscoveryScheduler {
               topologySourcesService: this.topologySourcesService,
               dataSourceService: this.dataSourceService,
               observationsService: this.observationsService,
+              snmpCredentialsService: this.snmpCredentialsService,
             })
             console.log(
               `[DiscoveryScheduler] ${topology.name} ← ${source.dataSourceId}: ${result.status} (${result.nodeCount} nodes, ${result.linkCount} links)`,

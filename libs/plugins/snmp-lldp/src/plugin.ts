@@ -167,6 +167,10 @@ export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
       const result = await discover({
         targets,
         community,
+        // Per-target overrides flow through here. Plugin doesn't know
+        // about credential entities — server resolves them from the
+        // discovery-policy chain and hands us a flat ip→community map.
+        credentialsByTarget: input.credentials,
         sourceId,
         timeoutMs: this.config.timeoutMs,
       })

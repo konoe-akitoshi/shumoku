@@ -375,6 +375,18 @@ export interface AutoscanInput {
   scope?: ScopePolicy
   /** Optional per-device catalog hints. */
   capabilityHints?: DiscoveryCapabilityHints
+  /**
+   * Per-target SNMP credential override. Keyed by IP (or hostname) of
+   * the target; value is the literal community string to use for that
+   * one device. For IPs not in the map (or when this whole field is
+   * undefined), the plugin falls back to its config-wide community.
+   *
+   * Server resolves these from the topology's discovery-policy
+   * inheritance chain (`snmpCredentialId` → credentials table lookup)
+   * and passes them in here, so the plugin doesn't need to know about
+   * the credential entity itself.
+   */
+  credentials?: Record<string, string>
 }
 
 /** Optional progress event stream during a long scan. */

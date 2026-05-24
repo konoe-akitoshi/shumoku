@@ -46,8 +46,20 @@ export interface DiscoverInput {
   /** Mixed list of targets: IPs, hostnames, or CIDR blocks. CIDR is
    *  expanded to host addresses; non-CIDR entries pass through. */
   targets: readonly string[]
-  /** SNMP community string used for every target. */
+  /** Fallback SNMP community used for any target not covered by
+   *  `credentialsByTarget`. */
   community: string
+  /**
+   * Per-target SNMP community override. Key = exact target string
+   * (IP or hostname as seen in `targets`); value = community to use.
+   * Targets not in the map fall through to `community`.
+   *
+   * Why exact string (rather than IP normalization): the same host
+   * shows up here whether the operator typed `10.0.0.5` or
+   * `core-rtr-01`; we don't try to resolve. Server is responsible for
+   * normalizing keys to whatever form will hit during liveness probe.
+   */
+  credentialsByTarget?: Record<string, string>
   /** Source id stamped into provenance on every produced element. */
   sourceId: string
   /** Deep-scan timeout in ms (full SNMP walk per device). Default 2000. */
@@ -141,11 +153,17 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     return emptyResult(warnings)
   }
 
+  // Per-target community resolver. Falls back to the input-level
+  // `community` for any IP/hostname not in the override map. Closure
+  // captures both so callers downstream don't need to thread two args.
+  const communityFor = (target: string): string =>
+    input.credentialsByTarget?.[target] ?? input.community
+
   // 2. Liveness probe — short SNMP get for sysName in parallel chunks.
   //    Silently drops non-responders. This is the key behavior that
   //    makes a /24 scan tolerable: ~250 addresses, ~250ms RTT each,
   //    32-way parallel → ~2s instead of ~250s sequential.
-  const alive = await probeAlive(expanded, input.community)
+  const alive = await probeAlive(expanded, communityFor)
 
   if (alive.length === 0) {
     warnings.push(
@@ -159,7 +177,7 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   for (const address of alive) {
     const client = new SnmpClient({
       address,
-      community: input.community,
+      community: communityFor(address),
       timeoutMs: input.timeoutMs,
     })
     try {
@@ -182,7 +200,7 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   for (const [address, device] of visited) {
     const client = new SnmpClient({
       address,
-      community: input.community,
+      community: communityFor(address),
       timeoutMs: input.timeoutMs,
     })
     try {
@@ -257,7 +275,10 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
  *  candidates in bounded-concurrency chunks. Returns the subset that
  *  responded. Errors are swallowed (non-responders are not warnings;
  *  the whole point is to silently drop dead addresses). */
-async function probeAlive(addresses: readonly string[], community: string): Promise<string[]> {
+async function probeAlive(
+  addresses: readonly string[],
+  communityFor: (addr: string) => string,
+): Promise<string[]> {
   const alive: string[] = []
   for (let i = 0; i < addresses.length; i += LIVENESS_CONCURRENCY) {
     const chunk = addresses.slice(i, i + LIVENESS_CONCURRENCY)
@@ -265,7 +286,7 @@ async function probeAlive(addresses: readonly string[], community: string): Prom
       chunk.map(async (addr) => {
         const client = new SnmpClient({
           address: addr,
-          community,
+          community: communityFor(addr),
           timeoutMs: LIVENESS_TIMEOUT_MS,
           retries: 0,
         })

@@ -9,7 +9,9 @@ import { Hono } from 'hono'
 import { getLayoutEngine } from '../layout.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
+import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
 import { ObservationsService } from '../services/observations.js'
+import { SnmpCredentialsService } from '../services/snmp-credentials.js'
 import { TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { MetricsMapping, TopologyInput } from '../types.js'
@@ -476,7 +478,12 @@ export function createTopologiesApi(): Hono {
 
           if (hasAutoscanCapability(plugin)) {
             // SNMP-LLDP and other autoscan plugins return a Snapshot directly.
-            const snapshot = await plugin.scan({ seeds: [] })
+            const credentials = resolveCredentialsForAutoscan(
+              id,
+              getTopologyService(),
+              new SnmpCredentialsService(),
+            )
+            const snapshot = await plugin.scan({ seeds: [], credentials })
             graph = snapshot.graph
             status = snapshot.status
             statusMessage = snapshot.statusMessage
@@ -484,7 +491,7 @@ export function createTopologiesApi(): Hono {
             // NetBox / Zabbix-topology / etc. — wrap fetchTopology in a snapshot.
             const opts = source.optionsJson ? JSON.parse(source.optionsJson) : undefined
             graph = await plugin.fetchTopology(opts)
-            status = graph && graph.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+            status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
           } else {
             throw new Error(
               `Plugin ${plugin.type} cannot supply topology (no autoscan or topology capability)`,
