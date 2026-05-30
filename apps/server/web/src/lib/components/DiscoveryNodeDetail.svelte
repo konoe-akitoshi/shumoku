@@ -17,17 +17,12 @@
   interface EffectivePolicy {
     mode: DiscoveryMode
     intervalMs: number
-    snmpCredentialId?: string
+    community?: string
     source: {
       mode: 'node' | 'subgraph' | 'topology' | 'default'
       intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
-      snmpCredentialId: 'node' | 'subgraph' | 'topology' | 'default'
+      community: 'node' | 'subgraph' | 'topology' | 'default'
     }
-  }
-
-  interface CredentialOption {
-    id: string
-    name: string
   }
 
   interface Props {
@@ -68,14 +63,9 @@
      *  banner under the mode buttons so the operator sees why their
      *  click didn 't stick (e.g. 409 "pin to Manual first"). */
     policyErrorMessage?: string | null
-    /** Available SNMP credentials for the picker. Caller fetches them
-     *  once and passes the same list to every modal open. Empty array
-     *  is fine — the picker shows an inline link to /settings/snmp-
-     *  credentials. */
-    snmpCredentialOptions?: CredentialOption[]
-    /** Change the per-node SNMP credential override. Pass `''` (empty
-     *  string) to clear the per-node override and inherit. */
-    onSetCredential?: (credentialId: string) => void | Promise<void>
+    /** Set the per-node SNMP community. Pass `''` to clear the per-node
+     *  override and inherit (from subgraph / topology / plugin default). */
+    onSetCommunity?: (community: string) => void | Promise<void>
   }
 
   let {
@@ -89,8 +79,7 @@
     patchingPolicy = false,
     onSetMode,
     policyErrorMessage = null,
-    snmpCredentialOptions = [],
-    onSetCredential,
+    onSetCommunity,
   }: Props = $props()
 
   function originLabel(o: EffectivePolicy['source']['mode']): string {
@@ -208,50 +197,39 @@
             <div
               class="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
             >
-              Reachable but not readable over SNMP. Assign a working credential below to sync this
+              Reachable but not readable over SNMP. Set a working community below to sync this
               device.
             </div>
           {/if}
 
-          <!-- SNMP credential. Inherits through the same chain as
-               mode/intervalMs. Empty string clears the per-node override.
-               Empty credentials list shows a link to create one. -->
-          {#if onSetCredential}
+          <!-- SNMP community, attached directly to this node. Inherits
+               through the same chain as mode/intervalMs (topology default
+               → subgraph → node). Empty value clears the per-node
+               override and inherits. -->
+          {#if onSetCommunity}
             <div class="mt-3">
               <div class="flex items-center justify-between mb-1">
-                <span class="text-xs text-theme-text-muted">SNMP credential</span>
-                {#if effectivePolicy?.snmpCredentialId}
+                <span class="text-xs text-theme-text-muted">SNMP community</span>
+                {#if effectivePolicy?.community}
                   <span class="text-[10px] text-theme-text-muted">
-                    from {originLabel(effectivePolicy.source.snmpCredentialId)}
+                    from {originLabel(effectivePolicy.source.community)}
                   </span>
                 {/if}
               </div>
-              {#if snmpCredentialOptions.length === 0}
-                <p class="text-xs text-theme-text-muted">
-                  No credentials defined.
-                  <a href="/settings/snmp-credentials" class="text-primary hover:underline">
-                    Create one →
-                  </a>
-                </p>
-              {:else if effectivePolicy}
-                <select
-                  class="input text-sm w-full"
-                  value={effectivePolicy.source.snmpCredentialId === 'node'
-                    ? (effectivePolicy.snmpCredentialId ?? '')
+              {#if effectivePolicy}
+                <input
+                  type="text"
+                  class="input text-sm w-full font-mono"
+                  value={effectivePolicy.source.community === 'node'
+                    ? (effectivePolicy.community ?? '')
                     : ''}
+                  placeholder={effectivePolicy.community &&
+                  effectivePolicy.source.community !== 'node'
+                    ? `inherit: ${effectivePolicy.community}`
+                    : 'inherit (plugin default)'}
                   disabled={patchingPolicy}
-                  onchange={(e) => onSetCredential?.(e.currentTarget.value)}
+                  onchange={(e) => onSetCommunity?.(e.currentTarget.value.trim())}
                 >
-                  <option value="">
-                    — inherit ({effectivePolicy.snmpCredentialId
-                    ? snmpCredentialOptions.find((c) => c.id === effectivePolicy?.snmpCredentialId)
-                        ?.name ?? 'unknown'
-                    : 'plugin default'}) —
-                  </option>
-                  {#each snmpCredentialOptions as opt (opt.id)}
-                    <option value={opt.id}>{opt.name}</option>
-                  {/each}
-                </select>
               {:else}
                 <p class="text-xs text-theme-text-muted">Loading…</p>
               {/if}

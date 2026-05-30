@@ -14,7 +14,6 @@ import { createObservationsRoute, createScanRoute } from './observations.js'
 import { createPluginsApi } from './plugins.js'
 import { createSettingsApi } from './settings.js'
 import { createShareApi } from './share.js'
-import { createSnmpCredentialsApi } from './snmp-credentials.js'
 import { createTopologiesApi } from './topologies.js'
 import { topologySourcesApi } from './topology-sources.js'
 import { webhooksApi } from './webhooks.js'
@@ -39,7 +38,6 @@ export function createApiRouter(): Hono {
   api.route('/topologies', createObservationsRoute()) // /topologies/:id/observations + /resolved
   api.route('/topologies', createDiscoveryPolicyApi()) // /topologies/:id/discovery-policy
   api.route('/settings', createSettingsApi())
-  api.route('/snmp-credentials', createSnmpCredentialsApi())
   api.route('/webhooks', webhooksApi)
 
   // API health check

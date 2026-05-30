@@ -70,17 +70,17 @@ function parseDiscoveryPolicy(
     }
     policy.intervalMs = raw.intervalMs
   }
-  if (raw.snmpCredentialId !== undefined) {
+  if (raw.community !== undefined) {
     // Empty string is intentionally the "clear this field only"
     // signal — distinct from `null` (which clears the whole policy
     // override at the parent level). Stored as `undefined` so the
     // resolver treats it as absent and falls back through inheritance.
-    if (raw.snmpCredentialId === '') {
-      policy.snmpCredentialId = undefined
-    } else if (typeof raw.snmpCredentialId !== 'string') {
-      return { error: 'snmpCredentialId must be a string or empty string' }
+    if (raw.community === '') {
+      policy.community = undefined
+    } else if (typeof raw.community !== 'string') {
+      return { error: 'community must be a string or empty string' }
     } else {
-      policy.snmpCredentialId = raw.snmpCredentialId
+      policy.community = raw.community
     }
   }
   return { policy }

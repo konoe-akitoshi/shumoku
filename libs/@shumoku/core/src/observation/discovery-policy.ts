@@ -40,11 +40,11 @@ export interface EffectiveDiscoveryPolicy {
   mode: DiscoveryMode
   intervalMs: number
   /**
-   * Resolved SNMP credential id. `undefined` means "use the
+   * Resolved SNMP community string. `undefined` means "use the
    * plugin's config-wide community"; consumers should not invent a
-   * fallback id when this is missing.
+   * fallback when this is missing.
    */
-  snmpCredentialId?: string
+  community?: string
   /**
    * Where each field came from in the inheritance chain. Useful for
    * the "Inherits from: Subgraph X" hint in the node detail modal.
@@ -52,7 +52,7 @@ export interface EffectiveDiscoveryPolicy {
   source: {
     mode: 'node' | 'subgraph' | 'topology' | 'default'
     intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
-    snmpCredentialId: 'node' | 'subgraph' | 'topology' | 'default'
+    community: 'node' | 'subgraph' | 'topology' | 'default'
   }
 }
 
@@ -105,8 +105,8 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
   let modeOrigin: EffectiveDiscoveryPolicy['source']['mode'] | undefined
   let intervalMs: number | undefined
   let intervalOrigin: EffectiveDiscoveryPolicy['source']['intervalMs'] | undefined
-  let snmpCredentialId: string | undefined
-  let credentialOrigin: EffectiveDiscoveryPolicy['source']['snmpCredentialId'] | undefined
+  let community: string | undefined
+  let communityOrigin: EffectiveDiscoveryPolicy['source']['community'] | undefined
 
   for (const layer of layers) {
     if (mode === undefined && layer.policy?.mode !== undefined) {
@@ -117,21 +117,21 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
       intervalMs = layer.policy.intervalMs
       intervalOrigin = layer.origin
     }
-    if (snmpCredentialId === undefined && layer.policy?.snmpCredentialId !== undefined) {
-      snmpCredentialId = layer.policy.snmpCredentialId
-      credentialOrigin = layer.origin
+    if (community === undefined && layer.policy?.community !== undefined) {
+      community = layer.policy.community
+      communityOrigin = layer.origin
     }
-    if (mode !== undefined && intervalMs !== undefined && snmpCredentialId !== undefined) break
+    if (mode !== undefined && intervalMs !== undefined && community !== undefined) break
   }
 
   return {
     mode: mode ?? RUNTIME_DEFAULT.mode,
     intervalMs: intervalMs ?? RUNTIME_DEFAULT.intervalMs,
-    snmpCredentialId,
+    community,
     source: {
       mode: modeOrigin ?? 'default',
       intervalMs: intervalOrigin ?? 'default',
-      snmpCredentialId: credentialOrigin ?? 'default',
+      community: communityOrigin ?? 'default',
     },
   }
 }

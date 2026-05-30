@@ -9,7 +9,6 @@ import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.j
 import { DataSourceService } from '../services/datasource.js'
 import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
 import { ObservationsService } from '../services/observations.js'
-import { SnmpCredentialsService } from '../services/snmp-credentials.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { SyncMode, TopologyDataSourceInput } from '../types.js'
 import { getTopologyService } from './topologies.js'
@@ -297,11 +296,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
     // Apply per-target credential overrides here too — even the ad-hoc
     // /probe endpoint (which passes specific seeds) should honor what
     // the operator configured on those nodes.
-    const credentials = resolveCredentialsForAutoscan(
-      topologyId,
-      getTopologyService(),
-      new SnmpCredentialsService(),
-    )
+    const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
     const snapshot = await plugin.scan({ seeds, credentials })
     const observation = await observations.record({
       topologyId,
@@ -366,11 +361,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
 
   try {
     if (hasAutoscanCapability(plugin)) {
-      const credentials = resolveCredentialsForAutoscan(
-        topologyId,
-        getTopologyService(),
-        new SnmpCredentialsService(),
-      )
+      const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
       const snapshot = await plugin.scan({ seeds: [], credentials })
       graph = snapshot.graph
       status = snapshot.status

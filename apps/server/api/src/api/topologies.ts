@@ -11,7 +11,6 @@ import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.j
 import { DataSourceService } from '../services/datasource.js'
 import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
 import { ObservationsService } from '../services/observations.js'
-import { SnmpCredentialsService } from '../services/snmp-credentials.js'
 import { TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { MetricsMapping, TopologyInput } from '../types.js'
@@ -477,12 +476,8 @@ export function createTopologiesApi(): Hono {
           let statusMessage: string | undefined
 
           if (hasAutoscanCapability(plugin)) {
-            // SNMP-LLDP and other autoscan plugins return a Snapshot directly.
-            const credentials = resolveCredentialsForAutoscan(
-              id,
-              getTopologyService(),
-              new SnmpCredentialsService(),
-            )
+            // network-scan and other autoscan plugins return a Snapshot directly.
+            const credentials = resolveCredentialsForAutoscan(id, getTopologyService())
             const snapshot = await plugin.scan({ seeds: [], credentials })
             graph = snapshot.graph
             status = snapshot.status

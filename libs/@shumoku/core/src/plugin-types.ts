@@ -382,9 +382,8 @@ export interface AutoscanInput {
    * undefined), the plugin falls back to its config-wide community.
    *
    * Server resolves these from the topology's discovery-policy
-   * inheritance chain (`snmpCredentialId` → credentials table lookup)
-   * and passes them in here, so the plugin doesn't need to know about
-   * the credential entity itself.
+   * inheritance chain (the per-node/subgraph `community`) and passes
+   * them in here, so the plugin only ever sees a flat ip→community map.
    */
   credentials?: Record<string, string>
 }

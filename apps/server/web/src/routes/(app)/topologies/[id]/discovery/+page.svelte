@@ -14,9 +14,8 @@
    */
   import { nodeIdentityQuality } from '@shumoku/core'
   import { ArrowsClockwiseIcon } from 'phosphor-svelte'
-  import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
-  import { api, type SnmpCredential } from '$lib/api'
+  import { api } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
   import { topologies } from '$lib/stores'
@@ -97,18 +96,6 @@
   let probingNodeId = $state<string | null>(null)
 
   let topologySources = $derived(ctx.currentSources.filter((s) => s.purpose === 'topology'))
-
-  /** Available SNMP credentials — loaded once on mount, passed to the
-   *  detail modal's credential picker. Empty list is fine (modal shows
-   *  a "create one →" link). */
-  let snmpCredentialOptions = $state<SnmpCredential[]>([])
-  onMount(async () => {
-    try {
-      snmpCredentialOptions = await api.snmpCredentials.list()
-    } catch (e) {
-      console.warn('[Discovery] failed to load snmp credentials', e)
-    }
-  })
 
   let filteredDiscoveredNodes = $derived.by(() => {
     const q = discoverySearch.trim().toLowerCase()
@@ -306,28 +293,27 @@
   }
 
   /**
-   * Modal callback: change the per-node SNMP credential. Empty string
-   * clears the override (back to inheritance). We need to keep any
-   * existing per-node mode/intervalMs in the same PATCH so the change
-   * doesn't accidentally wipe a separate override the user previously
-   * set.
+   * Modal callback: set the per-node SNMP community. Empty string clears
+   * the override (back to inheritance). We keep any existing per-node
+   * mode/intervalMs in the same PATCH so the change doesn't accidentally
+   * wipe a separate override the user previously set.
    */
-  async function handleSetCredential(credentialId: string): Promise<void> {
+  async function handleSetCommunity(community: string): Promise<void> {
     if (!detailNode) return
     const eff = policyView?.nodes[detailNode.id]
     const keepMode = eff?.source.mode === 'node' ? { mode: eff.mode } : {}
     const keepInterval = eff?.source.intervalMs === 'node' ? { intervalMs: eff.intervalMs } : {}
-    const cred = credentialId ? { snmpCredentialId: credentialId } : {}
+    const comm = community ? { community } : {}
     // Empty everything = clear the per-node entry entirely.
     const isEmpty =
       Object.keys(keepMode).length === 0 &&
       Object.keys(keepInterval).length === 0 &&
-      Object.keys(cred).length === 0
+      Object.keys(comm).length === 0
     const result = await setNodeDiscoveryMode(
       detailNode.id,
-      isEmpty ? null : { ...keepMode, ...keepInterval, ...cred },
+      isEmpty ? null : { ...keepMode, ...keepInterval, ...comm },
     )
-    if (!result.ok) console.warn('[Discovery] credential patch failed:', result.reason)
+    if (!result.ok) console.warn('[Discovery] community patch failed:', result.reason)
   }
 
   async function handleProbeNode(card: DiscoveredCard) {
@@ -840,6 +826,5 @@
     if (detailNode) handleProbeNode(detailNode)
   }}
   onSetMode={handleSetMode}
-  onSetCredential={handleSetCredential}
-  snmpCredentialOptions={snmpCredentialOptions.map((c) => ({ id: c.id, name: c.name }))}
+  onSetCommunity={handleSetCommunity}
 />

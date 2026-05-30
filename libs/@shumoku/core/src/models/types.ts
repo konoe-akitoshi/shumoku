@@ -389,22 +389,15 @@ export interface DiscoveryPolicy {
    */
   intervalMs?: number
   /**
-   * Reference to a named SNMP credential (see server-side
-   * `snmp_credentials` table). Resolves through the same
-   * topology-default → subgraph → node inheritance chain as `mode`
-   * and `intervalMs`; the autoscan plugin then uses the resolved
-   * credential's community string for that target instead of its
-   * own config-wide community.
-   *
-   * Why a separate field instead of a literal community string:
-   *   - The community itself is a secret and shouldn't appear in
-   *     the resolved graph (which is rendered in the UI). Storing
-   *     just the id keeps the actual string server-side only.
-   *   - A credential typically applies to many nodes ("Core switches"
-   *     credential covers 20 devices); referencing it by id keeps
-   *     edits in one place.
+   * SNMP community string to read this target with. Resolves through
+   * the same topology-default → subgraph → node inheritance chain as
+   * `mode` and `intervalMs`, so an operator can set one community for a
+   * whole subgraph (a management subnet) and override it on individual
+   * nodes. `undefined` means "use the autoscan plugin's config-wide
+   * community". Attached directly to the node/subgraph — there is no
+   * separate credential registry.
    */
-  snmpCredentialId?: string
+  community?: string
 }
 
 export interface Node {

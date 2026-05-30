@@ -445,59 +445,21 @@ export const topologies = {
 export interface DiscoveryPolicyPatch {
   mode?: DiscoveryMode
   intervalMs?: number
-  snmpCredentialId?: string
+  /** SNMP community to read this target with. `''` clears the per-node
+   *  override (inherit); omit to leave unchanged. */
+  community?: string
 }
 
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 export interface EffectivePolicy {
   mode: DiscoveryMode
   intervalMs: number
-  snmpCredentialId?: string
+  community?: string
   source: {
     mode: 'node' | 'subgraph' | 'topology' | 'default'
     intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
-    snmpCredentialId: 'node' | 'subgraph' | 'topology' | 'default'
+    community: 'node' | 'subgraph' | 'topology' | 'default'
   }
-}
-
-/**
- * SNMP credentials — named community strings the discovery policy
- * chain can reference per node/subgraph/topology-default. The plugin
- * uses the resolved credential for that target's community instead of
- * its own config-wide string.
- *
- * `community` comes back masked (`••••••••`) on every response; the
- * raw value only ever lives server-side.
- */
-export interface SnmpCredential {
-  id: string
-  name: string
-  community: string
-  createdAt: number
-  updatedAt: number
-}
-export interface SnmpCredentialInput {
-  name: string
-  community?: string
-}
-
-export const snmpCredentials = {
-  list: () => request<SnmpCredential[]>('/snmp-credentials'),
-  get: (id: string) => request<SnmpCredential>(`/snmp-credentials/${id}`),
-  create: (input: SnmpCredentialInput) =>
-    request<SnmpCredential>('/snmp-credentials', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
-  update: (id: string, input: Partial<SnmpCredentialInput>) =>
-    request<SnmpCredential>(`/snmp-credentials/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(input),
-    }),
-  delete: (id: string) =>
-    request<{ success: boolean }>(`/snmp-credentials/${id}`, {
-      method: 'DELETE',
-    }),
 }
 
 // Settings API
@@ -692,7 +654,6 @@ export const api = {
   plugins,
   topologies,
   settings,
-  snmpCredentials,
   health,
   auth,
 }
