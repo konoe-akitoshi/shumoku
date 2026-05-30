@@ -107,8 +107,8 @@
     </a>
     <h1 class="text-xl font-semibold text-theme-text-emphasis">SNMP Credentials</h1>
     <p class="text-sm text-theme-text-muted mt-1">
-      Named SNMP community strings. Topology nodes reference one via the discovery-policy chain; the
-      SNMP-LLDP plugin uses the resolved credential when scanning that target.
+      Named SNMP community strings. Topology nodes reference one via the discovery-policy chain; a
+      Network Discovery scan uses the resolved credential when reading that target over SNMP.
     </p>
   </div>
 

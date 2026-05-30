@@ -63,7 +63,7 @@ describe('resolve()', () => {
   describe('discovered-only', () => {
     it('node present only in 1 snapshot → state = discovered-only', () => {
       const snap: SnapshotEntry = {
-        sourceId: 'snmp-lldp:1',
+        sourceId: 'network-scan:1',
         capturedAt: 1000,
         status: 'ok',
         graph: {
@@ -81,7 +81,7 @@ describe('resolve()', () => {
       const out = resolve(emptyGraph(), [snap])
       expect(out.nodes).toHaveLength(1)
       expect(out.nodes[0]?.provenance?.state).toBe('discovered-only')
-      expect(out.nodes[0]?.provenance?.source).toBe('snmp-lldp:1')
+      expect(out.nodes[0]?.provenance?.source).toBe('network-scan:1')
     })
   })
 
@@ -99,7 +99,7 @@ describe('resolve()', () => {
         ],
       }
       const snap: SnapshotEntry = {
-        sourceId: 'snmp-lldp:1',
+        sourceId: 'network-scan:1',
         capturedAt: 1000,
         status: 'ok',
         graph: {
@@ -189,7 +189,7 @@ describe('resolve()', () => {
         ],
       }
       const failed: SnapshotEntry = {
-        sourceId: 'snmp-lldp:1',
+        sourceId: 'network-scan:1',
         capturedAt: 1000,
         status: 'failed',
         graph: null,

@@ -169,8 +169,8 @@
           : (JSON.parse(jsonContent) as NetworkGraph)
       return JSON.stringify({ graph })
     }
-    // snmp-lldp uses a different config shape (no URL).
-    if (type === 'snmp-lldp') {
+    // network-scan uses a different config shape (no URL).
+    if (type === 'network-scan') {
       const community = formSnmpCommunity.trim() || 'public'
       const targets = formSnmpTargets
         .split(/[\s,]+/)
@@ -248,7 +248,7 @@
         hasExistingToken = !!config.token
         formInsecure = !!config.insecure
         formUseWebhook = !!config.useWebhook
-        // snmp-lldp specific
+        // network-scan specific
         formSnmpCommunity = config.community || 'public'
         formSnmpTargets = (config.targets ?? []).join('\n')
         formSnmpTimeoutMs = config.timeoutMs ?? 2000
@@ -297,7 +297,7 @@
     }
     if (dataSource.type === 'manual') {
       // Manual has no upstream — name is the only configurable field.
-    } else if (dataSource.type === 'snmp-lldp') {
+    } else if (dataSource.type === 'network-scan') {
       if (!formSnmpTargets.trim()) {
         error = 'At least one target is required'
         return
@@ -465,14 +465,14 @@
                   </p>
                 {/if}
               </div>
-            {:else if dataSource.type !== 'snmp-lldp'}
+            {:else if dataSource.type !== 'network-scan'}
               <div>
                 <label for="url" class="label">URL</label>
                 <input type="url" id="url" class="input" bind:value={formUrl}>
               </div>
             {/if}
 
-            {#if dataSource.type === 'snmp-lldp'}
+            {#if dataSource.type === 'network-scan'}
               <div>
                 <label for="snmpCommunity" class="label">SNMP Community</label>
                 <input

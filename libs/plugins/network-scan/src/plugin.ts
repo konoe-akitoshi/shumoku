@@ -23,7 +23,7 @@ import { SnmpClient } from './client.js'
 import { discover } from './discover.js'
 import { SYSTEM_MIB } from './mib.js'
 
-export interface SnmpLldpConfig {
+export interface NetworkScanConfig {
   /** Plugin instance id, stamped into provenance.source. Supplied by
    *  the server when constructing the plugin. */
   instanceId?: string
@@ -40,8 +40,8 @@ export interface SnmpLldpConfig {
   timeoutMs?: number
 }
 
-export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
-  readonly type = 'snmp-lldp'
+export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
+  readonly type = 'network-scan'
   readonly displayName = 'Network Discovery'
   // `autoscan` is the load-bearing capability — the plugin produces a
   // Snapshot via `scan()`. The plugin does NOT implement `fetchTopology()`
@@ -49,10 +49,10 @@ export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
   // to `scan()` when it sees `autoscan` capability.
   readonly capabilities: readonly DataSourceCapability[] = ['autoscan']
 
-  private config: SnmpLldpConfig = {}
+  private config: NetworkScanConfig = {}
 
   initialize(config: unknown): void {
-    this.config = (config as SnmpLldpConfig) ?? {}
+    this.config = (config as NetworkScanConfig) ?? {}
   }
 
   /**
@@ -150,7 +150,7 @@ export class SnmpLldpPlugin implements DataSourcePlugin, AutoscanCapable {
    */
   async scan(input: AutoscanInput): Promise<Snapshot> {
     const capturedAt = Date.now()
-    const sourceId = this.config.instanceId ?? 'snmp-lldp'
+    const sourceId = this.config.instanceId ?? 'network-scan'
     const targets = input.seeds.length > 0 ? input.seeds : (this.config.targets ?? [])
     const community = this.config.community || 'public'
 

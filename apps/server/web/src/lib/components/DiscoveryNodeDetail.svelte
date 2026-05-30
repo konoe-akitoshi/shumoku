@@ -109,12 +109,12 @@
     return `${Math.round(ms / 3_600_000)}h`
   }
 
-  /** Friendly label for the read protocol. The read layer is NOT
-   *  SNMP-only — SNMP-LLDP is just one protocol a source can read with —
-   *  so this is a lookup, not a hardcoded string. Unknown types fall
-   *  back to the raw type rather than pretending they're SNMP. */
+  /** Friendly label for the read protocol, keyed by source type. A
+   *  network-scan source reads over SNMP (LLDP is just a MIB it walks,
+   *  not a protocol). This is a lookup so other source types can map to
+   *  their own read protocol; unknown types fall back to the raw type. */
   const PROTOCOL_LABELS: Record<string, string> = {
-    'snmp-lldp': 'SNMP-LLDP',
+    'network-scan': 'SNMP',
   }
   function protocolLabel(type: string | undefined): string {
     if (!type) return '—'

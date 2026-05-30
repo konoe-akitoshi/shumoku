@@ -193,12 +193,12 @@ export interface AutoscanProgress {
 
 | 名前 | capabilities | 役割 |
 |---|---|---|
-| **snmp-lldp** | topology, autoscan, hosts, metrics | autoscan の本命。SNMP LLDP/CDP/ENTITY/IF MIB をベースに network discovery |
+| **network-scan** | topology, autoscan, hosts, metrics | autoscan の本命。SNMP LLDP/CDP/ENTITY/IF MIB をベースに network discovery |
 | **libvirt** | topology, hosts | KVM/Xen 仮想化発見（将来） |
 | **proxmox** | topology, hosts, metrics | Proxmox VE（将来、scanopy ロードマップ参考） |
 | **kubernetes** | topology, hosts | k8s API による Workload 層（将来） |
 
-MVP の v1 では **snmp-lldp 1 個**を作る前提。詳細は `topology-foundation-mvp.md`。
+MVP の v1 では **network-scan 1 個**を作る前提。詳細は `topology-foundation-mvp.md`。
 
 ## 7. プラグイン側の testConnection() 改訂
 

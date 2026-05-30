@@ -21,7 +21,7 @@
     "shumoku-plugin-grafana": "workspace:*",
     "shumoku-plugin-netbox": "workspace:*",
     "shumoku-plugin-prometheus": "workspace:*",
-    "shumoku-plugin-snmp-lldp": "workspace:*",
+    "shumoku-plugin-network-scan": "workspace:*",
     "shumoku-plugin-zabbix": "workspace:*",
     "adm-zip": "^0.5.16",
     "hono": "^4.7.11",

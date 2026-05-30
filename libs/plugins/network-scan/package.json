@@ -1,5 +1,5 @@
 {
-  "name": "shumoku-plugin-snmp-lldp",
+  "name": "shumoku-plugin-network-scan",
   "version": "0.0.0",
   "description": "SNMP/LLDP autoscan data source plugin for Shumoku",
   "license": "AGPL-3.0-only",
@@ -7,7 +7,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
-    "directory": "libs/plugins/snmp-lldp"
+    "directory": "libs/plugins/network-scan"
   },
   "homepage": "https://shumoku.packof.me/",
   "bugs": {
