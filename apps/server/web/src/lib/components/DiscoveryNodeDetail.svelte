@@ -46,6 +46,9 @@
       sysObjectID?: string
       catalogId?: string
       quality: 'stable' | 'weak' | 'unbound'
+      /** 'notice' = reachable but not yet readable over SNMP (needs a
+       *  credential); 'synced' = fully walked. */
+      syncState?: 'synced' | 'notice'
       sourceId?: string
       sourceName?: string
       sourceType?: string
@@ -106,6 +109,18 @@
     return `${Math.round(ms / 3_600_000)}h`
   }
 
+  /** Friendly label for the read protocol. The read layer is NOT
+   *  SNMP-only — SNMP-LLDP is just one protocol a source can read with —
+   *  so this is a lookup, not a hardcoded string. Unknown types fall
+   *  back to the raw type rather than pretending they're SNMP. */
+  const PROTOCOL_LABELS: Record<string, string> = {
+    'snmp-lldp': 'SNMP-LLDP',
+  }
+  function protocolLabel(type: string | undefined): string {
+    if (!type) return '—'
+    return PROTOCOL_LABELS[type] ?? type
+  }
+
   const qualityColor = $derived(
     node?.quality === 'stable'
       ? 'bg-green-500'
@@ -125,6 +140,13 @@
             title={node.quality}
           ></span>
           <span class="truncate">{node.label}</span>
+          {#if node.syncState === 'notice'}
+            <span
+              class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 whitespace-nowrap"
+            >
+              notice
+            </span>
+          {/if}
         </Dialog.Title>
         <Dialog.Description class="text-xs">
           {node.quality}
@@ -158,6 +180,85 @@
           </dl>
         </section>
 
+        <!-- How this node is read. The protocol + endpoint + credential
+             the scanner uses to walk it. Filled in automatically when the
+             source already knows them; otherwise the operator sets the
+             credential here. For a discovered node this just works — no
+             separate adopt step. -->
+        <section>
+          <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide mb-2">
+            How this node is read
+          </h3>
+          <dl class="space-y-1">
+            <div class="flex justify-between gap-3">
+              <dt class="text-theme-text-muted">Protocol</dt>
+              {#if node.syncState === 'notice'}
+                <dd class="text-theme-text-muted italic">not registered yet</dd>
+              {:else}
+                <dd>{protocolLabel(node.sourceType)}</dd>
+              {/if}
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-theme-text-muted">IP</dt>
+              <dd class="font-mono">{node.mgmtIp ?? '—'}</dd>
+            </div>
+          </dl>
+
+          {#if node.syncState === 'notice'}
+            <div
+              class="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+            >
+              Reachable but not readable over SNMP. Assign a working credential below to sync this
+              device.
+            </div>
+          {/if}
+
+          <!-- SNMP credential. Inherits through the same chain as
+               mode/intervalMs. Empty string clears the per-node override.
+               Empty credentials list shows a link to create one. -->
+          {#if onSetCredential}
+            <div class="mt-3">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-theme-text-muted">SNMP credential</span>
+                {#if effectivePolicy?.snmpCredentialId}
+                  <span class="text-[10px] text-theme-text-muted">
+                    from {originLabel(effectivePolicy.source.snmpCredentialId)}
+                  </span>
+                {/if}
+              </div>
+              {#if snmpCredentialOptions.length === 0}
+                <p class="text-xs text-theme-text-muted">
+                  No credentials defined.
+                  <a href="/settings/snmp-credentials" class="text-primary hover:underline">
+                    Create one →
+                  </a>
+                </p>
+              {:else if effectivePolicy}
+                <select
+                  class="input text-sm w-full"
+                  value={effectivePolicy.source.snmpCredentialId === 'node'
+                    ? (effectivePolicy.snmpCredentialId ?? '')
+                    : ''}
+                  disabled={patchingPolicy}
+                  onchange={(e) => onSetCredential?.(e.currentTarget.value)}
+                >
+                  <option value="">
+                    — inherit ({effectivePolicy.snmpCredentialId
+                    ? snmpCredentialOptions.find((c) => c.id === effectivePolicy?.snmpCredentialId)
+                        ?.name ?? 'unknown'
+                    : 'plugin default'}) —
+                  </option>
+                  {#each snmpCredentialOptions as opt (opt.id)}
+                    <option value={opt.id}>{opt.name}</option>
+                  {/each}
+                </select>
+              {:else}
+                <p class="text-xs text-theme-text-muted">Loading…</p>
+              {/if}
+            </div>
+          {/if}
+        </section>
+
         <!-- Discovery. Which source owns this node and when it last
              answered. Source type tells you which plugin code path
              actually walked the wire. -->
@@ -182,14 +283,13 @@
           </dl>
         </section>
 
-        <!-- Discovery policy. The effective mode + interval the
-             scheduler will use for this node, with the per-field
-             origin so the operator can tell "this came from my
-             override" apart from "this came from the subgraph". The
-             three buttons either pin the override (auto / observe /
-             disabled) or clear it (Inherit). 409 from a discovered-only
-             node is surfaced via the parent 's console warn for now —
-             Phase A2.1 will show it inline. -->
+        <!-- Discovery policy = the *schedule* (mode + interval the
+             scheduler uses), kept separate from "how this node is read"
+             above. Per-field origin shows whether a value is this node's
+             own override or inherited from subgraph / topology. The three
+             buttons pin the override (auto / observe / disabled); Inherit
+             clears it. Setting any of these on a discovered-only node now
+             just works — the server materializes the authored entry. -->
         <section>
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">
@@ -251,50 +351,6 @@
                 class="mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
               >
                 {policyErrorMessage}
-              </div>
-            {/if}
-
-            <!-- SNMP credential picker. Inherits through the same
-                 chain as mode/intervalMs. Empty string clears the
-                 per-node override. Empty credentials list shows a
-                 link to create one rather than an empty dropdown. -->
-            {#if onSetCredential}
-              <div class="mt-3">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="text-xs text-theme-text-muted">SNMP credential</span>
-                  {#if effectivePolicy.snmpCredentialId}
-                    <span class="text-[10px] text-theme-text-muted">
-                      from {originLabel(effectivePolicy.source.snmpCredentialId)}
-                    </span>
-                  {/if}
-                </div>
-                {#if snmpCredentialOptions.length === 0}
-                  <p class="text-xs text-theme-text-muted">
-                    No credentials defined.
-                    <a href="/settings/snmp-credentials" class="text-primary hover:underline">
-                      Create one →
-                    </a>
-                  </p>
-                {:else}
-                  <select
-                    class="input text-sm w-full"
-                    value={effectivePolicy.source.snmpCredentialId === 'node'
-                      ? (effectivePolicy.snmpCredentialId ?? '')
-                      : ''}
-                    disabled={patchingPolicy}
-                    onchange={(e) => onSetCredential?.(e.currentTarget.value)}
-                  >
-                    <option value="">
-                      — inherit ({effectivePolicy.snmpCredentialId
-                      ? snmpCredentialOptions.find((c) => c.id === effectivePolicy?.snmpCredentialId)
-                          ?.name ?? 'unknown'
-                      : 'plugin default'}) —
-                    </option>
-                    {#each snmpCredentialOptions as opt (opt.id)}
-                      <option value={opt.id}>{opt.name}</option>
-                    {/each}
-                  </select>
-                {/if}
               </div>
             {/if}
           {:else}

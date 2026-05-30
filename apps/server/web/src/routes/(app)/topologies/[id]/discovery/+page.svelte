@@ -37,6 +37,10 @@
     sysObjectID?: string
     catalogId?: string
     quality: 'stable' | 'weak' | 'unbound'
+    /** 'notice' = reachable but not yet readable over SNMP (needs a
+     *  credential); 'synced' = fully walked. Undefined for sources that
+     *  don't distinguish (e.g. non-SNMP plugins). */
+    syncState?: 'synced' | 'notice'
     sourceId?: string
     sourceName?: string
     sourceType?: string
@@ -178,6 +182,12 @@
             typeof md['sysObjectID'] === 'string' ? (md['sysObjectID'] as string) : undefined,
           catalogId: typeof md['catalogId'] === 'string' ? (md['catalogId'] as string) : undefined,
           quality: q,
+          syncState:
+            md['syncState'] === 'notice'
+              ? 'notice'
+              : md['syncState'] === 'synced'
+                ? 'synced'
+                : undefined,
           sourceId,
           sourceName: sourceDs?.name,
           sourceType: sourceDs?.type,
@@ -622,6 +632,14 @@
                       <div class="min-w-0 flex-1">
                         <p class="font-medium text-sm text-theme-text-emphasis truncate">
                           {card.label}
+                          {#if card.syncState === 'notice'}
+                            <span
+                              class="ml-1 align-middle text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                              title="Reachable but not readable over SNMP — assign a credential to sync"
+                            >
+                              notice
+                            </span>
+                          {/if}
                         </p>
                         <p class="text-xs text-theme-text-muted truncate">
                           {card.model ?? card.vendor ?? card.sysDescr?.split(',')[0] ?? '—'}

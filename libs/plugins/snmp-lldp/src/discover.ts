@@ -34,6 +34,7 @@ import {
   LLDP_REM_TABLE,
   SYSTEM_MIB,
 } from './mib.js'
+import { probeReachable } from './reachability.js'
 import { buildSegmentInference, type DeviceInterfaceIp, groupBySubnet } from './subnet-inference.js'
 
 /** How many addresses to probe in parallel during the liveness pass. */
@@ -41,6 +42,10 @@ const LIVENESS_CONCURRENCY = 32
 /** Liveness probe timeout — much shorter than the deep-scan timeout
  *  because we 're triaging many candidates at once. */
 const LIVENESS_TIMEOUT_MS = 1000
+/** Per-port TCP connect timeout for the credential-free reachability
+ *  pass (Phase A). Same budget as the SNMP liveness probe — both are
+ *  triage sweeps, not deep reads. */
+const REACHABILITY_TIMEOUT_MS = 1000
 
 export interface DiscoverInput {
   /** Mixed list of targets: IPs, hostnames, or CIDR blocks. CIDR is
@@ -74,6 +79,9 @@ export interface DiscoverResult {
     expanded: number
     alive: number
     walked: number
+    /** Reachable (Phase A) but SNMP-silent addresses turned into notice
+     *  nodes — i.e. devices awaiting a working credential. */
+    notice: number
   }
   /**
    * True when something genuinely missing from the result happened —
@@ -165,12 +173,23 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   //    32-way parallel → ~2s instead of ~250s sequential.
   const alive = await probeAlive(expanded, communityFor)
 
-  if (alive.length === 0) {
+  // Phase A — credential-free reachability over the addresses SNMP did
+  // NOT answer. A device that's reachable here but silent to SNMP can't
+  // be read until it gets a working community, so we surface it as a
+  // "notice" node rather than dropping it. The probe strategy is
+  // swappable (TCP connect today; ICMP / ARP later) — see reachability.ts.
+  const aliveSet = new Set(alive)
+  const reachCandidates = expanded.filter((addr) => !aliveSet.has(addr))
+  const reachable = await probeReachable(reachCandidates, {
+    timeoutMs: REACHABILITY_TIMEOUT_MS,
+  })
+
+  if (alive.length === 0 && reachable.size === 0) {
     warnings.push(
       `Probed ${expanded.length} address${expanded.length === 1 ? '' : 'es'}, none responded ` +
-        `to SNMP. Check community / network reachability / firewall.`,
+        `to SNMP or TCP. Check community / network reachability / firewall.`,
     )
-    return emptyResult(warnings, { expanded: expanded.length, alive: 0, walked: 0 })
+    return emptyResult(warnings, { expanded: expanded.length, alive: 0, walked: 0, notice: 0 })
   }
 
   // 3. Full SNMP walk on live targets only.
@@ -254,10 +273,24 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     }
   }
 
+  // Notice nodes — reachable but unreadable. Actionable warning so the
+  // operator knows there's gear here that just needs a credential.
+  if (reachable.size > 0) {
+    warnings.push(
+      `${reachable.size} host${reachable.size === 1 ? '' : 's'} reachable but not readable over ` +
+        `SNMP — assign a working credential to sync ${reachable.size === 1 ? 'it' : 'them'}.`,
+    )
+  }
+  const noticeNodes: Node[] = []
+  for (const [address, res] of reachable) {
+    noticeNodes.push(noticeNode(address, res.via, input.sourceId))
+  }
+
   const graph: NetworkGraph = {
     version: '1.0',
     nodes: [
       ...Array.from(visited.values()).map((d) => visitedToNode(d, input.sourceId)),
+      ...noticeNodes,
       ...inference.segmentNodes,
     ],
     links: allLinks,
@@ -266,7 +299,12 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   return {
     graph,
     warnings,
-    stats: { expanded: expanded.length, alive: alive.length, walked: visited.size },
+    stats: {
+      expanded: expanded.length,
+      alive: alive.length,
+      walked: visited.size,
+      notice: reachable.size,
+    },
     partialData: walkErrors > 0,
   }
 }
@@ -307,7 +345,7 @@ async function probeAlive(
 
 function emptyResult(
   warnings: string[],
-  stats: DiscoverResult['stats'] = { expanded: 0, alive: 0, walked: 0 },
+  stats: DiscoverResult['stats'] = { expanded: 0, alive: 0, walked: 0, notice: 0 },
 ): DiscoverResult {
   return {
     graph: { version: '1.0', nodes: [], links: [] },
@@ -488,6 +526,9 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
     identity: device.identity,
     ...(spec ? { spec } : {}),
     metadata: {
+      // We walked this device over SNMP — it's fully readable, the
+      // counterpart to a `notice` node. Drives the UI sync-state badge.
+      syncState: 'synced',
       vendor: device.vendor,
       sysDescr: device.sysDescr,
       catalogId: device.catalogEntry?.id,
@@ -495,6 +536,26 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
       chassisModel: device.chassisModel,
     },
     ports: Array.from(device.ports.values()),
+    provenance: { source: sourceId, observedAt: Date.now() },
+  }
+}
+
+/**
+ * Build a "notice" node — an address that answered the credential-free
+ * reachability probe (Phase A) but not SNMP. Identity is mgmtIp only; no
+ * ports, no spec, no catalog binding (we never read the device).
+ * `metadata.syncState='notice'` drives the UI badge and tells the
+ * operator this device needs a working credential before it can sync.
+ */
+function noticeNode(address: string, via: number | undefined, sourceId: string): Node {
+  return {
+    id: `${sourceId}:node:${address}`,
+    label: address,
+    identity: { mgmtIp: address },
+    metadata: {
+      syncState: 'notice',
+      ...(via !== undefined ? { reachableVia: via } : {}),
+    },
     provenance: { source: sourceId, observedAt: Date.now() },
   }
 }
