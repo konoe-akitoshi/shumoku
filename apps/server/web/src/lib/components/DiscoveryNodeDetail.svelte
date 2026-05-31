@@ -238,31 +238,6 @@
           </div>
 
           <div class="space-y-2">
-            <!-- Access · SNMP -->
-            {#if hasSnmp}
-              <div class="rounded border border-theme-border p-2.5">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="text-xs font-medium">Access · SNMP</span>
-                  <button
-                    type="button"
-                    class="text-xs text-theme-text-muted hover:text-danger"
-                    disabled={patchingPolicy}
-                    onclick={() => removeKind('access')}
-                  >
-                    remove
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  class="input text-sm w-full font-mono"
-                  placeholder="community"
-                  value={snmpCommunity}
-                  disabled={patchingPolicy}
-                  onchange={(e) => setCommunity(e.currentTarget.value)}
-                >
-              </div>
-            {/if}
-
             <!-- Discovery policy — always shown: every node has an
                  effective mode (auto/observe/disabled). The buttons set a
                  per-node override; Inherit clears it. It is NOT an addable
