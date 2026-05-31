@@ -33,6 +33,8 @@
       catalogId?: string
       quality: 'stable' | 'weak' | 'unbound'
       syncState?: 'synced' | 'notice'
+      /** Protocol it was actually read with (snapshot data), e.g. 'snmp'. */
+      readVia?: string
       sourceId?: string
       sourceName?: string
       sourceType?: string
@@ -74,10 +76,17 @@
 
   const MODE_OPTIONS: DiscoveryMode[] = ['auto', 'observe', 'disabled']
 
-  const PROTOCOL_LABELS: Record<string, string> = { 'network-scan': 'SNMP' }
-  function protocolLabel(type: string | undefined): string {
-    if (!type) return '—'
-    return PROTOCOL_LABELS[type] ?? type
+  // Keyed on the actual read protocol (from snapshot `readVia`), not the
+  // source type — so the label is real data, not a guess.
+  const PROTOCOL_LABELS: Record<string, string> = {
+    snmp: 'SNMP',
+    ssh: 'SSH',
+    netconf: 'NETCONF',
+    http: 'HTTP',
+  }
+  function protocolLabel(p: string | undefined): string {
+    if (!p) return '—'
+    return PROTOCOL_LABELS[p] ?? p.toUpperCase()
   }
 
   function formatInterval(ms: number): string {
@@ -192,10 +201,12 @@
             <div class="flex justify-between gap-3">
               <dt class="text-theme-text-muted">Read via</dt>
               <dd>
-                {#if node.syncState === 'notice'}
+                {#if node.readVia}
+                  {protocolLabel(node.readVia)}
+                {:else if node.syncState === 'notice'}
                   <span class="italic text-theme-text-muted">not registered yet</span>
                 {:else}
-                  {protocolLabel(node.sourceType)}
+                  —
                 {/if}
               </dd>
             </div>
@@ -225,14 +236,6 @@
               <span class="text-[10px] text-theme-text-muted">saving…</span>
             {/if}
           </div>
-
-          {#if node.syncState === 'notice' && !hasSnmp}
-            <div
-              class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
-            >
-              Reachable but not readable over SNMP. Add an SNMP community below to sync this device.
-            </div>
-          {/if}
 
           <div class="space-y-2">
             <!-- Access · SNMP -->
@@ -305,26 +308,86 @@
               </div>
             </div>
 
-            {#if !hasSnmp && effectivePolicy?.community}
-              <p class="text-[10px] text-theme-text-muted px-0.5">
-                SNMP community inherited from {originLabel(effectivePolicy.source.community)}
-              </p>
-            {/if}
-          </div>
-
-          <!-- Add menu: addable kinds only (policy is not addable). -->
-          {#if !hasSnmp}
-            <div class="mt-3 flex gap-1.5 flex-wrap">
-              <button
-                type="button"
-                class="text-xs px-2 py-1 rounded border border-dashed border-theme-border hover:border-primary text-theme-text-muted"
-                disabled={patchingPolicy}
-                onclick={addSnmp}
-              >
-                + SNMP community
-              </button>
+            <!-- Access · SNMP — always shown. The community can come from
+                 a per-node override, an inherited attachment, or the
+                 source's config-wide default; show which, and let the
+                 operator override it for this node. Coherent with the
+                 "Read via" line above. -->
+            <div class="rounded border border-theme-border p-2.5">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-medium">Access · SNMP</span>
+                {#if hasSnmp}
+                  <button
+                    type="button"
+                    class="text-xs text-theme-text-muted hover:text-danger"
+                    disabled={patchingPolicy}
+                    onclick={() => removeKind('access')}
+                  >
+                    remove override
+                  </button>
+                {/if}
+              </div>
+              {#if hasSnmp}
+                <input
+                  type="text"
+                  class="input text-sm w-full font-mono"
+                  placeholder="community"
+                  value={snmpCommunity}
+                  disabled={patchingPolicy}
+                  onchange={(e) => setCommunity(e.currentTarget.value)}
+                >
+                <p class="text-[10px] text-theme-text-muted mt-1">
+                  community override for this node
+                </p>
+              {:else if effectivePolicy?.community}
+                <p class="text-xs text-theme-text-muted">
+                  Community inherited from {originLabel(effectivePolicy.source.community)}.
+                  <button
+                    type="button"
+                    class="text-primary hover:underline"
+                    disabled={patchingPolicy}
+                    onclick={addSnmp}
+                  >
+                    Override
+                  </button>
+                </p>
+              {:else if node.readVia}
+                <p class="text-xs text-theme-text-muted">
+                  Reading with the <span class="font-medium">{node.sourceName ?? 'source'}</span>
+                  default community.
+                  <button
+                    type="button"
+                    class="text-primary hover:underline"
+                    disabled={patchingPolicy}
+                    onclick={addSnmp}
+                  >
+                    Override
+                  </button>
+                </p>
+              {:else if node.syncState === 'notice'}
+                <p class="text-xs text-amber-700 dark:text-amber-300">
+                  Reachable but not readable — no working community.
+                  <button
+                    type="button"
+                    class="text-primary hover:underline"
+                    disabled={patchingPolicy}
+                    onclick={addSnmp}
+                  >
+                    Set community
+                  </button>
+                </p>
+              {:else}
+                <button
+                  type="button"
+                  class="text-xs px-2 py-1 rounded border border-dashed border-theme-border hover:border-primary text-theme-text-muted"
+                  disabled={patchingPolicy}
+                  onclick={addSnmp}
+                >
+                  + SNMP community
+                </button>
+              {/if}
             </div>
-          {/if}
+          </div>
 
           {#if policyErrorMessage}
             <div

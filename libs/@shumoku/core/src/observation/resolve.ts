@@ -206,15 +206,41 @@ function foldNodeCluster(cluster: NodeCluster): Node {
   // Identity: union of all members' identity keys (keep first non-empty value)
   const mergedIdentity = mergeIdentities(cluster.members.map((m) => m.node.identity))
 
-  // Field-level resolution. Skeleton: handle a small set of factual
-  // string fields explicitly; non-factual fields take the authored
-  // value if present, otherwise the most recent observation.
+  // Metadata merge: observed members form the base (so facts like
+  // `readVia` / `syncState` / model survive), then the authored member's
+  // keys win on top. Without this, an authored override entry would
+  // *replace* the observed node and blank everything the source saw — the
+  // root of the "I added a community and the device's details vanished"
+  // incoherence.
+  const mergedMetadata: Record<string, unknown> = {}
+  for (const m of observers) {
+    for (const [k, v] of Object.entries(m.node.metadata ?? {})) {
+      if (mergedMetadata[k] === undefined && v !== undefined) mergedMetadata[k] = v
+    }
+  }
+  for (const [k, v] of Object.entries(authored?.node.metadata ?? {})) {
+    if (v !== undefined) mergedMetadata[k] = v
+  }
+  // Preserve the observing source. Once an authored override exists the
+  // cluster's `provenance.source` becomes `authored`, but the discovery UI
+  // still needs the source that actually saw the device — for the "Tracked
+  // by" line and to know which source to Probe.
+  const observedSource = observers.find((m) => m.sourceId)?.sourceId
+  if (observedSource && mergedMetadata['observedSource'] === undefined) {
+    mergedMetadata['observedSource'] = observedSource
+  }
+  // `spec` (icon / model) similarly: authored wins, else first observed.
+  const spec = authored?.node.spec ?? observers.find((m) => m.node.spec)?.node.spec
+
+  // Field-level resolution. Non-factual fields (position / parent / style)
+  // come from authored when present (via `anchor`); metadata + spec merge
+  // observed-under-authored as above.
   const resolved: Node = {
     ...anchor,
     id: cluster.id,
     identity: mergedIdentity,
-    // chosen fields: position / parent / style come from authored when
-    // present (already in `anchor` via spread). Otherwise from latest.
+    ...(Object.keys(mergedMetadata).length > 0 ? { metadata: mergedMetadata } : {}),
+    ...(spec ? { spec } : {}),
     ports: foldPortsAcrossCluster(cluster),
     provenance: deriveNodeProvenance(cluster, observers.length, Boolean(authored)),
   }

@@ -40,6 +40,9 @@
      *  credential); 'synced' = fully walked. Undefined for sources that
      *  don't distinguish (e.g. non-SNMP plugins). */
     syncState?: 'synced' | 'notice'
+    /** Protocol the node was actually read with (from the snapshot), e.g.
+     *  'snmp'. Absent for notice / unread nodes. */
+    readVia?: string
     /** Authored overlay (access / policy) on this node, for the detail modal. */
     attachments?: Attachment[]
     sourceId?: string
@@ -155,7 +158,13 @@
         counts.total++
         const md = (node.metadata ?? {}) as Record<string, unknown>
         const label = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
-        const sourceId = node.provenance?.source
+        // Prefer the observing source: once a node has an authored override
+        // its provenance.source flips to 'authored', but discovery still
+        // needs the source that saw it (resolve stamps `observedSource`).
+        const sourceId =
+          (typeof md['observedSource'] === 'string'
+            ? (md['observedSource'] as string)
+            : undefined) ?? node.provenance?.source
         const sourceDs = sourceId ? ctx.getDataSource(sourceId) : undefined
         cards.push({
           id: node.id,
@@ -177,6 +186,7 @@
               : md['syncState'] === 'synced'
                 ? 'synced'
                 : undefined,
+          readVia: typeof md['readVia'] === 'string' ? (md['readVia'] as string) : undefined,
           attachments: (node as { attachments?: Attachment[] }).attachments,
           sourceId,
           sourceName: sourceDs?.name,

@@ -529,6 +529,9 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
       // We walked this device over SNMP — it's fully readable, the
       // counterpart to a `notice` node. Drives the UI sync-state badge.
       syncState: 'synced',
+      // The protocol we actually read it with — real data so the UI shows
+      // "Read via: SNMP" from the snapshot instead of guessing from type.
+      readVia: 'snmp',
       vendor: device.vendor,
       sysDescr: device.sysDescr,
       catalogId: device.catalogEntry?.id,
