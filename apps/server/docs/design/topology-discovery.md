@@ -32,7 +32,7 @@
 
 - `authored` レイヤー（人が描いた図 / YAML / editor）
 - `netbox:<dsId>` レイヤー
-- `snmp-lldp:<dsId>` レイヤー
+- `network-scan:<dsId>` レイヤー
 - `proxmox:<dsId>` / `docker:<dsId>` / `k8s:<dsId>` レイヤー …
 - （発見ソースが増えたらレイヤー型が増えるだけ）
 
@@ -45,10 +45,10 @@
 
 | やりたいこと | レイヤー構成 |
 |---|---|
-| 0 からクロール (A) | `authored` なし、`snmp-lldp` のみ |
-| NetBox 基準でクロール (A') | `netbox` をベースライン、`snmp-lldp` がその枠内を補完 |
-| 描いた図 + 実態差分 (B) | `authored` が主、`snmp-lldp` は observe のみ |
-| メトリクスだけ SNMP (C) | `snmp-lldp` の topology レイヤーを持たず metrics 用途のみ |
+| 0 からクロール (A) | `authored` なし、`network-scan` のみ |
+| NetBox 基準でクロール (A') | `netbox` をベースライン、`network-scan` がその枠内を補完 |
+| 描いた図 + 実態差分 (B) | `authored` が主、`network-scan` は observe のみ |
+| メトリクスだけ SNMP (C) | `network-scan` の topology レイヤーを持たず metrics 用途のみ |
 
 新しい発見ソースが増えても「レイヤー型が増える」だけ。コードパス（モード）は
 増やさない。これが拡張性の担保。

@@ -17,9 +17,11 @@
   interface EffectivePolicy {
     mode: DiscoveryMode
     intervalMs: number
+    community?: string
     source: {
       mode: 'node' | 'subgraph' | 'topology' | 'default'
       intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+      community: 'node' | 'subgraph' | 'topology' | 'default'
     }
   }
 
@@ -39,6 +41,9 @@
       sysObjectID?: string
       catalogId?: string
       quality: 'stable' | 'weak' | 'unbound'
+      /** 'notice' = reachable but not yet readable over SNMP (needs a
+       *  credential); 'synced' = fully walked. */
+      syncState?: 'synced' | 'notice'
       sourceId?: string
       sourceName?: string
       sourceType?: string
@@ -58,6 +63,9 @@
      *  banner under the mode buttons so the operator sees why their
      *  click didn 't stick (e.g. 409 "pin to Manual first"). */
     policyErrorMessage?: string | null
+    /** Set the per-node SNMP community. Pass `''` to clear the per-node
+     *  override and inherit (from subgraph / topology / plugin default). */
+    onSetCommunity?: (community: string) => void | Promise<void>
   }
 
   let {
@@ -71,6 +79,7 @@
     patchingPolicy = false,
     onSetMode,
     policyErrorMessage = null,
+    onSetCommunity,
   }: Props = $props()
 
   function originLabel(o: EffectivePolicy['source']['mode']): string {
@@ -87,6 +96,18 @@
     if (ms < 60_000) return `${Math.round(ms / 1000)}s`
     if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`
     return `${Math.round(ms / 3_600_000)}h`
+  }
+
+  /** Friendly label for the read protocol, keyed by source type. A
+   *  network-scan source reads over SNMP (LLDP is just a MIB it walks,
+   *  not a protocol). This is a lookup so other source types can map to
+   *  their own read protocol; unknown types fall back to the raw type. */
+  const PROTOCOL_LABELS: Record<string, string> = {
+    'network-scan': 'SNMP',
+  }
+  function protocolLabel(type: string | undefined): string {
+    if (!type) return '—'
+    return PROTOCOL_LABELS[type] ?? type
   }
 
   const qualityColor = $derived(
@@ -108,6 +129,13 @@
             title={node.quality}
           ></span>
           <span class="truncate">{node.label}</span>
+          {#if node.syncState === 'notice'}
+            <span
+              class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 whitespace-nowrap"
+            >
+              notice
+            </span>
+          {/if}
         </Dialog.Title>
         <Dialog.Description class="text-xs">
           {node.quality}
@@ -141,6 +169,74 @@
           </dl>
         </section>
 
+        <!-- How this node is read. The protocol + endpoint + credential
+             the scanner uses to walk it. Filled in automatically when the
+             source already knows them; otherwise the operator sets the
+             credential here. For a discovered node this just works — no
+             separate adopt step. -->
+        <section>
+          <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide mb-2">
+            How this node is read
+          </h3>
+          <dl class="space-y-1">
+            <div class="flex justify-between gap-3">
+              <dt class="text-theme-text-muted">Protocol</dt>
+              {#if node.syncState === 'notice'}
+                <dd class="text-theme-text-muted italic">not registered yet</dd>
+              {:else}
+                <dd>{protocolLabel(node.sourceType)}</dd>
+              {/if}
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-theme-text-muted">IP</dt>
+              <dd class="font-mono">{node.mgmtIp ?? '—'}</dd>
+            </div>
+          </dl>
+
+          {#if node.syncState === 'notice'}
+            <div
+              class="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+            >
+              Reachable but not readable over SNMP. Set a working community below to sync this
+              device.
+            </div>
+          {/if}
+
+          <!-- SNMP community, attached directly to this node. Inherits
+               through the same chain as mode/intervalMs (topology default
+               → subgraph → node). Empty value clears the per-node
+               override and inherits. -->
+          {#if onSetCommunity}
+            <div class="mt-3">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-theme-text-muted">SNMP community</span>
+                {#if effectivePolicy?.community}
+                  <span class="text-[10px] text-theme-text-muted">
+                    from {originLabel(effectivePolicy.source.community)}
+                  </span>
+                {/if}
+              </div>
+              {#if effectivePolicy}
+                <input
+                  type="text"
+                  class="input text-sm w-full font-mono"
+                  value={effectivePolicy.source.community === 'node'
+                    ? (effectivePolicy.community ?? '')
+                    : ''}
+                  placeholder={effectivePolicy.community &&
+                  effectivePolicy.source.community !== 'node'
+                    ? `inherit: ${effectivePolicy.community}`
+                    : 'inherit (plugin default)'}
+                  disabled={patchingPolicy}
+                  onchange={(e) => onSetCommunity?.(e.currentTarget.value.trim())}
+                >
+              {:else}
+                <p class="text-xs text-theme-text-muted">Loading…</p>
+              {/if}
+            </div>
+          {/if}
+        </section>
+
         <!-- Discovery. Which source owns this node and when it last
              answered. Source type tells you which plugin code path
              actually walked the wire. -->
@@ -165,14 +261,13 @@
           </dl>
         </section>
 
-        <!-- Discovery policy. The effective mode + interval the
-             scheduler will use for this node, with the per-field
-             origin so the operator can tell "this came from my
-             override" apart from "this came from the subgraph". The
-             three buttons either pin the override (auto / observe /
-             disabled) or clear it (Inherit). 409 from a discovered-only
-             node is surfaced via the parent 's console warn for now —
-             Phase A2.1 will show it inline. -->
+        <!-- Discovery policy = the *schedule* (mode + interval the
+             scheduler uses), kept separate from "how this node is read"
+             above. Per-field origin shows whether a value is this node's
+             own override or inherited from subgraph / topology. The three
+             buttons pin the override (auto / observe / disabled); Inherit
+             clears it. Setting any of these on a discovered-only node now
+             just works — the server materializes the authored entry. -->
         <section>
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">

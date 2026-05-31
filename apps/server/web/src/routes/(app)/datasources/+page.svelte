@@ -34,7 +34,7 @@
   let formArubaUsername = $state('')
   let formArubaPassword = $state('')
   let formArubaSiteId = $state('')
-  // Network Discovery (snmp-lldp) uses community + seeds, no URL.
+  // Network Discovery (network-scan) uses community + seeds, no URL.
   let formSnmpCommunity = $state('public')
   /** Newline- or comma-separated list of seed device addresses. */
   let formSnmpTargets = $state('')
@@ -153,7 +153,7 @@
       })
     }
 
-    if (selectedPlugin.type === 'snmp-lldp') {
+    if (selectedPlugin.type === 'network-scan') {
       // Targets are entered as one per line (or comma-separated). Each
       // entry may be an IP, hostname, or CIDR — the plugin expands CIDR
       // and liveness-probes before the full walk. Community is shared
@@ -218,7 +218,7 @@
         formError = 'Name, portal email, and password are required'
         return
       }
-    } else if (selectedPlugin.type === 'snmp-lldp') {
+    } else if (selectedPlugin.type === 'network-scan') {
       if (!formName.trim() || !formSnmpTargets.trim()) {
         formError = 'Name and at least one target are required'
         return
@@ -568,7 +568,7 @@
           >
         </div>
 
-        {#if ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type) || (!selectedPlugin.configSchema?.properties && !['aruba-instant-on', 'snmp-lldp', 'manual'].includes(selectedPlugin.type))}
+        {#if ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type) || (!selectedPlugin.configSchema?.properties && !['aruba-instant-on', 'network-scan', 'manual'].includes(selectedPlugin.type))}
           <div>
             <label for="url" class="label">URL</label>
             <input
@@ -631,7 +631,7 @@
           </div>
         {/if}
 
-        {#if selectedPlugin.type === 'snmp-lldp'}
+        {#if selectedPlugin.type === 'network-scan'}
           <div>
             <label for="snmpCommunity" class="label">SNMP Community</label>
             <input

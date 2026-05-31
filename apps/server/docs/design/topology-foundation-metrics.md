@@ -118,7 +118,7 @@ interface PortMetricsMapping {
   /** ソース固有のホスト/インタフェース指定。
    *  zabbix: { hostId, itemKey }
    *  prometheus: { job, instance, labels: {...} }
-   *  snmp-lldp: { devTarget, ifName } */
+   *  network-scan: { devTarget, ifName } */
   sourceBinding: Record<string, unknown>
 }
 ```
@@ -144,7 +144,7 @@ v1 では Element inspector の port mini-chart のみ実装。`/metrics` ペー
 ## 5. データ取得の経路
 
 ```
-[snmp-lldp plugin] ──poll──→ ifHCInOctets/Out per port
+[network-scan plugin] ──poll──→ ifHCInOctets/Out per port
                               ↓
                        deltaCompute（カウンタ差分 / 時間）
                               ↓

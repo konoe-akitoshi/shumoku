@@ -36,6 +36,10 @@
     sysObjectID?: string
     catalogId?: string
     quality: 'stable' | 'weak' | 'unbound'
+    /** 'notice' = reachable but not yet readable over SNMP (needs a
+     *  credential); 'synced' = fully walked. Undefined for sources that
+     *  don't distinguish (e.g. non-SNMP plugins). */
+    syncState?: 'synced' | 'notice'
     sourceId?: string
     sourceName?: string
     sourceType?: string
@@ -165,6 +169,12 @@
             typeof md['sysObjectID'] === 'string' ? (md['sysObjectID'] as string) : undefined,
           catalogId: typeof md['catalogId'] === 'string' ? (md['catalogId'] as string) : undefined,
           quality: q,
+          syncState:
+            md['syncState'] === 'notice'
+              ? 'notice'
+              : md['syncState'] === 'synced'
+                ? 'synced'
+                : undefined,
           sourceId,
           sourceName: sourceDs?.name,
           sourceType: sourceDs?.type,
@@ -280,6 +290,30 @@
     if (!detailNode) return
     const result = await setNodeDiscoveryMode(detailNode.id, mode === 'inherit' ? null : { mode })
     if (!result.ok) console.warn('[Discovery] policy patch failed:', result.reason)
+  }
+
+  /**
+   * Modal callback: set the per-node SNMP community. Empty string clears
+   * the override (back to inheritance). We keep any existing per-node
+   * mode/intervalMs in the same PATCH so the change doesn't accidentally
+   * wipe a separate override the user previously set.
+   */
+  async function handleSetCommunity(community: string): Promise<void> {
+    if (!detailNode) return
+    const eff = policyView?.nodes[detailNode.id]
+    const keepMode = eff?.source.mode === 'node' ? { mode: eff.mode } : {}
+    const keepInterval = eff?.source.intervalMs === 'node' ? { intervalMs: eff.intervalMs } : {}
+    const comm = community ? { community } : {}
+    // Empty everything = clear the per-node entry entirely.
+    const isEmpty =
+      Object.keys(keepMode).length === 0 &&
+      Object.keys(keepInterval).length === 0 &&
+      Object.keys(comm).length === 0
+    const result = await setNodeDiscoveryMode(
+      detailNode.id,
+      isEmpty ? null : { ...keepMode, ...keepInterval, ...comm },
+    )
+    if (!result.ok) console.warn('[Discovery] community patch failed:', result.reason)
   }
 
   async function handleProbeNode(card: DiscoveredCard) {
@@ -584,6 +618,14 @@
                       <div class="min-w-0 flex-1">
                         <p class="font-medium text-sm text-theme-text-emphasis truncate">
                           {card.label}
+                          {#if card.syncState === 'notice'}
+                            <span
+                              class="ml-1 align-middle text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                              title="Reachable but not readable over SNMP — assign a credential to sync"
+                            >
+                              notice
+                            </span>
+                          {/if}
                         </p>
                         <p class="text-xs text-theme-text-muted truncate">
                           {card.model ?? card.vendor ?? card.sysDescr?.split(',')[0] ?? '—'}
@@ -784,4 +826,5 @@
     if (detailNode) handleProbeNode(detailNode)
   }}
   onSetMode={handleSetMode}
+  onSetCommunity={handleSetCommunity}
 />

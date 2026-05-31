@@ -19,9 +19,11 @@
  * a Manual source on first use so the operator doesn 't have to do it
  * manually from the data-sources tab — same affordance the editor uses.
  *
- * Per-node overrides on a node that exists ONLY in a discovered snapshot
- * (no authored entry yet) return 409 — "adoption" semantics are tracked
- * separately and intentionally out of scope here.
+ * A per-node override on a node that exists ONLY in a discovered snapshot
+ * just works: detection already grabbed the node, so we materialize a
+ * minimal authored entry from its resolved identity and apply the
+ * override. No separate "adopt" step. (Subgraph scope still 409s — a
+ * discovered-only subgraph has no identity to materialize from.)
  */
 
 import {
@@ -67,6 +69,19 @@ function parseDiscoveryPolicy(
       return { error: 'intervalMs must be a non-negative number' }
     }
     policy.intervalMs = raw.intervalMs
+  }
+  if (raw.community !== undefined) {
+    // Empty string is intentionally the "clear this field only"
+    // signal — distinct from `null` (which clears the whole policy
+    // override at the parent level). Stored as `undefined` so the
+    // resolver treats it as absent and falls back through inheritance.
+    if (raw.community === '') {
+      policy.community = undefined
+    } else if (typeof raw.community !== 'string') {
+      return { error: 'community must be a string or empty string' }
+    } else {
+      policy.community = raw.community
+    }
   }
   return { policy }
 }
@@ -171,21 +186,35 @@ export function createDiscoveryPolicyApi(): Hono {
       const nodes = [...next.nodes]
       const idx = nodes.findIndex((n) => n.id === id)
       if (idx === -1) {
-        return c.json(
-          {
-            error: `node '${id}' is not in the authored graph — pin it to Manual before overriding discovery`,
-            reason: 'discovered-only',
-          },
-          409,
-        )
+        // Discovered-only node. Detection already grabbed it, so
+        // configuring it should just work — materialize a minimal
+        // authored entry from the resolved node's identity, then apply
+        // the override. Clearing (null) on a node with no authored entry
+        // is a no-op (nothing to clear, nothing to materialize).
+        if (newPolicy !== null) {
+          const resolved = await service.getParsed(topologyId)
+          const discovered = resolved?.graph.nodes.find((n) => n.id === id)
+          if (!discovered) {
+            return c.json({ error: `node '${id}' not found` }, 404)
+          }
+          nodes.push({
+            id,
+            label: discovered.label,
+            ...(discovered.identity ? { identity: discovered.identity } : {}),
+            ...(discovered.parent ? { parent: discovered.parent } : {}),
+            discovery: newPolicy,
+          })
+          next.nodes = nodes
+        }
+      } else {
+        const current = nodes[idx]
+        if (!current) return c.json({ error: 'node index lost' }, 500)
+        const target = { ...current }
+        if (newPolicy === null) delete target.discovery
+        else target.discovery = newPolicy
+        nodes[idx] = target
+        next.nodes = nodes
       }
-      const current = nodes[idx]
-      if (!current) return c.json({ error: 'node index lost' }, 500)
-      const target = { ...current }
-      if (newPolicy === null) delete target.discovery
-      else target.discovery = newPolicy
-      nodes[idx] = target
-      next.nodes = nodes
     }
 
     service.writeManualGraph(manualId, next)

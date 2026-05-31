@@ -63,7 +63,7 @@ describe('resolve()', () => {
   describe('discovered-only', () => {
     it('node present only in 1 snapshot → state = discovered-only', () => {
       const snap: SnapshotEntry = {
-        sourceId: 'snmp-lldp:1',
+        sourceId: 'network-scan:1',
         capturedAt: 1000,
         status: 'ok',
         graph: {
@@ -81,7 +81,44 @@ describe('resolve()', () => {
       const out = resolve(emptyGraph(), [snap])
       expect(out.nodes).toHaveLength(1)
       expect(out.nodes[0]?.provenance?.state).toBe('discovered-only')
-      expect(out.nodes[0]?.provenance?.source).toBe('snmp-lldp:1')
+      expect(out.nodes[0]?.provenance?.source).toBe('network-scan:1')
+    })
+  })
+
+  describe('synthetic id collision (adopt path)', () => {
+    it('authored node carrying a `discovered:N` id does not collide with synthesized ids', () => {
+      // Reproduces the adopt path: a discovered node materialized into the
+      // authored graph keeps its synthesized `discovered:0` id. A later
+      // resolve must not hand that same id to a fresh discovered cluster —
+      // duplicate ids crash the keyed grid in the UI.
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'adopted',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.99' },
+          },
+        ],
+      }
+      const snap: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'a', label: 'a', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+            { id: 'b', label: 'b', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+          ],
+        },
+      }
+      const out = resolve(authored, [snap])
+      const ids = out.nodes.map((n) => n.id)
+      expect(out.nodes).toHaveLength(3)
+      expect(new Set(ids).size).toBe(ids.length) // all unique — no duplicate key
+      expect(ids).toContain('discovered:0') // authored node kept its id
     })
   })
 
@@ -99,7 +136,7 @@ describe('resolve()', () => {
         ],
       }
       const snap: SnapshotEntry = {
-        sourceId: 'snmp-lldp:1',
+        sourceId: 'network-scan:1',
         capturedAt: 1000,
         status: 'ok',
         graph: {
@@ -189,7 +226,7 @@ describe('resolve()', () => {
         ],
       }
       const failed: SnapshotEntry = {
-        sourceId: 'snmp-lldp:1',
+        sourceId: 'network-scan:1',
         capturedAt: 1000,
         status: 'failed',
         graph: null,

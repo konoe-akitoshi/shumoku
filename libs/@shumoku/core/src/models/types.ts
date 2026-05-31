@@ -388,6 +388,16 @@ export interface DiscoveryPolicy {
    * for `auto` and `observe` modes — ignored for `disabled`.
    */
   intervalMs?: number
+  /**
+   * SNMP community string to read this target with. Resolves through
+   * the same topology-default → subgraph → node inheritance chain as
+   * `mode` and `intervalMs`, so an operator can set one community for a
+   * whole subgraph (a management subnet) and override it on individual
+   * nodes. `undefined` means "use the autoscan plugin's config-wide
+   * community". Attached directly to the node/subgraph — there is no
+   * separate credential registry.
+   */
+  community?: string
 }
 
 export interface Node {

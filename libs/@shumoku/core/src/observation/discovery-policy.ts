@@ -40,12 +40,19 @@ export interface EffectiveDiscoveryPolicy {
   mode: DiscoveryMode
   intervalMs: number
   /**
+   * Resolved SNMP community string. `undefined` means "use the
+   * plugin's config-wide community"; consumers should not invent a
+   * fallback when this is missing.
+   */
+  community?: string
+  /**
    * Where each field came from in the inheritance chain. Useful for
    * the "Inherits from: Subgraph X" hint in the node detail modal.
    */
   source: {
     mode: 'node' | 'subgraph' | 'topology' | 'default'
     intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+    community: 'node' | 'subgraph' | 'topology' | 'default'
   }
 }
 
@@ -98,6 +105,8 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
   let modeOrigin: EffectiveDiscoveryPolicy['source']['mode'] | undefined
   let intervalMs: number | undefined
   let intervalOrigin: EffectiveDiscoveryPolicy['source']['intervalMs'] | undefined
+  let community: string | undefined
+  let communityOrigin: EffectiveDiscoveryPolicy['source']['community'] | undefined
 
   for (const layer of layers) {
     if (mode === undefined && layer.policy?.mode !== undefined) {
@@ -108,15 +117,21 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
       intervalMs = layer.policy.intervalMs
       intervalOrigin = layer.origin
     }
-    if (mode !== undefined && intervalMs !== undefined) break
+    if (community === undefined && layer.policy?.community !== undefined) {
+      community = layer.policy.community
+      communityOrigin = layer.origin
+    }
+    if (mode !== undefined && intervalMs !== undefined && community !== undefined) break
   }
 
   return {
     mode: mode ?? RUNTIME_DEFAULT.mode,
     intervalMs: intervalMs ?? RUNTIME_DEFAULT.intervalMs,
+    community,
     source: {
       mode: modeOrigin ?? 'default',
       intervalMs: intervalOrigin ?? 'default',
+      community: communityOrigin ?? 'default',
     },
   }
 }

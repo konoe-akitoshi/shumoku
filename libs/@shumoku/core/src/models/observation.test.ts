@@ -72,10 +72,10 @@ describe('observation model types', () => {
         id: 'n1',
         label: 'Router',
         shape: 'rect',
-        provenance: { source: 'snmp-lldp:1', state: 'confirmed', observedAt: 1 },
+        provenance: { source: 'network-scan:1', state: 'confirmed', observedAt: 1 },
         identity: { mgmtIp: '10.0.0.1', chassisId: 'aa:bb:cc:dd:ee:ff' },
       }
-      expect(node.provenance?.source).toBe('snmp-lldp:1')
+      expect(node.provenance?.source).toBe('network-scan:1')
       expect(node.identity?.mgmtIp).toBe('10.0.0.1')
     })
 
@@ -84,10 +84,10 @@ describe('observation model types', () => {
         id: 'p1',
         label: 'Gi1/0/1',
         connectors: ['rj45'],
-        provenance: { source: 'snmp-lldp:1' },
+        provenance: { source: 'network-scan:1' },
         identity: { ifName: 'GigabitEthernet1/0/1', ifIndex: 10001 },
       }
-      expect(port.provenance?.source).toBe('snmp-lldp:1')
+      expect(port.provenance?.source).toBe('network-scan:1')
       expect(port.identity?.ifName).toBe('GigabitEthernet1/0/1')
     })
 
@@ -95,7 +95,7 @@ describe('observation model types', () => {
       const link: Link = {
         from: { node: 'a', port: 'p1' },
         to: { node: 'b', port: 'p2' },
-        provenance: { source: 'snmp-lldp:1', state: 'discovered-only' },
+        provenance: { source: 'network-scan:1', state: 'discovered-only' },
       }
       expect(link.provenance?.state).toBe('discovered-only')
     })

@@ -43,7 +43,7 @@ export interface InterfaceIp {
 
 /** An interface binding scoped to its parent device. */
 export interface DeviceInterfaceIp extends InterfaceIp {
-  /** Stable node id of the parent device (e.g. `snmp-lldp:node:192.168.13.15`). */
+  /** Stable node id of the parent device (e.g. `network-scan:node:192.168.13.15`). */
   nodeId: string
   /** Stable port id on the parent device for the spoke endpoint. */
   portId: string

@@ -417,7 +417,7 @@ export const topologies = {
   discoveryPolicy: {
     get: (topologyId: string) =>
       request<{
-        topologyDefault: { mode?: DiscoveryMode; intervalMs?: number } | null
+        topologyDefault: DiscoveryPolicyPatch | null
         runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
         nodes: Record<string, EffectivePolicy>
         subgraphs: Record<string, EffectivePolicy>
@@ -426,11 +426,11 @@ export const topologies = {
     patch: (
       topologyId: string,
       body:
-        | { scope: 'topology'; discovery: { mode?: DiscoveryMode; intervalMs?: number } | null }
+        | { scope: 'topology'; discovery: DiscoveryPolicyPatch | null }
         | {
             scope: 'node' | 'subgraph'
             id: string
-            discovery: { mode?: DiscoveryMode; intervalMs?: number } | null
+            discovery: DiscoveryPolicyPatch | null
           },
     ) =>
       request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
@@ -440,13 +440,25 @@ export const topologies = {
   },
 }
 
+/** Shape accepted by the discovery-policy PATCH endpoint. Each field
+ *  optional; `null` for the whole object clears the override. */
+export interface DiscoveryPolicyPatch {
+  mode?: DiscoveryMode
+  intervalMs?: number
+  /** SNMP community to read this target with. `''` clears the per-node
+   *  override (inherit); omit to leave unchanged. */
+  community?: string
+}
+
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 export interface EffectivePolicy {
   mode: DiscoveryMode
   intervalMs: number
+  community?: string
   source: {
     mode: 'node' | 'subgraph' | 'topology' | 'default'
     intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+    community: 'node' | 'subgraph' | 'topology' | 'default'
   }
 }
 

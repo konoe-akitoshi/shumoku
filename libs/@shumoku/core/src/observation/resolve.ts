@@ -124,6 +124,12 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   const clusters: NodeCluster[] = []
   // Map identity-key-hash → cluster index
   const keyIndex = new Map<string, number>()
+  // Every cluster id handed out so far. Authored nodes keep their own id,
+  // which can itself look like a synthesized `discovered:N` (e.g. a node
+  // adopted into Manual from a previously-synthesized id). Tracking used
+  // ids lets the synthetic generator skip those, so two clusters never
+  // share an id — a duplicate id crashes the keyed grid in the UI.
+  const usedClusterIds = new Set<string>()
   let nextSynthId = 0
 
   const claim = (member: ClusterMember): void => {
@@ -140,11 +146,20 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
     if (hit !== undefined) {
       clusters[hit]?.members.push(member)
     } else {
-      // Brand new cluster
-      const cluster: NodeCluster = {
-        id: member.sourceId === 'authored' ? member.node.id : `discovered:${nextSynthId++}`,
-        members: [member],
+      // Brand new cluster. Authored members keep their own id; discovered
+      // members get a synthesized one — skipping any id already in use so a
+      // synthetic `discovered:N` can't collide with an authored node that
+      // happens to carry the same id.
+      let id: string
+      if (member.sourceId === 'authored') {
+        id = member.node.id
+      } else {
+        do {
+          id = `discovered:${nextSynthId++}`
+        } while (usedClusterIds.has(id))
       }
+      usedClusterIds.add(id)
+      const cluster: NodeCluster = { id, members: [member] }
       clusters.push(cluster)
       hit = clusters.length - 1
     }

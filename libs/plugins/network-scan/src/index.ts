@@ -10,14 +10,14 @@
  */
 
 import type { PluginRegistryInterface } from '@shumoku/core'
-import { SnmpLldpPlugin } from './plugin.js'
+import { NetworkScanPlugin } from './plugin.js'
 
 export { spikeBunCompat } from './bun-compat.js'
-export { SnmpLldpPlugin } from './plugin.js'
+export { NetworkScanPlugin } from './plugin.js'
 
 export function register(registry: PluginRegistryInterface): void {
-  registry.register('snmp-lldp', 'Network Discovery', ['autoscan'], (config) => {
-    const plugin = new SnmpLldpPlugin()
+  registry.register('network-scan', 'Network Discovery', ['autoscan'], (config) => {
+    const plugin = new NetworkScanPlugin()
     plugin.initialize(config)
     return plugin
   })
