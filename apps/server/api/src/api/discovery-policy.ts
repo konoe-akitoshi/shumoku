@@ -1,89 +1,109 @@
 /**
- * Discovery-policy API
- *
- * Reads and mutates the per-node / per-subgraph / topology-default
- * discovery configuration that drives the scheduler and the Discovery
- * tab UI.
+ * Discovery-policy API — the authored overlay (access / policy
+ * attachments) per node / subgraph / topology default.
  *
  *   GET   /api/topologies/:id/discovery-policy
- *     → full view: topology default + effective policy for every node
- *       and subgraph in the resolved graph.
+ *     → topology default + effective policy (mode / interval / community)
+ *       for every node and subgraph in the resolved graph. The raw
+ *       attachments themselves live on the resolved graph (GET /graph).
  *
  *   PATCH /api/topologies/:id/discovery-policy
  *     body: { scope: 'topology' | 'node' | 'subgraph',
- *             id?: string,           // required for node / subgraph
- *             discovery: DiscoveryPolicy | null }  // null clears the override
+ *             id?: string,                       // node / subgraph
+ *             attachments: Attachment[] | null } // replace; null/[] clears
  *     → { effective: EffectiveDiscoveryPolicy }
  *
- * The override lives on the authored (Manual) layer. PATCH auto-attaches
- * a Manual source on first use so the operator doesn 't have to do it
- * manually from the data-sources tab — same affordance the editor uses.
- *
- * A per-node override on a node that exists ONLY in a discovered snapshot
- * just works: detection already grabbed the node, so we materialize a
+ * The overlay lives on the authored (Manual) layer; PATCH auto-attaches a
+ * Manual source on first use. A node that exists ONLY in a discovered
+ * snapshot just works — detection already grabbed it, so we materialize a
  * minimal authored entry from its resolved identity and apply the
- * override. No separate "adopt" step. (Subgraph scope still 409s — a
- * discovered-only subgraph has no identity to materialize from.)
+ * attachments. (Subgraph scope still 409s — a discovered-only subgraph has
+ * no identity to materialize from.)
  */
 
 import {
+  type Attachment,
   computeEffectivePolicy,
   type DiscoveryMode,
-  type DiscoveryPolicy,
   type EffectiveDiscoveryPolicy,
   RUNTIME_DEFAULT,
 } from '@shumoku/core'
 import { Hono } from 'hono'
 import { getTopologyService } from './topologies.js'
 
-const VALID_MODES: ReadonlySet<DiscoveryMode> = new Set(['auto', 'observe', 'disabled'])
+const VALID_MODES: ReadonlySet<string> = new Set<DiscoveryMode>(['auto', 'observe', 'disabled'])
+const VALID_PROTOCOLS: ReadonlySet<string> = new Set(['snmp', 'ssh', 'netconf', 'http'])
 
 interface PatchBody {
   scope?: string
   id?: string
-  discovery?: DiscoveryPolicy | null
+  /** Replace the scope's attachments. `null` or `[]` clears them. */
+  attachments?: unknown
 }
 
-/** Validate the discovery patch body. Returns the parsed policy on
- *  success, or a string with the reason on failure. */
-function parseDiscoveryPolicy(
-  raw: DiscoveryPolicy | null | undefined,
-): { policy: DiscoveryPolicy | null } | { error: string } {
-  if (raw === null) return { policy: null }
-  if (raw === undefined || typeof raw !== 'object') {
-    return { error: 'discovery must be an object or null' }
-  }
-  const policy: DiscoveryPolicy = {}
-  if (raw.mode !== undefined) {
-    if (!VALID_MODES.has(raw.mode as DiscoveryMode)) {
-      return { error: `mode must be one of ${[...VALID_MODES].join(', ')}` }
-    }
-    policy.mode = raw.mode as DiscoveryMode
-  }
-  if (raw.intervalMs !== undefined) {
-    if (
-      typeof raw.intervalMs !== 'number' ||
-      !Number.isFinite(raw.intervalMs) ||
-      raw.intervalMs < 0
-    ) {
-      return { error: 'intervalMs must be a non-negative number' }
-    }
-    policy.intervalMs = raw.intervalMs
-  }
-  if (raw.community !== undefined) {
-    // Empty string is intentionally the "clear this field only"
-    // signal — distinct from `null` (which clears the whole policy
-    // override at the parent level). Stored as `undefined` so the
-    // resolver treats it as absent and falls back through inheritance.
-    if (raw.community === '') {
-      policy.community = undefined
-    } else if (typeof raw.community !== 'string') {
-      return { error: 'community must be a string or empty string' }
+/** Validate + normalize the attachments array from a PATCH body. */
+function parseAttachments(raw: unknown): { attachments: Attachment[] } | { error: string } {
+  if (raw === null || raw === undefined) return { attachments: [] }
+  if (!Array.isArray(raw)) return { error: 'attachments must be an array or null' }
+  const out: Attachment[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') return { error: 'each attachment must be an object' }
+    const a = item as Record<string, unknown>
+    const kind = a['kind']
+    if (kind === 'policy') {
+      const mode = a['mode']
+      const intervalMs = a['intervalMs']
+      if (mode !== undefined && !VALID_MODES.has(mode as string)) {
+        return { error: `mode must be one of ${[...VALID_MODES].join(', ')}` }
+      }
+      if (
+        intervalMs !== undefined &&
+        (typeof intervalMs !== 'number' || !Number.isFinite(intervalMs) || intervalMs < 0)
+      ) {
+        return { error: 'intervalMs must be a non-negative number' }
+      }
+      out.push({
+        kind: 'policy',
+        ...(mode !== undefined ? { mode: mode as DiscoveryMode } : {}),
+        ...(intervalMs !== undefined ? { intervalMs: intervalMs as number } : {}),
+      })
+    } else if (kind === 'access') {
+      const protocol = a['protocol']
+      if (typeof protocol !== 'string' || !VALID_PROTOCOLS.has(protocol)) {
+        return { error: `access.protocol must be one of ${[...VALID_PROTOCOLS].join(', ')}` }
+      }
+      if (protocol === 'snmp') {
+        const community = a['community']
+        const version = a['version']
+        if (community !== undefined && community !== '' && typeof community !== 'string') {
+          return { error: 'community must be a string' }
+        }
+        if (version !== undefined && version !== '2c' && version !== '3') {
+          return { error: "version must be '2c' or '3'" }
+        }
+        out.push({
+          kind: 'access',
+          protocol: 'snmp',
+          ...(typeof community === 'string' && community !== '' ? { community } : {}),
+          ...(version === '2c' || version === '3' ? { version } : {}),
+        })
+      } else if (protocol === 'ssh') {
+        const username = a['username']
+        const port = a['port']
+        out.push({
+          kind: 'access',
+          protocol: 'ssh',
+          ...(typeof username === 'string' ? { username } : {}),
+          ...(typeof port === 'number' ? { port } : {}),
+        })
+      } else {
+        out.push({ kind: 'access', protocol: protocol as 'netconf' | 'http' })
+      }
     } else {
-      policy.community = raw.community
+      return { error: `unknown attachment kind: ${String(kind)}` }
     }
   }
-  return { policy }
+  return { attachments: out }
 }
 
 export function createDiscoveryPolicyApi(): Hono {
@@ -97,30 +117,32 @@ export function createDiscoveryPolicyApi(): Hono {
 
     const graph = parsed.graph
     const subgraphLookup = new Map(
-      (graph.subgraphs ?? []).map((sg) => [sg.id, { parent: sg.parent, discovery: sg.discovery }]),
+      (graph.subgraphs ?? []).map((sg) => [
+        sg.id,
+        { parent: sg.parent, attachments: sg.attachments },
+      ]),
     )
 
     const nodes: Record<string, EffectiveDiscoveryPolicy> = {}
     for (const node of graph.nodes) {
       nodes[node.id] = computeEffectivePolicy({
-        node: { discovery: node.discovery, parent: node.parent },
+        node: { attachments: node.attachments, parent: node.parent },
         subgraphs: subgraphLookup,
-        topologyDefault: graph.discovery,
+        topologyDefault: graph.attachments,
       })
     }
 
     const subgraphs: Record<string, EffectiveDiscoveryPolicy> = {}
     for (const sg of graph.subgraphs ?? []) {
-      // Effective at the subgraph itself: walk *its* parent chain.
       subgraphs[sg.id] = computeEffectivePolicy({
-        node: { discovery: sg.discovery, parent: sg.parent },
+        node: { attachments: sg.attachments, parent: sg.parent },
         subgraphs: subgraphLookup,
-        topologyDefault: graph.discovery,
+        topologyDefault: graph.attachments,
       })
     }
 
     return c.json({
-      topologyDefault: graph.discovery ?? null,
+      topologyDefault: graph.attachments ?? null,
       runtimeDefault: RUNTIME_DEFAULT,
       nodes,
       subgraphs,
@@ -138,16 +160,15 @@ export function createDiscoveryPolicyApi(): Hono {
       return c.json({ error: `id is required when scope is '${body.scope}'` }, 400)
     }
 
-    const parsedBody = parseDiscoveryPolicy(body.discovery)
+    const parsedBody = parseAttachments(body.attachments)
     if ('error' in parsedBody) return c.json({ error: parsedBody.error }, 400)
-    const newPolicy = parsedBody.policy
+    // Empty array means "no overlay" — store as undefined so the field is absent.
+    const next0 = parsedBody.attachments
+    const attachments = next0.length > 0 ? next0 : undefined
 
     const topology = service.get(topologyId)
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
 
-    // The override has to land on the authored Manual graph. If no Manual
-    // source is attached yet, auto-attach one — same affordance the editor
-    // would have used on first edit.
     const manualId = await service.ensureManualSource(topologyId)
     const authored = service.readManualGraph(manualId) ?? {
       version: '1' as const,
@@ -155,14 +176,11 @@ export function createDiscoveryPolicyApi(): Hono {
       nodes: [],
       links: [],
     }
-
-    // Apply the mutation. We copy the graph (and the touched array) so we
-    // never mutate the JSON we 'll round-trip back into config_json.
     const next = { ...authored }
 
     if (body.scope === 'topology') {
-      if (newPolicy === null) delete next.discovery
-      else next.discovery = newPolicy
+      if (attachments) next.attachments = attachments
+      else delete next.attachments
     } else if (body.scope === 'subgraph') {
       const id = body.id as string
       const subgraphs = [...(next.subgraphs ?? [])]
@@ -176,8 +194,8 @@ export function createDiscoveryPolicyApi(): Hono {
       const current = subgraphs[idx]
       if (!current) return c.json({ error: 'subgraph index lost' }, 500)
       const target = { ...current }
-      if (newPolicy === null) delete target.discovery
-      else target.discovery = newPolicy
+      if (attachments) target.attachments = attachments
+      else delete target.attachments
       subgraphs[idx] = target
       next.subgraphs = subgraphs
     } else {
@@ -186,23 +204,19 @@ export function createDiscoveryPolicyApi(): Hono {
       const nodes = [...next.nodes]
       const idx = nodes.findIndex((n) => n.id === id)
       if (idx === -1) {
-        // Discovered-only node. Detection already grabbed it, so
-        // configuring it should just work — materialize a minimal
-        // authored entry from the resolved node's identity, then apply
-        // the override. Clearing (null) on a node with no authored entry
-        // is a no-op (nothing to clear, nothing to materialize).
-        if (newPolicy !== null) {
+        // Discovered-only node: materialize a minimal authored entry from
+        // the resolved identity, then attach. Clearing (empty) on a node
+        // with no authored entry is a no-op.
+        if (attachments) {
           const resolved = await service.getParsed(topologyId)
           const discovered = resolved?.graph.nodes.find((n) => n.id === id)
-          if (!discovered) {
-            return c.json({ error: `node '${id}' not found` }, 404)
-          }
+          if (!discovered) return c.json({ error: `node '${id}' not found` }, 404)
           nodes.push({
             id,
             label: discovered.label,
             ...(discovered.identity ? { identity: discovered.identity } : {}),
             ...(discovered.parent ? { parent: discovered.parent } : {}),
-            discovery: newPolicy,
+            attachments,
           })
           next.nodes = nodes
         }
@@ -210,8 +224,8 @@ export function createDiscoveryPolicyApi(): Hono {
         const current = nodes[idx]
         if (!current) return c.json({ error: 'node index lost' }, 500)
         const target = { ...current }
-        if (newPolicy === null) delete target.discovery
-        else target.discovery = newPolicy
+        if (attachments) target.attachments = attachments
+        else delete target.attachments
         nodes[idx] = target
         next.nodes = nodes
       }
@@ -222,28 +236,31 @@ export function createDiscoveryPolicyApi(): Hono {
 
     // Recompute the affected effective policy for the response.
     const subgraphLookup = new Map(
-      (next.subgraphs ?? []).map((sg) => [sg.id, { parent: sg.parent, discovery: sg.discovery }]),
+      (next.subgraphs ?? []).map((sg) => [
+        sg.id,
+        { parent: sg.parent, attachments: sg.attachments },
+      ]),
     )
     let effective: EffectiveDiscoveryPolicy
     if (body.scope === 'topology') {
       effective = computeEffectivePolicy({
-        node: { discovery: undefined, parent: undefined },
+        node: { attachments: undefined, parent: undefined },
         subgraphs: subgraphLookup,
-        topologyDefault: next.discovery,
+        topologyDefault: next.attachments,
       })
     } else if (body.scope === 'subgraph') {
       const sg = next.subgraphs?.find((s) => s.id === body.id)
       effective = computeEffectivePolicy({
-        node: { discovery: sg?.discovery, parent: sg?.parent },
+        node: { attachments: sg?.attachments, parent: sg?.parent },
         subgraphs: subgraphLookup,
-        topologyDefault: next.discovery,
+        topologyDefault: next.attachments,
       })
     } else {
       const node = next.nodes.find((n) => n.id === body.id)
       effective = computeEffectivePolicy({
-        node: { discovery: node?.discovery, parent: node?.parent },
+        node: { attachments: node?.attachments, parent: node?.parent },
         subgraphs: subgraphLookup,
-        topologyDefault: next.discovery,
+        topologyDefault: next.attachments,
       })
     }
 

@@ -417,21 +417,18 @@ export const topologies = {
   discoveryPolicy: {
     get: (topologyId: string) =>
       request<{
-        topologyDefault: DiscoveryPolicyPatch | null
+        topologyDefault: Attachment[] | null
         runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
         nodes: Record<string, EffectivePolicy>
         subgraphs: Record<string, EffectivePolicy>
       }>(`/topologies/${topologyId}/discovery-policy`),
 
+    /** Replace a scope's authored attachments wholesale. `null`/`[]` clears. */
     patch: (
       topologyId: string,
       body:
-        | { scope: 'topology'; discovery: DiscoveryPolicyPatch | null }
-        | {
-            scope: 'node' | 'subgraph'
-            id: string
-            discovery: DiscoveryPolicyPatch | null
-          },
+        | { scope: 'topology'; attachments: Attachment[] | null }
+        | { scope: 'node' | 'subgraph'; id: string; attachments: Attachment[] | null },
     ) =>
       request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
         method: 'PATCH',
@@ -440,17 +437,15 @@ export const topologies = {
   },
 }
 
-/** Shape accepted by the discovery-policy PATCH endpoint. Each field
- *  optional; `null` for the whole object clears the override. */
-export interface DiscoveryPolicyPatch {
-  mode?: DiscoveryMode
-  intervalMs?: number
-  /** SNMP community to read this target with. `''` clears the per-node
-   *  override (inherit); omit to leave unchanged. */
-  community?: string
-}
-
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
+
+/** A unit of authored intent attached to a node / subgraph / topology.
+ *  Mirrors `@shumoku/core`'s `Attachment`. */
+export type Attachment =
+  | { kind: 'policy'; mode?: DiscoveryMode; intervalMs?: number }
+  | { kind: 'access'; protocol: 'snmp'; community?: string; version?: '2c' | '3' }
+  | { kind: 'access'; protocol: 'ssh'; username?: string; port?: number }
+  | { kind: 'access'; protocol: 'netconf' | 'http' }
 export interface EffectivePolicy {
   mode: DiscoveryMode
   intervalMs: number

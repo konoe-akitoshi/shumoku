@@ -15,7 +15,7 @@
   import { nodeIdentityQuality } from '@shumoku/core'
   import { ArrowsClockwiseIcon } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
+  import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
   import { topologies } from '$lib/stores'
@@ -40,6 +40,8 @@
      *  credential); 'synced' = fully walked. Undefined for sources that
      *  don't distinguish (e.g. non-SNMP plugins). */
     syncState?: 'synced' | 'notice'
+    /** Authored overlay (access / policy) on this node, for the detail modal. */
+    attachments?: Attachment[]
     sourceId?: string
     sourceName?: string
     sourceType?: string
@@ -81,7 +83,7 @@
   >([])
   let discoveryLoading = $state(false)
   let policyView = $state<{
-    topologyDefault: { mode?: import('$lib/api').DiscoveryMode; intervalMs?: number } | null
+    topologyDefault: Attachment[] | null
     runtimeDefault: { mode: import('$lib/api').DiscoveryMode; intervalMs: number }
     nodes: Record<string, import('$lib/api').EffectivePolicy>
     subgraphs: Record<string, import('$lib/api').EffectivePolicy>
@@ -175,6 +177,7 @@
               : md['syncState'] === 'synced'
                 ? 'synced'
                 : undefined,
+          attachments: (node as { attachments?: Attachment[] }).attachments,
           sourceId,
           sourceName: sourceDs?.name,
           sourceType: sourceDs?.type,
@@ -226,20 +229,18 @@
     }
   }
 
-  async function setNodeDiscoveryMode(
+  /** Replace a node's authored overlay wholesale (empty = clear). */
+  async function setNodeAttachments(
     nodeId: string,
-    discovery: { mode?: import('$lib/api').DiscoveryMode; intervalMs?: number } | null,
+    attachments: Attachment[],
   ): Promise<{ ok: true } | { ok: false; reason: string }> {
     policyPatching = { ...policyPatching, [nodeId]: true }
     try {
-      const { effective } = await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
+      await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
         scope: 'node',
         id: nodeId,
-        discovery,
+        attachments: attachments.length > 0 ? attachments : null,
       })
-      if (policyView) {
-        policyView = { ...policyView, nodes: { ...policyView.nodes, [nodeId]: effective } }
-      }
       if (policyError[nodeId]) {
         const next = { ...policyError }
         delete next[nodeId]
@@ -255,16 +256,29 @@
     }
   }
 
-  async function handleBulkSetMode(
-    mode: import('$lib/api').DiscoveryMode | 'inherit',
-  ): Promise<void> {
+  /** Set/clear the policy attachment's mode, preserving other attachments. */
+  function withMode(attachments: Attachment[], mode: DiscoveryMode | 'inherit'): Attachment[] {
+    const rest = attachments.filter((a) => a.kind !== 'policy')
+    if (mode === 'inherit') return rest
+    const policy = attachments.find((a) => a.kind === 'policy')
+    return [
+      ...rest,
+      { kind: 'policy', mode, ...(policy?.intervalMs ? { intervalMs: policy.intervalMs } : {}) },
+    ]
+  }
+
+  async function handleBulkSetMode(mode: DiscoveryMode | 'inherit'): Promise<void> {
     if (bulkSelection.size === 0) return
     bulkApplying = true
     try {
       const ids = [...bulkSelection]
       await Promise.all(
-        ids.map((id) => setNodeDiscoveryMode(id, mode === 'inherit' ? null : { mode })),
+        ids.map((id) => {
+          const card = discoveredNodes.find((c) => c.id === id)
+          return setNodeAttachments(id, withMode(card?.attachments ?? [], mode))
+        }),
       )
+      await refreshDiscovery()
     } finally {
       bulkApplying = false
     }
@@ -286,34 +300,19 @@
     bulkSelection = next
   }
 
-  async function handleSetMode(mode: import('$lib/api').DiscoveryMode | 'inherit'): Promise<void> {
+  /** Modal callback: the detail panel emits the node's full desired
+   *  attachment list; we replace the overlay and refresh. */
+  async function handleSetAttachments(attachments: Attachment[]): Promise<void> {
     if (!detailNode) return
-    const result = await setNodeDiscoveryMode(detailNode.id, mode === 'inherit' ? null : { mode })
-    if (!result.ok) console.warn('[Discovery] policy patch failed:', result.reason)
-  }
-
-  /**
-   * Modal callback: set the per-node SNMP community. Empty string clears
-   * the override (back to inheritance). We keep any existing per-node
-   * mode/intervalMs in the same PATCH so the change doesn't accidentally
-   * wipe a separate override the user previously set.
-   */
-  async function handleSetCommunity(community: string): Promise<void> {
-    if (!detailNode) return
-    const eff = policyView?.nodes[detailNode.id]
-    const keepMode = eff?.source.mode === 'node' ? { mode: eff.mode } : {}
-    const keepInterval = eff?.source.intervalMs === 'node' ? { intervalMs: eff.intervalMs } : {}
-    const comm = community ? { community } : {}
-    // Empty everything = clear the per-node entry entirely.
-    const isEmpty =
-      Object.keys(keepMode).length === 0 &&
-      Object.keys(keepInterval).length === 0 &&
-      Object.keys(comm).length === 0
-    const result = await setNodeDiscoveryMode(
-      detailNode.id,
-      isEmpty ? null : { ...keepMode, ...keepInterval, ...comm },
-    )
-    if (!result.ok) console.warn('[Discovery] community patch failed:', result.reason)
+    const id = detailNode.id
+    const result = await setNodeAttachments(id, attachments)
+    if (!result.ok) {
+      console.warn('[Discovery] attachment patch failed:', result.reason)
+      return
+    }
+    await refreshDiscovery()
+    const refreshed = discoveredNodes.find((c) => c.id === id)
+    if (refreshed) detailNode = refreshed
   }
 
   async function handleProbeNode(card: DiscoveredCard) {
@@ -372,7 +371,10 @@
           </p>
         </div>
         {#if policyView}
-          {@const def = policyView.topologyDefault?.mode ?? policyView.runtimeDefault.mode}
+          {@const topoPolicy = policyView.topologyDefault?.find((a) => a.kind === 'policy')}
+          {@const def =
+            (topoPolicy?.kind === 'policy' ? topoPolicy.mode : undefined) ??
+            policyView.runtimeDefault.mode}
           <span class="text-xs text-theme-text-muted whitespace-nowrap">
             topology default: <span class="font-mono">{def}</span>
           </span>
@@ -817,6 +819,7 @@
     if (!v) detailNode = null
   }}
   node={detailNode}
+  attachments={detailNode?.attachments ?? []}
   probing={detailNode !== null && probingNodeId === detailNode.id}
   effectivePolicy={detailNode ? (policyView?.nodes[detailNode.id] ?? null) : null}
   patchingPolicy={detailNode !== null && policyPatching[detailNode.id] === true}
@@ -825,6 +828,5 @@
   onProbe={() => {
     if (detailNode) handleProbeNode(detailNode)
   }}
-  onSetMode={handleSetMode}
-  onSetCommunity={handleSetCommunity}
+  onSetAttachments={handleSetAttachments}
 />

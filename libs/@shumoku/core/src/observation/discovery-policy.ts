@@ -23,18 +23,12 @@
  *     its output.
  */
 
-import type {
-  DiscoveryMode,
-  DiscoveryPolicy,
-  NetworkGraph,
-  Node,
-  Subgraph,
-} from '../models/types.js'
+import type { Attachment, DiscoveryMode, NetworkGraph, Node, Subgraph } from '../models/types.js'
 
 /**
  * The fully-resolved policy actually applied at a node — every field
- * is concrete. Compare to `DiscoveryPolicy` whose fields are all
- * optional to support the merge chain.
+ * is concrete. The contributing `policy` / `access` attachments have
+ * optional fields to support the merge chain; this is the merged result.
  */
 export interface EffectiveDiscoveryPolicy {
   mode: DiscoveryMode
@@ -74,13 +68,35 @@ export const RUNTIME_DEFAULT: { mode: DiscoveryMode; intervalMs: number } = {
 /** Input to `computeEffectivePolicy` — kept as a record so callers
  *  don 't have to construct a full `NetworkGraph` for unit tests. */
 export interface PolicyContext {
-  /** The node whose effective policy we want. Only `discovery` and
+  /** The node whose effective policy we want. Only `attachments` and
    *  `parent` are consulted. */
-  node: Pick<Node, 'discovery' | 'parent'>
+  node: Pick<Node, 'attachments' | 'parent'>
   /** Subgraph lookup, keyed by subgraph id. Used to walk ancestors. */
-  subgraphs?: ReadonlyMap<string, Pick<Subgraph, 'parent' | 'discovery'>>
-  /** Topology-wide default. */
-  topologyDefault?: DiscoveryPolicy
+  subgraphs?: ReadonlyMap<string, Pick<Subgraph, 'parent' | 'attachments'>>
+  /** Topology-wide default attachments. */
+  topologyDefault?: Attachment[]
+}
+
+/** Effective fields a single attachment layer contributes: `mode` /
+ *  `intervalMs` from a `policy` attachment, `community` from an
+ *  `access:snmp` attachment. First of each kind wins within a layer. */
+function readLayer(attachments: Attachment[] | undefined): {
+  mode?: DiscoveryMode
+  intervalMs?: number
+  community?: string
+} {
+  let mode: DiscoveryMode | undefined
+  let intervalMs: number | undefined
+  let community: string | undefined
+  for (const a of attachments ?? []) {
+    if (a.kind === 'policy') {
+      if (mode === undefined && a.mode !== undefined) mode = a.mode
+      if (intervalMs === undefined && a.intervalMs !== undefined) intervalMs = a.intervalMs
+    } else if (a.kind === 'access' && a.protocol === 'snmp') {
+      if (community === undefined && a.community !== undefined) community = a.community
+    }
+  }
+  return { mode, intervalMs, community }
 }
 
 export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPolicy {
@@ -88,18 +104,18 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
   // The first layer to supply each field wins.
   const layers: Array<{
     origin: EffectiveDiscoveryPolicy['source']['mode']
-    policy: DiscoveryPolicy | undefined
-  }> = [{ origin: 'node', policy: ctx.node.discovery }]
+    attachments: Attachment[] | undefined
+  }> = [{ origin: 'node', attachments: ctx.node.attachments }]
 
   let currentParent: string | undefined = ctx.node.parent
   const seen = new Set<string>()
   while (currentParent && ctx.subgraphs?.has(currentParent) && !seen.has(currentParent)) {
     seen.add(currentParent)
     const sg = ctx.subgraphs.get(currentParent)
-    layers.push({ origin: 'subgraph', policy: sg?.discovery })
+    layers.push({ origin: 'subgraph', attachments: sg?.attachments })
     currentParent = sg?.parent
   }
-  layers.push({ origin: 'topology', policy: ctx.topologyDefault })
+  layers.push({ origin: 'topology', attachments: ctx.topologyDefault })
 
   let mode: DiscoveryMode | undefined
   let modeOrigin: EffectiveDiscoveryPolicy['source']['mode'] | undefined
@@ -109,16 +125,17 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
   let communityOrigin: EffectiveDiscoveryPolicy['source']['community'] | undefined
 
   for (const layer of layers) {
-    if (mode === undefined && layer.policy?.mode !== undefined) {
-      mode = layer.policy.mode
+    const v = readLayer(layer.attachments)
+    if (mode === undefined && v.mode !== undefined) {
+      mode = v.mode
       modeOrigin = layer.origin
     }
-    if (intervalMs === undefined && layer.policy?.intervalMs !== undefined) {
-      intervalMs = layer.policy.intervalMs
+    if (intervalMs === undefined && v.intervalMs !== undefined) {
+      intervalMs = v.intervalMs
       intervalOrigin = layer.origin
     }
-    if (community === undefined && layer.policy?.community !== undefined) {
-      community = layer.policy.community
+    if (community === undefined && v.community !== undefined) {
+      community = v.community
       communityOrigin = layer.origin
     }
     if (mode !== undefined && intervalMs !== undefined && community !== undefined) break
@@ -168,16 +185,16 @@ export function absenceImpliesRetraction(policy: EffectiveDiscoveryPolicy): bool
  * this node" surface all need the same answer; they call this helper.
  */
 export function effectivePolicyForNode(
-  graph: Pick<NetworkGraph, 'subgraphs' | 'discovery'>,
-  node: Pick<Node, 'discovery' | 'parent'>,
+  graph: Pick<NetworkGraph, 'subgraphs' | 'attachments'>,
+  node: Pick<Node, 'attachments' | 'parent'>,
 ): EffectiveDiscoveryPolicy {
-  const subgraphs = new Map<string, Pick<Subgraph, 'parent' | 'discovery'>>()
+  const subgraphs = new Map<string, Pick<Subgraph, 'parent' | 'attachments'>>()
   for (const sg of graph.subgraphs ?? []) {
-    subgraphs.set(sg.id, { parent: sg.parent, discovery: sg.discovery })
+    subgraphs.set(sg.id, { parent: sg.parent, attachments: sg.attachments })
   }
   return computeEffectivePolicy({
     node,
     subgraphs,
-    topologyDefault: graph.discovery,
+    topologyDefault: graph.attachments,
   })
 }

@@ -168,16 +168,19 @@ export function resolveCredentialsForAutoscan(
   if (!graph) return {}
 
   const subgraphLookup = new Map(
-    (graph.subgraphs ?? []).map((sg) => [sg.id, { parent: sg.parent, discovery: sg.discovery }]),
+    (graph.subgraphs ?? []).map((sg) => [
+      sg.id,
+      { parent: sg.parent, attachments: sg.attachments },
+    ]),
   )
   const result: Record<string, string> = {}
   for (const node of graph.nodes) {
     const ip = node.identity?.mgmtIp
     if (!ip) continue
     const eff = computeEffectivePolicy({
-      node: { discovery: node.discovery, parent: node.parent },
+      node: { attachments: node.attachments, parent: node.parent },
       subgraphs: subgraphLookup,
-      topologyDefault: graph.discovery,
+      topologyDefault: graph.attachments,
     })
     if (eff.community) result[ip] = eff.community
   }
@@ -258,7 +261,7 @@ export class DiscoveryScheduler {
         // its whole reachable surface — partial-scan is out of scope).
         const topologyDefault = await this.readTopologyDefault(topology.id)
         const effective = computeEffectivePolicy({
-          node: { discovery: undefined, parent: undefined },
+          node: { attachments: undefined, parent: undefined },
           topologyDefault,
         })
         if (effective.mode === 'disabled') continue
@@ -311,11 +314,11 @@ export class DiscoveryScheduler {
    */
   private async readTopologyDefault(
     topologyId: string,
-  ): Promise<import('@shumoku/core').DiscoveryPolicy | undefined> {
+  ): Promise<import('@shumoku/core').Attachment[] | undefined> {
     const topology = this.topologyService.get(topologyId)
     if (!topology?.manualSourceId) return undefined
     const graph = this.topologyService.readManualGraph(topology.manualSourceId)
-    return graph?.discovery
+    return graph?.attachments
   }
 
   /**
