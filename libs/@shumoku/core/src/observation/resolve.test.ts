@@ -85,6 +85,43 @@ describe('resolve()', () => {
     })
   })
 
+  describe('synthetic id collision (adopt path)', () => {
+    it('authored node carrying a `discovered:N` id does not collide with synthesized ids', () => {
+      // Reproduces the adopt path: a discovered node materialized into the
+      // authored graph keeps its synthesized `discovered:0` id. A later
+      // resolve must not hand that same id to a fresh discovered cluster —
+      // duplicate ids crash the keyed grid in the UI.
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'adopted',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.99' },
+          },
+        ],
+      }
+      const snap: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'a', label: 'a', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+            { id: 'b', label: 'b', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+          ],
+        },
+      }
+      const out = resolve(authored, [snap])
+      const ids = out.nodes.map((n) => n.id)
+      expect(out.nodes).toHaveLength(3)
+      expect(new Set(ids).size).toBe(ids.length) // all unique — no duplicate key
+      expect(ids).toContain('discovered:0') // authored node kept its id
+    })
+  })
+
   describe('confirmed (authored + snapshot agree on identity)', () => {
     it('authored mgmtIp matches snapshot mgmtIp → confirmed', () => {
       const authored: NetworkGraph = {
