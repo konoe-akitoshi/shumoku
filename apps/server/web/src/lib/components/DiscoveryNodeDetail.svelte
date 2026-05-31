@@ -136,9 +136,6 @@
     commit(v ? [...rest, { kind: 'access', protocol: 'snmp', community: v }] : rest)
   }
 
-  function addPolicy(): void {
-    if (!hasPolicy) commit([...working, { kind: 'policy', mode: 'auto' }])
-  }
   function addSnmp(): void {
     if (!hasSnmp) commit([...working, { kind: 'access', protocol: 'snmp' }])
   }
@@ -263,66 +260,61 @@
               </div>
             {/if}
 
-            <!-- Policy -->
-            {#if hasPolicy}
-              <div class="rounded border border-theme-border p-2.5">
-                <div class="flex items-center justify-between mb-1.5">
-                  <span class="text-xs font-medium">Discovery policy</span>
+            <!-- Discovery policy — always shown: every node has an
+                 effective mode (auto/observe/disabled). The buttons set a
+                 per-node override; Inherit clears it. It is NOT an addable
+                 attachment, so it never appears in the "+ Add" menu. -->
+            <div class="rounded border border-theme-border p-2.5">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-medium">Discovery policy</span>
+                {#if effectivePolicy}
+                  <span class="text-[10px] text-theme-text-muted">
+                    effective <span class="font-mono">{effectivePolicy.mode}</span> ·
+                    {formatInterval(effectivePolicy.intervalMs)}
+                    {#if effectivePolicy.source.mode !== 'node'}
+                      (from {originLabel(effectivePolicy.source.mode)})
+                    {/if}
+                  </span>
+                {/if}
+              </div>
+              <div class="flex gap-1.5 flex-wrap">
+                {#each MODE_OPTIONS as m (m)}
+                  {@const active = hasPolicy && policyMode === m}
                   <button
                     type="button"
-                    class="text-xs text-theme-text-muted hover:text-danger"
+                    class="text-xs px-2 py-1 rounded border transition-colors {active
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-theme-border hover:border-primary'}"
                     disabled={patchingPolicy}
-                    onclick={() => removeKind('policy')}
+                    onclick={() => setMode(m)}
                   >
-                    remove
+                    {m}
                   </button>
-                </div>
-                <div class="flex gap-1.5 flex-wrap">
-                  {#each MODE_OPTIONS as m (m)}
-                    <button
-                      type="button"
-                      class="text-xs px-2 py-1 rounded border transition-colors {policyMode === m
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-theme-border hover:border-primary'}"
-                      disabled={patchingPolicy}
-                      onclick={() => setMode(m)}
-                    >
-                      {m}
-                    </button>
-                  {/each}
-                </div>
+                {/each}
+                <button
+                  type="button"
+                  class="text-xs px-2 py-1 rounded border border-theme-border hover:border-primary transition-colors text-theme-text-muted"
+                  disabled={patchingPolicy || !hasPolicy}
+                  title={hasPolicy
+                    ? 'Clear the per-node override and inherit'
+                    : 'No per-node override — already inheriting'}
+                  onclick={() => removeKind('policy')}
+                >
+                  Inherit
+                </button>
               </div>
-            {/if}
+            </div>
 
-            {#if !hasSnmp && !hasPolicy}
-              <p class="text-xs text-theme-text-muted">
-                No overlay — inherits from subgraph / topology default.
+            {#if !hasSnmp && effectivePolicy?.community}
+              <p class="text-[10px] text-theme-text-muted px-0.5">
+                SNMP community inherited from {originLabel(effectivePolicy.source.community)}
               </p>
             {/if}
           </div>
 
-          <!-- Inherited-value hints (when not set on this node). -->
-          {#if effectivePolicy}
-            <div class="mt-2 space-y-0.5">
-              {#if effectivePolicy.source.mode !== 'node'}
-                <p class="text-[10px] text-theme-text-muted">
-                  mode <span class="font-mono">{effectivePolicy.mode}</span> ·
-                  {formatInterval(effectivePolicy.intervalMs)}
-                  (from
-                  {originLabel(effectivePolicy.source.mode)})
-                </p>
-              {/if}
-              {#if effectivePolicy.community && effectivePolicy.source.community !== 'node'}
-                <p class="text-[10px] text-theme-text-muted">
-                  community inherited from {originLabel(effectivePolicy.source.community)}
-                </p>
-              {/if}
-            </div>
-          {/if}
-
-          <!-- Add menu: only kinds not already present. -->
-          <div class="mt-3 flex gap-1.5 flex-wrap">
-            {#if !hasSnmp}
+          <!-- Add menu: addable kinds only (policy is not addable). -->
+          {#if !hasSnmp}
+            <div class="mt-3 flex gap-1.5 flex-wrap">
               <button
                 type="button"
                 class="text-xs px-2 py-1 rounded border border-dashed border-theme-border hover:border-primary text-theme-text-muted"
@@ -331,18 +323,8 @@
               >
                 + SNMP community
               </button>
-            {/if}
-            {#if !hasPolicy}
-              <button
-                type="button"
-                class="text-xs px-2 py-1 rounded border border-dashed border-theme-border hover:border-primary text-theme-text-muted"
-                disabled={patchingPolicy}
-                onclick={addPolicy}
-              >
-                + Discovery policy
-              </button>
-            {/if}
-          </div>
+            </div>
+          {/if}
 
           {#if policyErrorMessage}
             <div
