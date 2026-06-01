@@ -280,10 +280,12 @@ export function createDiscoveryPolicyApi(): Hono {
           }
           nodes.push({
             id,
-            // Node.label is required, but an attach-only overlay isn't a
-            // rename: store '' as the "no override" sentinel so resolve lets
-            // the observed name (and future source renames) show through. A
-            // real rename stores the trimmed value.
+            // Node.label is required, so an attach-only overlay must carry
+            // SOME label — we store ''. That is NOT a special sentinel:
+            // resolve's generic "empty = no value" rule (hasValue) means an
+            // empty label makes no name claim, so the observed name and any
+            // future source rename show through. A real rename stores the
+            // trimmed value (the human's claim wins by top priority).
             label: wantLabel ? labelTrimmed : '',
             identity: discovered.identity,
             ...(wantAttach ? { attachments } : {}),
@@ -306,13 +308,14 @@ export function createDiscoveryPolicyApi(): Hono {
             target.label = labelTrimmed
           } else {
             // Revert the name. If the entry still carries attachments we must
-            // KEEP it (the attachments are a real override) but clear the name
-            // override — set the '' sentinel so resolve lets the observed name
-            // show through. Only when there's nothing left to author (no
-            // attachments) AND a real observation backs the node do we drop the
-            // entry entirely, so it re-resolves as discovered-only. For an
-            // authored-only node with nothing left, deleting would destroy real
-            // data — so keep it (with '' label) rather than erase it.
+            // KEEP it (the attachments are a real human claim) but drop the
+            // name claim — store '' which resolve reads as "no name claim"
+            // (hasValue), so the observed name shows through. Only when there's
+            // nothing left to author (no attachments) AND a real observation
+            // backs the node do we drop the entry entirely (a full Reset =
+            // remove the human contribution), so it re-resolves to the bare
+            // observed state. For an authored-only node with nothing left,
+            // deleting would destroy real data — so keep it (with '' label).
             const hasAttach = Array.isArray(target.attachments) && target.attachments.length > 0
             const discovered = await loadDiscovered()
             const observationBacked = discovered?.provenance?.state === 'confirmed'
@@ -320,7 +323,7 @@ export function createDiscoveryPolicyApi(): Hono {
               nodes.splice(idx, 1)
               removed = true
             } else {
-              target.label = '' // clear the name override, keep the entry
+              target.label = '' // clear the name claim, keep the entry
             }
           }
         }

@@ -814,6 +814,69 @@ describe('resolve()', () => {
   })
 
   // -------------------------------------------------------------------------
+  // Reset removes the human contribution; the node returns to the observed
+  // bare state via the priority merge — not by "peeling a layer" (C4).
+  // -------------------------------------------------------------------------
+  describe('Reset = remove the human contribution (C4)', () => {
+    const observed: SnapshotEntry = {
+      sourceId: 'network-scan:1',
+      capturedAt: 1000,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'scan-name',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+          },
+        ],
+      },
+    }
+    const communityOf = (n: { attachments?: unknown[] } | undefined): string | undefined => {
+      const a = (n?.attachments ?? []).find(
+        (x): x is { kind: 'access'; protocol: 'snmp'; community?: string } =>
+          !!x &&
+          typeof x === 'object' &&
+          (x as { kind?: string }).kind === 'access' &&
+          (x as { protocol?: string }).protocol === 'snmp',
+      )
+      return a?.community
+    }
+
+    it('with the human overlay present, human name + community win', () => {
+      const withHuman: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'MY-NAME',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'private' }],
+          },
+        ],
+      }
+      const n = resolve(withHuman, [observed]).nodes[0]
+      expect(stringOf(n?.label)).toBe('MY-NAME')
+      expect(communityOf(n)).toBe('private')
+      expect(n?.fieldSources?.['label']).toBe('authored')
+    })
+
+    it('dropping the human contribution returns the node to the observed name + community', () => {
+      // Reset = the node's entry is gone from the authored graph.
+      const n = resolve(emptyGraph(), [observed]).nodes[0]
+      expect(stringOf(n?.label)).toBe('scan-name') // observed name surfaces
+      expect(communityOf(n)).toBe('public') // observed community surfaces
+      expect(n?.fieldSources?.['label']).toBe('network-scan:1')
+      // the surviving community is observed-derived → read-only in the UI
+      const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      expect(acc?.provenance?.source).toBe('network-scan:1')
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // Retraction is orthogonal to priority (decision 4 / C7). Presence is the
   // union of contributions; priority only decides per-field winners. Human
   // contributions and policy=disabled overlays persist; failed snapshots
