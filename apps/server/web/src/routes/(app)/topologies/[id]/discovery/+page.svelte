@@ -325,6 +325,33 @@
     if (refreshed) detailNode = refreshed
   }
 
+  /** Modal callback: set/clear the open node's authored name override. */
+  async function handleSetLabel(label: string | null): Promise<void> {
+    if (!detailNode) return
+    const id = detailNode.id
+    policyPatching = { ...policyPatching, [id]: true }
+    try {
+      await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
+        scope: 'node',
+        id,
+        label,
+      })
+      if (policyError[id]) {
+        const next = { ...policyError }
+        delete next[id]
+        policyError = next
+      }
+    } catch (e) {
+      policyError = { ...policyError, [id]: e instanceof Error ? e.message : 'rename failed' }
+      return
+    } finally {
+      policyPatching = { ...policyPatching, [id]: false }
+    }
+    await refreshDiscovery()
+    const refreshed = discoveredNodes.find((c) => c.id === id)
+    if (refreshed) detailNode = refreshed
+  }
+
   async function handleProbeNode(card: DiscoveredCard) {
     if (!card.sourceId || !card.mgmtIp) return
     probingNodeId = card.id
@@ -839,4 +866,5 @@
     if (detailNode) handleProbeNode(detailNode)
   }}
   onSetAttachments={handleSetAttachments}
+  onSetLabel={handleSetLabel}
 />
