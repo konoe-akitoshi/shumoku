@@ -219,7 +219,11 @@ function isClusterExcluded(cluster: NodeCluster, exclusions: NodeExclusion[]): b
     const keys: Array<keyof NodeExclusion> = ['mgmtIp', 'chassisId', 'sysName']
     const used = keys.filter((k) => ex[k] !== undefined && ex[k] !== '')
     if (used.length === 0) continue
-    if (used.every((k) => identity[k] !== undefined && identity[k] === ex[k])) return true
+    // Match when ANY specified key matches — a Hide stored with mgmtIp +
+    // chassisId + sysName must keep biting even if one of them later changes
+    // (e.g. a sysName rename or chassisId re-normalization). Requiring ALL to
+    // match would silently un-hide the node. Matches the type's doc comment.
+    if (used.some((k) => identity[k] !== undefined && identity[k] === ex[k])) return true
   }
   return false
 }

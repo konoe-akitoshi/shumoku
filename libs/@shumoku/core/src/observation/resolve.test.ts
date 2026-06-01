@@ -384,6 +384,19 @@ describe('resolve()', () => {
       expect(resolve(authored, [snap]).nodes).toHaveLength(0)
     })
 
+    it('a multi-key exclusion still matches when one key changed (ANY, not ALL)', () => {
+      // Hide is stored with all available keys; a later sysName rename must not
+      // silently un-hide the node — mgmtIp still matches.
+      const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
+        { id: 'a', label: 'junk', identity: { mgmtIp: '10.0.0.5', sysName: 'new-name' } },
+      ])
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        exclusions: [{ mgmtIp: '10.0.0.5', sysName: 'old-name' }],
+      }
+      expect(resolve(authored, [snap]).nodes).toHaveLength(0)
+    })
+
     it('drops links incident to a hidden node', () => {
       const snap: SnapshotEntry = {
         sourceId: 'network-scan:1',

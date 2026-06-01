@@ -118,16 +118,19 @@
   )
 
   // ── Local editable copy of the overlay. Re-synced from the incoming
-  //    `attachments` whenever they change identity OR content. The node-id
-  //    change covers switching nodes; the content compare covers the parent
-  //    pushing a new overlay for the SAME node — e.g. Reset (attachments
-  //    cleared server-side) must visibly clear the segmented control / Access
-  //    rows even though node.id is unchanged. Local edits already set
-  //    `working` themselves, and the parent re-passes the same value, so the
-  //    compare is a no-op in that case (no edit-stomping). ──
+  //    `attachments` prop whenever the PROP itself changes (node switched, or
+  //    the parent pushed a new overlay for the same node — e.g. Reset clearing
+  //    it server-side). We track the last `attachments` PROP value in
+  //    `lastPropsKey`, updated ONLY here in the effect. A local edit changes
+  //    `working` (and PATCHes), but does NOT touch `lastPropsKey`; the parent's
+  //    post-PATCH round-trip re-passes the same value, so `incomingKey ===
+  //    lastPropsKey` and the effect is a no-op — the edit is never stomped.
+  //    (Earlier this compared against a key that `commit` also mutated, which
+  //    re-fired the effect with the still-old prop and reset `working` back —
+  //    that stomped edits. Keep `lastPropsKey` effect-only.) ──
   let working = $state<Attachment[]>([])
   let boundId = $state<string | null>(null)
-  let syncedKey = $state<string>('')
+  let lastPropsKey = $state<string>('')
   // Name editing is gated behind an explicit Edit action — the name is not a
   // permanently-open free-text box.
   let editingName = $state(false)
@@ -138,9 +141,9 @@
     if (!node) return
     const incomingKey = JSON.stringify(attachments)
     const nodeChanged = node.id !== boundId
-    if (nodeChanged || incomingKey !== syncedKey) {
+    if (nodeChanged || incomingKey !== lastPropsKey) {
       boundId = node.id
-      syncedKey = incomingKey
+      lastPropsKey = incomingKey
       working = attachments.map((a) => ({ ...a }))
       if (nodeChanged) {
         editingName = false
@@ -183,12 +186,12 @@
   })
 
   function commit(next: Attachment[]): void {
+    // Local edit: update `working` and PATCH. Do NOT touch `lastPropsKey` — it
+    // tracks the incoming PROP only. Touching it here would re-fire the sync
+    // effect with the still-old `attachments` prop and reset `working` back,
+    // stomping the edit. The parent's post-PATCH refresh re-passes new props
+    // and the effect re-syncs from those legitimately.
     working = next
-    // Declare this value as "synced" so the round-trip (parent re-passing the
-    // same attachments after the PATCH) doesn't re-trigger the sync effect and
-    // stomp a follow-up edit. Only a genuinely different incoming overlay
-    // (e.g. Reset clearing it) will differ from this key and re-sync.
-    syncedKey = JSON.stringify(next)
     void onSetAttachments?.(next)
   }
 
