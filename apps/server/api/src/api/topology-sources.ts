@@ -3,7 +3,7 @@
  * Manages the relationship between topologies and data sources
  */
 
-import type { NetworkGraph } from '@shumoku/core'
+import type { Link, NetworkGraph } from '@shumoku/core'
 import { Hono } from 'hono'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
@@ -29,6 +29,52 @@ function getDataSourceService() {
     _dataSourceService = new DataSourceService()
   }
   return _dataSourceService
+}
+
+/**
+ * Merge a probe's narrow snapshot into the source's previous full snapshot.
+ *
+ * A probe re-scans only `seeds`, so `probeGraph` contains just those nodes.
+ * We keep every node from `baseGraph` except the ones the probe re-read
+ * (matched by node id), then append the probe's nodes — so probing one node
+ * refreshes that node and leaves the rest of the source's view intact.
+ *
+ * Links are rebuilt to whatever endpoints survive: any base link touching a
+ * re-probed node is dropped (the probe's own links for that node replace it),
+ * then we drop any link whose endpoints aren't present in the merged node set.
+ *
+ * When there's no usable base (first probe, or base had no graph), we fall
+ * back to the probe graph as-is — nothing to preserve.
+ */
+function mergeProbeIntoSnapshot(
+  baseGraph: NetworkGraph | null,
+  probeGraph: NetworkGraph | null,
+  seeds: readonly string[],
+): NetworkGraph | null {
+  if (!probeGraph) return baseGraph
+  if (!baseGraph || baseGraph.nodes.length === 0) return probeGraph
+
+  const probedIds = new Set(probeGraph.nodes.map((n) => n.id))
+  const mergedNodes = [...baseGraph.nodes.filter((n) => !probedIds.has(n.id)), ...probeGraph.nodes]
+  const nodeIds = new Set(mergedNodes.map((n) => n.id))
+
+  // A Link's endpoints are structured: `from.node` / `to.node` are node ids.
+  const linkTouchesProbed = (l: Link): boolean =>
+    probedIds.has(l.from.node) || probedIds.has(l.to.node)
+  const linkResolvable = (l: Link): boolean => nodeIds.has(l.from.node) && nodeIds.has(l.to.node)
+
+  const baseLinks = (baseGraph.links ?? []).filter((l) => !linkTouchesProbed(l))
+  const mergedLinks = [...baseLinks, ...(probeGraph.links ?? [])].filter(linkResolvable)
+
+  // `seeds` is informational here (the probe graph already reflects them);
+  // referenced to keep the signature honest for future per-seed handling.
+  void seeds
+
+  return {
+    ...baseGraph,
+    nodes: mergedNodes,
+    links: mergedLinks,
+  }
 }
 
 export const topologySourcesApi = new Hono()
@@ -298,13 +344,30 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
     // the operator configured on those nodes.
     const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
     const snapshot = await plugin.scan({ seeds, credentials })
+
+    // A probe re-scans only the named seeds — its graph holds just those
+    // nodes. Recording it verbatim would make it the source's *latest*
+    // snapshot, and `latestPerSource` would then drop every node the probe
+    // didn't touch. So merge the probe's nodes/links INTO the source's last
+    // full snapshot: replace the probed nodes (and their incident links),
+    // keep everything else. This makes "probe one node" actually update one
+    // node instead of wiping the source's view.
+    const prevLatest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
+    const merged = mergeProbeIntoSnapshot(prevLatest?.graph ?? null, snapshot.graph, seeds)
+
     const observation = await observations.record({
       topologyId,
       sourceId,
       capturedAt,
-      status: snapshot.status,
+      // Merged graph carries the whole source view again, so the snapshot is
+      // as complete as the base was — inherit the base's confidence, not the
+      // probe's narrow 'ok' (which only spoke for the probed seeds).
+      status:
+        prevLatest && merged !== snapshot.graph
+          ? (prevLatest.status ?? 'partial')
+          : snapshot.status,
       statusMessage: snapshot.statusMessage,
-      graph: snapshot.graph,
+      graph: merged,
     })
     observations.updateHysteresis(
       topologyId,
@@ -321,7 +384,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
         statusMessage: snapshot.statusMessage,
         capturedAt: snapshot.capturedAt,
         warnings: snapshot.warnings,
-        graph: snapshot.graph,
+        graph: merged,
       },
     })
   } catch (err) {
