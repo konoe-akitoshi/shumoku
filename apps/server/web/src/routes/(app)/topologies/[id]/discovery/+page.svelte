@@ -64,6 +64,8 @@
     >
   >({})
   let syncingSourceId = $state<string | null>(null)
+  let syncingAll = $state(false)
+  let rebuilding = $state(false)
   let identityQuality = $state<{ stable: number; weak: number; unbound: number; total: number }>({
     stable: 0,
     weak: 0,
@@ -239,6 +241,45 @@
     }
   }
 
+  /** Sync all attached sources at once (observed refresh; overlay preserved). */
+  async function handleSyncAll() {
+    syncingAll = true
+    try {
+      await api.topologies.sources.syncAll(ctx.topologyId)
+      const updatedTopology = await api.topologies.get(ctx.topologyId)
+      ctx.topology = updatedTopology
+      topologies.upsert(updatedTopology)
+      await refreshDiscovery()
+    } catch (e) {
+      console.error('[Discovery] sync all failed', e)
+    } finally {
+      syncingAll = false
+    }
+  }
+
+  /** Rebuild: discard the authored overlay (attachments + exclusions), then
+   *  re-sync all sources so the view is purely what the sources observe. */
+  async function handleRebuild() {
+    const ok = confirm(
+      'Rebuild discards every override you made (community, names, hidden nodes) ' +
+        'and rebuilds from the sources. This cannot be undone. Continue?',
+    )
+    if (!ok) return
+    rebuilding = true
+    try {
+      await api.topologies.discoveryPolicy.rebuild(ctx.topologyId)
+      await api.topologies.sources.syncAll(ctx.topologyId)
+      const updatedTopology = await api.topologies.get(ctx.topologyId)
+      ctx.topology = updatedTopology
+      topologies.upsert(updatedTopology)
+      await refreshDiscovery()
+    } catch (e) {
+      console.error('[Discovery] rebuild failed', e)
+    } finally {
+      rebuilding = false
+    }
+  }
+
   /** Replace a node's authored overlay wholesale (empty = clear). */
   async function setNodeAttachments(
     nodeId: string,
@@ -350,6 +391,51 @@
     await refreshDiscovery()
     const refreshed = discoveredNodes.find((c) => c.id === id)
     if (refreshed) detailNode = refreshed
+  }
+
+  /** Modal callback: drop the open node's whole authored overlay (Reset). */
+  async function handleResetNode(): Promise<void> {
+    if (!detailNode) return
+    const id = detailNode.id
+    policyPatching = { ...policyPatching, [id]: true }
+    try {
+      // Clearing attachments + label removes the overlay entry (when the node
+      // is observation-backed) or strips it to bare identity.
+      await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
+        scope: 'node',
+        id,
+        attachments: null,
+        label: null,
+      })
+    } catch (e) {
+      policyError = { ...policyError, [id]: e instanceof Error ? e.message : 'reset failed' }
+      return
+    } finally {
+      policyPatching = { ...policyPatching, [id]: false }
+    }
+    await refreshDiscovery()
+    const refreshed = discoveredNodes.find((c) => c.id === id)
+    detailNode = refreshed ?? null
+  }
+
+  /** Modal callback: hide the open node from the diagram (identity-keyed). */
+  async function handleHideNode(): Promise<void> {
+    if (!detailNode) return
+    const { mgmtIp, chassisId, sysName } = detailNode
+    const identity = {
+      ...(mgmtIp ? { mgmtIp } : {}),
+      ...(chassisId ? { chassisId } : {}),
+      ...(sysName ? { sysName } : {}),
+    }
+    if (Object.keys(identity).length === 0) return
+    try {
+      await api.topologies.discoveryPolicy.hide(ctx.topologyId, identity)
+    } catch (e) {
+      console.error('[Discovery] hide failed', e)
+      return
+    }
+    detailNode = null // it's gone from the resolved graph now
+    await refreshDiscovery()
   }
 
   async function handleProbeNode(card: DiscoveredCard) {
@@ -704,12 +790,34 @@
 
     <!-- Per-source sync -->
     <div class="card">
-      <div class="card-header">
-        <h2 class="font-medium text-theme-text-emphasis">Sources</h2>
-        <p class="text-xs text-theme-text-muted mt-0.5">
-          Drive each attached source. Results land as observation snapshots and the diagram
-          re-renders through the resolver.
-        </p>
+      <div class="card-header flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <h2 class="font-medium text-theme-text-emphasis">Sources</h2>
+          <p class="text-xs text-theme-text-muted mt-0.5">
+            Drive each attached source. Results land as observation snapshots and the diagram
+            re-renders through the resolver.
+          </p>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={syncingAll || rebuilding || ctx.hasSourceChanges || topologySources.length === 0}
+            onclick={handleSyncAll}
+          >
+            {syncingAll ? 'Syncing…' : '⟳ Sync all'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-muted-foreground hover:text-destructive"
+            disabled={rebuilding || syncingAll || ctx.hasSourceChanges || topologySources.length === 0}
+            title="Discard all overrides and rebuild from the sources"
+            onclick={handleRebuild}
+          >
+            {rebuilding ? 'Rebuilding…' : 'Rebuild'}
+          </Button>
+        </div>
       </div>
       {#if ctx.hasSourceChanges}
         <div class="px-4 py-2 bg-warning/10 border-t border-warning/20 text-warning text-sm">
@@ -867,4 +975,7 @@
   }}
   onSetAttachments={handleSetAttachments}
   onSetLabel={handleSetLabel}
+  onReset={handleResetNode}
+  onHide={handleHideNode}
+  hasOverlay={(detailNode?.attachments?.length ?? 0) > 0}
 />

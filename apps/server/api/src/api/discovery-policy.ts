@@ -20,6 +20,20 @@
  * minimal authored entry from its resolved identity and apply the
  * attachments. (Subgraph scope still 409s — a discovered-only subgraph has
  * no identity to materialize from.)
+ *
+ *   POST   /discovery-policy/exclusions   body { mgmtIp?|chassisId?|sysName? }
+ *     → Hide a node: add an identity-keyed exclusion. resolve() drops any
+ *       cluster that matches, so a "junk" discovered node stops showing
+ *       without being deleted (it can't be — the source keeps seeing it).
+ *   DELETE /discovery-policy/exclusions   (same body) → Unhide.
+ *
+ *   POST   /discovery-policy/rebuild
+ *     → Discard the WHOLE authored overlay (every node/subgraph/topology-
+ *       default attachment + all exclusions). Pair with a Sync-all to refresh
+ *       observed afterwards. Destructive; the UI confirms first.
+ *
+ * Reset (drop one node's overlay) reuses PATCH with attachments=null,
+ * label=null — no dedicated route.
  */
 
 import {
@@ -28,8 +42,10 @@ import {
   type DiscoveryMode,
   type EffectiveDiscoveryPolicy,
   type Node,
+  type NodeExclusion,
   RUNTIME_DEFAULT,
 } from '@shumoku/core'
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getTopologyService } from './topologies.js'
 
@@ -345,6 +361,96 @@ export function createDiscoveryPolicyApi(): Hono {
     }
 
     return c.json({ effective })
+  })
+
+  // Hide / Unhide a node: add or remove an identity-keyed exclusion on the
+  // authored graph. `resolve()` drops any cluster matching an exclusion, so a
+  // "junk" discovered node stops showing without being deleted (it can't be —
+  // the source keeps seeing it). Identity-keyed so it survives re-scans.
+  //   POST   body { mgmtIp?, chassisId?, sysName? }  → hide
+  //   DELETE body { mgmtIp?, chassisId?, sysName? }  → unhide
+  const exclusionKey = (e: NodeExclusion): string =>
+    `${e.mgmtIp ?? ''}|${e.chassisId ?? ''}|${e.sysName ?? ''}`
+
+  const readExclusionBody = async (c: Context): Promise<NodeExclusion | null> => {
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+    if (!body) return null
+    const pick = (k: string): string | undefined =>
+      typeof body[k] === 'string' && (body[k] as string).length > 0
+        ? (body[k] as string)
+        : undefined
+    const ex: NodeExclusion = {
+      ...(pick('mgmtIp') ? { mgmtIp: pick('mgmtIp') } : {}),
+      ...(pick('chassisId') ? { chassisId: pick('chassisId') } : {}),
+      ...(pick('sysName') ? { sysName: pick('sysName') } : {}),
+    }
+    return exclusionKey(ex) === '||' ? null : ex
+  }
+
+  app.post('/:id/discovery-policy/exclusions', async (c) => {
+    const topologyId = c.req.param('id')
+    const ex = await readExclusionBody(c)
+    if (!ex) return c.json({ error: 'body must include mgmtIp, chassisId, or sysName' }, 400)
+    const topology = service.get(topologyId)
+    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    const manualId = await service.ensureManualSource(topologyId)
+    const authored = service.readManualGraph(manualId) ?? {
+      version: '1' as const,
+      name: topology.name,
+      nodes: [],
+      links: [],
+    }
+    const exclusions = [...(authored.exclusions ?? [])]
+    if (!exclusions.some((e) => exclusionKey(e) === exclusionKey(ex))) exclusions.push(ex)
+    service.writeManualGraph(manualId, { ...authored, exclusions })
+    service.clearCacheEntry(topologyId)
+    return c.json({ exclusions })
+  })
+
+  app.delete('/:id/discovery-policy/exclusions', async (c) => {
+    const topologyId = c.req.param('id')
+    const ex = await readExclusionBody(c)
+    if (!ex) return c.json({ error: 'body must include mgmtIp, chassisId, or sysName' }, 400)
+    const topology = service.get(topologyId)
+    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    const manualId = service.findManualSourceId(topologyId)
+    if (!manualId) return c.json({ exclusions: [] })
+    const authored = service.readManualGraph(manualId)
+    if (!authored) return c.json({ exclusions: [] })
+    const exclusions = (authored.exclusions ?? []).filter(
+      (e) => exclusionKey(e) !== exclusionKey(ex),
+    )
+    service.writeManualGraph(manualId, { ...authored, exclusions })
+    service.clearCacheEntry(topologyId)
+    return c.json({ exclusions })
+  })
+
+  // Rebuild: discard the entire authored overlay — every node's attachments,
+  // the topology-default attachments, and all exclusions — so the topology
+  // falls back to "purely what the sources observed". Callers pair this with a
+  // Sync-all to refresh observed afterwards. Destructive; UI confirms first.
+  app.post('/:id/discovery-policy/rebuild', async (c) => {
+    const topologyId = c.req.param('id')
+    const topology = service.get(topologyId)
+    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    const manualId = service.findManualSourceId(topologyId)
+    if (!manualId) return c.json({ cleared: false, reason: 'no authored layer' })
+    const authored = service.readManualGraph(manualId)
+    if (!authored) return c.json({ cleared: false, reason: 'no authored graph' })
+    // Strip overlay: drop attachments from every node/subgraph, the topology
+    // default, and all exclusions. Keep the nodes themselves out entirely —
+    // a node that exists only as an overlay has nothing to keep once cleared,
+    // and observation-backed ones re-resolve from their snapshots.
+    const cleared = {
+      ...authored,
+      nodes: [],
+      subgraphs: (authored.subgraphs ?? []).map(({ attachments: _a, ...sg }) => sg),
+      attachments: undefined,
+      exclusions: undefined,
+    }
+    service.writeManualGraph(manualId, cleared)
+    service.clearCacheEntry(topologyId)
+    return c.json({ cleared: true })
   })
 
   return app

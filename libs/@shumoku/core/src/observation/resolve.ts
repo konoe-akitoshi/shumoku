@@ -8,6 +8,7 @@ import type {
   LinkEndpoint,
   NetworkGraph,
   Node,
+  NodeExclusion,
   NodePort,
   Provenance,
   Subgraph,
@@ -63,7 +64,17 @@ export function resolve(
   }
 
   // 2. Build node clusters by identity keys
-  const nodeClusters = clusterNodes(contributions)
+  const allClusters = clusterNodes(contributions)
+
+  // 2b. Drop hidden clusters. A cluster is hidden when its merged identity
+  //     matches any exclusion (by mgmtIp / chassisId / sysName). Identity-keyed
+  //     so a hide survives re-scans that re-number ephemeral node ids. Dropping
+  //     here (before link folding) also removes links to hidden nodes.
+  const exclusions = authored.exclusions ?? []
+  const nodeClusters =
+    exclusions.length > 0
+      ? allClusters.filter((c) => !isClusterExcluded(c, exclusions))
+      : allClusters
 
   // 3. For each cluster, fold into a single resolved Node
   const resolvedNodes: Node[] = []
@@ -191,6 +202,25 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
     }
   }
   return clusters
+}
+
+/**
+ * True when a cluster's merged identity matches any exclusion. An exclusion
+ * matches when every key it specifies equals the cluster's corresponding
+ * identity value (mgmtIp / chassisId / sysName). An exclusion with no usable
+ * key never matches. Uses the union of all members' identity keys so a hide
+ * keyed on chassisId still catches a cluster found via mgmtIp.
+ */
+function isClusterExcluded(cluster: NodeCluster, exclusions: NodeExclusion[]): boolean {
+  const identity = mergeIdentities(cluster.members.map((m) => m.node.identity))
+  if (!identity) return false
+  for (const ex of exclusions) {
+    const keys: Array<keyof NodeExclusion> = ['mgmtIp', 'chassisId', 'sysName']
+    const used = keys.filter((k) => ex[k] !== undefined && ex[k] !== '')
+    if (used.length === 0) continue
+    if (used.every((k) => identity[k] !== undefined && identity[k] === ex[k])) return true
+  }
+  return false
 }
 
 function foldNodeCluster(cluster: NodeCluster): Node {

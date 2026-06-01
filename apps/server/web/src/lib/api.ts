@@ -445,7 +445,35 @@ export const topologies = {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
+
+    /** Hide a node (identity-keyed exclusion). resolve() drops matching clusters. */
+    hide: (topologyId: string, identity: NodeExclusion) =>
+      request<{ exclusions: NodeExclusion[] }>(
+        `/topologies/${topologyId}/discovery-policy/exclusions`,
+        { method: 'POST', body: JSON.stringify(identity) },
+      ),
+
+    /** Unhide a previously hidden node. */
+    unhide: (topologyId: string, identity: NodeExclusion) =>
+      request<{ exclusions: NodeExclusion[] }>(
+        `/topologies/${topologyId}/discovery-policy/exclusions`,
+        { method: 'DELETE', body: JSON.stringify(identity) },
+      ),
+
+    /** Rebuild: discard the whole authored overlay (attachments + exclusions). */
+    rebuild: (topologyId: string) =>
+      request<{ cleared: boolean; reason?: string }>(
+        `/topologies/${topologyId}/discovery-policy/rebuild`,
+        { method: 'POST' },
+      ),
   },
+}
+
+/** Identity used to hide/unhide a node. Mirrors `@shumoku/core`'s NodeExclusion. */
+export interface NodeExclusion {
+  mgmtIp?: string
+  chassisId?: string
+  sysName?: string
 }
 
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'

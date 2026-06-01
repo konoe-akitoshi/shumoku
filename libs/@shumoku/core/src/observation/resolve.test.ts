@@ -262,6 +262,81 @@ describe('resolve()', () => {
     })
   })
 
+  describe('exclusions (Hide)', () => {
+    it('drops a cluster whose identity matches an exclusion', () => {
+      const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
+        { id: 'a', label: 'keep', identity: { mgmtIp: '10.0.0.1' } },
+        { id: 'b', label: 'junk', identity: { mgmtIp: '10.0.0.2' } },
+      ])
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        exclusions: [{ mgmtIp: '10.0.0.2' }],
+      }
+      const out = resolve(authored, [snap])
+      const ips = out.nodes.map((n) => n.identity?.mgmtIp)
+      expect(ips).toContain('10.0.0.1')
+      expect(ips).not.toContain('10.0.0.2')
+    })
+
+    it('exclusion is identity-keyed: survives an ephemeral node-id change', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        exclusions: [{ mgmtIp: '10.0.0.2' }],
+      }
+      // re-scan gives the same device a different id — exclusion still bites.
+      const t1 = makeSnap('network-scan:1', 1000, [
+        { id: 'discovered:7', label: 'junk', identity: { mgmtIp: '10.0.0.2' } },
+      ])
+      const t2 = makeSnap('network-scan:1', 2000, [
+        { id: 'discovered:99', label: 'junk', identity: { mgmtIp: '10.0.0.2' } },
+      ])
+      expect(resolve(authored, [t1]).nodes).toHaveLength(0)
+      expect(resolve(authored, [t2]).nodes).toHaveLength(0)
+    })
+
+    it('matches via any identity key (chassisId hide catches mgmtIp-found node)', () => {
+      const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
+        { id: 'a', label: 'junk', identity: { mgmtIp: '10.0.0.5', chassisId: 'aa:bb' } },
+      ])
+      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{ chassisId: 'aa:bb' }] }
+      expect(resolve(authored, [snap]).nodes).toHaveLength(0)
+    })
+
+    it('drops links incident to a hidden node', () => {
+      const snap: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'a', label: 'a', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+            { id: 'b', label: 'b', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+          ],
+          links: [
+            {
+              id: 'l1',
+              from: { node: 'a', port: 'a:p1' },
+              to: { node: 'b', port: 'b:p1' },
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{ mgmtIp: '10.0.0.2' }] }
+      const out = resolve(authored, [snap])
+      expect(out.nodes).toHaveLength(1)
+      expect(out.links).toHaveLength(0)
+    })
+
+    it('empty exclusion entry matches nothing', () => {
+      const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
+        { id: 'a', label: 'a', identity: { mgmtIp: '10.0.0.1' } },
+      ])
+      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{}] }
+      expect(resolve(authored, [snap]).nodes).toHaveLength(1)
+    })
+  })
+
   describe('confirmed (≥2 snapshots agree, no authored)', () => {
     it('two snapshots sharing chassisId → 1 cluster, confirmed', () => {
       const a: SnapshotEntry = makeSnap('netbox:1', 1000, [

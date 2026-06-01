@@ -40,7 +40,13 @@ interface Node {
 
 type Attachment = FactsAttachment | AccessAttachment | PolicyAttachment
 
-/** 属性オーバーライド。observed 値の上に被さる(authored 優先)。node 限定。 */
+/** 属性オーバーライド。observed 値の上に被さる(authored 優先)。node 限定。
+ *
+ * ⚠️ 実装状況(2026-06): `facts` は **未実装**。現状は名前=`Node.label` の
+ * override、機種/vendor=カタログ紐付け(`catalogId`→`spec`)で扱っており、
+ * facts attachment は作っていない(「ベンダー/機種はカタログ一体」の方針)。
+ * facts を attachment 化するかどうかは別 PR で再判断する(カタログ選択 UI と
+ * の住み分けが論点)。それまで `Attachment` の実装は `access | policy` のみ。 */
 interface FactsAttachment {
   kind: 'facts'
   name?: string
@@ -148,3 +154,64 @@ no-backcompat(pre-1.0):既存 DB の authored ノードは旧フィールドが 
 
 `access` の protocol は snmp のみ実装。ssh/netconf/http は型に枠だけ用意し、`+ Add` の
 メニューに「(coming soon)」で出すか、実装まで出さないかは実装時判断。
+
+## 操作モデル(Discovery タブの動詞)
+
+ノードは「Observed(ソースが見た事実) + Authored overlay(人が与えた設定)」の1つ。
+操作は **対象(個別ノード / 全体) × 性質** で整理する。すべて「1つのノードを触る」
+モデルの上に乗る — 複製や分裂は起こさない。
+
+### 個別ノード
+
+| 操作 | 何をする | 対象レイヤー | 永続化 |
+|---|---|---|---|
+| **Rescan** | このノードの IP だけ再スキャンして observed を最新化(他ノードは保持) | observed | observation 差し替え(マージ) |
+| **Reset** | 人が与えた overlay(community / 名前 / facts)を全部捨て、ソースが見た素の状態に戻す | authored overlay | Manual グラフから該当エントリ削除 |
+| **Hide** | 「スキャンに出たがゴミ」なノードをダイアグラム/グリッドに出さない。スキャンは見続けるが resolve が除外する | exclusion(新) | topology の exclusion リストに identity を記録 |
+
+- **Reset と Hide は別物**:Reset は「上書きを消す(ノードは残る、素に戻る)」、Hide は
+  「ノードを表示から外す(overlay は無関係、スキャンが見ても出さない)」。
+- **Remove という語は使わない**:observed ノードは「消して」も次スキャンで復活するため
+  「削除」は成立しない。ゴミは Hide(除外)で表現する。
+- Reset は overlay が無いノードでは無効(non-op)。Hide は exclusion 済みなら Unhide に反転。
+
+### 全体(Sources セクション)
+
+| 操作 | 何をする | 破壊度 |
+|---|---|---|
+| **Sync (per-source)**(既存) | そのソース1つを最新化(autoscan→scan / それ以外→fetch) | 非破壊 |
+| **Sync all**(全ソース) | 全ソースを一斉に最新化(`/sync-from-source`)。overlay は保持 | 非破壊 |
+| **Rebuild** | 全部やり直す。全ソースを再スキャン **かつ authored overlay も破棄** してゼロから作り直す | 破壊的(要確認ダイアログ) |
+
+- **Sync all と Rebuild の違い**:Sync all は observed を最新化するだけ(人の上書きは残る)。
+  Rebuild は overlay も exclusion も破棄してゼロから(素のソース状態に戻す)。
+
+- Rebuild は「全体 Reset + 全ソース Sync」。人の上書き(community/名前/facts)も含めて全消し。
+  exclusion(Hide)もクリアする ⇒ 文字どおり「素の・ソースが見たまま」に戻る。要確認。
+
+### exclusion(Hide)の保存形
+
+除外は authored overlay とは別概念(ノードへの上書きではなく「このノードを出すな」)。
+topology に identity ベースの除外リストを持つ:
+
+```ts
+// NetworkGraph(authored) に持たせる or topology メタに持たせる
+exclusions?: Array<{ mgmtIp?: string; chassisId?: string; sysName?: string }>
+```
+
+`resolve()` は cluster 確定後、cluster の identity が exclusion のいずれかに一致したら
+**その cluster を出力から落とす**(observed/authored どちら由来でも)。identity ベースなので
+ephemeral な `discovered:N` id に依存せず、再スキャンで id が変わっても除外が効き続ける。
+
+### 移行・非互換
+
+no-backcompat(pre-1.0)。exclusions は新フィールドで、無い topology は「除外なし」。
+
+### 実装フェーズ(この PR)
+
+1. **core**: `NetworkGraph.exclusions` 型 + `resolve()` が exclusion 一致 cluster を落とす。
+   テスト(除外で消える / 再スキャンで id 変わっても効く)。
+2. **api**: exclusion の add/remove エンドポイント(または discovery-policy PATCH に同居)。
+   Rebuild = `/sync-from-source` + authored overlay クリア + exclusions クリア。
+3. **web**: ノード詳細に Reset / Hide ボタン、Sources に Rebuild(確認ダイアログ)。
+   Rescan は既存。

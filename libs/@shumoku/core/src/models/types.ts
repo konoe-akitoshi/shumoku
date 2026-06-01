@@ -1198,6 +1198,27 @@ export interface NetworkGraph {
    * defaults in `computeEffectivePolicy()`.
    */
   attachments?: Attachment[]
+
+  /**
+   * Hidden nodes — "discovered but junk, don't show it". Each entry is an
+   * identity (mgmtIp / chassisId / sysName); `resolve()` drops any cluster
+   * whose identity matches, no matter which source observed it. Identity-keyed
+   * (not node id) so a hide survives a re-scan that re-numbers ephemeral ids.
+   * This is NOT an attachment / overlay — it's a topology-level exclusion list.
+   */
+  exclusions?: NodeExclusion[]
+}
+
+/**
+ * One hidden-node rule. Matches a resolved cluster when ANY present key
+ * equals the cluster's corresponding identity value (mgmtIp / chassisId /
+ * sysName). At least one key should be set; an all-empty entry matches
+ * nothing (ignored).
+ */
+export interface NodeExclusion {
+  mgmtIp?: string
+  chassisId?: string
+  sysName?: string
 }
 
 /**

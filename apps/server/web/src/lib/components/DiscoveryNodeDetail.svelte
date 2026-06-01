@@ -57,6 +57,12 @@
     onSetAttachments?: (attachments: Attachment[]) => void | Promise<void>
     /** Set the authored name override (`null`/'' reverts to the observed name). */
     onSetLabel?: (label: string | null) => void | Promise<void>
+    /** Reset: drop the whole authored overlay (attachments + name) for this node. */
+    onReset?: () => void | Promise<void>
+    /** Hide: exclude this node from the diagram (identity-keyed). */
+    onHide?: () => void | Promise<void>
+    /** Whether this node currently has any authored overlay (enables Reset). */
+    hasOverlay?: boolean
   }
 
   let {
@@ -72,6 +78,9 @@
     policyErrorMessage = null,
     onSetAttachments,
     onSetLabel,
+    onReset,
+    onHide,
+    hasOverlay = false,
   }: Props = $props()
 
   function originLabel(o: CredentialOrigin['mode']): string {
@@ -594,9 +603,32 @@
       </div>
 
       <Dialog.Footer class="flex items-center justify-between gap-2">
-        <p class="text-xs text-muted-foreground">
-          Re-scans just this node's IP and refreshes it in place.
-        </p>
+        <div class="flex items-center gap-1.5">
+          {#if onReset}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={patchingPolicy || !hasOverlay}
+              title={hasOverlay
+                ? 'Discard your overrides on this node and return to the discovered state'
+                : 'No overrides to reset'}
+              onclick={() => onReset?.()}
+            >
+              Reset
+            </Button>
+          {/if}
+          {#if onHide}
+            <Button
+              variant="ghost"
+              size="sm"
+              class="text-muted-foreground hover:text-destructive"
+              title="Hide this node from the diagram (it stays discoverable but won't be shown)"
+              onclick={() => onHide?.()}
+            >
+              Hide
+            </Button>
+          {/if}
+        </div>
         <Button onclick={onProbe} disabled={probing || !node.sourceId || !node.mgmtIp} size="sm">
           {probing ? 'Rescanning…' : '⟳ Rescan'}
         </Button>
