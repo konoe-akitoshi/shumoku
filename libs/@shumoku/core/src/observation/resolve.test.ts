@@ -161,6 +161,107 @@ describe('resolve()', () => {
     })
   })
 
+  describe('authored overlay is thin (community/name on top of observed)', () => {
+    // The authored layer is an OVERLAY, not a replacement node. A
+    // community-only overlay carries identity + attachments (+ a mirrored
+    // label, since Node.label is required) and must NOT blank the device's
+    // observed facts — the bug where "adding a community made the device's
+    // ports/model/readVia vanish".
+    const observed: SnapshotEntry = {
+      sourceId: 'network-scan:1',
+      capturedAt: 1000,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'sw-core',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.5' },
+            metadata: { readVia: 'snmp', syncState: 'synced' },
+            ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
+          },
+        ],
+      },
+    }
+
+    it('observed facts show through under a community-only overlay', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            // Thin overlay: identity to cluster by, empty label (no rename),
+            // and the attachment the operator set. No ports / metadata copied.
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+          },
+        ],
+      }
+      const out = resolve(authored, [observed])
+      expect(out.nodes).toHaveLength(1)
+      const n = out.nodes[0]
+      expect(n?.provenance?.state).toBe('confirmed')
+      // observed facts survived
+      expect(n?.metadata?.['readVia']).toBe('snmp')
+      expect(n?.ports).toHaveLength(1)
+      // authored attachment applied
+      const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      expect(
+        acc && acc.kind === 'access' && acc.protocol === 'snmp' ? acc.community : undefined,
+      ).toBe('public')
+    })
+
+    it('observed label tracks a source rename when the overlay sets no name', () => {
+      // attach-only overlay stores '' (no rename). Source then renames.
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '', // no rename sentinel
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+          },
+        ],
+      }
+      const renamed: SnapshotEntry = {
+        ...observed,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core-renamed',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+            },
+          ],
+        },
+      }
+      const out = resolve(authored, [renamed])
+      // mirrored placeholder must NOT freeze the name — observed rename wins.
+      expect(stringOf(out.nodes[0]?.label)).toBe('sw-core-renamed')
+    })
+
+    it('an explicit rename overrides the observed label', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'MY-RENAME',
+            identity: { mgmtIp: '10.0.0.5' },
+          },
+        ],
+      }
+      const out = resolve(authored, [observed])
+      expect(stringOf(out.nodes[0]?.label)).toBe('MY-RENAME')
+    })
+  })
+
   describe('confirmed (≥2 snapshots agree, no authored)', () => {
     it('two snapshots sharing chassisId → 1 cluster, confirmed', () => {
       const a: SnapshotEntry = makeSnap('netbox:1', 1000, [
@@ -260,6 +361,11 @@ describe('resolve()', () => {
 
 function emptyGraph(): NetworkGraph {
   return { version: '1.0', nodes: [], links: [] }
+}
+
+function stringOf(label: string | string[] | undefined): string {
+  if (label === undefined) return ''
+  return Array.isArray(label) ? label.join('\n') : label
 }
 
 interface MakeSnapNode {

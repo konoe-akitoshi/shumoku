@@ -194,10 +194,16 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
 }
 
 function foldNodeCluster(cluster: NodeCluster): Node {
-  // The authored member, if any, anchors id / chosen fields
+  // Observed members form the base; the authored member is a thin OVERLAY on
+  // top — not a replacement. Picking the observed node as the structural base
+  // (and overlaying only the authored fields that are actually set) means an
+  // authored entry that carries community/name doesn't blank the device's
+  // observed facts (ports / readVia / model). The authored node anchors only
+  // when nothing observed the device (authored-only).
   const authored = cluster.members.find((m) => m.sourceId === 'authored')
   const observers = cluster.members.filter((m) => m.sourceId !== 'authored')
-  const anchor = authored?.node ?? cluster.members[0]?.node
+  const observedBase = observers[0]?.node
+  const anchor = observedBase ?? authored?.node
   if (!anchor) {
     // unreachable — cluster always has at least one member
     throw new Error('empty cluster')
@@ -229,18 +235,37 @@ function foldNodeCluster(cluster: NodeCluster): Node {
   if (observedSource && mergedMetadata['observedSource'] === undefined) {
     mergedMetadata['observedSource'] = observedSource
   }
-  // `spec` (icon / model) similarly: authored wins, else first observed.
+  // `spec` (icon / model): authored wins, else first observed.
   const spec = authored?.node.spec ?? observers.find((m) => m.node.spec)?.node.spec
 
-  // Field-level resolution. Non-factual fields (position / parent / style)
-  // come from authored when present (via `anchor`); metadata + spec merge
-  // observed-under-authored as above.
+  // `attachments` are the authored overlay itself — always from authored.
+  const attachments = authored?.node.attachments
+
+  // `label` is an authored override only when the authored entry carries a
+  // NON-EMPTY label. A thin overlay (community-only) stores an empty label
+  // (`''`) as the "no rename" sentinel — Node.label is a required field, so the
+  // overlay can't omit it, but empty means "let the observed name show". When
+  // there's no observer (authored-only), `...anchor` is the authored node, so
+  // its label is carried regardless of this check.
+  const authoredLabel = authored?.node.label
+  const authoredLabelOverrides =
+    observedBase !== undefined &&
+    authoredLabel !== undefined &&
+    (Array.isArray(authoredLabel) ? authoredLabel.length > 0 : authoredLabel !== '')
+  // `parent` is a straightforward authored override when set.
+  const authoredParent = authored?.node.parent
+
+  // Field-level resolution: observed base (`...anchor`) with authored fields
+  // overlaid only where the operator actually set them.
   const resolved: Node = {
     ...anchor,
     id: cluster.id,
     identity: mergedIdentity,
+    ...(authoredLabelOverrides ? { label: authoredLabel } : {}),
+    ...(authoredParent !== undefined ? { parent: authoredParent } : {}),
     ...(Object.keys(mergedMetadata).length > 0 ? { metadata: mergedMetadata } : {}),
     ...(spec ? { spec } : {}),
+    ...(attachments !== undefined ? { attachments } : {}),
     ports: foldPortsAcrossCluster(cluster),
     provenance: deriveNodeProvenance(cluster, observers.length, Boolean(authored)),
   }

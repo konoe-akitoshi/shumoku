@@ -242,19 +242,34 @@ export function createDiscoveryPolicyApi(): Hono {
       }
 
       if (idx === -1) {
-        // Discovered-only node: detection already grabbed it, so materialize a
-        // minimal authored entry from the resolved identity if there's anything
-        // to author. Clearing on a node with no authored entry is a no-op.
+        // Discovered-only node: detection already grabbed it. Store a THIN
+        // authored overlay — identity (so resolve clusters it onto the observed
+        // node by mgmtIp/chassisId/sysName) plus only what the operator set.
+        // We deliberately do NOT copy the observed label / parent / ports: the
+        // overlay isn't a node, it's a few fields layered on top. resolve()
+        // overlays observed facts under the authored fields, so the device's
+        // details show through and the entry doesn't ghost when a re-scan
+        // changes the ephemeral node id. `label` is included only when it's an
+        // actual rename. Clearing on a node with no authored entry is a no-op.
         const wantAttach = attachmentsProvided && attachments
         const wantLabel = labelProvided && labelTrimmed !== ''
         if (wantAttach || wantLabel) {
           const discovered = await loadDiscovered()
           if (!discovered) return c.json({ error: `node '${id}' not found` }, 404)
+          if (!discovered.identity) {
+            return c.json(
+              { error: `node '${id}' has no identity to anchor an overlay`, reason: 'no-identity' },
+              409,
+            )
+          }
           nodes.push({
             id,
-            label: wantLabel ? labelTrimmed : discovered.label,
-            ...(discovered.identity ? { identity: discovered.identity } : {}),
-            ...(discovered.parent ? { parent: discovered.parent } : {}),
+            // Node.label is required, but an attach-only overlay isn't a
+            // rename: store '' as the "no override" sentinel so resolve lets
+            // the observed name (and future source renames) show through. A
+            // real rename stores the trimmed value.
+            label: wantLabel ? labelTrimmed : '',
+            identity: discovered.identity,
             ...(wantAttach ? { attachments } : {}),
           })
           next.nodes = nodes
