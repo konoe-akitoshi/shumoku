@@ -58,8 +58,6 @@
     onReset?: () => void | Promise<void>
     /** Hide: exclude this node from the diagram (identity-keyed). */
     onHide?: () => void | Promise<void>
-    /** Whether this node currently has any authored overlay (enables Reset). */
-    hasOverlay?: boolean
   }
 
   let {
@@ -77,7 +75,6 @@
     onSetLabel,
     onReset,
     onHide,
-    hasOverlay = false,
   }: Props = $props()
 
   function originLabel(o: OriginLevel): string {
@@ -625,10 +622,8 @@
             <Button
               variant="ghost"
               size="sm"
-              disabled={patchingPolicy || !hasOverlay}
-              title={hasOverlay
-                ? 'Discard your overrides on this node and return to the discovered state'
-                : 'No overrides to reset'}
+              disabled={patchingPolicy}
+              title="Discard your overrides on this node and return to the discovered state"
               onclick={() => onReset?.()}
             >
               Reset

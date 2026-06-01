@@ -977,5 +977,4 @@
   onSetLabel={handleSetLabel}
   onReset={handleResetNode}
   onHide={handleHideNode}
-  hasOverlay={(detailNode?.attachments?.length ?? 0) > 0}
 />

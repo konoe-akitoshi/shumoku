@@ -355,17 +355,22 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
     const prevLatest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
     const merged = mergeProbeIntoSnapshot(prevLatest?.graph ?? null, snapshot.graph, seeds)
 
+    // Status: a failed/empty probe must record its OWN status — never inherit
+    // the previous snapshot's 'ok', or a failed probe would masquerade as a
+    // healthy sync. Only when the probe itself succeeded AND we actually merged
+    // into the prior full snapshot do we inherit the base's confidence (the
+    // merged graph is as complete as the base was, not the probe's narrow 'ok'
+    // that only spoke for the seeds).
+    const mergedIntoBase = prevLatest !== undefined && merged !== snapshot.graph
+    const status =
+      snapshot.status === 'ok' && mergedIntoBase
+        ? (prevLatest?.status ?? 'partial')
+        : snapshot.status
     const observation = await observations.record({
       topologyId,
       sourceId,
       capturedAt,
-      // Merged graph carries the whole source view again, so the snapshot is
-      // as complete as the base was — inherit the base's confidence, not the
-      // probe's narrow 'ok' (which only spoke for the probed seeds).
-      status:
-        prevLatest && merged !== snapshot.graph
-          ? (prevLatest.status ?? 'partial')
-          : snapshot.status,
+      status,
       statusMessage: snapshot.statusMessage,
       graph: merged,
     })

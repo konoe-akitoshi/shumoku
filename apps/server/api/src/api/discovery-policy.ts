@@ -305,20 +305,23 @@ export function createDiscoveryPolicyApi(): Hono {
           if (labelTrimmed !== '') {
             target.label = labelTrimmed
           } else {
-            // Revert the name. Dropping the authored entry only restores a
-            // sensible name when a real observation backs this node (it then
-            // re-resolves as discovered-only with the observed name). For an
-            // authored-only node there is nothing to fall back to, so deleting
-            // it would destroy real data — never do that. Same when the entry
-            // still carries attachments: keep it, leave the label as-is.
+            // Revert the name. If the entry still carries attachments we must
+            // KEEP it (the attachments are a real override) but clear the name
+            // override — set the '' sentinel so resolve lets the observed name
+            // show through. Only when there's nothing left to author (no
+            // attachments) AND a real observation backs the node do we drop the
+            // entry entirely, so it re-resolves as discovered-only. For an
+            // authored-only node with nothing left, deleting would destroy real
+            // data — so keep it (with '' label) rather than erase it.
             const hasAttach = Array.isArray(target.attachments) && target.attachments.length > 0
             const discovered = await loadDiscovered()
             const observationBacked = discovered?.provenance?.state === 'confirmed'
-            if (observationBacked && !hasAttach) {
+            if (!hasAttach && observationBacked) {
               nodes.splice(idx, 1)
               removed = true
+            } else {
+              target.label = '' // clear the name override, keep the entry
             }
-            // else: authored-only or still has attachments → keep node + label.
           }
         }
 
