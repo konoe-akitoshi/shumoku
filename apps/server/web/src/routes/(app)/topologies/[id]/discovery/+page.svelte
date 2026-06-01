@@ -516,7 +516,7 @@
               </span>
             </h2>
             <p class="text-xs text-theme-text-muted mt-0.5">
-              Click to see identity / probe / change discovery mode.
+              Click to see identity / rescan / change discovery mode.
             </p>
           </div>
           <div class="flex items-center gap-2">

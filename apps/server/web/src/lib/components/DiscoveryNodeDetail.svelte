@@ -594,9 +594,11 @@
       </div>
 
       <Dialog.Footer class="flex items-center justify-between gap-2">
-        <p class="text-xs text-muted-foreground">Probe re-runs discovery against this node's IP.</p>
+        <p class="text-xs text-muted-foreground">
+          Re-scans just this node's IP and refreshes it in place.
+        </p>
         <Button onclick={onProbe} disabled={probing || !node.sourceId || !node.mgmtIp} size="sm">
-          {probing ? 'Probing…' : '⟳ Probe now'}
+          {probing ? 'Rescanning…' : '⟳ Rescan'}
         </Button>
       </Dialog.Footer>
     {/if}
