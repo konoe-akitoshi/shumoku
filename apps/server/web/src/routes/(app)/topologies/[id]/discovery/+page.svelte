@@ -18,6 +18,7 @@
   import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
+  import { isAuthoredAttachment, stripProvenance } from '$lib/discovery-attachments'
   import { topologies } from '$lib/stores'
   import type { TopologyDataSource } from '$lib/types'
   import { useTopologyCtx } from '../_context.svelte'
@@ -307,11 +308,16 @@
     }
   }
 
-  /** Set/clear the policy attachment's mode, preserving other attachments. */
+  /** Set/clear the policy attachment's mode, preserving the operator's OTHER
+   *  attachments. Operates on the AUTHORED set only — `card.attachments` is the
+   *  resolved list (observed + human), and PATCHing observed access back would
+   *  silently promote it to an authored override. Strip provenance so the
+   *  payload is a plain authored overlay. */
   function withMode(attachments: Attachment[], mode: DiscoveryMode | 'inherit'): Attachment[] {
-    const rest = attachments.filter((a) => a.kind !== 'policy')
+    const authored = attachments.filter(isAuthoredAttachment).map(stripProvenance)
+    const rest = authored.filter((a) => a.kind !== 'policy')
     if (mode === 'inherit') return rest
-    const policy = attachments.find((a) => a.kind === 'policy')
+    const policy = authored.find((a) => a.kind === 'policy')
     return [
       ...rest,
       { kind: 'policy', mode, ...(policy?.intervalMs ? { intervalMs: policy.intervalMs } : {}) },
