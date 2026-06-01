@@ -214,6 +214,88 @@ describe('resolve()', () => {
       ).toBe('public')
     })
 
+    it('a policy-only overlay does NOT wipe an observed access attachment', () => {
+      // network-scan stamps the community it read with as an observed access
+      // attachment. An authored overlay that only sets a policy must merge in,
+      // not replace — otherwise the scan-discovered community vanishes and the
+      // autoscan scheduler can't resolve it.
+      const observedWithAccess: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              metadata: { readVia: 'snmp' },
+              attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'policy', mode: 'disabled' }],
+          },
+        ],
+      }
+      const n = resolve(authored, [observedWithAccess]).nodes[0]
+      const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      expect(
+        acc && acc.kind === 'access' && acc.protocol === 'snmp' ? acc.community : undefined,
+      ).toBe('public') // observed community survived
+      expect((n?.attachments ?? []).some((a) => a.kind === 'policy')).toBe(true) // authored applied
+    })
+
+    it('an authored access overrides an observed access of the same protocol', () => {
+      const observedWithAccess: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'private-override' }],
+          },
+        ],
+      }
+      const n = resolve(authored, [observedWithAccess]).nodes[0]
+      const accs = (n?.attachments ?? []).filter(
+        (a) => a.kind === 'access' && a.protocol === 'snmp',
+      )
+      expect(accs).toHaveLength(1) // not duplicated
+      const a = accs[0]
+      expect(a && a.kind === 'access' && a.protocol === 'snmp' ? a.community : undefined).toBe(
+        'private-override',
+      )
+    })
+
     it('observed label tracks a source rename when the overlay sets no name', () => {
       // attach-only overlay stores '' (no rename). Source then renames.
       const authored: NetworkGraph = {

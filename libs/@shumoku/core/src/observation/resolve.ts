@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type {
+  Attachment,
   Identity,
   Link,
   LinkEndpoint,
@@ -268,8 +269,17 @@ function foldNodeCluster(cluster: NodeCluster): Node {
   // `spec` (icon / model): authored wins, else first observed.
   const spec = authored?.node.spec ?? observers.find((m) => m.node.spec)?.node.spec
 
-  // `attachments` are the authored overlay itself — always from authored.
-  const attachments = authored?.node.attachments
+  // `attachments` merge observed-under-authored, keyed by kind (+protocol for
+  // access). Observed sources can contribute attachments too — network-scan
+  // stamps the SNMP community it read with as an `access:snmp` attachment — so
+  // taking authored wholesale would blank that (e.g. a policy-only authored
+  // overlay would wipe the observed community). Instead: observed entries form
+  // the base, an authored entry of the same key overrides it. This keeps the
+  // scan-discovered community visible even when the operator only set a policy.
+  const attachments = mergeAttachments(
+    observers.flatMap((m) => m.node.attachments ?? []),
+    authored?.node.attachments ?? [],
+  )
 
   // `label` is an authored override only when the authored entry carries a
   // NON-EMPTY label. A thin overlay (community-only) stores an empty label
@@ -295,7 +305,7 @@ function foldNodeCluster(cluster: NodeCluster): Node {
     ...(authoredParent !== undefined ? { parent: authoredParent } : {}),
     ...(Object.keys(mergedMetadata).length > 0 ? { metadata: mergedMetadata } : {}),
     ...(spec ? { spec } : {}),
-    ...(attachments !== undefined ? { attachments } : {}),
+    ...(attachments.length > 0 ? { attachments } : { attachments: undefined }),
     ports: foldPortsAcrossCluster(cluster),
     provenance: deriveNodeProvenance(cluster, observers.length, Boolean(authored)),
   }
@@ -347,6 +357,22 @@ function deriveNodeProvenance(
     state,
     observedAt: Number.isFinite(latest) ? latest : undefined,
   }
+}
+
+/**
+ * Merge attachments observed-under-authored, keyed by kind (+protocol for
+ * `access`). Observed entries form the base; an authored entry of the same key
+ * overrides it (and authored-only keys are appended). Observed order is kept;
+ * authored-only entries follow. This mirrors the metadata/spec merge so an
+ * authored overlay never silently drops an attachment a source supplied (e.g.
+ * the scan-discovered SNMP community when the operator only set a policy).
+ */
+function mergeAttachments(observed: Attachment[], authored: Attachment[]): Attachment[] {
+  const keyOf = (a: Attachment): string => (a.kind === 'access' ? `access:${a.protocol}` : a.kind)
+  const byKey = new Map<string, Attachment>()
+  for (const a of observed) byKey.set(keyOf(a), a)
+  for (const a of authored) byKey.set(keyOf(a), a)
+  return [...byKey.values()]
 }
 
 function mergeIdentities(identities: Array<Identity | undefined>): Identity | undefined {
