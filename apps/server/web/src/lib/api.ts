@@ -478,13 +478,26 @@ export interface NodeExclusion {
 
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 
+/** Where a resolved attachment came from. Mirrors `@shumoku/core`'s
+ *  `Provenance`. `source === 'authored'` marks a human-set attachment
+ *  (editable / removable in the UI); any other source is observed-derived
+ *  (read-only). resolve() stamps it; freshly-authored local attachments omit
+ *  it until the next round-trip. */
+export interface Provenance {
+  source: string
+  state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'
+  observedAt?: number
+}
+
 /** A unit of authored intent attached to a node / subgraph / topology.
- *  Mirrors `@shumoku/core`'s `Attachment`. */
-export type Attachment =
+ *  Mirrors `@shumoku/core`'s `Attachment` (incl. the resolve-stamped
+ *  `provenance`). */
+export type Attachment = (
   | { kind: 'policy'; mode?: DiscoveryMode; intervalMs?: number }
   | { kind: 'access'; protocol: 'snmp'; community?: string; version?: '2c' | '3' }
   | { kind: 'access'; protocol: 'ssh'; username?: string; port?: number }
   | { kind: 'access'; protocol: 'netconf' | 'http' }
+) & { provenance?: Provenance }
 export interface EffectivePolicy {
   mode: DiscoveryMode
   intervalMs: number

@@ -6,6 +6,11 @@
   import * as Dialog from '$lib/components/ui/dialog'
   import { Input } from '$lib/components/ui/input'
   import { Label } from '$lib/components/ui/label'
+  import {
+    isAuthoredAttachment,
+    partitionAttachments,
+    stripProvenance,
+  } from '$lib/discovery-attachments'
 
   /**
    * Discovery-tab per-node detail. Two regions:
@@ -141,7 +146,11 @@
     if (nodeChanged || incomingKey !== lastPropsKey) {
       boundId = node.id
       lastPropsKey = incomingKey
-      working = attachments.map((a) => ({ ...a }))
+      // `working` holds ONLY the operator's attachments — those are what the
+      // panel edits and what we PATCH back. Observed-derived attachments are
+      // rendered read-only (see observedAccess) and are never sent, so a ✕
+      // can't try to remove an observed access (it has none).
+      working = attachments.filter(isAuthoredAttachment).map(stripProvenance)
       if (nodeChanged) {
         editingName = false
         openAccess = null
@@ -172,8 +181,24 @@
   }
 
   const hasPolicy = $derived(working.some((a) => a.kind === 'policy'))
+  // Authored (editable) access rows come from `working`; observed (read-only)
+  // ones come straight from the resolved props via partitionAttachments.
   const accessRows = $derived(working.filter((a): a is AccessAttachment => a.kind === 'access'))
-  const presentProtocols = $derived(new Set(accessRows.map((a) => a.protocol)))
+  const authoredProtocols = $derived(new Set(accessRows.map((a) => a.protocol)))
+  const observedAccess = $derived(
+    partitionAttachments(attachments).observedAccess.filter(
+      (a) => !authoredProtocols.has(a.protocol),
+    ),
+  )
+  // A protocol is "present" if either the operator authored it or a source
+  // observed it; the + menu only offers the genuinely-missing ones (override
+  // an observed one from its own row instead).
+  const presentProtocols = $derived(
+    new Set<AccessProtocol>([
+      ...accessRows.map((a) => a.protocol),
+      ...observedAccess.map((a) => a.protocol),
+    ]),
+  )
   const addableProtocols = $derived(
     ACCESS_PROTOCOLS.filter((p) => !presentProtocols.has(p.protocol)),
   )
@@ -247,6 +272,14 @@
     if (presentProtocols.has(protocol)) return
     commit([...working, { kind: 'access', protocol }])
     openAccess = protocol // expand the freshly-added row for immediate editing
+  }
+  /** Override an observed access method: seed an authored attachment from the
+   *  observed value so the operator can edit it. The observed row then yields
+   *  to this authored one (it shares the protocol key). */
+  function overrideAccess(observed: AccessAttachment): void {
+    if (authoredProtocols.has(observed.protocol)) return
+    commit([...working, stripProvenance(observed) as AccessAttachment])
+    openAccess = observed.protocol
   }
   function removeAccess(protocol: AccessProtocol): void {
     commit(working.filter((a) => !(a.kind === 'access' && a.protocol === protocol)))
@@ -501,8 +534,40 @@
               <!-- Attached protocols: one row each. Tap a row to expand its
                    fields (accordion — at most one open). Collapsed rows show a
                    value summary + chevron, iOS-Settings-style. -->
-              {#if accessRows.length > 0}
+              {#if observedAccess.length > 0 || accessRows.length > 0}
                 <div class="border-t border-border divide-y divide-border">
+                  <!-- Observed-derived access (read-only). No ✕ — the operator
+                       never authored these and resolve keeps re-supplying them;
+                       use Override to start an editable authored copy. -->
+                  {#each observedAccess as row (row.protocol)}
+                    <div class="flex items-center justify-between gap-2 px-3 py-2.5">
+                      <span class="flex items-center gap-2 min-w-0">
+                        <span class="text-sm font-medium">{protocolLabel(row.protocol)}</span>
+                        <span
+                          class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground whitespace-nowrap"
+                          title={`Read from ${node.sourceName ?? 'the source'} — read-only. Override to set your own.`}
+                        >
+                          observed
+                        </span>
+                      </span>
+                      <span class="flex items-center gap-2 shrink-0">
+                        <span
+                          class="text-xs text-muted-foreground truncate max-w-[120px] font-mono"
+                        >
+                          {accessSummary(row)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="h-7 px-2 text-muted-foreground"
+                          disabled={patchingPolicy}
+                          onclick={() => overrideAccess(row)}
+                        >
+                          Override
+                        </Button>
+                      </span>
+                    </div>
+                  {/each}
                   {#each accessRows as row (row.protocol)}
                     {@const expanded = openAccess === row.protocol}
                     <div>
