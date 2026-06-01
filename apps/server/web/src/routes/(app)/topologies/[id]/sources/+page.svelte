@@ -13,15 +13,7 @@
    * context so the Discovery page sees the same attachments without
    * a second fetch.
    */
-  import {
-    ArrowDownIcon,
-    CheckCircleIcon,
-    CopyIcon,
-    FloppyDiskIcon,
-    PlusIcon,
-    StarIcon,
-    TrashIcon,
-  } from 'phosphor-svelte'
+  import { CheckCircleIcon, CopyIcon, FloppyDiskIcon, PlusIcon, TrashIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
@@ -30,29 +22,6 @@
   import { useTopologyCtx } from '../_context.svelte'
 
   const ctx = useTopologyCtx()
-
-  type MergeMatchStrategy = 'id' | 'name' | 'attribute' | 'manual'
-  type MergeMergeStrategy = 'merge-properties' | 'keep-base' | 'keep-overlay'
-  type MergeUnmatchedStrategy = 'add-to-root' | 'add-to-subgraph' | 'ignore'
-
-  interface OverlayConfig {
-    match: MergeMatchStrategy
-    matchAttribute?: string
-    idMapping?: Record<string, string>
-    onMatch: MergeMergeStrategy
-    onUnmatched: MergeUnmatchedStrategy
-    subgraphName?: string
-  }
-
-  interface MergeConfig {
-    isBase?: boolean
-    match?: MergeMatchStrategy
-    matchAttribute?: string
-    idMapping?: Record<string, string>
-    onMatch?: MergeMergeStrategy
-    onUnmatched?: MergeUnmatchedStrategy
-    subgraphName?: string
-  }
 
   interface NetBoxOptions {
     groupBy?: string
@@ -66,8 +35,6 @@
   let savingSources = $state(false)
   let copiedSecret = $state<string | null>(null)
   let copiedTimer: ReturnType<typeof setTimeout> | null = null
-  let baseSourceId = $state<string | null>(null)
-  let overlayConfigs = $state<Record<string, OverlayConfig>>({})
   let filterOptionsCache = $state<
     Record<
       string,
@@ -84,37 +51,6 @@
   let topologySources = $derived(ctx.editableSources.filter((s) => s.purpose === 'topology'))
   let metricsSources = $derived(ctx.editableSources.filter((s) => s.purpose === 'metrics'))
   let hasMultipleTopologySources = $derived(topologySources.length >= 2)
-  let overlaySources = $derived(
-    ctx.currentSources.filter((s) => s.purpose === 'topology' && s.dataSourceId !== baseSourceId),
-  )
-
-  // Initialize merge state from the loaded sources. Runs once on mount
-  // and again whenever the shared sources list changes (e.g. after a
-  // save round-trip from the layout).
-  $effect(() => {
-    // Re-derive base/overlay state from currentSources.
-    let firstTopo: string | null = null
-    const overlays: Record<string, OverlayConfig> = {}
-    for (const source of ctx.currentSources) {
-      if (source.purpose !== 'topology') continue
-      if (!firstTopo) firstTopo = source.dataSourceId
-      const config = parseMergeConfig(source.optionsJson)
-      if (config.isBase) {
-        baseSourceId = source.dataSourceId
-      } else {
-        overlays[source.dataSourceId] = {
-          match: config.match || 'name',
-          matchAttribute: config.matchAttribute,
-          idMapping: config.idMapping,
-          onMatch: config.onMatch || 'merge-properties',
-          onUnmatched: config.onUnmatched || 'add-to-subgraph',
-          subgraphName: config.subgraphName,
-        }
-      }
-    }
-    overlayConfigs = overlays
-    if (!baseSourceId && firstTopo) baseSourceId = firstTopo
-  })
 
   // Load NetBox filter options for any attached NetBox sources.
   onMount(() => {
@@ -239,89 +175,15 @@
     }, 2000)
   }
 
-  function parseMergeConfig(optionsJson?: string): MergeConfig {
-    if (!optionsJson) return {}
-    try {
-      return JSON.parse(optionsJson)
-    } catch {
-      return {}
-    }
-  }
-
-  function getOtherOptions(optionsJson?: string): Record<string, unknown> {
-    if (!optionsJson) return {}
-    try {
-      const parsed = JSON.parse(optionsJson)
-      const {
-        isBase: _isBase,
-        match: _match,
-        matchAttribute: _matchAttribute,
-        idMapping: _idMapping,
-        onMatch: _onMatch,
-        onUnmatched: _onUnmatched,
-        subgraphName: _subgraphName,
-        ...rest
-      } = parsed
-      return rest
-    } catch {
-      return {}
-    }
-  }
-
-  function setBaseSource(dataSourceId: string) {
-    baseSourceId = dataSourceId
-    ctx.hasSourceChanges = true
-  }
-
-  function updateOverlayConfig(dataSourceId: string, updates: Partial<OverlayConfig>) {
-    const prev = overlayConfigs[dataSourceId]
-    if (prev) overlayConfigs[dataSourceId] = { ...prev, ...updates }
-    ctx.hasSourceChanges = true
-  }
-
-  function getSourceName(dataSourceId: string): string {
-    const source = ctx.currentSources.find((s) => s.dataSourceId === dataSourceId)
-    return source?.dataSource?.name || dataSourceId
-  }
-
-  function getSourceType(dataSourceId: string): string {
-    const source = ctx.currentSources.find((s) => s.dataSourceId === dataSourceId)
-    return source?.dataSource?.type || 'unknown'
-  }
-
   async function handleSaveSources() {
     savingSources = true
     localError = ''
     try {
-      const sourcesWithMerge = ctx.editableSources.map((source) => {
-        if (source.purpose !== 'topology') return source
-        const otherOptions = getOtherOptions(source.optionsJson)
-        let mergeConfig: MergeConfig = {}
-        if (source.dataSourceId === baseSourceId) {
-          mergeConfig = { isBase: true }
-        } else {
-          const overlay = overlayConfigs[source.dataSourceId]
-          if (overlay) {
-            mergeConfig = {
-              match: overlay.match,
-              matchAttribute: overlay.matchAttribute,
-              idMapping: overlay.idMapping,
-              onMatch: overlay.onMatch,
-              onUnmatched: overlay.onUnmatched,
-              subgraphName: overlay.subgraphName,
-            }
-          }
-        }
-        const combined: Record<string, unknown> = { ...otherOptions, ...mergeConfig }
-        for (const key of Object.keys(combined)) {
-          if (combined[key] === undefined || combined[key] === '') delete combined[key]
-        }
-        return {
-          ...source,
-          optionsJson: Object.keys(combined).length > 0 ? JSON.stringify(combined) : undefined,
-        }
-      })
-      const updated = await api.topologies.sources.replaceAll(ctx.topologyId, sourcesWithMerge)
+      // Source merge is governed entirely by `priority` (higher wins each
+      // field in resolve()) and per-plugin `optionsJson` — both already live
+      // on editableSources, so save them straight through. The old
+      // base/overlay Merge-Config injection was retired with merge.ts.
+      const updated = await api.topologies.sources.replaceAll(ctx.topologyId, ctx.editableSources)
       ctx.currentSources = updated
       ctx.editableSources = updated.map((s) => ({
         dataSourceId: s.dataSourceId,
@@ -343,10 +205,6 @@
   // when the same form repeats inside an each block.
   const componentId = $props.id()
   const groupBySelectorId = `${componentId}:groupBy`
-  const matchStrategySelectorId = `${componentId}:matchStrategy`
-  const unmatchedNodesSelectorId = `${componentId}:unmatchedNodes`
-  const idMappingId = `${componentId}:idMapping`
-  const subgraphNameId = `${componentId}:subgraph`
 </script>
 
 <div class="container mx-auto p-6 max-w-6xl space-y-6">
@@ -417,6 +275,28 @@
                       <option value="webhook">Webhook</option>
                     </select>
                   </div>
+
+                  <!-- Merge priority. Higher wins each field in resolve() when
+                       sources observe the same device; only meaningful with
+                       multiple topology sources. -->
+                  {#if hasMultipleTopologySources}
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-theme-text-muted">Priority</span>
+                      <input
+                        type="number"
+                        class="input"
+                        style="width: 6rem;"
+                        value={source.priority ?? 0}
+                        onchange={(e) =>
+                          updateSource(source.index, {
+                            priority: Number(e.currentTarget.value) || 0,
+                          })}
+                      >
+                      <span class="text-xs text-theme-text-muted">
+                        higher wins each field when sources overlap
+                      </span>
+                    </div>
+                  {/if}
 
                   {#if source.syncMode === 'webhook' && currentSource?.webhookSecret}
                     <div class="flex items-center gap-2">
@@ -599,135 +479,6 @@
       {/if}
     </div>
   </div>
-
-  <!-- Merge Configuration (only when multiple topology sources) -->
-  {#if hasMultipleTopologySources}
-    <div class="card">
-      <div class="card-header">
-        <h2 class="font-medium text-theme-text-emphasis flex items-center gap-2">
-          <StarIcon size={18} weight="fill" class="text-warning" />
-          Merge Configuration
-        </h2>
-      </div>
-      <div class="card-body space-y-4">
-        <div>
-          <p class="text-xs text-theme-text-muted mb-2">Base Source (others merge into this)</p>
-          <div class="flex flex-wrap gap-2">
-            {#each ctx.currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
-              {@const isBase = source.dataSourceId === baseSourceId}
-              <button
-                type="button"
-                class="px-3 py-1.5 rounded-lg border-2 text-sm cursor-pointer {isBase
-                  ? 'bg-warning/15 border-warning text-warning font-medium'
-                  : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                onclick={() => setBaseSource(source.dataSourceId)}
-              >
-                {getSourceName(source.dataSourceId)}
-              </button>
-            {/each}
-          </div>
-        </div>
-
-        {#if overlaySources.length > 0}
-          <div class="flex justify-center">
-            <ArrowDownIcon size={20} class="text-theme-text-muted" />
-          </div>
-
-          {#each overlaySources as source (source.id)}
-            {@const config =
-              overlayConfigs[source.dataSourceId] || {
-                match: 'name',
-                onMatch: 'merge-properties',
-                onUnmatched: 'add-to-subgraph',
-              }}
-            <div class="border border-theme-border rounded-lg p-4">
-              <h3 class="font-medium text-theme-text-emphasis mb-3">
-                {getSourceName(source.dataSourceId)}
-              </h3>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label for={matchStrategySelectorId} class="text-xs text-theme-text-muted">
-                    Match Strategy
-                  </label>
-                  <select
-                    id={matchStrategySelectorId}
-                    class="input mt-1"
-                    value={config.match}
-                    onchange={(e) =>
-                      updateOverlayConfig(source.dataSourceId, {
-                        match: e.currentTarget.value as MergeMatchStrategy,
-                      })}
-                  >
-                    <option value="name">By Name</option>
-                    <option value="id">By ID</option>
-                    <option value="manual">Manual Mapping</option>
-                  </select>
-                </div>
-                <div>
-                  <label for={unmatchedNodesSelectorId} class="text-xs text-theme-text-muted">
-                    Unmatched Nodes
-                  </label>
-                  <select
-                    id={unmatchedNodesSelectorId}
-                    class="input mt-1"
-                    value={config.onUnmatched}
-                    onchange={(e) =>
-                      updateOverlayConfig(source.dataSourceId, {
-                        onUnmatched: e.currentTarget.value as MergeUnmatchedStrategy,
-                      })}
-                  >
-                    <option value="add-to-subgraph">Add to Subgraph</option>
-                    <option value="add-to-root">Add to Root</option>
-                    <option value="ignore">Ignore</option>
-                  </select>
-                </div>
-                {#if config.match === 'manual'}
-                  <div class="col-span-2">
-                    <label for={idMappingId} class="text-xs text-theme-text-muted">
-                      ID Mapping (JSON)
-                    </label>
-                    <textarea
-                      id={idMappingId}
-                      class="input mt-1 font-mono text-xs"
-                      rows="4"
-                      placeholder={`{\n  "overlay-id": "base-id"\n}`}
-                      value={config.idMapping ? JSON.stringify(config.idMapping, null, 2) : ''}
-                      onchange={(e) => {
-                        try {
-                          const parsed = JSON.parse(e.currentTarget.value || '{}')
-                          updateOverlayConfig(source.dataSourceId, { idMapping: parsed })
-                        } catch {
-                          /* invalid */
-                        }
-                      }}
-                    ></textarea>
-                  </div>
-                {/if}
-                {#if config.onUnmatched === 'add-to-subgraph'}
-                  <div class="col-span-2">
-                    <label for={subgraphNameId} class="text-xs text-theme-text-muted">
-                      Subgraph Name
-                    </label>
-                    <input
-                      id={subgraphNameId}
-                      type="text"
-                      class="input mt-1"
-                      placeholder={getSourceType(source.dataSourceId)}
-                      value={config.subgraphName || ''}
-                      onchange={(e) =>
-                        updateOverlayConfig(source.dataSourceId, {
-                          subgraphName: e.currentTarget.value,
-                        })}
-                    >
-                  </div>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        {/if}
-      </div>
-    </div>
-  {/if}
 
   <!-- Metrics Sources -->
   <div class="card">
