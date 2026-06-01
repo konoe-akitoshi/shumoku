@@ -53,10 +53,11 @@ export function resolve(
   //     which only decides per-field winners — never adds or drops a node.
   //   - retraction: an OBSERVED contribution may stop carrying a node.
   // v1 feeds only the latest non-failed snapshot per source (see
-  // services/topology.ts → latestPerSource), so "retraction" today is
-  // simply "absent from the latest snapshot". There is no multi-scan
-  // hysteresis yet; _staleThreshold / _retractAfter stay documented knobs
-  // for when snapshot history is fed in.
+  // services/topology.ts → latestSuccessfulPerSource), so "retraction" today
+  // is simply "absent from the latest successful snapshot". A failed scan is
+  // skipped at the feed, so it never replaces a source's last-good snapshot.
+  // There is no multi-scan hysteresis yet; _staleThreshold / _retractAfter
+  // stay documented knobs for when snapshot history is fed in.
   //
   // Invariants that MUST hold regardless of priority (covered by tests):
   //   - The human/authored contribution is never retracted. A node the
@@ -390,8 +391,12 @@ function foldNodeCluster(cluster: NodeCluster): Node {
 
   // Factual: if multiple *non-authored* sources disagree on `label`, mark
   // conflicting. (`label` straddles factual/chosen — authored always wins
-  // display, so a human rename is never "conflicting".)
-  const labelObservations = collectField(cluster.members, (n) => stringLabel(n.label))
+  // display, so a human rename is never "conflicting".) Only NON-EMPTY
+  // labels count — an empty label makes no claim (same hasValue rule as the
+  // field winner), so `''` vs `'real'` is a fall-through, not a conflict.
+  const labelObservations = collectField(cluster.members, (n) => stringLabel(n.label)).filter((o) =>
+    hasValue(o.value),
+  )
   if (!hasAuthored && labelObservations.length > 1) {
     const distinct = new Set(labelObservations.map((o) => o.value))
     if (distinct.size > 1) {
@@ -600,15 +605,43 @@ function foldPortCluster(members: PortMember[]): NodePort {
   else if (observerCount >= 2) state = 'confirmed'
   else state = 'discovered-only'
 
-  const mergedIdentity = mergeIdentities(members.map((m) => m.port.identity))
-  return {
-    ...top.port,
-    identity: mergedIdentity,
-    provenance: {
-      source: top.sourceId,
-      state,
-    },
+  // Per-field winner (priority desc, capturedAt desc; must hold a value), so a
+  // high-priority port that lacks a field — e.g. `connectors: []` or no
+  // faceplateLabel — falls through to a lower-priority source that has it
+  // (§6). The top port is the base (keeps id + any field not re-picked).
+  const pick = <T>(read: (p: NodePort) => T | undefined): T | undefined => {
+    for (const m of ranked) {
+      const v = read(m.port)
+      if (hasValue(v)) return v
+    }
+    return undefined
   }
+  const folded: NodePort = {
+    ...top.port,
+    identity: mergeIdentities(members.map((m) => m.port.identity)),
+    provenance: { source: top.sourceId, state },
+  }
+  const label = pick((p) => p.label)
+  if (label !== undefined) folded.label = label
+  const faceplateLabel = pick((p) => p.faceplateLabel)
+  if (faceplateLabel !== undefined) folded.faceplateLabel = faceplateLabel
+  const interfaceName = pick((p) => p.interfaceName)
+  if (interfaceName !== undefined) folded.interfaceName = interfaceName
+  const aliases = pick((p) => p.aliases)
+  if (aliases !== undefined) folded.aliases = aliases
+  const role = pick((p) => p.role)
+  if (role !== undefined) folded.role = role
+  const speed = pick((p) => p.speed)
+  if (speed !== undefined) folded.speed = speed
+  const connectors = pick((p) => p.connectors)
+  if (connectors !== undefined) folded.connectors = connectors
+  const poe = pick((p) => p.poe)
+  if (poe !== undefined) folded.poe = poe
+  const notes = pick((p) => p.notes)
+  if (notes !== undefined) folded.notes = notes
+  const placement = pick((p) => p.placement)
+  if (placement !== undefined) folded.placement = placement
+  return folded
 }
 
 function foldSubgraphs(authored: NetworkGraph): Subgraph[] | undefined {

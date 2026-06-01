@@ -470,7 +470,9 @@ export class TopologyService {
    * diagram is whatever the other sources produced.
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
-    const latest = this.observations.latestPerSource(topology.id)
+    // Latest NON-FAILED snapshot per source: a transient failed scan must not
+    // drop a source's last-good nodes (C7 — failed never retracts).
+    const latest = this.observations.latestSuccessfulPerSource(topology.id)
     const manualId = topology.manualSourceId
     const authored: NetworkGraph = manualId
       ? (this.readManualGraph(manualId) ?? {

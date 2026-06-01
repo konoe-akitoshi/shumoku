@@ -971,6 +971,69 @@ describe('resolve()', () => {
       expect(ips).toEqual(['10.0.0.1', '10.0.0.2'])
     })
   })
+
+  describe('empty values do not count as a conflict (hasValue consistency)', () => {
+    it('an empty label from one observer is a fall-through, not a conflict', () => {
+      const empty = makeSnap('a:1', 1000, [{ id: 'a', label: '', identity: { chassisId: 'cc' } }])
+      const real = makeSnap('b:1', 2000, [
+        { id: 'b', label: 'real-name', identity: { chassisId: 'cc' } },
+      ])
+      const n = resolve(emptyGraph(), [empty, real]).nodes[0]
+      expect(stringOf(n?.label)).toBe('real-name')
+      // two observers, but only ONE non-empty label → not conflicting
+      expect(n?.provenance?.state).not.toBe('conflicting')
+    })
+  })
+
+  describe('port field merge falls through empty values (§6)', () => {
+    it('a high-priority port with empty connectors yields to a lower-priority one that has them', () => {
+      const hi: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 10,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'nb',
+              label: 'sw',
+              shape: 'rect',
+              identity: { chassisId: 'cc' },
+              // same port by ifName, but no connectors observed here
+              ports: [
+                { id: 'p-hi', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } },
+              ],
+            },
+          ],
+        },
+      }
+      const lo: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        priority: 5,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'scan',
+              label: 'sw',
+              shape: 'rect',
+              identity: { chassisId: 'cc' },
+              ports: [
+                { id: 'p-lo', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
+              ],
+            },
+          ],
+        },
+      }
+      const n = resolve(emptyGraph(), [hi, lo]).nodes[0]
+      expect(n?.ports).toHaveLength(1)
+      // connectors fell through from the lower-priority source that has them
+      expect(n?.ports?.[0]?.connectors).toEqual(['rj45'])
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
