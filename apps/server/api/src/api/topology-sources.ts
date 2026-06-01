@@ -3,7 +3,7 @@
  * Manages the relationship between topologies and data sources
  */
 
-import type { Link, NetworkGraph } from '@shumoku/core'
+import type { NetworkGraph } from '@shumoku/core'
 import { Hono } from 'hono'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
@@ -11,6 +11,7 @@ import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.j
 import { ObservationsService } from '../services/observations.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { SyncMode, TopologyDataSourceInput } from '../types.js'
+import { mergeProbeIntoSnapshot } from './probe-merge.js'
 import { getTopologyService } from './topologies.js'
 
 // Lazy initialization to avoid database access at module load time
@@ -29,52 +30,6 @@ function getDataSourceService() {
     _dataSourceService = new DataSourceService()
   }
   return _dataSourceService
-}
-
-/**
- * Merge a probe's narrow snapshot into the source's previous full snapshot.
- *
- * A probe re-scans only `seeds`, so `probeGraph` contains just those nodes.
- * We keep every node from `baseGraph` except the ones the probe re-read
- * (matched by node id), then append the probe's nodes — so probing one node
- * refreshes that node and leaves the rest of the source's view intact.
- *
- * Links are rebuilt to whatever endpoints survive: any base link touching a
- * re-probed node is dropped (the probe's own links for that node replace it),
- * then we drop any link whose endpoints aren't present in the merged node set.
- *
- * When there's no usable base (first probe, or base had no graph), we fall
- * back to the probe graph as-is — nothing to preserve.
- */
-function mergeProbeIntoSnapshot(
-  baseGraph: NetworkGraph | null,
-  probeGraph: NetworkGraph | null,
-  seeds: readonly string[],
-): NetworkGraph | null {
-  if (!probeGraph) return baseGraph
-  if (!baseGraph || baseGraph.nodes.length === 0) return probeGraph
-
-  const probedIds = new Set(probeGraph.nodes.map((n) => n.id))
-  const mergedNodes = [...baseGraph.nodes.filter((n) => !probedIds.has(n.id)), ...probeGraph.nodes]
-  const nodeIds = new Set(mergedNodes.map((n) => n.id))
-
-  // A Link's endpoints are structured: `from.node` / `to.node` are node ids.
-  const linkTouchesProbed = (l: Link): boolean =>
-    probedIds.has(l.from.node) || probedIds.has(l.to.node)
-  const linkResolvable = (l: Link): boolean => nodeIds.has(l.from.node) && nodeIds.has(l.to.node)
-
-  const baseLinks = (baseGraph.links ?? []).filter((l) => !linkTouchesProbed(l))
-  const mergedLinks = [...baseLinks, ...(probeGraph.links ?? [])].filter(linkResolvable)
-
-  // `seeds` is informational here (the probe graph already reflects them);
-  // referenced to keep the signature honest for future per-seed handling.
-  void seeds
-
-  return {
-    ...baseGraph,
-    nodes: mergedNodes,
-    links: mergedLinks,
-  }
 }
 
 export const topologySourcesApi = new Hono()
