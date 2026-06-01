@@ -3,7 +3,7 @@
 # ============================================
 # Build stage
 # ============================================
-FROM oven/bun:1 AS builder
+FROM oven/bun:1.3.4 AS builder
 
 WORKDIR /app
 
@@ -22,9 +22,11 @@ COPY apps/server/ ./apps/server/
 RUN cd apps/server/web/static && \
     for f in *; do [ -L "$f" ] && cp --remove-destination "$(readlink -f "$f")" "$f" || true; done
 
-# Install dependencies with cache mount
+# Install dependencies with cache mount.
+# --ignore-scripts: containers don't need git hooks, so skip lifecycle scripts
+# (e.g. lefthook's postinstall). Avoids running JS that isn't needed for the build.
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install
+    bun install --ignore-scripts
 
 # Build library packages (turborepo handles dependency order)
 RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/catalog --filter=@shumoku/renderer --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter='./libs/plugins/**'
@@ -52,7 +54,7 @@ RUN bun run esbuild.config.js
 # ============================================
 # Production stage - Bun runtime
 # ============================================
-FROM oven/bun:1-slim
+FROM oven/bun:1.3.4-slim
 
 # Metadata
 LABEL org.opencontainers.image.title="Shumoku"
