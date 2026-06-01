@@ -117,11 +117,17 @@
         : 'bg-neutral-500',
   )
 
-  // ── Local editable copy of the overlay. Reset when the node changes;
-  //    after a save the parent re-passes the same node + new attachments,
-  //    which already match our local edit, so no reset is needed. ──
+  // ── Local editable copy of the overlay. Re-synced from the incoming
+  //    `attachments` whenever they change identity OR content. The node-id
+  //    change covers switching nodes; the content compare covers the parent
+  //    pushing a new overlay for the SAME node — e.g. Reset (attachments
+  //    cleared server-side) must visibly clear the segmented control / Access
+  //    rows even though node.id is unchanged. Local edits already set
+  //    `working` themselves, and the parent re-passes the same value, so the
+  //    compare is a no-op in that case (no edit-stomping). ──
   let working = $state<Attachment[]>([])
   let boundId = $state<string | null>(null)
+  let syncedKey = $state<string>('')
   // Name editing is gated behind an explicit Edit action — the name is not a
   // permanently-open free-text box.
   let editingName = $state(false)
@@ -129,11 +135,17 @@
   // Which access row is expanded for editing (accordion — at most one).
   let openAccess = $state<AccessProtocol | null>(null)
   $effect(() => {
-    if (node && node.id !== boundId) {
+    if (!node) return
+    const incomingKey = JSON.stringify(attachments)
+    const nodeChanged = node.id !== boundId
+    if (nodeChanged || incomingKey !== syncedKey) {
       boundId = node.id
+      syncedKey = incomingKey
       working = attachments.map((a) => ({ ...a }))
-      editingName = false
-      openAccess = null
+      if (nodeChanged) {
+        editingName = false
+        openAccess = null
+      }
     }
   })
 
@@ -172,6 +184,11 @@
 
   function commit(next: Attachment[]): void {
     working = next
+    // Declare this value as "synced" so the round-trip (parent re-passing the
+    // same attachments after the PATCH) doesn't re-trigger the sync effect and
+    // stomp a follow-up edit. Only a genuinely different incoming overlay
+    // (e.g. Reset clearing it) will differ from this key and re-sync.
+    syncedKey = JSON.stringify(next)
     void onSetAttachments?.(next)
   }
 
