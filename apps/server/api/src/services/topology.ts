@@ -155,7 +155,7 @@ export class TopologyService {
    * Returns the *data source* id (PK of `data_sources`), not the
    * junction row id.
    */
-  private findManualSourceId(topologyId: string): string | undefined {
+  findManualSourceId(topologyId: string): string | undefined {
     const row = this.db
       .query(
         `SELECT ds.id AS id

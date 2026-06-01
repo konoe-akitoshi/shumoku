@@ -3,11 +3,13 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type {
+  Attachment,
   Identity,
   Link,
   LinkEndpoint,
   NetworkGraph,
   Node,
+  NodeExclusion,
   NodePort,
   Provenance,
   Subgraph,
@@ -63,7 +65,17 @@ export function resolve(
   }
 
   // 2. Build node clusters by identity keys
-  const nodeClusters = clusterNodes(contributions)
+  const allClusters = clusterNodes(contributions)
+
+  // 2b. Drop hidden clusters. A cluster is hidden when its merged identity
+  //     matches any exclusion (by mgmtIp / chassisId / sysName). Identity-keyed
+  //     so a hide survives re-scans that re-number ephemeral node ids. Dropping
+  //     here (before link folding) also removes links to hidden nodes.
+  const exclusions = authored.exclusions ?? []
+  const nodeClusters =
+    exclusions.length > 0
+      ? allClusters.filter((c) => !isClusterExcluded(c, exclusions))
+      : allClusters
 
   // 3. For each cluster, fold into a single resolved Node
   const resolvedNodes: Node[] = []
@@ -193,11 +205,40 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   return clusters
 }
 
+/**
+ * True when a cluster's merged identity matches any exclusion. An exclusion
+ * matches when every key it specifies equals the cluster's corresponding
+ * identity value (mgmtIp / chassisId / sysName). An exclusion with no usable
+ * key never matches. Uses the union of all members' identity keys so a hide
+ * keyed on chassisId still catches a cluster found via mgmtIp.
+ */
+function isClusterExcluded(cluster: NodeCluster, exclusions: NodeExclusion[]): boolean {
+  const identity = mergeIdentities(cluster.members.map((m) => m.node.identity))
+  if (!identity) return false
+  for (const ex of exclusions) {
+    const keys: Array<keyof NodeExclusion> = ['mgmtIp', 'chassisId', 'sysName']
+    const used = keys.filter((k) => ex[k] !== undefined && ex[k] !== '')
+    if (used.length === 0) continue
+    // Match when ANY specified key matches — a Hide stored with mgmtIp +
+    // chassisId + sysName must keep biting even if one of them later changes
+    // (e.g. a sysName rename or chassisId re-normalization). Requiring ALL to
+    // match would silently un-hide the node. Matches the type's doc comment.
+    if (used.some((k) => identity[k] !== undefined && identity[k] === ex[k])) return true
+  }
+  return false
+}
+
 function foldNodeCluster(cluster: NodeCluster): Node {
-  // The authored member, if any, anchors id / chosen fields
+  // Observed members form the base; the authored member is a thin OVERLAY on
+  // top — not a replacement. Picking the observed node as the structural base
+  // (and overlaying only the authored fields that are actually set) means an
+  // authored entry that carries community/name doesn't blank the device's
+  // observed facts (ports / readVia / model). The authored node anchors only
+  // when nothing observed the device (authored-only).
   const authored = cluster.members.find((m) => m.sourceId === 'authored')
   const observers = cluster.members.filter((m) => m.sourceId !== 'authored')
-  const anchor = authored?.node ?? cluster.members[0]?.node
+  const observedBase = observers[0]?.node
+  const anchor = observedBase ?? authored?.node
   if (!anchor) {
     // unreachable — cluster always has at least one member
     throw new Error('empty cluster')
@@ -206,15 +247,69 @@ function foldNodeCluster(cluster: NodeCluster): Node {
   // Identity: union of all members' identity keys (keep first non-empty value)
   const mergedIdentity = mergeIdentities(cluster.members.map((m) => m.node.identity))
 
-  // Field-level resolution. Skeleton: handle a small set of factual
-  // string fields explicitly; non-factual fields take the authored
-  // value if present, otherwise the most recent observation.
+  // Metadata merge: observed members form the base (so facts like
+  // `readVia` / `syncState` / model survive), then the authored member's
+  // keys win on top. Without this, an authored override entry would
+  // *replace* the observed node and blank everything the source saw — the
+  // root of the "I added a community and the device's details vanished"
+  // incoherence.
+  const mergedMetadata: Record<string, unknown> = {}
+  for (const m of observers) {
+    for (const [k, v] of Object.entries(m.node.metadata ?? {})) {
+      if (mergedMetadata[k] === undefined && v !== undefined) mergedMetadata[k] = v
+    }
+  }
+  for (const [k, v] of Object.entries(authored?.node.metadata ?? {})) {
+    if (v !== undefined) mergedMetadata[k] = v
+  }
+  // Preserve the observing source. Once an authored override exists the
+  // cluster's `provenance.source` becomes `authored`, but the discovery UI
+  // still needs the source that actually saw the device — for the "Tracked
+  // by" line and to know which source to Probe.
+  const observedSource = observers.find((m) => m.sourceId)?.sourceId
+  if (observedSource && mergedMetadata['observedSource'] === undefined) {
+    mergedMetadata['observedSource'] = observedSource
+  }
+  // `spec` (icon / model): authored wins, else first observed.
+  const spec = authored?.node.spec ?? observers.find((m) => m.node.spec)?.node.spec
+
+  // `attachments` merge observed-under-authored, keyed by kind (+protocol for
+  // access). Observed sources can contribute attachments too — network-scan
+  // stamps the SNMP community it read with as an `access:snmp` attachment — so
+  // taking authored wholesale would blank that (e.g. a policy-only authored
+  // overlay would wipe the observed community). Instead: observed entries form
+  // the base, an authored entry of the same key overrides it. This keeps the
+  // scan-discovered community visible even when the operator only set a policy.
+  const attachments = mergeAttachments(
+    observers.flatMap((m) => m.node.attachments ?? []),
+    authored?.node.attachments ?? [],
+  )
+
+  // `label` is an authored override only when the authored entry carries a
+  // NON-EMPTY label. A thin overlay (community-only) stores an empty label
+  // (`''`) as the "no rename" sentinel — Node.label is a required field, so the
+  // overlay can't omit it, but empty means "let the observed name show". When
+  // there's no observer (authored-only), `...anchor` is the authored node, so
+  // its label is carried regardless of this check.
+  const authoredLabel = authored?.node.label
+  const authoredLabelOverrides =
+    observedBase !== undefined &&
+    authoredLabel !== undefined &&
+    (Array.isArray(authoredLabel) ? authoredLabel.length > 0 : authoredLabel !== '')
+  // `parent` is a straightforward authored override when set.
+  const authoredParent = authored?.node.parent
+
+  // Field-level resolution: observed base (`...anchor`) with authored fields
+  // overlaid only where the operator actually set them.
   const resolved: Node = {
     ...anchor,
     id: cluster.id,
     identity: mergedIdentity,
-    // chosen fields: position / parent / style come from authored when
-    // present (already in `anchor` via spread). Otherwise from latest.
+    ...(authoredLabelOverrides ? { label: authoredLabel } : {}),
+    ...(authoredParent !== undefined ? { parent: authoredParent } : {}),
+    ...(Object.keys(mergedMetadata).length > 0 ? { metadata: mergedMetadata } : {}),
+    ...(spec ? { spec } : {}),
+    ...(attachments.length > 0 ? { attachments } : { attachments: undefined }),
     ports: foldPortsAcrossCluster(cluster),
     provenance: deriveNodeProvenance(cluster, observers.length, Boolean(authored)),
   }
@@ -266,6 +361,22 @@ function deriveNodeProvenance(
     state,
     observedAt: Number.isFinite(latest) ? latest : undefined,
   }
+}
+
+/**
+ * Merge attachments observed-under-authored, keyed by kind (+protocol for
+ * `access`). Observed entries form the base; an authored entry of the same key
+ * overrides it (and authored-only keys are appended). Observed order is kept;
+ * authored-only entries follow. This mirrors the metadata/spec merge so an
+ * authored overlay never silently drops an attachment a source supplied (e.g.
+ * the scan-discovered SNMP community when the operator only set a policy).
+ */
+function mergeAttachments(observed: Attachment[], authored: Attachment[]): Attachment[] {
+  const keyOf = (a: Attachment): string => (a.kind === 'access' ? `access:${a.protocol}` : a.kind)
+  const byKey = new Map<string, Attachment>()
+  for (const a of observed) byKey.set(keyOf(a), a)
+  for (const a of authored) byKey.set(keyOf(a), a)
+  return [...byKey.values()]
 }
 
 function mergeIdentities(identities: Array<Identity | undefined>): Identity | undefined {

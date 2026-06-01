@@ -15,7 +15,7 @@
   import { nodeIdentityQuality } from '@shumoku/core'
   import { ArrowsClockwiseIcon } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
+  import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
   import { topologies } from '$lib/stores'
@@ -40,6 +40,11 @@
      *  credential); 'synced' = fully walked. Undefined for sources that
      *  don't distinguish (e.g. non-SNMP plugins). */
     syncState?: 'synced' | 'notice'
+    /** Protocol the node was actually read with (from the snapshot), e.g.
+     *  'snmp'. Absent for notice / unread nodes. */
+    readVia?: string
+    /** Authored overlay (access / policy) on this node, for the detail modal. */
+    attachments?: Attachment[]
     sourceId?: string
     sourceName?: string
     sourceType?: string
@@ -59,6 +64,8 @@
     >
   >({})
   let syncingSourceId = $state<string | null>(null)
+  let syncingAll = $state(false)
+  let rebuilding = $state(false)
   let identityQuality = $state<{ stable: number; weak: number; unbound: number; total: number }>({
     stable: 0,
     weak: 0,
@@ -81,7 +88,7 @@
   >([])
   let discoveryLoading = $state(false)
   let policyView = $state<{
-    topologyDefault: { mode?: import('$lib/api').DiscoveryMode; intervalMs?: number } | null
+    topologyDefault: Attachment[] | null
     runtimeDefault: { mode: import('$lib/api').DiscoveryMode; intervalMs: number }
     nodes: Record<string, import('$lib/api').EffectivePolicy>
     subgraphs: Record<string, import('$lib/api').EffectivePolicy>
@@ -153,7 +160,13 @@
         counts.total++
         const md = (node.metadata ?? {}) as Record<string, unknown>
         const label = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
-        const sourceId = node.provenance?.source
+        // Prefer the observing source: once a node has an authored override
+        // its provenance.source flips to 'authored', but discovery still
+        // needs the source that saw it (resolve stamps `observedSource`).
+        const sourceId =
+          (typeof md['observedSource'] === 'string'
+            ? (md['observedSource'] as string)
+            : undefined) ?? node.provenance?.source
         const sourceDs = sourceId ? ctx.getDataSource(sourceId) : undefined
         cards.push({
           id: node.id,
@@ -175,6 +188,8 @@
               : md['syncState'] === 'synced'
                 ? 'synced'
                 : undefined,
+          readVia: typeof md['readVia'] === 'string' ? (md['readVia'] as string) : undefined,
+          attachments: (node as { attachments?: Attachment[] }).attachments,
           sourceId,
           sourceName: sourceDs?.name,
           sourceType: sourceDs?.type,
@@ -226,20 +241,57 @@
     }
   }
 
-  async function setNodeDiscoveryMode(
+  /** Sync all attached sources at once (observed refresh; overlay preserved). */
+  async function handleSyncAll() {
+    syncingAll = true
+    try {
+      await api.topologies.sources.syncAll(ctx.topologyId)
+      const updatedTopology = await api.topologies.get(ctx.topologyId)
+      ctx.topology = updatedTopology
+      topologies.upsert(updatedTopology)
+      await refreshDiscovery()
+    } catch (e) {
+      console.error('[Discovery] sync all failed', e)
+    } finally {
+      syncingAll = false
+    }
+  }
+
+  /** Rebuild: discard the authored overlay (attachments + exclusions), then
+   *  re-sync all sources so the view is purely what the sources observe. */
+  async function handleRebuild() {
+    const ok = confirm(
+      'Rebuild discards every override you made (community, names, hidden nodes) ' +
+        'and rebuilds from the sources. This cannot be undone. Continue?',
+    )
+    if (!ok) return
+    rebuilding = true
+    try {
+      await api.topologies.discoveryPolicy.rebuild(ctx.topologyId)
+      await api.topologies.sources.syncAll(ctx.topologyId)
+      const updatedTopology = await api.topologies.get(ctx.topologyId)
+      ctx.topology = updatedTopology
+      topologies.upsert(updatedTopology)
+      await refreshDiscovery()
+    } catch (e) {
+      console.error('[Discovery] rebuild failed', e)
+    } finally {
+      rebuilding = false
+    }
+  }
+
+  /** Replace a node's authored overlay wholesale (empty = clear). */
+  async function setNodeAttachments(
     nodeId: string,
-    discovery: { mode?: import('$lib/api').DiscoveryMode; intervalMs?: number } | null,
+    attachments: Attachment[],
   ): Promise<{ ok: true } | { ok: false; reason: string }> {
     policyPatching = { ...policyPatching, [nodeId]: true }
     try {
-      const { effective } = await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
+      await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
         scope: 'node',
         id: nodeId,
-        discovery,
+        attachments: attachments.length > 0 ? attachments : null,
       })
-      if (policyView) {
-        policyView = { ...policyView, nodes: { ...policyView.nodes, [nodeId]: effective } }
-      }
       if (policyError[nodeId]) {
         const next = { ...policyError }
         delete next[nodeId]
@@ -255,16 +307,29 @@
     }
   }
 
-  async function handleBulkSetMode(
-    mode: import('$lib/api').DiscoveryMode | 'inherit',
-  ): Promise<void> {
+  /** Set/clear the policy attachment's mode, preserving other attachments. */
+  function withMode(attachments: Attachment[], mode: DiscoveryMode | 'inherit'): Attachment[] {
+    const rest = attachments.filter((a) => a.kind !== 'policy')
+    if (mode === 'inherit') return rest
+    const policy = attachments.find((a) => a.kind === 'policy')
+    return [
+      ...rest,
+      { kind: 'policy', mode, ...(policy?.intervalMs ? { intervalMs: policy.intervalMs } : {}) },
+    ]
+  }
+
+  async function handleBulkSetMode(mode: DiscoveryMode | 'inherit'): Promise<void> {
     if (bulkSelection.size === 0) return
     bulkApplying = true
     try {
       const ids = [...bulkSelection]
       await Promise.all(
-        ids.map((id) => setNodeDiscoveryMode(id, mode === 'inherit' ? null : { mode })),
+        ids.map((id) => {
+          const card = discoveredNodes.find((c) => c.id === id)
+          return setNodeAttachments(id, withMode(card?.attachments ?? [], mode))
+        }),
       )
+      await refreshDiscovery()
     } finally {
       bulkApplying = false
     }
@@ -286,34 +351,91 @@
     bulkSelection = next
   }
 
-  async function handleSetMode(mode: import('$lib/api').DiscoveryMode | 'inherit'): Promise<void> {
+  /** Modal callback: the detail panel emits the node's full desired
+   *  attachment list; we replace the overlay and refresh. */
+  async function handleSetAttachments(attachments: Attachment[]): Promise<void> {
     if (!detailNode) return
-    const result = await setNodeDiscoveryMode(detailNode.id, mode === 'inherit' ? null : { mode })
-    if (!result.ok) console.warn('[Discovery] policy patch failed:', result.reason)
+    const id = detailNode.id
+    const result = await setNodeAttachments(id, attachments)
+    if (!result.ok) {
+      console.warn('[Discovery] attachment patch failed:', result.reason)
+      return
+    }
+    await refreshDiscovery()
+    const refreshed = discoveredNodes.find((c) => c.id === id)
+    if (refreshed) detailNode = refreshed
   }
 
-  /**
-   * Modal callback: set the per-node SNMP community. Empty string clears
-   * the override (back to inheritance). We keep any existing per-node
-   * mode/intervalMs in the same PATCH so the change doesn't accidentally
-   * wipe a separate override the user previously set.
-   */
-  async function handleSetCommunity(community: string): Promise<void> {
+  /** Modal callback: set/clear the open node's authored name override. */
+  async function handleSetLabel(label: string | null): Promise<void> {
     if (!detailNode) return
-    const eff = policyView?.nodes[detailNode.id]
-    const keepMode = eff?.source.mode === 'node' ? { mode: eff.mode } : {}
-    const keepInterval = eff?.source.intervalMs === 'node' ? { intervalMs: eff.intervalMs } : {}
-    const comm = community ? { community } : {}
-    // Empty everything = clear the per-node entry entirely.
-    const isEmpty =
-      Object.keys(keepMode).length === 0 &&
-      Object.keys(keepInterval).length === 0 &&
-      Object.keys(comm).length === 0
-    const result = await setNodeDiscoveryMode(
-      detailNode.id,
-      isEmpty ? null : { ...keepMode, ...keepInterval, ...comm },
-    )
-    if (!result.ok) console.warn('[Discovery] community patch failed:', result.reason)
+    const id = detailNode.id
+    policyPatching = { ...policyPatching, [id]: true }
+    try {
+      await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
+        scope: 'node',
+        id,
+        label,
+      })
+      if (policyError[id]) {
+        const next = { ...policyError }
+        delete next[id]
+        policyError = next
+      }
+    } catch (e) {
+      policyError = { ...policyError, [id]: e instanceof Error ? e.message : 'rename failed' }
+      return
+    } finally {
+      policyPatching = { ...policyPatching, [id]: false }
+    }
+    await refreshDiscovery()
+    const refreshed = discoveredNodes.find((c) => c.id === id)
+    if (refreshed) detailNode = refreshed
+  }
+
+  /** Modal callback: drop the open node's whole authored overlay (Reset). */
+  async function handleResetNode(): Promise<void> {
+    if (!detailNode) return
+    const id = detailNode.id
+    policyPatching = { ...policyPatching, [id]: true }
+    try {
+      // Clearing attachments + label removes the overlay entry (when the node
+      // is observation-backed) or strips it to bare identity.
+      await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
+        scope: 'node',
+        id,
+        attachments: null,
+        label: null,
+      })
+    } catch (e) {
+      policyError = { ...policyError, [id]: e instanceof Error ? e.message : 'reset failed' }
+      return
+    } finally {
+      policyPatching = { ...policyPatching, [id]: false }
+    }
+    await refreshDiscovery()
+    const refreshed = discoveredNodes.find((c) => c.id === id)
+    detailNode = refreshed ?? null
+  }
+
+  /** Modal callback: hide the open node from the diagram (identity-keyed). */
+  async function handleHideNode(): Promise<void> {
+    if (!detailNode) return
+    const { mgmtIp, chassisId, sysName } = detailNode
+    const identity = {
+      ...(mgmtIp ? { mgmtIp } : {}),
+      ...(chassisId ? { chassisId } : {}),
+      ...(sysName ? { sysName } : {}),
+    }
+    if (Object.keys(identity).length === 0) return
+    try {
+      await api.topologies.discoveryPolicy.hide(ctx.topologyId, identity)
+    } catch (e) {
+      console.error('[Discovery] hide failed', e)
+      return
+    }
+    detailNode = null // it's gone from the resolved graph now
+    await refreshDiscovery()
   }
 
   async function handleProbeNode(card: DiscoveredCard) {
@@ -372,7 +494,10 @@
           </p>
         </div>
         {#if policyView}
-          {@const def = policyView.topologyDefault?.mode ?? policyView.runtimeDefault.mode}
+          {@const topoPolicy = policyView.topologyDefault?.find((a) => a.kind === 'policy')}
+          {@const def =
+            (topoPolicy?.kind === 'policy' ? topoPolicy.mode : undefined) ??
+            policyView.runtimeDefault.mode}
           <span class="text-xs text-theme-text-muted whitespace-nowrap">
             topology default: <span class="font-mono">{def}</span>
           </span>
@@ -477,7 +602,7 @@
               </span>
             </h2>
             <p class="text-xs text-theme-text-muted mt-0.5">
-              Click to see identity / probe / change discovery mode.
+              Click to see identity / rescan / change discovery mode.
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -665,12 +790,34 @@
 
     <!-- Per-source sync -->
     <div class="card">
-      <div class="card-header">
-        <h2 class="font-medium text-theme-text-emphasis">Sources</h2>
-        <p class="text-xs text-theme-text-muted mt-0.5">
-          Drive each attached source. Results land as observation snapshots and the diagram
-          re-renders through the resolver.
-        </p>
+      <div class="card-header flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <h2 class="font-medium text-theme-text-emphasis">Sources</h2>
+          <p class="text-xs text-theme-text-muted mt-0.5">
+            Drive each attached source. Results land as observation snapshots and the diagram
+            re-renders through the resolver.
+          </p>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={syncingAll || rebuilding || ctx.hasSourceChanges || topologySources.length === 0}
+            onclick={handleSyncAll}
+          >
+            {syncingAll ? 'Syncing…' : '⟳ Sync all'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-muted-foreground hover:text-destructive"
+            disabled={rebuilding || syncingAll || ctx.hasSourceChanges || topologySources.length === 0}
+            title="Discard all overrides and rebuild from the sources"
+            onclick={handleRebuild}
+          >
+            {rebuilding ? 'Rebuilding…' : 'Rebuild'}
+          </Button>
+        </div>
       </div>
       {#if ctx.hasSourceChanges}
         <div class="px-4 py-2 bg-warning/10 border-t border-warning/20 text-warning text-sm">
@@ -817,6 +964,7 @@
     if (!v) detailNode = null
   }}
   node={detailNode}
+  attachments={detailNode?.attachments ?? []}
   probing={detailNode !== null && probingNodeId === detailNode.id}
   effectivePolicy={detailNode ? (policyView?.nodes[detailNode.id] ?? null) : null}
   patchingPolicy={detailNode !== null && policyPatching[detailNode.id] === true}
@@ -825,6 +973,8 @@
   onProbe={() => {
     if (detailNode) handleProbeNode(detailNode)
   }}
-  onSetMode={handleSetMode}
-  onSetCommunity={handleSetCommunity}
+  onSetAttachments={handleSetAttachments}
+  onSetLabel={handleSetLabel}
+  onReset={handleResetNode}
+  onHide={handleHideNode}
 />

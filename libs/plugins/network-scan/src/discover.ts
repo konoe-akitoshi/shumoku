@@ -22,7 +22,15 @@
  */
 
 import { builtinEntries, Catalog, type CatalogEntry, vendorFromOid } from '@shumoku/catalog'
-import type { Identity, Link, NetworkGraph, Node, NodePort, NodeSpec } from '@shumoku/core'
+import type {
+  Attachment,
+  Identity,
+  Link,
+  NetworkGraph,
+  Node,
+  NodePort,
+  NodeSpec,
+} from '@shumoku/core'
 import { expandTargets } from './cidr.js'
 import { asMacString, asNumber, asString, indexByRow, SnmpClient } from './client.js'
 import {
@@ -105,6 +113,10 @@ interface VisitedDevice {
   nodeId: string
   /** Identity captured at scan time. */
   identity: Identity
+  /** The SNMP community that actually read this device. Recorded so the
+   *  node carries the credential it was read with — the proof a green
+   *  (synced) node is built on, not an invisible config-wide fallback. */
+  community: string
   sysName?: string
   sysDescr?: string
   vendor?: string
@@ -194,13 +206,14 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
 
   // 3. Full SNMP walk on live targets only.
   for (const address of alive) {
+    const community = communityFor(address)
     const client = new SnmpClient({
       address,
-      community: communityFor(address),
+      community,
       timeoutMs: input.timeoutMs,
     })
     try {
-      const device = await scanOne(client, address, input.sourceId)
+      const device = await scanOne(client, address, input.sourceId, community)
       visited.set(address, device)
     } catch (err) {
       walkErrors++
@@ -362,6 +375,7 @@ async function scanOne(
   client: SnmpClient,
   address: string,
   sourceId: string,
+  community: string,
 ): Promise<VisitedDevice> {
   // System-MIB scalars
   const sys = await client.get([SYSTEM_MIB.sysName, SYSTEM_MIB.sysObjectID, SYSTEM_MIB.sysDescr])
@@ -485,6 +499,7 @@ async function scanOne(
   return {
     nodeId: `${sourceId}:node:${address}`,
     identity,
+    community,
     sysName,
     sysDescr,
     vendor,
@@ -516,6 +531,17 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
       ? { kind: 'hardware', vendor: device.vendor }
       : undefined
 
+  // The credential this device was actually read with. Recording it as an
+  // access attachment is what makes a green (synced) node honest: the
+  // community that proved readable IS the node's access, and the autoscan
+  // scheduler resolves the same value back from `attachments`. An operator
+  // override on the authored layer wins via resolve (authored anchors).
+  const accessAttachment: Attachment = {
+    kind: 'access',
+    protocol: 'snmp',
+    community: device.community,
+  }
+
   return {
     id: device.nodeId,
     label: labelParts.length > 0 ? labelParts : (device.identity.mgmtIp ?? 'unknown'),
@@ -525,10 +551,14 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
     // inventing it on every node.
     identity: device.identity,
     ...(spec ? { spec } : {}),
+    attachments: [accessAttachment],
     metadata: {
       // We walked this device over SNMP — it's fully readable, the
       // counterpart to a `notice` node. Drives the UI sync-state badge.
       syncState: 'synced',
+      // The protocol we actually read it with — real data so the UI shows
+      // "Read via: SNMP" from the snapshot instead of guessing from type.
+      readVia: 'snmp',
       vendor: device.vendor,
       sysDescr: device.sysDescr,
       catalogId: device.catalogEntry?.id,

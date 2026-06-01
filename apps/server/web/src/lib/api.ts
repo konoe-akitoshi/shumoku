@@ -417,40 +417,74 @@ export const topologies = {
   discoveryPolicy: {
     get: (topologyId: string) =>
       request<{
-        topologyDefault: DiscoveryPolicyPatch | null
+        topologyDefault: Attachment[] | null
         runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
         nodes: Record<string, EffectivePolicy>
         subgraphs: Record<string, EffectivePolicy>
       }>(`/topologies/${topologyId}/discovery-policy`),
 
+    /**
+     * Replace a scope's authored attachments wholesale (`null`/`[]` clears),
+     * and/or set a node's authored name override (`label`; `null`/'' reverts
+     * to the observed name). For node scope each field is applied only when
+     * present, so a label edit never wipes the access/policy overlay.
+     */
     patch: (
       topologyId: string,
       body:
-        | { scope: 'topology'; discovery: DiscoveryPolicyPatch | null }
+        | { scope: 'topology'; attachments: Attachment[] | null }
+        | { scope: 'subgraph'; id: string; attachments: Attachment[] | null }
         | {
-            scope: 'node' | 'subgraph'
+            scope: 'node'
             id: string
-            discovery: DiscoveryPolicyPatch | null
+            attachments?: Attachment[] | null
+            label?: string | null
           },
     ) =>
       request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
+
+    /** Hide a node (identity-keyed exclusion). resolve() drops matching clusters. */
+    hide: (topologyId: string, identity: NodeExclusion) =>
+      request<{ exclusions: NodeExclusion[] }>(
+        `/topologies/${topologyId}/discovery-policy/exclusions`,
+        { method: 'POST', body: JSON.stringify(identity) },
+      ),
+
+    /** Unhide a previously hidden node. */
+    unhide: (topologyId: string, identity: NodeExclusion) =>
+      request<{ exclusions: NodeExclusion[] }>(
+        `/topologies/${topologyId}/discovery-policy/exclusions`,
+        { method: 'DELETE', body: JSON.stringify(identity) },
+      ),
+
+    /** Rebuild: discard the whole authored overlay (attachments + exclusions). */
+    rebuild: (topologyId: string) =>
+      request<{ cleared: boolean; reason?: string }>(
+        `/topologies/${topologyId}/discovery-policy/rebuild`,
+        { method: 'POST' },
+      ),
   },
 }
 
-/** Shape accepted by the discovery-policy PATCH endpoint. Each field
- *  optional; `null` for the whole object clears the override. */
-export interface DiscoveryPolicyPatch {
-  mode?: DiscoveryMode
-  intervalMs?: number
-  /** SNMP community to read this target with. `''` clears the per-node
-   *  override (inherit); omit to leave unchanged. */
-  community?: string
+/** Identity used to hide/unhide a node. Mirrors `@shumoku/core`'s NodeExclusion. */
+export interface NodeExclusion {
+  mgmtIp?: string
+  chassisId?: string
+  sysName?: string
 }
 
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
+
+/** A unit of authored intent attached to a node / subgraph / topology.
+ *  Mirrors `@shumoku/core`'s `Attachment`. */
+export type Attachment =
+  | { kind: 'policy'; mode?: DiscoveryMode; intervalMs?: number }
+  | { kind: 'access'; protocol: 'snmp'; community?: string; version?: '2c' | '3' }
+  | { kind: 'access'; protocol: 'ssh'; username?: string; port?: number }
+  | { kind: 'access'; protocol: 'netconf' | 'http' }
 export interface EffectivePolicy {
   mode: DiscoveryMode
   intervalMs: number

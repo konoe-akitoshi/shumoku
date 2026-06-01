@@ -161,6 +161,277 @@ describe('resolve()', () => {
     })
   })
 
+  describe('authored overlay is thin (community/name on top of observed)', () => {
+    // The authored layer is an OVERLAY, not a replacement node. A
+    // community-only overlay carries identity + attachments (+ a mirrored
+    // label, since Node.label is required) and must NOT blank the device's
+    // observed facts — the bug where "adding a community made the device's
+    // ports/model/readVia vanish".
+    const observed: SnapshotEntry = {
+      sourceId: 'network-scan:1',
+      capturedAt: 1000,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'sw-core',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.5' },
+            metadata: { readVia: 'snmp', syncState: 'synced' },
+            ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
+          },
+        ],
+      },
+    }
+
+    it('observed facts show through under a community-only overlay', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            // Thin overlay: identity to cluster by, empty label (no rename),
+            // and the attachment the operator set. No ports / metadata copied.
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+          },
+        ],
+      }
+      const out = resolve(authored, [observed])
+      expect(out.nodes).toHaveLength(1)
+      const n = out.nodes[0]
+      expect(n?.provenance?.state).toBe('confirmed')
+      // observed facts survived
+      expect(n?.metadata?.['readVia']).toBe('snmp')
+      expect(n?.ports).toHaveLength(1)
+      // authored attachment applied
+      const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      expect(
+        acc && acc.kind === 'access' && acc.protocol === 'snmp' ? acc.community : undefined,
+      ).toBe('public')
+    })
+
+    it('a policy-only overlay does NOT wipe an observed access attachment', () => {
+      // network-scan stamps the community it read with as an observed access
+      // attachment. An authored overlay that only sets a policy must merge in,
+      // not replace — otherwise the scan-discovered community vanishes and the
+      // autoscan scheduler can't resolve it.
+      const observedWithAccess: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              metadata: { readVia: 'snmp' },
+              attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'policy', mode: 'disabled' }],
+          },
+        ],
+      }
+      const n = resolve(authored, [observedWithAccess]).nodes[0]
+      const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      expect(
+        acc && acc.kind === 'access' && acc.protocol === 'snmp' ? acc.community : undefined,
+      ).toBe('public') // observed community survived
+      expect((n?.attachments ?? []).some((a) => a.kind === 'policy')).toBe(true) // authored applied
+    })
+
+    it('an authored access overrides an observed access of the same protocol', () => {
+      const observedWithAccess: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'private-override' }],
+          },
+        ],
+      }
+      const n = resolve(authored, [observedWithAccess]).nodes[0]
+      const accs = (n?.attachments ?? []).filter(
+        (a) => a.kind === 'access' && a.protocol === 'snmp',
+      )
+      expect(accs).toHaveLength(1) // not duplicated
+      const a = accs[0]
+      expect(a && a.kind === 'access' && a.protocol === 'snmp' ? a.community : undefined).toBe(
+        'private-override',
+      )
+    })
+
+    it('observed label tracks a source rename when the overlay sets no name', () => {
+      // attach-only overlay stores '' (no rename). Source then renames.
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '', // no rename sentinel
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+          },
+        ],
+      }
+      const renamed: SnapshotEntry = {
+        ...observed,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core-renamed',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+            },
+          ],
+        },
+      }
+      const out = resolve(authored, [renamed])
+      // mirrored placeholder must NOT freeze the name — observed rename wins.
+      expect(stringOf(out.nodes[0]?.label)).toBe('sw-core-renamed')
+    })
+
+    it('an explicit rename overrides the observed label', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'MY-RENAME',
+            identity: { mgmtIp: '10.0.0.5' },
+          },
+        ],
+      }
+      const out = resolve(authored, [observed])
+      expect(stringOf(out.nodes[0]?.label)).toBe('MY-RENAME')
+    })
+  })
+
+  describe('exclusions (Hide)', () => {
+    it('drops a cluster whose identity matches an exclusion', () => {
+      const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
+        { id: 'a', label: 'keep', identity: { mgmtIp: '10.0.0.1' } },
+        { id: 'b', label: 'junk', identity: { mgmtIp: '10.0.0.2' } },
+      ])
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        exclusions: [{ mgmtIp: '10.0.0.2' }],
+      }
+      const out = resolve(authored, [snap])
+      const ips = out.nodes.map((n) => n.identity?.mgmtIp)
+      expect(ips).toContain('10.0.0.1')
+      expect(ips).not.toContain('10.0.0.2')
+    })
+
+    it('exclusion is identity-keyed: survives an ephemeral node-id change', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        exclusions: [{ mgmtIp: '10.0.0.2' }],
+      }
+      // re-scan gives the same device a different id — exclusion still bites.
+      const t1 = makeSnap('network-scan:1', 1000, [
+        { id: 'discovered:7', label: 'junk', identity: { mgmtIp: '10.0.0.2' } },
+      ])
+      const t2 = makeSnap('network-scan:1', 2000, [
+        { id: 'discovered:99', label: 'junk', identity: { mgmtIp: '10.0.0.2' } },
+      ])
+      expect(resolve(authored, [t1]).nodes).toHaveLength(0)
+      expect(resolve(authored, [t2]).nodes).toHaveLength(0)
+    })
+
+    it('matches via any identity key (chassisId hide catches mgmtIp-found node)', () => {
+      const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
+        { id: 'a', label: 'junk', identity: { mgmtIp: '10.0.0.5', chassisId: 'aa:bb' } },
+      ])
+      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{ chassisId: 'aa:bb' }] }
+      expect(resolve(authored, [snap]).nodes).toHaveLength(0)
+    })
+
+    it('a multi-key exclusion still matches when one key changed (ANY, not ALL)', () => {
+      // Hide is stored with all available keys; a later sysName rename must not
+      // silently un-hide the node — mgmtIp still matches.
+      const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
+        { id: 'a', label: 'junk', identity: { mgmtIp: '10.0.0.5', sysName: 'new-name' } },
+      ])
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        exclusions: [{ mgmtIp: '10.0.0.5', sysName: 'old-name' }],
+      }
+      expect(resolve(authored, [snap]).nodes).toHaveLength(0)
+    })
+
+    it('drops links incident to a hidden node', () => {
+      const snap: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'a', label: 'a', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+            { id: 'b', label: 'b', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+          ],
+          links: [
+            {
+              id: 'l1',
+              from: { node: 'a', port: 'a:p1' },
+              to: { node: 'b', port: 'b:p1' },
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{ mgmtIp: '10.0.0.2' }] }
+      const out = resolve(authored, [snap])
+      expect(out.nodes).toHaveLength(1)
+      expect(out.links).toHaveLength(0)
+    })
+
+    it('empty exclusion entry matches nothing', () => {
+      const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
+        { id: 'a', label: 'a', identity: { mgmtIp: '10.0.0.1' } },
+      ])
+      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{}] }
+      expect(resolve(authored, [snap]).nodes).toHaveLength(1)
+    })
+  })
+
   describe('confirmed (≥2 snapshots agree, no authored)', () => {
     it('two snapshots sharing chassisId → 1 cluster, confirmed', () => {
       const a: SnapshotEntry = makeSnap('netbox:1', 1000, [
@@ -260,6 +531,11 @@ describe('resolve()', () => {
 
 function emptyGraph(): NetworkGraph {
   return { version: '1.0', nodes: [], links: [] }
+}
+
+function stringOf(label: string | string[] | undefined): string {
+  if (label === undefined) return ''
+  return Array.isArray(label) ? label.join('\n') : label
 }
 
 interface MakeSnapNode {
