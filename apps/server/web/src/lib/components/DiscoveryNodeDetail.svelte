@@ -15,11 +15,8 @@
    *     list via `onSetAttachments`; the parent PATCHes wholesale.
    */
 
-  interface CredentialOrigin {
-    mode: 'node' | 'subgraph' | 'topology' | 'default'
-    intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
-    community: 'node' | 'subgraph' | 'topology' | 'default'
-  }
+  /** Where an effective value was inherited from (for origin hints). */
+  type OriginLevel = 'node' | 'subgraph' | 'topology' | 'default'
 
   interface Props {
     open: boolean
@@ -83,7 +80,7 @@
     hasOverlay = false,
   }: Props = $props()
 
-  function originLabel(o: CredentialOrigin['mode']): string {
+  function originLabel(o: OriginLevel): string {
     if (o === 'node') return 'this node'
     if (o === 'subgraph') return 'subgraph'
     if (o === 'topology') return 'topology default'
