@@ -485,6 +485,14 @@ export class TopologyService {
           nodes: [],
           links: [],
         }
+    // Source priority feeds the resolver's field merge: when two sources
+    // observe the same device, the higher-priority source wins each field it
+    // holds. Mirrors `topology_data_sources.priority`. The Manual/authored
+    // contribution always outranks these (handled inside resolve()).
+    const priorityBySource = new Map<string, number>()
+    for (const tds of this.topologySources.listByTopology(topology.id)) {
+      priorityBySource.set(tds.dataSourceId, tds.priority)
+    }
     const snapshots: SnapshotEntry[] = latest
       .filter((o) => o.sourceId !== manualId)
       .map((o) => ({
@@ -492,6 +500,7 @@ export class TopologyService {
         capturedAt: o.capturedAt,
         status: o.status,
         graph: o.graph,
+        priority: priorityBySource.get(o.sourceId) ?? 0,
       }))
     const graph = resolveObservations(authored, snapshots)
 
