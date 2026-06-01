@@ -812,6 +812,102 @@ describe('resolve()', () => {
       expect(a?.provenance?.source).toBe('authored')
     })
   })
+
+  // -------------------------------------------------------------------------
+  // Retraction is orthogonal to priority (decision 4 / C7). Presence is the
+  // union of contributions; priority only decides per-field winners. Human
+  // contributions and policy=disabled overlays persist; failed snapshots
+  // never retract; priority changes none of this.
+  // -------------------------------------------------------------------------
+  describe('retraction orthogonal to priority (C7)', () => {
+    it('priority does not affect presence: a node seen only by a low-priority source survives a high-priority source that omits it', () => {
+      const hi: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 100,
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+        },
+      }
+      const lo: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        priority: 1,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'a2', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+            // B is held ONLY by the low-priority source.
+            { id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+          ],
+        },
+      }
+      const out = resolve(emptyGraph(), [hi, lo])
+      const ips = out.nodes.map((n) => n.identity?.mgmtIp).sort()
+      expect(ips).toEqual(['10.0.0.1', '10.0.0.2']) // B not dropped despite low priority
+    })
+
+    it('a human overlay (policy=disabled) persists when no observed snapshot carries it', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.9' },
+            attachments: [{ kind: 'policy', mode: 'disabled' }],
+          },
+        ],
+      }
+      // A high-priority source that observes a DIFFERENT device — it must not
+      // retract the human's node just because it doesn't see it.
+      const other: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 100,
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'x', label: 'X', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+        },
+      }
+      const out = resolve(authored, [other])
+      const disabled = out.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.9')
+      expect(disabled).toBeDefined()
+      expect(disabled?.provenance?.state).toBe('authored-only')
+      expect((disabled?.attachments ?? []).some((a) => a.kind === 'policy')).toBe(true)
+    })
+
+    it('an observed-only node vanishing from the latest snapshot is retracted, but the same device persists when the human kept it', () => {
+      // latest snapshot no longer carries the device.
+      const latest: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 5,
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'y', label: 'Y', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } }],
+        },
+      }
+      // observed-only → device .1 is gone (retracted) when nobody carries it.
+      expect(resolve(emptyGraph(), [latest]).nodes.map((n) => n.identity?.mgmtIp)).toEqual([
+        '10.0.0.2',
+      ])
+      // human kept .1 → it persists even though the source dropped it.
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [{ id: 'kept', label: 'kept', identity: { mgmtIp: '10.0.0.1' } }],
+      }
+      const ips = resolve(authored, [latest])
+        .nodes.map((n) => n.identity?.mgmtIp)
+        .sort()
+      expect(ips).toEqual(['10.0.0.1', '10.0.0.2'])
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

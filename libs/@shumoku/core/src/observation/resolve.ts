@@ -47,17 +47,27 @@ export function resolve(
 ): ResolvedGraph {
   const _staleThreshold = options.staleThresholdMs ?? 30 * 24 * 60 * 60 * 1000
   const _retractAfter = options.retractAfterMissedScans ?? 3
-  // _staleThreshold / _retractAfter are wired through in the full impl;
-  // the skeleton leaves them as documented knobs.
+  // Retraction (design decision 4) is ORTHOGONAL to priority. Two axes:
+  //   - presence: a resolved node exists iff some surviving contribution
+  //     carries it. Presence is the *union* of clusters, so priority —
+  //     which only decides per-field winners — never adds or drops a node.
+  //   - retraction: an OBSERVED contribution may stop carrying a node.
+  // v1 feeds only the latest non-failed snapshot per source (see
+  // services/topology.ts → latestPerSource), so "retraction" today is
+  // simply "absent from the latest snapshot". There is no multi-scan
+  // hysteresis yet; _staleThreshold / _retractAfter stay documented knobs
+  // for when snapshot history is fed in.
   //
-  // !!! When retraction logic lands here, gate it on
-  //     `absenceImpliesRetraction(effectivePolicyForNode(authored, node))`.
-  // A node whose effective policy is `disabled` must survive being
-  // missing from a `status='ok'` snapshot — the operator opted out,
-  // the source was never asked, the absence carries no information.
-  // Codex 's review of the discovery-policy design
-  // flagged this as the highest-impact footgun in the area; see
-  // `discovery-policy.ts` for the gate predicate and rationale.
+  // Invariants that MUST hold regardless of priority (covered by tests):
+  //   - The human/authored contribution is never retracted. A node the
+  //     operator touched (rename, access, or a policy=disabled overlay) is
+  //     an authored contribution, so it persists until Reset.
+  //   - A 'failed' snapshot is ignored — never read as a retraction.
+  //   - When real hysteresis lands it must gate on
+  //     `absenceImpliesRetraction(effectivePolicyForNode(authored, node))`
+  //     so a policy=disabled node survives being missing from a
+  //     status='ok' snapshot (the operator opted out; absence carries no
+  //     information). Codex flagged this as the highest-impact footgun.
   void _staleThreshold
   void _retractAfter
 
