@@ -10,7 +10,8 @@
  *   PATCH /api/topologies/:id/discovery-policy
  *     body: { scope: 'topology' | 'node' | 'subgraph',
  *             id?: string,                       // node / subgraph
- *             attachments: Attachment[] | null } // replace; null/[] clears
+ *             attachments?: Attachment[] | null, // replace; null/[] clears
+ *             label?: string | null }            // node scope: name override
  *     → { effective: EffectiveDiscoveryPolicy }
  *
  * The overlay lives on the authored (Manual) layer; PATCH auto-attaches a
@@ -26,6 +27,7 @@ import {
   computeEffectivePolicy,
   type DiscoveryMode,
   type EffectiveDiscoveryPolicy,
+  type Node,
   RUNTIME_DEFAULT,
 } from '@shumoku/core'
 import { Hono } from 'hono'
@@ -39,6 +41,8 @@ interface PatchBody {
   id?: string
   /** Replace the scope's attachments. `null` or `[]` clears them. */
   attachments?: unknown
+  /** Node scope only: authored name override. `null` / '' reverts to observed. */
+  label?: unknown
 }
 
 /** Validate + normalize the attachments array from a PATCH body. */
@@ -160,11 +164,31 @@ export function createDiscoveryPolicyApi(): Hono {
       return c.json({ error: `id is required when scope is '${body.scope}'` }, 400)
     }
 
-    const parsedBody = parseAttachments(body.attachments)
-    if ('error' in parsedBody) return c.json({ error: parsedBody.error }, 400)
-    // Empty array means "no overlay" — store as undefined so the field is absent.
-    const next0 = parsedBody.attachments
-    const attachments = next0.length > 0 ? next0 : undefined
+    // Attachments are mutated only when the key is present; a label-only
+    // PATCH must not wipe a node's existing access/policy overlay.
+    const attachmentsProvided = body.attachments !== undefined
+    let attachments: Attachment[] | undefined
+    if (attachmentsProvided) {
+      const parsedBody = parseAttachments(body.attachments)
+      if ('error' in parsedBody) return c.json({ error: parsedBody.error }, 400)
+      // Empty array means "no overlay" — store as undefined so the field is absent.
+      attachments = parsedBody.attachments.length > 0 ? parsedBody.attachments : undefined
+    }
+
+    // `label` is a node-scope authored name override (a fact, not an
+    // attachment). `null` / '' reverts to the observed name.
+    const labelProvided = body.scope === 'node' && body.label !== undefined
+    let labelTrimmed = ''
+    if (labelProvided) {
+      if (body.label !== null && typeof body.label !== 'string') {
+        return c.json({ error: 'label must be a string or null' }, 400)
+      }
+      labelTrimmed = typeof body.label === 'string' ? body.label.trim() : ''
+    }
+
+    if (!attachmentsProvided && !labelProvided) {
+      return c.json({ error: 'nothing to update: provide attachments or label' }, 400)
+    }
 
     const topology = service.get(topologyId)
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
@@ -199,24 +223,39 @@ export function createDiscoveryPolicyApi(): Hono {
       subgraphs[idx] = target
       next.subgraphs = subgraphs
     } else {
-      // scope === 'node'
+      // scope === 'node' — attachments and/or an authored label override.
       const id = body.id as string
       const nodes = [...next.nodes]
       const idx = nodes.findIndex((n) => n.id === id)
-      if (idx === -1) {
-        // Discovered-only node: materialize a minimal authored entry from
-        // the resolved identity, then attach. Clearing (empty) on a node
-        // with no authored entry is a no-op.
-        if (attachments) {
+
+      // Resolved (observed) node — needed to materialize a discovered-only
+      // entry and to revert a cleared label to the observed name. Loaded once.
+      let discoveredNode: Node | undefined
+      let discoveredLoaded = false
+      const loadDiscovered = async (): Promise<Node | undefined> => {
+        if (!discoveredLoaded) {
           const resolved = await service.getParsed(topologyId)
-          const discovered = resolved?.graph.nodes.find((n) => n.id === id)
+          discoveredNode = resolved?.graph.nodes.find((n) => n.id === id)
+          discoveredLoaded = true
+        }
+        return discoveredNode
+      }
+
+      if (idx === -1) {
+        // Discovered-only node: detection already grabbed it, so materialize a
+        // minimal authored entry from the resolved identity if there's anything
+        // to author. Clearing on a node with no authored entry is a no-op.
+        const wantAttach = attachmentsProvided && attachments
+        const wantLabel = labelProvided && labelTrimmed !== ''
+        if (wantAttach || wantLabel) {
+          const discovered = await loadDiscovered()
           if (!discovered) return c.json({ error: `node '${id}' not found` }, 404)
           nodes.push({
             id,
-            label: discovered.label,
+            label: wantLabel ? labelTrimmed : discovered.label,
             ...(discovered.identity ? { identity: discovered.identity } : {}),
             ...(discovered.parent ? { parent: discovered.parent } : {}),
-            attachments,
+            ...(wantAttach ? { attachments } : {}),
           })
           next.nodes = nodes
         }
@@ -224,9 +263,35 @@ export function createDiscoveryPolicyApi(): Hono {
         const current = nodes[idx]
         if (!current) return c.json({ error: 'node index lost' }, 500)
         const target = { ...current }
-        if (attachments) target.attachments = attachments
-        else delete target.attachments
-        nodes[idx] = target
+
+        if (attachmentsProvided) {
+          if (attachments) target.attachments = attachments
+          else delete target.attachments
+        }
+
+        let removed = false
+        if (labelProvided) {
+          if (labelTrimmed !== '') {
+            target.label = labelTrimmed
+          } else {
+            // Revert the name. Dropping the authored entry only restores a
+            // sensible name when a real observation backs this node (it then
+            // re-resolves as discovered-only with the observed name). For an
+            // authored-only node there is nothing to fall back to, so deleting
+            // it would destroy real data — never do that. Same when the entry
+            // still carries attachments: keep it, leave the label as-is.
+            const hasAttach = Array.isArray(target.attachments) && target.attachments.length > 0
+            const discovered = await loadDiscovered()
+            const observationBacked = discovered?.provenance?.state === 'confirmed'
+            if (observationBacked && !hasAttach) {
+              nodes.splice(idx, 1)
+              removed = true
+            }
+            // else: authored-only or still has attachments → keep node + label.
+          }
+        }
+
+        if (!removed) nodes[idx] = target
         next.nodes = nodes
       }
     }

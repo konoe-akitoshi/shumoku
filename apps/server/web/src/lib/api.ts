@@ -423,12 +423,23 @@ export const topologies = {
         subgraphs: Record<string, EffectivePolicy>
       }>(`/topologies/${topologyId}/discovery-policy`),
 
-    /** Replace a scope's authored attachments wholesale. `null`/`[]` clears. */
+    /**
+     * Replace a scope's authored attachments wholesale (`null`/`[]` clears),
+     * and/or set a node's authored name override (`label`; `null`/'' reverts
+     * to the observed name). For node scope each field is applied only when
+     * present, so a label edit never wipes the access/policy overlay.
+     */
     patch: (
       topologyId: string,
       body:
         | { scope: 'topology'; attachments: Attachment[] | null }
-        | { scope: 'node' | 'subgraph'; id: string; attachments: Attachment[] | null },
+        | { scope: 'subgraph'; id: string; attachments: Attachment[] | null }
+        | {
+            scope: 'node'
+            id: string
+            attachments?: Attachment[] | null
+            label?: string | null
+          },
     ) =>
       request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
         method: 'PATCH',
