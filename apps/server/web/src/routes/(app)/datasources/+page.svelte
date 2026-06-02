@@ -1,11 +1,5 @@
 <script lang="ts">
-  import {
-    ChartLineIcon,
-    CubeIcon,
-    DatabaseIcon,
-    PlusIcon,
-    TreeStructureIcon,
-  } from 'phosphor-svelte'
+  import { ChartLineIcon, DatabaseIcon, PlusIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
@@ -406,14 +400,12 @@
                   <div
                     class="p-2 rounded-lg bg-theme-bg group-hover:bg-primary/10 transition-colors"
                   >
-                    {#if plugin.type === 'zabbix'}
-                      <ChartLineIcon
+                    {#if plugin.capabilities.includes('topology')}
+                      <TreeStructureIcon
                         size={24}
                         class="text-theme-text-muted group-hover:text-primary"
                       />
-                    {:else if plugin.type === 'netbox'}
-                      <CubeIcon size={24} class="text-theme-text-muted group-hover:text-primary" />
-                    {:else if plugin.type === 'prometheus'}
+                    {:else if plugin.capabilities.includes('metrics')}
                       <ChartLineIcon
                         size={24}
                         class="text-theme-text-muted group-hover:text-primary"
