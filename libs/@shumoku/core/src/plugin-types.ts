@@ -442,6 +442,53 @@ export interface NativeApiCapable {
   nativeApi(method: string, params: Record<string, unknown>): Promise<unknown>
 }
 
+/** A selectable candidate for a schema field declared with `optionsSource`. */
+export interface ConfigOption {
+  value: string
+  label: string
+}
+
+/**
+ * Plugin can supply dynamic candidates for a config/options field declared
+ * with `optionsSource: '<key>'` (e.g. NetBox site/tag/role lists). This is the
+ * generic counterpart to NetBox's bespoke `getFilterOptions` — the same
+ * any-key path as `getHosts`. Candidates require a live connection: the host
+ * disables the field until connection config is filled, and on failure falls
+ * back to free entry (it must NOT treat "no candidates" as broken). Optional —
+ * detected by `hasConfigOptions`.
+ */
+export interface ConfigOptionsCapable {
+  getConfigOptions(key: string, currentConfig: unknown): Promise<ConfigOption[]>
+}
+
+/** Context the host supplies to `getConnectionInfo` (it knows id + origin). */
+export interface ConnectionInfoContext {
+  /** The data source instance id. */
+  dataSourceId: string
+  /** Server origin, e.g. `https://host:8080`, for building absolute URLs. */
+  serverOrigin: string
+}
+
+/** A derived, display-only fact about a configured connection (not an input). */
+export interface ConnectionInfoItem {
+  label: string
+  value: string
+  /** Render a copy-to-clipboard affordance (e.g. a webhook URL). */
+  copyable?: boolean
+}
+
+/**
+ * Plugin can surface derived, display-only connection info that is NOT a
+ * config input — e.g. Grafana's webhook URL, which is generated after the
+ * source exists and depends on the server origin + data source id (so it
+ * can't be a schema field). The host shows these on the detail screen. F6:
+ * the URL needs `ctx`, not just `config`. Optional — detected by
+ * `hasConnectionInfo`.
+ */
+export interface ConnectionInfoCapable {
+  getConnectionInfo(config: unknown, ctx: ConnectionInfoContext): ConnectionInfoItem[]
+}
+
 // ============================================
 // Type Guards
 // ============================================
@@ -486,6 +533,20 @@ export function hasNativeApi(
   plugin: DataSourcePlugin,
 ): plugin is DataSourcePlugin & NativeApiCapable {
   return typeof (plugin as Partial<NativeApiCapable>).nativeApi === 'function'
+}
+
+/** Duck-type: can this plugin supply dynamic candidates for `optionsSource` fields? */
+export function hasConfigOptions(
+  plugin: DataSourcePlugin,
+): plugin is DataSourcePlugin & ConfigOptionsCapable {
+  return typeof (plugin as Partial<ConfigOptionsCapable>).getConfigOptions === 'function'
+}
+
+/** Duck-type: does this plugin expose derived, display-only connection info? */
+export function hasConnectionInfo(
+  plugin: DataSourcePlugin,
+): plugin is DataSourcePlugin & ConnectionInfoCapable {
+  return typeof (plugin as Partial<ConnectionInfoCapable>).getConnectionInfo === 'function'
 }
 
 /**

@@ -3,7 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { type DataSourcePlugin, missingCapabilityMethods } from './plugin-types.js'
+import {
+  type DataSourcePlugin,
+  hasConfigOptions,
+  hasConnectionInfo,
+  missingCapabilityMethods,
+} from './plugin-types.js'
 
 function makePlugin(
   capabilities: string[],
@@ -41,5 +46,17 @@ describe('missingCapabilityMethods', () => {
 
   it('passes a plugin that declares nothing', () => {
     expect(missingCapabilityMethods(makePlugin([]))).toEqual([])
+  })
+})
+
+describe('optional capability guards', () => {
+  it('detects getConfigOptions (optionsSource candidates)', () => {
+    expect(hasConfigOptions(makePlugin([]))).toBe(false)
+    expect(hasConfigOptions(makePlugin([], { getConfigOptions: async () => [] }))).toBe(true)
+  })
+
+  it('detects getConnectionInfo (derived display)', () => {
+    expect(hasConnectionInfo(makePlugin([]))).toBe(false)
+    expect(hasConnectionInfo(makePlugin([], { getConnectionInfo: () => [] }))).toBe(true)
   })
 })
