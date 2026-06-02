@@ -77,6 +77,12 @@ export const dataSources = {
 
   getPluginTypes: () => request<DataSourcePluginInfo[]>('/datasources/types'),
 
+  /** Dynamic candidates for an `optionsSource` schema field (connection-backed). */
+  getConfigOptions: (id: string, key: string) =>
+    request<{ options: { value: string; label: string }[] }>(
+      `/datasources/${id}/config-options/${key}`,
+    ),
+
   get: (id: string) => request<DataSource>(`/datasources/${id}`),
 
   create: (input: DataSourceInput) =>

@@ -17,13 +17,32 @@
     schema,
     value = $bindable(),
     disabled = false,
+    getOptions,
   }: {
     schema: PluginConfigSchema
     value: Record<string, unknown>
     disabled?: boolean
+    /** Fetch dynamic candidates for an `optionsSource` key (connection-backed). */
+    getOptions?: (key: string) => Promise<{ value: string; label: string }[]>
   } = $props()
 
   const entries = $derived(Object.entries(schema.properties))
+
+  // Dynamic candidates for optionsSource array fields, fetched lazily.
+  let candidates = $state<Record<string, { value: string; label: string }[]>>({})
+  let loadingOptions = $state<Record<string, boolean>>({})
+
+  async function ensureOptions(key: string) {
+    if (!getOptions || candidates[key] || loadingOptions[key]) return
+    loadingOptions[key] = true
+    try {
+      candidates[key] = await getOptions(key)
+    } catch {
+      candidates[key] = []
+    } finally {
+      loadingOptions[key] = false
+    }
+  }
 
   // Ensure nested object props have a bag to write into — after render, so we
   // never mutate $state during rendering.
@@ -37,6 +56,23 @@
       }
     }
   })
+
+  // Load candidates for visible optionsSource fields.
+  $effect(() => {
+    if (!getOptions) return
+    for (const prop of Object.values(schema.properties)) {
+      if (prop.type === 'array' && prop.optionsSource && isVisible(prop)) {
+        void ensureOptions(prop.optionsSource)
+      }
+    }
+  })
+
+  function addFromSelect(key: string, e: Event) {
+    const select = e.currentTarget as HTMLSelectElement
+    const picked = select.value
+    if (picked && !asArray(key).includes(picked)) value[key] = [...asArray(key), picked]
+    select.value = ''
+  }
 
   function isVisible(prop: PluginConfigProperty): boolean {
     if (!prop.visibleWhen) return true
@@ -161,9 +197,17 @@
               onkeydown={(e) => addTag(key, e)}
             >
           </div>
+          {#if prop.optionsSource && (candidates[prop.optionsSource]?.length ?? 0) > 0}
+            <select class="input mt-1" {disabled} onchange={(e) => addFromSelect(key, e)}>
+              <option value="">Add…</option>
+              {#each (candidates[prop.optionsSource] ?? []).filter((o) => !asArray(key).includes(o.value)) as o (o.value)}
+                <option value={o.value}>{o.label}</option>
+              {/each}
+            </select>
+          {/if}
         {:else if prop.type === 'object' && prop.properties}
           <fieldset class="schema-object">
-            <SchemaForm schema={subSchema(prop)} value={subValue(key)} {disabled} />
+            <SchemaForm schema={subSchema(prop)} value={subValue(key)} {disabled} {getOptions} />
           </fieldset>
         {:else}
           <input

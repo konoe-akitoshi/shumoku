@@ -3,7 +3,7 @@
  * CRUD endpoints for data source management with plugin support
  */
 
-import { validateAgainstSchema } from '@shumoku/core'
+import { hasConfigOptions, validateAgainstSchema } from '@shumoku/core'
 import { Hono } from 'hono'
 import { getAllPlugins } from '../plugins/loader.js'
 import type { AlertQueryOptions } from '../plugins/types.js'
@@ -84,6 +84,30 @@ export function createDataSourcesApi(): Hono {
       optionsSchema: pluginOptionsSchemas.get(type),
     }))
     return c.json(serializable)
+  })
+
+  // Dynamic candidates for an `optionsSource` schema field (e.g. NetBox
+  // site / tag / role). Instantiates the plugin with its stored config and asks
+  // it for the options — the generic, capability-gated counterpart to the
+  // per-plugin filter endpoints. Failures degrade to an empty list so the web
+  // can fall back to free entry (never treats "no candidates" as broken).
+  app.get('/:id/config-options/:key', async (c) => {
+    const id = c.req.param('id')
+    const key = c.req.param('key')
+    const plugin = service.getPlugin(id)
+    if (!plugin) {
+      return c.json({ error: 'Data source not found' }, 404)
+    }
+    if (!hasConfigOptions(plugin)) {
+      return c.json({ options: [] })
+    }
+    try {
+      const options = await plugin.getConfigOptions(key, {})
+      return c.json({ options })
+    } catch (err) {
+      console.error('[DataSources] getConfigOptions failed:', err)
+      return c.json({ options: [] })
+    }
   })
 
   // List all data sources. Manual rows are included like any other
