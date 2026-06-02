@@ -15,7 +15,7 @@ import {
   type DataSourceCapability,
   type DataSourcePlugin,
 } from '@shumoku/core'
-import type { AlertStoreService, GrafanaPluginConfig } from './types.js'
+import type { AlertStoreService, GrafanaPluginConfig, GrafanaWebhookPayload } from './types.js'
 
 // ============================================
 // Helper Functions
@@ -67,6 +67,30 @@ export function filterLabels(labels: Record<string, string>): Record<string, str
     filtered[key] = value
   }
   return filtered
+}
+
+/**
+ * Validate an inbound Grafana webhook payload before it is processed. The
+ * plugin owns its webhook shape (the server must not blind-cast arbitrary JSON
+ * into `GrafanaWebhookPayload`). Returns a type predicate so callers can reject
+ * malformed bodies with 400 instead of crashing downstream.
+ */
+export function isGrafanaWebhookPayload(body: unknown): body is GrafanaWebhookPayload {
+  if (typeof body !== 'object' || body === null) return false
+  const payload = body as Record<string, unknown>
+  if (payload['status'] !== 'firing' && payload['status'] !== 'resolved') return false
+  if (!Array.isArray(payload['alerts'])) return false
+  return payload['alerts'].every((alert) => {
+    if (typeof alert !== 'object' || alert === null) return false
+    const a = alert as Record<string, unknown>
+    return (
+      (a['status'] === 'firing' || a['status'] === 'resolved') &&
+      typeof a['fingerprint'] === 'string' &&
+      typeof a['startsAt'] === 'string' &&
+      typeof a['labels'] === 'object' &&
+      a['labels'] !== null
+    )
+  })
 }
 
 // ============================================

@@ -4,6 +4,7 @@
  */
 
 import { Hono } from 'hono'
+import { isGrafanaWebhookPayload } from 'shumoku-plugin-grafana'
 import { DataSourceService } from '../services/datasource.js'
 import { GrafanaAlertService, type GrafanaWebhookPayload } from '../services/grafana-alerts.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
@@ -152,6 +153,12 @@ webhooksApi.post('/grafana/:secret', async (c) => {
     body = await c.req.json()
   } catch {
     return c.json({ error: 'Invalid JSON payload' }, 400)
+  }
+
+  // The plugin owns its webhook shape — validate before processing rather than
+  // blind-casting arbitrary JSON.
+  if (!isGrafanaWebhookPayload(body)) {
+    return c.json({ error: 'Invalid Grafana webhook payload' }, 400)
   }
 
   try {
