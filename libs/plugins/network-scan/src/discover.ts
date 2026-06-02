@@ -31,6 +31,7 @@ import type {
   NodePort,
   NodeSpec,
 } from '@shumoku/core'
+import { mapWithConcurrency } from '@shumoku/core'
 import { expandTargets } from './cidr.js'
 import { asMacString, asNumber, asString, indexByRow, SnmpClient } from './client.js'
 import {
@@ -330,30 +331,23 @@ async function probeAlive(
   addresses: readonly string[],
   communityFor: (addr: string) => string,
 ): Promise<string[]> {
-  const alive: string[] = []
-  for (let i = 0; i < addresses.length; i += LIVENESS_CONCURRENCY) {
-    const chunk = addresses.slice(i, i + LIVENESS_CONCURRENCY)
-    const settled = await Promise.all(
-      chunk.map(async (addr) => {
-        const client = new SnmpClient({
-          address: addr,
-          community: communityFor(addr),
-          timeoutMs: LIVENESS_TIMEOUT_MS,
-          retries: 0,
-        })
-        try {
-          const vbs = await client.get([SYSTEM_MIB.sysName])
-          return vbs.length > 0 ? addr : null
-        } catch {
-          return null
-        } finally {
-          client.close()
-        }
-      }),
-    )
-    for (const r of settled) if (r) alive.push(r)
-  }
-  return alive
+  const settled = await mapWithConcurrency(addresses, LIVENESS_CONCURRENCY, async (addr) => {
+    const client = new SnmpClient({
+      address: addr,
+      community: communityFor(addr),
+      timeoutMs: LIVENESS_TIMEOUT_MS,
+      retries: 0,
+    })
+    try {
+      const vbs = await client.get([SYSTEM_MIB.sysName])
+      return vbs.length > 0 ? addr : null
+    } catch {
+      return null
+    } finally {
+      client.close()
+    }
+  })
+  return settled.filter((addr): addr is string => addr !== null)
 }
 
 function emptyResult(

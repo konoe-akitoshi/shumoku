@@ -28,6 +28,7 @@
  */
 
 import { connect, type Socket } from 'node:net'
+import { mapWithConcurrency } from '@shumoku/core'
 
 /**
  * TCP ports we knock on to decide "something's alive here". These are
@@ -120,17 +121,16 @@ export async function probeReachable(
 ): Promise<Map<string, ReachabilityResult>> {
   const probe = opts.probe ?? tcpConnectProbe
   const out = new Map<string, ReachabilityResult>()
-  for (let i = 0; i < addresses.length; i += REACHABILITY_CONCURRENCY) {
-    const chunk = addresses.slice(i, i + REACHABILITY_CONCURRENCY)
-    const settled = await Promise.all(
-      chunk.map(
-        async (addr) =>
-          [addr, await probe(addr, { timeoutMs: opts.timeoutMs, ports: opts.ports })] as const,
-      ),
-    )
-    for (const [addr, res] of settled) {
-      if (res.reachable) out.set(addr, res)
-    }
+  // True bounded pool (starts the next address as soon as one finishes), vs the
+  // old chunk-barrier that waited for the slowest probe in each chunk.
+  const settled = await mapWithConcurrency(
+    addresses,
+    REACHABILITY_CONCURRENCY,
+    async (addr) =>
+      [addr, await probe(addr, { timeoutMs: opts.timeoutMs, ports: opts.ports })] as const,
+  )
+  for (const [addr, res] of settled) {
+    if (res.reachable) out.set(addr, res)
   }
   return out
 }
