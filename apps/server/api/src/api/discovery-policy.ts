@@ -9,9 +9,10 @@
  *
  *   PATCH /api/topologies/:id/discovery-policy
  *     body: { scope: 'topology' | 'node' | 'subgraph',
- *             id?: string,                       // node / subgraph
- *             attachments?: Attachment[] | null, // replace; null/[] clears
- *             label?: string | null }            // node scope: name override
+ *             id?: string,                          // node / subgraph
+ *             attachments?: Attachment[] | null,    // replace; null/[] clears
+ *             label?: string | null,                // node scope: name override
+ *             suppressedAttachments?: string[]|null } // node: keys to remove
  *     → { effective: EffectiveDiscoveryPolicy }
  *
  * The overlay lives on the authored (Manual) layer; PATCH auto-attaches a
@@ -32,8 +33,10 @@
  *       default attachment + all exclusions). Pair with a Sync-all to refresh
  *       observed afterwards. Destructive; the UI confirms first.
  *
- * Reset (drop one node's overlay) reuses PATCH with attachments=null,
- * label=null — no dedicated route.
+ * Reset (drop one node's human contribution) reuses PATCH with
+ * attachments=null, label=null, suppressedAttachments=null — no dedicated
+ * route. A node with any remaining human claim (attachment OR suppression) is
+ * kept; only an observation-backed node with nothing left is dropped entirely.
  */
 
 import {
@@ -51,6 +54,14 @@ import { getTopologyService } from './topologies.js'
 
 const VALID_MODES: ReadonlySet<string> = new Set<DiscoveryMode>(['auto', 'observe', 'disabled'])
 const VALID_PROTOCOLS: ReadonlySet<string> = new Set(['snmp', 'ssh', 'netconf', 'http'])
+// Attachment keys the human may suppress (mirror of core's `attachmentKey`).
+const VALID_ATTACHMENT_KEYS: ReadonlySet<string> = new Set([
+  'access:snmp',
+  'access:ssh',
+  'access:netconf',
+  'access:http',
+  'policy',
+])
 
 interface PatchBody {
   scope?: string
@@ -59,6 +70,13 @@ interface PatchBody {
   attachments?: unknown
   /** Node scope only: authored name override. `null` / '' reverts to observed. */
   label?: unknown
+  /**
+   * Node scope only: attachment keys the human removed — the negative
+   * counterpart to `attachments` (see core `attachmentKey`). `null` / `[]`
+   * clears the suppression. A deleted access stays gone across re-scans until
+   * Reset drops the whole entry.
+   */
+  suppressedAttachments?: unknown
 }
 
 /** Validate + normalize the attachments array from a PATCH body. */
@@ -202,8 +220,29 @@ export function createDiscoveryPolicyApi(): Hono {
       labelTrimmed = typeof body.label === 'string' ? body.label.trim() : ''
     }
 
-    if (!attachmentsProvided && !labelProvided) {
-      return c.json({ error: 'nothing to update: provide attachments or label' }, 400)
+    // `suppressedAttachments` is a node-scope negative assertion: keys the
+    // human removed. `null` / `[]` clears it.
+    const suppressedProvided = body.scope === 'node' && body.suppressedAttachments !== undefined
+    let suppressed: string[] | undefined
+    if (suppressedProvided) {
+      const raw = body.suppressedAttachments
+      if (raw !== null && !Array.isArray(raw)) {
+        return c.json({ error: 'suppressedAttachments must be an array or null' }, 400)
+      }
+      const keys = Array.isArray(raw) ? raw : []
+      for (const k of keys) {
+        if (typeof k !== 'string' || !VALID_ATTACHMENT_KEYS.has(k)) {
+          return c.json({ error: `invalid attachment key: ${String(k)}` }, 400)
+        }
+      }
+      suppressed = keys.length > 0 ? (keys as string[]) : undefined
+    }
+
+    if (!attachmentsProvided && !labelProvided && !suppressedProvided) {
+      return c.json(
+        { error: 'nothing to update: provide attachments, label, or suppressedAttachments' },
+        400,
+      )
     }
 
     const topology = service.get(topologyId)
@@ -269,7 +308,8 @@ export function createDiscoveryPolicyApi(): Hono {
         // actual rename. Clearing on a node with no authored entry is a no-op.
         const wantAttach = attachmentsProvided && attachments
         const wantLabel = labelProvided && labelTrimmed !== ''
-        if (wantAttach || wantLabel) {
+        const wantSuppress = suppressedProvided && suppressed
+        if (wantAttach || wantLabel || wantSuppress) {
           const discovered = await loadDiscovered()
           if (!discovered) return c.json({ error: `node '${id}' not found` }, 404)
           if (!discovered.identity) {
@@ -280,15 +320,16 @@ export function createDiscoveryPolicyApi(): Hono {
           }
           nodes.push({
             id,
-            // Node.label is required, so an attach-only overlay must carry
-            // SOME label — we store ''. That is NOT a special sentinel:
-            // resolve's generic "empty = no value" rule (hasValue) means an
-            // empty label makes no name claim, so the observed name and any
-            // future source rename show through. A real rename stores the
-            // trimmed value (the human's claim wins by top priority).
+            // Node.label is required, so an attach-only entry must carry SOME
+            // label — we store ''. That is NOT a special sentinel: resolve's
+            // generic "empty = no value" rule (hasValue) means an empty label
+            // makes no name claim, so the observed name and any future source
+            // rename show through. A real rename stores the trimmed value (the
+            // human's claim wins by top priority).
             label: wantLabel ? labelTrimmed : '',
             identity: discovered.identity,
             ...(wantAttach ? { attachments } : {}),
+            ...(wantSuppress ? { suppressedAttachments: suppressed } : {}),
           })
           next.nodes = nodes
         }
@@ -301,25 +342,31 @@ export function createDiscoveryPolicyApi(): Hono {
           if (attachments) target.attachments = attachments
           else delete target.attachments
         }
+        if (suppressedProvided) {
+          if (suppressed) target.suppressedAttachments = suppressed
+          else delete target.suppressedAttachments
+        }
 
         let removed = false
         if (labelProvided) {
           if (labelTrimmed !== '') {
             target.label = labelTrimmed
           } else {
-            // Revert the name. If the entry still carries attachments we must
-            // KEEP it (the attachments are a real human claim) but drop the
-            // name claim — store '' which resolve reads as "no name claim"
-            // (hasValue), so the observed name shows through. Only when there's
-            // nothing left to author (no attachments) AND a real observation
+            // Revert the name. If the entry still carries a human claim
+            // (attachments OR a suppression) we KEEP it but drop the name claim
+            // — store '' which resolve reads as "no name claim" (hasValue), so
+            // the observed name shows through. Only when there's nothing left
+            // to author (no attachments, no suppression) AND a real observation
             // backs the node do we drop the entry entirely (a full Reset =
             // remove the human contribution), so it re-resolves to the bare
             // observed state. For an authored-only node with nothing left,
             // deleting would destroy real data — so keep it (with '' label).
             const hasAttach = Array.isArray(target.attachments) && target.attachments.length > 0
+            const hasSuppress =
+              Array.isArray(target.suppressedAttachments) && target.suppressedAttachments.length > 0
             const discovered = await loadDiscovered()
             const observationBacked = discovered?.provenance?.state === 'confirmed'
-            if (!hasAttach && observationBacked) {
+            if (!hasAttach && !hasSuppress && observationBacked) {
               nodes.splice(idx, 1)
               removed = true
             } else {
