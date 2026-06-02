@@ -7,8 +7,8 @@
 
 import {
   type Alert,
+  type AlertmanagerAlert,
   type AlertQueryOptions,
-  type AlertSeverity,
   type AlertsCapable,
   addHttpWarning,
   type ConnectionResult,
@@ -21,6 +21,7 @@ import {
   type MetricsCapable,
   type MetricsData,
   type MetricsMapping,
+  parseAlertmanagerAlerts,
 } from '@shumoku/core'
 import type { PrometheusCustomMetrics, PrometheusPluginConfig } from './types.js'
 
@@ -447,55 +448,10 @@ export class PrometheusPlugin
         return []
       }
 
-      interface AlertmanagerAlert {
-        fingerprint: string
-        labels: Record<string, string>
-        annotations?: Record<string, string>
-        startsAt: string
-        endsAt?: string
-        status: { state: 'active' | 'suppressed' | 'unprocessed' }
-        generatorURL?: string
-      }
-
-      const alertmanagerAlerts = (await response.json()) as AlertmanagerAlert[]
-
-      const now = Date.now()
-      const timeRangeMs = (options?.timeRange || 3600) * 1000
-
-      const alerts: Alert[] = alertmanagerAlerts
-        .filter((a) => {
-          const isActive = a.status.state === 'active'
-          // Active alerts are always included; resolved alerts are filtered by timeRange
-          if (!isActive) {
-            if (options?.activeOnly) return false
-            const startTime = new Date(a.startsAt).getTime()
-            if (now - startTime > timeRangeMs) return false
-          }
-          return true
-        })
-        .map((a) => {
-          const severity = this.mapAlertmanagerSeverity(a.labels['severity'])
-          return {
-            id: a.fingerprint,
-            severity,
-            title: a.labels['alertname'] || 'Unknown Alert',
-            description: a.annotations?.['description'] || a.annotations?.['summary'],
-            host: a.labels['instance'] || a.labels['host'],
-            startTime: new Date(a.startsAt).getTime(),
-            endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
-            status: a.status.state === 'active' ? 'active' : 'resolved',
-            source: 'prometheus' as const,
-            url: a.generatorURL,
-          } satisfies Alert
-        })
-
-      // Filter by minimum severity
-      if (options?.minSeverity) {
-        const minSeverityOrder = this.getSeverityOrder(options.minSeverity)
-        return alerts.filter((a) => this.getSeverityOrder(a.severity) >= minSeverityOrder)
-      }
-
-      return alerts
+      // One shared Alertmanager parser (active/timeRange/minSeverity filters,
+      // severity mapping, host-label priority) — see @shumoku/core/plugin-kit.
+      const raw = (await response.json()) as AlertmanagerAlert[]
+      return parseAlertmanagerAlerts(raw, { source: 'prometheus', query: options })
     } catch (err) {
       console.error('[PrometheusPlugin] Failed to fetch alerts:', err)
       return []
@@ -530,46 +486,6 @@ export class PrometheusPlugin
     }
 
     return fetch(url, { headers })
-  }
-
-  private mapAlertmanagerSeverity(severity?: string): AlertSeverity {
-    if (!severity) return 'info'
-
-    const severityLower = severity.toLowerCase()
-    // Translate common upstream vocabularies into our neutral scale.
-    // Position-preserving against the historical Zabbix-flavored mapping.
-    const severityMap: Record<string, AlertSeverity> = {
-      critical: 'critical',
-      disaster: 'critical',
-      high: 'high',
-      major: 'high',
-      error: 'high',
-      medium: 'medium',
-      average: 'medium',
-      moderate: 'medium',
-      warning: 'low',
-      warn: 'low',
-      minor: 'low',
-      low: 'info',
-      info: 'info',
-      information: 'info',
-      none: 'ok',
-      ok: 'ok',
-    }
-
-    return severityMap[severityLower] || 'info'
-  }
-
-  private getSeverityOrder(severity: AlertSeverity): number {
-    const order: Record<AlertSeverity, number> = {
-      ok: 0,
-      info: 1,
-      low: 2,
-      medium: 3,
-      high: 4,
-      critical: 5,
-    }
-    return order[severity] ?? 1
   }
 
   // ============================================
