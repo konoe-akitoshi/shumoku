@@ -75,6 +75,15 @@
 - [ ] **C8 新プラグイン＝ホスト編集ゼロ（核）**: 受け入れの実証として、**最小のサンプル外部プラグイン**
       （新 type・既存 capability・configSchema/optionsSchema 付き）を追加し、core/api/web を触らず
       接続・設定・options 描画・能力ディスパッチが通る。(e2e/integration)
+- [ ] **C9 共有ユーティリティ（重複撲滅）**: HTTP クライアント（auth/timeout/insecure/非2xx/
+      pagination）、Alertmanager アダプタ＋`mapAlertmanagerSeverity`/`severityRank`、`stampObserved`
+      （identity/provenance/syncState/readVia）、`validateAgainstSchema`、`flattenObject`（汎用 metrics
+      dump）、`mapWithConcurrency`、timing-safe webhook guard を core(or 共有 lib)に集約し全 bundled が
+      使用。severity マップ/fetch の重複ゼロ・timeout 抜けゼロ。(grep + unit test)
+- [ ] **C10 既存実装の P0 解消（§2.1 監査）**: netbox=identity/provenance 付与＋真のページング(next 追従)
+      ＋TLS 無効化の Node 対応、prometheus=metadataMap 代入＋PromQL エスケープ＋Alertmanager URL を
+      推測しない、grafana=webhook payload 検証＋定数時間 secret 比較、全 HTTP に timeout、
+      zabbix=config 検証＋severity `ok` 整合＋ホスト一括取得。各々回帰テスト。(plugin test)
 - [ ] **回帰**: バンドル5種＋外部サンプルが**同一経路**で動作、typecheck / lint / 既存 test 緑。
 
 ### スコープ外（この設計でやらない）
@@ -118,6 +127,25 @@
 
 **良い所（保つ）**: capability の宣言→汎用ディスパッチ。外部の manifest+configSchema 経路。core の
 表示契約型（`Alert`/`AlertSeverity` 中立/`MetricsData`/`DiscoveredMetric` passthrough）。
+
+## 2.1 実装監査の結果（2026-06-03、プラグイン単位の並列レビュー）
+
+6プラグインの実装を監査し、P1–P8 が**机上でなく実コードで再現**することを確認。加えて実害級(P0)と
+系統的重複が出た。要点（行番号は監査ログ）:
+
+| plugin | 評価 | 主な所見 |
+|---|---|---|
+| netbox | 要修正 | **identity/provenance 未付与→resolver がクラスタ不能(P0)**、`limit=0` ページング偽装で >1000 台欠落、TLS 無効化が Bun 専用で黙殺、`fetchTopology` に try/catch 無し（1つの 403 で全滅）、converter に死にコード ~520 行 |
+| prometheus | 要修正 | **`metadataMap` が no-op→TYPE/HELP 常に空(P0)**、**PromQL ラベルインジェクション(P0)**、Alertmanager URL を `:9090→:9093` 置換で推測、config 無検証 |
+| grafana | 要修正 | **webhook secret 非定数時間比較＋payload 検証ゼロ(P0)**、severity マップ4コピー、`low→info` 降格 |
+| zabbix | 凡庸 | HTTP timeout 無し、config 無検証、severity フィルタ `ok` 不整合、ホスト逐次ポーリング、discoverMetrics が値を number に強制 |
+| aruba | 良 | 認証セキュア・`flattenObject` 汎用 passthrough。manifest/configSchema 無し・UA 無し・テスト0・在庫 N+1 |
+| network-scan | 良 | identity/provenance/syncState/status 正しい・デバイス隔離。`ScopePolicy` 未実装で黙殺、LLDP が sysName 一致のみ |
+
+**系統的（＝設計で潰す）**: ①config 検証ゼロ（全員 `config as X`）②HTTP クライアント6重複＋timeout 抜け
+③Alertmanager severity 4コピー ④identity/provenance スタンプ不在（netbox 未付与）⑤manifest/configSchema
+皆無(#270)⑥capability 未検証 ⑦テストは network-scan のみ ⑧`source as const`/`||`vs`??`/idle リンク
+を unknown 表示/alerts に warnings チャネル無し。→ §3.9 ＋ C5/C6/C9/C10 で解消する。
 
 ## 3. 目標設計
 
@@ -196,20 +224,45 @@ interface PluginDescriptor {
 - 将来 (b) 未知作者に備え、descriptor に `apiVersion` / `permissions` を**宣言できる場所だけ用意**
   （今は記録/表示のみ、強制しない）。sandbox / permission 強制・API 安定化は別設計。
 
-## 4. 段階実装（phasing）
-1. **Phase 1 — 一般化した型・registry**: ExtensionPoint 概念、`PluginDescriptor`（capabilities open、
-   extensionPoints、apiVersion/permissions 余地）、descriptor 版 `register`（4引数アダプタ併存）。
-   `getAllPlugins`/registry が descriptor を運ぶ。capability 検証（C6）。（C1/C2/C3/C6 土台）
-2. **Phase 2 — schema 強化＋検証**: `PluginConfigProperty` 拡張、`optionsSource`/`getConfigOptions`、
-   core の `validateAgainstSchema`。（C5/C4 土台）
-3. **Phase 3 — バンドル5種の自己記述**: 各 plugin に configSchema（+ NetBox 等 optionsSchema）執筆。
-4. **Phase 4 — web 汎用描画一本化**: datasources の `type===` 撤去＋汎用描画＋サーバ config 検証配線
-   （**#270 解消**）。（C4/C5）
-5. **Phase 5 — options 汎用化＋ガード＋実証**: Sources options 汎用化（C4/C5）、grep ガード（C7）、
-   サンプル外部プラグインで「ホスト編集ゼロ」を実証（C8）。
-6. 回帰: 全プラグイン同一経路で緑。
+### 3.9 共有ユーティリティ（core に集約 — 実装監査が示した重複の撲滅）
+監査(§2.1)で、各プラグインが同じものを再実装し、しかも取りこぼし（timeout 抜け・severity 4コピー・
+identity 付け忘れ）が出ていた。以下を `@shumoku/core`（外部プラグインも import 可＝実行時隔離を満たす）
+に集約し、bundled/外部とも使う:
+- **`httpClient`**: baseUrl＋auth strategy（Bearer/Basic/Token/none）＋`timeoutMs`＋`insecure`（Node
+  互換の TLS 設定）＋非2xx を typed error＋末尾スラッシュ正規化＋**credentials を絶対にログしない** debug。
+  ＋ `paginate(fetchPage)`（cursor/`next` 追従）。→ HTTP 重複6箇所・timeout 抜け・Bun 専用 TLS バグ・
+  netbox ページング偽装を一掃。
+- **Alertmanager アダプタ**: `/api/v2/alerts` → `Alert[]` 解析＋active/timeRange フィルタ＋
+  `mapAlertmanagerSeverity`＋`severityRank(AlertSeverity)`。→ severity マップ4コピー・host ラベル優先順位
+  の食い違い・`endsAt` 未考慮を一掃（grafana/prometheus が共有）。
+- **`stampObserved(node, { sourceId, syncState?, readVia? })` ＋ identity builder**: topology/autoscan が
+  必ず付けるべき `provenance.source`＋`identity`＋`metadata.syncState/readVia` を1関数に。→ netbox の
+  identity/provenance 付け忘れ(P0)を**構造的に**防ぐ。
+- **`validateAgainstSchema(schema, value)`**（§3.5）＋ **timing-safe webhook guard**（secret 定数時間
+  比較＋payload スキーマ検証）→ grafana webhook の P0。
+- **`flattenObject`**（aruba が持つ汎用 metrics passthrough）を core へ → zabbix の「値を全部 number に
+  潰す」等を是正、全プラグインの "All metrics" を1実装に。
+- **`mapWithConcurrency(items, n, fn)`** → network-scan の重複・zabbix の逐次ポーリングを是正。
+- （将来）SNMP plumbing（`SnmpClient`/MIB）は `@shumoku/snmp` 候補。今回は network-scan 内に留め、メモのみ。
 
-各 Phase をコミット単位に、priority-merge 同様こまめに。
+## 4. 段階実装（phasing）— 設計を詰めて一気に
+1. **Phase 1 — 共有 core ユーティリティ（§3.9）**: httpClient(+paginate)、Alertmanager アダプタ＋
+   severity lib、`stampObserved`、`validateAgainstSchema`、`flattenObject`、`mapWithConcurrency`、
+   webhook guard。各々単体テスト付き。（C9 土台）
+2. **Phase 2 — 一般化した型・registry**: ExtensionPoint、`PluginDescriptor`（capabilities open /
+   extensionPoints / apiVersion・permissions 余地）、descriptor 版 `register`（4引数アダプタ併存）、
+   `getAllPlugins`/registry が descriptor を運ぶ、capability 検証。（C1/C2/C3/C6）
+3. **Phase 3 — schema 強化**: `PluginConfigProperty` 拡張＋`optionsSource`/`getConfigOptions`。（C4/C5 土台）
+4. **Phase 4 — バンドル5種を共有 lib へ移行＋自己記述＋P0 修正**（plugin ごとにコミット）: 各 plugin を
+   httpClient/stampObserved/severity lib に載せ替えつつ configSchema(+optionsSchema)を執筆し、**同時に
+   §2.1 の P0 を解消**（netbox identity/provenance＋pagination、prometheus metadataMap＋PromQL escape、
+   grafana webhook、zabbix config/severity/batch、全 HTTP timeout）。（C3/C9/C10）
+5. **Phase 5 — web 汎用描画一本化＋#270**: datasources/Sources の `type===` 撤去＋configSchema/
+   optionsSchema 描画＋サーバ config 検証配線。#270 解消。（C4/C5）
+6. **Phase 6 — ガード＋実証**: grep ガード（C7）、サンプル外部プラグインで「ホスト編集ゼロ」実証（C8）。
+7. 回帰: 全プラグイン同一経路で緑、typecheck/lint/test。
+
+各 Phase（特に Phase 4 は **plugin 単位**）をコミットに、priority-merge 同様こまめに。一気にやるが段は崩さない。
 
 ## 5. 確定した決定
 - **決定1**: 拡張点モデルに一般化（data-source は1点、実装は data-source のみ、型/registry は一般化）。
@@ -220,6 +273,10 @@ interface PluginDescriptor {
 - **決定6**: config/options 検証は core の純粋関数（api/web 共有）。
 - **決定7**: capability 検証は初回 instantiate 時（登録時 dummy instantiate は避ける）。
 - **決定8**: bundled の自己記述は `register(descriptor, factory)`（plugin.json 経由にしない＝同梱）。
+- **決定9**: 重複（HTTP / severity / identity / 検証 / metrics dump / 並行）は core の共有ユーティリティに
+  集約（§3.9）。プラグインは mapping 表など**固有部分だけ**持つ。
+- **決定10**: 既存実装の P0（§2.1）は**別 PR で先行せず、Phase 4 の plugin 移行と同時に**直す（共有 lib に
+  載せ替える過程で自然に解消）。＝「設計を詰めて一気に」。
 
 ## 6. #270 / 後方互換 / 既存ドキュメント
 - `#270` は本設計の **Phase 1+3+4（datasources）**に相当する部分集合。本 doc が上位で、Sources
