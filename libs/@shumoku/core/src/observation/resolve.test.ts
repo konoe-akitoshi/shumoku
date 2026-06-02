@@ -1124,6 +1124,113 @@ describe('resolve()', () => {
       )
     })
   })
+
+  // -------------------------------------------------------------------------
+  // The whole model in one place: a node is ONE thing; data sources, observed
+  // snapshots and the human are equal, priority-ordered contributions merged
+  // field-by-field — a Git-style non-conflicting auto-merge. The human is just
+  // the top-priority source (can add / override / remove); untouched fields
+  // flow through from whoever has them; non-matching identities stay separate.
+  // -------------------------------------------------------------------------
+  describe('Git-like merge: one node from equal contributions, field by field', () => {
+    // Same device seen by NetBox (high priority, has the model) and a scan
+    // (lower priority, has ports + community). The human touches only the name.
+    const netbox: SnapshotEntry = {
+      sourceId: 'netbox:1',
+      capturedAt: 2000,
+      status: 'ok',
+      priority: 10,
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'nb',
+            label: 'NB-NAME',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.1' },
+            spec: { kind: 'hardware', model: 'C9300' },
+          },
+        ],
+      },
+    }
+    const scan: SnapshotEntry = {
+      sourceId: 'network-scan:1',
+      capturedAt: 1000,
+      status: 'ok',
+      priority: 5,
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'scan',
+            label: 'scan-name',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.1', chassisId: 'cc' },
+            ports: [
+              { id: 'p', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
+            ],
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+          },
+        ],
+      },
+    }
+    const human: NetworkGraph = {
+      ...emptyGraph(),
+      nodes: [{ id: 'discovered:0', label: 'MY-NAME', identity: { mgmtIp: '10.0.0.1' } }],
+    }
+
+    it('one node: human name + NetBox model + scan ports + scan community, merged like Git', () => {
+      const out = resolve(human, [scan, netbox])
+      expect(out.nodes).toHaveLength(1) // one thing, not three
+      const n = out.nodes[0]
+      expect(stringOf(n?.label)).toBe('MY-NAME') // human won the one field it touched
+      expect(n?.fieldSources?.['label']).toBe('authored')
+      // untouched fields flow through from whoever holds them (priority order)
+      expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('C9300') // NetBox (10)
+      expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1') // scan
+      const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      expect(
+        acc && acc.kind === 'access' && acc.protocol === 'snmp' ? acc.community : undefined,
+      ).toBe('public') // scan
+      expect(n?.identity?.chassisId).toBe('cc') // identity is the union
+    })
+
+    it('drop the human (Reset) → name reverts to the top-priority source; the rest is unchanged', () => {
+      const n = resolve(emptyGraph(), [scan, netbox]).nodes[0]
+      expect(stringOf(n?.label)).toBe('NB-NAME') // NetBox (10) now wins the name
+      expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('C9300')
+      expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1')
+    })
+
+    it('a non-matching identity stays a separate island (never force-merged)', () => {
+      const other = makeSnap('network-scan:1', 1000, [
+        { id: 'x', label: 'other', identity: { mgmtIp: '10.99.99.99' } },
+      ])
+      expect(resolve(emptyGraph(), [scan, other]).nodes).toHaveLength(2)
+    })
+
+    it('the human can also remove (delete) a field a source supplied; Reset brings it back', () => {
+      const del: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.1' },
+            suppressedAttachments: ['access:snmp'],
+          },
+        ],
+      }
+      // human deleted the scan's community → gone
+      const deleted = resolve(del, [scan, netbox]).nodes[0]
+      expect((deleted?.attachments ?? []).some((a) => a.kind === 'access')).toBe(false)
+      // Reset (no human) → the source's community is back
+      const reset = resolve(emptyGraph(), [scan, netbox]).nodes[0]
+      expect(
+        (reset?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp'),
+      ).toBe(true)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
