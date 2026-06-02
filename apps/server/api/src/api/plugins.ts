@@ -139,7 +139,11 @@ export function createPluginsApi(): Hono {
   // Reload all plugins (hot reload)
   app.post('/reload', async (c) => {
     try {
-      const plugins = await reloadPlugins()
+      // reloadPlugins() returns only the freshly-loaded external plugins. The UI
+      // shows bundled + external in one list, so respond with the full set from
+      // getAllPlugins() — otherwise the "Bundled Plugins" section vanishes on reload.
+      await reloadPlugins()
+      const plugins = getAllPlugins()
       return c.json({
         success: true,
         plugins,
