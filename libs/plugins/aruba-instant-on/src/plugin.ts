@@ -31,6 +31,7 @@ import type {
   NativeApiCapable,
   NodeMetrics,
 } from '@shumoku/core'
+import { flattenObject } from '@shumoku/core'
 import { ArubaInstantOnApi } from './api.js'
 import type {
   ArubaInstantOnConfig,
@@ -411,40 +412,6 @@ function buildHostItems(d: AruInventoryDevice): HostItem[] {
  */
 function buildDeviceMetrics(d: AruInventoryDevice): DiscoveredMetric[] {
   return flattenObject(d, 'aruba')
-}
-
-function flattenObject(
-  obj: unknown,
-  prefix: string,
-  labels: Record<string, string> = {},
-): DiscoveredMetric[] {
-  if (obj == null || typeof obj !== 'object') return []
-  const out: DiscoveredMetric[] = []
-  for (const [key, value] of Object.entries(obj)) {
-    const name = `${prefix}_${key}`
-    if (value == null) continue
-    if (Array.isArray(value)) {
-      // Array of primitives → emit count plus join (rare in this API).
-      // Array of objects → expand each with `<key>_index` label.
-      if (value.every((v) => typeof v !== 'object' || v === null)) {
-        out.push({ name: `${name}_count`, value: value.length, labels })
-        continue
-      }
-      out.push({ name: `${name}_count`, value: value.length, labels })
-      for (const [i, child] of value.entries()) {
-        out.push(...flattenObject(child, name, { ...labels, [`${key}_index`]: String(i) }))
-      }
-      continue
-    }
-    if (typeof value === 'object') {
-      out.push(...flattenObject(value, name, labels))
-      continue
-    }
-    if (typeof value === 'string' && value.length === 0) continue
-    if (typeof value === 'number' && !Number.isFinite(value)) continue
-    out.push({ name, value: value as number | string | boolean, labels })
-  }
-  return out
 }
 
 function classifyDeviceStatus(raw: string | undefined): 'up' | 'down' | 'unknown' {

@@ -44,7 +44,8 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@shumoku/core": "workspace:*"
+    "@shumoku/core": "workspace:*",
+    "@shumoku/plugin-sdk": "workspace:*"
   },
   "devDependencies": {},
   "publishConfig": {

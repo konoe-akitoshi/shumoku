@@ -24,8 +24,11 @@ import type {
   MonitoringHealth,
   NodeMetrics,
 } from '@shumoku/core'
-import { addHttpWarning } from '@shumoku/core'
+import { addHttpWarning, mapWithConcurrency } from '@shumoku/core'
 import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
+
+/** Max in-flight Zabbix API calls during a metrics poll (was fully sequential). */
+const POLL_CONCURRENCY = 8
 
 /** Zabbix-specific link mapping with item IDs for direct item reference */
 interface ZabbixLinkMapping extends LinkMetricsMapping {
@@ -105,84 +108,99 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
     // multi-source setup another plugin (Aruba, Prometheus, …) may be
     // the actual owner, and emitting a fake `pending` here would
     // clobber its real result during merge in the server.
-    for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
-      if (!nodeMapping.hostId) continue
-      try {
-        const node = await this.evaluateHostHealth(nodeMapping.hostId)
-        if (node) metrics.nodes[nodeId] = node
-      } catch {
-        // Transport / auth failure — let the absence speak. Future
-        // work: emit `{ monitoring: 'failing' }` once we can tell
-        // a transport error apart from "host not in this Zabbix".
-      }
+    const nodeResults = await mapWithConcurrency(
+      Object.entries(mapping.nodes || {}),
+      POLL_CONCURRENCY,
+      async ([nodeId, nodeMapping]) => {
+        if (!nodeMapping.hostId) return null
+        try {
+          const node = await this.evaluateHostHealth(nodeMapping.hostId)
+          return node ? ([nodeId, node] as const) : null
+          // Transport / auth failure — let the absence speak. Future work:
+          // emit `{ monitoring: 'failing' }` once we can tell a transport
+          // error apart from "host not in this Zabbix".
+        } catch {
+          return null
+        }
+      },
+    )
+    for (const result of nodeResults) {
+      if (result) metrics.nodes[result[0]] = result[1]
     }
 
     // Poll link metrics. Same silence rule as nodes — emit nothing
     // when the link doesn't resolve to a Zabbix-owned interface, so
     // another metrics source can fill it.
-    for (const [linkId, baseLinkMapping] of Object.entries(mapping.links || {})) {
-      try {
-        const linkMapping = baseLinkMapping as ZabbixLinkMapping
-        let inItemId = linkMapping.in
-        let outItemId = linkMapping.out
+    const linkResults = await mapWithConcurrency(
+      Object.entries(mapping.links || {}),
+      POLL_CONCURRENCY,
+      async ([linkId, baseLinkMapping]) => {
+        try {
+          const linkMapping = baseLinkMapping as ZabbixLinkMapping
+          let inItemId = linkMapping.in
+          let outItemId = linkMapping.out
 
-        // Resolve item IDs from monitoredNodeId + interface if not directly set
-        if (!inItemId && !outItemId && linkMapping.monitoredNodeId && linkMapping.interface) {
-          const hostId = mapping.nodes[linkMapping.monitoredNodeId]?.hostId
-          if (hostId) {
-            const ifItems = await this.getInterfaceItems(hostId, linkMapping.interface)
-            inItemId = ifItems.in?.id
-            outItemId = ifItems.out?.id
+          // Resolve item IDs from monitoredNodeId + interface if not directly set
+          if (!inItemId && !outItemId && linkMapping.monitoredNodeId && linkMapping.interface) {
+            const hostId = mapping.nodes[linkMapping.monitoredNodeId]?.hostId
+            if (hostId) {
+              const ifItems = await this.getInterfaceItems(hostId, linkMapping.interface)
+              inItemId = ifItems.in?.id
+              outItemId = ifItems.out?.id
+            }
           }
+
+          if (!inItemId && !outItemId) return null // not a Zabbix-monitored link
+
+          const itemIds = [inItemId, outItemId].filter(Boolean) as string[]
+          const items = await this.getItemsByIds(itemIds)
+
+          // Drop stale items — when a host goes unreachable Zabbix keeps the
+          // last polled value indefinitely. Without this check we'd paint
+          // utilization bars for a dead link from values minutes/hours old.
+          const nowSec = Math.floor(Date.now() / 1000)
+          let inBps = 0
+          let outBps = 0
+          let anyFresh = false
+          for (const item of items) {
+            const lastclock = (item as ZabbixItem & { lastclock?: string }).lastclock ?? '0'
+            if (!ZabbixPlugin.isFreshClock(lastclock, nowSec)) continue
+            anyFresh = true
+            const value = Number.parseFloat(item.lastvalue) || 0
+            if (item.itemid === inItemId) inBps = value
+            else if (item.itemid === outItemId) outBps = value
+          }
+
+          // Stale data on a link Zabbix *does* own (items resolved) — emit an
+          // explicit `unknown` so the renderer drops the weathermap flow rather
+          // than animating hours-old values. Not the silence rule: a link is
+          // owned by exactly one source, so this can't clobber another source.
+          if (!anyFresh) return [linkId, { status: 'unknown' }] as const
+
+          const capacity = linkMapping.bandwidth || 1_000_000_000
+          const inUtil = (inBps / capacity) * 100
+          const outUtil = (outBps / capacity) * 100
+          const maxUtil = Math.max(inUtil, outUtil)
+
+          return [
+            linkId,
+            {
+              status: maxUtil > 0 ? 'up' : 'unknown',
+              utilization: Math.ceil(maxUtil),
+              inUtilization: Math.ceil(inUtil),
+              outUtilization: Math.ceil(outUtil),
+              inBps,
+              outBps,
+            },
+          ] as const
+        } catch {
+          // Transport / auth failure — let the absence speak.
+          return null
         }
-
-        if (!inItemId && !outItemId) continue // not a Zabbix-monitored link
-
-        const itemIds = [inItemId, outItemId].filter(Boolean) as string[]
-        const items = await this.getItemsByIds(itemIds)
-
-        // Drop stale items — when a host goes unreachable Zabbix keeps the
-        // last polled value indefinitely. Without this check we'd paint
-        // utilization bars for a dead link from values minutes/hours old.
-        const nowSec = Math.floor(Date.now() / 1000)
-        let inBps = 0
-        let outBps = 0
-        let anyFresh = false
-        for (const item of items) {
-          const lastclock = (item as ZabbixItem & { lastclock?: string }).lastclock ?? '0'
-          if (!ZabbixPlugin.isFreshClock(lastclock, nowSec)) continue
-          anyFresh = true
-          const value = Number.parseFloat(item.lastvalue) || 0
-          if (item.itemid === inItemId) inBps = value
-          else if (item.itemid === outItemId) outBps = value
-        }
-
-        // Stale data on a link Zabbix *does* own (items resolved) — emit
-        // an explicit `unknown` so the renderer drops the weathermap flow
-        // rather than animating hours-old values. Not the silence rule:
-        // a link is owned by exactly one source (its monitoredNode maps
-        // to one hostId), so this can't clobber another source.
-        if (!anyFresh) {
-          metrics.links[linkId] = { status: 'unknown' }
-          continue
-        }
-
-        const capacity = linkMapping.bandwidth || 1_000_000_000
-        const inUtil = (inBps / capacity) * 100
-        const outUtil = (outBps / capacity) * 100
-        const maxUtil = Math.max(inUtil, outUtil)
-
-        metrics.links[linkId] = {
-          status: maxUtil > 0 ? 'up' : 'unknown',
-          utilization: Math.ceil(maxUtil),
-          inUtilization: Math.ceil(inUtil),
-          outUtilization: Math.ceil(outUtil),
-          inBps,
-          outBps,
-        }
-      } catch {
-        // Transport / auth failure — let the absence speak.
-      }
+      },
+    )
+    for (const result of linkResults) {
+      if (result) metrics.links[result[0]] = result[1]
     }
 
     return metrics

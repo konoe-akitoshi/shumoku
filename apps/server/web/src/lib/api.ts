@@ -77,6 +77,18 @@ export const dataSources = {
 
   getPluginTypes: () => request<DataSourcePluginInfo[]>('/datasources/types'),
 
+  /** Dynamic candidates for an `optionsSource` schema field (connection-backed). */
+  getConfigOptions: (id: string, key: string) =>
+    request<{ options: { value: string; label: string }[] }>(
+      `/datasources/${id}/config-options/${key}`,
+    ),
+
+  /** Derived, display-only connection info (e.g. webhook URL). Generic across plugins. */
+  getConnectionInfo: (id: string, origin: string) =>
+    request<{ items: { label: string; value: string; copyable?: boolean }[] }>(
+      `/datasources/${id}/connection-info?origin=${encodeURIComponent(origin)}`,
+    ),
+
   get: (id: string) => request<DataSource>(`/datasources/${id}`),
 
   create: (input: DataSourceInput) =>
@@ -128,8 +140,6 @@ export const dataSources = {
     const url = `/datasources/${id}/alerts${queryString ? `?${queryString}` : ''}`
     return request<Alert[]>(url)
   },
-
-  getWebhookUrl: (id: string) => request<{ webhookPath: string }>(`/datasources/${id}/webhook-url`),
 
   getFilterOptions: (id: string) =>
     request<{ sites: { slug: string; name: string }[]; tags: { slug: string; name: string }[] }>(

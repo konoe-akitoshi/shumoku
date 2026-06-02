@@ -2,6 +2,7 @@
  * NetBox API Client
  */
 
+import { createHttpClient, type HttpClient, paginate } from '@shumoku/plugin-sdk'
 import type {
   NetBoxCableResponse,
   NetBoxClientOptions,
@@ -39,19 +40,24 @@ export interface QueryParams {
 export class NetBoxClient {
   private baseUrl: string
   private token: string
-  private timeout: number
   private debug: boolean
-  private insecure: boolean
+  /** Shared SDK client: timeout, Node-compatible insecure TLS, typed errors,
+   *  no credential logging. Replaces the hand-rolled fetch + Bun-only tls. */
+  private http: HttpClient
 
   constructor(options: NetBoxClientOptions) {
     // Remove trailing slash from URL
     this.baseUrl = options.url.replace(/\/$/, '')
     this.token = options.token
-    this.timeout = options.timeout ?? 30000
     this.debug = options.debug ?? false
-    this.insecure = options.insecure ?? false
-
-    // Note: insecure mode is applied per-request via tls option in fetch()
+    this.http = createHttpClient({
+      baseUrl: this.baseUrl,
+      auth: { type: 'token', token: this.token, scheme: 'Token' },
+      timeoutMs: options.timeout ?? 30000,
+      insecure: options.insecure ?? false,
+      defaultHeaders: { Accept: 'application/json' },
+      debug: this.debug ? (m) => this.log(m) : undefined,
+    })
   }
 
   /**
@@ -136,47 +142,23 @@ export class NetBoxClient {
    * Make GET request to NetBox API
    */
   private async get<T>(path: string, params?: QueryParams): Promise<T> {
-    const queryString = this.buildQueryString(params)
-    const url = `${this.baseUrl}/api/${path}/?${queryString}`
-
-    this.log(`Request: GET ${url}`)
-    if (params && Object.keys(params).length > 0) {
-      this.log('Query params:', params)
-    }
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
-
-    try {
-      const startTime = Date.now()
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Token ${this.token}`,
-          Accept: 'application/json',
-        },
-        signal: controller.signal,
-        ...(this.insecure && { tls: { rejectUnauthorized: false } }),
-      })
-      const elapsed = Date.now() - startTime
-
-      this.log(`Response: ${response.status} ${response.statusText} (${elapsed}ms)`)
-
-      if (!response.ok) {
-        const errorBody = await response.text()
-        this.log('Error response body:', errorBody)
-        throw new Error(`NetBox API request failed: ${response.status} ${response.statusText}`)
-      }
-
-      const data = (await response.json()) as T
-      if (this.debug && typeof data === 'object' && data !== null && 'count' in data) {
-        this.log(`Response data: ${(data as { count: number }).count} items`)
-      }
-
-      return data
-    } finally {
-      clearTimeout(timeoutId)
-    }
+    // NetBox list endpoints are paginated ({ count, next, results }). `limit=0`
+    // asks for everything, but installs past MAX_PAGE_SIZE still page — so
+    // follow `next` to exhaustion (the previous code took only the first page).
+    // httpClient handles auth / timeout / Node-compatible insecure TLS and
+    // throws a typed HttpError on non-2xx; credentials are never logged.
+    const firstPath = `/api/${path}/?${this.buildQueryString(params)}`
+    this.log(`Request: GET ${firstPath}`)
+    const results = await paginate<unknown>(
+      firstPath,
+      async (pathOrUrl) => {
+        const page = await this.http.json<{ results?: unknown[]; next?: string | null }>(pathOrUrl)
+        return { items: page.results ?? [], next: page.next ?? null }
+      },
+      { onTruncated: (pages) => this.log(`pagination cap hit at ${pages} pages for ${path}`) },
+    )
+    this.log(`Response: ${results.length} items for ${path}`)
+    return { count: results.length, next: null, results } as T
   }
 
   /**

@@ -13,6 +13,7 @@ import type {
   LayoutResult,
   MetricsMapping,
   NetworkGraph,
+  PluginConfigSchema,
 } from '@shumoku/core'
 
 import type { MetricsData } from './stores/metrics'
@@ -31,6 +32,8 @@ export type {
   LinkMetricsMapping,
   MetricsMapping,
   NodeMetricsMapping,
+  PluginConfigProperty,
+  PluginConfigSchema,
 } from '@shumoku/core'
 
 export type DataSourceStatus = 'connected' | 'disconnected' | 'unknown'
@@ -39,21 +42,10 @@ export interface DataSourcePluginInfo {
   type: string
   displayName: string
   capabilities: readonly DataSourceCapability[]
-  configSchema?: {
-    type: 'object'
-    required?: string[]
-    properties: Record<
-      string,
-      {
-        type: string
-        title?: string
-        description?: string
-        format?: string
-        default?: unknown
-        enum?: string[]
-      }
-    >
-  }
+  /** Connection config schema — the web renders + validates one generic form from it. */
+  configSchema?: PluginConfigSchema
+  /** Per-use options schema (e.g. NetBox topology groupBy/filters). */
+  optionsSchema?: PluginConfigSchema
 }
 
 export interface DataSource {

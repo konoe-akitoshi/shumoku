@@ -42,7 +42,8 @@ export class ManualPlugin implements DataSourcePlugin {
 }
 
 export function registerManualPlugin(registry: PluginRegistryInterface): void {
-  registry.register('manual', 'Manual', [], () => {
+  // No configSchema: Manual has no upstream and no config form.
+  registry.registerDescriptor({ type: 'manual', displayName: 'Manual', capabilities: [] }, () => {
     const plugin = new ManualPlugin()
     plugin.initialize({})
     return plugin

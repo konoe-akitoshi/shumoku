@@ -26,8 +26,8 @@ Alertmanager APIポーリングによるフォールバックも可能。
 1. **Data Sources > Add Data Source** で Grafana を選択
 2. URL と API Token を入力して作成
 3. 作成後、編集画面で **Webhook Alerts** トグルを ON にする
-4. **Save Changes** すると Webhook URL が生成される
-5. 表示された URL をコピーする（例: `/api/webhooks/grafana/xxxxxxxx`）
+4. **Save Changes** すると、接続情報（Connection）に Webhook URL が表示される（secret は保存時に自動生成）
+5. 表示された URL をコピーする（例: `/api/webhooks/grafana/<id>?secret=<secret>`）
 
 ### 2. Grafana側
 
@@ -38,7 +38,7 @@ Alertmanager APIポーリングによるフォールバックも可能。
 3. 名前を入力（例: `Shumoku`）
 4. Integration に **Webhook** を選択
 5. URL に Shumoku の完全な Webhook URL を入力
-   - 例: `http://shumoku-server:8080/api/webhooks/grafana/xxxxxxxx`
+   - 例: `http://shumoku-server:8080/api/webhooks/grafana/<id>?secret=<secret>`
 6. **Save contact point**
 
 #### Notification Policy の設定（必須）
@@ -84,8 +84,9 @@ Grafana から送信される JSON の構造:
 ### データフロー
 
 ```
-POST /api/webhooks/grafana/:secret
-  → webhooks.ts: secretでデータソース検索
+POST /api/webhooks/grafana/:id?secret=…   (汎用ルート /api/webhooks/:type/:id)
+  → webhooks.ts: id でデータソースを引き、secret を timingSafeEqualStr で定数時間比較
+  → isGrafanaWebhookPayload(payload) で形を検証
   → GrafanaAlertService.upsertFromWebhook(): SQLiteにupsert
   → grafana_alerts テーブルに保存
 
@@ -99,22 +100,28 @@ GET /api/datasources/:id/alerts
 
 | ファイル | 役割 |
 |---------|------|
-| `api/src/services/grafana-alerts.ts` | アラートDB操作、共通ヘルパー |
-| `api/src/plugins/grafana.ts` | プラグイン本体、API フォールバック |
-| `api/src/api/webhooks.ts` | Webhook エンドポイント |
-| `api/src/api/datasources.ts` | Webhook URL 取得エンドポイント |
+| `libs/plugins/grafana/src/plugin.ts` | プラグイン本体（payload 検証・`getConnectionInfo`・API フォールバック） |
+| `libs/@shumoku/core/src/plugin-kit/` | severity / Alertmanager パース等の共通ヘルパー（旧 grafana-alerts.ts から集約） |
+| `api/src/services/grafana-alerts.ts` | アラートの SQLite 操作（upsert / クエリ） |
+| `api/src/api/webhooks.ts` | 汎用 Webhook エンドポイント `POST /:type/:id`（id 検索＋定数時間 secret 比較） |
+| `api/src/lib/webhook-guard.ts` | `timingSafeEqualStr`（定数時間比較） |
 | `api/src/db/migrations/007_grafana_alerts.sql` | テーブル定義 |
-| `web/src/routes/(app)/datasources/[id]/+page.svelte` | Webhook トグル UI |
+| `web/src/routes/(app)/datasources/[id]/+page.svelte` | Webhook トグル＋接続情報（URL）UI |
 
 ### Severity マッピング
 
-Grafana のラベル値を内部の severity に変換する:
+Grafana/Alertmanager の `severity` ラベルを core の中立スケール
+（`critical | high | medium | low | info | ok`）に変換する。実体は
+`@shumoku/core/plugin-kit` の `mapAlertmanagerSeverity()`（grafana / prometheus が共有する単一の真実）:
 
-| Grafana | Shumoku |
-|---------|---------|
-| critical, disaster | disaster |
+| ラベル値 | Shumoku（中立） |
+|---------|------|
+| critical, disaster | critical |
 | high, major, error | high |
-| average, medium | average |
-| warning, warn, minor | warning |
-| low, info, information | information |
+| medium, average, moderate | medium |
+| warning, warn, minor | low |
+| low, info, information | info |
 | none, ok | ok |
+
+> Zabbix 由来の `disaster` / `average` / `information` は出力スケールから撤去済み（CLAUDE.md の不変条件）。
+> `warning` が `low` なのは Alertmanager 方言（`warning` は page 対象 `critical` の下）に合わせているため。

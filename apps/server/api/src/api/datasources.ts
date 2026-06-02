@@ -3,6 +3,7 @@
  * CRUD endpoints for data source management with plugin support
  */
 
+import { hasConfigOptions, hasConnectionInfo, validateAgainstSchema } from '@shumoku/core'
 import { Hono } from 'hono'
 import { getAllPlugins } from '../plugins/loader.js'
 import type { AlertQueryOptions } from '../plugins/types.js'
@@ -36,6 +37,26 @@ function maskSecrets(obj: Record<string, unknown>): void {
   }
 }
 
+/**
+ * Validate a config_json string against the plugin's configSchema using core's
+ * shared validator — the same one the web form renders from (§3.5). Returns an
+ * error message, or null when valid (or when the plugin declares no schema, in
+ * which case config is opaque and passes through).
+ */
+function validateConfigForType(type: string, configJson: string): string | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(configJson)
+  } catch {
+    return 'configJson must be valid JSON'
+  }
+  const schema = getAllPlugins().find((p) => p.id === type)?.configSchema
+  if (!schema) return null
+  const result = validateAgainstSchema(schema, parsed)
+  if (result.ok) return null
+  return result.errors.map((e) => `${e.path}: ${e.message}`).join('; ')
+}
+
 export function createDataSourcesApi(): Hono {
   const app = new Hono()
   const service = new DataSourceService()
@@ -46,9 +67,13 @@ export function createDataSourcesApi(): Hono {
   // one-Manual-per-topology cardinality separately.
   app.get('/types', (c) => {
     const types = service.getRegisteredTypes()
-    // Get loaded plugin info for configSchema
+    // configSchema / optionsSchema now flow from the registry for bundled
+    // plugins too (Phase 2/4a), so getAllPlugins carries both for bundled and
+    // external alike — the web renders one generic form from them (no per-type
+    // branch).
     const loadedPlugins = getAllPlugins()
     const pluginSchemas = new Map(loadedPlugins.map((p) => [p.id, p.configSchema]))
+    const pluginOptionsSchemas = new Map(loadedPlugins.map((p) => [p.id, p.optionsSchema]))
 
     // Only return serializable fields (exclude factory function)
     const serializable = types.map(({ type, displayName, capabilities }) => ({
@@ -56,8 +81,55 @@ export function createDataSourcesApi(): Hono {
       displayName,
       capabilities,
       configSchema: pluginSchemas.get(type),
+      optionsSchema: pluginOptionsSchemas.get(type),
     }))
     return c.json(serializable)
+  })
+
+  // Dynamic candidates for an `optionsSource` schema field (e.g. NetBox
+  // site / tag / role). Instantiates the plugin with its stored config and asks
+  // it for the options — the generic, capability-gated counterpart to the
+  // per-plugin filter endpoints. Failures degrade to an empty list so the web
+  // can fall back to free entry (never treats "no candidates" as broken).
+  app.get('/:id/config-options/:key', async (c) => {
+    const id = c.req.param('id')
+    const key = c.req.param('key')
+    const plugin = service.getPlugin(id)
+    if (!plugin) {
+      return c.json({ error: 'Data source not found' }, 404)
+    }
+    if (!hasConfigOptions(plugin)) {
+      return c.json({ options: [] })
+    }
+    try {
+      const options = await plugin.getConfigOptions(key, {})
+      return c.json({ options })
+    } catch (err) {
+      console.error('[DataSources] getConfigOptions failed:', err)
+      return c.json({ options: [] })
+    }
+  })
+
+  // Derived, display-only connection info (e.g. a webhook URL). The plugin
+  // builds it from its config + the host-supplied origin; the web renders the
+  // items generically (no per-plugin branch). `origin` is the public origin the
+  // web is served from, so the URL is reachable by the upstream.
+  app.get('/:id/connection-info', (c) => {
+    const id = c.req.param('id')
+    const plugin = service.getPlugin(id)
+    if (!plugin || !hasConnectionInfo(plugin)) {
+      return c.json({ items: [] })
+    }
+    const ds = service.get(id)
+    const config = ds ? JSON.parse(ds.configJson) : {}
+    const serverOrigin = c.req.query('origin') || new URL(c.req.url).origin
+    try {
+      const items = plugin.getConnectionInfo(config, { dataSourceId: id, serverOrigin })
+      return c.json({ items })
+    } catch (err) {
+      console.error('[DataSources] getConnectionInfo failed:', err)
+      return c.json({ items: [] })
+    }
   })
 
   // List all data sources. Manual rows are included like any other
@@ -134,11 +206,10 @@ export function createDataSourcesApi(): Hono {
         return c.json({ error: 'name, type, and configJson are required' }, 400)
       }
 
-      // Validate configJson is valid JSON
-      try {
-        JSON.parse(body.configJson)
-      } catch {
-        return c.json({ error: 'configJson must be valid JSON' }, 400)
+      // Validate configJson against the plugin's configSchema (authoritative).
+      const configError = validateConfigForType(body.type, body.configJson)
+      if (configError) {
+        return c.json({ error: configError }, 400)
       }
 
       const dataSource = await service.create(body)
@@ -161,12 +232,15 @@ export function createDataSourcesApi(): Hono {
     try {
       const body = (await c.req.json()) as Partial<DataSourceInput>
 
-      // Validate configJson if provided
+      // Validate configJson against the plugin's configSchema if provided.
       if (body.configJson !== undefined) {
-        try {
-          JSON.parse(body.configJson)
-        } catch {
-          return c.json({ error: 'configJson must be valid JSON' }, 400)
+        const existing = service.get(id)
+        const type = body.type ?? existing?.type
+        if (type) {
+          const configError = validateConfigForType(type, body.configJson)
+          if (configError) {
+            return c.json({ error: configError }, 400)
+          }
         }
       }
 
@@ -300,34 +374,9 @@ export function createDataSourcesApi(): Hono {
     }
   })
 
-  // Get webhook URL for Grafana data sources
-  app.get('/:id/webhook-url', async (c) => {
-    const id = c.req.param('id')
-    const dataSource = service.get(id)
-    if (!dataSource) {
-      return c.json({ error: 'Data source not found' }, 404)
-    }
-    if (dataSource.type !== 'grafana') {
-      return c.json({ error: 'Webhook URL only available for Grafana data sources' }, 400)
-    }
-    try {
-      let config = JSON.parse(dataSource.configJson)
-      if (!config.useWebhook) {
-        return c.json({ error: 'Webhook mode is not enabled' }, 400)
-      }
-      if (!config.webhookSecret) {
-        // Trigger secret generation via update
-        const updated = await service.update(id, { configJson: dataSource.configJson })
-        if (!updated) return c.json({ error: 'Failed to generate webhook secret' }, 500)
-        config = JSON.parse(updated.configJson)
-      }
-      return c.json({
-        webhookPath: `/api/webhooks/grafana/${config.webhookSecret}`,
-      })
-    } catch {
-      return c.json({ error: 'Invalid configuration' }, 500)
-    }
-  })
+  // (Removed /:id/webhook-url — the webhook URL is now derived generically via
+  // the plugin's getConnectionInfo + the /:id/connection-info endpoint, with no
+  // grafana-specific branch.)
 
   // Get alerts from a data source directly
   app.get('/:id/alerts', async (c) => {

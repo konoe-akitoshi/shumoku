@@ -4,6 +4,13 @@
  */
 
 import type { Database } from 'bun:sqlite'
+import {
+  buildAlertTitle,
+  extractHost,
+  filterAlertLabels,
+  mapAlertmanagerSeverity,
+  severityRank,
+} from '@shumoku/core'
 import { getDatabase } from '../db/index.js'
 import type { Alert, AlertQueryOptions, AlertSeverity } from '../plugins/types.js'
 
@@ -37,53 +44,9 @@ interface GrafanaAlertRow {
   labels_json: string | null
 }
 
-const SEVERITY_MAP: Record<string, AlertSeverity> = {
-  critical: 'critical',
-  disaster: 'critical',
-  high: 'high',
-  major: 'high',
-  error: 'high',
-  medium: 'medium',
-  average: 'medium',
-  moderate: 'medium',
-  warning: 'low',
-  warn: 'low',
-  minor: 'low',
-  low: 'info',
-  info: 'info',
-  information: 'info',
-  none: 'ok',
-  ok: 'ok',
-}
-
-export const SEVERITY_ORDER: Record<AlertSeverity, number> = {
-  ok: 0,
-  info: 1,
-  low: 2,
-  medium: 3,
-  high: 4,
-  critical: 5,
-}
-
-export function mapSeverity(severity?: string): AlertSeverity {
-  if (!severity) return 'info'
-  return SEVERITY_MAP[severity.toLowerCase()] || 'info'
-}
-
-export function buildTitle(labels: Record<string, string>): string {
-  const name = labels['alertname'] || 'Unknown Alert'
-  const host = labels['hostname'] || labels['instance'] || labels['host']
-  return host ? `${name} - ${host}` : name
-}
-
-export function filterLabels(labels: Record<string, string>): Record<string, string> {
-  const filtered: Record<string, string> = {}
-  for (const [key, value] of Object.entries(labels)) {
-    if (key.startsWith('__')) continue
-    filtered[key] = value
-  }
-  return filtered
-}
+// Severity mapping, title, label filtering, and ranking come from
+// @shumoku/core/plugin-kit — the same Alertmanager dialect the grafana plugin
+// and prometheus use. No local copy.
 
 function rowToAlert(row: GrafanaAlertRow): Alert & { receivedAt: number } {
   return {
@@ -133,14 +96,14 @@ export class GrafanaAlertService {
     `)
 
     for (const a of payload.alerts) {
-      const severity = mapSeverity(a.labels['severity'])
-      const title = buildTitle(a.labels)
+      const severity = mapAlertmanagerSeverity(a.labels['severity'])
+      const title = buildAlertTitle(a.labels)
       const description = a.annotations?.['description'] || a.annotations?.['summary'] || null
-      const host = a.labels['hostname'] || a.labels['instance'] || a.labels['host'] || null
+      const host = extractHost(a.labels) ?? null
       const status = a.status === 'firing' ? 'active' : 'resolved'
       const startedAt = new Date(a.startsAt).getTime()
       const endedAt = a.endsAt ? new Date(a.endsAt).getTime() : null
-      const labels = filterLabels(a.labels)
+      const labels = filterAlertLabels(a.labels)
 
       upsert.run(
         a.fingerprint,
@@ -187,8 +150,8 @@ export class GrafanaAlertService {
     let alerts = rows.map(rowToAlert)
 
     if (options?.minSeverity) {
-      const minOrder = SEVERITY_ORDER[options.minSeverity]
-      alerts = alerts.filter((a) => SEVERITY_ORDER[a.severity] >= minOrder)
+      const minOrder = severityRank(options.minSeverity)
+      alerts = alerts.filter((a) => severityRank(a.severity) >= minOrder)
     }
 
     return alerts
