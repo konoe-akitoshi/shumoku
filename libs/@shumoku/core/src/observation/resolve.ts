@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type {
-  Attachment,
-  Identity,
-  Link,
-  LinkEndpoint,
-  NetworkGraph,
-  Node,
-  NodeExclusion,
-  NodePort,
-  Provenance,
-  Subgraph,
+import {
+  type Attachment,
+  attachmentKey,
+  type Identity,
+  type Link,
+  type LinkEndpoint,
+  type NetworkGraph,
+  type Node,
+  type NodeExclusion,
+  type NodePort,
+  type Provenance,
+  type Subgraph,
 } from '../models/types.js'
 import { keyHash, nodeIdentityKeys, portIdentityKeys } from './identity.js'
 import type { ResolvedGraph, ResolveOptions, SnapshotEntry } from './types.js'
@@ -356,9 +357,23 @@ function foldNodeCluster(cluster: NodeCluster): Node {
     mergedMetadata['observedSource'] = primaryObserver.sourceId
   }
 
-  // Attachments: per kind (+protocol for access), highest-priority wins,
-  // each stamped with the provenance of the source that supplied it.
-  const attachments = foldAttachments(ranked)
+  // Suppression: attachment keys the human removed (negative assertion — the
+  // counterpart to a positive override). Only the human contribution can
+  // suppress; a source can't remove another's attachment. Collected from the
+  // authored member(s) and passed through onto the resolved node so the UI can
+  // round-trip it (a re-scan re-supplying the attachment won't resurrect it).
+  const suppressed = Array.from(
+    new Set(
+      cluster.members
+        .filter((m) => m.sourceId === 'authored')
+        .flatMap((m) => m.node.suppressedAttachments ?? []),
+    ),
+  )
+
+  // Attachments: per kind (+protocol for access), highest-priority wins, each
+  // stamped with the provenance of the source that supplied it; any key the
+  // human suppressed is dropped.
+  const attachments = foldAttachments(ranked, suppressed)
 
   const ports = foldPortsAcrossCluster(cluster)
 
@@ -386,6 +401,7 @@ function foldNodeCluster(cluster: NodeCluster): Node {
     ...(attachments.length > 0 ? { attachments } : {}),
     ...(ports ? { ports } : {}),
     ...(Object.keys(fieldSources).length > 0 ? { fieldSources } : {}),
+    ...(suppressed.length > 0 ? { suppressedAttachments: suppressed } : {}),
     provenance: deriveNodeProvenance(cluster, observerCount, hasAuthored),
   }
 
@@ -459,22 +475,26 @@ function mergeMetadata(ranked: ClusterMember[]): Record<string, unknown> {
 }
 
 /**
- * Fold attachments across a cluster, keyed by kind (+protocol for
- * `access`). `ranked` is priority desc, so the first writer per key wins —
+ * Fold attachments across a cluster, keyed by `attachmentKey` (per protocol
+ * for `access`). `ranked` is priority desc, so the first writer per key wins —
  * a human SNMP community overrides an observed one, but a human policy-only
- * overlay leaves the observed community untouched (different key). Each
+ * contribution leaves the observed community untouched (different key). Each
  * resolved attachment is stamped with the provenance of the source that
- * supplied it (decision 5) so the UI knows which rows are human (editable /
- * removable) vs observed (read-only). Output order is deterministic
- * (access by protocol, then policy) — independent of who won.
+ * supplied it, an annotation of where the value came from (not a layer).
+ *
+ * `suppressedKeys` are the keys the human removed (negative assertion); any
+ * attachment of those keys is dropped no matter which source supplied it — so
+ * deleting an observed access is just the human asserting "none here", and it
+ * survives re-scans. Output order is deterministic (access by protocol, then
+ * the rest) — independent of who won.
  */
-function foldAttachments(ranked: ClusterMember[]): Attachment[] {
-  const keyOf = (a: Attachment): string => (a.kind === 'access' ? `access:${a.protocol}` : a.kind)
+function foldAttachments(ranked: ClusterMember[], suppressedKeys: string[] = []): Attachment[] {
+  const suppressed = new Set(suppressedKeys)
   const byKey = new Map<string, Attachment>()
   for (const m of ranked) {
     for (const a of m.node.attachments ?? []) {
-      const k = keyOf(a)
-      if (byKey.has(k)) continue
+      const k = attachmentKey(a)
+      if (suppressed.has(k) || byKey.has(k)) continue
       byKey.set(k, {
         ...a,
         provenance: {

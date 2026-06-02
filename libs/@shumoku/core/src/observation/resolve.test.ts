@@ -1034,6 +1034,96 @@ describe('resolve()', () => {
       expect(n?.ports?.[0]?.connectors).toEqual(['rj45'])
     })
   })
+
+  // -------------------------------------------------------------------------
+  // Human suppression — the negative counterpart to an override. The human
+  // can remove an attachment a source supplied; it stays gone across re-scans
+  // (the assertion persists) and returns only when the human contribution is
+  // dropped (Reset). No observed/authored layers — just add / override /
+  // remove on one node.
+  // -------------------------------------------------------------------------
+  describe('human suppression of an observed attachment', () => {
+    const observed: SnapshotEntry = {
+      sourceId: 'network-scan:1',
+      capturedAt: 1000,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'sw-core',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [
+              { kind: 'access', protocol: 'snmp', community: 'public' },
+              { kind: 'access', protocol: 'ssh', username: 'observed-admin' },
+            ],
+          },
+        ],
+      },
+    }
+
+    it('a suppressed key is dropped even though the source supplies it', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            suppressedAttachments: ['access:snmp'],
+          },
+        ],
+      }
+      const n = resolve(authored, [observed]).nodes[0]
+      // snmp removed by the human; ssh (not suppressed) still shows
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp')).toBe(
+        false,
+      )
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'ssh')).toBe(
+        true,
+      )
+      // node itself survives, and the suppression rides along for UI round-trip
+      expect(n?.identity?.mgmtIp).toBe('10.0.0.5')
+      expect(n?.suppressedAttachments).toEqual(['access:snmp'])
+    })
+
+    it('dropping the human contribution (Reset) brings the suppressed access back', () => {
+      const n = resolve(emptyGraph(), [observed]).nodes[0]
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp')).toBe(
+        true,
+      )
+      expect(n?.suppressedAttachments).toBeUndefined()
+    })
+
+    it('only the human suppresses — a source cannot remove another source attachment', () => {
+      // a second source carrying suppressedAttachments must NOT drop anything
+      // (suppression is a human-only, top-priority assertion).
+      const sourceWithSuppress: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'nb',
+              label: 'sw',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              suppressedAttachments: ['access:snmp'],
+            },
+          ],
+        },
+      }
+      const n = resolve(emptyGraph(), [observed, sourceWithSuppress]).nodes[0]
+      // snmp survives — a non-human source's suppressedAttachments is ignored
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp')).toBe(
+        true,
+      )
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

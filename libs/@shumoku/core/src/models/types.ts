@@ -421,6 +421,18 @@ export interface PolicyAttachment extends AttachmentMeta {
   intervalMs?: number
 }
 
+/**
+ * Stable merge / suppression key for an attachment. `access` is keyed per
+ * protocol (SNMP and SSH are distinct slots); every other kind keys by its
+ * `kind`. The resolver merges attachments by this key (highest-priority
+ * contribution wins per key) and the human suppresses by it
+ * (`Node.suppressedAttachments`). One definition so merge and suppression
+ * never disagree on what "the same attachment slot" means.
+ */
+export function attachmentKey(a: Attachment): string {
+  return a.kind === 'access' ? `access:${a.protocol}` : a.kind
+}
+
 export interface Node {
   id: string
 
@@ -546,6 +558,20 @@ export interface Node {
    * resolve.
    */
   fieldSources?: Record<string, string>
+
+  /**
+   * Attachment keys (see `attachmentKey`) the human has explicitly removed —
+   * the negative counterpart to `attachments`. A node is one thing every
+   * source contributes to; the human (top priority) can add / override a
+   * value (`attachments`) AND remove one a source supplied (here). There are
+   * no observed/authored layers — this is just the human asserting "no
+   * attachment of this key". `resolve()` drops any merged attachment whose
+   * key is listed, so a deleted access stays gone across re-scans (the
+   * assertion persists) until Reset removes the whole human contribution.
+   * Meaningful on the human contribution; the resolver passes it through onto
+   * the resolved node so the UI can round-trip it.
+   */
+  suppressedAttachments?: string[]
 }
 
 // ============================================
