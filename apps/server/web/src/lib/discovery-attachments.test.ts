@@ -4,13 +4,9 @@
 
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from './api'
-import {
-  isAuthoredAttachment,
-  partitionAttachments,
-  stripProvenance,
-} from './discovery-attachments'
+import { isAuthoredAttachment, stripProvenance, unifyAccessRows } from './discovery-attachments'
 
-describe('isAuthoredAttachment (C5)', () => {
+describe('isAuthoredAttachment', () => {
   it('authored when provenance.source is "authored"', () => {
     expect(
       isAuthoredAttachment({ kind: 'policy', mode: 'auto', provenance: { source: 'authored' } }),
@@ -19,7 +15,7 @@ describe('isAuthoredAttachment (C5)', () => {
   it('authored when provenance is absent (fresh local attachment)', () => {
     expect(isAuthoredAttachment({ kind: 'access', protocol: 'ssh' })).toBe(true)
   })
-  it('observed when provenance.source is a discovery source', () => {
+  it('not authored when provenance.source is a discovery source', () => {
     expect(
       isAuthoredAttachment({
         kind: 'access',
@@ -31,43 +27,47 @@ describe('isAuthoredAttachment (C5)', () => {
   })
 })
 
-describe('partitionAttachments (C5 — read-only observed vs editable human)', () => {
-  it('an observed-only access goes to observedAccess (read-only), not authored', () => {
-    const attachments: Attachment[] = [
+describe('unifyAccessRows (one editable row per protocol — no two-tier)', () => {
+  it('an observed-only protocol becomes one row whose value is editable (no separate layer)', () => {
+    const observed: Attachment[] = [
       { kind: 'access', protocol: 'snmp', community: 'public', provenance: { source: 'scan:1' } },
     ]
-    const { authored, observedAccess } = partitionAttachments(attachments)
-    expect(authored).toHaveLength(0) // no ✕ — nothing the operator can remove
-    expect(observedAccess).toHaveLength(1)
-    expect(observedAccess[0]?.protocol).toBe('snmp')
+    const rows = unifyAccessRows([], observed)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.protocol).toBe('snmp')
+    expect(rows[0]?.authored).toBeUndefined() // not overridden — effective = observed
+    expect(rows[0]?.observed?.kind === 'access' ? rows[0]?.observed?.protocol : undefined).toBe(
+      'snmp',
+    )
   })
 
-  it('a human access is editable, and a human override hides the observed row of the same protocol', () => {
-    const attachments: Attachment[] = [
-      // resolve already deduped: only the authored snmp survives, but assert
-      // the partition is robust even if both are present.
+  it('an override and its observed value collapse into ONE row (override + fallback both kept)', () => {
+    const authored: Attachment[] = [{ kind: 'access', protocol: 'snmp', community: 'override' }]
+    const observed: Attachment[] = [
       { kind: 'access', protocol: 'snmp', community: 'public', provenance: { source: 'scan:1' } },
-      {
-        kind: 'access',
-        protocol: 'snmp',
-        community: 'override',
-        provenance: { source: 'authored' },
-      },
     ]
-    const { authored, observedAccess } = partitionAttachments(attachments)
-    expect(authored).toHaveLength(1)
-    expect(observedAccess).toHaveLength(0) // observed snmp hidden — authored supersedes it
+    const rows = unifyAccessRows(authored, observed)
+    expect(rows).toHaveLength(1) // one row, not two layers
+    expect(rows[0]?.authored?.kind === 'access' ? rows[0]?.authored?.protocol : undefined).toBe(
+      'snmp',
+    )
+    expect(rows[0]?.observed).toBeDefined() // the observed value is the revert target
   })
 
-  it('mixes: human ssh editable, observed snmp read-only, authored policy editable', () => {
-    const attachments: Attachment[] = [
-      { kind: 'access', protocol: 'snmp', community: 'public', provenance: { source: 'scan:1' } },
-      { kind: 'access', protocol: 'ssh', username: 'admin', provenance: { source: 'authored' } },
-      { kind: 'policy', mode: 'disabled', provenance: { source: 'authored' } },
+  it('mixes overridden snmp, a pure-authored ssh, and leaves policy out', () => {
+    const authored: Attachment[] = [
+      { kind: 'access', protocol: 'snmp', community: 'mine' },
+      { kind: 'access', protocol: 'ssh', username: 'admin' },
+      { kind: 'policy', mode: 'disabled' },
     ]
-    const { authored, observedAccess } = partitionAttachments(attachments)
-    expect(authored.map((a) => a.kind).sort()).toEqual(['access', 'policy'])
-    expect(observedAccess.map((a) => a.protocol)).toEqual(['snmp'])
+    const observed: Attachment[] = [
+      { kind: 'access', protocol: 'snmp', community: 'public', provenance: { source: 'scan:1' } },
+    ]
+    const rows = unifyAccessRows(authored, observed)
+    expect(rows.map((r) => r.protocol)).toEqual(['snmp', 'ssh'])
+    const ssh = rows.find((r) => r.protocol === 'ssh')
+    expect(ssh?.authored).toBeDefined()
+    expect(ssh?.observed).toBeUndefined() // pure authored → remove deletes it outright
   })
 })
 

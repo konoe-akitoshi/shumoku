@@ -8,16 +8,19 @@
   import { Label } from '$lib/components/ui/label'
   import {
     isAuthoredAttachment,
-    partitionAttachments,
     stripProvenance,
+    unifyAccessRows,
   } from '$lib/discovery-attachments'
 
   /**
    * Discovery-tab per-node detail. Two regions:
-   *   - Observed (read-only): identity + what the sources saw.
-   *   - Authored overlay: the typed Attachments the operator attaches
-   *     (access / policy), edited as a list + Add. Emits the full desired
-   *     list via `onSetAttachments`; the parent PATCHes wholesale.
+   *   - Observed: the device's identity facts (mgmtIp / sysName / chassisId).
+   *   - Settings: name, discovery policy, and Access — each shown as ONE
+   *     effective value (no observed/authored layers). For Access the field
+   *     is always editable; editing sets a top-priority override, clearing
+   *     drops it back to the source value. `provenance` only annotates where
+   *     the current value comes from. We PATCH just the operator's overrides
+   *     (`working`) via `onSetAttachments`; observed values are never sent.
    */
 
   /** Where an effective value was inherited from (for origin hints). */
@@ -146,10 +149,11 @@
     if (nodeChanged || incomingKey !== lastPropsKey) {
       boundId = node.id
       lastPropsKey = incomingKey
-      // `working` holds ONLY the operator's attachments — those are what the
-      // panel edits and what we PATCH back. Observed-derived attachments are
-      // rendered read-only (see observedAccess) and are never sent, so a ✕
-      // can't try to remove an observed access (it has none).
+      // `working` holds ONLY the operator's overrides — those are what we
+      // PATCH back. Observed values aren't copied in; they're merged for
+      // display by unifyAccessRows and shown in the same editable field
+      // (editing one creates an override). So we never PATCH an observed
+      // value as if it were the operator's.
       working = attachments.filter(isAuthoredAttachment).map(stripProvenance)
       if (nodeChanged) {
         editingName = false
@@ -181,22 +185,24 @@
   }
 
   const hasPolicy = $derived(working.some((a) => a.kind === 'policy'))
-  // Authored (editable) access rows come from `working`; observed (read-only)
-  // ones come straight from the resolved props via partitionAttachments.
+  // ONE row per protocol — no observed/authored layers. `working` holds the
+  // operator's overrides; the resolved props carry whatever a source observed.
+  // unifyAccessRows collapses them: each row's effective value is the override
+  // if present, else the observed value, and the field is always editable.
   const accessRows = $derived(working.filter((a): a is AccessAttachment => a.kind === 'access'))
-  const authoredProtocols = $derived(new Set(accessRows.map((a) => a.protocol)))
-  const observedAccess = $derived(
-    partitionAttachments(attachments).observedAccess.filter(
-      (a) => !authoredProtocols.has(a.protocol),
+  const observedAccessAll = $derived(
+    attachments.filter(
+      (a): a is AccessAttachment => a.kind === 'access' && !isAuthoredAttachment(a),
     ),
   )
-  // A protocol is "present" if either the operator authored it or a source
-  // observed it; the + menu only offers the genuinely-missing ones (override
-  // an observed one from its own row instead).
+  const unifiedAccess = $derived(unifyAccessRows(working, observedAccessAll))
+  // A protocol is "present" if the operator authored it OR a source observed
+  // it; the + menu only offers the genuinely-missing ones (an already-shown
+  // protocol is overridden by typing into its row, not re-added).
   const presentProtocols = $derived(
     new Set<AccessProtocol>([
       ...accessRows.map((a) => a.protocol),
-      ...observedAccess.map((a) => a.protocol),
+      ...observedAccessAll.map((a) => a.protocol),
     ]),
   )
   const addableProtocols = $derived(
@@ -255,31 +261,40 @@
     openAccess = openAccess === protocol ? null : protocol
   }
 
-  /** Replace one access row's fields in place (preserves order). */
-  function updateAccess(protocol: AccessProtocol, next: AccessAttachment): void {
-    commit(working.map((a) => (a.kind === 'access' && a.protocol === protocol ? next : a)))
+  /** Upsert the operator's override for a protocol into `working` (add if the
+   *  protocol isn't overridden yet, else replace it in place). */
+  function upsertAccess(next: AccessAttachment): void {
+    const exists = working.some((a) => a.kind === 'access' && a.protocol === next.protocol)
+    commit(
+      exists
+        ? working.map((a) => (a.kind === 'access' && a.protocol === next.protocol ? next : a))
+        : [...working, next],
+    )
   }
+  // Editing to a value sets a top-priority override; clearing the field drops
+  // the override (revert to the observed value / source default) — so we never
+  // store an empty override that would blank an observed value.
   function setSnmpCommunity(value: string): void {
     const v = value.trim()
-    updateAccess('snmp', { kind: 'access', protocol: 'snmp', ...(v ? { community: v } : {}) })
+    if (!v) {
+      removeAccess('snmp')
+      return
+    }
+    upsertAccess({ kind: 'access', protocol: 'snmp', community: v })
   }
   function setSshUsername(value: string): void {
     const v = value.trim()
-    updateAccess('ssh', { kind: 'access', protocol: 'ssh', ...(v ? { username: v } : {}) })
+    if (!v) {
+      removeAccess('ssh')
+      return
+    }
+    upsertAccess({ kind: 'access', protocol: 'ssh', username: v })
   }
 
   function addAccess(protocol: AccessProtocol): void {
     if (presentProtocols.has(protocol)) return
     commit([...working, { kind: 'access', protocol }])
     openAccess = protocol // expand the freshly-added row for immediate editing
-  }
-  /** Override an observed access method: seed an authored attachment from the
-   *  observed value so the operator can edit it. The observed row then yields
-   *  to this authored one (it shares the protocol key). */
-  function overrideAccess(observed: AccessAttachment): void {
-    if (authoredProtocols.has(observed.protocol)) return
-    commit([...working, stripProvenance(observed) as AccessAttachment])
-    openAccess = observed.protocol
   }
   function removeAccess(protocol: AccessProtocol): void {
     commit(working.filter((a) => !(a.kind === 'access' && a.protocol === protocol)))
@@ -534,41 +549,16 @@
               <!-- Attached protocols: one row each. Tap a row to expand its
                    fields (accordion — at most one open). Collapsed rows show a
                    value summary + chevron, iOS-Settings-style. -->
-              {#if observedAccess.length > 0 || accessRows.length > 0}
+              {#if unifiedAccess.length > 0}
+                <!-- ONE row per protocol. No observed/authored layers: the
+                     field is always editable (typing sets a top-priority
+                     override); the caption just says where the current value
+                     comes from. Clearing the field / Revert drops the override
+                     back to the source value. -->
                 <div class="border-t border-border divide-y divide-border">
-                  <!-- Observed-derived access (read-only). No ✕ — the operator
-                       never authored these and resolve keeps re-supplying them;
-                       use Override to start an editable authored copy. -->
-                  {#each observedAccess as row (row.protocol)}
-                    <div class="flex items-center justify-between gap-2 px-3 py-2.5">
-                      <span class="flex items-center gap-2 min-w-0">
-                        <span class="text-sm font-medium">{protocolLabel(row.protocol)}</span>
-                        <span
-                          class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground whitespace-nowrap"
-                          title={`Read from ${node.sourceName ?? 'the source'} — read-only. Override to set your own.`}
-                        >
-                          observed
-                        </span>
-                      </span>
-                      <span class="flex items-center gap-2 shrink-0">
-                        <span
-                          class="text-xs text-muted-foreground truncate max-w-[120px] font-mono"
-                        >
-                          {accessSummary(row)}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          class="h-7 px-2 text-muted-foreground"
-                          disabled={patchingPolicy}
-                          onclick={() => overrideAccess(row)}
-                        >
-                          Override
-                        </Button>
-                      </span>
-                    </div>
-                  {/each}
-                  {#each accessRows as row (row.protocol)}
+                  {#each unifiedAccess as row (row.protocol)}
+                    {@const effective = row.authored ?? row.observed}
+                    {@const overridden = !!row.authored}
                     {@const expanded = openAccess === row.protocol}
                     <div>
                       <button
@@ -594,24 +584,35 @@
                             </span>
                           {/if}
                         </span>
-                        {#if !expanded}
+                        {#if !expanded && effective}
                           <span
                             class="text-xs text-muted-foreground truncate max-w-[150px] font-mono"
                           >
-                            {accessSummary(row)}
+                            {accessSummary(effective)}
                           </span>
                         {/if}
                       </button>
 
-                      {#if expanded}
+                      {#if expanded && effective}
                         <div class="px-3 pb-3 pl-9 space-y-2">
+                          <p class="text-[11px] text-muted-foreground">
+                            {#if overridden}
+                              Your value
+                              {#if row.observed}
+                                · source read
+                                <span class="font-mono">{accessSummary(row.observed)}</span>
+                              {/if}
+                            {:else}
+                              From {node.sourceName ?? 'the source'} — edit to set your own
+                            {/if}
+                          </p>
                           {#if row.protocol === 'snmp'}
                             <div class="space-y-1">
                               <Label class="text-[11px] text-muted-foreground">Community</Label>
                               <Input
                                 class="h-8 text-xs font-mono"
                                 placeholder="community (e.g. public)"
-                                value={snmpCommunityOf(row)}
+                                value={snmpCommunityOf(effective)}
                                 disabled={patchingPolicy}
                                 onchange={(e) => setSnmpCommunity(e.currentTarget.value)}
                               />
@@ -622,7 +623,7 @@
                               <Input
                                 class="h-8 text-xs"
                                 placeholder="username"
-                                value={sshUsernameOf(row)}
+                                value={sshUsernameOf(effective)}
                                 disabled={patchingPolicy}
                                 onchange={(e) => setSshUsername(e.currentTarget.value)}
                               />
@@ -632,17 +633,35 @@
                               No editable fields for this protocol yet.
                             </p>
                           {/if}
-                          <div class="flex justify-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              class="h-7 gap-1 px-2 text-muted-foreground hover:text-destructive"
-                              disabled={patchingPolicy}
-                              onclick={() => removeAccess(row.protocol)}
-                            >
-                              <TrashIcon size={14} />
-                              Remove
-                            </Button>
+                          <div class="flex items-center justify-end gap-2">
+                            {#if overridden && row.observed}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                class="h-7 px-2 text-muted-foreground"
+                                disabled={patchingPolicy}
+                                title="Drop your override and use the value the source read"
+                                onclick={() => removeAccess(row.protocol)}
+                              >
+                                Revert to source value
+                              </Button>
+                            {:else if overridden}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                class="h-7 gap-1 px-2 text-muted-foreground hover:text-destructive"
+                                disabled={patchingPolicy}
+                                onclick={() => removeAccess(row.protocol)}
+                              >
+                                <TrashIcon size={14} />
+                                Remove
+                              </Button>
+                            {:else}
+                              <span class="text-[10px] text-muted-foreground">
+                                Reading via {node.sourceName ?? 'the source'} · Hide the node to
+                                drop it
+                              </span>
+                            {/if}
                           </div>
                         </div>
                       {/if}

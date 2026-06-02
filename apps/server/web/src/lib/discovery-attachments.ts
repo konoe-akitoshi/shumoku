@@ -3,12 +3,14 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Split a node's resolved attachments into the operator's editable set and
- * the observed read-only set, by provenance. This is the data behind the
- * discovery detail panel's "human rows are editable / removable, observed
- * rows are read-only" rule (design decision 5): resolve() stamps each
- * attachment with the source that won it, and the human contribution is
- * tagged `authored`.
+ * Helpers for the discovery node-detail panel's Access section.
+ *
+ * The model has NO observed/authored layers: a node is one thing and every
+ * source (the human included, at top priority) overwrites field-by-field.
+ * So Access shows ONE editable row per protocol — the effective value —
+ * and `provenance` is just an annotation of where that value currently
+ * comes from, NOT a read-only gate. Editing = a top-priority override;
+ * clearing = drop the override (fall back to the observed value / default).
  *
  * Pure so it can be unit-tested without mounting the Svelte component.
  */
@@ -18,10 +20,10 @@ import type { Attachment } from './api'
 type AccessAttachment = Extract<Attachment, { kind: 'access' }>
 
 /**
- * The operator owns this attachment (editable / removable) when resolve
+ * The operator owns this attachment (its value is theirs) when resolve
  * tagged it `authored`, or when it has no provenance yet — a freshly-added
- * local attachment before its next round-trip. Anything else came from an
- * observing source and is shown read-only.
+ * local attachment before its next round-trip. Anything else is the value a
+ * source currently supplies (shown, editable, annotated with its origin).
  */
 export function isAuthoredAttachment(a: Attachment): boolean {
   return a.provenance === undefined || a.provenance.source === 'authored'
@@ -34,26 +36,39 @@ export function stripProvenance(a: Attachment): Attachment {
   return rest as Attachment
 }
 
+/** One unified Access row: the protocol plus, where present, the operator's
+ *  override and/or the value a source observed. The row's effective value is
+ *  `authored ?? observed`; `authored` also means "the operator has overridden
+ *  this protocol" (so a revert/remove affordance applies). */
+export interface UnifiedAccessRow {
+  protocol: AccessAttachment['protocol']
+  /** The operator's override for this protocol, if any (from `working`). */
+  authored?: AccessAttachment
+  /** The value a source observed for this protocol, if any. */
+  observed?: AccessAttachment
+}
+
 /**
- * Partition resolved attachments into:
- *   - `authored`: the operator's attachments (provenance kept) — what the
- *     panel edits and PATCHes back.
- *   - `observedAccess`: observed-derived access rows shown read-only, with
- *     any protocol the operator has overridden removed (an authored access
- *     supersedes the observed one of the same protocol — resolve would dedup
- *     to the authored one anyway).
+ * Collapse the operator's (authored) access and the observed access into ONE
+ * row per protocol — no two-tier split. Each row carries whichever sides
+ * exist; the UI shows a single editable field (effective = authored ??
+ * observed) with a provenance caption. Protocol order: authored first, then
+ * any observed-only protocols, each kept once.
  */
-export function partitionAttachments(attachments: Attachment[]): {
-  authored: Attachment[]
-  observedAccess: AccessAttachment[]
-} {
-  const authored = attachments.filter(isAuthoredAttachment)
-  const authoredAccessProtocols = new Set(
-    authored.filter((a): a is AccessAttachment => a.kind === 'access').map((a) => a.protocol),
-  )
-  const observedAccess = attachments.filter(
-    (a): a is AccessAttachment =>
-      a.kind === 'access' && !isAuthoredAttachment(a) && !authoredAccessProtocols.has(a.protocol),
-  )
-  return { authored, observedAccess }
+export function unifyAccessRows(
+  authored: Attachment[],
+  observed: Attachment[],
+): UnifiedAccessRow[] {
+  const isAccess = (a: Attachment): a is AccessAttachment => a.kind === 'access'
+  const au = authored.filter(isAccess)
+  const ob = observed.filter(isAccess)
+  const protocols: AccessAttachment['protocol'][] = []
+  for (const a of [...au, ...ob]) {
+    if (!protocols.includes(a.protocol)) protocols.push(a.protocol)
+  }
+  return protocols.map((protocol) => ({
+    protocol,
+    authored: au.find((a) => a.protocol === protocol),
+    observed: ob.find((a) => a.protocol === protocol),
+  }))
 }
