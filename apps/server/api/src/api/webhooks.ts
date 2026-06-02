@@ -1,10 +1,18 @@
 /**
  * Webhook API Routes
- * Receives updates from external systems like NetBox
+ *
+ * One generic ingress: POST /api/webhooks/:type/:id. The source is looked up by
+ * its public id (NetBox topology source, or a data source like Grafana), and
+ * the secret — supplied via the `X-Webhook-Secret` header or a `?secret=` query
+ * param — is compared in constant time (timingSafeEqualStr). Dispatch is by
+ * type: `topology` re-fetches the graph; a data-source plugin handles its own
+ * payload (Grafana validates + upserts alerts).
  */
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { isGrafanaWebhookPayload } from 'shumoku-plugin-grafana'
+import { timingSafeEqualStr } from '../lib/webhook-guard.js'
 import { DataSourceService } from '../services/datasource.js'
 import { GrafanaAlertService, type GrafanaWebhookPayload } from '../services/grafana-alerts.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
@@ -37,56 +45,50 @@ export function setWebhookBroadcaster(broadcaster: (topologyId: string, data: un
 
 export const webhooksApi = new Hono()
 
-/**
- * Webhook endpoint for topology updates
- * POST /api/webhooks/topology/:secret
- *
- * NetBox webhook config should point to:
- * https://your-server/api/webhooks/topology/{webhook_secret}
- */
-webhooksApi.post('/topology/:secret', async (c) => {
-  const { secret } = c.req.param()
+/** Secret from the `X-Webhook-Secret` header (preferred) or a `?secret=` query. */
+function providedSecret(c: Context): string | null {
+  return c.req.header('x-webhook-secret') || c.req.query('secret') || null
+}
 
-  // Find the topology data source by webhook secret
-  const source = getTopologySourcesService().findByWebhookSecret(secret)
-  if (!source) {
-    console.log('[Webhook] Invalid secret received')
+/**
+ * Generic webhook ingress: POST /api/webhooks/:type/:id
+ *
+ * URL forms produced by the app:
+ *   - topology: /api/webhooks/topology/{topologySourceId}?secret={secret}
+ *   - grafana:  /api/webhooks/grafana/{dataSourceId}?secret={secret}
+ */
+webhooksApi.post('/:type/:id', async (c) => {
+  const { type, id } = c.req.param()
+  const secret = providedSecret(c)
+  if (!secret) {
+    return c.json({ error: 'Missing webhook secret' }, 401)
+  }
+
+  if (type === 'topology') {
+    return handleTopologyWebhook(c, id, secret)
+  }
+  return handleDataSourceWebhook(c, type, id, secret)
+})
+
+/** NetBox-style topology webhook: re-fetch the source's graph and record it. */
+async function handleTopologyWebhook(c: Context, id: string, secret: string) {
+  const source = getTopologySourcesService().get(id)
+  if (!source || source.syncMode !== 'webhook' || !source.webhookSecret) {
+    return c.json({ error: 'Unknown or non-webhook topology source' }, 404)
+  }
+  if (!timingSafeEqualStr(secret, source.webhookSecret)) {
     return c.json({ error: 'Invalid webhook secret' }, 401)
   }
 
-  if (source.syncMode !== 'webhook') {
-    console.log('[Webhook] Source is not in webhook mode:', source.id)
-    return c.json({ error: 'Webhook mode not enabled for this source' }, 400)
-  }
-
-  console.log(
-    `[Webhook] Received update for topology ${source.topologyId} from source ${source.dataSourceId}`,
-  )
-
-  // Parse the webhook body (NetBox sends JSON with event details)
-  let body: unknown
   try {
-    body = await c.req.json()
-    console.log('[Webhook] Payload:', JSON.stringify(body, null, 2))
-  } catch {
-    // Body might be empty for some webhook types
-    body = {}
-  }
-
-  try {
-    // Fetch fresh topology from data source (with per-source options)
     const graph = await getDataSourceService().fetchTopologyWithOptionsJson(
       source.dataSourceId,
       source.optionsJson,
     )
     if (!graph) {
-      console.log('[Webhook] Data source does not support topology')
       return c.json({ error: 'Data source does not support topology' }, 400)
     }
 
-    // Record the fetched graph as a new observation against the
-    // *source* itself (NetBox / Zabbix / etc), not against the
-    // topology shell. Resolver re-folds on next read.
     const { ObservationsService } = await import('../services/observations.js')
     const observations = new ObservationsService()
     await observations.record({
@@ -97,15 +99,8 @@ webhooksApi.post('/topology/:secret', async (c) => {
       graph,
     })
     getTopologyService().clearCacheEntry(source.topologyId)
-
-    // Update last synced timestamp
     getTopologySourcesService().updateLastSynced(source.id)
 
-    console.log(
-      `[Webhook] Topology ${source.topologyId} updated: ${graph.nodes?.length ?? 0} nodes, ${graph.links?.length ?? 0} links`,
-    )
-
-    // Broadcast update to connected WebSocket clients
     if (broadcastTopologyUpdate) {
       broadcastTopologyUpdate(source.topologyId, {
         type: 'topology_updated',
@@ -123,59 +118,58 @@ webhooksApi.post('/topology/:secret', async (c) => {
       linkCount: graph.links?.length ?? 0,
     })
   } catch (error) {
-    console.error('[Webhook] Error processing webhook:', error)
+    console.error('[Webhook] Error processing topology webhook:', error)
     return c.json(
       { error: error instanceof Error ? error.message : 'Failed to process webhook' },
       500,
     )
   }
-})
+}
 
-/**
- * Webhook endpoint for Grafana alerts
- * POST /api/webhooks/grafana/:secret
- *
- * Grafana Contact Point (Webhook) should point to:
- * https://your-server/api/webhooks/grafana/{webhook_secret}
- */
-webhooksApi.post('/grafana/:secret', async (c) => {
-  const { secret } = c.req.param()
-
-  // Find data source by webhook secret
-  const dataSource = getDataSourceService().findByWebhookSecret(secret)
-  if (!dataSource || dataSource.type !== 'grafana') {
-    console.log('[Webhook/Grafana] Invalid secret received')
+/** Data-source plugin webhook (currently Grafana alerts). */
+async function handleDataSourceWebhook(c: Context, type: string, id: string, secret: string) {
+  const dataSource = getDataSourceService().get(id)
+  if (!dataSource || dataSource.type !== type) {
+    return c.json({ error: 'Unknown webhook target' }, 404)
+  }
+  let config: { webhookSecret?: string }
+  try {
+    config = JSON.parse(dataSource.configJson)
+  } catch {
+    config = {}
+  }
+  if (!config.webhookSecret || !timingSafeEqualStr(secret, config.webhookSecret)) {
     return c.json({ error: 'Invalid webhook secret' }, 401)
   }
 
-  let body: unknown
-  try {
-    body = await c.req.json()
-  } catch {
-    return c.json({ error: 'Invalid JSON payload' }, 400)
+  if (type === 'grafana') {
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Invalid JSON payload' }, 400)
+    }
+    // The plugin owns its webhook shape — validate before processing.
+    if (!isGrafanaWebhookPayload(body)) {
+      return c.json({ error: 'Invalid Grafana webhook payload' }, 400)
+    }
+    try {
+      const count = new GrafanaAlertService().upsertFromWebhook(
+        dataSource.id,
+        body as GrafanaWebhookPayload,
+      )
+      return c.json({ success: true, alertCount: count })
+    } catch (error) {
+      console.error('[Webhook/Grafana] Error processing webhook:', error)
+      return c.json(
+        { error: error instanceof Error ? error.message : 'Failed to process webhook' },
+        500,
+      )
+    }
   }
 
-  // The plugin owns its webhook shape — validate before processing rather than
-  // blind-casting arbitrary JSON.
-  if (!isGrafanaWebhookPayload(body)) {
-    return c.json({ error: 'Invalid Grafana webhook payload' }, 400)
-  }
-
-  try {
-    const alertService = new GrafanaAlertService()
-    const count = alertService.upsertFromWebhook(dataSource.id, body as GrafanaWebhookPayload)
-
-    console.log(`[Webhook/Grafana] Upserted ${count} alerts for data source ${dataSource.id}`)
-
-    return c.json({ success: true, alertCount: count })
-  } catch (error) {
-    console.error('[Webhook/Grafana] Error processing webhook:', error)
-    return c.json(
-      { error: error instanceof Error ? error.message : 'Failed to process webhook' },
-      500,
-    )
-  }
-})
+  return c.json({ error: `Webhooks are not supported for data source type: ${type}` }, 400)
+}
 
 /**
  * Health check for webhooks

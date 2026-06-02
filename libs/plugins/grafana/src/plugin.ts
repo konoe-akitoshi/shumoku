@@ -83,7 +83,9 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable, Connectio
     return [
       {
         label: 'Webhook URL',
-        value: `${ctx.serverOrigin}/api/webhooks/grafana/${cfg.webhookSecret}`,
+        // Generic ingress: id in the path (public), secret in the query
+        // (compared in constant time server-side).
+        value: `${ctx.serverOrigin}/api/webhooks/grafana/${ctx.dataSourceId}?secret=${cfg.webhookSecret}`,
         copyable: true,
       },
     ]

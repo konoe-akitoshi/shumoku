@@ -47,7 +47,7 @@ describe('GrafanaPlugin.getConnectionInfo', () => {
     ).toEqual([
       {
         label: 'Webhook URL',
-        value: 'https://shumoku.example.com/api/webhooks/grafana/sek',
+        value: 'https://shumoku.example.com/api/webhooks/grafana/ds1?secret=sek',
         copyable: true,
       },
     ])

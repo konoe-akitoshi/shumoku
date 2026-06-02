@@ -151,7 +151,9 @@
   }
 
   function getWebhookUrl(source: TopologyDataSource): string {
-    return `${window.location.origin}/api/webhooks/topology/${source.webhookSecret}`
+    // Generic ingress: source id in the path, secret in the query (compared in
+    // constant time server-side).
+    return `${window.location.origin}/api/webhooks/topology/${source.id}?secret=${source.webhookSecret}`
   }
 
   async function copyWebhookUrl(source: TopologyDataSource) {

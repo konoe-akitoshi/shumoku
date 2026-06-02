@@ -374,34 +374,9 @@ export function createDataSourcesApi(): Hono {
     }
   })
 
-  // Get webhook URL for Grafana data sources
-  app.get('/:id/webhook-url', async (c) => {
-    const id = c.req.param('id')
-    const dataSource = service.get(id)
-    if (!dataSource) {
-      return c.json({ error: 'Data source not found' }, 404)
-    }
-    if (dataSource.type !== 'grafana') {
-      return c.json({ error: 'Webhook URL only available for Grafana data sources' }, 400)
-    }
-    try {
-      let config = JSON.parse(dataSource.configJson)
-      if (!config.useWebhook) {
-        return c.json({ error: 'Webhook mode is not enabled' }, 400)
-      }
-      if (!config.webhookSecret) {
-        // Trigger secret generation via update
-        const updated = await service.update(id, { configJson: dataSource.configJson })
-        if (!updated) return c.json({ error: 'Failed to generate webhook secret' }, 500)
-        config = JSON.parse(updated.configJson)
-      }
-      return c.json({
-        webhookPath: `/api/webhooks/grafana/${config.webhookSecret}`,
-      })
-    } catch {
-      return c.json({ error: 'Invalid configuration' }, 500)
-    }
-  })
+  // (Removed /:id/webhook-url — the webhook URL is now derived generically via
+  // the plugin's getConnectionInfo + the /:id/connection-info endpoint, with no
+  // grafana-specific branch.)
 
   // Get alerts from a data source directly
   app.get('/:id/alerts', async (c) => {
