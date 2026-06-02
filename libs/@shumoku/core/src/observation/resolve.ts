@@ -447,14 +447,19 @@ function deriveNodeProvenance(
     const latest = [...cluster.members].sort((a, b) => b.capturedAt - a.capturedAt)[0]
     source = latest?.sourceId ?? 'unknown'
   }
-  const latest = cluster.members.reduce(
-    (acc, m) => (m.capturedAt > acc ? m.capturedAt : acc),
+  // `observedAt` = the latest real OBSERVATION time. Consider only finite
+  // capturedAt — the human contribution carries `+Infinity` (it's not an
+  // observation), and including it would poison the max and drop observedAt
+  // (→ "Last seen" blanks out the moment a node is renamed / given a
+  // community). An authored-only node has no finite time → undefined.
+  const latestObserved = cluster.members.reduce(
+    (acc, m) => (Number.isFinite(m.capturedAt) && m.capturedAt > acc ? m.capturedAt : acc),
     Number.NEGATIVE_INFINITY,
   )
   return {
     source,
     state,
-    observedAt: Number.isFinite(latest) ? latest : undefined,
+    observedAt: Number.isFinite(latestObserved) ? latestObserved : undefined,
   }
 }
 

@@ -103,6 +103,14 @@
   }
 
   const MODE_OPTIONS: DiscoveryMode[] = ['auto', 'observe', 'disabled']
+  // Selected-mode highlight, toned per mode (same hues as the grid cards) so
+  // the color carries the mode — not the app's green `primary`, which reads as
+  // "healthy" on a not-readable node and would even paint "disabled" green.
+  const MODE_SELECTED_CLASS: Record<DiscoveryMode, string> = {
+    auto: 'bg-sky-500 text-white shadow-sm',
+    observe: 'bg-violet-500 text-white shadow-sm',
+    disabled: 'bg-neutral-500 text-white shadow-sm',
+  }
 
   // Keyed on the actual read protocol (from snapshot `readVia`), not the
   // source type — so the label is real data, not a guess.
@@ -510,7 +518,7 @@
                     type="button"
                     class="flex-1 rounded-[5px] px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50
                       {selected
-                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      ? MODE_SELECTED_CLASS[m]
                       : 'text-muted-foreground hover:text-foreground'}
                       {selected && !hasPolicy ? 'opacity-80' : ''}"
                     disabled={patchingPolicy}
