@@ -187,6 +187,13 @@
         "react",
       ],
     },
+    "libs/@shumoku/plugin-sdk": {
+      "name": "@shumoku/plugin-sdk",
+      "version": "0.1.0",
+      "dependencies": {
+        "undici": "^6.21.0",
+      },
+    },
     "libs/@shumoku/renderer": {
       "name": "@shumoku/renderer",
       "version": "0.1.0",
@@ -795,6 +802,8 @@
     "@shumoku/docs": ["@shumoku/docs@workspace:apps/docs"],
 
     "@shumoku/editor": ["@shumoku/editor@workspace:apps/editor"],
+
+    "@shumoku/plugin-sdk": ["@shumoku/plugin-sdk@workspace:libs/@shumoku/plugin-sdk"],
 
     "@shumoku/renderer": ["@shumoku/renderer@workspace:libs/@shumoku/renderer"],
 
@@ -1727,6 +1736,8 @@
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "unbash": ["unbash@2.2.0", "", {}, "sha512-X2wH19RAPZE3+ldGicOkoj/SIA83OIxcJ6Cuaw23hf8Xc6fQpvZXY0SftE2JgS0QhYLUG4uwodSI3R53keyh7w=="],
+
+    "undici": ["undici@6.26.0", "", {}, "sha512-4yqz8a3n5HmGTlsbADNtr/dJlhkh/55Rq798G6ibiULcXbDtaLpTl1pvdqcbFfeoj3iSi52lePFM7h9H21cw/A=="],
 
     "undici-types": ["undici-types@7.19.2", "", {}, "sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg=="],
 

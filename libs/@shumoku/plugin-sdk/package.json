@@ -1,0 +1,50 @@
+{
+  "name": "@shumoku/plugin-sdk",
+  "version": "0.1.0",
+  "description": "Node-runtime SDK for shumoku data source plugins (HTTP client, pagination)",
+  "license": "AGPL-3.0-only",
+  "author": "konoe-akitoshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/@shumoku/plugin-sdk"
+  },
+  "homepage": "https://shumoku.packof.me/",
+  "bugs": {
+    "url": "https://github.com/konoe-akitoshi/shumoku/issues"
+  },
+  "keywords": [
+    "shumoku",
+    "plugin",
+    "sdk",
+    "http"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "dependencies": {
+    "undici": "^6.21.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
