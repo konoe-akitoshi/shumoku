@@ -3,6 +3,7 @@
  * CRUD endpoints for data source management with plugin support
  */
 
+import { validateAgainstSchema } from '@shumoku/core'
 import { Hono } from 'hono'
 import { getAllPlugins } from '../plugins/loader.js'
 import type { AlertQueryOptions } from '../plugins/types.js'
@@ -36,6 +37,26 @@ function maskSecrets(obj: Record<string, unknown>): void {
   }
 }
 
+/**
+ * Validate a config_json string against the plugin's configSchema using core's
+ * shared validator — the same one the web form renders from (§3.5). Returns an
+ * error message, or null when valid (or when the plugin declares no schema, in
+ * which case config is opaque and passes through).
+ */
+function validateConfigForType(type: string, configJson: string): string | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(configJson)
+  } catch {
+    return 'configJson must be valid JSON'
+  }
+  const schema = getAllPlugins().find((p) => p.id === type)?.configSchema
+  if (!schema) return null
+  const result = validateAgainstSchema(schema, parsed)
+  if (result.ok) return null
+  return result.errors.map((e) => `${e.path}: ${e.message}`).join('; ')
+}
+
 export function createDataSourcesApi(): Hono {
   const app = new Hono()
   const service = new DataSourceService()
@@ -46,9 +67,13 @@ export function createDataSourcesApi(): Hono {
   // one-Manual-per-topology cardinality separately.
   app.get('/types', (c) => {
     const types = service.getRegisteredTypes()
-    // Get loaded plugin info for configSchema
+    // configSchema / optionsSchema now flow from the registry for bundled
+    // plugins too (Phase 2/4a), so getAllPlugins carries both for bundled and
+    // external alike — the web renders one generic form from them (no per-type
+    // branch).
     const loadedPlugins = getAllPlugins()
     const pluginSchemas = new Map(loadedPlugins.map((p) => [p.id, p.configSchema]))
+    const pluginOptionsSchemas = new Map(loadedPlugins.map((p) => [p.id, p.optionsSchema]))
 
     // Only return serializable fields (exclude factory function)
     const serializable = types.map(({ type, displayName, capabilities }) => ({
@@ -56,6 +81,7 @@ export function createDataSourcesApi(): Hono {
       displayName,
       capabilities,
       configSchema: pluginSchemas.get(type),
+      optionsSchema: pluginOptionsSchemas.get(type),
     }))
     return c.json(serializable)
   })
@@ -134,11 +160,10 @@ export function createDataSourcesApi(): Hono {
         return c.json({ error: 'name, type, and configJson are required' }, 400)
       }
 
-      // Validate configJson is valid JSON
-      try {
-        JSON.parse(body.configJson)
-      } catch {
-        return c.json({ error: 'configJson must be valid JSON' }, 400)
+      // Validate configJson against the plugin's configSchema (authoritative).
+      const configError = validateConfigForType(body.type, body.configJson)
+      if (configError) {
+        return c.json({ error: configError }, 400)
       }
 
       const dataSource = await service.create(body)
@@ -161,12 +186,15 @@ export function createDataSourcesApi(): Hono {
     try {
       const body = (await c.req.json()) as Partial<DataSourceInput>
 
-      // Validate configJson if provided
+      // Validate configJson against the plugin's configSchema if provided.
       if (body.configJson !== undefined) {
-        try {
-          JSON.parse(body.configJson)
-        } catch {
-          return c.json({ error: 'configJson must be valid JSON' }, 400)
+        const existing = service.get(id)
+        const type = body.type ?? existing?.type
+        if (type) {
+          const configError = validateConfigForType(type, body.configJson)
+          if (configError) {
+            return c.json({ error: configError }, 400)
+          }
         }
       }
 

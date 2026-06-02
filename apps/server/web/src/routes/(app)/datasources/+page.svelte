@@ -8,10 +8,16 @@
   } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
+  import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
   import { dataSources, dataSourcesError, dataSourcesList, dataSourcesLoading } from '$lib/stores'
-  import type { ConnectionResult, DataSource, DataSourcePluginInfo } from '$lib/types'
+  import type {
+    ConnectionResult,
+    DataSource,
+    DataSourcePluginInfo,
+    PluginConfigSchema,
+  } from '$lib/types'
 
   let showCreateModal = $state(false)
   let testingId = $state<string | null>(null)
@@ -21,28 +27,13 @@
   let pluginTypes = $state<DataSourcePluginInfo[]>([])
   let selectedPlugin = $state<DataSourcePluginInfo | null>(null)
 
-  // Form state
+  // Form state. The data source name is the only field outside the schema;
+  // everything else is the plugin's config, rendered + validated from
+  // `selectedPlugin.configSchema` via <SchemaForm> — no per-plugin branch.
   let formName = $state('')
-  let formUrl = $state('')
-  let formToken = $state('')
-  let formPollInterval = $state(30000)
-  let formSiteFilter = $state('')
-  let formTagFilter = $state('')
-  let formPrometheusPreset = $state<'snmp' | 'node_exporter'>('snmp')
-  let formInsecure = $state(false)
-  // Aruba Instant On uses portal account (email + password) instead of URL + token
-  let formArubaUsername = $state('')
-  let formArubaPassword = $state('')
-  let formArubaSiteId = $state('')
-  // Network Discovery (network-scan) uses community + seeds, no URL.
-  let formSnmpCommunity = $state('public')
-  /** Newline- or comma-separated list of seed device addresses. */
-  let formSnmpTargets = $state('')
-  let formSnmpTimeoutMs = $state(2000)
+  let config = $state<Record<string, unknown>>({})
   let formError = $state('')
   let formSubmitting = $state(false)
-  // Dynamic config values for external plugins
-  let dynamicConfig = $state<Record<string, string>>({})
 
   // Plugin type lookup
   let pluginTypeMap = $derived(
@@ -68,9 +59,7 @@
   function openCreateModal() {
     selectedPlugin = null
     formName = ''
-    formUrl = ''
-    formToken = ''
-    formPollInterval = 30000
+    config = {}
     formError = ''
     showCreateModal = true
   }
@@ -78,115 +67,21 @@
   function selectPlugin(plugin: DataSourcePluginInfo) {
     selectedPlugin = plugin
     formName = ''
-    formUrl = ''
-    formToken = ''
-    formPollInterval = 30000
-    formSiteFilter = ''
-    formTagFilter = ''
-    formInsecure = false
-    formPrometheusPreset = 'snmp'
-    formArubaUsername = ''
-    formArubaPassword = ''
-    formArubaSiteId = ''
-    formSnmpCommunity = 'public'
-    formSnmpTargets = ''
-    formSnmpTimeoutMs = 2000
-    // Initialize dynamic config from schema defaults
-    dynamicConfig = {}
-    if (plugin.configSchema?.properties) {
-      for (const [key, prop] of Object.entries(plugin.configSchema.properties)) {
-        if (prop.default !== undefined) {
-          dynamicConfig[key] = String(prop.default)
-        } else {
-          dynamicConfig[key] = ''
-        }
-      }
-    }
+    formError = ''
+    config = initConfig(plugin.configSchema)
   }
 
-  function getConfigFromForm(): string {
-    if (!selectedPlugin) return '{}'
-
-    // Manual has no upstream — config is intentionally empty.
-    if (selectedPlugin.type === 'manual') {
-      return '{}'
+  /** Seed a config object with the schema's declared defaults. */
+  function initConfig(schema?: PluginConfigSchema): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    if (!schema) return out
+    for (const [key, prop] of Object.entries(schema.properties)) {
+      if (prop.default !== undefined) out[key] = prop.default
     }
-
-    // Builtin plugins with hardcoded config
-    if (selectedPlugin.type === 'zabbix') {
-      return JSON.stringify({
-        url: formUrl.trim(),
-        token: formToken.trim() || undefined,
-        pollInterval: formPollInterval,
-      })
-    }
-
-    if (selectedPlugin.type === 'netbox') {
-      return JSON.stringify({
-        url: formUrl.trim(),
-        token: formToken.trim() || undefined,
-        siteFilter: formSiteFilter.trim() || undefined,
-        tagFilter: formTagFilter.trim() || undefined,
-        insecure: formInsecure || undefined,
-      })
-    }
-
-    if (selectedPlugin.type === 'prometheus') {
-      return JSON.stringify({
-        url: formUrl.trim(),
-        preset: formPrometheusPreset,
-      })
-    }
-
-    if (selectedPlugin.type === 'grafana') {
-      return JSON.stringify({
-        url: formUrl.trim(),
-        token: formToken.trim() || undefined,
-      })
-    }
-
-    if (selectedPlugin.type === 'aruba-instant-on') {
-      return JSON.stringify({
-        username: formArubaUsername.trim(),
-        password: formArubaPassword,
-        siteId: formArubaSiteId.trim() || undefined,
-      })
-    }
-
-    if (selectedPlugin.type === 'network-scan') {
-      // Targets are entered as one per line (or comma-separated). Each
-      // entry may be an IP, hostname, or CIDR — the plugin expands CIDR
-      // and liveness-probes before the full walk. Community is shared
-      // across all targets in v1 (per-target community is a v2 item).
-      const community = formSnmpCommunity.trim() || 'public'
-      const targets = formSnmpTargets
-        .split(/[\s,]+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-      return JSON.stringify({
-        community,
-        targets,
-        timeoutMs: formSnmpTimeoutMs,
-      })
-    }
-
-    // External plugins with configSchema - use dynamicConfig
-    if (selectedPlugin.configSchema?.properties) {
-      const config: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(dynamicConfig)) {
-        if (value.trim()) {
-          config[key] = value.trim()
-        }
-      }
-      return JSON.stringify(config)
-    }
-
-    // Generic config for other types
-    return JSON.stringify({
-      url: formUrl.trim(),
-    })
+    return out
   }
 
+  /** Parse a stored config_json for read-only display in the table. */
   function parseConfig(configJson: string): { url?: string; pollInterval?: number } {
     try {
       return JSON.parse(configJson)
@@ -195,52 +90,58 @@
     }
   }
 
+  /**
+   * Build config_json from the schema-driven `config`. Prune empty/blank
+   * values so unset stays unset, and drop optional objects whose children are
+   * all empty (F3 serialization rule).
+   */
+  function getConfigFromForm(): string {
+    return JSON.stringify(pruneEmpty(config))
+  }
+
+  function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      if (value == null) continue
+      if (typeof value === 'string') {
+        const trimmed = value.trim()
+        if (trimmed) out[key] = trimmed
+        continue
+      }
+      if (Array.isArray(value)) {
+        if (value.length > 0) out[key] = value
+        continue
+      }
+      if (typeof value === 'object') {
+        const nested = pruneEmpty(value as Record<string, unknown>)
+        if (Object.keys(nested).length > 0) out[key] = nested
+        continue
+      }
+      out[key] = value
+    }
+    return out
+  }
+
   async function handleCreate() {
     if (!selectedPlugin) {
       formError = 'Please select a data source type'
       return
     }
-
-    // Validation for bundled plugins
-    if (selectedPlugin.type === 'manual') {
-      // Manual: name-only. Attach to topologies separately.
-      if (!formName.trim()) {
-        formError = 'Name is required'
-        return
-      }
-    } else if (['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type)) {
-      if (!formName.trim() || !formUrl.trim()) {
-        formError = 'Name and URL are required'
-        return
-      }
-    } else if (selectedPlugin.type === 'aruba-instant-on') {
-      if (!formName.trim() || !formArubaUsername.trim() || !formArubaPassword) {
-        formError = 'Name, portal email, and password are required'
-        return
-      }
-    } else if (selectedPlugin.type === 'network-scan') {
-      if (!formName.trim() || !formSnmpTargets.trim()) {
-        formError = 'Name and at least one target are required'
-        return
-      }
-    } else if (selectedPlugin.configSchema?.properties) {
-      // Validation for external plugins with configSchema
-      if (!formName.trim()) {
-        formError = 'Name is required'
-        return
-      }
-      const required = selectedPlugin.configSchema.required || []
-      for (const key of required) {
-        if (!dynamicConfig[key]?.trim()) {
+    if (!formName.trim()) {
+      formError = 'Name is required'
+      return
+    }
+    // Full config validation is authoritative on the server (core
+    // validateAgainstSchema → 400, surfaced in the catch below). Here we do a
+    // light required-field check for instant feedback before the round-trip.
+    if (selectedPlugin.configSchema?.required) {
+      const filled = pruneEmpty(config)
+      for (const key of selectedPlugin.configSchema.required) {
+        if (filled[key] === undefined) {
           const prop = selectedPlugin.configSchema.properties[key]
-          formError = `${prop?.title || key} is required`
+          formError = `${prop?.title ?? key} is required`
           return
         }
-      }
-    } else {
-      if (!formName.trim() || !formUrl.trim()) {
-        formError = 'Name and URL are required'
-        return
       }
     }
 
@@ -362,7 +263,7 @@
           </thead>
           <tbody>
             {#each $dataSourcesList as ds}
-              {@const config = parseConfig(ds.configJson)}
+              {@const dsConfig = parseConfig(ds.configJson)}
               <tr>
                 <td>
                   <a
@@ -409,7 +310,7 @@
                   </div>
                 </td>
                 <td class="text-theme-text-muted text-sm font-mono truncate">
-                  {config.url || '-'}
+                  {dsConfig.url || '-'}
                 </td>
                 <td class="datasources-status-cell">
                   <div class="flex flex-col gap-0.5">
@@ -568,234 +469,8 @@
           >
         </div>
 
-        {#if ['zabbix', 'netbox', 'prometheus', 'grafana'].includes(selectedPlugin.type) || (!selectedPlugin.configSchema?.properties && !['aruba-instant-on', 'network-scan', 'manual'].includes(selectedPlugin.type))}
-          <div>
-            <label for="url" class="label">URL</label>
-            <input
-              type="url"
-              id="url"
-              class="input"
-              placeholder="https://example.com"
-              bind:value={formUrl}
-            >
-          </div>
-        {/if}
-
-        {#if selectedPlugin.type === 'zabbix' || selectedPlugin.type === 'netbox' || selectedPlugin.type === 'grafana'}
-          <div>
-            <label for="token" class="label">API Token</label>
-            <input
-              type="password"
-              id="token"
-              class="input"
-              placeholder="Enter API token"
-              bind:value={formToken}
-            >
-            {#if selectedPlugin.type === 'zabbix'}
-              <p class="text-xs text-muted-foreground mt-1">
-                Required for API access (Zabbix 5.4+)
-              </p>
-            {:else if selectedPlugin.type === 'grafana'}
-              <p class="text-xs text-muted-foreground mt-1">Service Account Token (Bearer token)</p>
-            {/if}
-          </div>
-        {/if}
-
-        {#if selectedPlugin.type === 'prometheus'}
-          <div>
-            <label for="preset" class="label">Exporter Type</label>
-            <select id="preset" class="input" bind:value={formPrometheusPreset}>
-              <option value="snmp">SNMP Exporter</option>
-              <option value="node_exporter">Node Exporter</option>
-            </select>
-            <p class="text-xs text-muted-foreground mt-1">
-              {#if formPrometheusPreset === 'snmp'}
-                Uses ifHCInOctets/ifHCOutOctets metrics with ifName label
-              {:else}
-                Uses node_network_receive/transmit_bytes_total metrics with device label
-              {/if}
-            </p>
-          </div>
-        {/if}
-
-        {#if selectedPlugin.type === 'zabbix'}
-          <div>
-            <label for="pollInterval" class="label">Poll Interval</label>
-            <select id="pollInterval" class="input" bind:value={formPollInterval}>
-              <option value={5000}>5 seconds</option>
-              <option value={10000}>10 seconds</option>
-              <option value={30000}>30 seconds</option>
-              <option value={60000}>1 minute</option>
-              <option value={300000}>5 minutes</option>
-            </select>
-          </div>
-        {/if}
-
-        {#if selectedPlugin.type === 'network-scan'}
-          <div>
-            <label for="snmpCommunity" class="label">SNMP Community</label>
-            <input
-              type="text"
-              id="snmpCommunity"
-              class="input"
-              placeholder="public"
-              bind:value={formSnmpCommunity}
-            >
-            <p class="text-xs text-muted-foreground mt-1">
-              SNMPv2c community string used for every seed.
-            </p>
-          </div>
-
-          <div>
-            <label for="snmpTargets" class="label">Targets</label>
-            <textarea
-              id="snmpTargets"
-              class="input min-h-24 font-mono"
-              placeholder="10.0.0.0/24&#10;192.168.5.1&#10;core-rtr-01.example.net"
-              bind:value={formSnmpTargets}
-            ></textarea>
-            <p class="text-xs text-muted-foreground mt-1">
-              One per line. Each entry can be a <strong>CIDR block</strong> (e.g. 10.0.0.0/24), a
-              single IP, or a hostname. CIDR is expanded and a short SNMP liveness probe runs in
-              parallel before the full walk — dead addresses are silently skipped. Up to /16 per
-              entry.
-            </p>
-          </div>
-
-          <div>
-            <label for="snmpTimeout" class="label">Per-Device Timeout (ms)</label>
-            <input
-              type="number"
-              id="snmpTimeout"
-              class="input"
-              min="500"
-              max="30000"
-              step="500"
-              bind:value={formSnmpTimeoutMs}
-            >
-          </div>
-
-          <div
-            class="rounded border border-theme-border bg-theme-surface p-3 text-xs text-theme-text-muted"
-          >
-            v1 scope: SNMP only (System-MIB, IF-MIB, ifXTable, LLDP-MIB). CIDR sweep + liveness
-            probe is supported. CDP / BRIDGE-MIB / ENTITY-MIB / NETCONF / gNMI / CLI scraping and
-            LLDP-neighbor auto-expansion land in v2.
-          </div>
-        {/if}
-
-        {#if selectedPlugin.type === 'aruba-instant-on'}
-          <div>
-            <label for="arubaUsername" class="label">Portal Email</label>
-            <input
-              type="email"
-              id="arubaUsername"
-              class="input"
-              placeholder="account@example.com"
-              autocomplete="username"
-              bind:value={formArubaUsername}
-            >
-            <p class="text-xs text-muted-foreground mt-1">
-              Aruba Instant On account email. <strong>MFA must be disabled</strong> on this account
-              — the (undocumented) API auth flow doesn't support MFA.
-            </p>
-          </div>
-
-          <div>
-            <label for="arubaPassword" class="label">Portal Password</label>
-            <input
-              type="password"
-              id="arubaPassword"
-              class="input"
-              placeholder="Account password"
-              autocomplete="current-password"
-              bind:value={formArubaPassword}
-            >
-          </div>
-
-          <div>
-            <label for="arubaSiteId" class="label">Site ID (optional)</label>
-            <input
-              type="text"
-              id="arubaSiteId"
-              class="input"
-              placeholder="Leave blank for all sites"
-              bind:value={formArubaSiteId}
-            >
-            <p class="text-xs text-muted-foreground mt-1">
-              Restrict polling to a single site. Leave empty to include every site the account can
-              access.
-            </p>
-          </div>
-
-          <div class="rounded border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
-            ⚠️ Aruba Instant On API is unofficial / unsupported by HPE. It may stop working without
-            notice.
-          </div>
-        {/if}
-
-        {#if selectedPlugin.type === 'netbox'}
-          <div>
-            <label for="siteFilter" class="label">Site Filter (optional)</label>
-            <input
-              type="text"
-              id="siteFilter"
-              class="input"
-              placeholder="e.g., tokyo-dc1"
-              bind:value={formSiteFilter}
-            >
-            <p class="text-xs text-muted-foreground mt-1">Filter devices by site slug</p>
-          </div>
-
-          <div>
-            <label for="tagFilter" class="label">Tag Filter (optional)</label>
-            <input
-              type="text"
-              id="tagFilter"
-              class="input"
-              placeholder="e.g., production"
-              bind:value={formTagFilter}
-            >
-            <p class="text-xs text-muted-foreground mt-1">Filter devices by tag slug</p>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <input type="checkbox" id="insecure" bind:checked={formInsecure}>
-            <label for="insecure" class="text-sm">Skip TLS certificate verification</label>
-            <p class="text-xs text-muted-foreground">(for self-signed certificates)</p>
-          </div>
-        {/if}
-
-        <!-- Dynamic fields from configSchema (external plugins) -->
-        {#if selectedPlugin.configSchema?.properties && !['zabbix', 'netbox', 'prometheus', 'grafana', 'aruba-instant-on'].includes(selectedPlugin.type)}
-          {#each Object.entries(selectedPlugin.configSchema.properties) as [ key, prop ]}
-            <div>
-              <label for="config-{key}" class="label">
-                {prop.title || key}
-                {#if !selectedPlugin.configSchema.required?.includes(key)}
-                  <span class="text-theme-text-muted font-normal">(optional)</span>
-                {/if}
-              </label>
-              {#if prop.enum}
-                <select id="config-{key}" class="input" bind:value={dynamicConfig[key]}>
-                  {#each prop.enum as option}
-                    <option value={option}>{option}</option>
-                  {/each}
-                </select>
-              {:else}
-                <input
-                  type={prop.format === 'password' ? 'password' : prop.type === 'number' ? 'number' : 'text'}
-                  id="config-{key}"
-                  class="input"
-                  placeholder={prop.description || ''}
-                  bind:value={dynamicConfig[key]}
-                >
-              {/if}
-              {#if prop.description}
-                <p class="text-xs text-muted-foreground mt-1">{prop.description}</p>
-              {/if}
-            </div>
-          {/each}
+        {#if selectedPlugin.configSchema}
+          <SchemaForm schema={selectedPlugin.configSchema} bind:value={config} />
         {/if}
       </form>
 
