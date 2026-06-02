@@ -7,8 +7,8 @@
 
 import {
   type Alert,
+  type AlertmanagerAlert,
   type AlertQueryOptions,
-  type AlertSeverity,
   type AlertsCapable,
   addHttpWarning,
   type ConnectionInfoCapable,
@@ -17,6 +17,7 @@ import {
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
+  parseAlertmanagerAlerts,
 } from '@shumoku/core'
 import type { AlertStoreService, GrafanaPluginConfig, GrafanaWebhookPayload } from './types.js'
 
@@ -24,53 +25,10 @@ import type { AlertStoreService, GrafanaPluginConfig, GrafanaWebhookPayload } fr
 // Helper Functions
 // ============================================
 
-const SEVERITY_MAP: Record<string, AlertSeverity> = {
-  critical: 'critical',
-  disaster: 'critical',
-  high: 'high',
-  major: 'high',
-  error: 'high',
-  medium: 'medium',
-  average: 'medium',
-  moderate: 'medium',
-  warning: 'low',
-  warn: 'low',
-  minor: 'low',
-  low: 'info',
-  info: 'info',
-  information: 'info',
-  none: 'ok',
-  ok: 'ok',
-}
-
-export const SEVERITY_ORDER: Record<AlertSeverity, number> = {
-  ok: 0,
-  info: 1,
-  low: 2,
-  medium: 3,
-  high: 4,
-  critical: 5,
-}
-
-export function mapSeverity(severity?: string): AlertSeverity {
-  if (!severity) return 'info'
-  return SEVERITY_MAP[severity.toLowerCase()] || 'info'
-}
-
-export function buildTitle(labels: Record<string, string>): string {
-  const name = labels['alertname'] || 'Unknown Alert'
-  const host = labels['hostname'] || labels['instance'] || labels['host']
-  return host ? `${name} - ${host}` : name
-}
-
-export function filterLabels(labels: Record<string, string>): Record<string, string> {
-  const filtered: Record<string, string> = {}
-  for (const [key, value] of Object.entries(labels)) {
-    if (key.startsWith('__')) continue
-    filtered[key] = value
-  }
-  return filtered
-}
+// Severity mapping, title, and label filtering now come from
+// @shumoku/core/plugin-kit (mapAlertmanagerSeverity / severityRank /
+// buildAlertTitle / filterAlertLabels) via parseAlertmanagerAlerts — one shared
+// Alertmanager dialect, no local copy.
 
 /**
  * Validate an inbound Grafana webhook payload before it is processed. The
@@ -209,54 +167,10 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable, Connectio
         return []
       }
 
-      interface GrafanaAlertmanagerAlert {
-        fingerprint: string
-        labels: Record<string, string>
-        annotations?: Record<string, string>
-        startsAt: string
-        endsAt?: string
-        status: { state: 'active' | 'suppressed' | 'unprocessed' }
-        generatorURL?: string
-      }
-
-      const alertmanagerAlerts = (await response.json()) as GrafanaAlertmanagerAlert[]
-
-      const now = Date.now()
-      const timeRangeMs = (options?.timeRange || 3600) * 1000
-
-      const alerts: Alert[] = alertmanagerAlerts
-        .filter((a) => {
-          const isActive = a.status.state === 'active'
-          if (!isActive) {
-            if (options?.activeOnly) return false
-            const startTime = new Date(a.startsAt).getTime()
-            if (now - startTime > timeRangeMs) return false
-          }
-          return true
-        })
-        .map(
-          (a) =>
-            ({
-              id: a.fingerprint,
-              severity: mapSeverity(a.labels['severity']),
-              title: buildTitle(a.labels),
-              description: a.annotations?.['description'] || a.annotations?.['summary'],
-              host: a.labels['hostname'] || a.labels['instance'] || a.labels['host'],
-              startTime: new Date(a.startsAt).getTime(),
-              endTime: a.endsAt ? new Date(a.endsAt).getTime() : undefined,
-              status: a.status.state === 'active' ? 'active' : 'resolved',
-              source: 'grafana' as const,
-              url: a.generatorURL,
-              labels: filterLabels(a.labels),
-            }) satisfies Alert,
-        )
-
-      if (options?.minSeverity) {
-        const minOrder = SEVERITY_ORDER[options.minSeverity]
-        return alerts.filter((a) => SEVERITY_ORDER[a.severity] >= minOrder)
-      }
-
-      return alerts
+      // Grafana's bundled Alertmanager speaks the standard /api/v2/alerts
+      // shape, so the shared parser handles it (filters + severity + labels).
+      const raw = (await response.json()) as AlertmanagerAlert[]
+      return parseAlertmanagerAlerts(raw, { source: 'grafana', query: options })
     } catch (err) {
       console.error('[GrafanaPlugin] Failed to fetch alerts:', err)
       return []

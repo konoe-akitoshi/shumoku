@@ -1,11 +1,4 @@
-export {
-  buildTitle,
-  filterLabels,
-  GrafanaPlugin,
-  isGrafanaWebhookPayload,
-  mapSeverity,
-  SEVERITY_ORDER,
-} from './plugin.js'
+export { GrafanaPlugin, isGrafanaWebhookPayload } from './plugin.js'
 export type {
   AlertStoreService,
   GrafanaPluginConfig,
