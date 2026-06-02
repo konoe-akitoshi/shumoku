@@ -424,10 +424,11 @@ export const topologies = {
       }>(`/topologies/${topologyId}/discovery-policy`),
 
     /**
-     * Replace a scope's authored attachments wholesale (`null`/`[]` clears),
-     * and/or set a node's authored name override (`label`; `null`/'' reverts
-     * to the observed name). For node scope each field is applied only when
-     * present, so a label edit never wipes the access/policy overlay.
+     * Replace a scope's attachments wholesale (`null`/`[]` clears), set a
+     * node's name override (`label`; `null`/'' reverts to the observed name),
+     * and/or set a node's `suppressedAttachments` (keys the human removed;
+     * `null`/`[]` clears). For node scope each field is applied only when
+     * present, so a label edit never wipes the access/policy a node carries.
      */
     patch: (
       topologyId: string,
@@ -439,6 +440,7 @@ export const topologies = {
             id: string
             attachments?: Attachment[] | null
             label?: string | null
+            suppressedAttachments?: string[] | null
           },
     ) =>
       request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
@@ -478,11 +480,12 @@ export interface NodeExclusion {
 
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 
-/** Where a resolved attachment came from. Mirrors `@shumoku/core`'s
- *  `Provenance`. `source === 'authored'` marks a human-set attachment
- *  (editable / removable in the UI); any other source is observed-derived
- *  (read-only). resolve() stamps it; freshly-authored local attachments omit
- *  it until the next round-trip. */
+/** Where a resolved attachment's value came from. Mirrors `@shumoku/core`'s
+ *  `Provenance`. `source === 'authored'` marks a human-set value; any other
+ *  source is the value a discovery source supplied. The UI uses this as an
+ *  annotation ("your value" vs "from <source>"), NOT as a read-only gate —
+ *  every value is editable. resolve() stamps it; freshly-authored local
+ *  attachments omit it until the next round-trip. */
 export interface Provenance {
   source: string
   state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'

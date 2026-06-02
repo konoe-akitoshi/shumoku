@@ -19,6 +19,13 @@ import type { Attachment } from './api'
 
 type AccessAttachment = Extract<Attachment, { kind: 'access' }>
 
+/** Suppression key for an access protocol — mirrors core's `attachmentKey`
+ *  for the `access` case. The node-detail ✕ records this key so resolve drops
+ *  the access (a human "remove" assertion). */
+export function accessKey(protocol: AccessAttachment['protocol']): string {
+  return `access:${protocol}`
+}
+
 /**
  * The operator owns this attachment (its value is theirs) when resolve
  * tagged it `authored`, or when it has no provenance yet — a freshly-added

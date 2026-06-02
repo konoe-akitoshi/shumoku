@@ -4,7 +4,19 @@
 
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from './api'
-import { isAuthoredAttachment, stripProvenance, unifyAccessRows } from './discovery-attachments'
+import {
+  accessKey,
+  isAuthoredAttachment,
+  stripProvenance,
+  unifyAccessRows,
+} from './discovery-attachments'
+
+describe('accessKey', () => {
+  it('matches core attachmentKey for access (access:<protocol>)', () => {
+    expect(accessKey('snmp')).toBe('access:snmp')
+    expect(accessKey('ssh')).toBe('access:ssh')
+  })
+})
 
 describe('isAuthoredAttachment', () => {
   it('authored when provenance.source is "authored"', () => {
