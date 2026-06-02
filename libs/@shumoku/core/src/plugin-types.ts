@@ -16,14 +16,25 @@ import type { NetworkGraph } from './models/types.js'
 // ============================================
 
 /**
- * Capabilities a data source plugin can provide
+ * The capabilities the host knows how to dispatch to. Each maps to a required
+ * instance method (see `CAPABILITY_METHOD`).
  */
-export type DataSourceCapability =
+export type KnownDataSourceCapability =
   | 'topology' // Can provide NetworkGraph
   | 'metrics' // Can provide MetricsData
   | 'hosts' // Can list hosts (for mapping UI)
   | 'alerts' // Can provide alerts from monitoring system
   | 'autoscan' // Can perform seed-crawl network discovery (SNMP/LLDP etc.)
+
+/**
+ * Capabilities a data source plugin can provide.
+ *
+ * OPEN set (decision 3): the known values get IDE autocomplete and host
+ * dispatch wiring, but any string is accepted so a new plugin can advertise a
+ * capability the host doesn't recognize yet. Unknown capabilities are
+ * gracefully ignored, never rejected — adding one must not require a core edit.
+ */
+export type DataSourceCapability = KnownDataSourceCapability | (string & {})
 
 // ============================================
 // Common Types
@@ -477,6 +488,37 @@ export function hasNativeApi(
   return typeof (plugin as Partial<NativeApiCapable>).nativeApi === 'function'
 }
 
+/**
+ * Required instance method for each KNOWN capability. Unknown (open)
+ * capabilities are intentionally absent — the host can't know their contract,
+ * so it can't verify or dispatch them.
+ */
+export const CAPABILITY_METHOD: Record<KnownDataSourceCapability, string> = {
+  topology: 'fetchTopology',
+  hosts: 'getHosts',
+  metrics: 'pollMetrics',
+  alerts: 'getAlerts',
+  autoscan: 'scan',
+}
+
+/**
+ * Declared capabilities whose required method is missing on a constructed
+ * instance, formatted `"cap → method()"`. Empty array = compliant. Unknown
+ * (open) capabilities are skipped. The registry calls this once at first
+ * instantiate (decision 7) to catch a plugin that advertises a capability it
+ * doesn't actually implement (C6).
+ */
+export function missingCapabilityMethods(plugin: DataSourcePlugin): string[] {
+  const missing: string[] = []
+  const asRecord = plugin as unknown as Record<string, unknown>
+  for (const cap of plugin.capabilities) {
+    const method = CAPABILITY_METHOD[cap as KnownDataSourceCapability]
+    if (!method) continue
+    if (typeof asRecord[method] !== 'function') missing.push(`${cap} → ${method}()`)
+  }
+  return missing
+}
+
 // ============================================
 // Plugin Registry Types
 // ============================================
@@ -487,19 +529,56 @@ export function hasNativeApi(
 export type PluginFactory = (config: unknown) => DataSourcePlugin
 
 /**
- * Plugin registration info
+ * Self-description of a plugin — the single contract bundled and external
+ * plugins both provide. Bundled plugins pass this to `registerDescriptor`;
+ * the external loader builds it from `plugin.json`. The host renders forms and
+ * validates config purely from `configSchema` / `optionsSchema`, so no
+ * per-plugin branch is needed (this closes the bundled-vs-external asymmetry
+ * where only external plugins carried a configSchema).
  */
-export interface PluginRegistration {
+export interface PluginDescriptor {
   type: string
   displayName: string
   capabilities: readonly DataSourceCapability[]
+  version?: string
+  description?: string
+  /** Connection config schema; the host renders the form and validates from it. */
+  configSchema?: PluginConfigSchema
+  /** Per-use options schema (e.g. topology groupBy/filters), rendered on the Sources page. */
+  optionsSchema?: PluginConfigSchema
+  /**
+   * Declares this plugin ingests webhooks; the host then shows the generic
+   * `/api/webhooks/:type/:id` URL via `getConnectionInfo`. Consumed in Phase 5 (F6).
+   */
+  webhook?: boolean
+  /**
+   * INERT today (decision 5 / §3.10): recorded and displayable, never enforced.
+   * Reserved for a future (b) untrusted-author model with sandboxing — kept so
+   * authors can start declaring it, not because anything reads it yet.
+   */
+  apiVersion?: string
+  permissions?: string[]
+}
+
+/**
+ * Plugin registration info: a descriptor plus its factory. Keeps the flat
+ * `type` / `displayName` / `capabilities` fields (existing readers rely on
+ * them) and adds the descriptor's schema fields.
+ */
+export interface PluginRegistration extends PluginDescriptor {
   factory: PluginFactory
 }
 
 /**
- * Plugin registry interface for external plugins
+ * Plugin registry interface that plugins register against.
  */
 export interface PluginRegistryInterface {
+  /** Register from a full self-description (preferred — carries config/options schema). */
+  registerDescriptor(descriptor: PluginDescriptor, factory: PluginFactory): void
+  /**
+   * Back-compat 4-arg form (no schema). Delegates to `registerDescriptor`.
+   * Retained so existing external plugins keep working without edits.
+   */
   register(
     type: string,
     displayName: string,
@@ -596,6 +675,8 @@ export interface PluginManifest {
   entry?: string
   /** JSON Schema for plugin configuration */
   configSchema?: PluginConfigSchema
+  /** Per-use options schema (e.g. topology groupBy/filters). */
+  optionsSchema?: PluginConfigSchema
 }
 
 // ============================================

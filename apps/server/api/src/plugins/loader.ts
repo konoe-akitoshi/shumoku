@@ -48,6 +48,7 @@ interface LoadedPluginInfo {
   path: string
   capabilities: string[]
   configSchema?: PluginManifest['configSchema']
+  optionsSchema?: PluginManifest['optionsSchema']
   enabled: boolean
   bundled: boolean
   error?: string
@@ -188,6 +189,7 @@ async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<L
         path: pluginPath,
         capabilities: manifest.capabilities,
         configSchema: manifest.configSchema,
+        optionsSchema: manifest.optionsSchema,
         enabled: false,
         bundled: false,
       }
@@ -246,6 +248,7 @@ async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<L
       path: pluginPath,
       capabilities: manifest.capabilities,
       configSchema: manifest.configSchema,
+      optionsSchema: manifest.optionsSchema,
       enabled: true,
       bundled: false,
     }
@@ -769,9 +772,13 @@ export function getAllPlugins(): LoadedPluginInfo[] {
       bundledPlugins.push({
         id: reg.type,
         name: reg.displayName,
-        version: 'bundled',
+        version: reg.version ?? 'bundled',
         path: '',
         capabilities: [...reg.capabilities],
+        // Bundled plugins now self-describe via registerDescriptor, so their
+        // schemas flow through the registry the same as external plugins'.
+        configSchema: reg.configSchema,
+        optionsSchema: reg.optionsSchema,
         enabled: true,
         bundled: true,
       })

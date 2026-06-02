@@ -5,11 +5,13 @@
  * Plugins are registered at startup and can be instantiated on demand.
  */
 
-import type {
-  DataSourceCapability,
-  DataSourcePlugin,
-  PluginFactory,
-  PluginRegistration,
+import {
+  type DataSourceCapability,
+  type DataSourcePlugin,
+  missingCapabilityMethods,
+  type PluginDescriptor,
+  type PluginFactory,
+  type PluginRegistration,
 } from '@shumoku/core'
 
 class PluginRegistry {
@@ -17,7 +19,29 @@ class PluginRegistry {
   private instances = new Map<string, DataSourcePlugin>()
 
   /**
-   * Register a plugin type
+   * Register a plugin from its full self-description (preferred). Carries
+   * configSchema / optionsSchema so bundled plugins describe themselves the
+   * same way external ones do (closing the asymmetry where only external
+   * plugins surfaced a configSchema).
+   */
+  registerDescriptor(descriptor: PluginDescriptor, factory: PluginFactory): void {
+    if (this.plugins.has(descriptor.type)) {
+      console.warn(
+        `[PluginRegistry] Plugin "${descriptor.type}" is already registered, overwriting`,
+      )
+    }
+
+    this.plugins.set(descriptor.type, { ...descriptor, factory })
+
+    console.log(
+      `[PluginRegistry] Registered plugin: ${descriptor.type} [${descriptor.capabilities.join(', ')}]`,
+    )
+  }
+
+  /**
+   * Back-compat 4-arg registration (no schema). Delegates to
+   * `registerDescriptor`. Retained so existing external plugins and any
+   * not-yet-migrated bundled plugin keep working unchanged.
    */
   register(
     type: string,
@@ -25,18 +49,7 @@ class PluginRegistry {
     capabilities: readonly DataSourceCapability[],
     factory: PluginFactory,
   ): void {
-    if (this.plugins.has(type)) {
-      console.warn(`[PluginRegistry] Plugin "${type}" is already registered, overwriting`)
-    }
-
-    this.plugins.set(type, {
-      type,
-      displayName,
-      capabilities,
-      factory,
-    })
-
-    console.log(`[PluginRegistry] Registered plugin: ${type} [${capabilities.join(', ')}]`)
+    this.registerDescriptor({ type, displayName, capabilities }, factory)
   }
 
   /**
@@ -64,6 +77,21 @@ class PluginRegistry {
 
     // Factory is responsible for calling initialize
     const plugin = registration.factory(config)
+
+    // Verify the instance actually implements every capability it advertises
+    // (decision 7: check at first instantiate, not at registration — no dummy
+    // construction). A misdeclared bundled plugin is a bug → throw in dev; in
+    // production, log and proceed so one bad external plugin can't wedge boot.
+    const missing = missingCapabilityMethods(plugin)
+    if (missing.length > 0) {
+      const message = `[PluginRegistry] "${type}" advertises capabilities it does not implement: ${missing.join(', ')}`
+      if (process.env.NODE_ENV === 'production') {
+        console.error(message)
+      } else {
+        throw new Error(message)
+      }
+    }
+
     return plugin
   }
 
