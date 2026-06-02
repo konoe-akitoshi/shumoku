@@ -3,7 +3,7 @@
  * CRUD endpoints for data source management with plugin support
  */
 
-import { hasConfigOptions, validateAgainstSchema } from '@shumoku/core'
+import { hasConfigOptions, hasConnectionInfo, validateAgainstSchema } from '@shumoku/core'
 import { Hono } from 'hono'
 import { getAllPlugins } from '../plugins/loader.js'
 import type { AlertQueryOptions } from '../plugins/types.js'
@@ -107,6 +107,28 @@ export function createDataSourcesApi(): Hono {
     } catch (err) {
       console.error('[DataSources] getConfigOptions failed:', err)
       return c.json({ options: [] })
+    }
+  })
+
+  // Derived, display-only connection info (e.g. a webhook URL). The plugin
+  // builds it from its config + the host-supplied origin; the web renders the
+  // items generically (no per-plugin branch). `origin` is the public origin the
+  // web is served from, so the URL is reachable by the upstream.
+  app.get('/:id/connection-info', (c) => {
+    const id = c.req.param('id')
+    const plugin = service.getPlugin(id)
+    if (!plugin || !hasConnectionInfo(plugin)) {
+      return c.json({ items: [] })
+    }
+    const ds = service.get(id)
+    const config = ds ? JSON.parse(ds.configJson) : {}
+    const serverOrigin = c.req.query('origin') || new URL(c.req.url).origin
+    try {
+      const items = plugin.getConnectionInfo(config, { dataSourceId: id, serverOrigin })
+      return c.json({ items })
+    } catch (err) {
+      console.error('[DataSources] getConnectionInfo failed:', err)
+      return c.json({ items: [] })
     }
   })
 

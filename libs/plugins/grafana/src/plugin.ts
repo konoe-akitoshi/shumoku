@@ -11,6 +11,9 @@ import {
   type AlertSeverity,
   type AlertsCapable,
   addHttpWarning,
+  type ConnectionInfoCapable,
+  type ConnectionInfoContext,
+  type ConnectionInfoItem,
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
@@ -97,7 +100,7 @@ export function isGrafanaWebhookPayload(body: unknown): body is GrafanaWebhookPa
 // Plugin Class
 // ============================================
 
-export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
+export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable, ConnectionInfoCapable {
   readonly type = 'grafana'
   readonly displayName = 'Grafana'
   readonly capabilities: readonly DataSourceCapability[] = ['alerts']
@@ -108,6 +111,24 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable {
 
   initialize(config: unknown): void {
     this.config = config as GrafanaPluginConfig
+  }
+
+  /**
+   * Derived, display-only info: the webhook URL to paste into a Grafana
+   * Contact Point. Built from the stored secret + the host-supplied origin (it
+   * can't be a config input). The host renders this generically via
+   * getConnectionInfo — no grafana-specific UI branch.
+   */
+  getConnectionInfo(config: unknown, ctx: ConnectionInfoContext): ConnectionInfoItem[] {
+    const cfg = config as GrafanaPluginConfig | null
+    if (!cfg?.useWebhook || !cfg.webhookSecret) return []
+    return [
+      {
+        label: 'Webhook URL',
+        value: `${ctx.serverOrigin}/api/webhooks/grafana/${cfg.webhookSecret}`,
+        copyable: true,
+      },
+    ]
   }
 
   /**

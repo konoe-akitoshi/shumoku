@@ -51,18 +51,27 @@
     return type ? pluginTypes.find((p) => p.type === type)?.configSchema : undefined
   }
 
-  // Grafana webhook URL display (read-only; secret is generated server-side).
-  let webhookUrl = $state('')
-  let webhookLoading = $state(false)
-  let copied = $state(false)
+  // Derived, display-only connection info (e.g. grafana webhook URL), rendered
+  // generically from the plugin's getConnectionInfo — no per-plugin branch.
+  let connectionItems = $state<{ label: string; value: string; copyable?: boolean }[]>([])
+  let copiedValue = $state<string | null>(null)
   let copiedTimer: ReturnType<typeof setTimeout> | null = null
 
-  function copyWebhookUrl() {
-    navigator.clipboard.writeText(webhookUrl)
-    copied = true
+  async function loadConnectionInfo() {
+    try {
+      const res = await api.dataSources.getConnectionInfo(id, window.location.origin)
+      connectionItems = res.items
+    } catch {
+      connectionItems = []
+    }
+  }
+
+  function copyValue(value: string) {
+    navigator.clipboard.writeText(value)
+    copiedValue = value
     if (copiedTimer) clearTimeout(copiedTimer)
     copiedTimer = setTimeout(() => {
-      copied = false
+      copiedValue = null
       copiedTimer = null
     }, 2000)
   }
@@ -217,23 +226,6 @@
     return out
   }
 
-  async function loadWebhookUrl() {
-    if (!config['useWebhook']) {
-      webhookUrl = ''
-      return
-    }
-    webhookLoading = true
-    try {
-      const result = await api.dataSources.getWebhookUrl(id)
-      webhookUrl = `${window.location.origin}${result.webhookPath}`
-    } catch (err) {
-      console.error('[WebhookUrl] Failed to load:', err)
-      webhookUrl = ''
-    } finally {
-      webhookLoading = false
-    }
-  }
-
   // Re-fetch whenever the route id changes (the component is reused across
   // /datasources/[id] navigations).
   $effect(() => {
@@ -243,7 +235,7 @@
     error = ''
     dataSource = null
     testResult = null
-    webhookUrl = ''
+    connectionItems = []
 
     ;(async () => {
       try {
@@ -258,9 +250,7 @@
         const parsed = parseConfig(ds.configJson) as Record<string, unknown>
         config = blankSecrets(parsed, configSchemaFor(ds.type))
 
-        if (config['useWebhook']) {
-          await loadWebhookUrl()
-        }
+        await loadConnectionInfo()
 
         if (ds.type === 'manual') {
           try {
@@ -330,10 +320,9 @@
         configSchemaFor(dataSource.type),
       )
 
-      // Load webhook URL after save (secret may have been generated)
-      if (dataSource.type === 'grafana' && config['useWebhook']) {
-        await loadWebhookUrl()
-      }
+      // Refresh derived connection info after save (e.g. a webhook secret may
+      // have just been generated server-side).
+      await loadConnectionInfo()
 
       // Auto-test connection after save
       await handleTest()
@@ -486,42 +475,35 @@
               {/if}
             {/if}
 
-            {#if dataSource.type === 'grafana' && config['useWebhook']}
+            <!-- Derived connection info (e.g. webhook URL), rendered generically
+                 from the plugin's getConnectionInfo — no per-plugin branch. -->
+            {#each connectionItems as item (item.label)}
               <div class="pt-2 border-t border-theme-border">
-                <p class="text-sm font-medium text-theme-text-emphasis">Webhook URL</p>
-                <p class="text-xs text-theme-text-muted mt-0.5 mb-2">
-                  Set this as a Grafana Contact Point (Webhook type, POST method).
-                </p>
-                {#if webhookUrl}
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="text"
-                      class="input flex-1 font-mono text-xs"
-                      value={webhookUrl}
-                      readonly
-                    >
+                <p class="text-sm font-medium text-theme-text-emphasis">{item.label}</p>
+                <div class="flex items-center gap-2 mt-1">
+                  <input
+                    type="text"
+                    class="input flex-1 font-mono text-xs"
+                    value={item.value}
+                    readonly
+                  >
+                  {#if item.copyable}
                     <button
                       type="button"
                       class="btn btn-secondary p-2"
                       title="Copy to clipboard"
-                      onclick={copyWebhookUrl}
+                      onclick={() => copyValue(item.value)}
                     >
-                      {#if copied}
+                      {#if copiedValue === item.value}
                         <CheckIcon size={16} class="text-success" />
                       {:else}
                         <CopyIcon size={16} />
                       {/if}
                     </button>
-                  </div>
-                {:else if webhookLoading}
-                  <p class="text-xs text-theme-text-muted">Loading webhook URL...</p>
-                {:else}
-                  <p class="text-xs text-theme-text-muted">
-                    Click <strong>Save Changes</strong> to generate the Webhook URL.
-                  </p>
-                {/if}
+                  {/if}
+                </div>
               </div>
-            {/if}
+            {/each}
 
             <div class="flex justify-end pt-4 border-t border-theme-border">
               <button type="submit" class="btn btn-primary" disabled={saving}>

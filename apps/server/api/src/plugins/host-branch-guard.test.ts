@@ -15,15 +15,13 @@ import { describe, expect, it } from 'vitest'
  * per-plugin `type === '<plugin>'` branch in these files is a regression —
  * adding a data source type must require zero host edits.
  *
- * Documented, intentional exceptions (NOT config-form branches):
+ * Documented, intentional exception (NOT a config-form branch):
  * - 'manual': the editor-container source — no upstream, one-per-topology,
  *   carries its graph in config_json. Architecturally special, not a normal
- *   data-source plugin.
- * - 'grafana': the webhook-URL display + useWebhook gate, pending
- *   getConnectionInfo + a generic /api/webhooks/:type/:id route (design F6).
- *   Tracked cleanup, not a config-form branch.
+ *   data-source plugin. (Grafana's webhook URL is now generic via
+ *   getConnectionInfo, so it no longer needs an exception.)
  */
-const ALLOWED = new Set(['manual', 'grafana'])
+const ALLOWED = new Set(['manual'])
 const BUNDLED = [
   'zabbix',
   'prometheus',
