@@ -23,6 +23,41 @@ import type {
 
 const BASE_URL = '/api'
 
+/**
+ * Shared-dashboard view context. When a shared dashboard is open (no auth
+ * cookie), its widgets must read topology/datasource data through the
+ * token-scoped `/share/dashboards/:token/*` endpoints instead of the
+ * management endpoints (which 401 for anonymous viewers). The share page sets
+ * this on mount and clears it on destroy; widgets consult `isSharedView()` to
+ * skip selector-list calls that only make sense while editing.
+ */
+let shareDashboardToken: string | null = null
+
+export function setShareDashboardToken(token: string | null): void {
+  shareDashboardToken = token
+}
+
+export function isSharedView(): boolean {
+  return shareDashboardToken !== null
+}
+
+/** Prefix a widget read path with the active share scope, when in a shared view. */
+function scoped(managementPath: string, sharePath: string): string {
+  return shareDashboardToken
+    ? `/share/dashboards/${shareDashboardToken}${sharePath}`
+    : managementPath
+}
+
+/**
+ * Full URL for a widget read that uses raw `fetch` rather than the typed
+ * client, applying the active share scope. `suffix` is a management-style path
+ * (e.g. `/topologies/abc/context`); in a shared view it's rewritten to the
+ * token-scoped equivalent.
+ */
+export function apiUrl(suffix: string): string {
+  return `${BASE_URL}${scoped(suffix, suffix)}`
+}
+
 class ApiError extends Error {
   constructor(
     message: string,
@@ -125,8 +160,8 @@ export const dataSources = {
       params.set('minSeverity', options.minSeverity)
     }
     const queryString = params.toString()
-    const url = `/datasources/${id}/alerts${queryString ? `?${queryString}` : ''}`
-    return request<Alert[]>(url)
+    const suffix = `/datasources/${id}/alerts${queryString ? `?${queryString}` : ''}`
+    return request<Alert[]>(scoped(suffix, suffix))
   },
 
   getWebhookUrl: (id: string) => request<{ webhookPath: string }>(`/datasources/${id}/webhook-url`),
@@ -166,7 +201,7 @@ export const dataSources = {
 export const topologies = {
   list: () => request<Topology[]>('/topologies'),
 
-  get: (id: string) => request<Topology>(`/topologies/${id}`),
+  get: (id: string) => request<Topology>(scoped(`/topologies/${id}`, `/topologies/${id}`)),
 
   create: (input: TopologyInput) =>
     request<Topology>('/topologies', {
@@ -220,7 +255,9 @@ export const topologies = {
   },
 
   getGraph: (id: string) =>
-    request<{ id: string; name: string; graph: NetworkGraph }>(`/topologies/${id}/graph`),
+    request<{ id: string; name: string; graph: NetworkGraph }>(
+      scoped(`/topologies/${id}/graph`, `/topologies/${id}/graph`),
+    ),
 
   /** Resolved graph = authored layer folded with latest snapshot per source. */
   getResolved: (id: string) =>
@@ -262,7 +299,9 @@ export const topologies = {
 
   getContext: (id: string, theme?: 'light' | 'dark') => {
     const params = theme ? `?theme=${theme}` : ''
-    return request<TopologyContext>(`/topologies/${id}/context${params}`)
+    return request<TopologyContext>(
+      scoped(`/topologies/${id}/context${params}`, `/topologies/${id}/context${params}`),
+    )
   },
 
   // Sharing

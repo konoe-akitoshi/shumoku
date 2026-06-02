@@ -10,7 +10,7 @@
   } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
   import { get } from 'svelte/store'
-  import { api } from '$lib/api'
+  import { api, isSharedView } from '$lib/api'
   import * as Dialog from '$lib/components/ui/dialog'
   import { currentLayout, dashboardStore } from '$lib/stores/dashboards'
   import {
@@ -295,7 +295,9 @@
   }
 
   onMount(() => {
-    loadAlertDataSources()
+    // The alert-source list only feeds the editor picker; a shared view reads
+    // alerts straight from the configured source via the token-scoped endpoint.
+    if (!isSharedView()) loadAlertDataSources()
     loadAlerts()
     setupAutoRefresh()
   })

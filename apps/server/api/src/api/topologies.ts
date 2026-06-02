@@ -10,7 +10,7 @@ import { getLayoutEngine } from '../layout.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { ObservationsService } from '../services/observations.js'
-import { TopologyService } from '../services/topology.js'
+import { type ParsedTopology, TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { MetricsMapping, TopologyInput } from '../types.js'
 
@@ -124,6 +124,56 @@ let _topologyService: TopologyService | null = null
 let _dataSourceService: DataSourceService | null = null
 let _topologySourcesService: TopologySourcesService | null = null
 
+/**
+ * Build the simplified context payload (nodes, edges, subgraphs, metrics)
+ * served by `GET /topologies/:id/context` and its shared-dashboard twin in
+ * `share.ts`. Kept here so both paths return byte-identical shapes.
+ */
+export function buildTopologyContext(parsed: ParsedTopology) {
+  // Build a node lookup so we can resolve link endpoints to their port objects.
+  const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
+  const resolvePort = (nodeId: string, portId: string | undefined) => {
+    if (!portId) return undefined
+    const port = nodeById.get(nodeId)?.ports?.find((p) => p.id === portId)
+    if (!port) return undefined
+    return {
+      id: port.id,
+      label: port.label || undefined,
+      interfaceName: port.interfaceName,
+      aliases: port.aliases,
+    }
+  }
+
+  return {
+    id: parsed.id,
+    name: parsed.name,
+    nodes: parsed.graph.nodes.map((n) => ({
+      id: n.id,
+      label: n.label || n.id,
+      type: specDeviceType(n.spec),
+    })),
+    edges: parsed.graph.links.map((l, i) => ({
+      id: l.id || `link-${i}`,
+      from: {
+        nodeId: l.from.node,
+        port: l.from.port,
+        portInfo: resolvePort(l.from.node, l.from.port),
+      },
+      to: {
+        nodeId: l.to.node,
+        port: l.to.port,
+        portInfo: resolvePort(l.to.node, l.to.port),
+      },
+      standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
+    })),
+    subgraphs: parsed.graph.subgraphs || [],
+    metrics: parsed.metrics,
+    topologySourceId: parsed.topologySourceId,
+    metricsSourceId: parsed.metricsSourceId,
+    mapping: parsed.mapping,
+  }
+}
+
 export function getTopologyService(): TopologyService {
   if (!_topologyService) {
     _topologyService = new TopologyService()
@@ -131,7 +181,7 @@ export function getTopologyService(): TopologyService {
   return _topologyService
 }
 
-function getDataSourceService(): DataSourceService {
+export function getDataSourceService(): DataSourceService {
   if (!_dataSourceService) {
     _dataSourceService = new DataSourceService()
   }
@@ -259,49 +309,8 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Build a node lookup so we can resolve link endpoints to their port objects.
-      const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
-      const resolvePort = (nodeId: string, portId: string | undefined) => {
-        if (!portId) return undefined
-        const port = nodeById.get(nodeId)?.ports?.find((p) => p.id === portId)
-        if (!port) return undefined
-        return {
-          id: port.id,
-          label: port.label || undefined,
-          interfaceName: port.interfaceName,
-          aliases: port.aliases,
-        }
-      }
-
       // Return simplified context with node/edge info from graph
-      return c.json({
-        id: parsed.id,
-        name: parsed.name,
-        nodes: parsed.graph.nodes.map((n) => ({
-          id: n.id,
-          label: n.label || n.id,
-          type: specDeviceType(n.spec),
-        })),
-        edges: parsed.graph.links.map((l, i) => ({
-          id: l.id || `link-${i}`,
-          from: {
-            nodeId: l.from.node,
-            port: l.from.port,
-            portInfo: resolvePort(l.from.node, l.from.port),
-          },
-          to: {
-            nodeId: l.to.node,
-            port: l.to.port,
-            portInfo: resolvePort(l.to.node, l.to.port),
-          },
-          standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
-        })),
-        subgraphs: parsed.graph.subgraphs || [],
-        metrics: parsed.metrics,
-        topologySourceId: parsed.topologySourceId,
-        metricsSourceId: parsed.metricsSourceId,
-        mapping: parsed.mapping,
-      })
+      return c.json(buildTopologyContext(parsed))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
