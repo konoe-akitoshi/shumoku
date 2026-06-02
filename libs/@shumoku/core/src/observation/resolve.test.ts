@@ -523,6 +523,714 @@ describe('resolve()', () => {
       expect(out.links[0]?.provenance?.state).toBe('authored-only')
     })
   })
+
+  // -------------------------------------------------------------------------
+  // Priority field merge — the heart of the redesign. All sources (incl. the
+  // human/authored graph) are equal, priority-ordered contributions; per
+  // field the highest-priority contribution that holds a value wins.
+  // -------------------------------------------------------------------------
+  describe('priority field merge (C1)', () => {
+    it('two observed sources merge field-by-field; higher priority wins, missing fields fall through', () => {
+      // Same device (mgmtIp) seen by two sources at different priorities.
+      const hi: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 10,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'nb-1',
+              label: 'hi-name',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.1' },
+              spec: { kind: 'hardware', model: 'modelHi' },
+              // hi has NO ports — that field must fall through to lo.
+            },
+          ],
+        },
+      }
+      const lo: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        priority: 5,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'scan-1',
+              label: 'lo-name',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.1' },
+              spec: { kind: 'hardware', model: 'modelLo' },
+              ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
+            },
+          ],
+        },
+      }
+      const out = resolve(emptyGraph(), [lo, hi]) // order independent of priority
+      expect(out.nodes).toHaveLength(1)
+      const n = out.nodes[0]
+      // higher priority (netbox:1) wins the fields it holds
+      expect(stringOf(n?.label)).toBe('hi-name')
+      expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('modelHi')
+      expect(n?.fieldSources?.['label']).toBe('netbox:1')
+      // ports fall through to the only source that holds them
+      expect(n?.ports).toHaveLength(1)
+      expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1')
+    })
+
+    it('human (authored) outranks every observed source per field', () => {
+      const lo: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        priority: 5,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'scan-1',
+              label: 'observed-name',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.1' },
+              spec: { kind: 'hardware', model: 'observed-model' },
+              ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'HUMAN-RENAME',
+            identity: { mgmtIp: '10.0.0.1' },
+          },
+        ],
+      }
+      const n = resolve(authored, [lo]).nodes[0]
+      // human wins label (it holds one) — "human wins" = "+Infinity priority"
+      expect(stringOf(n?.label)).toBe('HUMAN-RENAME')
+      expect(n?.fieldSources?.['label']).toBe('authored')
+      // human held no spec/ports → observed still flows through
+      expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('observed-model')
+      expect(n?.ports).toHaveLength(1)
+      expect(n?.provenance?.state).toBe('confirmed')
+    })
+  })
+
+  describe('empty = no value (C2, decision 1)', () => {
+    it('a high-priority empty string field yields to a lower-priority real value', () => {
+      const hi: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 10,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'nb-1', label: '', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }, // empty name
+          ],
+        },
+      }
+      const lo: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        priority: 5,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'scan-1', label: 'real-name', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+          ],
+        },
+      }
+      const n = resolve(emptyGraph(), [hi, lo]).nodes[0]
+      // hi's empty label makes no claim → lo's real value wins despite lower priority
+      expect(stringOf(n?.label)).toBe('real-name')
+      expect(n?.fieldSources?.['label']).toBe('network-scan:1')
+    })
+
+    it('a high-priority empty-array label yields too', () => {
+      const hi: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 10,
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'nb-1', label: [], shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+        },
+      }
+      const lo: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        priority: 5,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'scan-1', label: 'visible', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+          ],
+        },
+      }
+      const n = resolve(emptyGraph(), [hi, lo]).nodes[0]
+      expect(stringOf(n?.label)).toBe('visible')
+    })
+  })
+
+  describe('human partial node, no sentinel dependence (C3, decision 3)', () => {
+    it('a human overlay that only sets an attachment makes no claim on the name (observed shows through)', () => {
+      const observed: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              metadata: { readVia: 'snmp' },
+              ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
+              attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+            },
+          ],
+        },
+      }
+      // Partial node: identity + a policy attachment. label '' is NOT a
+      // sentinel here — it just fails hasValue, so no name claim is made.
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'policy', mode: 'disabled' }],
+          },
+        ],
+      }
+      const n = resolve(authored, [observed]).nodes[0]
+      // observed name shows through; the human made no label claim
+      expect(stringOf(n?.label)).toBe('sw-core')
+      expect(n?.fieldSources?.['label']).toBe('network-scan:1')
+      // observed facts survive
+      expect(n?.metadata?.['readVia']).toBe('snmp')
+      expect(n?.ports).toHaveLength(1)
+      // both attachments present
+      expect((n?.attachments ?? []).some((a) => a.kind === 'policy')).toBe(true)
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp')).toBe(
+        true,
+      )
+    })
+  })
+
+  describe('attachment provenance (C6, decision 5)', () => {
+    it('observed and human attachments carry distinct provenance sources', () => {
+      const observed: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'ssh', username: 'admin' }],
+          },
+        ],
+      }
+      const n = resolve(authored, [observed]).nodes[0]
+      const snmp = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      const ssh = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'ssh')
+      // observed access is attributed to the observing source (UI: read-only)
+      expect(snmp?.provenance?.source).toBe('network-scan:1')
+      // human access is attributed to 'authored' (UI: editable / ✕)
+      expect(ssh?.provenance?.source).toBe('authored')
+    })
+
+    it('a human access that overrides an observed one is attributed to the human', () => {
+      const observed: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'discovered:0',
+              label: 'sw-core',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+            },
+          ],
+        },
+      }
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'override' }],
+          },
+        ],
+      }
+      const n = resolve(authored, [observed]).nodes[0]
+      const accs = (n?.attachments ?? []).filter(
+        (a) => a.kind === 'access' && a.protocol === 'snmp',
+      )
+      expect(accs).toHaveLength(1)
+      const a = accs[0]
+      expect(a && a.kind === 'access' && a.protocol === 'snmp' ? a.community : undefined).toBe(
+        'override',
+      )
+      expect(a?.provenance?.source).toBe('authored')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Reset removes the human contribution; the node returns to the observed
+  // bare state via the priority merge — not by "peeling a layer" (C4).
+  // -------------------------------------------------------------------------
+  describe('Reset = remove the human contribution (C4)', () => {
+    const observed: SnapshotEntry = {
+      sourceId: 'network-scan:1',
+      capturedAt: 1000,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'scan-name',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+          },
+        ],
+      },
+    }
+    const communityOf = (n: { attachments?: unknown[] } | undefined): string | undefined => {
+      const a = (n?.attachments ?? []).find(
+        (x): x is { kind: 'access'; protocol: 'snmp'; community?: string } =>
+          !!x &&
+          typeof x === 'object' &&
+          (x as { kind?: string }).kind === 'access' &&
+          (x as { protocol?: string }).protocol === 'snmp',
+      )
+      return a?.community
+    }
+
+    it('with the human overlay present, human name + community win', () => {
+      const withHuman: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'MY-NAME',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'private' }],
+          },
+        ],
+      }
+      const n = resolve(withHuman, [observed]).nodes[0]
+      expect(stringOf(n?.label)).toBe('MY-NAME')
+      expect(communityOf(n)).toBe('private')
+      expect(n?.fieldSources?.['label']).toBe('authored')
+    })
+
+    it('dropping the human contribution returns the node to the observed name + community', () => {
+      // Reset = the node's entry is gone from the authored graph.
+      const n = resolve(emptyGraph(), [observed]).nodes[0]
+      expect(stringOf(n?.label)).toBe('scan-name') // observed name surfaces
+      expect(communityOf(n)).toBe('public') // observed community surfaces
+      expect(n?.fieldSources?.['label']).toBe('network-scan:1')
+      // the surviving community is observed-derived → read-only in the UI
+      const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      expect(acc?.provenance?.source).toBe('network-scan:1')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Retraction is orthogonal to priority (decision 4 / C7). Presence is the
+  // union of contributions; priority only decides per-field winners. Human
+  // contributions and policy=disabled overlays persist; failed snapshots
+  // never retract; priority changes none of this.
+  // -------------------------------------------------------------------------
+  describe('retraction orthogonal to priority (C7)', () => {
+    it('priority does not affect presence: a node seen only by a low-priority source survives a high-priority source that omits it', () => {
+      const hi: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 100,
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+        },
+      }
+      const lo: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        priority: 1,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'a2', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+            // B is held ONLY by the low-priority source.
+            { id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+          ],
+        },
+      }
+      const out = resolve(emptyGraph(), [hi, lo])
+      const ips = out.nodes.map((n) => n.identity?.mgmtIp).sort()
+      expect(ips).toEqual(['10.0.0.1', '10.0.0.2']) // B not dropped despite low priority
+    })
+
+    it('a human overlay (policy=disabled) persists when no observed snapshot carries it', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.9' },
+            attachments: [{ kind: 'policy', mode: 'disabled' }],
+          },
+        ],
+      }
+      // A high-priority source that observes a DIFFERENT device — it must not
+      // retract the human's node just because it doesn't see it.
+      const other: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 100,
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'x', label: 'X', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+        },
+      }
+      const out = resolve(authored, [other])
+      const disabled = out.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.9')
+      expect(disabled).toBeDefined()
+      expect(disabled?.provenance?.state).toBe('authored-only')
+      expect((disabled?.attachments ?? []).some((a) => a.kind === 'policy')).toBe(true)
+    })
+
+    it('an observed-only node vanishing from the latest snapshot is retracted, but the same device persists when the human kept it', () => {
+      // latest snapshot no longer carries the device.
+      const latest: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 5,
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'y', label: 'Y', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } }],
+        },
+      }
+      // observed-only → device .1 is gone (retracted) when nobody carries it.
+      expect(resolve(emptyGraph(), [latest]).nodes.map((n) => n.identity?.mgmtIp)).toEqual([
+        '10.0.0.2',
+      ])
+      // human kept .1 → it persists even though the source dropped it.
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [{ id: 'kept', label: 'kept', identity: { mgmtIp: '10.0.0.1' } }],
+      }
+      const ips = resolve(authored, [latest])
+        .nodes.map((n) => n.identity?.mgmtIp)
+        .sort()
+      expect(ips).toEqual(['10.0.0.1', '10.0.0.2'])
+    })
+  })
+
+  describe('empty values do not count as a conflict (hasValue consistency)', () => {
+    it('an empty label from one observer is a fall-through, not a conflict', () => {
+      const empty = makeSnap('a:1', 1000, [{ id: 'a', label: '', identity: { chassisId: 'cc' } }])
+      const real = makeSnap('b:1', 2000, [
+        { id: 'b', label: 'real-name', identity: { chassisId: 'cc' } },
+      ])
+      const n = resolve(emptyGraph(), [empty, real]).nodes[0]
+      expect(stringOf(n?.label)).toBe('real-name')
+      // two observers, but only ONE non-empty label → not conflicting
+      expect(n?.provenance?.state).not.toBe('conflicting')
+    })
+  })
+
+  describe('port field merge falls through empty values (§6)', () => {
+    it('a high-priority port with empty connectors yields to a lower-priority one that has them', () => {
+      const hi: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        priority: 10,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'nb',
+              label: 'sw',
+              shape: 'rect',
+              identity: { chassisId: 'cc' },
+              // same port by ifName, but no connectors observed here
+              ports: [
+                { id: 'p-hi', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } },
+              ],
+            },
+          ],
+        },
+      }
+      const lo: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1000,
+        status: 'ok',
+        priority: 5,
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'scan',
+              label: 'sw',
+              shape: 'rect',
+              identity: { chassisId: 'cc' },
+              ports: [
+                { id: 'p-lo', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
+              ],
+            },
+          ],
+        },
+      }
+      const n = resolve(emptyGraph(), [hi, lo]).nodes[0]
+      expect(n?.ports).toHaveLength(1)
+      // connectors fell through from the lower-priority source that has them
+      expect(n?.ports?.[0]?.connectors).toEqual(['rj45'])
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Human suppression — the negative counterpart to an override. The human
+  // can remove an attachment a source supplied; it stays gone across re-scans
+  // (the assertion persists) and returns only when the human contribution is
+  // dropped (Reset). No observed/authored layers — just add / override /
+  // remove on one node.
+  // -------------------------------------------------------------------------
+  describe('human suppression of an observed attachment', () => {
+    const observed: SnapshotEntry = {
+      sourceId: 'network-scan:1',
+      capturedAt: 1000,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: 'sw-core',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.5' },
+            attachments: [
+              { kind: 'access', protocol: 'snmp', community: 'public' },
+              { kind: 'access', protocol: 'ssh', username: 'observed-admin' },
+            ],
+          },
+        ],
+      },
+    }
+
+    it('a suppressed key is dropped even though the source supplies it', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.5' },
+            suppressedAttachments: ['access:snmp'],
+          },
+        ],
+      }
+      const n = resolve(authored, [observed]).nodes[0]
+      // snmp removed by the human; ssh (not suppressed) still shows
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp')).toBe(
+        false,
+      )
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'ssh')).toBe(
+        true,
+      )
+      // node itself survives, and the suppression rides along for UI round-trip
+      expect(n?.identity?.mgmtIp).toBe('10.0.0.5')
+      expect(n?.suppressedAttachments).toEqual(['access:snmp'])
+    })
+
+    it('dropping the human contribution (Reset) brings the suppressed access back', () => {
+      const n = resolve(emptyGraph(), [observed]).nodes[0]
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp')).toBe(
+        true,
+      )
+      expect(n?.suppressedAttachments).toBeUndefined()
+    })
+
+    it('only the human suppresses — a source cannot remove another source attachment', () => {
+      // a second source carrying suppressedAttachments must NOT drop anything
+      // (suppression is a human-only, top-priority assertion).
+      const sourceWithSuppress: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 2000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'nb',
+              label: 'sw',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.5' },
+              suppressedAttachments: ['access:snmp'],
+            },
+          ],
+        },
+      }
+      const n = resolve(emptyGraph(), [observed, sourceWithSuppress]).nodes[0]
+      // snmp survives — a non-human source's suppressedAttachments is ignored
+      expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp')).toBe(
+        true,
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // The whole model in one place: a node is ONE thing; data sources, observed
+  // snapshots and the human are equal, priority-ordered contributions merged
+  // field-by-field — a Git-style non-conflicting auto-merge. The human is just
+  // the top-priority source (can add / override / remove); untouched fields
+  // flow through from whoever has them; non-matching identities stay separate.
+  // -------------------------------------------------------------------------
+  describe('Git-like merge: one node from equal contributions, field by field', () => {
+    // Same device seen by NetBox (high priority, has the model) and a scan
+    // (lower priority, has ports + community). The human touches only the name.
+    const netbox: SnapshotEntry = {
+      sourceId: 'netbox:1',
+      capturedAt: 2000,
+      status: 'ok',
+      priority: 10,
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'nb',
+            label: 'NB-NAME',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.1' },
+            spec: { kind: 'hardware', model: 'C9300' },
+          },
+        ],
+      },
+    }
+    const scan: SnapshotEntry = {
+      sourceId: 'network-scan:1',
+      capturedAt: 1000,
+      status: 'ok',
+      priority: 5,
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'scan',
+            label: 'scan-name',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.1', chassisId: 'cc' },
+            ports: [
+              { id: 'p', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
+            ],
+            attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
+          },
+        ],
+      },
+    }
+    const human: NetworkGraph = {
+      ...emptyGraph(),
+      nodes: [{ id: 'discovered:0', label: 'MY-NAME', identity: { mgmtIp: '10.0.0.1' } }],
+    }
+
+    it('one node: human name + NetBox model + scan ports + scan community, merged like Git', () => {
+      const out = resolve(human, [scan, netbox])
+      expect(out.nodes).toHaveLength(1) // one thing, not three
+      const n = out.nodes[0]
+      expect(stringOf(n?.label)).toBe('MY-NAME') // human won the one field it touched
+      expect(n?.fieldSources?.['label']).toBe('authored')
+      // untouched fields flow through from whoever holds them (priority order)
+      expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('C9300') // NetBox (10)
+      expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1') // scan
+      const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
+      expect(
+        acc && acc.kind === 'access' && acc.protocol === 'snmp' ? acc.community : undefined,
+      ).toBe('public') // scan
+      expect(n?.identity?.chassisId).toBe('cc') // identity is the union
+    })
+
+    it('drop the human (Reset) → name reverts to the top-priority source; the rest is unchanged', () => {
+      const n = resolve(emptyGraph(), [scan, netbox]).nodes[0]
+      expect(stringOf(n?.label)).toBe('NB-NAME') // NetBox (10) now wins the name
+      expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('C9300')
+      expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1')
+    })
+
+    it('a non-matching identity stays a separate island (never force-merged)', () => {
+      const other = makeSnap('network-scan:1', 1000, [
+        { id: 'x', label: 'other', identity: { mgmtIp: '10.99.99.99' } },
+      ])
+      expect(resolve(emptyGraph(), [scan, other]).nodes).toHaveLength(2)
+    })
+
+    it('the human can also remove (delete) a field a source supplied; Reset brings it back', () => {
+      const del: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'discovered:0',
+            label: '',
+            identity: { mgmtIp: '10.0.0.1' },
+            suppressedAttachments: ['access:snmp'],
+          },
+        ],
+      }
+      // human deleted the scan's community → gone
+      const deleted = resolve(del, [scan, netbox]).nodes[0]
+      expect((deleted?.attachments ?? []).some((a) => a.kind === 'access')).toBe(false)
+      // Reset (no human) → the source's community is back
+      const reset = resolve(emptyGraph(), [scan, netbox]).nodes[0]
+      expect(
+        (reset?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp'),
+      ).toBe(true)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

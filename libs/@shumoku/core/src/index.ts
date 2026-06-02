@@ -18,8 +18,6 @@ export * from './icons/index.js'
 export * from './ids.js'
 // Layout
 export * from './layout/index.js'
-// Merge
-export * from './merge.js'
 // Models
 export * from './models/index.js'
 // Observation (discovery / resolve)

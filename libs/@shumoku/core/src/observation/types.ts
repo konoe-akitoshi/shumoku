@@ -24,6 +24,14 @@ export interface SnapshotEntry {
   /** The observed graph. `null` only when `status === 'failed'`. */
   graph: NetworkGraph | null
   /**
+   * Merge priority for this source — higher wins per field in `resolve()`.
+   * Mirrors `topology_data_sources.priority`; defaults to `0` when omitted.
+   * The human/authored contribution always outranks snapshots regardless
+   * of this value. Orthogonal to identity clustering (priority decides the
+   * field winner, never which nodes are the same).
+   */
+  priority?: number
+  /**
    * How many of this source's recent runs have been `'failed'` in a row.
    * Used as the retraction hysteresis counter — the resolver only
    * considers retracting elements from this source after the threshold.

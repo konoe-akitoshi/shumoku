@@ -144,10 +144,11 @@ export class ObservationsService {
   }
 
   /**
-   * Get the latest observation for each source attached to a topology.
-   * This is the input the resolver consumes — one current snapshot per
-   * source. Failed snapshots ARE returned so callers can see status,
-   * but the resolver ignores them.
+   * Get the latest observation for each source attached to a topology —
+   * INCLUDING a failed latest. Used by status / history surfaces and the
+   * editor's per-source latest-snapshot view, which want the true latest.
+   * For the resolver feed use `latestSuccessfulPerSource` instead, so a
+   * transient failed scan doesn't drop a source's last-good nodes.
    */
   latestPerSource(topologyId: string): TopologyObservation[] {
     const rows = this.db
@@ -160,6 +161,33 @@ export class ObservationsService {
            GROUP BY source_id
          ) m ON m.source_id = t.source_id AND m.latest = t.captured_at
          WHERE t.topology_id = ?
+         ORDER BY t.captured_at DESC`,
+      )
+      .all(topologyId, topologyId) as ObservationRow[]
+    return rows.map(rowToObservation)
+  }
+
+  /**
+   * Latest NON-FAILED observation per source — the input the resolver
+   * consumes. A `failed` snapshot means "couldn't scan", which carries no
+   * information about what the source sees, so it must NOT replace the
+   * source's last-good snapshot (otherwise a flapping source would wipe its
+   * nodes off the diagram — a retraction the design forbids; see
+   * topology-source-priority-merge.md decision 4 / C7). `empty` and
+   * `partial` ARE kept: those are successful scans whose absence of a node
+   * is real evidence.
+   */
+  latestSuccessfulPerSource(topologyId: string): TopologyObservation[] {
+    const rows = this.db
+      .query(
+        `SELECT t.* FROM topology_observations t
+         INNER JOIN (
+           SELECT source_id, MAX(captured_at) AS latest
+           FROM topology_observations
+           WHERE topology_id = ? AND status != 'failed'
+           GROUP BY source_id
+         ) m ON m.source_id = t.source_id AND m.latest = t.captured_at
+         WHERE t.topology_id = ? AND t.status != 'failed'
          ORDER BY t.captured_at DESC`,
       )
       .all(topologyId, topologyId) as ObservationRow[]

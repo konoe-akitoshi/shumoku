@@ -114,34 +114,10 @@ export interface TopologyInput {
 export type SyncMode = 'manual' | 'on_view' | 'webhook'
 export type DataSourcePurpose = 'topology' | 'metrics'
 
-// ============================================
-// Merge Configuration
-// ============================================
-
-export type MergeMatchStrategy = 'id' | 'name' | 'attribute' | 'manual'
-export type MergeMergeStrategy = 'merge-properties' | 'keep-base' | 'keep-overlay'
-export type MergeUnmatchedStrategy = 'add-to-root' | 'add-to-subgraph' | 'ignore'
-
-/**
- * Merge configuration for a topology data source
- * Stored in optionsJson field
- */
-export interface TopologySourceMergeConfig {
-  /** Is this the base source? Only one source should be marked as base */
-  isBase?: boolean
-  /** How to match nodes from this source to base (for overlay sources) */
-  match?: MergeMatchStrategy
-  /** Attribute path for 'attribute' match strategy */
-  matchAttribute?: string
-  /** Manual ID mapping: thisSourceNodeId -> baseNodeId */
-  idMapping?: Record<string, string>
-  /** What to do when nodes match */
-  onMatch?: MergeMergeStrategy
-  /** What to do with unmatched nodes */
-  onUnmatched?: MergeUnmatchedStrategy
-  /** Custom subgraph name for unmatched nodes */
-  subgraphName?: string
-}
+// Source merge is governed by `TopologyDataSource.priority` — the
+// higher-priority source wins each field in resolve() (see
+// `@shumoku/core` resolve() and topology-source-priority-merge.md). The
+// old base/overlay/match Merge-Config shape was retired with merge.ts.
 
 export interface TopologyDataSource {
   id: string

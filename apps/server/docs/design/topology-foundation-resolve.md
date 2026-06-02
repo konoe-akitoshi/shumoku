@@ -1,5 +1,10 @@
 # Topology Foundation: resolve() アルゴリズム
 
+> **一部 SUPERSEDED — `topology-source-priority-merge.md`（実装済み）を参照。**
+> 「authored を核に observed を畳む」骨子は **全ソース同列の priority フィールドマージ**
+> （人＝最優先ソース、層は無い）に置き換わった。identity clustering / provenance /
+> retraction の記述は引き続き有効。
+>
 > ステータス: ドラフト。`topology-foundation.md` の付属。
 > 観測モデルの中核となる純粋関数の擬似コード仕様。
 

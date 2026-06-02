@@ -18,6 +18,7 @@
   import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
+  import { isAuthoredAttachment, stripProvenance } from '$lib/discovery-attachments'
   import { topologies } from '$lib/stores'
   import type { TopologyDataSource } from '$lib/types'
   import { useTopologyCtx } from '../_context.svelte'
@@ -43,8 +44,11 @@
     /** Protocol the node was actually read with (from the snapshot), e.g.
      *  'snmp'. Absent for notice / unread nodes. */
     readVia?: string
-    /** Authored overlay (access / policy) on this node, for the detail modal. */
+    /** Resolved attachments (sources + human, merged) on this node, for the
+     *  detail modal. */
     attachments?: Attachment[]
+    /** Attachment keys the human removed (negative assertion), for round-trip. */
+    suppressedAttachments?: string[]
     sourceId?: string
     sourceName?: string
     sourceType?: string
@@ -190,6 +194,8 @@
                 : undefined,
           readVia: typeof md['readVia'] === 'string' ? (md['readVia'] as string) : undefined,
           attachments: (node as { attachments?: Attachment[] }).attachments,
+          suppressedAttachments: (node as { suppressedAttachments?: string[] })
+            .suppressedAttachments,
           sourceId,
           sourceName: sourceDs?.name,
           sourceType: sourceDs?.type,
@@ -280,10 +286,13 @@
     }
   }
 
-  /** Replace a node's authored overlay wholesale (empty = clear). */
+  /** Replace a node's human contribution wholesale: the operator's attachments
+   *  and (when given) their suppression set. Omit `suppressed` to leave the
+   *  existing suppression untouched (e.g. bulk mode-set only changes policy). */
   async function setNodeAttachments(
     nodeId: string,
     attachments: Attachment[],
+    suppressed?: string[],
   ): Promise<{ ok: true } | { ok: false; reason: string }> {
     policyPatching = { ...policyPatching, [nodeId]: true }
     try {
@@ -291,6 +300,9 @@
         scope: 'node',
         id: nodeId,
         attachments: attachments.length > 0 ? attachments : null,
+        ...(suppressed !== undefined
+          ? { suppressedAttachments: suppressed.length > 0 ? suppressed : null }
+          : {}),
       })
       if (policyError[nodeId]) {
         const next = { ...policyError }
@@ -307,11 +319,16 @@
     }
   }
 
-  /** Set/clear the policy attachment's mode, preserving other attachments. */
+  /** Set/clear the policy attachment's mode, preserving the operator's OTHER
+   *  attachments. Operates on the AUTHORED set only — `card.attachments` is the
+   *  resolved list (observed + human), and PATCHing observed access back would
+   *  silently promote it to an authored override. Strip provenance so the
+   *  payload is a plain authored overlay. */
   function withMode(attachments: Attachment[], mode: DiscoveryMode | 'inherit'): Attachment[] {
-    const rest = attachments.filter((a) => a.kind !== 'policy')
+    const authored = attachments.filter(isAuthoredAttachment).map(stripProvenance)
+    const rest = authored.filter((a) => a.kind !== 'policy')
     if (mode === 'inherit') return rest
-    const policy = attachments.find((a) => a.kind === 'policy')
+    const policy = authored.find((a) => a.kind === 'policy')
     return [
       ...rest,
       { kind: 'policy', mode, ...(policy?.intervalMs ? { intervalMs: policy.intervalMs } : {}) },
@@ -351,12 +368,15 @@
     bulkSelection = next
   }
 
-  /** Modal callback: the detail panel emits the node's full desired
-   *  attachment list; we replace the overlay and refresh. */
-  async function handleSetAttachments(attachments: Attachment[]): Promise<void> {
+  /** Modal callback: the detail panel emits the node's full desired human
+   *  state (overrides + removals); we replace both and refresh. */
+  async function handleSetAttachments(next: {
+    attachments: Attachment[]
+    suppressed: string[]
+  }): Promise<void> {
     if (!detailNode) return
     const id = detailNode.id
-    const result = await setNodeAttachments(id, attachments)
+    const result = await setNodeAttachments(id, next.attachments, next.suppressed)
     if (!result.ok) {
       console.warn('[Discovery] attachment patch failed:', result.reason)
       return
@@ -393,19 +413,22 @@
     if (refreshed) detailNode = refreshed
   }
 
-  /** Modal callback: drop the open node's whole authored overlay (Reset). */
+  /** Modal callback: drop the open node's whole human contribution (Reset) —
+   *  overrides AND removals — so it returns to the bare source state. */
   async function handleResetNode(): Promise<void> {
     if (!detailNode) return
     const id = detailNode.id
     policyPatching = { ...policyPatching, [id]: true }
     try {
-      // Clearing attachments + label removes the overlay entry (when the node
-      // is observation-backed) or strips it to bare identity.
+      // Clearing attachments + label + suppression removes the human entry
+      // (when observation-backed) or strips it to bare identity — so a deleted
+      // (suppressed) access comes back from the source too.
       await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
         scope: 'node',
         id,
         attachments: null,
         label: null,
+        suppressedAttachments: null,
       })
     } catch (e) {
       policyError = { ...policyError, [id]: e instanceof Error ? e.message : 'reset failed' }

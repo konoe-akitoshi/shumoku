@@ -2,33 +2,44 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type {
-  Attachment,
-  Identity,
-  Link,
-  LinkEndpoint,
-  NetworkGraph,
-  Node,
-  NodeExclusion,
-  NodePort,
-  Provenance,
-  Subgraph,
+import {
+  type Attachment,
+  attachmentKey,
+  type Identity,
+  type Link,
+  type LinkEndpoint,
+  type NetworkGraph,
+  type Node,
+  type NodeExclusion,
+  type NodePort,
+  type Provenance,
+  type Subgraph,
 } from '../models/types.js'
 import { keyHash, nodeIdentityKeys, portIdentityKeys } from './identity.js'
 import type { ResolvedGraph, ResolveOptions, SnapshotEntry } from './types.js'
 
 /**
  * Resolve an authored NetworkGraph against any number of source
- * snapshots into a single graph whose every entity carries a
- * `provenance.state` of `confirmed` / `authored-only` / `discovered-only`
- * / `conflicting`.
+ * snapshots into a single graph whose every entity carries
+ * `provenance`.
  *
- * Skeleton implementation — see `apps/server/docs/design/topology-foundation-resolve.md`
- * for the algorithm. This skeleton handles the common cases that v1
- * needs (single-source overlay, identity-based dedup, simple field
- * comparison) and intentionally leaves the harder cases (link
- * matching across cross-cluster endpoints, ghost endpoints, full
- * retraction hysteresis) as small TODOs surfaced in tests.
+ * Model: **all sources are equal, priority-ordered contributions.** The
+ * authored (human) graph is just the top-priority source; observed
+ * snapshots carry their own priority (mirroring
+ * `topology_data_sources.priority`). resolve clusters contributions by
+ * identity (any-key match — orthogonal to priority) and then, **per
+ * field**, the highest-priority contribution that actually holds a value
+ * wins (`priority desc, capturedAt desc`). A field nobody holds is
+ * omitted. This is the "Git-like" merge: a human who only renamed a node
+ * keeps the observed ports/community flowing through untouched.
+ *
+ * There is intentionally NO `authored ===` special-casing in the field
+ * merge — "human wins" falls out of "human has the highest priority". The
+ * literal `'authored'` survives only as the human contribution's source
+ * *label*, so the UI can tell a human-set value from an observed one
+ * (per-field `fieldSources`, per-attachment `provenance`).
+ *
+ * See `apps/server/docs/design/topology-source-priority-merge.md`.
  */
 export function resolve(
   authored: NetworkGraph,
@@ -37,28 +48,48 @@ export function resolve(
 ): ResolvedGraph {
   const _staleThreshold = options.staleThresholdMs ?? 30 * 24 * 60 * 60 * 1000
   const _retractAfter = options.retractAfterMissedScans ?? 3
-  // _staleThreshold / _retractAfter are wired through in the full impl;
-  // the skeleton leaves them as documented knobs.
+  // Retraction (design decision 4) is ORTHOGONAL to priority. Two axes:
+  //   - presence: a resolved node exists iff some surviving contribution
+  //     carries it. Presence is the *union* of clusters, so priority —
+  //     which only decides per-field winners — never adds or drops a node.
+  //   - retraction: an OBSERVED contribution may stop carrying a node.
+  // v1 feeds only the latest non-failed snapshot per source (see
+  // services/topology.ts → latestSuccessfulPerSource), so "retraction" today
+  // is simply "absent from the latest successful snapshot". A failed scan is
+  // skipped at the feed, so it never replaces a source's last-good snapshot.
+  // There is no multi-scan hysteresis yet; _staleThreshold / _retractAfter
+  // stay documented knobs for when snapshot history is fed in.
   //
-  // !!! When retraction logic lands here, gate it on
-  //     `absenceImpliesRetraction(effectivePolicyForNode(authored, node))`.
-  // A node whose effective policy is `disabled` must survive being
-  // missing from a `status='ok'` snapshot — the operator opted out,
-  // the source was never asked, the absence carries no information.
-  // Codex 's review of the discovery-policy design
-  // flagged this as the highest-impact footgun in the area; see
-  // `discovery-policy.ts` for the gate predicate and rationale.
+  // Invariants that MUST hold regardless of priority (covered by tests):
+  //   - The human/authored contribution is never retracted. A node the
+  //     operator touched (rename, access, or a policy=disabled overlay) is
+  //     an authored contribution, so it persists until Reset.
+  //   - A 'failed' snapshot is ignored — never read as a retraction.
+  //   - When real hysteresis lands it must gate on
+  //     `absenceImpliesRetraction(effectivePolicyForNode(authored, node))`
+  //     so a policy=disabled node survives being missing from a
+  //     status='ok' snapshot (the operator opted out; absence carries no
+  //     information). Codex flagged this as the highest-impact footgun.
   void _staleThreshold
   void _retractAfter
 
-  // 1. Gather valid contributions: authored + every non-failed snapshot
+  // 1. Gather valid contributions. The authored graph is the top-priority
+  //    contribution ("human wins" = "human outranks every source"); every
+  //    non-failed snapshot is a contribution at its own priority. Identity
+  //    clustering ignores priority; only the field merge consults it.
   const contributions: Contribution[] = [
-    { sourceId: 'authored', capturedAt: Number.POSITIVE_INFINITY, graph: authored },
+    {
+      sourceId: 'authored',
+      priority: Number.POSITIVE_INFINITY,
+      capturedAt: Number.POSITIVE_INFINITY,
+      graph: authored,
+    },
   ]
   for (const snap of snapshots) {
     if (snap.status === 'failed' || !snap.graph) continue
     contributions.push({
       sourceId: snap.sourceId,
+      priority: snap.priority ?? 0,
       capturedAt: snap.capturedAt,
       graph: snap.graph,
     })
@@ -116,12 +147,15 @@ export function resolve(
 
 interface Contribution {
   sourceId: string
+  /** Higher wins per field. Authored/human = +Infinity. */
+  priority: number
   capturedAt: number
   graph: NetworkGraph
 }
 
 interface ClusterMember {
   sourceId: string
+  priority: number
   capturedAt: number
   node: Node
 }
@@ -130,6 +164,45 @@ interface NodeCluster {
   /** Synthesized id — preferring authored id when an authored member exists. */
   id: string
   members: ClusterMember[]
+}
+
+/**
+ * "Has a value worth merging" — non-null AND non-empty (decision 1 of the
+ * priority-merge design). Empty string / empty array / null all yield to
+ * the next-highest-priority contribution. Same rule for observed and human
+ * values, so a thin human overlay carrying `label: ''` simply makes no
+ * claim on `label` (no sentinel special-case needed).
+ */
+function hasValue(v: unknown): boolean {
+  if (v == null) return false
+  if (v === '') return false
+  if (Array.isArray(v) && v.length === 0) return false
+  return true
+}
+
+interface FieldWin<T> {
+  value: T
+  source: string
+}
+
+/**
+ * Pick the field winner: the first member (members are pre-sorted
+ * priority desc, capturedAt desc) whose node holds a value (`hasValue`).
+ * Returns the value and the source that supplied it (for `fieldSources`).
+ */
+function pickField<T>(
+  ranked: ClusterMember[],
+  read: (n: Node) => T | undefined,
+): FieldWin<T> | undefined {
+  for (const m of ranked) {
+    const v = read(m.node)
+    if (hasValue(v)) return { value: v as T, source: m.sourceId }
+  }
+  return undefined
+}
+
+function rankMembers(members: ClusterMember[]): ClusterMember[] {
+  return [...members].sort((a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt)
 }
 
 function clusterNodes(contributions: Contribution[]): NodeCluster[] {
@@ -189,17 +262,29 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
     }
   }
 
-  // Authored first so cluster ids prefer authored values
+  // Authored first so cluster ids prefer authored values. This ordering is
+  // about id preference only — it does NOT decide field winners (priority
+  // does, in foldNodeCluster) and does NOT decide identity (any-key match).
   for (const contrib of contributions) {
     if (contrib.sourceId !== 'authored') continue
     for (const node of contrib.graph.nodes) {
-      claim({ sourceId: contrib.sourceId, capturedAt: contrib.capturedAt, node })
+      claim({
+        sourceId: contrib.sourceId,
+        priority: contrib.priority,
+        capturedAt: contrib.capturedAt,
+        node,
+      })
     }
   }
   for (const contrib of contributions) {
     if (contrib.sourceId === 'authored') continue
     for (const node of contrib.graph.nodes) {
-      claim({ sourceId: contrib.sourceId, capturedAt: contrib.capturedAt, node })
+      claim({
+        sourceId: contrib.sourceId,
+        priority: contrib.priority,
+        capturedAt: contrib.capturedAt,
+        node,
+      })
     }
   }
   return clusters
@@ -228,97 +313,107 @@ function isClusterExcluded(cluster: NodeCluster, exclusions: NodeExclusion[]): b
   return false
 }
 
+/**
+ * Fold a cluster of same-device observations into one resolved Node by
+ * picking, for every field, the highest-priority contribution that holds a
+ * value. No layer concept, no `authored ===` branch — "human wins" is just
+ * "+Infinity priority". `fieldSources` / attachment `provenance` record who
+ * won each field so the UI can show human values as editable and observed
+ * values as read-only.
+ */
 function foldNodeCluster(cluster: NodeCluster): Node {
-  // Observed members form the base; the authored member is a thin OVERLAY on
-  // top — not a replacement. Picking the observed node as the structural base
-  // (and overlaying only the authored fields that are actually set) means an
-  // authored entry that carries community/name doesn't blank the device's
-  // observed facts (ports / readVia / model). The authored node anchors only
-  // when nothing observed the device (authored-only).
-  const authored = cluster.members.find((m) => m.sourceId === 'authored')
-  const observers = cluster.members.filter((m) => m.sourceId !== 'authored')
-  const observedBase = observers[0]?.node
-  const anchor = observedBase ?? authored?.node
-  if (!anchor) {
+  const ranked = rankMembers(cluster.members)
+  const top = ranked[0]
+  if (!top) {
     // unreachable — cluster always has at least one member
     throw new Error('empty cluster')
   }
 
+  const hasAuthored = cluster.members.some((m) => m.sourceId === 'authored')
+  const observerCount = cluster.members.filter((m) => m.sourceId !== 'authored').length
+
   // Identity: union of all members' identity keys (keep first non-empty value)
   const mergedIdentity = mergeIdentities(cluster.members.map((m) => m.node.identity))
 
-  // Metadata merge: observed members form the base (so facts like
-  // `readVia` / `syncState` / model survive), then the authored member's
-  // keys win on top. Without this, an authored override entry would
-  // *replace* the observed node and blank everything the source saw — the
-  // root of the "I added a community and the device's details vanished"
-  // incoherence.
-  const mergedMetadata: Record<string, unknown> = {}
-  for (const m of observers) {
-    for (const [k, v] of Object.entries(m.node.metadata ?? {})) {
-      if (mergedMetadata[k] === undefined && v !== undefined) mergedMetadata[k] = v
-    }
-  }
-  for (const [k, v] of Object.entries(authored?.node.metadata ?? {})) {
-    if (v !== undefined) mergedMetadata[k] = v
-  }
-  // Preserve the observing source. Once an authored override exists the
-  // cluster's `provenance.source` becomes `authored`, but the discovery UI
-  // still needs the source that actually saw the device — for the "Tracked
-  // by" line and to know which source to Probe.
-  const observedSource = observers.find((m) => m.sourceId)?.sourceId
-  if (observedSource && mergedMetadata['observedSource'] === undefined) {
-    mergedMetadata['observedSource'] = observedSource
-  }
-  // `spec` (icon / model): authored wins, else first observed.
-  const spec = authored?.node.spec ?? observers.find((m) => m.node.spec)?.node.spec
+  // Per-field winners (priority desc, capturedAt desc; must hold a value).
+  const labelWin = pickField(ranked, (n) => n.label)
+  const shapeWin = pickField(ranked, (n) => n.shape)
+  const parentWin = pickField(ranked, (n) => n.parent)
+  const rankWin = pickField(ranked, (n) => n.rank)
+  const styleWin = pickField(ranked, (n) => n.style)
+  const specWin = pickField(ranked, (n) => n.spec)
+  const productIdWin = pickField(ranked, (n) => n.productId)
+  const positionWin = pickField(ranked, (n) => n.position)
+  const sizeWin = pickField(ranked, (n) => n.size)
+  const terminationWin = pickField(ranked, (n) => n.termination)
 
-  // `attachments` merge observed-under-authored, keyed by kind (+protocol for
-  // access). Observed sources can contribute attachments too — network-scan
-  // stamps the SNMP community it read with as an `access:snmp` attachment — so
-  // taking authored wholesale would blank that (e.g. a policy-only authored
-  // overlay would wipe the observed community). Instead: observed entries form
-  // the base, an authored entry of the same key overrides it. This keeps the
-  // scan-discovered community visible even when the operator only set a policy.
-  const attachments = mergeAttachments(
-    observers.flatMap((m) => m.node.attachments ?? []),
-    authored?.node.attachments ?? [],
+  // Metadata: per-key, highest-priority defined value wins (structural map
+  // merge, not the scalar hasValue rule — `false` / `0` are legit values).
+  const mergedMetadata = mergeMetadata(ranked)
+  // Preserve the observing source for the discovery UI ("Tracked by" line,
+  // which source to Probe). Highest-ranked non-authored member.
+  const primaryObserver = ranked.find((m) => m.sourceId !== 'authored')
+  if (primaryObserver && mergedMetadata['observedSource'] === undefined) {
+    mergedMetadata['observedSource'] = primaryObserver.sourceId
+  }
+
+  // Suppression: attachment keys the human removed (negative assertion — the
+  // counterpart to a positive override). Only the human contribution can
+  // suppress; a source can't remove another's attachment. Collected from the
+  // authored member(s) and passed through onto the resolved node so the UI can
+  // round-trip it (a re-scan re-supplying the attachment won't resurrect it).
+  const suppressed = Array.from(
+    new Set(
+      cluster.members
+        .filter((m) => m.sourceId === 'authored')
+        .flatMap((m) => m.node.suppressedAttachments ?? []),
+    ),
   )
 
-  // `label` is an authored override only when the authored entry carries a
-  // NON-EMPTY label. A thin overlay (community-only) stores an empty label
-  // (`''`) as the "no rename" sentinel — Node.label is a required field, so the
-  // overlay can't omit it, but empty means "let the observed name show". When
-  // there's no observer (authored-only), `...anchor` is the authored node, so
-  // its label is carried regardless of this check.
-  const authoredLabel = authored?.node.label
-  const authoredLabelOverrides =
-    observedBase !== undefined &&
-    authoredLabel !== undefined &&
-    (Array.isArray(authoredLabel) ? authoredLabel.length > 0 : authoredLabel !== '')
-  // `parent` is a straightforward authored override when set.
-  const authoredParent = authored?.node.parent
+  // Attachments: per kind (+protocol for access), highest-priority wins, each
+  // stamped with the provenance of the source that supplied it; any key the
+  // human suppressed is dropped.
+  const attachments = foldAttachments(ranked, suppressed)
 
-  // Field-level resolution: observed base (`...anchor`) with authored fields
-  // overlaid only where the operator actually set them.
+  const ports = foldPortsAcrossCluster(cluster)
+
+  // fieldSources: who won the human-relevant fields. Lets the UI render the
+  // displayed name/spec as a human override vs an observed fact.
+  const fieldSources: Record<string, string> = {}
+  if (labelWin) fieldSources['label'] = labelWin.source
+  if (specWin) fieldSources['spec'] = specWin.source
+  if (parentWin) fieldSources['parent'] = parentWin.source
+
   const resolved: Node = {
-    ...anchor,
     id: cluster.id,
-    identity: mergedIdentity,
-    ...(authoredLabelOverrides ? { label: authoredLabel } : {}),
-    ...(authoredParent !== undefined ? { parent: authoredParent } : {}),
+    label: labelWin?.value ?? top.node.label,
+    ...(shapeWin ? { shape: shapeWin.value } : {}),
+    ...(parentWin ? { parent: parentWin.value } : {}),
+    ...(rankWin ? { rank: rankWin.value } : {}),
+    ...(styleWin ? { style: styleWin.value } : {}),
+    ...(specWin ? { spec: specWin.value } : {}),
+    ...(productIdWin ? { productId: productIdWin.value } : {}),
+    ...(positionWin ? { position: positionWin.value } : {}),
+    ...(sizeWin ? { size: sizeWin.value } : {}),
+    ...(terminationWin ? { termination: terminationWin.value } : {}),
     ...(Object.keys(mergedMetadata).length > 0 ? { metadata: mergedMetadata } : {}),
-    ...(spec ? { spec } : {}),
-    ...(attachments.length > 0 ? { attachments } : { attachments: undefined }),
-    ports: foldPortsAcrossCluster(cluster),
-    provenance: deriveNodeProvenance(cluster, observers.length, Boolean(authored)),
+    ...(mergedIdentity ? { identity: mergedIdentity } : {}),
+    ...(attachments.length > 0 ? { attachments } : {}),
+    ...(ports ? { ports } : {}),
+    ...(Object.keys(fieldSources).length > 0 ? { fieldSources } : {}),
+    ...(suppressed.length > 0 ? { suppressedAttachments: suppressed } : {}),
+    provenance: deriveNodeProvenance(cluster, observerCount, hasAuthored),
   }
 
-  // Factual: if multiple sources disagree on `label`, mark conflicting.
-  // (`label` straddles factual/chosen — we treat it as conflicting only
-  // when *non-authored* sources disagree; authored always wins display.)
-  const labelObservations = collectField(cluster.members, (n) => stringLabel(n.label))
-  if (!authored && labelObservations.length > 1) {
+  // Factual: if multiple *non-authored* sources disagree on `label`, mark
+  // conflicting. (`label` straddles factual/chosen — authored always wins
+  // display, so a human rename is never "conflicting".) Only NON-EMPTY
+  // labels count — an empty label makes no claim (same hasValue rule as the
+  // field winner), so `''` vs `'real'` is a fall-through, not a conflict.
+  const labelObservations = collectField(cluster.members, (n) => stringLabel(n.label)).filter((o) =>
+    hasValue(o.value),
+  )
+  if (!hasAuthored && labelObservations.length > 1) {
     const distinct = new Set(labelObservations.map((o) => o.value))
     if (distinct.size > 1) {
       resolved.provenance = {
@@ -364,19 +459,53 @@ function deriveNodeProvenance(
 }
 
 /**
- * Merge attachments observed-under-authored, keyed by kind (+protocol for
- * `access`). Observed entries form the base; an authored entry of the same key
- * overrides it (and authored-only keys are appended). Observed order is kept;
- * authored-only entries follow. This mirrors the metadata/spec merge so an
- * authored overlay never silently drops an attachment a source supplied (e.g.
- * the scan-discovered SNMP community when the operator only set a policy).
+ * Merge metadata maps across a cluster: for each key, the highest-priority
+ * member that defines it wins. `members` are pre-ranked. A defined value
+ * (`!== undefined`) is enough — unlike the scalar field rule, a metadata
+ * value of `false` / `0` / `''` is meaningful and kept.
  */
-function mergeAttachments(observed: Attachment[], authored: Attachment[]): Attachment[] {
-  const keyOf = (a: Attachment): string => (a.kind === 'access' ? `access:${a.protocol}` : a.kind)
+function mergeMetadata(ranked: ClusterMember[]): Record<string, unknown> {
+  const merged: Record<string, unknown> = {}
+  for (const m of ranked) {
+    for (const [k, v] of Object.entries(m.node.metadata ?? {})) {
+      if (v !== undefined && merged[k] === undefined) merged[k] = v
+    }
+  }
+  return merged
+}
+
+/**
+ * Fold attachments across a cluster, keyed by `attachmentKey` (per protocol
+ * for `access`). `ranked` is priority desc, so the first writer per key wins —
+ * a human SNMP community overrides an observed one, but a human policy-only
+ * contribution leaves the observed community untouched (different key). Each
+ * resolved attachment is stamped with the provenance of the source that
+ * supplied it, an annotation of where the value came from (not a layer).
+ *
+ * `suppressedKeys` are the keys the human removed (negative assertion); any
+ * attachment of those keys is dropped no matter which source supplied it — so
+ * deleting an observed access is just the human asserting "none here", and it
+ * survives re-scans. Output order is deterministic (access by protocol, then
+ * the rest) — independent of who won.
+ */
+function foldAttachments(ranked: ClusterMember[], suppressedKeys: string[] = []): Attachment[] {
+  const suppressed = new Set(suppressedKeys)
   const byKey = new Map<string, Attachment>()
-  for (const a of observed) byKey.set(keyOf(a), a)
-  for (const a of authored) byKey.set(keyOf(a), a)
-  return [...byKey.values()]
+  for (const m of ranked) {
+    for (const a of m.node.attachments ?? []) {
+      const k = attachmentKey(a)
+      if (suppressed.has(k) || byKey.has(k)) continue
+      byKey.set(k, {
+        ...a,
+        provenance: {
+          source: m.sourceId,
+          observedAt: Number.isFinite(m.capturedAt) ? m.capturedAt : undefined,
+        },
+      })
+    }
+  }
+  const order = (a: Attachment): string => (a.kind === 'access' ? `0:${a.protocol}` : `1:${a.kind}`)
+  return [...byKey.values()].sort((a, b) => order(a).localeCompare(order(b)))
 }
 
 function mergeIdentities(identities: Array<Identity | undefined>): Identity | undefined {
@@ -437,19 +566,26 @@ function stringLabel(label: string | string[]): string {
   return Array.isArray(label) ? label.join('\n') : label
 }
 
+interface PortMember {
+  sourceId: string
+  priority: number
+  capturedAt: number
+  port: NodePort
+}
+
 function foldPortsAcrossCluster(cluster: NodeCluster): NodePort[] | undefined {
   // Collect ports from all members of the cluster, group by port
   // identity within the cluster, fold each port.
-  const all: Array<{ sourceId: string; port: NodePort }> = []
+  const all: PortMember[] = []
   for (const m of cluster.members) {
     for (const port of m.node.ports ?? []) {
-      all.push({ sourceId: m.sourceId, port })
+      all.push({ sourceId: m.sourceId, priority: m.priority, capturedAt: m.capturedAt, port })
     }
   }
   if (all.length === 0) return undefined
 
   // Group by port identity (within-cluster scope)
-  const portClusters: Array<Array<{ sourceId: string; port: NodePort }>> = []
+  const portClusters: PortMember[][] = []
   const keyToIdx = new Map<string, number>()
   for (const entry of all) {
     const keys = portIdentityKeys(entry.port.identity)
@@ -476,28 +612,56 @@ function foldPortsAcrossCluster(cluster: NodeCluster): NodePort[] | undefined {
   return portClusters.map((members) => foldPortCluster(members))
 }
 
-function foldPortCluster(members: Array<{ sourceId: string; port: NodePort }>): NodePort {
-  const authored = members.find((m) => m.sourceId === 'authored')
-  const anchor = authored?.port ?? members[0]?.port
-  if (!anchor) throw new Error('empty port cluster')
+function foldPortCluster(members: PortMember[]): NodePort {
+  const ranked = [...members].sort((a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt)
+  const top = ranked[0]
+  if (!top) throw new Error('empty port cluster')
 
+  const hasAuthored = members.some((m) => m.sourceId === 'authored')
   const observerCount = members.filter((m) => m.sourceId !== 'authored').length
-  const hasAuthored = Boolean(authored)
   let state: Provenance['state']
   if (hasAuthored && observerCount > 0) state = 'confirmed'
   else if (hasAuthored) state = 'authored-only'
   else if (observerCount >= 2) state = 'confirmed'
   else state = 'discovered-only'
 
-  const mergedIdentity = mergeIdentities(members.map((m) => m.port.identity))
-  return {
-    ...anchor,
-    identity: mergedIdentity,
-    provenance: {
-      source: authored?.sourceId ?? members[0]?.sourceId ?? 'unknown',
-      state,
-    },
+  // Per-field winner (priority desc, capturedAt desc; must hold a value), so a
+  // high-priority port that lacks a field — e.g. `connectors: []` or no
+  // faceplateLabel — falls through to a lower-priority source that has it
+  // (§6). The top port is the base (keeps id + any field not re-picked).
+  const pick = <T>(read: (p: NodePort) => T | undefined): T | undefined => {
+    for (const m of ranked) {
+      const v = read(m.port)
+      if (hasValue(v)) return v
+    }
+    return undefined
   }
+  const folded: NodePort = {
+    ...top.port,
+    identity: mergeIdentities(members.map((m) => m.port.identity)),
+    provenance: { source: top.sourceId, state },
+  }
+  const label = pick((p) => p.label)
+  if (label !== undefined) folded.label = label
+  const faceplateLabel = pick((p) => p.faceplateLabel)
+  if (faceplateLabel !== undefined) folded.faceplateLabel = faceplateLabel
+  const interfaceName = pick((p) => p.interfaceName)
+  if (interfaceName !== undefined) folded.interfaceName = interfaceName
+  const aliases = pick((p) => p.aliases)
+  if (aliases !== undefined) folded.aliases = aliases
+  const role = pick((p) => p.role)
+  if (role !== undefined) folded.role = role
+  const speed = pick((p) => p.speed)
+  if (speed !== undefined) folded.speed = speed
+  const connectors = pick((p) => p.connectors)
+  if (connectors !== undefined) folded.connectors = connectors
+  const poe = pick((p) => p.poe)
+  if (poe !== undefined) folded.poe = poe
+  const notes = pick((p) => p.notes)
+  if (notes !== undefined) folded.notes = notes
+  const placement = pick((p) => p.placement)
+  if (placement !== undefined) folded.placement = placement
+  return folded
 }
 
 function foldSubgraphs(authored: NetworkGraph): Subgraph[] | undefined {

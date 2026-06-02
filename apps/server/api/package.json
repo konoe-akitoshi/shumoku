@@ -9,6 +9,7 @@
     "build": "tsc && bun -e \"import{cpSync}from'fs';cpSync('src/db/migrations','dist/api/src/db/migrations',{recursive:true})\"",
     "dev": "NODE_ENV=development bun --watch src/index.ts",
     "start": "bun dist/api/src/index.js",
+    "test": "vitest --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write ."

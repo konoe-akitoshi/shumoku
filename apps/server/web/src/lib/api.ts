@@ -424,10 +424,11 @@ export const topologies = {
       }>(`/topologies/${topologyId}/discovery-policy`),
 
     /**
-     * Replace a scope's authored attachments wholesale (`null`/`[]` clears),
-     * and/or set a node's authored name override (`label`; `null`/'' reverts
-     * to the observed name). For node scope each field is applied only when
-     * present, so a label edit never wipes the access/policy overlay.
+     * Replace a scope's attachments wholesale (`null`/`[]` clears), set a
+     * node's name override (`label`; `null`/'' reverts to the observed name),
+     * and/or set a node's `suppressedAttachments` (keys the human removed;
+     * `null`/`[]` clears). For node scope each field is applied only when
+     * present, so a label edit never wipes the access/policy a node carries.
      */
     patch: (
       topologyId: string,
@@ -439,6 +440,7 @@ export const topologies = {
             id: string
             attachments?: Attachment[] | null
             label?: string | null
+            suppressedAttachments?: string[] | null
           },
     ) =>
       request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
@@ -478,13 +480,27 @@ export interface NodeExclusion {
 
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 
+/** Where a resolved attachment's value came from. Mirrors `@shumoku/core`'s
+ *  `Provenance`. `source === 'authored'` marks a human-set value; any other
+ *  source is the value a discovery source supplied. The UI uses this as an
+ *  annotation ("your value" vs "from <source>"), NOT as a read-only gate —
+ *  every value is editable. resolve() stamps it; freshly-authored local
+ *  attachments omit it until the next round-trip. */
+export interface Provenance {
+  source: string
+  state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'
+  observedAt?: number
+}
+
 /** A unit of authored intent attached to a node / subgraph / topology.
- *  Mirrors `@shumoku/core`'s `Attachment`. */
-export type Attachment =
+ *  Mirrors `@shumoku/core`'s `Attachment` (incl. the resolve-stamped
+ *  `provenance`). */
+export type Attachment = (
   | { kind: 'policy'; mode?: DiscoveryMode; intervalMs?: number }
   | { kind: 'access'; protocol: 'snmp'; community?: string; version?: '2c' | '3' }
   | { kind: 'access'; protocol: 'ssh'; username?: string; port?: number }
   | { kind: 'access'; protocol: 'netconf' | 'http' }
+) & { provenance?: Provenance }
 export interface EffectivePolicy {
   mode: DiscoveryMode
   intervalMs: number

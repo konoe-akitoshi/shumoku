@@ -384,18 +384,33 @@ export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 export type Attachment = AccessAttachment | PolicyAttachment
 
 /**
+ * Provenance stamped by `resolve()` onto every attachment in the resolved
+ * graph: which source contributed it. The human/authored contribution
+ * carries `source: 'authored'`; an observed attachment carries the
+ * observing source's id. The discovery UI reads this to render
+ * observed-derived rows read-only (no ✕) and human rows editable — the
+ * fix for "✕ doesn't remove an observed access". Optional: hand-authored
+ * or freshly-saved attachments omit it, and resolve fills it in.
+ */
+export interface AttachmentMeta {
+  provenance?: Provenance
+}
+
+/**
  * How to read a device: a protocol plus its connection params. Only
  * `snmp` is wired today; the other protocols reserve the shape so the
  * "+ Add" menu and the read layer can grow without a type overhaul. A
  * node/subgraph/topology may carry several (e.g. SNMP + SSH later).
  */
-export type AccessAttachment =
+export type AccessAttachment = (
   | { kind: 'access'; protocol: 'snmp'; community?: string; version?: '2c' | '3' }
   | { kind: 'access'; protocol: 'ssh'; username?: string; port?: number }
   | { kind: 'access'; protocol: 'netconf' | 'http' }
+) &
+  AttachmentMeta
 
 /** Discovery scheduling for a node / subgraph / topology default. */
-export interface PolicyAttachment {
+export interface PolicyAttachment extends AttachmentMeta {
   kind: 'policy'
   mode?: DiscoveryMode
   /**
@@ -404,6 +419,18 @@ export interface PolicyAttachment {
    * `observe` modes — ignored for `disabled`.
    */
   intervalMs?: number
+}
+
+/**
+ * Stable merge / suppression key for an attachment. `access` is keyed per
+ * protocol (SNMP and SSH are distinct slots); every other kind keys by its
+ * `kind`. The resolver merges attachments by this key (highest-priority
+ * contribution wins per key) and the human suppresses by it
+ * (`Node.suppressedAttachments`). One definition so merge and suppression
+ * never disagree on what "the same attachment slot" means.
+ */
+export function attachmentKey(a: Attachment): string {
+  return a.kind === 'access' ? `access:${a.protocol}` : a.kind
 }
 
 export interface Node {
@@ -520,6 +547,31 @@ export interface Node {
    * are this node's own `label` / `spec`.
    */
   attachments?: Attachment[]
+
+  /**
+   * Per-field provenance stamped by `resolve()`: maps a field name
+   * (`label` / `spec` / `parent` …) to the source id that won it in the
+   * priority merge. `'authored'` means the human contribution supplied the
+   * value. Diagnostic / UI affordance (e.g. show whether the displayed name
+   * is a human override or the observed name) — not load-bearing for
+   * rendering. Omitted on hand-authored nodes that never went through
+   * resolve.
+   */
+  fieldSources?: Record<string, string>
+
+  /**
+   * Attachment keys (see `attachmentKey`) the human has explicitly removed —
+   * the negative counterpart to `attachments`. A node is one thing every
+   * source contributes to; the human (top priority) can add / override a
+   * value (`attachments`) AND remove one a source supplied (here). There are
+   * no observed/authored layers — this is just the human asserting "no
+   * attachment of this key". `resolve()` drops any merged attachment whose
+   * key is listed, so a deleted access stays gone across re-scans (the
+   * assertion persists) until Reset removes the whole human contribution.
+   * Meaningful on the human contribution; the resolver passes it through onto
+   * the resolved node so the UI can round-trip it.
+   */
+  suppressedAttachments?: string[]
 }
 
 // ============================================

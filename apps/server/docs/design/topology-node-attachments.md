@@ -2,6 +2,17 @@
 
 Status: design / accepted direction (2026-06-01)
 
+> **SUPERSEDED in part by `topology-source-priority-merge.md`.** The
+> attachment *types* (access / policy / facts) and the operation set
+> (Rescan / Reset / Hide / Rebuild) below still hold. But the **UI framing**
+> here — a read-only "Observed" section vs an editable "Authored overlay"
+> with ✎/✕ — is the **two-tier model that was rejected**. The node is one
+> thing; every source (the human at top priority) contributes field-by-field,
+> and the human can add / override / **delete** any value (incl. a
+> source-supplied one, via `Node.suppressedAttachments`). The detail panel
+> shows ONE editable value per field/attachment with provenance as an
+> annotation — not two layers. See priority-merge §4 / 決定5.
+
 ## なぜこの設計か
 
 ノード詳細 UI を「今ある機能(SNMP community 1個)」に最適化して継ぎ足してきた結果、
