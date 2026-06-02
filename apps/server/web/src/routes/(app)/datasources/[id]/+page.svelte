@@ -11,8 +11,14 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
+  import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { dataSources } from '$lib/stores'
-  import type { ConnectionResult, DataSource } from '$lib/types'
+  import type {
+    ConnectionResult,
+    DataSource,
+    DataSourcePluginInfo,
+    PluginConfigSchema,
+  } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
   // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
@@ -35,20 +41,17 @@
   let yamlContent = $state('')
   let jsonContent = $state('')
 
-  // Form state
+  // Form state. Non-manual config is rendered + edited via <SchemaForm> from
+  // the plugin's configSchema; Manual keeps the graph editor below.
   let formName = $state('')
-  let formUrl = $state('')
-  let formToken = $state('')
-  let formPollInterval = $state(30000)
-  let hasExistingToken = $state(false)
-  let formInsecure = $state(false)
-  // SNMP / Network Discovery — community + targets, no URL.
-  let formSnmpCommunity = $state('public')
-  let formSnmpTargets = $state('')
-  let formSnmpTimeoutMs = $state(2000)
+  let config = $state<Record<string, unknown>>({})
+  let pluginTypes = $state<DataSourcePluginInfo[]>([])
 
-  // Grafana webhook state
-  let formUseWebhook = $state(false)
+  function configSchemaFor(type?: string): PluginConfigSchema | undefined {
+    return type ? pluginTypes.find((p) => p.type === type)?.configSchema : undefined
+  }
+
+  // Grafana webhook URL display (read-only; secret is generated server-side).
   let webhookUrl = $state('')
   let webhookLoading = $state(false)
   let copied = $state(false)
@@ -160,8 +163,10 @@
   }
 
   function getConfigFromForm(type: string): string {
-    // Manual stores its graph in config_json. Parse whichever editor
-    // pane is active, then serialise the whole config.
+    // Manual stores its graph in config_json. Parse whichever editor pane is
+    // active, then serialise. Everything else serialises the schema-driven
+    // `config` (empty password fields are pruned → the server preserves the
+    // stored secret).
     if (type === 'manual') {
       const graph =
         editorMode === 'yaml'
@@ -169,46 +174,51 @@
           : (JSON.parse(jsonContent) as NetworkGraph)
       return JSON.stringify({ graph })
     }
-    // network-scan uses a different config shape (no URL).
-    if (type === 'network-scan') {
-      const community = formSnmpCommunity.trim() || 'public'
-      const targets = formSnmpTargets
-        .split(/[\s,]+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-      return JSON.stringify({
-        community,
-        targets,
-        timeoutMs: formSnmpTimeoutMs,
-      })
-    }
+    return JSON.stringify(pruneEmpty(config))
+  }
 
-    const config: Record<string, unknown> = {
-      url: formUrl.trim(),
+  function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      if (value == null) continue
+      if (typeof value === 'string') {
+        const trimmed = value.trim()
+        if (trimmed) out[key] = trimmed
+        continue
+      }
+      if (Array.isArray(value)) {
+        if (value.length > 0) out[key] = value
+        continue
+      }
+      if (typeof value === 'object') {
+        const nested = pruneEmpty(value as Record<string, unknown>)
+        if (Object.keys(nested).length > 0) out[key] = nested
+        continue
+      }
+      out[key] = value
     }
+    return out
+  }
 
-    // Only include token if user entered a new one; omit to let server preserve existing
-    if (formToken.trim()) {
-      config['token'] = formToken.trim()
+  /**
+   * Blank password fields so the masked secret loaded from the API isn't
+   * re-submitted; the server preserves the stored secret when a field is
+   * omitted (and re-generates grafana's webhookSecret as needed).
+   */
+  function blankSecrets(
+    cfg: Record<string, unknown>,
+    schema?: PluginConfigSchema,
+  ): Record<string, unknown> {
+    if (!schema) return cfg
+    const out = { ...cfg }
+    for (const [key, prop] of Object.entries(schema.properties)) {
+      if (prop.format === 'password') out[key] = ''
     }
-
-    if (type === 'zabbix') {
-      config['pollInterval'] = formPollInterval
-    }
-
-    if (type === 'netbox') {
-      if (formInsecure) config['insecure'] = true
-    }
-
-    if (type === 'grafana') {
-      config['useWebhook'] = formUseWebhook
-    }
-
-    return JSON.stringify(config)
+    return out
   }
 
   async function loadWebhookUrl() {
-    if (!formUseWebhook) {
+    if (!config['useWebhook']) {
       webhookUrl = ''
       return
     }
@@ -241,19 +251,14 @@
         if (cancelled) return
         dataSource = ds
         formName = ds.name
-        const config = parseConfig(ds.configJson)
-        formUrl = config.url || ''
-        formToken = ''
-        formPollInterval = config.pollInterval || 30000
-        hasExistingToken = !!config.token
-        formInsecure = !!config.insecure
-        formUseWebhook = !!config.useWebhook
-        // network-scan specific
-        formSnmpCommunity = config.community || 'public'
-        formSnmpTargets = (config.targets ?? []).join('\n')
-        formSnmpTimeoutMs = config.timeoutMs ?? 2000
+        if (!pluginTypes.length) {
+          pluginTypes = await api.dataSources.getPluginTypes()
+          if (cancelled) return
+        }
+        const parsed = parseConfig(ds.configJson) as Record<string, unknown>
+        config = blankSecrets(parsed, configSchemaFor(ds.type))
 
-        if (formUseWebhook) {
+        if (config['useWebhook']) {
           await loadWebhookUrl()
         }
 
@@ -264,7 +269,7 @@
             console.warn('[Manual] Failed to list attached topologies:', err)
           }
           // Seed the editor with the source 's stored graph.
-          const graph = (config as unknown as { graph?: Record<string, unknown> }).graph ?? {
+          const graph = (parsed as { graph?: Record<string, unknown> }).graph ?? {
             version: '1',
             nodes: [],
             links: [],
@@ -295,16 +300,18 @@
       error = 'Name is required'
       return
     }
-    if (dataSource.type === 'manual') {
-      // Manual has no upstream — name is the only configurable field.
-    } else if (dataSource.type === 'network-scan') {
-      if (!formSnmpTargets.trim()) {
-        error = 'At least one target is required'
-        return
+    // Config is validated server-side (core validateAgainstSchema → 400). Do a
+    // light required-field check here for instant feedback.
+    const cfgSchema = configSchemaFor(dataSource.type)
+    if (cfgSchema?.required) {
+      const filled = pruneEmpty(config)
+      for (const key of cfgSchema.required) {
+        if (filled[key] === undefined) {
+          const prop = cfgSchema.properties[key]
+          error = `${prop?.title ?? key} is required`
+          return
+        }
       }
-    } else if (!formUrl.trim()) {
-      error = 'URL is required'
-      return
     }
 
     saving = true
@@ -317,12 +324,14 @@
       }
 
       dataSource = await dataSources.update(id, updates)
-      // Update hasExistingToken state
-      const newConfig = parseConfig(dataSource.configJson)
-      hasExistingToken = !!newConfig.token
+      // Re-seed from the saved (masked) config so password fields blank again.
+      config = blankSecrets(
+        parseConfig(dataSource.configJson) as Record<string, unknown>,
+        configSchemaFor(dataSource.type),
+      )
 
       // Load webhook URL after save (secret may have been generated)
-      if (dataSource.type === 'grafana' && formUseWebhook) {
+      if (dataSource.type === 'grafana' && config['useWebhook']) {
         await loadWebhookUrl()
       }
 
@@ -465,144 +474,51 @@
                   </p>
                 {/if}
               </div>
-            {:else if dataSource.type !== 'network-scan'}
-              <div>
-                <label for="url" class="label">URL</label>
-                <input type="url" id="url" class="input" bind:value={formUrl}>
-              </div>
+            {:else}
+              {@const cfgSchema = configSchemaFor(dataSource.type)}
+              {#if cfgSchema}
+                <SchemaForm
+                  schema={cfgSchema}
+                  value={config}
+                  getOptions={(key) =>
+                    api.dataSources.getConfigOptions(id, key).then((r) => r.options)}
+                />
+              {/if}
             {/if}
 
-            {#if dataSource.type === 'network-scan'}
-              <div>
-                <label for="snmpCommunity" class="label">SNMP Community</label>
-                <input
-                  type="text"
-                  id="snmpCommunity"
-                  class="input"
-                  placeholder="public"
-                  bind:value={formSnmpCommunity}
-                >
-              </div>
-              <div>
-                <label for="snmpTargets" class="label">Targets</label>
-                <textarea
-                  id="snmpTargets"
-                  class="input min-h-24 font-mono"
-                  placeholder="10.0.0.0/24&#10;192.168.5.1&#10;core-rtr-01.example.net"
-                  bind:value={formSnmpTargets}
-                ></textarea>
-                <p class="text-xs text-theme-text-muted mt-1">
-                  One per line. CIDR / single IP / hostname all accepted.
-                </p>
-              </div>
-              <div>
-                <label for="snmpTimeout" class="label">Per-Device Timeout (ms)</label>
-                <input
-                  type="number"
-                  id="snmpTimeout"
-                  class="input"
-                  min="500"
-                  max="30000"
-                  step="500"
-                  bind:value={formSnmpTimeoutMs}
-                >
-              </div>
-            {/if}
-
-            {#if dataSource.type === 'zabbix' || dataSource.type === 'netbox' || dataSource.type === 'grafana'}
-              <div>
-                <label for="token" class="label">API Token</label>
-                <input
-                  type="password"
-                  id="token"
-                  class="input"
-                  placeholder="Enter new token to update"
-                  bind:value={formToken}
-                >
-                <p class="text-xs text-theme-text-muted mt-1">
-                  {hasExistingToken ? 'Token is set. Enter a new value to update.' : 'No token set.'}
-                </p>
-              </div>
-            {/if}
-
-            {#if dataSource.type === 'zabbix'}
-              <div>
-                <label for="pollInterval" class="label">Poll Interval</label>
-                <select id="pollInterval" class="input" bind:value={formPollInterval}>
-                  <option value={5000}>5 seconds</option>
-                  <option value={10000}>10 seconds</option>
-                  <option value={30000}>30 seconds</option>
-                  <option value={60000}>1 minute</option>
-                  <option value={300000}>5 minutes</option>
-                </select>
-              </div>
-            {/if}
-
-            {#if dataSource.type === 'netbox'}
-              <div class="flex items-center gap-2">
-                <input type="checkbox" id="insecure" bind:checked={formInsecure}>
-                <label for="insecure" class="text-sm">Skip TLS certificate verification</label>
-                <p class="text-xs text-muted-foreground">(for self-signed certificates)</p>
-              </div>
-            {/if}
-
-            {#if dataSource.type === 'grafana'}
+            {#if dataSource.type === 'grafana' && config['useWebhook']}
               <div class="pt-2 border-t border-theme-border">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-sm font-medium text-theme-text-emphasis">Webhook Alerts</p>
-                    <p class="text-xs text-theme-text-muted mt-0.5">
-                      Receive alerts via Grafana Contact Point instead of polling Alertmanager API.
-                    </p>
+                <p class="text-sm font-medium text-theme-text-emphasis">Webhook URL</p>
+                <p class="text-xs text-theme-text-muted mt-0.5 mb-2">
+                  Set this as a Grafana Contact Point (Webhook type, POST method).
+                </p>
+                {#if webhookUrl}
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="text"
+                      class="input flex-1 font-mono text-xs"
+                      value={webhookUrl}
+                      readonly
+                    >
+                    <button
+                      type="button"
+                      class="btn btn-secondary p-2"
+                      title="Copy to clipboard"
+                      onclick={copyWebhookUrl}
+                    >
+                      {#if copied}
+                        <CheckIcon size={16} class="text-success" />
+                      {:else}
+                        <CopyIcon size={16} />
+                      {/if}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={formUseWebhook}
-                    aria-label="Toggle webhook alerts"
-                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {formUseWebhook ? 'bg-primary' : 'bg-theme-border'}"
-                    onclick={() => { formUseWebhook = !formUseWebhook; if (formUseWebhook) loadWebhookUrl(); else webhookUrl = ''; }}
-                  >
-                    <span
-                      class="inline-block h-4 w-4 rounded-full bg-white transition-transform {formUseWebhook ? 'translate-x-6' : 'translate-x-1'}"
-                    ></span>
-                  </button>
-                </div>
-
-                {#if formUseWebhook}
-                  <div class="mt-3 p-3 rounded-lg bg-theme-bg-canvas border border-theme-border">
-                    {#if webhookUrl}
-                      <p class="text-xs text-theme-text-muted mb-1.5">
-                        Set this URL as a Grafana Contact Point (Webhook type, POST method).
-                      </p>
-                      <div class="flex items-center gap-2">
-                        <input
-                          type="text"
-                          class="input flex-1 font-mono text-xs"
-                          value={webhookUrl}
-                          readonly
-                        >
-                        <button
-                          type="button"
-                          class="btn btn-secondary p-2"
-                          title="Copy to clipboard"
-                          onclick={copyWebhookUrl}
-                        >
-                          {#if copied}
-                            <CheckIcon size={16} class="text-success" />
-                          {:else}
-                            <CopyIcon size={16} />
-                          {/if}
-                        </button>
-                      </div>
-                    {:else if webhookLoading}
-                      <p class="text-xs text-theme-text-muted">Loading webhook URL...</p>
-                    {:else}
-                      <p class="text-xs text-theme-text-muted">
-                        Click <strong>Save Changes</strong> to generate the Webhook URL.
-                      </p>
-                    {/if}
-                  </div>
+                {:else if webhookLoading}
+                  <p class="text-xs text-theme-text-muted">Loading webhook URL...</p>
+                {:else}
+                  <p class="text-xs text-theme-text-muted">
+                    Click <strong>Save Changes</strong> to generate the Webhook URL.
+                  </p>
                 {/if}
               </div>
             {/if}
