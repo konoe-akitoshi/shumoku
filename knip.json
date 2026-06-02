@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/knip/schema.json",
-  "ignore": ["libs/@shumoku/core/src/icons/build-icons.ts"],
+  "ignore": ["libs/@shumoku/core/src/icons/build-icons.ts", "examples/**"],
   "workspaces": {
     ".": {},
     "libs/@shumoku/core": {},

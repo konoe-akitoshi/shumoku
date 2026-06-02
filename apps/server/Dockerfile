@@ -15,6 +15,7 @@ COPY libs/@shumoku/catalog/ ./libs/@shumoku/catalog/
 COPY libs/@shumoku/renderer/ ./libs/@shumoku/renderer/
 COPY libs/@shumoku/renderer-svg/ ./libs/@shumoku/renderer-svg/
 COPY libs/@shumoku/renderer-html/ ./libs/@shumoku/renderer-html/
+COPY libs/@shumoku/plugin-sdk/ ./libs/@shumoku/plugin-sdk/
 COPY libs/plugins/ ./libs/plugins/
 COPY apps/server/ ./apps/server/
 
@@ -29,7 +30,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --ignore-scripts
 
 # Build library packages (turborepo handles dependency order)
-RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/catalog --filter=@shumoku/renderer --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter='./libs/plugins/**'
+RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/catalog --filter=@shumoku/renderer --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter=@shumoku/plugin-sdk --filter='./libs/plugins/**'
 
 # Create workspace symlinks for server packages (bun may skip these when some workspace dirs are missing)
 RUN mkdir -p /app/apps/server/node_modules/@shumoku && \
