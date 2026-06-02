@@ -18,12 +18,15 @@
     value = $bindable(),
     disabled = false,
     getOptions,
+    onChange,
   }: {
     schema: PluginConfigSchema
     value: Record<string, unknown>
     disabled?: boolean
     /** Fetch dynamic candidates for an `optionsSource` key (connection-backed). */
     getOptions?: (key: string) => Promise<{ value: string; label: string }[]>
+    /** Called after any field mutation — for save-on-change consumers. */
+    onChange?: () => void
   } = $props()
 
   const entries = $derived(Object.entries(schema.properties))
@@ -72,6 +75,7 @@
     const picked = select.value
     if (picked && !asArray(key).includes(picked)) value[key] = [...asArray(key), picked]
     select.value = ''
+    onChange?.()
   }
 
   function isVisible(prop: PluginConfigProperty): boolean {
@@ -110,17 +114,21 @@
 
   function onText(key: string, e: Event) {
     value[key] = (e.currentTarget as HTMLInputElement).value
+    onChange?.()
   }
   function onNumber(key: string, e: Event) {
     const raw = (e.currentTarget as HTMLInputElement).value
     value[key] = raw === '' ? undefined : Number(raw)
+    onChange?.()
   }
   function onSelect(key: string, prop: PluginConfigProperty, e: Event) {
     const raw = (e.currentTarget as HTMLSelectElement).value
     value[key] = prop.type === 'number' ? Number(raw) : raw
+    onChange?.()
   }
   function onCheckbox(key: string, e: Event) {
     value[key] = (e.currentTarget as HTMLInputElement).checked
+    onChange?.()
   }
   function addTag(key: string, e: KeyboardEvent) {
     if (e.key !== 'Enter' && e.key !== ',') return
@@ -131,9 +139,11 @@
     const next = asArray(key)
     if (!next.includes(tag)) value[key] = [...next, tag]
     input.value = ''
+    onChange?.()
   }
   function removeTag(key: string, tag: string) {
     value[key] = asArray(key).filter((t) => t !== tag)
+    onChange?.()
   }
 </script>
 
@@ -207,7 +217,13 @@
           {/if}
         {:else if prop.type === 'object' && prop.properties}
           <fieldset class="schema-object">
-            <SchemaForm schema={subSchema(prop)} value={subValue(key)} {disabled} {getOptions} />
+            <SchemaForm
+              schema={subSchema(prop)}
+              value={subValue(key)}
+              {disabled}
+              {getOptions}
+              {onChange}
+            />
           </fieldset>
         {:else}
           <input

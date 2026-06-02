@@ -16,45 +16,52 @@
   import { CheckCircleIcon, CopyIcon, FloppyDiskIcon, PlusIcon, TrashIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
+  import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
   import { mappingStore } from '$lib/stores'
-  import type { SyncMode, TopologyDataSource, TopologyDataSourceInput } from '$lib/types'
+  import type {
+    DataSourcePluginInfo,
+    PluginConfigSchema,
+    SyncMode,
+    TopologyDataSource,
+    TopologyDataSourceInput,
+  } from '$lib/types'
   import { useTopologyCtx } from '../_context.svelte'
 
   const ctx = useTopologyCtx()
 
-  interface NetBoxOptions {
-    groupBy?: string
-    siteFilter?: string[]
-    tagFilter?: string[]
-    roleFilter?: string[]
-    excludeRoleFilter?: string[]
-    excludeTagFilter?: string[]
-  }
-
   let savingSources = $state(false)
   let copiedSecret = $state<string | null>(null)
   let copiedTimer: ReturnType<typeof setTimeout> | null = null
-  let filterOptionsCache = $state<
-    Record<
-      string,
-      {
-        sites: { slug: string; name: string }[]
-        tags: { slug: string; name: string }[]
-        roles?: { slug: string; name: string }[]
-      }
-    >
-  >({})
-  let filterOptionsLoading = $state<Record<string, boolean>>({})
   let localError = $state('')
+
+  // Plugin types carry each plugin's optionsSchema; the per-source options form
+  // is rendered generically from it (no NetBox-specific UI here anymore).
+  let pluginTypes = $state<DataSourcePluginInfo[]>([])
+  let optionsState = $state<Record<number, Record<string, unknown>>>({})
+
+  function optionsSchemaFor(type?: string): PluginConfigSchema | undefined {
+    return type ? pluginTypes.find((p) => p.type === type)?.optionsSchema : undefined
+  }
 
   let topologySources = $derived(ctx.editableSources.filter((s) => s.purpose === 'topology'))
   let metricsSources = $derived(ctx.editableSources.filter((s) => s.purpose === 'metrics'))
   let hasMultipleTopologySources = $derived(topologySources.length >= 2)
 
-  // Load NetBox filter options for any attached NetBox sources.
-  onMount(() => {
-    for (const s of ctx.editableSources) loadFilterOptions(s.dataSourceId)
+  onMount(async () => {
+    try {
+      pluginTypes = await api.dataSources.getPluginTypes()
+    } catch {
+      // Non-fatal: sources whose plugin has no optionsSchema just show no form.
+    }
+  })
+
+  // Seed per-source options form state from stored optionsJson (after render,
+  // so we never mutate $state during rendering).
+  $effect(() => {
+    for (const [index, s] of ctx.editableSources.entries()) {
+      if (!optionsState[index]) optionsState[index] = parseOptions(s.optionsJson)
+    }
   })
 
   $effect(() => {
@@ -106,59 +113,41 @@
       i === index ? { ...s, ...updates } : s,
     )
     ctx.hasSourceChanges = true
-    if (updates.dataSourceId) loadFilterOptions(updates.dataSourceId)
   }
 
-  async function loadFilterOptions(dataSourceId: string) {
-    if (filterOptionsCache[dataSourceId] || filterOptionsLoading[dataSourceId]) return
-    const ds = ctx.getDataSource(dataSourceId)
-    if (ds?.type !== 'netbox') return
-    filterOptionsLoading = { ...filterOptionsLoading, [dataSourceId]: true }
-    try {
-      const options = await api.dataSources.getFilterOptions(dataSourceId)
-      filterOptionsCache = { ...filterOptionsCache, [dataSourceId]: options }
-    } catch {
-      // silently fail
-    } finally {
-      filterOptionsLoading = { ...filterOptionsLoading, [dataSourceId]: false }
-    }
-  }
-
-  function parseOptions(optionsJson?: string): NetBoxOptions {
+  /** Parse stored optionsJson, coercing legacy string filters to arrays. */
+  function parseOptions(optionsJson?: string): Record<string, unknown> {
     if (!optionsJson) return {}
     try {
-      const raw = JSON.parse(optionsJson)
-      if (typeof raw.siteFilter === 'string')
-        raw.siteFilter = raw.siteFilter ? [raw.siteFilter] : []
-      if (typeof raw.tagFilter === 'string') raw.tagFilter = raw.tagFilter ? [raw.tagFilter] : []
-      if (typeof raw.roleFilter === 'string')
-        raw.roleFilter = raw.roleFilter ? [raw.roleFilter] : []
-      if (typeof raw.excludeRoleFilter === 'string')
-        raw.excludeRoleFilter = raw.excludeRoleFilter ? [raw.excludeRoleFilter] : []
-      if (typeof raw.excludeTagFilter === 'string')
-        raw.excludeTagFilter = raw.excludeTagFilter ? [raw.excludeTagFilter] : []
+      const raw = JSON.parse(optionsJson) as Record<string, unknown>
+      for (const key of [
+        'siteFilter',
+        'tagFilter',
+        'roleFilter',
+        'excludeRoleFilter',
+        'excludeTagFilter',
+      ]) {
+        if (typeof raw[key] === 'string') raw[key] = raw[key] ? [raw[key]] : []
+      }
       return raw
     } catch {
       return {}
     }
   }
 
-  function updateOptions(index: number, patch: Partial<NetBoxOptions>) {
-    const current = parseOptions(ctx.editableSources[index]?.optionsJson)
-    const merged = { ...current, ...patch }
-    if (!merged.groupBy) delete merged.groupBy
-    if (!merged.siteFilter?.length) delete merged.siteFilter
-    if (!merged.tagFilter?.length) delete merged.tagFilter
-    if (!merged.roleFilter?.length) delete merged.roleFilter
-    if (!merged.excludeRoleFilter?.length) delete merged.excludeRoleFilter
-    if (!merged.excludeTagFilter?.length) delete merged.excludeTagFilter
-    const json = Object.keys(merged).length > 0 ? JSON.stringify(merged) : undefined
+  /** Persist a source's options form state (pruning empties) to optionsJson. */
+  function saveOptions(index: number) {
+    const state = optionsState[index]
+    if (!state) return
+    const pruned: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(state)) {
+      if (value == null) continue
+      if (typeof value === 'string' && value === '') continue
+      if (Array.isArray(value) && value.length === 0) continue
+      pruned[key] = value
+    }
+    const json = Object.keys(pruned).length > 0 ? JSON.stringify(pruned) : undefined
     updateSource(index, { optionsJson: json })
-  }
-
-  function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
-    const current = arr || []
-    return current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
   }
 
   function getWebhookUrl(source: TopologyDataSource): string {
@@ -200,11 +189,6 @@
       savingSources = false
     }
   }
-
-  // Per-form-control ids — uniquified to avoid label/input mismatches
-  // when the same form repeats inside an each block.
-  const componentId = $props.id()
-  const groupBySelectorId = `${componentId}:groupBy`
 </script>
 
 <div class="container mx-auto p-6 max-w-6xl space-y-6">
@@ -320,148 +304,29 @@
                     </div>
                   {/if}
 
-                  <!-- NetBox options -->
-                  {#if dataSource?.type === 'netbox'}
-                    {@const opts = parseOptions(source.optionsJson)}
-                    {@const filterOpts = filterOptionsCache[source.dataSourceId]}
-                    {@const isLoading = filterOptionsLoading[source.dataSourceId]}
-                    <div class="border-t border-theme-border pt-3 space-y-3">
-                      <p class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">
-                        NetBox Options
-                      </p>
-                      <div class="flex items-center gap-4">
-                        <label for={groupBySelectorId} class="text-xs text-theme-text-muted">
-                          Group By
-                        </label>
-                        <select
-                          id={groupBySelectorId}
-                          class="input text-sm"
-                          value={opts.groupBy || 'tag'}
-                          onchange={(e) =>
-                            updateOptions(source.index, { groupBy: e.currentTarget.value })}
+                  <!-- Per-source options, rendered generically from the plugin's
+                       optionsSchema (no per-plugin UI here — #270). -->
+                  {#if optionsState[source.index]}
+                    {@const optSchema = optionsSchemaFor(dataSource?.type)}
+                    {#if optSchema}
+                      <div class="border-t border-theme-border pt-3 space-y-3">
+                        <p
+                          class="text-xs font-medium text-theme-text-muted uppercase tracking-wide"
                         >
-                          <option value="tag">Tag</option>
-                          <option value="site">Site</option>
-                          <option value="location">Location</option>
-                          <option value="prefix">Prefix</option>
-                          <option value="none">None</option>
-                        </select>
+                          {dataSource?.type}
+                          options
+                        </p>
+                        <SchemaForm
+                          schema={optSchema}
+                          value={optionsState[source.index] ?? {}}
+                          getOptions={(key) =>
+                            api.dataSources
+                              .getConfigOptions(source.dataSourceId, key)
+                              .then((r) => r.options)}
+                          onChange={() => saveOptions(source.index)}
+                        />
                       </div>
-                      {#if filterOpts}
-                        <div class="grid grid-cols-3 gap-3">
-                          <div>
-                            <p class="text-xs text-theme-text-muted mb-1">Site Filter</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.sites || [] as site (site.slug)}
-                                {@const selected = opts.siteFilter?.includes(site.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-primary/15 border-primary/40 text-primary'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      siteFilter: toggleArrayOption(opts.siteFilter, site.slug),
-                                    })}
-                                >
-                                  {site.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                          <div>
-                            <p class="text-xs text-theme-text-muted mb-1">Tag Filter</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.tags || [] as tag (tag.slug)}
-                                {@const selected = opts.tagFilter?.includes(tag.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-primary/15 border-primary/40 text-primary'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      tagFilter: toggleArrayOption(opts.tagFilter, tag.slug),
-                                    })}
-                                >
-                                  {tag.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                          <div>
-                            <p class="text-xs text-theme-text-muted mb-1">Role Filter</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.roles || [] as role (role.slug)}
-                                {@const selected = opts.roleFilter?.includes(role.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-primary/15 border-primary/40 text-primary'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      roleFilter: toggleArrayOption(opts.roleFilter, role.slug),
-                                    })}
-                                >
-                                  {role.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                          <div>
-                            <p class="text-xs text-danger mb-1">Exclude Roles</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.roles || [] as role (role.slug)}
-                                {@const selected = opts.excludeRoleFilter?.includes(role.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-danger/15 border-danger/40 text-danger'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      excludeRoleFilter: toggleArrayOption(
-                                        opts.excludeRoleFilter,
-                                        role.slug,
-                                      ),
-                                    })}
-                                >
-                                  {role.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                          <div>
-                            <p class="text-xs text-danger mb-1">Exclude Tags</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.tags || [] as tag (tag.slug)}
-                                {@const selected = opts.excludeTagFilter?.includes(tag.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-danger/15 border-danger/40 text-danger'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      excludeTagFilter: toggleArrayOption(
-                                        opts.excludeTagFilter,
-                                        tag.slug,
-                                      ),
-                                    })}
-                                >
-                                  {tag.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        </div>
-                      {:else if isLoading}
-                        <p class="text-xs text-theme-text-muted">Loading filter options...</p>
-                      {/if}
-                    </div>
+                    {/if}
                   {/if}
                 </div>
                 <Button
