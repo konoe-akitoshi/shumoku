@@ -1231,6 +1231,42 @@ describe('resolve()', () => {
       ).toBe(true)
     })
   })
+
+  // -------------------------------------------------------------------------
+  // Status reflects reality, not decoration: `observedAt` ("Last seen") is the
+  // latest real observation time and must survive a human edit (the human
+  // contribution's capturedAt is +Infinity and must not poison it).
+  // -------------------------------------------------------------------------
+  describe('observedAt reflects the last observation, not the human edit', () => {
+    it('a human-touched node still reports the observed time (not blank)', () => {
+      const observed: SnapshotEntry = {
+        sourceId: 'network-scan:1',
+        capturedAt: 1_700_000_000_000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'discovered:0', label: 'sw', shape: 'rect', identity: { mgmtIp: '10.0.0.7' } },
+          ],
+        },
+      }
+      const human: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [{ id: 'discovered:0', label: 'MY-NAME', identity: { mgmtIp: '10.0.0.7' } }],
+      }
+      const n = resolve(human, [observed]).nodes[0]
+      expect(n?.provenance?.observedAt).toBe(1_700_000_000_000)
+    })
+
+    it('an authored-only node (never observed) has no observedAt', () => {
+      const human: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [{ id: 'n', label: 'X', identity: { mgmtIp: '10.0.0.8' } }],
+      }
+      const n = resolve(human, []).nodes[0]
+      expect(n?.provenance?.observedAt).toBeUndefined()
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
