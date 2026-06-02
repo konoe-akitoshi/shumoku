@@ -1,5 +1,9 @@
 # Topology Foundation: ソース ↔ トポロジ アタッチ設計
 
+> **§6 SUPERSEDED — `topology-source-priority-merge.md`（実装済み）を参照。**
+> `fieldAuthority` は採らず **単一 priority** に倒した（fieldAuthority は将来拡張）。
+> attach のライフサイクル / hosts capability の identity 寄与 / UX の記述は有効。
+>
 > ステータス: ドラフト。`topology-foundation.md` の付属。
 > 実装未着手。protocol-probes と並行する設計レイヤ。
 

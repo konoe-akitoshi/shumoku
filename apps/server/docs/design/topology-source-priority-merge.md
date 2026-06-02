@@ -1,6 +1,9 @@
 # Topology: 全ソース同列 + 優先度マージ（resolve 一本化）
 
-> ステータス: 設計（accepted direction, 2026-06-01）。実装未着手。
+> ステータス: **実装完了**（branch `feat/priority-merge`, 2026-06-02）。§0.5 の
+> C1–C10 + 回帰すべて緑。実装中に決定5を「観測=読み取り専用」と取り違えて二段構えを
+> 一度復活させたが、根因（人の寄与が肯定のみの非対称モデル）を特定し
+> `Node.suppressedAttachments`（否定の主張）で対称化して解消した（§2 / §4 / 決定5）。
 > 既存 `topology-foundation-resolve.md` / `topology-foundation-source-attachment.md`
 > を **更新（superseding）** する判断を含む — §7 参照。
 
@@ -27,9 +30,9 @@
 
 ## 0.5 この PR の目的と完成チェックリスト
 
-> 次 PR（このドキュメントが駆動する実装）は**一気に**やる。発散しないよう、目的と
-> 「これが全部緑なら完成」の受け入れ条件をここに固定する。実装中はこのリストから
-> 出ない。
+> このドキュメントが駆動した実装（branch `feat/priority-merge`）は**一気に**やった。
+> 発散しないよう目的と「これが全部緑なら完成」の受け入れ条件をここに固定した。
+> 下のチェックリストは**全項目達成済み**（テストで担保）。
 
 ### 目的（なぜやるか）
 1. **observed / authored の2層の混同を構造から消す。** 「✕ で消えない」「community を
@@ -41,38 +44,42 @@
 ### 完成チェックリスト（受け入れ条件＝テスト）
 core / api / web それぞれに、以下を自動テストで満たすこと。**全部緑で「完成」。**
 
-- [ ] **C1 同列マージ**: 観測ソース2つ＋人寄与を priority 順でフィールド単位マージ。
+- [x] **C1 同列マージ**: 観測ソース2つ＋人寄与を priority 順でフィールド単位マージ。
       priority 高が各フィールドを勝ち取り、持たないフィールドは次 priority が出る。(resolve test)
-- [ ] **C2 空=値なし(決定1)**: 高 priority が `''`/`[]`/null のフィールドは、低 priority の
+- [x] **C2 空=値なし(決定1)**: 高 priority が `''`/`[]`/null のフィールドは、低 priority の
       実値が勝つ。(resolve test)
-- [ ] **C3 人=最優先(決定3)**: 人寄与は partial node（identity＋触ったフィールドのみ）。
+- [x] **C3 人=最優先(決定3)**: 人寄与は partial node（identity＋触ったフィールドのみ）。
       キーの無いフィールドは主張なし＝観測が透ける。`label:''` sentinel に依存しない。(resolve test)
-- [ ] **C4 Reset = 人寄与の除去**: 人寄与を取り除くと、そのノードは観測の素の状態に戻る
+- [x] **C4 Reset = 人寄与の除去**: 人寄与を取り除くと、そのノードは観測の素の状態に戻る
       （scan の name / community が出る）。層を剥がす挙動でない。(api + resolve test)
-- [ ] **C5 二段構えにしない＋人は否定もできる(決定5)**: access は **1プロトコル=1行の単一の
+- [x] **C5 二段構えにしない＋人は否定もできる(決定5)**: access は **1プロトコル=1行の単一の
       有効値**として常に編集可能に出す。provenance は「出どころ(scan / 人)」の**注記**だけで、
       読み取り専用の層を作らない。編集＝最優先の上書き、クリア＝上書き解除でソース値へ戻す、
       **✕＝削除（observed 由来でも）= `suppressedAttachments` に記録**して再スキャンでも復活
       させない。Reset で人の寄与（肯定も否定も）全破棄＝素のソース状態へ。(resolve suppression
       test + web helper unit test)
-- [ ] **C6 provenance**: resolved の各 attachment（最低限）に由来ソースが付く。観測由来と
+- [x] **C6 provenance**: resolved の各 attachment（最低限）に由来ソースが付く。観測由来と
       人由来が区別できる。(resolve test)
-- [ ] **C7 retraction 直交(決定4)**: 観測から消えたノードは retraction 対象だが、人寄与の
+- [x] **C7 retraction 直交(決定4)**: 観測から消えたノードは retraction 対象だが、人寄与の
       あるノード／policy=disabled は残る。priority はこの判定に影響しない。(resolve test)
-- [ ] **C8 identity 軸は不変(決定2)**: clustering は従来どおり any-key 一致。priority を
+- [x] **C8 identity 軸は不変(決定2)**: clustering は従来どおり any-key 一致。priority を
       clustering に効かせない（同一判定の回帰が無い）。(resolve test)
-- [ ] **C9 Merge Config 引き継ぎ**: 旧 Merge Config の base/overlay 設定が priority/by-source
+- [x] **C9 Merge Config 引き継ぎ**: 旧 Merge Config の base/overlay 設定が priority/by-source
       設定として機能する（または明示的に移行）。merge.ts は撤去され、`index.ts` の
       re-export も消える。呼び出しゼロ→存在ゼロ。(grep + build)
-- [ ] **C10 probe は identity マッチ**: probe マージが node id でなく identity で差し替え、
+- [x] **C10 probe は identity マッチ**: probe マージが node id でなく identity で差し替え、
       id 振り直しでも重複しない。(api test、現 PR 持ち越し)
-- [ ] **回帰**: 既存 resolve / discovery-policy / network-scan テストが全て緑。
+- [x] **回帰**: 既存 resolve / discovery-policy / network-scan テストが全て緑。
       svelte-check 0/0、typecheck clean、biome clean。
 
-### スコープ外（次PRでやらない）
+### スコープ外（この PR では触らない / 将来）
 - fieldAuthority（field×source の細粒度権威）。単一 priority で v1 は足りる(§3)。
 - manual idMapping（自動 clustering で繋がらないノードの手動マージ）。島のまま許容(決定2)。
 - facts attachment の実装（名前/機種を attachment 化）。別 PR(§ node-attachments doc)。
+- bridge ノードによる clustering の推移的併合（A{mgmtIp}・B{chassisId}・C{両方} が島に
+  割れうる）。决定2「自動 clustering のみ・割れたら島」の既知の制限として受容。
+- 失敗スナップショットの多段ヒステリシス（`_staleThreshold` / `_retractAfter`）。v1 は
+  last-good フィードで「failed は撤去しない」のみ担保（§決定4 / resolve コメント）。
 
 ## 1. 中心概念：すべては「優先度付きソースの寄与(contribution)」
 
@@ -325,17 +332,15 @@ Merge Config が解いていた問題 =「複数トポロジソースを base + 
 - **`topology-node-attachments.md`**: overlay モデルの記述を「人 = 最優先ソース」に
   読み替え。facts attachment 未実装の注記はそのまま。
 
-## 8. 移行と現 PR(#332)の扱い
+## 8. 実装の経緯（#332 を前段に、本 PR でコア手術）
 
-現 PR は「overlay モデル上での UI / 機能（Access・policy・Hide・Reset・Rescan・
-Rebuild・Sync-all）」を積んでおり、**動作している**。本設計（全ソース同列 + priority
-へのコア作り替え）は **データモデルの手術**で別物。
+#332（`feat/node-attachments`）が overlay モデル上の UI / 機能（Access・policy・Hide・
+Reset・Rescan・Rebuild・Sync-all）を積んで閉じ、**本 PR `feat/priority-merge` が
+データモデルの手術**を実施した：`foldNodeCluster` / `foldPortCluster` の特別分岐を
+priority フィールドマージへ一般化、`topology_data_sources.priority` を配線、merge.ts を
+撤去（Merge Config は per-source priority へ移行）、probe を identity マッチへ、そして
+人の寄与を `Node.suppressedAttachments` で対称化（足す・上書き・削除）。
 
-判断：**現 PR はこの設計の前段として閉じる**（overlay UI と Hide/Reset/Rebuild は
-priority モデルでもそのまま活きる）。priority 一本化 + merge.ts 撤去は**次 PR**で
-コアから着手する。理由：現 PR を膨らませると再び迷走する。本 doc を「次の大仕事」の
-基点として残す。
-
-> 補足：現 PR の `resolve` は既に「authored = 最優先」で実質 priority モデルの特殊形に
-> なっているため、次 PR はゼロからではなく「特別分岐の一般化 + priority 配線 +
-> Merge Config の resolve への引き継ぎ（その後 merge.ts 撤去）」という差分作業になる。
+実装は core → api → web → docs の順で、C1–C10 + 回帰を緑にしながら進めた（§0.5）。
+迷走ポイントは決定5の取り違え（観測=読み取り専用の二段構え）一度きりで、根因
+（非対称な人モデル）を特定して対称化で解消。詳細は §2 / §4 / 決定5。
