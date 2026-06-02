@@ -7,7 +7,7 @@
     XCircleIcon,
   } from 'phosphor-svelte'
   import { onMount } from 'svelte'
-  import { api } from '$lib/api'
+  import { api, isSharedView } from '$lib/api'
   import type { DataSource } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
@@ -27,6 +27,9 @@
   let dataSources: DataSource[] = $state([])
   let loading = $state(true)
   let error = $state('')
+  // The data-source list is server-wide inventory, not scoped to one resource,
+  // so it isn't exposed to anonymous shared viewers.
+  const restricted = isSharedView()
 
   async function loadDataSources() {
     loading = true
@@ -42,6 +45,10 @@
   }
 
   onMount(() => {
+    if (restricted) {
+      loading = false
+      return
+    }
     loadDataSources()
     // Auto-refresh every 30 seconds
     const interval = setInterval(loadDataSources, 30000)
@@ -60,7 +67,12 @@
 </script>
 
 <WidgetWrapper {title} {onRemove} onSettings={handleSettings}>
-  {#if loading && dataSources.length === 0}
+  {#if restricted}
+    <div class="h-full flex flex-col items-center justify-center text-theme-text-muted gap-2">
+      <DatabaseIcon size={32} />
+      <span class="text-sm">Not available in shared view</span>
+    </div>
+  {:else if loading && dataSources.length === 0}
     <div class="h-full flex items-center justify-center">
       <SpinnerIcon size={24} class="animate-spin text-theme-text-muted" />
     </div>
