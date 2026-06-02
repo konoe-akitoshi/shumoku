@@ -519,11 +519,63 @@ export interface PluginConfigProperty {
   type: 'string' | 'number' | 'boolean' | 'object' | 'array'
   title?: string
   description?: string
+  /** String formatting hint (masked password / URL / email). */
   format?: 'password' | 'uri' | 'email'
+  /** Placeholder shown in an empty input. */
+  placeholder?: string
   default?: unknown
+
+  // --- choices ---------------------------------------------------------
+  /** Enumerated values WITH display labels. Prefer this over `enum`. */
+  oneOf?: { const: string | number; title: string }[]
+  /** Enumerated values (no labels). Kept for back-compat; new schemas use `oneOf`. */
   enum?: (string | number)[]
+
+  // --- number ----------------------------------------------------------
   minimum?: number
   maximum?: number
+  /** Step for numeric inputs. */
+  step?: number
+
+  // --- array<string> ---------------------------------------------------
+  /** Item schema for `type:'array'` (string items only, for now). */
+  items?: { type: 'string' }
+  /** Key passed to `getConfigOptions(key, config)` to fetch dynamic candidates. */
+  optionsSource?: string
+  /** Allow hand-typed values not in the candidate list (fallback when candidates fail/empty). */
+  freeSolo?: boolean
+
+  // --- object (nested) -------------------------------------------------
+  /** Child properties for `type:'object'`. */
+  properties?: Record<string, PluginConfigProperty>
+  /** Required child keys for `type:'object'`. */
+  required?: string[]
+
+  // --- conditionals ----------------------------------------------------
+  /** Render this field only when a sibling field equals a value. */
+  visibleWhen?: { field: string; equals: string | number | boolean }
+  /** Require this field only when a sibling field equals a value (in addition to top-level `required`). */
+  requiredWhen?: { field: string; equals: string | number | boolean }
+
+  // --- advisory / display ----------------------------------------------
+  /** Warning shown by the field (e.g. "account must NOT have MFA enabled"). */
+  warning?: string
+  /** Help/hint text. */
+  help?: string
+  /** Link to relevant documentation. */
+  docUrl?: string
+  /** Supplied by the host at construction, not the user — exclude from forms. */
+  serverSupplied?: boolean
+}
+
+/**
+ * JSON-schema-ish object descriptor, reused for plugin `configSchema`
+ * (connection config) and per-use `optionsSchema` (e.g. topology groupBy/filters).
+ */
+export interface PluginConfigSchema {
+  type: 'object'
+  required?: string[]
+  properties: Record<string, PluginConfigProperty>
 }
 
 /**
@@ -543,11 +595,7 @@ export interface PluginManifest {
   /** Entry point file (default: index.js) */
   entry?: string
   /** JSON Schema for plugin configuration */
-  configSchema?: {
-    type: 'object'
-    required?: string[]
-    properties: Record<string, PluginConfigProperty>
-  }
+  configSchema?: PluginConfigSchema
 }
 
 // ============================================

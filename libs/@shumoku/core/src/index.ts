@@ -24,6 +24,8 @@ export * from './models/index.js'
 export * from './observation/index.js'
 // Parser
 export * from './parser/index.js'
+// Plugin authoring kit (pure helpers: severity, alertmanager, flatten, stamp, validate)
+export * from './plugin-kit/index.js'
 // Plugin types
 export * from './plugin-types.js'
 // Themes
