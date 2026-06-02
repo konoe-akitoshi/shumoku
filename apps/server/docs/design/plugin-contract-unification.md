@@ -1,6 +1,8 @@
 # Plugin contract unification & flexible extension model
 
-> ステータス: 設計（合意済み方向, 2026-06-03）。実装未着手。
+> ステータス: **実装完了**（branch `feat/plugin-contract`, 2026-06-03、未マージ）。
+> C1–C11 ＋ 回帰すべて緑（typecheck / lint / vitest / svelte-check、dev サーバで live 検証済み）。
+> 実体マップは §0.5 末尾「実装結果」を参照。
 > `#270`（web の per-plugin ハードコード設定フォーム）を**内包する、より広い設計修正**。
 > 既存 `plugin-types.ts` / `docs/plugin-authoring.md` の contract を**一般化・強制・拡張**する
 > （後方互換な移行を含む — §6）。
@@ -57,38 +59,59 @@
 4. **拡張点モデルで data-source 以外を将来塞がない**（型・registry の一般化のみ、実装は data-source）。
 
 ### 完成チェックリスト（受け入れ条件＝テスト）
-- [ ] **C1 拡張点 registry**: core が extension point を定義し、プラグインは部分集合を埋める。
+- [x] **C1 拡張点 registry**: core が extension point を定義し、プラグインは部分集合を埋める。
       `data-source` は1実装。register / registry / `getAllPlugins` は拡張点を一般に扱う。(unit test)
-- [ ] **C2 open capability**: capability は文字列（既知の well-known セット＋任意）。ホストは
+- [x] **C2 open capability**: capability は文字列（既知の well-known セット＋任意）。ホストは
       **既知のみ消費・未知は無視**（クラッシュしない）。閉じた union を撤去し、web 型の漏れも掃除。(unit test)
-- [ ] **C3 自己記述 descriptor 統一**: バンドルも `configSchema` / `optionsSchema` / capabilities を
+- [x] **C3 自己記述 descriptor 統一**: バンドルも `configSchema` / `optionsSchema` / capabilities を
       宣言。`getAllPlugins` は **bundled でも configSchema を運ぶ**。descriptor ≡ 外部 manifest の
       ランタイム形。(loader/registry test)
-- [ ] **C4 schema 駆動描画一本化**: `datasources/+page.svelte` ・ `[id]/+page.svelte` ・ Sources の
+- [x] **C4 schema 駆動描画一本化**: `datasources/+page.svelte` ・ `[id]/+page.svelte` ・ Sources の
       options が **`type === '…'` 分岐ゼロ**。新フィールド型もホスト編集ゼロで描ける。(grep + web build) ← #270 解消
-- [ ] **C5 config/options 検証**: core の純粋関数（schema + value → errors）で検証。api(作成/更新)・
+- [x] **C5 config/options 検証**: core の純粋関数（schema + value → errors）で検証。api(作成/更新)・
       web(クライアント)が共有。不正は 400。(api test)
-- [ ] **C6 capability 検証**: 申告 capability に対応するメソッド存在を registry が検証（嘘申告を
+- [x] **C6 capability 検証**: 申告 capability に対応するメソッド存在を registry が検証（嘘申告を
       初回 instantiate で検出）。(registry test)
-- [ ] **C7 host に `type === '…'` ブランチゼロ**: プラグイン dir 外に plugin-type リテラル分岐が無い。
+- [x] **C7 host に `type === '…'` ブランチゼロ**: プラグイン dir 外に plugin-type リテラル分岐が無い。
       grep ガードを CI/テストに追加（CLAUDE.md 不変条件の機械強制）。(guard test)
-- [ ] **C8 新プラグイン＝ホスト編集ゼロ（核）**: 受け入れの実証として、**最小のサンプル外部プラグイン**
+- [x] **C8 新プラグイン＝ホスト編集ゼロ（核）**: 受け入れの実証として、**最小のサンプル外部プラグイン**
       （新 type・既存 capability・configSchema/optionsSchema 付き）を追加し、core/api/web を触らず
       接続・設定・options 描画・能力ディスパッチが通る。(e2e/integration)
-- [ ] **C9 共有ユーティリティ（重複撲滅）**: HTTP クライアント（auth/timeout/insecure/非2xx/
+- [x] **C9 共有ユーティリティ（重複撲滅）**: HTTP クライアント（auth/timeout/insecure/非2xx/
       pagination）、Alertmanager アダプタ＋`mapAlertmanagerSeverity`/`severityRank`、`stampObserved`
       （identity/provenance/syncState/readVia）、`validateAgainstSchema`、`flattenObject`（汎用 metrics
       dump）、`mapWithConcurrency`、timing-safe webhook guard を core(or 共有 lib)に集約し全 bundled が
       使用。severity マップ/fetch の重複ゼロ・timeout 抜けゼロ。(grep + unit test)
-- [ ] **C10 既存実装の P0 解消（§2.1 監査）**: netbox=identity/provenance 付与＋真のページング(next 追従)
+- [x] **C10 既存実装の P0 解消（§2.1 監査）**: netbox=identity/provenance 付与＋真のページング(next 追従)
       ＋TLS 無効化の Node 対応、prometheus=metadataMap 代入＋PromQL エスケープ＋Alertmanager URL を
       推測しない、grafana=webhook payload 検証＋定数時間 secret 比較、全 HTTP に timeout、
       zabbix=config 検証＋severity `ok` 整合＋ホスト一括取得。各々回帰テスト。(plugin test)
-- [ ] **C11 開発者ドキュメント**: `docs/plugin-authoring.md` が新契約（descriptor / configSchema・
+- [x] **C11 開発者ドキュメント**: `docs/plugin-authoring.md` が新契約（descriptor / configSchema・
       optionsSchema の全機能 / `@shumoku/plugin-sdk` / `stampObserved`・identity / severity 中立マッピング /
       capability 準拠 / セキュリティ作法）を網羅し、**動くサンプル外部プラグイン**を worked example として含む。
       新規作者が**この doc だけでホスト無編集のプラグインを書ける**。(doc レビュー + サンプルが C8 で緑)
-- [ ] **回帰**: バンドル6種＋外部サンプルが**同一経路**で動作、typecheck / lint / 既存 test 緑。
+- [x] **回帰**: バンドル6種＋外部サンプルが**同一経路**で動作、typecheck / lint / 既存 test 緑。
+
+#### 実装結果（実体マップ, 2026-06-03）
+- **C1/C2/C3/C6** → `libs/@shumoku/core/src/plugin-types.ts`（open capability union、`PluginDescriptor`、
+  `CAPABILITY_METHOD`/`missingCapabilityMethods`）＋ `apps/server/api/src/plugins/{registry,loader}.ts`
+  （`registerDescriptor`、初回 `create()` で capability 検証、`getAllPlugins`/`/types` が bundled でも
+  configSchema/optionsSchema を運ぶ）。4引数 `register` はアダプタとして併存。
+- **C4** → `apps/server/web/src/lib/components/SchemaForm.svelte` 一本で datasources(create/edit)＋
+  Sources options を描画。`type === '…'` 分岐ゼロ（#270 解消）。
+- **C5** → core `validateAgainstSchema`（`plugin-kit/validate-schema.ts`）を api の作成/更新で
+  `validateConfigForType` 経由で適用、不正は 400。
+- **C7** → `apps/server/api/src/plugins/host-branch-guard.test.ts`（プラグイン dir 外の plugin-type
+  リテラル分岐を grep ガード、`ALLOWED = {manual}`）。
+- **C8** → `examples/sample-plugin/`（新 type・既存 capability・configSchema/optionsSchema）＋
+  `apps/server/api/src/plugins/sample-plugin.test.ts`（core/api/web 無編集で接続〜options 描画が通る）。
+- **C9** → 3層集約: 純粋 `@shumoku/core/plugin-kit`（severity / alertmanager / metrics-flatten /
+  concurrency / stamp / validate-schema）／Node `@shumoku/plugin-sdk`（http-client / paginate）／
+  server `apps/server/api/src/lib/webhook-guard.ts`（`timingSafeEqualStr`）。
+- **C10** → netbox=httpClient＋真のページング＋identity/provenance スタンプ、prometheus=metadataMap 代入＋
+  PromQL エスケープ＋Alertmanager dedup、grafana=payload 検証＋**定数時間 secret 比較**（generic
+  `POST /api/webhooks/:type/:id`、F6）、全 HTTP に timeout。
+- **C11** → `docs/plugin-authoring.md` を新契約に全面改訂、C8 のサンプルを worked example として収録。
 
 ### スコープ外（この設計でやらない）
 - **sandbox / permission の実装**（信頼モデル(a)。manifest に `apiVersion`/`permissions` の宣言余地のみ）。

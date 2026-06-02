@@ -2,6 +2,13 @@
 
 > ステータス: ドラフト。`topology-foundation.md` の付属。
 > 観測モデルに乗せるための plugin v2 仕様。後方互換は考慮しない（v1 は破棄）。
+>
+> **更新（2026-06-03, supersede）**: capability の表現・登録 API・拡張点まわりは
+> [`plugin-contract-unification.md`](./plugin-contract-unification.md) が上位。実装済みの差分は
+> ① `DataSourceCapability` は **open union**（`KnownDataSourceCapability | (string & {})`。本書 §1 の
+> 閉じた union は撤去済み）／② 登録は `registerDescriptor(descriptor, factory)`（本書 §の 4引数
+> `register` はアダプタとして併存）／③ capability の充足検証は初回 `create()` 時。
+> 本書の **観測モデル**（Snapshot / identity / provenance / status / autoscan）は引き続き有効。
 
 ## 0. v1 からの変更点（要約）
 
