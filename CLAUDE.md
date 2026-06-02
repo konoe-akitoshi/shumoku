@@ -120,9 +120,15 @@ Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on cor
   Don't reintroduce Zabbix-flavored values (`disaster` / `average` / `information`).
 - `DiscoveredMetric.value` is `number | string | boolean`. The "All metrics" panel
   is a passthrough dump — plugins should walk the upstream record generically
-  (see `flattenObject` in aruba-instant-on) rather than enumerating fields.
-- The web app must render plugins through `configSchema`, not via per-plugin
-  branches. Hardcoded forms are tracked for cleanup in issue #270.
+  (use `flattenObject` from `@shumoku/core/plugin-kit`) rather than enumerating fields.
+- The web app renders plugin config through `configSchema` via one generic
+  `SchemaForm`, never per-plugin branches (#270 resolved). A vitest guard
+  (`apps/server/api/src/plugins/host-branch-guard.test.ts`) fails the build if a
+  `type === '<plugin>'` branch reappears in the config surfaces.
+- Plugins reuse shared helpers, not re-rolled copies: `@shumoku/core/plugin-kit`
+  (severity / Alertmanager parse / `flattenObject` / `stampObserved` / `validateAgainstSchema`
+  / `mapWithConcurrency`) and `@shumoku/plugin-sdk` (`httpClient` / `paginate`).
+  Bundled plugins self-describe via `registerDescriptor({...configSchema}, factory)`.
 
 When in doubt, refuse to add `plugin.type === 'foo'` branches anywhere outside
 the plugin's own `libs/plugins/foo/` directory.
