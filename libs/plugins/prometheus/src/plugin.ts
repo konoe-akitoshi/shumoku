@@ -24,6 +24,24 @@ import {
 } from '@shumoku/core'
 import type { PrometheusCustomMetrics, PrometheusPluginConfig } from './types.js'
 
+/** Escape a string for use as a double-quoted PromQL label value. */
+export function escapeLabelValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
+}
+
+/**
+ * Build a PromQL label selector `{a="x",b="y"}` with every value escaped.
+ * Pairs with an undefined/empty value are dropped. This is the injection guard:
+ * discovered host / instance / interface values flow into selectors and must
+ * not be able to break out of the quoted string.
+ */
+export function labelSelector(pairs: Record<string, string | undefined>): string {
+  const parts = Object.entries(pairs)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([key, v]) => `${key}="${escapeLabelValue(v as string)}"`)
+  return `{${parts.join(',')}}`
+}
+
 /**
  * Metric presets for common exporters
  */
@@ -157,7 +175,7 @@ export class PrometheusPlugin
     // Only run when jobFilter is configured to avoid noisy results from unrelated jobs
     if (this.config?.jobFilter) {
       try {
-        const query = `up{job="${this.config.jobFilter}"}`
+        const query = `up${labelSelector({ job: this.config.jobFilter })}`
         const result = await this.instantQuery(query)
         const total = result.result.length
         const down = result.result.filter((r) => r.value[1] === '0').length
@@ -246,9 +264,9 @@ export class PrometheusPlugin
       // Get all unique values for the host label
       let url = `/api/v1/label/${hostLabel}/values`
 
-      // If job filter is specified, add a match parameter
+      // If job filter is specified, add a match parameter (escaped + encoded)
       if (this.config.jobFilter) {
-        url += `?match[]={job="${this.config.jobFilter}"}`
+        url += `?match[]=${encodeURIComponent(labelSelector({ job: this.config.jobFilter }))}`
       }
 
       const response = await this.apiRequest<string[]>(url)
@@ -340,10 +358,7 @@ export class PrometheusPlugin
 
     try {
       // Get all series for this host
-      let selector = `{${hostLabel}="${hostId}"}`
-      if (this.config.jobFilter) {
-        selector = `{${hostLabel}="${hostId}",job="${this.config.jobFilter}"}`
-      }
+      const selector = labelSelector({ [hostLabel]: hostId, job: this.config.jobFilter })
 
       const seriesUrl = `/api/v1/series?match[]=${encodeURIComponent(selector)}`
       const seriesData = await this.apiRequest<Array<Record<string, string>>>(seriesUrl)
@@ -365,7 +380,7 @@ export class PrometheusPlugin
 
         for (const [name, entries] of Object.entries(metadataResponse)) {
           if (entries[0]) {
-            metadataMap[name]
+            metadataMap[name] = entries[0]
           }
         }
       } catch {
@@ -375,10 +390,7 @@ export class PrometheusPlugin
       // Query current values for each metric
       for (const metricName of metricNames) {
         try {
-          let query = `${metricName}{${hostLabel}="${hostId}"}`
-          if (this.config.jobFilter) {
-            query = `${metricName}{${hostLabel}="${hostId}",job="${this.config.jobFilter}"}`
-          }
+          const query = `${metricName}${labelSelector({ [hostLabel]: hostId, job: this.config.jobFilter })}`
 
           const result = await this.instantQuery(query)
 
@@ -654,12 +666,8 @@ export class PrometheusPlugin
     const hostLabel = this.config.hostLabel || 'instance'
     const upMetric = this.metrics.upMetric || 'up'
 
-    const buildQuery = (metric: string) => {
-      if (this.config?.jobFilter) {
-        return `${metric}{${hostLabel}="${instance}",job="${this.config.jobFilter}"}`
-      }
-      return `${metric}{${hostLabel}="${instance}"}`
-    }
+    const buildQuery = (metric: string) =>
+      `${metric}${labelSelector({ [hostLabel]: instance, job: this.config?.jobFilter })}`
 
     // Empty result = "Prometheus has no series matching this instance"
     // which we surface as `undefined` so the caller can stay silent
@@ -701,15 +709,16 @@ export class PrometheusPlugin
     const hostLabel = this.config.hostLabel || 'instance'
     const interfaceLabel = this.metrics.interfaceLabel
 
-    // Build label selector
-    let labelSelector = `${hostLabel}="${instance}",${interfaceLabel}="${interfaceName}"`
-    if (this.config.jobFilter) {
-      labelSelector += `,job="${this.config.jobFilter}"`
-    }
+    // Build label selector (values escaped)
+    const selector = labelSelector({
+      [hostLabel]: instance,
+      [interfaceLabel]: interfaceName,
+      job: this.config.jobFilter,
+    })
 
     // Use rate() to convert counter to bytes/sec
-    const inQuery = `rate(${this.metrics.inOctets}{${labelSelector}}[5m])`
-    const outQuery = `rate(${this.metrics.outOctets}{${labelSelector}}[5m])`
+    const inQuery = `rate(${this.metrics.inOctets}${selector}[5m])`
+    const outQuery = `rate(${this.metrics.outOctets}${selector}[5m])`
 
     let inBytesPerSec = 0
     let outBytesPerSec = 0
