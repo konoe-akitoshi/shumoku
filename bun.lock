@@ -261,6 +261,7 @@
       "version": "0.2.25",
       "dependencies": {
         "@shumoku/core": "workspace:*",
+        "@shumoku/plugin-sdk": "workspace:*",
       },
     },
     "libs/plugins/network-scan": {
