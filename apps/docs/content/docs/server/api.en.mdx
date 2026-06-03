@@ -14,6 +14,31 @@ Content-Type: application/json
 { "password": "your-password" }
 ```
 
+## Shared views (public, token-scoped)
+
+The **only** endpoints reachable without a session are the share routes below
+(plus `/api/health`). A share token grants read-only access to a single
+topology — or, for a dashboard, to just the topology/data-source ids that
+dashboard's widgets reference. Responses are projected to a public shape:
+internal fields (the resource's own share token, data-source ids, host
+mappings, port aliases, timestamps) are never returned.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/share/topologies/:token` | Shared topology context (nodes/edges/metrics) |
+| GET | `/api/share/topologies/:token/graph` | Shared topology as a NetworkGraph |
+| GET | `/api/share/topologies/:token/render` | Shared topology render output |
+| GET | `/api/share/dashboards/:token` | Shared dashboard shell (layout) |
+| GET | `/api/share/dashboards/:token/topologies/:id` | Topology metadata for a widget in this dashboard |
+| GET | `/api/share/dashboards/:token/topologies/:id/graph` | NetworkGraph for a widget in this dashboard |
+| GET | `/api/share/dashboards/:token/topologies/:id/context` | Context for a device-status widget |
+| GET | `/api/share/dashboards/:token/datasources/:id/alerts` | Alerts for an alert widget |
+
+A dashboard-scoped request whose `:id` is not referenced by the dashboard's
+layout returns `404`, so the token cannot enumerate unrelated resources. The
+management endpoints below (`/api/topologies/:id`, `/api/dashboards/:id`,
+`/api/datasources/:id/alerts`, …) always require authentication.
+
 ## HTTP Endpoints
 
 ### Data Sources
