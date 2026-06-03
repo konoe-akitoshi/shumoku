@@ -65,7 +65,7 @@ you'll tie yourself in knots:
 
 | You mean… | Where it lives | Example |
 |---|---|---|
-| **which plugin this is** — identity / discriminator | `registerDescriptor({ type })`, `dataSource.type` | `'zabbix'`, `'netbox'`, `'ttdb'` |
+| **which plugin this is** — identity / discriminator | `registerDescriptor({ type })`, `dataSource.type` | `'zabbix'`, `'netbox'` |
 | **what the plugin can do** — its roles, the chips shown in the UI | `capabilities` | `['metrics', 'hosts', 'alerts']` |
 | **a config field's value type** — drives the form widget + validation | `PluginConfigProperty.type` | `'string'` `'number'` `'boolean'` `'object'` `'array'` |
 | **a network device's kind** — topology model, nothing to do with plugins | `Node.type` | `'router'`, `'l2-switch'` |
