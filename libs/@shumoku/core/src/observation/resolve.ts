@@ -91,7 +91,10 @@ export function resolve(
       sourceId: snap.sourceId,
       priority: snap.priority ?? 0,
       capturedAt: snap.capturedAt,
-      graph: snap.graph,
+      // Namespace this source's subgraph ids (and the node.parent refs into
+      // them) so groups from different sources can't collide. Authored keeps
+      // the raw id space (it's the top-priority, human-owned layer).
+      graph: namespaceSourceSubgraphs(snap.graph, snap.sourceId),
     })
   }
 
@@ -124,9 +127,12 @@ export function resolve(
   //    out of scope for the skeleton.
   const resolvedLinks = foldLinks(contributions, clusterById)
 
-  // 5. Subgraphs — pass through authored, then stamp provenance.
-  //    Workload-source subgraphs are v2; skeleton respects authored only.
-  const resolvedSubgraphs = foldSubgraphs(authored)
+  // 5. Subgraphs — fold from every contribution (authored + each source), not
+  //    just authored. Source subgraph ids were namespaced per source above, and
+  //    resolved nodes carry the matching namespaced `parent`, so membership
+  //    resolves without cross-source collisions. (No cross-source dedup yet:
+  //    subgraphs have no identity key like nodes do — each source keeps its own.)
+  const resolvedSubgraphs = foldSubgraphs(contributions)
 
   return {
     version: authored.version,
@@ -669,12 +675,57 @@ function foldPortCluster(members: PortMember[]): NodePort {
   return folded
 }
 
-function foldSubgraphs(authored: NetworkGraph): Subgraph[] | undefined {
-  if (!authored.subgraphs) return undefined
-  return authored.subgraphs.map((s) => ({
-    ...s,
-    provenance: s.provenance ?? { source: 'authored', state: 'authored-only' },
-  }))
+/**
+ * Namespace a source contribution's subgraph references so groups from
+ * different sources can't collide. A subgraph `id`, a node's `parent`, and a
+ * subgraph's `parent`/`children` are all subgraph ids — prefix every one with
+ * the source id. Mirrors the node-id namespacing already used for link
+ * endpoints (`${sourceId}:${node}` in remapEndpoint / clusterById).
+ *
+ * Returns the graph unchanged when there is nothing to namespace, and never
+ * mutates the input.
+ */
+function namespaceSourceSubgraphs(graph: NetworkGraph, sourceId: string): NetworkGraph {
+  const tag = (id: string) => `${sourceId}:${id}`
+  const hasSubgraphs = (graph.subgraphs?.length ?? 0) > 0
+  const hasNodeParent = graph.nodes.some((n) => n.parent)
+  if (!hasSubgraphs && !hasNodeParent) return graph
+
+  const nodes = hasNodeParent
+    ? graph.nodes.map((n) => (n.parent ? { ...n, parent: tag(n.parent) } : n))
+    : graph.nodes
+
+  const subgraphs = graph.subgraphs?.map((s) => {
+    const next: Subgraph = { ...s, id: tag(s.id) }
+    if (s.parent) next.parent = tag(s.parent)
+    if (s.children) next.children = s.children.map(tag)
+    return next
+  })
+
+  return { ...graph, nodes, subgraphs }
+}
+
+/**
+ * Fold subgraphs from EVERY contribution (authored + each source), stamping
+ * provenance. Source subgraph ids were namespaced per source at contribution
+ * time (see namespaceSourceSubgraphs), and resolved nodes carry the matching
+ * namespaced `parent`, so membership resolves without collisions. No
+ * cross-source dedup yet — subgraphs have no identity key, so each source keeps
+ * its own groups; a subgraph that already carries provenance is left as-is.
+ */
+function foldSubgraphs(contributions: Contribution[]): Subgraph[] | undefined {
+  const all: Subgraph[] = []
+  for (const contrib of contributions) {
+    if (!contrib.graph.subgraphs) continue
+    const state = contrib.sourceId === 'authored' ? 'authored-only' : 'discovered-only'
+    for (const s of contrib.graph.subgraphs) {
+      all.push({
+        ...s,
+        provenance: s.provenance ?? { source: contrib.sourceId, state },
+      })
+    }
+  }
+  return all.length > 0 ? all : undefined
 }
 
 /**

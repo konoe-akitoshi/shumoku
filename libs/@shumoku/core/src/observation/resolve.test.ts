@@ -1267,6 +1267,149 @@ describe('resolve()', () => {
       expect(n?.provenance?.observedAt).toBeUndefined()
     })
   })
+
+  describe('source subgraphs (fold + namespacing)', () => {
+    it('folds a source subgraph and namespaces its id + node.parent so membership resolves', () => {
+      const snap: SnapshotEntry = {
+        sourceId: 'src-a:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'n1',
+              label: 'web',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.1' },
+              parent: 'sg-2',
+            },
+          ],
+          subgraphs: [{ id: 'sg-2', label: 'Rack 2' }],
+        },
+      }
+      const out = resolve(emptyGraph(), [snap])
+      expect(out.subgraphs).toHaveLength(1)
+      expect(out.subgraphs?.[0]?.id).toBe('src-a:1:sg-2')
+      expect(out.subgraphs?.[0]?.label).toBe('Rack 2')
+      expect(out.subgraphs?.[0]?.provenance?.source).toBe('src-a:1')
+      // the resolved node's parent points at the namespaced id → not dangling
+      expect(out.nodes[0]?.parent).toBe('src-a:1:sg-2')
+    })
+
+    it('keeps same-id subgraphs from two sources distinct (collision-safe)', () => {
+      const a: SnapshotEntry = {
+        sourceId: 'src-a:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'a',
+              label: 'a',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.1' },
+              parent: 'sg-2',
+            },
+          ],
+          subgraphs: [{ id: 'sg-2', label: 'Source A rack' }],
+        },
+      }
+      const b: SnapshotEntry = {
+        sourceId: 'netbox:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'b',
+              label: 'b',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.2' },
+              parent: 'sg-2',
+            },
+          ],
+          subgraphs: [{ id: 'sg-2', label: 'NetBox site' }],
+        },
+      }
+      const out = resolve(emptyGraph(), [a, b])
+      const ids = out.subgraphs?.map((s) => s.id) ?? []
+      expect(ids).toContain('src-a:1:sg-2')
+      expect(ids).toContain('netbox:1:sg-2')
+      expect(new Set(ids).size).toBe(2)
+      const parentByLabel = new Map(out.nodes.map((n) => [n.label, n.parent]))
+      expect(parentByLabel.get('a')).toBe('src-a:1:sg-2')
+      expect(parentByLabel.get('b')).toBe('netbox:1:sg-2')
+    })
+
+    it('namespaces nested subgraph parent/children refs together', () => {
+      const snap: SnapshotEntry = {
+        sourceId: 'src-a:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          subgraphs: [
+            { id: 'site', label: 'Site', children: ['rack'] },
+            { id: 'rack', label: 'Rack', parent: 'site' },
+          ],
+        },
+      }
+      const out = resolve(emptyGraph(), [snap])
+      const site = out.subgraphs?.find((s) => s.label === 'Site')
+      const rack = out.subgraphs?.find((s) => s.label === 'Rack')
+      expect(site?.id).toBe('src-a:1:site')
+      expect(site?.children).toEqual(['src-a:1:rack'])
+      expect(rack?.id).toBe('src-a:1:rack')
+      expect(rack?.parent).toBe('src-a:1:site')
+    })
+
+    it('leaves authored subgraph ids raw, and authored parent wins on a shared node', () => {
+      const authored: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'r1',
+            label: 'R1',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.1' },
+            parent: 'authored-sg',
+          },
+        ],
+        subgraphs: [{ id: 'authored-sg', label: 'Authored group' }],
+      }
+      const snap: SnapshotEntry = {
+        sourceId: 'src-a:1',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'x',
+              label: 'R1',
+              shape: 'rect',
+              identity: { mgmtIp: '10.0.0.1' },
+              parent: 'sg-2',
+            },
+          ],
+          subgraphs: [{ id: 'sg-2', label: 'Source A group' }],
+        },
+      }
+      const out = resolve(authored, [snap])
+      const ids = out.subgraphs?.map((s) => s.id) ?? []
+      expect(ids).toContain('authored-sg') // raw — authored owns the id space
+      expect(ids).toContain('src-a:1:sg-2')
+      // same identity (10.0.0.1) clusters into one node; authored parent wins
+      const r1 = out.nodes.find((n) => n.label === 'R1')
+      expect(r1?.parent).toBe('authored-sg')
+      expect(out.subgraphs?.find((s) => s.id === 'authored-sg')?.provenance?.source).toBe(
+        'authored',
+      )
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
