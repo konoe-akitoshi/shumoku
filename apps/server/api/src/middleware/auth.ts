@@ -23,17 +23,16 @@ function isPublicRequest(method: string, pathname: string): boolean {
   // Only GET requests can be public beyond this point
   if (method !== 'GET') return false
 
-  // Public GET: individual dashboard viewing
-  // Match /api/dashboards/:id but NOT /api/dashboards (list)
-  if (/^\/api\/dashboards\/[^/]+$/.test(pathname)) return true
-
-  // Public GET: topology view endpoints
-  // Match /api/topologies/:id (single topology) and /api/topologies/:id/(context|render|alerts|parsed)
-  if (/^\/api\/topologies\/[^/]+$/.test(pathname)) return true
-  if (/^\/api\/topologies\/[^/]+\/(context|render|alerts|parsed)/.test(pathname)) return true
-
-  // Public GET: data source alerts (for dashboard widgets)
-  if (/^\/api\/datasources\/[^/]+\/alerts$/.test(pathname)) return true
+  // Public GET: token-scoped share endpoints only.
+  // `/api/share/*` is mounted before this middleware (see api/index.ts), so it
+  // never reaches here — anonymous read access to topology/dashboard/datasource
+  // data is ONLY available through a share token, which gates and projects what
+  // it exposes (see api/share.ts + share-projections.ts). The management
+  // endpoints (/api/topologies/:id, /context, /render, /parsed,
+  // /api/dashboards/:id, /api/datasources/:id/alerts) are intentionally NOT
+  // public: exposing them un-projected let anyone who learned an id (e.g. from a
+  // shared dashboard's layoutJson) read a topology's own shareToken, data-source
+  // ids and host mappings, bypassing the share token's scoping entirely.
 
   return false
 }

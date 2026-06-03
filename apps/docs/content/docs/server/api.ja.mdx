@@ -14,6 +14,30 @@ Content-Type: application/json
 { "password": "your-password" }
 ```
 
+## 共有ビュー（公開・トークンスコープ）
+
+セッションなしで到達できるのは、以下の共有ルート（と `/api/health`）**のみ**です。
+共有トークンは単一トポロジー、あるいはダッシュボードの場合はそのウィジェットが
+参照するトポロジー/データソース id **だけ**への読み取り専用アクセスを与えます。
+レスポンスは公開用の形に投影され、内部フィールド（リソース自身の共有トークン、
+データソース id、ホストマッピング、ポートエイリアス、タイムスタンプ）は返しません。
+
+| Method | Endpoint | 説明 |
+|--------|----------|-------------|
+| GET | `/api/share/topologies/:token` | 共有トポロジーのコンテキスト（ノード/エッジ/メトリクス） |
+| GET | `/api/share/topologies/:token/graph` | 共有トポロジーの NetworkGraph |
+| GET | `/api/share/topologies/:token/render` | 共有トポロジーのレンダリング出力 |
+| GET | `/api/share/dashboards/:token` | 共有ダッシュボードのガワ（レイアウト） |
+| GET | `/api/share/dashboards/:token/topologies/:id` | このダッシュボード内ウィジェット用のトポロジーメタデータ |
+| GET | `/api/share/dashboards/:token/topologies/:id/graph` | このダッシュボード内ウィジェット用の NetworkGraph |
+| GET | `/api/share/dashboards/:token/topologies/:id/context` | デバイスステータスウィジェット用のコンテキスト |
+| GET | `/api/share/dashboards/:token/datasources/:id/alerts` | アラートウィジェット用のアラート |
+
+ダッシュボードのレイアウトが参照していない `:id` へのトークンスコープ要求は
+`404` を返すため、トークンで無関係なリソースを列挙することはできません。
+以下の管理エンドポイント（`/api/topologies/:id`、`/api/dashboards/:id`、
+`/api/datasources/:id/alerts` など）は常に認証が必要です。
+
 ## HTTP エンドポイント
 
 ### データソース

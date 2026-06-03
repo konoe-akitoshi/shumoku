@@ -1,7 +1,7 @@
 <script lang="ts">
   import { CheckCircleIcon, HeartIcon, SpinnerIcon, XCircleIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
-  import { api } from '$lib/api'
+  import { api, isSharedView } from '$lib/api'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
   interface Props {
@@ -26,6 +26,9 @@
   let health = $state<HealthStatus | null>(null)
   let loading = $state(true)
   let error = $state('')
+  // Health counts span the whole server inventory, so they aren't exposed to
+  // anonymous shared viewers.
+  const restricted = isSharedView()
 
   async function checkHealth() {
     loading = true
@@ -55,6 +58,10 @@
   }
 
   onMount(() => {
+    if (restricted) {
+      loading = false
+      return
+    }
     checkHealth()
     // Auto-refresh every 30 seconds
     const interval = setInterval(checkHealth, 30000)
@@ -71,7 +78,12 @@
 </script>
 
 <WidgetWrapper {title} {onRemove} onSettings={handleSettings}>
-  {#if loading && !health}
+  {#if restricted}
+    <div class="h-full flex flex-col items-center justify-center text-theme-text-muted gap-2">
+      <HeartIcon size={32} />
+      <span class="text-sm">Not available in shared view</span>
+    </div>
+  {:else if loading && !health}
     <div class="h-full flex items-center justify-center">
       <SpinnerIcon size={24} class="animate-spin text-theme-text-muted" />
     </div>

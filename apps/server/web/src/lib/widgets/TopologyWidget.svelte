@@ -2,7 +2,7 @@
   import { darkTheme, lightTheme, type NetworkGraph } from '@shumoku/core'
   import { ArrowSquareOutIcon, SpinnerIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
-  import { api } from '$lib/api'
+  import { api, isSharedView } from '$lib/api'
   import {
     HighlightOverlay,
     NodeStatusOverlay,
@@ -225,7 +225,9 @@
   })
 
   onMount(() => {
-    loadTopologies()
+    // The topology list only feeds the editor's picker; a shared view can't
+    // read it (401) and doesn't need it.
+    if (!isSharedView()) loadTopologies()
     loadTopology()
     unsubscribeEvents = widgetEvents.on(handleWidgetEvent)
   })

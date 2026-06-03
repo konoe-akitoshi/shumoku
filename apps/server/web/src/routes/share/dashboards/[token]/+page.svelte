@@ -3,6 +3,7 @@
   import { mount, onMount, tick, unmount } from 'svelte'
   import { browser } from '$app/environment'
   import { page } from '$app/stores'
+  import { setShareDashboardToken } from '$lib/api'
   import Logo from '$lib/components/Logo.svelte'
   import { dashboardStore } from '$lib/stores/dashboards'
   import type { WidgetInstance } from '$lib/types'
@@ -27,10 +28,14 @@
   let token = $derived($page.params.token)
 
   onMount(() => {
+    // Route widget data reads through the token-scoped share endpoints so
+    // they work without an auth cookie (e.g. inside an iframe embed).
+    setShareDashboardToken(token ?? null)
     initializeWidgets()
     loadDashboard()
 
     return () => {
+      setShareDashboardToken(null)
       cleanupAllWidgets()
       dashboardStore.clearCurrent()
       if (grid) {
