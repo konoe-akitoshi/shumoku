@@ -112,7 +112,22 @@ describe('placePorts', () => {
   })
 
   it('handles LR direction', () => {
-    const nodes = makeNodes()
+    // LR flows left→right, so a real layout places the source (sw1)
+    // left of the dest (sw2). placePorts re-seats ports from final
+    // geometry (a port faces its peer), so the fixture positions the
+    // nodes horizontally — then the structural LR sides
+    // (source→right, dest→left) are also the geometric ones.
+    const size = { width: 180, height: 60 }
+    const nodes = new Map<string, Node>([
+      [
+        'sw1',
+        { id: 'sw1', label: 'Switch 1', shape: 'rounded', position: { x: 100, y: 200 }, size },
+      ],
+      [
+        'sw2',
+        { id: 'sw2', label: 'Switch 2', shape: 'rounded', position: { x: 400, y: 200 }, size },
+      ],
+    ])
     const links: Link[] = [
       { from: { node: 'sw1', port: 'eth0' }, to: { node: 'sw2', port: 'eth0' } },
     ]

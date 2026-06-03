@@ -21,6 +21,7 @@
 import type { LayoutEngine } from '../hierarchical.js'
 import type { LayoutResult, NetworkGraph } from '../models/types.js'
 import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
+import { layoutCompound } from './auto-placement/flat-tree/compound.js'
 import { createEngine, resolveNodeSize } from './engine/index.js'
 import type { ResolvedLayout } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
@@ -45,7 +46,10 @@ export function createNetworkLayoutEngine(): LayoutEngine {
  * Compute layout and return both ResolvedLayout and legacy LayoutResult.
  * Use this when you need both (e.g., renderer-svg uses ResolvedLayout directly).
  */
-export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
+export async function computeNetworkLayout(
+  graph: NetworkGraph,
+  options: { compound?: boolean } = {},
+): Promise<{
   resolved: ResolvedLayout
   layout: LayoutResult
 }> {
@@ -56,7 +60,11 @@ export async function computeNetworkLayout(graph: NetworkGraph): Promise<{
   // contexts that lay out repeatedly (drag, animation) the
   // engine instance can be hoisted to caller scope.
   const engine = createEngine()
-  const { nodes, ports, subgraphs, bounds } = autoLayoutFlatTree(graph, engine, { direction })
+  // `compound` folds each subgraph into a compact box and arranges
+  // the boxes by dependency — the container reading that scales to
+  // large grouped (auto-discovered) graphs.
+  const layoutFn = options.compound ? layoutCompound : autoLayoutFlatTree
+  const { nodes, ports, subgraphs, bounds } = layoutFn(graph, engine, { direction })
   const edges = await routeEdges(nodes, ports, graph.links, subgraphs)
 
   const resolved: ResolvedLayout = {

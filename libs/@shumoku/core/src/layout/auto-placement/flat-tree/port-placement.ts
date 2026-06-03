@@ -237,15 +237,65 @@ export function computePortPosition(
 }
 
 /**
+ * Re-seat a port to the end of its OWN axis that faces the peer.
+ * A top/bottom port stays vertical (only flips up↔down); a
+ * left/right port stays horizontal (only flips left↔right).
+ *
+ * Staying on-axis is a hard constraint: a normal link flows along
+ * the main axis (top/bottom for TB) and an HA link runs
+ * perpendicular (left/right). A sideways port on a normal TB link
+ * is not allowed, so we never move a port to the perpendicular
+ * axis — we only choose which end of its existing axis points at
+ * the peer.
+ */
+function reseatTowardPeer(side: Side, here: Position, peer: Position): Side {
+  const horizontal = side === 'left' || side === 'right'
+  if (horizontal) return peer.x >= here.x ? 'right' : 'left'
+  return peer.y >= here.y ? 'bottom' : 'top'
+}
+
+/**
+ * Re-seat each port on the end of its axis that actually faces
+ * its peer, now that final node positions are known.
+ * {@link decidePortSides} runs before layout (it can only use the
+ * structural flow direction), so once a node lands *above* the
+ * peer it was supposed to flow *down* to, its source port would
+ * still sit on the bottom and the wire would leave downward only
+ * to loop back up. Re-deciding the axis end from geometry makes
+ * every wire exit toward its peer — without ever switching a port
+ * to the perpendicular (sideways) axis.
+ *
+ * Skips ports with an explicit `placement.side` (author intent
+ * wins) and any port whose node or peer lacks a position (keeps
+ * the structural assignment as a safe fallback).
+ */
+function reseatPortsByGeometry(
+  assignments: PortAssignment[],
+  nodes: Map<string, Node>,
+): PortAssignment[] {
+  return assignments.map((a) => {
+    if (getPortPlacement(nodes.get(a.nodeId), a.portId)?.side) return a
+    const here = nodes.get(a.nodeId)?.position
+    const peer = nodes.get(a.peerNodeId)?.position
+    if (!here || !peer) return a
+    return { ...a, side: reseatTowardPeer(a.side, here, peer) }
+  })
+}
+
+/**
  * Compose the three phases: decide sides → order each side → compute
  * absolute coordinates → emit `ResolvedPort`s keyed by `nodeId:portId`.
+ *
+ * Port sides are re-seated from final geometry (see
+ * {@link reseatPortsByGeometry}) so wires exit toward their peer
+ * regardless of how the upstream/downstream tree was inferred.
  */
 export function placePorts(
   nodes: Map<string, Node>,
   links: Link[],
   direction: Direction = 'TB',
 ): Map<string, ResolvedPort> {
-  const assignments = decidePortSides(links, nodes, direction)
+  const assignments = reseatPortsByGeometry(decidePortSides(links, nodes, direction), nodes)
 
   const bySide = new Map<string, PortAssignment[]>()
   for (const a of assignments) {

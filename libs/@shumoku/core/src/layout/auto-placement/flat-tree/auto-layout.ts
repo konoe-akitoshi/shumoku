@@ -26,6 +26,7 @@
 import type { Bounds, Direction, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
 import type { LayoutEngine, PortInfo, PortsBySide } from '../../engine/index.js'
 import { rebalanceSubgraphs } from '../../interaction.js'
+import { linkSpeedBps } from '../../link-utils.js'
 import type { ResolvedPort } from '../../resolved-types.js'
 import { layoutFlatTree } from './index.js'
 import { decidePortSides, placePorts } from './port-placement.js'
@@ -102,6 +103,7 @@ function shouldFlipForLayout(
   link: NetworkGraph['links'][number],
   nodes: Map<string, Node>,
   direction: Direction,
+  tier: ReadonlyMap<string, number>,
 ): boolean {
   const sides = flowSides(direction)
   const fromNode = nodes.get(link.from.node)
@@ -125,7 +127,43 @@ function shouldFlipForLayout(
   ) {
     return true
   }
+  // No port-placement or device-type signal — common for auto-
+  // discovered topologies that carry neither. Fall back to link
+  // SPEED: a device's tier is the fastest link it terminates
+  // (100G/400G backbone vs 1G/10G access), so the higher-tier
+  // endpoint is the structural parent and the fabric core floats
+  // upstream (parent = root = top, per the outer-tree convention).
+  //
+  // When both ends top out at the SAME speed there is no
+  // bandwidth signal — e.g. two core routers across a shared 800G
+  // link, or a switch and its host that only share a 1G link. We
+  // keep the authored from→to rather than guess. Degree must NOT
+  // break the tie: a high-degree node is an access *aggregator*
+  // (many downlinks) which sits DOWNSTREAM, so degree-as-parent
+  // inverts the hierarchy (it would pull a 48-port leaf switch or
+  // a traffic generator above the core it hangs off).
+  const fromTier = tier.get(link.from.node) ?? 0
+  const toTier = tier.get(link.to.node) ?? 0
+  if (toTier !== fromTier) return toTier > fromTier
   return false
+}
+
+/**
+ * Per-node tier = the fastest link it terminates (bits/sec). Drives
+ * the speed-based flip fallback so the high-bandwidth fabric core
+ * is oriented upstream of the slower access edge. Links with no
+ * resolvable speed contribute 0 (they fall through to the degree
+ * tie-break).
+ */
+function computeTier(links: NetworkGraph['links']): Map<string, number> {
+  const tier = new Map<string, number>()
+  for (const link of links) {
+    if (link.redundancy) continue
+    const bps = linkSpeedBps(link) ?? 0
+    if (bps > (tier.get(link.from.node) ?? 0)) tier.set(link.from.node, bps)
+    if (bps > (tier.get(link.to.node) ?? 0)) tier.set(link.to.node, bps)
+  }
+  return tier
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -231,12 +269,13 @@ export function autoLayoutFlatTree(
       right: p.right.length,
     })
   }
+  const tier = computeTier(graph.links)
   const result = layoutFlatTree(
     graph,
     nodesById,
     subgraphsById,
     sizeById,
-    (link) => shouldFlipForLayout(link, nodesById, opts.direction),
+    (link) => shouldFlipForLayout(link, nodesById, opts.direction, tier),
     {
       direction: opts.direction,
       nodeGap: opts.nodeGap,
