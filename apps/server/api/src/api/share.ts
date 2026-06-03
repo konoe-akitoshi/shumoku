@@ -1,19 +1,26 @@
 /**
  * Share API
- * Public endpoints for viewing shared topologies and dashboards (no auth required)
+ * Public endpoints for viewing shared topologies and dashboards (no auth required).
+ *
+ * Two doors, one rule: anything returned here goes through a projection in
+ * `share-projections.ts` (never a raw entity), and a dashboard token only
+ * reaches the resources its layout references (resolved once by the
+ * `resolveDashboardGrant` middleware, not re-checked per handler).
  */
 
-import { specDeviceType } from '@shumoku/core'
 import { Hono } from 'hono'
 import type { AlertQueryOptions } from '../plugins/types.js'
 import { getDashboardService } from './dashboards.js'
-import {
-  applyMappingBandwidth,
-  buildRenderOutput,
-  buildTopologyContext,
-  getDataSourceService,
-  getTopologyService,
-} from './topologies.js'
+import { publicTopology, publicTopologyContext, publicTopologyGraph } from './share-projections.js'
+import { buildRenderOutput, getDataSourceService, getTopologyService } from './topologies.js'
+
+/** Set of resources a dashboard token is allowed to reach, keyed by kind. */
+interface ReachableSet {
+  topologyIds: Set<string>
+  dataSourceIds: Set<string>
+}
+
+type ShareVars = { reachable: ReachableSet }
 
 /**
  * Resources a shared dashboard is allowed to expose. A share token grants
@@ -21,10 +28,7 @@ import {
  * reference — never the full server inventory. Requests for any other id are
  * 404'd so the token can't be used to enumerate or probe unrelated resources.
  */
-function referencedIds(layoutJson: string): {
-  topologyIds: Set<string>
-  dataSourceIds: Set<string>
-} {
+function referencedIds(layoutJson: string): ReachableSet {
   const topologyIds = new Set<string>()
   const dataSourceIds = new Set<string>()
   try {
@@ -43,8 +47,8 @@ function referencedIds(layoutJson: string): {
   return { topologyIds, dataSourceIds }
 }
 
-export function createShareApi(): Hono {
-  const app = new Hono()
+export function createShareApi(): Hono<{ Variables: ShareVars }> {
+  const app = new Hono<{ Variables: ShareVars }>()
 
   // Get shared topology context data
   app.get('/topologies/:token', async (c) => {
@@ -64,24 +68,7 @@ export function createShareApi(): Hono {
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
-
-      return c.json({
-        id: parsed.id,
-        name: parsed.name,
-        nodes: parsed.graph.nodes.map((n) => ({
-          id: n.id,
-          label: n.label || n.id,
-          type: specDeviceType(n.spec),
-        })),
-        edges: parsed.graph.links.map((l, i) => ({
-          id: l.id || `link-${i}`,
-          from: { nodeId: l.from.node, port: l.from.port },
-          to: { nodeId: l.to.node, port: l.to.port },
-          standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
-        })),
-        subgraphs: parsed.graph.subgraphs || [],
-        metrics: parsed.metrics,
-      })
+      return c.json(publicTopologyContext(parsed))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
@@ -105,11 +92,7 @@ export function createShareApi(): Hono {
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
-      return c.json({
-        id: parsed.id,
-        name: parsed.name,
-        graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
-      })
+      return c.json(publicTopologyGraph(parsed))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
@@ -159,31 +142,31 @@ export function createShareApi(): Hono {
 
   // --- Token-scoped data for a shared dashboard's widgets ---
   // These let a shared dashboard render live widget data without a session
-  // cookie. Access is gated twice: the token must resolve to a dashboard, and
-  // the requested id must be referenced by that dashboard's layout.
+  // cookie. Access is gated twice: the token must resolve to a dashboard
+  // (this middleware), and the requested id must be referenced by that
+  // dashboard's layout (each handler checks `reachable`). Any miss → 404, so
+  // the token can't enumerate unrelated resources.
+  app.use('/dashboards/:token/*', async (c, next) => {
+    const dashboard = getDashboardService().getByShareToken(c.req.param('token'))
+    if (!dashboard) return c.json({ error: 'Not found' }, 404)
+    c.set('reachable', referencedIds(dashboard.layoutJson))
+    await next()
+    return
+  })
 
-  // Resolve the dashboard for a token and assert the id is in `bucket`
-  // (its referenced topology or datasource set). Returns null on any miss so
-  // callers respond 404 uniformly — no existence leak.
-  function authorize(token: string, id: string, bucket: 'topologyIds' | 'dataSourceIds'): boolean {
-    const dashboard = getDashboardService().getByShareToken(token)
-    if (!dashboard) return false
-    return referencedIds(dashboard.layoutJson)[bucket].has(id)
-  }
-
-  // Topology metadata (name, mappingJson, …) for a widget in a shared dashboard.
+  // Topology metadata (name, mappingJson) for a widget in a shared dashboard.
   app.get('/dashboards/:token/topologies/:id', (c) => {
-    const { token, id } = c.req.param()
-    if (!authorize(token, id, 'topologyIds')) return c.json({ error: 'Not found' }, 404)
+    const id = c.req.param('id')
+    if (!c.get('reachable').topologyIds.has(id)) return c.json({ error: 'Not found' }, 404)
     const topology = getTopologyService().get(id)
     if (!topology) return c.json({ error: 'Not found' }, 404)
-    return c.json(topology)
+    return c.json(publicTopology(topology))
   })
 
   // Raw NetworkGraph for a topology widget in a shared dashboard.
   app.get('/dashboards/:token/topologies/:id/graph', async (c) => {
-    const { token, id } = c.req.param()
-    if (!authorize(token, id, 'topologyIds')) return c.json({ error: 'Not found' }, 404)
+    const id = c.req.param('id')
+    if (!c.get('reachable').topologyIds.has(id)) return c.json({ error: 'Not found' }, 404)
     const service = getTopologyService()
     try {
       const parsed = await service.getParsed(id)
@@ -194,11 +177,7 @@ export function createShareApi(): Hono {
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
-      return c.json({
-        id: parsed.id,
-        name: parsed.name,
-        graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
-      })
+      return c.json(publicTopologyGraph(parsed))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
@@ -207,8 +186,8 @@ export function createShareApi(): Hono {
 
   // Context (nodes/edges/metrics) for a device-status widget in a shared dashboard.
   app.get('/dashboards/:token/topologies/:id/context', async (c) => {
-    const { token, id } = c.req.param()
-    if (!authorize(token, id, 'topologyIds')) return c.json({ error: 'Not found' }, 404)
+    const id = c.req.param('id')
+    if (!c.get('reachable').topologyIds.has(id)) return c.json({ error: 'Not found' }, 404)
     const service = getTopologyService()
     try {
       const parsed = await service.getParsed(id)
@@ -219,7 +198,7 @@ export function createShareApi(): Hono {
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
-      return c.json(buildTopologyContext(parsed))
+      return c.json(publicTopologyContext(parsed))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
@@ -228,8 +207,8 @@ export function createShareApi(): Hono {
 
   // Alerts for an alert widget in a shared dashboard.
   app.get('/dashboards/:token/datasources/:id/alerts', async (c) => {
-    const { token, id } = c.req.param()
-    if (!authorize(token, id, 'dataSourceIds')) return c.json({ error: 'Not found' }, 404)
+    const id = c.req.param('id')
+    if (!c.get('reachable').dataSourceIds.has(id)) return c.json({ error: 'Not found' }, 404)
     const service = getDataSourceService()
     if (!service.hasAlertsCapability(id)) {
       return c.json({ error: 'Data source does not support alerts' }, 400)
