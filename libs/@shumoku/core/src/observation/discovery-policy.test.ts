@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest'
-import type { NetworkGraph, Subgraph } from '../models/types.js'
+import type { Attachment, NetworkGraph, Subgraph } from '../models/types.js'
 import {
   absenceImpliesRetraction,
   computeEffectivePolicy,
@@ -10,12 +10,28 @@ import {
   isExcluded,
 } from './discovery-policy.js'
 
+/** One-element policy-attachment list (omit a field to leave it inherited). */
+function pol(mode?: 'auto' | 'observe' | 'disabled', intervalMs?: number): Attachment[] {
+  return [
+    {
+      kind: 'policy',
+      ...(mode !== undefined ? { mode } : {}),
+      ...(intervalMs !== undefined ? { intervalMs } : {}),
+    },
+  ]
+}
+
+/** One-element access:snmp attachment list. */
+function snmp(community: string): Attachment[] {
+  return [{ kind: 'access', protocol: 'snmp', community }]
+}
+
 function sg(
   id: string,
   parent: string | undefined,
-  discovery: Subgraph['discovery'],
-): [string, Pick<Subgraph, 'parent' | 'discovery'>] {
-  return [id, { parent, discovery }]
+  attachments: Attachment[],
+): [string, Pick<Subgraph, 'parent' | 'attachments'>] {
+  return [id, { parent, attachments }]
 }
 
 describe('computeEffectivePolicy', () => {
@@ -28,10 +44,7 @@ describe('computeEffectivePolicy', () => {
   })
 
   it('uses topology default when node and subgraph are silent', () => {
-    const e = computeEffectivePolicy({
-      node: {},
-      topologyDefault: { mode: 'observe', intervalMs: 600_000 },
-    })
+    const e = computeEffectivePolicy({ node: {}, topologyDefault: pol('observe', 600_000) })
     expect(e.mode).toBe('observe')
     expect(e.intervalMs).toBe(600_000)
     expect(e.source.mode).toBe('topology')
@@ -39,11 +52,11 @@ describe('computeEffectivePolicy', () => {
   })
 
   it('subgraph beats topology default', () => {
-    const subgraphs = new Map([sg('prod', undefined, { mode: 'auto', intervalMs: 60_000 })])
+    const subgraphs = new Map([sg('prod', undefined, pol('auto', 60_000))])
     const e = computeEffectivePolicy({
       node: { parent: 'prod' },
       subgraphs,
-      topologyDefault: { mode: 'observe', intervalMs: 600_000 },
+      topologyDefault: pol('observe', 600_000),
     })
     expect(e.mode).toBe('auto')
     expect(e.intervalMs).toBe(60_000)
@@ -52,11 +65,11 @@ describe('computeEffectivePolicy', () => {
   })
 
   it('node override beats subgraph and topology', () => {
-    const subgraphs = new Map([sg('prod', undefined, { mode: 'auto', intervalMs: 60_000 })])
+    const subgraphs = new Map([sg('prod', undefined, pol('auto', 60_000))])
     const e = computeEffectivePolicy({
-      node: { parent: 'prod', discovery: { mode: 'disabled' } },
+      node: { parent: 'prod', attachments: pol('disabled') },
       subgraphs,
-      topologyDefault: { mode: 'observe', intervalMs: 600_000 },
+      topologyDefault: pol('observe', 600_000),
     })
     expect(e.mode).toBe('disabled')
     expect(e.source.mode).toBe('node')
@@ -67,25 +80,20 @@ describe('computeEffectivePolicy', () => {
 
   it('nested subgraphs: nearest ancestor wins', () => {
     const subgraphs = new Map([
-      sg('prod', undefined, { mode: 'auto', intervalMs: 600_000 }),
-      sg('prod-core', 'prod', { intervalMs: 60_000 }),
+      sg('prod', undefined, pol('auto', 600_000)),
+      sg('prod-core', 'prod', pol(undefined, 60_000)),
     ])
-    const e = computeEffectivePolicy({
-      node: { parent: 'prod-core' },
-      subgraphs,
-    })
-    // intervalMs comes from the nearest ancestor (prod-core, 60s)…
+    const e = computeEffectivePolicy({ node: { parent: 'prod-core' }, subgraphs })
     expect(e.intervalMs).toBe(60_000)
     expect(e.source.intervalMs).toBe('subgraph')
-    // …but mode falls through to the further ancestor (prod, 'auto').
     expect(e.mode).toBe('auto')
     expect(e.source.mode).toBe('subgraph')
   })
 
   it('per-field merge — node sets only mode, subgraph supplies interval', () => {
-    const subgraphs = new Map([sg('lab', undefined, { intervalMs: 5 * 60_000 })])
+    const subgraphs = new Map([sg('lab', undefined, pol(undefined, 5 * 60_000))])
     const e = computeEffectivePolicy({
-      node: { parent: 'lab', discovery: { mode: 'observe' } },
+      node: { parent: 'lab', attachments: pol('observe') },
       subgraphs,
     })
     expect(e.mode).toBe('observe')
@@ -95,7 +103,7 @@ describe('computeEffectivePolicy', () => {
   })
 
   it('survives a self-referencing subgraph chain without looping', () => {
-    const subgraphs = new Map([sg('loop', 'loop', { mode: 'disabled' })])
+    const subgraphs = new Map([sg('loop', 'loop', pol('disabled'))])
     const e = computeEffectivePolicy({ node: { parent: 'loop' }, subgraphs })
     expect(e.mode).toBe('disabled')
   })
@@ -104,10 +112,27 @@ describe('computeEffectivePolicy', () => {
     const e = computeEffectivePolicy({
       node: { parent: 'ghost' },
       subgraphs: new Map(),
-      topologyDefault: { mode: 'disabled' },
+      topologyDefault: pol('disabled'),
     })
     expect(e.mode).toBe('disabled')
     expect(e.source.mode).toBe('topology')
+  })
+
+  it('resolves SNMP community from an access attachment, inherited from subgraph', () => {
+    const subgraphs = new Map([sg('mgmt', undefined, snmp('as38649'))])
+    const e = computeEffectivePolicy({ node: { parent: 'mgmt' }, subgraphs })
+    expect(e.community).toBe('as38649')
+    expect(e.source.community).toBe('subgraph')
+  })
+
+  it('node access attachment overrides inherited community', () => {
+    const subgraphs = new Map([sg('mgmt', undefined, snmp('as38649'))])
+    const e = computeEffectivePolicy({
+      node: { parent: 'mgmt', attachments: snmp('smys-itc') },
+      subgraphs,
+    })
+    expect(e.community).toBe('smys-itc')
+    expect(e.source.community).toBe('node')
   })
 })
 
@@ -117,7 +142,7 @@ describe('isExcluded', () => {
       isExcluded({
         mode: 'disabled',
         intervalMs: 0,
-        source: { mode: 'default', intervalMs: 'default' },
+        source: { mode: 'default', intervalMs: 'default', community: 'default' },
       }),
     ).toBe(true)
   })
@@ -126,14 +151,14 @@ describe('isExcluded', () => {
       isExcluded({
         mode: 'auto',
         intervalMs: 0,
-        source: { mode: 'default', intervalMs: 'default' },
+        source: { mode: 'default', intervalMs: 'default', community: 'default' },
       }),
     ).toBe(false)
     expect(
       isExcluded({
         mode: 'observe',
         intervalMs: 0,
-        source: { mode: 'default', intervalMs: 'default' },
+        source: { mode: 'default', intervalMs: 'default', community: 'default' },
       }),
     ).toBe(false)
   })
@@ -142,12 +167,12 @@ describe('isExcluded', () => {
 describe('effectivePolicyForNode (NetworkGraph context)', () => {
   // Realistic-ish graph: nested subgraphs + topology default.
   // tun-gw01 sits in `prod-core` which sits in `prod`.
-  const graph: Pick<NetworkGraph, 'subgraphs' | 'discovery'> = {
-    discovery: { mode: 'observe', intervalMs: 600_000 },
+  const graph: Pick<NetworkGraph, 'subgraphs' | 'attachments'> = {
+    attachments: pol('observe', 600_000),
     subgraphs: [
-      { id: 'prod', label: 'Production', discovery: { mode: 'auto' } },
-      { id: 'prod-core', label: 'Core', parent: 'prod', discovery: { intervalMs: 60_000 } },
-      { id: 'lab', label: 'Lab', discovery: { mode: 'disabled' } },
+      { id: 'prod', label: 'Production', attachments: pol('auto') },
+      { id: 'prod-core', label: 'Core', parent: 'prod', attachments: pol(undefined, 60_000) },
+      { id: 'lab', label: 'Lab', attachments: pol('disabled') },
     ],
   }
 
@@ -158,10 +183,7 @@ describe('effectivePolicyForNode (NetworkGraph context)', () => {
   })
 
   it('node override beats the subgraph chain', () => {
-    const e = effectivePolicyForNode(graph, {
-      parent: 'prod-core',
-      discovery: { mode: 'disabled' },
-    })
+    const e = effectivePolicyForNode(graph, { parent: 'prod-core', attachments: pol('disabled') })
     expect(e.mode).toBe('disabled')
     expect(e.source.mode).toBe('node')
   })
@@ -176,14 +198,13 @@ describe('effectivePolicyForNode (NetworkGraph context)', () => {
   it('lab subgraph propagates disabled to its descendants', () => {
     const e = effectivePolicyForNode(graph, { parent: 'lab' })
     expect(e.mode).toBe('disabled')
-    // intervalMs not set in `lab` or in topology default for the lab path
-    // → falls through to topology 's intervalMs.
+    // intervalMs not set in `lab` → falls through to topology's intervalMs.
     expect(e.intervalMs).toBe(600_000)
     expect(e.source.intervalMs).toBe('topology')
   })
 
   it('handles a graph with no subgraphs at all', () => {
-    const e = effectivePolicyForNode({ discovery: { mode: 'auto' } }, {})
+    const e = effectivePolicyForNode({ attachments: pol('auto') }, {})
     expect(e.mode).toBe('auto')
     expect(e.source.mode).toBe('topology')
   })
@@ -195,14 +216,14 @@ describe('absenceImpliesRetraction', () => {
       absenceImpliesRetraction({
         mode: 'auto',
         intervalMs: 0,
-        source: { mode: 'default', intervalMs: 'default' },
+        source: { mode: 'default', intervalMs: 'default', community: 'default' },
       }),
     ).toBe(true)
     expect(
       absenceImpliesRetraction({
         mode: 'observe',
         intervalMs: 0,
-        source: { mode: 'default', intervalMs: 'default' },
+        source: { mode: 'default', intervalMs: 'default', community: 'default' },
       }),
     ).toBe(true)
   })
@@ -211,7 +232,7 @@ describe('absenceImpliesRetraction', () => {
       absenceImpliesRetraction({
         mode: 'disabled',
         intervalMs: 0,
-        source: { mode: 'default', intervalMs: 'default' },
+        source: { mode: 'default', intervalMs: 'default', community: 'default' },
       }),
     ).toBe(false)
   })

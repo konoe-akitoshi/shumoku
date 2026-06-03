@@ -112,6 +112,18 @@ export const dataSources = {
 
   getPluginTypes: () => request<DataSourcePluginInfo[]>('/datasources/types'),
 
+  /** Dynamic candidates for an `optionsSource` schema field (connection-backed). */
+  getConfigOptions: (id: string, key: string) =>
+    request<{ options: { value: string; label: string }[] }>(
+      `/datasources/${id}/config-options/${key}`,
+    ),
+
+  /** Derived, display-only connection info (e.g. webhook URL). Generic across plugins. */
+  getConnectionInfo: (id: string, origin: string) =>
+    request<{ items: { label: string; value: string; copyable?: boolean }[] }>(
+      `/datasources/${id}/connection-info?origin=${encodeURIComponent(origin)}`,
+    ),
+
   get: (id: string) => request<DataSource>(`/datasources/${id}`),
 
   create: (input: DataSourceInput) =>
@@ -163,8 +175,6 @@ export const dataSources = {
     const suffix = `/datasources/${id}/alerts${queryString ? `?${queryString}` : ''}`
     return request<Alert[]>(scoped(suffix, suffix))
   },
-
-  getWebhookUrl: (id: string) => request<{ webhookPath: string }>(`/datasources/${id}/webhook-url`),
 
   getFilterOptions: (id: string) =>
     request<{ sites: { slug: string; name: string }[]; tags: { slug: string; name: string }[] }>(
@@ -456,36 +466,98 @@ export const topologies = {
   discoveryPolicy: {
     get: (topologyId: string) =>
       request<{
-        topologyDefault: { mode?: DiscoveryMode; intervalMs?: number } | null
+        topologyDefault: Attachment[] | null
         runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
         nodes: Record<string, EffectivePolicy>
         subgraphs: Record<string, EffectivePolicy>
       }>(`/topologies/${topologyId}/discovery-policy`),
 
+    /**
+     * Replace a scope's attachments wholesale (`null`/`[]` clears), set a
+     * node's name override (`label`; `null`/'' reverts to the observed name),
+     * and/or set a node's `suppressedAttachments` (keys the human removed;
+     * `null`/`[]` clears). For node scope each field is applied only when
+     * present, so a label edit never wipes the access/policy a node carries.
+     */
     patch: (
       topologyId: string,
       body:
-        | { scope: 'topology'; discovery: { mode?: DiscoveryMode; intervalMs?: number } | null }
+        | { scope: 'topology'; attachments: Attachment[] | null }
+        | { scope: 'subgraph'; id: string; attachments: Attachment[] | null }
         | {
-            scope: 'node' | 'subgraph'
+            scope: 'node'
             id: string
-            discovery: { mode?: DiscoveryMode; intervalMs?: number } | null
+            attachments?: Attachment[] | null
+            label?: string | null
+            suppressedAttachments?: string[] | null
           },
     ) =>
       request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
+
+    /** Hide a node (identity-keyed exclusion). resolve() drops matching clusters. */
+    hide: (topologyId: string, identity: NodeExclusion) =>
+      request<{ exclusions: NodeExclusion[] }>(
+        `/topologies/${topologyId}/discovery-policy/exclusions`,
+        { method: 'POST', body: JSON.stringify(identity) },
+      ),
+
+    /** Unhide a previously hidden node. */
+    unhide: (topologyId: string, identity: NodeExclusion) =>
+      request<{ exclusions: NodeExclusion[] }>(
+        `/topologies/${topologyId}/discovery-policy/exclusions`,
+        { method: 'DELETE', body: JSON.stringify(identity) },
+      ),
+
+    /** Rebuild: discard the whole authored overlay (attachments + exclusions). */
+    rebuild: (topologyId: string) =>
+      request<{ cleared: boolean; reason?: string }>(
+        `/topologies/${topologyId}/discovery-policy/rebuild`,
+        { method: 'POST' },
+      ),
   },
 }
 
+/** Identity used to hide/unhide a node. Mirrors `@shumoku/core`'s NodeExclusion. */
+export interface NodeExclusion {
+  mgmtIp?: string
+  chassisId?: string
+  sysName?: string
+}
+
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
+
+/** Where a resolved attachment's value came from. Mirrors `@shumoku/core`'s
+ *  `Provenance`. `source === 'authored'` marks a human-set value; any other
+ *  source is the value a discovery source supplied. The UI uses this as an
+ *  annotation ("your value" vs "from <source>"), NOT as a read-only gate —
+ *  every value is editable. resolve() stamps it; freshly-authored local
+ *  attachments omit it until the next round-trip. */
+export interface Provenance {
+  source: string
+  state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'
+  observedAt?: number
+}
+
+/** A unit of authored intent attached to a node / subgraph / topology.
+ *  Mirrors `@shumoku/core`'s `Attachment` (incl. the resolve-stamped
+ *  `provenance`). */
+export type Attachment = (
+  | { kind: 'policy'; mode?: DiscoveryMode; intervalMs?: number }
+  | { kind: 'access'; protocol: 'snmp'; community?: string; version?: '2c' | '3' }
+  | { kind: 'access'; protocol: 'ssh'; username?: string; port?: number }
+  | { kind: 'access'; protocol: 'netconf' | 'http' }
+) & { provenance?: Provenance }
 export interface EffectivePolicy {
   mode: DiscoveryMode
   intervalMs: number
+  community?: string
   source: {
     mode: 'node' | 'subgraph' | 'topology' | 'default'
     intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
+    community: 'node' | 'subgraph' | 'topology' | 'default'
   }
 }
 

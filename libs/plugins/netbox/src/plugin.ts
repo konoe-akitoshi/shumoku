@@ -7,6 +7,8 @@
 import type { NetworkGraph } from '@shumoku/core'
 import {
   addHttpWarning,
+  type ConfigOption,
+  type ConfigOptionsCapable,
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
@@ -19,7 +21,9 @@ import { NetBoxClient } from './client.js'
 import { convertToNetworkGraph } from './converter.js'
 import type { NetBoxPluginConfig } from './types.js'
 
-export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCapable {
+export class NetBoxPlugin
+  implements DataSourcePlugin, TopologyCapable, HostsCapable, ConfigOptionsCapable
+{
   readonly type = 'netbox'
   readonly displayName = 'NetBox'
   readonly capabilities: readonly DataSourceCapability[] = ['topology', 'hosts']
@@ -202,6 +206,20 @@ export class NetBoxPlugin implements DataSourcePlugin, TopologyCapable, HostsCap
       tags: tagResp.results.map((t) => ({ slug: t.slug, name: t.name })),
       roles: roleResp.results.map((r) => ({ slug: r.slug, name: r.name })),
     }
+  }
+
+  /**
+   * Generic candidate provider for `optionsSource` schema fields. Generalizes
+   * getFilterOptions to the ConfigOptionsCapable contract so the host renders
+   * the topology-source filters (sites / tags / roles) from the schema instead
+   * of a NetBox-specific form. Requires a live connection (handled by the
+   * caller instantiating the plugin with stored config).
+   */
+  async getConfigOptions(key: string): Promise<ConfigOption[]> {
+    const opts = await this.getFilterOptions()
+    const list =
+      key === 'sites' ? opts.sites : key === 'tags' ? opts.tags : key === 'roles' ? opts.roles : []
+    return list.map((o) => ({ value: o.slug, label: o.name }))
   }
 
   // ============================================

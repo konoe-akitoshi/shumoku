@@ -61,9 +61,15 @@
 
   async function handleReload() {
     reloading = true
+    error = null
     try {
-      const result = await api.plugins.reload()
-      plugins = result.plugins
+      // Re-scan external plugins on the server, then re-read the canonical full
+      // list (bundled + external) — the same source as the initial load and the
+      // add/remove/toggle handlers. Don't bind state to the action's own response:
+      // it only carries what *it* reloaded (externals), which is how the
+      // "Bundled Plugins" section used to vanish on reload.
+      await api.plugins.reload()
+      plugins = await api.plugins.list()
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to reload plugins'
     } finally {

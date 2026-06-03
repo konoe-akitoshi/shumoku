@@ -1,5 +1,9 @@
 # Topology Foundation: ソース ↔ トポロジ アタッチ設計
 
+> **§6 SUPERSEDED — `topology-source-priority-merge.md`（実装済み）を参照。**
+> `fieldAuthority` は採らず **単一 priority** に倒した（fieldAuthority は将来拡張）。
+> attach のライフサイクル / hosts capability の identity 寄与 / UX の記述は有効。
+>
 > ステータス: ドラフト。`topology-foundation.md` の付属。
 > 実装未着手。protocol-probes と並行する設計レイヤ。
 
@@ -8,7 +12,7 @@
 v1 を一通り組み上げて UI まで触ったあとで、**複数ソースを 1 トポロジに同居させる
 シナリオ**の詰めが足りないことが見えた。具体的には：
 
-- NetBox / Zabbix / Discovery（snmp-lldp）は**並列の data source 種別**として扱える
+- NetBox / Zabbix / Discovery（network-scan）は**並列の data source 種別**として扱える
   べきで、どれも topology / metrics / hosts / alerts を *任意の組合せ* で提供しうる
 - 「データソースを設定する」と「設定済みソースをトポロジに attach する」は別レイヤ
 - 観測モデルから merge tiebreaker priority を消したのは正しいが、**表示権威 (display
@@ -23,7 +27,7 @@ protocol-probes の orchestrator が落とし所を見失う。
 
 ```
 ┌─ Data Source（system-wide） ───────────────────┐
-│  - id, name, type (netbox / zabbix / snmp-lldp / …)│
+│  - id, name, type (netbox / zabbix / network-scan / …)│
 │  - configJson: 接続クレデンシャル等              │
 │  - capabilities: [topology, metrics, hosts, alerts]│
 │  - status / fail_count                          │
@@ -56,7 +60,7 @@ protocol-probes の orchestrator が落とし所を見失う。
 |---|---|---|
 | **NetBox** | topology, hosts | topology（意図） |
 | **Zabbix** | topology, metrics, hosts, alerts | topology（hosts→graph）/ metrics（両方ありうる）|
-| **Discovery (snmp-lldp)** | topology, autoscan, hosts, metrics | topology（実態） |
+| **Discovery (network-scan)** | topology, autoscan, hosts, metrics | topology（実態） |
 | Prometheus / Grafana / Aruba | metrics / alerts / hosts | metrics |
 
 ポイント:
@@ -97,7 +101,7 @@ interface TopologySourceOptions {
   /**
    * このソースがこのトポロジで権威を持つフィールドクラス。
    * 既定の field-class authority 表を override する。
-   * 設定無し → 既定表（`snmp-lldp` は hostname 権威、`netbox` は intended_* 権威 等）。
+   * 設定無し → 既定表（`network-scan` は hostname 権威、`netbox` は intended_* 権威 等）。
    */
   fieldAuthority?: {
     [fieldClass: string]: 'prefer' | 'avoid'
@@ -176,14 +180,14 @@ field-class authority の既定表（v1 hard-code、v2 で settings に逃がす
 ```ts
 const DEFAULT_FIELD_AUTHORITY: Record<string, Record<string, 'prefer' | 'neutral'>> = {
   // factual: 機器自身に近いほど信頼
-  hostname:       { 'snmp-lldp': 'prefer', netbox: 'neutral', zabbix: 'neutral' },
-  model:          { 'snmp-lldp': 'prefer', netbox: 'neutral', zabbix: 'neutral' },
-  serial:         { 'snmp-lldp': 'prefer', netbox: 'neutral', zabbix: 'neutral' },
+  hostname:       { 'network-scan': 'prefer', netbox: 'neutral', zabbix: 'neutral' },
+  model:          { 'network-scan': 'prefer', netbox: 'neutral', zabbix: 'neutral' },
+  serial:         { 'network-scan': 'prefer', netbox: 'neutral', zabbix: 'neutral' },
   // intent: 設計データを保持してるソースを優先
-  intended_rack:  { netbox: 'prefer', 'snmp-lldp': 'avoid' },
-  intended_site:  { netbox: 'prefer', 'snmp-lldp': 'avoid' },
+  intended_rack:  { netbox: 'prefer', 'network-scan': 'avoid' },
+  intended_site:  { netbox: 'prefer', 'network-scan': 'avoid' },
   // observed: 実機観測を優先
-  observed_rack:  { 'snmp-lldp': 'prefer', netbox: 'avoid' },
+  observed_rack:  { 'network-scan': 'prefer', netbox: 'avoid' },
 }
 ```
 

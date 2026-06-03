@@ -7,9 +7,11 @@ import type { NetworkGraph } from '@shumoku/core'
 import { Hono } from 'hono'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
+import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
 import { ObservationsService } from '../services/observations.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type { SyncMode, TopologyDataSourceInput } from '../types.js'
+import { mergeProbeIntoSnapshot } from './probe-merge.js'
 import { getTopologyService } from './topologies.js'
 
 // Lazy initialization to avoid database access at module load time
@@ -292,14 +294,40 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
   const capturedAt = Date.now()
   const observations = new ObservationsService()
   try {
-    const snapshot = await plugin.scan({ seeds })
+    // Apply per-target credential overrides here too — even the ad-hoc
+    // /probe endpoint (which passes specific seeds) should honor what
+    // the operator configured on those nodes.
+    const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
+    const snapshot = await plugin.scan({ seeds, credentials })
+
+    // A probe re-scans only the named seeds — its graph holds just those
+    // nodes. Recording it verbatim would make it the source's *latest*
+    // snapshot, and `latestPerSource` would then drop every node the probe
+    // didn't touch. So merge the probe's nodes/links INTO the source's last
+    // full snapshot: replace the probed nodes (and their incident links),
+    // keep everything else. This makes "probe one node" actually update one
+    // node instead of wiping the source's view.
+    const prevLatest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
+    const merged = mergeProbeIntoSnapshot(prevLatest?.graph ?? null, snapshot.graph, seeds)
+
+    // Status: a failed/empty probe must record its OWN status — never inherit
+    // the previous snapshot's 'ok', or a failed probe would masquerade as a
+    // healthy sync. Only when the probe itself succeeded AND we actually merged
+    // into the prior full snapshot do we inherit the base's confidence (the
+    // merged graph is as complete as the base was, not the probe's narrow 'ok'
+    // that only spoke for the seeds).
+    const mergedIntoBase = prevLatest !== undefined && merged !== snapshot.graph
+    const status =
+      snapshot.status === 'ok' && mergedIntoBase
+        ? (prevLatest?.status ?? 'partial')
+        : snapshot.status
     const observation = await observations.record({
       topologyId,
       sourceId,
       capturedAt,
-      status: snapshot.status,
+      status,
       statusMessage: snapshot.statusMessage,
-      graph: snapshot.graph,
+      graph: merged,
     })
     observations.updateHysteresis(
       topologyId,
@@ -316,7 +344,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
         statusMessage: snapshot.statusMessage,
         capturedAt: snapshot.capturedAt,
         warnings: snapshot.warnings,
-        graph: snapshot.graph,
+        graph: merged,
       },
     })
   } catch (err) {
@@ -356,7 +384,8 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
 
   try {
     if (hasAutoscanCapability(plugin)) {
-      const snapshot = await plugin.scan({ seeds: [] })
+      const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
+      const snapshot = await plugin.scan({ seeds: [], credentials })
       graph = snapshot.graph
       status = snapshot.status
       statusMessage = snapshot.statusMessage
@@ -364,7 +393,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
     } else if (hasTopologyCapability(plugin)) {
       const opts = attached.optionsJson ? JSON.parse(attached.optionsJson) : undefined
       graph = await plugin.fetchTopology(opts)
-      status = graph && graph.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+      status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
     } else {
       return c.json(
         {

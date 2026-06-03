@@ -1,25 +1,23 @@
 {
-  "name": "shumoku-plugin-snmp-lldp",
-  "version": "0.0.0",
-  "description": "SNMP/LLDP autoscan data source plugin for Shumoku",
+  "name": "@shumoku/plugin-sdk",
+  "version": "0.1.0",
+  "description": "Node-runtime SDK for shumoku data source plugins (HTTP client, pagination)",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
-    "directory": "libs/plugins/snmp-lldp"
+    "directory": "libs/@shumoku/plugin-sdk"
   },
   "homepage": "https://shumoku.packof.me/",
   "bugs": {
     "url": "https://github.com/konoe-akitoshi/shumoku/issues"
   },
   "keywords": [
-    "snmp",
-    "lldp",
-    "autoscan",
-    "discovery",
     "shumoku",
-    "plugin"
+    "plugin",
+    "sdk",
+    "http"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -44,13 +42,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@shumoku/catalog": "workspace:*",
-    "@shumoku/core": "workspace:*",
-    "net-snmp": "^3.26.3"
-  },
-  "devDependencies": {
-    "@types/net-snmp": "^3.23.0",
-    "@types/node": "^22.0.0"
+    "undici": "^6.21.0"
   },
   "publishConfig": {
     "access": "public"

@@ -370,24 +370,67 @@ export function specDeviceType(spec: NodeSpec | undefined): DeviceType | undefin
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 
 /**
- * Discovery policy applied to a node, a subgraph (inherited by its
- * descendants), or as a topology-wide default. The effective policy
- * at any node is the result of merging `topology default → subgraph
- * (nearest ancestor wins) → node override`. Compute it via
+ * A unit of authored intent attached to a node — or to a subgraph / the
+ * topology default, where `access` and `policy` are inherited by
+ * descendants (`topology → subgraph (nearest ancestor wins) → node`).
+ * Resolve the effective access/policy at a node via
  * `computeEffectivePolicy()` rather than walking the chain ad-hoc.
  *
- * Both fields are optional so any layer can override just one piece
- * (e.g. a subgraph that only wants a different interval but inherits
- * the mode from topology default).
+ * Attribute overrides (name / model / vendor) are deliberately NOT
+ * attachments: they are the authored node's own `label` / `spec`, which
+ * the resolver already prefers over observed values. The UI presents
+ * them as a "Facts" card over those native fields.
  */
-export interface DiscoveryPolicy {
+export type Attachment = AccessAttachment | PolicyAttachment
+
+/**
+ * Provenance stamped by `resolve()` onto every attachment in the resolved
+ * graph: which source contributed it. The human/authored contribution
+ * carries `source: 'authored'`; an observed attachment carries the
+ * observing source's id. The discovery UI reads this to render
+ * observed-derived rows read-only (no ✕) and human rows editable — the
+ * fix for "✕ doesn't remove an observed access". Optional: hand-authored
+ * or freshly-saved attachments omit it, and resolve fills it in.
+ */
+export interface AttachmentMeta {
+  provenance?: Provenance
+}
+
+/**
+ * How to read a device: a protocol plus its connection params. Only
+ * `snmp` is wired today; the other protocols reserve the shape so the
+ * "+ Add" menu and the read layer can grow without a type overhaul. A
+ * node/subgraph/topology may carry several (e.g. SNMP + SSH later).
+ */
+export type AccessAttachment = (
+  | { kind: 'access'; protocol: 'snmp'; community?: string; version?: '2c' | '3' }
+  | { kind: 'access'; protocol: 'ssh'; username?: string; port?: number }
+  | { kind: 'access'; protocol: 'netconf' | 'http' }
+) &
+  AttachmentMeta
+
+/** Discovery scheduling for a node / subgraph / topology default. */
+export interface PolicyAttachment extends AttachmentMeta {
+  kind: 'policy'
   mode?: DiscoveryMode
   /**
-   * Expected freshness budget in milliseconds. A node is considered
-   * fresh when `lastObservedAt + intervalMs ≥ now`. Only meaningful
-   * for `auto` and `observe` modes — ignored for `disabled`.
+   * Expected freshness budget in milliseconds. A node is fresh when
+   * `lastObservedAt + intervalMs ≥ now`. Only meaningful for `auto` /
+   * `observe` modes — ignored for `disabled`.
    */
   intervalMs?: number
+}
+
+/**
+ * Stable merge / suppression key for an attachment. `access` is keyed per
+ * protocol (SNMP and SSH are distinct slots); every other kind keys by its
+ * `kind`. The resolver merges attachments by this key (highest-priority
+ * contribution wins per key) and the human suppresses by it
+ * (`Node.suppressedAttachments`). One definition so merge and suppression
+ * never disagree on what "the same attachment slot" means.
+ */
+export function attachmentKey(a: Attachment): string {
+  return a.kind === 'access' ? `access:${a.protocol}` : a.kind
 }
 
 export interface Node {
@@ -496,14 +539,39 @@ export interface Node {
   identity?: Identity
 
   /**
-   * Per-node discovery override. Merged with the parent subgraph 's
-   * policy and the topology default by `computeEffectivePolicy()`.
-   * Absent fields fall through; an empty object means "inherit
-   * everything". Set on the **resolved** / **authored** node — overrides
-   * should always be bound to a stable identity so they survive
-   * re-scans (see codex review note on policy bind / adopt).
+   * Authored overlay for this node: access (how to read it) and policy
+   * (discovery scheduling) attachments. Access/policy merge with the
+   * parent subgraph and topology default via `computeEffectivePolicy()`.
+   * Set on the **resolved** / **authored** node so overrides survive
+   * re-scans. Attribute overrides (name/model/vendor) are NOT here — they
+   * are this node's own `label` / `spec`.
    */
-  discovery?: DiscoveryPolicy
+  attachments?: Attachment[]
+
+  /**
+   * Per-field provenance stamped by `resolve()`: maps a field name
+   * (`label` / `spec` / `parent` …) to the source id that won it in the
+   * priority merge. `'authored'` means the human contribution supplied the
+   * value. Diagnostic / UI affordance (e.g. show whether the displayed name
+   * is a human override or the observed name) — not load-bearing for
+   * rendering. Omitted on hand-authored nodes that never went through
+   * resolve.
+   */
+  fieldSources?: Record<string, string>
+
+  /**
+   * Attachment keys (see `attachmentKey`) the human has explicitly removed —
+   * the negative counterpart to `attachments`. A node is one thing every
+   * source contributes to; the human (top priority) can add / override a
+   * value (`attachments`) AND remove one a source supplied (here). There are
+   * no observed/authored layers — this is just the human asserting "no
+   * attachment of this key". `resolve()` drops any merged attachment whose
+   * key is listed, so a deleted access stays gone across re-scans (the
+   * assertion persists) until Reset removes the whole human contribution.
+   * Meaningful on the human contribution; the resolver passes it through onto
+   * the resolved node so the UI can round-trip it.
+   */
+  suppressedAttachments?: string[]
 }
 
 // ============================================
@@ -883,13 +951,12 @@ export interface Subgraph {
   provenance?: Provenance
 
   /**
-   * Discovery policy inherited by every descendant node (unless that
-   * node overrides specific fields). For nested subgraphs, the nearest
-   * ancestor 's value wins for any given field. Compute the effective
-   * policy with `computeEffectivePolicy()` — don 't walk the chain
-   * by hand.
+   * Access / policy attachments inherited by every descendant node
+   * (unless that node attaches its own). For nested subgraphs the
+   * nearest ancestor wins per field. Compute the effective value with
+   * `computeEffectivePolicy()` — don 't walk the chain by hand.
    */
-  discovery?: DiscoveryPolicy
+  attachments?: Attachment[]
 }
 
 // ============================================
@@ -1177,13 +1244,33 @@ export interface NetworkGraph {
   pins?: Pin[]
 
   /**
-   * Topology-wide discovery defaults. Sits at the root of the
-   * `topology default → subgraph → node` inheritance chain. Subgraphs
-   * and individual nodes override specific fields; absent fields here
-   * fall back to the runtime defaults in
-   * `computeEffectivePolicy()`.
+   * Topology-wide default attachments (access / policy). Root of the
+   * `topology default → subgraph → node` inheritance chain. Subgraphs and
+   * nodes override per field; absent values fall back to the runtime
+   * defaults in `computeEffectivePolicy()`.
    */
-  discovery?: DiscoveryPolicy
+  attachments?: Attachment[]
+
+  /**
+   * Hidden nodes — "discovered but junk, don't show it". Each entry is an
+   * identity (mgmtIp / chassisId / sysName); `resolve()` drops any cluster
+   * whose identity matches, no matter which source observed it. Identity-keyed
+   * (not node id) so a hide survives a re-scan that re-numbers ephemeral ids.
+   * This is NOT an attachment / overlay — it's a topology-level exclusion list.
+   */
+  exclusions?: NodeExclusion[]
+}
+
+/**
+ * One hidden-node rule. Matches a resolved cluster when ANY present key
+ * equals the cluster's corresponding identity value (mgmtIp / chassisId /
+ * sysName). At least one key should be set; an all-empty entry matches
+ * nothing (ignored).
+ */
+export interface NodeExclusion {
+  mgmtIp?: string
+  chassisId?: string
+  sysName?: string
 }
 
 /**

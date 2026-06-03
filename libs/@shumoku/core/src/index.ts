@@ -18,14 +18,14 @@ export * from './icons/index.js'
 export * from './ids.js'
 // Layout
 export * from './layout/index.js'
-// Merge
-export * from './merge.js'
 // Models
 export * from './models/index.js'
 // Observation (discovery / resolve)
 export * from './observation/index.js'
 // Parser
 export * from './parser/index.js'
+// Plugin authoring kit (pure helpers: severity, alertmanager, flatten, stamp, validate)
+export * from './plugin-kit/index.js'
 // Plugin types
 export * from './plugin-types.js'
 // Themes

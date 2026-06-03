@@ -104,7 +104,7 @@ describe('buildSegmentInference', () => {
 
   it('emits one segment node + one spoke link per device for each shared subnet', () => {
     const groups = groupBySubnet(ifaces)
-    const inference = buildSegmentInference(groups, 'snmp-lldp')
+    const inference = buildSegmentInference(groups, 'network-scan')
     expect(inference.segmentNodes).toHaveLength(1)
     expect(inference.spokeLinks).toHaveLength(4)
     const seg = inference.segmentNodes[0]
@@ -116,7 +116,7 @@ describe('buildSegmentInference', () => {
 
   it('respects the "1 port = 1 link endpoint" invariant', () => {
     const groups = groupBySubnet(ifaces)
-    const inference = buildSegmentInference(groups, 'snmp-lldp')
+    const inference = buildSegmentInference(groups, 'network-scan')
     // No port id should appear twice across the spoke links — both the
     // device-side and the segment-side.
     const portUses = new Map<string, number>()
@@ -131,7 +131,7 @@ describe('buildSegmentInference', () => {
 
   it('stamps subnet metadata on the segment node and each spoke link', () => {
     const groups = groupBySubnet(ifaces)
-    const inference = buildSegmentInference(groups, 'snmp-lldp')
+    const inference = buildSegmentInference(groups, 'network-scan')
     expect(inference.segmentNodes[0]?.metadata?.['subnet']).toBe('192.168.12.0/22')
     for (const link of inference.spokeLinks) {
       expect(link.metadata?.['linkType']).toBe('subnet-inferred')
@@ -141,7 +141,7 @@ describe('buildSegmentInference', () => {
 
   it('produces deterministic segment node ids from the CIDR', () => {
     const groups = groupBySubnet(ifaces)
-    const inference = buildSegmentInference(groups, 'snmp-lldp')
-    expect(inference.segmentNodes[0]?.id).toBe('snmp-lldp:segment:192.168.12.0_22')
+    const inference = buildSegmentInference(groups, 'network-scan')
+    expect(inference.segmentNodes[0]?.id).toBe('network-scan:segment:192.168.12.0_22')
   })
 })

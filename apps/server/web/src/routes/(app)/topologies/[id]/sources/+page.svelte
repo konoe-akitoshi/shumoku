@@ -13,112 +13,55 @@
    * context so the Discovery page sees the same attachments without
    * a second fetch.
    */
-  import {
-    ArrowDownIcon,
-    CheckCircleIcon,
-    CopyIcon,
-    FloppyDiskIcon,
-    PlusIcon,
-    StarIcon,
-    TrashIcon,
-  } from 'phosphor-svelte'
+  import { CheckCircleIcon, CopyIcon, FloppyDiskIcon, PlusIcon, TrashIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
+  import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
   import { mappingStore } from '$lib/stores'
-  import type { SyncMode, TopologyDataSource, TopologyDataSourceInput } from '$lib/types'
+  import type {
+    DataSourcePluginInfo,
+    PluginConfigSchema,
+    SyncMode,
+    TopologyDataSource,
+    TopologyDataSourceInput,
+  } from '$lib/types'
   import { useTopologyCtx } from '../_context.svelte'
 
   const ctx = useTopologyCtx()
 
-  type MergeMatchStrategy = 'id' | 'name' | 'attribute' | 'manual'
-  type MergeMergeStrategy = 'merge-properties' | 'keep-base' | 'keep-overlay'
-  type MergeUnmatchedStrategy = 'add-to-root' | 'add-to-subgraph' | 'ignore'
-
-  interface OverlayConfig {
-    match: MergeMatchStrategy
-    matchAttribute?: string
-    idMapping?: Record<string, string>
-    onMatch: MergeMergeStrategy
-    onUnmatched: MergeUnmatchedStrategy
-    subgraphName?: string
-  }
-
-  interface MergeConfig {
-    isBase?: boolean
-    match?: MergeMatchStrategy
-    matchAttribute?: string
-    idMapping?: Record<string, string>
-    onMatch?: MergeMergeStrategy
-    onUnmatched?: MergeUnmatchedStrategy
-    subgraphName?: string
-  }
-
-  interface NetBoxOptions {
-    groupBy?: string
-    siteFilter?: string[]
-    tagFilter?: string[]
-    roleFilter?: string[]
-    excludeRoleFilter?: string[]
-    excludeTagFilter?: string[]
-  }
-
   let savingSources = $state(false)
   let copiedSecret = $state<string | null>(null)
   let copiedTimer: ReturnType<typeof setTimeout> | null = null
-  let baseSourceId = $state<string | null>(null)
-  let overlayConfigs = $state<Record<string, OverlayConfig>>({})
-  let filterOptionsCache = $state<
-    Record<
-      string,
-      {
-        sites: { slug: string; name: string }[]
-        tags: { slug: string; name: string }[]
-        roles?: { slug: string; name: string }[]
-      }
-    >
-  >({})
-  let filterOptionsLoading = $state<Record<string, boolean>>({})
   let localError = $state('')
+
+  // Plugin types carry each plugin's optionsSchema; the per-source options form
+  // is rendered generically from it (no NetBox-specific UI here anymore).
+  let pluginTypes = $state<DataSourcePluginInfo[]>([])
+  let optionsState = $state<Record<number, Record<string, unknown>>>({})
+
+  function optionsSchemaFor(type?: string): PluginConfigSchema | undefined {
+    return type ? pluginTypes.find((p) => p.type === type)?.optionsSchema : undefined
+  }
 
   let topologySources = $derived(ctx.editableSources.filter((s) => s.purpose === 'topology'))
   let metricsSources = $derived(ctx.editableSources.filter((s) => s.purpose === 'metrics'))
   let hasMultipleTopologySources = $derived(topologySources.length >= 2)
-  let overlaySources = $derived(
-    ctx.currentSources.filter((s) => s.purpose === 'topology' && s.dataSourceId !== baseSourceId),
-  )
 
-  // Initialize merge state from the loaded sources. Runs once on mount
-  // and again whenever the shared sources list changes (e.g. after a
-  // save round-trip from the layout).
-  $effect(() => {
-    // Re-derive base/overlay state from currentSources.
-    let firstTopo: string | null = null
-    const overlays: Record<string, OverlayConfig> = {}
-    for (const source of ctx.currentSources) {
-      if (source.purpose !== 'topology') continue
-      if (!firstTopo) firstTopo = source.dataSourceId
-      const config = parseMergeConfig(source.optionsJson)
-      if (config.isBase) {
-        baseSourceId = source.dataSourceId
-      } else {
-        overlays[source.dataSourceId] = {
-          match: config.match || 'name',
-          matchAttribute: config.matchAttribute,
-          idMapping: config.idMapping,
-          onMatch: config.onMatch || 'merge-properties',
-          onUnmatched: config.onUnmatched || 'add-to-subgraph',
-          subgraphName: config.subgraphName,
-        }
-      }
+  onMount(async () => {
+    try {
+      pluginTypes = await api.dataSources.getPluginTypes()
+    } catch {
+      // Non-fatal: sources whose plugin has no optionsSchema just show no form.
     }
-    overlayConfigs = overlays
-    if (!baseSourceId && firstTopo) baseSourceId = firstTopo
   })
 
-  // Load NetBox filter options for any attached NetBox sources.
-  onMount(() => {
-    for (const s of ctx.editableSources) loadFilterOptions(s.dataSourceId)
+  // Seed per-source options form state from stored optionsJson (after render,
+  // so we never mutate $state during rendering).
+  $effect(() => {
+    for (const [index, s] of ctx.editableSources.entries()) {
+      if (!optionsState[index]) optionsState[index] = parseOptions(s.optionsJson)
+    }
   })
 
   $effect(() => {
@@ -170,63 +113,47 @@
       i === index ? { ...s, ...updates } : s,
     )
     ctx.hasSourceChanges = true
-    if (updates.dataSourceId) loadFilterOptions(updates.dataSourceId)
   }
 
-  async function loadFilterOptions(dataSourceId: string) {
-    if (filterOptionsCache[dataSourceId] || filterOptionsLoading[dataSourceId]) return
-    const ds = ctx.getDataSource(dataSourceId)
-    if (ds?.type !== 'netbox') return
-    filterOptionsLoading = { ...filterOptionsLoading, [dataSourceId]: true }
-    try {
-      const options = await api.dataSources.getFilterOptions(dataSourceId)
-      filterOptionsCache = { ...filterOptionsCache, [dataSourceId]: options }
-    } catch {
-      // silently fail
-    } finally {
-      filterOptionsLoading = { ...filterOptionsLoading, [dataSourceId]: false }
-    }
-  }
-
-  function parseOptions(optionsJson?: string): NetBoxOptions {
+  /** Parse stored optionsJson, coercing legacy string filters to arrays. */
+  function parseOptions(optionsJson?: string): Record<string, unknown> {
     if (!optionsJson) return {}
     try {
-      const raw = JSON.parse(optionsJson)
-      if (typeof raw.siteFilter === 'string')
-        raw.siteFilter = raw.siteFilter ? [raw.siteFilter] : []
-      if (typeof raw.tagFilter === 'string') raw.tagFilter = raw.tagFilter ? [raw.tagFilter] : []
-      if (typeof raw.roleFilter === 'string')
-        raw.roleFilter = raw.roleFilter ? [raw.roleFilter] : []
-      if (typeof raw.excludeRoleFilter === 'string')
-        raw.excludeRoleFilter = raw.excludeRoleFilter ? [raw.excludeRoleFilter] : []
-      if (typeof raw.excludeTagFilter === 'string')
-        raw.excludeTagFilter = raw.excludeTagFilter ? [raw.excludeTagFilter] : []
+      const raw = JSON.parse(optionsJson) as Record<string, unknown>
+      for (const key of [
+        'siteFilter',
+        'tagFilter',
+        'roleFilter',
+        'excludeRoleFilter',
+        'excludeTagFilter',
+      ]) {
+        if (typeof raw[key] === 'string') raw[key] = raw[key] ? [raw[key]] : []
+      }
       return raw
     } catch {
       return {}
     }
   }
 
-  function updateOptions(index: number, patch: Partial<NetBoxOptions>) {
-    const current = parseOptions(ctx.editableSources[index]?.optionsJson)
-    const merged = { ...current, ...patch }
-    if (!merged.groupBy) delete merged.groupBy
-    if (!merged.siteFilter?.length) delete merged.siteFilter
-    if (!merged.tagFilter?.length) delete merged.tagFilter
-    if (!merged.roleFilter?.length) delete merged.roleFilter
-    if (!merged.excludeRoleFilter?.length) delete merged.excludeRoleFilter
-    if (!merged.excludeTagFilter?.length) delete merged.excludeTagFilter
-    const json = Object.keys(merged).length > 0 ? JSON.stringify(merged) : undefined
+  /** Persist a source's options form state (pruning empties) to optionsJson. */
+  function saveOptions(index: number) {
+    const state = optionsState[index]
+    if (!state) return
+    const pruned: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(state)) {
+      if (value == null) continue
+      if (typeof value === 'string' && value === '') continue
+      if (Array.isArray(value) && value.length === 0) continue
+      pruned[key] = value
+    }
+    const json = Object.keys(pruned).length > 0 ? JSON.stringify(pruned) : undefined
     updateSource(index, { optionsJson: json })
   }
 
-  function toggleArrayOption(arr: string[] | undefined, value: string): string[] {
-    const current = arr || []
-    return current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
-  }
-
   function getWebhookUrl(source: TopologyDataSource): string {
-    return `${window.location.origin}/api/webhooks/topology/${source.webhookSecret}`
+    // Generic ingress: source id in the path, secret in the query (compared in
+    // constant time server-side).
+    return `${window.location.origin}/api/webhooks/topology/${source.id}?secret=${source.webhookSecret}`
   }
 
   async function copyWebhookUrl(source: TopologyDataSource) {
@@ -239,89 +166,15 @@
     }, 2000)
   }
 
-  function parseMergeConfig(optionsJson?: string): MergeConfig {
-    if (!optionsJson) return {}
-    try {
-      return JSON.parse(optionsJson)
-    } catch {
-      return {}
-    }
-  }
-
-  function getOtherOptions(optionsJson?: string): Record<string, unknown> {
-    if (!optionsJson) return {}
-    try {
-      const parsed = JSON.parse(optionsJson)
-      const {
-        isBase: _isBase,
-        match: _match,
-        matchAttribute: _matchAttribute,
-        idMapping: _idMapping,
-        onMatch: _onMatch,
-        onUnmatched: _onUnmatched,
-        subgraphName: _subgraphName,
-        ...rest
-      } = parsed
-      return rest
-    } catch {
-      return {}
-    }
-  }
-
-  function setBaseSource(dataSourceId: string) {
-    baseSourceId = dataSourceId
-    ctx.hasSourceChanges = true
-  }
-
-  function updateOverlayConfig(dataSourceId: string, updates: Partial<OverlayConfig>) {
-    const prev = overlayConfigs[dataSourceId]
-    if (prev) overlayConfigs[dataSourceId] = { ...prev, ...updates }
-    ctx.hasSourceChanges = true
-  }
-
-  function getSourceName(dataSourceId: string): string {
-    const source = ctx.currentSources.find((s) => s.dataSourceId === dataSourceId)
-    return source?.dataSource?.name || dataSourceId
-  }
-
-  function getSourceType(dataSourceId: string): string {
-    const source = ctx.currentSources.find((s) => s.dataSourceId === dataSourceId)
-    return source?.dataSource?.type || 'unknown'
-  }
-
   async function handleSaveSources() {
     savingSources = true
     localError = ''
     try {
-      const sourcesWithMerge = ctx.editableSources.map((source) => {
-        if (source.purpose !== 'topology') return source
-        const otherOptions = getOtherOptions(source.optionsJson)
-        let mergeConfig: MergeConfig = {}
-        if (source.dataSourceId === baseSourceId) {
-          mergeConfig = { isBase: true }
-        } else {
-          const overlay = overlayConfigs[source.dataSourceId]
-          if (overlay) {
-            mergeConfig = {
-              match: overlay.match,
-              matchAttribute: overlay.matchAttribute,
-              idMapping: overlay.idMapping,
-              onMatch: overlay.onMatch,
-              onUnmatched: overlay.onUnmatched,
-              subgraphName: overlay.subgraphName,
-            }
-          }
-        }
-        const combined: Record<string, unknown> = { ...otherOptions, ...mergeConfig }
-        for (const key of Object.keys(combined)) {
-          if (combined[key] === undefined || combined[key] === '') delete combined[key]
-        }
-        return {
-          ...source,
-          optionsJson: Object.keys(combined).length > 0 ? JSON.stringify(combined) : undefined,
-        }
-      })
-      const updated = await api.topologies.sources.replaceAll(ctx.topologyId, sourcesWithMerge)
+      // Source merge is governed entirely by `priority` (higher wins each
+      // field in resolve()) and per-plugin `optionsJson` — both already live
+      // on editableSources, so save them straight through. The old
+      // base/overlay Merge-Config injection was retired with merge.ts.
+      const updated = await api.topologies.sources.replaceAll(ctx.topologyId, ctx.editableSources)
       ctx.currentSources = updated
       ctx.editableSources = updated.map((s) => ({
         dataSourceId: s.dataSourceId,
@@ -338,15 +191,6 @@
       savingSources = false
     }
   }
-
-  // Per-form-control ids — uniquified to avoid label/input mismatches
-  // when the same form repeats inside an each block.
-  const componentId = $props.id()
-  const groupBySelectorId = `${componentId}:groupBy`
-  const matchStrategySelectorId = `${componentId}:matchStrategy`
-  const unmatchedNodesSelectorId = `${componentId}:unmatchedNodes`
-  const idMappingId = `${componentId}:idMapping`
-  const subgraphNameId = `${componentId}:subgraph`
 </script>
 
 <div class="container mx-auto p-6 max-w-6xl space-y-6">
@@ -418,6 +262,28 @@
                     </select>
                   </div>
 
+                  <!-- Merge priority. Higher wins each field in resolve() when
+                       sources observe the same device; only meaningful with
+                       multiple topology sources. -->
+                  {#if hasMultipleTopologySources}
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-theme-text-muted">Priority</span>
+                      <input
+                        type="number"
+                        class="input"
+                        style="width: 6rem;"
+                        value={source.priority ?? 0}
+                        onchange={(e) =>
+                          updateSource(source.index, {
+                            priority: Number(e.currentTarget.value) || 0,
+                          })}
+                      >
+                      <span class="text-xs text-theme-text-muted">
+                        higher wins each field when sources overlap
+                      </span>
+                    </div>
+                  {/if}
+
                   {#if source.syncMode === 'webhook' && currentSource?.webhookSecret}
                     <div class="flex items-center gap-2">
                       <input
@@ -440,148 +306,29 @@
                     </div>
                   {/if}
 
-                  <!-- NetBox options -->
-                  {#if dataSource?.type === 'netbox'}
-                    {@const opts = parseOptions(source.optionsJson)}
-                    {@const filterOpts = filterOptionsCache[source.dataSourceId]}
-                    {@const isLoading = filterOptionsLoading[source.dataSourceId]}
-                    <div class="border-t border-theme-border pt-3 space-y-3">
-                      <p class="text-xs font-medium text-theme-text-muted uppercase tracking-wide">
-                        NetBox Options
-                      </p>
-                      <div class="flex items-center gap-4">
-                        <label for={groupBySelectorId} class="text-xs text-theme-text-muted">
-                          Group By
-                        </label>
-                        <select
-                          id={groupBySelectorId}
-                          class="input text-sm"
-                          value={opts.groupBy || 'tag'}
-                          onchange={(e) =>
-                            updateOptions(source.index, { groupBy: e.currentTarget.value })}
+                  <!-- Per-source options, rendered generically from the plugin's
+                       optionsSchema (no per-plugin UI here — #270). -->
+                  {#if optionsState[source.index]}
+                    {@const optSchema = optionsSchemaFor(dataSource?.type)}
+                    {#if optSchema}
+                      <div class="border-t border-theme-border pt-3 space-y-3">
+                        <p
+                          class="text-xs font-medium text-theme-text-muted uppercase tracking-wide"
                         >
-                          <option value="tag">Tag</option>
-                          <option value="site">Site</option>
-                          <option value="location">Location</option>
-                          <option value="prefix">Prefix</option>
-                          <option value="none">None</option>
-                        </select>
+                          {dataSource?.type}
+                          options
+                        </p>
+                        <SchemaForm
+                          schema={optSchema}
+                          value={optionsState[source.index] ?? {}}
+                          getOptions={(key) =>
+                            api.dataSources
+                              .getConfigOptions(source.dataSourceId, key)
+                              .then((r) => r.options)}
+                          onChange={() => saveOptions(source.index)}
+                        />
                       </div>
-                      {#if filterOpts}
-                        <div class="grid grid-cols-3 gap-3">
-                          <div>
-                            <p class="text-xs text-theme-text-muted mb-1">Site Filter</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.sites || [] as site (site.slug)}
-                                {@const selected = opts.siteFilter?.includes(site.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-primary/15 border-primary/40 text-primary'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      siteFilter: toggleArrayOption(opts.siteFilter, site.slug),
-                                    })}
-                                >
-                                  {site.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                          <div>
-                            <p class="text-xs text-theme-text-muted mb-1">Tag Filter</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.tags || [] as tag (tag.slug)}
-                                {@const selected = opts.tagFilter?.includes(tag.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-primary/15 border-primary/40 text-primary'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      tagFilter: toggleArrayOption(opts.tagFilter, tag.slug),
-                                    })}
-                                >
-                                  {tag.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                          <div>
-                            <p class="text-xs text-theme-text-muted mb-1">Role Filter</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.roles || [] as role (role.slug)}
-                                {@const selected = opts.roleFilter?.includes(role.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-primary/15 border-primary/40 text-primary'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      roleFilter: toggleArrayOption(opts.roleFilter, role.slug),
-                                    })}
-                                >
-                                  {role.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                          <div>
-                            <p class="text-xs text-danger mb-1">Exclude Roles</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.roles || [] as role (role.slug)}
-                                {@const selected = opts.excludeRoleFilter?.includes(role.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-danger/15 border-danger/40 text-danger'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      excludeRoleFilter: toggleArrayOption(
-                                        opts.excludeRoleFilter,
-                                        role.slug,
-                                      ),
-                                    })}
-                                >
-                                  {role.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                          <div>
-                            <p class="text-xs text-danger mb-1">Exclude Tags</p>
-                            <div class="flex flex-wrap gap-1">
-                              {#each filterOpts.tags || [] as tag (tag.slug)}
-                                {@const selected = opts.excludeTagFilter?.includes(tag.slug)}
-                                <button
-                                  type="button"
-                                  class="px-2 py-0.5 rounded-full text-xs border cursor-pointer {selected
-                                    ? 'bg-danger/15 border-danger/40 text-danger'
-                                    : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                                  onclick={() =>
-                                    updateOptions(source.index, {
-                                      excludeTagFilter: toggleArrayOption(
-                                        opts.excludeTagFilter,
-                                        tag.slug,
-                                      ),
-                                    })}
-                                >
-                                  {tag.name}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        </div>
-                      {:else if isLoading}
-                        <p class="text-xs text-theme-text-muted">Loading filter options...</p>
-                      {/if}
-                    </div>
+                    {/if}
                   {/if}
                 </div>
                 <Button
@@ -599,135 +346,6 @@
       {/if}
     </div>
   </div>
-
-  <!-- Merge Configuration (only when multiple topology sources) -->
-  {#if hasMultipleTopologySources}
-    <div class="card">
-      <div class="card-header">
-        <h2 class="font-medium text-theme-text-emphasis flex items-center gap-2">
-          <StarIcon size={18} weight="fill" class="text-warning" />
-          Merge Configuration
-        </h2>
-      </div>
-      <div class="card-body space-y-4">
-        <div>
-          <p class="text-xs text-theme-text-muted mb-2">Base Source (others merge into this)</p>
-          <div class="flex flex-wrap gap-2">
-            {#each ctx.currentSources.filter((s) => s.purpose === 'topology') as source (source.id)}
-              {@const isBase = source.dataSourceId === baseSourceId}
-              <button
-                type="button"
-                class="px-3 py-1.5 rounded-lg border-2 text-sm cursor-pointer {isBase
-                  ? 'bg-warning/15 border-warning text-warning font-medium'
-                  : 'border-theme-border text-theme-text-muted hover:border-theme-text-muted'}"
-                onclick={() => setBaseSource(source.dataSourceId)}
-              >
-                {getSourceName(source.dataSourceId)}
-              </button>
-            {/each}
-          </div>
-        </div>
-
-        {#if overlaySources.length > 0}
-          <div class="flex justify-center">
-            <ArrowDownIcon size={20} class="text-theme-text-muted" />
-          </div>
-
-          {#each overlaySources as source (source.id)}
-            {@const config =
-              overlayConfigs[source.dataSourceId] || {
-                match: 'name',
-                onMatch: 'merge-properties',
-                onUnmatched: 'add-to-subgraph',
-              }}
-            <div class="border border-theme-border rounded-lg p-4">
-              <h3 class="font-medium text-theme-text-emphasis mb-3">
-                {getSourceName(source.dataSourceId)}
-              </h3>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label for={matchStrategySelectorId} class="text-xs text-theme-text-muted">
-                    Match Strategy
-                  </label>
-                  <select
-                    id={matchStrategySelectorId}
-                    class="input mt-1"
-                    value={config.match}
-                    onchange={(e) =>
-                      updateOverlayConfig(source.dataSourceId, {
-                        match: e.currentTarget.value as MergeMatchStrategy,
-                      })}
-                  >
-                    <option value="name">By Name</option>
-                    <option value="id">By ID</option>
-                    <option value="manual">Manual Mapping</option>
-                  </select>
-                </div>
-                <div>
-                  <label for={unmatchedNodesSelectorId} class="text-xs text-theme-text-muted">
-                    Unmatched Nodes
-                  </label>
-                  <select
-                    id={unmatchedNodesSelectorId}
-                    class="input mt-1"
-                    value={config.onUnmatched}
-                    onchange={(e) =>
-                      updateOverlayConfig(source.dataSourceId, {
-                        onUnmatched: e.currentTarget.value as MergeUnmatchedStrategy,
-                      })}
-                  >
-                    <option value="add-to-subgraph">Add to Subgraph</option>
-                    <option value="add-to-root">Add to Root</option>
-                    <option value="ignore">Ignore</option>
-                  </select>
-                </div>
-                {#if config.match === 'manual'}
-                  <div class="col-span-2">
-                    <label for={idMappingId} class="text-xs text-theme-text-muted">
-                      ID Mapping (JSON)
-                    </label>
-                    <textarea
-                      id={idMappingId}
-                      class="input mt-1 font-mono text-xs"
-                      rows="4"
-                      placeholder={`{\n  "overlay-id": "base-id"\n}`}
-                      value={config.idMapping ? JSON.stringify(config.idMapping, null, 2) : ''}
-                      onchange={(e) => {
-                        try {
-                          const parsed = JSON.parse(e.currentTarget.value || '{}')
-                          updateOverlayConfig(source.dataSourceId, { idMapping: parsed })
-                        } catch {
-                          /* invalid */
-                        }
-                      }}
-                    ></textarea>
-                  </div>
-                {/if}
-                {#if config.onUnmatched === 'add-to-subgraph'}
-                  <div class="col-span-2">
-                    <label for={subgraphNameId} class="text-xs text-theme-text-muted">
-                      Subgraph Name
-                    </label>
-                    <input
-                      id={subgraphNameId}
-                      type="text"
-                      class="input mt-1"
-                      placeholder={getSourceType(source.dataSourceId)}
-                      value={config.subgraphName || ''}
-                      onchange={(e) =>
-                        updateOverlayConfig(source.dataSourceId, {
-                          subgraphName: e.currentTarget.value,
-                        })}
-                    >
-                  </div>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        {/if}
-      </div>
-    </div>
-  {/if}
 
   <!-- Metrics Sources -->
   <div class="card">

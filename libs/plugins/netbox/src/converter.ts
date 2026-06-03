@@ -6,6 +6,7 @@
 // Imports
 // ============================================
 
+import { buildIdentity } from '@shumoku/core'
 import type {
   DeviceType,
   LegendSettings,
@@ -592,6 +593,10 @@ function buildNodes(
       label: labelLines,
       shape: 'rounded',
       rank: tagConfig?.level,
+      // Identity keys so the resolver clusters this device across rescans and
+      // across sources (mgmtIp is the strongest node key; sysName is the
+      // fallback). Without these, NetBox nodes never matched anything (P0).
+      identity: buildIdentity({ mgmtIp: device.ip, sysName: device.name }),
       spec: {
         kind: 'hardware' as const,
         type: deviceType as DeviceType,
@@ -780,6 +785,7 @@ function buildVMNodes(
       id: `vm-${vm.name}`,
       label: labelLines,
       shape: 'rounded',
+      identity: buildIdentity({ mgmtIp: ip, sysName: vm.name }),
       spec: { kind: 'hardware' as const, type: 'server' as DeviceType },
       style: { ...VM_NODE_STYLE },
       metadata: {
@@ -1146,6 +1152,7 @@ function buildLocationGraph(
       label: labelLines,
       shape: 'rounded',
       rank: tagConfig?.level,
+      identity: buildIdentity({ mgmtIp: info.ip, sysName: info.name }),
       spec: {
         kind: 'hardware' as const,
         type: deviceType as DeviceType,

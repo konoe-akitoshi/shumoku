@@ -52,3 +52,4 @@ apps/server/data/plugins.yaml
 obs*.json
 resolved.json
 discovery-tab.png
+scratch-*.ts

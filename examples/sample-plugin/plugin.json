@@ -1,0 +1,50 @@
+{
+  "id": "sample-hosts",
+  "name": "Sample Hosts",
+  "version": "1.0.0",
+  "description": "A minimal external data source plugin — a worked example for docs/plugin-authoring.md. Returns a canned host list so you can see a plugin appear in the UI with zero host edits.",
+  "capabilities": ["hosts"],
+  "entry": "index.mjs",
+  "configSchema": {
+    "type": "object",
+    "required": ["label"],
+    "properties": {
+      "label": {
+        "type": "string",
+        "title": "Host label prefix",
+        "placeholder": "host",
+        "help": "Each generated host is named <label>-N."
+      },
+      "hostCount": {
+        "type": "number",
+        "title": "How many hosts",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 50,
+        "step": 1
+      },
+      "region": {
+        "type": "string",
+        "title": "Region",
+        "default": "tokyo",
+        "oneOf": [
+          { "const": "tokyo", "title": "Tokyo" },
+          { "const": "osaka", "title": "Osaka" },
+          { "const": "global", "title": "Global" }
+        ]
+      },
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" },
+        "freeSolo": true,
+        "title": "Tags",
+        "help": "Free-form tags attached to every host."
+      },
+      "verbose": {
+        "type": "boolean",
+        "title": "Verbose logging",
+        "default": false
+      }
+    }
+  }
+}

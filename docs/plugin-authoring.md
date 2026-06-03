@@ -13,6 +13,7 @@ external plugins.
 ## Contents
 
 - [Design principle](#design-principle)
+- [Vocabulary: `type` vs `capabilities`](#vocabulary-type-vs-capabilities)
 - [Capability interfaces](#capability-interfaces)
 - [Lifecycle](#lifecycle)
 - [Data shapes](#data-shapes)
@@ -20,7 +21,8 @@ external plugins.
 - [The three node-state axes](#the-three-node-state-axes)
 - [`discoverMetrics` — passthrough by default](#discovermetrics--passthrough-by-default)
 - [Native API passthrough (dev only)](#native-api-passthrough-dev-only)
-- [Registration](#registration)
+- [Registration & self-description](#registration--self-description)
+- [Shared utilities](#shared-utilities--dont-re-implement-these)
 - [Security practices for unofficial APIs](#security-practices-for-unofficial-apis)
 - [Don'ts](#donts)
 
@@ -44,14 +46,35 @@ Consequences:
 - **Never push upstream vocabulary into core.** If an upstream system
   says `"average"` and the rest of the world says `"medium"`, the
   plugin translates `"average" → "medium"` — not the other way.
-- **Never branch on plugin type in the UI.** Render plugins through
-  their `configSchema` (open issue #270 tracks bundled-plugin
-  cleanup); render alerts through `AlertSeverity`; render hosts
-  through `Host`. The renderer should be a generic consumer.
+- **Never branch on plugin type in the UI.** Render data-source config through
+  the plugin's `configSchema` — the host has a single generic `SchemaForm` and
+  no per-plugin form code. Render alerts through `AlertSeverity`; render hosts
+  through `Host`. A vitest guard
+  (`apps/server/api/src/plugins/host-branch-guard.test.ts`) fails the build if a
+  `type === '<plugin>'` branch creeps into the config surfaces.
 
-If you find yourself adding a `if (plugin.type === 'foo')` in core
-or the web app, that's the signal something is wrong with the
-contract, not with the UI.
+If you find yourself adding `if (plugin.type === 'foo')` in core or the web app,
+that's the signal something is wrong with the contract, not with the UI.
+
+---
+
+## Vocabulary: `type` vs `capabilities`
+
+The word **type** shows up in several unrelated places — keep them separate, or
+you'll tie yourself in knots:
+
+| You mean… | Where it lives | Example |
+|---|---|---|
+| **which plugin this is** — identity / discriminator | `registerDescriptor({ type })`, `dataSource.type` | `'zabbix'`, `'netbox'`, `'ttdb'` |
+| **what the plugin can do** — its roles, the chips shown in the UI | `capabilities` | `['metrics', 'hosts', 'alerts']` |
+| **a config field's value type** — drives the form widget + validation | `PluginConfigProperty.type` | `'string'` `'number'` `'boolean'` `'object'` `'array'` |
+| **a network device's kind** — topology model, nothing to do with plugins | `Node.type` | `'router'`, `'l2-switch'` |
+
+So a plugin's **`type` is its name, not its role**. The role-ish thing you might
+expect `type` to mean — the *Topology / Hosts / Metrics / Alerts* tags — is
+`capabilities`. And the `type` inside a `configSchema` property
+(`{ type: 'string' }`) is a value type: a different axis again, living one level
+down from the plugin's own `type`.
 
 ---
 
@@ -250,11 +273,17 @@ mappings:
 | (generic)              | `medium` / `moderate` | `medium`   |
 | (generic)              | `none` / `ok` | `ok`       |
 
+For **Alertmanager-style** `severity` labels, don't copy the table — call
+`mapAlertmanagerSeverity(label)` from `@shumoku/core/plugin-kit` (it implements
+the Prometheus/Alertmanager rows above), and rank/compare with `severityRank` /
+`severityAtLeast`. **Native** vocabularies (Zabbix priorities, Aruba tokens) you
+still map locally with a small table like this one — that translation is the
+plugin's job, at its boundary.
+
 The mapping is **position-preserving** against the pre-refactor
 Zabbix-flavored scale — plugins that used to emit `'disaster'` now
 emit `'critical'`, plugins that used to emit `'average'` now emit
-`'medium'`, etc. If you're authoring a new plugin, copy the table
-above; don't invent a new mapping.
+`'medium'`, etc.
 
 ---
 
@@ -334,32 +363,131 @@ See PR #260 for the pattern.
 
 ---
 
-## Registration
+## Registration & self-description
 
-**Bundled plugins** ship in `libs/plugins/<name>/` and self-register
-on startup via `apps/server/api/src/plugins/index.ts`:
+A plugin **describes itself**: type, display name, capabilities, and a
+`configSchema` the host renders its config form from. There is no per-plugin
+form code in the host — bundled and external plugins reach the UI through the
+same descriptor, so **adding a data source type requires zero host edits**.
+
+**Bundled plugins** ship in `libs/plugins/<name>/` and self-register on startup
+via `apps/server/api/src/plugins/index.ts`. Each plugin's `index.ts` exports a
+`register` function that calls `registerDescriptor`:
 
 ```ts
-import { register as registerMyPlugin } from 'shumoku-plugin-my-plugin'
+import type { PluginConfigSchema, PluginRegistryInterface } from '@shumoku/core'
 
-export function registerBundledPlugins(): void {
-  registerMyPlugin(pluginRegistry)
+const configSchema: PluginConfigSchema = {
+  type: 'object',
+  required: ['url', 'token'],
+  properties: {
+    url: { type: 'string', format: 'uri', title: 'URL', placeholder: 'https://example.com' },
+    token: { type: 'string', format: 'password', title: 'API token' },
+    pollInterval: {
+      type: 'number',
+      title: 'Polling interval',
+      default: 60000,
+      oneOf: [
+        { const: 30000, title: '30 seconds' },
+        { const: 60000, title: '1 minute' },
+      ],
+    },
+  },
+}
+
+export function register(registry: PluginRegistryInterface): void {
+  registry.registerDescriptor(
+    { type: 'my-plugin', displayName: 'My Plugin', capabilities: ['metrics'], configSchema },
+    (config) => {
+      const plugin = new MyPlugin()
+      plugin.initialize(config)
+      return plugin
+    },
+  )
 }
 ```
 
-Each plugin's `index.ts` exports a `register` function that calls
-`pluginRegistry.register(type, displayName, capabilities, factory)`.
+The legacy 4-arg `register(type, displayName, capabilities, factory)` still
+works (no schema) for back-compat, but new plugins use `registerDescriptor`.
 
-**External plugins** are installed at runtime via the plugins UI;
-they ship a `plugin.json` manifest plus a JS bundle and are loaded
-dynamically. The manifest's `configSchema` (JSON Schema subset)
-drives the data-source config form automatically.
+**External plugins** ship a `plugin.json` manifest (same `configSchema` shape)
+plus a JS bundle, loaded at runtime via the plugins UI.
 
-Bundled plugins **should** declare a `configSchema` too — they
-currently don't (issue #270), which is why the web app carries
-hardcoded form branches per plugin. New plugins are encouraged to
-populate it from day one even though the bundled-plugin path
-doesn't read it yet.
+**Capability verification.** At first instantiation the registry asserts that
+every advertised capability has its required method (`topology→fetchTopology`,
+`hosts→getHosts`, `metrics→pollMetrics`, `alerts→getAlerts`, `autoscan→scan`).
+A plugin that advertises a capability it doesn't implement fails fast in dev.
+
+### `configSchema` — what the host can render
+
+`SchemaForm` renders these `PluginConfigProperty` shapes (so cover your config
+with them and the form is automatic):
+
+- `string` + `format: 'uri' | 'password' | 'email'` → URL / masked / email input;
+  `placeholder`, `warning` (red note), `help`, `docUrl`.
+- `number` with `minimum`/`maximum`/`step`, or `oneOf: {const,title}[]` for a
+  labelled dropdown (also works on `string`). Prefer `oneOf` over `enum` (`enum`
+  has no labels).
+- `boolean` → checkbox.
+- `array` (`items: { type: 'string' }`) → tag input; add `optionsSource: '<key>'`
+  for dynamic candidates (below) and `freeSolo: true` to allow hand-typed values.
+- `object` with nested `properties` (+ `required`) → a sub-group (e.g. Prometheus
+  `customMetrics`). Optional objects whose children are all empty are dropped on save.
+- Conditionals: `visibleWhen: { field, equals }` shows the field only when a
+  sibling matches; `requiredWhen` makes it required only then.
+- `serverSupplied: true` marks a schema field the host fills at construction,
+  hidden from the form — use it for a config value you still want validated and
+  documented in the schema. A plugin's *instance id* is **not** such a field: it
+  is kept out of `configSchema` entirely and read from `config` at runtime (see
+  network-scan), so don't model `instanceId` with `serverSupplied`.
+
+Config is validated by core's `validateAgainstSchema` — the **same** function on
+the API (400 on invalid) and (optionally) the web — so describe/validate/render
+all derive from one schema.
+
+### Dynamic candidates & derived info (optional)
+
+- **`getConfigOptions(key, currentConfig): Promise<{value,label}[]>`** — supply
+  candidates for an `optionsSource` field (e.g. NetBox sites/tags/roles). Needs a
+  live connection; the host disables the field until connection config is filled
+  and falls back to free entry on failure (never treats "no candidates" as broken).
+- **`getConnectionInfo(config, ctx): {label,value,copyable?}[]`** — derived,
+  display-only info that is *not* a config input (e.g. a webhook URL built from
+  `ctx.serverOrigin` + `ctx.dataSourceId`). Detected by `hasConnectionInfo`.
+- **`optionsSchema`** — a second `PluginConfigSchema` for per-use settings (e.g.
+  topology `groupBy` / filters), rendered on the topology Sources page.
+
+---
+
+## Shared utilities — don't re-implement these
+
+The audit that motivated this contract found every plugin had re-rolled the same
+HTTP/severity/flatten logic and drifted. Use the shared helpers; keep only your
+*mapping tables* and upstream-specific glue.
+
+**`@shumoku/core/plugin-kit`** (pure, browser-safe):
+
+- `mapAlertmanagerSeverity(label)` + `severityRank` / `severityAtLeast` — the
+  Alertmanager-dialect → `AlertSeverity` mapping and the neutral ordering.
+- `parseAlertmanagerAlerts(raw, { source, query, now })` — one parser for the
+  `/api/v2/alerts` shape (filters by active/timeRange/minSeverity).
+- `flattenObject(obj, prefix)` — the generic "All metrics" passthrough dump.
+- `stampObserved(node, { source, identity, syncState, readVia })` +
+  `buildIdentity(parts)` — topology/autoscan plugins MUST stamp `provenance.source`
+  and `identity` (mgmtIp / chassisId / sysName / vendorIds) so the resolver can
+  cluster the same device across rescans and sources.
+- `mapWithConcurrency(items, limit, fn)` — bounded parallelism (don't open
+  hundreds of sockets with `Promise.all`, don't poll serially).
+- `validateAgainstSchema(schema, value)` — config/options validation.
+
+**`@shumoku/plugin-sdk`** (Node runtime — HTTP, not browser-safe):
+
+- `createHttpClient({ baseUrl, auth, timeoutMs, insecure })` — auth strategies
+  (Bearer/Token/Basic), per-request timeout, typed `HttpError` on non-2xx,
+  `insecure` TLS that works on **both** Bun and Node, and credentials never
+  logged. Don't hand-roll `fetch`.
+- `paginate(firstPath, fetchPage)` — follow a cursor `next` to exhaustion (don't
+  stop at page 1).
 
 ---
 

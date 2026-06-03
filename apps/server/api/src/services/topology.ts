@@ -155,7 +155,7 @@ export class TopologyService {
    * Returns the *data source* id (PK of `data_sources`), not the
    * junction row id.
    */
-  private findManualSourceId(topologyId: string): string | undefined {
+  findManualSourceId(topologyId: string): string | undefined {
     const row = this.db
       .query(
         `SELECT ds.id AS id
@@ -470,7 +470,9 @@ export class TopologyService {
    * diagram is whatever the other sources produced.
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
-    const latest = this.observations.latestPerSource(topology.id)
+    // Latest NON-FAILED snapshot per source: a transient failed scan must not
+    // drop a source's last-good nodes (C7 — failed never retracts).
+    const latest = this.observations.latestSuccessfulPerSource(topology.id)
     const manualId = topology.manualSourceId
     const authored: NetworkGraph = manualId
       ? (this.readManualGraph(manualId) ?? {
@@ -485,6 +487,14 @@ export class TopologyService {
           nodes: [],
           links: [],
         }
+    // Source priority feeds the resolver's field merge: when two sources
+    // observe the same device, the higher-priority source wins each field it
+    // holds. Mirrors `topology_data_sources.priority`. The Manual/authored
+    // contribution always outranks these (handled inside resolve()).
+    const priorityBySource = new Map<string, number>()
+    for (const tds of this.topologySources.listByTopology(topology.id)) {
+      priorityBySource.set(tds.dataSourceId, tds.priority)
+    }
     const snapshots: SnapshotEntry[] = latest
       .filter((o) => o.sourceId !== manualId)
       .map((o) => ({
@@ -492,6 +502,7 @@ export class TopologyService {
         capturedAt: o.capturedAt,
         status: o.status,
         graph: o.graph,
+        priority: priorityBySource.get(o.sourceId) ?? 0,
       }))
     const graph = resolveObservations(authored, snapshots)
 
