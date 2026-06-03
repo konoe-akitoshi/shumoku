@@ -13,6 +13,7 @@ external plugins.
 ## Contents
 
 - [Design principle](#design-principle)
+- [Vocabulary: `type` vs `capabilities`](#vocabulary-type-vs-capabilities)
 - [Capability interfaces](#capability-interfaces)
 - [Lifecycle](#lifecycle)
 - [Data shapes](#data-shapes)
@@ -54,6 +55,26 @@ Consequences:
 
 If you find yourself adding `if (plugin.type === 'foo')` in core or the web app,
 that's the signal something is wrong with the contract, not with the UI.
+
+---
+
+## Vocabulary: `type` vs `capabilities`
+
+The word **type** shows up in several unrelated places — keep them separate, or
+you'll tie yourself in knots:
+
+| You mean… | Where it lives | Example |
+|---|---|---|
+| **which plugin this is** — identity / discriminator | `registerDescriptor({ type })`, `dataSource.type` | `'zabbix'`, `'netbox'`, `'ttdb'` |
+| **what the plugin can do** — its roles, the chips shown in the UI | `capabilities` | `['metrics', 'hosts', 'alerts']` |
+| **a config field's value type** — drives the form widget + validation | `PluginConfigProperty.type` | `'string'` `'number'` `'boolean'` `'object'` `'array'` |
+| **a network device's kind** — topology model, nothing to do with plugins | `Node.type` | `'router'`, `'l2-switch'` |
+
+So a plugin's **`type` is its name, not its role**. The role-ish thing you might
+expect `type` to mean — the *Topology / Hosts / Metrics / Alerts* tags — is
+`capabilities`. And the `type` inside a `configSchema` property
+(`{ type: 'string' }`) is a value type: a different axis again, living one level
+down from the plugin's own `type`.
 
 ---
 
@@ -414,8 +435,11 @@ with them and the form is automatic):
   `customMetrics`). Optional objects whose children are all empty are dropped on save.
 - Conditionals: `visibleWhen: { field, equals }` shows the field only when a
   sibling matches; `requiredWhen` makes it required only then.
-- `serverSupplied: true` marks a value the host injects at construction (excluded
-  from the form, e.g. network-scan's `instanceId`).
+- `serverSupplied: true` marks a schema field the host fills at construction,
+  hidden from the form — use it for a config value you still want validated and
+  documented in the schema. A plugin's *instance id* is **not** such a field: it
+  is kept out of `configSchema` entirely and read from `config` at runtime (see
+  network-scan), so don't model `instanceId` with `serverSupplied`.
 
 Config is validated by core's `validateAgainstSchema` — the **same** function on
 the API (400 on invalid) and (optionally) the web — so describe/validate/render
