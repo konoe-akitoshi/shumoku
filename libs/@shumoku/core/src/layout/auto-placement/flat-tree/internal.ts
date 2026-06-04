@@ -100,9 +100,31 @@ export function layoutSingleMember(
 }
 
 /**
+ * Width past which a multi-root block stops growing as one row
+ * and wraps into a grid. Sized so a typical fan-out (a switch
+ * with ~12 downstream peers, ≈ 12 × 250px) still reads as one
+ * left-to-right row, but a subgraph holding dozens of unlinked
+ * members (the common shape of an auto-discovered "uncategorised"
+ * group) wraps into a compact block instead of a multi-thousand-
+ * px strip that drags the whole canvas sideways.
+ */
+const MULTI_ROOT_WRAP_MIN_WIDTH = 3000
+
+/**
+ * Target aspect (width ÷ height) for the wrapped grid. Slightly
+ * wider than square to suit landscape viewports.
+ */
+const MULTI_ROOT_WRAP_ASPECT = 1.6
+
+/**
  * Default block layout: each intra-root sits at the top of its
- * own subtree column; subtree columns sit side-by-side
- * separated by `INTERNAL_ROOT_GAP`.
+ * own subtree column. Columns sit side-by-side in a single row
+ * while the row stays within {@link MULTI_ROOT_WRAP_MIN_WIDTH};
+ * past that the columns wrap into a roughly-square grid so a
+ * subgraph full of unlinked members renders as a compact block
+ * rather than one runaway-wide strip. The wrap is purely
+ * geometric — every member keeps its own subtree layout, only
+ * the column-to-column placement changes.
  */
 function layoutMultiRootRow(
   intraRoots: readonly string[],
@@ -111,27 +133,84 @@ function layoutMultiRootRow(
   spacing: Spacing,
   portsBySideById?: PortsBySideMap,
 ): InternalLayout {
-  const positions = new Map<string, Position>()
-  let cursorX = 0
-  let totalHeight = 0
-  let lastRootId: string | undefined
-  for (const root of intraRoots) {
-    const sub = layoutWrappedSubtree(root, intraChildren, sizeById, spacing, portsBySideById)
-    // Gap between this intra-root and the previous one. Uses
-    // port info if available; otherwise falls back to the
-    // legacy `internalRootGap` (one-label-could-face-the-other
-    // assumption).
-    if (lastRootId !== undefined) {
-      cursorX += rootToChainHorizontalGap(lastRootId, root, spacing, portsBySideById)
-    }
-    for (const [id, pos] of sub.positions) {
-      positions.set(id, { x: pos.x + cursorX, y: pos.y })
-    }
-    cursorX += sub.width
-    if (sub.height > totalHeight) totalHeight = sub.height
-    lastRootId = root
+  // Lay out each intra-root's subtree once; reused by both the
+  // single-row and the wrapped-grid placement below.
+  const columns = intraRoots.map((root) => ({
+    root,
+    layout: layoutWrappedSubtree(root, intraChildren, sizeById, spacing, portsBySideById),
+  }))
+
+  // Gap between consecutive columns. Uses port info if available;
+  // otherwise falls back to the legacy `internalRootGap`
+  // (one-label-could-face-the-other assumption).
+  const gapBefore = (idx: number): number => {
+    const prev = columns[idx - 1]
+    const curr = columns[idx]
+    if (!prev || !curr) return 0
+    return rootToChainHorizontalGap(prev.root, curr.root, spacing, portsBySideById)
   }
-  return { positions, width: Math.max(0, cursorX), height: totalHeight }
+
+  // Width the columns would occupy as a single row — also the
+  // legacy output when it stays within budget.
+  let singleRowWidth = 0
+  for (const [i, c] of columns.entries()) {
+    if (!c) continue
+    singleRowWidth += (i > 0 ? gapBefore(i) : 0) + c.layout.width
+  }
+
+  const positions = new Map<string, Position>()
+
+  if (singleRowWidth <= MULTI_ROOT_WRAP_MIN_WIDTH) {
+    // ── Single row (output identical to the pre-wrap engine) ──
+    let cursorX = 0
+    let totalHeight = 0
+    for (const [i, c] of columns.entries()) {
+      if (!c) continue
+      cursorX += i > 0 ? gapBefore(i) : 0
+      for (const [id, pos] of c.layout.positions) {
+        positions.set(id, { x: pos.x + cursorX, y: pos.y })
+      }
+      cursorX += c.layout.width
+      if (c.layout.height > totalHeight) totalHeight = c.layout.height
+    }
+    return { positions, width: Math.max(0, cursorX), height: totalHeight }
+  }
+
+  // ── Wrapped grid (shelf packing) ──
+  // Target a roughly-square block so the subgraph hull stays
+  // compact. `targetWidth` only bounds where a row wraps; rows
+  // may be jagged because subtree heights vary.
+  const totalArea = columns.reduce((sum, c) => sum + c.layout.width * c.layout.height, 0)
+  const targetWidth = Math.max(
+    MULTI_ROOT_WRAP_MIN_WIDTH,
+    Math.sqrt(totalArea * MULTI_ROOT_WRAP_ASPECT),
+  )
+  const rowGap = spacing.internalLayerGap
+  let cursorX = 0
+  let cursorY = 0
+  let rowHeight = 0
+  let maxWidth = 0
+  let isRowStart = true
+  for (const [i, c] of columns.entries()) {
+    if (!c) continue
+    const gap = isRowStart ? 0 : gapBefore(i)
+    // Wrap before placing when this column would overflow the row.
+    if (!isRowStart && cursorX + gap + c.layout.width > targetWidth) {
+      cursorY += rowHeight + rowGap
+      cursorX = 0
+      rowHeight = 0
+      isRowStart = true
+    }
+    const x = cursorX + (isRowStart ? 0 : gapBefore(i))
+    for (const [id, pos] of c.layout.positions) {
+      positions.set(id, { x: pos.x + x, y: pos.y + cursorY })
+    }
+    cursorX = x + c.layout.width
+    if (cursorX > maxWidth) maxWidth = cursorX
+    if (c.layout.height > rowHeight) rowHeight = c.layout.height
+    isRowStart = false
+  }
+  return { positions, width: maxWidth, height: cursorY + rowHeight }
 }
 
 /**

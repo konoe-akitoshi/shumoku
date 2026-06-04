@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Link, Node } from '../../../models/types.js'
-import { placePorts } from './port-placement.js'
+import { decidePortSides, placePorts } from './port-placement.js'
 
 // Test fixture: nodes mimic post-layout state with `.size` already
 // attached (as layoutNetwork would do). The old test fixture relied
@@ -112,7 +112,22 @@ describe('placePorts', () => {
   })
 
   it('handles LR direction', () => {
-    const nodes = makeNodes()
+    // LR flows left→right, so a real layout places the source (sw1)
+    // left of the dest (sw2). placePorts re-seats ports from final
+    // geometry (a port faces its peer), so the fixture positions the
+    // nodes horizontally — then the structural LR sides
+    // (source→right, dest→left) are also the geometric ones.
+    const size = { width: 180, height: 60 }
+    const nodes = new Map<string, Node>([
+      [
+        'sw1',
+        { id: 'sw1', label: 'Switch 1', shape: 'rounded', position: { x: 100, y: 200 }, size },
+      ],
+      [
+        'sw2',
+        { id: 'sw2', label: 'Switch 2', shape: 'rounded', position: { x: 400, y: 200 }, size },
+      ],
+    ])
     const links: Link[] = [
       { from: { node: 'sw1', port: 'eth0' }, to: { node: 'sw2', port: 'eth0' } },
     ]
@@ -272,5 +287,39 @@ describe('placePorts', () => {
       expect(pc.absolutePosition.x).toBeLessThan(pb.absolutePosition.x)
       expect(pb.absolutePosition.x).toBeLessThan(pa.absolutePosition.x)
     })
+  })
+})
+
+describe('decidePortSides flip-awareness', () => {
+  const size = { width: 180, height: 60 }
+  function pair(): Map<string, Node> {
+    return new Map<string, Node>([
+      [
+        'parent',
+        { id: 'parent', label: 'parent', shape: 'rounded', position: { x: 200, y: 100 }, size },
+      ],
+      [
+        'child',
+        { id: 'child', label: 'child', shape: 'rounded', position: { x: 200, y: 300 }, size },
+      ],
+    ])
+  }
+  // Authored child→parent, but the layout treats `parent` (the `to`) as
+  // the upstream root. Without flip the facing sides come out inverted
+  // and a gap calc reading these counts reserves no vertical room.
+  const links: Link[] = [
+    { from: { node: 'child', port: 'up' }, to: { node: 'parent', port: 'down' } },
+  ]
+
+  it('uses authored source=bottom / dest=top when not flipped', () => {
+    const a = decidePortSides(links, pair(), 'TB')
+    expect(a.find((p) => p.nodeId === 'child')?.side).toBe('bottom')
+    expect(a.find((p) => p.nodeId === 'parent')?.side).toBe('top')
+  })
+
+  it('swaps the facing sides for a flipped link (parent faces down to child)', () => {
+    const a = decidePortSides(links, pair(), 'TB', () => true)
+    expect(a.find((p) => p.nodeId === 'child')?.side).toBe('top')
+    expect(a.find((p) => p.nodeId === 'parent')?.side).toBe('bottom')
   })
 })

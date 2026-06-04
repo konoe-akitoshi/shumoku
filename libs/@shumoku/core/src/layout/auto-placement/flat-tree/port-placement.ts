@@ -102,6 +102,19 @@ function getHASides(direction: Direction): { sourceSide: Side; destSide: Side } 
  * Auto rule: source ports go on `sourceSide`, destination ports on
  * `destSide`, with HA links perpendicular to the main flow.
  *
+ * `shouldFlip` (optional) reports links whose layout orientation is the
+ * reverse of their authored direction — i.e. the tree parent is the
+ * link's `to`, not its `from` (same predicate the layout uses to root
+ * the tidy-tree). For a flipped link the facing sides invert: the parent
+ * (`to`) faces its source side toward the child (`from`)'s dest side. We
+ * assign those flipped sides here so a caller that derives gaps from this
+ * map (e.g. the vertical layer gap) reserves room on the sides the ports
+ * will actually occupy after geometric re-seating — otherwise a flipped
+ * parent→child layer looks port-less on its facing sides and the two
+ * nodes crowd to the bare label-clearance gap. When `shouldFlip` is
+ * omitted the legacy from=source / to=dest assignment is used (the
+ * geometric re-seat in {@link placePorts} still fixes the rendered side).
+ *
  * Override: if the corresponding `NodePort.placement.side` is set,
  * it wins. The peer node id stays whatever the link says so phase 2
  * can still sort by peer position.
@@ -110,6 +123,7 @@ export function decidePortSides(
   links: Link[],
   nodes: Map<string, Node>,
   direction: Direction,
+  shouldFlip?: (link: Link) => boolean,
 ): PortAssignment[] {
   const haPairs = detectHAPairs(links)
   const assignments: PortAssignment[] = []
@@ -123,6 +137,9 @@ export function decidePortSides(
     const toNode = link.to.node
     const isHA = haPairs.has([fromNode, toNode].sort().join(':'))
     const sides = isHA ? haSides : normalSides
+    const flip = shouldFlip?.(link) ?? false
+    const fromSide = flip ? sides.destSide : sides.sourceSide
+    const toSide = flip ? sides.sourceSide : sides.destSide
 
     const fromKey = `${fromNode}:${link.from.port}`
     if (!seen.has(fromKey)) {
@@ -131,7 +148,7 @@ export function decidePortSides(
       assignments.push({
         nodeId: fromNode,
         portId: link.from.port,
-        side: override ?? sides.sourceSide,
+        side: override ?? fromSide,
         peerNodeId: toNode,
       })
     }
@@ -143,7 +160,7 @@ export function decidePortSides(
       assignments.push({
         nodeId: toNode,
         portId: link.to.port,
-        side: override ?? sides.destSide,
+        side: override ?? toSide,
         peerNodeId: fromNode,
       })
     }
@@ -237,15 +254,157 @@ export function computePortPosition(
 }
 
 /**
+ * Re-seat a port to the end of its OWN axis that faces the peer.
+ * A top/bottom port stays vertical (only flips up↔down); a
+ * left/right port stays horizontal (only flips left↔right).
+ *
+ * Staying on-axis is a hard constraint: a normal link flows along
+ * the main axis (top/bottom for TB) and an HA link runs
+ * perpendicular (left/right). A sideways port on a normal TB link
+ * is not allowed, so we never move a port to the perpendicular
+ * axis — we only choose which end of its existing axis points at
+ * the peer.
+ */
+function reseatTowardPeer(side: Side, here: Position, peer: Position): Side {
+  const horizontal = side === 'left' || side === 'right'
+  if (horizontal) return peer.x >= here.x ? 'right' : 'left'
+  return peer.y >= here.y ? 'bottom' : 'top'
+}
+
+/**
+ * Re-seat each port on the end of its axis that actually faces
+ * its peer, now that final node positions are known.
+ * {@link decidePortSides} runs before layout (it can only use the
+ * structural flow direction), so once a node lands *above* the
+ * peer it was supposed to flow *down* to, its source port would
+ * still sit on the bottom and the wire would leave downward only
+ * to loop back up. Re-deciding the axis end from geometry makes
+ * every wire exit toward its peer — without ever switching a port
+ * to the perpendicular (sideways) axis.
+ *
+ * Skips ports with an explicit `placement.side` (author intent
+ * wins) and any port whose node or peer lacks a position (keeps
+ * the structural assignment as a safe fallback).
+ */
+function reseatPortsByGeometry(
+  assignments: PortAssignment[],
+  nodes: Map<string, Node>,
+): PortAssignment[] {
+  return assignments.map((a) => {
+    if (getPortPlacement(nodes.get(a.nodeId), a.portId)?.side) return a
+    const here = nodes.get(a.nodeId)?.position
+    const peer = nodes.get(a.peerNodeId)?.position
+    if (!here || !peer) return a
+    return { ...a, side: reseatTowardPeer(a.side, here, peer) }
+  })
+}
+
+/**
+ * Distribute a side's ports by aligning each to its peer, so wires drop
+ * (near-)straight to the node above/below instead of fanning evenly
+ * across a wide switch. Keeps the order {@link orderPortsOnSide} chose;
+ * only the coordinate along the side is decided here:
+ *
+ *   1. target = the peer's centre on the side axis (x for top/bottom,
+ *      y for left/right), clamped to the node edge. A peer without a
+ *      position falls back to its even slot.
+ *   2. project to non-decreasing with a minimum gap of span/(total+1)
+ *      — the even-distribution pitch — via pool-adjacent-violators, so
+ *      ports never overlap or reorder. When every peer shares a
+ *      coordinate this reproduces the plain even spread; when peers
+ *      spread out, each port sits under its peer.
+ *   3. shift the block back inside the edge if the peer pull overran it.
+ *
+ * The even-distribution pitch as the floor means a switch fanning out
+ * to children of uneven port counts no longer slants every wire (the
+ * old `(index+1)/(total+1)` spread ignored where each child actually
+ * sat), while a bank of ports all going to one peer still spreads
+ * evenly.
+ */
+function distributePortsAlongSide(
+  ordered: PortAssignment[],
+  node: Node & { position: { x: number; y: number } },
+  side: Side,
+  nodes: Map<string, Node>,
+): Position[] {
+  const total = ordered.length
+  if (total === 0) return []
+  const size = resolveNodeSize(node)
+  const horizontal = side === 'top' || side === 'bottom'
+  const span = horizontal ? size.width : size.height
+  const center = horizontal ? node.position.x : node.position.y
+  const lo = center - span / 2
+  const hi = center + span / 2
+  const gap = span / (total + 1)
+
+  // 1. target per port: pull toward the peer ONLY when the peer sits
+  //    within the node's own span (the wire then drops roughly
+  //    straight). When the peer is off to the side, aligning would jam
+  //    the port into the node corner — keep the conventional even slot
+  //    and let the wire leave at an angle, which reads far better. Also
+  //    the fallback when the peer isn't positioned yet.
+  const target = ordered.map((a, i) => {
+    const slot = lo + span * ((i + 1) / (total + 1))
+    const peer = nodes.get(a.peerNodeId)?.position
+    if (!peer) return slot
+    const raw = horizontal ? peer.x : peer.y
+    return raw >= lo && raw <= hi ? raw : slot
+  })
+
+  // 2. monotonic projection with min gap `gap`: pool-adjacent-violators
+  //    on the gap-detrended series, so ties spread by exactly `gap`.
+  const detrended = target.map((v, i) => v - i * gap)
+  const blocks: Array<{ sum: number; n: number; val: number }> = []
+  for (const v of detrended) {
+    let sum = v
+    let n = 1
+    while (blocks.length > 0) {
+      const prev = blocks[blocks.length - 1]
+      if (!prev || prev.val <= sum / n) break
+      blocks.pop()
+      sum += prev.sum
+      n += prev.n
+    }
+    blocks.push({ sum, n, val: sum / n })
+  }
+  const fitted = blocks.flatMap((b) => Array.from({ length: b.n }, () => b.val))
+  const raw = fitted.map((v, i) => v + i * gap)
+
+  // 3. shift inside [lo, hi] (the block fits since total*gap < span).
+  const firstPos = raw[0] ?? lo
+  const lastPos = raw[raw.length - 1] ?? hi
+  const shift = firstPos < lo ? lo - firstPos : lastPos > hi ? hi - lastPos : 0
+  const along = raw.map((v) => v + shift)
+
+  // 4. compose with the fixed perpendicular coordinate (constant per
+  //    side; only the along-axis coordinate varies per port).
+  const halfW = size.width / 2
+  const halfH = size.height / 2
+  const perpY = node.position.y + (side === 'top' ? -halfH : halfH)
+  const perpX = node.position.x + (side === 'left' ? -halfW : halfW)
+  return ordered.map((_a, i) => {
+    const c = along[i] ?? center
+    return horizontal ? { x: c, y: perpY } : { x: perpX, y: c }
+  })
+}
+
+/**
  * Compose the three phases: decide sides → order each side → compute
  * absolute coordinates → emit `ResolvedPort`s keyed by `nodeId:portId`.
+ *
+ * Port sides are re-seated from final geometry (see
+ * {@link reseatPortsByGeometry}) so wires exit toward their peer
+ * regardless of how the upstream/downstream tree was inferred. Ports
+ * are positioned along each side by {@link distributePortsAlongSide}
+ * (peer-aligned), with {@link computePortPosition}'s even spread as the
+ * fallback.
  */
 export function placePorts(
   nodes: Map<string, Node>,
   links: Link[],
   direction: Direction = 'TB',
 ): Map<string, ResolvedPort> {
-  const assignments = decidePortSides(links, nodes, direction)
+  const assignments = reseatPortsByGeometry(decidePortSides(links, nodes, direction), nodes)
 
   const bySide = new Map<string, PortAssignment[]>()
   for (const a of assignments) {
@@ -264,10 +423,12 @@ export function placePorts(
 
     const ordered = orderPortsOnSide(sideAssignments, nodes)
     const positioned = node as Node & { position: { x: number; y: number } }
+    const coords = distributePortsAlongSide(ordered, positioned, first.side, nodes)
 
     for (const [i, a] of ordered.entries()) {
       const portId = `${a.nodeId}:${a.portId}`
-      const absolutePosition = computePortPosition(positioned, a.side, i, ordered.length)
+      const absolutePosition =
+        coords[i] ?? computePortPosition(positioned, a.side, i, ordered.length)
       ports.set(portId, {
         id: portId,
         nodeId: a.nodeId,
