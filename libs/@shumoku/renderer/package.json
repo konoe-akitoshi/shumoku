@@ -42,6 +42,7 @@
     "dev": "vite dev",
     "build": "svelte-package -i src && vite build --outDir dist/wc --emptyOutDir",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run --passWithNoTests",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
