@@ -31,6 +31,14 @@ import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
 /** Max in-flight Zabbix API calls during a metrics poll (was fully sequential). */
 const POLL_CONCURRENCY = 8
 
+/**
+ * Per-request timeout. The shared HttpClient defaults to 10s, but Zabbix
+ * frontends behind a reverse proxy (or polling a large host) can take longer,
+ * and the pre-HttpClient code had no timeout at all — 10s was a regression.
+ * Matches the NetBox client's 30s.
+ */
+const REQUEST_TIMEOUT_MS = 30_000
+
 /** Zabbix-specific link mapping with item IDs for direct item reference */
 interface ZabbixLinkMapping extends LinkMetricsMapping {
   in?: string
@@ -69,6 +77,7 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
     this.http = createHttpClient({
       baseUrl: this.config.url,
       insecure: this.config.insecure ?? false,
+      timeoutMs: REQUEST_TIMEOUT_MS,
       defaultHeaders: { 'Content-Type': 'application/json-rpc' },
     })
   }
