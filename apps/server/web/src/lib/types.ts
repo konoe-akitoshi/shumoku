@@ -10,6 +10,7 @@
 
 import type {
   DataSourceCapability,
+  Identity,
   LayoutResult,
   MetricsMapping,
   NetworkGraph,
@@ -29,6 +30,7 @@ export type {
   DiscoveredMetric,
   Host,
   HostItem,
+  Identity,
   LinkMetricsMapping,
   MetricsMapping,
   NodeMetricsMapping,
@@ -276,6 +278,8 @@ export interface NodeContext {
   resource?: string
   ports: NodePortContext[]
   metadata?: Record<string, unknown>
+  /** Discovery identity keys, used by the mapping UI for deterministic matching. */
+  identity?: Identity
 }
 
 /** Port info resolved from a NodePort so callers can match without looking up the node. */

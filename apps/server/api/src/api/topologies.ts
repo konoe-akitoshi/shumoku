@@ -152,6 +152,9 @@ export function buildTopologyContext(parsed: ParsedTopology) {
       id: n.id,
       label: n.label || n.id,
       type: specDeviceType(n.spec),
+      // Carry discovery identity (mgmtIp / chassisId / sysName / vendorIds) so the
+      // mapping UI can auto-bind a node to a host deterministically, not by name.
+      ...(n.identity ? { identity: n.identity } : {}),
     })),
     edges: parsed.graph.links.map((l, i) => ({
       id: l.id || `link-${i}`,

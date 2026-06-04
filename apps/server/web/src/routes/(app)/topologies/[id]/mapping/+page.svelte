@@ -26,7 +26,7 @@
   import { Button } from '$lib/components/ui/button'
   import { hostInterfaces, linkMapping, mappingHosts, mappingStore, nodeMapping } from '$lib/stores'
   import type { MetricsData } from '$lib/stores/metrics'
-  import type { EdgeEndpoint, MetricsMapping } from '$lib/types'
+  import type { EdgeEndpoint, Identity, MetricsMapping } from '$lib/types'
   import { nodeLabelById, nodeLabel as resolveNodeLabel } from '$lib/utils/node-label'
   import { useTopologyCtx } from '../_context.svelte'
 
@@ -40,6 +40,7 @@
         id: string
         label?: string | string[]
         spec?: { type?: string; vendor?: string }
+        identity?: Identity
       }>
       links: Array<{ id: string; from: string; to: string; standard?: string }>
     }
@@ -59,9 +60,13 @@
   let edges = $state<EdgeData[]>([])
   let savingMapping = $state(false)
   let nodeSearchQuery = $state('')
-  let autoMapResult = $state<{ matched: number; total: number; kind: 'nodes' | 'links' } | null>(
-    null,
-  )
+  let autoMapResult = $state<{
+    matched: number
+    total: number
+    kind: 'nodes' | 'links'
+    byIdentity?: number
+    byName?: number
+  } | null>(null)
   let singleCandidateFallback = $state(true)
   let customBandwidthLinks = $state(new Set<string>())
   let localError = $state('')
@@ -128,6 +133,7 @@
             id: n.id,
             label: n.label,
             spec: { type: n.type, vendor: n.vendor },
+            identity: n.identity,
           })),
           links: contextData.edges.map((e) => ({
             id: e.id,
@@ -378,6 +384,12 @@
       >
         <CheckCircleIcon size={16} />
         Auto-mapped {autoMapResult.matched} of {autoMapResult.total} {autoMapResult.kind}
+        {#if autoMapResult.byIdentity !== undefined && autoMapResult.matched > 0}
+          <span class="text-muted-foreground">
+            ({autoMapResult.byIdentity}
+            by identity, {autoMapResult.byName} by name)
+          </span>
+        {/if}
       </div>
     {/if}
 

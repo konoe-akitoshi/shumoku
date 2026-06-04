@@ -9,7 +9,7 @@
  * External plugins can import these types without server dependencies.
  */
 
-import type { NetworkGraph } from './models/types.js'
+import type { Identity, NetworkGraph } from './models/types.js'
 
 // ============================================
 // Capability Types
@@ -54,6 +54,14 @@ export interface Host {
   displayName?: string
   status?: 'up' | 'down' | 'unknown'
   ip?: string
+  /**
+   * Device-identifying keys (mgmtIp / chassisId / sysName / vendorIds),
+   * translated into core's neutral `Identity` at the plugin boundary.
+   * Lets the mapping UI match a topology node to this host deterministically
+   * (e.g. node.identity.mgmtIp === host.identity.mgmtIp) instead of relying
+   * only on fuzzy name matching. Optional — plugins fill what they can.
+   */
+  identity?: Identity
 }
 
 export interface HostItem {
