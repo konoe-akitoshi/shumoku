@@ -299,7 +299,12 @@ function layoutTierGrid(
       rowH = Math.max(rowH, s.height)
       rowStart = false
     }
-    y += rowH + gap * 3
+    // Separate tiers by a bit more than the intra-tier wrap gap so the
+    // dependency bands read distinctly — but not by the full link-width
+    // scaling (that term sizes horizontal sibling clearance; applied
+    // vertically it inflates into a large empty void that the cross-tier
+    // backbone links have to span).
+    y += rowH + Math.round(gap * 1.5)
     band++
   }
 
