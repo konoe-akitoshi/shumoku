@@ -60,11 +60,12 @@
     }
   })
 
-  // Load candidates for visible optionsSource fields.
+  // Load candidates for visible optionsSource fields — both array (multi-select)
+  // and single-value string (single-select) fields.
   $effect(() => {
     if (!getOptions) return
     for (const prop of Object.values(schema.properties)) {
-      if (prop.type === 'array' && prop.optionsSource && isVisible(prop)) {
+      if (prop.optionsSource && prop.type !== 'object' && isVisible(prop)) {
         void ensureOptions(prop.optionsSource)
       }
     }
@@ -225,12 +226,28 @@
               {onChange}
             />
           </fieldset>
+        {:else if prop.optionsSource && (candidates[prop.optionsSource]?.length ?? 0) > 0}
+          <!-- Single-select from dynamic candidates (e.g. a Zabbix map). When no
+               candidates are available (connection not ready), this falls through
+               to the free-text input below — the documented freeSolo fallback. -->
+          <select
+            id={`sf-${key}`}
+            class="input"
+            {disabled}
+            value={(value[key] ?? prop.default ?? '') as string}
+            onchange={(e) => onSelect(key, prop, e)}
+          >
+            <option value="">{prop.placeholder ?? 'Select…'}</option>
+            {#each candidates[prop.optionsSource] ?? [] as o (o.value)}
+              <option value={o.value}>{o.label}</option>
+            {/each}
+          </select>
         {:else}
           <input
             id={`sf-${key}`}
             class="input"
             type={inputType(prop)}
-            placeholder={prop.placeholder}
+            placeholder={loadingOptions[prop.optionsSource ?? ''] ? 'Loading…' : prop.placeholder}
             {disabled}
             value={(value[key] ?? prop.default ?? '') as string}
             oninput={(e) => onText(key, e)}
