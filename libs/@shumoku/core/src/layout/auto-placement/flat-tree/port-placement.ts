@@ -102,6 +102,19 @@ function getHASides(direction: Direction): { sourceSide: Side; destSide: Side } 
  * Auto rule: source ports go on `sourceSide`, destination ports on
  * `destSide`, with HA links perpendicular to the main flow.
  *
+ * `shouldFlip` (optional) reports links whose layout orientation is the
+ * reverse of their authored direction — i.e. the tree parent is the
+ * link's `to`, not its `from` (same predicate the layout uses to root
+ * the tidy-tree). For a flipped link the facing sides invert: the parent
+ * (`to`) faces its source side toward the child (`from`)'s dest side. We
+ * assign those flipped sides here so a caller that derives gaps from this
+ * map (e.g. the vertical layer gap) reserves room on the sides the ports
+ * will actually occupy after geometric re-seating — otherwise a flipped
+ * parent→child layer looks port-less on its facing sides and the two
+ * nodes crowd to the bare label-clearance gap. When `shouldFlip` is
+ * omitted the legacy from=source / to=dest assignment is used (the
+ * geometric re-seat in {@link placePorts} still fixes the rendered side).
+ *
  * Override: if the corresponding `NodePort.placement.side` is set,
  * it wins. The peer node id stays whatever the link says so phase 2
  * can still sort by peer position.
@@ -110,6 +123,7 @@ export function decidePortSides(
   links: Link[],
   nodes: Map<string, Node>,
   direction: Direction,
+  shouldFlip?: (link: Link) => boolean,
 ): PortAssignment[] {
   const haPairs = detectHAPairs(links)
   const assignments: PortAssignment[] = []
@@ -123,6 +137,9 @@ export function decidePortSides(
     const toNode = link.to.node
     const isHA = haPairs.has([fromNode, toNode].sort().join(':'))
     const sides = isHA ? haSides : normalSides
+    const flip = shouldFlip?.(link) ?? false
+    const fromSide = flip ? sides.destSide : sides.sourceSide
+    const toSide = flip ? sides.sourceSide : sides.destSide
 
     const fromKey = `${fromNode}:${link.from.port}`
     if (!seen.has(fromKey)) {
@@ -131,7 +148,7 @@ export function decidePortSides(
       assignments.push({
         nodeId: fromNode,
         portId: link.from.port,
-        side: override ?? sides.sourceSide,
+        side: override ?? fromSide,
         peerNodeId: toNode,
       })
     }
@@ -143,7 +160,7 @@ export function decidePortSides(
       assignments.push({
         nodeId: toNode,
         portId: link.to.port,
-        side: override ?? sides.destSide,
+        side: override ?? toSide,
         peerNodeId: fromNode,
       })
     }

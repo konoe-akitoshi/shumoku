@@ -226,9 +226,17 @@ export function autoLayoutFlatTree(
 ): AutoLayoutResult {
   const opts = { ...DEFAULTS, ...options }
 
-  // 1. Decide port sides — algorithm-side (direction-aware).
+  // 1. Decide port sides — algorithm-side (direction-aware). The
+  // tier-driven flip predicate is shared with the tidy-tree below so the
+  // port sides (and the gaps derived from them) match the orientation
+  // the layout will actually use: a flipped parent→child link reserves
+  // vertical room on the facing sides instead of crowding to the bare
+  // label gap.
   const nodesById = new Map(graph.nodes.map((n) => [n.id, n]))
-  const portAssignments = decidePortSides(graph.links, nodesById, opts.direction)
+  const tier = computeTier(graph.links)
+  const shouldFlip = (link: NetworkGraph['links'][number]): boolean =>
+    shouldFlipForLayout(link, nodesById, opts.direction, tier)
+  const portAssignments = decidePortSides(graph.links, nodesById, opts.direction, shouldFlip)
 
   // Aggregate into the rich PortsBySide (PortInfo[] per side)
   // format the engine consumes.
@@ -269,23 +277,15 @@ export function autoLayoutFlatTree(
       right: p.right.length,
     })
   }
-  const tier = computeTier(graph.links)
-  const result = layoutFlatTree(
-    graph,
-    nodesById,
-    subgraphsById,
-    sizeById,
-    (link) => shouldFlipForLayout(link, nodesById, opts.direction, tier),
-    {
-      direction: opts.direction,
-      nodeGap: opts.nodeGap,
-      layerGap: opts.layerGap,
-      subgraphPadding: opts.subgraphPadding,
-      subgraphLabelHeight: opts.subgraphLabelHeight,
-      metrics: engine.metrics,
-      portsBySideById: countOnly,
-    },
-  )
+  const result = layoutFlatTree(graph, nodesById, subgraphsById, sizeById, shouldFlip, {
+    direction: opts.direction,
+    nodeGap: opts.nodeGap,
+    layerGap: opts.layerGap,
+    subgraphPadding: opts.subgraphPadding,
+    subgraphLabelHeight: opts.subgraphLabelHeight,
+    metrics: engine.metrics,
+    portsBySideById: countOnly,
+  })
 
   // 4. Fold results into the Node / Subgraph records.
   const nodes = new Map<string, Node>()
