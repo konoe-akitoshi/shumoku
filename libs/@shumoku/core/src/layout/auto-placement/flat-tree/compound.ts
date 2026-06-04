@@ -93,9 +93,11 @@ function layoutCompoundCore(
   const direction = options.direction ?? 'TB'
   const padding = options.subgraphPadding ?? 20
   const labelHeight = options.subgraphLabelHeight ?? 28
-  const subgraphsById = new Map((graph.subgraphs ?? []).map((s) => [s.id, s]))
-
-  // Functional domain = hostname suffix; '(none)' when absent.
+  // Functional domain = hostname suffix; '(none)' when absent. This is
+  // the single grouping axis: every member of a domain lands in one
+  // box, so a domain-scoped view reads as "one box for the domain" and
+  // its link-less members band together (via the inner flat layout's
+  // repack) instead of scattering across physical-location sub-boxes.
   const domainOf = (node: Node): string => {
     const host = (node.metadata as { hostname?: unknown } | undefined)?.hostname
     const h = typeof host === 'string' ? host : ''
@@ -109,29 +111,8 @@ function layoutCompoundCore(
           .trim()
           .toLowerCase()
   }
-  const topSubgraphOf = (sgId: string): string => {
-    let cur = sgId
-    for (let guard = 0; guard < 100; guard++) {
-      const sg = subgraphsById.get(cur)
-      if (!sg?.parent || !subgraphsById.has(sg.parent)) return cur
-      cur = sg.parent
-    }
-    return cur
-  }
-  // Grouping key for THIS level. depth 0 = functional domain (the
-  // hostname suffix — what a filter scopes on, so the box matches the
-  // user's mental model: scope to `.noc` → one NOC box with every
-  // `.noc` device). depth 1 = physical location area. '' → loose box.
-  const keyOf = (node: Node): string => {
-    if (depth === 0) return `dom:${domainOf(node)}`
-    if (node.parent && subgraphsById.has(node.parent)) return `loc:${topSubgraphOf(node.parent)}`
-    return ''
-  }
-  const labelOf = (key: string): string => {
-    if (key.startsWith('dom:')) return key.slice(4)
-    if (key.startsWith('loc:')) return subgraphsById.get(key.slice(4))?.label ?? key.slice(4)
-    return key
-  }
+  const keyOf = (node: Node): string => `dom:${domainOf(node)}`
+  const labelOf = (key: string): string => (key.startsWith('dom:') ? key.slice(4) : key)
 
   // 1. Partition by this level's key ('' → its own singleton box).
   const groups = new Map<string, Node[]>()
@@ -238,6 +219,55 @@ function layoutCompoundCore(
       position: { x: boxCentre.x + rel.x, y: boxCentre.y + rel.y },
       size: memberSize.get(n.id) ?? engine.nodeFootprint(n),
     })
+  }
+
+  // 4b. Re-pack each box's link-less members into a compact grid below
+  //     its connected core. The flat sub-layout strews isolated nodes
+  //     across the top (they're tidy-tree roots), which reads as
+  //     meaningless dispersion; gather them under the wiring instead.
+  const degree = new Map<string, number>()
+  for (const l of graph.links) {
+    degree.set(l.from.node, (degree.get(l.from.node) ?? 0) + 1)
+    degree.set(l.to.node, (degree.get(l.to.node) ?? 0) + 1)
+  }
+  const boxMembers = new Map<string, Node[]>()
+  for (const n of finalNodes.values()) {
+    if (!n.parent) continue
+    const arr = boxMembers.get(n.parent)
+    if (arr) arr.push(n)
+    else boxMembers.set(n.parent, [n])
+  }
+  for (const members of boxMembers.values()) {
+    const isol = members.filter((n) => !((degree.get(n.id) ?? 0) > 0) && n.position)
+    const conn = members.filter((n) => (degree.get(n.id) ?? 0) > 0 && n.position)
+    if (isol.length < 2 || conn.length === 0) continue
+    let cMinX = Number.POSITIVE_INFINITY
+    let cMaxX = Number.NEGATIVE_INFINITY
+    let cMaxY = Number.NEGATIVE_INFINITY
+    for (const n of conn) {
+      const s = n.size ?? { width: 0, height: 0 }
+      const p = n.position
+      if (!p) continue
+      cMinX = Math.min(cMinX, p.x - s.width / 2)
+      cMaxX = Math.max(cMaxX, p.x + s.width / 2)
+      cMaxY = Math.max(cMaxY, p.y + s.height / 2)
+    }
+    const gap = 30
+    const cellW = Math.max(1, ...isol.map((n) => n.size?.width ?? 0)) + gap
+    const cellH = Math.max(1, ...isol.map((n) => n.size?.height ?? 0)) + gap
+    const cols = Math.max(1, Math.min(isol.length, Math.floor((cMaxX - cMinX) / cellW) || 1))
+    const startX = (cMinX + cMaxX) / 2 - (cols * cellW) / 2
+    const startY = cMaxY + gap + labelHeight
+    for (const [i, n] of isol.entries()) {
+      const s = n.size ?? { width: 0, height: 0 }
+      finalNodes.set(n.id, {
+        ...n,
+        position: {
+          x: startX + (i % cols) * cellW + s.width / 2,
+          y: startY + Math.floor(i / cols) * cellH + s.height / 2,
+        },
+      })
+    }
   }
 
   // 5. Ports + group hulls + root bounds.

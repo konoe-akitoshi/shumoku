@@ -57,8 +57,8 @@ export interface RepackOptions {
   targetAspect?: number
 }
 
-const DEFAULT_MAX_ASPECT = 4
-const DEFAULT_MIN_WRAP_WIDTH = 3000
+const DEFAULT_MAX_ASPECT = 2
+const DEFAULT_MIN_WRAP_WIDTH = 600
 const DEFAULT_TARGET_ASPECT = 1.6
 
 interface Component {
