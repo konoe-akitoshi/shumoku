@@ -68,6 +68,8 @@ describe('convertLldpToGraph', () => {
     expect(a?.spec).toMatchObject({ vendor: 'juniper', model: 'ptx10002-60mr' })
     expect(a?.provenance).toEqual({ source: 'inst1', observedAt: OPTS.observedAt })
     expect(a?.parent).toBe('inst1:sg:98')
+    // FQDN exposed for the compound layout (ghost detection + domain banding)
+    expect(a?.metadata?.['hostname']).toBe('ptxA.noc')
   })
 
   it('builds links from LLDP neighbors with real ports + bandwidth, de-duping the mirror', () => {

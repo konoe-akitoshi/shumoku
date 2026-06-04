@@ -73,6 +73,11 @@ export function convertLldpToGraph(
       }),
       provenance: { source: sourceId, observedAt },
       metadata: {
+        // `hostname` (FQDN) is what the compound layout reads to (a) tell a
+        // real device from an information-less ghost and (b) band link-less
+        // members by domain (`.noc` / `.sec` / …). Without it every link-less
+        // host is treated as a ghost and dumped into the "未マップ" grid.
+        hostname: host.name || host.host,
         zabbixHostId: host.hostid,
         zabbixHost: host.host,
         zabbixStatus: host.status === '0' ? 'monitored' : 'unmonitored',
@@ -134,7 +139,7 @@ export function convertLldpToGraph(
             spec: { kind: 'hardware' },
             identity: buildIdentity({ sysName: nbr.remSysname, chassisId: nbr.remChassisId }),
             provenance: { source: sourceId, observedAt },
-            metadata: { external: true },
+            metadata: { external: true, hostname: nbr.remSysname },
           }
           externalNodes.set(nbr.remSysname, remoteNode)
         }

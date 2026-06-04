@@ -88,6 +88,16 @@ templates.
    dropping, so topology stays complete and future-clusters.
 3. **identity.sysName = host.name** (the map version used `host.host`=IP — a bug for
    clustering; fixed here).
+3b. **`metadata.hostname = host.name`** — the compound layout
+   (`layout/auto-placement/flat-tree/compound.ts`) reads `metadata.hostname` (FQDN)
+   to (a) tell a real device from an information-less *ghost* and (b) band link-less
+   members by domain (`.noc` / `.sec` / …). Without it every link-less host (the
+   majority — only backbone gear has LLDP) is treated as a ghost and dumped into the
+   "未マップ" grid, discarding the topology subgraphs. NOTE: the compound layout then
+   groups by hostname **domain**, which overrides the host-group `parent` this
+   converter sets — so `groupBy` currently affects the resolved graph but not the
+   compound-rendered diagram. (No production plugin set `metadata.hostname` before
+   this — the compound layout's hostname features were effectively dormant.)
 4. **Template coupling** — auto-detect `lldp.rem.*`; absent → nodes-only. Don't hard-fail.
 5. **Bidirectional LLDP** — de-dup links.
 
