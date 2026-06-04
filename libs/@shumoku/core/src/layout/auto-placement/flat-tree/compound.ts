@@ -81,7 +81,9 @@ export function layoutCompound(
     const h = (n.metadata as { hostname?: unknown } | undefined)?.hostname
     return typeof h === 'string' ? h : ''
   }
-  const isGhost = (n: Node): boolean => !(deg.get(n.id) ?? 0) && hostnameOf(n) === ''
+  // A node the source explicitly grouped (`parent`) is never an information-less
+  // ghost — it has a place to go.
+  const isGhost = (n: Node): boolean => !(deg.get(n.id) ?? 0) && hostnameOf(n) === '' && !n.parent
   const ghosts = homed.nodes.filter(isGhost)
   if (ghosts.length === 0) return layoutCompoundCore(homed, engine, options, 0)
 
@@ -155,8 +157,18 @@ function layoutCompoundCore(
           .trim()
           .toLowerCase()
   }
-  const keyOf = (node: Node): string => `dom:${domainOf(node)}`
-  const labelOf = (key: string): string => (key.startsWith('dom:') ? key.slice(4) : key)
+  // A source's explicit subgraph (`node.parent`) is authoritative grouping —
+  // honor it (e.g. Zabbix host groups, NetBox sites). Functional-domain banding
+  // is the fallback for nodes the source left ungrouped.
+  const subgraphLabel = new Map((graph.subgraphs ?? []).map((s) => [s.id, s.label]))
+  const keyOf = (node: Node): string =>
+    node.parent ? `sg:${node.parent}` : `dom:${domainOf(node)}`
+  const labelOf = (key: string): string =>
+    key.startsWith('sg:')
+      ? (subgraphLabel.get(key.slice(3)) ?? key.slice(3))
+      : key.startsWith('dom:')
+        ? key.slice(4)
+        : key
 
   // 1. Partition by this level's key ('' → its own singleton box).
   const groups = new Map<string, Node[]>()
