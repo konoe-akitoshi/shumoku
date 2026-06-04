@@ -39,29 +39,28 @@ const configSchema: PluginConfigSchema = {
 
 /**
  * Per-attachment topology options (rendered on the Sources page, stored as the
- * attachment's `optionsJson`). `sysmapId` picks which Zabbix map to import; its
- * candidates come from `getConfigOptions('map')`, with free entry when a
- * connection isn't available yet.
+ * attachment's `optionsJson`). Topology is generated from hosts (nodes) + LLDP
+ * neighbor items (links); see the design doc.
  */
 const optionsSchema: PluginConfigSchema = {
   type: 'object',
-  required: ['sysmapId'],
   properties: {
-    sysmapId: {
-      type: 'string',
-      title: 'Map',
-      help: 'The Zabbix network map (sysmap) to import as topology.',
-      optionsSource: 'map',
+    hostGroups: {
+      type: 'array',
+      items: { type: 'string' },
+      title: 'Host groups',
+      help: 'Limit the import to these host groups. Strongly recommended — large instances have thousands of hosts. Empty = all.',
+      optionsSource: 'hostgroup',
       freeSolo: true,
     },
     groupBy: {
       type: 'string',
       title: 'Group by',
       default: 'hostgroup',
-      help: 'Subgraphs from host groups (most-specific per host), or only from standard host-group elements drawn on the map.',
+      help: 'Nest each node under its most-specific host group, or emit a flat graph.',
       oneOf: [
         { const: 'hostgroup', title: 'Host group' },
-        { const: 'none', title: 'Map host-group elements only' },
+        { const: 'none', title: 'No grouping' },
       ],
     },
     groupExclude: {
@@ -70,6 +69,12 @@ const optionsSchema: PluginConfigSchema = {
       title: 'Exclude groups',
       help: 'Host-group names to never use as a subgraph (admin / catch-all groups).',
       freeSolo: true,
+    },
+    includeExternalNeighbors: {
+      type: 'boolean',
+      title: 'Include external neighbors',
+      default: true,
+      help: 'Add nodes for LLDP neighbors that are not Zabbix hosts, so their links still render.',
     },
   },
 }

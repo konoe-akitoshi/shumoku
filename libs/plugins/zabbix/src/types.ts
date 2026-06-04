@@ -14,18 +14,47 @@ export interface ZabbixPluginConfig {
   instanceId?: string
 }
 
-/** Per-attachment topology options passed to `fetchTopology` (from `optionsJson`). */
+/**
+ * Per-attachment topology options passed to `fetchTopology` (from `optionsJson`).
+ * Topology is generated from hosts (nodes) + LLDP neighbor items (links) — see
+ * `apps/server/docs/design/zabbix-lldp-topology.md`.
+ */
 export interface ZabbixTopologyOptions {
-  /** sysmapid of the Zabbix map (sysmap) to import. Required. */
-  sysmapId?: string
+  /**
+   * Host-group ids to scope the import to. Strongly recommended — a Zabbix
+   * instance can hold thousands of hosts. Empty / absent = all hosts.
+   */
+  hostGroups?: string[]
   /**
    * How to derive subgraphs. `'hostgroup'` (default) nests each node under its
-   * most-specific host group; `'none'` uses only standard host-group area
-   * elements on the map. See the converter for details.
+   * most-specific host group; `'none'` emits a flat graph.
    */
   groupBy?: 'none' | 'hostgroup'
   /** Host-group names to never use as a subgraph (admin / catch-all groups). */
   groupExclude?: string[]
+  /**
+   * Synthesize a node for an LLDP neighbor that isn't a Zabbix host (default
+   * true) so the link still renders and a later discovery of that device
+   * clusters with it. When false, links to non-host neighbors are dropped.
+   */
+  includeExternalNeighbors?: boolean
+}
+
+/**
+ * One LLDP adjacency discovered on a host, assembled by the plugin from the
+ * per-interface `lldp.rem.*` / `lldp.loc.if.*` items and handed to the converter.
+ */
+export interface ZabbixLldpNeighbor {
+  /** Local interface name (e.g. `et-0/0/5`). */
+  localIf: string
+  /** Remote system name reported by LLDP (resolved against `host.name`). */
+  remSysname: string
+  /** Remote port id (a port name, or a MAC when port-id is MAC-typed). */
+  remPortId?: string
+  /** Remote chassis id (identity key for a synthesized external node). */
+  remChassisId?: string
+  /** Local interface speed in bits/sec, when known. */
+  speedBps?: number
 }
 
 // Zabbix API types
@@ -80,57 +109,6 @@ export interface ZabbixHost {
   parentTemplates?: ZabbixParentTemplate[]
   /** Present when `host.get` is called with `selectInventory`. */
   inventory?: ZabbixInventory
-}
-
-// ============================================
-// Sysmap (network map) API types — standard `map.get` shapes only.
-// https://www.zabbix.com/documentation/7.0/en/manual/api/reference/map/object
-// ============================================
-
-/** Element reference inside a `selement.elements` array (varies by elementtype). */
-export interface ZabbixSelementRef {
-  hostid?: string
-  groupid?: string
-  triggerid?: string
-  sysmapid?: string
-}
-
-/**
- * A map element (`selement`). `elementtype`: '0' host, '1' map (submap),
- * '2' trigger, '3' host group, '4' image. `elementsubtype` '1' on a host-group
- * element means "separate hosts" (the group is drawn as an area of its hosts).
- */
-export interface ZabbixSelement {
-  selementid: string
-  elementtype: string
-  elementsubtype?: string
-  label?: string
-  x?: string
-  y?: string
-  iconid_off?: string
-  elements?: ZabbixSelementRef[]
-}
-
-/** A map link between two selements. */
-export interface ZabbixMapLink {
-  linkid: string
-  selementid1: string
-  selementid2: string
-  /** '0' line, '2' bold, '3' dotted, '4' dashed. */
-  drawtype?: string
-  /** Hex color without '#', e.g. '0000FF'. */
-  color?: string
-  label?: string
-}
-
-/** A Zabbix sysmap (network map) from `map.get`. */
-export interface ZabbixSysmap {
-  sysmapid: string
-  name: string
-  width?: string
-  height?: string
-  selements?: ZabbixSelement[]
-  links?: ZabbixMapLink[]
 }
 
 export interface ZabbixItem {

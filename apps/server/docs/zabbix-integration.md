@@ -142,51 +142,48 @@ Authorization: Bearer <token>
 
 ---
 
-## トポロジー取り込み (Network Maps / sysmaps)
+## トポロジー生成 (LLDP)
 
-Zabbix の **ネットワークマップ (sysmap)** を 1 枚選んで shumoku の `NetworkGraph`
-に変換する (`topology` capability / `fetchTopology`)。**標準の `map.get` のみ**に依存し、
-自作マップ生成モジュール (例: ShowNet の `/zabbix/netmap`) のラベル/アイコン規約には
-依存しない。
+Zabbix から **ノード＋リンク**を生成する (`topology` capability / `fetchTopology`)。
+**ノードはホスト (`host.get`)、リンクは各ホストの LLDP 隣接アイテム**から。Zabbix の
+マップ (sysmap) や自作マップ生成モジュールには依存せず、**shumoku からの直接 SNMP も不要**
+(Zabbix が収集済み)。詳細は `docs/design/zabbix-lldp-topology.md`。
+
+リンクの出どころは**標準 LLDP-MIB** (`lldpRemSysName` 等、OID `1.0.8802.1.1.2…`) を
+SNMP_walk → LLD → dependent item で取り込んだもの。アイテムキー命名 (`lldp.rem.*`) は
+LLDP テンプレ依存なので、**`lldp.rem.sysname` が無いホストはノードのみ**になる (graceful)。
 
 ### 設定 (アタッチ単位 / `optionsJson`)
 
-マップ選択はデータソース config ではなく **トポロジーへのアタッチ時オプション**
-(`optionsSchema`)。1 つの Zabbix ソースを複数トポロジーに別マップで使える。
-
 | キー | 説明 |
 |------|------|
-| `sysmapId` | 取り込む sysmap の ID。候補は `getConfigOptions('map')` が `map.get` で動的供給 |
-| `groupBy` | `hostgroup` (既定) / `none`。下記参照 |
-| `groupExclude` | サブグラフに使わないホストグループ名 (管理/全体グループの除外) |
+| `hostGroups` | 取り込み対象のホストグループ id (`getConfigOptions('hostgroup')` が動的供給)。**大規模インスタンスでは必須級** (数千ホスト)。空=全件 |
+| `groupBy` | `hostgroup` (既定, 最も具体的なグループに入れる) / `none` |
+| `groupExclude` | サブグラフに使わないホストグループ名 |
+| `includeExternalNeighbors` | Zabbix ホストでない LLDP 隣接にノードを合成 (既定 true) |
 
 ### 変換マッピング
 
 | Zabbix | shumoku | 備考 |
 |--------|---------|------|
-| selement `elementtype:0` (host) | `Node` | `elements[0].hostid` を `host.get` でバッチ解決 |
-| host `name` | `Node.label` | selement.label は `{HOST.NAME}` マクロ (API では未展開) なので使わない |
-| 既定インターフェース IP | `identity.mgmtIp` / `Node` ip | `main==='1'` 優先 |
-| host id / sysName | `identity.vendorIds['zabbix-hostid']` / `sysName` | リゾルバのクラスタリング用 |
-| `inventory.hardware` | `spec.vendor` / `model` / `type` | best-effort パース。空なら Generic |
-| link `selementid1/2` | `Link.from/to.node` | 端点ごとに **ポートを合成** (1 port = 1 endpoint 不変条件) |
-| link `drawtype` / `color` | `Link.type` / `style.stroke` | 0=solid,2=thick,3/4=dashed |
-| host group | `Subgraph` | `groupBy` 参照 |
+| `host.get` host | `Node` | `id=<src>:host:<hostid>` |
+| host `name` | `Node.label` / `identity.sysName` | **sysName は host.name** (host.host は IP のことがあり不可) |
+| 既定 IF の IP | `identity.mgmtIp` | `main==='1'` 優先 |
+| host id | `identity.vendorIds['zabbix-hostid']` | |
+| `inventory.hardware` | `spec.vendor/model/type` | best-effort パース |
+| LLDP 隣接 (`lldp.rem.sysname` 等) | `Link` | local IF + 隣接機器/ポートで端点。**実ポート名**つき |
+| `lldp.loc.if.ifSpeed` | port `speed` / link `metadata.speedBps` | |
+| ホストグループ | `Subgraph` | `groupBy` 参照 |
 
-### グルーピング (`groupBy`)
-
-- **`hostgroup`** (既定): 各ノードを **最も具体的なホストグループ**(マップ上メンバー数が
-  最小のグループ)に入れる。全ホストを含む管理/全体グループは自動的に負けるので、
-  ベンダ固有の命名規則に依存せずセグメント単位に分かれる。`groupExclude` で
-  特定グループを明示除外。
-- **`none`**: マップ上の標準ホストグループ要素 (`elementtype:3`) のみをサブグラフ化。
-  素の Zabbix マップはこの形式だが、自動生成マップは持たないことが多い (= フラット)。
+### 要点
+- アイテムは host id バッチで `item.get`、IF ごとに**アイテム名の `[ifName]` サフィックス**で join (キーはファミリ間で形が揃っていないため)。
+- LLDP は双方向に出るので**リンクを de-dup** (端点ペアの正規化キー)。
+- 解決できない隣接は**外部ノードを合成** (identity.sysName 付き)。後で当該機器を別グループ/別ソースで取り込むと resolver が identity で**自動統合**。
 
 ### 現時点の非対応 (今後)
-
-- selement の x/y 座標は `Node.position` に未反映 (レイアウト保持は別途検討)。
-- submap (`type:1`) / trigger (`type:2`) / image (`type:4`) 要素はスキップ。
-- リンクのポート名 / 帯域 / VLAN は標準マップに無いため未対応 (`item.get` で別途付与の余地)。
+- ノード座標、VLAN、リンクアグリゲーションのまとめ。
+- 非 L2DM な LLDP テンプレ向けのキー接頭辞設定 (現状は共通命名を自動検出)。
+- リモートポート id が MAC のとき de-dup が緩むケース。
 
 ---
 

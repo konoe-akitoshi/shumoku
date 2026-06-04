@@ -108,7 +108,7 @@ Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on cor
 - **grafana**: Alerts via Alertmanager API or webhook
 - **netbox**: Topology and hosts from NetBox DCIM/IPAM
 - **prometheus**: Metrics, hosts, alerts from Prometheus/Alertmanager
-- **zabbix**: Topology (network maps / sysmaps), metrics, hosts, auto-mapping, alerts from Zabbix
+- **zabbix**: Topology (hosts + LLDP neighbor links), metrics, hosts, auto-mapping, alerts from Zabbix
 - **aruba-instant-on**: Hosts, metrics, alerts from the (unofficial) Aruba Instant On portal API
 
 **Plugin contract invariants** (see `docs/plugin-authoring.md` for the full reference):
