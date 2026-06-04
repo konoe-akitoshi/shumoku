@@ -24,6 +24,7 @@ import { type Diagnostic, missingSizeDiagnostic, validateGraph } from './diagnos
 import { computeSubgraphHulls } from './hulls.js'
 import { layoutBlockInternal } from './internal.js'
 import { buildBlockChildren, buildBlockParents } from './outer.js'
+import { repackBySubgraph } from './pack.js'
 import { breakCycles, buildPrimaryParents } from './parents.js'
 import { applyPinnedPositions } from './pin.js'
 import type { PortsBySideMap } from './port-extent.js'
@@ -193,6 +194,16 @@ export function layoutFlatTree(
   // 5. Spine alignment.
   const blockPositions = new Map(tree.positions)
   alignSameSubgraphSpine(blockPositions, blockChildren, blockMembers, nodesById)
+
+  // 5b. Subgraph-aware re-pack. The outer tidy-tree lays a
+  //     disconnected forest out as one wide row; for a
+  //     group-dominated, link-poor graph (typical of auto-
+  //     discovery) that sprawls sideways and the post-hoc hulls
+  //     overlap. This freezes the linked backbone (its tier order)
+  //     and sweeps only the unlinked remainder into a compact band
+  //     below it. No-op for well-proportioned graphs (single
+  //     component or low aspect ratio).
+  repackBySubgraph(blockPositions, internal, blockMembers, blockChildren, nodesById, graph, spacing)
 
   // 6. Expand to absolute node positions.
   const nodePositions = new Map<string, Position>()

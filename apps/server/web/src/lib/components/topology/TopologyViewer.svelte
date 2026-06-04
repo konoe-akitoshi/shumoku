@@ -151,7 +151,7 @@
     }
     try {
       const target = id ? (buildChildSheetGraph(g, id) ?? g) : g
-      const { resolved } = await computeNetworkLayout(target)
+      const { resolved } = await computeNetworkLayout(target, { compound: true })
       // Bail if graph/sheet changed while we were computing. Compare
       // against `id` (the nullable sheet id), not `key` (the
       // 'root'-normalized cache key) — `activeSheetKey` stores the
@@ -177,7 +177,7 @@
       const child = buildChildSheetGraph(g, sg.id)
       if (!child) continue
       try {
-        const { resolved } = await computeNetworkLayout(child)
+        const { resolved } = await computeNetworkLayout(child, { compound: true })
         if (cachedGraphRef !== g) return
         layoutsBySheet[sg.id] = resolved
       } catch (err) {
@@ -412,16 +412,16 @@
   }
 
   /* Interaction gating via pointer-events on specific element types.
-                                             Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
-                                             propagation on the canvas background. d3-zoom's filter already
-                                             handles wheel requiring ctrl/meta, but we also kill the background
-                                             grid's clickability when selection is off. */
+                                               Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
+                                               propagation on the canvas background. d3-zoom's filter already
+                                               handles wheel requiring ctrl/meta, but we also kill the background
+                                               grid's clickability when selection is off. */
   .topology-viewer.no-panzoom :global(.canvas-bg) {
     pointer-events: none;
   }
 
   /* LOD: toggleable ornament classes. Rules match @shumoku/renderer's
-                                             output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
+                                               output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
   .topology-viewer.hide-port-labels :global(.port-label),
   .topology-viewer.hide-port-labels :global(.port-label-bg) {
     display: none;
