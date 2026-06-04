@@ -185,12 +185,26 @@ function layoutCompoundCore(
       depth + 1,
     )
 
-    const b = sub.bounds
+    // Re-pack this group's link-less members into a compact band under
+    // its connected core BEFORE measuring the box. autoLayoutFlatTree
+    // lays isolated nodes as tidy-tree roots strewn across the top row,
+    // which both wastes width and — since we fold this result into a box
+    // next — inflates the box and throws off the meta-layout's band
+    // centring and vertical stacking. Doing it here keeps the box size
+    // honest, so the centring below lands true.
+    const subDegree = new Map<string, number>()
+    for (const l of subLinks) {
+      subDegree.set(l.from.node, (subDegree.get(l.from.node) ?? 0) + 1)
+      subDegree.set(l.to.node, (subDegree.get(l.to.node) ?? 0) + 1)
+    }
+    const packed = bandIsolatedBelowCore(sub.nodes, subDegree, labelHeight)
+
+    const b = computeBounds(packed, new Map())
     const cx = b.x + b.width / 2
     const cy = b.y + b.height / 2
     boxSize.set(key, { width: b.width, height: b.height })
     for (const m of members) {
-      const sn = sub.nodes.get(m.id)
+      const sn = packed.get(m.id)
       memberSize.set(m.id, sn?.size ?? engine.nodeFootprint(m))
       memberRelPos.set(
         m.id,
@@ -219,55 +233,6 @@ function layoutCompoundCore(
       position: { x: boxCentre.x + rel.x, y: boxCentre.y + rel.y },
       size: memberSize.get(n.id) ?? engine.nodeFootprint(n),
     })
-  }
-
-  // 4b. Re-pack each box's link-less members into a compact grid below
-  //     its connected core. The flat sub-layout strews isolated nodes
-  //     across the top (they're tidy-tree roots), which reads as
-  //     meaningless dispersion; gather them under the wiring instead.
-  const degree = new Map<string, number>()
-  for (const l of graph.links) {
-    degree.set(l.from.node, (degree.get(l.from.node) ?? 0) + 1)
-    degree.set(l.to.node, (degree.get(l.to.node) ?? 0) + 1)
-  }
-  const boxMembers = new Map<string, Node[]>()
-  for (const n of finalNodes.values()) {
-    if (!n.parent) continue
-    const arr = boxMembers.get(n.parent)
-    if (arr) arr.push(n)
-    else boxMembers.set(n.parent, [n])
-  }
-  for (const members of boxMembers.values()) {
-    const isol = members.filter((n) => !((degree.get(n.id) ?? 0) > 0) && n.position)
-    const conn = members.filter((n) => (degree.get(n.id) ?? 0) > 0 && n.position)
-    if (isol.length < 2 || conn.length === 0) continue
-    let cMinX = Number.POSITIVE_INFINITY
-    let cMaxX = Number.NEGATIVE_INFINITY
-    let cMaxY = Number.NEGATIVE_INFINITY
-    for (const n of conn) {
-      const s = n.size ?? { width: 0, height: 0 }
-      const p = n.position
-      if (!p) continue
-      cMinX = Math.min(cMinX, p.x - s.width / 2)
-      cMaxX = Math.max(cMaxX, p.x + s.width / 2)
-      cMaxY = Math.max(cMaxY, p.y + s.height / 2)
-    }
-    const gap = 30
-    const cellW = Math.max(1, ...isol.map((n) => n.size?.width ?? 0)) + gap
-    const cellH = Math.max(1, ...isol.map((n) => n.size?.height ?? 0)) + gap
-    const cols = Math.max(1, Math.min(isol.length, Math.floor((cMaxX - cMinX) / cellW) || 1))
-    const startX = (cMinX + cMaxX) / 2 - (cols * cellW) / 2
-    const startY = cMaxY + gap + labelHeight
-    for (const [i, n] of isol.entries()) {
-      const s = n.size ?? { width: 0, height: 0 }
-      finalNodes.set(n.id, {
-        ...n,
-        position: {
-          x: startX + (i % cols) * cellW + s.width / 2,
-          y: startY + Math.floor(i / cols) * cellH + s.height / 2,
-        },
-      })
-    }
   }
 
   // 5. Ports + group hulls + root bounds.
@@ -350,6 +315,59 @@ function layoutTierGrid(
     pos.set(p.k, { x: shift + p.x + p.w / 2, y: p.y + p.h / 2 })
   }
   return pos
+}
+
+/**
+ * Re-pack a folded group's link-less members into a compact grid
+ * directly below its connected core. autoLayoutFlatTree lays isolated
+ * nodes as tidy-tree roots strewn across the top row, which wastes
+ * width and inflates the box this result is folded into. `degree`
+ * counts intra-group links only — a node wired solely to *other* groups
+ * still reads as isolated inside this box, so it bands too. Returns a
+ * new map; the input is not mutated.
+ */
+function bandIsolatedBelowCore(
+  nodes: Map<string, Node>,
+  degree: Map<string, number>,
+  labelHeight: number,
+): Map<string, Node> {
+  const positioned = [...nodes.values()].filter((n) => n.position)
+  const isol = positioned.filter((n) => !((degree.get(n.id) ?? 0) > 0))
+  const conn = positioned.filter((n) => (degree.get(n.id) ?? 0) > 0)
+  if (isol.length < 2 || conn.length === 0) return nodes
+
+  let cMinX = Number.POSITIVE_INFINITY
+  let cMaxX = Number.NEGATIVE_INFINITY
+  let cMaxY = Number.NEGATIVE_INFINITY
+  for (const n of conn) {
+    const s = n.size ?? { width: 0, height: 0 }
+    const p = n.position
+    if (!p) continue
+    cMinX = Math.min(cMinX, p.x - s.width / 2)
+    cMaxX = Math.max(cMaxX, p.x + s.width / 2)
+    cMaxY = Math.max(cMaxY, p.y + s.height / 2)
+  }
+  const gap = 30
+  const cellW = Math.max(1, ...isol.map((n) => n.size?.width ?? 0)) + gap
+  const cellH = Math.max(1, ...isol.map((n) => n.size?.height ?? 0)) + gap
+  // Wrap the isolated band to roughly the connected core's width so it
+  // sits as a tidy block under the wiring, not a single long row.
+  const cols = Math.max(1, Math.min(isol.length, Math.floor((cMaxX - cMinX) / cellW) || 1))
+  const startX = (cMinX + cMaxX) / 2 - (cols * cellW) / 2
+  const startY = cMaxY + gap + labelHeight
+
+  const out = new Map(nodes)
+  for (const [i, n] of isol.entries()) {
+    const s = n.size ?? { width: 0, height: 0 }
+    out.set(n.id, {
+      ...n,
+      position: {
+        x: startX + (i % cols) * cellW + s.width / 2,
+        y: startY + Math.floor(i / cols) * cellH + s.height / 2,
+      },
+    })
+  }
+  return out
 }
 
 /** Tight bbox of a box's members + padding + a direction-placed label band. */
