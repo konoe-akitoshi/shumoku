@@ -25,6 +25,7 @@ import type {
   NodeMetrics,
 } from '@shumoku/core'
 import { addHttpWarning, mapWithConcurrency } from '@shumoku/core'
+import { createHttpClient, type HttpClient } from '@shumoku/plugin-sdk'
 import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
 
 /** Max in-flight Zabbix API calls during a metrics poll (was fully sequential). */
@@ -58,13 +59,23 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
 
   private config: ZabbixPluginConfig | null = null
   private requestId = 0
+  /** Shared SDK client: timeout, Node-compatible insecure TLS, no credential logging. */
+  private http: HttpClient | null = null
 
   initialize(config: unknown): void {
     this.config = config as ZabbixPluginConfig
+    // Zabbix auth is per-method (apiinfo.version etc. must be unauthenticated),
+    // so the client carries no global auth — the Bearer header is set per request.
+    this.http = createHttpClient({
+      baseUrl: this.config.url,
+      insecure: this.config.insecure ?? false,
+      defaultHeaders: { 'Content-Type': 'application/json-rpc' },
+    })
   }
 
   dispose(): void {
     this.config = null
+    this.http = null
   }
 
   // ============================================
@@ -466,40 +477,28 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
   ])
 
   private async apiRequest<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    if (!this.config) {
+    if (!this.config || !this.http) {
       throw new Error('Plugin not initialized')
     }
 
     const id = ++this.requestId
-    const url = `${this.config.url.replace(/\/$/, '')}/api_jsonrpc.php`
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json-rpc',
-    }
-
+    const headers: Record<string, string> = {}
     if (!ZabbixPlugin.UNAUTHENTICATED_METHODS.has(method)) {
       headers['Authorization'] = `Bearer ${this.config.token}`
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method,
-        params,
-        id,
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error(`Zabbix API request failed: ${response.status} ${response.statusText}`)
-    }
-
-    const result = (await response.json()) as {
+    // JSON-RPC always returns HTTP 200 with an `error` envelope on failure, so
+    // HttpClient won't throw — we inspect the body below. HttpClient still
+    // handles transport, timeout, and Node-compatible insecure TLS.
+    const result = await this.http.json<{
       result?: T
       error?: { message: string; data: string }
-    }
+    }>('/api_jsonrpc.php', {
+      method: 'POST',
+      headers,
+      body: { jsonrpc: '2.0', method, params, id },
+    })
 
     if (result.error) {
       throw new Error(`Zabbix API error: ${result.error.message} - ${result.error.data}`)

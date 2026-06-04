@@ -16,6 +16,12 @@ const configSchema: PluginConfigSchema = {
       placeholder: 'https://zabbix.example.com',
     },
     token: { type: 'string', format: 'password', title: 'API token' },
+    insecure: {
+      type: 'boolean',
+      title: 'Skip TLS verification',
+      default: false,
+      warning: 'Disables certificate validation. Self-signed certs in trusted networks only.',
+    },
     pollInterval: {
       type: 'number',
       title: 'Polling interval',
