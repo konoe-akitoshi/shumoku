@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   findBestInterfaceMatch,
   interfaceMatchScore,
+  matchNodeToHost,
   nodeNameMatchScore,
   normalizeInterfaceName,
   rankInterfaceMatches,
@@ -312,5 +313,89 @@ describe('nodeNameMatchScore', () => {
 
   it('NetBox HV01 vs Zabbix hv01 (case diff)', () => {
     expect(nodeNameMatchScore('HV01', 'hv01')).toBe(1.0)
+  })
+})
+
+// ============================================
+// matchNodeToHost (composite identity + name)
+// ============================================
+
+describe('matchNodeToHost', () => {
+  it('matches on mgmtIp even when names differ entirely', () => {
+    const node = { label: 'gw03.bb.example.net', identity: { mgmtIp: '10.0.0.22' } }
+    const hosts = [
+      { id: 'h1', name: 'unrelated', identity: { mgmtIp: '10.0.0.99' } },
+      { id: 'h2', name: 'gw03.dc.example.net', identity: { mgmtIp: '10.0.0.22' } },
+    ]
+    const m = matchNodeToHost(node, hosts)
+    expect(m?.host.id).toBe('h2')
+    expect(m?.via).toBe('identity')
+  })
+
+  it('matches on mgmtIp when the node is labelled by bare IP (no name to match)', () => {
+    const node = { label: '10.0.0.11', identity: { mgmtIp: '10.0.0.11' } }
+    const hosts = [{ id: 'h1', name: 'core-rtr-01', identity: { mgmtIp: '10.0.0.11' } }]
+    expect(matchNodeToHost(node, hosts)?.host.id).toBe('h1')
+  })
+
+  it('refuses to guess when a strong key is ambiguous and nothing else distinguishes', () => {
+    // Same mgmtIp monitored twice (e.g. SNMP + direct), no other shared signal.
+    const node = { label: 'sonic', identity: { mgmtIp: '10.0.0.104' } }
+    const hosts = [
+      { id: 'h1', name: 'snmp.sw-1', identity: { mgmtIp: '10.0.0.104' } },
+      { id: 'h2', name: 'sw-1', identity: { mgmtIp: '10.0.0.104' } },
+    ]
+    expect(matchNodeToHost(node, hosts)).toBeNull()
+  })
+
+  it('breaks an ambiguous mgmtIp tie with a second shared key (sysName)', () => {
+    const node = { label: 'sonic', identity: { mgmtIp: '10.0.0.104', sysName: 'sw-1' } }
+    const hosts = [
+      { id: 'h1', name: 'snmp.sw-1', identity: { mgmtIp: '10.0.0.104', sysName: 'other' } },
+      { id: 'h2', name: 'sw-1', identity: { mgmtIp: '10.0.0.104', sysName: 'sw-1' } },
+    ]
+    const m = matchNodeToHost(node, hosts)
+    expect(m?.host.id).toBe('h2')
+    expect(m?.via).toBe('identity')
+  })
+
+  it('breaks an ambiguous mgmtIp tie with the node name when no second key exists', () => {
+    const node = { label: 'sw-1', identity: { mgmtIp: '10.0.0.104' } }
+    const hosts = [
+      { id: 'h1', name: 'snmp-probe', identity: { mgmtIp: '10.0.0.104' } },
+      { id: 'h2', name: 'sw-1', identity: { mgmtIp: '10.0.0.104' } },
+    ]
+    expect(matchNodeToHost(node, hosts)?.host.id).toBe('h2')
+  })
+
+  it('lets a real identity match outrank a host that only matches by name', () => {
+    const node = { label: 'core-rtr-01', identity: { mgmtIp: '10.0.0.11' } }
+    const hosts = [
+      { id: 'name-twin', name: 'core-rtr-01', identity: { mgmtIp: '10.0.0.99' } },
+      { id: 'ip-owner', name: 'totally-different', identity: { mgmtIp: '10.0.0.11' } },
+    ]
+    const m = matchNodeToHost(node, hosts)
+    expect(m?.host.id).toBe('ip-owner')
+    expect(m?.via).toBe('identity')
+  })
+
+  it('falls back to fuzzy name matching when the node has no identity', () => {
+    const node = { label: 'HV01' }
+    const hosts = [{ id: 'h1', name: 'hv01', identity: { mgmtIp: '10.0.0.5' } }]
+    const m = matchNodeToHost(node, hosts)
+    expect(m?.host.id).toBe('h1')
+    expect(m?.via).toBe('name')
+  })
+
+  it('returns null when neither identity nor name clears the bar', () => {
+    const node = { label: 'router-a', identity: { mgmtIp: '10.0.0.1' } }
+    const hosts = [{ id: 'h1', name: 'switch-b', identity: { mgmtIp: '10.0.0.2' } }]
+    expect(matchNodeToHost(node, hosts)).toBeNull()
+  })
+
+  it('does not map a node that has no signal at all', () => {
+    const node = { label: '192.168.0.0/22' }
+    const hosts = [{ id: 'h1', name: 'core-rtr-01', identity: { mgmtIp: '10.0.0.11' } }]
+    expect(matchNodeToHost(node, hosts)).toBeNull()
   })
 })

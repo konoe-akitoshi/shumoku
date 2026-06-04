@@ -16,6 +16,7 @@ import type {
   Host,
   HostItem,
   HostsCapable,
+  Identity,
   LinkMetricsMapping,
   MetricsCapable,
   MetricsData,
@@ -248,14 +249,40 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
   async getHosts(): Promise<Host[]> {
     const zabbixHosts = await this.apiRequest<ZabbixHost[]>('host.get', {
       output: ['hostid', 'host', 'name', 'status'],
+      selectInterfaces: ['ip', 'dns', 'main', 'type', 'useip'],
     })
 
-    return zabbixHosts.map((h) => ({
-      id: h.hostid,
-      name: h.host,
-      displayName: h.name,
-      status: h.status === '0' ? 'up' : 'down',
-    }))
+    return zabbixHosts.map((h) => {
+      const mgmtIp = ZabbixPlugin.pickMgmtIp(h.interfaces)
+      // Translate Zabbix's vocabulary into core's neutral identity at the
+      // plugin boundary: the management interface IP is the strong key,
+      // the technical host name doubles as a weak sysName fallback.
+      const identity: Identity = {}
+      if (mgmtIp) identity.mgmtIp = mgmtIp
+      if (h.host) identity.sysName = h.host
+
+      return {
+        id: h.hostid,
+        name: h.host,
+        displayName: h.name,
+        status: h.status === '0' ? 'up' : 'down',
+        ...(mgmtIp ? { ip: mgmtIp } : {}),
+        ...(Object.keys(identity).length > 0 ? { identity } : {}),
+      }
+    })
+  }
+
+  /**
+   * Pick the management IP from a host's Zabbix interfaces: the default
+   * (`main === '1'`) interface's IP wins, otherwise the first interface that
+   * carries an IP. Interfaces configured to connect by DNS (no IP) are skipped.
+   */
+  private static pickMgmtIp(interfaces?: ZabbixHost['interfaces']): string | undefined {
+    if (!interfaces || interfaces.length === 0) return undefined
+    const withIp = interfaces.filter((i) => i.ip && i.ip.trim() !== '')
+    if (withIp.length === 0) return undefined
+    const main = withIp.find((i) => i.main === '1')
+    return (main ?? withIp[0])?.ip
   }
 
   async getHostItems(hostId: string): Promise<HostItem[]> {

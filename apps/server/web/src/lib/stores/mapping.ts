@@ -16,9 +16,10 @@
  * "core defines the display contract" principle.
  */
 
+import type { Identity } from '@shumoku/core'
 import { derived, get, writable } from 'svelte/store'
 import { api } from '$lib/api'
-import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '$lib/auto-mapping'
+import { matchNodeToHost } from '$lib/auto-mapping'
 import { topologies } from '$lib/stores/topologies'
 import type { Host, HostItem, MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
@@ -345,50 +346,36 @@ function createMappingStore() {
     },
 
     /**
-     * Auto-map specific nodes by matching names with hosts
+     * Auto-map nodes to hosts via composite identity + name matching
+     * (see `matchNodeToHost`). Returns a per-strategy breakdown so the UI can
+     * show how confident the matches were.
      */
     autoMapNodes: (
-      nodeList: Array<{ id: string; label?: string | string[] }>,
+      nodeList: Array<{ id: string; label?: string | string[]; identity?: Identity }>,
       options: { overwrite?: boolean } = {},
     ) => {
       const current = get({ subscribe })
-      if (current.hosts.length === 0) return { matched: 0, total: nodeList.length }
+      if (current.hosts.length === 0)
+        return { matched: 0, total: nodeList.length, byIdentity: 0, byName: 0 }
 
-      let matched = 0
+      let byIdentity = 0
+      let byName = 0
       const nodes = { ...current.mapping.nodes }
 
       for (const node of nodeList) {
         if (!options.overwrite && nodes[node.id]?.hostId) continue
 
-        const nodeLabel = Array.isArray(node.label) ? node.label[0] : node.label
-        if (!nodeLabel) continue
+        const match = matchNodeToHost(node, current.hosts)
+        if (!match) continue
 
-        // Find best matching host across all sources by score. Ties are
-        // broken by source priority via the order of `current.hosts`
-        // (hosts are loaded source-by-source in priority order, so a
-        // higher-priority source's host wins on equal scores).
-        let bestHost: MappingHost | null = null
-        let bestScore = 0
-        for (const host of current.hosts) {
-          const score = nodeNameMatchScore(nodeLabel, host.name, host.displayName)
-          if (score > bestScore) {
-            bestScore = score
-            bestHost = host
-          }
-        }
-
-        if (bestHost && bestScore >= NODE_MATCH_THRESHOLD) {
-          nodes[node.id] = {
-            hostId: bestHost.id,
-            hostName: bestHost.name,
-          }
-          matched++
-        }
+        nodes[node.id] = { hostId: match.host.id, hostName: match.host.name }
+        if (match.via === 'identity') byIdentity++
+        else byName++
       }
 
       update((s) => ({ ...s, mapping: { ...s.mapping, nodes } }))
 
-      return { matched, total: nodeList.length }
+      return { matched: byIdentity + byName, total: nodeList.length, byIdentity, byName }
     },
 
     /**
