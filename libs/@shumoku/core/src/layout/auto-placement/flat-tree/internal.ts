@@ -153,8 +153,7 @@ function layoutMultiRootRow(
   // Width the columns would occupy as a single row — also the
   // legacy output when it stays within budget.
   let singleRowWidth = 0
-  for (let i = 0; i < columns.length; i++) {
-    const c = columns[i]
+  for (const [i, c] of columns.entries()) {
     if (!c) continue
     singleRowWidth += (i > 0 ? gapBefore(i) : 0) + c.layout.width
   }
@@ -165,8 +164,7 @@ function layoutMultiRootRow(
     // ── Single row (output identical to the pre-wrap engine) ──
     let cursorX = 0
     let totalHeight = 0
-    for (let i = 0; i < columns.length; i++) {
-      const c = columns[i]
+    for (const [i, c] of columns.entries()) {
       if (!c) continue
       cursorX += i > 0 ? gapBefore(i) : 0
       for (const [id, pos] of c.layout.positions) {
@@ -193,8 +191,7 @@ function layoutMultiRootRow(
   let rowHeight = 0
   let maxWidth = 0
   let isRowStart = true
-  for (let i = 0; i < columns.length; i++) {
-    const c = columns[i]
+  for (const [i, c] of columns.entries()) {
     if (!c) continue
     const gap = isRowStart ? 0 : gapBefore(i)
     // Wrap before placing when this column would overflow the row.

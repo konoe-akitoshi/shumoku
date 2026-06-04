@@ -13,30 +13,34 @@
  * stretches into a thin ~100k-px strip and the group hulls overlap.
  *
  * This pass restores the "container" reading for grouped graphs
- * **without changing the base engine**, by running it recursively
- * over a coarse→fine grouping hierarchy:
+ * **without changing the base engine**:
  *
- *   depth 0 — **functional domain** (the hostname suffix .noc / .dc /
- *             .svc / .ap …). This is the *coarse* axis: it tracks the
- *             dependency tiers (core / service / access) and, unlike
- *             physical location, isn't blank for ~half the fleet — so
- *             a location-less device still lands in its real domain
- *             box instead of piling into one false "(未入力)" hub.
- *   depth 1 — **physical location** subgraph (rack), where present, so
- *             a dense domain like .noc folds its own racks.
- *   depth 2 — flat.
+ *   - Group nodes by **functional domain** — the hostname suffix
+ *     (.noc / .dc / .svc / .ap …). Unlike physical location it isn't
+ *     blank for ~half an auto-discovered fleet, so a location-less
+ *     device lands in its real domain box instead of piling into one
+ *     false "(未入力)" hub. (First, a node wired *exclusively* into one
+ *     subgraph is re-homed into it — see {@link adoptSoleNeighborSubgraph}
+ *     — and information-less ghost devices are pulled out into their own
+ *     grid by {@link appendGhostGrid}.)
  *
- * At each level it (1) folds every group by laying out its members
- * recursively → a compact box + size; (2) builds a meta-graph of the
- * boxes (aggregated cross-box links, box tier = max member tier) and
- * lays it out with `layoutFlatTree` directly — NOT the rebalancing
- * wrapper — so the tier order can't be reordered; (3) composes the
- * box-internal positions into the placed slots. Boxes are compact and
- * placed as whole units, so the width collapses and the overlap
- * instability goes away.
+ *   - **Fold** each domain by laying its members out with the plain
+ *     engine (recursing once; a single domain's members just fall
+ *     through to {@link autoLayoutFlatTree}) → a compact box + size,
+ *     then band the box's link-less members under its connected core
+ *     (see {@link bandIsolatedBelowCore}) so the box stays tight.
  *
- * Falls back to the plain engine when a level has nothing to compound
- * (fewer than two real groups) or the recursion bottoms out.
+ *   - **Place the boxes** by dependency tier with {@link layoutTierGrid}:
+ *     boxes are bucketed into tier bands (highest tier on top), each band
+ *     shelf-packed into a roughly-square grid and centred on a shared
+ *     axis. Then each box's internal positions are composed into its
+ *     placed slot and its nodes re-parented to the domain hull. Boxes are
+ *     placed as whole units, so the width collapses and the post-hoc
+ *     hull-overlap instability goes away.
+ *
+ * `MAX_DEPTH` and the per-level "≥1 real group" gate just bound the
+ * recursion / fall back to the plain engine when there's nothing to
+ * compound.
  */
 
 import type { Bounds, NetworkGraph, Node, Position, Size, Subgraph } from '../../../models/types.js'
