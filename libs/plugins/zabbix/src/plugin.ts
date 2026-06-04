@@ -9,6 +9,8 @@ import type {
   AlertQueryOptions,
   AlertSeverity,
   AlertsCapable,
+  ConfigOption,
+  ConfigOptionsCapable,
   ConnectionResult,
   DataSourceCapability,
   DataSourcePlugin,
@@ -23,11 +25,20 @@ import type {
   MetricsMapping,
   MetricsStatus,
   MonitoringHealth,
+  NetworkGraph,
   NodeMetrics,
+  TopologyCapable,
 } from '@shumoku/core'
 import { addHttpWarning, mapWithConcurrency } from '@shumoku/core'
 import { createHttpClient, type HttpClient } from '@shumoku/plugin-sdk'
-import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
+import { convertSysmapToGraph } from './topology.js'
+import type {
+  ZabbixHost,
+  ZabbixItem,
+  ZabbixPluginConfig,
+  ZabbixSysmap,
+  ZabbixTopologyOptions,
+} from './types.js'
 
 /** Max in-flight Zabbix API calls during a metrics poll (was fully sequential). */
 const POLL_CONCURRENCY = 8
@@ -61,10 +72,23 @@ interface HostMeta {
   interfaces?: Array<{ available: string; error?: string }>
 }
 
-export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapable, AlertsCapable {
+export class ZabbixPlugin
+  implements
+    DataSourcePlugin,
+    MetricsCapable,
+    HostsCapable,
+    AlertsCapable,
+    TopologyCapable,
+    ConfigOptionsCapable
+{
   readonly type = 'zabbix'
   readonly displayName = 'Zabbix'
-  readonly capabilities: readonly DataSourceCapability[] = ['metrics', 'hosts', 'alerts']
+  readonly capabilities: readonly DataSourceCapability[] = [
+    'metrics',
+    'hosts',
+    'alerts',
+    'topology',
+  ]
 
   private config: ZabbixPluginConfig | null = null
   private requestId = 0
@@ -511,6 +535,91 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
     'user.login',
     'user.checkauthentication',
   ])
+
+  // ============================================
+  // TopologyCapable Implementation
+  // ============================================
+
+  /**
+   * Import a Zabbix sysmap (network map) as a NetworkGraph. The map is chosen
+   * per attachment via `options.sysmapId` (from the topology source's
+   * `optionsJson`), so one Zabbix source can feed different maps into different
+   * topologies. Standard `map.get` only — no dependency on custom map modules.
+   */
+  async fetchTopology(options?: Record<string, unknown>): Promise<NetworkGraph> {
+    const opts = options as ZabbixTopologyOptions | undefined
+    const sysmapId = opts?.sysmapId
+    if (!sysmapId) {
+      throw new Error('Zabbix topology import requires a sysmapId — select a map to import.')
+    }
+
+    const maps = await this.apiRequest<ZabbixSysmap[]>('map.get', {
+      sysmapids: [sysmapId],
+      output: ['sysmapid', 'name', 'width', 'height'],
+      selectSelements: [
+        'selementid',
+        'elementtype',
+        'elementsubtype',
+        'label',
+        'x',
+        'y',
+        'iconid_off',
+        'elements',
+      ],
+      selectLinks: ['linkid', 'selementid1', 'selementid2', 'drawtype', 'color', 'label'],
+    })
+    const map = maps[0]
+    if (!map) throw new Error(`Zabbix map ${sysmapId} not found`)
+
+    // Resolve the host elements in one batched host.get.
+    const hostIds = [
+      ...new Set(
+        (map.selements ?? [])
+          .filter((se) => se.elementtype === '0')
+          .map((se) => se.elements?.[0]?.hostid)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ]
+    const hosts = hostIds.length
+      ? await this.apiRequest<ZabbixHost[]>('host.get', {
+          hostids: hostIds,
+          output: ['hostid', 'host', 'name', 'status'],
+          selectInterfaces: ['ip', 'dns', 'main', 'type', 'useip'],
+          selectInventory: ['hardware'],
+          selectHostGroups: ['groupid', 'name'],
+          selectParentTemplates: ['templateid', 'name'],
+        })
+      : []
+
+    const hostsById = new Map(hosts.map((h) => [h.hostid, h]))
+    // Group names come from the resolved hosts' memberships — no extra call.
+    const groupNamesById = new Map<string, string>()
+    for (const h of hosts) {
+      for (const g of h.hostgroups ?? []) groupNamesById.set(g.groupid, g.name)
+    }
+
+    const sourceId = this.config?.instanceId ?? 'zabbix'
+    return convertSysmapToGraph(map, hostsById, groupNamesById, {
+      sourceId,
+      observedAt: Date.now(),
+      groupBy: opts?.groupBy,
+      groupExclude: opts?.groupExclude,
+    })
+  }
+
+  // ============================================
+  // ConfigOptionsCapable Implementation
+  // ============================================
+
+  /** Dynamic candidates for `optionsSource` schema fields (the map picker). */
+  async getConfigOptions(key: string): Promise<ConfigOption[]> {
+    if (key !== 'map') return []
+    const maps = await this.apiRequest<ZabbixSysmap[]>('map.get', {
+      output: ['sysmapid', 'name'],
+      sortfield: 'name',
+    })
+    return maps.map((m) => ({ value: m.sysmapid, label: m.name }))
+  }
 
   private async apiRequest<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     if (!this.config || !this.http) {

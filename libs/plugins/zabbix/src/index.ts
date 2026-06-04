@@ -37,13 +37,51 @@ const configSchema: PluginConfigSchema = {
   },
 }
 
+/**
+ * Per-attachment topology options (rendered on the Sources page, stored as the
+ * attachment's `optionsJson`). `sysmapId` picks which Zabbix map to import; its
+ * candidates come from `getConfigOptions('map')`, with free entry when a
+ * connection isn't available yet.
+ */
+const optionsSchema: PluginConfigSchema = {
+  type: 'object',
+  required: ['sysmapId'],
+  properties: {
+    sysmapId: {
+      type: 'string',
+      title: 'Map',
+      help: 'The Zabbix network map (sysmap) to import as topology.',
+      optionsSource: 'map',
+      freeSolo: true,
+    },
+    groupBy: {
+      type: 'string',
+      title: 'Group by',
+      default: 'hostgroup',
+      help: 'Subgraphs from host groups (most-specific per host), or only from standard host-group elements drawn on the map.',
+      oneOf: [
+        { const: 'hostgroup', title: 'Host group' },
+        { const: 'none', title: 'Map host-group elements only' },
+      ],
+    },
+    groupExclude: {
+      type: 'array',
+      items: { type: 'string' },
+      title: 'Exclude groups',
+      help: 'Host-group names to never use as a subgraph (admin / catch-all groups).',
+      freeSolo: true,
+    },
+  },
+}
+
 export function register(registry: PluginRegistryInterface): void {
   registry.registerDescriptor(
     {
       type: 'zabbix',
       displayName: 'Zabbix',
-      capabilities: ['metrics', 'hosts', 'alerts'],
+      capabilities: ['metrics', 'hosts', 'alerts', 'topology'],
       configSchema,
+      optionsSchema,
     },
     (config) => {
       const plugin = new ZabbixPlugin()
