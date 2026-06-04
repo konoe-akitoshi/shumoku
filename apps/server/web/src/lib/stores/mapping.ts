@@ -16,10 +16,10 @@
  * "core defines the display contract" principle.
  */
 
-import { type Identity, nodeIdentityKeys } from '@shumoku/core'
+import type { Identity } from '@shumoku/core'
 import { derived, get, writable } from 'svelte/store'
 import { api } from '$lib/api'
-import { NODE_MATCH_THRESHOLD, nodeNameMatchScore } from '$lib/auto-mapping'
+import { matchNodeToHost } from '$lib/auto-mapping'
 import { topologies } from '$lib/stores/topologies'
 import type { Host, HostItem, MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
 
@@ -76,25 +76,6 @@ const initialState: MappingState = {
  */
 function sourceIdForHost(hosts: MappingHost[], hostId: string): string | undefined {
   return hosts.find((h) => h.id === hostId)?.sourceId
-}
-
-/**
- * Index hosts by every identity key they expose (`kind:value`) for
- * deterministic node→host matching. A key resolving to exactly one host is a
- * confident match; a key shared by several hosts is ambiguous and skipped in
- * favour of the next-priority key (or, ultimately, fuzzy name matching).
- */
-function buildHostIdentityIndex(hosts: MappingHost[]): Map<string, MappingHost[]> {
-  const index = new Map<string, MappingHost[]>()
-  for (const host of hosts) {
-    for (const key of nodeIdentityKeys(host.identity)) {
-      const k = `${key.kind}:${key.value}`
-      const bucket = index.get(k)
-      if (bucket) bucket.push(host)
-      else index.set(k, [host])
-    }
-  }
-  return index
 }
 
 async function loadHostsForSources(sources: MetricsSourceInfo[]): Promise<MappingHost[]> {
@@ -365,10 +346,9 @@ function createMappingStore() {
     },
 
     /**
-     * Auto-map nodes to hosts. Tries deterministic identity matching first
-     * (mgmtIp / chassisId / sysName / vendorId, in priority order) and falls
-     * back to fuzzy name matching. Returns a per-strategy breakdown so the UI
-     * can show how confident the match was.
+     * Auto-map nodes to hosts via composite identity + name matching
+     * (see `matchNodeToHost`). Returns a per-strategy breakdown so the UI can
+     * show how confident the matches were.
      */
     autoMapNodes: (
       nodeList: Array<{ id: string; label?: string | string[]; identity?: Identity }>,
@@ -381,48 +361,16 @@ function createMappingStore() {
       let byIdentity = 0
       let byName = 0
       const nodes = { ...current.mapping.nodes }
-      const identityIndex = buildHostIdentityIndex(current.hosts)
 
       for (const node of nodeList) {
         if (!options.overwrite && nodes[node.id]?.hostId) continue
 
-        // 1. Deterministic identity match, in priority order. The first key
-        //    that resolves to exactly one host wins; ambiguous keys (shared by
-        //    multiple hosts, e.g. a duplicated mgmtIp) fall through.
-        let chosen: MappingHost | null = null
-        for (const key of nodeIdentityKeys(node.identity)) {
-          const candidates = identityIndex.get(`${key.kind}:${key.value}`)
-          if (candidates && candidates.length === 1) {
-            chosen = candidates[0] ?? null
-            break
-          }
-        }
-        if (chosen) byIdentity++
+        const match = matchNodeToHost(node, current.hosts)
+        if (!match) continue
 
-        // 2. Fall back to fuzzy name matching (the previous behaviour). Ties
-        //    are broken by source priority via the order of `current.hosts`.
-        if (!chosen) {
-          const nodeLabel = Array.isArray(node.label) ? node.label[0] : node.label
-          if (nodeLabel) {
-            let bestHost: MappingHost | null = null
-            let bestScore = 0
-            for (const host of current.hosts) {
-              const score = nodeNameMatchScore(nodeLabel, host.name, host.displayName)
-              if (score > bestScore) {
-                bestScore = score
-                bestHost = host
-              }
-            }
-            if (bestHost && bestScore >= NODE_MATCH_THRESHOLD) {
-              chosen = bestHost
-              byName++
-            }
-          }
-        }
-
-        if (chosen) {
-          nodes[node.id] = { hostId: chosen.id, hostName: chosen.name }
-        }
+        nodes[node.id] = { hostId: match.host.id, hostName: match.host.name }
+        if (match.via === 'identity') byIdentity++
+        else byName++
       }
 
       update((s) => ({ ...s, mapping: { ...s.mapping, nodes } }))

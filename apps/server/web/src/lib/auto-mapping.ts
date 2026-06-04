@@ -15,6 +15,8 @@
  *   NetBox "GE0/0"  ↔  Zabbix "GigaEthernet0"  (UNIVERGE IX)
  */
 
+import { type Identity, nodeIdentityKeys } from '@shumoku/core'
+
 // ============================================
 // Interface name prefix synonyms
 // ============================================
@@ -247,4 +249,117 @@ export function nodeNameMatchScore(
   if (d && (d.includes(n) || n.includes(d))) return 0.7
 
   return 0
+}
+
+// ============================================
+// Composite node → host matching
+// ============================================
+
+/** Minimal host shape the matcher needs (a `MappingHost` satisfies it). */
+export interface MatchableHost {
+  id: string
+  name: string
+  displayName?: string
+  identity?: Identity
+}
+
+/** Minimal node shape the matcher needs (a topology `Node` satisfies it). */
+export interface MatchableNode {
+  label?: string | string[]
+  identity?: Identity
+}
+
+/** Result of {@link matchNodeToHost}: the chosen host and which signal won. */
+export interface NodeHostMatch<H> {
+  host: H
+  /** `'identity'` = a shared device key drove it; `'name'` = fuzzy name only. */
+  via: 'identity' | 'name'
+}
+
+/**
+ * Weight of each identity-key kind, derived from core's own priority order
+ * (`nodeIdentityKeys` emits the strongest key first) instead of a duplicated
+ * magic table — reorder or extend the keys in core and this follows along.
+ * Yields mgmtIp > chassisId > sysName > vendorId.
+ */
+const IDENTITY_KIND_WEIGHT: Record<string, number> = (() => {
+  const order = nodeIdentityKeys({
+    mgmtIp: 'x',
+    chassisId: 'x',
+    sysName: 'x',
+    vendorIds: { x: 'x' },
+  }).map((k) => k.kind)
+  const weights: Record<string, number> = {}
+  order.forEach((kind, i) => {
+    weights[kind] = order.length - i
+  })
+  return weights
+})()
+
+/**
+ * Name similarity contributes strictly below the weakest identity key, so it
+ * disambiguates otherwise-tied identity matches without ever outranking a real
+ * identity signal.
+ */
+const NAME_TIEBREAK_WEIGHT = 0.9
+
+/** Composite identity score: sum of the weights of every key node & host share. */
+function identityMatchScore(node: MatchableNode, host: MatchableHost): number {
+  if (!node.identity) return 0
+  const hostKeys = new Set(nodeIdentityKeys(host.identity).map((k) => `${k.kind}:${k.value}`))
+  let score = 0
+  for (const k of nodeIdentityKeys(node.identity)) {
+    if (hostKeys.has(`${k.kind}:${k.value}`)) score += IDENTITY_KIND_WEIGHT[k.kind] ?? 0
+  }
+  return score
+}
+
+/**
+ * Pick the best host for a node by combining *every* shared identity key
+ * (weighted by strength) with fuzzy name similarity into a single score:
+ *
+ *   score(host) = Σ weight(kind) for each identity key node & host share
+ *               + nameSimilarity · NAME_TIEBREAK_WEIGHT
+ *
+ * The composite is what makes this robust without special-casing: a host
+ * sharing mgmtIp *and* name beats one sharing only mgmtIp, and when several
+ * hosts tie on a strong key (e.g. a management IP that Zabbix monitors twice)
+ * a weaker shared key — or the name — breaks the tie. If nothing distinguishes
+ * the top identity candidates, we return `null` rather than guess.
+ *
+ * Falls back to name-only matching (threshold `NODE_MATCH_THRESHOLD`) when the
+ * node carries no identity, preserving behaviour for hand-authored topologies.
+ */
+export function matchNodeToHost<H extends MatchableHost>(
+  node: MatchableNode,
+  hosts: readonly H[],
+): NodeHostMatch<H> | null {
+  const nodeLabel = Array.isArray(node.label) ? node.label[0] : node.label
+
+  let best: { host: H; total: number; identity: number; name: number } | null = null
+  let topCount = 0
+  for (const host of hosts) {
+    const identity = identityMatchScore(node, host)
+    const name = nodeLabel ? nodeNameMatchScore(nodeLabel, host.name, host.displayName) : 0
+    const total = identity + name * NAME_TIEBREAK_WEIGHT
+    if (!best || total > best.total) {
+      best = { host, total, identity, name }
+      topCount = 1
+    } else if (total === best.total) {
+      topCount++
+    }
+  }
+
+  if (!best || best.total <= 0) return null
+
+  if (best.identity > 0) {
+    // Identity-driven match: refuse to guess between equally-scored hosts.
+    if (topCount > 1) return null
+    return { host: best.host, via: 'identity' }
+  }
+
+  // Name-only match: keep the previous threshold; ties resolve to the first
+  // host at the top score (source-priority order via the strict `>` above).
+  if (best.name < NODE_MATCH_THRESHOLD) return null
+  return { host: best.host, via: 'name' }
 }
