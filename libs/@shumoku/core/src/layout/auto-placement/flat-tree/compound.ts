@@ -62,8 +62,14 @@ export function layoutCompound(
   engine: LayoutEngine,
   options: AutoLayoutOptions = {},
 ): AutoLayoutResult {
+  // Re-home each node into the single subgraph it exclusively connects
+  // to (see {@link adoptSoleNeighborSubgraph}). A device the source left
+  // with an unset location otherwise lands in a phantom group that the
+  // inner block layout places a row below the switch it hangs off, so
+  // its uplinks cross the intervening row.
+  const homed = adoptSoleNeighborSubgraph(graph)
   const deg = new Map<string, number>()
-  for (const l of graph.links) {
+  for (const l of homed.links) {
     deg.set(l.from.node, (deg.get(l.from.node) ?? 0) + 1)
     deg.set(l.to.node, (deg.get(l.to.node) ?? 0) + 1)
   }
@@ -72,12 +78,46 @@ export function layoutCompound(
     return typeof h === 'string' ? h : ''
   }
   const isGhost = (n: Node): boolean => !(deg.get(n.id) ?? 0) && hostnameOf(n) === ''
-  const ghosts = graph.nodes.filter(isGhost)
-  if (ghosts.length === 0) return layoutCompoundCore(graph, engine, options, 0)
+  const ghosts = homed.nodes.filter(isGhost)
+  if (ghosts.length === 0) return layoutCompoundCore(homed, engine, options, 0)
 
-  const mainGraph: NetworkGraph = { ...graph, nodes: graph.nodes.filter((n) => !isGhost(n)) }
+  const mainGraph: NetworkGraph = { ...homed, nodes: homed.nodes.filter((n) => !isGhost(n)) }
   const result = layoutCompoundCore(mainGraph, engine, options, 0)
   return appendGhostGrid(result, ghosts, engine, options)
+}
+
+/**
+ * Re-home a node into the subgraph it connects *exclusively* to, when
+ * that isn't already its own. Auto-discovery sources frequently leave a
+ * device's location unset, dropping it into a phantom "(未入力)"-style
+ * group; grouped by location that node fragments away from the switch it
+ * actually hangs off (its block lands a row below, uplinks crossing the
+ * intervening row). Grouping a node with the single area it wires into
+ * mends that and reads better. A node wired into several areas is
+ * genuinely cross-area and keeps its own group. Input is not mutated.
+ */
+function adoptSoleNeighborSubgraph(graph: NetworkGraph): NetworkGraph {
+  const parentOf = new Map(graph.nodes.map((n) => [n.id, n.parent]))
+  const neighborSgs = new Map<string, Set<string | undefined>>()
+  const note = (id: string, sg: string | undefined): void => {
+    const seen = neighborSgs.get(id)
+    if (seen) seen.add(sg)
+    else neighborSgs.set(id, new Set([sg]))
+  }
+  for (const l of graph.links) {
+    note(l.from.node, parentOf.get(l.to.node))
+    note(l.to.node, parentOf.get(l.from.node))
+  }
+  let changed = false
+  const nodes = graph.nodes.map((n) => {
+    const sgs = neighborSgs.get(n.id)
+    if (!sgs || sgs.size !== 1) return n
+    const [only] = sgs
+    if (only === undefined || only === n.parent) return n
+    changed = true
+    return { ...n, parent: only }
+  })
+  return changed ? { ...graph, nodes } : graph
 }
 
 /**
