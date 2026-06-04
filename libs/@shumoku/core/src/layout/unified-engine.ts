@@ -23,6 +23,7 @@ import type { LayoutResult, NetworkGraph } from '../models/types.js'
 import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
 import { layoutCompound } from './auto-placement/flat-tree/compound.js'
 import { createEngine, resolveNodeSize } from './engine/index.js'
+import { getLinkWidth } from './link-utils.js'
 import type { ResolvedLayout } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 
@@ -63,8 +64,22 @@ export async function computeNetworkLayout(
   // `compound` folds each subgraph into a compact box and arranges
   // the boxes by dependency — the container reading that scales to
   // large grouped (auto-discovered) graphs.
+  // Link width is bandwidth-derived and can be tens of px on a fast
+  // fabric. The flat-tree gaps are otherwise fixed, so a thick pipe
+  // overruns the nodes it runs between. Widen the sibling/layer gaps to
+  // clear the thickest link so the wiring has room (thin-link graphs
+  // keep the small defaults).
+  let maxLinkWidth = 0
+  for (const l of graph.links) maxLinkWidth = Math.max(maxLinkWidth, getLinkWidth(l))
+  const nodeGap = Math.max(30, Math.round(maxLinkWidth) + 16)
+  const layerGap = Math.max(80, Math.round(maxLinkWidth) + 24)
+
   const layoutFn = options.compound ? layoutCompound : autoLayoutFlatTree
-  const { nodes, ports, subgraphs, bounds } = layoutFn(graph, engine, { direction })
+  const { nodes, ports, subgraphs, bounds } = layoutFn(graph, engine, {
+    direction,
+    nodeGap,
+    layerGap,
+  })
   const edges = await routeEdges(nodes, ports, graph.links, subgraphs)
 
   const resolved: ResolvedLayout = {

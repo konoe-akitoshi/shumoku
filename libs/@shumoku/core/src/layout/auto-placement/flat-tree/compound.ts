@@ -100,7 +100,14 @@ function layoutCompoundCore(
     const host = (node.metadata as { hostname?: unknown } | undefined)?.hostname
     const h = typeof host === 'string' ? host : ''
     const i = h.lastIndexOf('.')
-    return i === -1 ? '(none)' : h.slice(i + 1)
+    // Normalise (trim/lowercase) so a stray "noc " doesn't split into a
+    // second box from the real "noc".
+    return i === -1
+      ? '(none)'
+      : h
+          .slice(i + 1)
+          .trim()
+          .toLowerCase()
   }
   const topSubgraphOf = (sgId: string): string => {
     let cur = sgId
@@ -111,17 +118,14 @@ function layoutCompoundCore(
     }
     return cur
   }
-  // Grouping key for THIS level. depth 0 = physical location area
-  // (coarse), depth 1 = functional domain (fine). Returns '' for a
-  // node with no group at this level → its own (loose) box, so a
-  // location-less device floats to its dependency position instead of
-  // piling into one bucket.
+  // Grouping key for THIS level. depth 0 = functional domain (the
+  // hostname suffix — what a filter scopes on, so the box matches the
+  // user's mental model: scope to `.noc` → one NOC box with every
+  // `.noc` device). depth 1 = physical location area. '' → loose box.
   const keyOf = (node: Node): string => {
-    if (depth === 0) {
-      if (node.parent && subgraphsById.has(node.parent)) return `loc:${topSubgraphOf(node.parent)}`
-      return ''
-    }
-    return `dom:${domainOf(node)}`
+    if (depth === 0) return `dom:${domainOf(node)}`
+    if (node.parent && subgraphsById.has(node.parent)) return `loc:${topSubgraphOf(node.parent)}`
+    return ''
   }
   const labelOf = (key: string): string => {
     if (key.startsWith('dom:')) return key.slice(4)
@@ -142,7 +146,13 @@ function layoutCompoundCore(
 
   // Nothing meaningful to compound, or out of levels → plain engine.
   const realGroups = [...groups].filter(([k, m]) => !k.startsWith('node:') && m.length > 1)
-  if (realGroups.length < 2 || depth >= MAX_DEPTH) return autoLayoutFlatTree(graph, engine, options)
+  // At the top level a single domain group still earns its own box (so a
+  // domain-scoped view reads as "one box for the domain"); deeper levels
+  // need ≥2 groups to be worth nesting.
+  const minGroups = depth === 0 ? 1 : 2
+  if (realGroups.length < minGroups || depth >= MAX_DEPTH) {
+    return autoLayoutFlatTree(graph, engine, options)
+  }
 
   // Per-node tier (fastest incident link); a box's tier is the max of
   // its members, which orients the boxes in the meta layout.
@@ -271,8 +281,11 @@ function layoutTierGrid(
   }
   const tiers = [...byTier.keys()].sort((a, b) => b - a)
 
-  const pos = new Map<string, Position>()
+  // First pass: pack each tier band left-aligned, recording each box's
+  // (x, y) and its band index.
+  const placed: Array<{ k: string; x: number; y: number; w: number; h: number; band: number }> = []
   let y = 0
+  let band = 0
   for (const t of tiers) {
     const boxes = (byTier.get(t) ?? []).sort((a, b) => a.localeCompare(b))
     let x = 0
@@ -286,12 +299,25 @@ function layoutTierGrid(
         rowH = 0
         rowStart = true
       }
-      pos.set(k, { x: x + s.width / 2, y: y + s.height / 2 })
+      placed.push({ k, x, y, w: s.width, h: s.height, band })
       x += s.width + gap
       rowH = Math.max(rowH, s.height)
       rowStart = false
     }
     y += rowH + gap * 3
+    band++
+  }
+
+  // Second pass: centre each band on the widest one, so a narrow tier
+  // sits in the middle instead of clustering against the left edge.
+  const bandWidth = new Map<number, number>()
+  for (const p of placed) bandWidth.set(p.band, Math.max(bandWidth.get(p.band) ?? 0, p.x + p.w))
+  const maxWidth = Math.max(1, ...bandWidth.values())
+
+  const pos = new Map<string, Position>()
+  for (const p of placed) {
+    const shift = (maxWidth - (bandWidth.get(p.band) ?? 0)) / 2
+    pos.set(p.k, { x: shift + p.x + p.w / 2, y: p.y + p.h / 2 })
   }
   return pos
 }
@@ -346,7 +372,9 @@ function appendGhostGrid(
   const cellW = Math.max(1, ...dims.map((s) => s.width)) + gap
   const cellH = Math.max(1, ...dims.map((s) => s.height)) + gap
   const cols = Math.max(1, Math.ceil(Math.sqrt(ghosts.length)))
-  const startX = result.bounds.x + padding
+  // Centre the grid under the topology rather than left-aligning it.
+  const gridWidth = Math.min(ghosts.length, cols) * cellW
+  const startX = result.bounds.x + result.bounds.width / 2 - gridWidth / 2
   const startY = result.bounds.y + result.bounds.height + gap + labelHeight
 
   const nodes = new Map(result.nodes)
