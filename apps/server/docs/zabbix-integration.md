@@ -43,12 +43,13 @@ Authorization: Bearer <token>
 
 | メソッド | 用途 | 現状 |
 |---------|------|------|
-| `apiinfo.version` | API バージョン確認 | ✅ 実装済 |
-| `host.get` | ホスト一覧取得 | ✅ 実装済 |
+| `apiinfo.version` | API バージョン確認 (無認証) | ✅ 実装済 |
+| `host.get` | ホスト一覧取得 (interfaces/inventory/hostgroups/templates) | ✅ 実装済 |
 | `item.get` | アイテム(メトリクス)取得 | ✅ 実装済 |
-| `hostinterface.get` | ホストインターフェース | ❌ 未実装 |
+| `event.get` | 障害イベント取得 (アラート) | ✅ 実装済 |
+| `map.get` | ネットワークマップ(sysmap)取得 | ✅ 実装済 (トポロジー) |
+| `hostgroup.get` | ホストグループ | （host.get の selectHostGroups で代替） |
 | `trigger.get` | トリガー(障害定義) | ❌ 未実装 |
-| `problem.get` | 現在の障害一覧 | ❌ 未実装 |
 | `history.get` | 過去データ | ❌ 未実装 |
 
 ---
@@ -138,6 +139,54 @@ Authorization: Bearer <token>
 ```
 
 **用途**: 現在発生中の障害表示
+
+---
+
+## トポロジー取り込み (Network Maps / sysmaps)
+
+Zabbix の **ネットワークマップ (sysmap)** を 1 枚選んで shumoku の `NetworkGraph`
+に変換する (`topology` capability / `fetchTopology`)。**標準の `map.get` のみ**に依存し、
+自作マップ生成モジュール (例: ShowNet の `/zabbix/netmap`) のラベル/アイコン規約には
+依存しない。
+
+### 設定 (アタッチ単位 / `optionsJson`)
+
+マップ選択はデータソース config ではなく **トポロジーへのアタッチ時オプション**
+(`optionsSchema`)。1 つの Zabbix ソースを複数トポロジーに別マップで使える。
+
+| キー | 説明 |
+|------|------|
+| `sysmapId` | 取り込む sysmap の ID。候補は `getConfigOptions('map')` が `map.get` で動的供給 |
+| `groupBy` | `hostgroup` (既定) / `none`。下記参照 |
+| `groupExclude` | サブグラフに使わないホストグループ名 (管理/全体グループの除外) |
+
+### 変換マッピング
+
+| Zabbix | shumoku | 備考 |
+|--------|---------|------|
+| selement `elementtype:0` (host) | `Node` | `elements[0].hostid` を `host.get` でバッチ解決 |
+| host `name` | `Node.label` | selement.label は `{HOST.NAME}` マクロ (API では未展開) なので使わない |
+| 既定インターフェース IP | `identity.mgmtIp` / `Node` ip | `main==='1'` 優先 |
+| host id / sysName | `identity.vendorIds['zabbix-hostid']` / `sysName` | リゾルバのクラスタリング用 |
+| `inventory.hardware` | `spec.vendor` / `model` / `type` | best-effort パース。空なら Generic |
+| link `selementid1/2` | `Link.from/to.node` | 端点ごとに **ポートを合成** (1 port = 1 endpoint 不変条件) |
+| link `drawtype` / `color` | `Link.type` / `style.stroke` | 0=solid,2=thick,3/4=dashed |
+| host group | `Subgraph` | `groupBy` 参照 |
+
+### グルーピング (`groupBy`)
+
+- **`hostgroup`** (既定): 各ノードを **最も具体的なホストグループ**(マップ上メンバー数が
+  最小のグループ)に入れる。全ホストを含む管理/全体グループは自動的に負けるので、
+  ベンダ固有の命名規則に依存せずセグメント単位に分かれる。`groupExclude` で
+  特定グループを明示除外。
+- **`none`**: マップ上の標準ホストグループ要素 (`elementtype:3`) のみをサブグラフ化。
+  素の Zabbix マップはこの形式だが、自動生成マップは持たないことが多い (= フラット)。
+
+### 現時点の非対応 (今後)
+
+- selement の x/y 座標は `Node.position` に未反映 (レイアウト保持は別途検討)。
+- submap (`type:1`) / trigger (`type:2`) / image (`type:4`) 要素はスキップ。
+- リンクのポート名 / 帯域 / VLAN は標準マップに無いため未対応 (`item.get` で別途付与の余地)。
 
 ---
 
