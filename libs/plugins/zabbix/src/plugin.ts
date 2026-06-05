@@ -312,30 +312,71 @@ export class ZabbixPlugin
     return (main ?? withIp[0])?.ip
   }
 
+  /**
+   * Item-key prefixes that carry per-interface traffic counters, paired with
+   * the direction they represent. Covers Zabbix Agent (`net.if.in/out`) and the
+   * standard SNMP templates network gear actually uses — `ifHCInOctets` /
+   * `ifHCOutOctets` (64-bit) and `ifInOctets` / `ifOutOctets` (32-bit). Without
+   * the SNMP keys, interface lookup returns nothing for SNMP-monitored
+   * switches/routers and link mapping can never resolve.
+   */
+  private static readonly TRAFFIC_KEY_DIRECTIONS: ReadonlyArray<readonly [string, 'in' | 'out']> = [
+    ['net.if.in', 'in'],
+    ['net.if.out', 'out'],
+    ['ifHCInOctets', 'in'],
+    ['ifHCOutOctets', 'out'],
+    ['ifInOctets', 'in'],
+    ['ifOutOctets', 'out'],
+  ]
+
+  /** Substrings passed to `item.get` search to pull every traffic item. */
+  private static readonly TRAFFIC_KEY_SEARCH = ZabbixPlugin.TRAFFIC_KEY_DIRECTIONS.map(([k]) => k)
+
+  /** Traffic direction a counter key represents, or null if it isn't one. */
+  private static trafficDirection(key: string): 'in' | 'out' | null {
+    for (const [prefix, dir] of ZabbixPlugin.TRAFFIC_KEY_DIRECTIONS) {
+      if (key.startsWith(prefix)) return dir
+    }
+    return null
+  }
+
+  /**
+   * Resolve the interface a traffic item belongs to. Both Agent and SNMP
+   * templates put the interface name in the key bracket
+   * (`net.if.in[eth0]`, `ifHCInOctets[GigabitEthernet1/0/1]`), sometimes with a
+   * trailing " (alias)" — strip that. Fall back to parsing the item name.
+   */
+  private static interfaceNameOf(key: string, name: string): string {
+    const bracket = key.match(/\[(.+)\]/)?.[1]
+    if (bracket) return bracket.replace(/\s*\([^)]*\)\s*$/, '').trim()
+    return ZabbixPlugin.extractInterfaceName(name)
+  }
+
   async getHostItems(hostId: string): Promise<HostItem[]> {
     // Fetch only network interface traffic items (net.if.in / net.if.out)
     const items = await this.apiRequest<ZabbixItem[]>('item.get', {
       output: ['itemid', 'hostid', 'name', 'key_', 'lastvalue', 'units'],
       hostids: [hostId],
-      search: { key_: ['net.if.in', 'net.if.out'] },
+      search: { key_: ZabbixPlugin.TRAFFIC_KEY_SEARCH },
       searchByAny: true,
       filter: { status: '0', state: '0' },
     })
 
-    return items.map((item) => {
-      const ifName = ZabbixPlugin.extractInterfaceName(item.name)
-      const isIn = item.key_.startsWith('net.if.in')
-
-      return {
-        id: item.itemid,
-        hostId: item.hostid,
-        name: item.name,
-        key: item.key_,
-        lastValue: item.lastvalue,
-        unit: (item as ZabbixItem & { units?: string }).units,
-        interfaceName: ifName,
-        direction: isIn ? 'in' : 'out',
-      } satisfies HostItem
+    return items.flatMap((item) => {
+      const direction = ZabbixPlugin.trafficDirection(item.key_)
+      if (!direction) return [] // search is a substring match — drop incidental hits
+      return [
+        {
+          id: item.itemid,
+          hostId: item.hostid,
+          name: item.name,
+          key: item.key_,
+          lastValue: item.lastvalue,
+          unit: (item as ZabbixItem & { units?: string }).units,
+          interfaceName: ZabbixPlugin.interfaceNameOf(item.key_, item.name),
+          direction,
+        } satisfies HostItem,
+      ]
     })
   }
 
@@ -903,18 +944,18 @@ export class ZabbixPlugin
 
   /**
    * Get interface traffic items for a host.
-   * Searches by both key pattern and item name to support
-   * agent-based (net.if.in[eth0]) and SNMP-based (net.if.in[ifHCInOctets.N]) items.
+   * Searches Agent (`net.if.in[eth0]`) and SNMP
+   * (`ifHCInOctets[GigabitEthernet1/0/1]`) counter keys and matches the
+   * requested interface by the name resolved from each item's key bracket.
    */
   async getInterfaceItems(
     hostId: string,
     interfaceName?: string,
   ): Promise<{ in: HostItem | null; out: HostItem | null }> {
-    // Fetch all net.if.in / net.if.out items for this host
     const items = await this.apiRequest<ZabbixItem[]>('item.get', {
       output: ['itemid', 'hostid', 'name', 'key_', 'lastvalue'],
       hostids: [hostId],
-      search: { key_: ['net.if.in', 'net.if.out'] },
+      search: { key_: ZabbixPlugin.TRAFFIC_KEY_SEARCH },
       searchByAny: true,
       filter: { status: '0', state: '0' },
     })
@@ -923,12 +964,12 @@ export class ZabbixPlugin
     let outItem: HostItem | null = null
 
     for (const item of items) {
-      // Match by interface name extracted from item name (works for both agent and SNMP)
-      if (interfaceName) {
-        const extractedName = ZabbixPlugin.extractInterfaceName(item.name)
-        if (extractedName !== interfaceName) {
-          continue
-        }
+      const direction = ZabbixPlugin.trafficDirection(item.key_)
+      if (!direction) continue
+
+      // Match by interface name resolved from the key (works for Agent + SNMP)
+      if (interfaceName && ZabbixPlugin.interfaceNameOf(item.key_, item.name) !== interfaceName) {
+        continue
       }
 
       const hostItem: HostItem = {
@@ -939,11 +980,8 @@ export class ZabbixPlugin
         lastValue: item.lastvalue,
       }
 
-      if (item.key_.startsWith('net.if.in')) {
-        inItem = hostItem
-      } else if (item.key_.startsWith('net.if.out')) {
-        outItem = hostItem
-      }
+      if (direction === 'in') inItem = hostItem
+      else outItem = hostItem
     }
 
     return { in: inItem, out: outItem }

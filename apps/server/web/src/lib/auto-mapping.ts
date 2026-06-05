@@ -22,10 +22,25 @@ import { type Identity, nodeIdentityKeys } from '@shumoku/core'
 // ============================================
 
 const PREFIX_GROUPS: [string[], string][] = [
-  [['hundredgigabitethernet', 'hundredgige', 'hu'], 'hundredge'],
-  [['fortygigabitethernet', 'fortygige', 'fo'], 'fortyge'],
+  // Speed prefixes carry vendor full names, common abbreviations, and TTDB's
+  // speed-coded forms (eg = 1G, xg = 10G, fg = 40G, hg = 100G, fhg = 400G,
+  // ehg = 800G). Zabbix SNMP sometimes truncates the vendor word
+  // ("HundredGigabitEther"), so the truncated spelling is listed too.
+  [
+    ['eighthundredgigabitethernet', 'eighthundredgigabitether', 'eighthundredgige', 'ehg'],
+    'eighthundredge',
+  ],
+  [
+    ['fourhundredgigabitethernet', 'fourhundredgigabitether', 'fourhundredgige', 'fhg'],
+    'fourhundredge',
+  ],
+  [['hundredgigabitethernet', 'hundredgigabitether', 'hundredgige', 'hu', 'hg'], 'hundredge'],
+  [['fortygigabitethernet', 'fortygigabitether', 'fortygige', 'fo', 'fg'], 'fortyge'],
   [['twentyfivegigabitethernet', 'twentyfivegige'], 'twentyfivege'],
-  [['tengigabitethernet', 'tengigaethernet', 'tenge', 'te', 'xge', 'xe'], 'te'],
+  [
+    ['tengigabitethernet', 'tengigabitether', 'tengigaethernet', 'tenge', 'te', 'xge', 'xe', 'xg'],
+    'te',
+  ],
   [['gigabitethernet', 'gigaethernet', 'gi', 'ge'], 'ge'],
   [['fastethernet', 'fa', 'fe'], 'fe'],
   [['ethernet', 'ens', 'enp', 'eno', 'eth', 'en'], 'eth'],
@@ -191,6 +206,18 @@ export function findBestInterfaceMatch(
 
   if (bestScore >= threshold) return bestCandidate
 
+  // Cross-vocabulary fallback: a port named by speed class (TTDB's hg/xg/fhg…)
+  // and one named by media/type (`Ethernet1/5`, `et-0/0/0`, `swp0`) share no
+  // canonical prefix, so the score above is 0 even for the same physical port —
+  // but the port NUMBER aligns. Match on the number sequence, and only when
+  // exactly one candidate carries it, so genuinely ambiguous cases (a chassis
+  // exposing `ge-0/1` and `xe-0/1`) fall through instead of mis-binding.
+  if (norm.numbers.length > 0) {
+    const want = norm.numbers.join('/')
+    const numHits = candidates.filter((c) => normalizeInterfaceName(c).numbers.join('/') === want)
+    if (numHits.length === 1) return numHits[0] ?? null
+  }
+
   // Fallback: single candidate → assume it's the same physical port
   if (opts.singleCandidateFallback && candidates.length === 1) {
     return candidates[0] ?? null
@@ -335,12 +362,19 @@ export function matchNodeToHost<H extends MatchableHost>(
   hosts: readonly H[],
 ): NodeHostMatch<H> | null {
   const nodeLabel = Array.isArray(node.label) ? node.label[0] : node.label
+  // Try both the display label and the discovered sysName as the node's name:
+  // a device's sysName ("dl380-1.dc") often matches a monitoring host's visible
+  // name even when the human label ("DL380 Gen12-1") doesn't.
+  const nodeNames = [nodeLabel, node.identity?.sysName].filter((s): s is string => !!s)
 
   let best: { host: H; total: number; identity: number; name: number } | null = null
   let topCount = 0
   for (const host of hosts) {
     const identity = identityMatchScore(node, host)
-    const name = nodeLabel ? nodeNameMatchScore(nodeLabel, host.name, host.displayName) : 0
+    const name = nodeNames.reduce(
+      (max, n) => Math.max(max, nodeNameMatchScore(n, host.name, host.displayName)),
+      0,
+    )
     const total = identity + name * NAME_TIEBREAK_WEIGHT
     if (!best || total > best.total) {
       best = { host, total, identity, name }
