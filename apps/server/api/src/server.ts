@@ -369,15 +369,14 @@ export class Server {
       // it recognizes and ignores the rest.
       const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
       if (metricsSources.length > 0) {
-        // Parse mapping once — every plugin sees the same view.
-        let mapping: MetricsMapping = { nodes: {}, links: {} }
-        if (topology.mappingJson) {
-          try {
-            mapping = JSON.parse(topology.mappingJson)
-          } catch {
-            // Invalid mapping JSON, use empty
-          }
-        }
+        // Use the resolved mapping (metrics-binding attachments ∪ residual
+        // mapping_json), NOT the raw mapping_json blob — after the binding
+        // backfill, node bindings live as attachments and mapping_json holds
+        // only the residual, so reading the blob alone would starve pollers of
+        // node bindings. `parseTopology` already produced this view.
+        const mapping: MetricsMapping = parsed.mapping
+          ? { nodes: { ...parsed.mapping.nodes }, links: { ...parsed.mapping.links } }
+          : { nodes: {}, links: {} }
 
         // Backfill link bandwidth from the topology spec exactly once.
         // The plugin sees a single authoritative bps per link.
@@ -387,7 +386,9 @@ export class Server {
             const linkMapping = mapping.links?.[linkId]
             if (linkMapping && linkMapping.bandwidth === undefined) {
               const bps = linkSpeedBps(link)
-              if (bps !== undefined) linkMapping.bandwidth = bps
+              // Copy-on-write: the link object is shared with the cached
+              // parsed.mapping, so replace it rather than mutate in place.
+              if (bps !== undefined) mapping.links[linkId] = { ...linkMapping, bandwidth: bps }
             }
           }
         }

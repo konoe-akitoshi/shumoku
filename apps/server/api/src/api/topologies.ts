@@ -366,6 +366,22 @@ export function createTopologiesApi(): Hono {
     }
   })
 
+  // Get the resolved metrics mapping (metrics-binding attachments ∪ residual
+  // mapping_json). This is the authoritative view the UI must hydrate from —
+  // reading topology.mappingJson alone misses node bindings stored as
+  // attachments and would strip them on the next save.
+  app.get('/:id/mapping', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const parsed = await service.getParsed(id)
+      if (!parsed) return c.json({ error: 'Topology not found' }, 404)
+      return c.json(parsed.mapping ?? { nodes: {}, links: {} })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
   // Update mapping
   app.put('/:id/mapping', async (c) => {
     const id = c.req.param('id')
@@ -395,12 +411,19 @@ export function createTopologiesApi(): Hono {
 
       // Start from the FULL current mapping (bindings ∪ residual mapping_json),
       // not just the mapping_json blob — node bindings now live as attachments,
-      // so reading the blob alone would drop them on the next save.
+      // so reading the blob alone would drop them on the next save. If the graph
+      // can't be resolved right now, REFUSE: reconciling against an incomplete
+      // mapping would strip every existing binding for the source.
       const parsed = await service.getParsed(id)
-      const current = parsed?.mapping
+      if (!parsed) {
+        return c.json(
+          { error: 'cannot resolve current mapping; refusing to patch (would drop bindings)' },
+          409,
+        )
+      }
       const mapping: MetricsMapping = {
-        nodes: { ...(current?.nodes ?? {}) },
-        links: { ...(current?.links ?? {}) },
+        nodes: { ...(parsed.mapping?.nodes ?? {}) },
+        links: { ...(parsed.mapping?.links ?? {}) },
       }
 
       // Update the specific node mapping

@@ -94,25 +94,23 @@ function identitiesMatch(a: Identity | undefined, b: Identity | undefined): bool
 }
 
 /**
- * A pure-overlay node carries identity but makes NO authored claim (empty
- * label, no attachments/suppressions/spec/ports/parent/etc). Such a node
- * contributes nothing to resolve, so it's safe to drop after a binding is
- * cleared — avoids accumulating empty overlay rows.
+ * A pure-overlay node carries identity but makes NO authored claim whatsoever.
+ * Such a node contributes nothing to resolve, so it's safe to drop after a
+ * binding is cleared — avoids accumulating empty overlay rows. Conservative by
+ * construction: ANY authored field present means we keep the node, so clearing a
+ * binding can never delete unrelated authored content. Only `id` + `label:''` +
+ * `identity` may remain for it to be dropped.
  */
 function isPureEmptyOverlay(n: Node): boolean {
   const label = Array.isArray(n.label) ? n.label.join('') : (n.label ?? '')
-  return (
-    label.trim() === '' &&
-    (n.attachments?.length ?? 0) === 0 &&
-    (n.suppressedAttachments?.length ?? 0) === 0 &&
-    !n.spec &&
-    !n.productId &&
-    (n.ports?.length ?? 0) === 0 &&
-    !n.parent &&
-    !n.style &&
-    !n.position &&
-    !n.metadata
-  )
+  // Allow-list the fields a bare binding overlay legitimately carries; any other
+  // populated property keeps the node.
+  const ALLOWED = new Set(['id', 'label', 'identity'])
+  for (const [k, v] of Object.entries(n)) {
+    if (ALLOWED.has(k)) continue
+    if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
+  }
+  return label.trim() === ''
 }
 
 /**
@@ -524,27 +522,37 @@ export class TopologyService {
       .query("SELECT id FROM topologies WHERE mapping_json IS NOT NULL AND mapping_json != ''")
       .all() as { id: string }[]
     let migrated = 0
+    let failed = 0
     for (const { id } of rows) {
       try {
         const parsed = await this.getParsed(id)
         if (parsed?.mapping) {
           await this.updateMapping(id, parsed.mapping)
           migrated++
+        } else if (!parsed) {
+          // Couldn't resolve — leave mapping_json intact and retry next start.
+          failed++
         }
       } catch (err) {
+        failed++
         console.warn(
           `[Backfill] metrics bindings for topology ${id}:`,
           err instanceof Error ? err.message : err,
         )
       }
     }
-    this.db
-      .query(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('metrics_bindings_backfilled', '1')",
-      )
-      .run()
-    if (migrated > 0) {
-      console.log(`[Backfill] migrated metrics mapping → bindings for ${migrated} topologies`)
+    // Only mark done when every topology migrated cleanly. A transient failure
+    // leaves the flag unset so the next startup retries — and so dropping
+    // mapping_json later (Phase 2 contract migration) stays safe.
+    if (failed === 0) {
+      this.db
+        .query(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('metrics_bindings_backfilled', '1')",
+        )
+        .run()
+    }
+    if (migrated > 0 || failed > 0) {
+      console.log(`[Backfill] metrics mapping → bindings: ${migrated} migrated, ${failed} deferred`)
     }
   }
 
@@ -729,9 +737,16 @@ export class TopologyService {
     if (topology.mappingJson) {
       try {
         const legacy = JSON.parse(topology.mappingJson) as MetricsMapping
+        // Per-link field merge (binding fields win where defined) so a
+        // binding-derived link {monitoredNodeId, interface} doesn't clobber a
+        // residual {bandwidth}, and vice versa.
+        const links: MetricsMapping['links'] = { ...legacy.links }
+        for (const [id, b] of Object.entries(bindingMapping.links)) {
+          links[id] = { ...links[id], ...b }
+        }
         mapping = {
           nodes: { ...legacy.nodes, ...bindingMapping.nodes },
-          links: { ...legacy.links, ...bindingMapping.links },
+          links,
         }
       } catch {
         // Invalid JSON, ignore — keep whatever bindings produced.
