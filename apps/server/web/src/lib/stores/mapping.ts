@@ -300,18 +300,15 @@ function createMappingStore() {
         hostInterfacesLoading: { ...s.hostInterfacesLoading, [hostId]: true },
       }))
 
-      // Fetch neighbours alongside interfaces — link auto-map prefers the LLDP
-      // neighbour (which local interface faces the peer) over name matching.
-      // A neighbour fetch failure must not block interface loading.
-      api.dataSources
-        .getInterfaceNeighbors(sourceId, hostId)
-        .then((neighbors) =>
-          update((s) => ({ ...s, hostNeighbors: { ...s.hostNeighbors, [hostId]: neighbors } })),
-        )
-        .catch(() => {})
-
       try {
-        const items = await api.dataSources.getHostItems(sourceId, hostId)
+        // Fetch interfaces and LLDP/CDP neighbours together so both are ready
+        // when this resolves — link auto-map prefers the neighbour (which local
+        // interface faces the peer) and falls back to name matching. A neighbour
+        // fetch failure must not fail interface loading.
+        const [items, neighbors] = await Promise.all([
+          api.dataSources.getHostItems(sourceId, hostId),
+          api.dataSources.getInterfaceNeighbors(sourceId, hostId).catch(() => []),
+        ])
         // Filter to unique interface names (remove :in/:out suffix)
         const interfaceNames = new Set<string>()
         const interfaces: HostItem[] = []
@@ -336,6 +333,7 @@ function createMappingStore() {
         update((s) => ({
           ...s,
           hostInterfaces: { ...s.hostInterfaces, [hostId]: interfaces },
+          hostNeighbors: { ...s.hostNeighbors, [hostId]: neighbors },
           hostInterfacesLoading: { ...s.hostInterfacesLoading, [hostId]: false },
         }))
       } catch {

@@ -177,7 +177,7 @@
     return [info.interfaceName, info.label, ...(info.aliases ?? [])].filter((n): n is string => !!n)
   }
 
-  function loadInterfacesForMappedNodes() {
+  async function loadInterfacesForMappedNodes() {
     const hostIds = new Set<string>()
     for (const edge of edges) {
       const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
@@ -185,7 +185,7 @@
       if (fromHostId) hostIds.add(fromHostId)
       if (toHostId) hostIds.add(toHostId)
     }
-    for (const hostId of hostIds) mappingStore.loadHostInterfaces(hostId)
+    await Promise.all([...hostIds].map((hostId) => mappingStore.loadHostInterfaces(hostId)))
   }
 
   function handleNodeMappingChange(nodeId: string, hostId: string) {
@@ -203,6 +203,10 @@
       ...mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false }),
       kind: 'nodes',
     }
+    // Load interfaces + neighbours for the freshly mapped hosts so a following
+    // link auto-map has data to match against (bulk node mapping doesn't load
+    // them the way the per-node dropdown does).
+    void loadInterfacesForMappedNodes()
     scheduleClearAutoMapResult()
   }
 
@@ -535,7 +539,11 @@
             <Button
               variant="outline"
               size="sm"
-              onclick={() => {
+              onclick={async () => {
+                // Make sure interfaces + neighbours are loaded for the mapped
+                // hosts before matching, so link auto-map works even right after
+                // a bulk node auto-map (interfaces load lazily).
+                await loadInterfacesForMappedNodes()
                 const matched = handleAutoMapLinks()
                 if (matched > 0) {
                   autoMapResult = { matched, total: edges.length, kind: 'links' }
