@@ -179,6 +179,40 @@ prerequisite for step 2's link bindings; sequence it before/with step 2.
 5. **Cache-busting granularity** — today any edit clears the whole parsed cache;
    the materialized store should invalidate per topology, ideally per source.
 
+## Information architecture (tabs follow the model)
+
+Once binding is emergent (a metrics source is just another identity contribution,
+not a separate module), the topology tab's sub-tabs collapse to match the data
+model's three layers — **inputs → resolved composition → output**.
+
+Today (5 tabs, with the resolved-curation layer split three ways):
+- Diagram · Sources · Discovery (per-node policy + observations) · Mapping
+  (node→host / link→interface) · Resolved (debug JSON)
+
+Target (3 tabs):
+| Tab | What | Absorbs |
+| --- | --- | --- |
+| **Sources** | inputs — which sources contribute (topology / metrics / manual), priority, sync | Sources |
+| **Composition (構成)** | the resolved entities; per-entity detail holds identity + provenance (who observed it), field overrides, **discovery policy**, **metrics-binding override** (the old Mapping), hide/exclude; raw observations + resolved JSON as a debug subview | **Discovery + Mapping + Resolved** |
+| **Diagram** | render + live metrics | Diagram |
+
+- **Mapping stops being a tab** — it becomes the metrics-binding override section
+  in an element's detail. Binding is mostly emergent (identity merge), so "auto-map
+  all" dissolves into a Composition filter ("entities with no metrics binding")
+  plus per-element override.
+- **"Discovery" is renamed "Composition"** — it was never just discovery
+  scheduling; it's the whole human-curation surface over the resolved graph.
+  Sectioning the element detail absorbs the bloat.
+
+Why this belongs in a *data-model* doc: the tabs map 1:1 to the model layers —
+**Sources ↔ `topology_data_sources`**, **Composition ↔ the resolved-entity store
+(entity + per-entity attachments {access, policy, metrics-binding} + provenance)**,
+**Diagram ↔ materialized resolved graph + live values**. The store redesign
+(one resolved-entity store, binding emergent) is exactly what makes the IA
+collapse to three tabs. Data model and UI converge on the same shape — a sign
+the structure is right. (IA implementation is frontend, sequenced *after* the
+data model; noted here only to keep model↔UI aligned.)
+
 ## Relation to other docs
 - Supersedes the "separate `mapping_binding` table" of `metrics-mapping-model.md`
   (folded into the attachment + identity-registry model here).
