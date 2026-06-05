@@ -475,6 +475,8 @@ export class Server {
     this.topologySourcesService = new TopologySourcesService()
     this.dataSourceService = new DataSourceService()
     await this.topologyService.initializeSample()
+    // One-shot: migrate legacy mapping_json → identity-keyed metrics bindings.
+    await this.topologyService.backfillMetricsBindings()
 
     await this.topologyManager.loadAll()
     console.log(

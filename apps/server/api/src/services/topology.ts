@@ -18,12 +18,16 @@
 import type { Database } from 'bun:sqlite'
 import type {
   IconDimensions,
+  Identity,
   LayoutResult,
+  MetricsBindingAttachment,
   NetworkGraph,
+  Node,
   ResolvedLayout,
   SnapshotEntry,
 } from '@shumoku/core'
 import {
+  attachmentKey,
   computeNetworkLayout,
   createMemoryFileResolver,
   deriveMappingFromGraph,
@@ -62,6 +66,53 @@ function rowToTopology(row: TopologyRow): Topology {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+}
+
+/** Whether an identity carries at least one usable node match key. */
+function hasAnyIdentityKey(identity: Identity | undefined): boolean {
+  if (!identity) return false
+  return Boolean(
+    identity.mgmtIp ||
+      identity.chassisId ||
+      identity.sysName ||
+      (identity.vendorIds && Object.keys(identity.vendorIds).length > 0),
+  )
+}
+
+/** Two node identities match if they share any node key (mgmtIp/chassisId/sysName/vendorId). */
+function identitiesMatch(a: Identity | undefined, b: Identity | undefined): boolean {
+  if (!a || !b) return false
+  if (a.mgmtIp && a.mgmtIp === b.mgmtIp) return true
+  if (a.chassisId && a.chassisId === b.chassisId) return true
+  if (a.sysName && a.sysName === b.sysName) return true
+  if (a.vendorIds && b.vendorIds) {
+    for (const [k, v] of Object.entries(a.vendorIds)) {
+      if (v && b.vendorIds[k] === v) return true
+    }
+  }
+  return false
+}
+
+/**
+ * A pure-overlay node carries identity but makes NO authored claim (empty
+ * label, no attachments/suppressions/spec/ports/parent/etc). Such a node
+ * contributes nothing to resolve, so it's safe to drop after a binding is
+ * cleared — avoids accumulating empty overlay rows.
+ */
+function isPureEmptyOverlay(n: Node): boolean {
+  const label = Array.isArray(n.label) ? n.label.join('') : (n.label ?? '')
+  return (
+    label.trim() === '' &&
+    (n.attachments?.length ?? 0) === 0 &&
+    (n.suppressedAttachments?.length ?? 0) === 0 &&
+    !n.spec &&
+    !n.productId &&
+    (n.ports?.length ?? 0) === 0 &&
+    !n.parent &&
+    !n.style &&
+    !n.position &&
+    !n.metadata
+  )
 }
 
 /**
@@ -334,24 +385,167 @@ export class TopologyService {
   }
 
   /**
-   * Update metrics mapping for a topology
+   * Update the metrics mapping for a topology.
+   *
+   * Node host bindings that can be anchored to a resolved node's identity (and
+   * for which the topology has a metrics source) are written as identity-keyed
+   * `metrics-binding` attachments on the authored overlay — so they follow
+   * re-sync by construction (composition-store Phase 2). Everything that can't
+   * yet be anchored (nodes with no identity, and ALL link bindings, which are
+   * staged behind port identity) stays in the legacy `topologies.mapping_json`
+   * blob. Each entry lives in exactly ONE place, so reads
+   * (`deriveMappingFromGraph` ∪ mapping_json) never see a divergent duplicate.
+   *
+   * Re-applying a topology's existing mapping through this method IS the Phase 2
+   * backfill: anchorable nodes migrate to bindings, the residual shrinks.
    */
-  updateMapping(id: string, mapping: MetricsMapping): Topology | null {
+  async updateMapping(id: string, mapping: MetricsMapping): Promise<Topology | null> {
     const existing = this.get(id)
-    if (!existing) {
-      return null
+    if (!existing) return null
+
+    const sourceId = this.metricsSourceIdFor(id)
+    const parsed = await this.getParsed(id)
+    const identityByNodeId = new Map<string, Identity | undefined>(
+      (parsed?.graph.nodes ?? []).map((n) => [n.id, n.identity]),
+    )
+
+    // Split: anchorable node bindings vs the residual (kept in mapping_json).
+    const residual: MetricsMapping = {
+      nodes: {},
+      links: { ...(mapping.links ?? {}) },
+    }
+    const desired: Array<{
+      nodeId: string
+      identity: Identity
+      hostId?: string
+      hostName?: string
+    }> = []
+    for (const [nodeId, nm] of Object.entries(mapping.nodes ?? {})) {
+      const identity = identityByNodeId.get(nodeId)
+      const anchorable = sourceId && identity && hasAnyIdentityKey(identity)
+      if (anchorable && (nm.hostId || nm.hostName)) {
+        desired.push({ nodeId, identity, hostId: nm.hostId, hostName: nm.hostName })
+      } else {
+        residual.nodes[nodeId] = nm
+      }
     }
 
-    const mappingJson = JSON.stringify(mapping)
+    // Reconcile bindings onto the authored overlay (also removes ones the new
+    // mapping dropped, so "clear" works).
+    if (sourceId) {
+      await this.reconcileNodeBindings(id, sourceId, desired)
+    }
+
+    // Persist the residual (null when empty so the column can later be dropped).
+    const residualEmpty =
+      Object.keys(residual.nodes).length === 0 && Object.keys(residual.links).length === 0
     this.db
       .query('UPDATE topologies SET mapping_json = ?, updated_at = ? WHERE id = ?')
-      .run(mappingJson, timestamp(), id)
+      .run(residualEmpty ? null : JSON.stringify(residual), timestamp(), id)
 
-    // Clear cache to force re-parse
     this.cache.delete(id)
     this.renderCache.delete(id)
-
     return this.get(id)
+  }
+
+  /** The metrics data source id for a topology (m2m purpose='metrics', legacy fallback). */
+  private metricsSourceIdFor(topologyId: string): string | undefined {
+    const metrics = this.topologySources.listByPurpose(topologyId, 'metrics')
+    return metrics[0]?.dataSourceId ?? this.get(topologyId)?.metricsSourceId
+  }
+
+  /**
+   * Reconcile this metrics source's node bindings on the authored overlay so it
+   * holds EXACTLY `desired`: strip every existing `metrics-binding:${sourceId}`
+   * attachment, then re-add for each desired node (anchored by identity so the
+   * binding survives re-sync). Pure-overlay nodes left with no remaining claim
+   * are dropped. Mirrors the discovery-policy authored-overlay rail.
+   */
+  private async reconcileNodeBindings(
+    topologyId: string,
+    sourceId: string,
+    desired: Array<{ nodeId: string; identity: Identity; hostId?: string; hostName?: string }>,
+  ): Promise<void> {
+    const manualId = await this.ensureManualSource(topologyId)
+    const topology = this.get(topologyId)
+    const authored = this.readManualGraph(manualId) ?? {
+      version: '1' as const,
+      name: topology?.name ?? 'Manual',
+      nodes: [],
+      links: [],
+    }
+    const key = `metrics-binding:${sourceId}`
+    const stripBinding = (n: Node): Node => {
+      if (!n.attachments?.some((a) => attachmentKey(a) === key)) return n
+      const attachments = n.attachments.filter((a) => attachmentKey(a) !== key)
+      return { ...n, attachments: attachments.length > 0 ? attachments : undefined }
+    }
+    let nodes = authored.nodes.map(stripBinding)
+
+    for (const b of desired) {
+      const attachment: MetricsBindingAttachment = {
+        kind: 'metrics-binding',
+        sourceId,
+        ...(b.hostId ? { hostId: b.hostId } : {}),
+        ...(b.hostName ? { hostName: b.hostName } : {}),
+      }
+      const idx = nodes.findIndex((n) => identitiesMatch(n.identity, b.identity))
+      if (idx >= 0) {
+        const cur = nodes[idx]
+        if (!cur) continue
+        const others = (cur.attachments ?? []).filter((a) => attachmentKey(a) !== key)
+        nodes[idx] = { ...cur, attachments: [...others, attachment] }
+      } else {
+        nodes.push({ id: b.nodeId, label: '', identity: b.identity, attachments: [attachment] })
+      }
+    }
+
+    // Drop thin overlay nodes that no longer carry any human claim.
+    nodes = nodes.filter((n) => !isPureEmptyOverlay(n))
+    this.writeManualGraph(manualId, { ...authored, nodes })
+    this.clearCacheEntry(topologyId)
+  }
+
+  /**
+   * One-shot Phase 2 backfill: migrate every topology's legacy `mapping_json`
+   * into identity-keyed bindings by re-applying its current full mapping through
+   * `updateMapping` (anchorable nodes → bindings; links + unanchorable stay in
+   * the residual). Idempotent and guarded by a `settings` flag so it runs once.
+   * Best-effort: a topology that fails to resolve is logged and left untouched
+   * (its `mapping_json` survives, so nothing is lost).
+   */
+  async backfillMetricsBindings(): Promise<void> {
+    const flag = this.db
+      .query("SELECT value FROM settings WHERE key = 'metrics_bindings_backfilled'")
+      .get() as { value: string } | undefined
+    if (flag?.value === '1') return
+
+    const rows = this.db
+      .query("SELECT id FROM topologies WHERE mapping_json IS NOT NULL AND mapping_json != ''")
+      .all() as { id: string }[]
+    let migrated = 0
+    for (const { id } of rows) {
+      try {
+        const parsed = await this.getParsed(id)
+        if (parsed?.mapping) {
+          await this.updateMapping(id, parsed.mapping)
+          migrated++
+        }
+      } catch (err) {
+        console.warn(
+          `[Backfill] metrics bindings for topology ${id}:`,
+          err instanceof Error ? err.message : err,
+        )
+      }
+    }
+    this.db
+      .query(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('metrics_bindings_backfilled', '1')",
+      )
+      .run()
+    if (migrated > 0) {
+      console.log(`[Backfill] migrated metrics mapping → bindings for ${migrated} topologies`)
+    }
   }
 
   /**

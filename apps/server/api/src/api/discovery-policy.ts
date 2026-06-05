@@ -55,6 +55,8 @@ import { getTopologyService } from './topologies.js'
 const VALID_MODES: ReadonlySet<string> = new Set<DiscoveryMode>(['auto', 'observe', 'disabled'])
 const VALID_PROTOCOLS: ReadonlySet<string> = new Set(['snmp', 'ssh', 'netconf', 'http'])
 // Attachment keys the human may suppress (mirror of core's `attachmentKey`).
+// `metrics-binding:<sourceId>` keys are dynamic (per metrics source), so they're
+// validated by prefix in `isValidAttachmentKey` rather than enumerated here.
 const VALID_ATTACHMENT_KEYS: ReadonlySet<string> = new Set([
   'access:snmp',
   'access:ssh',
@@ -62,6 +64,10 @@ const VALID_ATTACHMENT_KEYS: ReadonlySet<string> = new Set([
   'access:http',
   'policy',
 ])
+
+function isValidAttachmentKey(k: string): boolean {
+  return VALID_ATTACHMENT_KEYS.has(k) || k.startsWith('metrics-binding:')
+}
 
 interface PatchBody {
   scope?: string
@@ -231,7 +237,7 @@ export function createDiscoveryPolicyApi(): Hono {
       }
       const keys = Array.isArray(raw) ? raw : []
       for (const k of keys) {
-        if (typeof k !== 'string' || !VALID_ATTACHMENT_KEYS.has(k)) {
+        if (typeof k !== 'string' || !isValidAttachmentKey(k)) {
           return c.json({ error: `invalid attachment key: ${String(k)}` }, 400)
         }
       }

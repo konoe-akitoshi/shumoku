@@ -371,7 +371,7 @@ export function createTopologiesApi(): Hono {
     const id = c.req.param('id')
     try {
       const mapping = (await c.req.json()) as MetricsMapping
-      const topology = service.updateMapping(id, mapping)
+      const topology = await service.updateMapping(id, mapping)
       if (!topology) {
         return c.json({ error: 'Topology not found' }, 404)
       }
@@ -393,19 +393,14 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Get existing mapping or create new one
-      let mapping: MetricsMapping = { nodes: {}, links: {} }
-      if (topology.mappingJson) {
-        try {
-          mapping = JSON.parse(topology.mappingJson) as MetricsMapping
-        } catch {
-          // Invalid JSON, start fresh
-        }
-      }
-
-      // Ensure nodes object exists
-      if (!mapping.nodes) {
-        mapping.nodes = {}
+      // Start from the FULL current mapping (bindings ∪ residual mapping_json),
+      // not just the mapping_json blob — node bindings now live as attachments,
+      // so reading the blob alone would drop them on the next save.
+      const parsed = await service.getParsed(id)
+      const current = parsed?.mapping
+      const mapping: MetricsMapping = {
+        nodes: { ...(current?.nodes ?? {}) },
+        links: { ...(current?.links ?? {}) },
       }
 
       // Update the specific node mapping
@@ -420,7 +415,7 @@ export function createTopologiesApi(): Hono {
       }
 
       // Save updated mapping
-      const updated = service.updateMapping(id, mapping)
+      const updated = await service.updateMapping(id, mapping)
       return c.json({
         success: true,
         topology: updated,
