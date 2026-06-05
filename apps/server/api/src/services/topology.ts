@@ -68,6 +68,24 @@ function rowToTopology(row: TopologyRow): Topology {
   }
 }
 
+/**
+ * Bump when the resolve/layout algorithms change shape, so persisted
+ * `topology_resolved_graph` artifacts built by an older version are treated as
+ * stale and recomputed without a manual purge.
+ */
+const RESOLVER_VERSION = 1
+
+/** Persisted resolved-graph artifact row (Phase 3 materialization). */
+interface ResolvedGraphRow {
+  topology_id: string
+  graph_json: string
+  layout_json: string | null
+  icon_dimensions_json: string | null
+  built_revision: number
+  resolver_version: number
+  computed_at: number
+}
+
 /** Whether an identity carries at least one usable node match key. */
 function hasAnyIdentityKey(identity: Identity | undefined): boolean {
   if (!identity) return false
@@ -251,7 +269,7 @@ export class TopologyService {
       purpose,
       syncMode: 'manual',
     })
-    this.cache.delete(topologyId)
+    this.clearCacheEntry(topologyId)
     return { dataSourceId: dsId }
   }
 
@@ -329,8 +347,7 @@ export class TopologyService {
         now,
       )
 
-    this.cache.delete(id)
-    this.renderCache.delete(id)
+    this.clearCacheEntry(id)
 
     const created = this.get(id)
     if (!created) throw new Error('Topology disappeared immediately after creation')
@@ -376,8 +393,7 @@ export class TopologyService {
       this.db.query(`UPDATE topologies SET ${updates.join(', ')} WHERE id = ?`).run(...values)
     }
 
-    this.cache.delete(id)
-    this.renderCache.delete(id)
+    this.clearCacheEntry(id)
 
     return this.get(id)
   }
@@ -451,8 +467,7 @@ export class TopologyService {
       .query('UPDATE topologies SET mapping_json = ?, updated_at = ? WHERE id = ?')
       .run(residualEmpty ? null : JSON.stringify(residual), timestamp(), id)
 
-    this.cache.delete(id)
-    this.renderCache.delete(id)
+    this.clearCacheEntry(id)
     return this.get(id)
   }
 
@@ -635,10 +650,28 @@ export class TopologyService {
       return null
     }
 
+    // L2: a persisted resolved-graph artifact (survives restart / RAM eviction).
+    // Serve it only when it was built from the CURRENT composition revision and
+    // resolver version — otherwise it's stale and we recompute. Fully guarded:
+    // any read/parse failure falls through to a fresh resolve, so the artifact
+    // can never break a read (worst case = current behaviour).
+    const fromArtifact = this.tryHydrateArtifact(topology)
+    if (fromArtifact) {
+      this.cache.set(id, fromArtifact)
+      this.errorCache.delete(id)
+      return fromArtifact
+    }
+
+    // Capture the revision BEFORE the async resolve. If an input changes during
+    // parse (a concurrent bump), this captured value won't match the new
+    // current revision, so the artifact we persist is immediately considered
+    // stale rather than served as falsely-fresh.
+    const revisionAtStart = this.compositionRevisionOf(id)
     try {
       const parsed = await this.parseTopology(topology)
       this.cache.set(id, parsed)
       this.errorCache.delete(id)
+      this.writeResolvedArtifact(topology, parsed, revisionAtStart)
       return parsed
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -733,35 +766,7 @@ export class TopologyService {
 
     const { resolved, layout: layoutResult } = await computeNetworkLayout(graph)
     const metrics = this.createEmptyMetrics(graph)
-
-    // Metrics mapping (axis 2) is now derived from `metrics-binding` attachments
-    // folded onto the resolved graph by identity — so it follows re-sync by
-    // construction. The legacy `topologies.mapping_json` blob is still read as a
-    // fallback for topologies not yet migrated to bindings; where both exist, a
-    // binding wins (it's the new source of truth). Once every topology is
-    // backfilled, mapping_json is dropped (see composition-store plan, Phase 2).
-    const bindingMapping = deriveMappingFromGraph(graph)
-    const hasBindings =
-      Object.keys(bindingMapping.nodes).length > 0 || Object.keys(bindingMapping.links).length > 0
-    let mapping: MetricsMapping | undefined = hasBindings ? bindingMapping : undefined
-    if (topology.mappingJson) {
-      try {
-        const legacy = JSON.parse(topology.mappingJson) as MetricsMapping
-        // Per-link field merge (binding fields win where defined) so a
-        // binding-derived link {monitoredNodeId, interface} doesn't clobber a
-        // residual {bandwidth}, and vice versa.
-        const links: MetricsMapping['links'] = { ...legacy.links }
-        for (const [id, b] of Object.entries(bindingMapping.links)) {
-          links[id] = { ...links[id], ...b }
-        }
-        mapping = {
-          nodes: { ...legacy.nodes, ...bindingMapping.nodes },
-          links,
-        }
-      } catch {
-        // Invalid JSON, ignore — keep whatever bindings produced.
-      }
-    }
+    const mapping = this.buildMapping(topology, graph)
 
     return {
       id: topology.id,
@@ -774,6 +779,122 @@ export class TopologyService {
       topologySourceId: topology.topologySourceId,
       metricsSourceId: topology.metricsSourceId,
       mapping,
+    }
+  }
+
+  /**
+   * Derive the metrics mapping (axis 2) for a resolved graph: `metrics-binding`
+   * attachments folded onto the graph by identity (so it follows re-sync),
+   * unioned with the legacy `topologies.mapping_json` residual (binding wins;
+   * per-link field merge so a binding's {monitoredNodeId, interface} doesn't
+   * clobber a residual {bandwidth}). Pure read; used by both a fresh resolve and
+   * an artifact hydrate so the two agree.
+   */
+  private buildMapping(topology: Topology, graph: NetworkGraph): MetricsMapping | undefined {
+    const bindingMapping = deriveMappingFromGraph(graph)
+    const hasBindings =
+      Object.keys(bindingMapping.nodes).length > 0 || Object.keys(bindingMapping.links).length > 0
+    let mapping: MetricsMapping | undefined = hasBindings ? bindingMapping : undefined
+    if (topology.mappingJson) {
+      try {
+        const legacy = JSON.parse(topology.mappingJson) as MetricsMapping
+        const links: MetricsMapping['links'] = { ...legacy.links }
+        for (const [id, b] of Object.entries(bindingMapping.links)) {
+          links[id] = { ...links[id], ...b }
+        }
+        mapping = {
+          nodes: { ...legacy.nodes, ...bindingMapping.nodes },
+          links,
+        }
+      } catch {
+        // Invalid JSON, ignore — keep whatever bindings produced.
+      }
+    }
+    return mapping
+  }
+
+  /** Current composition revision for a topology (0 if column/row missing). */
+  private compositionRevisionOf(id: string): number {
+    try {
+      const row = this.db
+        .query('SELECT composition_revision AS r FROM topologies WHERE id = ?')
+        .get(id) as { r: number } | undefined
+      return row?.r ?? 0
+    } catch {
+      return 0
+    }
+  }
+
+  /**
+   * Hydrate a ParsedTopology from the persisted resolved-graph artifact, if one
+   * exists and is current (matching composition revision + resolver version).
+   * Returns null on any miss/staleness/parse error so the caller recomputes.
+   * Metrics are always rebuilt empty (live values come per-poll); mapping is
+   * re-derived from the stored graph so it tracks binding/residual edits.
+   */
+  private tryHydrateArtifact(topology: Topology): ParsedTopology | null {
+    try {
+      const row = this.db
+        .query('SELECT * FROM topology_resolved_graph WHERE topology_id = ?')
+        .get(topology.id) as ResolvedGraphRow | undefined
+      if (!row?.layout_json) return null
+      if (row.resolver_version !== RESOLVER_VERSION) return null
+      if (row.built_revision !== this.compositionRevisionOf(topology.id)) return null
+
+      const graph = JSON.parse(row.graph_json) as NetworkGraph
+      const { layout, resolved } = JSON.parse(row.layout_json) as {
+        layout: LayoutResult
+        resolved?: ResolvedLayout
+      }
+      const iconDimensions: ResolvedIconDimensions = new Map(
+        row.icon_dimensions_json ? JSON.parse(row.icon_dimensions_json) : [],
+      )
+      return {
+        id: topology.id,
+        name: topology.name,
+        graph,
+        layout,
+        resolved,
+        iconDimensions,
+        metrics: this.createEmptyMetrics(graph),
+        topologySourceId: topology.topologySourceId,
+        metricsSourceId: topology.metricsSourceId,
+        mapping: this.buildMapping(topology, graph),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Persist the resolved graph + layout + icon dimensions as a derived artifact,
+   * stamped with the revision it was built FROM (captured before the resolve, so
+   * a mid-resolve input change leaves this immediately stale). Best-effort.
+   */
+  private writeResolvedArtifact(
+    topology: Topology,
+    parsed: ParsedTopology,
+    builtRevision: number,
+  ): void {
+    try {
+      this.db
+        .query(
+          `INSERT OR REPLACE INTO topology_resolved_graph
+             (topology_id, graph_json, layout_json, icon_dimensions_json,
+              built_revision, resolver_version, computed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          topology.id,
+          JSON.stringify(parsed.graph),
+          JSON.stringify({ layout: parsed.layout, resolved: parsed.resolved }),
+          JSON.stringify([...parsed.iconDimensions.entries()]),
+          builtRevision,
+          RESOLVER_VERSION,
+          timestamp(),
+        )
+    } catch {
+      // Persisting is best-effort — a failure just means the next read recomputes.
     }
   }
 
@@ -910,12 +1031,28 @@ export class TopologyService {
   }
 
   /**
-   * Clear cached topology by ID
+   * Clear cached topology by ID. Also bumps `composition_revision` so the
+   * persisted resolved-graph artifact (L2) is invalidated in lockstep with the
+   * RAM cache — every invalidation site funnels through here, so the artifact
+   * can never be served stale relative to a RAM clear.
    */
   clearCacheEntry(id: string): void {
     this.cache.delete(id)
     this.renderCache.delete(id)
     this.errorCache.delete(id)
+    this.bumpCompositionRevision(id)
+  }
+
+  /** Bump the composition revision (invalidates the persisted resolved artifact). */
+  private bumpCompositionRevision(id: string): void {
+    try {
+      this.db
+        .query('UPDATE topologies SET composition_revision = composition_revision + 1 WHERE id = ?')
+        .run(id)
+    } catch {
+      // Column missing (pre-migration) or row gone — invalidation degrades to
+      // the RAM cache only, which is still correct within the process.
+    }
   }
 
   /**
