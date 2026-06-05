@@ -499,24 +499,50 @@ function mergeMetadata(ranked: ClusterMember[]): Record<string, unknown> {
  * survives re-scans. Output order is deterministic (access by protocol, then
  * the rest) — independent of who won.
  */
-function foldAttachments(ranked: ClusterMember[], suppressedKeys: string[] = []): Attachment[] {
+/**
+ * Member-agnostic attachment fold core. `entries` must be priority desc; each
+ * carries its source, capture time, and the attachment list to fold. Used for
+ * both node clusters (`foldAttachments`) and port clusters
+ * (`foldPortAttachments`) so merge + suppression + provenance + ordering stay
+ * identical across element kinds.
+ */
+function foldAttachmentEntries(
+  entries: Array<{ sourceId: string; capturedAt: number; attachments?: Attachment[] }>,
+  suppressedKeys: string[] = [],
+): Attachment[] {
   const suppressed = new Set(suppressedKeys)
   const byKey = new Map<string, Attachment>()
-  for (const m of ranked) {
-    for (const a of m.node.attachments ?? []) {
+  for (const e of entries) {
+    for (const a of e.attachments ?? []) {
       const k = attachmentKey(a)
       if (suppressed.has(k) || byKey.has(k)) continue
       byKey.set(k, {
         ...a,
         provenance: {
-          source: m.sourceId,
-          observedAt: Number.isFinite(m.capturedAt) ? m.capturedAt : undefined,
+          source: e.sourceId,
+          observedAt: Number.isFinite(e.capturedAt) ? e.capturedAt : undefined,
         },
       })
     }
   }
-  const order = (a: Attachment): string => (a.kind === 'access' ? `0:${a.protocol}` : `1:${a.kind}`)
+  const order = (a: Attachment): string =>
+    a.kind === 'access'
+      ? `0:${a.protocol}`
+      : a.kind === 'metrics-binding'
+        ? `2:${a.sourceId}`
+        : `1:${a.kind}`
   return [...byKey.values()].sort((a, b) => order(a).localeCompare(order(b)))
+}
+
+function foldAttachments(ranked: ClusterMember[], suppressedKeys: string[] = []): Attachment[] {
+  return foldAttachmentEntries(
+    ranked.map((m) => ({
+      sourceId: m.sourceId,
+      capturedAt: m.capturedAt,
+      attachments: m.node.attachments,
+    })),
+    suppressedKeys,
+  )
 }
 
 function mergeIdentities(identities: Array<Identity | undefined>): Identity | undefined {
@@ -672,6 +698,30 @@ function foldPortCluster(members: PortMember[]): NodePort {
   if (notes !== undefined) folded.notes = notes
   const placement = pick((p) => p.placement)
   if (placement !== undefined) folded.placement = placement
+
+  // Attachments (e.g. link metrics-binding): per key, highest-priority wins,
+  // human suppression drops the slot, provenance stamped — same machinery as
+  // node attachments so a port binding follows re-sync by identity. Only the
+  // human (authored) contribution may suppress.
+  const suppressed = Array.from(
+    new Set(
+      members
+        .filter((m) => m.sourceId === 'authored')
+        .flatMap((m) => m.port.suppressedAttachments ?? []),
+    ),
+  )
+  const attachments = foldAttachmentEntries(
+    ranked.map((m) => ({
+      sourceId: m.sourceId,
+      capturedAt: m.capturedAt,
+      attachments: m.port.attachments,
+    })),
+    suppressed,
+  )
+  // Override the spread-from-top.port values so a suppressed/lost binding
+  // doesn't survive via the base copy.
+  folded.attachments = attachments.length > 0 ? attachments : undefined
+  folded.suppressedAttachments = suppressed.length > 0 ? suppressed : undefined
   return folded
 }
 
