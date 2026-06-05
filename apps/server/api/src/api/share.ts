@@ -155,12 +155,14 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
   })
 
   // Topology metadata (name, mappingJson) for a widget in a shared dashboard.
-  app.get('/dashboards/:token/topologies/:id', (c) => {
+  app.get('/dashboards/:token/topologies/:id', async (c) => {
     const id = c.req.param('id')
     if (!c.get('reachable').topologyIds.has(id)) return c.json({ error: 'Not found' }, 404)
     const topology = getTopologyService().get(id)
     if (!topology) return c.json({ error: 'Not found' }, 404)
-    return c.json(publicTopology(topology))
+    // Expose the RESOLVED mapping (node bindings live as attachments post-backfill).
+    const parsed = await getTopologyService().getParsed(id)
+    return c.json(publicTopology(topology, parsed?.mapping))
   })
 
   // Raw NetworkGraph for a topology widget in a shared dashboard.

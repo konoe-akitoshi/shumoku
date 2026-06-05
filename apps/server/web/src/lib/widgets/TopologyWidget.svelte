@@ -63,24 +63,31 @@
   const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
   const editMode = $derived($dashboardEditMode)
 
+  // The RESOLVED node→host mapping (metrics-binding attachments ∪ residual).
+  // Fetched in authenticated mode; in a shared view `topology.mappingJson`
+  // already carries the resolved mapping (server-side publicTopology projection).
+  let derivedNodeMapping = $state<Record<string, { hostName?: string }> | null>(null)
+
   /**
    * Reverse lookup: monitoring host name → topology node id. Built from the
-   * topology's saved mapping. Used to resolve cross-widget highlight events
-   * that arrive with hostnames (e.g. from AlertWidget) into node ids that
-   * HighlightOverlay can match against `data-id` in the SVG.
+   * resolved mapping. Used to resolve cross-widget highlight events that arrive
+   * with hostnames (e.g. from AlertWidget) into node ids that HighlightOverlay
+   * can match against `data-id` in the SVG.
    */
   const hostToNodeId = $derived.by(() => {
     const map = new Map<string, string>()
-    if (!topology?.mappingJson) return map
-    try {
-      const m = JSON.parse(topology.mappingJson) as {
-        nodes?: Record<string, { hostName?: string }>
+    let nodes = derivedNodeMapping
+    if (!nodes && topology?.mappingJson) {
+      try {
+        nodes =
+          (JSON.parse(topology.mappingJson) as { nodes?: Record<string, { hostName?: string }> })
+            .nodes ?? null
+      } catch {
+        // ignore malformed mappingJson
       }
-      for (const [nodeId, info] of Object.entries(m.nodes ?? {})) {
-        if (info?.hostName) map.set(info.hostName, nodeId)
-      }
-    } catch {
-      // ignore malformed mappingJson
+    }
+    for (const [nodeId, info] of Object.entries(nodes ?? {})) {
+      if (info?.hostName) map.set(info.hostName, nodeId)
     }
     return map
   })
@@ -102,6 +109,16 @@
     error = ''
     try {
       topology = await api.topologies.get(config.topologyId)
+      // Authenticated: fetch the resolved mapping (node bindings live as
+      // attachments). Shared view relies on topology.mappingJson (already
+      // resolved server-side); getMapping isn't reachable there.
+      if (!isSharedView()) {
+        try {
+          derivedNodeMapping = (await api.topologies.getMapping(config.topologyId)).nodes ?? {}
+        } catch {
+          derivedNodeMapping = null
+        }
+      }
       const { graph } = await api.topologies.getGraph(config.topologyId)
       rootGraph = graph
 

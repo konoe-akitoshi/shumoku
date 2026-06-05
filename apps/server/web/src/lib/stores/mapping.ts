@@ -149,10 +149,11 @@ function createMappingStore() {
 
       // Fetch the RESOLVED mapping (bindings ∪ residual), not topo.mappingJson —
       // node bindings live as attachments and would be missed (and stripped on
-      // save) if we parsed the blob.
+      // save) if we parsed the blob. Guard against a topology switch mid-flight:
+      // only apply if the store is still on this topology.
       api.topologies
         .getMapping(topologyId)
-        .then((mapping) => update((s) => ({ ...s, mapping })))
+        .then((mapping) => update((s) => (s.topologyId === topologyId ? { ...s, mapping } : s)))
         .catch(() => {
           /* leave the empty mapping; a transient resolve failure isn't fatal */
         })

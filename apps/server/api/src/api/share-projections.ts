@@ -15,16 +15,22 @@
 
 import { specDeviceType } from '@shumoku/core'
 import type { ParsedTopology } from '../services/topology.js'
-import type { Topology } from '../types.js'
+import type { MetricsMapping, Topology } from '../types.js'
 import { applyMappingBandwidth } from './topologies.js'
 
 /**
- * Topology metadata safe for a shared dashboard widget. Keeps `mappingJson`
- * (the topology widget reads it to map node→host for status overlays) but
- * drops `shareToken`, data-source ids, and timestamps.
+ * Topology metadata safe for a shared dashboard widget. Exposes `mappingJson`
+ * (the topology widget reads it to map node→host for status overlays) but drops
+ * `shareToken`, data-source ids, and timestamps. Prefer the RESOLVED mapping
+ * (`metrics-binding` attachments ∪ residual) over the raw `mapping_json` column,
+ * which post-backfill no longer carries node bindings.
  */
-export function publicTopology(t: Topology): { id: string; name: string; mappingJson?: string } {
-  return { id: t.id, name: t.name, mappingJson: t.mappingJson }
+export function publicTopology(
+  t: Topology,
+  resolvedMapping?: MetricsMapping,
+): { id: string; name: string; mappingJson?: string } {
+  const mappingJson = resolvedMapping ? JSON.stringify(resolvedMapping) : t.mappingJson
+  return { id: t.id, name: t.name, mappingJson }
 }
 
 /**

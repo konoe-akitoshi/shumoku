@@ -403,8 +403,18 @@ export class TopologyService {
 
     const sourceId = this.metricsSourceIdFor(id)
     const parsed = await this.getParsed(id)
+    // Refuse to reconcile against an unresolved graph: with no node identities,
+    // EVERY existing binding for the source would be stripped (the reconcile
+    // sees an empty desired set). A transient resolve failure must not wipe
+    // bindings — surface it so the caller can retry. (PATCH guards too, but PUT
+    // calls this directly.)
+    if (!parsed) {
+      throw new Error(
+        'cannot resolve topology graph; refusing to update mapping (would drop bindings)',
+      )
+    }
     const identityByNodeId = new Map<string, Identity | undefined>(
-      (parsed?.graph.nodes ?? []).map((n) => [n.id, n.identity]),
+      parsed.graph.nodes.map((n) => [n.id, n.identity]),
     )
 
     // Split: anchorable node bindings vs the residual (kept in mapping_json).
