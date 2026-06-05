@@ -179,6 +179,29 @@ Three layers:
   of truth, because item ids are volatile.
 - **value** (bps / status) — never stored; fetched per poll.
 
+**The resolution layer must reach the plugin boundary as identity, not a name**
+(Codex BLOCKER). Storing `interfaceIdentity` is pointless if the poll then matches
+by name. Today the metrics contract is name-based:
+`LinkMetricsMapping.interface: string` (`plugin-types.ts:208`),
+`HostItem.interfaceName?: string` (`:67`),
+`InterfaceNeighbor.localInterface: string` (`:87`), and plugins poll by that name
+(Zabbix `plugin.ts:192`, Aruba `plugin.ts:286`, Prometheus `types.ts:54`). So the
+contract gains identity on both sides:
+- **Plugin exposes** source-side port identity: `HostItem.interfaceIdentity?:
+  Identity`, `InterfaceNeighbor.localInterfaceIdentity?: Identity`. (Plugins that
+  only know a name set `interfaceName`; the resolver treats name as a weak key —
+  the accepted residual for sources without ifIndex/mac.)
+- **Poll input is derived, not stored**: the server builds the per-poll
+  `LinkMetricsMapping` from `MetricsBindingAttachment.interfaceIdentity` by
+  matching against the source's listed `interfaceIdentity` to get the *current*
+  name/item id — a transient poll-adapter output, re-derived each cycle (this IS
+  the resolution cache). `LinkMetricsMapping.interface` stays a string at the
+  plugin call (no plugin rewrite), but it's freshly resolved from identity, so a
+  provider-side rename re-resolves instead of breaking.
+- **Acceptance:** rename an interface on the metrics source → link metrics keep
+  resolving (the stored `interfaceName` is never the match key; identity drives the
+  re-resolution).
+
 **One binding per (source, element) — invariant.** `attachmentKey` =
 `metrics-binding:${sourceId}` deliberately allows *different* metrics sources to
 each bind one element, but assumes a single binding per source per element. If a
@@ -393,9 +416,15 @@ not `012_*.sql` (Codex BLOCKER).
   the backfill has run and been spot-checked, `ALTER TABLE topologies DROP COLUMN
   mapping_json`. Keep the column readable until then (no dual *write*, but a safe
   rollback window).
-- **Poll:** binding carries identity, not item id. Per-poll, resolve port
-  identity → counter id through a **re-validated cache** (Phase 2 may keep this in
-  RAM in the plugin/poll loop; durable cache table is optional, see residuals).
+- **Poll:** binding carries identity, not item id. Add `interfaceIdentity` to the
+  metrics-plugin contract (`HostItem.interfaceIdentity`,
+  `InterfaceNeighbor.localInterfaceIdentity` in `plugin-types.ts`); the server
+  derives each poll's `LinkMetricsMapping.interface` from the binding's
+  `interfaceIdentity` by matching the source's *current* interface list (the
+  resolution layer / §1). Resolve port identity → counter id through a
+  **re-validated cache** (Phase 2 may keep this in RAM in the plugin/poll loop;
+  durable cache table is optional, see residuals). Plugin call signatures don't
+  change — only how the name they receive is obtained.
 - **Acceptance:** add/remove/reorder a device, re-sync → bindings stay attached
   (no `discovered:N` drift); backfill produces an audit list and migrates every
   *recoverable* entry; metrics still render; after the drop migration no code reads
