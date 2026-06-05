@@ -1,6 +1,8 @@
-# Zabbix LLDP Topology Source — Design
+# Zabbix Topology Source — Design
 
-Status: spec (2026-06-05). Supersedes the initial map-import approach (#341).
+Status: implemented (2026-06-05). Supersedes the initial map-import approach (#341).
+Rebuilt by cross-referencing the Zabbix 7.0 API spec, the live `zabbix-test` data,
+and the human-built ShowNet sysmaps.
 
 ## Goal
 
@@ -9,8 +11,14 @@ standard Zabbix data** — no dependency on Zabbix maps or the custom netmap/L2D
 map-generation module, and **no direct SNMP reach** from shumoku (Zabbix is the
 collector).
 
-- **nodes** ← `host.get` (scoped by host group)
-- **links** ← per-host **LLDP-MIB** neighbor items (`lldp.rem.*` / `lldp.loc.*`)
+- **nodes** ← `host.get` (scoped by host group). Keyed on `name` (the real
+  hostname; `host.host` is the management IP in this data).
+- **links** ← per-host **LLDP-MIB** neighbor items (`lldp.rem.*` / `lldp.loc.*`),
+  plus a **`PARENT` host-tag** fallback where LLDP saw no neighbor.
+- **groups** ← host groups, honoring the Zabbix `/` nesting convention.
+- **device type/vendor/model** ← `inventory.{type,vendor,model}` (spec, usually
+  empty) → parse `inventory.hardware` / SNMP **sysDescr** (`lldp.sys.desc` /
+  `system.descr`).
 
 ## Why this works (verified 2026-06-05 against zabbix-test, Zabbix 7.0.23)
 
@@ -26,11 +34,41 @@ collector).
 
 | key | type | note |
 |-----|------|------|
-| `hostGroups` | string[] (`optionsSource:'hostgroup'`, freeSolo) | **Scope.** Strongly recommended — instances have 1000s of hosts (zabbix-test: 1386). Empty = all (guarded/limited). |
-| `groupBy` | `'hostgroup'` \| `'none'` (default `hostgroup`) | Subgraphs from host groups (most-specific). Reused from the map version. |
-| `includeExternalNeighbors` | boolean (default `true`) | Synthesize nodes for LLDP neighbors that aren't Zabbix hosts. |
+| `hostGroups` | string[] (`optionsSource:'hostgroup'`, freeSolo) | **Scope.** Strongly recommended — instances have 1000s of hosts (zabbix-test: 1386). Empty = all. |
+| `groupBy` | `'hostgroup'` \| `'none'` (default `hostgroup`) | Subgraphs from host groups (most-specific, `/`-nested). |
+| `groupExclude` | string[] (freeSolo) | Host-group names to never use as a subgraph (admin / catch-all groups). |
+| `includeExternalNeighbors` | boolean (default `true`) | Synthesize nodes for LLDP/tag neighbors that aren't Zabbix hosts. |
+| `parentTag` | string (default `'PARENT'`) | Host-tag name whose value names an upstream device → fallback link where LLDP saw nothing. Empty disables. |
 
 `getConfigOptions('hostgroup')` supplies candidates via `hostgroup.get`.
+
+## Grouping (Zabbix host groups, `/`-nested)
+
+Zabbix host groups nest via the **`/`** separator (`A/B/C` → `A ⊃ A/B ⊃ A/B/C`);
+parent levels aren't real objects, so synthesize them by splitting the name. A
+node lands in its **most-specific** group: deepest `/` path, then fewest members
+(so an admin/catch-all group that contains everyone loses), then name.
+`groupExclude` drops named admin groups. (ShowNet groups are flat dotted names —
+`016.000.Backbone Routers` — with no `/`, so nesting is inert there but spec-correct.)
+There is **no "primary group"** in Zabbix — this most-specific policy is ours.
+
+## Device type / vendor / model
+
+Zabbix has no device-role enum. Order: structured `inventory.{vendor,model,type}`
+(spec-faithful but ~0% populated here) → parse the most informative of
+`inventory.hardware` / SNMP **sysDescr** (skipping a value that just echoes the
+hostname). sysDescr comes from `lldp.sys.desc` / `lldp.loc.sys.desc` / `system.descr`
+items fetched alongside the LLDP data. Maps to `DeviceType` (router / l3-switch /
+l2-switch / firewall / server / access-point) by keyword. Coverage on zabbix-test
+group 98: 33/63 typed, 35/63 vendor (vs ~10% from inventory.hardware alone).
+
+## Links: LLDP + PARENT-tag fallback
+
+LLDP neighbors are the authoritative edges (blue in the ShowNet maps). Where a
+host has no LLDP neighbor, a `PARENT` host-tag (value = upstream device name; the
+green links in the maps) adds a fallback edge — but only if that node-pair isn't
+already LLDP-linked. Tag links carry `metadata.discoveredVia='zabbix-parent-tag'`
+(LLDP: `'zabbix-lldp'`).
 
 ## LLDP item families (per host, joined by the item NAME `[ifName]` suffix)
 

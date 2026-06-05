@@ -31,7 +31,7 @@ import type {
 } from '@shumoku/core'
 import { addHttpWarning, mapWithConcurrency } from '@shumoku/core'
 import { createHttpClient, type HttpClient } from '@shumoku/plugin-sdk'
-import { convertLldpToGraph } from './topology.js'
+import { convertZabbixToGraph } from './topology.js'
 import type {
   ZabbixHost,
   ZabbixItem,
@@ -557,32 +557,41 @@ export class ZabbixPlugin
       ...(groupIds && groupIds.length > 0 ? { groupids: groupIds } : {}),
       output: ['hostid', 'host', 'name', 'status'],
       selectInterfaces: ['ip', 'dns', 'main', 'type', 'useip'],
-      selectInventory: ['hardware'],
+      selectInventory: ['type', 'vendor', 'model', 'hardware', 'os', 'serialno_a', 'location'],
       selectHostGroups: ['groupid', 'name'],
+      selectTags: 'extend',
     })
 
-    const neighborsByHostId = await this.fetchLldpNeighbors(hosts.map((h) => h.hostid))
+    const { neighborsByHostId, sysDescrByHostId } = await this.fetchLldpData(
+      hosts.map((h) => h.hostid),
+    )
 
     const sourceId = this.config?.instanceId ?? 'zabbix'
-    return convertLldpToGraph(hosts, neighborsByHostId, {
+    return convertZabbixToGraph(hosts, neighborsByHostId, sysDescrByHostId, {
       sourceId,
       observedAt: Date.now(),
       groupBy: opts?.groupBy,
       groupExclude: opts?.groupExclude,
       includeExternalNeighbors: opts?.includeExternalNeighbors,
+      parentTag: opts?.parentTag,
     })
   }
 
   /**
-   * Assemble per-host LLDP adjacencies from the standard LLDP-MIB items
-   * (`lldp.rem.*` + `lldp.loc.if.ifSpeed`). Items are fetched in host-id batches
-   * and joined per interface by the `[ifName]` suffix in the item NAME (item keys
-   * are inconsistently shaped across families). Hosts without `lldp.rem.*` items
-   * yield no neighbors (→ nodes-only).
+   * Assemble, per host: (a) LLDP adjacencies from the standard LLDP-MIB items
+   * (`lldp.rem.*` + `lldp.loc.if.ifSpeed`), joined per interface by the `[ifName]`
+   * suffix in the item NAME (item keys are inconsistently shaped across families);
+   * and (b) the host's own SNMP sysDescr (`lldp.sys.desc` / `system.descr`) for
+   * device-type derivation. Items are fetched in host-id batches. Hosts without
+   * `lldp.rem.*` items yield no neighbors (→ nodes-only).
    */
-  private async fetchLldpNeighbors(hostIds: string[]): Promise<Map<string, ZabbixLldpNeighbor[]>> {
-    const result = new Map<string, ZabbixLldpNeighbor[]>()
-    if (hostIds.length === 0) return result
+  private async fetchLldpData(hostIds: string[]): Promise<{
+    neighborsByHostId: Map<string, ZabbixLldpNeighbor[]>
+    sysDescrByHostId: Map<string, string>
+  }> {
+    const neighborsByHostId = new Map<string, ZabbixLldpNeighbor[]>()
+    const sysDescrByHostId = new Map<string, string>()
+    if (hostIds.length === 0) return { neighborsByHostId, sysDescrByHostId }
 
     const families = [
       'lldp.rem.sysname',
@@ -590,7 +599,13 @@ export class ZabbixPlugin
       'lldp.rem.chassisid',
       'lldp.loc.if.ifSpeed',
       'lldp.loc.if.ifHighSpeed',
+      'lldp.sys.desc',
+      'lldp.loc.sys.desc',
+      'system.descr',
+      'sysDescr',
     ]
+    // the host's OWN sysDescr (NOT the per-neighbor lldp.rem.sys.desc)
+    const sysDescrKeys = new Set(['lldp.sys.desc', 'lldp.loc.sys.desc'])
     const batches = Array.from({ length: Math.ceil(hostIds.length / LLDP_HOST_BATCH) }, (_, i) =>
       hostIds.slice(i * LLDP_HOST_BATCH, (i + 1) * LLDP_HOST_BATCH),
     )
@@ -608,13 +623,26 @@ export class ZabbixPlugin
       ),
     )
 
-    // group: hostid → ifName → { family: value }
+    // group LLDP per-IF data: hostid → ifName → { family: value }; capture sysDescr.
     const byHostIf = new Map<string, Map<string, Record<string, string>>>()
     for (const items of itemArrays) {
       for (const it of items) {
+        const family = it.key_.split('[')[0] ?? ''
+        if (
+          sysDescrKeys.has(family) ||
+          family.startsWith('system.descr') ||
+          family === 'sysDescr'
+        ) {
+          const v = (it.lastvalue ?? '').trim()
+          // a real sysDescr has spaces; ignore degenerate hostname echoes
+          if (v && /\s/.test(v)) {
+            const cur = sysDescrByHostId.get(it.hostid)
+            if (!cur || v.length > cur.length) sysDescrByHostId.set(it.hostid, v)
+          }
+          continue
+        }
         const ifName = it.name.match(ifSuffix)?.[1]
-        const family = it.key_.split('[')[0]
-        if (!ifName || !family) continue
+        if (!ifName) continue
         let ifMap = byHostIf.get(it.hostid)
         if (!ifMap) {
           ifMap = new Map()
@@ -643,9 +671,9 @@ export class ZabbixPlugin
           speedBps,
         })
       }
-      if (neighbors.length > 0) result.set(hostId, neighbors)
+      if (neighbors.length > 0) neighborsByHostId.set(hostId, neighbors)
     }
-    return result
+    return { neighborsByHostId, sysDescrByHostId }
   }
 
   // ============================================

@@ -33,11 +33,17 @@ export interface ZabbixTopologyOptions {
   /** Host-group names to never use as a subgraph (admin / catch-all groups). */
   groupExclude?: string[]
   /**
-   * Synthesize a node for an LLDP neighbor that isn't a Zabbix host (default
-   * true) so the link still renders and a later discovery of that device
-   * clusters with it. When false, links to non-host neighbors are dropped.
+   * Synthesize a node for an LLDP neighbor / tag upstream that isn't a Zabbix
+   * host (default true) so the link still renders and a later discovery of that
+   * device clusters with it. When false, links to non-host devices are dropped.
    */
   includeExternalNeighbors?: boolean
+  /**
+   * Host-tag name whose value names an upstream device (e.g. `PARENT=core.noc`).
+   * Used to draw a "tag-derived" link where LLDP has no neighbor — the green
+   * links in the ShowNet maps. Default `'PARENT'`; empty disables tag links.
+   */
+  parentTag?: string
 }
 
 /**
@@ -81,12 +87,20 @@ export interface ZabbixParentTemplate {
   name: string
 }
 
+/** A `{tag, value}` from `host.get` `selectTags`. */
+export interface ZabbixTag {
+  tag: string
+  value?: string
+}
+
 /**
  * Host inventory (`host.get` `selectInventory`). Free-text fields, mostly empty
- * under auto inventory mode; `hardware` is the most reliable device-facts source
- * (vendor/model/OS as an SNMP sysDescr-style string).
+ * under auto inventory mode. The structured `type`/`vendor`/`model` are the
+ * spec-faithful device facts; `hardware` is an SNMP sysDescr-style fallback.
  */
 export interface ZabbixInventory {
+  /** Free-text device type/role, e.g. "Router". Spec field; often empty. */
+  type?: string
   hardware?: string
   vendor?: string
   model?: string
@@ -109,6 +123,8 @@ export interface ZabbixHost {
   parentTemplates?: ZabbixParentTemplate[]
   /** Present when `host.get` is called with `selectInventory`. */
   inventory?: ZabbixInventory
+  /** Present when `host.get` is called with `selectTags`. */
+  tags?: ZabbixTag[]
 }
 
 export interface ZabbixItem {

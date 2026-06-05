@@ -76,6 +76,12 @@ const optionsSchema: PluginConfigSchema = {
       default: true,
       help: 'Add nodes for LLDP neighbors that are not Zabbix hosts, so their links still render.',
     },
+    parentTag: {
+      type: 'string',
+      title: 'Parent tag',
+      default: 'PARENT',
+      help: 'Host-tag name whose value names an upstream device — draws a link where LLDP saw no neighbor. Empty to disable.',
+    },
   },
 }
 
