@@ -90,7 +90,16 @@ function stringifyWithMaps(value: unknown): string {
 }
 function parseWithMaps<T>(text: string): T {
   return JSON.parse(text, (_k, v) => {
-    if (v && typeof v === 'object' && Array.isArray((v as Record<string, unknown>)[MAP_TAG])) {
+    // Only the encoder's exact shape `{ __map__: [...] }` (a single key) is a
+    // tagged Map — so a real object that merely *has* a `__map__` array property
+    // is not misread as a Map.
+    if (
+      v &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      Object.keys(v).length === 1 &&
+      Array.isArray((v as Record<string, unknown>)[MAP_TAG])
+    ) {
       return new Map((v as Record<string, [unknown, unknown][]>)[MAP_TAG])
     }
     return v
@@ -703,13 +712,19 @@ export class TopologyService {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       const phase = message.includes('Invalid NetworkGraph') ? 'parse' : 'layout'
-      this.errorCache.set(id, {
-        id,
-        name: topology.name,
-        phase,
-        message,
-        timestamp: Date.now(),
-      })
+      // Only cache the failure if the inputs haven't changed since the parse
+      // started. A concurrent edit (revision bump) may have already fixed the
+      // cause; caching a stale error would make later reads short-circuit to
+      // null until the next invalidation.
+      if (this.compositionRevisionOf(id) === revisionAtStart) {
+        this.errorCache.set(id, {
+          id,
+          name: topology.name,
+          phase,
+          message,
+          timestamp: Date.now(),
+        })
+      }
       console.error(
         `[TopologyService] Failed to parse topology "${topology.name}" (${id}):`,
         message,
