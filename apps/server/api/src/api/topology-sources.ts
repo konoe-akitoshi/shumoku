@@ -113,6 +113,8 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
 
   try {
     const source = await getTopologySourcesService().add(topologyId, body)
+    // Attaching a source changes the resolve input set → invalidate.
+    getTopologyService().clearCacheEntry(topologyId)
     return c.json(source, 201)
   } catch (error) {
     return c.json(
@@ -147,6 +149,8 @@ topologySourcesApi.put('/:topologyId/sources/:sourceId', async (c) => {
     return c.json({ error: 'Failed to update' }, 500)
   }
 
+  // Priority feeds the resolver's field merge → invalidate.
+  getTopologyService().clearCacheEntry(topologyId)
   return c.json(updated)
 })
 
@@ -173,6 +177,8 @@ topologySourcesApi.delete('/:topologyId/sources/:sourceId', async (c) => {
     return c.json({ error: 'Failed to delete' }, 500)
   }
 
+  // Detaching a source removes it from the resolve input set → invalidate.
+  getTopologyService().clearCacheEntry(topologyId)
   return c.json({ success: true })
 })
 
@@ -208,6 +214,8 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
 
   try {
     const sources = await getTopologySourcesService().replaceAll(topologyId, body.sources)
+    // Replacing the source set changes resolve inputs → invalidate.
+    getTopologyService().clearCacheEntry(topologyId)
     return c.json(sources)
   } catch (error) {
     return c.json(

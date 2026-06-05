@@ -75,6 +75,28 @@ function rowToTopology(row: TopologyRow): Topology {
  */
 const RESOLVER_VERSION = 1
 
+/**
+ * Map-aware JSON round-trip. `LayoutResult` / `ResolvedLayout` are Map-heavy
+ * (nodes/links/ports/subgraphs are `Map`s) and `JSON.stringify` silently turns a
+ * Map into `{}`, so the persisted artifact would be corrupt. These encode a Map
+ * as `{__map__: [...entries]}` recursively (the replacer/reviver visit every
+ * value), so arbitrarily-nested Maps survive the round-trip.
+ */
+const MAP_TAG = '__map__'
+function stringifyWithMaps(value: unknown): string {
+  return JSON.stringify(value, (_k, v) =>
+    v instanceof Map ? { [MAP_TAG]: Array.from(v.entries()) } : v,
+  )
+}
+function parseWithMaps<T>(text: string): T {
+  return JSON.parse(text, (_k, v) => {
+    if (v && typeof v === 'object' && Array.isArray((v as Record<string, unknown>)[MAP_TAG])) {
+      return new Map((v as Record<string, [unknown, unknown][]>)[MAP_TAG])
+    }
+    return v
+  }) as T
+}
+
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
   topology_id: string
@@ -669,9 +691,14 @@ export class TopologyService {
     const revisionAtStart = this.compositionRevisionOf(id)
     try {
       const parsed = await this.parseTopology(topology)
-      this.cache.set(id, parsed)
       this.errorCache.delete(id)
-      this.writeResolvedArtifact(topology, parsed, revisionAtStart)
+      // If an input changed DURING the async resolve, this result is already
+      // stale: don't poison the RAM cache or persist it as fresh. Return it to
+      // the current caller (it asked for "now"), but the next read re-resolves.
+      if (this.compositionRevisionOf(id) === revisionAtStart) {
+        this.cache.set(id, parsed)
+        this.writeResolvedArtifact(topology, parsed, revisionAtStart)
+      }
       return parsed
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -741,8 +768,11 @@ export class TopologyService {
     for (const tds of this.topologySources.listByTopology(topology.id)) {
       priorityBySource.set(tds.dataSourceId, tds.priority)
     }
+    // Only currently-attached sources contribute. A detached source leaves its
+    // old observation rows behind, so without this filter a detached source
+    // would keep feeding the resolve from stale snapshots.
     const snapshots: SnapshotEntry[] = latest
-      .filter((o) => o.sourceId !== manualId)
+      .filter((o) => o.sourceId !== manualId && priorityBySource.has(o.sourceId))
       .map((o) => ({
         sourceId: o.sourceId,
         capturedAt: o.capturedAt,
@@ -842,10 +872,10 @@ export class TopologyService {
       if (row.built_revision !== this.compositionRevisionOf(topology.id)) return null
 
       const graph = JSON.parse(row.graph_json) as NetworkGraph
-      const { layout, resolved } = JSON.parse(row.layout_json) as {
+      const { layout, resolved } = parseWithMaps<{
         layout: LayoutResult
         resolved?: ResolvedLayout
-      }
+      }>(row.layout_json)
       const iconDimensions: ResolvedIconDimensions = new Map(
         row.icon_dimensions_json ? JSON.parse(row.icon_dimensions_json) : [],
       )
@@ -887,7 +917,7 @@ export class TopologyService {
         .run(
           topology.id,
           JSON.stringify(parsed.graph),
-          JSON.stringify({ layout: parsed.layout, resolved: parsed.resolved }),
+          stringifyWithMaps({ layout: parsed.layout, resolved: parsed.resolved }),
           JSON.stringify([...parsed.iconDimensions.entries()]),
           builtRevision,
           RESOLVER_VERSION,
@@ -1022,12 +1052,32 @@ export class TopologyService {
   }
 
   /**
-   * Clear all cached topologies
+   * Clear all cached topologies. Also bumps every composition revision so the
+   * persisted resolved-graph artifacts (L2) are invalidated in lockstep — a
+   * bulk RAM clear must not leave stale artifacts servable.
    */
   clearCache(): void {
     this.cache.clear()
     this.renderCache.clear()
     this.errorCache.clear()
+    try {
+      this.db.query('UPDATE topologies SET composition_revision = composition_revision + 1').run()
+    } catch {
+      // Pre-migration / no rows — RAM clear still applied.
+    }
+  }
+
+  /**
+   * Invalidate every topology attached to a given data source. Used when the
+   * data source itself changes (config edit — e.g. a Manual source's authored
+   * graph lives in its config_json — or deletion) so attached topologies don't
+   * serve a stale resolved artifact.
+   */
+  clearCacheForDataSource(dataSourceId: string): void {
+    const rows = this.db
+      .query('SELECT DISTINCT topology_id FROM topology_data_sources WHERE data_source_id = ?')
+      .all(dataSourceId) as { topology_id: string }[]
+    for (const { topology_id } of rows) this.clearCacheEntry(topology_id)
   }
 
   /**
