@@ -150,9 +150,26 @@ identity-matched element every run, so:
 - it follows re-sync / reorder / add-remove **by construction** — no stable-id
   registry, no separate `mapping_binding` table (supersedes that part of
   `metrics-mapping-model.md`);
-- a **metrics source is just another contribution**: it can emit binding
-  attachments as observations, so auto-map becomes mostly *observed* and the
-  human only overrides (add / change / suppress) via the same priority-merge.
+- the binding is keyed by **identity on both ends** — element identity (node /
+  port) ↔ *source-side* identity (host id/name for nodes; **interface identity**
+  for ports, NOT an interface name string). A provider-side interface rename must
+  not break it, so the link binding stores `interfaceIdentity?: Identity` (ifName/
+  ifIndex/mac) with `interfaceName?` kept only as a human label / migration
+  fallback. (Codex BLOCKER: storing `interface: string` re-introduces the
+  name-fragility we're removing.)
+
+**Who produces bindings (scoped honestly).** Today bindings are **authored /
+human** — there is no plugin capability to *emit* a binding as an observation
+(`MetricsCapable` only has `pollMetrics`/host+item listing). So:
+- **Now (Phase 2):** bindings are human/authored contributions, carried in the
+  Manual source's authored graph and folded by resolve. Auto-map becomes a
+  server-side job that *writes authored bindings* (origin still `authored`), not
+  an emergent observed layer.
+- **Later (future capability):** a metrics source could emit binding attachments
+  as observations (a new `BindingDiscoveryCapable` or a metrics-source observation
+  graph of stub identity nodes/ports), at which point auto-map becomes mostly
+  *observed* and the human only overrides. The attachment + priority-merge model
+  already accommodates this — it's an additive capability, not a remodel.
 
 Three layers:
 - **binding** (element-identity ↔ source/host/port-identity) — the durable field,
@@ -162,12 +179,38 @@ Three layers:
   of truth, because item ids are volatile.
 - **value** (bps / status) — never stored; fetched per poll.
 
+**One binding per (source, element) — invariant.** `attachmentKey` =
+`metrics-binding:${sourceId}` deliberately allows *different* metrics sources to
+each bind one element, but assumes a single binding per source per element. If a
+future need appears (per-metric-role binding, aggregate/member interfaces),
+extend the key to `metrics-binding:${sourceId}:${role}` — do not overload one
+slot. State the invariant in code so it's a conscious change later.
+
 ### 2. Resolved current graph — materialize, don't recompute-per-poll
 Persist the resolver output so reads/polls don't re-resolve + re-layout each
 time: store the resolved graph (and layout) per topology as a derived artifact,
 recomputed only when an observation/authored edit invalidates it — not on every
 metrics poll. Lowest risk; kills the "resolve+layout every cycle" cost; keeps the
 NetworkGraph shape.
+
+**Invalidation must be O(1), not a per-poll blob hash.** Do NOT recompute a hash
+over observation/authored blobs on every `getParsed()` — that re-introduces
+per-poll DB work proportional to topology size (Codex SHOULD-FIX). Instead bump a
+cheap **`composition_revision`** integer on the `topologies` row whenever an input
+changes (observation recorded, authored edit, source attach/detach/priority). The
+materialized artifact stores the revision it was built from; a poll compares two
+integers. The artifact key must also fold a **`resolver_version` / `layout_version`**
+constant so a resolve/layout algorithm change invalidates stale artifacts without
+a manual purge.
+
+**Artifact shape.** `ParsedTopology` today carries graph, `layout`, `resolved`,
+`iconDimensions`, `metrics`, `mapping` (`services/topology.ts:85-95`). Persist
+the *derived-from-inputs* parts only: `graph_json` (resolved NetworkGraph) +
+`layout_json` (the full `computeNetworkLayout()` result: `{resolved, layout}`).
+**Metrics are always live** (never stored — they're per-poll values). **Icon
+dimensions** stay RAM-derived (a CDN-cached lookup, cheap, not composition
+truth); the derived `mapping` is computed from the resolved graph's bindings at
+read time (§1), not stored separately.
 
 **Deferred (YAGNI): full normalization.** Normalizing into
 `entity`/`entity_identity`/`entity_port`/`entity_link` tables (with
@@ -211,8 +254,18 @@ Design stance for the store:
   **open decision** — likely keep per-source unless an explicit grouping key is
   introduced.
 - The nesting-fix PR is **axis-1 only**, largely orthogonal to the mapping
-  (axis-2) work — it can land independently, but the store schema must already
-  carry containers + membership so it has somewhere to live.
+  (axis-2) work — it can land independently.
+
+**Storage in Phases 1–4: subgraphs stay JSON inside the resolved graph.** This
+plan does NOT add `container` / `membership` tables (Codex SHOULD-FIX: §4 must not
+imply DDL that Phases 1–4 don't deliver). Subgraphs already ride inside the
+`NetworkGraph` blob — the materialized artifact (§2) carries them as-is. The
+"reserve a slot" requirement is satisfied because the resolved-graph artifact is a
+full `NetworkGraph` and the axis-1 nesting fix operates on `resolve.ts`
+(`foldSubgraphs` / `namespaceSourceSubgraphs`) + the JSON shape, needing no new
+table. Dedicated container/membership tables are part of the deferred Phase 5
+normalization (or the axis-1 PR if it ever needs SQL over containers) — not
+this sequence.
 
 ### Boundary
 The API keeps emitting `NetworkGraph` / `TopologyContext` JSON, generated from
@@ -234,8 +287,13 @@ export interface MetricsBindingAttachment extends AttachmentMeta {
   /** Node binding: host identity within that source. */
   hostId?: string
   hostName?: string
-  /** Link binding (lives on the monitored NodePort): interface within source. */
-  interface?: string
+  /**
+   * Link binding (lives on the monitored NodePort): the source-side interface
+   * IDENTITY, not a name string — a provider-side rename must not break it.
+   */
+  interfaceIdentity?: Identity   // ifName/ifIndex/mac on the metrics source
+  /** Human label / migration fallback only — never the match key. */
+  interfaceName?: string
   /** Link bandwidth override (bps). */
   bandwidth?: number
 }
@@ -243,7 +301,9 @@ export type Attachment = AccessAttachment | PolicyAttachment | MetricsBindingAtt
 
 // attachmentKey() gains:  'metrics-binding' → `metrics-binding:${a.sourceId}`
 //   (one binding slot per metrics source → two metrics sources can both bind;
-//    human override replaces a source's slot, suppress removes it)
+//    human override replaces a source's slot, suppress removes it. ONE binding
+//    per (source, element) is an invariant — extend the key with a role segment
+//    if per-metric-role binding is ever needed; don't overload the slot.)
 
 // 2. Ports gain an attachment slot (risk #3). Today only Node/Subgraph/
 //    NetworkGraph carry attachments; link bindings live on the port.
@@ -254,12 +314,29 @@ export interface NodePort {
 }
 ```
 
-`resolve.ts` must fold port attachments the same way it folds node attachments
-(`foldNodeCluster`) — by `attachmentKey`, highest-priority contribution wins,
-`suppressedAttachments` removes, provenance stamped. **No new "where do human
-edits live" rail**: a human binding override is a `metrics-binding` attachment on
-the node/port inside the Manual source's authored graph — the same place
-access/policy overrides already persist.
+`resolve.ts` must fold port attachments the same way it folds node attachments.
+This is **not free today** (Codex BLOCKER) — wire all four touch points:
+- **`foldPortCluster()`** (`resolve.ts:626-653`) currently merges only scalar port
+  fields + identity + provenance. Add an attachment fold mirroring
+  `foldAttachments()` (`resolve.ts:502`): merge by `attachmentKey`, highest-priority
+  contribution wins, honor `suppressedAttachments`, stamp provenance.
+- **`NodePort`** gains `attachments` + `suppressedAttachments` (core types above).
+- **Suppression allowlist** (`api/discovery-policy.ts:58-66`) is hardcoded to
+  `access:*` / `policy` keys — it must accept `metrics-binding:*` keys too, or
+  human "remove this binding" can't persist.
+- **Authored-overlay rail** (`api/discovery-policy.ts:300-321`) only knows *node*
+  overlays and requires *node* identity. A link binding lives on a port, so define
+  the **port-only authored shape**: a thin authored node (carrying node identity so
+  resolve can cluster it) whose `ports[]` holds the target port (with `id`,
+  `label`, `connectors`, **port identity**, and the `metrics-binding` attachment).
+  Specify the fallback when port identity is weak/absent (fall back to port label
+  match within the identity-matched node; flag as low-confidence).
+
+**No new "where do human edits live" rail**: a human binding override is a
+`metrics-binding` attachment on the node/port inside the Manual source's authored
+graph — the same place access/policy overrides already persist. Add acceptance
+tests for: discovered-only port override, port-binding suppression, and
+re-scan-survival of both.
 
 ## Phasing (each independently shippable; schema-lock-aware)
 
@@ -282,51 +359,85 @@ link bindings can key on port identity instead of an interface *name* string.
   `mac` stable; resolve clusters the port across scans.
 
 ### Phase 2 — Mapping = `metrics-binding` attachment  · THE KEYSTONE
-Migration `012_metrics_binding.sql` + core types above.
-- **Core:** add `MetricsBindingAttachment`, `NodePort.attachments`,
-  `attachmentKey` case; fold port attachments in `resolve.ts`.
-- **Migration (`012`):** for each topology with `mapping_json`, re-key each entry
-  through the *current resolved graph* (node id → node identity, link id →
-  monitored port identity) and write a `metrics-binding` attachment
-  (`provenance.source='authored'`) into the Manual source's `config_json.graph`.
-  Entries whose identity can't be recovered are dropped (best-effort, logged).
-  Then `ALTER TABLE topologies DROP COLUMN mapping_json`.
-- **Server:** `parseTopology` stops reading `topology.mappingJson`; instead
-  **derive** `MetricsMapping` from the resolved graph by walking
-  `metrics-binding` attachments (`services/topology.ts:524-531` deleted; new
-  `deriveMappingFromGraph(graph)` helper). `updateMapping()` writes an attachment
+Core types above + a **TypeScript backfill** (NOT a pure-SQL migration) + a later
+contract migration. Follow expand → backfill → read-new/write-new → drop-old so
+the column is never dropped before data is safely moved.
+
+**Why not a `.sql` migration:** the migration runner (`db/schema.ts:115-139`) only
+splits SQL on `;` and `db.exec`s it — it cannot call `resolve()`, parse JSON, or
+mutate graphs. Re-keying needs the resolver. So the backfill is application code,
+not `012_*.sql` (Codex BLOCKER).
+
+- **Core:** add `MetricsBindingAttachment`, `NodePort.attachments` +
+  `suppressedAttachments`, `attachmentKey` case; fold port attachments in
+  `resolve.ts` (the four touch points listed above).
+- **Server reads (write-new path):** `parseTopology` stops reading
+  `topology.mappingJson`; instead **derive** `MetricsMapping` from the resolved
+  graph by walking `metrics-binding` attachments (replace
+  `services/topology.ts:524-531`; new `deriveMappingFromGraph(graph)` helper).
+  Also update the direct poll parse in `server.ts` (`~373-406`, incl. the
+  `link-${i}` fallback) and the mapping-mutation routes in
+  `api/topologies.ts` (`~374-423`). `updateMapping()` writes a binding attachment
   into the authored graph (reuse `discovery-policy.ts` authored-mutation path)
   instead of `mapping_json`.
+- **Backfill (one-shot, idempotent, audited):** for each topology with
+  `mapping_json`, resolve the current graph, map each entry (node id → node
+  identity; link id → the monitored endpoint's *port* identity) and write a
+  `metrics-binding` attachment (`provenance.source='authored'`) into the Manual
+  authored graph. **This is best-effort and cannot be assumed correct** — the old
+  keys are the unstable `discovered:N`, so a mapping that already drifted will
+  canonize a wrong host/interface. Emit an **audit artifact** per entry: old key,
+  resolved element label, identity quality (strong/weak/none), target host/iface,
+  and `unmigrated` reason. Do not silently drop — log every dropped entry.
+- **Drop-old (separate, later migration `0xx_drop_mapping_json.sql`):** only after
+  the backfill has run and been spot-checked, `ALTER TABLE topologies DROP COLUMN
+  mapping_json`. Keep the column readable until then (no dual *write*, but a safe
+  rollback window).
 - **Poll:** binding carries identity, not item id. Per-poll, resolve port
   identity → counter id through a **re-validated cache** (Phase 2 may keep this in
   RAM in the plugin/poll loop; durable cache table is optional, see residuals).
 - **Acceptance:** add/remove/reorder a device, re-sync → bindings stay attached
-  (no `discovered:N` drift); `mapping_json` column gone; existing mappings survive
-  the migration; metrics still render.
+  (no `discovered:N` drift); backfill produces an audit list and migrates every
+  *recoverable* entry; metrics still render; after the drop migration no code reads
+  `mapping_json`.
 
 ### Phase 3 — Materialized resolved graph  · decouple poll from resolve
-Migration `013_resolved_graph_cache.sql`.
+Migration `0xx_resolved_graph_cache.sql` (number sequentially after Phase 2).
 ```
+-- O(1) invalidation token bumped on any composition input change.
+ALTER TABLE topologies ADD COLUMN composition_revision INTEGER NOT NULL DEFAULT 0;
+
 CREATE TABLE topology_resolved_graph (
   topology_id TEXT PRIMARY KEY REFERENCES topologies(id) ON DELETE CASCADE,
-  graph_json TEXT NOT NULL,      -- resolved NetworkGraph
-  layout_json TEXT,              -- computeNetworkLayout output
-  computed_at INTEGER NOT NULL,
-  inputs_hash TEXT NOT NULL      -- hash of (observations + authored + priorities)
-                                 -- so a stale artifact is detectable
+  graph_json   TEXT NOT NULL,    -- resolved NetworkGraph
+  layout_json  TEXT,             -- full computeNetworkLayout() result {resolved, layout}
+  built_revision INTEGER NOT NULL,  -- topologies.composition_revision this was built from
+  resolver_version INTEGER NOT NULL,-- bumped when resolve/layout algorithms change
+  computed_at  INTEGER NOT NULL
 );
 ```
-- **Server:** `getParsed()` reads this artifact; recomputes (resolve + layout)
-  **only** when `inputs_hash` changes (observation recorded / authored edit /
-  source priority change) — NOT on every metrics poll. Replace the RAM `cache` as
-  source of truth; invalidate per-topology on write (residual: per-source
-  granularity is a later optimization).
+- **Invalidation is O(1), not a per-poll hash** (Codex SHOULD-FIX): bump
+  `topologies.composition_revision` on every input change — observation recorded
+  (`observations.record`), authored edit (`writeManualGraph` /
+  `discovery-policy`), source attach/detach/priority (`topology_data_sources`
+  writes). A poll compares two integers (`built_revision` vs current +
+  `resolver_version` vs the code constant); it never re-reads observation blobs to
+  decide freshness.
+- **Server:** `getParsed()` reads the artifact; recomputes (resolve + layout)
+  **only** on revision/version mismatch — NOT on every metrics poll. The artifact
+  replaces the RAM `cache` as source of truth (RAM may stay as an L1 in front of
+  it). Metrics stay live; icon dimensions stay RAM-derived (§2).
 - **Acceptance:** a metrics poll cycle performs zero `resolveObservations` /
-  `computeNetworkLayout` calls when inputs are unchanged (assert via counter/log);
-  cold start serves from the table.
+  `computeNetworkLayout` calls when `composition_revision` is unchanged (assert via
+  counter/log); editing the authored graph bumps the revision and forces exactly
+  one recompute; cold start serves from the table; a `resolver_version` bump
+  invalidates all artifacts without a manual purge.
 
 ### Phase 4 — Retire old paths  · no dual model
-Migration `014_drop_legacy_topology_columns.sql`.
+Migration `0xx_drop_legacy_topology_columns.sql` (number sequentially).
+> Migration numbers across phases are relative — assign the next free integer at
+> implementation time (next free today is `012`; `009` was skipped). Each phase's
+> drop is its own migration so it lands after its backfill/read-switch.
 - Move authored graph **out of `data_sources.config_json.graph`** into its own
   store (it's content, not config) — or explicitly decide to keep it and document
   why. (Lower priority than the drops below; can be its own PR.)
@@ -345,9 +456,10 @@ need. Introduces the entity merge/split problem (risk #1); the Phase 2 attachmen
 model deliberately avoids it by re-clustering in memory each run.
 
 ### Subgraph nesting fix — parallel axis-1 PR (not in this sequence)
-Tracked separately (§4). The store schema must already carry **containers +
-membership** so the fix has somewhere to live, but the fix itself is axis-1 only
-and lands independently of Phases 1–4.
+Tracked separately (§4). Subgraphs ride inside the resolved `NetworkGraph` JSON
+(no container/membership tables in this sequence — see §4), so the fix operates on
+`resolve.ts` (`foldSubgraphs` / `namespaceSourceSubgraphs`) + the JSON shape and
+lands independently of Phases 1–4. No store-schema dependency.
 
 ## Risks / open decisions
 
@@ -355,11 +467,17 @@ and lands independently of Phases 1–4.
    normalization (persisted stable ids). The shipping attachment model needs no
    persisted registry; resolve re-clusters in memory each run, so the problem
    doesn't exist for it. Flag it for the deferred phase only (rules + tests then).
-2. **Migration of existing `mapping_json`** — re-key via the current resolved
-   graph at migrate time (`origin='human'`, operator-confirmed). One-shot.
-3. **Ports need an attachment slot** — the `metrics-binding` attachment for links
-   lives on `NodePort` (nodes already have `attachments`). Small core change;
-   confirm it folds in resolve like node attachments.
+2. **Migration of existing `mapping_json`** — TS backfill, re-key via the current
+   resolved graph (`provenance.source='authored'`). **Best-effort & not
+   trust-the-data**: old keys are unstable `discovered:N`, so a drifted mapping
+   canonizes a wrong binding — emit a per-entry audit (old key, identity quality,
+   target, unmigrated reason); drop the column only in a later migration after the
+   backfill is spot-checked. One-shot.
+3. **Ports need an attachment slot + fold wiring** — `metrics-binding` for links
+   lives on `NodePort`. NOT just a field add: `foldPortCluster` must fold
+   attachments, the discovery-policy suppression allowlist must accept
+   `metrics-binding:*`, and the authored-overlay rail must support port-level
+   overlays (it's node-only today). See the four touch points in §Core type changes.
 4. **Materialized vs normalized resolved graph** — start materialized; normalize
    only if SQL queries over nodes/links become needed.
 5. **Cache-busting granularity** — today any edit clears the whole parsed cache;
@@ -367,9 +485,11 @@ and lands independently of Phases 1–4.
 
 ## Information architecture (tabs follow the model)
 
-Once binding is emergent (a metrics source is just another identity contribution,
-not a separate module), the topology tab's sub-tabs collapse to match the data
-model's three layers — **inputs → resolved composition → output**.
+Once binding is **a folded attachment on the entity** (not a separate side store /
+tab), the topology tab's sub-tabs collapse to match the data model's three layers
+— **inputs → resolved composition → output**. (Bindings are authored today; if the
+future observed-binding capability lands they become mostly emergent — the IA is
+the same either way.)
 
 Today (5 tabs, with the resolved-curation layer split three ways):
 - Diagram · Sources · Discovery (per-node policy + observations) · Mapping
@@ -383,9 +503,9 @@ Target (3 tabs):
 | **Diagram** | render + live metrics | Diagram |
 
 - **Mapping stops being a tab** — it becomes the metrics-binding override section
-  in an element's detail. Binding is mostly emergent (identity merge), so "auto-map
-  all" dissolves into a Composition filter ("entities with no metrics binding")
-  plus per-element override.
+  in an element's detail. Auto-map becomes a server-side job writing authored
+  bindings; "auto-map all" dissolves into a Composition filter ("entities with no
+  metrics binding") plus per-element override.
 - **"Discovery" is renamed "Composition"** — it was never just discovery
   scheduling; it's the whole human-curation surface over the resolved graph.
   Sectioning the element detail absorbs the bloat.
@@ -394,8 +514,8 @@ Why this belongs in a *data-model* doc: the tabs map 1:1 to the model layers —
 **Sources ↔ `topology_data_sources`**, **Composition ↔ the resolved-entity store
 (entity + per-entity attachments {access, policy, metrics-binding} + provenance)**,
 **Diagram ↔ materialized resolved graph + live values**. The store redesign
-(one resolved-entity store, binding emergent) is exactly what makes the IA
-collapse to three tabs. Data model and UI converge on the same shape — a sign
+(one resolved-entity store, binding folded onto the entity) is exactly what makes
+the IA collapse to three tabs. Data model and UI converge on the same shape — a sign
 the structure is right. (IA implementation is frontend, sequenced *after* the
 data model; noted here only to keep model↔UI aligned.)
 
