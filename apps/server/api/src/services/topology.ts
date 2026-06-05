@@ -26,6 +26,7 @@ import type {
 import {
   computeNetworkLayout,
   createMemoryFileResolver,
+  deriveMappingFromGraph,
   HierarchicalParser,
   resolve as resolveObservations,
   sampleNetwork,
@@ -521,12 +522,25 @@ export class TopologyService {
     const { resolved, layout: layoutResult } = await computeNetworkLayout(graph)
     const metrics = this.createEmptyMetrics(graph)
 
-    let mapping: MetricsMapping | undefined
+    // Metrics mapping (axis 2) is now derived from `metrics-binding` attachments
+    // folded onto the resolved graph by identity — so it follows re-sync by
+    // construction. The legacy `topologies.mapping_json` blob is still read as a
+    // fallback for topologies not yet migrated to bindings; where both exist, a
+    // binding wins (it's the new source of truth). Once every topology is
+    // backfilled, mapping_json is dropped (see composition-store plan, Phase 2).
+    const bindingMapping = deriveMappingFromGraph(graph)
+    const hasBindings =
+      Object.keys(bindingMapping.nodes).length > 0 || Object.keys(bindingMapping.links).length > 0
+    let mapping: MetricsMapping | undefined = hasBindings ? bindingMapping : undefined
     if (topology.mappingJson) {
       try {
-        mapping = JSON.parse(topology.mappingJson) as MetricsMapping
+        const legacy = JSON.parse(topology.mappingJson) as MetricsMapping
+        mapping = {
+          nodes: { ...legacy.nodes, ...bindingMapping.nodes },
+          links: { ...legacy.links, ...bindingMapping.links },
+        }
       } catch {
-        // Invalid JSON, ignore
+        // Invalid JSON, ignore — keep whatever bindings produced.
       }
     }
 
