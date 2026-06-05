@@ -398,4 +398,56 @@ describe('matchNodeToHost', () => {
     const hosts = [{ id: 'h1', name: 'core-rtr-01', identity: { mgmtIp: '10.0.0.11' } }]
     expect(matchNodeToHost(node, hosts)).toBeNull()
   })
+
+  it('matches via sysName when the display label does not match', () => {
+    // node label is a human name; sysName is the real hostname Zabbix knows
+    const node = { label: 'DL380 Gen12-1', identity: { sysName: 'dl380-1.dc' } }
+    const hosts = [{ id: 'h1', name: '172.16.0.5', displayName: 'dl380-1.dc' }]
+    const m = matchNodeToHost(node, hosts)
+    expect(m?.host.id).toBe('h1')
+    expect(m?.via).toBe('name')
+  })
+})
+
+// ============================================
+// TTDB speed-prefix normalization + cross-vocabulary interface matching
+// ============================================
+
+describe('speed-prefix normalization', () => {
+  it('normalizes TTDB 100G (hg) to the hundred-gig group', () => {
+    const r = normalizeInterfaceName('hg-1/0/49')
+    expect(r.prefix).toBe('hundredge')
+    expect(r.numbers).toEqual([1, 0, 49])
+  })
+
+  it('normalizes TTDB 10G (xg) to the ten-gig group', () => {
+    expect(normalizeInterfaceName('xg-1/1/1').prefix).toBe('te')
+  })
+
+  it('normalizes truncated/spaced Zabbix SNMP names', () => {
+    const r = normalizeInterfaceName('HundredGigabitEther 1/0/49')
+    expect(r.prefix).toBe('hundredge')
+    expect(r.numbers).toEqual([1, 0, 49])
+  })
+
+  it('matches hg-1/0/49 to "HundredGigabitEther 1/0/49"', () => {
+    const m = findBestInterfaceMatch('hg-1/0/49', [
+      'HundredGigabitEther 1/0/49',
+      'HundredGigabitEther 1/0/50',
+    ])
+    expect(m).toBe('HundredGigabitEther 1/0/49')
+  })
+})
+
+describe('findBestInterfaceMatch cross-vocabulary number fallback', () => {
+  it('matches a speed-prefixed port to a type-named one by unique port number', () => {
+    // hg-1/5 (TTDB 100G) ↔ Ethernet1/5 (Nexus): no shared prefix, unique number
+    const m = findBestInterfaceMatch('hg-1/5', ['Ethernet1/3', 'Ethernet1/5', 'Ethernet1/6'])
+    expect(m).toBe('Ethernet1/5')
+  })
+
+  it('refuses the number fallback when the port number is ambiguous', () => {
+    // ge-0/1 and xe-0/1 are different physical ports sharing a number → skip
+    expect(findBestInterfaceMatch('hg-0/1', ['ge-0/1', 'xe-0/1'])).toBeNull()
+  })
 })
