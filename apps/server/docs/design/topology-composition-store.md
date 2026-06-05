@@ -213,6 +213,68 @@ collapse to three tabs. Data model and UI converge on the same shape — a sign
 the structure is right. (IA implementation is frontend, sequenced *after* the
 data model; noted here only to keep model↔UI aligned.)
 
+## Performance basis (access patterns + indexes)
+
+The store is perf-shaped by construction (reads/polls stop re-resolving), but the
+schema must declare its access patterns so we don't repeat "indexes fine, model
+not perf-shaped":
+
+- **`entity_identity`**: hot path is "given an identity key, find its entity" →
+  `UNIQUE(kind, value)` (the lookup *and* the one-key-one-entity invariant).
+- **binding** (whether attachment-on-element or a row): looked up per topology
+  and per element → index `(topology_id, entity_id)`; resolution cache carries
+  `resolved_ref` + `resolved_at` for re-validation.
+- **materialized resolved graph**: one artifact per topology, read by id;
+  invalidated per topology (ideally per source) on observation/authored change —
+  NOT recomputed per poll.
+- Writes (resolve reconcile, binding edits) are far rarer than reads/polls, so
+  the read-cheap / write-on-change trade is correct.
+
+Note the boundary: this removes the **data-model** perf causes (per-poll
+resolve+layout, per-poll binding resolution, O(N×H) match). It does **not** fix
+the orchestration/render causes — subscriber-scoped polling, plugin `item.get`
+batching, client SVG/layout — which stay in `performance-scaling.md`. "Perf
+fully fixed" is false; this is the data-model half.
+
+## Old-path retirement (no dual model)
+
+Each phase must *remove* the path it replaces, or we recreate the dual-model debt
+that already exists today (legacy single-source columns
+`topologies.topology_source_id`/`metrics_source_id` still read + indexed +
+propagated to `/context`; a legacy file-based-topology path `topologyManager` in
+`server.ts` still polled alongside DB topologies). Explicit deletions:
+
+- `topologies.mapping_json` → migrate into bindings, then **drop** (no both).
+- RAM-only resolve in `TopologyService.cache` → replaced by the materialized
+  store (don't keep recomputing as the source of truth).
+- The standalone auto-map module / mapping store / Mapping tab → folded into the
+  Composition surface and removed.
+- Legacy `topology_source_id` / `metrics_source_id` columns + their indexes →
+  **drop** (m2m `topology_data_sources` is the model).
+- Decide the **file-based topology path** (`topologyManager`): retire or
+  explicitly scope it out — don't leave it as a third quiet code path.
+
+## Accepted residuals (unavoidable; not defects)
+
+- **Volatile counter ref (e.g. Zabbix item id) stays a cache.** The binding's
+  three layers are: ① binding (identity: ifName/mgmtIp/source — durable, stored,
+  the source of truth), ② resolution (identity → concrete counter id — volatile,
+  a `resolved_ref` + `resolved_at` cache, re-resolved on miss/age/re-sync), ③
+  value (bps/status — fetched per poll, never stored). Item ids are Zabbix-owned
+  and change on item recreation, so they must **not** be persisted as truth —
+  caching the resolution is the correct layering, not a clean-DB failure.
+- **Raw observations stay JSON blobs** (append-only document history) — deliberate.
+- **Identity-less elements** (no mgmtIp/ifName) can't be identity-keyed; they
+  fall back to a weaker per-source id and need human binding. Hard limit.
+- **Port identity (T0) is a prerequisite** for fully identity-based *link*
+  bindings; until each source emits ifName/ifIndex (TTDB doesn't yet), link
+  binding stays partly LLDP/name-based — a staged state.
+- **Migration is best-effort**: existing `mapping_json` re-keys via the current
+  resolved graph; bindings whose identity can't be recovered are dropped.
+- **Entity merge/split** in the identity registry is the one genuinely hard
+  correctness case (a bridging observation merges two entities) — rules + tests,
+  not avoidance.
+
 ## Relation to other docs
 - Supersedes the "separate `mapping_binding` table" of `metrics-mapping-model.md`
   (folded into the attachment + identity-registry model here).
