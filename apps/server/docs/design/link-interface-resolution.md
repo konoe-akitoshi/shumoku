@@ -88,8 +88,9 @@ LLDP also reports the remote port (`Ethernet 25`, `FourHundredGigE0/0/0/12`),
 which feeds T1's parallel-link disambiguation. The same device's `ifAlias`
 independently encodes the peer (`hg-25.thunder7465-1.noc`) — a secondary signal
 where LLDP is absent. Fuzzy T3 alone resolved 37/140 links on this topology
-(see `feat(mapping): SNMP interface keys …`, PR #351); T1 is expected to lift
-the LLDP-covered subset to near-complete.
+(PR #351); adding T1 (PR #353) lifts a Zabbix-sourced topology (test4) to 54/66
+— 52 via LLDP neighbour, 2 via name — where the remaining gap is data (hosts
+Zabbix doesn't monitor for interface traffic).
 
 ## Failure modes / contract (must address before relying on link metrics)
 
@@ -106,10 +107,23 @@ the LLDP-covered subset to near-complete.
 ## Status / next
 
 - T3 (fuzzy + speed-prefix + number fallback) — **shipped** (PR #351).
-- T1 (LLDP) — **validated** on live data (above); not yet implemented. Highest
-  value next step; the Zabbix plugin already parses LLDP for topology
-  (`zabbix-lldp-topology.md`), so the neighbour table is in reach.
+- T1 (LLDP neighbour, with remote-port disambiguation) — **shipped** (PR #353):
+  a `getInterfaceNeighbors` capability (Zabbix reuses its LLDP parse),
+  `matchInterfaceByNeighbor`, and link auto-map tries it before T3. The mapping
+  UI loads interfaces + neighbours for mapped hosts before matching.
 - T0 (port identity) — needs sources to stamp `NodePort.identity`; blocked on
   TTDB (and any abstract-port source) emitting ifName/ifIndex.
+
+### Open follow-ups
+
+- **Metrics-poll performance** (not yet addressed): the server polls *all* DB
+  topologies every cycle, and `pollMetrics` issues per-node (`item.get` +
+  `host.get`) and per-link (`getInterfaceItems` + `getItemsByIds`) calls, so a
+  poll fans out to hundreds–thousands of Zabbix requests and can overrun the
+  interval (`Skipping metrics poll — previous poll still running`). Candidate
+  fixes: poll only subscribed topologies; batch node health by `hostids`; cache
+  interface resolution per host within a poll.
 - Before wiring link metrics broadly, fix the **polarity (B1)** and
   **counter/rate (B2)** contract.
+- Derive `NAME_TIEBREAK_WEIGHT` from the weakest identity weight instead of the
+  hardcoded `0.9` (the "name never outranks identity" invariant is comment-only).
