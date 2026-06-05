@@ -161,6 +161,36 @@ Two options; pick by appetite:
 - Authored graph: move it **out of `config_json.graph`** into its own store
   (it's content, not config) — but still a graph document, not normalized.
 
+### 5. Subgraph hierarchy (axis 1, no identity) — reserve a slot
+Subgraphs are the *grouping/nesting* part of axis-1 structure, and they are **not
+identity-bearing** — so they do NOT fit the identity-keyed entity model. The
+store must model them as their own concern: a **container tree** (id, label,
+parent, children) plus **membership** (which entity belongs to which container).
+
+This matters because subgraph nesting is **currently broken** (tracked for a
+separate PR), and the store must be able to express the fix, not fight it. Root
+causes in today's resolve (`resolve.ts` `foldSubgraphs` / `namespaceSourceSubgraphs`):
+- membership is **double-encoded** — `node.parent` *and* `subgraph.children[]` —
+  and `node.parent` is picked by per-field priority while `children[]` is carried
+  verbatim, so the two **desync** (a container claims a node that no longer
+  parents into it);
+- subgraphs have **no identity**, so each source is namespaced (`sourceId:id`)
+  and the *same logical group* from two sources **fragments** instead of merging;
+- authored vs source namespacing **breaks cross-layer parent refs** (an authored
+  container holding a discovered subgraph) and leaves **orphan parents**.
+
+Design stance for the store:
+- **Single source of truth for membership** — entity→container edge (i.e.
+  `node.parent`), derive `children[]` for the JSON boundary; never persist both
+  as independent truth.
+- Containers are an **axis-1 tree**, resolved/merged separately from identity
+  entities; cross-source grouping merge (do two sources' "Rack-1" unify?) is an
+  **open decision** — likely keep per-source unless an explicit grouping key is
+  introduced.
+- The nesting-fix PR is **axis-1 only**, largely orthogonal to the mapping
+  (axis-2) work — it can land independently, but the store schema must already
+  carry containers + membership so it has somewhere to live.
+
 ### Boundary
 The API keeps emitting `NetworkGraph` / `TopologyContext` JSON, generated from
 the store. JSON is the wire/render format; the DB is the internal truth.
