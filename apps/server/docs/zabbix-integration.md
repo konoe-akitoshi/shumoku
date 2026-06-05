@@ -43,12 +43,13 @@ Authorization: Bearer <token>
 
 | メソッド | 用途 | 現状 |
 |---------|------|------|
-| `apiinfo.version` | API バージョン確認 | ✅ 実装済 |
-| `host.get` | ホスト一覧取得 | ✅ 実装済 |
+| `apiinfo.version` | API バージョン確認 (無認証) | ✅ 実装済 |
+| `host.get` | ホスト一覧取得 (interfaces/inventory/hostgroups/templates) | ✅ 実装済 |
 | `item.get` | アイテム(メトリクス)取得 | ✅ 実装済 |
-| `hostinterface.get` | ホストインターフェース | ❌ 未実装 |
+| `event.get` | 障害イベント取得 (アラート) | ✅ 実装済 |
+| `map.get` | ネットワークマップ(sysmap)取得 | ✅ 実装済 (トポロジー) |
+| `hostgroup.get` | ホストグループ | （host.get の selectHostGroups で代替） |
 | `trigger.get` | トリガー(障害定義) | ❌ 未実装 |
-| `problem.get` | 現在の障害一覧 | ❌ 未実装 |
 | `history.get` | 過去データ | ❌ 未実装 |
 
 ---
@@ -138,6 +139,51 @@ Authorization: Bearer <token>
 ```
 
 **用途**: 現在発生中の障害表示
+
+---
+
+## トポロジー生成 (LLDP)
+
+Zabbix から **ノード＋リンク**を生成する (`topology` capability / `fetchTopology`)。
+**ノードはホスト (`host.get`)、リンクは各ホストの LLDP 隣接アイテム**から。Zabbix の
+マップ (sysmap) や自作マップ生成モジュールには依存せず、**shumoku からの直接 SNMP も不要**
+(Zabbix が収集済み)。詳細は `docs/design/zabbix-lldp-topology.md`。
+
+リンクの出どころは**標準 LLDP-MIB** (`lldpRemSysName` 等、OID `1.0.8802.1.1.2…`) を
+SNMP_walk → LLD → dependent item で取り込んだもの。アイテムキー命名 (`lldp.rem.*`) は
+LLDP テンプレ依存なので、**`lldp.rem.sysname` が無いホストはノードのみ**になる (graceful)。
+
+### 設定 (アタッチ単位 / `optionsJson`)
+
+| キー | 説明 |
+|------|------|
+| `hostGroups` | 取り込み対象のホストグループ id (`getConfigOptions('hostgroup')` が動的供給)。**大規模インスタンスでは必須級** (数千ホスト)。空=全件 |
+| `groupBy` | `hostgroup` (既定, 最も具体的なグループに入れる) / `none` |
+| `groupExclude` | サブグラフに使わないホストグループ名 |
+| `includeExternalNeighbors` | Zabbix ホストでない LLDP 隣接にノードを合成 (既定 true) |
+
+### 変換マッピング
+
+| Zabbix | shumoku | 備考 |
+|--------|---------|------|
+| `host.get` host | `Node` | `id=<src>:host:<hostid>` |
+| host `name` | `Node.label` / `identity.sysName` | **sysName は host.name** (host.host は IP のことがあり不可) |
+| 既定 IF の IP | `identity.mgmtIp` | `main==='1'` 優先 |
+| host id | `identity.vendorIds['zabbix-hostid']` | |
+| `inventory.hardware` | `spec.vendor/model/type` | best-effort パース |
+| LLDP 隣接 (`lldp.rem.sysname` 等) | `Link` | local IF + 隣接機器/ポートで端点。**実ポート名**つき |
+| `lldp.loc.if.ifSpeed` | port `speed` / link `metadata.speedBps` | |
+| ホストグループ | `Subgraph` | `groupBy` 参照 |
+
+### 要点
+- アイテムは host id バッチで `item.get`、IF ごとに**アイテム名の `[ifName]` サフィックス**で join (キーはファミリ間で形が揃っていないため)。
+- LLDP は双方向に出るので**リンクを de-dup** (端点ペアの正規化キー)。
+- 解決できない隣接は**外部ノードを合成** (identity.sysName 付き)。後で当該機器を別グループ/別ソースで取り込むと resolver が identity で**自動統合**。
+
+### 現時点の非対応 (今後)
+- ノード座標、VLAN、リンクアグリゲーションのまとめ。
+- 非 L2DM な LLDP テンプレ向けのキー接頭辞設定 (現状は共通命名を自動検出)。
+- リモートポート id が MAC のとき de-dup が緩むケース。
 
 ---
 

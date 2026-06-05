@@ -9,6 +9,8 @@ import type {
   AlertQueryOptions,
   AlertSeverity,
   AlertsCapable,
+  ConfigOption,
+  ConfigOptionsCapable,
   ConnectionResult,
   DataSourceCapability,
   DataSourcePlugin,
@@ -23,14 +25,26 @@ import type {
   MetricsMapping,
   MetricsStatus,
   MonitoringHealth,
+  NetworkGraph,
   NodeMetrics,
+  TopologyCapable,
 } from '@shumoku/core'
 import { addHttpWarning, mapWithConcurrency } from '@shumoku/core'
 import { createHttpClient, type HttpClient } from '@shumoku/plugin-sdk'
-import type { ZabbixHost, ZabbixItem, ZabbixPluginConfig } from './types.js'
+import { convertZabbixToGraph } from './topology.js'
+import type {
+  ZabbixHost,
+  ZabbixItem,
+  ZabbixLldpNeighbor,
+  ZabbixPluginConfig,
+  ZabbixTopologyOptions,
+} from './types.js'
 
 /** Max in-flight Zabbix API calls during a metrics poll (was fully sequential). */
 const POLL_CONCURRENCY = 8
+
+/** Host ids per `item.get` when fetching LLDP items (bounds payload + round-trips). */
+const LLDP_HOST_BATCH = 50
 
 /**
  * Per-request timeout. The shared HttpClient defaults to 10s, but Zabbix
@@ -61,10 +75,23 @@ interface HostMeta {
   interfaces?: Array<{ available: string; error?: string }>
 }
 
-export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapable, AlertsCapable {
+export class ZabbixPlugin
+  implements
+    DataSourcePlugin,
+    MetricsCapable,
+    HostsCapable,
+    AlertsCapable,
+    TopologyCapable,
+    ConfigOptionsCapable
+{
   readonly type = 'zabbix'
   readonly displayName = 'Zabbix'
-  readonly capabilities: readonly DataSourceCapability[] = ['metrics', 'hosts', 'alerts']
+  readonly capabilities: readonly DataSourceCapability[] = [
+    'metrics',
+    'hosts',
+    'alerts',
+    'topology',
+  ]
 
   private config: ZabbixPluginConfig | null = null
   private requestId = 0
@@ -511,6 +538,160 @@ export class ZabbixPlugin implements DataSourcePlugin, MetricsCapable, HostsCapa
     'user.login',
     'user.checkauthentication',
   ])
+
+  // ============================================
+  // TopologyCapable Implementation
+  // ============================================
+
+  /**
+   * Generate a NetworkGraph from Zabbix: nodes from hosts, links from per-host
+   * LLDP neighbor items. Standard data only — no maps / netmap module, and no
+   * direct SNMP reach (Zabbix is the collector). Scoped by `options.hostGroups`.
+   * See `apps/server/docs/design/zabbix-lldp-topology.md`.
+   */
+  async fetchTopology(options?: Record<string, unknown>): Promise<NetworkGraph> {
+    const opts = options as ZabbixTopologyOptions | undefined
+    const groupIds = opts?.hostGroups?.filter(Boolean)
+
+    const hosts = await this.apiRequest<ZabbixHost[]>('host.get', {
+      ...(groupIds && groupIds.length > 0 ? { groupids: groupIds } : {}),
+      output: ['hostid', 'host', 'name', 'status'],
+      selectInterfaces: ['ip', 'dns', 'main', 'type', 'useip'],
+      selectInventory: ['type', 'vendor', 'model', 'hardware', 'os', 'serialno_a', 'location'],
+      selectHostGroups: ['groupid', 'name'],
+      selectTags: 'extend',
+    })
+
+    const { neighborsByHostId, sysDescrByHostId } = await this.fetchLldpData(
+      hosts.map((h) => h.hostid),
+    )
+
+    const sourceId = this.config?.instanceId ?? 'zabbix'
+    return convertZabbixToGraph(hosts, neighborsByHostId, sysDescrByHostId, {
+      sourceId,
+      observedAt: Date.now(),
+      groupBy: opts?.groupBy,
+      groupExclude: opts?.groupExclude,
+      includeExternalNeighbors: opts?.includeExternalNeighbors,
+      parentTag: opts?.parentTag,
+    })
+  }
+
+  /**
+   * Assemble, per host: (a) LLDP adjacencies from the standard LLDP-MIB items
+   * (`lldp.rem.*` + `lldp.loc.if.ifSpeed`), joined per interface by the `[ifName]`
+   * suffix in the item NAME (item keys are inconsistently shaped across families);
+   * and (b) the host's own SNMP sysDescr (`lldp.sys.desc` / `system.descr`) for
+   * device-type derivation. Items are fetched in host-id batches. Hosts without
+   * `lldp.rem.*` items yield no neighbors (→ nodes-only).
+   */
+  private async fetchLldpData(hostIds: string[]): Promise<{
+    neighborsByHostId: Map<string, ZabbixLldpNeighbor[]>
+    sysDescrByHostId: Map<string, string>
+  }> {
+    const neighborsByHostId = new Map<string, ZabbixLldpNeighbor[]>()
+    const sysDescrByHostId = new Map<string, string>()
+    if (hostIds.length === 0) return { neighborsByHostId, sysDescrByHostId }
+
+    const families = [
+      'lldp.rem.sysname',
+      'lldp.rem.port.id',
+      'lldp.rem.chassisid',
+      'lldp.loc.if.ifSpeed',
+      'lldp.loc.if.ifHighSpeed',
+      'lldp.sys.desc',
+      'lldp.loc.sys.desc',
+      'system.descr',
+      'sysDescr',
+    ]
+    // the host's OWN sysDescr (NOT the per-neighbor lldp.rem.sys.desc)
+    const sysDescrKeys = new Set(['lldp.sys.desc', 'lldp.loc.sys.desc'])
+    const batches = Array.from({ length: Math.ceil(hostIds.length / LLDP_HOST_BATCH) }, (_, i) =>
+      hostIds.slice(i * LLDP_HOST_BATCH, (i + 1) * LLDP_HOST_BATCH),
+    )
+    const ifSuffix = /\[([^\]]+)\]\s*$/
+
+    const itemArrays = await mapWithConcurrency(batches, POLL_CONCURRENCY, (batch) =>
+      this.apiRequest<Array<{ hostid: string; name: string; key_: string; lastvalue: string }>>(
+        'item.get',
+        {
+          hostids: batch,
+          search: { key_: families },
+          searchByAny: true,
+          output: ['hostid', 'name', 'key_', 'lastvalue'],
+        },
+      ),
+    )
+
+    // group LLDP per-IF data: hostid → ifName → { family: value }; capture sysDescr.
+    const byHostIf = new Map<string, Map<string, Record<string, string>>>()
+    for (const items of itemArrays) {
+      for (const it of items) {
+        const family = it.key_.split('[')[0] ?? ''
+        if (
+          sysDescrKeys.has(family) ||
+          family.startsWith('system.descr') ||
+          family === 'sysDescr'
+        ) {
+          const v = (it.lastvalue ?? '').trim()
+          // a real sysDescr has spaces; ignore degenerate hostname echoes
+          if (v && /\s/.test(v)) {
+            const cur = sysDescrByHostId.get(it.hostid)
+            if (!cur || v.length > cur.length) sysDescrByHostId.set(it.hostid, v)
+          }
+          continue
+        }
+        const ifName = it.name.match(ifSuffix)?.[1]
+        if (!ifName) continue
+        let ifMap = byHostIf.get(it.hostid)
+        if (!ifMap) {
+          ifMap = new Map()
+          byHostIf.set(it.hostid, ifMap)
+        }
+        const fields = ifMap.get(ifName) ?? {}
+        fields[family] = it.lastvalue
+        ifMap.set(ifName, fields)
+      }
+    }
+
+    for (const [hostId, ifMap] of byHostIf) {
+      const neighbors: ZabbixLldpNeighbor[] = []
+      for (const [ifName, f] of ifMap) {
+        const remSysname = f['lldp.rem.sysname']
+        if (!remSysname) continue
+        const speedBps =
+          Number(f['lldp.loc.if.ifSpeed']) ||
+          Number(f['lldp.loc.if.ifHighSpeed']) * 1_000_000 ||
+          undefined
+        neighbors.push({
+          localIf: ifName,
+          remSysname,
+          remPortId: f['lldp.rem.port.id'],
+          remChassisId: f['lldp.rem.chassisid'],
+          speedBps,
+        })
+      }
+      if (neighbors.length > 0) neighborsByHostId.set(hostId, neighbors)
+    }
+    return { neighborsByHostId, sysDescrByHostId }
+  }
+
+  // ============================================
+  // ConfigOptionsCapable Implementation
+  // ============================================
+
+  /** Dynamic candidates for `optionsSource` schema fields (the host-group filter). */
+  async getConfigOptions(key: string): Promise<ConfigOption[]> {
+    if (key !== 'hostgroup') return []
+    const groups = await this.apiRequest<Array<{ groupid: string; name: string }>>(
+      'hostgroup.get',
+      {
+        output: ['groupid', 'name'],
+        sortfield: 'name',
+      },
+    )
+    return groups.map((g) => ({ value: g.groupid, label: g.name }))
+  }
 
   private async apiRequest<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     if (!this.config || !this.http) {

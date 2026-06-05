@@ -45,7 +45,7 @@ libs/
     grafana/                 ← Grafana plugin (alerts)
     netbox/                  ← NetBox plugin (topology, hosts)
     prometheus/              ← Prometheus plugin (metrics, hosts, alerts)
-    zabbix/                  ← Zabbix plugin (metrics, hosts, auto-mapping, alerts)
+    zabbix/                  ← Zabbix plugin (topology, metrics, hosts, auto-mapping, alerts)
 
 apps/
   cli/     ← CLI tool (shumoku render)
@@ -67,7 +67,8 @@ apps/
 - Device:port notation, type aliases, bandwidth normalization
 
 **Layout Engines** (`src/layout/`): Automatic positioning algorithms
-- `HierarchicalLayout` - ELK-based hierarchical layout
+- Custom tiered (Sugiyama-style) engine — `computeNetworkLayout()` (`unified-engine.ts`
+  + `engine/` role-tiers/placement/spacing). ELK was removed; do not reintroduce it.
 - Produces `LayoutResult` with positioned nodes, links, subgraphs
 
 **Plugin Types** (`src/plugin-types.ts`): All capability interfaces
@@ -107,7 +108,7 @@ Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on cor
 - **grafana**: Alerts via Alertmanager API or webhook
 - **netbox**: Topology and hosts from NetBox DCIM/IPAM
 - **prometheus**: Metrics, hosts, alerts from Prometheus/Alertmanager
-- **zabbix**: Metrics, hosts, auto-mapping, alerts from Zabbix
+- **zabbix**: Topology (hosts + LLDP neighbor links), metrics, hosts, auto-mapping, alerts from Zabbix
 - **aruba-instant-on**: Hosts, metrics, alerts from the (unofficial) Aruba Instant On portal API
 
 **Plugin contract invariants** (see `docs/plugin-authoring.md` for the full reference):
@@ -140,7 +141,7 @@ YAML input → YamlParser.parse() → NetworkGraph → prepareRender() → Prepa
 
 Pipeline internally handles:
 1. Icon dimension resolution (CDN fetch with caching)
-2. Layout computation (HierarchicalLayout)
+2. Layout computation (custom tiered engine — `computeNetworkLayout`)
 3. Rendering with proper icon aspect ratios
 
 ## Versioning
