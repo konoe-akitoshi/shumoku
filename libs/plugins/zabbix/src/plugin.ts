@@ -19,6 +19,7 @@ import type {
   HostItem,
   HostsCapable,
   Identity,
+  InterfaceNeighbor,
   LinkMetricsMapping,
   MetricsCapable,
   MetricsData,
@@ -378,6 +379,21 @@ export class ZabbixPlugin
         } satisfies HostItem,
       ]
     })
+  }
+
+  /**
+   * Neighbour discovery for a host's interfaces, from Zabbix's LLDP items
+   * (reuses the same `lldp.rem.*` parse as topology import). Lets link mapping
+   * resolve the local interface facing a peer without interface-name fuzzing.
+   */
+  async getInterfaceNeighbors(hostId: string): Promise<InterfaceNeighbor[]> {
+    const { neighborsByHostId } = await this.fetchLldpData([hostId])
+    return (neighborsByHostId.get(hostId) ?? []).map((n) => ({
+      localInterface: n.localIf,
+      ...(n.remSysname ? { remoteSysName: n.remSysname } : {}),
+      ...(n.remChassisId ? { remoteChassisId: n.remChassisId } : {}),
+      ...(n.remPortId ? { remotePortId: n.remPortId } : {}),
+    }))
   }
 
   async searchHosts(query: string): Promise<Host[]> {

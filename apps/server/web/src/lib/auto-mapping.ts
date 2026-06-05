@@ -15,7 +15,7 @@
  *   NetBox "GE0/0"  ↔  Zabbix "GigaEthernet0"  (UNIVERGE IX)
  */
 
-import { type Identity, nodeIdentityKeys } from '@shumoku/core'
+import { type Identity, type InterfaceNeighbor, nodeIdentityKeys } from '@shumoku/core'
 
 // ============================================
 // Interface name prefix synonyms
@@ -396,4 +396,69 @@ export function matchNodeToHost<H extends MatchableHost>(
   // host at the top score (source-priority order via the strict `>` above).
   if (best.name < NODE_MATCH_THRESHOLD) return null
   return { host: best.host, via: 'name' }
+}
+
+// ============================================
+// Link → interface resolution via neighbour discovery (LLDP/CDP)
+// ============================================
+
+/** The far-end node of a link, as the matcher needs to recognise it. */
+export interface MatchablePeer {
+  identity?: Identity
+  label?: string | string[]
+}
+
+/** True if two device names refer to the same host (exact or domain-stripped). */
+function sameDeviceName(a: string | undefined, b: string | undefined): boolean {
+  return !!a && !!b && nodeNameMatchScore(a, b) >= 0.9
+}
+
+/**
+ * Resolve which local interface faces `peer` using a host's neighbour table —
+ * the deterministic, naming-agnostic alternative to interface-name matching.
+ *
+ * A link `A↔B` asks A's neighbours for the one whose remote end is B (matched
+ * by sysName / chassisId / mgmtIp, or the peer's label). When several local
+ * interfaces face B (a LAG or parallel links), `peerPort` disambiguates via the
+ * neighbour's `remotePortId`. Returns null if no neighbour matches or the
+ * choice stays ambiguous — callers fall back to name matching.
+ */
+export function matchInterfaceByNeighbor(
+  peer: MatchablePeer,
+  peerPort: string | undefined,
+  neighbors: readonly InterfaceNeighbor[],
+): string | null {
+  if (neighbors.length === 0) return null
+
+  const peerLabel = Array.isArray(peer.label) ? peer.label[0] : peer.label
+  const peerSys = peer.identity?.sysName
+  const peerChassis = peer.identity?.chassisId?.toLowerCase()
+  const peerMgmt = peer.identity?.mgmtIp
+
+  const facesPeer = (n: InterfaceNeighbor): boolean => {
+    if (n.remoteChassisId && peerChassis && n.remoteChassisId.toLowerCase() === peerChassis) {
+      return true
+    }
+    const rs = n.remoteSysName
+    if (rs && (sameDeviceName(rs, peerSys) || sameDeviceName(rs, peerLabel) || rs === peerMgmt)) {
+      return true
+    }
+    return false
+  }
+
+  const hits = neighbors.filter(facesPeer)
+  if (hits.length === 0) return null
+  if (hits.length === 1) return hits[0]?.localInterface ?? null
+
+  // Parallel links / LAG: disambiguate by the peer's own port id.
+  if (peerPort) {
+    const remotePorts = hits.map((n) => n.remotePortId).filter((p): p is string => !!p)
+    const bestRemote = findBestInterfaceMatch(peerPort, remotePorts)
+    if (bestRemote) {
+      const picked = hits.filter((n) => n.remotePortId === bestRemote)
+      if (picked.length === 1) return picked[0]?.localInterface ?? null
+    }
+  }
+
+  return null // ambiguous → fall back to name matching
 }

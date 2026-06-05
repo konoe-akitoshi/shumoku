@@ -19,6 +19,7 @@ import type {
   DiscoveredMetric,
   Host,
   HostItem,
+  InterfaceNeighbor,
 } from '../plugins/types.js'
 import type { DataSource, DataSourceInput, DataSourceStatus, DataSourceType } from '../types.js'
 
@@ -309,6 +310,19 @@ export class DataSourceService {
     }
 
     return plugin.getHostItems?.(hostId) || []
+  }
+
+  /**
+   * Get interface neighbours (LLDP/CDP) for a host from a data source
+   * (if supported). Used by link mapping to resolve a link's interface.
+   */
+  async getInterfaceNeighbors(id: string, hostId: string): Promise<InterfaceNeighbor[]> {
+    const plugin = this.getPlugin(id)
+    if (!plugin || !hasHostsCapability(plugin)) {
+      return []
+    }
+
+    return plugin.getInterfaceNeighbors?.(hostId) || []
   }
 
   /**

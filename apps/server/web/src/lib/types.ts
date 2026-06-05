@@ -31,6 +31,7 @@ export type {
   Host,
   HostItem,
   Identity,
+  InterfaceNeighbor,
   LinkMetricsMapping,
   MetricsMapping,
   NodeMetricsMapping,

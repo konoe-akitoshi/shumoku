@@ -78,6 +78,24 @@ export interface HostItem {
 }
 
 /**
+ * A device's view of what sits on the far end of one of its interfaces,
+ * derived from neighbour discovery (LLDP/CDP). Lets link mapping bind a
+ * topology link `A↔B` to the exact interface on A that faces B — by the peer's
+ * identity, not by fuzzy interface-name matching. Plugins translate their
+ * upstream's neighbour data into this neutral shape.
+ */
+export interface InterfaceNeighbor {
+  /** Local interface the neighbour is seen on (matches `HostItem.interfaceName`). */
+  localInterface: string
+  /** Neighbour's system name (e.g. LLDP remote sysName), if reported. */
+  remoteSysName?: string
+  /** Neighbour's chassis id (e.g. LLDP remote chassisId), if reported. */
+  remoteChassisId?: string
+  /** Neighbour's own port id/name, for disambiguating parallel links. */
+  remotePortId?: string
+}
+
+/**
  * A metric discovered from a data source for a specific host.
  *
  * The "All metrics" tab in the mapping UI dumps these for browsing —
@@ -301,6 +319,13 @@ export interface HostsCapable {
    * Get items for a specific host
    */
   getHostItems?(hostId: string): Promise<HostItem[]>
+
+  /**
+   * Get neighbour discovery (LLDP/CDP) for a host's interfaces, so link
+   * mapping can resolve which local interface faces a given peer. Optional —
+   * plugins implement it only when the upstream exposes neighbour data.
+   */
+  getInterfaceNeighbors?(hostId: string): Promise<InterfaceNeighbor[]>
 
   /**
    * Search hosts by name

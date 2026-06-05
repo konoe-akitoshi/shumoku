@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   findBestInterfaceMatch,
   interfaceMatchScore,
+  matchInterfaceByNeighbor,
   matchNodeToHost,
   nodeNameMatchScore,
   normalizeInterfaceName,
@@ -449,5 +450,47 @@ describe('findBestInterfaceMatch cross-vocabulary number fallback', () => {
   it('refuses the number fallback when the port number is ambiguous', () => {
     // ge-0/1 and xe-0/1 are different physical ports sharing a number → skip
     expect(findBestInterfaceMatch('hg-0/1', ['ge-0/1', 'xe-0/1'])).toBeNull()
+  })
+})
+
+describe('matchInterfaceByNeighbor', () => {
+  const peer = {
+    label: 'Switch B',
+    identity: { sysName: 'sw-b.dc', chassisId: 'AA:BB:CC:00:11:22' },
+  }
+
+  it('resolves the local interface facing the peer by sysName', () => {
+    const neighbors = [
+      { localInterface: 'et-0/0/1', remoteSysName: 'other.dc' },
+      { localInterface: 'et-0/0/9', remoteSysName: 'sw-b.dc' },
+    ]
+    expect(matchInterfaceByNeighbor(peer, 'hg-3', neighbors)).toBe('et-0/0/9')
+  })
+
+  it('matches by chassisId when the sysName differs', () => {
+    const neighbors = [{ localInterface: 'et-0/0/5', remoteChassisId: 'aa:bb:cc:00:11:22' }]
+    expect(matchInterfaceByNeighbor(peer, undefined, neighbors)).toBe('et-0/0/5')
+  })
+
+  it('returns null when no neighbour is the peer', () => {
+    const neighbors = [{ localInterface: 'et-0/0/1', remoteSysName: 'somewhere-else' }]
+    expect(matchInterfaceByNeighbor(peer, 'hg-3', neighbors)).toBeNull()
+  })
+
+  it('disambiguates parallel links to the same peer by the remote port', () => {
+    const neighbors = [
+      { localInterface: 'et-0/0/1', remoteSysName: 'sw-b.dc', remotePortId: 'Ethernet1/1' },
+      { localInterface: 'et-0/0/2', remoteSysName: 'sw-b.dc', remotePortId: 'Ethernet1/2' },
+    ]
+    // peer port hg-1/2 → Ethernet1/2 (number-aligned) → et-0/0/2
+    expect(matchInterfaceByNeighbor(peer, 'hg-1/2', neighbors)).toBe('et-0/0/2')
+  })
+
+  it('stays ambiguous (null) for parallel links with no distinguishing remote port', () => {
+    const neighbors = [
+      { localInterface: 'et-0/0/1', remoteSysName: 'sw-b.dc' },
+      { localInterface: 'et-0/0/2', remoteSysName: 'sw-b.dc' },
+    ]
+    expect(matchInterfaceByNeighbor(peer, undefined, neighbors)).toBeNull()
   })
 })

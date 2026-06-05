@@ -88,7 +88,7 @@ accordingly.
 | Mixin              | Purpose                                                | Methods                              |
 |--------------------|--------------------------------------------------------|--------------------------------------|
 | `TopologyCapable`  | Provide a `NetworkGraph` (nodes, links, subgraphs)     | `fetchTopology`, `watchTopology?`    |
-| `HostsCapable`     | List the monitored hosts so the mapping UI can choose  | `getHosts`, `getHostItems?`, `searchHosts?`, `discoverMetrics?` |
+| `HostsCapable`     | List the monitored hosts so the mapping UI can choose  | `getHosts`, `getHostItems?`, `getInterfaceNeighbors?`, `searchHosts?`, `discoverMetrics?` |
 | `MetricsCapable`   | Poll current metrics for mapped nodes/links            | `pollMetrics`, `subscribeMetrics?`   |
 | `AlertsCapable`    | Surface active/resolved alerts                         | `getAlerts`                          |
 | `NativeApiCapable` | Dev-only raw API passthrough for debugging             | `nativeApi(method, params)`          |

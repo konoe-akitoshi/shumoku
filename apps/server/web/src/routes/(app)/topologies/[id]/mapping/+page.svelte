@@ -22,9 +22,16 @@
   } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api } from '$lib/api'
-  import { findBestInterfaceMatch } from '$lib/auto-mapping'
+  import { findBestInterfaceMatch, matchInterfaceByNeighbor } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
-  import { hostInterfaces, linkMapping, mappingHosts, mappingStore, nodeMapping } from '$lib/stores'
+  import {
+    hostInterfaces,
+    hostNeighbors,
+    linkMapping,
+    mappingHosts,
+    mappingStore,
+    nodeMapping,
+  } from '$lib/stores'
   import type { MetricsData } from '$lib/stores/metrics'
   import type { EdgeEndpoint, Identity, MetricsMapping } from '$lib/types'
   import { nodeLabelById, nodeLabel as resolveNodeLabel } from '$lib/utils/node-label'
@@ -170,7 +177,7 @@
     return [info.interfaceName, info.label, ...(info.aliases ?? [])].filter((n): n is string => !!n)
   }
 
-  function loadInterfacesForMappedNodes() {
+  async function loadInterfacesForMappedNodes() {
     const hostIds = new Set<string>()
     for (const edge of edges) {
       const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
@@ -178,7 +185,7 @@
       if (fromHostId) hostIds.add(fromHostId)
       if (toHostId) hostIds.add(toHostId)
     }
-    for (const hostId of hostIds) mappingStore.loadHostInterfaces(hostId)
+    await Promise.all([...hostIds].map((hostId) => mappingStore.loadHostInterfaces(hostId)))
   }
 
   function handleNodeMappingChange(nodeId: string, hostId: string) {
@@ -196,6 +203,10 @@
       ...mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false }),
       kind: 'nodes',
     }
+    // Load interfaces + neighbours for the freshly mapped hosts so a following
+    // link auto-map has data to match against (bulk node mapping doesn't load
+    // them the way the per-node dropdown does).
+    void loadInterfacesForMappedNodes()
     scheduleClearAutoMapResult()
   }
 
@@ -268,6 +279,38 @@
     }
   }
 
+  function nodeForMapping(nodeId: string): { identity?: Identity; label?: string | string[] } {
+    return parsedTopology?.graph.nodes.find((n) => n.id === nodeId) ?? {}
+  }
+
+  /**
+   * Resolve one endpoint's interface: LLDP neighbour first (which local
+   * interface faces the peer), then fuzzy port-name matching. A neighbour hit
+   * is only accepted when it maps to a monitored interface so the link polls.
+   */
+  function resolveLinkInterface(
+    hostId: string | undefined,
+    side: EdgeEndpoint,
+    peerNodeId: string,
+    peerPort: string | undefined,
+    interfaces: Array<{ name: string }>,
+  ): string | null {
+    if (!hostId || interfaces.length === 0) return null
+    const names = interfaces.map((i) => i.name)
+    const neighborIf = matchInterfaceByNeighbor(
+      nodeForMapping(peerNodeId),
+      peerPort,
+      $hostNeighbors[hostId] ?? [],
+    )
+    if (neighborIf) {
+      const resolved = names.includes(neighborIf)
+        ? neighborIf
+        : findBestInterfaceMatch(neighborIf, names, { singleCandidateFallback: false })
+      if (resolved) return resolved
+    }
+    return findMatchingInterface(portMatchCandidates(side), interfaces)
+  }
+
   function handleAutoMapLinks() {
     let matched = 0
     for (const edge of edges) {
@@ -279,21 +322,24 @@
       if (currentMapping.interface) continue
 
       let monitoredNodeId: string | null = null
-      let matchedInterface: string | null = null
-
-      if (fromHostId && fromInterfaces.length > 0) {
-        const match = findMatchingInterface(portMatchCandidates(edge.from), fromInterfaces)
-        if (match) {
-          monitoredNodeId = edge.from.nodeId
-          matchedInterface = match
-        }
-      }
-      if (!matchedInterface && toHostId && toInterfaces.length > 0) {
-        const match = findMatchingInterface(portMatchCandidates(edge.to), toInterfaces)
-        if (match) {
-          monitoredNodeId = edge.to.nodeId
-          matchedInterface = match
-        }
+      let matchedInterface = resolveLinkInterface(
+        fromHostId,
+        edge.from,
+        edge.to.nodeId,
+        edge.to.port,
+        fromInterfaces,
+      )
+      if (matchedInterface) {
+        monitoredNodeId = edge.from.nodeId
+      } else {
+        matchedInterface = resolveLinkInterface(
+          toHostId,
+          edge.to,
+          edge.from.nodeId,
+          edge.from.port,
+          toInterfaces,
+        )
+        if (matchedInterface) monitoredNodeId = edge.to.nodeId
       }
       if (!matchedInterface) {
         if (fromHostId && fromInterfaces.length > 0) monitoredNodeId = edge.from.nodeId
@@ -493,7 +539,11 @@
             <Button
               variant="outline"
               size="sm"
-              onclick={() => {
+              onclick={async () => {
+                // Make sure interfaces + neighbours are loaded for the mapped
+                // hosts before matching, so link auto-map works even right after
+                // a bulk node auto-map (interfaces load lazily).
+                await loadInterfacesForMappedNodes()
                 const matched = handleAutoMapLinks()
                 if (matched > 0) {
                   autoMapResult = { matched, total: edges.length, kind: 'links' }

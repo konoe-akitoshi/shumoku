@@ -21,7 +21,14 @@ import { derived, get, writable } from 'svelte/store'
 import { api } from '$lib/api'
 import { matchNodeToHost } from '$lib/auto-mapping'
 import { topologies } from '$lib/stores/topologies'
-import type { Host, HostItem, MetricsMapping, Topology, TopologyDataSource } from '$lib/types'
+import type {
+  Host,
+  HostItem,
+  InterfaceNeighbor,
+  MetricsMapping,
+  Topology,
+  TopologyDataSource,
+} from '$lib/types'
 
 /**
  * A `Host` annotated with its origin data source. Web-local — does not
@@ -51,6 +58,8 @@ interface MappingState {
   // Interfaces per host (hostId -> interfaces)
   hostInterfaces: Record<string, HostItem[]>
   hostInterfacesLoading: Record<string, boolean>
+  // LLDP/CDP neighbours per host (hostId -> neighbours), for link auto-map
+  hostNeighbors: Record<string, InterfaceNeighbor[]>
   loading: boolean
   hostsLoading: boolean
   error: string | null
@@ -63,6 +72,7 @@ const initialState: MappingState = {
   metricsSources: [],
   hostInterfaces: {},
   hostInterfacesLoading: {},
+  hostNeighbors: {},
   loading: false,
   hostsLoading: false,
   error: null,
@@ -291,7 +301,14 @@ function createMappingStore() {
       }))
 
       try {
-        const items = await api.dataSources.getHostItems(sourceId, hostId)
+        // Fetch interfaces and LLDP/CDP neighbours together so both are ready
+        // when this resolves — link auto-map prefers the neighbour (which local
+        // interface faces the peer) and falls back to name matching. A neighbour
+        // fetch failure must not fail interface loading.
+        const [items, neighbors] = await Promise.all([
+          api.dataSources.getHostItems(sourceId, hostId),
+          api.dataSources.getInterfaceNeighbors(sourceId, hostId).catch(() => []),
+        ])
         // Filter to unique interface names (remove :in/:out suffix)
         const interfaceNames = new Set<string>()
         const interfaces: HostItem[] = []
@@ -316,6 +333,7 @@ function createMappingStore() {
         update((s) => ({
           ...s,
           hostInterfaces: { ...s.hostInterfaces, [hostId]: interfaces },
+          hostNeighbors: { ...s.hostNeighbors, [hostId]: neighbors },
           hostInterfacesLoading: { ...s.hostInterfacesLoading, [hostId]: false },
         }))
       } catch {
@@ -415,3 +433,4 @@ export const mappingHosts = derived(mappingStore, ($s) => $s.hosts)
 export const metricsSources = derived(mappingStore, ($s) => $s.metricsSources)
 export const hostInterfaces = derived(mappingStore, ($s) => $s.hostInterfaces)
 export const hostInterfacesLoading = derived(mappingStore, ($s) => $s.hostInterfacesLoading)
+export const hostNeighbors = derived(mappingStore, ($s) => $s.hostNeighbors)

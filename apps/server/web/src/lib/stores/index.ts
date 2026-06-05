@@ -19,6 +19,7 @@ export {
 export {
   hostInterfaces,
   hostInterfacesLoading,
+  hostNeighbors,
   linkMapping,
   type MappingHost,
   mappingError,
