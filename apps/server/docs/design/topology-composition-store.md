@@ -11,6 +11,25 @@ Scope: **data model only.** Diagram render (SVG DOM / client layout) and poll
 orchestration (subscriber scoping, plugin call batching) are real but separate
 — noted at the end, not the subject here.
 
+## Mental model: two axes on one hub
+
+The **resolved entity** is the hub; two axes meet on it:
+
+- **Axis 1 — composition (structure):** `sources → entity (identity-merged) →
+  diagram`. What the device is, where it sits, how it connects.
+- **Axis 2 — metrics dependency (the mapping):** `entity → metrics provider`
+  (which source/host/port supplies its live values). Mapping is **not a module**
+  — it's a *dependency-resolution field* on the entity (a resolved reference),
+  resolved by identity + LLDP + fuzzy as the resolution function. The internal
+  algorithms are how that one field is filled, not grounds for a separate
+  subsystem.
+
+The **diagram** is axis-1 rendered with axis-2's live values painted on.
+Human/authored input is not a third axis — it's a contributor on both, carried
+by provenance. The three tabs map to this: Sources (inputs to both axes),
+Composition (the entity + both axes' resolved state), Diagram (presentation).
+Everything below follows from putting both axes on the identity-keyed entity.
+
 ## Current state (survey)
 
 ### Where composition lives today
