@@ -29,6 +29,7 @@ export {
   hasMetricsCapability,
   hasNativeApi,
   hasTopologyCapability,
+  type InterfaceNeighbor,
   type LinkMetrics,
   type LinkMetricsMapping,
   type MetricsCapable,

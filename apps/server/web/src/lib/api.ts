@@ -101,6 +101,7 @@ import type {
   DiscoveredMetric,
   Host,
   HostItem,
+  InterfaceNeighbor,
 } from './types'
 
 // Data Sources API
@@ -156,6 +157,9 @@ export const dataSources = {
 
   getHostItems: (id: string, hostId: string) =>
     request<HostItem[]>(`/datasources/${id}/hosts/${hostId}/items`),
+
+  getInterfaceNeighbors: (id: string, hostId: string) =>
+    request<InterfaceNeighbor[]>(`/datasources/${id}/hosts/${hostId}/neighbors`),
 
   discoverMetrics: (id: string, hostId: string) =>
     request<DiscoveredMetric[]>(`/datasources/${id}/hosts/${hostId}/metrics`),

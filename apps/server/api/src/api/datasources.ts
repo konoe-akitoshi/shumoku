@@ -307,6 +307,19 @@ export function createDataSourcesApi(): Hono {
     }
   })
 
+  // Get interface neighbours (LLDP/CDP) for a specific host
+  app.get('/:id/hosts/:hostId/neighbors', async (c) => {
+    const id = c.req.param('id')
+    const hostId = c.req.param('hostId')
+    try {
+      const neighbors = await service.getInterfaceNeighbors(id, hostId)
+      return c.json(neighbors)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
   // Discover all metrics for a specific host
   app.get('/:id/hosts/:hostId/metrics', async (c) => {
     const id = c.req.param('id')
