@@ -128,6 +128,15 @@ export class ObservationsService {
         now,
       )
 
+    // Enforce retention on write — the table is otherwise append-only and grew
+    // unbounded (this method was never called). Cheap once the window is small;
+    // a prune hiccup must never fail the record itself.
+    try {
+      this.pruneOldObservations()
+    } catch (err) {
+      console.warn('[Observations] prune failed:', err instanceof Error ? err.message : err)
+    }
+
     return {
       id,
       topologyId: input.topologyId,
