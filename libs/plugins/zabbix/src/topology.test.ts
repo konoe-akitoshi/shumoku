@@ -118,10 +118,30 @@ describe('convertZabbixToGraph', () => {
     expect(g.links).toHaveLength(1)
     expect(g.links[0]?.metadata?.['discoveredVia']).toBe('zabbix-lldp')
     expect(g.links[0]?.metadata?.['speedBps']).toBe(100_000_000_000)
-    expect(
-      g.nodes.find((n) => n.id === 'inst1:host:1')?.ports?.find((p) => p.label === 'et-0/0/1')
-        ?.speed,
-    ).toBe('100g')
+    const localPort = g.nodes
+      .find((n) => n.id === 'inst1:host:1')
+      ?.ports?.find((p) => p.label === 'et-0/0/1')
+    expect(localPort?.speed).toBe('100g')
+    // Port identity is stamped from the local ifName so link metric bindings
+    // survive re-scans (the #363 contract).
+    expect(localPort?.identity).toEqual({ ifName: 'et-0/0/1' })
+    // The remote port-id is a port name → ifName identity (not a MAC).
+    const remotePort = g.nodes
+      .find((n) => n.id === 'inst1:host:2')
+      ?.ports?.find((p) => p.label === 'et-0/0/9')
+    expect(remotePort?.identity).toEqual({ ifName: 'et-0/0/9' })
+  })
+
+  it('stamps a MAC-typed remote port-id as a mac identity', () => {
+    const hosts = [mkHost({ hostid: '1', name: 'A' })]
+    const nbr = new Map<string, ZabbixLldpNeighbor[]>([
+      ['1', [{ localIf: 'e1', remSysname: 'ext.x', remPortId: '00:11:22:33:44:55' }]],
+    ])
+    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    const remotePort = g.nodes
+      .find((n) => n.id === 'inst1:ext:ext.x')
+      ?.ports?.find((p) => p.label === '00:11:22:33:44:55')
+    expect(remotePort?.identity).toEqual({ mac: '00:11:22:33:44:55' })
   })
 
   it('adds a PARENT-tag link where LLDP saw no neighbor', () => {

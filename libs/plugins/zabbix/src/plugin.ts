@@ -30,7 +30,7 @@ import type {
   NodeMetrics,
   TopologyCapable,
 } from '@shumoku/core'
-import { addHttpWarning, mapWithConcurrency } from '@shumoku/core'
+import { addHttpWarning, buildIdentity, mapWithConcurrency } from '@shumoku/core'
 import { createHttpClient, type HttpClient } from '@shumoku/plugin-sdk'
 import { convertZabbixToGraph } from './topology.js'
 import type {
@@ -366,6 +366,7 @@ export class ZabbixPlugin
     return items.flatMap((item) => {
       const direction = ZabbixPlugin.trafficDirection(item.key_)
       if (!direction) return [] // search is a substring match — drop incidental hits
+      const interfaceName = ZabbixPlugin.interfaceNameOf(item.key_, item.name)
       return [
         {
           id: item.itemid,
@@ -374,7 +375,10 @@ export class ZabbixPlugin
           key: item.key_,
           lastValue: item.lastvalue,
           unit: (item as ZabbixItem & { units?: string }).units,
-          interfaceName: ZabbixPlugin.interfaceNameOf(item.key_, item.name),
+          interfaceName,
+          // Durable interface key for link-metric binding (Zabbix LLDP exposes
+          // only ifName — no ifIndex/mac through the API).
+          ...(interfaceName ? { interfaceIdentity: buildIdentity({ ifName: interfaceName }) } : {}),
           direction,
         } satisfies HostItem,
       ]
@@ -390,6 +394,7 @@ export class ZabbixPlugin
     const { neighborsByHostId } = await this.fetchLldpData([hostId])
     return (neighborsByHostId.get(hostId) ?? []).map((n) => ({
       localInterface: n.localIf,
+      ...(n.localIf ? { localInterfaceIdentity: buildIdentity({ ifName: n.localIf }) } : {}),
       ...(n.remSysname ? { remoteSysName: n.remSysname } : {}),
       ...(n.remChassisId ? { remoteChassisId: n.remChassisId } : {}),
       ...(n.remPortId ? { remotePortId: n.remPortId } : {}),

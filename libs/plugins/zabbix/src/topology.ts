@@ -13,7 +13,15 @@
  *   - device   ← parsed from inventory.{type,vendor,model,hardware} + SNMP sysDescr
  */
 
-import type { Link, NetworkGraph, Node, NodePort, NodeSpec, Subgraph } from '@shumoku/core'
+import type {
+  Identity,
+  Link,
+  NetworkGraph,
+  Node,
+  NodePort,
+  NodeSpec,
+  Subgraph,
+} from '@shumoku/core'
 import { buildIdentity, DeviceType } from '@shumoku/core'
 import type { ZabbixHost, ZabbixLldpNeighbor } from './types.js'
 
@@ -42,6 +50,8 @@ interface StagedNode {
 
 /** Placeholder values the LLDP template uses when no neighbor was seen. */
 const NO_NEIGHBOR = /^\s*(\*\s*no info\s*\*|-|unknown|)\s*$/i
+// MAC address forms: colon/hyphen-separated octets, or Cisco dotted-quad.
+const MAC_LIKE = /^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$|^(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}$/i
 
 /**
  * Convert hosts + their LLDP adjacencies (and SNMP sysDescr) into a NetworkGraph.
@@ -104,7 +114,12 @@ export function convertZabbixToGraph(
   const seenLinks = new Set<string>() // canonical endpoint-port pairs
   const linkedNodePairs = new Set<string>() // canonical node pairs (for tag de-dup)
 
-  const ensurePort = (node: Node, label: string, speedBps?: number): NodePort => {
+  const ensurePort = (
+    node: Node,
+    label: string,
+    speedBps?: number,
+    identity?: Identity,
+  ): NodePort => {
     let ports = portsByNode.get(node.id)
     if (!ports) {
       ports = new Map()
@@ -112,12 +127,25 @@ export function convertZabbixToGraph(
     }
     const id = `${node.id}:port:${label}`
     const existing = ports.get(id)
-    if (existing) return existing
+    if (existing) {
+      // Backfill identity if a later assertion (LLDP > tag fallback) supplies one.
+      if (identity && !existing.identity) existing.identity = identity
+      return existing
+    }
     const port: NodePort = { id, label, connectors: [], provenance: { source: sourceId } }
+    if (identity) port.identity = identity
     const speed = speedLabel(speedBps)
     if (speed) port.speed = speed
     ports.set(id, port)
     return port
+  }
+
+  // LLDP remote port-id is a port name, or a MAC when port-id is MAC-typed —
+  // stamp the matching identity key so link bindings resolve across re-scans.
+  const lldpPortIdentity = (portId: string | undefined): Identity | undefined => {
+    const v = portId?.trim()
+    if (!v) return undefined
+    return MAC_LIKE.test(v) ? buildIdentity({ mac: v }) : buildIdentity({ ifName: v })
   }
 
   const resolveRemote = (sysName: string, chassisId?: string): Node | undefined => {
@@ -150,9 +178,19 @@ export function convertZabbixToGraph(
       const remoteNode = resolveRemote(nbr.remSysname, nbr.remChassisId)
       if (!remoteNode || remoteNode.id === localNode.id) continue
 
-      const localPort = ensurePort(localNode, nbr.localIf, nbr.speedBps)
+      const localPort = ensurePort(
+        localNode,
+        nbr.localIf,
+        nbr.speedBps,
+        buildIdentity({ ifName: nbr.localIf }),
+      )
       const remoteLabel = nbr.remPortId?.trim() || `to-${host.hostid}-${nbr.localIf}`
-      const remotePort = ensurePort(remoteNode, remoteLabel)
+      const remotePort = ensurePort(
+        remoteNode,
+        remoteLabel,
+        undefined,
+        lldpPortIdentity(nbr.remPortId),
+      )
 
       const key = nodePairKey(
         `${localNode.id}|${localPort.id}`,
