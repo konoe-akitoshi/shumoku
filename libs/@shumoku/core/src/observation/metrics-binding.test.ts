@@ -205,4 +205,79 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
     const suppressedPort = suppressed.nodes[0]?.ports?.[0]
     expect(metricsBindingOf(suppressedPort?.attachments)).toBeUndefined()
   })
+
+  it('link binding survives port folding: endpoint port id is remapped so the binding is discoverable', () => {
+    // The observed link references the OBSERVED port id; the authored overlay
+    // carries the binding on a port with a different id but the same identity.
+    // After fold there is one port (the authored id wins) and the link endpoint
+    // must be remapped to it, else deriveMappingFromGraph can't find the binding.
+    const authored: NetworkGraph = {
+      version: '1.0',
+      nodes: [
+        {
+          id: 'authored-a',
+          label: '',
+          shape: 'rect',
+          identity: { mgmtIp: '10.0.0.1' },
+          ports: [
+            {
+              id: 'authored-port',
+              label: 'Gi0/1',
+              connectors: ['rj45'],
+              identity: { ifName: 'Gi0/1' },
+              attachments: [portBinding('zbx', 'Gi0/1', 2000)],
+            },
+          ],
+        },
+      ],
+      links: [],
+    }
+    const observed: SnapshotEntry = {
+      sourceId: 'netbox',
+      capturedAt: 1,
+      status: 'ok',
+      graph: {
+        version: '1.0',
+        nodes: [
+          {
+            id: 'discovered:1',
+            label: 'A',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.1' },
+            ports: [
+              {
+                id: 'obs-port-a',
+                label: 'Gi0/1',
+                connectors: ['rj45'],
+                identity: { ifName: 'Gi0/1' },
+              },
+            ],
+          },
+          {
+            id: 'discovered:2',
+            label: 'B',
+            shape: 'rect',
+            identity: { mgmtIp: '10.0.0.2' },
+            ports: [{ id: 'obs-port-b', label: 'Gi0/2', connectors: ['rj45'] }],
+          },
+        ],
+        links: [
+          {
+            id: 'L1',
+            from: { node: 'discovered:1', port: 'obs-port-a' },
+            to: { node: 'discovered:2', port: 'obs-port-b' },
+          },
+        ],
+      },
+    }
+
+    const out = resolve(authored, [observed])
+    const mapping = deriveMappingFromGraph(out)
+    const monitoredNodeId = out.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id
+    expect(mapping.links['L1']).toEqual({
+      monitoredNodeId,
+      interface: 'Gi0/1',
+      bandwidth: 2000,
+    })
+  })
 })

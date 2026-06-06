@@ -114,18 +114,21 @@ export function resolve(
   // 3. For each cluster, fold into a single resolved Node
   const resolvedNodes: Node[] = []
   const clusterById = new Map<string, NodeCluster>()
+  // `${sourceId}:${origNodeId}:${origPortId}` → folded port id, so a link
+  // endpoint's port reference survives port folding (see remapEndpoint).
+  const portIdRemap = new Map<string, string>()
   for (const cluster of nodeClusters) {
-    const node = foldNodeCluster(cluster)
+    const { node, portRemap } = foldNodeCluster(cluster)
     resolvedNodes.push(node)
+    for (const [k, v] of portRemap) portIdRemap.set(k, v)
     // Bind each member's original `id` → cluster id so links can be remapped
     for (const member of cluster.members) {
       clusterById.set(`${member.sourceId}:${member.node.id}`, cluster)
     }
   }
 
-  // 4. Fold links — endpoint remapping only; cross-cluster matching is
-  //    out of scope for the skeleton.
-  const resolvedLinks = foldLinks(contributions, clusterById)
+  // 4. Fold links — endpoint node id → cluster id, port id → folded port id.
+  const resolvedLinks = foldLinks(contributions, clusterById, portIdRemap)
 
   // 5. Subgraphs — fold from every contribution (authored + each source), not
   //    just authored. Source subgraph ids were namespaced per source above, and
@@ -327,7 +330,7 @@ function isClusterExcluded(cluster: NodeCluster, exclusions: NodeExclusion[]): b
  * won each field so the UI can show human values as editable and observed
  * values as read-only.
  */
-function foldNodeCluster(cluster: NodeCluster): Node {
+function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[string, string]> } {
   const ranked = rankMembers(cluster.members)
   const top = ranked[0]
   if (!top) {
@@ -381,7 +384,7 @@ function foldNodeCluster(cluster: NodeCluster): Node {
   // human suppressed is dropped.
   const attachments = foldAttachments(ranked, suppressed)
 
-  const ports = foldPortsAcrossCluster(cluster)
+  const { ports, remap: portRemap } = foldPortsAcrossCluster(cluster)
 
   // fieldSources: who won the human-relevant fields. Lets the UI render the
   // displayed name/spec as a human override vs an observed fact.
@@ -429,7 +432,7 @@ function foldNodeCluster(cluster: NodeCluster): Node {
     }
   }
 
-  return resolved
+  return { node: resolved, portRemap }
 }
 
 function deriveNodeProvenance(
@@ -605,21 +608,39 @@ function stringLabel(label: string | string[]): string {
 
 interface PortMember {
   sourceId: string
+  nodeId: string
   priority: number
   capturedAt: number
   port: NodePort
 }
 
-function foldPortsAcrossCluster(cluster: NodeCluster): NodePort[] | undefined {
+/** Port-id remap key: a source's original (node, port) → the folded port id. */
+function portRemapKey(sourceId: string, nodeId: string, portId: string): string {
+  return `${sourceId}:${nodeId}:${portId}`
+}
+
+interface FoldedPorts {
+  ports: NodePort[] | undefined
+  /** `${sourceId}:${origNodeId}:${origPortId}` → folded port id. */
+  remap: Array<[string, string]>
+}
+
+function foldPortsAcrossCluster(cluster: NodeCluster): FoldedPorts {
   // Collect ports from all members of the cluster, group by port
   // identity within the cluster, fold each port.
   const all: PortMember[] = []
   for (const m of cluster.members) {
     for (const port of m.node.ports ?? []) {
-      all.push({ sourceId: m.sourceId, priority: m.priority, capturedAt: m.capturedAt, port })
+      all.push({
+        sourceId: m.sourceId,
+        nodeId: m.node.id,
+        priority: m.priority,
+        capturedAt: m.capturedAt,
+        port,
+      })
     }
   }
-  if (all.length === 0) return undefined
+  if (all.length === 0) return { ports: undefined, remap: [] }
 
   // Group by port identity (within-cluster scope)
   const portClusters: PortMember[][] = []
@@ -646,7 +667,19 @@ function foldPortsAcrossCluster(cluster: NodeCluster): NodePort[] | undefined {
     }
   }
 
-  return portClusters.map((members) => foldPortCluster(members))
+  // Fold each port cluster and record every member port id → the folded id, so
+  // a link endpoint that referenced an original port id still resolves to the
+  // surviving folded port (keeps link↔port consistent across the merge).
+  const ports: NodePort[] = []
+  const remap: Array<[string, string]> = []
+  for (const members of portClusters) {
+    const folded = foldPortCluster(members)
+    ports.push(folded)
+    for (const m of members) {
+      remap.push([portRemapKey(m.sourceId, m.nodeId, m.port.id), folded.id])
+    }
+  }
+  return { ports, remap }
 }
 
 function foldPortCluster(members: PortMember[]): NodePort {
@@ -786,12 +819,16 @@ function foldSubgraphs(contributions: Contribution[]): Subgraph[] | undefined {
  * The endpoint `node` id is remapped to the resolved cluster id so links
  * still reference real nodes after clustering.
  */
-function foldLinks(contributions: Contribution[], clusterById: Map<string, NodeCluster>): Link[] {
+function foldLinks(
+  contributions: Contribution[],
+  clusterById: Map<string, NodeCluster>,
+  portIdRemap: Map<string, string>,
+): Link[] {
   const links: Link[] = []
   for (const contrib of contributions) {
     for (const link of contrib.graph.links) {
-      const from = remapEndpoint(link.from, contrib.sourceId, clusterById)
-      const to = remapEndpoint(link.to, contrib.sourceId, clusterById)
+      const from = remapEndpoint(link.from, contrib.sourceId, clusterById, portIdRemap)
+      const to = remapEndpoint(link.to, contrib.sourceId, clusterById, portIdRemap)
       if (!from || !to) continue // dangling — TODO: ghost endpoint
       links.push({
         ...link,
@@ -812,8 +849,16 @@ function remapEndpoint(
   endpoint: LinkEndpoint,
   sourceId: string,
   clusterById: Map<string, NodeCluster>,
+  portIdRemap: Map<string, string>,
 ): LinkEndpoint | null {
   const cluster = clusterById.get(`${sourceId}:${endpoint.node}`)
   if (!cluster) return null
-  return { ...endpoint, node: cluster.id }
+  // The endpoint's port id came from this source's pre-fold node; after port
+  // folding the surviving port may carry a different id. Remap it so the link
+  // still references a real port (and a port-level metrics binding on that port
+  // is discoverable). Falls back to the original id if unmapped.
+  const remappedPort = endpoint.port
+    ? (portIdRemap.get(portRemapKey(sourceId, endpoint.node, endpoint.port)) ?? endpoint.port)
+    : endpoint.port
+  return { ...endpoint, node: cluster.id, port: remappedPort }
 }
