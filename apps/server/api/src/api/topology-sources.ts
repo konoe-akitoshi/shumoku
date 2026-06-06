@@ -221,6 +221,22 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
     if (!ds) {
       return c.json({ error: `Data source ${source.dataSourceId} not found` }, 404)
     }
+    // Manual is per-topology — its authored graph lives in THIS topology's
+    // observations. Reject a Manual that belongs to another topology (sharing it
+    // would make its editor ambiguous); same invariant as the POST attach path.
+    if (ds.type === 'manual') {
+      const attachedElsewhere = getTopologySourcesService()
+        .listByDataSource(source.dataSourceId)
+        .some((t) => t.topologyId !== topologyId)
+      if (attachedElsewhere) {
+        return c.json(
+          {
+            error: 'Manual sources are per-topology; cannot attach one owned by another topology.',
+          },
+          409,
+        )
+      }
+    }
   }
 
   try {
