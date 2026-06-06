@@ -16,9 +16,8 @@
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
-  import ShareButton from '$lib/components/ShareButton.svelte'
   import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
-  import { mappingStore, metricsConnected, topologies } from '$lib/stores'
+  import { mappingStore, metricsConnected } from '$lib/stores'
   import type { TopologyDataSource } from '$lib/types'
   import { useTopologyCtx } from './_context.svelte'
 
@@ -80,16 +79,6 @@
     diagramComponent?.panToNode(nodeId)
   }
 
-  async function handleShare() {
-    if (!ctx.topology) return
-    ctx.topology = await topologies.share(topologyId)
-  }
-
-  async function handleUnshare() {
-    if (!ctx.topology) return
-    ctx.topology = await topologies.unshare(topologyId)
-  }
-
   function handleKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault()
@@ -136,16 +125,6 @@
         <span class="w-2 h-2 bg-theme-text-muted rounded-full"></span>
         <span class="text-theme-text-muted">Offline</span>
       {/if}
-    </div>
-
-    <!-- Share button -->
-    <div class="absolute top-4 right-4 z-10">
-      <ShareButton
-        shareToken={ctx.topology.shareToken}
-        shareType="topologies"
-        onShare={handleShare}
-        onUnshare={handleUnshare}
-      />
     </div>
   {/if}
 </div>

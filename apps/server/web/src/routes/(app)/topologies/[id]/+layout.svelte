@@ -19,6 +19,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
+  import ShareButton from '$lib/components/ShareButton.svelte'
   import { topologies } from '$lib/stores'
   import { createTopologyCtx } from './_context.svelte'
   import TopologyCanvas from './TopologyCanvas.svelte'
@@ -63,6 +64,15 @@
   }
   function closeDrawer() {
     goto(base)
+  }
+
+  async function handleShare() {
+    if (!ctx.topology) return
+    ctx.topology = await topologies.share(ctx.topologyId)
+  }
+  async function handleUnshare() {
+    if (!ctx.topology) return
+    ctx.topology = await topologies.unshare(ctx.topologyId)
   }
 
   onMount(async () => {
@@ -148,37 +158,45 @@
   <!-- 表: the diagram canvas, always mounted underneath everything. -->
   <TopologyCanvas />
 
-  <!-- Top control cluster: Composition toggle + Settings gear. The app
-       breadcrumb already carries "Topologies › <name>", so no in-canvas
-       title is needed. -->
-  <div class="absolute top-4 right-16 z-20 flex items-center gap-2">
-    {#if ctx.loading}
-      <span class="text-xs text-theme-text-muted inline-flex items-center gap-1">
-        <ArrowsClockwiseIcon size={12} class="animate-spin" />
-        loading
-      </span>
-    {/if}
-    <button
-      type="button"
-      onclick={openComposition}
-      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors {drawerOpen
-        ? 'bg-primary/10 border-primary/30 text-primary'
-        : 'bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text hover:text-primary'}"
-      aria-expanded={drawerOpen}
-    >
-      <StackIcon size={16} />
-      Composition
-    </button>
-    <a
-      href={onSettings ? base : `${base}/settings`}
-      class="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors {onSettings
-        ? 'bg-primary/10 border-primary/30 text-primary'
-        : 'bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text-muted hover:text-theme-text'}"
-      aria-label="Topology settings"
-    >
-      <GearSixIcon size={16} />
-    </a>
-  </div>
+  <!-- Top-right control cluster — belongs to the CLOSED (diagram) state.
+       When the drawer is open it owns its own top-right chrome (gear + X),
+       so this is hidden to avoid stacking two clusters in one corner. The
+       canvas only owns the top-left status + bottom-right zoom; the app
+       breadcrumb carries the title. -->
+  {#if !drawerOpen}
+    <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
+      {#if ctx.loading}
+        <span class="text-xs text-theme-text-muted inline-flex items-center gap-1">
+          <ArrowsClockwiseIcon size={12} class="animate-spin" />
+          loading
+        </span>
+      {/if}
+      {#if ctx.topology}
+        <ShareButton
+          shareToken={ctx.topology.shareToken}
+          shareType="topologies"
+          onShare={handleShare}
+          onUnshare={handleUnshare}
+        />
+      {/if}
+      <button
+        type="button"
+        onclick={openComposition}
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text hover:text-primary"
+        aria-expanded={false}
+      >
+        <StackIcon size={16} />
+        Composition
+      </button>
+      <a
+        href={`${base}/settings`}
+        class="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text-muted hover:text-theme-text"
+        aria-label="Topology settings"
+      >
+        <GearSixIcon size={16} />
+      </a>
+    </div>
+  {/if}
 
   <!-- 裏: the Composition drawer. Non-modal (no backdrop) so the canvas
        stays pannable while you tune the machinery. -->
@@ -192,14 +210,25 @@
           <span class="text-sm font-semibold text-theme-text">
             {onSettings ? 'Settings' : 'Composition'}
           </span>
-          <button
-            type="button"
-            onclick={closeDrawer}
-            class="inline-flex items-center justify-center w-7 h-7 rounded-md text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-elevated"
-            aria-label="Close"
-          >
-            <XIcon size={16} />
-          </button>
+          <div class="flex items-center gap-1">
+            {#if !onSettings}
+              <a
+                href={`${base}/settings`}
+                class="inline-flex items-center justify-center w-7 h-7 rounded-md text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-elevated"
+                aria-label="Topology settings"
+              >
+                <GearSixIcon size={16} />
+              </a>
+            {/if}
+            <button
+              type="button"
+              onclick={closeDrawer}
+              class="inline-flex items-center justify-center w-7 h-7 rounded-md text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-elevated"
+              aria-label="Close"
+            >
+              <XIcon size={16} />
+            </button>
+          </div>
         </div>
         {#if !onSettings}
           <!-- Pipeline stepper (sources → discovery → mapping → resolved). -->
