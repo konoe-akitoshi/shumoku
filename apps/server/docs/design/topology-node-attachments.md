@@ -91,9 +91,10 @@ interface PolicyAttachment {
 
 ### 設計上の不変条件
 
-- **kind は有限の既知セット**(`facts` / `access` / `policy`)で、各々が具体的な型付き
-  フィールドを持つ。汎用 key-value プラグイン機構にはしない(over-abstract 回避、
-  「自然な UI のまま」)。
+- **kind は有限の既知セット**(`facts` / `access` / `policy`、および後から追加された
+  `metrics-binding` — メトリクスマッピングを identity-keyed フィールドとして表現する。
+  `topology-composition-store.md` 参照)で、各々が具体的な型付きフィールドを持つ。
+  汎用 key-value プラグイン機構にはしない(over-abstract 回避、「自然な UI のまま」)。
 - **拡張の仕方**:読み方が増える → `AccessAttachment.protocol` に値追加 + params 型追加。
   上書き属性が増える → `FactsAttachment` にフィールド追加。型の大改修は不要。
 - **メトリクス mapping はここに含めない**(別概念。weathermap 用の host/interface 紐付けは
