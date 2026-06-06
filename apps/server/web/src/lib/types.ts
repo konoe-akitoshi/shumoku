@@ -94,9 +94,6 @@ export interface Topology {
 
 export interface TopologyInput {
   name: string
-  topologySourceId?: string
-  metricsSourceId?: string
-  mappingJson?: string
 }
 
 /**

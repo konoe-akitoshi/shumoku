@@ -92,8 +92,14 @@ export interface Topology {
   name: string
   /** Id of the Manual source attached to this topology, if any. */
   manualSourceId?: string
-  topologySourceId?: string // Data source for structure (e.g., NetBox)
-  metricsSourceId?: string // Data source for metrics (e.g., Zabbix)
+  /**
+   * Structure / metrics data source ids. No longer stored on the topology row
+   * (sources live in `topology_data_sources`); the `/context` response derives
+   * them from the m2m table, and the share projection fills `mappingJson` from
+   * the resolved bindings. These remain as optional READ-only wire fields.
+   */
+  topologySourceId?: string
+  metricsSourceId?: string
   mappingJson?: string
   shareToken?: string
   createdAt: number
@@ -102,9 +108,6 @@ export interface Topology {
 
 export interface TopologyInput {
   name: string
-  topologySourceId?: string
-  metricsSourceId?: string
-  mappingJson?: string
 }
 
 // ============================================
