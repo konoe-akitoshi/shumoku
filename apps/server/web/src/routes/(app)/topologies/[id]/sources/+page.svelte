@@ -83,6 +83,29 @@
       .catch(() => {})
   })
 
+  // The shell loads the data-source catalogs + attachments once. They can go
+  // stale if a data source is created/deleted on /datasources while a topology
+  // stays open, so refresh them when entering Sources (no full reload needed).
+  let refreshedFor = ''
+  $effect(() => {
+    const id = ctx.topologyId
+    if (!id || refreshedFor === id) return
+    refreshedFor = id
+    Promise.all([
+      api.topologies.sources.list(id),
+      api.dataSources.listByCapability('topology'),
+      api.dataSources.listByCapability('metrics'),
+    ])
+      .then(([sources, topo, metrics]) => {
+        ctx.currentSources = sources
+        ctx.topologyDataSources = topo
+        ctx.metricsDataSources = metrics
+      })
+      .catch(() => {
+        // Keep the shell-loaded values on failure.
+      })
+  })
+
   $effect(() => {
     for (const s of ctx.currentSources) {
       if (!scopeState[s.id]) scopeState[s.id] = parseScope(s.optionsJson)
