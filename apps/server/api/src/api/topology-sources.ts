@@ -59,9 +59,9 @@ topologySourcesApi.get('/:topologyId/sources', async (c) => {
  *  (a) `{ dataSourceId, purpose, ... }` — attach an existing source
  *      (NetBox, SNMP, etc. shared across topologies).
  *  (b) `{ type: 'manual', purpose? }` — inline-create a Manual data
- *      source dedicated to this topology, then attach it. Manual is
- *      per-topology; cardinality is enforced as one-per-topology
- *      (409 on second attempt).
+ *      source and attach it in one step. Manual is a fully uniform
+ *      source (no cardinality / sharing constraints) — same as any
+ *      other; this shape is just a convenience.
  */
 topologySourcesApi.post('/:topologyId/sources', async (c) => {
   const { topologyId } = c.req.param()
@@ -174,6 +174,14 @@ topologySourcesApi.delete('/:topologyId/sources/:sourceId', async (c) => {
   if (!deleted) {
     return c.json({ error: 'Failed to delete' }, 500)
   }
+
+  // Detach also deletes this source's observation snapshots. Without this, the
+  // snapshots linger and a later re-attach silently resurrects stale data on the
+  // next resolve() — no Sync required — which breaks the "attach is config-only,
+  // no data until you Sync" model. A source's contribution must exist only while
+  // it is attached AND has been synced. (Matches the confirm copy: "Its observed
+  // data is removed.") This is the same delete the explicit Clear endpoint runs.
+  new ObservationsService().deleteForSource(topologyId, existing.dataSourceId)
 
   // Detaching a source removes it from the resolve input set → invalidate.
   getTopologyService().clearCacheEntry(topologyId)
