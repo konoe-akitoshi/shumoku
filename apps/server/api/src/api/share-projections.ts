@@ -19,18 +19,21 @@ import type { MetricsMapping, Topology } from '../types.js'
 import { applyMappingBandwidth } from './topologies.js'
 
 /**
- * Topology metadata safe for a shared dashboard widget. Exposes `mappingJson`
- * (the topology widget reads it to map node→host for status overlays) but drops
- * `shareToken`, data-source ids, and timestamps. Prefer the RESOLVED mapping
- * (`metrics-binding` attachments ∪ residual) over the raw `mapping_json` column,
- * which post-backfill no longer carries node bindings.
+ * Topology metadata safe for a shared dashboard widget. The widget maps
+ * node→host for status overlays from `mappingJson`, so we serialize the RESOLVED
+ * mapping (derived from `metrics-binding` attachments) into that wire field —
+ * there is no `mapping_json` column anymore. Drops `shareToken`, data-source
+ * ids, and timestamps.
  */
 export function publicTopology(
   t: Topology,
   resolvedMapping?: MetricsMapping,
 ): { id: string; name: string; mappingJson?: string } {
-  const mappingJson = resolvedMapping ? JSON.stringify(resolvedMapping) : t.mappingJson
-  return { id: t.id, name: t.name, mappingJson }
+  return {
+    id: t.id,
+    name: t.name,
+    mappingJson: resolvedMapping ? JSON.stringify(resolvedMapping) : undefined,
+  }
 }
 
 /**
