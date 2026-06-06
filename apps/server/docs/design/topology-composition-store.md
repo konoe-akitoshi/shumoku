@@ -35,8 +35,10 @@ below is the reasoning of record; the deltas from it, all deliberate:
 - **resolve gained link-endpoint port-id remap** so a port binding folds onto the
   link's endpoint port.
 
-Follow-ups (own PRs): #362 5→3 tab IA, #363 plugin port identity, #364 DB
-integration-test harness. Non-data-model perf (orchestration / render) stays in
+Follow-ups (own PRs): #362 UI IA — see [`topology-ui-ia.md`](./topology-ui-ia.md)
+(Diagram-resident canvas + Composition drawer; supersedes the "5→3 tabs"
+phrasing), #363 plugin port identity (DONE, PR #373), #364 DB
+integration-test harness (DONE, PR #372). Non-data-model perf (orchestration / render) stays in
 `performance-scaling.md` (#354).
 
 > **Superseded below — authored-graph storage:** every mention in this doc of the
