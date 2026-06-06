@@ -164,14 +164,26 @@ function isPureEmptyOverlay(n: Node): boolean {
   return label.trim() === ''
 }
 
-/** A port that carries no human claim (only id/label/identity, empty connectors). */
+/**
+ * A port that carries no human claim — safe to drop after its binding is
+ * cleared. Conservative: ANY populated field beyond id/identity/empty-connectors
+ * (including a non-empty label) keeps the port, so clearing a binding can't
+ * delete a port the user authored a label or any other detail on.
+ */
 function isPureEmptyOverlayPort(p: NodePort): boolean {
+  const label = Array.isArray(p.label) ? p.label.join('') : (p.label ?? '')
   const ALLOWED = new Set(['id', 'label', 'identity', 'connectors'])
   for (const [k, v] of Object.entries(p)) {
     if (ALLOWED.has(k)) continue
     if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
   }
-  return (p.connectors?.length ?? 0) === 0
+  return label.trim() === '' && (p.connectors?.length ?? 0) === 0
+}
+
+/** Whether a port identity carries at least one usable port match key. */
+function hasAnyPortIdentityKey(identity: Identity | undefined): boolean {
+  if (!identity) return false
+  return Boolean(identity.ifName || identity.ifIndex !== undefined || identity.mac)
 }
 
 /** Two port identities match if they share a port key (ifName / ifIndex / mac). */
@@ -484,63 +496,95 @@ export class TopologyService {
     // Without a metrics source there's nowhere to bind (and nothing to poll).
     if (!sourceId) return this.get(id)
 
-    const nodeDesired = this.buildNodeBindingDesired(parsed.graph, mapping)
-    const linkDesired = this.buildLinkBindingDesired(parsed.graph, mapping)
+    const { desired: nodeDesired, skipped: nodeSkipped } = this.buildNodeBindingDesired(
+      parsed.graph,
+      mapping,
+    )
+    const { desired: linkDesired, skipped: linkSkipped } = this.buildLinkBindingDesired(
+      parsed.graph,
+      mapping,
+    )
+    if (nodeSkipped > 0 || linkSkipped > 0) {
+      // Surface dropped bindings rather than silently losing them (no-silent-caps):
+      // an element with no identity (node) or no port identity (link) can't be
+      // anchored so the binding would create a duplicate overlay instead of
+      // folding. These need source-emitted identity (Phase 1) to bind.
+      console.warn(
+        `[Mapping] topology ${id}: skipped ${nodeSkipped} node + ${linkSkipped} link binding(s) lacking identity to anchor`,
+      )
+    }
     await this.reconcileBindings(id, sourceId, nodeDesired, linkDesired)
     return this.get(id)
   }
 
-  /** Node host bindings to write: each resolved node mapping with its identity. */
+  /**
+   * Node host bindings to write. Only nodes with a usable identity are
+   * anchorable — an identity-less authored overlay can't fold onto the observed
+   * node (it gets a separate per-source fallback cluster), so it would create a
+   * duplicate rather than bind. Such entries are skipped and counted.
+   */
   private buildNodeBindingDesired(
     graph: NetworkGraph,
     mapping: MetricsMapping,
-  ): NodeBindingDesired[] {
+  ): { desired: NodeBindingDesired[]; skipped: number } {
     const identityByNodeId = new Map<string, Identity | undefined>(
       graph.nodes.map((n) => [n.id, n.identity]),
     )
-    const out: NodeBindingDesired[] = []
+    const desired: NodeBindingDesired[] = []
+    let skipped = 0
     for (const [nodeId, nm] of Object.entries(mapping.nodes ?? {})) {
       if (!nm.hostId && !nm.hostName) continue
-      out.push({
-        nodeId,
-        identity: identityByNodeId.get(nodeId),
-        hostId: nm.hostId,
-        hostName: nm.hostName,
-      })
+      const identity = identityByNodeId.get(nodeId)
+      if (!hasAnyIdentityKey(identity)) {
+        skipped++
+        continue
+      }
+      desired.push({ nodeId, identity, hostId: nm.hostId, hostName: nm.hostName })
     }
-    return out
+    return { desired, skipped }
   }
 
   /**
    * Link interface bindings to write: resolve each link mapping to its monitored
-   * node + port (and their identities) so the binding can be anchored on the
-   * port. Link key matches the rest of the server (`link.id || link-${i}`).
+   * node + port. Both the node identity AND the port identity (ifName/ifIndex/mac)
+   * are required to anchor the binding so it folds onto the link's port — a
+   * port-identity-less link binding can't bind (staged behind Phase 1 port
+   * identity) and is skipped + counted. Link key matches the rest of the server.
    */
   private buildLinkBindingDesired(
     graph: NetworkGraph,
     mapping: MetricsMapping,
-  ): LinkBindingDesired[] {
+  ): { desired: LinkBindingDesired[]; skipped: number } {
     const identityByNodeId = new Map<string, Identity | undefined>(
       graph.nodes.map((n) => [n.id, n.identity]),
     )
     const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
-    const out: LinkBindingDesired[] = []
+    const desired: LinkBindingDesired[] = []
+    let skipped = 0
     graph.links.forEach((link, i) => {
       const lm = mapping.links?.[link.id || `link-${i}`]
       if (!lm?.monitoredNodeId) return
       const ep = [link.from, link.to].find((e) => e.node === lm.monitoredNodeId)
-      if (!ep) return
+      if (!ep) {
+        skipped++
+        return
+      }
+      const nodeIdentity = identityByNodeId.get(lm.monitoredNodeId)
       const port = nodeById.get(lm.monitoredNodeId)?.ports?.find((p) => p.id === ep.port)
-      out.push({
+      if (!hasAnyIdentityKey(nodeIdentity) || !hasAnyPortIdentityKey(port?.identity)) {
+        skipped++
+        return
+      }
+      desired.push({
         monitoredNodeId: lm.monitoredNodeId,
-        nodeIdentity: identityByNodeId.get(lm.monitoredNodeId),
+        nodeIdentity,
         portId: ep.port,
         portIdentity: port?.identity,
         interfaceName: lm.interface ?? port?.interfaceName ?? port?.identity?.ifName,
         bandwidth: lm.bandwidth,
       })
     })
-    return out
+    return { desired, skipped }
   }
 
   /** The metrics data source id for a topology (m2m purpose='metrics', legacy fallback). */
@@ -725,20 +769,26 @@ export class TopologyService {
     }
 
     if (failed === 0) {
-      // Everything migrated → drop the column and mark done.
+      // Everything migrated → drop the column. Mark done ONLY if the drop
+      // actually succeeded, so a failed drop retries next startup (re-running the
+      // idempotent migration) instead of being silently left in place forever.
+      let dropped = false
       try {
         this.db.query('ALTER TABLE topologies DROP COLUMN mapping_json').run()
+        dropped = true
       } catch (err) {
         console.warn(
-          '[Backfill] could not drop mapping_json column:',
+          '[Backfill] could not drop mapping_json column (will retry next start):',
           err instanceof Error ? err.message : err,
         )
       }
-      this.db
-        .query(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('metrics_bindings_backfilled', '1')",
-        )
-        .run()
+      if (dropped) {
+        this.db
+          .query(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('metrics_bindings_backfilled', '1')",
+          )
+          .run()
+      }
     }
     if (migrated > 0 || failed > 0) {
       console.log(`[Backfill] metrics mapping → bindings: ${migrated} migrated, ${failed} deferred`)
@@ -954,7 +1004,7 @@ export class TopologyService {
 
     const { resolved, layout: layoutResult } = await computeNetworkLayout(graph)
     const metrics = this.createEmptyMetrics(graph)
-    const mapping = this.buildMapping(graph)
+    const mapping = this.buildMapping(topology.id, graph)
 
     return {
       id: topology.id,
@@ -977,8 +1027,13 @@ export class TopologyService {
    * are the single source of truth. Used by both a fresh resolve and an artifact
    * hydrate so the two agree.
    */
-  private buildMapping(graph: NetworkGraph): MetricsMapping | undefined {
-    const mapping = deriveMappingFromGraph(graph)
+  private buildMapping(topologyId: string, graph: NetworkGraph): MetricsMapping | undefined {
+    // Only bindings from currently-attached metrics sources count — a binding
+    // left behind by a detached source must not keep driving the mapping.
+    const activeSourceIds = new Set(
+      this.topologySources.listByPurpose(topologyId, 'metrics').map((s) => s.dataSourceId),
+    )
+    const mapping = deriveMappingFromGraph(graph, activeSourceIds)
     const hasBindings =
       Object.keys(mapping.nodes).length > 0 || Object.keys(mapping.links).length > 0
     return hasBindings ? mapping : undefined
@@ -1030,7 +1085,7 @@ export class TopologyService {
         metrics: this.createEmptyMetrics(graph),
         topologySourceId: topology.topologySourceId,
         metricsSourceId: topology.metricsSourceId,
-        mapping: this.buildMapping(graph),
+        mapping: this.buildMapping(topology.id, graph),
       }
     } catch {
       return null

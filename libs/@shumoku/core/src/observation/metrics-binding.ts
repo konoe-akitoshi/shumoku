@@ -18,11 +18,20 @@
 import type { MetricsBindingAttachment, NetworkGraph, NodePort } from '../models/types.js'
 import type { LinkMetricsMapping, MetricsMapping, NodeMetricsMapping } from '../plugin-types.js'
 
-/** The metrics-binding attachment on an element, if any. */
+/**
+ * The metrics-binding attachment on an element, if any. When `activeSourceIds`
+ * is given, only a binding whose `sourceId` is active counts — so a binding left
+ * behind by a detached/removed metrics source stops driving the mapping.
+ */
 export function metricsBindingOf(
   attachments: { kind: string }[] | undefined,
+  activeSourceIds?: ReadonlySet<string>,
 ): MetricsBindingAttachment | undefined {
-  return attachments?.find((a): a is MetricsBindingAttachment => a.kind === 'metrics-binding')
+  return attachments?.find(
+    (a): a is MetricsBindingAttachment =>
+      a.kind === 'metrics-binding' &&
+      (!activeSourceIds || activeSourceIds.has((a as MetricsBindingAttachment).sourceId)),
+  )
 }
 
 /**
@@ -45,12 +54,15 @@ export function bindingInterfaceName(b: MetricsBindingAttachment): string | unde
  *
  * Pure; never mutates the input.
  */
-export function deriveMappingFromGraph(graph: NetworkGraph): MetricsMapping {
+export function deriveMappingFromGraph(
+  graph: NetworkGraph,
+  activeSourceIds?: ReadonlySet<string>,
+): MetricsMapping {
   const nodes: Record<string, NodeMetricsMapping> = {}
   const links: Record<string, LinkMetricsMapping> = {}
 
   for (const node of graph.nodes ?? []) {
-    const b = metricsBindingOf(node.attachments)
+    const b = metricsBindingOf(node.attachments, activeSourceIds)
     if (!b) continue
     nodes[node.id] = {
       ...(b.hostId !== undefined ? { hostId: b.hostId } : {}),
@@ -67,7 +79,7 @@ export function deriveMappingFromGraph(graph: NetworkGraph): MetricsMapping {
   >()
   for (const node of graph.nodes ?? []) {
     for (const port of node.ports ?? []) {
-      const b = metricsBindingOf(port.attachments)
+      const b = metricsBindingOf(port.attachments, activeSourceIds)
       if (b) portBindings.set(portKey(node.id, port.id), { nodeId: node.id, port, binding: b })
     }
   }
