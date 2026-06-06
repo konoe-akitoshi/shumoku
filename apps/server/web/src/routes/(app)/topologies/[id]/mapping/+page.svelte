@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createVirtualizer } from '@tanstack/svelte-virtual'
   /**
    * Mapping — wires every node and link in the diagram to a monitored
    * host/interface from the attached metrics sources. The link half is
@@ -14,7 +13,6 @@
    * the same store) updates without a refresh.
    */
   import { ArrowRightIcon, CheckCircleIcon, FloppyDiskIcon } from 'phosphor-svelte'
-  import { get } from 'svelte/store'
   import { api } from '$lib/api'
   import { findBestInterfaceMatch, matchInterfaceByNeighbor } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
@@ -31,6 +29,7 @@
   import { nodeLabelById, nodeLabel as resolveNodeLabel } from '$lib/utils/node-label'
   import { useTopologyCtx } from '../_context.svelte'
   import MappingPanel from './MappingPanel.svelte'
+  import VirtualList from './VirtualList.svelte'
 
   const ctx = useTopologyCtx()
 
@@ -66,6 +65,7 @@
   // detail is tracked in #374; this is the interim split.
   let mappingTab = $state<'nodes' | 'links'>('nodes')
   let nodeSearchQuery = $state('')
+  let linkSearchQuery = $state('')
   let autoMapResult = $state<{
     matched: number
     total: number
@@ -99,25 +99,19 @@
     }) || [],
   )
 
-  // Virtualize the node list — large topologies have 1000+ nodes; rendering a
-  // row per node is the open-Mapping lag. TanStack Virtual renders only the
-  // ~visible rows. Fixed row height (matches the p-3 row + select).
-  const NODE_ROW_H = 60
-  let nodeScrollEl = $state<HTMLDivElement | null>(null)
-  const nodeVirtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: 0,
-    getScrollElement: () => nodeScrollEl,
-    estimateSize: () => NODE_ROW_H,
-    overscan: 8,
-  })
-  // Keep count + scroll element in sync without subscribing to the store here
-  // (get() = untracked read → no effect loop). Depends on the filtered list
-  // length and the bound element.
-  $effect(() => {
-    const count = filteredNodes.length
-    void nodeScrollEl
-    get(nodeVirtualizer).setOptions({ count, getScrollElement: () => nodeScrollEl })
-  })
+  // Both lists are virtualized via <VirtualList> (only ~visible rows in the DOM)
+  // so large topologies stay cheap to open.
+  let filteredEdges = $derived(
+    !linkSearchQuery
+      ? edges
+      : edges.filter((e) => {
+          const q = linkSearchQuery.toLowerCase()
+          return (
+            getNodeLabelById(e.from.nodeId).toLowerCase().includes(q) ||
+            getNodeLabelById(e.to.nodeId).toLowerCase().includes(q)
+          )
+        }),
+  )
 
   /** Hosts grouped by their owning data source, in source priority
    *  order. Drives `<optgroup>` rendering so the operator sees which
@@ -231,6 +225,13 @@
   function handleClearAll() {
     if (confirm('Clear all node mappings?')) {
       mappingStore.clearAllNodes()
+      autoMapResult = null
+    }
+  }
+
+  function handleClearAllLinks() {
+    if (confirm('Clear all link mappings?')) {
+      mappingStore.clearAllLinks()
       autoMapResult = null
     }
   }
@@ -510,88 +511,85 @@
             {nodeSearchQuery ? 'No matching nodes' : 'No nodes'}
           </div>
         {:else}
-          <!-- Virtualized: only ~visible rows are in the DOM. The inner spacer
-             holds the full scroll height; rows are absolutely positioned. -->
-          <div bind:this={nodeScrollEl} class="max-h-96 overflow-y-auto">
-            <div style="height: {$nodeVirtualizer.getTotalSize()}px; position: relative;">
-              {#each $nodeVirtualizer.getVirtualItems() as vrow (vrow.key)}
-                {@const node = filteredNodes[vrow.index]}
-                {#if node}
-                  {@const isMapped = !!$nodeMapping[node.id]?.hostId}
-                  <div
-                    class="absolute left-0 top-0 w-full p-3 flex items-center gap-4 border-b border-theme-border"
-                    style="height: {vrow.size}px; transform: translateY({vrow.start}px);"
-                  >
-                    <div class="flex-1 min-w-0">
-                      <p
-                        class="font-medium text-theme-text-emphasis truncate flex items-center gap-2"
-                      >
-                        <span
-                          class="w-2 h-2 rounded-full flex-shrink-0 {isMapped
-                          ? 'bg-success'
-                          : 'bg-theme-text-muted'}"
-                        ></span>
-                        {getNodeLabel(node)}
-                      </p>
-                      <p class="text-xs text-theme-text-muted">{node.spec?.type || 'Unknown'}</p>
-                    </div>
-                    <select
-                      class="input"
-                      style="width: 14rem;"
-                      value={$nodeMapping[node.id]?.hostId || ''}
-                      onchange={(e) => handleNodeMappingChange(node.id, e.currentTarget.value)}
-                    >
-                      <option value="">Not mapped</option>
-                      {#each hostsBySource as group (group.sourceName)}
-                        {#if hostsBySource.length > 1}
-                          <optgroup label={group.sourceName}>
-                            {#each group.items as host (host.id)}
-                              <option value={host.id}>{host.displayName || host.name}</option>
-                            {/each}
-                          </optgroup>
-                        {:else}
-                          {#each group.items as host (host.id)}
-                            <option value={host.id}>{host.displayName || host.name}</option>
-                          {/each}
-                        {/if}
+          <VirtualList items={filteredNodes} estimateSize={60}>
+            {#snippet row(node)}
+              {@const isMapped = !!$nodeMapping[node.id]?.hostId}
+              <div class="p-3 flex items-center gap-4 border-b border-theme-border">
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium text-theme-text-emphasis truncate flex items-center gap-2">
+                    <span
+                      class="w-2 h-2 rounded-full flex-shrink-0 {isMapped
+                        ? 'bg-success'
+                        : 'bg-theme-text-muted'}"
+                    ></span>
+                    {getNodeLabel(node)}
+                  </p>
+                  <p class="text-xs text-theme-text-muted">{node.spec?.type || 'Unknown'}</p>
+                </div>
+                <select
+                  class="input"
+                  style="width: 14rem;"
+                  value={$nodeMapping[node.id]?.hostId || ''}
+                  onchange={(e) => handleNodeMappingChange(node.id, e.currentTarget.value)}
+                >
+                  <option value="">Not mapped</option>
+                  {#each hostsBySource as group (group.sourceName)}
+                    {#if hostsBySource.length > 1}
+                      <optgroup label={group.sourceName}>
+                        {#each group.items as host (host.id)}
+                          <option value={host.id}>{host.displayName || host.name}</option>
+                        {/each}
+                      </optgroup>
+                    {:else}
+                      {#each group.items as host (host.id)}
+                        <option value={host.id}>{host.displayName || host.name}</option>
                       {/each}
-                    </select>
-                  </div>
-                {/if}
-              {/each}
-            </div>
-          </div>
+                    {/if}
+                  {/each}
+                </select>
+              </div>
+            {/snippet}
+          </VirtualList>
         {/if}
       </MappingPanel>
     {/if}
 
     {#if mappingTab === 'links'}
       <!-- Link Mapping -->
-      <MappingPanel title="Link Mapping" onAutoMap={handleLinkAutoMap}>
+      <MappingPanel
+        title="Link Mapping"
+        onAutoMap={handleLinkAutoMap}
+        onClear={handleClearAllLinks}
+        clearDisabled={mappedLinksCount === 0}
+        bind:searchValue={linkSearchQuery}
+        searchPlaceholder="Search links..."
+      >
         {#snippet actions()}
           <label class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
             <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded">
             Single candidate fallback
           </label>
         {/snippet}
-        <div class="divide-y divide-theme-border max-h-96 overflow-y-auto">
-          {#if edges.length === 0}
-            <div class="p-4 text-center text-theme-text-muted">No links</div>
-          {:else}
-            {#each edges as edge (edge.id)}
+        {#if filteredEdges.length === 0}
+          <div class="p-4 text-center text-theme-text-muted">
+            {linkSearchQuery ? 'No matching links' : 'No links'}
+          </div>
+        {:else}
+          <VirtualList items={filteredEdges} estimateSize={92}>
+            {#snippet row(edge)}
               {@const currentMapping = $linkMapping[edge.id] || {}}
               {@const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId}
               {@const toHostId = $nodeMapping[edge.to.nodeId]?.hostId}
               {@const monitoredNodeId = currentMapping.monitoredNodeId}
               {@const monitoredHostId =
-              monitoredNodeId === edge.from.nodeId
-                ? fromHostId
-                : monitoredNodeId === edge.to.nodeId
-                  ? toHostId
-                  : undefined}
+                monitoredNodeId === edge.from.nodeId
+                  ? fromHostId
+                  : monitoredNodeId === edge.to.nodeId
+                    ? toHostId
+                    : undefined}
               {@const interfaces = monitoredHostId ? $hostInterfaces[monitoredHostId] || [] : []}
               {@const hasAnyMappedNode = !!fromHostId || !!toHostId}
-              <div class="p-3 space-y-2">
+              <div class="p-3 space-y-2 border-b border-theme-border">
                 <div class="flex items-center gap-2 text-sm">
                   <span
                     class="w-2 h-2 rounded-full flex-shrink-0 {currentMapping.monitoredNodeId &&
@@ -672,9 +670,9 @@
                   <p class="text-xs text-theme-text-muted italic">Map at least one node first</p>
                 {/if}
               </div>
-            {/each}
-          {/if}
-        </div>
+            {/snippet}
+          </VirtualList>
+        {/if}
       </MappingPanel>
     {/if}
   {/if}

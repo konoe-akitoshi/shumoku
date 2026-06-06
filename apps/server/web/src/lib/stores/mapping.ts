@@ -399,6 +399,13 @@ function createMappingStore() {
       }))
     },
 
+    clearAllLinks: () => {
+      update((s) => ({
+        ...s,
+        mapping: { ...s.mapping, links: {} },
+      }))
+    },
+
     /**
      * Clear error
      */
