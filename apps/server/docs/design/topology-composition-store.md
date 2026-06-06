@@ -11,6 +11,34 @@ Scope: **data model only.** Diagram render (SVG DOM / client layout) and poll
 orchestration (subscriber scoping, plugin call batching) are real but separate
 — noted at the end, not the subject here.
 
+## Implementation status (as-built — PR #360)
+
+The data-model migration is **implemented and Codex-LGTM** (PR #360). This plan
+below is the reasoning of record; the deltas from it, all deliberate:
+
+- **`mapping_json` fully dropped, no residual** (the plan kept a residual for
+  link / unanchorable entries). The operator chose **no-backcompat**: the backfill
+  migrates every anchorable entry to a binding, **audits + logs** the rest
+  (entries with no metrics source or no node/port identity), then drops the
+  column. Link bindings ARE implemented (port attachments), but **require port
+  identity** to anchor — name-only sources (e.g. TTDB) can't bind link metrics
+  until their plugin stamps `NodePort.identity` (issue #363).
+- **Column drop is imperative in the backfill** (after success), not a separate
+  SQL migration — the column is created by migration 001, so the data move (TS,
+  needs the resolver) must precede the drop within one step.
+- **Legacy `topology_source_id` / `metrics_source_id` dropped** (migration 013),
+  backfilling them into the m2m `topology_data_sources` first.
+- **Manual/authored is already an equal contribution** at resolve (top priority,
+  no `authored ===` field-merge casing). The only remaining asymmetry is its
+  storage location (`data_sources.config_json.graph` — content in config),
+  deferred to issue #361.
+- **resolve gained link-endpoint port-id remap** so a port binding folds onto the
+  link's endpoint port.
+
+Follow-ups (own PRs): #361 authored-graph store, #362 5→3 tab IA, #363 plugin
+port identity, #364 DB integration-test harness. Non-data-model perf
+(orchestration / render) stays in `performance-scaling.md` (#354).
+
 ## Mental model: two axes on one hub
 
 The **resolved entity** is the hub; two axes meet on it:
