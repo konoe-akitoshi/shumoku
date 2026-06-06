@@ -158,12 +158,11 @@ function createMappingStore() {
           /* leave the empty mapping; a transient resolve failure isn't fatal */
         })
 
-      if (metricsSources.length > 0) {
-        update((s) => ({ ...s, hostsLoading: true }))
-        loadHostsForSources(metricsSources)
-          .then((hosts) => update((s) => ({ ...s, hosts, hostsLoading: false })))
-          .catch(() => update((s) => ({ ...s, hostsLoading: false })))
-      }
+      // NOTE: do NOT fetch host lists here. `hydrate` runs on every diagram open
+      // (the canvas only needs the node→host mapping, above, for status). Host
+      // lists hit the live metrics source and are only needed by the Mapping
+      // picker — which loads them itself via `load()`. Fetching them on every
+      // open was an implicit read of the source without an explicit Sync.
     },
 
     /**
@@ -396,6 +395,13 @@ function createMappingStore() {
       update((s) => ({
         ...s,
         mapping: { ...s.mapping, nodes: {} },
+      }))
+    },
+
+    clearAllLinks: () => {
+      update((s) => ({
+        ...s,
+        mapping: { ...s.mapping, links: {} },
       }))
     },
 

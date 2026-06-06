@@ -59,9 +59,9 @@ topologySourcesApi.get('/:topologyId/sources', async (c) => {
  *  (a) `{ dataSourceId, purpose, ... }` — attach an existing source
  *      (NetBox, SNMP, etc. shared across topologies).
  *  (b) `{ type: 'manual', purpose? }` — inline-create a Manual data
- *      source dedicated to this topology, then attach it. Manual is
- *      per-topology; cardinality is enforced as one-per-topology
- *      (409 on second attempt).
+ *      source and attach it in one step. Manual is a fully uniform
+ *      source (no cardinality / sharing constraints) — same as any
+ *      other; this shape is just a convenience.
  */
 topologySourcesApi.post('/:topologyId/sources', async (c) => {
   const { topologyId } = c.req.param()
@@ -77,12 +77,10 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
   }
 
   // Inline-create path: `{ type: 'manual' }` (purpose defaults to 'topology').
-  // Manual is per-topology — only one allowed.
+  // Convenience: create a fresh Manual data source and attach it in one step.
+  // Manual is a fully uniform source (no cardinality / sharing constraints).
   if (body.type === 'manual') {
     const purpose = body.purpose ?? 'topology'
-    if (topology.manualSourceId) {
-      return c.json({ error: 'Topology already has a Manual source attached' }, 409)
-    }
     try {
       const newSource = await getTopologyService().attachManualSource(topologyId, purpose)
       return c.json(newSource, 201)
@@ -103,17 +101,6 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
   const dataSource = getDataSourceService().get(body.dataSourceId)
   if (!dataSource) {
     return c.json({ error: 'Data source not found' }, 404)
-  }
-
-  // Manual content is per-topology (its authored graph lives in this topology's
-  // observations). Sharing one Manual across topologies would be ambiguous to
-  // edit, so a Manual is one-per-topology and created fresh (the `type:'manual'`
-  // inline path), never attached as an existing source.
-  if (dataSource.type === 'manual') {
-    return c.json(
-      { error: 'Manual sources are per-topology; create a new one instead of attaching.' },
-      409,
-    )
   }
 
   // Check if already exists
@@ -188,9 +175,37 @@ topologySourcesApi.delete('/:topologyId/sources/:sourceId', async (c) => {
     return c.json({ error: 'Failed to delete' }, 500)
   }
 
+  // Detach also deletes this source's observation snapshots. Without this, the
+  // snapshots linger and a later re-attach silently resurrects stale data on the
+  // next resolve() — no Sync required — which breaks the "attach is config-only,
+  // no data until you Sync" model. A source's contribution must exist only while
+  // it is attached AND has been synced. (Matches the confirm copy: "Its observed
+  // data is removed.") This is the same delete the explicit Clear endpoint runs.
+  new ObservationsService().deleteForSource(topologyId, existing.dataSourceId)
+
   // Detaching a source removes it from the resolve input set → invalidate.
   getTopologyService().clearCacheEntry(topologyId)
   return c.json({ success: true })
+})
+
+/**
+ * Clear one source's CONTRIBUTION without detaching it: delete its observation
+ * snapshots, then invalidate so resolve() re-stitches from the remaining
+ * sources (entities only this source asserted disappear by orphan sweep).
+ * The attachment + its config (priority / scope) stay. See
+ * topology-ui-ia.md § "Per-source operations".
+ * POST /api/topologies/:topologyId/sources/:sourceId/clear
+ * (`:sourceId` is the data-source id, matching the sync routes.)
+ */
+topologySourcesApi.post('/:topologyId/sources/:sourceId/clear', async (c) => {
+  const { topologyId, sourceId } = c.req.param()
+  const topology = getTopologyService().get(topologyId)
+  if (!topology) {
+    return c.json({ error: 'Topology not found' }, 404)
+  }
+  const deleted = new ObservationsService().deleteForSource(topologyId, sourceId)
+  getTopologyService().clearCacheEntry(topologyId)
+  return c.json({ success: true, deleted })
 })
 
 /**
@@ -220,22 +235,6 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
     const ds = getDataSourceService().get(source.dataSourceId)
     if (!ds) {
       return c.json({ error: `Data source ${source.dataSourceId} not found` }, 404)
-    }
-    // Manual is per-topology — its authored graph lives in THIS topology's
-    // observations. Reject a Manual that belongs to another topology (sharing it
-    // would make its editor ambiguous); same invariant as the POST attach path.
-    if (ds.type === 'manual') {
-      const attachedElsewhere = getTopologySourcesService()
-        .listByDataSource(source.dataSourceId)
-        .some((t) => t.topologyId !== topologyId)
-      if (attachedElsewhere) {
-        return c.json(
-          {
-            error: 'Manual sources are per-topology; cannot attach one owned by another topology.',
-          },
-          409,
-        )
-      }
     }
   }
 

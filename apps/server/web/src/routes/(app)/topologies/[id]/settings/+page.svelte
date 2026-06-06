@@ -89,6 +89,8 @@
         graph as unknown as Parameters<typeof api.topologies.sources.recordObservation>[2],
         'ok',
       )
+      // Edge-style change is a committed observation → re-render the diagram.
+      ctx.bumpRevision()
     } catch (e) {
       console.error('Failed to update edge style:', e)
     } finally {
@@ -110,7 +112,7 @@
   }
 </script>
 
-<div class="container mx-auto p-6 max-w-4xl space-y-6">
+<div class="p-4 space-y-4">
   <!-- Statistics -->
   {#if ctx.renderData}
     <div class="card">

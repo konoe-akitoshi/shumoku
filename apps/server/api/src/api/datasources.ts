@@ -64,8 +64,8 @@ export function createDataSourcesApi(): Hono {
 
   // Get available plugin types for the +Add Source picker. Manual is
   // included like any other source — the UI renders a name-only form
-  // for it (no URL/token), and topology attachment enforces the
-  // one-Manual-per-topology cardinality separately.
+  // for it (no URL/token). Manual is fully uniform: no cardinality or
+  // sharing constraint at attach time.
   app.get('/types', (c) => {
     const types = service.getRegisteredTypes()
     // configSchema / optionsSchema now flow from the registry for bundled

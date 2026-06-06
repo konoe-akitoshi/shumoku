@@ -1,8 +1,15 @@
 /**
  * Discovery Scheduler
  *
- * Walks every topology's attached topology sources on a fixed cadence
+ * Walks every topology's ESTABLISHED topology sources on a fixed cadence
  * and runs the same sync flow the manual "Sync now" button calls.
+ *
+ * "Established" = attached AND synced at least once (`lastSyncedAt` set).
+ * The scheduler only *refreshes*; it never bootstraps. The first sync of a
+ * source is always an explicit human action ("Sync now" / webhook) — discovery
+ * does not start on its own. So an attached-but-never-synced source (a valid
+ * intermediate state: config wired, not yet pulled) is simply not in the
+ * working set. Manual is the authored layer and is never fetched at all.
  *
  * Decision per (topology, source) on each tick:
  *
@@ -252,7 +259,18 @@ export class DiscoveryScheduler {
       const topologies = this.topologyService.list()
       const now = Date.now()
       for (const topology of topologies) {
-        const sources = this.topologySourcesService.listByPurpose(topology.id, 'topology')
+        const attached = this.topologySourcesService.listByPurpose(topology.id, 'topology')
+        // The scheduler REFRESHES established sources, not every attached one.
+        // "Attached" is a config relationship; "established" is a data-lifecycle
+        // state — the source has been synced at least once (`lastSyncedAt` set),
+        // so it has observations to refresh. The first sync is always an explicit
+        // human action ("Sync now" / webhook); discovery never bootstraps itself.
+        // Manual is the authored layer and is never fetched at all. So the working
+        // set is the established, non-manual sources — anything else has nothing
+        // to refresh and must not be touched here.
+        const sources = attached.filter(
+          (s) => s.dataSource?.type !== 'manual' && s.lastSyncedAt != null,
+        )
         if (sources.length === 0) continue
 
         // The topology default policy gates every source on this topology
@@ -268,20 +286,15 @@ export class DiscoveryScheduler {
 
         const intervalMs = Math.max(effective.intervalMs, MIN_SYNC_INTERVAL_MS)
         for (const source of sources) {
-          // Manual is the authored layer, not an observed one — there's
-          // no `scan()` or `fetchTopology()` to call. The plugin
-          // capability check in `syncSource()` would catch this too,
-          // but the catch-all would record a `failed` observation
-          // (misleading: it's not a discovery failure, this source
-          // just doesn't do discovery). Skip at the scheduler instead
-          // so the observation history stays meaningful.
-          if (source.dataSource?.type === 'manual') continue
-          if (source.lastSyncedAt && now - source.lastSyncedAt < intervalMs) continue
+          // Established by construction (filtered above) — so `lastSyncedAt` is
+          // set. Default only to satisfy the nullable type.
+          const lastSyncedAt = source.lastSyncedAt ?? 0
+          if (now - lastSyncedAt < intervalMs) continue
 
           const consecutiveFailures = this.readConsecutiveFailures(source.id)
-          if (consecutiveFailures > 0 && source.lastSyncedAt) {
+          if (consecutiveFailures > 0) {
             const wait = backoffFor(consecutiveFailures)
-            if (now - source.lastSyncedAt < wait) continue
+            if (now - lastSyncedAt < wait) continue
           }
 
           try {

@@ -348,7 +348,7 @@ export const topologies = {
     update: (
       topologyId: string,
       sourceId: string,
-      updates: { syncMode?: SyncMode; priority?: number },
+      updates: { syncMode?: SyncMode; priority?: number; optionsJson?: string },
     ) =>
       request<TopologyDataSource>(`/topologies/${topologyId}/sources/${sourceId}`, {
         method: 'PUT',
@@ -401,6 +401,13 @@ export const topologies = {
       }>(`/topologies/${topologyId}/sources/${sourceId}/sync`, { method: 'POST' }).catch((err) => {
         throw err
       }),
+
+    /** Clear a source's contribution (delete its observations); attachment stays. */
+    clear: (topologyId: string, sourceId: string) =>
+      request<{ success: boolean; deleted: number }>(
+        `/topologies/${topologyId}/sources/${sourceId}/clear`,
+        { method: 'POST' },
+      ),
 
     /**
      * Targeted probe of an attached source. Semantically distinct
@@ -457,7 +464,7 @@ export const topologies = {
         },
       ),
 
-    /** Attach a brand-new Manual source to a topology. 409 if one exists. */
+    /** Create-and-attach a new Manual source to a topology (no cardinality limit). */
     attachManual: (topologyId: string) =>
       request<{ dataSourceId: string }>(`/topologies/${topologyId}/sources`, {
         method: 'POST',

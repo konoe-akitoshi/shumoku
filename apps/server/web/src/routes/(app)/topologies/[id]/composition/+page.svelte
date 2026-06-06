@@ -13,14 +13,11 @@
    * button" and "edit the config" are intentionally separate surfaces.
    */
   import { nodeIdentityQuality } from '@shumoku/core'
-  import { ArrowsClockwiseIcon } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
   import { isAuthoredAttachment, stripProvenance } from '$lib/discovery-attachments'
-  import { topologies } from '$lib/stores'
-  import type { TopologyDataSource } from '$lib/types'
   import { useTopologyCtx } from '../_context.svelte'
 
   const ctx = useTopologyCtx()
@@ -55,21 +52,6 @@
     observedAt?: number
   }
 
-  let perSourceSync = $state<
-    Record<
-      string,
-      {
-        status: 'ok' | 'partial' | 'failed' | 'empty'
-        nodeCount: number
-        linkCount: number
-        message?: string
-        at: number
-      }
-    >
-  >({})
-  let syncingSourceId = $state<string | null>(null)
-  let syncingAll = $state(false)
-  let rebuilding = $state(false)
   let identityQuality = $state<{ stable: number; weak: number; unbound: number; total: number }>({
     stable: 0,
     weak: 0,
@@ -140,7 +122,10 @@
     if (ctx.topology && ctx.topologyId) void refreshDiscovery()
   })
 
-  async function refreshDiscovery() {
+  // `mutated` = this refresh follows a committed change (policy edit), so the
+  // persistent diagram should re-fetch too. Pure reads (mount, navigation) pass
+  // false so they don't trigger a wasteful refetch.
+  async function refreshDiscovery(mutated = false) {
     if (!ctx.topologyId) return
     discoveryLoading = true
     try {
@@ -205,84 +190,11 @@
       identityQuality = counts
       discoveredNodes = cards
       recentObservations = obsList
+      if (mutated) ctx.bumpRevision()
     } catch (e) {
       console.error('[Discovery] failed to refresh', e)
     } finally {
       discoveryLoading = false
-    }
-  }
-
-  async function handleSyncOne(source: TopologyDataSource) {
-    syncingSourceId = source.dataSourceId
-    try {
-      const result = await api.topologies.sources.syncOne(ctx.topologyId, source.dataSourceId)
-      const counts = result.snapshot.graph ?? { nodes: [], links: [] }
-      perSourceSync = {
-        ...perSourceSync,
-        [source.dataSourceId]: {
-          status: result.snapshot.status,
-          nodeCount: counts.nodes?.length ?? 0,
-          linkCount: counts.links?.length ?? 0,
-          message: result.snapshot.statusMessage,
-          at: Date.now(),
-        },
-      }
-      const updatedTopology = await api.topologies.get(ctx.topologyId)
-      ctx.topology = updatedTopology
-      topologies.upsert(updatedTopology)
-      await refreshDiscovery()
-    } catch (e) {
-      perSourceSync = {
-        ...perSourceSync,
-        [source.dataSourceId]: {
-          status: 'failed',
-          nodeCount: 0,
-          linkCount: 0,
-          message: e instanceof Error ? e.message : 'Sync failed',
-          at: Date.now(),
-        },
-      }
-    } finally {
-      syncingSourceId = null
-    }
-  }
-
-  /** Sync all attached sources at once (observed refresh; overlay preserved). */
-  async function handleSyncAll() {
-    syncingAll = true
-    try {
-      await api.topologies.sources.syncAll(ctx.topologyId)
-      const updatedTopology = await api.topologies.get(ctx.topologyId)
-      ctx.topology = updatedTopology
-      topologies.upsert(updatedTopology)
-      await refreshDiscovery()
-    } catch (e) {
-      console.error('[Discovery] sync all failed', e)
-    } finally {
-      syncingAll = false
-    }
-  }
-
-  /** Rebuild: discard the authored overlay (attachments + exclusions), then
-   *  re-sync all sources so the view is purely what the sources observe. */
-  async function handleRebuild() {
-    const ok = confirm(
-      'Rebuild discards every override you made (community, names, hidden nodes) ' +
-        'and rebuilds from the sources. This cannot be undone. Continue?',
-    )
-    if (!ok) return
-    rebuilding = true
-    try {
-      await api.topologies.discoveryPolicy.rebuild(ctx.topologyId)
-      await api.topologies.sources.syncAll(ctx.topologyId)
-      const updatedTopology = await api.topologies.get(ctx.topologyId)
-      ctx.topology = updatedTopology
-      topologies.upsert(updatedTopology)
-      await refreshDiscovery()
-    } catch (e) {
-      console.error('[Discovery] rebuild failed', e)
-    } finally {
-      rebuilding = false
     }
   }
 
@@ -346,7 +258,7 @@
           return setNodeAttachments(id, withMode(card?.attachments ?? [], mode))
         }),
       )
-      await refreshDiscovery()
+      await refreshDiscovery(true)
     } finally {
       bulkApplying = false
     }
@@ -381,7 +293,7 @@
       console.warn('[Discovery] attachment patch failed:', result.reason)
       return
     }
-    await refreshDiscovery()
+    await refreshDiscovery(true)
     const refreshed = discoveredNodes.find((c) => c.id === id)
     if (refreshed) detailNode = refreshed
   }
@@ -408,7 +320,7 @@
     } finally {
       policyPatching = { ...policyPatching, [id]: false }
     }
-    await refreshDiscovery()
+    await refreshDiscovery(true)
     const refreshed = discoveredNodes.find((c) => c.id === id)
     if (refreshed) detailNode = refreshed
   }
@@ -436,7 +348,7 @@
     } finally {
       policyPatching = { ...policyPatching, [id]: false }
     }
-    await refreshDiscovery()
+    await refreshDiscovery(true)
     const refreshed = discoveredNodes.find((c) => c.id === id)
     detailNode = refreshed ?? null
   }
@@ -458,7 +370,7 @@
       return
     }
     detailNode = null // it's gone from the resolved graph now
-    await refreshDiscovery()
+    await refreshDiscovery(true)
   }
 
   async function handleProbeNode(card: DiscoveredCard) {
@@ -466,7 +378,7 @@
     probingNodeId = card.id
     try {
       await api.topologies.sources.probe(ctx.topologyId, card.sourceId, [card.mgmtIp])
-      await refreshDiscovery()
+      await refreshDiscovery(true)
       if (detailNode?.id === card.id) {
         const refreshed = discoveredNodes.find((c) => c.id === card.id)
         if (refreshed) detailNode = refreshed
@@ -487,7 +399,7 @@
   }
 </script>
 
-<div class="container mx-auto p-6 max-w-6xl space-y-6">
+<div class="p-4 space-y-4">
   {#if topologySources.length === 0}
     <div class="card p-8 text-center space-y-2">
       <p class="text-theme-text-emphasis font-medium">No sources to discover from</p>
@@ -810,121 +722,6 @@
         </div>
       </div>
     {/if}
-
-    <!-- Per-source sync -->
-    <div class="card">
-      <div class="card-header flex items-start justify-between gap-3 flex-wrap">
-        <div class="min-w-0">
-          <h2 class="font-medium text-theme-text-emphasis">Sources</h2>
-          <p class="text-xs text-theme-text-muted mt-0.5">
-            Drive each attached source. Results land as observation snapshots and the diagram
-            re-renders through the resolver.
-          </p>
-        </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={syncingAll || rebuilding || ctx.hasSourceChanges || topologySources.length === 0}
-            onclick={handleSyncAll}
-          >
-            {syncingAll ? 'Syncing…' : '⟳ Sync all'}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            class="text-muted-foreground hover:text-destructive"
-            disabled={rebuilding || syncingAll || ctx.hasSourceChanges || topologySources.length === 0}
-            title="Discard all overrides and rebuild from the sources"
-            onclick={handleRebuild}
-          >
-            {rebuilding ? 'Rebuilding…' : 'Rebuild'}
-          </Button>
-        </div>
-      </div>
-      {#if ctx.hasSourceChanges}
-        <div class="px-4 py-2 bg-warning/10 border-t border-warning/20 text-warning text-sm">
-          You have unsaved changes on the Sources page. Save them before syncing.
-        </div>
-      {/if}
-      <div class="card-body space-y-2">
-        {#each topologySources as source (source.id)}
-          {@const dataSource = ctx.getDataSource(source.dataSourceId)}
-          {@const lastResult = perSourceSync[source.dataSourceId]}
-          <div class="rounded-lg border border-theme-border p-3 space-y-2">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <h3 class="text-sm font-medium text-theme-text-emphasis truncate">
-                    {dataSource?.name ?? source.dataSourceId}
-                  </h3>
-                  <span
-                    class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-theme-bg font-mono text-theme-text-muted"
-                  >
-                    {dataSource?.type ?? '—'}
-                  </span>
-                  {#if dataSource?.status === 'connected'}
-                    <span class="badge badge-success text-xs">connected</span>
-                  {:else if dataSource?.status === 'disconnected'}
-                    <span class="badge badge-danger text-xs" title={dataSource.statusMessage}>
-                      disconnected
-                    </span>
-                  {:else}
-                    <span class="badge badge-secondary text-xs">unknown</span>
-                  {/if}
-                </div>
-                <p class="text-xs text-theme-text-muted mt-1">
-                  {#if source.lastSyncedAt}
-                    last synced {formatAgo(source.lastSyncedAt)}
-                  {:else}
-                    never synced
-                  {/if}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={() => handleSyncOne(source)}
-                disabled={syncingSourceId === source.dataSourceId || ctx.hasSourceChanges}
-              >
-                {#if syncingSourceId === source.dataSourceId}
-                  <span
-                    class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
-                  ></span>
-                  Syncing…
-                {:else}
-                  <ArrowsClockwiseIcon size={12} class="mr-1" />
-                  Sync now
-                {/if}
-              </Button>
-            </div>
-            {#if lastResult}
-              <p class="text-xs">
-                {#if lastResult.status === 'ok'}
-                  <span class="text-theme-text-muted">
-                    ✓ {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
-                    {formatAgo(lastResult.at)}
-                  </span>
-                {:else if lastResult.status === 'partial'}
-                  <span class="text-amber-600 dark:text-amber-400" title={lastResult.message}>
-                    ⚠ partial: {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
-                    {formatAgo(lastResult.at)}
-                  </span>
-                {:else if lastResult.status === 'empty'}
-                  <span class="text-theme-text-muted">
-                    no devices observed · {formatAgo(lastResult.at)}
-                  </span>
-                {:else}
-                  <span class="text-red-500" title={lastResult.message}>
-                    ✗ {lastResult.message ?? 'failed'}
-                  </span>
-                {/if}
-              </p>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </div>
 
     <!-- Observation history -->
     <div class="card">

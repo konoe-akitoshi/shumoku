@@ -16,10 +16,11 @@ import { describe, expect, it } from 'vitest'
  * adding a data source type must require zero host edits.
  *
  * Documented, intentional exception (NOT a config-form branch):
- * - 'manual': the editor-container source — no upstream, one-per-topology,
- *   carries its graph in config_json. Architecturally special, not a normal
- *   data-source plugin. (Grafana's webhook URL is now generic via
- *   getConnectionInfo, so it no longer needs an exception.)
+ * - 'manual': the editor-container source — no upstream; its graph is a
+ *   per-topology observation snapshot (migration 014), not config_json.
+ *   Architecturally special, not a normal data-source plugin. (Grafana's
+ *   webhook URL is now generic via getConnectionInfo, so it no longer
+ *   needs an exception.)
  */
 const ALLOWED = new Set(['manual'])
 const BUNDLED = [

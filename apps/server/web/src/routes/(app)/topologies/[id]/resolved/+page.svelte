@@ -8,7 +8,6 @@
    * top-level tab; kept as a tab for now because it's the only place
    * to see "what is the resolver actually producing right now".
    */
-  import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import { useTopologyCtx } from '../_context.svelte'
@@ -21,14 +20,11 @@
   let error = $state('')
   let copied = $state(false)
 
-  onMount(() => {
-    void load()
-  })
-
-  // Refetch if the user navigates between topologies without unmounting
-  // (SvelteKit keeps the page mounted across [id] changes since it's
-  // the same route component).
+  // Load when the id is ready, and whenever a committed mutation bumps the shell
+  // revision (reflect Save/Sync without a reload). No separate onMount — it would
+  // fire before the id is ready and then double-fetch with this effect.
   $effect(() => {
+    ctx.revision
     if (ctx.topologyId) void load()
   })
 
@@ -60,7 +56,7 @@
   }
 </script>
 
-<div class="container mx-auto p-6 max-w-6xl space-y-3">
+<div class="p-4 space-y-3">
   <div class="flex items-start justify-between">
     <div>
       <h2 class="font-medium text-theme-text-emphasis">Resolved project graph</h2>

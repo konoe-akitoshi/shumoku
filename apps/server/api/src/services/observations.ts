@@ -242,6 +242,20 @@ export class ObservationsService {
   }
 
   /**
+   * Clear one source's contribution to a topology: drop all its observation
+   * snapshots. `resolve()` then re-stitches from the remaining sources, so
+   * entities only this source asserted disappear by orphan sweep. Returns the
+   * number of rows deleted. (Backstage-style mark-and-sweep; see
+   * topology-ui-ia.md § "Per-source operations".)
+   */
+  deleteForSource(topologyId: string, sourceId: string): number {
+    const result = this.db
+      .query('DELETE FROM topology_observations WHERE topology_id = ? AND source_id = ?')
+      .run(topologyId, sourceId)
+    return result.changes
+  }
+
+  /**
    * Retention: keep at most `keepPerSource` rows per (topology, source).
    * Older rows beyond that window are dropped. Failed-status rows are
    * pruned more aggressively (only the very latest one is kept).

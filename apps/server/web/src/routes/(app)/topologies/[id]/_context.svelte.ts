@@ -9,9 +9,9 @@
  *
  * The shell layout (`+layout.svelte`) loads once, drops the result
  * into this context, and child routes read via `useTopologyCtx()`.
- * Cross-page mutations (Sources tab saves → Discovery tab grid
- * updates) write back through the explicit setters so it's obvious
- * in the source where shared-state changes originate.
+ * Source edits are direct-apply: the Sources page mutates
+ * `currentSources` in place after each granular add/update/remove
+ * (no editable mirror, no dirty flag) — see topology-ui-ia.md.
  *
  * Why a class with `$state` instead of just runes at the layout
  * level: layout-script runes are only consumable in the layout
@@ -20,7 +20,7 @@
  * reactivity working across the context boundary.
  */
 import { getContext, setContext } from 'svelte'
-import type { DataSource, Topology, TopologyDataSource, TopologyDataSourceInput } from '$lib/types'
+import type { DataSource, Topology, TopologyDataSource } from '$lib/types'
 
 const KEY = Symbol('topology-shell-ctx')
 
@@ -34,11 +34,22 @@ class TopologyCtx {
    *  layout's breadcrumb if/when we surface them there. */
   renderData = $state<{ nodeCount: number; edgeCount: number } | null>(null)
 
-  /** Sources currently attached (Sources, Discovery, Mapping all read). */
+  /** Sources currently attached (Sources, Discovery, Mapping all read).
+   *  The Sources page mutates this directly after each granular edit. */
   currentSources = $state<TopologyDataSource[]>([])
-  /** Editable mirror for the Sources page — write here, Save flushes. */
-  editableSources = $state<TopologyDataSourceInput[]>([])
-  hasSourceChanges = $state(false)
+
+  /**
+   * Composition revision — a single propagation channel. Any *committed*
+   * mutation (Sources Save, Discovery sync/rebuild/policy, Mapping save,
+   * manual-editor save) calls `bumpRevision()`; the persistent diagram
+   * canvas re-fetches when it changes, so a commit reflects without a
+   * manual reload. Mirrors the backend's `composition_revision` intent.
+   * See `apps/server/docs/design/topology-ui-ia.md` § Interaction model.
+   */
+  revision = $state(0)
+  bumpRevision(): void {
+    this.revision++
+  }
 
   /** Data-source catalogs for the +Add Source picker; cached because
    *  the Discovery page's per-card "owned by source X" lookup uses

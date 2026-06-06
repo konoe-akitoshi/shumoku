@@ -3,6 +3,34 @@
 > Status: IMPLEMENTED — merged in PR #370. Issue: #368. Supersedes #361. Builds on the composition-store
 > refactor (`topology-composition-store.md`). No backward compatibility.
 
+> **Known gap — "uniform" is only surface-deep (discovered 2026-06, follow-up).**
+> This doc's claim that Manual is *fully* uniform holds for the **attach API,
+> `resolve()` merge, and Sources UI** — but the **authoring machinery still
+> special-cases Manual**, so the premise doesn't fully hold end-to-end:
+>
+> - Human edits (drawn graph, discovery-policy overrides, **metrics mapping**) are
+>   funneled into "the topology's Manual" via `ensureManualSource()`, which
+>   **auto-creates a Manual** on the first edit. No other source type is ever
+>   auto-created. So editing the *composed* result spawns a Manual source — which
+>   reads as a leaky abstraction (the edit belongs to the project, not a source).
+> - The authored layer assumes **one canonical Manual per topology** (singular
+>   `topologies.manual_source_id`; `findManualSourceId` does `… LIMIT 1`). The
+>   removed-cardinality "attach many Manuals" is therefore only theoretical — the
+>   authoring layer can meaningfully use just one.
+> - **Metrics mapping is not a DB relation.** `reconcileBindings` writes
+>   `metrics-binding:${sourceId}` **attachments into the Manual's authored
+>   NetworkGraph**, persisted as **JSON in `topology_observations.graph_json`**.
+>   There is no binding/attachment table. It's identity-keyed but JSON-stored, not
+>   relational.
+>
+> These share one root cause: the authored layer (graph + overrides + mappings) is
+> modeled as "a JSON graph belonging to a Manual source." The target — separate
+> follow-up — is to make project-owned authored data (overrides + bindings) a
+> **DB relation** folded as top-priority in `resolve()`, leaving Manual as a
+> genuinely just-another-source used only for explicit hand-drawn topology. JSON
+> stays at the boundary; the base becomes relational. Not addressed in the
+> #362 PR (that PR only removed the stale one-per-topology *comments*).
+
 ## The problem
 
 Every other data source (zabbix / netbox / prometheus / …) follows one shape:
@@ -55,15 +83,25 @@ is no source-level graph store and no `config_json.graph`.
 011 moved the graph to `config_json.graph` to (a) allow one Manual to be *shared*
 (content-mirrored) across topologies and (b) avoid "orphan Manual" semantics. But:
 
-- In practice each topology already gets **its own** dedicated Manual source
-  (`man_<topologyId>`, migration 010), so the content-mirror sharing 011 enabled
-  is **unused**.
-- Content-mirroring is *unlike every other data source* — it's what made Manual
-  special. Dropping it (per no-backcompat) is what makes Manual uniform.
-- "Orphan Manual" doesn't arise: Manual is one-per-topology (enforced at attach).
+- Content-mirroring (one graph reflected across topologies) is *unlike every
+  other data source* — it's what made Manual special. Dropping it (per
+  no-backcompat) is what makes Manual uniform: content is per-(topology, source)
+  observations, exactly like a Zabbix attached to A and B scanning each
+  independently.
 
 So 011 is reversed; we go back to 010's shape (manual content = observations),
 which is the uniform model.
+
+> **No cardinality / sharing constraints (corrected 2026-06).** Earlier drafts of
+> this doc said "Manual is one-per-topology (enforced at attach)" and kept a 409
+> guard. That **contradicted** the core decision (§Decision: "the source entity is
+> attachable to many topologies, the same as every source") and is **wrong**.
+> Manual is fully uniform: create it on `/datasources`, attach it to one *or many*
+> topologies, multiple per topology if you like — no special guards. Content stays
+> per-(topology, source). The attach-rejection guards
+> (`topology-sources.ts` POST + bulk PUT) and `listByDataSource` were removed.
+> "Orphan Manual" simply isn't a concern — a detached Manual's data source row is
+> an ordinary unattached source, like any other.
 
 ## What changes (inventory → target)
 
@@ -77,7 +115,7 @@ Legend: **keep** (inherent, survives) · **fold** (becomes generic) · **remove*
 | editor save → `PUT /datasources/:id {configJson.graph}` | persist graph in config | **fold** → `POST /topologies/:id/sources/:sid/observation {graph}` (the existing generic path) |
 | `parseTopology` authored = `readManualGraph` | feed resolve's authored slot | **fold** → authored = latest manual observation for this topology (it's just another snapshot, but top priority) |
 | `attachManualSource` seeds `config_json.graph` | empty-canvas seed | **fold** → seed nothing; absent observation = empty authored graph |
-| `topology-sources.ts:81` one-per-topology 409 | cardinality | **keep** (a topology has ≤1 Manual — reasonable UX) |
+| `topology-sources.ts` one-per-topology 409 + bulk "owned elsewhere" 409 | cardinality / sharing guard | **remove** — Manual is fully uniform; attach to one or many topologies, no cardinality limit (corrected; was mistakenly "keep") |
 | `datasource.ts:90` Manual in `listByCapability('topology')` | no capability flags | **keep** (inherent: no upstream → declares nothing) |
 | `discovery-scheduler.ts:278` skip Manual in tick | no upstream to scan | **keep** (inherent) |
 | `discovery-scheduler.ts:167,320` readManualGraph for SNMP creds | reads authored for per-target community | **fold** → read via the observation/resolved feed |

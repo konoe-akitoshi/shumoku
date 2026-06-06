@@ -11,8 +11,9 @@
  * type so the rest of the system (Sources tab, +Add Source, attach API,
  * resolver) can treat it exactly like any other source — no special-casing.
  *
- * Cardinality is one-per-topology, enforced at attach time by
- * `attachManualSource()` in services/topology-sources, not here.
+ * Manual is a fully uniform source: no cardinality or sharing
+ * constraints. It can be created on /datasources and attached to one
+ * or many topologies, exactly like any other source.
  *
  * Capability list is empty on purpose: there is nothing to dispatch
  * to (no `fetchTopology`, no `scan`). The Sync button in the UI hides

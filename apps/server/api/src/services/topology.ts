@@ -328,9 +328,8 @@ export class TopologyService {
    * blank canvas rather than 404 / null.
    *
    * Public — invoked by the `POST /api/topologies/:id/sources` endpoint
-   * when the body is `{ type: 'manual' }`. Caller should 409 if a
-   * Manual is already attached (we don 't double-check here so the
-   * endpoint can craft a clearer message).
+   * when the body is `{ type: 'manual' }`. Manual is fully uniform: no
+   * cardinality limit, so this can run more than once per topology.
    */
   async attachManualSource(
     topologyId: string,
