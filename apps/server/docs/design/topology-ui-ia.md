@@ -1,9 +1,19 @@
 # Topology UI — information architecture (#362)
 
-Status: **DESIGN** (approved direction; implementation pending). Supersedes the
-"5→3 tabs" one-liner in [`topology-composition-store.md`](./topology-composition-store.md)
-§ *Follow-ups*. Backend is done (composition store landed); this is the UI layer
-that makes the as-built two-axis model legible.
+Status: **IMPLEMENTED (first pass)** on `feat/topology-ui-ia` (#362) — pending
+review. Supersedes the "5→3 tabs" one-liner in
+[`topology-composition-store.md`](./topology-composition-store.md) § *Follow-ups*.
+Backend was already done (composition store); this is the UI layer that makes the
+as-built two-axis model legible.
+
+As built: canvas-resident shell + Composition drawer with the L→R stepper;
+top-right chrome single-owner; Sources slimmed to connection identity with
+granular direct-apply (no Save, no replaceAll); scope moved to Discovery
+(per-source, faceted via `getConfigOptions`, partial-update persistence); the
+cross-surface sync-gate removed; a single `ctx.revision` channel re-fetches the
+diagram / Resolved on commit (no manual reload). Deferred: a dedicated left
+Sources rail; manual-editor relocation into the topology context; wiring the
+client revision to the backend `composition_revision` value.
 
 ## Problem
 

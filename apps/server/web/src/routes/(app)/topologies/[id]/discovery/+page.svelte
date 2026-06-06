@@ -13,17 +13,88 @@
    * button" and "edit the config" are intentionally separate surfaces.
    */
   import { nodeIdentityQuality } from '@shumoku/core'
-  import { ArrowsClockwiseIcon } from 'phosphor-svelte'
+  import { ArrowsClockwiseIcon, SlidersHorizontalIcon } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
+  import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
   import { isAuthoredAttachment, stripProvenance } from '$lib/discovery-attachments'
   import { topologies } from '$lib/stores'
-  import type { TopologyDataSource } from '$lib/types'
+  import type { DataSourcePluginInfo, PluginConfigSchema, TopologyDataSource } from '$lib/types'
   import { useTopologyCtx } from '../_context.svelte'
 
   const ctx = useTopologyCtx()
+
+  // Scope (ingestion filters) lives here, next to Sync, faceted from the source
+  // (getConfigOptions). It persists straight to the attachment's optionsJson via
+  // a *partial* update — local to this surface, never coupled to the Sources page.
+  let pluginTypes = $state<DataSourcePluginInfo[]>([])
+  let scopeState = $state<Record<string, Record<string, unknown>>>({})
+  let scopeOpen = $state<Set<string>>(new Set())
+  const scopeTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+  function optionsSchemaFor(type?: string): PluginConfigSchema | undefined {
+    return type ? pluginTypes.find((p) => p.type === type)?.optionsSchema : undefined
+  }
+
+  function toggleScope(id: string) {
+    const next = new Set(scopeOpen)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    scopeOpen = next
+  }
+
+  /** Parse a source's stored optionsJson, coercing legacy string filters to arrays. */
+  function parseScope(optionsJson?: string): Record<string, unknown> {
+    if (!optionsJson) return {}
+    try {
+      const raw = JSON.parse(optionsJson) as Record<string, unknown>
+      for (const key of [
+        'siteFilter',
+        'tagFilter',
+        'roleFilter',
+        'excludeRoleFilter',
+        'excludeTagFilter',
+      ]) {
+        if (typeof raw[key] === 'string') raw[key] = raw[key] ? [raw[key]] : []
+      }
+      return raw
+    } catch {
+      return {}
+    }
+  }
+
+  /** Debounced direct-apply of a source's scope to its optionsJson (partial
+   *  update → preserves the Sources-owned syncMode/priority). */
+  function saveScope(source: TopologyDataSource) {
+    const existing = scopeTimers.get(source.id)
+    if (existing) clearTimeout(existing)
+    scopeTimers.set(
+      source.id,
+      setTimeout(async () => {
+        scopeTimers.delete(source.id)
+        const state = scopeState[source.id]
+        if (!state) return
+        const pruned: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(state)) {
+          if (value == null) continue
+          if (typeof value === 'string' && value === '') continue
+          if (Array.isArray(value) && value.length === 0) continue
+          pruned[key] = value
+        }
+        const json = Object.keys(pruned).length > 0 ? JSON.stringify(pruned) : ''
+        try {
+          const updated = await api.topologies.sources.update(ctx.topologyId, source.id, {
+            optionsJson: json,
+          })
+          ctx.currentSources = ctx.currentSources.map((s) => (s.id === source.id ? updated : s))
+        } catch (e) {
+          console.error('[Discovery] failed to save scope', e)
+        }
+      }, 500),
+    )
+  }
 
   type DiscoveredCard = {
     id: string
@@ -138,6 +209,34 @@
   // topology id) and on subsequent topology switches.
   $effect(() => {
     if (ctx.topology && ctx.topologyId) void refreshDiscovery()
+  })
+
+  // Plugin optionsSchema (for the per-source Scope form) — load once.
+  let pluginTypesLoaded = false
+  $effect(() => {
+    if (pluginTypesLoaded) return
+    pluginTypesLoaded = true
+    api.dataSources
+      .getPluginTypes()
+      .then((t) => {
+        pluginTypes = t
+      })
+      .catch(() => {
+        // Non-fatal: sources whose plugin has no optionsSchema show no scope form.
+      })
+  })
+
+  // Seed the per-source scope form from each attachment's stored optionsJson.
+  $effect(() => {
+    for (const s of ctx.currentSources) {
+      if (!scopeState[s.id]) scopeState[s.id] = parseScope(s.optionsJson)
+    }
+  })
+
+  $effect(() => {
+    return () => {
+      for (const t of scopeTimers.values()) clearTimeout(t)
+    }
   })
 
   // `mutated` = this refresh follows a committed change (sync / rebuild /
@@ -880,22 +979,36 @@
                   {/if}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={() => handleSyncOne(source)}
-                disabled={syncingSourceId === source.dataSourceId}
-              >
-                {#if syncingSourceId === source.dataSourceId}
-                  <span
-                    class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
-                  ></span>
-                  Syncing…
-                {:else}
-                  <ArrowsClockwiseIcon size={12} class="mr-1" />
-                  Sync now
+              <div class="flex items-center gap-1.5 shrink-0">
+                {#if optionsSchemaFor(dataSource?.type)}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onclick={() => toggleScope(source.id)}
+                    title="What to pull from this source"
+                    aria-expanded={scopeOpen.has(source.id)}
+                  >
+                    <SlidersHorizontalIcon size={14} class="mr-1" />
+                    Scope
+                  </Button>
                 {/if}
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onclick={() => handleSyncOne(source)}
+                  disabled={syncingSourceId === source.dataSourceId}
+                >
+                  {#if syncingSourceId === source.dataSourceId}
+                    <span
+                      class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
+                    ></span>
+                    Syncing…
+                  {:else}
+                    <ArrowsClockwiseIcon size={12} class="mr-1" />
+                    Sync now
+                  {/if}
+                </Button>
+              </div>
             </div>
             {#if lastResult}
               <p class="text-xs">
@@ -919,6 +1032,34 @@
                   </span>
                 {/if}
               </p>
+            {/if}
+
+            <!-- Scope: what to pull from this source. Faceted from the source
+                 (getConfigOptions); applies directly to the attachment's
+                 optionsJson and takes effect on the next Sync. -->
+            {#if scopeOpen.has(source.id)}
+              {@const optSchema = optionsSchemaFor(dataSource?.type)}
+              {#if optSchema && scopeState[source.id]}
+                <div class="border-t border-theme-border pt-2 mt-1 space-y-3">
+                  <p class="text-xs text-theme-text-muted">
+                    Narrow what this source contributes. Pick from values it exposes; takes effect
+                    on the next Sync.
+                  </p>
+                  <SchemaForm
+                    schema={optSchema}
+                    value={scopeState[source.id] ?? {}}
+                    getOptions={(key) =>
+                      api.dataSources
+                        .getConfigOptions(source.dataSourceId, key)
+                        .then((r) => r.options)}
+                    onChange={() => saveScope(source)}
+                  />
+                </div>
+              {:else}
+                <p class="text-xs text-theme-text-muted border-t border-theme-border pt-2 mt-1">
+                  This source has no scope options.
+                </p>
+              {/if}
             {/if}
           </div>
         {/each}
