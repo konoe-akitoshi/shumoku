@@ -5,8 +5,8 @@
  * Storage model: the `topologies` table holds only the topology shell
  * (name, share_token, composition_revision). Sources live in
  * `topology_data_sources` (m2m); per-source graph snapshots in
- * `topology_observations`; the human-authored graph on the Manual source's
- * `config_json.graph`; the metrics mapping as `metrics-binding` attachments on
+ * `topology_observations`; the human-authored graph in `manual_source_graph`
+ * (keyed by the Manual source id); the metrics mapping as `metrics-binding` attachments on
  * the resolved graph (no `mapping_json`); the resolved graph + layout are
  * materialized in `topology_resolved_graph`.
  *
@@ -338,18 +338,16 @@ export class TopologyService {
   ): Promise<{ dataSourceId: string }> {
     const now = timestamp()
     const dsId = await generateId()
-    // Seed config_json with an empty graph so the editor opens on a
-    // blank canvas. Manual content lives here, not in observations
-    // (see migration 011).
-    const emptyConfig = JSON.stringify({
-      graph: { version: '1', nodes: [], links: [] },
-    })
+    // No graph in config_json — the authored graph lives in
+    // `manual_source_graph` (migration 014). An absent row reads as null and
+    // resolve() treats that as an empty authored graph, so the editor still
+    // opens on a blank canvas without seeding anything.
     this.db
       .prepare(
         `INSERT INTO data_sources (id, name, type, config_json, status, fail_count, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(dsId, 'Manual', 'manual', emptyConfig, 'connected', 0, now, now)
+      .run(dsId, 'Manual', 'manual', '{}', 'connected', 0, now, now)
     await this.topologySources.add(topologyId, {
       dataSourceId: dsId,
       purpose,
@@ -1149,50 +1147,49 @@ export class TopologyService {
   // at the API boundary (api/observations.ts) and at resolve() time.
 
   /**
-   * Read the graph stored on a Manual data source 's config_json.
-   * Returns null when the source doesn 't exist, isn 't Manual, or has
-   * no graph (e.g. freshly attached then config cleared by hand).
+   * Read the authored graph for a Manual data source from `manual_source_graph`
+   * (its own store — content, not config; see migration 014). Returns null when
+   * the source doesn't exist, isn't Manual, or has no authored graph yet.
    *
    * Public so the discovery-policy API can compute / mutate the authored
-   * layer without poking the data_sources table directly.
+   * layer without poking the storage directly.
    */
   readManualGraph(sourceId: string): NetworkGraph | null {
+    const src = this.db.query('SELECT type FROM data_sources WHERE id = ?').get(sourceId) as
+      | { type: string }
+      | undefined
+    if (!src || src.type !== 'manual') return null
     const row = this.db
-      .query('SELECT type, config_json FROM data_sources WHERE id = ?')
-      .get(sourceId) as { type: string; config_json: string } | undefined
-    if (!row || row.type !== 'manual') return null
+      .query('SELECT graph_json FROM manual_source_graph WHERE source_id = ?')
+      .get(sourceId) as { graph_json: string } | undefined
+    if (!row) return null
     try {
-      const config = JSON.parse(row.config_json) as { graph?: NetworkGraph }
-      return config.graph ?? null
+      return JSON.parse(row.graph_json) as NetworkGraph
     } catch {
       return null
     }
   }
 
   /**
-   * Persist a new authored graph onto a Manual data source 's config_json.
-   * Preserves any sibling keys we don 't own. Invalidates EVERY topology attached
-   * to this Manual source (the authored graph is source-level content and can be
-   * shared across topologies) so none serves a stale resolved artifact — callers
-   * don't need a separate clearCacheEntry.
+   * Persist a Manual source's authored graph into `manual_source_graph` (upsert).
+   * Invalidates EVERY topology attached to this Manual source (the authored graph
+   * is source-level content and can be shared across topologies) so none serves a
+   * stale resolved artifact — callers don't need a separate clearCacheEntry.
    */
   writeManualGraph(sourceId: string, graph: NetworkGraph): void {
-    const row = this.db
-      .query('SELECT type, config_json FROM data_sources WHERE id = ?')
-      .get(sourceId) as { type: string; config_json: string } | undefined
-    if (!row || row.type !== 'manual') {
+    const src = this.db.query('SELECT type FROM data_sources WHERE id = ?').get(sourceId) as
+      | { type: string }
+      | undefined
+    if (!src || src.type !== 'manual') {
       throw new Error(`Data source ${sourceId} is not a Manual source`)
     }
-    let config: Record<string, unknown> = {}
-    try {
-      config = JSON.parse(row.config_json) as Record<string, unknown>
-    } catch {
-      // Corrupted config — start fresh.
-    }
-    config['graph'] = graph
     this.db
-      .query('UPDATE data_sources SET config_json = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(config), timestamp(), sourceId)
+      .query(
+        `INSERT INTO manual_source_graph (source_id, graph_json, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(source_id) DO UPDATE SET graph_json = excluded.graph_json, updated_at = excluded.updated_at`,
+      )
+      .run(sourceId, JSON.stringify(graph), timestamp())
     // Fan-out invalidation: this Manual source may be attached to several
     // topologies; all of them must re-resolve.
     this.clearCacheForDataSource(sourceId)

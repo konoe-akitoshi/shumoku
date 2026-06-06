@@ -14,7 +14,7 @@ Shumoku Server uses SQLite (via `bun:sqlite`) for persistent storage. The databa
 │ config_json     │     │          metrics)       │     │ composition_revision │
 │ status …        │     │ sync_mode, priority …   │     │ created_at, updated… │
 └─────────────────┘     └─────────────────────────┘     └──────────────────────┘
-   ▲  type='manual' rows hold the authored graph at config_json.graph
+   ▲  type='manual' rows: authored graph in `manual_source_graph` (by source id)
    │
    │   ┌──────────────────────────┐     ┌──────────────────────────┐
    └───│  topology_observations   │     │  topology_resolved_graph │
@@ -38,7 +38,7 @@ Shumoku Server uses SQLite (via `bun:sqlite`) for persistent storage. The databa
 **Composition model (since the composition-store refactor):** a topology is a
 shell; its sources live in `topology_data_sources` (m2m, by purpose); each
 source's scans are appended to `topology_observations`; the human-authored graph
-lives on the Manual source's `config_json.graph`; `resolve()` folds these into
+lives in `manual_source_graph` (keyed by the Manual source id); `resolve()` folds these into
 the displayed graph, which is materialized in `topology_resolved_graph` and
 invalidated by `composition_revision`. The **metrics mapping** is no longer a
 column — it is `metrics-binding` attachments on the resolved graph (see
@@ -88,6 +88,19 @@ External data source connections (Zabbix, NetBox, Prometheus, etc.)
   "groupBy": "site"
 }
 ```
+
+### manual_source_graph
+
+The authored graph for a Manual data source (content, not config — migration
+014 moved it out of `config_json.graph`). Keyed by the Manual source id so it can
+be shared across topologies. `resolve()` reads it as the top-priority authored
+contribution.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `source_id` | TEXT (PK, FK→data_sources) | The Manual data source |
+| `graph_json` | TEXT | Serialized authored NetworkGraph |
+| `updated_at` | INTEGER | Last edit timestamp (ms) |
 
 ### topologies
 
@@ -223,6 +236,7 @@ Schema migrations use numbered SQL files in `src/db/migrations/`. On startup, th
 | `010_manual_as_source.sql` / `011_manual_graph_to_config.sql` | Authored content → Manual source (content_json dropped) |
 | `012_resolved_graph_cache.sql` | `composition_revision` + `topology_resolved_graph` |
 | `013_drop_legacy_source_columns.sql` | Backfill legacy source pointers → m2m, then drop the columns |
+| `014_authored_graph_store.sql` | Move Manual authored graph `config_json.graph` → `manual_source_graph` table |
 
 (`009` is intentionally skipped. `mapping_json` is dropped imperatively by the
 startup backfill after migrating it to bindings — not by a SQL migration — since

@@ -249,8 +249,8 @@ export function createDataSourcesApi(): Hono {
       if (!dataSource) {
         return c.json({ error: 'Data source not found' }, 404)
       }
-      // A config edit can change resolve inputs (a Manual source's authored
-      // graph lives in config_json.graph) → invalidate attached topologies.
+      // A config edit can change what a source contributes → defensively
+      // invalidate attached topologies' resolved artifacts.
       getTopologyService().clearCacheForDataSource(id)
       return c.json({
         ...dataSource,
