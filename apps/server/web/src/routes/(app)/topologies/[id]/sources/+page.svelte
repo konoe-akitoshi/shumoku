@@ -14,6 +14,8 @@
    */
   import {
     ArrowsClockwiseIcon,
+    CaretDownIcon,
+    CaretRightIcon,
     CheckCircleIcon,
     CopyIcon,
     EraserIcon,
@@ -57,10 +59,11 @@
   let syncingAll = $state(false)
   let rebuilding = $state(false)
 
+  // Which source cards are expanded to show config + scope + danger actions.
+  let expanded = $state<Set<string>>(new Set())
   // Scope (faceted ingestion filters), keyed by attachment id.
   let pluginTypes = $state<DataSourcePluginInfo[]>([])
   let scopeState = $state<Record<string, Record<string, unknown>>>({})
-  let scopeOpen = $state<Set<string>>(new Set())
   const scopeTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   let topologySources = $derived(ctx.currentSources.filter((s) => s.purpose === 'topology'))
@@ -168,6 +171,14 @@
   }
 
   function detachSource(source: TopologyDataSource) {
+    const name = ctx.getDataSource(source.dataSourceId)?.name ?? source.dataSourceId
+    if (
+      !confirm(
+        `Detach "${name}" from this topology? Its observed data is removed from the view. ` +
+          `The data source itself is not deleted.`,
+      )
+    )
+      return
     void mutate(
       source.id,
       () => api.topologies.sources.remove(ctx.topologyId, source.id),
@@ -219,11 +230,11 @@
 
   // --- Scope (faceted, debounced direct apply) ------------------------------
 
-  function toggleScope(id: string) {
-    const next = new Set(scopeOpen)
+  function toggleExpand(id: string) {
+    const next = new Set(expanded)
     if (next.has(id)) next.delete(id)
     else next.add(id)
-    scopeOpen = next
+    expanded = next
   }
 
   function parseScope(optionsJson?: string): Record<string, unknown> {
@@ -442,12 +453,88 @@
           {#each topologySources as source (source.id)}
             {@const dataSource = ctx.getDataSource(source.dataSourceId)}
             {@const lastResult = perSourceSync[source.dataSourceId]}
+            {@const isOpen = expanded.has(source.id)}
             <div
-              class="border border-theme-border rounded-lg p-4 transition-opacity"
+              class="border border-theme-border rounded-lg transition-opacity"
               class:opacity-60={busy.has(source.id)}
             >
-              <div class="flex items-start justify-between gap-4">
-                <div class="flex-1 space-y-3">
+              <!-- Collapsed header: identity + status + last sync + Sync now -->
+              <div class="flex items-center gap-3 p-3">
+                <button
+                  type="button"
+                  class="text-theme-text-muted hover:text-theme-text shrink-0"
+                  onclick={() => toggleExpand(source.id)}
+                  aria-expanded={isOpen}
+                  aria-label={isOpen ? 'Collapse' : 'Expand'}
+                >
+                  {#if isOpen}
+                    <CaretDownIcon size={16} />
+                  {:else}
+                    <CaretRightIcon size={16} />
+                  {/if}
+                </button>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-medium text-theme-text-emphasis truncate">
+                      {dataSource?.name ?? source.dataSourceId}
+                    </span>
+                    <span
+                      class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-theme-bg font-mono text-theme-text-muted"
+                    >
+                      {dataSource?.type ?? '—'}
+                    </span>
+                    {#if source.syncMode !== 'manual'}
+                      <span class="text-[10px] text-theme-text-muted">· {source.syncMode}</span>
+                    {/if}
+                  </div>
+                  <p class="text-xs text-theme-text-muted mt-0.5 truncate">
+                    {#if lastResult}
+                      {#if lastResult.status === 'ok'}
+                        ✓ {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
+                        {formatAgo(
+                          lastResult.at,
+                        )}
+                      {:else if lastResult.status === 'partial'}
+                        <span class="text-amber-600 dark:text-amber-400" title={lastResult.message}>
+                          ⚠ partial · {formatAgo(lastResult.at)}
+                        </span>
+                      {:else if lastResult.status === 'empty'}
+                        no devices observed · {formatAgo(lastResult.at)}
+                      {:else}
+                        <span class="text-red-500" title={lastResult.message}>
+                          ✗ {lastResult.message ?? 'failed'}
+                        </span>
+                      {/if}
+                    {:else if source.lastSyncedAt}
+                      last synced {formatAgo(source.lastSyncedAt)}
+                    {:else}
+                      never synced
+                    {/if}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="shrink-0"
+                  onclick={() => handleSyncOne(source)}
+                  disabled={syncingSourceId === source.dataSourceId}
+                >
+                  {#if syncingSourceId === source.dataSourceId}
+                    <span
+                      class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
+                    ></span>
+                    Syncing…
+                  {:else}
+                    <ArrowsClockwiseIcon size={12} class="mr-1" />
+                    Sync
+                  {/if}
+                </Button>
+              </div>
+
+              <!-- Expanded detail: config + scope + danger actions -->
+              {#if isOpen}
+                {@const optSchema = optionsSchemaFor(dataSource?.type)}
+                <div class="border-t border-theme-border p-3 space-y-3">
                   <div class="flex items-center gap-2">
                     <select
                       class="input flex-1"
@@ -482,9 +569,7 @@
                         onchange={(e) =>
                           patchSource(source, { priority: Number(e.currentTarget.value) || 0 }, true)}
                       >
-                      <span class="text-xs text-theme-text-muted">
-                        higher wins each field when sources overlap
-                      </span>
+                      <span class="text-xs text-theme-text-muted">higher wins on overlap</span>
                     </div>
                   {/if}
 
@@ -506,107 +591,54 @@
                     </div>
                   {/if}
 
-                  <!-- Sync result + last-synced -->
-                  <p class="text-xs text-theme-text-muted">
-                    {#if lastResult}
-                      {#if lastResult.status === 'ok'}
-                        ✓ {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
-                        {formatAgo(
-                          lastResult.at,
-                        )}
-                      {:else if lastResult.status === 'partial'}
-                        <span class="text-amber-600 dark:text-amber-400" title={lastResult.message}>
-                          ⚠ partial · {formatAgo(lastResult.at)}
-                        </span>
-                      {:else if lastResult.status === 'empty'}
-                        no devices observed · {formatAgo(lastResult.at)}
-                      {:else}
-                        <span class="text-red-500" title={lastResult.message}>
-                          ✗ {lastResult.message ?? 'failed'}
-                        </span>
-                      {/if}
-                    {:else if source.lastSyncedAt}
-                      last synced {formatAgo(source.lastSyncedAt)}
-                    {:else}
-                      never synced
-                    {/if}
-                  </p>
-
                   <!-- Scope (faceted ingestion filter) -->
-                  {#if scopeOpen.has(source.id)}
-                    {@const optSchema = optionsSchemaFor(dataSource?.type)}
-                    {#if optSchema && scopeState[source.id]}
-                      <div class="border-t border-theme-border pt-3 space-y-2">
-                        <p class="text-xs text-theme-text-muted">
-                          Narrow what this source contributes. Takes effect on the next Sync.
-                        </p>
-                        <SchemaForm
-                          schema={optSchema}
-                          value={scopeState[source.id] ?? {}}
-                          getOptions={(key) =>
-                            api.dataSources
-                              .getConfigOptions(source.dataSourceId, key)
-                              .then((r) => r.options)}
-                          onChange={() => saveScope(source)}
-                        />
-                      </div>
-                    {:else}
-                      <p class="text-xs text-theme-text-muted border-t border-theme-border pt-2">
-                        This source has no scope options.
+                  {#if optSchema && scopeState[source.id]}
+                    <div class="border-t border-theme-border pt-3 space-y-2">
+                      <p
+                        class="text-xs font-medium text-theme-text-muted uppercase tracking-wide flex items-center gap-1"
+                      >
+                        <SlidersHorizontalIcon size={12} />
+                        Scope
                       </p>
-                    {/if}
+                      <p class="text-xs text-theme-text-muted">
+                        Narrow what this source contributes. Takes effect on the next Sync.
+                      </p>
+                      <SchemaForm
+                        schema={optSchema}
+                        value={scopeState[source.id] ?? {}}
+                        getOptions={(key) =>
+                          api.dataSources
+                            .getConfigOptions(source.dataSourceId, key)
+                            .then((r) => r.options)}
+                        onChange={() => saveScope(source)}
+                      />
+                    </div>
                   {/if}
-                </div>
 
-                <div class="flex flex-col items-end gap-1.5 shrink-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onclick={() => handleSyncOne(source)}
-                    disabled={syncingSourceId === source.dataSourceId}
-                  >
-                    {#if syncingSourceId === source.dataSourceId}
-                      <span
-                        class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
-                      ></span>
-                      Syncing…
-                    {:else}
-                      <ArrowsClockwiseIcon size={12} class="mr-1" />
-                      Sync now
-                    {/if}
-                  </Button>
-                  {#if optionsSchemaFor(dataSource?.type)}
+                  <!-- Danger actions -->
+                  <div class="flex items-center gap-2 border-t border-theme-border pt-3">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onclick={() => toggleScope(source.id)}
-                      aria-expanded={scopeOpen.has(source.id)}
+                      class="text-theme-text-muted hover:text-destructive"
+                      title="Clear this source's data (keeps the attachment + config)"
+                      onclick={() => handleClearOne(source)}
                     >
-                      <SlidersHorizontalIcon size={14} class="mr-1" />
-                      Scope
+                      <EraserIcon size={14} class="mr-1" />
+                      Clear data
                     </Button>
-                  {/if}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    class="text-theme-text-muted hover:text-destructive"
-                    title="Clear this source's data (keeps the attachment + config)"
-                    onclick={() => handleClearOne(source)}
-                  >
-                    <EraserIcon size={14} class="mr-1" />
-                    Clear
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    class="text-danger hover:bg-danger/10"
-                    title="Detach this source"
-                    onclick={() => detachSource(source)}
-                  >
-                    <TrashIcon size={16} />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="text-danger hover:bg-danger/10"
+                      onclick={() => detachSource(source)}
+                    >
+                      <TrashIcon size={14} class="mr-1" />
+                      Detach
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              {/if}
             </div>
           {/each}
         </div>
