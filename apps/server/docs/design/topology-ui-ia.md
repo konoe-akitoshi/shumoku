@@ -6,14 +6,14 @@ review. Supersedes the "5→3 tabs" one-liner in
 Backend was already done (composition store); this is the UI layer that makes the
 as-built two-axis model legible.
 
-As built: canvas-resident shell + Composition drawer with the L→R stepper;
-top-right chrome single-owner; Sources slimmed to connection identity with
-granular direct-apply (no Save, no replaceAll); scope moved to Discovery
-(per-source, faceted via `getConfigOptions`, partial-update persistence); the
-cross-surface sync-gate removed; a single `ctx.revision` channel re-fetches the
-diagram / Resolved on commit (no manual reload). Deferred: a dedicated left
-Sources rail; manual-editor relocation into the topology context; wiring the
-client revision to the backend `composition_revision` value.
+Zones (agreed): **Sources / Composition / Diagram** — Diagram is the resident
+canvas; Sources and Composition open in a right drawer via a two-way switch. No
+"Discovery / Mapping / Resolved" — those are absorbed (Discovery→Composition,
+Mapping→per-entity section, Resolved→debug subview). Sync + scope live in Sources
+(ingestion of the input). A single `ctx.revision` channel re-fetches the
+diagram / debug views on commit (no manual reload). Deferred: full folding of
+metrics-binding into per-entity detail (vs a Composition section); manual-editor
+relocation; wiring the client revision to the backend `composition_revision`.
 
 ## Problem
 
@@ -46,47 +46,58 @@ So the natural three *zones* are **Sources** (inputs to both axes), **Compositio
 of the IA is to make those three legible *without* six equal tabs and *without*
 hiding the dataflow.
 
-## Decision: "A+" — Diagram-resident canvas, Composition as an on-demand drawer
+## Decision: "A+" — Diagram-resident canvas; Sources + Composition in a drawer
 
-A single principled synthesis, not a tab reshuffle. The canvas is always the
-content; the machinery is a side concern you pull out when you need it.
+The three zones are exactly the agreed ones from
+[`topology-composition-store.md`](./topology-composition-store.md) § "Target (3
+tabs)": **Sources / Composition / Diagram**. There is **no "Discovery" / "Mapping"
+/ "Resolved"** — those old tabs are *absorbed*: "Discovery" is **renamed
+Composition**, "Mapping" becomes a per-entity metrics-binding section inside
+Composition, and "Resolved" becomes a Composition debug subview.
+
+A+ keeps the canvas resident (the "Diagram" zone) and puts the other two zones in
+an on-demand drawer with a **two-way switch — Sources | Composition** (NOT a
+four-stage pipeline stepper; that was a drift back into the old tabs).
 
 ```
 ┌──────────────────────────────────────────────┐
-│ MyTopology              [⚙]   [ Composition ▸]│   top bar: title, settings, ONE toggle
-├──────┬───────────────────────────────────────┤
-│ Sour │                                        │
-│ -ces │              DIAGRAM (表)              │   the result, full-bleed, always present
-│ rail │           (read + feedback surface)    │
-│ zbx  │                                        │
-│ nb   │                                        │
-│ man  │                                        │
-│ [+]  │                                        │
-└──────┴───────────────────────────────────────┘
+│ MyTopology        [ Sources ] [ Composition ] [⚙]│  top-right: 2 zone toggles + gear
+├──────────────────────────────────────────────┤
+│                                              │
+│                 DIAGRAM (表)                 │   the result, full-bleed, always present
+│              (read + feedback surface)       │
+│                                              │
+└──────────────────────────────────────────────┘
 
-   click [ Composition ▸ ]  → drawer slides from the right (裏):
+   open a zone → drawer slides from the right (裏):
    ┌─────────────────────────────────────┐
-   │ Composition                      [✕] │
-   │  ① Sources → ② Discovery → ③ Mapping → ④ Resolved   ← L→R pipeline stepper
+   │ [ Sources | Composition ]        [✕] │   two-way zone switch
    │  ┌───────────────────────────────┐  │
-   │  │ active stage panel            │  │   one stage at a time, in context
-   │  │ (e.g. Mapping: unbound ifaces)│  │
+   │  │ Sources: attached sources,    │  │   inputs: attach/priority/sync/scope
+   │  │   each with sync + scope      │  │
+   │  │ — or —                        │  │
+   │  │ Composition: resolved-entity  │  │   curation: entity list + per-entity
+   │  │   list + per-entity detail    │  │   detail (policy, metrics-binding,
+   │  │   (+ resolved-JSON debug)     │  │   provenance, override, hide)
    │  └───────────────────────────────┘  │
    └─────────────────────────────────────┘
 ```
 
-- **Sources** — a persistent left rail (compact list of attached data sources +
-  "attach" affordance). Inputs are always visible because both axes start here.
-- **Diagram (表)** — the canvas owns the screen. It is both the *output* and the
-  *feedback surface*: a Mapping/Discovery edit reflects here immediately.
-- **Composition (裏)** — a right-edge slide-over drawer, closed by default. Inside
-  it, the four pipeline stages (Sources → Discovery → Mapping → Resolved) are an
-  **L→R stepper**, showing one stage panel at a time. Mapping and Resolved are
-  panels/inspectors here, not separate full-screen pages.
-- **Settings** — a gear menu (general + danger zone), not a tab.
+- **Sources** — inputs. Which sources contribute (topology / metrics / manual),
+  priority, **sync (now / all)**, and **scope** (what to pull, faceted from the
+  source). Sync and scope live here because they are ingestion concerns of the
+  input, co-located so there is no cross-surface seam.
+- **Composition** — the human-curation surface over the **resolved entities**: an
+  entity list + per-entity detail that holds identity + provenance, field
+  overrides, **discovery policy** (auto/observe/disabled), **metrics-binding**
+  (the old Mapping), and hide/exclude. Raw observations + the resolved-graph JSON
+  are a **debug subview**. "Auto-map all" dissolves into a filter ("entities with
+  no metrics binding") + per-entity override.
+- **Diagram (表)** — the canvas owns the screen; output *and* feedback surface (a
+  Composition edit reflects here immediately).
+- **Settings** — a gear (general + danger zone), not a zone.
 
-Top-level interactive choices collapse from six tabs to **two** (Composition
-toggle + ⚙) plus the Sources rail.
+Top-level choices: the two zone toggles + gear; the canvas is always present.
 
 ## Why this shape (the theory)
 
@@ -110,12 +121,13 @@ The A-vs-B choice was resolved on established IA/HCI principles, not preference:
    universally use *canvas-resident + side inspector*. This is the empirical
    optimum.
 
-**What option B got right is folded in, not discarded:** B's only real advantage
-is making the `Sources → Discovery → Mapping → Resolved` *pipeline* visible
-(good information scent for the dataflow). We keep that by putting an L→R stepper
-*inside* the drawer instead of flipping the whole screen — exactly the move
-Figma makes (canvas resident; only the right panel switches Design/Prototype/Dev
-mode). Full-screen modeless, mode confined to the inspector.
+**What option B got right is folded in, not discarded:** B's advantage was making
+the dataflow legible. We keep that with the drawer's two-way Sources | Composition
+switch and the canvas always showing the result — exactly the move Figma makes
+(canvas resident; only the right panel switches mode). Full-screen modeless, the
+zone switch confined to the drawer. (An earlier draft put a four-stage
+`Sources→Discovery→Mapping→Resolved` stepper here; that was a drift — it just
+renamed the old tabs and contradicted the 3-zone collapse. Removed.)
 
 ## Interaction model: Save is fine — cross-surface state coupling is the bug (cross-cutting)
 
@@ -160,93 +172,76 @@ it.
 
 ### Consequences
 
-- **Sources** keeps a Save button (batched commit of attach/detach + sync-mode +
-  priority + scope), but its editable mirror is **page-local** — never in
-  `ctx`. On Save it flushes (`replaceAll`) and updates `ctx.currentSources` (the
-  committed truth). `ctx.editableSources` / `ctx.hasSourceChanges` are removed.
-- **Discovery** reads `ctx.currentSources` (committed) and has **no** dependency on
-  Sources' dirty state — the cross-surface gate is gone for good.
+- **Sources** edits apply directly via the granular `sources.{add,update,remove}`
+  endpoints (partial updates). With scope no longer batched here, there is no
+  multi-field draft worth a page-level Save — every remaining edit (attach /
+  detach / sync-mode / priority / scope) is atomic. No editable mirror, no
+  `replaceAll` (it would wipe scope, regenerate ids, reset webhook secrets), and
+  `ctx.editableSources` / `ctx.hasSourceChanges` are removed.
+- **No cross-surface gate exists** because config and the action consuming it are
+  on the same surface (see the seam section). Nothing reaches into another
+  surface's draft.
 - **Manual editor** stays a deliberate draft → Save (record observation).
-- **Reads stay reactive on `composition_revision`** (backend bumps it O(1) per
-  mutation): once an edit is *committed*, dependent views (Resolved, Diagram)
-  refresh themselves — no manual reload. (This is orthogonal to Save: it's about
-  committed changes propagating, not about when the commit happens.)
+- **Reads stay reactive on a single revision channel** (`ctx.revision`, mirroring
+  the backend's `composition_revision`): once an edit commits, the diagram + debug
+  views re-fetch themselves — no manual reload.
 
-## Responsibility split: Sources vs Discovery (the filter seam)
+## Responsibility split: Sources owns ingestion (the filter seam)
 
-The current split draws the line at *declarative vs imperative*: Sources holds
-all config (including per-source scope filters — `siteFilter` / `tagFilter` /
-`roleFilter` / `exclude*`), Discovery holds the `Sync` button and results
-(`sources/+page.svelte` header comment; `discovery/+page.svelte`). That seam is
-cut in the wrong place:
+The old split cut at *declarative vs imperative* — scope filters in Sources, the
+`Sync` button on a separate Discovery surface. That seam is in the wrong place: a
+scope filter is only meaningful against the **facets that exist** (which sites /
+tags / roles a source exposes), known only *after* a fetch; configuring it on one
+surface while syncing on another breaks the loop (narrow → see result) and forces
+cross-surface coordination.
 
-> A scope filter is only meaningful against the *facets that exist* (which sites,
-> tags, roles a source actually exposes) — and those are known only **after** the
-> first fetch, which happens in Discovery. So the filter is configured blind, in
-> Sources, away from both the data it narrows and the feedback on its effect. The
-> loop (narrow → see result) is broken across two surfaces.
+Cut the seam at **input vs curation** instead:
 
-Redraw the line at **identity/connection vs ingestion/scope**:
+- **Sources = the input, end-to-end.** What is attached (purpose, priority,
+  credentials) **and** its ingestion: **`Sync`** and **`scope`** (faceted from the
+  source via `getConfigOptions`, persisted to the attachment `optionsJson`). Sync
+  and scope sit together, on the same surface, so any "set scope, then sync" flow
+  is local and visible. This is why `Sync` and `scope` belong here and not on a
+  separate Discovery surface — co-location is what makes a cross-surface gate
+  impossible to construct.
+- **Composition = curation of the result.** The resolved entities and their
+  per-entity detail (policy, metrics-binding, provenance, override, hide); raw
+  observations + resolved JSON as a debug subview. It reads committed state; it
+  never depends on Sources' in-flight edits.
 
-- **Sources (the noun — the connection).** What is attached, `purpose`
-  (topology/metrics), merge priority, sync mode (manual / scheduled / webhook),
-  credentials/connection. "The relationship exists, and how/when it feeds."
-- **Composition › Discovery (the verb + its reach).** `Sync now`; see what came
-  back (grid + identity-quality); **set the scope filter against the real
-  observed facets** (faceted multi-select, not blind free-text); set per-node
-  scheduler policy (auto / observe / disabled). "What we actually pull in and
-  adopt from each source."
-
-Consequences for the implementation:
-
-1. **Move the scope filter out of the Sources rail into the Discovery stage**, co-
-   located with `Sync` and the result grid → one closed feedback loop.
-2. **Faceted, not free-text.** The filter offers the observed `site`/`tag`/`role`
-   values as a multi-select. Cold start (no fetch yet): show "no data — Sync to
-   discover," scope permissive; facets appear after the first fetch — which is the
-   *correct* ordering the current UI violates.
-3. **Scope is still persisted config** (it shapes future scheduled syncs), so the
-   value edited in the Discovery stage **writes back to the source-attachment
-   options** (`optionsJson`). The declarative/imperative distinction survives —
-   it is just re-seamed: connection-config (Sources) vs ingestion-scope
-   (Discovery), rather than all-config vs all-action.
-
-One line: **Sources = "who do we connect to"; Discovery = "what, and how much, do
-we pull from them." The scope filter is the latter.**
+One line: **Sources = "who we connect to and what we pull"; Composition = "curate
+what came back." Sync and scope are the former.**
 
 ## Routing / migration
 
-Current routes (`/topologies/[id]/{discovery,mapping,resolved,settings,sources}`)
-become drawer states rather than separate workspaces. Preserve deep links:
+Three zone routes under `/topologies/[id]`, the drawer is chrome around the active
+one; deep links preserved:
 
-- `/topologies/[id]` → Diagram with drawer closed (default).
-- `/topologies/[id]/composition?stage=mapping` (or a hash) → Diagram with the
-  drawer open on that stage. The existing per-stage routes redirect here so
-  bookmarks/`/settings#X` legacy links (already handled in the current layout)
-  keep working.
-- `/topologies/[id]/settings` → opens the ⚙ menu/sheet; keep the route for
-  direct links.
+- `/topologies/[id]` → Diagram, drawer closed (default).
+- `/topologies/[id]/sources` → drawer open on Sources.
+- `/topologies/[id]/composition` → drawer open on Composition.
+- `/topologies/[id]/settings` → gear (drawer, switch hidden).
+- Legacy `/topologies/[id]/{discovery,mapping,resolved}` **redirect to
+  `/composition`** (discovery & resolved fold in directly; mapping becomes the
+  per-entity metrics-binding section). `/settings#X` legacy hash links still map.
 
 No data-layer change: the drawer reads the same `_context.svelte.ts` /
-`api.topologies.*` the tabs read today. This is presentation only (mirrors the
-composition-store doc's "data model only" scope boundary).
+`api.topologies.*`. Presentation only.
 
 ## Accessibility notes
 
-- The drawer is a `role="dialog"`/disclosure with focus trap while open, `Esc` to
-  close, and a labelled toggle that exposes `aria-expanded`.
-- The stage stepper is a `tablist`-like control *scoped to the drawer* (not the
-  page), so the page's top-level landmark count stays low.
-- The Sources rail is a `navigation` landmark; the canvas is `main`.
-- Keyboard: one accelerator toggles the drawer; arrow keys move between pipeline
-  stages once focus is in the stepper.
+- The drawer is a disclosure with a focus trap while open and `Esc` to close; the
+  zone toggles expose `aria-expanded`.
+- The Sources | Composition switch is a `tablist`-like control scoped to the
+  drawer, so the page's top-level landmark count stays low.
+- The canvas is `main`; the drawer is a labelled `complementary`/`dialog` region.
 
 ## Out of scope (this doc)
 
-- Manual-editor relocation *into* the topology context is part of #362's spirit
-  and lands here: the manual source's authored-graph edit surface moves from the
-  standalone datasources page into the Sources rail / Composition drawer (it is
-  per-topology observation data now — see
-  [`manual-source-unification.md`](./manual-source-unification.md)). Tracked as a
-  sub-task of this work.
+- Manual-editor relocation *into* the topology context: the manual source's
+  authored-graph edit surface moves from the standalone datasources page into the
+  Sources zone (it is per-topology observation data now — see
+  [`manual-source-unification.md`](./manual-source-unification.md)).
+- Full folding of metrics-binding into per-entity detail (vs. a Composition
+  section) — staged.
 - Diagram canvas internals (render pipeline, client layout) — unchanged.

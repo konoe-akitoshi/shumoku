@@ -2,19 +2,19 @@
   /**
    * Shell for everything under `/topologies/[id]/*`.
    *
-   * IA: "A+" — a Diagram-resident canvas (表) with an on-demand
-   * Composition drawer (裏). The canvas (`TopologyCanvas`) is rendered
-   * once here and stays mounted; the composition stages
-   * (Sources / Discovery / Mapping / Resolved) live in a right-edge,
-   * non-modal slide-over so editing them keeps the diagram in view
-   * (focus + context). Settings is a gear, not a peer tab.
-   * See `apps/server/docs/design/topology-ui-ia.md`.
+   * IA (agreed 3-zone model — see topology-ui-ia.md / composition-store doc):
+   *   - Diagram (表) — the resident canvas (`TopologyCanvas`), always mounted.
+   *   - Sources — inputs: attached sources, priority, sync, scope.
+   *   - Composition — curation of the resolved entities (the old Discovery,
+   *     renamed); Mapping + Resolved are subviews within it.
+   * Sources and Composition open in a right-edge, non-modal drawer via a
+   * two-way zone switch. There is NO "Discovery" / "Mapping" / "Resolved"
+   * top-level tab. Settings is a gear.
    *
-   * Each stage is still a real subroute (back/forward + Ctrl-click +
-   * deep links keep working); the drawer is just chrome around the
-   * active child. Shared state lives in `_context.svelte.ts`.
+   * Each zone/subview is still a real subroute (deep links work); the drawer
+   * is chrome around the active child. Shared state lives in `_context`.
    */
-  import { ArrowsClockwiseIcon, GearSixIcon, StackIcon, XIcon } from 'phosphor-svelte'
+  import { GearSixIcon, XIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
@@ -33,35 +33,30 @@
     ctx.topologyId = $page.params.id!
   })
 
-  /**
-   * The Composition pipeline stages, in dataflow order (① → ④). These
-   * are the drawer's stepper. Settings is intentionally NOT here — it's
-   * reached via the gear.
-   */
-  const STAGES = [
-    { slug: 'sources', label: 'Sources', step: '1' },
-    { slug: 'discovery', label: 'Discovery', step: '2' },
-    { slug: 'mapping', label: 'Mapping', step: '3' },
-    { slug: 'resolved', label: 'Resolved', step: '4' },
-  ] as const
-
   let activeSlug = $derived.by(() => {
     const m = $page.url.pathname.match(/\/topologies\/[^/]+\/?([^/]*)/)
     return m?.[1] ?? ''
   })
 
-  // The drawer is open whenever a stage (or Settings) subroute is active.
-  const KNOWN_SLUGS = ['sources', 'discovery', 'mapping', 'resolved', 'settings']
-  let drawerOpen = $derived(KNOWN_SLUGS.includes(activeSlug))
-  let onSettings = $derived(activeSlug === 'settings')
-  let activeStage = $derived(STAGES.find((s) => s.slug === activeSlug))
+  // The Composition zone owns three subviews (Entities / Mapping / Resolved).
+  const COMPOSITION_SLUGS = ['composition', 'mapping', 'resolved']
+  const SUBVIEWS = [
+    { slug: 'composition', label: 'Entities' },
+    { slug: 'mapping', label: 'Mapping' },
+    { slug: 'resolved', label: 'Resolved' },
+  ] as const
+
+  let zone = $derived.by<'sources' | 'composition' | 'settings' | null>(() => {
+    if (activeSlug === 'sources') return 'sources'
+    if (activeSlug === 'settings') return 'settings'
+    if (COMPOSITION_SLUGS.includes(activeSlug)) return 'composition'
+    return null
+  })
+  let drawerOpen = $derived(zone !== null)
+  let onSettings = $derived(zone === 'settings')
 
   const base = $derived(`/topologies/${ctx.topologyId}`)
 
-  function openComposition() {
-    // Open at the active stage if already on one, else the first stage.
-    if (!drawerOpen) goto(`${base}/sources`)
-  }
   function closeDrawer() {
     goto(base)
   }
@@ -76,26 +71,32 @@
   }
 
   onMount(async () => {
-    // Honor legacy `/settings#X` deep links (the old IA baked the tab into
-    // a hash fragment); map them onto the new stage subroutes / drawer.
+    // Honor legacy deep links: the old IA had Discovery/Mapping/Resolved as
+    // peer tabs and baked Settings sub-tabs into a hash. Map both onto the
+    // new zones (Discovery → Composition).
     if (typeof window !== 'undefined') {
+      const path = window.location.pathname
+      if (/\/topologies\/[^/]+\/discovery\/?$/.test(path)) {
+        await goto(`${base}/composition`, { replaceState: true })
+        return
+      }
       const hash = window.location.hash.slice(1)
-      const onLegacySettings = /\/topologies\/[^/]+\/settings\/?$/.test(window.location.pathname)
+      const onLegacySettings = /\/topologies\/[^/]+\/settings\/?$/.test(path)
       if (onLegacySettings && hash) {
         const legacyMap: Record<string, string> = {
           general: 'settings',
           sources: 'sources',
-          discovery: 'discovery',
+          discovery: 'composition',
           mapping: 'mapping',
           resolved: 'resolved',
         }
         const dest = legacyMap[hash]
         if (dest && dest !== 'settings') {
-          await goto(`/topologies/${ctx.topologyId}/${dest}`, { replaceState: true })
+          await goto(`${base}/${dest}`, { replaceState: true })
           return
         }
         if (dest === 'settings') {
-          history.replaceState(null, '', window.location.pathname)
+          history.replaceState(null, '', path)
         }
       }
     }
@@ -130,19 +131,22 @@
       ctx.loading = false
     }
   }
+
+  const zoneTitle = $derived(
+    zone === 'sources' ? 'Sources' : zone === 'settings' ? 'Settings' : 'Composition',
+  )
+
+  // Top-right zone toggles (shown on the diagram). Each opens the drawer to
+  // its zone; the active one is highlighted.
+  const ZONES = [
+    { key: 'sources', label: 'Sources', href: 'sources' },
+    { key: 'composition', label: 'Composition', href: 'composition' },
+  ] as const
 </script>
 
 <svelte:head>
   {#if ctx.topology}
-    <title>
-      {ctx.topology.name}
-      {onSettings
-        ? ' · Settings'
-        : activeStage
-          ? ` · ${activeStage.label}`
-          : ''}
-      - Shumoku
-    </title>
+    <title>{ctx.topology.name}{drawerOpen ? ` · ${zoneTitle}` : ''} - Shumoku</title>
   {/if}
 </svelte:head>
 
@@ -150,19 +154,10 @@
   <!-- 表: the diagram canvas, always mounted underneath everything. -->
   <TopologyCanvas />
 
-  <!-- Top-right control cluster — belongs to the CLOSED (diagram) state.
-       When the drawer is open it owns its own top-right chrome (gear + X),
-       so this is hidden to avoid stacking two clusters in one corner. The
-       canvas only owns the top-left status + bottom-right zoom; the app
-       breadcrumb carries the title. -->
+  <!-- Top-right control cluster — the diagram (drawer-closed) state. Hidden
+       when the drawer is open so it never stacks on the drawer's own header. -->
   {#if !drawerOpen}
     <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
-      {#if ctx.loading}
-        <span class="text-xs text-theme-text-muted inline-flex items-center gap-1">
-          <ArrowsClockwiseIcon size={12} class="animate-spin" />
-          loading
-        </span>
-      {/if}
       {#if ctx.topology}
         <ShareButton
           shareToken={ctx.topology.shareToken}
@@ -171,15 +166,14 @@
           onUnshare={handleUnshare}
         />
       {/if}
-      <button
-        type="button"
-        onclick={openComposition}
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text hover:text-primary"
-        aria-expanded={false}
-      >
-        <StackIcon size={16} />
-        Composition
-      </button>
+      {#each ZONES as z (z.key)}
+        <a
+          href={`${base}/${z.href}`}
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text hover:text-primary"
+        >
+          {z.label}
+        </a>
+      {/each}
       <a
         href={`${base}/settings`}
         class="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text-muted hover:text-theme-text"
@@ -190,18 +184,32 @@
     </div>
   {/if}
 
-  <!-- 裏: the Composition drawer. Non-modal (no backdrop) so the canvas
-       stays pannable while you tune the machinery. -->
+  <!-- 裏: the drawer. Non-modal (no backdrop) so the canvas stays pannable. -->
   {#if drawerOpen}
     <aside
       class="absolute top-0 right-0 bottom-0 z-10 w-full max-w-[30rem] flex flex-col bg-theme-bg-canvas border-l border-theme-border shadow-xl"
-      aria-label={onSettings ? 'Settings' : 'Composition'}
+      aria-label={zoneTitle}
     >
       <header class="flex-shrink-0 border-b border-theme-border px-4 pt-3 pb-0">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-semibold text-theme-text">
-            {onSettings ? 'Settings' : 'Composition'}
-          </span>
+          <!-- Two-way zone switch: Sources | Composition (hidden on Settings). -->
+          {#if onSettings}
+            <span class="text-sm font-semibold text-theme-text">Settings</span>
+          {:else}
+            <div class="flex items-center gap-1">
+              {#each ZONES as z (z.key)}
+                <a
+                  href={`${base}/${z.href}`}
+                  class="px-2.5 py-1 rounded-md text-sm font-medium transition-colors {zone ===
+                  z.key
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-theme-text-muted hover:text-theme-text'}"
+                >
+                  {z.label}
+                </a>
+              {/each}
+            </div>
+          {/if}
           <div class="flex items-center gap-1">
             {#if !onSettings}
               <a
@@ -222,26 +230,18 @@
             </button>
           </div>
         </div>
-        {#if !onSettings}
-          <!-- Pipeline stepper (sources → discovery → mapping → resolved). -->
+        <!-- Composition subviews: Entities / Mapping / Resolved. -->
+        {#if zone === 'composition'}
           <nav class="flex gap-1 -mb-px overflow-x-auto">
-            {#each STAGES as stage (stage.slug)}
+            {#each SUBVIEWS as sv (sv.slug)}
               <a
-                href={`${base}/${stage.slug}`}
-                class="flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors {activeSlug ===
-                stage.slug
+                href={`${base}/${sv.slug}`}
+                class="px-2.5 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors {activeSlug ===
+                sv.slug
                   ? 'text-primary border-primary'
                   : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
               >
-                <span
-                  class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] {activeSlug ===
-                  stage.slug
-                    ? 'bg-primary text-white'
-                    : 'bg-theme-bg-elevated text-theme-text-muted'}"
-                >
-                  {stage.step}
-                </span>
-                {stage.label}
+                {sv.label}
               </a>
             {/each}
           </nav>

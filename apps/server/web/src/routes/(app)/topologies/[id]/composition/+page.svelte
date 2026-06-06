@@ -13,88 +13,14 @@
    * button" and "edit the config" are intentionally separate surfaces.
    */
   import { nodeIdentityQuality } from '@shumoku/core'
-  import { ArrowsClockwiseIcon, SlidersHorizontalIcon } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
-  import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
   import { isAuthoredAttachment, stripProvenance } from '$lib/discovery-attachments'
-  import { topologies } from '$lib/stores'
-  import type { DataSourcePluginInfo, PluginConfigSchema, TopologyDataSource } from '$lib/types'
   import { useTopologyCtx } from '../_context.svelte'
 
   const ctx = useTopologyCtx()
-
-  // Scope (ingestion filters) lives here, next to Sync, faceted from the source
-  // (getConfigOptions). It persists straight to the attachment's optionsJson via
-  // a *partial* update — local to this surface, never coupled to the Sources page.
-  let pluginTypes = $state<DataSourcePluginInfo[]>([])
-  let scopeState = $state<Record<string, Record<string, unknown>>>({})
-  let scopeOpen = $state<Set<string>>(new Set())
-  const scopeTimers = new Map<string, ReturnType<typeof setTimeout>>()
-
-  function optionsSchemaFor(type?: string): PluginConfigSchema | undefined {
-    return type ? pluginTypes.find((p) => p.type === type)?.optionsSchema : undefined
-  }
-
-  function toggleScope(id: string) {
-    const next = new Set(scopeOpen)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    scopeOpen = next
-  }
-
-  /** Parse a source's stored optionsJson, coercing legacy string filters to arrays. */
-  function parseScope(optionsJson?: string): Record<string, unknown> {
-    if (!optionsJson) return {}
-    try {
-      const raw = JSON.parse(optionsJson) as Record<string, unknown>
-      for (const key of [
-        'siteFilter',
-        'tagFilter',
-        'roleFilter',
-        'excludeRoleFilter',
-        'excludeTagFilter',
-      ]) {
-        if (typeof raw[key] === 'string') raw[key] = raw[key] ? [raw[key]] : []
-      }
-      return raw
-    } catch {
-      return {}
-    }
-  }
-
-  /** Debounced direct-apply of a source's scope to its optionsJson (partial
-   *  update → preserves the Sources-owned syncMode/priority). */
-  function saveScope(source: TopologyDataSource) {
-    const existing = scopeTimers.get(source.id)
-    if (existing) clearTimeout(existing)
-    scopeTimers.set(
-      source.id,
-      setTimeout(async () => {
-        scopeTimers.delete(source.id)
-        const state = scopeState[source.id]
-        if (!state) return
-        const pruned: Record<string, unknown> = {}
-        for (const [key, value] of Object.entries(state)) {
-          if (value == null) continue
-          if (typeof value === 'string' && value === '') continue
-          if (Array.isArray(value) && value.length === 0) continue
-          pruned[key] = value
-        }
-        const json = Object.keys(pruned).length > 0 ? JSON.stringify(pruned) : ''
-        try {
-          const updated = await api.topologies.sources.update(ctx.topologyId, source.id, {
-            optionsJson: json,
-          })
-          ctx.currentSources = ctx.currentSources.map((s) => (s.id === source.id ? updated : s))
-        } catch (e) {
-          console.error('[Discovery] failed to save scope', e)
-        }
-      }, 500),
-    )
-  }
 
   type DiscoveredCard = {
     id: string
@@ -126,21 +52,6 @@
     observedAt?: number
   }
 
-  let perSourceSync = $state<
-    Record<
-      string,
-      {
-        status: 'ok' | 'partial' | 'failed' | 'empty'
-        nodeCount: number
-        linkCount: number
-        message?: string
-        at: number
-      }
-    >
-  >({})
-  let syncingSourceId = $state<string | null>(null)
-  let syncingAll = $state(false)
-  let rebuilding = $state(false)
   let identityQuality = $state<{ stable: number; weak: number; unbound: number; total: number }>({
     stable: 0,
     weak: 0,
@@ -211,37 +122,9 @@
     if (ctx.topology && ctx.topologyId) void refreshDiscovery()
   })
 
-  // Plugin optionsSchema (for the per-source Scope form) — load once.
-  let pluginTypesLoaded = false
-  $effect(() => {
-    if (pluginTypesLoaded) return
-    pluginTypesLoaded = true
-    api.dataSources
-      .getPluginTypes()
-      .then((t) => {
-        pluginTypes = t
-      })
-      .catch(() => {
-        // Non-fatal: sources whose plugin has no optionsSchema show no scope form.
-      })
-  })
-
-  // Seed the per-source scope form from each attachment's stored optionsJson.
-  $effect(() => {
-    for (const s of ctx.currentSources) {
-      if (!scopeState[s.id]) scopeState[s.id] = parseScope(s.optionsJson)
-    }
-  })
-
-  $effect(() => {
-    return () => {
-      for (const t of scopeTimers.values()) clearTimeout(t)
-    }
-  })
-
-  // `mutated` = this refresh follows a committed change (sync / rebuild /
-  // policy edit), so the persistent diagram should re-fetch too. Pure reads
-  // (mount, navigation) pass false so they don't trigger a wasteful refetch.
+  // `mutated` = this refresh follows a committed change (policy edit), so the
+  // persistent diagram should re-fetch too. Pure reads (mount, navigation) pass
+  // false so they don't trigger a wasteful refetch.
   async function refreshDiscovery(mutated = false) {
     if (!ctx.topologyId) return
     discoveryLoading = true
@@ -312,80 +195,6 @@
       console.error('[Discovery] failed to refresh', e)
     } finally {
       discoveryLoading = false
-    }
-  }
-
-  async function handleSyncOne(source: TopologyDataSource) {
-    syncingSourceId = source.dataSourceId
-    try {
-      const result = await api.topologies.sources.syncOne(ctx.topologyId, source.dataSourceId)
-      const counts = result.snapshot.graph ?? { nodes: [], links: [] }
-      perSourceSync = {
-        ...perSourceSync,
-        [source.dataSourceId]: {
-          status: result.snapshot.status,
-          nodeCount: counts.nodes?.length ?? 0,
-          linkCount: counts.links?.length ?? 0,
-          message: result.snapshot.statusMessage,
-          at: Date.now(),
-        },
-      }
-      const updatedTopology = await api.topologies.get(ctx.topologyId)
-      ctx.topology = updatedTopology
-      topologies.upsert(updatedTopology)
-      await refreshDiscovery(true)
-    } catch (e) {
-      perSourceSync = {
-        ...perSourceSync,
-        [source.dataSourceId]: {
-          status: 'failed',
-          nodeCount: 0,
-          linkCount: 0,
-          message: e instanceof Error ? e.message : 'Sync failed',
-          at: Date.now(),
-        },
-      }
-    } finally {
-      syncingSourceId = null
-    }
-  }
-
-  /** Sync all attached sources at once (observed refresh; overlay preserved). */
-  async function handleSyncAll() {
-    syncingAll = true
-    try {
-      await api.topologies.sources.syncAll(ctx.topologyId)
-      const updatedTopology = await api.topologies.get(ctx.topologyId)
-      ctx.topology = updatedTopology
-      topologies.upsert(updatedTopology)
-      await refreshDiscovery(true)
-    } catch (e) {
-      console.error('[Discovery] sync all failed', e)
-    } finally {
-      syncingAll = false
-    }
-  }
-
-  /** Rebuild: discard the authored overlay (attachments + exclusions), then
-   *  re-sync all sources so the view is purely what the sources observe. */
-  async function handleRebuild() {
-    const ok = confirm(
-      'Rebuild discards every override you made (community, names, hidden nodes) ' +
-        'and rebuilds from the sources. This cannot be undone. Continue?',
-    )
-    if (!ok) return
-    rebuilding = true
-    try {
-      await api.topologies.discoveryPolicy.rebuild(ctx.topologyId)
-      await api.topologies.sources.syncAll(ctx.topologyId)
-      const updatedTopology = await api.topologies.get(ctx.topologyId)
-      ctx.topology = updatedTopology
-      topologies.upsert(updatedTopology)
-      await refreshDiscovery(true)
-    } catch (e) {
-      console.error('[Discovery] rebuild failed', e)
-    } finally {
-      rebuilding = false
     }
   }
 
@@ -913,158 +722,6 @@
         </div>
       </div>
     {/if}
-
-    <!-- Per-source sync -->
-    <div class="card">
-      <div class="card-header flex items-start justify-between gap-3 flex-wrap">
-        <div class="min-w-0">
-          <h2 class="font-medium text-theme-text-emphasis">Sources</h2>
-          <p class="text-xs text-theme-text-muted mt-0.5">
-            Drive each attached source. Results land as observation snapshots and the diagram
-            re-renders through the resolver.
-          </p>
-        </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={syncingAll || rebuilding || topologySources.length === 0}
-            onclick={handleSyncAll}
-          >
-            {syncingAll ? 'Syncing…' : '⟳ Sync all'}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            class="text-muted-foreground hover:text-destructive"
-            disabled={rebuilding || syncingAll || topologySources.length === 0}
-            title="Discard all overrides and rebuild from the sources"
-            onclick={handleRebuild}
-          >
-            {rebuilding ? 'Rebuilding…' : 'Rebuild'}
-          </Button>
-        </div>
-      </div>
-      <div class="card-body space-y-2">
-        {#each topologySources as source (source.id)}
-          {@const dataSource = ctx.getDataSource(source.dataSourceId)}
-          {@const lastResult = perSourceSync[source.dataSourceId]}
-          <div class="rounded-lg border border-theme-border p-3 space-y-2">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <h3 class="text-sm font-medium text-theme-text-emphasis truncate">
-                    {dataSource?.name ?? source.dataSourceId}
-                  </h3>
-                  <span
-                    class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-theme-bg font-mono text-theme-text-muted"
-                  >
-                    {dataSource?.type ?? '—'}
-                  </span>
-                  {#if dataSource?.status === 'connected'}
-                    <span class="badge badge-success text-xs">connected</span>
-                  {:else if dataSource?.status === 'disconnected'}
-                    <span class="badge badge-danger text-xs" title={dataSource.statusMessage}>
-                      disconnected
-                    </span>
-                  {:else}
-                    <span class="badge badge-secondary text-xs">unknown</span>
-                  {/if}
-                </div>
-                <p class="text-xs text-theme-text-muted mt-1">
-                  {#if source.lastSyncedAt}
-                    last synced {formatAgo(source.lastSyncedAt)}
-                  {:else}
-                    never synced
-                  {/if}
-                </p>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                {#if optionsSchemaFor(dataSource?.type)}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onclick={() => toggleScope(source.id)}
-                    title="What to pull from this source"
-                    aria-expanded={scopeOpen.has(source.id)}
-                  >
-                    <SlidersHorizontalIcon size={14} class="mr-1" />
-                    Scope
-                  </Button>
-                {/if}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onclick={() => handleSyncOne(source)}
-                  disabled={syncingSourceId === source.dataSourceId}
-                >
-                  {#if syncingSourceId === source.dataSourceId}
-                    <span
-                      class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"
-                    ></span>
-                    Syncing…
-                  {:else}
-                    <ArrowsClockwiseIcon size={12} class="mr-1" />
-                    Sync now
-                  {/if}
-                </Button>
-              </div>
-            </div>
-            {#if lastResult}
-              <p class="text-xs">
-                {#if lastResult.status === 'ok'}
-                  <span class="text-theme-text-muted">
-                    ✓ {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
-                    {formatAgo(lastResult.at)}
-                  </span>
-                {:else if lastResult.status === 'partial'}
-                  <span class="text-amber-600 dark:text-amber-400" title={lastResult.message}>
-                    ⚠ partial: {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
-                    {formatAgo(lastResult.at)}
-                  </span>
-                {:else if lastResult.status === 'empty'}
-                  <span class="text-theme-text-muted">
-                    no devices observed · {formatAgo(lastResult.at)}
-                  </span>
-                {:else}
-                  <span class="text-red-500" title={lastResult.message}>
-                    ✗ {lastResult.message ?? 'failed'}
-                  </span>
-                {/if}
-              </p>
-            {/if}
-
-            <!-- Scope: what to pull from this source. Faceted from the source
-                 (getConfigOptions); applies directly to the attachment's
-                 optionsJson and takes effect on the next Sync. -->
-            {#if scopeOpen.has(source.id)}
-              {@const optSchema = optionsSchemaFor(dataSource?.type)}
-              {#if optSchema && scopeState[source.id]}
-                <div class="border-t border-theme-border pt-2 mt-1 space-y-3">
-                  <p class="text-xs text-theme-text-muted">
-                    Narrow what this source contributes. Pick from values it exposes; takes effect
-                    on the next Sync.
-                  </p>
-                  <SchemaForm
-                    schema={optSchema}
-                    value={scopeState[source.id] ?? {}}
-                    getOptions={(key) =>
-                      api.dataSources
-                        .getConfigOptions(source.dataSourceId, key)
-                        .then((r) => r.options)}
-                    onChange={() => saveScope(source)}
-                  />
-                </div>
-              {:else}
-                <p class="text-xs text-theme-text-muted border-t border-theme-border pt-2 mt-1">
-                  This source has no scope options.
-                </p>
-              {/if}
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </div>
 
     <!-- Observation history -->
     <div class="card">
