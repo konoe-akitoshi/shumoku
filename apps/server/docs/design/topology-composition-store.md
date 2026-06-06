@@ -35,9 +35,17 @@ below is the reasoning of record; the deltas from it, all deliberate:
 - **resolve gained link-endpoint port-id remap** so a port binding folds onto the
   link's endpoint port.
 
-Follow-ups (own PRs): #361 authored-graph store, #362 5→3 tab IA, #363 plugin
-port identity, #364 DB integration-test harness. Non-data-model perf
-(orchestration / render) stays in `performance-scaling.md` (#354).
+Follow-ups (own PRs): #362 5→3 tab IA, #363 plugin port identity, #364 DB
+integration-test harness. Non-data-model perf (orchestration / render) stays in
+`performance-scaling.md` (#354).
+
+> **Superseded below — authored-graph storage:** every mention in this doc of the
+> Manual/authored graph living in `data_sources.config_json.graph` (the survey
+> table, §3, Phase-4 "move to its own store", #361) is **out of date**. PR #370
+> (#368, `manual-source-unification.md`) made Manual a uniform data source: its
+> authored graph is now a **per-topology `topology_observations` snapshot**, and
+> `config_json.graph` is gone. #361 (move to a dedicated table) was superseded by
+> that — the graph lives in observations like every other source's content.
 
 ## Mental model: two axes on one hub
 
