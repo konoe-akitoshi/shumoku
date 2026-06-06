@@ -29,6 +29,7 @@
   "dependencies": {
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
+    "@tanstack/svelte-virtual": "^3.13.28",
     "bits-ui": "^2.15.4",
     "clsx": "^2.1.1",
     "gridstack": "^11.0.1",

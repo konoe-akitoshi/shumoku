@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createVirtualizer } from '@tanstack/svelte-virtual'
   /**
    * Mapping — wires every node and link in the diagram to a monitored
    * host/interface from the attached metrics sources. The link half is
@@ -20,6 +21,7 @@
     MagnifyingGlassIcon,
     TrashIcon,
   } from 'phosphor-svelte'
+  import { get } from 'svelte/store'
   import { api } from '$lib/api'
   import { findBestInterfaceMatch, matchInterfaceByNeighbor } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
@@ -98,6 +100,26 @@
       return label.includes(nodeSearchQuery.toLowerCase())
     }) || [],
   )
+
+  // Virtualize the node list — large topologies have 1000+ nodes; rendering a
+  // row per node is the open-Mapping lag. TanStack Virtual renders only the
+  // ~visible rows. Fixed row height (matches the p-3 row + select).
+  const NODE_ROW_H = 60
+  let nodeScrollEl = $state<HTMLDivElement | null>(null)
+  const nodeVirtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
+    count: 0,
+    getScrollElement: () => nodeScrollEl,
+    estimateSize: () => NODE_ROW_H,
+    overscan: 8,
+  })
+  // Keep count + scroll element in sync without subscribing to the store here
+  // (get() = untracked read → no effect loop). Depends on the filtered list
+  // length and the bound element.
+  $effect(() => {
+    const count = filteredNodes.length
+    void nodeScrollEl
+    get(nodeVirtualizer).setOptions({ count, getScrollElement: () => nodeScrollEl })
+  })
 
   /** Hosts grouped by their owning data source, in source priority
    *  order. Drives `<optgroup>` rendering so the operator sees which
@@ -479,51 +501,63 @@
           >
         </div>
       </div>
-      <div class="divide-y divide-theme-border max-h-96 overflow-y-auto">
-        {#if filteredNodes.length === 0}
-          <div class="p-4 text-center text-theme-text-muted">
-            {nodeSearchQuery ? 'No matching nodes' : 'No nodes'}
-          </div>
-        {:else}
-          {#each filteredNodes as node (node.id)}
-            {@const isMapped = !!$nodeMapping[node.id]?.hostId}
-            <div class="p-3 flex items-center gap-4">
-              <div class="flex-1 min-w-0">
-                <p class="font-medium text-theme-text-emphasis truncate flex items-center gap-2">
-                  <span
-                    class="w-2 h-2 rounded-full flex-shrink-0 {isMapped
-                      ? 'bg-success'
-                      : 'bg-theme-text-muted'}"
-                  ></span>
-                  {getNodeLabel(node)}
-                </p>
-                <p class="text-xs text-theme-text-muted">{node.spec?.type || 'Unknown'}</p>
-              </div>
-              <select
-                class="input"
-                style="width: 14rem;"
-                value={$nodeMapping[node.id]?.hostId || ''}
-                onchange={(e) => handleNodeMappingChange(node.id, e.currentTarget.value)}
-              >
-                <option value="">Not mapped</option>
-                {#each hostsBySource as group (group.sourceName)}
-                  {#if hostsBySource.length > 1}
-                    <optgroup label={group.sourceName}>
-                      {#each group.items as host (host.id)}
-                        <option value={host.id}>{host.displayName || host.name}</option>
-                      {/each}
-                    </optgroup>
-                  {:else}
-                    {#each group.items as host (host.id)}
-                      <option value={host.id}>{host.displayName || host.name}</option>
+      {#if filteredNodes.length === 0}
+        <div class="p-4 text-center text-theme-text-muted">
+          {nodeSearchQuery ? 'No matching nodes' : 'No nodes'}
+        </div>
+      {:else}
+        <!-- Virtualized: only ~visible rows are in the DOM. The inner spacer
+             holds the full scroll height; rows are absolutely positioned. -->
+        <div bind:this={nodeScrollEl} class="max-h-96 overflow-y-auto">
+          <div style="height: {$nodeVirtualizer.getTotalSize()}px; position: relative;">
+            {#each $nodeVirtualizer.getVirtualItems() as vrow (vrow.key)}
+              {@const node = filteredNodes[vrow.index]}
+              {#if node}
+                {@const isMapped = !!$nodeMapping[node.id]?.hostId}
+                <div
+                  class="absolute left-0 top-0 w-full p-3 flex items-center gap-4 border-b border-theme-border"
+                  style="height: {vrow.size}px; transform: translateY({vrow.start}px);"
+                >
+                  <div class="flex-1 min-w-0">
+                    <p
+                      class="font-medium text-theme-text-emphasis truncate flex items-center gap-2"
+                    >
+                      <span
+                        class="w-2 h-2 rounded-full flex-shrink-0 {isMapped
+                          ? 'bg-success'
+                          : 'bg-theme-text-muted'}"
+                      ></span>
+                      {getNodeLabel(node)}
+                    </p>
+                    <p class="text-xs text-theme-text-muted">{node.spec?.type || 'Unknown'}</p>
+                  </div>
+                  <select
+                    class="input"
+                    style="width: 14rem;"
+                    value={$nodeMapping[node.id]?.hostId || ''}
+                    onchange={(e) => handleNodeMappingChange(node.id, e.currentTarget.value)}
+                  >
+                    <option value="">Not mapped</option>
+                    {#each hostsBySource as group (group.sourceName)}
+                      {#if hostsBySource.length > 1}
+                        <optgroup label={group.sourceName}>
+                          {#each group.items as host (host.id)}
+                            <option value={host.id}>{host.displayName || host.name}</option>
+                          {/each}
+                        </optgroup>
+                      {:else}
+                        {#each group.items as host (host.id)}
+                          <option value={host.id}>{host.displayName || host.name}</option>
+                        {/each}
+                      {/if}
                     {/each}
-                  {/if}
-                {/each}
-              </select>
-            </div>
-          {/each}
-        {/if}
-      </div>
+                  </select>
+                </div>
+              {/if}
+            {/each}
+          </div>
+        </div>
+      {/if}
     </div>
 
     <!-- Link Mapping -->
