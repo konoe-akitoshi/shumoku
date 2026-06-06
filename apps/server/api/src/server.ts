@@ -54,6 +54,11 @@ function mergeMetricsData(acc: MetricsData | null, incoming: MetricsData): Metri
 export class Server {
   private app: Hono
   private config: Config
+  // Legacy file-based topology path (YAML files watched on disk, served over the
+  // WebSocket subscribe/poll handlers). Deliberately SCOPED OUT of the
+  // composition-store refactor (it has no DB sources/observations/bindings) and
+  // retained as-is; retiring it is a separate concern. See composition-store
+  // plan § Phase 4 (old-path retirement).
   private topologyManager: TopologyManager
   private topologyService: TopologyService | null = null
   private topologySourcesService: TopologySourcesService | null = null

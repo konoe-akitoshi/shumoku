@@ -48,8 +48,6 @@ import { TopologySourcesService } from './topology-sources.js'
 interface TopologyRow {
   id: string
   name: string
-  topology_source_id: string | null
-  metrics_source_id: string | null
   share_token: string | null
   created_at: number
   updated_at: number
@@ -60,10 +58,8 @@ function rowToTopology(row: TopologyRow): Topology {
     id: row.id,
     name: row.name,
     // contentJson + manualSourceId populated by withManual() at the call site.
-    // No mappingJson: the mapping is derived from bindings (Topology.mappingJson
-    // is now only a computed wire field the share projection fills).
-    topologySourceId: row.topology_source_id ?? undefined,
-    metricsSourceId: row.metrics_source_id ?? undefined,
+    // No mappingJson (derived from bindings) and no topology/metrics source
+    // pointers (the m2m topology_data_sources table is the model now).
     shareToken: row.share_token ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -410,18 +406,15 @@ export class TopologyService {
    * Keeping create() to the topology shell only mirrors the structure:
    * Topology owns name + mapping + share state; sources own graph content.
    */
-  async create({ name, topologySourceId, metricsSourceId }: TopologyInput): Promise<Topology> {
+  async create({ name }: TopologyInput): Promise<Topology> {
     const id = await generateId()
     const now = timestamp()
 
-    // No mapping_json: the metrics mapping lives as metrics-binding attachments
-    // on the authored overlay (set later via updateMapping).
+    // Shell only: sources are attached via topology_data_sources; the mapping
+    // lives as metrics-binding attachments on the authored overlay.
     this.db
-      .prepare(
-        `INSERT INTO topologies (id, name, topology_source_id, metrics_source_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(id, name, topologySourceId || null, metricsSourceId || null, now, now)
+      .prepare('INSERT INTO topologies (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+      .run(id, name, now, now)
 
     this.clearCacheEntry(id)
 
@@ -449,15 +442,8 @@ export class TopologyService {
       updates.push('name = ?')
       values.push(input.name)
     }
-    if (input.topologySourceId !== undefined) {
-      updates.push('topology_source_id = ?')
-      values.push(input.topologySourceId || null)
-    }
-    if (input.metricsSourceId !== undefined) {
-      updates.push('metrics_source_id = ?')
-      values.push(input.metricsSourceId || null)
-    }
-    // mapping_json is gone — the mapping is set via updateMapping (bindings).
+    // Source pointers + mapping_json columns are gone: sources live in
+    // topology_data_sources; the mapping is set via updateMapping (bindings).
 
     if (updates.length > 0) {
       updates.push('updated_at = ?')
@@ -587,10 +573,22 @@ export class TopologyService {
     return { desired, skipped }
   }
 
-  /** The metrics data source id for a topology (m2m purpose='metrics', legacy fallback). */
+  /** The metrics data source id for a topology (first m2m purpose='metrics'). */
   private metricsSourceIdFor(topologyId: string): string | undefined {
-    const metrics = this.topologySources.listByPurpose(topologyId, 'metrics')
-    return metrics[0]?.dataSourceId ?? this.get(topologyId)?.metricsSourceId
+    return this.topologySources.listByPurpose(topologyId, 'metrics')[0]?.dataSourceId
+  }
+
+  /**
+   * The structure (topology) data source id — first non-manual m2m
+   * purpose='topology' source. Derived from the m2m table now that the legacy
+   * `topologies.topology_source_id` column is gone; kept on `ParsedTopology` for
+   * the /context response shape (the client doesn't read it today).
+   */
+  private topologySourceIdFor(topologyId: string): string | undefined {
+    const manualId = this.findManualSourceId(topologyId)
+    return this.topologySources
+      .listByPurpose(topologyId, 'topology')
+      .find((s) => s.dataSourceId !== manualId)?.dataSourceId
   }
 
   /**
@@ -1014,8 +1012,8 @@ export class TopologyService {
       resolved,
       iconDimensions,
       metrics,
-      topologySourceId: topology.topologySourceId,
-      metricsSourceId: topology.metricsSourceId,
+      topologySourceId: this.topologySourceIdFor(topology.id),
+      metricsSourceId: this.metricsSourceIdFor(topology.id),
       mapping,
     }
   }
@@ -1083,8 +1081,8 @@ export class TopologyService {
         resolved,
         iconDimensions,
         metrics: this.createEmptyMetrics(graph),
-        topologySourceId: topology.topologySourceId,
-        metricsSourceId: topology.metricsSourceId,
+        topologySourceId: this.topologySourceIdFor(topology.id),
+        metricsSourceId: this.metricsSourceIdFor(topology.id),
         mapping: this.buildMapping(topology.id, graph),
       }
     } catch {
