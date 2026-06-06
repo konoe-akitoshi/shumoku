@@ -1,6 +1,6 @@
 # Manual source unification — make Manual a uniform data source
 
-> Status: design (signed off). Issue: #368. Supersedes #361. Builds on the composition-store
+> Status: IMPLEMENTED — merged in PR #370. Issue: #368. Supersedes #361. Builds on the composition-store
 > refactor (`topology-composition-store.md`). No backward compatibility.
 
 ## The problem
@@ -181,7 +181,7 @@ working (now writing observations) until #362 moves it.
 ## Phasing
 
 **This PR (Manual unification + remnant cleanup, backend-led):**
-1. Migration 015 (config_json.graph → observation; strip config).
+1. Migration 014 (config_json.graph → observation; strip config).
 2. Service: `readManualGraph`/`writeManualGraph` → observation read/record;
    `parseTopology` authored = latest manual observation; `attachManualSource`
    seeds nothing; **`create()`/create-flow no longer auto-attach Manual** (lazy
