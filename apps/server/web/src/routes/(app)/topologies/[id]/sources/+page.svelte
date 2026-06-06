@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { DropdownMenu } from 'bits-ui'
   /**
    * Sources (zone ①) — the input end-to-end: which sources feed this topology
    * (attach, priority, sync mode), AND their ingestion — **Sync** and **scope**.
@@ -143,22 +144,23 @@
     }
   }
 
-  function attachSource(purpose: 'topology' | 'metrics') {
+  /** Data sources of `purpose` not already attached — the Add menu's candidates. */
+  function availableFor(purpose: 'topology' | 'metrics') {
     const catalog = purpose === 'topology' ? ctx.topologyDataSources : ctx.metricsDataSources
     const taken = new Set(
       ctx.currentSources.filter((s) => s.purpose === purpose).map((s) => s.dataSourceId),
     )
-    const pick = catalog.find((ds) => !taken.has(ds.id))
-    if (!pick) {
-      alert('No data sources available. Create one on /datasources first.')
-      return
-    }
+    return catalog.filter((ds) => !taken.has(ds.id))
+  }
+
+  /** Attach a specific data source chosen from the Add menu. */
+  function attachSpecific(purpose: 'topology' | 'metrics', dataSourceId: string) {
     const priority = ctx.currentSources.filter((s) => s.purpose === purpose).length
     void mutate(
-      `attach:${purpose}`,
+      `attach:${dataSourceId}`,
       () =>
         api.topologies.sources.add(ctx.topologyId, {
-          dataSourceId: pick.id,
+          dataSourceId,
           purpose,
           syncMode: 'manual',
           priority,
@@ -437,10 +439,36 @@
             {rebuilding ? 'Resetting…' : 'Reset overrides'}
           </Button>
         {/if}
-        <Button variant="outline" size="sm" onclick={() => attachSource('topology')}>
-          <PlusIcon size={16} class="mr-1" />
-          Add
-        </Button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger
+            class="inline-flex items-center gap-1 rounded-md border border-theme-border px-2.5 py-1.5 text-sm font-medium hover:text-primary hover:border-primary transition-colors"
+          >
+            <PlusIcon size={16} />
+            Add
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content
+            sideOffset={6}
+            align="end"
+            class="z-50 min-w-[16rem] rounded-md border border-border bg-popover p-1 shadow-lg"
+          >
+            {#each availableFor('topology') as ds (ds.id)}
+              <DropdownMenu.Item
+                onSelect={() => attachSpecific('topology', ds.id)}
+                class="flex items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-left cursor-pointer outline-none data-[highlighted]:bg-accent"
+              >
+                <span class="text-sm font-medium">{ds.name}</span>
+                <span class="text-[10px] uppercase tracking-wide font-mono text-muted-foreground">
+                  {ds.type}
+                </span>
+              </DropdownMenu.Item>
+            {:else}
+              <div class="px-2.5 py-2 text-sm text-muted-foreground">
+                No more sources to add.
+                <a href="/datasources" class="text-primary hover:underline">Create one</a>.
+              </div>
+            {/each}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       </div>
     </div>
     <div class="card-body">
@@ -650,10 +678,36 @@
   <div class="card">
     <div class="card-header flex items-center justify-between">
       <h2 class="font-medium text-theme-text-emphasis">Metrics Sources</h2>
-      <Button variant="outline" size="sm" onclick={() => attachSource('metrics')}>
-        <PlusIcon size={16} class="mr-1" />
-        Add
-      </Button>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger
+          class="inline-flex items-center gap-1 rounded-md border border-theme-border px-2.5 py-1.5 text-sm font-medium hover:text-primary hover:border-primary transition-colors"
+        >
+          <PlusIcon size={16} />
+          Add
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content
+          sideOffset={6}
+          align="end"
+          class="z-50 min-w-[16rem] rounded-md border border-border bg-popover p-1 shadow-lg"
+        >
+          {#each availableFor('metrics') as ds (ds.id)}
+            <DropdownMenu.Item
+              onSelect={() => attachSpecific('metrics', ds.id)}
+              class="flex items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-left cursor-pointer outline-none data-[highlighted]:bg-accent"
+            >
+              <span class="text-sm font-medium">{ds.name}</span>
+              <span class="text-[10px] uppercase tracking-wide font-mono text-muted-foreground">
+                {ds.type}
+              </span>
+            </DropdownMenu.Item>
+          {:else}
+            <div class="px-2.5 py-2 text-sm text-muted-foreground">
+              No more sources to add.
+              <a href="/datasources" class="text-primary hover:underline">Create one</a>.
+            </div>
+          {/each}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
     </div>
     <div class="card-body">
       {#if metricsSources.length === 0}
