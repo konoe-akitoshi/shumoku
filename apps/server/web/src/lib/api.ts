@@ -348,7 +348,7 @@ export const topologies = {
     update: (
       topologyId: string,
       sourceId: string,
-      updates: { syncMode?: SyncMode; priority?: number },
+      updates: { syncMode?: SyncMode; priority?: number; optionsJson?: string },
     ) =>
       request<TopologyDataSource>(`/topologies/${topologyId}/sources/${sourceId}`, {
         method: 'PUT',

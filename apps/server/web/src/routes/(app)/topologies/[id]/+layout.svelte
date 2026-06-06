@@ -124,14 +124,6 @@
       ctx.currentSources = sources
       ctx.topologyDataSources = topoSources
       ctx.metricsDataSources = metricsSrcs
-      ctx.editableSources = sources.map((s) => ({
-        dataSourceId: s.dataSourceId,
-        purpose: s.purpose,
-        syncMode: s.syncMode,
-        priority: s.priority,
-        optionsJson: s.optionsJson,
-      }))
-      ctx.hasSourceChanges = false
     } catch (e) {
       ctx.error = e instanceof Error ? e.message : 'Failed to load topology'
     } finally {

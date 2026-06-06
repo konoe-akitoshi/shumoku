@@ -825,7 +825,7 @@
           <Button
             variant="outline"
             size="sm"
-            disabled={syncingAll || rebuilding || ctx.hasSourceChanges || topologySources.length === 0}
+            disabled={syncingAll || rebuilding || topologySources.length === 0}
             onclick={handleSyncAll}
           >
             {syncingAll ? 'Syncing…' : '⟳ Sync all'}
@@ -834,7 +834,7 @@
             variant="ghost"
             size="sm"
             class="text-muted-foreground hover:text-destructive"
-            disabled={rebuilding || syncingAll || ctx.hasSourceChanges || topologySources.length === 0}
+            disabled={rebuilding || syncingAll || topologySources.length === 0}
             title="Discard all overrides and rebuild from the sources"
             onclick={handleRebuild}
           >
@@ -842,11 +842,6 @@
           </Button>
         </div>
       </div>
-      {#if ctx.hasSourceChanges}
-        <div class="px-4 py-2 bg-warning/10 border-t border-warning/20 text-warning text-sm">
-          You have unsaved changes on the Sources page. Save them before syncing.
-        </div>
-      {/if}
       <div class="card-body space-y-2">
         {#each topologySources as source (source.id)}
           {@const dataSource = ctx.getDataSource(source.dataSourceId)}
@@ -885,7 +880,7 @@
                 variant="outline"
                 size="sm"
                 onclick={() => handleSyncOne(source)}
-                disabled={syncingSourceId === source.dataSourceId || ctx.hasSourceChanges}
+                disabled={syncingSourceId === source.dataSourceId}
               >
                 {#if syncingSourceId === source.dataSourceId}
                   <span
