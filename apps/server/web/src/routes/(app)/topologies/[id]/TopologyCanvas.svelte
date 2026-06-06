@@ -34,6 +34,18 @@
   const topologyId = $derived(ctx.topologyId)
   const currentMapping = $derived($mappingStore.mapping)
 
+  // Re-fetch the diagram whenever a committed mutation bumps the shell's
+  // composition revision — a Save/Sync/policy change reflects here without a
+  // manual reload. Skips the initial value (the component loads on mount).
+  let lastRevision = 0
+  $effect(() => {
+    const r = ctx.revision
+    if (r !== lastRevision) {
+      lastRevision = r
+      diagramComponent?.refreshGraph()
+    }
+  })
+
   // Hydrate the metrics mapping + derive the NetBox deep-link base once the
   // shell context has loaded the topology and its sources. Re-runs when the
   // topology id changes (the layout reloads the context on navigation).

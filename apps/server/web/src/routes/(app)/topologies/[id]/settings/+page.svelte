@@ -89,6 +89,8 @@
         graph as unknown as Parameters<typeof api.topologies.sources.recordObservation>[2],
         'ok',
       )
+      // Edge-style change is a committed observation → re-render the diagram.
+      ctx.bumpRevision()
     } catch (e) {
       console.error('Failed to update edge style:', e)
     } finally {

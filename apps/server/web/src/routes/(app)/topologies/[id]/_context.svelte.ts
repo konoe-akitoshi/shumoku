@@ -38,6 +38,19 @@ class TopologyCtx {
    *  The Sources page mutates this directly after each granular edit. */
   currentSources = $state<TopologyDataSource[]>([])
 
+  /**
+   * Composition revision — a single propagation channel. Any *committed*
+   * mutation (Sources Save, Discovery sync/rebuild/policy, Mapping save,
+   * manual-editor save) calls `bumpRevision()`; the persistent diagram
+   * canvas re-fetches when it changes, so a commit reflects without a
+   * manual reload. Mirrors the backend's `composition_revision` intent.
+   * See `apps/server/docs/design/topology-ui-ia.md` § Interaction model.
+   */
+  revision = $state(0)
+  bumpRevision(): void {
+    this.revision++
+  }
+
   /** Data-source catalogs for the +Add Source picker; cached because
    *  the Discovery page's per-card "owned by source X" lookup uses
    *  the same list. */

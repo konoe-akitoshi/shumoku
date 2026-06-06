@@ -221,6 +221,8 @@
     savingMapping = true
     try {
       await mappingStore.save()
+      // Commit landed → let the persistent diagram re-fetch (no manual reload).
+      ctx.bumpRevision()
     } catch (e) {
       localError = e instanceof Error ? e.message : 'Failed to save mapping'
     } finally {

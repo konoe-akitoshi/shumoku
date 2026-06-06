@@ -140,7 +140,10 @@
     if (ctx.topology && ctx.topologyId) void refreshDiscovery()
   })
 
-  async function refreshDiscovery() {
+  // `mutated` = this refresh follows a committed change (sync / rebuild /
+  // policy edit), so the persistent diagram should re-fetch too. Pure reads
+  // (mount, navigation) pass false so they don't trigger a wasteful refetch.
+  async function refreshDiscovery(mutated = false) {
     if (!ctx.topologyId) return
     discoveryLoading = true
     try {
@@ -205,6 +208,7 @@
       identityQuality = counts
       discoveredNodes = cards
       recentObservations = obsList
+      if (mutated) ctx.bumpRevision()
     } catch (e) {
       console.error('[Discovery] failed to refresh', e)
     } finally {
@@ -230,7 +234,7 @@
       const updatedTopology = await api.topologies.get(ctx.topologyId)
       ctx.topology = updatedTopology
       topologies.upsert(updatedTopology)
-      await refreshDiscovery()
+      await refreshDiscovery(true)
     } catch (e) {
       perSourceSync = {
         ...perSourceSync,
@@ -255,7 +259,7 @@
       const updatedTopology = await api.topologies.get(ctx.topologyId)
       ctx.topology = updatedTopology
       topologies.upsert(updatedTopology)
-      await refreshDiscovery()
+      await refreshDiscovery(true)
     } catch (e) {
       console.error('[Discovery] sync all failed', e)
     } finally {
@@ -278,7 +282,7 @@
       const updatedTopology = await api.topologies.get(ctx.topologyId)
       ctx.topology = updatedTopology
       topologies.upsert(updatedTopology)
-      await refreshDiscovery()
+      await refreshDiscovery(true)
     } catch (e) {
       console.error('[Discovery] rebuild failed', e)
     } finally {
@@ -346,7 +350,7 @@
           return setNodeAttachments(id, withMode(card?.attachments ?? [], mode))
         }),
       )
-      await refreshDiscovery()
+      await refreshDiscovery(true)
     } finally {
       bulkApplying = false
     }
@@ -381,7 +385,7 @@
       console.warn('[Discovery] attachment patch failed:', result.reason)
       return
     }
-    await refreshDiscovery()
+    await refreshDiscovery(true)
     const refreshed = discoveredNodes.find((c) => c.id === id)
     if (refreshed) detailNode = refreshed
   }
@@ -408,7 +412,7 @@
     } finally {
       policyPatching = { ...policyPatching, [id]: false }
     }
-    await refreshDiscovery()
+    await refreshDiscovery(true)
     const refreshed = discoveredNodes.find((c) => c.id === id)
     if (refreshed) detailNode = refreshed
   }
@@ -436,7 +440,7 @@
     } finally {
       policyPatching = { ...policyPatching, [id]: false }
     }
-    await refreshDiscovery()
+    await refreshDiscovery(true)
     const refreshed = discoveredNodes.find((c) => c.id === id)
     detailNode = refreshed ?? null
   }
@@ -458,7 +462,7 @@
       return
     }
     detailNode = null // it's gone from the resolved graph now
-    await refreshDiscovery()
+    await refreshDiscovery(true)
   }
 
   async function handleProbeNode(card: DiscoveredCard) {
@@ -466,7 +470,7 @@
     probingNodeId = card.id
     try {
       await api.topologies.sources.probe(ctx.topologyId, card.sourceId, [card.mgmtIp])
-      await refreshDiscovery()
+      await refreshDiscovery(true)
       if (detailNode?.id === card.id) {
         const refreshed = discoveredNodes.find((c) => c.id === card.id)
         if (refreshed) detailNode = refreshed

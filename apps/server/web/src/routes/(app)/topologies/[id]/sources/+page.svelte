@@ -191,6 +191,8 @@
       optionsState = {}
       hasChanges = false
       await mappingStore.load(ctx.topologyId, true)
+      // Commit landed → let the persistent diagram re-fetch (no manual reload).
+      ctx.bumpRevision()
     } catch (e) {
       localError = e instanceof Error ? e.message : 'Failed to save'
     } finally {

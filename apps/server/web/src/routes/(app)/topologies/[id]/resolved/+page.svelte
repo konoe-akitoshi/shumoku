@@ -25,10 +25,11 @@
     void load()
   })
 
-  // Refetch if the user navigates between topologies without unmounting
-  // (SvelteKit keeps the page mounted across [id] changes since it's
-  // the same route component).
+  // Refetch on topology change, and whenever a committed mutation bumps the
+  // shell revision (so the resolved view reflects a Save/Sync without a reload).
   $effect(() => {
+    ctx.topologyId
+    ctx.revision
     if (ctx.topologyId) void load()
   })
 
