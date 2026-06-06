@@ -8,7 +8,6 @@
    * top-level tab; kept as a tab for now because it's the only place
    * to see "what is the resolver actually producing right now".
    */
-  import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import { useTopologyCtx } from '../_context.svelte'
@@ -21,14 +20,10 @@
   let error = $state('')
   let copied = $state(false)
 
-  onMount(() => {
-    void load()
-  })
-
-  // Refetch on topology change, and whenever a committed mutation bumps the
-  // shell revision (so the resolved view reflects a Save/Sync without a reload).
+  // Load when the id is ready, and whenever a committed mutation bumps the shell
+  // revision (reflect Save/Sync without a reload). No separate onMount — it would
+  // fire before the id is ready and then double-fetch with this effect.
   $effect(() => {
-    ctx.topologyId
     ctx.revision
     if (ctx.topologyId) void load()
   })

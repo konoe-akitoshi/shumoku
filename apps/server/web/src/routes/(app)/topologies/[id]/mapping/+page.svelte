@@ -20,7 +20,6 @@
     MagnifyingGlassIcon,
     TrashIcon,
   } from 'phosphor-svelte'
-  import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import { findBestInterfaceMatch, matchInterfaceByNeighbor } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
@@ -113,10 +112,9 @@
     return [...groups.values()]
   })
 
-  onMount(() => {
-    void loadMappingData()
-  })
-
+  // Load once the shell context is ready (topology + id). No separate onMount —
+  // it would fire before ctx.topologyId is set (→ wasteful `/topologies//…`
+  // requests) and then again here, double-fetching /context.
   $effect(() => {
     if (ctx.topology && ctx.topologyId) void loadMappingData()
   })
