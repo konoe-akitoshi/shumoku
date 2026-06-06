@@ -2,6 +2,12 @@
 
 > ステータス: ドラフト。`topology-foundation.md` の付属。
 > core 型拡張 + DB スキーマの具体形。後方互換は考慮しない。
+>
+> **一部実装済み・更新あり**: ここで計画した `topology_source_id` /
+> `metrics_source_id` の廃止と `mapping_json` の置き換えは composition-store
+> リファクタで実施済み（マッピング = `metrics-binding` attachment、ソース = m2m
+> 一本化、解決済みグラフ = `topology_resolved_graph` にマテリアライズ）。
+> **as-built は `topology-composition-store.md` と `../database.md` を参照。**
 
 ## 1. core 型の拡張
 

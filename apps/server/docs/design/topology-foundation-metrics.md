@@ -2,6 +2,10 @@
 
 > ステータス: ドラフト。`topology-foundation.md` の付属。
 > ユーザの感覚「更新情報やメトリクス情報はログとして残る」を実装するための方針。
+>
+> **更新あり**: 本文の `topologies.mapping_json` は廃止済み。マッピングは
+> 解決済みグラフ上の `metrics-binding` attachment から導出する（保存カラムなし）。
+> as-built は `topology-composition-store.md` / `../database.md` を参照。
 
 ## 0. 現状の穴
 
