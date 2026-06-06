@@ -13,14 +13,7 @@
    * Saves through `mappingStore` so the diagram view (which reads from
    * the same store) updates without a refresh.
    */
-  import {
-    ArrowRightIcon,
-    CheckCircleIcon,
-    FloppyDiskIcon,
-    LightningIcon,
-    MagnifyingGlassIcon,
-    TrashIcon,
-  } from 'phosphor-svelte'
+  import { ArrowRightIcon, CheckCircleIcon, FloppyDiskIcon } from 'phosphor-svelte'
   import { get } from 'svelte/store'
   import { api } from '$lib/api'
   import { findBestInterfaceMatch, matchInterfaceByNeighbor } from '$lib/auto-mapping'
@@ -37,6 +30,7 @@
   import type { EdgeEndpoint, Identity, MetricsMapping } from '$lib/types'
   import { nodeLabelById, nodeLabel as resolveNodeLabel } from '$lib/utils/node-label'
   import { useTopologyCtx } from '../_context.svelte'
+  import MappingPanel from './MappingPanel.svelte'
 
   const ctx = useTopologyCtx()
 
@@ -414,6 +408,17 @@
       autoMapTimer = null
     }, 5000)
   }
+
+  // Link auto-map: ensure interfaces + neighbours are loaded for the mapped
+  // hosts first (they load lazily), so it works right after a bulk node auto-map.
+  async function handleLinkAutoMap() {
+    await loadInterfacesForMappedNodes()
+    const matched = handleAutoMapLinks()
+    if (matched > 0) {
+      autoMapResult = { matched, total: edges.length, kind: 'links' }
+      scheduleClearAutoMapResult()
+    }
+  }
 </script>
 
 <div class="p-4 space-y-4">
@@ -491,45 +496,15 @@
 
     {#if mappingTab === 'nodes'}
       <!-- Node Mapping -->
-      <div class="card">
-        <div class="card-header">
-          <div class="flex items-center justify-between gap-4 mb-3">
-            <h2 class="font-medium text-theme-text-emphasis">Node Mapping</h2>
-            <div class="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={handleAutoMap}
-                disabled={$mappingStore.hostsLoading}
-              >
-                <LightningIcon size={14} class="mr-1" />
-                Auto-map
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={handleClearAll}
-                disabled={mappedCount === 0}
-              >
-                <TrashIcon size={14} class="mr-1" />
-                Clear
-              </Button>
-            </div>
-          </div>
-          <div class="relative">
-            <MagnifyingGlassIcon
-              size={16}
-              class="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted"
-            />
-            <input
-              type="text"
-              class="input w-full"
-              style="padding-left: 2.25rem;"
-              placeholder="Search nodes..."
-              bind:value={nodeSearchQuery}
-            >
-          </div>
-        </div>
+      <MappingPanel
+        title="Node Mapping"
+        onAutoMap={handleAutoMap}
+        autoMapDisabled={$mappingStore.hostsLoading}
+        onClear={handleClearAll}
+        clearDisabled={mappedCount === 0}
+        bind:searchValue={nodeSearchQuery}
+        searchPlaceholder="Search nodes..."
+      >
         {#if filteredNodes.length === 0}
           <div class="p-4 text-center text-theme-text-muted">
             {nodeSearchQuery ? 'No matching nodes' : 'No nodes'}
@@ -587,41 +562,18 @@
             </div>
           </div>
         {/if}
-      </div>
+      </MappingPanel>
     {/if}
 
     {#if mappingTab === 'links'}
       <!-- Link Mapping -->
-      <div class="card">
-        <div class="card-header">
-          <div class="flex items-center justify-between gap-4">
-            <h2 class="font-medium text-theme-text-emphasis">Link Mapping</h2>
-            <div class="flex items-center gap-3">
-              <label class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
-                <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded">
-                Single candidate fallback
-              </label>
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={async () => {
-                // Make sure interfaces + neighbours are loaded for the mapped
-                // hosts before matching, so link auto-map works even right after
-                // a bulk node auto-map (interfaces load lazily).
-                await loadInterfacesForMappedNodes()
-                const matched = handleAutoMapLinks()
-                if (matched > 0) {
-                  autoMapResult = { matched, total: edges.length, kind: 'links' }
-                  scheduleClearAutoMapResult()
-                }
-              }}
-              >
-                <LightningIcon size={14} class="mr-1" />
-                Auto-map
-              </Button>
-            </div>
-          </div>
-        </div>
+      <MappingPanel title="Link Mapping" onAutoMap={handleLinkAutoMap}>
+        {#snippet actions()}
+          <label class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
+            <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded">
+            Single candidate fallback
+          </label>
+        {/snippet}
         <div class="divide-y divide-theme-border max-h-96 overflow-y-auto">
           {#if edges.length === 0}
             <div class="p-4 text-center text-theme-text-muted">No links</div>
@@ -723,7 +675,7 @@
             {/each}
           {/if}
         </div>
-      </div>
+      </MappingPanel>
     {/if}
   {/if}
 </div>
