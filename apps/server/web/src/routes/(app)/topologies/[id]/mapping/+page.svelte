@@ -67,6 +67,10 @@
   let parsedTopology = $state<SettingsTopologySnapshot | null>(null)
   let edges = $state<EdgeData[]>([])
   let savingMapping = $state(false)
+  // Node mapping and link mapping are distinct concerns — show one at a time
+  // (they were stacked, which scrolled forever). Full fold into per-entity
+  // detail is tracked in #374; this is the interim split.
+  let mappingTab = $state<'nodes' | 'links'>('nodes')
   let nodeSearchQuery = $state('')
   let autoMapResult = $state<{
     matched: number
@@ -461,119 +465,146 @@
       </div>
     {/if}
 
-    <!-- Node Mapping -->
-    <div class="card">
-      <div class="card-header">
-        <div class="flex items-center justify-between gap-4 mb-3">
-          <h2 class="font-medium text-theme-text-emphasis">Node Mapping</h2>
-          <div class="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onclick={handleAutoMap}
-              disabled={$mappingStore.hostsLoading}
+    <!-- Nodes | Links sub-toggle: the two mappings are separate concerns. -->
+    <div class="flex gap-1 border-b border-theme-border">
+      <button
+        type="button"
+        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {mappingTab ===
+        'nodes'
+          ? 'text-primary border-primary'
+          : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+        onclick={() => (mappingTab = 'nodes')}
+      >
+        Nodes <span class="text-xs">({mappedCount}/{totalNodes})</span>
+      </button>
+      <button
+        type="button"
+        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {mappingTab ===
+        'links'
+          ? 'text-primary border-primary'
+          : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+        onclick={() => (mappingTab = 'links')}
+      >
+        Links <span class="text-xs">({mappedLinksCount}/{totalLinks})</span>
+      </button>
+    </div>
+
+    {#if mappingTab === 'nodes'}
+      <!-- Node Mapping -->
+      <div class="card">
+        <div class="card-header">
+          <div class="flex items-center justify-between gap-4 mb-3">
+            <h2 class="font-medium text-theme-text-emphasis">Node Mapping</h2>
+            <div class="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onclick={handleAutoMap}
+                disabled={$mappingStore.hostsLoading}
+              >
+                <LightningIcon size={14} class="mr-1" />
+                Auto-map
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onclick={handleClearAll}
+                disabled={mappedCount === 0}
+              >
+                <TrashIcon size={14} class="mr-1" />
+                Clear
+              </Button>
+            </div>
+          </div>
+          <div class="relative">
+            <MagnifyingGlassIcon
+              size={16}
+              class="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted"
+            />
+            <input
+              type="text"
+              class="input w-full"
+              style="padding-left: 2.25rem;"
+              placeholder="Search nodes..."
+              bind:value={nodeSearchQuery}
             >
-              <LightningIcon size={14} class="mr-1" />
-              Auto-map
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onclick={handleClearAll}
-              disabled={mappedCount === 0}
-            >
-              <TrashIcon size={14} class="mr-1" />
-              Clear
-            </Button>
           </div>
         </div>
-        <div class="relative">
-          <MagnifyingGlassIcon
-            size={16}
-            class="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted"
-          />
-          <input
-            type="text"
-            class="input w-full"
-            style="padding-left: 2.25rem;"
-            placeholder="Search nodes..."
-            bind:value={nodeSearchQuery}
-          >
-        </div>
-      </div>
-      {#if filteredNodes.length === 0}
-        <div class="p-4 text-center text-theme-text-muted">
-          {nodeSearchQuery ? 'No matching nodes' : 'No nodes'}
-        </div>
-      {:else}
-        <!-- Virtualized: only ~visible rows are in the DOM. The inner spacer
+        {#if filteredNodes.length === 0}
+          <div class="p-4 text-center text-theme-text-muted">
+            {nodeSearchQuery ? 'No matching nodes' : 'No nodes'}
+          </div>
+        {:else}
+          <!-- Virtualized: only ~visible rows are in the DOM. The inner spacer
              holds the full scroll height; rows are absolutely positioned. -->
-        <div bind:this={nodeScrollEl} class="max-h-96 overflow-y-auto">
-          <div style="height: {$nodeVirtualizer.getTotalSize()}px; position: relative;">
-            {#each $nodeVirtualizer.getVirtualItems() as vrow (vrow.key)}
-              {@const node = filteredNodes[vrow.index]}
-              {#if node}
-                {@const isMapped = !!$nodeMapping[node.id]?.hostId}
-                <div
-                  class="absolute left-0 top-0 w-full p-3 flex items-center gap-4 border-b border-theme-border"
-                  style="height: {vrow.size}px; transform: translateY({vrow.start}px);"
-                >
-                  <div class="flex-1 min-w-0">
-                    <p
-                      class="font-medium text-theme-text-emphasis truncate flex items-center gap-2"
-                    >
-                      <span
-                        class="w-2 h-2 rounded-full flex-shrink-0 {isMapped
+          <div bind:this={nodeScrollEl} class="max-h-96 overflow-y-auto">
+            <div style="height: {$nodeVirtualizer.getTotalSize()}px; position: relative;">
+              {#each $nodeVirtualizer.getVirtualItems() as vrow (vrow.key)}
+                {@const node = filteredNodes[vrow.index]}
+                {#if node}
+                  {@const isMapped = !!$nodeMapping[node.id]?.hostId}
+                  <div
+                    class="absolute left-0 top-0 w-full p-3 flex items-center gap-4 border-b border-theme-border"
+                    style="height: {vrow.size}px; transform: translateY({vrow.start}px);"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <p
+                        class="font-medium text-theme-text-emphasis truncate flex items-center gap-2"
+                      >
+                        <span
+                          class="w-2 h-2 rounded-full flex-shrink-0 {isMapped
                           ? 'bg-success'
                           : 'bg-theme-text-muted'}"
-                      ></span>
-                      {getNodeLabel(node)}
-                    </p>
-                    <p class="text-xs text-theme-text-muted">{node.spec?.type || 'Unknown'}</p>
-                  </div>
-                  <select
-                    class="input"
-                    style="width: 14rem;"
-                    value={$nodeMapping[node.id]?.hostId || ''}
-                    onchange={(e) => handleNodeMappingChange(node.id, e.currentTarget.value)}
-                  >
-                    <option value="">Not mapped</option>
-                    {#each hostsBySource as group (group.sourceName)}
-                      {#if hostsBySource.length > 1}
-                        <optgroup label={group.sourceName}>
+                        ></span>
+                        {getNodeLabel(node)}
+                      </p>
+                      <p class="text-xs text-theme-text-muted">{node.spec?.type || 'Unknown'}</p>
+                    </div>
+                    <select
+                      class="input"
+                      style="width: 14rem;"
+                      value={$nodeMapping[node.id]?.hostId || ''}
+                      onchange={(e) => handleNodeMappingChange(node.id, e.currentTarget.value)}
+                    >
+                      <option value="">Not mapped</option>
+                      {#each hostsBySource as group (group.sourceName)}
+                        {#if hostsBySource.length > 1}
+                          <optgroup label={group.sourceName}>
+                            {#each group.items as host (host.id)}
+                              <option value={host.id}>{host.displayName || host.name}</option>
+                            {/each}
+                          </optgroup>
+                        {:else}
                           {#each group.items as host (host.id)}
                             <option value={host.id}>{host.displayName || host.name}</option>
                           {/each}
-                        </optgroup>
-                      {:else}
-                        {#each group.items as host (host.id)}
-                          <option value={host.id}>{host.displayName || host.name}</option>
-                        {/each}
-                      {/if}
-                    {/each}
-                  </select>
-                </div>
-              {/if}
-            {/each}
+                        {/if}
+                      {/each}
+                    </select>
+                  </div>
+                {/if}
+              {/each}
+            </div>
           </div>
-        </div>
-      {/if}
-    </div>
+        {/if}
+      </div>
+    {/if}
 
-    <!-- Link Mapping -->
-    <div class="card">
-      <div class="card-header">
-        <div class="flex items-center justify-between gap-4">
-          <h2 class="font-medium text-theme-text-emphasis">Link Mapping</h2>
-          <div class="flex items-center gap-3">
-            <label class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
-              <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded">
-              Single candidate fallback
-            </label>
-            <Button
-              variant="outline"
-              size="sm"
-              onclick={async () => {
+    {#if mappingTab === 'links'}
+      <!-- Link Mapping -->
+      <div class="card">
+        <div class="card-header">
+          <div class="flex items-center justify-between gap-4">
+            <h2 class="font-medium text-theme-text-emphasis">Link Mapping</h2>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
+                <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded">
+                Single candidate fallback
+              </label>
+              <Button
+                variant="outline"
+                size="sm"
+                onclick={async () => {
                 // Make sure interfaces + neighbours are loaded for the mapped
                 // hosts before matching, so link auto-map works even right after
                 // a bulk node auto-map (interfaces load lazily).
@@ -584,83 +615,85 @@
                   scheduleClearAutoMapResult()
                 }
               }}
-            >
-              <LightningIcon size={14} class="mr-1" />
-              Auto-map
-            </Button>
+              >
+                <LightningIcon size={14} class="mr-1" />
+                Auto-map
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="divide-y divide-theme-border max-h-96 overflow-y-auto">
-        {#if edges.length === 0}
-          <div class="p-4 text-center text-theme-text-muted">No links</div>
-        {:else}
-          {#each edges as edge (edge.id)}
-            {@const currentMapping = $linkMapping[edge.id] || {}}
-            {@const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId}
-            {@const toHostId = $nodeMapping[edge.to.nodeId]?.hostId}
-            {@const monitoredNodeId = currentMapping.monitoredNodeId}
-            {@const monitoredHostId =
+        <div class="divide-y divide-theme-border max-h-96 overflow-y-auto">
+          {#if edges.length === 0}
+            <div class="p-4 text-center text-theme-text-muted">No links</div>
+          {:else}
+            {#each edges as edge (edge.id)}
+              {@const currentMapping = $linkMapping[edge.id] || {}}
+              {@const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId}
+              {@const toHostId = $nodeMapping[edge.to.nodeId]?.hostId}
+              {@const monitoredNodeId = currentMapping.monitoredNodeId}
+              {@const monitoredHostId =
               monitoredNodeId === edge.from.nodeId
                 ? fromHostId
                 : monitoredNodeId === edge.to.nodeId
                   ? toHostId
                   : undefined}
-            {@const interfaces = monitoredHostId ? $hostInterfaces[monitoredHostId] || [] : []}
-            {@const hasAnyMappedNode = !!fromHostId || !!toHostId}
-            <div class="p-3 space-y-2">
-              <div class="flex items-center gap-2 text-sm">
-                <span
-                  class="w-2 h-2 rounded-full flex-shrink-0 {currentMapping.monitoredNodeId &&
+              {@const interfaces = monitoredHostId ? $hostInterfaces[monitoredHostId] || [] : []}
+              {@const hasAnyMappedNode = !!fromHostId || !!toHostId}
+              <div class="p-3 space-y-2">
+                <div class="flex items-center gap-2 text-sm">
+                  <span
+                    class="w-2 h-2 rounded-full flex-shrink-0 {currentMapping.monitoredNodeId &&
                   currentMapping.interface
                     ? 'bg-success'
                     : currentMapping.monitoredNodeId
                       ? 'bg-warning'
                       : 'bg-theme-text-muted'}"
-                ></span>
-                <span class="font-medium">{getNodeLabelById(edge.from.nodeId)}</span>
-                {#if portDisplay(edge.from)}
-                  <span class="text-theme-text-muted">({portDisplay(edge.from)})</span>
-                {/if}
-                <ArrowRightIcon size={14} class="text-theme-text-muted" />
-                <span class="font-medium">{getNodeLabelById(edge.to.nodeId)}</span>
-                {#if portDisplay(edge.to)}
-                  <span class="text-theme-text-muted">({portDisplay(edge.to)})</span>
-                {/if}
-              </div>
-              {#if hasAnyMappedNode}
-                <div class="flex items-center gap-2">
-                  <select
-                    class="input text-sm"
-                    style="width: 10rem;"
-                    value={monitoredNodeId || ''}
-                    onchange={(e) => handleMonitoredNodeChange(edge.id, e.currentTarget.value)}
-                  >
-                    <option value="">Monitor from...</option>
-                    {#if fromHostId}
-                      <option value={edge.from.nodeId}>{getNodeLabelById(edge.from.nodeId)}</option>
-                    {/if}
-                    {#if toHostId}
-                      <option value={edge.to.nodeId}>{getNodeLabelById(edge.to.nodeId)}</option>
-                    {/if}
-                  </select>
-                  {#if monitoredNodeId && interfaces.length > 0}
-                    <select
-                      class="input text-sm flex-1"
-                      value={currentMapping.interface || ''}
-                      onchange={(e) => handleLinkInterfaceChange(edge.id, e.currentTarget.value)}
-                    >
-                      <option value="">Select interface</option>
-                      {#each interfaces as iface (iface.name)}
-                        <option value={iface.name}>{iface.name}</option>
-                      {/each}
-                    </select>
+                  ></span>
+                  <span class="font-medium">{getNodeLabelById(edge.from.nodeId)}</span>
+                  {#if portDisplay(edge.from)}
+                    <span class="text-theme-text-muted">({portDisplay(edge.from)})</span>
                   {/if}
-                  <select
-                    class="input text-sm"
-                    style="width: 6rem;"
-                    value={bandwidthToSelectValue(edge.id, currentMapping.bandwidth)}
-                    onchange={(e) => {
+                  <ArrowRightIcon size={14} class="text-theme-text-muted" />
+                  <span class="font-medium">{getNodeLabelById(edge.to.nodeId)}</span>
+                  {#if portDisplay(edge.to)}
+                    <span class="text-theme-text-muted">({portDisplay(edge.to)})</span>
+                  {/if}
+                </div>
+                {#if hasAnyMappedNode}
+                  <div class="flex items-center gap-2">
+                    <select
+                      class="input text-sm"
+                      style="width: 10rem;"
+                      value={monitoredNodeId || ''}
+                      onchange={(e) => handleMonitoredNodeChange(edge.id, e.currentTarget.value)}
+                    >
+                      <option value="">Monitor from...</option>
+                      {#if fromHostId}
+                        <option value={edge.from.nodeId}>
+                          {getNodeLabelById(edge.from.nodeId)}
+                        </option>
+                      {/if}
+                      {#if toHostId}
+                        <option value={edge.to.nodeId}>{getNodeLabelById(edge.to.nodeId)}</option>
+                      {/if}
+                    </select>
+                    {#if monitoredNodeId && interfaces.length > 0}
+                      <select
+                        class="input text-sm flex-1"
+                        value={currentMapping.interface || ''}
+                        onchange={(e) => handleLinkInterfaceChange(edge.id, e.currentTarget.value)}
+                      >
+                        <option value="">Select interface</option>
+                        {#each interfaces as iface (iface.name)}
+                          <option value={iface.name}>{iface.name}</option>
+                        {/each}
+                      </select>
+                    {/if}
+                    <select
+                      class="input text-sm"
+                      style="width: 6rem;"
+                      value={bandwidthToSelectValue(edge.id, currentMapping.bandwidth)}
+                      onchange={(e) => {
                       const val = e.currentTarget.value
                       if (val === '') {
                         customBandwidthLinks.delete(edge.id)
@@ -676,20 +709,21 @@
                         handleLinkBandwidthChange(edge.id, parseInt(val, 10))
                       }
                     }}
-                  >
-                    <option value="">Auto</option>
-                    <option value="1000000000">1G</option>
-                    <option value="10000000000">10G</option>
-                    <option value="100000000000">100G</option>
-                  </select>
-                </div>
-              {:else}
-                <p class="text-xs text-theme-text-muted italic">Map at least one node first</p>
-              {/if}
-            </div>
-          {/each}
-        {/if}
+                    >
+                      <option value="">Auto</option>
+                      <option value="1000000000">1G</option>
+                      <option value="10000000000">10G</option>
+                      <option value="100000000000">100G</option>
+                    </select>
+                  </div>
+                {:else}
+                  <p class="text-xs text-theme-text-muted italic">Map at least one node first</p>
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
       </div>
-    </div>
+    {/if}
   {/if}
 </div>
