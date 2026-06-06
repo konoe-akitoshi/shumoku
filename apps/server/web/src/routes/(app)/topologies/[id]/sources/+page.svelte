@@ -27,7 +27,7 @@
   import { api } from '$lib/api'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { mappingStore, topologies } from '$lib/stores'
+  import { topologies } from '$lib/stores'
   import type {
     DataSourcePluginInfo,
     PluginConfigSchema,
@@ -117,21 +117,23 @@
 
   // --- Config (direct apply) ------------------------------------------------
 
+  // Config edits are cheap + LOCAL: they never hit live sources (no metrics-host
+  // fetch) and never pull data. `reflect: true` only when the change alters how
+  // *existing* data resolves (detach / priority / swap) → the diagram re-renders
+  // the materialized graph (one cached recompute, no upstream call). Attaching
+  // does NOT reflect — a new source shows nothing until you Sync.
   async function mutate(
     id: string,
     run: () => Promise<unknown>,
     onOk: (result: unknown) => void,
-    opts: { structural?: boolean } = {},
+    opts: { reflect?: boolean } = {},
   ) {
     localError = ''
     setBusy(id, true)
     try {
       const result = await run()
       onOk(result)
-      if (opts.structural) {
-        await mappingStore.load(ctx.topologyId, true)
-        ctx.bumpRevision()
-      }
+      if (opts.reflect) ctx.bumpRevision()
     } catch (e) {
       localError = e instanceof Error ? e.message : 'Failed to apply change'
       try {
@@ -168,7 +170,8 @@
       (added) => {
         ctx.currentSources = [...ctx.currentSources, added as TopologyDataSource]
       },
-      { structural: true },
+      // Attach is config only — no data until the user Syncs, so don't reflect.
+      {},
     )
   }
 
@@ -187,14 +190,16 @@
       () => {
         ctx.currentSources = ctx.currentSources.filter((s) => s.id !== source.id)
       },
-      { structural: true },
+      // Detaching removes a contributing source → its data leaves the resolved
+      // graph; reflect it.
+      { reflect: true },
     )
   }
 
   function patchSource(
     source: TopologyDataSource,
     updates: { syncMode?: SyncMode; priority?: number },
-    structural = false,
+    reflect = false,
   ) {
     void mutate(
       source.id,
@@ -204,7 +209,7 @@
           s.id === source.id ? (updated as TopologyDataSource) : s,
         )
       },
-      { structural },
+      { reflect },
     )
   }
 
@@ -226,7 +231,8 @@
           s.id === source.id ? (added as TopologyDataSource) : s,
         )
       },
-      { structural: true },
+      // Swapping the underlying source changes resolved output → reflect.
+      { reflect: true },
     )
   }
 
@@ -381,7 +387,6 @@
       const updated = await api.topologies.get(ctx.topologyId)
       ctx.topology = updated
       topologies.upsert(updated)
-      await mappingStore.load(ctx.topologyId, true)
       ctx.bumpRevision()
     } catch (e) {
       localError = e instanceof Error ? e.message : 'Clear failed'
