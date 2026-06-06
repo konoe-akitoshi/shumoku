@@ -464,7 +464,7 @@ export const topologies = {
         },
       ),
 
-    /** Attach a brand-new Manual source to a topology. 409 if one exists. */
+    /** Create-and-attach a new Manual source to a topology (no cardinality limit). */
     attachManual: (topologyId: string) =>
       request<{ dataSourceId: string }>(`/topologies/${topologyId}/sources`, {
         method: 'POST',

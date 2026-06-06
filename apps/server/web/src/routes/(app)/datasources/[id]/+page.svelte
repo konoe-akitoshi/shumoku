@@ -320,12 +320,13 @@
       }
 
       // Manual: persist the drawn graph as an observation against its topology
-      // (the human is the "scanner"); config_json holds no graph. The authored
-      // graph is per-topology, so this editor requires EXACTLY one attached
-      // topology — refuse on none (would silently lose the edit) or many (would
-      // edit an arbitrary one). New sharing is blocked server-side; this guards
-      // any pre-existing shared Manual until the editor moves into the topology
-      // context (#362).
+      // (the human is the "scanner"); config_json holds no graph. The graph is a
+      // per-topology observation, so THIS standalone editor needs exactly one
+      // attached topology to know which one to write — refuse on none (would
+      // silently lose the edit) or many (would edit an arbitrary one). This is a
+      // limitation of editing from /datasources, not a cardinality constraint:
+      // Manual is fully uniform and may be attached to many topologies. The fix
+      // is to edit from the topology context (#362), where the target is known.
       if (dataSource.type === 'manual') {
         if (attachedTopologies.length !== 1) {
           error =
