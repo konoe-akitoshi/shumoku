@@ -712,8 +712,8 @@ export class TopologyService {
     })
     nodes = nodes.filter((n) => !isPureEmptyOverlay(n))
 
+    // writeManualGraph fans out invalidation to every attached topology.
     this.writeManualGraph(manualId, { ...authored, nodes })
-    this.clearCacheEntry(topologyId)
   }
 
   /**
@@ -751,12 +751,29 @@ export class TopologyService {
       .all() as { id: string; mapping_json: string }[]
     let migrated = 0
     let failed = 0
+    let lostEntries = 0
     for (const row of rows) {
       try {
         const mapping = JSON.parse(row.mapping_json) as MetricsMapping
+        const originalCount =
+          Object.keys(mapping.nodes ?? {}).length + Object.keys(mapping.links ?? {}).length
         // Re-apply through updateMapping → writes node + link bindings.
         await this.updateMapping(row.id, mapping)
         migrated++
+        // Audit coverage: entries that couldn't be anchored (no metrics source,
+        // or no node/port identity) don't survive as bindings. Under the project's
+        // no-backcompat stance these are intentionally dropped — but log them so
+        // it's never a SILENT loss.
+        const after = (await this.getParsed(row.id))?.mapping
+        const migratedCount =
+          Object.keys(after?.nodes ?? {}).length + Object.keys(after?.links ?? {}).length
+        if (migratedCount < originalCount) {
+          const lost = originalCount - migratedCount
+          lostEntries += lost
+          console.warn(
+            `[Backfill] topology ${row.id}: ${lost}/${originalCount} mapping entr(ies) could not be migrated to a binding (no metrics source or no identity to anchor) — dropped per no-backcompat`,
+          )
+        }
       } catch (err) {
         failed++
         console.warn(
@@ -789,7 +806,9 @@ export class TopologyService {
       }
     }
     if (migrated > 0 || failed > 0) {
-      console.log(`[Backfill] metrics mapping → bindings: ${migrated} migrated, ${failed} deferred`)
+      console.log(
+        `[Backfill] metrics mapping → bindings: ${migrated} topolog(ies) migrated, ${failed} deferred, ${lostEntries} entr(ies) dropped (no-backcompat)`,
+      )
     }
   }
 
@@ -1149,8 +1168,10 @@ export class TopologyService {
 
   /**
    * Persist a new authored graph onto a Manual data source 's config_json.
-   * Preserves any sibling keys we don 't own. Caller is responsible for
-   * invalidating the topology cache (`clearCacheEntry`).
+   * Preserves any sibling keys we don 't own. Invalidates EVERY topology attached
+   * to this Manual source (the authored graph is source-level content and can be
+   * shared across topologies) so none serves a stale resolved artifact — callers
+   * don't need a separate clearCacheEntry.
    */
   writeManualGraph(sourceId: string, graph: NetworkGraph): void {
     const row = this.db
@@ -1169,6 +1190,9 @@ export class TopologyService {
     this.db
       .query('UPDATE data_sources SET config_json = ?, updated_at = ? WHERE id = ?')
       .run(JSON.stringify(config), timestamp(), sourceId)
+    // Fan-out invalidation: this Manual source may be attached to several
+    // topologies; all of them must re-resolve.
+    this.clearCacheForDataSource(sourceId)
   }
 
   /**
