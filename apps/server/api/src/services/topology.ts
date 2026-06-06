@@ -2,10 +2,13 @@
  * Topology Service
  * Manages network topologies with database persistence.
  *
- * Storage model (post-migration-010): the `topologies` table holds
- * only the topology shell (name, mapping, share_token, etc). All graph
- * content — including human-authored content from the editor — lives
- * in `topology_observations`, indexed by source.
+ * Storage model: the `topologies` table holds only the topology shell
+ * (name, share_token, composition_revision). Sources live in
+ * `topology_data_sources` (m2m); per-source graph snapshots in
+ * `topology_observations`; the human-authored graph on the Manual source's
+ * `config_json.graph`; the metrics mapping as `metrics-binding` attachments on
+ * the resolved graph (no `mapping_json`); the resolved graph + layout are
+ * materialized in `topology_resolved_graph`.
  *
  * The editor 's "save" routes through this service 's `create()` /
  * `update()` `contentJson` input. Internally that translates to:
