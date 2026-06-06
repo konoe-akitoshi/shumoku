@@ -50,8 +50,6 @@ interface StagedNode {
 
 /** Placeholder values the LLDP template uses when no neighbor was seen. */
 const NO_NEIGHBOR = /^\s*(\*\s*no info\s*\*|-|unknown|)\s*$/i
-// MAC address forms: colon/hyphen-separated octets, or Cisco dotted-quad.
-const MAC_LIKE = /^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$|^(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}$/i
 
 /**
  * Convert hosts + their LLDP adjacencies (and SNMP sysDescr) into a NetworkGraph.
@@ -128,8 +126,9 @@ export function convertZabbixToGraph(
     const id = `${node.id}:port:${label}`
     const existing = ports.get(id)
     if (existing) {
-      // Backfill identity if a later assertion (LLDP > tag fallback) supplies one.
-      if (identity && !existing.identity) existing.identity = identity
+      // Union identity keys across assertions (a port can be observed from more
+      // than one host); existing keys win on conflict so the result is stable.
+      if (identity) existing.identity = { ...identity, ...existing.identity }
       return existing
     }
     const port: NodePort = { id, label, connectors: [], provenance: { source: sourceId } }
@@ -138,14 +137,6 @@ export function convertZabbixToGraph(
     if (speed) port.speed = speed
     ports.set(id, port)
     return port
-  }
-
-  // LLDP remote port-id is a port name, or a MAC when port-id is MAC-typed —
-  // stamp the matching identity key so link bindings resolve across re-scans.
-  const lldpPortIdentity = (portId: string | undefined): Identity | undefined => {
-    const v = portId?.trim()
-    if (!v) return undefined
-    return MAC_LIKE.test(v) ? buildIdentity({ mac: v }) : buildIdentity({ ifName: v })
   }
 
   const resolveRemote = (sysName: string, chassisId?: string): Node | undefined => {
@@ -178,6 +169,11 @@ export function convertZabbixToGraph(
       const remoteNode = resolveRemote(nbr.remSysname, nbr.remChassisId)
       if (!remoteNode || remoteNode.id === localNode.id) continue
 
+      // Only the local interface name is an authoritative port key (from the
+      // host's own `lldp.loc.if` data). The remote port-id alone can't be
+      // classified (ifName vs MAC needs the LLDP port-id subtype, which the
+      // template doesn't expose), so we don't stamp the remote port — that
+      // peer's own scan stamps its ports from its local side anyway.
       const localPort = ensurePort(
         localNode,
         nbr.localIf,
@@ -185,12 +181,7 @@ export function convertZabbixToGraph(
         buildIdentity({ ifName: nbr.localIf }),
       )
       const remoteLabel = nbr.remPortId?.trim() || `to-${host.hostid}-${nbr.localIf}`
-      const remotePort = ensurePort(
-        remoteNode,
-        remoteLabel,
-        undefined,
-        lldpPortIdentity(nbr.remPortId),
-      )
+      const remotePort = ensurePort(remoteNode, remoteLabel)
 
       const key = nodePairKey(
         `${localNode.id}|${localPort.id}`,
