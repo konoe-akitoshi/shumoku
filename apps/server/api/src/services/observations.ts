@@ -160,19 +160,22 @@ export class ObservationsService {
    * transient failed scan doesn't drop a source's last-good nodes.
    */
   latestPerSource(topologyId: string): TopologyObservation[] {
+    // ROW_NUMBER (not MAX+join) so a same-millisecond capture_at tie resolves
+    // deterministically to ONE row per source (latest captured, then highest
+    // rowid = insert order) instead of returning both.
     const rows = this.db
       .query(
-        `SELECT t.* FROM topology_observations t
-         INNER JOIN (
-           SELECT source_id, MAX(captured_at) AS latest
-           FROM topology_observations
+        `SELECT * FROM (
+           SELECT t.*,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY source_id ORDER BY captured_at DESC, rowid DESC
+                  ) AS rn
+           FROM topology_observations t
            WHERE topology_id = ?
-           GROUP BY source_id
-         ) m ON m.source_id = t.source_id AND m.latest = t.captured_at
-         WHERE t.topology_id = ?
-         ORDER BY t.captured_at DESC`,
+         ) WHERE rn = 1
+         ORDER BY captured_at DESC`,
       )
-      .all(topologyId, topologyId) as ObservationRow[]
+      .all(topologyId) as ObservationRow[]
     return rows.map(rowToObservation)
   }
 
@@ -187,19 +190,21 @@ export class ObservationsService {
    * is real evidence.
    */
   latestSuccessfulPerSource(topologyId: string): TopologyObservation[] {
+    // ROW_NUMBER tiebreak (see latestPerSource) so same-ms captures resolve to a
+    // single deterministic latest per source.
     const rows = this.db
       .query(
-        `SELECT t.* FROM topology_observations t
-         INNER JOIN (
-           SELECT source_id, MAX(captured_at) AS latest
-           FROM topology_observations
+        `SELECT * FROM (
+           SELECT t.*,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY source_id ORDER BY captured_at DESC, rowid DESC
+                  ) AS rn
+           FROM topology_observations t
            WHERE topology_id = ? AND status != 'failed'
-           GROUP BY source_id
-         ) m ON m.source_id = t.source_id AND m.latest = t.captured_at
-         WHERE t.topology_id = ? AND t.status != 'failed'
-         ORDER BY t.captured_at DESC`,
+         ) WHERE rn = 1
+         ORDER BY captured_at DESC`,
       )
-      .all(topologyId, topologyId) as ObservationRow[]
+      .all(topologyId) as ObservationRow[]
     return rows.map(rowToObservation)
   }
 
@@ -253,7 +258,7 @@ export class ObservationsService {
              SELECT id,
                     ROW_NUMBER() OVER (
                       PARTITION BY topology_id, source_id
-                      ORDER BY captured_at DESC
+                      ORDER BY captured_at DESC, rowid DESC
                     ) AS rn
              FROM topology_observations
              WHERE status != 'failed'
@@ -272,7 +277,7 @@ export class ObservationsService {
              SELECT id,
                     ROW_NUMBER() OVER (
                       PARTITION BY topology_id, source_id
-                      ORDER BY captured_at DESC
+                      ORDER BY captured_at DESC, rowid DESC
                     ) AS rn
              FROM topology_observations
              WHERE status = 'failed'

@@ -320,12 +320,17 @@
       }
 
       // Manual: persist the drawn graph as an observation against its topology
-      // (the human is the "scanner"); config_json holds no graph.
+      // (the human is the "scanner"); config_json holds no graph. The authored
+      // graph is per-topology, so a Manual must be attached to exactly one
+      // topology to be editable here — refuse rather than silently lose the edit.
       if (dataSource.type === 'manual') {
         const topoId = attachedTopologies[0]?.topologyId
-        if (topoId) {
-          await api.topologies.sources.recordObservation(topoId, id, manualGraphFromEditor(), 'ok')
+        if (!topoId) {
+          error = 'Attach this Manual source to a topology before editing its content.'
+          saving = false
+          return
         }
+        await api.topologies.sources.recordObservation(topoId, id, manualGraphFromEditor(), 'ok')
       }
 
       dataSource = await dataSources.update(id, updates)

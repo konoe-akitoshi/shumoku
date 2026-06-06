@@ -9,13 +9,14 @@
 
 -- 1. Move each Manual source's config_json.graph → a fresh observation per
 --    attached topology. `json_valid` guards against malformed config (the
---    migration runner is not transactional). INSERT OR IGNORE = idempotent
---    (derived id is unique per topology; 011 already deleted old manual obs).
+--    migration runner is not transactional). The id is unique per
+--    (topology, source) so multiple Manuals on one topology each survive.
+--    INSERT OR IGNORE = idempotent (011 already deleted old manual obs).
 INSERT OR IGNORE INTO topology_observations
   (id, topology_id, source_id, captured_at, status, graph_json,
    node_count, link_count, port_count, created_at)
 SELECT
-  'obs_man_' || tds.topology_id,
+  'obs_man_' || tds.topology_id || '_' || ds.id,
   tds.topology_id,
   ds.id,
   ds.updated_at,
@@ -32,9 +33,12 @@ WHERE ds.type = 'manual'
   AND json_valid(ds.config_json)
   AND json_extract(ds.config_json, '$.graph') IS NOT NULL;
 
--- 2. Strip the graph from config — content no longer lives in config.
+-- 2. Strip the graph from config — but ONLY for sources whose graph actually
+--    landed in an observation above. A Manual with no topology attachment (or
+--    malformed config) keeps its config.graph rather than losing it silently.
 UPDATE data_sources
 SET config_json = json_remove(config_json, '$.graph')
 WHERE type = 'manual'
   AND json_valid(config_json)
-  AND json_extract(config_json, '$.graph') IS NOT NULL;
+  AND json_extract(config_json, '$.graph') IS NOT NULL
+  AND EXISTS (SELECT 1 FROM topology_observations o WHERE o.source_id = data_sources.id);

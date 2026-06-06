@@ -105,6 +105,17 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
     return c.json({ error: 'Data source not found' }, 404)
   }
 
+  // Manual content is per-topology (its authored graph lives in this topology's
+  // observations). Sharing one Manual across topologies would be ambiguous to
+  // edit, so a Manual is one-per-topology and created fresh (the `type:'manual'`
+  // inline path), never attached as an existing source.
+  if (dataSource.type === 'manual') {
+    return c.json(
+      { error: 'Manual sources are per-topology; create a new one instead of attaching.' },
+      409,
+    )
+  }
+
   // Check if already exists
   const existing = getTopologySourcesService().find(topologyId, body.dataSourceId, body.purpose)
   if (existing) {

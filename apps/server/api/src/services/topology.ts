@@ -1156,7 +1156,7 @@ export class TopologyService {
       .query(
         `SELECT graph_json FROM topology_observations
          WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
-         ORDER BY captured_at DESC LIMIT 1`,
+         ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
       )
       .get(topologyId, sourceId) as { graph_json: string } | undefined
     if (!row) return null
