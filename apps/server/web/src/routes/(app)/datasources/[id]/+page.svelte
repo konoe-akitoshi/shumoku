@@ -172,18 +172,17 @@
   }
 
   function getConfigFromForm(type: string): string {
-    // Manual stores its graph in config_json. Parse whichever editor pane is
-    // active, then serialise. Everything else serialises the schema-driven
-    // `config` (empty password fields are pruned → the server preserves the
-    // stored secret).
-    if (type === 'manual') {
-      const graph =
-        editorMode === 'yaml'
-          ? new YamlParser().parse(yamlContent).graph
-          : (JSON.parse(jsonContent) as NetworkGraph)
-      return JSON.stringify({ graph })
-    }
+    // Manual has no connection config — its graph is recorded as an observation
+    // (see manualGraphFromEditor / handleSave), not stored in config_json.
+    if (type === 'manual') return '{}'
     return JSON.stringify(pruneEmpty(config))
+  }
+
+  /** Parse the active editor pane (YAML or JSON) into a NetworkGraph. */
+  function manualGraphFromEditor(): NetworkGraph {
+    return editorMode === 'yaml'
+      ? new YamlParser().parse(yamlContent).graph
+      : (JSON.parse(jsonContent) as NetworkGraph)
   }
 
   function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
@@ -258,12 +257,19 @@
           } catch (err) {
             console.warn('[Manual] Failed to list attached topologies:', err)
           }
-          // Seed the editor with the source 's stored graph.
-          const graph = (parsed as { graph?: Record<string, unknown> }).graph ?? {
-            version: '1',
-            nodes: [],
-            links: [],
+          // Manual content is a per-topology observation now (not config_json).
+          // Seed the editor from this source's latest snapshot for its topology.
+          let graph: Record<string, unknown> = { version: '1', nodes: [], links: [] }
+          const topoId = attachedTopologies[0]?.topologyId
+          if (topoId) {
+            try {
+              const snap = await api.topologies.sources.latestSnapshot(topoId, currentId)
+              if (snap?.graph) graph = snap.graph as unknown as Record<string, unknown>
+            } catch (err) {
+              console.warn('[Manual] Failed to load latest snapshot:', err)
+            }
           }
+          if (cancelled) return
           jsonContent = JSON.stringify(graph, null, 2)
           yamlContent = graphToYaml(graph)
         }
@@ -311,6 +317,15 @@
       const updates = {
         name: formName.trim(),
         configJson: getConfigFromForm(dataSource.type),
+      }
+
+      // Manual: persist the drawn graph as an observation against its topology
+      // (the human is the "scanner"); config_json holds no graph.
+      if (dataSource.type === 'manual') {
+        const topoId = attachedTopologies[0]?.topologyId
+        if (topoId) {
+          await api.topologies.sources.recordObservation(topoId, id, manualGraphFromEditor(), 'ok')
+        }
       }
 
       dataSource = await dataSources.update(id, updates)

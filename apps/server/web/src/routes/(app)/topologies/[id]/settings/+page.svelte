@@ -20,7 +20,6 @@
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import {
-    dataSources,
     displaySettings,
     liveUpdatesEnabled,
     metricsConnected,
@@ -47,18 +46,20 @@
   })
 
   /**
-   * edgeStyle / splineMode live on `NetworkGraph.settings` inside the
-   * Manual source's stored graph (config_json.graph). Read/write goes
-   * through the data source config, not through observations.
+   * edgeStyle / splineMode live on `NetworkGraph.settings` inside the Manual
+   * source's authored graph, which is now a per-topology observation. Read the
+   * latest snapshot; write by recording a new observation.
    */
   async function parseGraphSettings() {
     if (!ctx.topology?.manualSourceId) return
     try {
-      const ds = await api.dataSources.get(ctx.topology.manualSourceId)
-      const config = JSON.parse(ds.configJson || '{}') as {
-        graph?: { settings?: { edgeStyle?: string; splineMode?: string } }
-      }
-      const settings = config.graph?.settings
+      const snap = await api.topologies.sources.latestSnapshot(
+        ctx.topology.id,
+        ctx.topology.manualSourceId,
+      )
+      const settings = (
+        snap?.graph as { settings?: { edgeStyle?: string; splineMode?: string } } | null
+      )?.settings
       edgeStyle = settings?.edgeStyle || 'orthogonal'
       splineMode = settings?.splineMode || 'sloppy'
     } catch {
@@ -70,12 +71,11 @@
     if (!ctx.topology?.manualSourceId) return
     savingEdgeStyle = true
     try {
-      const ds = await api.dataSources.get(ctx.topology.manualSourceId)
-      const config = JSON.parse(ds.configJson || '{}') as {
-        graph?: { settings?: Record<string, unknown>; [k: string]: unknown }
-        [k: string]: unknown
-      }
-      const graph = (config.graph ?? { version: '1', nodes: [], links: [] }) as {
+      const snap = await api.topologies.sources.latestSnapshot(
+        ctx.topology.id,
+        ctx.topology.manualSourceId,
+      )
+      const graph = (snap?.graph ?? { version: '1', nodes: [], links: [] }) as unknown as {
         settings?: Record<string, unknown>
         [k: string]: unknown
       }
@@ -83,10 +83,12 @@
       graph.settings['edgeStyle'] = edgeStyle
       if (edgeStyle === 'splines') graph.settings['splineMode'] = splineMode
       else delete graph.settings['splineMode']
-      config.graph = graph
-      await dataSources.update(ctx.topology.manualSourceId, {
-        configJson: JSON.stringify(config),
-      })
+      await api.topologies.sources.recordObservation(
+        ctx.topology.id,
+        ctx.topology.manualSourceId,
+        graph as unknown as Parameters<typeof api.topologies.sources.recordObservation>[2],
+        'ok',
+      )
     } catch (e) {
       console.error('Failed to update edge style:', e)
     } finally {

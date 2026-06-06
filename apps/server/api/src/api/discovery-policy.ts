@@ -255,7 +255,7 @@ export function createDiscoveryPolicyApi(): Hono {
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
 
     const manualId = await service.ensureManualSource(topologyId)
-    const authored = service.readManualGraph(manualId) ?? {
+    const authored = service.readManualGraph(topologyId, manualId) ?? {
       version: '1' as const,
       name: topology.name,
       nodes: [],
@@ -386,7 +386,7 @@ export function createDiscoveryPolicyApi(): Hono {
       }
     }
 
-    service.writeManualGraph(manualId, next)
+    await service.writeManualGraph(topologyId, manualId, next)
     service.clearCacheEntry(topologyId)
 
     // Recompute the affected effective policy for the response.
@@ -453,7 +453,7 @@ export function createDiscoveryPolicyApi(): Hono {
     const topology = service.get(topologyId)
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
     const manualId = await service.ensureManualSource(topologyId)
-    const authored = service.readManualGraph(manualId) ?? {
+    const authored = service.readManualGraph(topologyId, manualId) ?? {
       version: '1' as const,
       name: topology.name,
       nodes: [],
@@ -461,7 +461,7 @@ export function createDiscoveryPolicyApi(): Hono {
     }
     const exclusions = [...(authored.exclusions ?? [])]
     if (!exclusions.some((e) => exclusionKey(e) === exclusionKey(ex))) exclusions.push(ex)
-    service.writeManualGraph(manualId, { ...authored, exclusions })
+    await service.writeManualGraph(topologyId, manualId, { ...authored, exclusions })
     service.clearCacheEntry(topologyId)
     return c.json({ exclusions })
   })
@@ -474,12 +474,12 @@ export function createDiscoveryPolicyApi(): Hono {
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
     const manualId = service.findManualSourceId(topologyId)
     if (!manualId) return c.json({ exclusions: [] })
-    const authored = service.readManualGraph(manualId)
+    const authored = service.readManualGraph(topologyId, manualId)
     if (!authored) return c.json({ exclusions: [] })
     const exclusions = (authored.exclusions ?? []).filter(
       (e) => exclusionKey(e) !== exclusionKey(ex),
     )
-    service.writeManualGraph(manualId, { ...authored, exclusions })
+    await service.writeManualGraph(topologyId, manualId, { ...authored, exclusions })
     service.clearCacheEntry(topologyId)
     return c.json({ exclusions })
   })
@@ -494,7 +494,7 @@ export function createDiscoveryPolicyApi(): Hono {
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
     const manualId = service.findManualSourceId(topologyId)
     if (!manualId) return c.json({ cleared: false, reason: 'no authored layer' })
-    const authored = service.readManualGraph(manualId)
+    const authored = service.readManualGraph(topologyId, manualId)
     if (!authored) return c.json({ cleared: false, reason: 'no authored graph' })
     // Strip overlay: drop attachments from every node/subgraph, the topology
     // default, and all exclusions. Keep the nodes themselves out entirely —
@@ -507,7 +507,7 @@ export function createDiscoveryPolicyApi(): Hono {
       attachments: undefined,
       exclusions: undefined,
     }
-    service.writeManualGraph(manualId, cleared)
+    await service.writeManualGraph(topologyId, manualId, cleared)
     service.clearCacheEntry(topologyId)
     return c.json({ cleared: true })
   })
