@@ -487,7 +487,7 @@
   }
 </script>
 
-<div class="container mx-auto p-6 max-w-6xl space-y-6">
+<div class="p-4 space-y-4">
   {#if topologySources.length === 0}
     <div class="card p-8 text-center space-y-2">
       <p class="text-theme-text-emphasis font-medium">No sources to discover from</p>

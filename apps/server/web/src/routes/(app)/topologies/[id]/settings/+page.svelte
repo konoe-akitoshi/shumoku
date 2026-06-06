@@ -110,7 +110,7 @@
   }
 </script>
 
-<div class="container mx-auto p-6 max-w-4xl space-y-6">
+<div class="p-4 space-y-4">
   <!-- Statistics -->
   {#if ctx.renderData}
     <div class="card">

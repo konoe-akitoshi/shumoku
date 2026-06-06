@@ -60,7 +60,7 @@
   }
 </script>
 
-<div class="container mx-auto p-6 max-w-6xl space-y-3">
+<div class="p-4 space-y-3">
   <div class="flex items-start justify-between">
     <div>
       <h2 class="font-medium text-theme-text-emphasis">Resolved project graph</h2>

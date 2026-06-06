@@ -193,7 +193,7 @@
   }
 </script>
 
-<div class="container mx-auto p-6 max-w-6xl space-y-6">
+<div class="p-4 space-y-4">
   {#if localError}
     <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
       {localError}

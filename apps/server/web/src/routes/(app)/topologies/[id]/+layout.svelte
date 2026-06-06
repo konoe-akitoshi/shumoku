@@ -2,26 +2,26 @@
   /**
    * Shell for everything under `/topologies/[id]/*`.
    *
-   * The previous shape parked Sources / Discovery / Mapping / Resolved
-   * inside a "Settings" page as tabs. That was honest for General +
-   * danger zone, but Discovery and Mapping are full-screen workspaces,
-   * not "settings". This layout treats them as peers of the diagram:
+   * IA: "A+" — a Diagram-resident canvas (表) with an on-demand
+   * Composition drawer (裏). The canvas (`TopologyCanvas`) is rendered
+   * once here and stays mounted; the composition stages
+   * (Sources / Discovery / Mapping / Resolved) live in a right-edge,
+   * non-modal slide-over so editing them keeps the diagram in view
+   * (focus + context). Settings is a gear, not a peer tab.
+   * See `apps/server/docs/design/topology-ui-ia.md`.
    *
-   *   Diagram · Sources · Discovery · Mapping · Resolved · Settings
-   *
-   * Each is a real subroute (so back/forward + Ctrl-click + deep
-   * links all work). The diagram is the default (`+page.svelte`).
-   *
-   * Shared state lives in `_context.svelte.ts` so tab pages don't
-   * each re-fetch the topology and source list independently.
+   * Each stage is still a real subroute (back/forward + Ctrl-click +
+   * deep links keep working); the drawer is just chrome around the
+   * active child. Shared state lives in `_context.svelte.ts`.
    */
-  import { ArrowsClockwiseIcon } from 'phosphor-svelte'
+  import { ArrowsClockwiseIcon, GearSixIcon, StackIcon, XIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
   import { topologies } from '$lib/stores'
   import { createTopologyCtx } from './_context.svelte'
+  import TopologyCanvas from './TopologyCanvas.svelte'
 
   let { children } = $props()
 
@@ -33,19 +33,15 @@
   })
 
   /**
-   * The tabs. Diagram first (it's the default workspace), Settings
-   * last (least-frequent action). Order is the operator's mental
-   * model — "look at it" → "configure what feeds it" → "see what
-   * was discovered" → "wire metrics to nodes" → "inspect the result"
-   * → "tune display / delete".
+   * The Composition pipeline stages, in dataflow order (① → ④). These
+   * are the drawer's stepper. Settings is intentionally NOT here — it's
+   * reached via the gear.
    */
-  const TABS = [
-    { slug: '', label: 'Diagram' },
-    { slug: 'sources', label: 'Sources' },
-    { slug: 'discovery', label: 'Discovery' },
-    { slug: 'mapping', label: 'Mapping' },
-    { slug: 'resolved', label: 'Resolved' },
-    { slug: 'settings', label: 'Settings' },
+  const STAGES = [
+    { slug: 'sources', label: 'Sources', step: '1' },
+    { slug: 'discovery', label: 'Discovery', step: '2' },
+    { slug: 'mapping', label: 'Mapping', step: '3' },
+    { slug: 'resolved', label: 'Resolved', step: '4' },
   ] as const
 
   let activeSlug = $derived.by(() => {
@@ -53,11 +49,25 @@
     return m?.[1] ?? ''
   })
 
+  // The drawer is open whenever a stage (or Settings) subroute is active.
+  const KNOWN_SLUGS = ['sources', 'discovery', 'mapping', 'resolved', 'settings']
+  let drawerOpen = $derived(KNOWN_SLUGS.includes(activeSlug))
+  let onSettings = $derived(activeSlug === 'settings')
+  let activeStage = $derived(STAGES.find((s) => s.slug === activeSlug))
+
+  const base = $derived(`/topologies/${ctx.topologyId}`)
+
+  function openComposition() {
+    // Open at the active stage if already on one, else the first stage.
+    if (!drawerOpen) goto(`${base}/sources`)
+  }
+  function closeDrawer() {
+    goto(base)
+  }
+
   onMount(async () => {
-    // Honor legacy `/settings#X` deep links. The old route baked the
-    // tab into a hash fragment; the tabs are now real subroutes, so
-    // bookmarks and external links keep working via this redirect.
-    // `#general` collapses to the (now small) Settings page itself.
+    // Honor legacy `/settings#X` deep links (the old IA baked the tab into
+    // a hash fragment); map them onto the new stage subroutes / drawer.
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.slice(1)
       const onLegacySettings = /\/topologies\/[^/]+\/settings\/?$/.test(window.location.pathname)
@@ -75,7 +85,6 @@
           return
         }
         if (dest === 'settings') {
-          // Clear the hash but stay on /settings.
           history.replaceState(null, '', window.location.pathname)
         }
       }
@@ -123,48 +132,112 @@
 
 <svelte:head>
   {#if ctx.topology}
-    {@const tab = TABS.find((t) => t.slug === activeSlug)}
-    <title>{ctx.topology.name}{tab && tab.slug ? ` · ${tab.label}` : ''} - Shumoku</title>
+    <title>
+      {ctx.topology.name}
+      {onSettings
+        ? ' · Settings'
+        : activeStage
+          ? ` · ${activeStage.label}`
+          : ''}
+      - Shumoku
+    </title>
   {/if}
 </svelte:head>
 
-<div class="h-full flex flex-col min-h-0">
-  <!-- Tab bar — shown on every topology route, including the Diagram,
-       so the operator never loses their navigation handle. Costs ~40px
-       of vertical on the Diagram canvas; in exchange the IA stays
-       consistent. The (app) layout's breadcrumb already carries
-       "Topologies › <name>", so a second in-page breadcrumb would
-       just be noise. -->
-  <header class="border-b border-theme-border bg-theme-bg-canvas px-6 pt-3 flex-shrink-0">
+<div class="h-full relative min-h-0">
+  <!-- 表: the diagram canvas, always mounted underneath everything. -->
+  <TopologyCanvas />
+
+  <!-- Top control cluster: Composition toggle + Settings gear. The app
+       breadcrumb already carries "Topologies › <name>", so no in-canvas
+       title is needed. -->
+  <div class="absolute top-4 right-16 z-20 flex items-center gap-2">
     {#if ctx.loading}
-      <div class="text-xs text-theme-text-muted inline-flex items-center gap-1 mb-1">
+      <span class="text-xs text-theme-text-muted inline-flex items-center gap-1">
         <ArrowsClockwiseIcon size={12} class="animate-spin" />
         loading
-      </div>
+      </span>
     {/if}
-    <nav class="flex gap-1 -mb-px">
-      {#each TABS as tab (tab.slug)}
-        {@const href = `/topologies/${ctx.topologyId}${tab.slug ? `/${tab.slug}` : ''}`}
-        <a
-          {href}
-          class="px-3 py-2 text-sm font-medium transition-colors border-b-2 {activeSlug ===
-          tab.slug
-            ? 'text-primary border-primary'
-            : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
-        >
-          {tab.label}
-        </a>
-      {/each}
-    </nav>
-  </header>
+    <button
+      type="button"
+      onclick={openComposition}
+      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors {drawerOpen
+        ? 'bg-primary/10 border-primary/30 text-primary'
+        : 'bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text hover:text-primary'}"
+      aria-expanded={drawerOpen}
+    >
+      <StackIcon size={16} />
+      Composition
+    </button>
+    <a
+      href={onSettings ? base : `${base}/settings`}
+      class="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors {onSettings
+        ? 'bg-primary/10 border-primary/30 text-primary'
+        : 'bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text-muted hover:text-theme-text'}"
+      aria-label="Topology settings"
+    >
+      <GearSixIcon size={16} />
+    </a>
+  </div>
 
-  {#if ctx.error && !ctx.topology}
-    <div class="p-6">
-      <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
-        {ctx.error}
+  <!-- 裏: the Composition drawer. Non-modal (no backdrop) so the canvas
+       stays pannable while you tune the machinery. -->
+  {#if drawerOpen}
+    <aside
+      class="absolute top-0 right-0 bottom-0 z-10 w-full max-w-[30rem] flex flex-col bg-theme-bg-canvas border-l border-theme-border shadow-xl"
+      aria-label={onSettings ? 'Settings' : 'Composition'}
+    >
+      <header class="flex-shrink-0 border-b border-theme-border px-4 pt-3 pb-0">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-semibold text-theme-text">
+            {onSettings ? 'Settings' : 'Composition'}
+          </span>
+          <button
+            type="button"
+            onclick={closeDrawer}
+            class="inline-flex items-center justify-center w-7 h-7 rounded-md text-theme-text-muted hover:text-theme-text hover:bg-theme-bg-elevated"
+            aria-label="Close"
+          >
+            <XIcon size={16} />
+          </button>
+        </div>
+        {#if !onSettings}
+          <!-- Pipeline stepper (sources → discovery → mapping → resolved). -->
+          <nav class="flex gap-1 -mb-px overflow-x-auto">
+            {#each STAGES as stage (stage.slug)}
+              <a
+                href={`${base}/${stage.slug}`}
+                class="flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors {activeSlug ===
+                stage.slug
+                  ? 'text-primary border-primary'
+                  : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+              >
+                <span
+                  class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] {activeSlug ===
+                  stage.slug
+                    ? 'bg-primary text-white'
+                    : 'bg-theme-bg-elevated text-theme-text-muted'}"
+                >
+                  {stage.step}
+                </span>
+                {stage.label}
+              </a>
+            {/each}
+          </nav>
+        {/if}
+      </header>
+
+      <div class="flex-1 min-h-0 overflow-auto">
+        {#if ctx.error && !ctx.topology}
+          <div class="p-4">
+            <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
+              {ctx.error}
+            </div>
+          </div>
+        {:else}
+          {@render children?.()}
+        {/if}
       </div>
-    </div>
-  {:else}
-    <main class="flex-1 min-h-0 overflow-auto">{@render children?.()}</main>
+    </aside>
   {/if}
 </div>
