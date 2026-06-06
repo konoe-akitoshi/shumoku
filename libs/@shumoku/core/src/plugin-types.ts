@@ -73,6 +73,15 @@ export interface HostItem {
   unit?: string
   /** Extracted interface name (e.g., "GigabitEthernet0/0", "eth0") */
   interfaceName?: string
+  /**
+   * Interface identity (ifName / ifIndex / mac) for this item's port,
+   * translated into core's neutral `Identity`. The durable match key for a
+   * link metrics binding: the server resolves a binding's `interfaceIdentity`
+   * against this list to find the current item, so a provider-side interface
+   * rename re-resolves instead of breaking. Optional — plugins fill what they
+   * can; name-only sources leave it unset (weaker, name-based matching).
+   */
+  interfaceIdentity?: Identity
   /** Traffic direction */
   direction?: 'in' | 'out'
 }
@@ -87,6 +96,12 @@ export interface HostItem {
 export interface InterfaceNeighbor {
   /** Local interface the neighbour is seen on (matches `HostItem.interfaceName`). */
   localInterface: string
+  /**
+   * Identity of the local interface (ifName / ifIndex / mac). Lets a link
+   * binding key on identity rather than the `localInterface` name string, so
+   * the binding survives a provider-side rename. Optional.
+   */
+  localInterfaceIdentity?: Identity
   /** Neighbour's system name (e.g. LLDP remote sysName), if reported. */
   remoteSysName?: string
   /** Neighbour's chassis id (e.g. LLDP remote chassisId), if reported. */

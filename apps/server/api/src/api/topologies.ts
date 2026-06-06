@@ -366,12 +366,28 @@ export function createTopologiesApi(): Hono {
     }
   })
 
+  // Get the resolved metrics mapping (metrics-binding attachments ∪ residual
+  // mapping_json). This is the authoritative view the UI must hydrate from —
+  // reading topology.mappingJson alone misses node bindings stored as
+  // attachments and would strip them on the next save.
+  app.get('/:id/mapping', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const parsed = await service.getParsed(id)
+      if (!parsed) return c.json({ error: 'Topology not found' }, 404)
+      return c.json(parsed.mapping ?? { nodes: {}, links: {} })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
   // Update mapping
   app.put('/:id/mapping', async (c) => {
     const id = c.req.param('id')
     try {
       const mapping = (await c.req.json()) as MetricsMapping
-      const topology = service.updateMapping(id, mapping)
+      const topology = await service.updateMapping(id, mapping)
       if (!topology) {
         return c.json({ error: 'Topology not found' }, 404)
       }
@@ -393,19 +409,21 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Get existing mapping or create new one
-      let mapping: MetricsMapping = { nodes: {}, links: {} }
-      if (topology.mappingJson) {
-        try {
-          mapping = JSON.parse(topology.mappingJson) as MetricsMapping
-        } catch {
-          // Invalid JSON, start fresh
-        }
+      // Start from the FULL current mapping (bindings ∪ residual mapping_json),
+      // not just the mapping_json blob — node bindings now live as attachments,
+      // so reading the blob alone would drop them on the next save. If the graph
+      // can't be resolved right now, REFUSE: reconciling against an incomplete
+      // mapping would strip every existing binding for the source.
+      const parsed = await service.getParsed(id)
+      if (!parsed) {
+        return c.json(
+          { error: 'cannot resolve current mapping; refusing to patch (would drop bindings)' },
+          409,
+        )
       }
-
-      // Ensure nodes object exists
-      if (!mapping.nodes) {
-        mapping.nodes = {}
+      const mapping: MetricsMapping = {
+        nodes: { ...(parsed.mapping?.nodes ?? {}) },
+        links: { ...(parsed.mapping?.links ?? {}) },
       }
 
       // Update the specific node mapping
@@ -420,7 +438,7 @@ export function createTopologiesApi(): Hono {
       }
 
       // Save updated mapping
-      const updated = service.updateMapping(id, mapping)
+      const updated = await service.updateMapping(id, mapping)
       return c.json({
         success: true,
         topology: updated,

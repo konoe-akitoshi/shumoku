@@ -135,26 +135,28 @@ function createMappingStore() {
      * caller has already fetched the data (avoids duplicate API calls).
      * Triggers host loading in the background.
      */
-    hydrate: (topologyId: string, topo: Topology, sources: TopologyDataSource[]) => {
-      let mapping: MetricsMapping = { nodes: {}, links: {} }
-      if (topo.mappingJson) {
-        try {
-          mapping = JSON.parse(topo.mappingJson)
-        } catch {
-          // Ignore parse error
-        }
-      }
-
+    hydrate: (topologyId: string, _topo: Topology, sources: TopologyDataSource[]) => {
       const metricsSources = metricsSourcesOf(sources)
 
       update((s) => ({
         ...s,
         topologyId,
-        mapping,
+        mapping: { nodes: {}, links: {} },
         metricsSources,
         loading: false,
         error: null,
       }))
+
+      // Fetch the RESOLVED mapping (bindings ∪ residual), not topo.mappingJson —
+      // node bindings live as attachments and would be missed (and stripped on
+      // save) if we parsed the blob. Guard against a topology switch mid-flight:
+      // only apply if the store is still on this topology.
+      api.topologies
+        .getMapping(topologyId)
+        .then((mapping) => update((s) => (s.topologyId === topologyId ? { ...s, mapping } : s)))
+        .catch(() => {
+          /* leave the empty mapping; a transient resolve failure isn't fatal */
+        })
 
       if (metricsSources.length > 0) {
         update((s) => ({ ...s, hostsLoading: true }))
@@ -179,20 +181,11 @@ function createMappingStore() {
       update((s) => ({ ...s, loading: true, error: null, topologyId }))
 
       try {
-        const [topo, sources] = await Promise.all([
-          api.topologies.get(topologyId),
+        // The RESOLVED mapping (bindings ∪ residual), not topo.mappingJson.
+        const [mapping, sources] = await Promise.all([
+          api.topologies.getMapping(topologyId),
           api.topologies.sources.list(topologyId),
         ])
-
-        // Parse mapping
-        let mapping: MetricsMapping = { nodes: {}, links: {} }
-        if (topo.mappingJson) {
-          try {
-            mapping = JSON.parse(topo.mappingJson)
-          } catch {
-            // Ignore parse error
-          }
-        }
 
         const metricsSources = metricsSourcesOf(sources)
 

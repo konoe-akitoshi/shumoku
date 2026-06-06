@@ -216,6 +216,19 @@ export interface NodePort {
    * discovery plugins (SNMP → ifIndex/ifName/mac, etc.). See `Identity`.
    */
   identity?: Identity
+  /**
+   * Access / policy / metrics-binding attachments on this port. Link metric
+   * bindings (`kind: 'metrics-binding'`) live here, keyed by port identity, so
+   * the resolver folds them across re-scans like node attachments. See
+   * `Attachment` and `attachmentKey`.
+   */
+  attachments?: Attachment[]
+  /**
+   * Attachment keys (see `attachmentKey`) the human explicitly removed — the
+   * port-level counterpart to `Node.suppressedAttachments`. Survives re-scan so
+   * a re-supplied binding won't resurrect a deleted one.
+   */
+  suppressedAttachments?: string[]
 }
 
 /**
@@ -381,7 +394,7 @@ export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
  * the resolver already prefers over observed values. The UI presents
  * them as a "Facts" card over those native fields.
  */
-export type Attachment = AccessAttachment | PolicyAttachment
+export type Attachment = AccessAttachment | PolicyAttachment | MetricsBindingAttachment
 
 /**
  * Provenance stamped by `resolve()` onto every attachment in the resolved
@@ -422,15 +435,56 @@ export interface PolicyAttachment extends AttachmentMeta {
 }
 
 /**
+ * Binds an element to the metrics provider that supplies its live values
+ * (axis 2 — the "mapping", modeled as a dependency-resolution field on the
+ * resolved element rather than a side store). Folded by `resolve()` exactly
+ * like access/policy, so it inherits identity-keyed re-sync follow,
+ * priority-merge, suppression, and provenance for free.
+ *
+ * Lives on a `Node` (node binding → host) or a `NodePort` (link binding →
+ * interface). The match key is IDENTITY, never a name string: `hostId` /
+ * `interfaceIdentity` are the durable keys; `hostName` / `interfaceName` are
+ * human labels and migration fallbacks only, so a provider-side rename
+ * re-resolves instead of breaking.
+ *
+ * Today bindings are authored/human contributions. A future
+ * binding-discovery capability could let a metrics source emit them as
+ * observations, at which point auto-map becomes mostly observed — the model
+ * already accommodates that additively.
+ *
+ * See `apps/server/docs/design/topology-composition-store.md § 1`.
+ */
+export interface MetricsBindingAttachment extends AttachmentMeta {
+  kind: 'metrics-binding'
+  /** Which metrics data source supplies values for this element. */
+  sourceId: string
+  /** Node binding: host id within that source (durable match key). */
+  hostId?: string
+  /** Node binding: host display name (label / migration fallback only). */
+  hostName?: string
+  /** Link binding (on NodePort): source-side interface identity (match key). */
+  interfaceIdentity?: Identity
+  /** Link binding: interface display name (label / migration fallback only). */
+  interfaceName?: string
+  /** Link bandwidth override in bits per second. */
+  bandwidth?: number
+}
+
+/**
  * Stable merge / suppression key for an attachment. `access` is keyed per
- * protocol (SNMP and SSH are distinct slots); every other kind keys by its
- * `kind`. The resolver merges attachments by this key (highest-priority
- * contribution wins per key) and the human suppresses by it
- * (`Node.suppressedAttachments`). One definition so merge and suppression
- * never disagree on what "the same attachment slot" means.
+ * protocol (SNMP and SSH are distinct slots); `metrics-binding` is keyed per
+ * metrics source (two metrics sources can each bind one element — but ONE
+ * binding per (source, element) is the invariant; extend with a role segment
+ * if per-metric-role binding is ever needed, don't overload the slot); every
+ * other kind keys by its `kind`. The resolver merges attachments by this key
+ * (highest-priority contribution wins per key) and the human suppresses by it
+ * (`suppressedAttachments`). One definition so merge and suppression never
+ * disagree on what "the same attachment slot" means.
  */
 export function attachmentKey(a: Attachment): string {
-  return a.kind === 'access' ? `access:${a.protocol}` : a.kind
+  if (a.kind === 'access') return `access:${a.protocol}`
+  if (a.kind === 'metrics-binding') return `metrics-binding:${a.sourceId}`
+  return a.kind
 }
 
 export interface Node {

@@ -234,6 +234,11 @@ export const topologies = {
       method: 'DELETE',
     }),
 
+  // The resolved mapping (metrics-binding attachments ∪ residual mapping_json).
+  // Hydrate the mapping UI from this, NOT topology.mappingJson — the latter
+  // misses node bindings stored as attachments.
+  getMapping: (id: string) => request<MetricsMapping>(`/topologies/${id}/mapping`),
+
   updateMapping: (id: string, mapping: MetricsMapping) =>
     request<Topology>(`/topologies/${id}/mapping`, {
       method: 'PUT',

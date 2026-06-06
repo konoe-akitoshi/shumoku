@@ -10,6 +10,7 @@ import type { AlertQueryOptions } from '../plugins/types.js'
 import { hasNativeApi } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import type { DataSourceInput } from '../types.js'
+import { getTopologyService } from './topologies.js'
 
 /**
  * Mask sensitive fields in config JSON
@@ -248,6 +249,9 @@ export function createDataSourcesApi(): Hono {
       if (!dataSource) {
         return c.json({ error: 'Data source not found' }, 404)
       }
+      // A config edit can change resolve inputs (a Manual source's authored
+      // graph lives in config_json.graph) → invalidate attached topologies.
+      getTopologyService().clearCacheForDataSource(id)
       return c.json({
         ...dataSource,
         configJson: maskConfigSecrets(dataSource.configJson),
@@ -261,6 +265,9 @@ export function createDataSourcesApi(): Hono {
   // Delete data source
   app.delete('/:id', (c) => {
     const id = c.req.param('id')
+    // Invalidate attached topologies BEFORE the delete cascades away the
+    // topology_data_sources rows we'd otherwise look up.
+    getTopologyService().clearCacheForDataSource(id)
     const deleted = service.delete(id)
     if (!deleted) {
       return c.json({ error: 'Data source not found' }, 404)

@@ -17,6 +17,8 @@ import migration007 from './migrations/007_grafana_alerts.sql'
 import migration008 from './migrations/008_topology_observations.sql'
 import migration010 from './migrations/010_manual_as_source.sql'
 import migration011 from './migrations/011_manual_graph_to_config.sql'
+import migration012 from './migrations/012_resolved_graph_cache.sql'
+import migration013 from './migrations/013_drop_legacy_source_columns.sql'
 
 /** Ordered list of all migrations */
 const MIGRATIONS: { name: string; sql: string }[] = [
@@ -30,6 +32,8 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '008_topology_observations.sql', sql: migration008 },
   { name: '010_manual_as_source.sql', sql: migration010 },
   { name: '011_manual_graph_to_config.sql', sql: migration011 },
+  { name: '012_resolved_graph_cache.sql', sql: migration012 },
+  { name: '013_drop_legacy_source_columns.sql', sql: migration013 },
 ]
 
 interface MigrationRecord {
