@@ -13,7 +13,15 @@
  *   - device   ← parsed from inventory.{type,vendor,model,hardware} + SNMP sysDescr
  */
 
-import type { Link, NetworkGraph, Node, NodePort, NodeSpec, Subgraph } from '@shumoku/core'
+import type {
+  Identity,
+  Link,
+  NetworkGraph,
+  Node,
+  NodePort,
+  NodeSpec,
+  Subgraph,
+} from '@shumoku/core'
 import { buildIdentity, DeviceType } from '@shumoku/core'
 import type { ZabbixHost, ZabbixLldpNeighbor } from './types.js'
 
@@ -104,7 +112,12 @@ export function convertZabbixToGraph(
   const seenLinks = new Set<string>() // canonical endpoint-port pairs
   const linkedNodePairs = new Set<string>() // canonical node pairs (for tag de-dup)
 
-  const ensurePort = (node: Node, label: string, speedBps?: number): NodePort => {
+  const ensurePort = (
+    node: Node,
+    label: string,
+    speedBps?: number,
+    identity?: Identity,
+  ): NodePort => {
     let ports = portsByNode.get(node.id)
     if (!ports) {
       ports = new Map()
@@ -112,8 +125,14 @@ export function convertZabbixToGraph(
     }
     const id = `${node.id}:port:${label}`
     const existing = ports.get(id)
-    if (existing) return existing
+    if (existing) {
+      // Union identity keys across assertions (a port can be observed from more
+      // than one host); existing keys win on conflict so the result is stable.
+      if (identity) existing.identity = { ...identity, ...existing.identity }
+      return existing
+    }
     const port: NodePort = { id, label, connectors: [], provenance: { source: sourceId } }
+    if (identity) port.identity = identity
     const speed = speedLabel(speedBps)
     if (speed) port.speed = speed
     ports.set(id, port)
@@ -150,7 +169,17 @@ export function convertZabbixToGraph(
       const remoteNode = resolveRemote(nbr.remSysname, nbr.remChassisId)
       if (!remoteNode || remoteNode.id === localNode.id) continue
 
-      const localPort = ensurePort(localNode, nbr.localIf, nbr.speedBps)
+      // Only the local interface name is an authoritative port key (from the
+      // host's own `lldp.loc.if` data). The remote port-id alone can't be
+      // classified (ifName vs MAC needs the LLDP port-id subtype, which the
+      // template doesn't expose), so we don't stamp the remote port — that
+      // peer's own scan stamps its ports from its local side anyway.
+      const localPort = ensurePort(
+        localNode,
+        nbr.localIf,
+        nbr.speedBps,
+        buildIdentity({ ifName: nbr.localIf }),
+      )
       const remoteLabel = nbr.remPortId?.trim() || `to-${host.hostid}-${nbr.localIf}`
       const remotePort = ensurePort(remoteNode, remoteLabel)
 

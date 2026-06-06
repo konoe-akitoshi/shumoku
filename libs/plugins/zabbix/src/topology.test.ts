@@ -118,10 +118,18 @@ describe('convertZabbixToGraph', () => {
     expect(g.links).toHaveLength(1)
     expect(g.links[0]?.metadata?.['discoveredVia']).toBe('zabbix-lldp')
     expect(g.links[0]?.metadata?.['speedBps']).toBe(100_000_000_000)
-    expect(
-      g.nodes.find((n) => n.id === 'inst1:host:1')?.ports?.find((p) => p.label === 'et-0/0/1')
-        ?.speed,
-    ).toBe('100g')
+    const localPort = g.nodes
+      .find((n) => n.id === 'inst1:host:1')
+      ?.ports?.find((p) => p.label === 'et-0/0/1')
+    expect(localPort?.speed).toBe('100g')
+    // The local ifName is the authoritative port key, stamped as identity so
+    // link metric bindings resolve across re-scans (the #363 contract). Both
+    // hosts stamp their own ports from their local LLDP side.
+    expect(localPort?.identity).toEqual({ ifName: 'et-0/0/1' })
+    const peerLocalPort = g.nodes
+      .find((n) => n.id === 'inst1:host:2')
+      ?.ports?.find((p) => p.label === 'et-0/0/9')
+    expect(peerLocalPort?.identity).toEqual({ ifName: 'et-0/0/9' })
   })
 
   it('adds a PARENT-tag link where LLDP saw no neighbor', () => {
