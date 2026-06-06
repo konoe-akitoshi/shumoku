@@ -148,10 +148,7 @@
     const taken = new Set(
       ctx.currentSources.filter((s) => s.purpose === purpose).map((s) => s.dataSourceId),
     )
-    // Manual is uniform in every other way, but it is *created per topology*
-    // (one-per-topology), not attached from a shared pool — so it never belongs
-    // in the "attach an existing source" picker. See manual-source-unification.md.
-    const pick = catalog.find((ds) => ds.type !== 'manual' && !taken.has(ds.id))
+    const pick = catalog.find((ds) => !taken.has(ds.id))
     if (!pick) {
       alert('No data sources available. Create one on /datasources first.')
       return

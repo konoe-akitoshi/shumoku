@@ -77,12 +77,10 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
   }
 
   // Inline-create path: `{ type: 'manual' }` (purpose defaults to 'topology').
-  // Manual is per-topology — only one allowed.
+  // Convenience: create a fresh Manual data source and attach it in one step.
+  // Manual is a fully uniform source (no cardinality / sharing constraints).
   if (body.type === 'manual') {
     const purpose = body.purpose ?? 'topology'
-    if (topology.manualSourceId) {
-      return c.json({ error: 'Topology already has a Manual source attached' }, 409)
-    }
     try {
       const newSource = await getTopologyService().attachManualSource(topologyId, purpose)
       return c.json(newSource, 201)
@@ -103,17 +101,6 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
   const dataSource = getDataSourceService().get(body.dataSourceId)
   if (!dataSource) {
     return c.json({ error: 'Data source not found' }, 404)
-  }
-
-  // Manual content is per-topology (its authored graph lives in this topology's
-  // observations). Sharing one Manual across topologies would be ambiguous to
-  // edit, so a Manual is one-per-topology and created fresh (the `type:'manual'`
-  // inline path), never attached as an existing source.
-  if (dataSource.type === 'manual') {
-    return c.json(
-      { error: 'Manual sources are per-topology; create a new one instead of attaching.' },
-      409,
-    )
   }
 
   // Check if already exists
@@ -240,22 +227,6 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
     const ds = getDataSourceService().get(source.dataSourceId)
     if (!ds) {
       return c.json({ error: `Data source ${source.dataSourceId} not found` }, 404)
-    }
-    // Manual is per-topology — its authored graph lives in THIS topology's
-    // observations. Reject a Manual that belongs to another topology (sharing it
-    // would make its editor ambiguous); same invariant as the POST attach path.
-    if (ds.type === 'manual') {
-      const attachedElsewhere = getTopologySourcesService()
-        .listByDataSource(source.dataSourceId)
-        .some((t) => t.topologyId !== topologyId)
-      if (attachedElsewhere) {
-        return c.json(
-          {
-            error: 'Manual sources are per-topology; cannot attach one owned by another topology.',
-          },
-          409,
-        )
-      }
     }
   }
 
