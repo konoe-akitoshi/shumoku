@@ -91,7 +91,7 @@ scan, no capability flags).
 
 ## Migration
 
-`015_manual_graph_to_observations.sql` (reverse of 011, restore 010's shape):
+`014_manual_graph_to_observations.sql` (reverse of 011, restore 010's shape):
 
 ```sql
 -- Move each Manual source's config_json.graph back into a fresh observation.

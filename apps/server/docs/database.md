@@ -14,7 +14,7 @@ Shumoku Server uses SQLite (via `bun:sqlite`) for persistent storage. The databa
 │ config_json     │     │          metrics)       │     │ composition_revision │
 │ status …        │     │ sync_mode, priority …   │     │ created_at, updated… │
 └─────────────────┘     └─────────────────────────┘     └──────────────────────┘
-   ▲  type='manual' rows hold the authored graph at config_json.graph
+   ▲  type='manual': authored graph = a topology_observations snapshot (uniform source)
    │
    │   ┌──────────────────────────┐     ┌──────────────────────────┐
    └───│  topology_observations   │     │  topology_resolved_graph │
@@ -37,8 +37,9 @@ Shumoku Server uses SQLite (via `bun:sqlite`) for persistent storage. The databa
 
 **Composition model (since the composition-store refactor):** a topology is a
 shell; its sources live in `topology_data_sources` (m2m, by purpose); each
-source's scans are appended to `topology_observations`; the human-authored graph
-lives on the Manual source's `config_json.graph`; `resolve()` folds these into
+source's scans are appended to `topology_observations` — including the Manual
+source's human-authored graph (the editor's save records one; Manual is a uniform
+source, see `docs/design/manual-source-unification.md`); `resolve()` folds these into
 the displayed graph, which is materialized in `topology_resolved_graph` and
 invalidated by `composition_revision`. The **metrics mapping** is no longer a
 column — it is `metrics-binding` attachments on the resolved graph (see
@@ -223,6 +224,7 @@ Schema migrations use numbered SQL files in `src/db/migrations/`. On startup, th
 | `010_manual_as_source.sql` / `011_manual_graph_to_config.sql` | Authored content → Manual source (content_json dropped) |
 | `012_resolved_graph_cache.sql` | `composition_revision` + `topology_resolved_graph` |
 | `013_drop_legacy_source_columns.sql` | Backfill legacy source pointers → m2m, then drop the columns |
+| `014_manual_graph_to_observations.sql` | Manual authored graph `config_json.graph` → per-topology observation (reverses 011); Manual becomes a uniform source |
 
 (`009` is intentionally skipped. `mapping_json` is dropped imperatively by the
 startup backfill after migrating it to bindings — not by a SQL migration — since

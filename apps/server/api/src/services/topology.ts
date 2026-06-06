@@ -4,11 +4,11 @@
  *
  * Storage model: the `topologies` table holds only the topology shell
  * (name, share_token, composition_revision). Sources live in
- * `topology_data_sources` (m2m); per-source graph snapshots in
- * `topology_observations`; the human-authored graph on the Manual source's
- * `config_json.graph`; the metrics mapping as `metrics-binding` attachments on
- * the resolved graph (no `mapping_json`); the resolved graph + layout are
- * materialized in `topology_resolved_graph`.
+ * `topology_data_sources` (m2m); per-source graph snapshots — INCLUDING the
+ * Manual source's human-authored graph (the editor's save records one) — in
+ * `topology_observations`; the metrics mapping as `metrics-binding` attachments
+ * on the resolved graph (no `mapping_json`); the resolved graph + layout are
+ * materialized in `topology_resolved_graph`. Manual is a uniform data source.
  *
  * The editor 's "save" routes through this service 's `create()` /
  * `update()` `contentJson` input. Internally that translates to:
@@ -338,18 +338,16 @@ export class TopologyService {
   ): Promise<{ dataSourceId: string }> {
     const now = timestamp()
     const dsId = await generateId()
-    // Seed config_json with an empty graph so the editor opens on a
-    // blank canvas. Manual content lives here, not in observations
-    // (see migration 011).
-    const emptyConfig = JSON.stringify({
-      graph: { version: '1', nodes: [], links: [] },
-    })
+    // Manual has no connection config and no seeded content: its authored graph
+    // is a topology_observations snapshot recorded by the editor's first save.
+    // Until then there's no observation → resolve treats authored as empty (blank
+    // canvas). Config is `{}` like any source with nothing to configure.
     this.db
       .prepare(
         `INSERT INTO data_sources (id, name, type, config_json, status, fail_count, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(dsId, 'Manual', 'manual', emptyConfig, 'connected', 0, now, now)
+      .run(dsId, 'Manual', 'manual', '{}', 'connected', 0, now, now)
     await this.topologySources.add(topologyId, {
       dataSourceId: dsId,
       purpose,
@@ -610,7 +608,7 @@ export class TopologyService {
   ): Promise<void> {
     const manualId = await this.ensureManualSource(topologyId)
     const topology = this.get(topologyId)
-    const authored = this.readManualGraph(manualId) ?? {
+    const authored = this.readManualGraph(topologyId, manualId) ?? {
       version: '1' as const,
       name: topology?.name ?? 'Manual',
       nodes: [],
@@ -715,8 +713,8 @@ export class TopologyService {
     })
     nodes = nodes.filter((n) => !isPureEmptyOverlay(n))
 
-    // writeManualGraph fans out invalidation to every attached topology.
-    this.writeManualGraph(manualId, { ...authored, nodes })
+    // Records a new authored observation for this topology + invalidates it.
+    await this.writeManualGraph(topologyId, manualId, { ...authored, nodes })
   }
 
   /**
@@ -975,19 +973,16 @@ export class TopologyService {
     // drop a source's last-good nodes (C7 — failed never retracts).
     const latest = this.observations.latestSuccessfulPerSource(topology.id)
     const manualId = topology.manualSourceId
-    const authored: NetworkGraph = manualId
-      ? (this.readManualGraph(manualId) ?? {
-          version: '1',
-          name: topology.name,
-          nodes: [],
-          links: [],
-        })
-      : {
-          version: '1',
-          name: topology.name,
-          nodes: [],
-          links: [],
-        }
+    // The authored graph is the Manual source's latest observation — it's just
+    // another snapshot in `latest`, fed to resolve() as the top-priority
+    // contribution. Absent (fresh Manual / no Manual) → empty.
+    const manualGraph = manualId ? latest.find((o) => o.sourceId === manualId)?.graph : undefined
+    const authored: NetworkGraph = manualGraph ?? {
+      version: '1',
+      name: topology.name,
+      nodes: [],
+      links: [],
+    }
     // Source priority feeds the resolver's field merge: when two sources
     // observe the same device, the higher-priority source wins each field it
     // holds. Mirrors `topology_data_sources.priority`. The Manual/authored
@@ -1149,53 +1144,50 @@ export class TopologyService {
   // at the API boundary (api/observations.ts) and at resolve() time.
 
   /**
-   * Read the graph stored on a Manual data source 's config_json.
-   * Returns null when the source doesn 't exist, isn 't Manual, or has
-   * no graph (e.g. freshly attached then config cleared by hand).
+   * Read a Manual source's authored graph for a topology — the latest
+   * observation it recorded against that topology (Manual is a uniform source;
+   * its content is a per-topology observation, not config). Returns null when
+   * there's no observation yet (fresh Manual = blank canvas).
    *
-   * Public so the discovery-policy API can compute / mutate the authored
-   * layer without poking the data_sources table directly.
+   * Public so the discovery-policy API can compute / mutate the authored layer.
    */
-  readManualGraph(sourceId: string): NetworkGraph | null {
+  readManualGraph(topologyId: string, sourceId: string): NetworkGraph | null {
     const row = this.db
-      .query('SELECT type, config_json FROM data_sources WHERE id = ?')
-      .get(sourceId) as { type: string; config_json: string } | undefined
-    if (!row || row.type !== 'manual') return null
+      .query(
+        `SELECT graph_json FROM topology_observations
+         WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
+         ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get(topologyId, sourceId) as { graph_json: string } | undefined
+    if (!row) return null
     try {
-      const config = JSON.parse(row.config_json) as { graph?: NetworkGraph }
-      return config.graph ?? null
+      return JSON.parse(row.graph_json) as NetworkGraph
     } catch {
       return null
     }
   }
 
   /**
-   * Persist a new authored graph onto a Manual data source 's config_json.
-   * Preserves any sibling keys we don 't own. Invalidates EVERY topology attached
-   * to this Manual source (the authored graph is source-level content and can be
-   * shared across topologies) so none serves a stale resolved artifact — callers
-   * don't need a separate clearCacheEntry.
+   * Persist a Manual source's authored graph by recording a new observation
+   * against the topology (the human is the "scanner"). resolve() folds the
+   * latest one as the top-priority authored contribution. Per-topology: an edit
+   * to topology X's authored graph only invalidates X.
    */
-  writeManualGraph(sourceId: string, graph: NetworkGraph): void {
-    const row = this.db
-      .query('SELECT type, config_json FROM data_sources WHERE id = ?')
-      .get(sourceId) as { type: string; config_json: string } | undefined
-    if (!row || row.type !== 'manual') {
+  async writeManualGraph(topologyId: string, sourceId: string, graph: NetworkGraph): Promise<void> {
+    const src = this.db.query('SELECT type FROM data_sources WHERE id = ?').get(sourceId) as
+      | { type: string }
+      | undefined
+    if (!src || src.type !== 'manual') {
       throw new Error(`Data source ${sourceId} is not a Manual source`)
     }
-    let config: Record<string, unknown> = {}
-    try {
-      config = JSON.parse(row.config_json) as Record<string, unknown>
-    } catch {
-      // Corrupted config — start fresh.
-    }
-    config['graph'] = graph
-    this.db
-      .query('UPDATE data_sources SET config_json = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(config), timestamp(), sourceId)
-    // Fan-out invalidation: this Manual source may be attached to several
-    // topologies; all of them must re-resolve.
-    this.clearCacheForDataSource(sourceId)
+    await this.observations.record({
+      topologyId,
+      sourceId,
+      capturedAt: timestamp(),
+      status: 'ok',
+      graph,
+    })
+    this.clearCacheEntry(topologyId)
   }
 
   /**

@@ -2,7 +2,6 @@
   import { GearSixIcon, PlusIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
-  import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Input } from '$lib/components/ui/input'
@@ -35,14 +34,12 @@
     formError = ''
 
     try {
-      // Two-step: create the topology shell, then attach a Manual
-      // source. Manual owns the graph content; the topology row
-      // just owns name / mapping / share state.
+      // A topology is a composition of sources. Create the shell and land on its
+      // Sources tab to add sources (Manual is just one option — no longer
+      // auto-attached; it's created lazily on first edit).
       const topology = await topologies.create({ name })
-      const { dataSourceId } = await api.topologies.sources.attachManual(topology.id)
       showCreateModal = false
-      // Manual content lives on the source itself — edit on /datasources/<id>.
-      await goto(`/datasources/${dataSourceId}`)
+      await goto(`/topologies/${topology.id}/sources`)
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to create topology'
     } finally {
@@ -107,16 +104,8 @@
                 href="/topologies/{topo.id}"
                 class="btn btn-primary py-1 px-3 text-xs flex-1 text-center"
               >
-                View
+                Open
               </a>
-              {#if topo.manualSourceId}
-                <a
-                  href="/datasources/{topo.manualSourceId}"
-                  class="btn btn-secondary py-1 px-3 text-xs flex-1 text-center"
-                >
-                  Edit
-                </a>
-              {/if}
             </div>
           </div>
         </div>
@@ -130,7 +119,7 @@
     <Dialog.Header>
       <Dialog.Title>Add Topology</Dialog.Title>
       <Dialog.Description>
-        Give your topology a name. You can edit its content on the next screen.
+        Give your topology a name, then add data sources to compose it.
       </Dialog.Description>
     </Dialog.Header>
 

@@ -164,7 +164,7 @@ export function resolveCredentialsForAutoscan(
 ): Record<string, string> {
   const topology = topologyService.get(topologyId)
   if (!topology?.manualSourceId) return {}
-  const graph = topologyService.readManualGraph(topology.manualSourceId)
+  const graph = topologyService.readManualGraph(topologyId, topology.manualSourceId)
   if (!graph) return {}
 
   const subgraphLookup = new Map(
@@ -317,7 +317,7 @@ export class DiscoveryScheduler {
   ): Promise<import('@shumoku/core').Attachment[] | undefined> {
     const topology = this.topologyService.get(topologyId)
     if (!topology?.manualSourceId) return undefined
-    const graph = this.topologyService.readManualGraph(topology.manualSourceId)
+    const graph = this.topologyService.readManualGraph(topologyId, topology.manualSourceId)
     return graph?.attachments
   }
 
