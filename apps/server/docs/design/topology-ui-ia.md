@@ -107,66 +107,60 @@ is making the `Sources → Discovery → Mapping → Resolved` *pipeline* visibl
 Figma makes (canvas resident; only the right panel switches Design/Prototype/Dev
 mode). Full-screen modeless, mode confined to the inspector.
 
-## Interaction model: match the affordance to the operation's meaning (cross-cutting)
+## Interaction model: Save is fine — cross-surface state coupling is the bug (cross-cutting)
 
-A Save button is a **good affordance** — it promises "nothing happens until you
-commit," which is exactly what some operations want. The problem in the current UI
-is not that Save exists; it's that Save is **overused** — applied uniformly,
-including to operations that should just take effect. The goal is **"意味的なUI" /
-semantic UI**: the interaction's *form* matches the operation's *meaning*, so the
-UX is intuitive — a Save button appears exactly where you'd expect to need one,
-and is absent where you'd expect direct effect.
+A Save button is a **good, preferred affordance**. Batching a set of edits behind
+one explicit commit *reduces* wasteful behavior: fewer round-trips, and no
+side-effect (re-resolve, and especially any re-sync / polling) firing on every
+keystroke. It also gives a clear "nothing happens until you commit" point and a
+natural "discard my draft." Using Save is encouraged.
+
+The earlier framing ("Save is overused, make everything direct-apply") was wrong.
+The real defect in the old UI was not the Save button — it was that the *dirty
+state* of one surface reached across and changed the behavior of **another**
+surface. That is the anti-pattern.
+
+### The anti-pattern: dirty state that spans surfaces
+
+The clearest symptom: Discovery's `Sync` was disabled by Sources' unsaved-edits
+flag — *"You have unsaved changes on the Sources page. Save them before syncing."*
+(`ctx.hasSourceChanges`, read by `discovery/+page.svelte`). When surface B's
+behavior depends on surface A's *uncommitted* state, the cause becomes invisible:
+standing on Discovery, nothing explains why Sync is greyed out. And the fact that
+the coupling had to be plumbed through shared context (`ctx.hasSourceChanges`) is
+itself the structural tell — uncommitted state leaked out of the surface that owns
+it.
 
 ### The rule
 
-Choose the affordance by the operation's semantics:
+- **Keep edit / dirty state local to the surface that owns it.** A page's
+  editable mirror + its Save button live and die on that page; they are *not*
+  written into the shared shell context. Other surfaces read only the
+  **committed** state (`ctx.currentSources`, the resolved graph, …).
+- **A "must commit before X" dependency is allowed only when X is on the same
+  surface as the Save.** Then the gate is visible and diagnosable (the Save button
+  and the thing it unlocks are in the same view). A gate that spans surfaces is
+  forbidden — re-express it as "uncommitted edits simply aren't in effect yet,"
+  contained to the owning surface.
+- **Side-effectful verbs stay explicit** (`Sync`, `Rebuild`). They operate on the
+  committed state; they are never gated on *another* surface's draft. If Sources
+  has uncommitted edits, Discovery still syncs the last *saved* config — those
+  edits just haven't happened from the system's point of view, and that fact is
+  local to Sources.
 
-- **Draft → commit (Save button is correct).** Multi-field or multi-step edits the
-  user is *composing* before they should take effect, where atomic commit and
-  "discard my draft" both make sense. Examples: editing the manual topology graph;
-  building up a multi-field source connection config before first connect; a
-  mapping session you want to confirm as a unit.
-- **Atomic / direct / reversible (no Save — apply on commit).** A single-intent
-  change that is meaningful on its own and easily undone. Examples: toggling a
-  node's scheduler policy (auto/observe/disabled); attaching or detaching a
-  source; setting merge priority; flipping a sync mode. A Save button here is
-  ceremony that hides a one-step action behind two.
+### Consequences
 
-### What's wrong today (the abuse)
-
-- **Batching many atomic ops behind one Save.** The Sources page collects
-  attach/detach + priority + sync-mode + scope into an `editableSources` mirror and
-  one **Save Changes** (`sources/+page.svelte`; `_context.svelte.ts`'s
-  `hasSourceChanges`). Each of those is individually atomic and reversible — they
-  should apply directly, not wait behind a page-level commit.
-- **A cross-surface "save before you can act" wall.** Discovery's `Sync` is gated
-  on `ctx.hasSourceChanges` — *"You have unsaved changes on the Sources page. Save
-  them before syncing."* (`discovery/+page.svelte`). This is the clearest symptom:
-  one surface's unsaved form blocks another surface's action. It disappears once
-  atomic edits apply directly.
-
-### Where Save stays
-
-- **Manual editor** (drawing/editing the authored graph): a deliberate draft →
-  Save (record observation). Correct as-is.
-- **A source's connection config** while first composing it (host/token/TLS):
-  reasonable to commit as a unit, *then* the row's lightweight knobs (priority,
-  mode, scope) are direct.
-- **Mapping**, *if* a mapping session is genuinely a compose-then-confirm unit —
-  decide per the rule above; if individual bindings are atomic, drop the page-level
-  Save Mapping and apply per binding.
-
-### Still true regardless of Save
-
-- **Side-effectful verbs stay explicit** (`Sync`, `Rebuild`) — and are **never
-  gated on unsaved config**, because atomic edits are already applied and
-  draft-commits are the user's own deliberate Save.
-- **Reads are reactive on `composition_revision`** (backend already bumps it O(1)
-  per mutation). Change anything → dependent views (Resolved, Diagram) refresh
-  themselves; no manual reload. This removes the "reload to see the effect" half of
-  the friction independently of the Save question.
-- The granular endpoints for direct apply already exist (attach / detach /
-  priority / options, each calling `clearCacheEntry`).
+- **Sources** keeps a Save button (batched commit of attach/detach + sync-mode +
+  priority + scope), but its editable mirror is **page-local** — never in
+  `ctx`. On Save it flushes (`replaceAll`) and updates `ctx.currentSources` (the
+  committed truth). `ctx.editableSources` / `ctx.hasSourceChanges` are removed.
+- **Discovery** reads `ctx.currentSources` (committed) and has **no** dependency on
+  Sources' dirty state — the cross-surface gate is gone for good.
+- **Manual editor** stays a deliberate draft → Save (record observation).
+- **Reads stay reactive on `composition_revision`** (backend bumps it O(1) per
+  mutation): once an edit is *committed*, dependent views (Resolved, Diagram)
+  refresh themselves — no manual reload. (This is orthogonal to Save: it's about
+  committed changes propagating, not about when the commit happens.)
 
 ## Responsibility split: Sources vs Discovery (the filter seam)
 
