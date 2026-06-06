@@ -194,6 +194,26 @@ topologySourcesApi.delete('/:topologyId/sources/:sourceId', async (c) => {
 })
 
 /**
+ * Clear one source's CONTRIBUTION without detaching it: delete its observation
+ * snapshots, then invalidate so resolve() re-stitches from the remaining
+ * sources (entities only this source asserted disappear by orphan sweep).
+ * The attachment + its config (priority / scope) stay. See
+ * topology-ui-ia.md § "Per-source operations".
+ * POST /api/topologies/:topologyId/sources/:sourceId/clear
+ * (`:sourceId` is the data-source id, matching the sync routes.)
+ */
+topologySourcesApi.post('/:topologyId/sources/:sourceId/clear', async (c) => {
+  const { topologyId, sourceId } = c.req.param()
+  const topology = getTopologyService().get(topologyId)
+  if (!topology) {
+    return c.json({ error: 'Topology not found' }, 404)
+  }
+  const deleted = new ObservationsService().deleteForSource(topologyId, sourceId)
+  getTopologyService().clearCacheEntry(topologyId)
+  return c.json({ success: true, deleted })
+})
+
+/**
  * Bulk replace all sources for a topology
  * PUT /api/topologies/:topologyId/sources
  */

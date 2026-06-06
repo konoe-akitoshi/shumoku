@@ -236,6 +236,81 @@ No data-layer change: the drawer reads the same `_context.svelte.ts` /
   drawer, so the page's top-level landmark count stays low.
 - The canvas is `main`; the drawer is a labelled `complementary`/`dialog` region.
 
+## Per-source operations & scope (prior-art-informed)
+
+The Sources zone's per-source controls follow the shape ETL (Airbyte, Fivetran),
+catalog (Backstage), and network-SSoT (Nautobot SSoT) tools converged on. Prior
+art: [Airbyte sync modes](https://docs.airbyte.com/platform/using-airbyte/core-concepts/sync-modes)
+· [Airbyte clear/reset](https://docs.airbyte.com/operator-guides/reset) ·
+[Fivetran table selection + re-sync](https://fivetran.com/docs/using-fivetran/fivetran-dashboard/connectors/schema)
+· [Backstage life-of-an-entity (stitching + orphan sweep)](https://backstage.io/docs/features/software-catalog/life-of-an-entity/)
+· [Nautobot SSoT (diff + create/update/delete + history)](https://docs.nautobot.com/projects/ssot/en/latest/).
+
+### Per-source operation set (the canonical trio)
+
+Every attached source carries its own operations (not just a topology-global
+"Sync all"):
+
+- **Sync** — pull the current state (observed refresh). Records a new observation
+  snapshot; `resolve()` re-stitches.
+- **Re-sync (full)** — re-pull from scratch (the Fivetran "historical re-sync" /
+  Airbyte "refresh" analog). Same as Sync for stateless plugins; explicit for
+  ones that track incremental state.
+- **Clear** — remove *this source's* contribution: delete its observation
+  snapshots for this topology. `resolve()` then re-stitches from the remaining
+  sources; entities only this source asserted disappear by **mark-and-sweep**
+  (Backstage's orphan model — we already have the substrate: per-source
+  `topology_observations` + `resolve()` is the stitch). Bumps the revision.
+
+`Sync all` / `Re-sync all` remain as topology-level conveniences.
+
+### Rebuild is split (data vs curation)
+
+The old global **Rebuild** conflated two different layers; prior art keeps them
+separate (data reset vs config/override reset):
+
+- **Reset overrides** — discard the *human curation* layer only (authored
+  attachments, names, hidden nodes): `discoveryPolicy.rebuild`. Does NOT re-sync.
+- **Sync all** — re-pull data. Independent button.
+- **Clear (per-source)** — drop a source's data, above.
+
+So "blow it away and start over" = Reset overrides + Sync all, but each is an
+explicit, separately-safe action instead of one destructive combined button.
+
+### Scope = stream selection, gated behind schema discovery
+
+The decisive prior-art insight: ETL tools separate **schema discovery** (list the
+streams/facets a source *offers*) from **data sync** (pull rows). Scope is
+*stream selection over the discovered schema* — available after discovery, NOT
+after a data sync. Our `getConfigOptions(key)` (a live catalog query — NetBox
+sites, etc.) **is** schema discovery; topology sync is the data pull. So:
+
+- Scope's facets come from schema discovery (catalog), available once the source
+  is **connected** — independent of whether a topology sync has run. The user
+  intuition "scope appears after the first sync" is really "after discovery."
+- UX must surface the discovery **state**, not show a blind form: *not connected*
+  → "connect first"; *catalog-capable* → faceted selection of real values
+  (default = **all**, with counts); *no catalog* (pure-scan plugins) → "imports
+  everything; refine in Composition." (The current blind `SchemaForm` regardless
+  of state is the smell to fix.)
+- Default is **everything selected**; narrowing scope is a refinement. Changing
+  scope takes effect on the next Sync (Fivetran: re-including a stream triggers a
+  historical re-sync of just that stream).
+
+### Two levels of narrowing (don't conflate)
+
+- **Scope (Sources)** — *pre-ingestion* query filter: don't even pull it. Source
+  level, efficient.
+- **Curation (Composition)** — *post-ingestion* per-entity decisions: hide /
+  exclude / policy on what was pulled. Entity level.
+
+### Backend note
+
+`Clear` is the one piece needing new backend: delete a `(topologyId, sourceId)`'s
+observation rows, then `clearCacheEntry` (revision bump) so `resolve()` re-stitches
+without them. Everything else (per-source Sync, Reset overrides) already has
+endpoints. Mark-and-sweep is automatic — `resolve()` over the surviving snapshots.
+
 ## Out of scope (this doc)
 
 - Manual-editor relocation *into* the topology context: the manual source's

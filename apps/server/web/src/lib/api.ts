@@ -402,6 +402,13 @@ export const topologies = {
         throw err
       }),
 
+    /** Clear a source's contribution (delete its observations); attachment stays. */
+    clear: (topologyId: string, sourceId: string) =>
+      request<{ success: boolean; deleted: number }>(
+        `/topologies/${topologyId}/sources/${sourceId}/clear`,
+        { method: 'POST' },
+      ),
+
     /**
      * Targeted probe of an attached source. Semantically distinct
      * from `syncOne` — probe re-checks the named seeds only, not the

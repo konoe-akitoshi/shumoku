@@ -16,6 +16,7 @@
     ArrowsClockwiseIcon,
     CheckCircleIcon,
     CopyIcon,
+    EraserIcon,
     PlusIcon,
     SlidersHorizontalIcon,
     TrashIcon,
@@ -325,24 +326,54 @@
     }
   }
 
-  async function handleRebuild() {
+  /** Reset the human curation layer only (authored attachments, names, hidden
+   *  nodes). Does NOT re-sync — that's a separate, explicit Sync all. Splitting
+   *  the old combined "Rebuild" keeps data-reset and override-reset independent. */
+  async function handleResetOverrides() {
     const ok = confirm(
-      'Rebuild discards every override you made (community, names, hidden nodes) ' +
-        'and rebuilds from the sources. This cannot be undone. Continue?',
+      'Reset overrides discards every manual change you made (names, community, ' +
+        'hidden nodes) and falls back to what the sources observe. The source data ' +
+        'itself is kept. This cannot be undone. Continue?',
     )
     if (!ok) return
     rebuilding = true
     try {
       await api.topologies.discoveryPolicy.rebuild(ctx.topologyId)
-      await api.topologies.sources.syncAll(ctx.topologyId)
       const updated = await api.topologies.get(ctx.topologyId)
       ctx.topology = updated
       topologies.upsert(updated)
       ctx.bumpRevision()
     } catch (e) {
-      localError = e instanceof Error ? e.message : 'Rebuild failed'
+      localError = e instanceof Error ? e.message : 'Reset overrides failed'
     } finally {
       rebuilding = false
+    }
+  }
+
+  /** Clear one source's contribution (delete its observations); the attachment
+   *  and its config stay. resolve() re-stitches from the remaining sources. */
+  async function handleClearOne(source: TopologyDataSource) {
+    const name = ctx.getDataSource(source.dataSourceId)?.name ?? source.dataSourceId
+    const ok = confirm(
+      `Clear all data contributed by "${name}"? The source stays attached (and its ` +
+        `scope/priority kept); only what it observed is removed. Re-sync to repopulate.`,
+    )
+    if (!ok) return
+    setBusy(source.id, true)
+    localError = ''
+    try {
+      await api.topologies.sources.clear(ctx.topologyId, source.dataSourceId)
+      const { [source.dataSourceId]: _cleared, ...rest } = perSourceSync
+      perSourceSync = rest
+      const updated = await api.topologies.get(ctx.topologyId)
+      ctx.topology = updated
+      topologies.upsert(updated)
+      await mappingStore.load(ctx.topologyId, true)
+      ctx.bumpRevision()
+    } catch (e) {
+      localError = e instanceof Error ? e.message : 'Clear failed'
+    } finally {
+      setBusy(source.id, false)
     }
   }
 
@@ -389,10 +420,10 @@
             size="sm"
             class="text-muted-foreground hover:text-destructive"
             disabled={rebuilding || syncingAll}
-            title="Discard all overrides and rebuild from the sources"
-            onclick={handleRebuild}
+            title="Discard manual overrides (names, hidden nodes); keeps source data"
+            onclick={handleResetOverrides}
           >
-            {rebuilding ? 'Rebuilding…' : 'Rebuild'}
+            {rebuilding ? 'Resetting…' : 'Reset overrides'}
           </Button>
         {/if}
         <Button variant="outline" size="sm" onclick={() => attachSource('topology')}>
@@ -558,7 +589,18 @@
                   <Button
                     variant="ghost"
                     size="sm"
+                    class="text-theme-text-muted hover:text-destructive"
+                    title="Clear this source's data (keeps the attachment + config)"
+                    onclick={() => handleClearOne(source)}
+                  >
+                    <EraserIcon size={14} class="mr-1" />
+                    Clear
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     class="text-danger hover:bg-danger/10"
+                    title="Detach this source"
                     onclick={() => detachSource(source)}
                   >
                     <TrashIcon size={16} />
