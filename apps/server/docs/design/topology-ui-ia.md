@@ -264,6 +264,35 @@ Every attached source carries its own operations (not just a topology-global
 
 `Sync all` / `Re-sync all` remain as topology-level conveniences.
 
+### Source data lifecycle (as-built)
+
+The invariant the operations above hang on: **a source contributes data only
+while it is attached AND has been synced.** Config (attach / priority / scope)
+and data (observations) are separate layers, and the lifecycle keeps them from
+leaking into each other:
+
+- **Attach** is config-only. It records the `(topology, source)` relationship and
+  nothing else — no fetch, no observation. A freshly attached source shows
+  nothing in the diagram until the user runs **Sync**. Discovery never bootstraps
+  itself; the first sync is always an explicit human action (Sync / webhook).
+- **Sync** establishes the source: it records the first observation snapshot.
+  Only *after* this is the source "established."
+- **Refresh (the discovery scheduler)** works on **established sources only** —
+  attached AND already synced at least once (`lastSyncedAt` set), excluding
+  Manual (no upstream). Its working set is filtered to those; an attached-but-
+  never-synced source is structurally absent from it, not skipped by a guard. So
+  the scheduler only ever *refreshes* what an explicit Sync already established.
+- **Detach** deletes the source's observations as well as the attachment (the
+  same delete `Clear` runs). Without this, snapshots linger and a later re-attach
+  silently resurrects stale data on the next `resolve()` — no Sync — which breaks
+  the "attach is config-only" rule above. So re-attaching a previously-detached
+  source starts clean: empty until Sync. (Matches the detach confirm copy: "Its
+  observed data is removed.")
+
+Net: the only way a source's data exists is "attached now + synced while
+attached." Reload, restart, and re-attach all respect that — none of them pull
+data on their own.
+
 ### Rebuild is split (data vs curation)
 
 The old global **Rebuild** conflated two different layers; prior art keeps them
@@ -304,12 +333,17 @@ sites, etc.) **is** schema discovery; topology sync is the data pull. So:
 - **Curation (Composition)** — *post-ingestion* per-entity decisions: hide /
   exclude / policy on what was pulled. Entity level.
 
-### Backend note
+### Backend note (as-built)
 
-`Clear` is the one piece needing new backend: delete a `(topologyId, sourceId)`'s
-observation rows, then `clearCacheEntry` (revision bump) so `resolve()` re-stitches
-without them. Everything else (per-source Sync, Reset overrides) already has
-endpoints. Mark-and-sweep is automatic — `resolve()` over the surviving snapshots.
+`Clear` is implemented as `POST /topologies/:id/sources/:sourceId/clear`
+(`ObservationsService.deleteForSource` → `clearCacheEntry` revision bump), so
+`resolve()` re-stitches without them; mark-and-sweep is automatic over the
+surviving snapshots. **Detach reuses the same delete** — `DELETE
+/topologies/:id/sources/:sourceId` removes the attachment AND the source's
+observations, so the lifecycle invariant above holds. Per-source Sync and Reset
+overrides already had endpoints. The discovery scheduler scopes its tick to
+established (synced, non-Manual) sources, so it refreshes but never bootstraps —
+see `discovery-scheduler.ts`.
 
 ## Out of scope (this doc)
 
