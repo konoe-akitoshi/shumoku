@@ -546,14 +546,14 @@ export interface NodeExclusion {
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 
 /** Where a resolved attachment's value came from. Mirrors `@shumoku/core`'s
- *  `Provenance`. `source === 'authored'` marks a human-set value; any other
- *  source is the value a discovery source supplied. The UI uses this as an
- *  annotation ("your value" vs "from <source>"), NOT as a read-only gate —
+ *  `Provenance`. `source === 'intrinsic'` marks a project-owned (your own) value;
+ *  any other source is the value a discovery source supplied. The UI uses this as
+ *  an annotation ("your value" vs "from <source>"), NOT as a read-only gate —
  *  every value is editable. resolve() stamps it; freshly-authored local
  *  attachments omit it until the next round-trip. */
 export interface Provenance {
   source: string
-  state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'
+  state?: 'confirmed' | 'intrinsic-only' | 'discovered-only' | 'conflicting'
   observedAt?: number
 }
 

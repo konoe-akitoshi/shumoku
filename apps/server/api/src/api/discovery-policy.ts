@@ -363,8 +363,8 @@ export function createDiscoveryPolicyApi(): Hono {
             // the observed name shows through. Only when there's nothing left
             // to author (no attachments, no suppression) AND a real observation
             // backs the node do we drop the entry entirely (a full Reset =
-            // remove the human contribution), so it re-resolves to the bare
-            // observed state. For an authored-only node with nothing left,
+            // remove the project's own contribution), so it re-resolves to the
+            // bare observed state. For an intrinsic-only node with nothing left,
             // deleting would destroy real data — so keep it (with '' label).
             const hasAttach = Array.isArray(target.attachments) && target.attachments.length > 0
             const hasSuppress =

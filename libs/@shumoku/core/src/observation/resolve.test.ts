@@ -8,7 +8,7 @@ import { nodeIdentityQuality, portIdentityQuality, resolve, type SnapshotEntry }
 
 /**
  * Skeleton-level resolve() behavior. Covers the four end-state
- * cases (confirmed / authored-only / discovered-only / conflicting)
+ * cases (confirmed / intrinsic-only / discovered-only / conflicting)
  * and the critical ifIndex reshuffle scenario. Deeper edge cases
  * (cross-source link dedup, ghost endpoints, full retraction
  * hysteresis) are intentionally deferred — see resolve.ts header.
@@ -33,16 +33,16 @@ describe('resolve()', () => {
   })
 
   describe('empty inputs', () => {
-    it('empty authored, no snapshots → empty resolved', () => {
+    it('empty intrinsic, no snapshots → empty resolved', () => {
       const out = resolve(emptyGraph(), [])
       expect(out.nodes).toEqual([])
       expect(out.links).toEqual([])
     })
   })
 
-  describe('authored-only', () => {
-    it('node present only in authored → state = authored-only', () => {
-      const authored: NetworkGraph = {
+  describe('intrinsic-only', () => {
+    it('node present only in intrinsic → state = intrinsic-only', () => {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -53,10 +53,10 @@ describe('resolve()', () => {
           },
         ],
       }
-      const out = resolve(authored, [])
+      const out = resolve(intrinsic, [])
       expect(out.nodes).toHaveLength(1)
-      expect(out.nodes[0]?.provenance?.state).toBe('authored-only')
-      expect(out.nodes[0]?.provenance?.source).toBe('authored')
+      expect(out.nodes[0]?.provenance?.state).toBe('intrinsic-only')
+      expect(out.nodes[0]?.provenance?.source).toBe('intrinsic')
     })
   })
 
@@ -86,12 +86,12 @@ describe('resolve()', () => {
   })
 
   describe('synthetic id collision (adopt path)', () => {
-    it('authored node carrying a `discovered:N` id does not collide with synthesized ids', () => {
+    it('intrinsic node carrying a `discovered:N` id does not collide with synthesized ids', () => {
       // Reproduces the adopt path: a discovered node materialized into the
-      // authored graph keeps its synthesized `discovered:0` id. A later
+      // intrinsic graph keeps its synthesized `discovered:0` id. A later
       // resolve must not hand that same id to a fresh discovered cluster —
       // duplicate ids crash the keyed grid in the UI.
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -114,21 +114,21 @@ describe('resolve()', () => {
           ],
         },
       }
-      const out = resolve(authored, [snap])
+      const out = resolve(intrinsic, [snap])
       const ids = out.nodes.map((n) => n.id)
       expect(out.nodes).toHaveLength(3)
       expect(new Set(ids).size).toBe(ids.length) // all unique — no duplicate key
-      expect(ids).toContain('discovered:0') // authored node kept its id
+      expect(ids).toContain('discovered:0') // intrinsic node kept its id
     })
   })
 
-  describe('confirmed (authored + snapshot agree on identity)', () => {
-    it('authored mgmtIp matches snapshot mgmtIp → confirmed', () => {
-      const authored: NetworkGraph = {
+  describe('confirmed (intrinsic + snapshot agree on identity)', () => {
+    it('intrinsic mgmtIp matches snapshot mgmtIp → confirmed', () => {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
-            id: 'authored-r1',
+            id: 'intrinsic-r1',
             label: 'R1',
             shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
@@ -151,18 +151,18 @@ describe('resolve()', () => {
           ],
         },
       }
-      const out = resolve(authored, [snap])
+      const out = resolve(intrinsic, [snap])
       expect(out.nodes).toHaveLength(1)
       expect(out.nodes[0]?.provenance?.state).toBe('confirmed')
       // identity merged
       expect(out.nodes[0]?.identity?.chassisId).toBe('aa:bb')
-      // cluster id prefers authored
-      expect(out.nodes[0]?.id).toBe('authored-r1')
+      // cluster id prefers intrinsic
+      expect(out.nodes[0]?.id).toBe('intrinsic-r1')
     })
   })
 
-  describe('authored overlay is thin (community/name on top of observed)', () => {
-    // The authored layer is an OVERLAY, not a replacement node. A
+  describe('intrinsic overlay is thin (community/name on top of observed)', () => {
+    // The intrinsic layer is an OVERLAY, not a replacement node. A
     // community-only overlay carries identity + attachments (+ a mirrored
     // label, since Node.label is required) and must NOT blank the device's
     // observed facts — the bug where "adding a community made the device's
@@ -187,7 +187,7 @@ describe('resolve()', () => {
     }
 
     it('observed facts show through under a community-only overlay', () => {
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -200,14 +200,14 @@ describe('resolve()', () => {
           },
         ],
       }
-      const out = resolve(authored, [observed])
+      const out = resolve(intrinsic, [observed])
       expect(out.nodes).toHaveLength(1)
       const n = out.nodes[0]
       expect(n?.provenance?.state).toBe('confirmed')
       // observed facts survived
       expect(n?.metadata?.['readVia']).toBe('snmp')
       expect(n?.ports).toHaveLength(1)
-      // authored attachment applied
+      // intrinsic attachment applied
       const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
       expect(
         acc && acc.kind === 'access' && acc.protocol === 'snmp' ? acc.community : undefined,
@@ -216,7 +216,7 @@ describe('resolve()', () => {
 
     it('a policy-only overlay does NOT wipe an observed access attachment', () => {
       // network-scan stamps the community it read with as an observed access
-      // attachment. An authored overlay that only sets a policy must merge in,
+      // attachment. An intrinsic overlay that only sets a policy must merge in,
       // not replace — otherwise the scan-discovered community vanishes and the
       // autoscan scheduler can't resolve it.
       const observedWithAccess: SnapshotEntry = {
@@ -237,7 +237,7 @@ describe('resolve()', () => {
           ],
         },
       }
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -248,15 +248,15 @@ describe('resolve()', () => {
           },
         ],
       }
-      const n = resolve(authored, [observedWithAccess]).nodes[0]
+      const n = resolve(intrinsic, [observedWithAccess]).nodes[0]
       const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
       expect(
         acc && acc.kind === 'access' && acc.protocol === 'snmp' ? acc.community : undefined,
       ).toBe('public') // observed community survived
-      expect((n?.attachments ?? []).some((a) => a.kind === 'policy')).toBe(true) // authored applied
+      expect((n?.attachments ?? []).some((a) => a.kind === 'policy')).toBe(true) // intrinsic applied
     })
 
-    it('an authored access overrides an observed access of the same protocol', () => {
+    it('an intrinsic access overrides an observed access of the same protocol', () => {
       const observedWithAccess: SnapshotEntry = {
         sourceId: 'network-scan:1',
         capturedAt: 1000,
@@ -274,7 +274,7 @@ describe('resolve()', () => {
           ],
         },
       }
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -285,7 +285,7 @@ describe('resolve()', () => {
           },
         ],
       }
-      const n = resolve(authored, [observedWithAccess]).nodes[0]
+      const n = resolve(intrinsic, [observedWithAccess]).nodes[0]
       const accs = (n?.attachments ?? []).filter(
         (a) => a.kind === 'access' && a.protocol === 'snmp',
       )
@@ -298,7 +298,7 @@ describe('resolve()', () => {
 
     it('observed label tracks a source rename when the overlay sets no name', () => {
       // attach-only overlay stores '' (no rename). Source then renames.
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -323,13 +323,13 @@ describe('resolve()', () => {
           ],
         },
       }
-      const out = resolve(authored, [renamed])
+      const out = resolve(intrinsic, [renamed])
       // mirrored placeholder must NOT freeze the name — observed rename wins.
       expect(stringOf(out.nodes[0]?.label)).toBe('sw-core-renamed')
     })
 
     it('an explicit rename overrides the observed label', () => {
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -339,7 +339,7 @@ describe('resolve()', () => {
           },
         ],
       }
-      const out = resolve(authored, [observed])
+      const out = resolve(intrinsic, [observed])
       expect(stringOf(out.nodes[0]?.label)).toBe('MY-RENAME')
     })
   })
@@ -350,18 +350,18 @@ describe('resolve()', () => {
         { id: 'a', label: 'keep', identity: { mgmtIp: '10.0.0.1' } },
         { id: 'b', label: 'junk', identity: { mgmtIp: '10.0.0.2' } },
       ])
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         exclusions: [{ mgmtIp: '10.0.0.2' }],
       }
-      const out = resolve(authored, [snap])
+      const out = resolve(intrinsic, [snap])
       const ips = out.nodes.map((n) => n.identity?.mgmtIp)
       expect(ips).toContain('10.0.0.1')
       expect(ips).not.toContain('10.0.0.2')
     })
 
     it('exclusion is identity-keyed: survives an ephemeral node-id change', () => {
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         exclusions: [{ mgmtIp: '10.0.0.2' }],
       }
@@ -372,16 +372,16 @@ describe('resolve()', () => {
       const t2 = makeSnap('network-scan:1', 2000, [
         { id: 'discovered:99', label: 'junk', identity: { mgmtIp: '10.0.0.2' } },
       ])
-      expect(resolve(authored, [t1]).nodes).toHaveLength(0)
-      expect(resolve(authored, [t2]).nodes).toHaveLength(0)
+      expect(resolve(intrinsic, [t1]).nodes).toHaveLength(0)
+      expect(resolve(intrinsic, [t2]).nodes).toHaveLength(0)
     })
 
     it('matches via any identity key (chassisId hide catches mgmtIp-found node)', () => {
       const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
         { id: 'a', label: 'junk', identity: { mgmtIp: '10.0.0.5', chassisId: 'aa:bb' } },
       ])
-      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{ chassisId: 'aa:bb' }] }
-      expect(resolve(authored, [snap]).nodes).toHaveLength(0)
+      const intrinsic: NetworkGraph = { ...emptyGraph(), exclusions: [{ chassisId: 'aa:bb' }] }
+      expect(resolve(intrinsic, [snap]).nodes).toHaveLength(0)
     })
 
     it('a multi-key exclusion still matches when one key changed (ANY, not ALL)', () => {
@@ -390,11 +390,11 @@ describe('resolve()', () => {
       const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
         { id: 'a', label: 'junk', identity: { mgmtIp: '10.0.0.5', sysName: 'new-name' } },
       ])
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         exclusions: [{ mgmtIp: '10.0.0.5', sysName: 'old-name' }],
       }
-      expect(resolve(authored, [snap]).nodes).toHaveLength(0)
+      expect(resolve(intrinsic, [snap]).nodes).toHaveLength(0)
     })
 
     it('drops links incident to a hidden node', () => {
@@ -417,8 +417,8 @@ describe('resolve()', () => {
           ],
         },
       }
-      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{ mgmtIp: '10.0.0.2' }] }
-      const out = resolve(authored, [snap])
+      const intrinsic: NetworkGraph = { ...emptyGraph(), exclusions: [{ mgmtIp: '10.0.0.2' }] }
+      const out = resolve(intrinsic, [snap])
       expect(out.nodes).toHaveLength(1)
       expect(out.links).toHaveLength(0)
     })
@@ -427,12 +427,12 @@ describe('resolve()', () => {
       const snap: SnapshotEntry = makeSnap('network-scan:1', 1000, [
         { id: 'a', label: 'a', identity: { mgmtIp: '10.0.0.1' } },
       ])
-      const authored: NetworkGraph = { ...emptyGraph(), exclusions: [{}] }
-      expect(resolve(authored, [snap]).nodes).toHaveLength(1)
+      const intrinsic: NetworkGraph = { ...emptyGraph(), exclusions: [{}] }
+      expect(resolve(intrinsic, [snap]).nodes).toHaveLength(1)
     })
   })
 
-  describe('confirmed (≥2 snapshots agree, no authored)', () => {
+  describe('confirmed (≥2 snapshots agree, no intrinsic)', () => {
     it('two snapshots sharing chassisId → 1 cluster, confirmed', () => {
       const a: SnapshotEntry = makeSnap('netbox:1', 1000, [
         { id: 'a-r1', label: 'R1', identity: { chassisId: 'aa', sysName: 'r1' } },
@@ -484,8 +484,8 @@ describe('resolve()', () => {
   })
 
   describe('failed snapshots are ignored', () => {
-    it('failed snapshot does not retract authored nodes', () => {
-      const authored: NetworkGraph = {
+    it('failed snapshot does not retract intrinsic nodes', () => {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -502,15 +502,15 @@ describe('resolve()', () => {
         status: 'failed',
         graph: null,
       }
-      const out = resolve(authored, [failed])
+      const out = resolve(intrinsic, [failed])
       expect(out.nodes).toHaveLength(1)
-      expect(out.nodes[0]?.provenance?.state).toBe('authored-only')
+      expect(out.nodes[0]?.provenance?.state).toBe('intrinsic-only')
     })
   })
 
   describe('links carry provenance', () => {
-    it('authored link gets authored-only state', () => {
-      const authored: NetworkGraph = {
+    it('intrinsic link gets intrinsic-only state', () => {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           { id: 'a', label: 'A', shape: 'rect' },
@@ -518,15 +518,15 @@ describe('resolve()', () => {
         ],
         links: [{ from: { node: 'a', port: 'p1' }, to: { node: 'b', port: 'p2' } }],
       }
-      const out = resolve(authored, [])
+      const out = resolve(intrinsic, [])
       expect(out.links).toHaveLength(1)
-      expect(out.links[0]?.provenance?.state).toBe('authored-only')
+      expect(out.links[0]?.provenance?.state).toBe('intrinsic-only')
     })
   })
 
   // -------------------------------------------------------------------------
   // Priority field merge — the heart of the redesign. All sources (incl. the
-  // human/authored graph) are equal, priority-ordered contributions; per
+  // human/intrinsic graph) are equal, priority-ordered contributions; per
   // field the highest-priority contribution that holds a value wins.
   // -------------------------------------------------------------------------
   describe('priority field merge (C1)', () => {
@@ -582,7 +582,7 @@ describe('resolve()', () => {
       expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1')
     })
 
-    it('human (authored) outranks every observed source per field', () => {
+    it('human (intrinsic) outranks every observed source per field', () => {
       const lo: SnapshotEntry = {
         sourceId: 'network-scan:1',
         capturedAt: 1000,
@@ -602,7 +602,7 @@ describe('resolve()', () => {
           ],
         },
       }
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -612,10 +612,10 @@ describe('resolve()', () => {
           },
         ],
       }
-      const n = resolve(authored, [lo]).nodes[0]
+      const n = resolve(intrinsic, [lo]).nodes[0]
       // human wins label (it holds one) — "human wins" = "+Infinity priority"
       expect(stringOf(n?.label)).toBe('HUMAN-RENAME')
-      expect(n?.fieldSources?.['label']).toBe('authored')
+      expect(n?.fieldSources?.['label']).toBe('intrinsic')
       // human held no spec/ports → observed still flows through
       expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('observed-model')
       expect(n?.ports).toHaveLength(1)
@@ -706,7 +706,7 @@ describe('resolve()', () => {
       }
       // Partial node: identity + a policy attachment. label '' is NOT a
       // sentinel here — it just fails hasValue, so no name claim is made.
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -717,7 +717,7 @@ describe('resolve()', () => {
           },
         ],
       }
-      const n = resolve(authored, [observed]).nodes[0]
+      const n = resolve(intrinsic, [observed]).nodes[0]
       // observed name shows through; the human made no label claim
       expect(stringOf(n?.label)).toBe('sw-core')
       expect(n?.fieldSources?.['label']).toBe('network-scan:1')
@@ -751,7 +751,7 @@ describe('resolve()', () => {
           ],
         },
       }
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -762,13 +762,13 @@ describe('resolve()', () => {
           },
         ],
       }
-      const n = resolve(authored, [observed]).nodes[0]
+      const n = resolve(intrinsic, [observed]).nodes[0]
       const snmp = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
       const ssh = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'ssh')
       // observed access is attributed to the observing source (UI: read-only)
       expect(snmp?.provenance?.source).toBe('network-scan:1')
-      // human access is attributed to 'authored' (UI: editable / ✕)
-      expect(ssh?.provenance?.source).toBe('authored')
+      // human access is attributed to 'intrinsic' (UI: editable / ✕)
+      expect(ssh?.provenance?.source).toBe('intrinsic')
     })
 
     it('a human access that overrides an observed one is attributed to the human', () => {
@@ -789,7 +789,7 @@ describe('resolve()', () => {
           ],
         },
       }
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -800,7 +800,7 @@ describe('resolve()', () => {
           },
         ],
       }
-      const n = resolve(authored, [observed]).nodes[0]
+      const n = resolve(intrinsic, [observed]).nodes[0]
       const accs = (n?.attachments ?? []).filter(
         (a) => a.kind === 'access' && a.protocol === 'snmp',
       )
@@ -809,7 +809,7 @@ describe('resolve()', () => {
       expect(a && a.kind === 'access' && a.protocol === 'snmp' ? a.community : undefined).toBe(
         'override',
       )
-      expect(a?.provenance?.source).toBe('authored')
+      expect(a?.provenance?.source).toBe('intrinsic')
     })
   })
 
@@ -861,11 +861,11 @@ describe('resolve()', () => {
       const n = resolve(withHuman, [observed]).nodes[0]
       expect(stringOf(n?.label)).toBe('MY-NAME')
       expect(communityOf(n)).toBe('private')
-      expect(n?.fieldSources?.['label']).toBe('authored')
+      expect(n?.fieldSources?.['label']).toBe('intrinsic')
     })
 
     it('dropping the human contribution returns the node to the observed name + community', () => {
-      // Reset = the node's entry is gone from the authored graph.
+      // Reset = the node's entry is gone from the intrinsic graph.
       const n = resolve(emptyGraph(), [observed]).nodes[0]
       expect(stringOf(n?.label)).toBe('scan-name') // observed name surfaces
       expect(communityOf(n)).toBe('public') // observed community surfaces
@@ -914,7 +914,7 @@ describe('resolve()', () => {
     })
 
     it('a human overlay (policy=disabled) persists when no observed snapshot carries it', () => {
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -937,10 +937,10 @@ describe('resolve()', () => {
           nodes: [{ id: 'x', label: 'X', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
         },
       }
-      const out = resolve(authored, [other])
+      const out = resolve(intrinsic, [other])
       const disabled = out.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.9')
       expect(disabled).toBeDefined()
-      expect(disabled?.provenance?.state).toBe('authored-only')
+      expect(disabled?.provenance?.state).toBe('intrinsic-only')
       expect((disabled?.attachments ?? []).some((a) => a.kind === 'policy')).toBe(true)
     })
 
@@ -961,11 +961,11 @@ describe('resolve()', () => {
         '10.0.0.2',
       ])
       // human kept .1 → it persists even though the source dropped it.
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [{ id: 'kept', label: 'kept', identity: { mgmtIp: '10.0.0.1' } }],
       }
-      const ips = resolve(authored, [latest])
+      const ips = resolve(intrinsic, [latest])
         .nodes.map((n) => n.identity?.mgmtIp)
         .sort()
       expect(ips).toEqual(['10.0.0.1', '10.0.0.2'])
@@ -1039,7 +1039,7 @@ describe('resolve()', () => {
   // Human suppression — the negative counterpart to an override. The human
   // can remove an attachment a source supplied; it stays gone across re-scans
   // (the assertion persists) and returns only when the human contribution is
-  // dropped (Reset). No observed/authored layers — just add / override /
+  // dropped (Reset). No observed/intrinsic layers — just add / override /
   // remove on one node.
   // -------------------------------------------------------------------------
   describe('human suppression of an observed attachment', () => {
@@ -1065,7 +1065,7 @@ describe('resolve()', () => {
     }
 
     it('a suppressed key is dropped even though the source supplies it', () => {
-      const authored: NetworkGraph = {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -1076,7 +1076,7 @@ describe('resolve()', () => {
           },
         ],
       }
-      const n = resolve(authored, [observed]).nodes[0]
+      const n = resolve(intrinsic, [observed]).nodes[0]
       // snmp removed by the human; ssh (not suppressed) still shows
       expect((n?.attachments ?? []).some((a) => a.kind === 'access' && a.protocol === 'snmp')).toBe(
         false,
@@ -1184,7 +1184,7 @@ describe('resolve()', () => {
       expect(out.nodes).toHaveLength(1) // one thing, not three
       const n = out.nodes[0]
       expect(stringOf(n?.label)).toBe('MY-NAME') // human won the one field it touched
-      expect(n?.fieldSources?.['label']).toBe('authored')
+      expect(n?.fieldSources?.['label']).toBe('intrinsic')
       // untouched fields flow through from whoever holds them (priority order)
       expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('C9300') // NetBox (10)
       expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1') // scan
@@ -1258,7 +1258,7 @@ describe('resolve()', () => {
       expect(n?.provenance?.observedAt).toBe(1_700_000_000_000)
     })
 
-    it('an authored-only node (never observed) has no observedAt', () => {
+    it('an intrinsic-only node (never observed) has no observedAt', () => {
       const human: NetworkGraph = {
         ...emptyGraph(),
         nodes: [{ id: 'n', label: 'X', identity: { mgmtIp: '10.0.0.8' } }],
@@ -1366,8 +1366,8 @@ describe('resolve()', () => {
       expect(rack?.parent).toBe('src-a:1:site')
     })
 
-    it('leaves authored subgraph ids raw, and authored parent wins on a shared node', () => {
-      const authored: NetworkGraph = {
+    it('leaves intrinsic subgraph ids raw, and intrinsic parent wins on a shared node', () => {
+      const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
           {
@@ -1375,10 +1375,10 @@ describe('resolve()', () => {
             label: 'R1',
             shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
-            parent: 'authored-sg',
+            parent: 'intrinsic-sg',
           },
         ],
-        subgraphs: [{ id: 'authored-sg', label: 'Authored group' }],
+        subgraphs: [{ id: 'intrinsic-sg', label: 'Authored group' }],
       }
       const snap: SnapshotEntry = {
         sourceId: 'src-a:1',
@@ -1398,15 +1398,15 @@ describe('resolve()', () => {
           subgraphs: [{ id: 'sg-2', label: 'Source A group' }],
         },
       }
-      const out = resolve(authored, [snap])
+      const out = resolve(intrinsic, [snap])
       const ids = out.subgraphs?.map((s) => s.id) ?? []
-      expect(ids).toContain('authored-sg') // raw — authored owns the id space
+      expect(ids).toContain('intrinsic-sg') // raw — intrinsic owns the id space
       expect(ids).toContain('src-a:1:sg-2')
-      // same identity (10.0.0.1) clusters into one node; authored parent wins
+      // same identity (10.0.0.1) clusters into one node; intrinsic parent wins
       const r1 = out.nodes.find((n) => n.label === 'R1')
-      expect(r1?.parent).toBe('authored-sg')
-      expect(out.subgraphs?.find((s) => s.id === 'authored-sg')?.provenance?.source).toBe(
-        'authored',
+      expect(r1?.parent).toBe('intrinsic-sg')
+      expect(out.subgraphs?.find((s) => s.id === 'intrinsic-sg')?.provenance?.source).toBe(
+        'intrinsic',
       )
     })
   })

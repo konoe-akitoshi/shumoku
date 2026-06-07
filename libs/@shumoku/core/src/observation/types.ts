@@ -26,9 +26,9 @@ export interface SnapshotEntry {
   /**
    * Merge priority for this source — higher wins per field in `resolve()`.
    * Mirrors `topology_data_sources.priority`; defaults to `0` when omitted.
-   * The human/authored contribution always outranks snapshots regardless
-   * of this value. Orthogonal to identity clustering (priority decides the
-   * field winner, never which nodes are the same).
+   * The intrinsic (project-owned) contribution always outranks snapshots
+   * regardless of this value. Orthogonal to identity clustering (priority
+   * decides the field winner, never which nodes are the same).
    */
   priority?: number
   /**
