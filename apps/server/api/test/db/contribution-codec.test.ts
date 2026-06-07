@@ -182,6 +182,26 @@ describe('contribution codec — round-trip', () => {
     } as NetworkGraph)
   })
 
+  test('region subgraph identity + membership round-trip (via payload)', () => {
+    expectLossless({
+      version: '1',
+      name: 'regions',
+      nodes: [{ id: 'n1', label: 'N', parent: 'dc' }],
+      links: [],
+      subgraphs: [
+        {
+          id: 'dc',
+          label: 'DC',
+          identity: { name: 'backbone', keys: { 'zabbix-hostgroup': '98' } },
+          membership: [
+            { attr: 'subnet', value: '10.0.0.0/24' },
+            { attr: 'metadata', key: 'site', value: 'tokyo' },
+          ],
+        },
+      ],
+    } as NetworkGraph)
+  })
+
   test('presence anchor round-trips (NULL column); scoop default is absent', () => {
     expectLossless({
       version: '1',
