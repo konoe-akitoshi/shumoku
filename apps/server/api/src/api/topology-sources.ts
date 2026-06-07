@@ -175,13 +175,18 @@ topologySourcesApi.delete('/:topologyId/sources/:sourceId', async (c) => {
     return c.json({ error: 'Failed to delete' }, 500)
   }
 
-  // Detach also deletes this source's observation snapshots. Without this, the
-  // snapshots linger and a later re-attach silently resurrects stale data on the
-  // next resolve() — no Sync required — which breaks the "attach is config-only,
-  // no data until you Sync" model. A source's contribution must exist only while
-  // it is attached AND has been synced. (Matches the confirm copy: "Its observed
-  // data is removed.") This is the same delete the explicit Clear endpoint runs.
-  new ObservationsService().deleteForSource(topologyId, existing.dataSourceId)
+  // Detaching the TOPOLOGY attachment also purges this source's observed data
+  // (audit snapshots + the canonical contribution). Without it, the data lingers
+  // and a later re-attach silently resurrects it on the next resolve() — no Sync
+  // required — breaking the "attach is config-only, no data until you Sync" model.
+  // GUARD by purpose: a source can be attached for BOTH topology and metrics; the
+  // observed contribution is keyed by data-source id alone, so purging on a
+  // METRICS detach would wrongly wipe the still-attached topology contribution
+  // and its history. The topology attach-row FK cascade already drops the
+  // contribution; deleteForSource here cleans the audit log to match.
+  if (existing.purpose === 'topology') {
+    new ObservationsService().deleteForSource(topologyId, existing.dataSourceId)
+  }
 
   // Detaching a source removes it from the resolve input set → invalidate.
   getTopologyService().clearCacheEntry(topologyId)
