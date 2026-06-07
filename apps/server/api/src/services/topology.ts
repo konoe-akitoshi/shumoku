@@ -30,6 +30,8 @@ import type {
   NodePort,
   ResolvedLayout,
   SnapshotEntry,
+  Subgraph,
+  Termination,
 } from '@shumoku/core'
 import {
   attachmentKey,
@@ -44,7 +46,16 @@ import {
 import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
+import { buildGraph, ingestGraph } from './contribution-store.js'
 import { ObservationsService } from './observations.js'
+
+/**
+ * The project's own (intrinsic) contribution id — one per topology
+ * (contribution_source.attachment_id IS NULL). This is the authored layer; it is
+ * NOT a data source. See db-native-persistence.md.
+ */
+const INTRINSIC_SOURCE = 'intrinsic'
+
 import { TopologySourcesService } from './topology-sources.js'
 
 /** Bare topology row — no content_json column post-migration-010. */
@@ -177,6 +188,69 @@ function isPureEmptyOverlayPort(p: NodePort): boolean {
     if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
   }
   return label.trim() === '' && (p.connectors?.length ?? 0) === 0
+}
+
+/**
+ * One-time backfill merge: a topology may have had several legacy Manual sources
+ * (#370). Concatenate their authored graphs into the single intrinsic contribution —
+ * dedup nodes/subgraphs/terminations by id (first wins), append links/exclusions,
+ * concat topology-default attachments. Best-effort; only runs once on first read.
+ */
+function mergeAuthoredGraphs(graphs: NetworkGraph[]): NetworkGraph {
+  // Keep the first graph's graph-level fields (version/name/description/settings/pins);
+  // the structural arrays are merged below.
+  const out: NetworkGraph = { ...(graphs[0] ?? { version: '1' }), nodes: [], links: [] }
+  out.subgraphs = undefined
+  out.terminations = undefined
+  out.exclusions = undefined
+  out.attachments = undefined
+  const seenNode = new Set<string>()
+  const seenLink = new Set<string>()
+  const seenSub = new Set<string>()
+  const seenTerm = new Set<string>()
+  const seenAttKey = new Set<string>()
+  const subgraphs: Subgraph[] = []
+  const terminations: Termination[] = []
+  const exclusions: NetworkGraph['exclusions'] = []
+  const attachments: Attachment[] = []
+  for (const g of graphs) {
+    for (const n of g.nodes ?? []) {
+      if (seenNode.has(n.id)) continue
+      seenNode.add(n.id)
+      out.nodes.push(n)
+    }
+    for (const l of g.links ?? []) {
+      // Dedup by id (DB local_id is unique); id-less links can't collide, always append.
+      if (l.id != null) {
+        if (seenLink.has(l.id)) continue
+        seenLink.add(l.id)
+      }
+      out.links.push(l)
+    }
+    for (const sg of g.subgraphs ?? []) {
+      if (seenSub.has(sg.id)) continue
+      seenSub.add(sg.id)
+      subgraphs.push(sg)
+    }
+    for (const t of g.terminations ?? []) {
+      if (seenTerm.has(t.id)) continue
+      seenTerm.add(t.id)
+      terminations.push(t)
+    }
+    if (g.exclusions?.length) exclusions.push(...g.exclusions)
+    // topology-default attachments: one slot per key (first wins).
+    for (const a of g.attachments ?? []) {
+      const key = attachmentKey(a)
+      if (seenAttKey.has(key)) continue
+      seenAttKey.add(key)
+      attachments.push(a)
+    }
+  }
+  if (subgraphs.length) out.subgraphs = subgraphs
+  if (terminations.length) out.terminations = terminations
+  if (exclusions.length) out.exclusions = exclusions
+  if (attachments.length) out.attachments = attachments
+  return out
 }
 
 /** Whether a port identity carries at least one usable port match key. */
@@ -605,9 +679,8 @@ export class TopologyService {
     nodeDesired: NodeBindingDesired[],
     linkDesired: LinkBindingDesired[],
   ): Promise<void> {
-    const manualId = await this.ensureManualSource(topologyId)
     const topology = this.get(topologyId)
-    const authored = this.readManualGraph(topologyId, manualId) ?? {
+    const authored = this.readManualGraph(topologyId) ?? {
       version: '1' as const,
       name: topology?.name ?? 'Manual',
       nodes: [],
@@ -713,7 +786,7 @@ export class TopologyService {
     nodes = nodes.filter((n) => !isPureEmptyOverlay(n))
 
     // Records a new authored observation for this topology + invalidates it.
-    await this.writeManualGraph(topologyId, manualId, { ...authored, nodes })
+    await this.writeManualGraph(topologyId, INTRINSIC_SOURCE, { ...authored, nodes })
   }
 
   /**
@@ -971,12 +1044,18 @@ export class TopologyService {
     // Latest NON-FAILED snapshot per source: a transient failed scan must not
     // drop a source's last-good nodes (C7 — failed never retracts).
     const latest = this.observations.latestSuccessfulPerSource(topology.id)
-    const manualId = topology.manualSourceId
-    // The authored graph is the Manual source's latest observation — it's just
-    // another snapshot in `latest`, fed to resolve() as the top-priority
-    // contribution. Absent (fresh Manual / no Manual) → empty.
-    const manualGraph = manualId ? latest.find((o) => o.sourceId === manualId)?.graph : undefined
-    const authored: NetworkGraph = manualGraph ?? {
+    // Every attached Manual source's legacy observation is excluded from snapshots —
+    // authored data is the intrinsic contribution now, so a Manual observation must not
+    // double-count as an observed source (handles multiple Manuals, not just one).
+    const manualIds = new Set(
+      (
+        this.db.query("SELECT id FROM data_sources WHERE type = 'manual'").all() as { id: string }[]
+      ).map((r) => r.id),
+    )
+    // The authored graph is the intrinsic contribution (DB-native store), folded as
+    // resolve()'s top-priority contribution. Absent → empty. (`readManualGraph`
+    // lazily backfills from a legacy Manual observation the first time.)
+    const authored: NetworkGraph = this.readManualGraph(topology.id) ?? {
       version: '1',
       name: topology.name,
       nodes: [],
@@ -994,7 +1073,7 @@ export class TopologyService {
     // old observation rows behind, so without this filter a detached source
     // would keep feeding the resolve from stale snapshots.
     const snapshots: SnapshotEntry[] = latest
-      .filter((o) => o.sourceId !== manualId && priorityBySource.has(o.sourceId))
+      .filter((o) => !manualIds.has(o.sourceId) && priorityBySource.has(o.sourceId))
       .map((o) => ({
         sourceId: o.sourceId,
         capturedAt: o.capturedAt,
@@ -1150,20 +1229,53 @@ export class TopologyService {
    *
    * Public so the discovery-policy API can compute / mutate the authored layer.
    */
-  readManualGraph(topologyId: string, sourceId: string): NetworkGraph | null {
-    const row = this.db
-      .query(
-        `SELECT graph_json FROM topology_observations
-         WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
-         ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
-      )
-      .get(topologyId, sourceId) as { graph_json: string } | undefined
-    if (!row) return null
-    try {
-      return JSON.parse(row.graph_json) as NetworkGraph
-    } catch {
-      return null
+  readManualGraph(topologyId: string, _sourceId?: string): NetworkGraph | null {
+    // The authored layer is the intrinsic contribution (DB-native store). The
+    // `sourceId` param is vestigial — authored is per-topology now.
+    const fromRows = buildGraph(topologyId, INTRINSIC_SOURCE, this.db)
+    if (fromRows) return fromRows
+    // Lazy one-time backfill: an existing topology's authored graph still lives in
+    // a legacy Manual observation. Move it into the intrinsic contribution once.
+    const legacy = this.readLegacyManualObservation(topologyId)
+    if (legacy) {
+      ingestGraph(topologyId, INTRINSIC_SOURCE, legacy, { attachmentId: null }, this.db)
+      return legacy
     }
+    return null
+  }
+
+  /**
+   * Read the pre-cutover authored graph from legacy Manual observations (backfill
+   * source). A topology may have had MULTIPLE Manual sources (#370 allowed it), so
+   * merge them all into one intrinsic graph rather than losing all but one.
+   */
+  private readLegacyManualObservation(topologyId: string): NetworkGraph | null {
+    const manualSources = this.db
+      .query(
+        `SELECT ds.id AS id FROM topology_data_sources tds
+         JOIN data_sources ds ON ds.id = tds.data_source_id
+         WHERE tds.topology_id = ? AND ds.type = 'manual'`,
+      )
+      .all(topologyId) as { id: string }[]
+    const graphs: NetworkGraph[] = []
+    for (const { id } of manualSources) {
+      const row = this.db
+        .query(
+          `SELECT graph_json FROM topology_observations
+           WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
+           ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
+        )
+        .get(topologyId, id) as { graph_json: string } | undefined
+      if (!row) continue
+      try {
+        graphs.push(JSON.parse(row.graph_json) as NetworkGraph)
+      } catch {
+        // skip a corrupt legacy blob
+      }
+    }
+    if (graphs.length === 0) return null
+    if (graphs.length === 1) return graphs[0] ?? null
+    return mergeAuthoredGraphs(graphs)
   }
 
   /**
@@ -1172,20 +1284,9 @@ export class TopologyService {
    * latest one as the top-priority authored contribution. Per-topology: an edit
    * to topology X's authored graph only invalidates X.
    */
-  async writeManualGraph(topologyId: string, sourceId: string, graph: NetworkGraph): Promise<void> {
-    const src = this.db.query('SELECT type FROM data_sources WHERE id = ?').get(sourceId) as
-      | { type: string }
-      | undefined
-    if (!src || src.type !== 'manual') {
-      throw new Error(`Data source ${sourceId} is not a Manual source`)
-    }
-    await this.observations.record({
-      topologyId,
-      sourceId,
-      capturedAt: timestamp(),
-      status: 'ok',
-      graph,
-    })
+  writeManualGraph(topologyId: string, _sourceId: string, graph: NetworkGraph): void {
+    // Authored layer = the intrinsic contribution (topology-owned, attachment_id NULL).
+    ingestGraph(topologyId, INTRINSIC_SOURCE, graph, { attachmentId: null }, this.db)
     this.clearCacheEntry(topologyId)
   }
 
