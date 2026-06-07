@@ -968,6 +968,38 @@ export interface Pin {
   position?: 'top' | 'bottom' | 'left' | 'right'
 }
 
+/**
+ * Region identity for cross-source subgraph merge. A subgraph that carries an
+ * identity is treated as a REGION: subgraphs from different sources whose
+ * identities share ANY key are merged into one region by resolve() — the same
+ * any-key clustering nodes use. Without identity a subgraph stays source-local
+ * (each source keeps its own group).
+ */
+export interface RegionIdentity {
+  /** Human-facing region name; also a match key (`name=<value>`). */
+  name?: string
+  /** Namespaced keys, e.g. `{ 'zabbix-hostgroup': '98', 'netbox-site': 'backbone' }`. */
+  keys?: Record<string, string>
+}
+
+/**
+ * Membership rule deciding whether a node belongs to a region, INDEPENDENT of
+ * which source placed the node. A node with no explicit `parent` joins the
+ * region if it matches ANY of the region's criteria — this is what lets a
+ * lower-priority source's node land in a region an upper source scooped even
+ * when the upper source never saw that node.
+ *
+ * - `name`     — `value` (a regex) matches the node's label or `identity.sysName`.
+ * - `subnet`   — the node's `identity.mgmtIp` falls inside the IPv4 CIDR `value`.
+ * - `metadata` — `node.metadata[key]` equals `value` (string compare).
+ */
+export interface MembershipCriterion {
+  attr: 'name' | 'subnet' | 'metadata'
+  value: string
+  /** Metadata key to read when `attr === 'metadata'`. */
+  key?: string
+}
+
 export interface Subgraph {
   id: string
 
@@ -975,6 +1007,19 @@ export interface Subgraph {
    * Display label
    */
   label: string
+
+  /**
+   * Region identity — when set, resolve() merges this subgraph with same-region
+   * subgraphs from other sources (any-key match). See {@link RegionIdentity}.
+   */
+  identity?: RegionIdentity
+
+  /**
+   * Membership criteria — when set, this subgraph acts as a region whose member
+   * nodes are decided by rule, not just enumerated `parent` edges. See
+   * {@link MembershipCriterion}.
+   */
+  membership?: MembershipCriterion[]
 
   /**
    * Child subgraph IDs

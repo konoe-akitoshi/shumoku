@@ -1608,6 +1608,98 @@ describe('resolve()', () => {
       )
     })
   })
+
+  describe('regions (identity merge + membership)', () => {
+    it('merges same-identity subgraphs from two sources into one region', () => {
+      const a: SnapshotEntry = {
+        sourceId: 'src-a',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'a1', label: 'a', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' }],
+          subgraphs: [{ id: 'g', label: 'Backbone', identity: { name: 'backbone' } }],
+        },
+      }
+      const b: SnapshotEntry = {
+        sourceId: 'netbox',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'b1', label: 'b', identity: { mgmtIp: '10.0.0.2' }, parent: 'g' }],
+          subgraphs: [
+            {
+              id: 'g',
+              label: 'Backbone DC',
+              identity: { name: 'backbone', keys: { 'netbox-site': 'bb' } },
+            },
+          ],
+        },
+      }
+      const out = resolve(emptyGraph(), [a, b])
+      // one merged region (identity name=backbone matched across the two sources)
+      expect(out.subgraphs).toHaveLength(1)
+      const region = out.subgraphs?.[0]
+      expect(region?.identity?.name).toBe('backbone')
+      expect(region?.identity?.keys).toEqual({ 'netbox-site': 'bb' })
+      // both nodes' parents collapse to the one canonical region id
+      const parents = new Set(out.nodes.map((n) => n.parent))
+      expect(parents.size).toBe(1)
+      expect(parents.has(region?.id)).toBe(true)
+    })
+
+    it('assigns a parentless node to a region by subnet membership', () => {
+      const intrinsic: NetworkGraph = {
+        ...emptyGraph(),
+        subgraphs: [
+          { id: 'dc', label: 'DC', membership: [{ attr: 'subnet', value: '10.0.0.0/24' }] },
+        ],
+      }
+      const snap: SnapshotEntry = {
+        sourceId: 'src',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'in', label: 'in', identity: { mgmtIp: '10.0.0.5' } },
+            { id: 'out', label: 'out', identity: { mgmtIp: '10.9.0.5' } },
+          ],
+        },
+      }
+      const out = resolve(intrinsic, [snap])
+      expect(out.nodes.find((n) => n.label === 'in')?.parent).toBe('dc')
+      expect(out.nodes.find((n) => n.label === 'out')?.parent).toBeUndefined()
+    })
+
+    it('assigns by name-regex membership; explicit parent is never overridden', () => {
+      const intrinsic: NetworkGraph = {
+        ...emptyGraph(),
+        subgraphs: [
+          { id: 'routers', label: 'Routers', membership: [{ attr: 'name', value: '^mx' }] },
+          { id: 'kept', label: 'Kept' },
+        ],
+      }
+      const snap: SnapshotEntry = {
+        sourceId: 'src',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'm', label: 'mx99', identity: { mgmtIp: '10.0.0.1' } },
+            // already parented (to a namespaced source group) → criteria must not touch it
+            { id: 'p', label: 'mx88', identity: { mgmtIp: '10.0.0.2' }, parent: 'own' },
+          ],
+          subgraphs: [{ id: 'own', label: 'Own' }],
+        },
+      }
+      const out = resolve(intrinsic, [snap])
+      expect(out.nodes.find((n) => n.label === 'mx99')?.parent).toBe('routers')
+      expect(out.nodes.find((n) => n.label === 'mx88')?.parent).toBe('src:own')
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

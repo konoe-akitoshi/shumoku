@@ -8,11 +8,13 @@ import {
   type Identity,
   type Link,
   type LinkEndpoint,
+  type MembershipCriterion,
   type NetworkGraph,
   type Node,
   type NodeExclusion,
   type NodePort,
   type Provenance,
+  type RegionIdentity,
   type Subgraph,
 } from '../models/types.js'
 import { keyHash, nodeIdentityKeys, portIdentityKeys } from './identity.js'
@@ -143,15 +145,36 @@ export function resolve(
     }
   }
 
+  // 3b. Regions. Cluster subgraphs across contributions by region identity
+  //     (any-key match) — same machinery as nodes. A subgraph with no identity
+  //     stays its own region (keeping its namespaced id). Then:
+  //       - remap every resolved node's `parent` to the merged region's id;
+  //       - for a node with NO parent, assign the first region whose membership
+  //         criteria match (so a lower source fills a region an upper scooped).
+  const regions = clusterRegions(contributions)
+  const regionIdRemap = new Map<string, string>()
+  for (const cl of regions) {
+    for (const m of cl.members) regionIdRemap.set(m.subgraph.id, cl.canonicalId)
+  }
+  for (const node of resolvedNodes) {
+    if (node.parent !== undefined) {
+      const mapped = regionIdRemap.get(node.parent)
+      if (mapped) node.parent = mapped
+    } else {
+      for (const cl of regions) {
+        if (nodeMatchesRegion(node, cl)) {
+          node.parent = cl.canonicalId
+          break
+        }
+      }
+    }
+  }
+
   // 4. Fold links — endpoint node id → cluster id, port id → folded port id.
   const resolvedLinks = foldLinks(contributions, clusterById, portIdRemap)
 
-  // 5. Subgraphs — fold from every contribution (authored + each source), not
-  //    just authored. Source subgraph ids were namespaced per source above, and
-  //    resolved nodes carry the matching namespaced `parent`, so membership
-  //    resolves without cross-source collisions. (No cross-source dedup yet:
-  //    subgraphs have no identity key like nodes do — each source keeps its own.)
-  const resolvedSubgraphs = foldSubgraphs(contributions)
+  // 5. Subgraphs — fold each region cluster into one merged subgraph.
+  const resolvedSubgraphs = foldRegions(regions, regionIdRemap)
 
   return {
     version: authored.version,
@@ -804,32 +827,239 @@ function namespaceSourceSubgraphs(graph: NetworkGraph, sourceId: string): Networ
   return { ...graph, nodes, subgraphs }
 }
 
+interface RegionMember {
+  sourceId: string
+  priority: number
+  capturedAt: number
+  subgraph: Subgraph
+}
+interface RegionCluster {
+  /** Merged region id — prefers the intrinsic member's id, else first member's. */
+  canonicalId: string
+  members: RegionMember[]
+}
+
+/** Region identity match keys (name + namespaced keys). `[]` = no identity. */
+function regionKeys(identity: RegionIdentity | undefined): string[] {
+  if (!identity) return []
+  const out: string[] = []
+  if (identity.name) out.push(`name=${identity.name}`)
+  for (const [ns, v] of Object.entries(identity.keys ?? {})) out.push(`${ns}=${v}`)
+  return out
+}
+
 /**
- * Fold subgraphs from EVERY contribution (intrinsic + each source), stamping
- * provenance. Source subgraph ids were namespaced per source at contribution
- * time (see namespaceSourceSubgraphs), and resolved nodes carry the matching
- * namespaced `parent`, so membership resolves without collisions. No
- * cross-source dedup yet — subgraphs have no identity key, so each source keeps
- * its own groups.
- *
- * Provenance is ALWAYS restamped (not `?? s.provenance`) so resolve is the sole
- * authority — same as nodes/links. A subgraph whose stored input still carries
- * stale provenance (e.g. an old `source: 'authored'` round-tripped into a
- * contribution) can't leak the old value into the resolved output.
+ * Cluster subgraphs across contributions by region identity (any-key match) —
+ * the subgraph analogue of clusterNodes. A subgraph with no identity never
+ * merges (each stays its own region, keeping its namespaced id). Intrinsic is
+ * claimed first so a merged region prefers the intrinsic (raw) id.
  */
-function foldSubgraphs(contributions: Contribution[]): Subgraph[] | undefined {
-  const all: Subgraph[] = []
-  for (const contrib of contributions) {
-    if (!contrib.graph.subgraphs) continue
-    const state = contrib.sourceId === 'intrinsic' ? 'intrinsic-only' : 'discovered-only'
-    for (const s of contrib.graph.subgraphs) {
-      all.push({
-        ...s,
-        provenance: { source: contrib.sourceId, state },
-      })
+function clusterRegions(contributions: Contribution[]): RegionCluster[] {
+  const clusters: RegionCluster[] = []
+  const keyIndex = new Map<string, number>()
+  const claim = (m: RegionMember): void => {
+    const keys = regionKeys(m.subgraph.identity)
+    let hit: number | undefined
+    for (const k of keys) {
+      const idx = keyIndex.get(k)
+      if (idx !== undefined) {
+        hit = idx
+        break
+      }
+    }
+    if (hit === undefined) {
+      clusters.push({ canonicalId: m.subgraph.id, members: [m] })
+      hit = clusters.length - 1
+    } else {
+      clusters[hit]?.members.push(m)
+    }
+    for (const k of keys) if (!keyIndex.has(k)) keyIndex.set(k, hit)
+  }
+  for (const c of contributions) {
+    if (c.sourceId !== 'intrinsic') continue
+    for (const s of c.graph.subgraphs ?? [])
+      claim({ sourceId: c.sourceId, priority: c.priority, capturedAt: c.capturedAt, subgraph: s })
+  }
+  for (const c of contributions) {
+    if (c.sourceId === 'intrinsic') continue
+    for (const s of c.graph.subgraphs ?? [])
+      claim({ sourceId: c.sourceId, priority: c.priority, capturedAt: c.capturedAt, subgraph: s })
+  }
+  return clusters
+}
+
+/** Whether a node satisfies any membership criterion of any member of a region. */
+function nodeMatchesRegion(node: Node, cluster: RegionCluster): boolean {
+  for (const m of cluster.members) {
+    for (const crit of m.subgraph.membership ?? []) {
+      if (criterionMatches(node, crit)) return true
     }
   }
-  return all.length > 0 ? all : undefined
+  return false
+}
+
+function criterionMatches(node: Node, crit: MembershipCriterion): boolean {
+  if (crit.attr === 'name') {
+    const re = safeRegex(crit.value)
+    if (!re) return false
+    const hay = [stringLabel(node.label), node.identity?.sysName].filter(
+      (s): s is string => typeof s === 'string' && s.length > 0,
+    )
+    return hay.some((h) => re.test(h))
+  }
+  if (crit.attr === 'subnet') {
+    return node.identity?.mgmtIp ? ipv4InCidr(node.identity.mgmtIp, crit.value) : false
+  }
+  if (crit.attr === 'metadata') {
+    if (!crit.key) return false
+    const v = node.metadata?.[crit.key]
+    return v !== undefined && String(v) === crit.value
+  }
+  return false
+}
+
+function safeRegex(pattern: string): RegExp | null {
+  try {
+    return new RegExp(pattern)
+  } catch {
+    return null
+  }
+}
+
+function ipv4ToInt(ip: string): number | null {
+  const parts = ip.split('.')
+  if (parts.length !== 4) return null
+  let v = 0
+  for (const p of parts) {
+    const n = Number(p)
+    if (!Number.isInteger(n) || n < 0 || n > 255) return null
+    v = v * 256 + n
+  }
+  return v >>> 0
+}
+
+function ipv4InCidr(ip: string, cidr: string): boolean {
+  const [net, bitsStr] = cidr.split('/')
+  const bits = Number(bitsStr)
+  if (!net || !Number.isFinite(bits) || bits < 0 || bits > 32) return false
+  const a = ipv4ToInt(ip)
+  const b = ipv4ToInt(net)
+  if (a === null || b === null) return false
+  if (bits === 0) return true
+  const mask = (bits === 32 ? 0xffffffff : ~(0xffffffff >>> bits)) >>> 0
+  return (a & mask) === (b & mask)
+}
+
+function mergeRegionIdentities(ids: Array<RegionIdentity | undefined>): RegionIdentity | undefined {
+  let name: string | undefined
+  const keys: Record<string, string> = {}
+  let touched = false
+  for (const id of ids) {
+    if (!id) continue
+    if (id.name && !name) {
+      name = id.name
+      touched = true
+    }
+    for (const [k, v] of Object.entries(id.keys ?? {})) {
+      if (keys[k] === undefined) {
+        keys[k] = v
+        touched = true
+      }
+    }
+  }
+  if (!touched) return undefined
+  const out: RegionIdentity = {}
+  if (name) out.name = name
+  if (Object.keys(keys).length > 0) out.keys = keys
+  return out
+}
+
+function dedupMembership(crit: MembershipCriterion[]): MembershipCriterion[] {
+  const seen = new Set<string>()
+  const out: MembershipCriterion[] = []
+  for (const c of crit) {
+    const k = `${c.attr}|${c.key ?? ''}|${c.value}`
+    if (!seen.has(k)) {
+      seen.add(k)
+      out.push(c)
+    }
+  }
+  return out
+}
+
+/**
+ * Fold each region cluster into one merged subgraph. Cross-source members merge
+ * by identity (id collapses to `canonicalId`); per field the highest-priority
+ * member holding a value wins; identity keys + membership criteria union;
+ * parent / children ids are remapped through the region map. Provenance is
+ * ALWAYS restamped so resolve is the sole authority.
+ */
+function foldRegions(
+  clusters: RegionCluster[],
+  regionIdRemap: Map<string, string>,
+): Subgraph[] | undefined {
+  const out: Subgraph[] = []
+  for (const cl of clusters) {
+    const ranked = [...cl.members].sort(
+      (a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt,
+    )
+    const top = ranked[0]
+    if (!top) continue
+    const pick = <T>(read: (s: Subgraph) => T | undefined): T | undefined => {
+      for (const m of ranked) {
+        const v = read(m.subgraph)
+        if (hasValue(v)) return v
+      }
+      return undefined
+    }
+
+    const hasIntrinsic = cl.members.some((m) => m.sourceId === 'intrinsic')
+    const observerCount = cl.members.filter((m) => m.sourceId !== 'intrinsic').length
+    let state: Provenance['state']
+    if (hasIntrinsic && observerCount > 0) state = 'confirmed'
+    else if (hasIntrinsic) state = 'intrinsic-only'
+    else if (observerCount >= 2) state = 'confirmed'
+    else state = 'discovered-only'
+    const source = hasIntrinsic
+      ? 'intrinsic'
+      : ([...cl.members].sort((a, b) => b.capturedAt - a.capturedAt)[0]?.sourceId ?? 'unknown')
+
+    const identity = mergeRegionIdentities(cl.members.map((m) => m.subgraph.identity))
+    const membership = dedupMembership(cl.members.flatMap((m) => m.subgraph.membership ?? []))
+    const parentRaw = pick((s) => s.parent)
+    const parent = parentRaw ? (regionIdRemap.get(parentRaw) ?? parentRaw) : undefined
+    const childrenRaw = cl.members.flatMap((m) => m.subgraph.children ?? [])
+    const children = [...new Set(childrenRaw.map((c) => regionIdRemap.get(c) ?? c))]
+    const direction = pick((s) => s.direction)
+    const style = pick((s) => s.style)
+    const spec = pick((s) => s.spec)
+    const file = pick((s) => s.file)
+    const pins = pick((s) => s.pins)
+    const attachments = foldAttachmentEntries(
+      ranked.map((m) => ({
+        sourceId: m.sourceId,
+        capturedAt: m.capturedAt,
+        attachments: m.subgraph.attachments,
+      })),
+    )
+
+    out.push({
+      id: cl.canonicalId,
+      label: pick((s) => s.label) ?? top.subgraph.label,
+      ...(parent ? { parent } : {}),
+      ...(children.length > 0 ? { children } : {}),
+      ...(direction ? { direction } : {}),
+      ...(style ? { style } : {}),
+      ...(spec ? { spec } : {}),
+      ...(file ? { file } : {}),
+      ...(pins ? { pins } : {}),
+      ...(identity ? { identity } : {}),
+      ...(membership.length > 0 ? { membership } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
+      provenance: { source, state },
+    })
+  }
+  return out.length > 0 ? out : undefined
 }
 
 interface LinkMember {
