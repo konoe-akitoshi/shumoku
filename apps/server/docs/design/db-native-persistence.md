@@ -5,27 +5,28 @@
 
 ## ⚠️ Canonical model — read first
 
-> **The human is fully just a top-priority source. No authored layer, no human-vs-machine
-> special-casing, and NO reserved magic literal** (neither `'authored'` nor `'human'`).
-> A topology is **N source contributions**, each a `contribution_source` row. The human's
-> contribution is an *ordinary row* with a normal id; it is distinguished only by **typed
-> column values**, never by a branched string:
-> - **priority** — a *value* (the human's row holds the maximum). "Human wins" = higher
->   number, never `if (human)`.
-> - **`write_mode = 'edited'`** — edited-in-place (persists); external sources are
->   `'synced'` (re-fetched; a re-sync can drop a node → retraction). A typed kind, the
->   only basis for retraction, **orthogonal to human-ness** (a static import is also `'edited'`).
-> - **`origin = 'human'`** — a typed discriminator used only to *route* a human edit to
->   its row; the merge branches on **nothing** human-specific (only `priority`).
+> **There is no "human" or "authored" concept at all — not a layer, not a label, not an
+> `origin` flag.** A topology is **N contributions**, each a `contribution_source` row with
+> a `priority`. The ONLY structural distinction is **external vs the project's own**:
+> - a contribution **backed by a `data_source`** (`data_source_id` set) is an *external
+>   feed* — re-fetched on sync, so a re-sync that omits a node retracts it;
+> - a contribution with **`data_source_id IS NULL`** is the **project's own assertions** —
+>   written by the editor, never re-fetched, so it persists.
 >
-> The old `'authored'` literal (~15 `=== 'authored'` sites in `resolve.ts`) is **removed**.
+> This is **ownership / lifecycle (intrinsic vs external), NOT human-vs-machine** — a
+> future automated writer of project-owned data is also `data_source_id NULL`. "The
+> project's edits win" = its row holds the top `priority` (a *value*), never `if`. **The
+> merge branches on nothing but `priority`.** Editing writes the project's own
+> contribution (the topology's intrinsic layer, always available) — **it never spawns a
+> source**. Both the `'authored'` literal (~15 `=== 'authored'` sites in `resolve.ts`) and
+> any `'human'` tag are **removed**; retraction is derivable from `data_source_id IS NULL`.
 >
 > **Presence (scoop) and hide are the same bucket**: every contribution asserts
 > elements with a **sign** — a normal element row = "this node is here" (scoop); an
 > identity-only element row with `negate=1` = "hide this node". Same for attachments:
 > `negate=0` asserts, `negate=1` suppresses. `resolve()` clusters by identity and, per
 > identity/key, the **highest-priority assertion's sign** decides presence/value. Any
-> source can hide in principle; today only `'human'` does — usage, not a rule.
+> source can hide in principle; today only the project's own (intrinsic) contribution does — usage, not a rule.
 >
 > The literal `'authored'` special-cases in `resolve.ts` (~15 sites) are **residue to
 > remove**, replaced by priority + the signed-assertion model. Do NOT re-introduce a
@@ -49,7 +50,7 @@ cutting the "core type == storage model" coupling.
 
 ## Architecture: uniform contributions + one signed-assertion bucket
 
-Every source — external *and* `'human'` — stores the **same shape**:
+Every contribution — external feeds *and* the project's own — stores the **same shape**:
 - a **`contribution_source`** registry row (priority, write-mode, graph-level payload);
 - **`contribution_element`** rows (node|port|subgraph|termination + `payload_json`),
   each with a **`negate`** sign (0 = present/scoop, 1 = hide; a hide row is identity-only);
@@ -71,10 +72,11 @@ attachments, the binding target, the assertion sign) as real FK-enforced columns
 
 ## Schema (END STATE)
 
-`source_id` is `data_sources.id` for an external source, or an ordinary per-topology id
-for the human contribution (`origin='human'`) — **no code branches on its value**;
-`origin`/`write_mode`/`priority` columns carry the only differences. `payload_json` is the
-document column (promote a scalar to a generated column only when a query needs it).
+A contribution is identified by `contribution_source.id` (an ordinary id). It is an
+external feed when its `data_source_id` is set, or the project's own when
+`data_source_id IS NULL` — that NULL is the only discriminator, and **no code branches on
+any source string literal**. `payload_json` is the document column (promote a scalar to a
+generated column only when a query needs it).
 
 ```
 -- Existing, unchanged
@@ -84,20 +86,19 @@ topology_data_sources   id, topology_id, data_source_id, purpose, sync_mode, pri
 topology_resolved_graph topology_id, graph_json, layout_json, …, built_revision, resolver_version  -- ③ output
 -- topology_observations: RETIRED (its content becomes contribution_* rows; keep only as a raw audit log if desired)
 
--- ② Internal per-topology source registry (NOT data_sources; NOT in the Sources UI).
---    The human contribution is an ordinary row here (origin='human', normal id) — internal
---    bookkeeping, never an attachable source, so the "phantom Manual" UX problem does not
---    return. Resolves priority + FK + retraction. Nothing branches on the id value.
+-- ② Per-topology contribution registry. One row per contribution. data_source_id set =
+--    external feed; data_source_id NULL = the project's own (intrinsic) contribution
+--    (written by the editor, never re-fetched). The intrinsic row is NOT a data_source and
+--    NOT in the Sources UI, so "phantom Manual" does not return. No 'human'/'authored' tag.
 contribution_source
-  topology_id TEXT REFERENCES topologies(id) ON DELETE CASCADE,
-  source_id   TEXT,                              -- data_sources.id | 'human'
-  origin      TEXT,                              -- 'data-source' | 'human'
-  priority    INTEGER,                           -- merge precedence; 'human' = MAX
-  write_mode  TEXT,                              -- 'synced' (re-fetched, retractable) | 'edited' (in place, persists)
-  graph_payload_json TEXT,                       -- THIS contribution's graph-level fields: settings, pins, version, name
+  topology_id    TEXT REFERENCES topologies(id) ON DELETE CASCADE,
+  source_id      TEXT,                           -- this contribution's id (ordinary id)
+  data_source_id TEXT REFERENCES data_sources(id) ON DELETE CASCADE,  -- NULL ⇔ the project's own contribution
+  priority       INTEGER,                        -- merge precedence; the intrinsic contribution = MAX
+  graph_payload_json TEXT,                       -- this contribution's graph-level fields: settings, pins, version, name
   PRIMARY KEY (topology_id, source_id)
 
--- ② Contributions (rows + payload doc column), uniform for every source incl. 'human'
+-- ② Contributions (rows + payload doc column), uniform for every contribution (external + intrinsic)
 contribution_element
   id INTEGER PRIMARY KEY,
   topology_id TEXT NOT NULL, source_id TEXT NOT NULL,
@@ -141,11 +142,11 @@ Notes:
   array + `suppressedAttachments`.)
 - **Identity-anchored** (settles the composition-store invariant-6 contradiction):
   `local_id` is only the intra-source handle; cross-source matching is `contribution_identity`.
-- **`contribution_source` resolves three prior blockers at once**: `'human'` priority lives
-  here (= MAX, the one legitimate human-specific *value*); FK integrity (every contribution
-  FKs a real registry row, incl. `'human'`); retraction = `write_mode` (`'edited'` rows
-  persist, `'synced'` rows are replaced per sync). Graph-level `settings`/`pins` live in
-  `graph_payload_json` (closes that round-trip gap).
+- **`contribution_source` resolves three prior blockers at once**: priority lives here (a
+  value; the intrinsic `data_source_id IS NULL` row = MAX); FK integrity (every contribution
+  FKs a real registry row); retraction is derivable (`data_source_id IS NULL` → never
+  re-fetched → persists; otherwise replaced per sync). Graph-level `settings`/`pins` live in
+  `graph_payload_json` (closes that round-trip gap). No `'human'`/`'authored'` literal anywhere.
 - **Terminations** = `kind='termination'`; `link.via` references the source's own terminations.
 - **Topology-default** = `attachment.element_id NULL`; partial unique index
   `(topology_id, source_id, attachment_key) WHERE element_id IS NULL` + the symmetric
@@ -171,11 +172,12 @@ ingestGraph(topologyId, source_id, graph)           -- decompose a graph into th
   matches the old `resolve(readManual + snapshots)` for representative graphs.
 - **A sync** = `ingestGraph(topology, <data_source_id>, scannedGraph)` (replace that
   source's rows transactionally; on a failed scan, leave them — status on `topology_data_sources`).
-- **A human edit** = write `'human'` rows incrementally (one attachment/element row =
-  O(1)); never a full-replace, so a crash can't wipe the human contribution. Import
-  (`ingestGraph` of the whole human graph) is the only full-replace and is one transaction.
-- **No phantom Manual** — the human contribution is rows under an internal
-  `contribution_source('human')`, never a user-facing data source.
+- **An editor edit** = write the project's-own contribution (the `data_source_id IS NULL`
+  row) incrementally (one attachment/element row = O(1)); never a full-replace, so a crash
+  can't wipe it. Import (`ingestGraph` of the whole project graph) is the only full-replace
+  and is one transaction.
+- **No phantom Manual** — the project's own data is rows under the intrinsic
+  `contribution_source` row (`data_source_id IS NULL`), never a user-facing data source.
 
 ## Scaling (why DB-native, not a blob)
 
@@ -215,8 +217,8 @@ plan below, WAL, and batched transactions. It is bounded and infrequent, not a w
 ## Staged migration
 
 1. **`contribution_source` + `contribution_element`/`identity`/`link` + `buildContributions`
-   for `'human'`** + `ingestGraph`/`buildGraph` + golden round-trip test. Backfill the
-   Manual observation graph into `'human'` rows.
+   for the intrinsic contribution** + `ingestGraph`/`buildGraph` + golden round-trip test.
+   Backfill the Manual observation graph into the intrinsic (`data_source_id IS NULL`) rows.
 2. **`contribution_attachment` (with `negate`)** — metrics-binding first
    (`target_source_id` FK), then policy/access; unify hide via `contribution_element.negate`.
    Remove the `'authored'` literal special-cases + the `exclusions`/`suppressedAttachments`
