@@ -478,8 +478,13 @@ export const topologies = {
    */
   displaySettings: {
     get: (id: string) =>
-      request<{ edgeStyle: string; splineMode: string }>(`/topologies/${id}/display-settings`),
-    set: (id: string, body: { edgeStyle: string; splineMode?: string }) =>
+      request<{ edgeStyle: string; splineMode: string; hideDisconnected: boolean }>(
+        `/topologies/${id}/display-settings`,
+      ),
+    set: (
+      id: string,
+      body: { edgeStyle?: string; splineMode?: string; hideDisconnected?: boolean },
+    ) =>
       request<{ ok: boolean }>(`/topologies/${id}/display-settings`, {
         method: 'PUT',
         body: JSON.stringify(body),

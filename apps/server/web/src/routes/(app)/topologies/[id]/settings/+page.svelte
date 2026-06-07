@@ -33,6 +33,7 @@
 
   let edgeStyle = $state('orthogonal')
   let splineMode = $state('sloppy')
+  let hideDisconnected = $state(false)
   let savingEdgeStyle = $state(false)
   let deleting = $state(false)
 
@@ -56,8 +57,21 @@
       const settings = await api.topologies.displaySettings.get(ctx.topology.id)
       edgeStyle = settings.edgeStyle || 'orthogonal'
       splineMode = settings.splineMode || 'sloppy'
+      hideDisconnected = settings.hideDisconnected ?? false
     } catch {
       // Use defaults
+    }
+  }
+
+  async function updateHideDisconnected(value: boolean) {
+    if (!ctx.topology?.id) return
+    hideDisconnected = value
+    try {
+      await api.topologies.displaySettings.set(ctx.topology.id, { hideDisconnected: value })
+      // Changes the resolved node set → re-render the diagram.
+      ctx.bumpRevision()
+    } catch (e) {
+      console.error('Failed to update hideDisconnected:', e)
     }
   }
 
@@ -158,6 +172,21 @@
           </select>
         </div>
       {/if}
+
+      <label class="flex items-center justify-between cursor-pointer">
+        <div>
+          <p class="text-sm text-theme-text">Hide Disconnected Nodes</p>
+          <p class="text-xs text-theme-text-muted">
+            Drop auto-discovered nodes that have no links
+          </p>
+        </div>
+        <input
+          type="checkbox"
+          class="toggle"
+          checked={hideDisconnected}
+          onchange={(e) => updateHideDisconnected(e.currentTarget.checked)}
+        >
+      </label>
 
       <hr class="border-theme-border">
 
