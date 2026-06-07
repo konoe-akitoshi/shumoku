@@ -93,6 +93,19 @@ function attachmentKeyOf(a: Attachment): string {
   return a.kind
 }
 
+/**
+ * Port ids are only node-scoped in `NetworkGraph` (two switches may both have port
+ * `eth0`), but `contribution_element.local_id` is unique per source. So a port's stored
+ * local_id is composed with its owning node id; the original port id round-trips by
+ * stripping the prefix on read. The separator (unit separator) won't occur in real ids.
+ */
+const PORT_SEP = ''
+const portLocalId = (nodeId: string, portId: string): string => `${nodeId}${PORT_SEP}${portId}`
+const stripPortLocalId = (localId: string, nodeId: string | null): string =>
+  nodeId && localId.startsWith(`${nodeId}${PORT_SEP}`)
+    ? localId.slice(nodeId.length + PORT_SEP.length)
+    : localId
+
 /** Recover an attachment kind from a suppression key (the column needs a kind). */
 function kindFromKey(key: string): string {
   if (key.startsWith('access:')) return 'access'
@@ -234,7 +247,14 @@ export function ingestGraph(
           'attachments',
           'suppressedAttachments',
         ])
-        const pid = elementId(port.id, 'port', node.id, 'present', portPayload)
+        // Port local_id is node-scoped (two nodes may share a port id like 'eth0').
+        const pid = elementId(
+          portLocalId(node.id, port.id),
+          'port',
+          node.id,
+          'present',
+          portPayload,
+        )
         writeIdentity(pid, port.identity)
         writeAttachments(pid, 'port', port.attachments)
         writeSuppressions(pid, 'port', port.suppressedAttachments)
@@ -275,9 +295,9 @@ export function ingestGraph(
         sourceId,
         link.id ?? null,
         from.node,
-        from.port ?? null,
+        from.port != null ? portLocalId(from.node, from.port) : null,
         to.node,
-        to.port ?? null,
+        to.port != null ? portLocalId(to.node, to.port) : null,
         'present',
         j(linkPayload),
       )
@@ -382,7 +402,10 @@ export function buildGraph(
   // Ports first (so nodes can attach them).
   for (const el of elements) {
     if (el.kind !== 'port' || !el.parent_local_id) continue
-    const port: NodePort = { id: el.local_id, ...parse(el.payload_json) } as NodePort
+    const port: NodePort = {
+      id: stripPortLocalId(el.local_id, el.parent_local_id),
+      ...parse(el.payload_json),
+    } as NodePort
     const identity = identityFromRows(identityByElement.get(el.id) ?? [])
     if (identity) port.identity = identity
     const a = attsOf(el.id)
@@ -458,8 +481,22 @@ export function buildGraph(
     delete payload['to']
     const link: Link = {
       ...payload,
-      from: { node: r.from_node_local_id, port: r.from_port_local_id ?? undefined, ...fromExtra },
-      to: { node: r.to_node_local_id, port: r.to_port_local_id ?? undefined, ...toExtra },
+      from: {
+        node: r.from_node_local_id,
+        port:
+          r.from_port_local_id != null
+            ? stripPortLocalId(r.from_port_local_id, r.from_node_local_id)
+            : undefined,
+        ...fromExtra,
+      },
+      to: {
+        node: r.to_node_local_id,
+        port:
+          r.to_port_local_id != null
+            ? stripPortLocalId(r.to_port_local_id, r.to_node_local_id)
+            : undefined,
+        ...toExtra,
+      },
     } as Link
     // local_id is the source Link.id (NULL when the source link had none).
     if (r.local_id != null) link.id = r.local_id

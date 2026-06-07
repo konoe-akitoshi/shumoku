@@ -136,6 +136,20 @@ describe('contribution codec — round-trip', () => {
     } as NetworkGraph)
   })
 
+  test('node-scoped duplicate port ids round-trip (two nodes both have "eth0")', () => {
+    expectLossless({
+      version: '1',
+      name: 'dup-ports',
+      nodes: [
+        { id: 'sw-a', label: 'A', ports: [{ id: 'eth0', label: 'eth0' }] },
+        { id: 'sw-b', label: 'B', ports: [{ id: 'eth0', label: 'eth0' }] },
+      ],
+      links: [
+        { id: 'l', from: { node: 'sw-a', port: 'eth0' }, to: { node: 'sw-b', port: 'eth0' } },
+      ],
+    } as NetworkGraph)
+  })
+
   test('empty collections ≡ absent; Subgraph.children is derived (not round-tripped)', () => {
     // The input carries empty `ports`/`attachments` and a `children[]`; canon treats
     // empty ≡ absent and drops children, so the round-trip is equal under the contract.

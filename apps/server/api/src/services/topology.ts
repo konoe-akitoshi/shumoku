@@ -30,6 +30,8 @@ import type {
   NodePort,
   ResolvedLayout,
   SnapshotEntry,
+  Subgraph,
+  Termination,
 } from '@shumoku/core'
 import {
   attachmentKey,
@@ -186,6 +188,54 @@ function isPureEmptyOverlayPort(p: NodePort): boolean {
     if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
   }
   return label.trim() === '' && (p.connectors?.length ?? 0) === 0
+}
+
+/**
+ * One-time backfill merge: a topology may have had several legacy Manual sources
+ * (#370). Concatenate their authored graphs into the single intrinsic contribution —
+ * dedup nodes/subgraphs/terminations by id (first wins), append links/exclusions,
+ * concat topology-default attachments. Best-effort; only runs once on first read.
+ */
+function mergeAuthoredGraphs(graphs: NetworkGraph[]): NetworkGraph {
+  const first = graphs[0]
+  const out: NetworkGraph = {
+    version: first?.version ?? '1',
+    name: first?.name,
+    nodes: [],
+    links: [],
+  }
+  const seenNode = new Set<string>()
+  const seenSub = new Set<string>()
+  const seenTerm = new Set<string>()
+  const subgraphs: Subgraph[] = []
+  const terminations: Termination[] = []
+  const exclusions: NetworkGraph['exclusions'] = []
+  const attachments: Attachment[] = []
+  for (const g of graphs) {
+    for (const n of g.nodes ?? []) {
+      if (seenNode.has(n.id)) continue
+      seenNode.add(n.id)
+      out.nodes.push(n)
+    }
+    out.links.push(...(g.links ?? []))
+    for (const sg of g.subgraphs ?? []) {
+      if (seenSub.has(sg.id)) continue
+      seenSub.add(sg.id)
+      subgraphs.push(sg)
+    }
+    for (const t of g.terminations ?? []) {
+      if (seenTerm.has(t.id)) continue
+      seenTerm.add(t.id)
+      terminations.push(t)
+    }
+    if (g.exclusions?.length) exclusions.push(...g.exclusions)
+    if (g.attachments?.length) attachments.push(...g.attachments)
+  }
+  if (subgraphs.length) out.subgraphs = subgraphs
+  if (terminations.length) out.terminations = terminations
+  if (exclusions.length) out.exclusions = exclusions
+  if (attachments.length) out.attachments = attachments
+  return out
 }
 
 /** Whether a port identity carries at least one usable port match key. */
@@ -1179,23 +1229,38 @@ export class TopologyService {
     return null
   }
 
-  /** Read the pre-cutover Manual observation graph, if any (backfill source). */
+  /**
+   * Read the pre-cutover authored graph from legacy Manual observations (backfill
+   * source). A topology may have had MULTIPLE Manual sources (#370 allowed it), so
+   * merge them all into one intrinsic graph rather than losing all but one.
+   */
   private readLegacyManualObservation(topologyId: string): NetworkGraph | null {
-    const manualId = this.findManualSourceId(topologyId)
-    if (!manualId) return null
-    const row = this.db
+    const manualSources = this.db
       .query(
-        `SELECT graph_json FROM topology_observations
-         WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
-         ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
+        `SELECT ds.id AS id FROM topology_data_sources tds
+         JOIN data_sources ds ON ds.id = tds.data_source_id
+         WHERE tds.topology_id = ? AND ds.type = 'manual'`,
       )
-      .get(topologyId, manualId) as { graph_json: string } | undefined
-    if (!row) return null
-    try {
-      return JSON.parse(row.graph_json) as NetworkGraph
-    } catch {
-      return null
+      .all(topologyId) as { id: string }[]
+    const graphs: NetworkGraph[] = []
+    for (const { id } of manualSources) {
+      const row = this.db
+        .query(
+          `SELECT graph_json FROM topology_observations
+           WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
+           ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
+        )
+        .get(topologyId, id) as { graph_json: string } | undefined
+      if (!row) continue
+      try {
+        graphs.push(JSON.parse(row.graph_json) as NetworkGraph)
+      } catch {
+        // skip a corrupt legacy blob
+      }
     }
+    if (graphs.length === 0) return null
+    if (graphs.length === 1) return graphs[0] ?? null
+    return mergeAuthoredGraphs(graphs)
   }
 
   /**
