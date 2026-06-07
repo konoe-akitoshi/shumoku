@@ -197,16 +197,18 @@ function isPureEmptyOverlayPort(p: NodePort): boolean {
  * concat topology-default attachments. Best-effort; only runs once on first read.
  */
 function mergeAuthoredGraphs(graphs: NetworkGraph[]): NetworkGraph {
-  const first = graphs[0]
-  const out: NetworkGraph = {
-    version: first?.version ?? '1',
-    name: first?.name,
-    nodes: [],
-    links: [],
-  }
+  // Keep the first graph's graph-level fields (version/name/description/settings/pins);
+  // the structural arrays are merged below.
+  const out: NetworkGraph = { ...(graphs[0] ?? { version: '1' }), nodes: [], links: [] }
+  out.subgraphs = undefined
+  out.terminations = undefined
+  out.exclusions = undefined
+  out.attachments = undefined
   const seenNode = new Set<string>()
+  const seenLink = new Set<string>()
   const seenSub = new Set<string>()
   const seenTerm = new Set<string>()
+  const seenAttKey = new Set<string>()
   const subgraphs: Subgraph[] = []
   const terminations: Termination[] = []
   const exclusions: NetworkGraph['exclusions'] = []
@@ -217,7 +219,14 @@ function mergeAuthoredGraphs(graphs: NetworkGraph[]): NetworkGraph {
       seenNode.add(n.id)
       out.nodes.push(n)
     }
-    out.links.push(...(g.links ?? []))
+    for (const l of g.links ?? []) {
+      // Dedup by id (DB local_id is unique); id-less links can't collide, always append.
+      if (l.id != null) {
+        if (seenLink.has(l.id)) continue
+        seenLink.add(l.id)
+      }
+      out.links.push(l)
+    }
     for (const sg of g.subgraphs ?? []) {
       if (seenSub.has(sg.id)) continue
       seenSub.add(sg.id)
@@ -229,7 +238,13 @@ function mergeAuthoredGraphs(graphs: NetworkGraph[]): NetworkGraph {
       terminations.push(t)
     }
     if (g.exclusions?.length) exclusions.push(...g.exclusions)
-    if (g.attachments?.length) attachments.push(...g.attachments)
+    // topology-default attachments: one slot per key (first wins).
+    for (const a of g.attachments ?? []) {
+      const key = attachmentKey(a)
+      if (seenAttKey.has(key)) continue
+      seenAttKey.add(key)
+      attachments.push(a)
+    }
   }
   if (subgraphs.length) out.subgraphs = subgraphs
   if (terminations.length) out.terminations = terminations
