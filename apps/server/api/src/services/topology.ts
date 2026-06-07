@@ -4,18 +4,19 @@
  *
  * Storage model: the `topologies` table holds only the topology shell
  * (name, share_token, composition_revision). Sources live in
- * `topology_data_sources` (m2m); per-source graph snapshots — INCLUDING the
- * Manual source's human-authored graph (the editor's save records one) — in
- * `topology_observations`; the metrics mapping as `metrics-binding` attachments
- * on the resolved graph (no `mapping_json`); the resolved graph + layout are
- * materialized in `topology_resolved_graph`. Manual is a uniform data source.
+ * `topology_data_sources` (m2m). Each contribution — the project's own authored
+ * graph AND every external source's latest observed graph — is stored DB-native
+ * in the `contribution_*` store (decomposed into queryable element/link/
+ * attachment rows; see db-native-persistence.md). `topology_observations` is now
+ * just the append-only audit/history log. The metrics mapping is `metrics-binding`
+ * attachments on the resolved graph (no `mapping_json`); the resolved graph +
+ * layout are materialized in `topology_resolved_graph`.
  *
- * The editor 's "save" routes through this service 's `create()` /
- * `update()` `contentJson` input. Internally that translates to:
- * find-or-create a Manual data source attached to this topology, then
- * record a fresh observation against it. The `Topology.contentJson`
- * field returned by `get()` is a virtual view of that latest Manual
- * observation — there is no `content_json` column.
+ * The editor 's "save" routes through `writeManualGraph`, which ingests the
+ * authored graph as the topology's intrinsic contribution
+ * (`contribution_source.attachment_id IS NULL`). The `Topology.contentJson`
+ * field returned by `get()` is a virtual view built from that contribution —
+ * there is no `content_json` column.
  */
 
 import type { Database } from 'bun:sqlite'
@@ -47,7 +48,6 @@ import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
 import { buildGraph, ingestGraph } from './contribution-store.js'
-import { ObservationsService } from './observations.js'
 
 /**
  * The project's own (intrinsic) contribution id — one per topology
@@ -354,12 +354,10 @@ export class TopologyService {
   private cache: Map<string, ParsedTopology> = new Map()
   private renderCache: Map<string, object> = new Map()
   private errorCache: Map<string, TopologyParseError> = new Map()
-  private observations: ObservationsService
   private topologySources: TopologySourcesService
 
   constructor() {
     this.db = getDatabase()
-    this.observations = new ObservationsService()
     this.topologySources = new TopologySourcesService()
   }
 
@@ -1030,28 +1028,17 @@ export class TopologyService {
   /**
    * Parse a topology and generate layout.
    *
-   * The observation resolver runs here. Two pools feed it:
-   *   - The Manual source 's graph (read from `data_sources.config_json.graph`
-   *     — it 's stored on the source, not in observations; see
-   *     migration 011). Fills the `authored` slot.
-   *   - Every other attached source 's latest observation snapshot.
-   *     Goes into the `snapshots` array.
+   * The resolver runs here over two DB-native pools, both read from the
+   * contribution store (`contribution_*`):
+   *   - the intrinsic contribution (`attachment_id IS NULL`) — the project's
+   *     authored graph — fills the `authored` slot (top priority);
+   *   - every attached external source's contribution (`attachment_id NOT NULL`)
+   *     becomes a `SnapshotEntry` in `snapshots`.
    *
-   * When no Manual is attached, `authored` is an empty graph — the
-   * diagram is whatever the other sources produced.
+   * With no authored content, `authored` is an empty graph — the diagram is
+   * whatever the external sources produced.
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
-    // Latest NON-FAILED snapshot per source: a transient failed scan must not
-    // drop a source's last-good nodes (C7 — failed never retracts).
-    const latest = this.observations.latestSuccessfulPerSource(topology.id)
-    // Every attached Manual source's legacy observation is excluded from snapshots —
-    // authored data is the intrinsic contribution now, so a Manual observation must not
-    // double-count as an observed source (handles multiple Manuals, not just one).
-    const manualIds = new Set(
-      (
-        this.db.query("SELECT id FROM data_sources WHERE type = 'manual'").all() as { id: string }[]
-      ).map((r) => r.id),
-    )
     // The authored graph is the intrinsic contribution (DB-native store), folded as
     // resolve()'s top-priority contribution. Absent → empty. (`readManualGraph`
     // lazily backfills from a legacy Manual observation the first time.)
@@ -1069,18 +1056,7 @@ export class TopologyService {
     for (const tds of this.topologySources.listByTopology(topology.id)) {
       priorityBySource.set(tds.dataSourceId, tds.priority)
     }
-    // Only currently-attached sources contribute. A detached source leaves its
-    // old observation rows behind, so without this filter a detached source
-    // would keep feeding the resolve from stale snapshots.
-    const snapshots: SnapshotEntry[] = latest
-      .filter((o) => !manualIds.has(o.sourceId) && priorityBySource.has(o.sourceId))
-      .map((o) => ({
-        sourceId: o.sourceId,
-        capturedAt: o.capturedAt,
-        status: o.status,
-        graph: o.graph,
-        priority: priorityBySource.get(o.sourceId) ?? 0,
-      }))
+    const snapshots = this.readObservedSnapshots(topology.id, priorityBySource)
     const graph = resolveObservations(authored, snapshots)
 
     // Resolve icon dimensions for URL icons (used by renderer for
@@ -1111,6 +1087,51 @@ export class TopologyService {
       metricsSourceId: this.metricsSourceIdFor(topology.id),
       mapping,
     }
+  }
+
+  /**
+   * The observed snapshots feeding `resolve()` — one per external source, read
+   * DB-native from the contribution store (NOT the audit log). Each external
+   * source's latest graph is its `contribution_source` row (attachment_id NOT
+   * NULL); `buildGraph` projects the decomposed rows back to a NetworkGraph.
+   *
+   * Properties this inherits from how contributions are written
+   * (`ObservationsService.materializeContribution`):
+   *   - failed scans are never ingested, so a contribution is always last-good
+   *     (C7 — failed never retracts);
+   *   - detaching a source cascades its contribution away, so only currently
+   *     attached sources appear (the `priorityBySource` guard is a belt-and-braces
+   *     filter on top of that).
+   */
+  private readObservedSnapshots(
+    topologyId: string,
+    priorityBySource: Map<string, number>,
+  ): SnapshotEntry[] {
+    const rows = this.db
+      .query(
+        `SELECT source_id, last_status, last_ok_at
+         FROM contribution_source
+         WHERE topology_id = ? AND attachment_id IS NOT NULL`,
+      )
+      .all(topologyId) as {
+      source_id: string
+      last_status: string | null
+      last_ok_at: number | null
+    }[]
+    const snapshots: SnapshotEntry[] = []
+    for (const r of rows) {
+      if (!priorityBySource.has(r.source_id)) continue
+      const graph = buildGraph(topologyId, r.source_id, this.db)
+      if (!graph) continue
+      snapshots.push({
+        sourceId: r.source_id,
+        capturedAt: r.last_ok_at ?? 0,
+        status: (r.last_status as SnapshotEntry['status']) ?? 'ok',
+        graph,
+        priority: priorityBySource.get(r.source_id) ?? 0,
+      })
+    }
+    return snapshots
   }
 
   /**
@@ -1462,17 +1483,11 @@ export class TopologyService {
     const graph = await parseYamlToNetworkGraph(mainContent, fileMap)
 
     // Three-step seed mirroring the user 's flow: create topology shell,
-    // attach a Manual source, then record the parsed graph as that
-    // source 's first observation.
+    // attach a Manual source, then write the parsed graph as the project's
+    // intrinsic contribution (the authored layer — DB-native, not an observation).
     const created = await this.create({ name: 'Sample Network' })
-    const { dataSourceId } = await this.attachManualSource(created.id)
-    await this.observations.record({
-      topologyId: created.id,
-      sourceId: dataSourceId,
-      capturedAt: timestamp(),
-      status: 'ok',
-      graph,
-    })
+    await this.attachManualSource(created.id)
+    this.writeManualGraph(created.id, INTRINSIC_SOURCE, graph)
 
     console.log(
       '[TopologyService] Sample network created:',

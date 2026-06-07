@@ -53,10 +53,11 @@ export function resolve(
   //     carries it. Presence is the *union* of clusters, so priority —
   //     which only decides per-field winners — never adds or drops a node.
   //   - retraction: an OBSERVED contribution may stop carrying a node.
-  // v1 feeds only the latest non-failed snapshot per source (see
-  // services/topology.ts → latestSuccessfulPerSource), so "retraction" today
-  // is simply "absent from the latest successful snapshot". A failed scan is
-  // skipped at the feed, so it never replaces a source's last-good snapshot.
+  // v1 feeds only each source's latest non-failed graph — its current-state
+  // contribution (see services/topology.ts → readObservedSnapshots, fed from the
+  // DB-native contribution store). So "retraction" today is simply "absent from
+  // the latest successful snapshot". A failed scan is never ingested, so it never
+  // replaces a source's last-good contribution.
   // There is no multi-scan hysteresis yet; _staleThreshold / _retractAfter
   // stay documented knobs for when snapshot history is fed in.
   //

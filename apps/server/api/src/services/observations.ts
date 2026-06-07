@@ -1,18 +1,29 @@
 /**
  * Topology Observations Service
  *
- * Manages the `topology_observations` table — one row per source-snapshot.
- * The resolver folds these (plus the authored layer from
- * `topologies.content_json`) into the displayed graph.
+ * Manages the `topology_observations` table — one append-only row per
+ * source-snapshot. This is the **audit / history log** (status, captured-at,
+ * counts, raw graph for the history-detail view): it powers the "Recent
+ * observations" surfaces and the retraction-hysteresis counter.
+ *
+ * It is NO LONGER what the resolver reads. The canonical observed state — the
+ * latest graph each external source contributes — now lives DB-native in the
+ * `contribution_*` store (one `contribution_source` row per attached source,
+ * decomposed into queryable element/link/attachment rows). `record()` is the
+ * single choke point every observed writer funnels through, so it materializes
+ * that contribution here too: append the audit row, then ingest the graph into
+ * the contribution store (current-state table + event log; see
+ * db-native-persistence.md).
  *
  * Design references:
+ *   - apps/server/docs/design/db-native-persistence.md
  *   - apps/server/docs/design/topology-foundation.md
- *   - apps/server/docs/design/topology-foundation-schema.md
  */
 
 import type { Database } from 'bun:sqlite'
 import type { NetworkGraph } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
+import { ingestGraph } from './contribution-store.js'
 
 export type ObservationStatus = 'ok' | 'partial' | 'failed' | 'empty'
 
@@ -137,6 +148,12 @@ export class ObservationsService {
       console.warn('[Observations] prune failed:', err instanceof Error ? err.message : err)
     }
 
+    // Materialize this snapshot into the canonical observed contribution (the
+    // DB-native state the resolver reads). The audit row above stays for history;
+    // this row is the current-state projection. Errors propagate — a failed
+    // canonical write must surface, not silently leave the diagram stale.
+    this.materializeContribution(input)
+
     return {
       id,
       topologyId: input.topologyId,
@@ -153,11 +170,46 @@ export class ObservationsService {
   }
 
   /**
+   * Project one snapshot into the canonical observed contribution.
+   *
+   * The contribution is keyed by `(topology_id, source_id = data_sources.id)` and
+   * owned by its topology-purpose attach row (`attachment_id`), so detaching the
+   * source cascades the contribution away. Skipped when:
+   *   - `status === 'failed'` / no graph — a failed scan carries no information,
+   *     so it must NOT replace the source's last-good contribution (C7);
+   *   - the source isn't attached for the `topology` purpose (preview scans,
+   *     metrics-only sources) — there is nothing to contribute to the graph;
+   *   - the source is a Manual one — its graph is the intrinsic contribution,
+   *     written via `TopologyService.writeManualGraph`, not an observation.
+   * `empty` IS ingested: a successful empty scan is real evidence of absence and
+   * must retract the source's prior nodes.
+   */
+  private materializeContribution(input: RecordObservationInput): void {
+    if (input.status === 'failed' || !input.graph) return
+    const attach = this.db
+      .query(
+        `SELECT tds.id AS attach_id, ds.type AS ds_type
+         FROM topology_data_sources tds
+         JOIN data_sources ds ON ds.id = tds.data_source_id
+         WHERE tds.topology_id = ? AND tds.data_source_id = ? AND tds.purpose = 'topology'`,
+      )
+      .get(input.topologyId, input.sourceId) as { attach_id: string; ds_type: string } | undefined
+    if (!attach || attach.ds_type === 'manual') return
+    ingestGraph(
+      input.topologyId,
+      input.sourceId,
+      input.graph,
+      { attachmentId: attach.attach_id, lastStatus: input.status, lastOkAt: input.capturedAt },
+      this.db,
+    )
+  }
+
+  /**
    * Get the latest observation for each source attached to a topology —
-   * INCLUDING a failed latest. Used by status / history surfaces and the
-   * editor's per-source latest-snapshot view, which want the true latest.
-   * For the resolver feed use `latestSuccessfulPerSource` instead, so a
-   * transient failed scan doesn't drop a source's last-good nodes.
+   * INCLUDING a failed latest. Used by status / history surfaces, the editor's
+   * per-source latest-snapshot view, and the probe-merge base (all of which want
+   * the true latest from the audit log). The resolver no longer reads here — it
+   * reads the canonical observed state from the contribution store.
    */
   latestPerSource(topologyId: string): TopologyObservation[] {
     // ROW_NUMBER (not MAX+join) so a same-millisecond capture_at tie resolves
@@ -172,35 +224,6 @@ export class ObservationsService {
                   ) AS rn
            FROM topology_observations t
            WHERE topology_id = ?
-         ) WHERE rn = 1
-         ORDER BY captured_at DESC`,
-      )
-      .all(topologyId) as ObservationRow[]
-    return rows.map(rowToObservation)
-  }
-
-  /**
-   * Latest NON-FAILED observation per source — the input the resolver
-   * consumes. A `failed` snapshot means "couldn't scan", which carries no
-   * information about what the source sees, so it must NOT replace the
-   * source's last-good snapshot (otherwise a flapping source would wipe its
-   * nodes off the diagram — a retraction the design forbids; see
-   * topology-source-priority-merge.md decision 4 / C7). `empty` and
-   * `partial` ARE kept: those are successful scans whose absence of a node
-   * is real evidence.
-   */
-  latestSuccessfulPerSource(topologyId: string): TopologyObservation[] {
-    // ROW_NUMBER tiebreak (see latestPerSource) so same-ms captures resolve to a
-    // single deterministic latest per source.
-    const rows = this.db
-      .query(
-        `SELECT * FROM (
-           SELECT t.*,
-                  ROW_NUMBER() OVER (
-                    PARTITION BY source_id ORDER BY captured_at DESC, rowid DESC
-                  ) AS rn
-           FROM topology_observations t
-           WHERE topology_id = ? AND status != 'failed'
          ) WHERE rn = 1
          ORDER BY captured_at DESC`,
       )
@@ -249,6 +272,14 @@ export class ObservationsService {
    * topology-ui-ia.md § "Per-source operations".)
    */
   deleteForSource(topologyId: string, sourceId: string): number {
+    // Drop the canonical observed contribution too — `resolve()` reads that, not
+    // the audit log, so clearing only the audit rows would leave the source's
+    // nodes on the diagram. (Never touches the intrinsic: its source_id is
+    // 'intrinsic', not a data-source id.) Detach also cascades this via the
+    // attach-row FK; this covers the Clear-without-detach path.
+    this.db
+      .query('DELETE FROM contribution_source WHERE topology_id = ? AND source_id = ?')
+      .run(topologyId, sourceId)
     const result = this.db
       .query('DELETE FROM topology_observations WHERE topology_id = ? AND source_id = ?')
       .run(topologyId, sourceId)
