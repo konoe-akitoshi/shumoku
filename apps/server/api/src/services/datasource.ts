@@ -79,10 +79,8 @@ export class DataSourceService {
    *   - explicit `topology` capability (NetBox-style fetchers)
    *   - `autoscan` capability (SNMP-LLDP-style scanners — produce a
    *     topology snapshot via `scan()`)
-   *   - `manual` type (human-typed snapshots via the editor; the
-   *     plugin has no upstream and therefore no capability flag, but
-   *     it still produces topology observations and is structurally
-   *     parallel to the other sources)
+   * (The project's own hand-drawn graph is the intrinsic contribution, not a
+   * data source, so it doesn't appear here.)
    */
   listByCapability(capability: 'topology' | 'metrics' | 'alerts'): DataSource[] {
     const all = this.list()
