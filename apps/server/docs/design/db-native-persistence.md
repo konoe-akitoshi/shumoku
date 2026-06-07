@@ -200,6 +200,22 @@ cheaper. The wins must be earned with index design and N+1 avoidance.
 **Avoid N+1 (the main pitfall):** `buildGraph` must fetch each relations table **once
 per topology** (single indexed scan) and assemble in memory — never per-element queries.
 
+**Primary-key strategy (Shumoku-specific — we use nanoid TEXT PKs everywhere).** TEXT
+PKs are a real cost on the high-row-count internal tables: a TEXT PK leaves the hidden
+`rowid` AND stores the string in every index, vs an `INTEGER PRIMARY KEY` which *is* the
+rowid (one fast B-tree, less storage — Android's guidance). So:
+- Keep **TEXT nanoid** for externally-referenced entities (topologies, data_sources —
+  they appear in URLs / the API).
+- For internal, never-URL-exposed, high-volume relations tables (`identity`,
+  `attachment`), prefer **`INTEGER PRIMARY KEY`**, or **`WITHOUT ROWID` with the natural
+  composite key** for `suppression` / `exclusion` (composite PKs, no surrogate id needed).
+
+**Push work into SQL, don't re-walk JSON in app code.** Filtering / aggregation /
+existence checks belong in queries (SQLite's engine ≫ JS loops), which is the whole
+point of relationalizing ② — e.g. "bindings for source X" is an indexed `WHERE`, not a
+`graph.nodes.flatMap(...)` over a parsed blob. (`COUNT(*)`/`EXISTS`/`LIMIT`, select only
+needed columns.)
+
 **SQLite levers:**
 - `doc_json` as **TEXT is the safe default** (we read the whole doc and parse in JS);
   reserve **JSONB + generated columns** for scalars we actually filter on (promote on
@@ -209,9 +225,11 @@ per topology** (single indexed scan) and assemble in memory — never per-elemen
 - Batch in **one transaction**: `reconcileBindings`' N-row replace, and `ingestGraph`.
 - Keep using bun:sqlite prepared statements (`.query()` cache).
 
-**Measure before tuning:** add phase timing (DB read / merge / layout / ③ write) around
-resolve so the bottleneck is data, not a guess. Today only the cache-hit path (~19ms)
-is measured; the rebuild path is what to instrument.
+**Measure with `EXPLAIN QUERY PLAN` (+ SQLite's `.expert`)**, not by guessing — confirm
+every hot query hits an index (no `SCAN TABLE`). Add phase timing (DB read / merge /
+layout / ③ write) around resolve; today only the cache-hit path (~19ms) is measured, the
+rebuild path is what to instrument. (Prior art: Bencher cut response time ~1200× with
+exactly this — targeted compound indexes + a materialized view, found via EXPLAIN.)
 
 ## Risks / open questions
 
@@ -232,6 +250,8 @@ is measured; the rebuild path is what to instrument.
 - SQLite JSON / JSONB + virtual generated columns: <https://sqlite.org/json1.html>, <https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing>
 - Grafana App Platform — K8s-style resources over SQL unified storage: <https://deepwiki.com/grafana/grafana/3.3-folder-management>
 - Backstage — entity document + relations table + stitching: <https://backstage.io/docs/features/software-catalog/life-of-an-entity/>, <https://backstage.io/docs/features/software-catalog/creating-the-catalog-graph/>
+- SQLite performance best practices (Android) — INTEGER PK, compound indexes, WAL+synchronous, transactions, EXPLAIN QUERY PLAN, push work into SQL: <https://developer.android.com/topic/performance/sqlite-performance-best-practices>
+- SQLite performance tuning (Bencher) — compound indexes + materialized view + EXPLAIN/`.expert`, ~1200× win: <https://bencher.dev/learn/engineering/sqlite-performance-tuning/>
 
 ## Relationship to existing docs
 - `topology-composition-store.md` — predecessor; its identity-keyed-store intent is realized here; `metrics-binding`-as-attachment = stage-1 input.
