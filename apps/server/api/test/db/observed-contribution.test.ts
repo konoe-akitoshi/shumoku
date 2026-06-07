@@ -201,24 +201,17 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
     expect(shared?.label).toBe('from-hi')
   })
 
-  test('the intrinsic graph resolves alongside observed sources, exactly once', async () => {
-    const topo = await svc.create({ name: 'intrinsic' })
-    svc.writeIntrinsicGraph(topo.id, graphWith('authored'))
-    const nb = insertDataSource('netbox', 'nb_intrinsic')
-    attachSource(topo.id, nb, 'topology')
-    await obs.record({
-      topologyId: topo.id,
-      sourceId: nb,
-      capturedAt: timestamp(),
-      status: 'ok',
-      graph: graphWith('observed'),
-    })
+  test('the Manual source (fed as authored) is not double-counted as an observed snapshot', async () => {
+    const topo = await svc.create({ name: 'manual' })
+    await svc.writeManualGraph(topo.id, graphWith('authored'))
+    const manualId = svc.findManualSourceId(topo.id)
 
-    // The intrinsic contribution is not an observed source — no contribution row
-    // keyed by a data-source id for it, and the authored node resolves once.
+    // Manual is a real source with its OWN contribution (attachment_id set).
+    expect(contribCount(topo.id, manualId ?? '')).toBe(1)
+    // But resolve folds it once (as the top-priority authored contribution); it's
+    // excluded from the observed-snapshot feed so the node never doubles.
     const names = await sysNames(topo.id)
     expect(names.filter((n) => n === 'authored')).toEqual(['authored'])
-    expect(names).toContain('observed')
   })
 
   test('an out-of-order (older) scan does not regress newer canonical state', async () => {

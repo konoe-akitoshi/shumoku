@@ -282,19 +282,6 @@ export const topologies = {
   getResolved: (id: string) =>
     request<{ graph: NetworkGraph; snapshotCount: number }>(`/topologies/${id}/resolved`),
 
-  /**
-   * The project's own (intrinsic) graph — the editor's read/write target. NOT a
-   * data source: every topology has one. Distinct from `getGraph` (the resolved
-   * render graph). `graph` is null until anything is authored.
-   */
-  getIntrinsic: (id: string) =>
-    request<{ graph: NetworkGraph | null }>(`/topologies/${id}/intrinsic`),
-  putIntrinsic: (id: string, graph: NetworkGraph) =>
-    request<{ ok: boolean }>(`/topologies/${id}/intrinsic`, {
-      method: 'PUT',
-      body: JSON.stringify({ graph }),
-    }),
-
   /** Recent observation snapshots for this topology (counters only). */
   listObservations: (id: string, limit?: number) => {
     const params = limit ? `?limit=${limit}` : ''
@@ -441,6 +428,47 @@ export const topologies = {
       }>(`/topologies/${topologyId}/sources/${sourceId}/probe`, {
         method: 'POST',
         body: JSON.stringify({ seeds }),
+      }),
+
+    /**
+     * Latest observation graph for a specific source attached to this
+     * topology. `graph` is null when the source has no observation yet
+     * (e.g. a freshly-attached source). This is what the Manual editor
+     * loads — explicitly the *source 's* snapshot, not the resolved
+     * project graph.
+     */
+    latestSnapshot: (topologyId: string, sourceId: string) =>
+      request<{
+        graph: NetworkGraph | null
+        capturedAt: number | null
+        status?: 'ok' | 'partial' | 'failed' | 'empty'
+        observationId?: string
+      }>(`/topologies/${topologyId}/sources/${sourceId}/latest-snapshot`),
+
+    /**
+     * Record a new observation against a specific source. Manual
+     * editor save goes through this; any caller pushing a snapshot
+     * (e.g. webhook receivers) can use it too.
+     */
+    recordObservation: (
+      topologyId: string,
+      sourceId: string,
+      graph: NetworkGraph,
+      status?: 'ok' | 'partial' | 'failed' | 'empty',
+    ) =>
+      request<{ observation: { id: string } }>(
+        `/topologies/${topologyId}/sources/${sourceId}/observation`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ graph, status: status ?? 'ok' }),
+        },
+      ),
+
+    /** Create-and-attach a new Manual source to a topology (no cardinality limit). */
+    attachManual: (topologyId: string) =>
+      request<{ dataSourceId: string }>(`/topologies/${topologyId}/sources`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'manual', purpose: 'topology' }),
       }),
   },
 

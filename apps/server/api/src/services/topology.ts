@@ -12,11 +12,11 @@
  * attachments on the resolved graph (no `mapping_json`); the resolved graph +
  * layout are materialized in `topology_resolved_graph`.
  *
- * The editor 's "save" routes through `writeIntrinsicGraph` (PUT
- * /topologies/:id/intrinsic), which ingests the project's own graph as the
- * topology's intrinsic contribution (`contribution_source.attachment_id IS NULL`).
- * There is no Manual data source and no `content_json` column — the project's own
- * graph is just the top-priority contribution, read back via `readIntrinsicGraph`.
+ * The editor 's "save" routes through `writeManualGraph`, which ingests the
+ * hand-drawn graph as the **Manual data source's own contribution** (a uniform
+ * source, `attachment_id` = its attach row — equal to every other source, just
+ * top-priority and hand-edited). There is no `content_json` column and no special
+ * "intrinsic" layer; the Manual source is folded by `resolve()` like any source.
  */
 
 import type { Database } from 'bun:sqlite'
@@ -50,9 +50,10 @@ import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../ty
 import { buildGraph, ingestGraph } from './contribution-store.js'
 
 /**
- * The project's own (intrinsic) contribution id — one per topology
- * (contribution_source.attachment_id IS NULL). This is the authored layer; it is
- * NOT a data source. See db-native-persistence.md.
+ * LEGACY source_id of the drifted "intrinsic" authored contribution
+ * (attachment_id NULL). Retained ONLY for `migrateIntrinsicToManual` to find and
+ * re-home those rows into a real Manual data source. Nothing else writes it — the
+ * authored graph is the Manual source's own contribution now.
  */
 const INTRINSIC_SOURCE = 'intrinsic'
 
@@ -71,9 +72,9 @@ function rowToTopology(row: TopologyRow): Topology {
   return {
     id: row.id,
     name: row.name,
-    // No contentJson / mappingJson / source pointers on the shell: the authored
-    // graph is the intrinsic contribution, the mapping is derived from bindings,
-    // and sources live in the m2m `topology_data_sources` table.
+    // contentJson + manualSourceId populated by withManual() at the call site.
+    // No mappingJson (derived from bindings) and no topology/metrics source
+    // pointers (the m2m topology_data_sources table is the model now).
     shareToken: row.share_token ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -362,21 +363,104 @@ export class TopologyService {
   }
 
   /**
-   * Get all topologies from the database.
+   * Attach `manualSourceId` to a bare Topology row. Public API
+   * intentionally does NOT carry the Manual snapshot here — the
+   * editor / settings UI reads it through
+   * `GET /api/topologies/:id/sources/:sid/latest-snapshot` instead.
+   * Mixing snapshot content into the Topology shell was structurally
+   * confusing (Topology.contentJson read like "project JSON" when it
+   * was really one source 's input).
    */
-  list(): Topology[] {
-    const rows = this.db.query('SELECT * FROM topologies ORDER BY name ASC').all() as TopologyRow[]
-    return rows.map(rowToTopology)
+  private hydrateManualId(topology: Topology): Topology {
+    const manualId = this.findManualSourceId(topology.id)
+    if (!manualId) return topology
+    return { ...topology, manualSourceId: manualId }
   }
 
   /**
-   * Get a single topology by ID.
+   * Find the Manual data source id attached to a topology, if any.
+   * Returns the *data source* id (PK of `data_sources`), not the
+   * junction row id.
+   */
+  findManualSourceId(topologyId: string): string | undefined {
+    const row = this.db
+      .query(
+        `SELECT ds.id AS id
+         FROM topology_data_sources tds
+         JOIN data_sources ds ON ds.id = tds.data_source_id
+         WHERE tds.topology_id = ? AND ds.type = 'manual'
+         LIMIT 1`,
+      )
+      .get(topologyId) as { id: string } | undefined
+    return row?.id
+  }
+
+  /**
+   * Create-and-attach a new Manual data source to a topology, plus
+   * record an empty initial observation so the editor opens on a
+   * blank canvas rather than 404 / null.
+   *
+   * Public — invoked by the `POST /api/topologies/:id/sources` endpoint
+   * when the body is `{ type: 'manual' }`. Manual is fully uniform: no
+   * cardinality limit, so this can run more than once per topology.
+   */
+  async attachManualSource(
+    topologyId: string,
+    purpose: 'topology' | 'metrics' = 'topology',
+  ): Promise<{ dataSourceId: string }> {
+    const now = timestamp()
+    const dsId = await generateId()
+    // Manual has no connection config and no seeded content: its authored graph
+    // is a topology_observations snapshot recorded by the editor's first save.
+    // Until then there's no observation → resolve treats authored as empty (blank
+    // canvas). Config is `{}` like any source with nothing to configure.
+    this.db
+      .prepare(
+        `INSERT INTO data_sources (id, name, type, config_json, status, fail_count, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(dsId, 'Manual', 'manual', '{}', 'connected', 0, now, now)
+    await this.topologySources.add(topologyId, {
+      dataSourceId: dsId,
+      purpose,
+      syncMode: 'manual',
+    })
+    this.clearCacheEntry(topologyId)
+    return { dataSourceId: dsId }
+  }
+
+  /**
+   * Get all topologies from the database. Hydrates `manualSourceId`
+   * via a single JOIN so list-page links can point straight at the
+   * Manual source 's detail page.
+   */
+  list(): Topology[] {
+    const rows = this.db
+      .query(
+        `SELECT t.*, ds.id AS manual_source_id
+         FROM topologies t
+         LEFT JOIN topology_data_sources tds ON tds.topology_id = t.id
+         LEFT JOIN data_sources ds ON ds.id = tds.data_source_id AND ds.type = 'manual'
+         GROUP BY t.id
+         ORDER BY t.name ASC`,
+      )
+      .all() as (TopologyRow & { manual_source_id: string | null })[]
+    return rows.map((row) => {
+      const base = rowToTopology(row)
+      if (row.manual_source_id) base.manualSourceId = row.manual_source_id
+      return base
+    })
+  }
+
+  /**
+   * Get a single topology by ID, with contentJson hydrated from the
+   * latest Manual observation.
    */
   get(id: string): Topology | null {
     const row = this.db.query('SELECT * FROM topologies WHERE id = ?').get(id) as
       | TopologyRow
       | undefined
-    return row ? rowToTopology(row) : null
+    return row ? this.hydrateManualId(rowToTopology(row)) : null
   }
 
   /**
@@ -386,7 +470,7 @@ export class TopologyService {
     const row = this.db.query('SELECT * FROM topologies WHERE name = ?').get(name) as
       | TopologyRow
       | undefined
-    return row ? rowToTopology(row) : null
+    return row ? this.hydrateManualId(rowToTopology(row)) : null
   }
 
   /**
@@ -568,13 +652,16 @@ export class TopologyService {
   }
 
   /**
-   * The structure (topology) data source id — first m2m purpose='topology'
-   * source. Derived from the m2m table now that the legacy
+   * The structure (topology) data source id — first non-manual m2m
+   * purpose='topology' source. Derived from the m2m table now that the legacy
    * `topologies.topology_source_id` column is gone; kept on `ParsedTopology` for
    * the /context response shape (the client doesn't read it today).
    */
   private topologySourceIdFor(topologyId: string): string | undefined {
-    return this.topologySources.listByPurpose(topologyId, 'topology')[0]?.dataSourceId
+    const manualId = this.findManualSourceId(topologyId)
+    return this.topologySources
+      .listByPurpose(topologyId, 'topology')
+      .find((s) => s.dataSourceId !== manualId)?.dataSourceId
   }
 
   /**
@@ -592,7 +679,7 @@ export class TopologyService {
     linkDesired: LinkBindingDesired[],
   ): Promise<void> {
     const topology = this.get(topologyId)
-    const authored = this.readIntrinsicGraph(topologyId) ?? {
+    const authored = this.readManualGraph(topologyId) ?? {
       version: '1' as const,
       name: topology?.name ?? 'Manual',
       nodes: [],
@@ -698,7 +785,7 @@ export class TopologyService {
     nodes = nodes.filter((n) => !isPureEmptyOverlay(n))
 
     // Records a new authored observation for this topology + invalidates it.
-    await this.writeIntrinsicGraph(topologyId, { ...authored, nodes })
+    await this.writeManualGraph(topologyId, { ...authored, nodes })
   }
 
   /**
@@ -795,89 +882,6 @@ export class TopologyService {
         `[Backfill] metrics mapping → bindings: ${migrated} topolog(ies) migrated, ${failed} deferred, ${lostEntries} entr(ies) dropped (no-backcompat)`,
       )
     }
-  }
-
-  /**
-   * One-shot retirement of the legacy `type='manual'` data source. The project's
-   * authored graph is the intrinsic contribution now (stage 1); the Manual data
-   * source is residue (settled by the canonical model — no special "Manual"
-   * vocabulary). Runs at startup, guarded by a `settings` flag.
-   *
-   * Per topology: if the intrinsic is still empty, salvage it from the Manual
-   * source's last graph snapshot (merging several legacy Manuals, #370) and ingest
-   * it into the intrinsic FIRST — so no authored graph is lost. Then delete every
-   * `type='manual'` data source; the FK cascade drops its `topology_data_sources`
-   * attachments, observations, and any contribution rows.
-   */
-  retireManualSources(): void {
-    const flag = this.db.query("SELECT value FROM settings WHERE key = 'manual_retired'").get() as
-      | { value: string }
-      | undefined
-    if (flag?.value === '1') return
-
-    const manualRows = this.db.query("SELECT id FROM data_sources WHERE type = 'manual'").all() as {
-      id: string
-    }[]
-    if (manualRows.length === 0) {
-      this.db
-        .query("INSERT OR REPLACE INTO settings (key, value) VALUES ('manual_retired', '1')")
-        .run()
-      return
-    }
-
-    // Salvage authored graphs into the intrinsic before deleting Manual sources.
-    const topoIds = this.db.query('SELECT DISTINCT id FROM topologies').all() as { id: string }[]
-    let salvaged = 0
-    for (const { id: topologyId } of topoIds) {
-      if (buildGraph(topologyId, INTRINSIC_SOURCE, this.db)) continue // intrinsic already populated
-      const legacy = this.readLegacyManualGraph(topologyId)
-      if (!legacy) continue
-      ingestGraph(topologyId, INTRINSIC_SOURCE, legacy, { attachmentId: null }, this.db)
-      salvaged++
-    }
-
-    const deleted = this.db.query("DELETE FROM data_sources WHERE type = 'manual'").run()
-    this.db
-      .query("INSERT OR REPLACE INTO settings (key, value) VALUES ('manual_retired', '1')")
-      .run()
-    console.log(
-      `[Migration] Retired Manual data source: ${deleted.changes} row(s) dropped, ${salvaged} intrinsic graph(s) salvaged from legacy Manual snapshots.`,
-    )
-  }
-
-  /**
-   * Read the pre-cutover authored graph from a topology's legacy Manual source
-   * observation(s) — merged when several Manuals existed (#370). Salvage source
-   * for `retireManualSources`; nothing else should call it.
-   */
-  private readLegacyManualGraph(topologyId: string): NetworkGraph | null {
-    const manualSources = this.db
-      .query(
-        `SELECT ds.id AS id FROM topology_data_sources tds
-         JOIN data_sources ds ON ds.id = tds.data_source_id
-         WHERE tds.topology_id = ? AND ds.type = 'manual'
-         ORDER BY ds.created_at ASC, ds.id ASC`,
-      )
-      .all(topologyId) as { id: string }[]
-    const graphs: NetworkGraph[] = []
-    for (const { id } of manualSources) {
-      const row = this.db
-        .query(
-          `SELECT graph_json FROM topology_observations
-           WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
-           ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
-        )
-        .get(topologyId, id) as { graph_json: string } | undefined
-      if (!row) continue
-      try {
-        graphs.push(JSON.parse(row.graph_json) as NetworkGraph)
-      } catch {
-        // skip a corrupt legacy blob
-      }
-    }
-    if (graphs.length === 0) return null
-    if (graphs.length === 1) return graphs[0] ?? null
-    return mergeAuthoredGraphs(graphs)
   }
 
   /** Whether a column exists on a table (PRAGMA table_info). */
@@ -1037,9 +1041,9 @@ export class TopologyService {
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
     // The authored graph is the intrinsic contribution (DB-native store), folded as
-    // resolve()'s top-priority contribution. Absent → empty. (`readIntrinsicGraph`
+    // resolve()'s top-priority contribution. Absent → empty. (`readManualGraph`
     // lazily backfills from a legacy Manual observation the first time.)
-    const authored: NetworkGraph = this.readIntrinsicGraph(topology.id) ?? {
+    const authored: NetworkGraph = this.readManualGraph(topology.id) ?? {
       version: '1',
       name: topology.name,
       nodes: [],
@@ -1105,6 +1109,20 @@ export class TopologyService {
     priorityBySource: Map<string, number>,
   ): SnapshotEntry[] {
     this.backfillObservedContributions(topologyId)
+    // The Manual contribution(s) are fed to resolve() as `authored` (top
+    // priority), so exclude EVERY Manual source here (a topology may have several,
+    // #370) or they'd be double-counted as observed snapshots.
+    const manualIds = new Set(
+      (
+        this.db
+          .query(
+            `SELECT ds.id AS id FROM topology_data_sources tds
+             JOIN data_sources ds ON ds.id = tds.data_source_id
+             WHERE tds.topology_id = ? AND ds.type = 'manual'`,
+          )
+          .all(topologyId) as { id: string }[]
+      ).map((r) => r.id),
+    )
     const rows = this.db
       .query(
         `SELECT source_id, last_status, last_ok_at
@@ -1118,6 +1136,7 @@ export class TopologyService {
     }[]
     const snapshots: SnapshotEntry[] = []
     for (const r of rows) {
+      if (manualIds.has(r.source_id)) continue
       if (!priorityBySource.has(r.source_id)) continue
       const graph = buildGraph(topologyId, r.source_id, this.db)
       if (!graph) continue
@@ -1140,7 +1159,7 @@ export class TopologyService {
    * its nodes would vanish from the diagram until the next sync — and a manual-mode
    * source might never auto-resync. So for each attached topology source that lacks
    * a contribution, materialize its latest non-failed audit snapshot (mirrors the
-   * intrinsic's lazy backfill in `readIntrinsicGraph`). Idempotent: once a contribution
+   * intrinsic's lazy backfill in `readManualGraph`). Idempotent: once a contribution
    * exists, the source is skipped, so this degrades to a cheap existence check.
    *
    * GUARD on `lastSyncedAt != null` — the "data exists IFF attached AND synced"
@@ -1166,6 +1185,7 @@ export class TopologyService {
       ).map((r) => r.source_id),
     )
     for (const tds of this.topologySources.listByPurpose(topologyId, 'topology')) {
+      if (tds.dataSource?.type === 'manual') continue
       if (tds.lastSyncedAt == null) continue
       if (have.has(tds.dataSourceId)) continue
       const row = this.db
@@ -1301,25 +1321,186 @@ export class TopologyService {
   // at the API boundary (api/observations.ts) and at resolve() time.
 
   /**
-   * Read a topology's intrinsic graph — the project's own contribution
-   * (`contribution_source.attachment_id IS NULL`), where the editor writes. It
-   * is always available (every topology has one, lazily) and is never backed by
-   * a data source. Returns null when nothing has been authored yet (blank canvas).
-   *
-   * Public so the editor / settings / discovery-policy APIs can read + mutate it.
+   * The topology_data_sources row id (attach row) for this topology's Manual
+   * source, or undefined when none is attached. The contribution is owned by this
+   * attach row — exactly like any other source — so it round-trips through the
+   * standard `attachment_id`-keyed `contribution_*` store.
    */
-  readIntrinsicGraph(topologyId: string): NetworkGraph | null {
-    return buildGraph(topologyId, INTRINSIC_SOURCE, this.db)
+  private manualAttachId(topologyId: string, manualSourceId: string): string | undefined {
+    return this.topologySources.find(topologyId, manualSourceId, 'topology')?.id
   }
 
   /**
-   * Persist a topology's intrinsic graph (the project's own contribution,
-   * `attachment_id IS NULL`). resolve() folds it as the top-priority
-   * contribution. Per-topology: an edit to X only invalidates X.
+   * Read the Manual source's graph for a topology. Manual is a uniform data
+   * source: its hand-drawn graph is its own `contribution_source`
+   * (`attachment_id` = its attach row), read back via `buildGraph` like any
+   * source. Returns null when no Manual source is attached / nothing drawn yet.
+   *
+   * Public so the discovery-policy API can read the Manual contribution to mutate.
    */
-  writeIntrinsicGraph(topologyId: string, graph: NetworkGraph): void {
-    ingestGraph(topologyId, INTRINSIC_SOURCE, graph, { attachmentId: null }, this.db)
+  readManualGraph(topologyId: string, sourceId?: string): NetworkGraph | null {
+    // Target the SPECIFIC Manual source when the caller names one (the editor
+    // passes the route's :sourceId) — a topology may have several Manual sources
+    // (#370), so reading "the first" would surface the wrong one. Fall back to the
+    // first attached Manual when no id is given (discovery-policy / single-Manual).
+    const manualId =
+      sourceId && this.manualAttachId(topologyId, sourceId)
+        ? sourceId
+        : this.findManualSourceId(topologyId)
+    if (manualId) {
+      const fromRows = buildGraph(topologyId, manualId, this.db)
+      if (fromRows) return fromRows
+    }
+    // Transitional: a pre-DB-native authored graph may still sit in a legacy
+    // Manual observation. Surface it (the startup migration moves it into the
+    // Manual contribution; this is the read-path safety net until that runs).
+    return this.readLegacyManualObservation(topologyId)
+  }
+
+  /**
+   * Read the pre-DB-native authored graph from legacy Manual observations. A
+   * topology may have had MULTIPLE Manual sources (#370), so merge them.
+   */
+  private readLegacyManualObservation(topologyId: string): NetworkGraph | null {
+    const manualSources = this.db
+      .query(
+        `SELECT ds.id AS id FROM topology_data_sources tds
+         JOIN data_sources ds ON ds.id = tds.data_source_id
+         WHERE tds.topology_id = ? AND ds.type = 'manual'
+         ORDER BY ds.created_at ASC, ds.id ASC`,
+      )
+      .all(topologyId) as { id: string }[]
+    const graphs: NetworkGraph[] = []
+    for (const { id } of manualSources) {
+      const row = this.db
+        .query(
+          `SELECT graph_json FROM topology_observations
+           WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
+           ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
+        )
+        .get(topologyId, id) as { graph_json: string } | undefined
+      if (!row) continue
+      try {
+        graphs.push(JSON.parse(row.graph_json) as NetworkGraph)
+      } catch {
+        // skip a corrupt legacy blob
+      }
+    }
+    if (graphs.length === 0) return null
+    if (graphs.length === 1) return graphs[0] ?? null
+    return mergeAuthoredGraphs(graphs)
+  }
+
+  /**
+   * Persist the Manual source's graph. Manual is a uniform data source, so its
+   * graph is ingested as ITS OWN contribution (`attachment_id` = its attach row)
+   * — identical to how an observed source's graph is stored, just hand-edited and
+   * top-priority. Writes the SPECIFIC Manual source when one is named (the editor
+   * passes the route's :sourceId — so editing Manual B never clobbers Manual A);
+   * otherwise find-or-creates one (discovery-policy / first edit) so the write
+   * always has a home. resolve() folds it as the top-priority contribution.
+   * Per-topology: an edit to topology X only invalidates X.
+   */
+  async writeManualGraph(
+    topologyId: string,
+    graph: NetworkGraph,
+    sourceId?: string,
+  ): Promise<void> {
+    const manualId =
+      sourceId && this.manualAttachId(topologyId, sourceId)
+        ? sourceId
+        : await this.ensureManualSource(topologyId)
+    const attachId = this.manualAttachId(topologyId, manualId)
+    ingestGraph(
+      topologyId,
+      manualId,
+      graph,
+      { attachmentId: attachId ?? null, lastStatus: 'ok', lastOkAt: timestamp() },
+      this.db,
+    )
     this.clearCacheEntry(topologyId)
+  }
+
+  /**
+   * Find-or-create the Manual data source attached to this topology. Returns its
+   * data-source id. Called when an edit / override lands — the Manual source is a
+   * normal, visible, equal source that holds the operator's contribution (it is
+   * not auto-attached on topology create; it appears the first time you edit).
+   */
+  async ensureManualSource(topologyId: string): Promise<string> {
+    const existing = this.findManualSourceId(topologyId)
+    if (existing) return existing
+    const { dataSourceId } = await this.attachManualSource(topologyId, 'topology')
+    return dataSourceId
+  }
+
+  /**
+   * One-shot migration: re-home the legacy `data_source_id IS NULL` "intrinsic"
+   * contribution (the drifted authored layer) into a real Manual data source, so
+   * Manual is a uniform source again (db-native-persistence.md canonical model).
+   * Runs at startup, settings-guarded. For each topology that has a NULL-intrinsic
+   * contribution with actual content, ensure a Manual source and ingest the graph
+   * as ITS contribution; then drop the NULL row (empty intrinsics are just dropped,
+   * no Manual spawned).
+   */
+  async migrateIntrinsicToManual(): Promise<void> {
+    const flag = this.db
+      .query("SELECT value FROM settings WHERE key = 'intrinsic_to_manual_migrated'")
+      .get() as { value: string } | undefined
+    if (flag?.value === '1') return
+
+    const rows = this.db
+      .query(
+        `SELECT DISTINCT topology_id FROM contribution_source
+         WHERE attachment_id IS NULL AND source_id = ?`,
+      )
+      .all(INTRINSIC_SOURCE) as { topology_id: string }[]
+    let migrated = 0
+    for (const { topology_id } of rows) {
+      const graph = buildGraph(topology_id, INTRINSIC_SOURCE, this.db)
+      const hasContent =
+        !!graph &&
+        ((graph.nodes?.length ?? 0) > 0 ||
+          (graph.links?.length ?? 0) > 0 ||
+          (graph.subgraphs?.length ?? 0) > 0 ||
+          (graph.terminations?.length ?? 0) > 0 ||
+          (graph.attachments?.length ?? 0) > 0 ||
+          (graph.exclusions?.length ?? 0) > 0)
+      if (graph && hasContent) {
+        const manualId = await this.ensureManualSource(topology_id)
+        // Never clobber: if a Manual source already holds content, IT is the
+        // authoritative authored graph and the NULL-intrinsic row is stale — keep
+        // the Manual contribution, just drop the NULL row below.
+        if (!buildGraph(topology_id, manualId, this.db)) {
+          const attachId = this.manualAttachId(topology_id, manualId)
+          ingestGraph(
+            topology_id,
+            manualId,
+            graph,
+            { attachmentId: attachId ?? null, lastStatus: 'ok', lastOkAt: timestamp() },
+            this.db,
+          )
+          migrated++
+        }
+      }
+      // Drop the legacy NULL-intrinsic row (cascade removes its element rows).
+      this.db
+        .query(
+          'DELETE FROM contribution_source WHERE topology_id = ? AND source_id = ? AND attachment_id IS NULL',
+        )
+        .run(topology_id, INTRINSIC_SOURCE)
+      this.clearCacheEntry(topology_id)
+    }
+    this.db
+      .query(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('intrinsic_to_manual_migrated', '1')",
+      )
+      .run()
+    if (migrated > 0) {
+      console.log(
+        `[Migration] Re-homed ${migrated} intrinsic contribution(s) into Manual data sources.`,
+      )
+    }
   }
 
   /**
@@ -1480,11 +1661,11 @@ export class TopologyService {
     // Parse YAML to NetworkGraph
     const graph = await parseYamlToNetworkGraph(mainContent, fileMap)
 
-    // Create the topology shell, then write the parsed graph as the project's
-    // intrinsic contribution (the editor's write target — DB-native, always
-    // available, never a data source).
+    // Mirror the user's flow: create the topology shell, then write the parsed
+    // graph as the Manual source's contribution (writeManualGraph find-or-creates
+    // the Manual source — a normal, equal data source — and ingests its graph).
     const created = await this.create({ name: 'Sample Network' })
-    this.writeIntrinsicGraph(created.id, graph)
+    await this.writeManualGraph(created.id, graph)
 
     console.log(
       '[TopologyService] Sample network created:',

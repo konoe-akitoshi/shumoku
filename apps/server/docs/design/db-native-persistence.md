@@ -17,33 +17,46 @@
 
 ## ⚠️ Canonical model — read first
 
-> **There is no "human" or "authored" concept at all — not a layer, not a label, not an
-> `origin` flag.** A topology is **N contributions**, each a `contribution_source` row with
-> a `priority`. The ONLY structural distinction is **external vs the project's own**:
-> - a contribution **backed by a `data_source`** (`data_source_id` set) is an *external
->   feed* — re-fetched on sync, so a re-sync that omits a node retracts it;
-> - a contribution with **`data_source_id IS NULL`** is the **project's own assertions** —
->   written by the editor, never re-fetched, so it persists.
+> **Manual is a data source, fully equal to every other.** A topology is **N source
+> contributions**, each a `contribution_source` row owned by an attached `data_source`
+> (`topology_data_sources` row). The hand-drawn/edited graph is the contribution of a
+> `type='manual'` data source — attached explicitly like NetBox/Zabbix, shown in the same
+> Sources list, edited the same way. It is NOT a privileged layer.
 >
-> This is **ownership / lifecycle (intrinsic vs external), NOT human-vs-machine** — a
-> future automated writer of project-owned data is also `data_source_id NULL`. "The
-> project's edits win" = its row holds the top `priority` (a *value*), never `if`. **The
-> merge branches on nothing but `priority`.** Editing writes the project's own
-> contribution (the topology's intrinsic layer, always available) — **it never spawns a
-> source**. Both the `'authored'` literal (~15 `=== 'authored'` sites in `resolve.ts`) and
-> any `'human'` tag are **removed**; retraction is derivable from `data_source_id IS NULL`.
+> The only thing that makes Manual "win" is a **value, not a branch**: its row holds the
+> top `priority`. **`resolve()` branches on nothing but `priority`** — no `if (manual)`,
+> no `=== 'authored'`/`'human'` literal. The only typed distinctions are ordinary columns:
+> - **priority** — Manual's is the max, so its fields win the per-field merge.
+> - **sync behaviour** — a Manual source is hand-edited and never auto-fetched, so its
+>   contribution *persists*; external sources are re-fetched on sync, so a re-sync that
+>   omits a node *retracts* it. This falls out of "the manual plugin has no fetch", not a
+>   special case.
 >
-> **Presence (scoop) and hide are the same bucket**: every contribution asserts
-> elements with a **sign** — a normal element row = "this node is here" (scoop); an
-> identity-only element row with `negate=1` = "hide this node". Same for attachments:
-> `negate=0` asserts, `negate=1` suppresses. `resolve()` clusters by identity and, per
-> identity/key, the **highest-priority assertion's sign** decides presence/value. Any
-> source can hide in principle; today only the project's own (intrinsic) contribution does — usage, not a rule.
+> **Storage is DB-native** (the point of this doc): the Manual source's graph is decomposed
+> into `contribution_*` rows (element/link/attachment), exactly like every other source —
+> `attachment_id` set to its `topology_data_sources` row. There is **no `data_source_id IS
+> NULL` "intrinsic" row**, no `writeIntrinsicGraph`, no topology-scoped `/edit` route.
+> Editing the Manual source writes ITS contribution.
 >
-> The literal `'authored'` special-cases in `resolve.ts` (~15 sites) are **residue to
-> remove**, replaced by priority + the signed-assertion model. Do NOT re-introduce a
-> special table, code path, or vocabulary for "authored"/"Manual". (Settled by #335 +
-> #370; this doc finishes it in storage.)
+> **Presence (scoop) and hide are the same bucket**: every contribution asserts elements
+> with a **sign** — a normal element row = "this node is here" (scoop); an identity-only
+> element row with `negate=1` = "hide this node". Same for attachments (`negate=0` asserts,
+> `negate=1` suppresses). `resolve()` clusters by identity and, per identity/key, the
+> **highest-priority assertion's sign** decides presence/value. Any source can hide in
+> principle; today only Manual does — usage, not a rule.
+>
+> Do NOT re-introduce a special table, code path, or vocabulary for "authored". Settled by
+> **#335** (all-sources-equal priority merge) + **#370** (Manual is a uniform data source);
+> this doc only makes its *storage* DB-native.
+
+> **⚠️ Drift warning — read before "simplifying" this.** An earlier revision of this doc
+> (commit `c159c6da`) misread the user's "the `'human'` literal is structurally unnecessary"
+> as "remove human *as a source*", and replaced the equal-Manual-source model with a
+> `data_source_id IS NULL` **"intrinsic" non-source layer** + a topology-scoped `/edit`
+> route. That re-introduced exactly the privileged-layer special-casing #335/#370 removed
+> (and was shipped, then reverted). The lesson: **"no `'human'`/`'authored'` magic literal"
+> means remove the *branch/label*, NOT demote Manual from being a data source.** Manual
+> stays a real, equal `data_source`; only its *storage* goes DB-native.
 
 ## Thesis
 
