@@ -5,14 +5,20 @@
 
 ## ⚠️ Canonical model — read first
 
-> **The human is fully just a top-priority source. There is no authored layer and no
-> human-vs-machine special-casing.** A topology is **N source contributions**; each is
-> tagged by a `source` (a `data_sources.id`, or `'human'`). The human differs only by:
-> - **priority** — a *value* (`'human'` = the maximum). "Human wins" = higher number,
->   never `if (human)`.
-> - **write mode** — `'human'` is *edited-in-place* (persists); external sources are
->   *re-fetched* (a re-sync can drop a node → retraction). This is "edited vs synced",
->   orthogonal to human-ness (a static import would also be "edited").
+> **The human is fully just a top-priority source. No authored layer, no human-vs-machine
+> special-casing, and NO reserved magic literal** (neither `'authored'` nor `'human'`).
+> A topology is **N source contributions**, each a `contribution_source` row. The human's
+> contribution is an *ordinary row* with a normal id; it is distinguished only by **typed
+> column values**, never by a branched string:
+> - **priority** — a *value* (the human's row holds the maximum). "Human wins" = higher
+>   number, never `if (human)`.
+> - **`write_mode = 'edited'`** — edited-in-place (persists); external sources are
+>   `'synced'` (re-fetched; a re-sync can drop a node → retraction). A typed kind, the
+>   only basis for retraction, **orthogonal to human-ness** (a static import is also `'edited'`).
+> - **`origin = 'human'`** — a typed discriminator used only to *route* a human edit to
+>   its row; the merge branches on **nothing** human-specific (only `priority`).
+>
+> The old `'authored'` literal (~15 `=== 'authored'` sites in `resolve.ts`) is **removed**.
 >
 > **Presence (scoop) and hide are the same bucket**: every contribution asserts
 > elements with a **sign** — a normal element row = "this node is here" (scoop); an
@@ -65,8 +71,10 @@ attachments, the binding target, the assertion sign) as real FK-enforced columns
 
 ## Schema (END STATE)
 
-`source_id` is `data_sources.id` or the literal `'human'`. `payload_json` is the document
-column (promote a scalar to a generated column only when a query needs it).
+`source_id` is `data_sources.id` for an external source, or an ordinary per-topology id
+for the human contribution (`origin='human'`) — **no code branches on its value**;
+`origin`/`write_mode`/`priority` columns carry the only differences. `payload_json` is the
+document column (promote a scalar to a generated column only when a query needs it).
 
 ```
 -- Existing, unchanged
@@ -77,8 +85,9 @@ topology_resolved_graph topology_id, graph_json, layout_json, …, built_revisio
 -- topology_observations: RETIRED (its content becomes contribution_* rows; keep only as a raw audit log if desired)
 
 -- ② Internal per-topology source registry (NOT data_sources; NOT in the Sources UI).
---    The 'human' row is internal bookkeeping — it never appears as an attachable source,
---    so the "phantom Manual" UX problem does not return. Resolves priority + FK + retraction.
+--    The human contribution is an ordinary row here (origin='human', normal id) — internal
+--    bookkeeping, never an attachable source, so the "phantom Manual" UX problem does not
+--    return. Resolves priority + FK + retraction. Nothing branches on the id value.
 contribution_source
   topology_id TEXT REFERENCES topologies(id) ON DELETE CASCADE,
   source_id   TEXT,                              -- data_sources.id | 'human'
