@@ -189,13 +189,23 @@ cheaper. The wins must be earned with index design and N+1 avoidance.
   cost is `computeNetworkLayout` (CPU) and the ③ Map-aware JSON serialize — both
   unchanged by this design and addressed separately (`performance-scaling.md`).
 
-**Indexes (design up front):**
-- every ②-relations table: `topology_id`
-- `attachment(topology_id, element_kind, element_ref)` — per-element fold
+**Index every foreign-key column (SQLite does NOT auto-index FKs).** With
+`foreign_keys = ON` and `ON DELETE CASCADE` from `topologies`, deleting a topology runs
+`SELECT … WHERE <child_fk> = ?` per child table — a **full table scan without an index**
+(sqlite.org/foreignkeys.html). So every FK column in the new tables needs an explicit
+index. The compound indexes below already cover the `topology_id` FK by prefix.
+
+**Indexes (design up front; equality → range/order → output; no redundant prefixes):**
+- `attachment(topology_id, element_kind, element_ref)` — per-element fold (also covers
+  `topology_id`-only by prefix → no separate `topology_id` index)
 - `attachment(topology_id, kind, source)` — "bindings by source" queries
-- `identity` UNIQUE `(topology_id, element_kind, element_ref, key_type, key_value)`
-  + reverse `(topology_id, key_type, key_value)` for the merge's identity match
+- `identity` PK `(topology_id, element_kind, element_ref, key_type, key_value)`
+  + reverse index `(topology_id, key_type, key_value)` for the merge's identity match
+- `suppression` / `exclusion` — their composite PK IS the index
 - observation prune already supported by `(topology_id, source_id, captured_at DESC)`
+- **Covering** only where the output is small (key/existence checks); do NOT add
+  `payload_json` to an index (large value defeats the point). `COUNT(*)`/`EXISTS` over
+  these indexes stay index-only.
 
 **Avoid N+1 (the main pitfall):** `buildGraph` must fetch each relations table **once
 per topology** (single indexed scan) and assemble in memory — never per-element queries.
@@ -206,9 +216,15 @@ PKs are a real cost on the high-row-count internal tables: a TEXT PK leaves the 
 rowid (one fast B-tree, less storage — Android's guidance). So:
 - Keep **TEXT nanoid** for externally-referenced entities (topologies, data_sources —
   they appear in URLs / the API).
-- For internal, never-URL-exposed, high-volume relations tables (`identity`,
-  `attachment`), prefer **`INTEGER PRIMARY KEY`**, or **`WITHOUT ROWID` with the natural
-  composite key** for `suppression` / `exclusion` (composite PKs, no surrogate id needed).
+- **`WITHOUT ROWID` with the natural composite key** for `identity` / `suppression` /
+  `exclusion` — they have composite keys, **small rows**, and no surrogate id is needed.
+  WITHOUT ROWID fits exactly here (~2× faster, ~50% less space) *provided* the row stays
+  **under ~1/20 of a page (~200 B at the 4 KiB page size)** — the sqlite.org rule of
+  thumb; verify with `sqlite3_analyzer`.
+- **Keep a rowid (`INTEGER PRIMARY KEY`)** for `attachment` — `payload_json` can push
+  rows over that ~200 B threshold, and WITHOUT ROWID *hurts* large-row tables (content in
+  interior B-tree nodes lowers fan-out). Index it as above.
+- Decide WITHOUT-ROWID-vs-rowid by **measuring actual row size**, not by guessing.
 
 **Push work into SQL, don't re-walk JSON in app code.** Filtering / aggregation /
 existence checks belong in queries (SQLite's engine ≫ JS loops), which is the whole
@@ -216,12 +232,32 @@ point of relationalizing ② — e.g. "bindings for source X" is an indexed `WHE
 `graph.nodes.flatMap(...)` over a parsed blob. (`COUNT(*)`/`EXISTS`/`LIMIT`, select only
 needed columns.)
 
-**SQLite levers:**
-- `doc_json` as **TEXT is the safe default** (we read the whole doc and parse in JS);
-  reserve **JSONB + generated columns** for scalars we actually filter on (promote on
-  demand, STORED+index for hot filters / expression index for rare ones).
-- WAL is on (concurrent read during scheduler writes); set `synchronous=NORMAL`,
-  `busy_timeout`, and a sensible `cache_size`/`mmap_size`.
+**Connection PRAGMAs — current gap (fix independently, applies now).** `db/index.ts`
+today sets only `journal_mode=WAL` + `foreign_keys=ON`. Missing the rest of the standard
+production set — most importantly **`busy_timeout`**: it's `0` today, so the moment the
+discovery scheduler writes while the UI reads, a reader/writer collision throws
+`SQLITE_BUSY` instead of waiting. Recommended set on every connection (well-sourced
+2024-2026 values):
+```
+PRAGMA journal_mode = WAL;       -- ✓ already
+PRAGMA foreign_keys = ON;        -- ✓ already
+PRAGMA synchronous = NORMAL;     -- safe + faster with WAL (currently FULL)
+PRAGMA busy_timeout = 5000;      -- ★ currently 0 → SQLITE_BUSY under scheduler+UI contention
+PRAGMA cache_size = -65536;      -- 64 MiB page cache (currently ~2 MiB)
+PRAGMA temp_store = MEMORY;      -- temp B-trees in RAM
+PRAGMA mmap_size = 268435456;    -- 256 MiB mmap → fewer read syscalls
+-- page_size = 4096 already set in the file
+```
+Run **`PRAGMA optimize`** on connection close (and periodically) so the planner has
+up-to-date stats; run **`ANALYZE`** after large backfills.
+
+**Storage of `doc_json`.** bun:sqlite here bundles **SQLite 3.51.1**, so the **JSONB type
+(3.45+) is available.** Still, **TEXT is the safe default** (we read the whole doc and
+parse in JS — JSONB's win is for in-DB `json_extract`, which we only do for promoted
+generated columns). Reserve **JSONB + generated columns** for scalars we actually filter
+on (STORED + index for hot filters / expression index for rare ones).
+
+**Other levers:**
 - Batch in **one transaction**: `reconcileBindings`' N-row replace, and `ingestGraph`.
 - Keep using bun:sqlite prepared statements (`.query()` cache).
 
@@ -239,9 +275,12 @@ exactly this — targeted compound indexes + a materialized view, found via EXPL
 - **`element_ref` identity model** — confirm identity-anchored refs handle the
   "authored attachment on an observed-only node" case (the empty-overlay-node the
   current code already prunes post-merge).
-- **`doc_json` as JSONB vs TEXT** — SQLite JSONB needs 3.45+ and bun:sqlite's bundled
-  SQLite version; verify before relying on the JSONB type (TEXT + `json_extract`
-  generated columns works regardless and is the safe default).
+- **`doc_json` as JSONB vs TEXT** — confirmed available (bun 1.3.4 → SQLite 3.51.1), but
+  TEXT + `json_extract` generated columns is the safe default; adopt JSONB deliberately
+  as a parse/storage optimization, not by default.
+- **WITHOUT ROWID row-size threshold** — `identity`/`suppression`/`exclusion` must stay
+  under ~200 B/row (4 KiB page) to benefit; verify with `sqlite3_analyzer` before
+  committing to it, else fall back to a rowid table.
 - **Editor convergence / `product` table** — deliberately deferred.
 
 ## References (prior art, verified 2026-06)
@@ -252,6 +291,11 @@ exactly this — targeted compound indexes + a materialized view, found via EXPL
 - Backstage — entity document + relations table + stitching: <https://backstage.io/docs/features/software-catalog/life-of-an-entity/>, <https://backstage.io/docs/features/software-catalog/creating-the-catalog-graph/>
 - SQLite performance best practices (Android) — INTEGER PK, compound indexes, WAL+synchronous, transactions, EXPLAIN QUERY PLAN, push work into SQL: <https://developer.android.com/topic/performance/sqlite-performance-best-practices>
 - SQLite performance tuning (Bencher) — compound indexes + materialized view + EXPLAIN/`.expert`, ~1200× win: <https://bencher.dev/learn/engineering/sqlite-performance-tuning/>
+- SQLite foreign keys — FK columns are NOT auto-indexed; index child keys: <https://www.sqlite.org/foreignkeys.html>
+- SQLite WITHOUT ROWID — when it helps (composite PK, <~1/20 page row) vs hurts: <https://www.sqlite.org/withoutrowid.html>
+- SQLite query planner — covering indexes, compound order, redundant-prefix, ANALYZE: <https://www.sqlite.org/queryplanner.html>
+- Production PRAGMA values (synchronous/busy_timeout/cache_size/mmap_size/temp_store): <https://databaseschool.com/articles/sqlite-recommended-pragmas>, <https://cj.rs/blog/sqlite-pragma-cheatsheet-for-performance-and-consistency/>
+- bun:sqlite (journal default DELETE → set WAL; safeIntegers): <https://bun.com/docs/runtime/sqlite>
 
 ## Relationship to existing docs
 - `topology-composition-store.md` — predecessor; its identity-keyed-store intent is realized here; `metrics-binding`-as-attachment = stage-1 input.
