@@ -472,7 +472,12 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      const sourcesToSync = getTopologySourcesService().listByPurpose(id, 'topology')
+      // Manual is hand-edited, never fetched — exclude it (it has no topology/
+      // autoscan capability and would just record a spurious 'failed'). Mirrors
+      // the discovery scheduler, which already filters it.
+      const sourcesToSync = getTopologySourcesService()
+        .listByPurpose(id, 'topology')
+        .filter((s) => s.dataSource?.type !== 'manual')
       if (sourcesToSync.length === 0) {
         return c.json({ error: 'No topology sources attached' }, 400)
       }

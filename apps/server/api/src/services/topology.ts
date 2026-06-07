@@ -1109,9 +1109,20 @@ export class TopologyService {
     priorityBySource: Map<string, number>,
   ): SnapshotEntry[] {
     this.backfillObservedContributions(topologyId)
-    // The Manual source is fed to resolve() separately as `authored` (top
-    // priority), so exclude it here or it would be double-counted.
-    const manualId = this.findManualSourceId(topologyId)
+    // The Manual contribution(s) are fed to resolve() as `authored` (top
+    // priority), so exclude EVERY Manual source here (a topology may have several,
+    // #370) or they'd be double-counted as observed snapshots.
+    const manualIds = new Set(
+      (
+        this.db
+          .query(
+            `SELECT ds.id AS id FROM topology_data_sources tds
+             JOIN data_sources ds ON ds.id = tds.data_source_id
+             WHERE tds.topology_id = ? AND ds.type = 'manual'`,
+          )
+          .all(topologyId) as { id: string }[]
+      ).map((r) => r.id),
+    )
     const rows = this.db
       .query(
         `SELECT source_id, last_status, last_ok_at
@@ -1125,7 +1136,7 @@ export class TopologyService {
     }[]
     const snapshots: SnapshotEntry[] = []
     for (const r of rows) {
-      if (r.source_id === manualId) continue
+      if (manualIds.has(r.source_id)) continue
       if (!priorityBySource.has(r.source_id)) continue
       const graph = buildGraph(topologyId, r.source_id, this.db)
       if (!graph) continue
@@ -1327,8 +1338,15 @@ export class TopologyService {
    *
    * Public so the discovery-policy API can read the Manual contribution to mutate.
    */
-  readManualGraph(topologyId: string, _sourceId?: string): NetworkGraph | null {
-    const manualId = this.findManualSourceId(topologyId)
+  readManualGraph(topologyId: string, sourceId?: string): NetworkGraph | null {
+    // Target the SPECIFIC Manual source when the caller names one (the editor
+    // passes the route's :sourceId) — a topology may have several Manual sources
+    // (#370), so reading "the first" would surface the wrong one. Fall back to the
+    // first attached Manual when no id is given (discovery-policy / single-Manual).
+    const manualId =
+      sourceId && this.manualAttachId(topologyId, sourceId)
+        ? sourceId
+        : this.findManualSourceId(topologyId)
     if (manualId) {
       const fromRows = buildGraph(topologyId, manualId, this.db)
       if (fromRows) return fromRows
@@ -1377,12 +1395,21 @@ export class TopologyService {
    * Persist the Manual source's graph. Manual is a uniform data source, so its
    * graph is ingested as ITS OWN contribution (`attachment_id` = its attach row)
    * — identical to how an observed source's graph is stored, just hand-edited and
-   * top-priority. Find-or-creates the Manual source so an edit always has a home.
-   * resolve() folds it as the top-priority contribution. Per-topology: an edit to
-   * topology X only invalidates X.
+   * top-priority. Writes the SPECIFIC Manual source when one is named (the editor
+   * passes the route's :sourceId — so editing Manual B never clobbers Manual A);
+   * otherwise find-or-creates one (discovery-policy / first edit) so the write
+   * always has a home. resolve() folds it as the top-priority contribution.
+   * Per-topology: an edit to topology X only invalidates X.
    */
-  async writeManualGraph(topologyId: string, graph: NetworkGraph): Promise<void> {
-    const manualId = await this.ensureManualSource(topologyId)
+  async writeManualGraph(
+    topologyId: string,
+    graph: NetworkGraph,
+    sourceId?: string,
+  ): Promise<void> {
+    const manualId =
+      sourceId && this.manualAttachId(topologyId, sourceId)
+        ? sourceId
+        : await this.ensureManualSource(topologyId)
     const attachId = this.manualAttachId(topologyId, manualId)
     ingestGraph(
       topologyId,

@@ -144,9 +144,10 @@ export function createObservationsRoute(): Hono {
   // resolved project graph below.
   app.get('/:topologyId/sources/:sourceId/latest-snapshot', (c) => {
     const { topologyId, sourceId } = c.req.param()
-    // Manual = the intrinsic contribution (DB-native store), not an observation.
+    // Manual = its own contribution (DB-native), not an observation. Target THIS
+    // Manual source (a topology can have several).
     if (isManualForTopology(topologyId, sourceId)) {
-      const graph = getTopologyService().readManualGraph(topologyId)
+      const graph = getTopologyService().readManualGraph(topologyId, sourceId)
       return c.json({ graph, capturedAt: null, status: graph ? 'ok' : null })
     }
     const latest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
@@ -183,7 +184,7 @@ export function createObservationsRoute(): Hono {
       // observation row. Manual is a uniform source; writeManualGraph ingests its
       // graph keyed by its attach row, like any source.
       if (isManualForTopology(topologyId, sourceId)) {
-        await getTopologyService().writeManualGraph(topologyId, graph)
+        await getTopologyService().writeManualGraph(topologyId, graph, sourceId)
         return c.json({ ok: true }, 201)
       }
       const observation = await observations.record({
