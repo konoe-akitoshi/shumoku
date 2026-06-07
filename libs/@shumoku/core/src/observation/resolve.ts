@@ -832,38 +832,145 @@ function foldSubgraphs(contributions: Contribution[]): Subgraph[] | undefined {
   return all.length > 0 ? all : undefined
 }
 
+interface LinkMember {
+  sourceId: string
+  priority: number
+  capturedAt: number
+  /** The link with its endpoints already remapped to cluster ids + folded ports. */
+  link: Link
+}
+
 /**
- * Skeleton link folding. Currently passes through every contribution's
- * links with provenance stamped; cross-source dedup is left as a follow-up
- * in the full implementation.
- *
- * The endpoint `node` id is remapped to the resolved cluster id so links
- * still reference real nodes after clustering.
+ * Fold links across contributions. Endpoints are first remapped to resolved
+ * cluster ids + folded port ids, then links that resolve to the SAME canonical
+ * endpoint pair are clustered and folded into one — so the same physical link
+ * observed by two sources becomes a single edge. Per field, the highest-priority
+ * contribution that holds a value wins (priority desc, capturedAt desc), mirroring
+ * the node field merge; `metadata` merges per key. Dangling links (an endpoint
+ * whose node didn't survive clustering) are dropped.
  */
 function foldLinks(
   contributions: Contribution[],
   clusterById: Map<string, NodeCluster>,
   portIdRemap: Map<string, string>,
 ): Link[] {
-  const links: Link[] = []
+  // 1. Remap endpoints and bucket by canonical endpoint pair. First-seen order
+  //    is preserved (contributions are intrinsic-first) for stable output.
+  const clusters = new Map<string, LinkMember[]>()
+  const order: string[] = []
   for (const contrib of contributions) {
     for (const link of contrib.graph.links) {
       const from = remapEndpoint(link.from, contrib.sourceId, clusterById, portIdRemap)
       const to = remapEndpoint(link.to, contrib.sourceId, clusterById, portIdRemap)
-      if (!from || !to) continue // dangling — TODO: ghost endpoint
-      links.push({
-        ...link,
-        from,
-        to,
-        provenance: {
-          source: contrib.sourceId,
-          state: contrib.sourceId === 'intrinsic' ? 'intrinsic-only' : 'discovered-only',
-          observedAt: Number.isFinite(contrib.capturedAt) ? contrib.capturedAt : undefined,
-        },
-      })
+      if (!from || !to) continue // dangling — endpoint node didn't survive
+      const key = linkClusterKey(from, to)
+      const member: LinkMember = {
+        sourceId: contrib.sourceId,
+        priority: contrib.priority,
+        capturedAt: contrib.capturedAt,
+        link: { ...link, from, to },
+      }
+      const existing = clusters.get(key)
+      if (existing) existing.push(member)
+      else {
+        clusters.set(key, [member])
+        order.push(key)
+      }
     }
   }
+
+  // 2. Fold each cluster into one link.
+  const links: Link[] = []
+  for (const key of order) {
+    const members = clusters.get(key)
+    if (members) links.push(foldLinkCluster(members))
+  }
   return links
+}
+
+// Internal Map-key separators (never displayed). Unit / record separators don't
+// occur in node or port ids (namespaced alphanumerics + `:`/`-`/`.`/`/`).
+const NODE_PORT_SEP = '\x1f'
+const ENDPOINT_PAIR_SEP = '\x1e'
+
+/** Canonical, order-independent key for a remapped link's endpoint pair. */
+function linkEndpointKey(e: LinkEndpoint): string {
+  return e.port != null && e.port !== '' ? `${e.node}${NODE_PORT_SEP}${e.port}` : e.node
+}
+function linkClusterKey(from: LinkEndpoint, to: LinkEndpoint): string {
+  return [linkEndpointKey(from), linkEndpointKey(to)].sort().join(ENDPOINT_PAIR_SEP)
+}
+
+/** Link fields owned by the fold itself — never copied through the generic merge. */
+const LINK_FOLD_RESERVED = new Set(['id', 'from', 'to', 'provenance', 'metadata'])
+
+function foldLinkCluster(members: LinkMember[]): Link {
+  const ranked = [...members].sort((a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt)
+  const top = ranked[0]
+  if (!top) throw new Error('empty link cluster')
+
+  // Generic per-field winner: first ranked member holding a value wins. Keeps
+  // the fold robust as Link grows new optional fields (vlan, cable, label, …).
+  const merged: Record<string, unknown> = {}
+  const keys = new Set<string>()
+  for (const m of ranked) {
+    for (const k of Object.keys(m.link)) if (!LINK_FOLD_RESERVED.has(k)) keys.add(k)
+  }
+  for (const k of keys) {
+    for (const m of ranked) {
+      const v = (m.link as unknown as Record<string, unknown>)[k]
+      if (hasValue(v)) {
+        merged[k] = v
+        break
+      }
+    }
+  }
+
+  // metadata: per-key, highest-priority defined value wins (structural merge).
+  const metadata: Record<string, unknown> = {}
+  for (const m of ranked) {
+    for (const [k, v] of Object.entries(m.link.metadata ?? {})) {
+      if (v !== undefined && metadata[k] === undefined) metadata[k] = v
+    }
+  }
+
+  // id: prefer the intrinsic contribution's id, else the highest-priority one.
+  const intrinsicId = ranked.find((m) => m.sourceId === 'intrinsic' && hasValue(m.link.id))?.link.id
+  const id = intrinsicId ?? ranked.find((m) => hasValue(m.link.id))?.link.id
+
+  return {
+    ...(id != null ? { id } : {}),
+    ...merged,
+    from: top.link.from,
+    to: top.link.to,
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+    provenance: deriveLinkProvenance(members),
+  }
+}
+
+function deriveLinkProvenance(members: LinkMember[]): Provenance {
+  const hasIntrinsic = members.some((m) => m.sourceId === 'intrinsic')
+  const observerCount = members.filter((m) => m.sourceId !== 'intrinsic').length
+  let state: Provenance['state']
+  if (hasIntrinsic && observerCount > 0) state = 'confirmed'
+  else if (hasIntrinsic) state = 'intrinsic-only'
+  else if (observerCount >= 2) state = 'confirmed'
+  else state = 'discovered-only'
+
+  let source = 'intrinsic'
+  if (!hasIntrinsic) {
+    const latest = [...members].sort((a, b) => b.capturedAt - a.capturedAt)[0]
+    source = latest?.sourceId ?? 'unknown'
+  }
+  const latestObserved = members.reduce(
+    (acc, m) => (Number.isFinite(m.capturedAt) && m.capturedAt > acc ? m.capturedAt : acc),
+    Number.NEGATIVE_INFINITY,
+  )
+  return {
+    source,
+    state,
+    observedAt: Number.isFinite(latestObserved) ? latestObserved : undefined,
+  }
 }
 
 function remapEndpoint(
