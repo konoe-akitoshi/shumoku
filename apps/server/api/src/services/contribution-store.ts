@@ -239,13 +239,17 @@ export function ingestGraph(
         'attachments',
         'suppressedAttachments',
         'ports',
+        // presence is promoted to the column (scoop→'present', anchor→NULL).
+        'presence',
         // resolve()-derived annotations — never an input, so never stored (a
         // contribution is an input). Re-derived on every resolve. Storing a
         // stale one (e.g. an old `provenance.source`) would be a latent footgun.
         'provenance',
         'fieldSources',
       ])
-      const eid = elementId(node.id, 'node', node.parent ?? null, 'present', nodePayload)
+      // scoop (default / omitted) → 'present'; anchor → NULL (makes no presence claim).
+      const presence = node.presence === 'anchor' ? null : 'present'
+      const eid = elementId(node.id, 'node', node.parent ?? null, presence, nodePayload)
       writeIdentity(eid, node.identity)
       writeAttachments(eid, 'node', node.attachments)
       writeSuppressions(eid, 'node', node.suppressedAttachments)
@@ -441,6 +445,9 @@ export function buildGraph(
     } else if (el.kind === 'node') {
       const node: Node = { id: el.local_id, ...payload } as Node
       if (el.parent_local_id) node.parent = el.parent_local_id
+      // NULL presence = anchor (no presence claim). 'present' = scoop (default;
+      // left unset so it round-trips with nodes that never carried `presence`).
+      if (el.presence === null) node.presence = 'anchor'
       const identity = identityFromRows(identityByElement.get(el.id) ?? [])
       if (identity) node.identity = identity
       const a = attsOf(el.id)

@@ -523,6 +523,18 @@ export interface Node {
   parent?: string
 
   /**
+   * Presence claim this contribution makes about the node (resolve input only):
+   * - `'scoop'` (default, also when omitted) — positive: "this node exists".
+   * - `'anchor'` — NO presence claim: the node carries identity / attachments
+   *   only, to ride onto a node some OTHER contribution scoops. An anchor-only
+   *   cluster is dropped by resolve(), so e.g. an overlay node that merely holds
+   *   a metrics-binding does not keep a ghost alive once every source stops
+   *   observing the device. (`'hide'` is expressed via `NetworkGraph.exclusions`,
+   *   not here.)
+   */
+  presence?: 'scoop' | 'anchor'
+
+  /**
    * Rank/layer for horizontal alignment
    * Nodes with the same rank value will be placed on the same horizontal level
    */

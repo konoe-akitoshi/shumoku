@@ -104,6 +104,19 @@ export function resolve(
   // 2. Build node clusters by identity keys
   const allClusters = clusterNodes(contributions)
 
+  // 2a. Presence. A cluster exists only if some contribution SCOOPS it
+  //     (`presence !== 'anchor'`, i.e. makes a positive existence claim).
+  //     Anchor-only clusters make no presence claim — they carry identity /
+  //     attachments to ride onto a node someone else scoops — so they are
+  //     dropped. This is what lets an overlay node that merely holds a
+  //     metrics-binding evaporate once every source stops observing the
+  //     device, instead of lingering as a ghost. Anchor members still
+  //     contribute their identity / fields / attachments to clusters that DO
+  //     have a scoop member (the fold below reads every member).
+  const presentClusters = allClusters.filter((c) =>
+    c.members.some((m) => m.node.presence !== 'anchor'),
+  )
+
   // 2b. Drop hidden clusters. A cluster is hidden when its merged identity
   //     matches any exclusion (by mgmtIp / chassisId / sysName). Identity-keyed
   //     so a hide survives re-scans that re-number ephemeral node ids. Dropping
@@ -111,8 +124,8 @@ export function resolve(
   const exclusions = authored.exclusions ?? []
   const nodeClusters =
     exclusions.length > 0
-      ? allClusters.filter((c) => !isClusterExcluded(c, exclusions))
-      : allClusters
+      ? presentClusters.filter((c) => !isClusterExcluded(c, exclusions))
+      : presentClusters
 
   // 3. For each cluster, fold into a single resolved Node
   const resolvedNodes: Node[] = []

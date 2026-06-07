@@ -181,4 +181,25 @@ describe('contribution codec — round-trip', () => {
       attachments: [{ kind: 'access', protocol: 'snmp', community: 'topo-default' }],
     } as NetworkGraph)
   })
+
+  test('presence anchor round-trips (NULL column); scoop default is absent', () => {
+    expectLossless({
+      version: '1',
+      name: 'presence',
+      nodes: [
+        // anchor: binding-only node, no presence claim. Round-trips via NULL column.
+        {
+          id: 'a1',
+          label: '',
+          presence: 'anchor',
+          identity: { mgmtIp: '10.0.0.1' },
+          attachments: [{ kind: 'metrics-binding', sourceId: 'zbx', hostId: '7' }],
+        },
+        // scoop is the default → stored as 'present', rebuilt WITHOUT a presence
+        // field (canon: a node that never carried `presence` stays that way).
+        { id: 'n2', label: 'N2', identity: { mgmtIp: '10.0.0.2' } },
+      ],
+      links: [],
+    } as NetworkGraph)
+  })
 })
