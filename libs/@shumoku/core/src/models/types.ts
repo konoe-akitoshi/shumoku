@@ -1227,6 +1227,14 @@ export interface GraphSettings {
    * Legend configuration
    */
   legend?: boolean | LegendSettings
+
+  /**
+   * Hide nodes that have no links (degree 0) in the RESOLVED graph.
+   * A project-level display preference: evaluated after resolve() has folded
+   * every source, so a node linked by any source is kept. Operator-placed
+   * (intrinsic) nodes are never hidden — only auto-discovered orphans.
+   */
+  hideDisconnected?: boolean
 }
 
 /**

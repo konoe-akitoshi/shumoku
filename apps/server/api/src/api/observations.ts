@@ -226,13 +226,18 @@ export function createObservationsRoute(): Hono {
     return c.json({
       edgeStyle: settings['edgeStyle'] ?? 'orthogonal',
       splineMode: settings['splineMode'] ?? 'sloppy',
+      hideDisconnected: settings['hideDisconnected'] ?? false,
     })
   })
 
   app.put('/:id/display-settings', async (c) => {
     const id = c.req.param('id')
     try {
-      const body = await c.req.json<{ edgeStyle?: string; splineMode?: string }>()
+      const body = await c.req.json<{
+        edgeStyle?: string
+        splineMode?: string
+        hideDisconnected?: boolean
+      }>()
       const svc = getTopologyService()
       const overlay: NetworkGraph = svc.readProjectOverlay(id) ?? {
         version: '1',
@@ -242,7 +247,8 @@ export function createObservationsRoute(): Hono {
       const settings = { ...(overlay.settings ?? {}) } as Record<string, unknown>
       if (body.edgeStyle !== undefined) settings['edgeStyle'] = body.edgeStyle
       if (body.edgeStyle === 'splines') settings['splineMode'] = body.splineMode ?? 'sloppy'
-      else delete settings['splineMode']
+      else if (body.edgeStyle !== undefined) delete settings['splineMode']
+      if (body.hideDisconnected !== undefined) settings['hideDisconnected'] = body.hideDisconnected
       await svc.writeProjectOverlay(id, { ...overlay, settings })
       return c.json({ ok: true })
     } catch (err) {

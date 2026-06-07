@@ -53,6 +53,7 @@ import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
 import { buildGraph, ingestGraph } from './contribution-store.js'
+import { filterDisconnected } from './display-filter.js'
 
 /**
  * Sentinel `source_id` of the **project overlay** — the project's own
@@ -1036,7 +1037,12 @@ export class TopologyService {
       priorityBySource.set(tds.dataSourceId, tds.priority)
     }
     const snapshots = this.readObservedSnapshots(topology.id, priorityBySource)
-    const graph = resolveObservations(authored, snapshots)
+    const resolvedGraph = resolveObservations(authored, snapshots)
+    // Post-resolve display filter (project-level pref on the overlay settings).
+    // Runs on the fully-merged graph — never per-source.
+    const graph = authored.settings?.hideDisconnected
+      ? filterDisconnected(resolvedGraph)
+      : resolvedGraph
 
     // Resolve icon dimensions for URL icons (used by renderer for
     // aspect-preserving sizing).
