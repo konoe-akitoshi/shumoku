@@ -3,8 +3,11 @@
 -- codec (ingestGraph/buildGraph) + resolve integration land in later steps.
 --
 -- A topology = N contributions, each a contribution_source row. attachment_id set =
--- external feed (owned by its topology_data_sources attach row); attachment_id NULL =
--- the project's own intrinsic contribution. No human/authored concept.
+-- a source contribution (owned by its topology_data_sources attach row — external
+-- feed OR an explicitly-added hand-drawn Manual source); attachment_id NULL = the
+-- PROJECT OVERLAY (one per topology), the operator's curation — exclusions /
+-- overrides / metrics bindings / display settings — owned by the project, not a
+-- data source. resolve() folds the overlay as the top-priority `authored` input.
 
 -- Candidate key on topology_data_sources so contribution_source can FK (attachment_id, topology_id).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tds_id_topology ON topology_data_sources(id, topology_id);

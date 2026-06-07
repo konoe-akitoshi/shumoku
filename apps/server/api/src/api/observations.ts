@@ -16,7 +16,6 @@ import { Hono } from 'hono'
 import { hasAutoscanCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { ObservationsService } from '../services/observations.js'
-import { TopologySourcesService } from '../services/topology-sources.js'
 import { getTopologyService } from './topologies.js'
 
 /**
@@ -92,16 +91,9 @@ export function createScanRoute(): Hono {
 export function createObservationsRoute(): Hono {
   const app = new Hono()
   const observations = new ObservationsService()
-  const dataSources = new DataSourceService()
-  const topologySources = new TopologySourcesService()
-  // The authored ("Manual") source's graph is the intrinsic contribution now, NOT a
-  // topology_observations row. Route manual save/load through the topology service so the
-  // editor and resolve() agree (no split-brain). External sources stay observations.
-  // REQUIRE the manual source be attached to THIS topology (purpose 'topology') — else an
-  // unrelated manual id could overwrite the topology's intrinsic graph.
-  const isManualForTopology = (topologyId: string, sourceId: string): boolean =>
-    dataSources.get(sourceId)?.type === 'manual' &&
-    topologySources.find(topologyId, sourceId, 'topology') !== undefined
+  // Every source — external feed AND a hand-drawn Manual source — saves/loads its
+  // graph through the same observation path (record → materialize). No per-type
+  // branch; the human is just the "scanner" for a Manual source.
   // Note: the per-source sync endpoint
   // `POST /:topologyId/sources/:sourceId/sync` lives in
   // `topology-sources.ts` — that route is registered earlier on the
@@ -144,12 +136,8 @@ export function createObservationsRoute(): Hono {
   // resolved project graph below.
   app.get('/:topologyId/sources/:sourceId/latest-snapshot', (c) => {
     const { topologyId, sourceId } = c.req.param()
-    // Manual = its own contribution (DB-native), not an observation. Target THIS
-    // Manual source (a topology can have several).
-    if (isManualForTopology(topologyId, sourceId)) {
-      const graph = getTopologyService().readManualGraph(topologyId, sourceId)
-      return c.json({ graph, capturedAt: null, status: graph ? 'ok' : null })
-    }
+    // Every source — including a hand-drawn Manual source — reads its latest graph
+    // from the observation log; no manual-specific branch.
     const latest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
     if (!latest) {
       // Source attached but no observation yet — return an empty
@@ -180,13 +168,11 @@ export function createObservationsRoute(): Hono {
       if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
         return c.json({ error: 'graph.nodes and graph.links must be arrays' }, 400)
       }
-      // Manual save → the Manual source's own contribution (DB-native), not an
-      // observation row. Manual is a uniform source; writeManualGraph ingests its
-      // graph keyed by its attach row, like any source.
-      if (isManualForTopology(topologyId, sourceId)) {
-        await getTopologyService().writeManualGraph(topologyId, graph, sourceId)
-        return c.json({ ok: true }, 201)
-      }
+      // Every source saves the same way — record an observation, which materializes
+      // into the contribution store. A hand-drawn Manual source's editor save comes
+      // through here too (the human is the "scanner"); no manual-specific branch.
+      // (Operator curation — exclusions/bindings/overrides — does NOT come through
+      // here; it goes to the project overlay via the discovery-policy / mapping APIs.)
       const observation = await observations.record({
         topologyId,
         sourceId,
@@ -204,12 +190,11 @@ export function createObservationsRoute(): Hono {
   })
 
   // Resolved graph — the project 's current rendered graph.
-  // `TopologyService.parseTopology()` already runs `resolve()` over
-  // Manual + every attached source 's latest observation, so
-  // `parsed.graph` IS the resolved graph. The previous version of
-  // this endpoint re-ran `resolve()` with `parsed.graph` as the
-  // authored layer AND the same latest snapshots again, which
-  // double-counted every link (a snapshot of 7 links came out as 14).
+  // `TopologyService.parseTopology()` already runs `resolve()` over the project
+  // overlay + every attached source 's contribution, so `parsed.graph` IS the
+  // resolved graph. The previous version of this endpoint re-ran `resolve()` with
+  // `parsed.graph` as the `authored` input AND the same latest snapshots again,
+  // which double-counted every link (a snapshot of 7 links came out as 14).
   // Just hand back what parseTopology already computed.
   app.get('/:id/resolved', async (c) => {
     const id = c.req.param('id')
@@ -219,12 +204,47 @@ export function createObservationsRoute(): Hono {
       if (!parsed) return c.json({ error: 'not found' }, 404)
 
       // snapshotCount stays useful — it tells the UI how many sources
-      // were folded in beyond the authored Manual graph.
+      // were folded in beyond the project overlay.
       const snapshotCount = observations
         .latestPerSource(id)
         .filter((o) => o.sourceId !== parsed.topologySourceId || o.graph !== null).length
 
       return c.json({ graph: parsed.graph, snapshotCount })
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
+    }
+  })
+
+  // Topology display settings (edge style / spline mode). These are project-level
+  // presentation prefs, NOT source content, so they live on the project overlay's
+  // graph-level `settings`. Read-modify-write the overlay's settings only — never
+  // touches nodes/exclusions/bindings (no clobber). No Manual source involved.
+  app.get('/:id/display-settings', (c) => {
+    const id = c.req.param('id')
+    const overlay = getTopologyService().readProjectOverlay(id)
+    const settings = (overlay?.settings ?? {}) as Record<string, unknown>
+    return c.json({
+      edgeStyle: settings['edgeStyle'] ?? 'orthogonal',
+      splineMode: settings['splineMode'] ?? 'sloppy',
+    })
+  })
+
+  app.put('/:id/display-settings', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const body = await c.req.json<{ edgeStyle?: string; splineMode?: string }>()
+      const svc = getTopologyService()
+      const overlay: NetworkGraph = svc.readProjectOverlay(id) ?? {
+        version: '1',
+        nodes: [],
+        links: [],
+      }
+      const settings = { ...(overlay.settings ?? {}) } as Record<string, unknown>
+      if (body.edgeStyle !== undefined) settings['edgeStyle'] = body.edgeStyle
+      if (body.edgeStyle === 'splines') settings['splineMode'] = body.splineMode ?? 'sloppy'
+      else delete settings['splineMode']
+      await svc.writeProjectOverlay(id, { ...overlay, settings })
+      return c.json({ ok: true })
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
     }

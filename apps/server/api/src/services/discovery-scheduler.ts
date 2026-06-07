@@ -9,7 +9,9 @@
  * source is always an explicit human action ("Sync now" / webhook) — discovery
  * does not start on its own. So an attached-but-never-synced source (a valid
  * intermediate state: config wired, not yet pulled) is simply not in the
- * working set. Manual is the authored layer and is never fetched at all.
+ * working set. A hand-drawn Manual source has no upstream, so it is never synced
+ * (it stays out of the working set the same way) — it is an ordinary source, not
+ * a special layer. (Operator curation lives in the project overlay, never fetched.)
  *
  * Decision per (topology, source) on each tick:
  *
@@ -90,7 +92,7 @@ export async function syncSource(
 
   try {
     if (hasAutoscanCapability(plugin)) {
-      // Resolve per-target SNMP credentials from the authored layer's
+      // Resolve per-target SNMP credentials from the project overlay's
       // discovery-policy chain (topology default → subgraph → node).
       // The plugin doesn't know about credential entities — we pass it
       // a flat ip→community map and it uses that wherever a key matches.
@@ -152,8 +154,8 @@ function backoffFor(failCount: number): number {
 }
 
 /**
- * Walk a topology's authored Manual graph and resolve every node's
- * effective discovery policy. For nodes with both an `identity.mgmtIp`
+ * Walk a topology's project overlay (the operator's curation) and resolve every
+ * node's effective discovery policy. For nodes with both an `identity.mgmtIp`
  * and a resolved `community` (set on the node, or inherited from a
  * subgraph / topology default), emit an entry in the returned map keyed
  * by the mgmt IP. Nodes with no community (or no mgmt IP) are absent —
@@ -169,9 +171,9 @@ export function resolveCredentialsForAutoscan(
   topologyId: string,
   topologyService: TopologyService,
 ): Record<string, string> {
-  // Credentials live in the authored layer (the intrinsic contribution) — read it
+  // Credentials live in the project overlay (the intrinsic contribution) — read it
   // unconditionally; do NOT gate on a phantom Manual data source being attached.
-  const graph = topologyService.readManualGraph(topologyId)
+  const graph = topologyService.readProjectOverlay(topologyId)
   if (!graph) return {}
 
   const subgraphLookup = new Map(
@@ -265,12 +267,9 @@ export class DiscoveryScheduler {
         // state — the source has been synced at least once (`lastSyncedAt` set),
         // so it has observations to refresh. The first sync is always an explicit
         // human action ("Sync now" / webhook); discovery never bootstraps itself.
-        // Manual is the authored layer and is never fetched at all. So the working
-        // set is the established, non-manual sources — anything else has nothing
-        // to refresh and must not be touched here.
-        const sources = attached.filter(
-          (s) => s.dataSource?.type !== 'manual' && s.lastSyncedAt != null,
-        )
+        // A hand-drawn Manual source is never fetched (no upstream), so it is never
+        // synced → `lastSyncedAt` stays null → already excluded here. No type branch.
+        const sources = attached.filter((s) => s.lastSyncedAt != null)
         if (sources.length === 0) continue
 
         // The topology default policy gates every source on this topology
@@ -328,8 +327,8 @@ export class DiscoveryScheduler {
   private async readTopologyDefault(
     topologyId: string,
   ): Promise<import('@shumoku/core').Attachment[] | undefined> {
-    // Topology-default policy lives in the authored layer (intrinsic contribution).
-    const graph = this.topologyService.readManualGraph(topologyId)
+    // Topology-default policy lives in the project overlay (intrinsic contribution).
+    const graph = this.topologyService.readProjectOverlay(topologyId)
     return graph?.attachments
   }
 

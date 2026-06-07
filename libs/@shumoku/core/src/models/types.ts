@@ -381,16 +381,15 @@ export function specDeviceType(spec: NodeSpec | undefined): DeviceType | undefin
  *                  ageing, no drift noise, no stale alerts. Use for
  *                  vendor-managed gear, decommissioned hardware, lab
  *                  segments you want quiet. If you want the node to
- *                  keep displaying with curated values, add it to a
- *                  Manual source — the authored layer carries through
- *                  the resolver regardless of mode.
+ *                  keep displaying with curated values, curate it — the
+ *                  project overlay's overrides carry through the resolver
+ *                  regardless of discovery mode.
  *
  * History: an earlier revision had a fourth mode `manual-only` meaning
- * "authored content is authoritative". That collapses onto `disabled`
- * once you realise the authored layer is independent of discovery
- * mode — the resolver always folds it in. Keeping `manual-only`
- * around invited an impossible state (the mode is meaningless without
- * a Manual source attached).
+ * "the operator's content is authoritative". That collapses onto
+ * `disabled` once you realise the project overlay (the top-priority
+ * contribution) is independent of discovery mode — the resolver always
+ * folds it in. Keeping `manual-only` around invited an impossible state.
  */
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 

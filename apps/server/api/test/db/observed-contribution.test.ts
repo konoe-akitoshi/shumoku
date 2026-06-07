@@ -201,15 +201,16 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
     expect(shared?.label).toBe('from-hi')
   })
 
-  test('the Manual source (fed as authored) is not double-counted as an observed snapshot', async () => {
+  test('the project overlay (fed as authored) is not double-counted as an observed snapshot', async () => {
     const topo = await svc.create({ name: 'manual' })
-    await svc.writeManualGraph(topo.id, graphWith('authored'))
-    const manualId = svc.findManualSourceId(topo.id)
+    await svc.writeProjectOverlay(topo.id, graphWith('authored'))
 
-    // Manual is a real source with its OWN contribution (attachment_id set).
-    expect(contribCount(topo.id, manualId ?? '')).toBe(1)
-    // But resolve folds it once (as the top-priority authored contribution); it's
-    // excluded from the observed-snapshot feed so the node never doubles.
+    // The overlay is the project-owned contribution: a single NULL-attachment row,
+    // and NO data source is created.
+    expect(svc.findManualSourceId(topo.id)).toBeUndefined()
+    expect(contribCount(topo.id, 'intrinsic')).toBe(1)
+    // resolve folds it once (as the top-priority authored contribution); the
+    // observed-snapshot feed only reads attachment_id IS NOT NULL, so it never doubles.
     const names = await sysNames(topo.id)
     expect(names.filter((n) => n === 'authored')).toEqual(['authored'])
   })

@@ -278,7 +278,7 @@ export const topologies = {
       scoped(`/topologies/${id}/graph`, `/topologies/${id}/graph`),
     ),
 
-  /** Resolved graph = authored layer folded with latest snapshot per source. */
+  /** Resolved graph = project overlay folded with each attached source's contribution. */
   getResolved: (id: string) =>
     request<{ graph: NetworkGraph; snapshotCount: number }>(`/topologies/${id}/resolved`),
 
@@ -469,6 +469,20 @@ export const topologies = {
       request<{ dataSourceId: string }>(`/topologies/${topologyId}/sources`, {
         method: 'POST',
         body: JSON.stringify({ type: 'manual', purpose: 'topology' }),
+      }),
+  },
+
+  /**
+   * Topology display settings (edge style / spline mode). Project-level
+   * presentation prefs stored on the project overlay — NOT a Manual source.
+   */
+  displaySettings: {
+    get: (id: string) =>
+      request<{ edgeStyle: string; splineMode: string }>(`/topologies/${id}/display-settings`),
+    set: (id: string, body: { edgeStyle: string; splineMode?: string }) =>
+      request<{ ok: boolean }>(`/topologies/${id}/display-settings`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
       }),
   },
 

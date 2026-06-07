@@ -52,7 +52,7 @@ v1 でどこまでやる？
 
 ### Q4. v1 で editor をどう扱うか  ✅ **回答済**: (a) v1 は editor 改修ゼロ
 
-editor (neted) は authored layer の編集器だが、observation モデルとの接点をどこまで持たせるか。
+editor (neted) は人の編集（project overlay / 手描きソース）の編集器だが、observation モデルとの接点をどこまで持たせるか。
 
 **選択肢**:
 - (a) **v1 は editor 改修ゼロ**。editor は NetworkGraph をそのまま編集（provenance は無視）（推奨）

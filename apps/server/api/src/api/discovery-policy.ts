@@ -15,10 +15,11 @@
  *             suppressedAttachments?: string[]|null } // node: keys to remove
  *     → { effective: EffectiveDiscoveryPolicy }
  *
- * The overlay lives on the topology's intrinsic contribution (the project's own
- * authored layer — no Manual data source is created). A node that exists ONLY in a discovered
- * snapshot just works — detection already grabbed it, so we materialize a
- * minimal authored entry from its resolved identity and apply the
+ * The overlay lives on the PROJECT OVERLAY — the project's own top-priority
+ * contribution (`attachment_id` NULL, `source_id='intrinsic'`). It is NOT a data
+ * source: writing it never creates/attaches a Manual source. A node that exists
+ * ONLY in a discovered snapshot just works — detection already grabbed it, so we
+ * materialize a minimal overlay entry from its resolved identity and apply the
  * attachments. (Subgraph scope still 409s — a discovered-only subgraph has
  * no identity to materialize from.)
  *
@@ -254,7 +255,7 @@ export function createDiscoveryPolicyApi(): Hono {
     const topology = service.get(topologyId)
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
 
-    const authored = service.readManualGraph(topologyId) ?? {
+    const authored = service.readProjectOverlay(topologyId) ?? {
       version: '1' as const,
       name: topology.name,
       nodes: [],
@@ -385,7 +386,7 @@ export function createDiscoveryPolicyApi(): Hono {
       }
     }
 
-    await service.writeManualGraph(topologyId, next)
+    await service.writeProjectOverlay(topologyId, next)
     service.clearCacheEntry(topologyId)
 
     // Recompute the affected effective policy for the response.
@@ -451,7 +452,7 @@ export function createDiscoveryPolicyApi(): Hono {
     if (!ex) return c.json({ error: 'body must include mgmtIp, chassisId, or sysName' }, 400)
     const topology = service.get(topologyId)
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
-    const authored = service.readManualGraph(topologyId) ?? {
+    const authored = service.readProjectOverlay(topologyId) ?? {
       version: '1' as const,
       name: topology.name,
       nodes: [],
@@ -459,7 +460,7 @@ export function createDiscoveryPolicyApi(): Hono {
     }
     const exclusions = [...(authored.exclusions ?? [])]
     if (!exclusions.some((e) => exclusionKey(e) === exclusionKey(ex))) exclusions.push(ex)
-    await service.writeManualGraph(topologyId, { ...authored, exclusions })
+    await service.writeProjectOverlay(topologyId, { ...authored, exclusions })
     service.clearCacheEntry(topologyId)
     return c.json({ exclusions })
   })
@@ -470,12 +471,12 @@ export function createDiscoveryPolicyApi(): Hono {
     if (!ex) return c.json({ error: 'body must include mgmtIp, chassisId, or sysName' }, 400)
     const topology = service.get(topologyId)
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
-    const authored = service.readManualGraph(topologyId)
+    const authored = service.readProjectOverlay(topologyId)
     if (!authored) return c.json({ exclusions: [] })
     const exclusions = (authored.exclusions ?? []).filter(
       (e) => exclusionKey(e) !== exclusionKey(ex),
     )
-    await service.writeManualGraph(topologyId, { ...authored, exclusions })
+    await service.writeProjectOverlay(topologyId, { ...authored, exclusions })
     service.clearCacheEntry(topologyId)
     return c.json({ exclusions })
   })
@@ -488,7 +489,7 @@ export function createDiscoveryPolicyApi(): Hono {
     const topologyId = c.req.param('id')
     const topology = service.get(topologyId)
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
-    const authored = service.readManualGraph(topologyId)
+    const authored = service.readProjectOverlay(topologyId)
     if (!authored) return c.json({ cleared: false, reason: 'no authored graph' })
     // Strip overlay: drop attachments from every node/subgraph, the topology
     // default, and all exclusions. Keep the nodes themselves out entirely —
@@ -501,7 +502,7 @@ export function createDiscoveryPolicyApi(): Hono {
       attachments: undefined,
       exclusions: undefined,
     }
-    await service.writeManualGraph(topologyId, cleared)
+    await service.writeProjectOverlay(topologyId, cleared)
     service.clearCacheEntry(topologyId)
     return c.json({ cleared: true })
   })
