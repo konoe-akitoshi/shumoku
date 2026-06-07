@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS contribution_link (
   id INTEGER PRIMARY KEY,
   topology_id TEXT NOT NULL,
   source_id TEXT NOT NULL,
-  local_id TEXT NOT NULL,
+  local_id TEXT,
   from_node_local_id TEXT NOT NULL,
   from_port_local_id TEXT,
   to_node_local_id TEXT NOT NULL,

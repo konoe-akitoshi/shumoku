@@ -266,7 +266,7 @@ export function ingestGraph(
       const r = insLink.run(
         topologyId,
         sourceId,
-        link.id ?? `__link_${graph.links?.indexOf(link)}`,
+        link.id ?? null,
         from.node,
         from.port ?? null,
         to.node,
@@ -309,14 +309,14 @@ export function buildGraph(
 
   const elements = db
     .query(
-      'SELECT id, local_id, kind, parent_local_id, presence, payload_json FROM contribution_element WHERE topology_id = ? AND source_id = ?',
+      'SELECT id, local_id, kind, parent_local_id, presence, payload_json FROM contribution_element WHERE topology_id = ? AND source_id = ? ORDER BY id',
     )
     .all(topologyId, sourceId) as ElementRow[]
 
   const identityByElement = new Map<number, IdRow[]>()
   for (const r of db
     .query(
-      'SELECT element_id, key_type, key_value FROM contribution_identity WHERE topology_id = ? AND source_id = ?',
+      'SELECT element_id, key_type, key_value FROM contribution_identity WHERE topology_id = ? AND source_id = ? ORDER BY element_id, key_type, key_value',
     )
     .all(topologyId, sourceId) as { element_id: number; key_type: string; key_value: string }[]) {
     const list = identityByElement.get(r.element_id) ?? []
@@ -329,7 +329,7 @@ export function buildGraph(
   const suppByElement = new Map<number, string[]>()
   for (const r of db
     .query(
-      'SELECT element_id, kind, attachment_key, target_source_id, negate, payload_json FROM contribution_attachment WHERE topology_id = ? AND source_id = ?',
+      'SELECT element_id, kind, attachment_key, target_source_id, negate, payload_json FROM contribution_attachment WHERE topology_id = ? AND source_id = ? ORDER BY id',
     )
     .all(topologyId, sourceId) as {
     element_id: number | null
@@ -433,18 +433,18 @@ export function buildGraph(
   }
   for (const r of db
     .query(
-      'SELECT id, local_id, from_node_local_id, from_port_local_id, to_node_local_id, to_port_local_id, payload_json FROM contribution_link WHERE topology_id = ? AND source_id = ?',
+      'SELECT id, local_id, from_node_local_id, from_port_local_id, to_node_local_id, to_port_local_id, payload_json FROM contribution_link WHERE topology_id = ? AND source_id = ? ORDER BY id',
     )
     .all(topologyId, sourceId) as {
     id: number
-    local_id: string
+    local_id: string | null
     from_node_local_id: string
     from_port_local_id: string | null
     to_node_local_id: string
     to_port_local_id: string | null
     payload_json: string | null
   }[]) {
-    const payload = parse(r.payload_json)
+    const payload = parse(r.payload_json) as Record<string, unknown>
     const fromExtra = (payload['from'] as Record<string, unknown>) ?? {}
     const toExtra = (payload['to'] as Record<string, unknown>) ?? {}
     delete payload['from']
@@ -454,8 +454,8 @@ export function buildGraph(
       from: { node: r.from_node_local_id, port: r.from_port_local_id ?? undefined, ...fromExtra },
       to: { node: r.to_node_local_id, port: r.to_port_local_id ?? undefined, ...toExtra },
     } as Link
-    // A synthesized local_id (the source link had no `id`) must NOT round-trip as an id.
-    if (!r.local_id.startsWith('__link_')) link.id = r.local_id
+    // local_id is the source Link.id (NULL when the source link had none).
+    if (r.local_id != null) link.id = r.local_id
     const via = (viaByLink.get(r.id) ?? []).sort((a, b) => a.seq - b.seq).map((v) => v.t)
     if (via.length > 0) link.via = via
     links.push(link)
