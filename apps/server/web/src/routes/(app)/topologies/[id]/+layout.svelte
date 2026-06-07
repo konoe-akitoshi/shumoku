@@ -46,9 +46,10 @@
     { slug: 'resolved', label: 'Resolved' },
   ] as const
 
-  let zone = $derived.by<'sources' | 'composition' | 'settings' | null>(() => {
+  let zone = $derived.by<'sources' | 'composition' | 'settings' | 'edit' | null>(() => {
     if (activeSlug === 'sources') return 'sources'
     if (activeSlug === 'settings') return 'settings'
+    if (activeSlug === 'edit') return 'edit'
     if (COMPOSITION_SLUGS.includes(activeSlug)) return 'composition'
     return null
   })
@@ -133,7 +134,13 @@
   }
 
   const zoneTitle = $derived(
-    zone === 'sources' ? 'Sources' : zone === 'settings' ? 'Settings' : 'Composition',
+    zone === 'sources'
+      ? 'Sources'
+      : zone === 'settings'
+        ? 'Settings'
+        : zone === 'edit'
+          ? 'Edit'
+          : 'Composition',
   )
 
   // Top-right zone toggles (shown on the diagram). Each opens the drawer to
@@ -192,9 +199,10 @@
     >
       <header class="flex-shrink-0 border-b border-theme-border px-4 pt-3 pb-0">
         <div class="flex items-center justify-between mb-2">
-          <!-- Two-way zone switch: Sources | Composition (hidden on Settings). -->
-          {#if onSettings}
-            <span class="text-sm font-semibold text-theme-text">Settings</span>
+          <!-- Two-way zone switch: Sources | Composition (hidden on the
+               single-purpose Settings / Edit drawers, which show a plain title). -->
+          {#if onSettings || zone === 'edit'}
+            <span class="text-sm font-semibold text-theme-text">{zoneTitle}</span>
           {:else}
             <div class="flex items-center gap-1">
               {#each ZONES as z (z.key)}

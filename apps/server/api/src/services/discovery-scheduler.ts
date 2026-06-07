@@ -171,7 +171,7 @@ export function resolveCredentialsForAutoscan(
 ): Record<string, string> {
   // Credentials live in the authored layer (the intrinsic contribution) — read it
   // unconditionally; do NOT gate on a phantom Manual data source being attached.
-  const graph = topologyService.readManualGraph(topologyId)
+  const graph = topologyService.readIntrinsicGraph(topologyId)
   if (!graph) return {}
 
   const subgraphLookup = new Map(
@@ -265,12 +265,11 @@ export class DiscoveryScheduler {
         // state — the source has been synced at least once (`lastSyncedAt` set),
         // so it has observations to refresh. The first sync is always an explicit
         // human action ("Sync now" / webhook); discovery never bootstraps itself.
-        // Manual is the authored layer and is never fetched at all. So the working
-        // set is the established, non-manual sources — anything else has nothing
-        // to refresh and must not be touched here.
-        const sources = attached.filter(
-          (s) => s.dataSource?.type !== 'manual' && s.lastSyncedAt != null,
-        )
+        // So the working set is the established sources (synced at least once) —
+        // anything else has nothing to refresh and must not be touched here. (The
+        // project's own authored graph is the intrinsic contribution, not a source,
+        // so it never appears here at all.)
+        const sources = attached.filter((s) => s.lastSyncedAt != null)
         if (sources.length === 0) continue
 
         // The topology default policy gates every source on this topology
@@ -329,7 +328,7 @@ export class DiscoveryScheduler {
     topologyId: string,
   ): Promise<import('@shumoku/core').Attachment[] | undefined> {
     // Topology-default policy lives in the authored layer (intrinsic contribution).
-    const graph = this.topologyService.readManualGraph(topologyId)
+    const graph = this.topologyService.readIntrinsicGraph(topologyId)
     return graph?.attachments
   }
 

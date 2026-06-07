@@ -74,16 +74,14 @@ export interface DataSourceInput {
 }
 
 /**
- * Topology shell — name, mapping, share state, source pointers.
- * Graph content lives in source observations, not here. Read the
- * Manual snapshot via api.topologies.sources.latestSnapshot(...),
- * write a new one via api.topologies.sources.recordObservation(...).
- * The resolved project graph: api.topologies.getResolved(...).
+ * Topology shell — name, share state, source pointers. Graph content is not
+ * here: the project's own graph is the intrinsic contribution
+ * (api.topologies.getIntrinsic / putIntrinsic), external sources contribute
+ * observations, and the resolved project graph is api.topologies.getResolved(...).
  */
 export interface Topology {
   id: string
   name: string
-  manualSourceId?: string
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string

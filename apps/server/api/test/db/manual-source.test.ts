@@ -17,25 +17,15 @@ afterAll(() => db_.teardown())
 const g = (nodeId: string): NetworkGraph =>
   ({
     version: '1',
-    name: 'manual',
+    name: 'intrinsic',
     nodes: [{ id: nodeId, label: nodeId, shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
     links: [],
   }) as NetworkGraph
 
-describe('Manual = uniform data source (authored graph as the intrinsic contribution)', () => {
-  test('attachManualSource seeds config {} (no graph) and reads null until saved', async () => {
-    const topo = await svc.create({ name: 'm1' })
-    const manualId = await svc.ensureManualSource(topo.id)
-    const cfg = getDatabase()
-      .query('SELECT config_json FROM data_sources WHERE id = ?')
-      .get(manualId) as { config_json: string }
-    expect(JSON.parse(cfg.config_json).graph).toBeUndefined()
-    expect(svc.readManualGraph(topo.id, manualId)).toBeNull()
-  })
-
-  test('writeManualGraph stores the intrinsic contribution; readManualGraph + resolve see it', async () => {
+describe('intrinsic graph (the project own contribution — no Manual data source)', () => {
+  test('writeIntrinsicGraph stores the intrinsic contribution; readIntrinsicGraph + resolve see it', async () => {
     const topo = await svc.create({ name: 'm2' })
-    await svc.writeManualGraph(topo.id, 'intrinsic', g('a'))
+    svc.writeIntrinsicGraph(topo.id, g('a'))
 
     // Stored in the contribution store (intrinsic = attachment_id NULL), NOT an observation.
     const src = getDatabase()
@@ -49,19 +39,26 @@ describe('Manual = uniform data source (authored graph as the intrinsic contribu
       .get(topo.id) as { local_id: string } | undefined
     expect(node?.local_id).toBe('a')
 
-    expect(svc.readManualGraph(topo.id)?.nodes?.[0]?.id).toBe('a')
+    expect(svc.readIntrinsicGraph(topo.id)?.nodes?.[0]?.id).toBe('a')
     const parsed = await svc.getParsed(topo.id)
     expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
   })
 
-  test('latest write wins on re-save (intrinsic is replaced)', async () => {
-    const topo = await svc.create({ name: 'm3' })
-    await svc.writeManualGraph(topo.id, 'intrinsic', g('first'))
-    await svc.writeManualGraph(topo.id, 'intrinsic', g('second'))
-    expect(svc.readManualGraph(topo.id)?.nodes?.[0]?.id).toBe('second')
+  test('reads null until anything is authored', async () => {
+    const topo = await svc.create({ name: 'm1' })
+    expect(svc.readIntrinsicGraph(topo.id)).toBeNull()
   })
 
-  test('multiple legacy Manual sources merge into one intrinsic on backfill (no data loss, no UNIQUE clash)', async () => {
+  test('latest write wins on re-save (intrinsic is replaced)', async () => {
+    const topo = await svc.create({ name: 'm3' })
+    svc.writeIntrinsicGraph(topo.id, g('first'))
+    svc.writeIntrinsicGraph(topo.id, g('second'))
+    expect(svc.readIntrinsicGraph(topo.id)?.nodes?.[0]?.id).toBe('second')
+  })
+})
+
+describe('retireManualSources — one-shot legacy Manual → intrinsic migration', () => {
+  test('salvages + merges legacy Manual snapshots into the intrinsic, then drops Manual rows', async () => {
     // A pre-cutover topology with TWO Manual sources, each a legacy observation that
     // overlaps (same link id, same topology-default attachment key, distinct nodes).
     const topo = await svc.create({ name: 'mm' })
@@ -92,20 +89,41 @@ describe('Manual = uniform data source (authored graph as the intrinsic contribu
       attachments: [{ kind: 'access', protocol: 'snmp', community: 'y' }],
     } as NetworkGraph)
 
-    // Backfill (lazy, on first read) must merge both without throwing and keep both nodes.
-    const merged = svc.readManualGraph(topo.id)
+    svc.retireManualSources()
+
+    // Both Manual nodes merged into the intrinsic, no UNIQUE clash, dedups preserved.
+    const merged = svc.readIntrinsicGraph(topo.id)
     expect(merged?.nodes?.map((n) => n.id).sort()).toEqual(['na', 'nb'])
     expect(merged?.links).toHaveLength(1) // 'shared' deduped
     expect(merged?.attachments).toHaveLength(1) // one slot per key
     expect(merged?.description).toBe('kept') // graph-level fields preserved
     expect((merged?.settings as { paperSize?: string })?.paperSize).toBe('A4')
 
-    // Idempotent: a second read comes from the intrinsic rows, still merged.
-    expect(
-      svc
-        .readManualGraph(topo.id)
-        ?.nodes?.map((n) => n.id)
-        .sort(),
-    ).toEqual(['na', 'nb'])
+    // The Manual data sources are gone.
+    const manualCount = (
+      db.query("SELECT COUNT(*) AS c FROM data_sources WHERE type = 'manual'").get() as {
+        c: number
+      }
+    ).c
+    expect(manualCount).toBe(0)
+  })
+
+  test('does not clobber an already-populated intrinsic', async () => {
+    const topo = await svc.create({ name: 'keep-intrinsic' })
+    svc.writeIntrinsicGraph(topo.id, g('authored-real'))
+    // A stray legacy Manual snapshot exists too, but the intrinsic is already set.
+    insertDataSource('manual', 'man-stray')
+    attachSource(topo.id, 'man-stray', 'topology')
+    getDatabase()
+      .query(
+        `INSERT INTO topology_observations (id, topology_id, source_id, captured_at, status, graph_json, node_count, link_count, port_count, created_at)
+         VALUES ('obs-stray', ?, 'man-stray', 1, 'ok', ?, 0, 0, 0, 1)`,
+      )
+      .run(topo.id, JSON.stringify(g('stale-ghost')))
+
+    svc.retireManualSources()
+
+    // The real authored node survives; the stray legacy snapshot is NOT salvaged over it.
+    expect(svc.readIntrinsicGraph(topo.id)?.nodes?.[0]?.id).toBe('authored-real')
   })
 })

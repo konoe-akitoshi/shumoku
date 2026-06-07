@@ -15,23 +15,11 @@ import { describe, expect, it } from 'vitest'
  * per-plugin `type === '<plugin>'` branch in these files is a regression —
  * adding a data source type must require zero host edits.
  *
- * Documented, intentional exception (NOT a config-form branch):
- * - 'manual': the editor-container source — no upstream; its graph is a
- *   per-topology observation snapshot (migration 014), not config_json.
- *   Architecturally special, not a normal data-source plugin. (Grafana's
- *   webhook URL is now generic via getConnectionInfo, so it no longer
- *   needs an exception.)
+ * (The former 'manual' exception is gone: the project's own graph is the
+ * intrinsic contribution, edited at /topologies/:id/edit — not a data source.)
  */
-const ALLOWED = new Set(['manual'])
-const BUNDLED = [
-  'zabbix',
-  'prometheus',
-  'netbox',
-  'grafana',
-  'aruba-instant-on',
-  'network-scan',
-  'manual',
-]
+const ALLOWED = new Set<string>()
+const BUNDLED = ['zabbix', 'prometheus', 'netbox', 'grafana', 'aruba-instant-on', 'network-scan']
 
 const here = dirname(fileURLToPath(import.meta.url))
 const WEB = join(here, '..', '..', '..', 'web', 'src', 'routes', '(app)')

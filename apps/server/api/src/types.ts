@@ -78,20 +78,16 @@ export interface DataSourceInput {
  * and the displayed graph is computed by `resolve()` over those at
  * read time.
  *
- * No `contentJson` field on purpose: that name conflated "the
- * Manual source 's input" with "the project 's current graph". The
- * Manual snapshot is read via
- *   GET  /api/topologies/:tid/sources/:sid/latest-snapshot
- * and written via
- *   POST /api/topologies/:tid/sources/:sid/observation
+ * No `contentJson` field on purpose: that name conflated "the editor's
+ * input" with "the project's current graph". The project's own authored
+ * graph (the intrinsic contribution) is read/written via
+ *   GET / PUT  /api/topologies/:id/graph
  * The resolved project graph has its own endpoint:
  *   GET  /api/topologies/:tid/resolved
  */
 export interface Topology {
   id: string
   name: string
-  /** Id of the Manual source attached to this topology, if any. */
-  manualSourceId?: string
   /**
    * Structure / metrics data source ids. No longer stored on the topology row
    * (sources live in `topology_data_sources`); the `/context` response derives

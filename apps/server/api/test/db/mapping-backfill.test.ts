@@ -25,14 +25,13 @@ describe('mapping_json backfill (Phase 2 → bindings, then drop column)', () =>
     expect(columnExists('topologies', 'mapping_json')).toBe(true)
 
     const topo = await svc.create({ name: 'bf' })
-    const manualId = await svc.ensureManualSource(topo.id)
     const graph: NetworkGraph = {
       version: '1',
       name: 'bf',
       nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
       links: [],
     } as NetworkGraph
-    await svc.writeManualGraph(topo.id, manualId, graph)
+    await svc.writeIntrinsicGraph(topo.id, graph)
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_bf'), 'metrics')
 
     const nodeAId = (await svc.getParsed(topo.id))?.graph.nodes.find(
