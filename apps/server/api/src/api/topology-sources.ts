@@ -55,10 +55,13 @@ topologySourcesApi.get('/:topologyId/sources', async (c) => {
  * Add a data source to a topology.
  * POST /api/topologies/:topologyId/sources
  *
- * `{ dataSourceId, purpose, ... }` — attach an existing source (NetBox, SNMP,
- * etc., shared across topologies). The project's own hand-drawn graph is NOT a
- * data source — it's the intrinsic contribution, edited via PUT
- * /api/topologies/:id/graph.
+ * Two shapes:
+ *  (a) `{ dataSourceId, purpose, ... }` — attach an existing source
+ *      (NetBox, SNMP, etc. shared across topologies).
+ *  (b) `{ type: 'manual', purpose? }` — inline-create a Manual data
+ *      source and attach it in one step. Manual is a fully uniform
+ *      source (no cardinality / sharing constraints) — same as any
+ *      other; this shape is just a convenience.
  */
 topologySourcesApi.post('/:topologyId/sources', async (c) => {
   const { topologyId } = c.req.param()
@@ -69,7 +72,25 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
     return c.json({ error: 'Topology not found' }, 404)
   }
 
-  const body = (await c.req.json()) as TopologyDataSourceInput
+  const body = (await c.req.json()) as TopologyDataSourceInput & {
+    type?: string
+  }
+
+  // Inline-create path: `{ type: 'manual' }` (purpose defaults to 'topology').
+  // Convenience: create a fresh Manual data source and attach it in one step.
+  // Manual is a fully uniform source (no cardinality / sharing constraints).
+  if (body.type === 'manual') {
+    const purpose = body.purpose ?? 'topology'
+    try {
+      const newSource = await getTopologyService().attachManualSource(topologyId, purpose)
+      return c.json(newSource, 201)
+    } catch (error) {
+      return c.json(
+        { error: error instanceof Error ? error.message : 'Failed to attach Manual' },
+        500,
+      )
+    }
+  }
 
   // Existing-data-source path
   if (!body.dataSourceId || !body.purpose) {

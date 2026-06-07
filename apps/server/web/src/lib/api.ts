@@ -282,19 +282,6 @@ export const topologies = {
   getResolved: (id: string) =>
     request<{ graph: NetworkGraph; snapshotCount: number }>(`/topologies/${id}/resolved`),
 
-  /**
-   * The project's own (intrinsic) graph — the editor's read/write target. NOT a
-   * data source: every topology has one. Distinct from `getGraph` (the resolved
-   * render graph). `graph` is null until anything is authored.
-   */
-  getIntrinsic: (id: string) =>
-    request<{ graph: NetworkGraph | null }>(`/topologies/${id}/intrinsic`),
-  putIntrinsic: (id: string, graph: NetworkGraph) =>
-    request<{ ok: boolean }>(`/topologies/${id}/intrinsic`, {
-      method: 'PUT',
-      body: JSON.stringify({ graph }),
-    }),
-
   /** Recent observation snapshots for this topology (counters only). */
   listObservations: (id: string, limit?: number) => {
     const params = limit ? `?limit=${limit}` : ''
@@ -476,6 +463,13 @@ export const topologies = {
           body: JSON.stringify({ graph, status: status ?? 'ok' }),
         },
       ),
+
+    /** Create-and-attach a new Manual source to a topology (no cardinality limit). */
+    attachManual: (topologyId: string) =>
+      request<{ dataSourceId: string }>(`/topologies/${topologyId}/sources`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'manual', purpose: 'topology' }),
+      }),
   },
 
   /**

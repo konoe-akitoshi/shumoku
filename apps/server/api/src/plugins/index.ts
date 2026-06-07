@@ -37,10 +37,12 @@ import { register as registerNetBox } from 'shumoku-plugin-netbox'
 import { register as registerNetworkScan } from 'shumoku-plugin-network-scan'
 import { register as registerPrometheus } from 'shumoku-plugin-prometheus'
 import { register as registerZabbix } from 'shumoku-plugin-zabbix'
+import { registerManualPlugin } from './manual-plugin.js'
 // Register bundled plugins
 import { pluginRegistry } from './registry.js'
 
 export function registerBundledPlugins(): void {
+  registerManualPlugin(pluginRegistry)
   registerNetBox(pluginRegistry)
   registerZabbix(pluginRegistry)
   registerPrometheus(pluginRegistry)

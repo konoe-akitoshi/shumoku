@@ -87,6 +87,7 @@ export class DataSourceService {
   listByCapability(capability: 'topology' | 'metrics' | 'alerts'): DataSource[] {
     const all = this.list()
     return all.filter((ds) => {
+      if (capability === 'topology' && ds.type === 'manual') return true
       const pluginInfo = pluginRegistry.getInfo(ds.type)
       if (!pluginInfo) return false
       if (capability === 'topology') {

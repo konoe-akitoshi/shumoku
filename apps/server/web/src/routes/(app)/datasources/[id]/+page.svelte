@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { type NetworkGraph, YamlParser } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -29,6 +30,17 @@
   let saving = $state(false)
   let testResult = $state<ConnectionResult | null>(null)
   let testing = $state(false)
+  // For Manual sources: the topologies this source is attached to —
+  // shown as a tag list so users see where this content is in use.
+  let attachedTopologies = $state<{ topologyId: string; name: string }[]>([])
+
+  // Manual graph editor state (only used when dataSource.type === 'manual').
+  // Manual stores its graph in config_json under the `graph` key — the
+  // graph is the source 's content, shared across all attached topologies.
+  let editorMode = $state<'yaml' | 'json'>('yaml')
+  let yamlContent = $state('')
+  let jsonContent = $state('')
+
   // Form state. Non-manual config is rendered + edited via <SchemaForm> from
   // the plugin's configSchema; Manual keeps the graph editor below.
   let formName = $state('')
@@ -70,6 +82,75 @@
     }
   })
 
+  function graphToYaml(graph: Record<string, unknown>): string {
+    // Same converter as the dedicated edit page used to have. Walks the
+    // NetworkGraph 's top-level shape; anything not enumerated below
+    // round-trips through the JSON tab instead.
+    const lines: string[] = []
+    if (graph['name']) lines.push(`name: ${graph['name']}`)
+    if (graph['version']) lines.push(`version: "${graph['version']}"`)
+    if (graph['description']) lines.push(`description: ${graph['description']}`)
+    lines.push('')
+    lines.push('nodes:')
+    const nodes = (graph['nodes'] as Array<Record<string, unknown>>) || []
+    for (const node of nodes) {
+      lines.push(`  - id: ${node['id']}`)
+      if (node['label']) lines.push(`    label: ${node['label']}`)
+      if (node['type']) lines.push(`    type: ${node['type']}`)
+      if (node['vendor']) lines.push(`    vendor: ${node['vendor']}`)
+      if (node['model']) lines.push(`    model: ${node['model']}`)
+      if (node['parent']) lines.push(`    parent: ${node['parent']}`)
+    }
+    lines.push('')
+    lines.push('links:')
+    const links = (graph['links'] as Array<Record<string, unknown>>) || []
+    for (const link of links) {
+      const from = link['from'] as string | { node: string; port?: string }
+      const to = link['to'] as string | { node: string; port?: string }
+      if (typeof from === 'string') lines.push(`  - from: ${from}`)
+      else {
+        lines.push(`  - from:`)
+        lines.push(`      node: ${from.node}`)
+        if (from.port) lines.push(`      port: ${from.port}`)
+      }
+      if (typeof to === 'string') lines.push(`    to: ${to}`)
+      else {
+        lines.push(`    to:`)
+        lines.push(`      node: ${to.node}`)
+        if (to.port) lines.push(`      port: ${to.port}`)
+      }
+      if (link['bandwidth']) lines.push(`    bandwidth: ${link['bandwidth']}`)
+    }
+    const subgraphs = graph['subgraphs'] as Array<Record<string, unknown>> | undefined
+    if (subgraphs && subgraphs.length > 0) {
+      lines.push('')
+      lines.push('subgraphs:')
+      for (const sg of subgraphs) {
+        lines.push(`  - id: ${sg['id']}`)
+        if (sg['label']) lines.push(`    label: ${sg['label']}`)
+        if (sg['parent']) lines.push(`    parent: ${sg['parent']}`)
+      }
+    }
+    return lines.join('\n')
+  }
+
+  function switchMode(mode: 'yaml' | 'json') {
+    if (mode === editorMode) return
+    try {
+      if (mode === 'json') {
+        const result = new YamlParser().parse(yamlContent)
+        jsonContent = JSON.stringify(result.graph, null, 2)
+      } else {
+        const graph = JSON.parse(jsonContent)
+        yamlContent = graphToYaml(graph)
+      }
+      editorMode = mode
+      error = ''
+    } catch (e) {
+      error = e instanceof Error ? e.message : `Failed to convert to ${mode.toUpperCase()}`
+    }
+  }
+
   interface ParsedConfig {
     url?: string
     token?: string
@@ -90,8 +171,18 @@
     }
   }
 
-  function getConfigFromForm(_type: string): string {
+  function getConfigFromForm(type: string): string {
+    // Manual has no connection config — its graph is recorded as an observation
+    // (see manualGraphFromEditor / handleSave), not stored in config_json.
+    if (type === 'manual') return '{}'
     return JSON.stringify(pruneEmpty(config))
+  }
+
+  /** Parse the active editor pane (YAML or JSON) into a NetworkGraph. */
+  function manualGraphFromEditor(): NetworkGraph {
+    return editorMode === 'yaml'
+      ? new YamlParser().parse(yamlContent).graph
+      : (JSON.parse(jsonContent) as NetworkGraph)
   }
 
   function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
@@ -159,6 +250,29 @@
         config = blankSecrets(parsed, configSchemaFor(ds.type))
 
         await loadConnectionInfo()
+
+        if (ds.type === 'manual') {
+          try {
+            attachedTopologies = await api.dataSources.listAttachedTopologies(currentId)
+          } catch (err) {
+            console.warn('[Manual] Failed to list attached topologies:', err)
+          }
+          // Manual content is a per-topology observation now (not config_json).
+          // Seed the editor from this source's latest snapshot for its topology.
+          let graph: Record<string, unknown> = { version: '1', nodes: [], links: [] }
+          const topoId = attachedTopologies[0]?.topologyId
+          if (topoId) {
+            try {
+              const snap = await api.topologies.sources.latestSnapshot(topoId, currentId)
+              if (snap?.graph) graph = snap.graph as unknown as Record<string, unknown>
+            } catch (err) {
+              console.warn('[Manual] Failed to load latest snapshot:', err)
+            }
+          }
+          if (cancelled) return
+          jsonContent = JSON.stringify(graph, null, 2)
+          yamlContent = graphToYaml(graph)
+        }
       } catch (e) {
         if (cancelled) return
         error = e instanceof Error ? e.message : 'Failed to load data source'
@@ -203,6 +317,29 @@
       const updates = {
         name: formName.trim(),
         configJson: getConfigFromForm(dataSource.type),
+      }
+
+      // Manual: persist the drawn graph as an observation against its topology
+      // (the human is the "scanner"); config_json holds no graph. The graph is a
+      // per-topology observation, so THIS standalone editor needs exactly one
+      // attached topology to know which one to write — refuse on none (would
+      // silently lose the edit) or many (would edit an arbitrary one). This is a
+      // limitation of editing from /datasources, not a cardinality constraint:
+      // Manual is fully uniform and may be attached to many topologies. The fix
+      // is to edit from the topology context (#362), where the target is known.
+      if (dataSource.type === 'manual') {
+        if (attachedTopologies.length !== 1) {
+          error =
+            attachedTopologies.length === 0
+              ? 'Attach this Manual source to a topology before editing its content.'
+              : 'This Manual is attached to multiple topologies; edit its content from a topology.'
+          saving = false
+          return
+        }
+        const topoId = attachedTopologies[0]?.topologyId
+        if (topoId) {
+          await api.topologies.sources.recordObservation(topoId, id, manualGraphFromEditor(), 'ok')
+        }
       }
 
       dataSource = await dataSources.update(id, updates)
@@ -300,7 +437,62 @@
               <input type="text" id="name" class="input" bind:value={formName}>
             </div>
 
-            {#if configSchemaFor(dataSource.type)}
+            {#if dataSource.type === 'manual'}
+              <!-- Manual stores its graph in config_json. Same source-level
+                   content is shared across every topology it 's attached to. -->
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="label">Graph</span>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="px-2 py-0.5 text-xs rounded {editorMode === 'yaml' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
+                      onclick={() => switchMode('yaml')}
+                    >
+                      YAML
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-0.5 text-xs rounded {editorMode === 'json' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
+                      onclick={() => switchMode('json')}
+                    >
+                      JSON
+                    </button>
+                  </div>
+                </div>
+                {#if editorMode === 'yaml'}
+                  <textarea
+                    class="input min-h-[400px] font-mono text-sm"
+                    bind:value={yamlContent}
+                    placeholder="Enter YAML content..."
+                  ></textarea>
+                {:else}
+                  <textarea
+                    class="input min-h-[400px] font-mono text-sm"
+                    bind:value={jsonContent}
+                    placeholder="Enter JSON content..."
+                  ></textarea>
+                {/if}
+                {#if attachedTopologies.length > 0}
+                  <p class="text-xs text-theme-text-muted mt-2">
+                    Used by:
+                    {#each attachedTopologies as t, i}
+                      <a class="text-primary hover:underline" href="/topologies/{t.topologyId}">
+                        {t.name}
+                      </a>
+                      {#if i < attachedTopologies.length - 1}
+                        ,{' '}
+                      {/if}
+                    {/each}
+                  </p>
+                {:else}
+                  <p class="text-xs text-theme-text-muted mt-2">
+                    Not attached to any topology yet. Attach from a topology 's Sources tab to use
+                    this graph.
+                  </p>
+                {/if}
+              </div>
+            {:else}
               {@const cfgSchema = configSchemaFor(dataSource.type)}
               {#if cfgSchema}
                 <SchemaForm
