@@ -284,6 +284,12 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
     const topo = await svc.create({ name: 'backfill' })
     const nb = insertDataSource('netbox', 'nb_backfill')
     attachSource(topo.id, nb, 'topology')
+    // Pre-cutover state: the source was synced (lastSyncedAt set) → eligible for backfill.
+    getDatabase()
+      .query(
+        'UPDATE topology_data_sources SET last_synced_at = 1234 WHERE topology_id = ? AND data_source_id = ?',
+      )
+      .run(topo.id, nb)
 
     // Simulate a pre-stage-3 state: a successful audit row exists but no
     // contribution (write the audit row directly, bypassing record()).
@@ -299,5 +305,24 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
     // First resolve backfills the contribution and renders the node.
     expect(await sysNames(topo.id)).toContain('legacy-node')
     expect(contribCount(topo.id, nb)).toBe(1)
+  })
+
+  test('a fresh (never-synced) attach does NOT resurrect stale audit rows', async () => {
+    const topo = await svc.create({ name: 'no-resurrect' })
+    const nb = insertDataSource('netbox', 'nb_fresh')
+    attachSource(topo.id, nb, 'topology') // lastSyncedAt stays null (fresh attach)
+
+    // A stale audit row lingers (e.g. left over from a prior detach/replace).
+    getDatabase()
+      .query(
+        `INSERT INTO topology_observations
+           (id, topology_id, source_id, captured_at, status, graph_json, node_count, link_count, port_count, created_at)
+         VALUES (?, ?, ?, ?, 'ok', ?, 1, 0, 0, ?)`,
+      )
+      .run('obs_stale_1', topo.id, nb, 1234, JSON.stringify(graphWith('stale-node')), timestamp())
+
+    // No Sync yet → no contribution backfilled → the stale node must NOT appear.
+    expect(await sysNames(topo.id)).not.toContain('stale-node')
+    expect(contribCount(topo.id, nb)).toBe(0)
   })
 })

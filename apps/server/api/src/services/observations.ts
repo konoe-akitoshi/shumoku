@@ -11,9 +11,9 @@
  * `contribution_*` store (one `contribution_source` row per attached source,
  * decomposed into queryable element/link/attachment rows). `record()` is the
  * single choke point every observed writer funnels through, so it materializes
- * that contribution here too: ingest the graph into the contribution store
- * (canonical) and then append the audit row (history) — current-state table +
- * event log; see db-native-persistence.md.
+ * that contribution here too: in one transaction it ingests the graph into the
+ * contribution store (canonical) and appends the audit row (history) — a
+ * current-state table + event log that can't diverge; see db-native-persistence.md.
  *
  * Design references:
  *   - apps/server/docs/design/db-native-persistence.md
@@ -118,33 +118,35 @@ export class ObservationsService {
 
     const graphJson = input.graph ? JSON.stringify(input.graph) : null
 
-    // Canonical write FIRST: materialize the observed contribution (the DB-native
-    // state the resolver reads). Doing it before the audit insert means a failed
-    // canonical write throws WITHOUT leaving an audit row that claims a snapshot
-    // the diagram never applied — the audit log can only ever lag the canonical
-    // state, never lead it.
-    this.materializeContribution(input)
-
-    this.db
-      .query(
-        `INSERT INTO topology_observations (
-          id, topology_id, source_id, captured_at, status, status_message,
-          graph_json, node_count, link_count, port_count, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        input.topologyId,
-        input.sourceId,
-        input.capturedAt,
-        input.status,
-        input.statusMessage ?? null,
-        graphJson,
-        nodeCount,
-        linkCount,
-        portCount,
-        now,
-      )
+    // Canonical contribution + audit row in ONE transaction so they can never
+    // diverge: either both land or neither does. The contribution is the diagram's
+    // source of truth; the audit row is its history twin. (ingestGraph runs its own
+    // transaction — bun:sqlite nests it as a SAVEPOINT, so a failure here rolls back
+    // both writes together.)
+    const persist = this.db.transaction(() => {
+      this.materializeContribution(input)
+      this.db
+        .query(
+          `INSERT INTO topology_observations (
+            id, topology_id, source_id, captured_at, status, status_message,
+            graph_json, node_count, link_count, port_count, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          input.topologyId,
+          input.sourceId,
+          input.capturedAt,
+          input.status,
+          input.statusMessage ?? null,
+          graphJson,
+          nodeCount,
+          linkCount,
+          portCount,
+          now,
+        )
+    })
+    persist()
 
     // Enforce retention on write — the table is otherwise append-only and grew
     // unbounded (this method was never called). Cheap once the window is small;

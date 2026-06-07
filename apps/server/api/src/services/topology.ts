@@ -1145,6 +1145,12 @@ export class TopologyService {
    * a contribution, materialize its latest non-failed audit snapshot (mirrors the
    * intrinsic's lazy backfill in `readManualGraph`). Idempotent: once a contribution
    * exists, the source is skipped, so this degrades to a cheap existence check.
+   *
+   * GUARD on `lastSyncedAt != null` — the "data exists IFF attached AND synced"
+   * invariant. A freshly (re-)attached source (incl. after a bulk source replace)
+   * has `lastSyncedAt = null`, so its stale pre-detach audit rows are NOT revived:
+   * a fresh attachment shows nothing until you Sync. Only a genuinely-synced source
+   * (pre-cutover) is backfilled.
    */
   private backfillObservedContributions(topologyId: string): void {
     const have = new Set(
@@ -1158,6 +1164,7 @@ export class TopologyService {
     )
     for (const tds of this.topologySources.listByPurpose(topologyId, 'topology')) {
       if (tds.dataSource?.type === 'manual') continue
+      if (tds.lastSyncedAt == null) continue
       if (have.has(tds.dataSourceId)) continue
       const row = this.db
         .query(
