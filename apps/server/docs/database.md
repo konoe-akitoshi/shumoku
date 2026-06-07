@@ -14,20 +14,27 @@ Shumoku Server uses SQLite (via `bun:sqlite`) for persistent storage. The databa
 │ config_json     │     │          metrics)       │     │ composition_revision │
 │ status …        │     │ sync_mode, priority …   │     │ created_at, updated… │
 └─────────────────┘     └─────────────────────────┘     └──────────────────────┘
-   ▲  type='manual': authored graph = a topology_observations snapshot (uniform source)
-   │
-   │   ┌──────────────────────────┐     ┌──────────────────────────┐
-   └───│  topology_observations   │     │  topology_resolved_graph │
-       │──────────────────────────│     │──────────────────────────│
-       │ id (PK)                  │     │ topology_id (PK, FK)     │
-       │ topology_id (FK)         │     │ graph_json               │
-       │ source_id (FK)           │     │ layout_json              │
-       │ captured_at, status      │     │ icon_dimensions_json     │
-       │ graph_json (snapshot)    │     │ built_revision           │
-       │ node/link/port_count     │     │ resolver_version         │
-       └──────────────────────────┘     │ computed_at              │
-        one per source-scan (history)   └──────────────────────────┘
-                                          derived artifact, 1 per topology
+   (incl. type='manual': an ordinary, explicitly-added hand-drawn source)
+
+  ┌──────────────────────────────────────────────┐  ┌──────────────────────────┐
+  │  contribution_* (DB-NATIVE — the canonical    │  │  topology_resolved_graph │
+  │  composition store; resolve() reads THIS)     │  │──────────────────────────│
+  │──────────────────────────────────────────────│  │ topology_id (PK, FK)     │
+  │ contribution_source (topology_id, source_id)  │  │ graph_json               │
+  │   attachment_id SET  = a source contribution  │  │ layout_json              │
+  │   attachment_id NULL = the PROJECT OVERLAY    │  │ icon_dimensions_json     │
+  │   (operator curation; source_id='intrinsic')  │  │ built_revision           │
+  │ contribution_element / _identity / _link /    │  │ resolver_version         │
+  │   _link_via / _attachment  (decomposed graph) │  │ computed_at              │
+  └──────────────────────────────────────────────┘  └──────────────────────────┘
+                                                       derived artifact, 1/topology
+  ┌──────────────────────────┐
+  │  topology_observations   │  append-only AUDIT/HISTORY log only.
+  │──────────────────────────│  resolve() does NOT read this — it reads
+  │ id, topology_id,         │  contribution_*. record() materializes each
+  │ source_id, captured_at,  │  snapshot into a contribution in one txn.
+  │ status, graph_json …     │
+  └──────────────────────────┘
 
 ┌─────────────┐  ┌────────────┐  ┌──────────────────────────────┐
 │ dashboards  │  │  settings  │  │ migrations (id, name, applied)│
@@ -35,15 +42,28 @@ Shumoku Server uses SQLite (via `bun:sqlite`) for persistent storage. The databa
 (+ auth / share-token / grafana-alert tables — see migrations 005-007)
 ```
 
-**Composition model (since the composition-store refactor):** a topology is a
-shell; its sources live in `topology_data_sources` (m2m, by purpose); each
-source's scans are appended to `topology_observations` — including the Manual
-source's human-authored graph (the editor's save records one; Manual is a uniform
-source, see `docs/design/manual-source-unification.md`); `resolve()` folds these into
-the displayed graph, which is materialized in `topology_resolved_graph` and
-invalidated by `composition_revision`. The **metrics mapping** is no longer a
-column — it is `metrics-binding` attachments on the resolved graph (see
-`docs/design/topology-composition-store.md`).
+**Composition model (since the DB-native persistence refactor):** a topology is a
+shell; its sources live in `topology_data_sources` (m2m, by purpose). Every
+contribution is stored DB-native in the `contribution_*` store, keyed by
+`(topology_id, source_id)`, in **two kinds** distinguished by `attachment_id`:
+
+- **source contributions** (`attachment_id` SET) — every attached source's latest
+  graph, INCLUDING an explicitly-added hand-drawn `type='manual'` source. A Manual
+  source is ordinary: its editor save records an observation that materializes here,
+  the SAME path as any source (no manual-specific code).
+- **the project overlay** (`attachment_id` NULL, sentinel `source_id='intrinsic'`,
+  one per topology via `idx_contrib_one_intrinsic`) — the operator's **curation**:
+  exclusions, field overrides, metrics bindings, display settings. Owned by the
+  project, **not a data source**; writing it never creates/attaches anything.
+
+`resolve()` reads the `contribution_*` rows (NOT `topology_observations`), folds the
+project overlay as the top-priority `authored` input plus every source contribution
+by priority, and materializes the result in `topology_resolved_graph` (invalidated by
+`composition_revision`). `topology_observations` is now just the append-only
+audit/history log. The **metrics mapping** is not a column — it is `metrics-binding`
+attachments folded onto the resolved graph. See
+`docs/design/db-native-persistence.md` (storage), `topology-source-priority-merge.md`
+(merge), and `manual-source-unification.md` (Manual = uniform source).
 
 ## Tables
 
@@ -92,11 +112,11 @@ External data source connections (Zabbix, NetBox, Prometheus, etc.)
 
 ### topologies
 
-Topology **shell** only. Graph content lives in observations / the Manual
-source; the metrics mapping lives as `metrics-binding` attachments on the
-resolved graph (no column). Legacy columns `content_json` (dropped m010),
-`topology_source_id` / `metrics_source_id` / `mapping_json` (dropped in the
-composition-store refactor) are gone.
+Topology **shell** only. Graph content lives in the `contribution_*` store (source
+contributions + the project overlay); the metrics mapping lives as `metrics-binding`
+attachments folded onto the resolved graph (no column). Legacy columns `content_json`
+(dropped m010), `topology_source_id` / `metrics_source_id` / `mapping_json` (dropped in
+the composition-store refactor) are gone.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -109,9 +129,11 @@ composition-store refactor) are gone.
 
 ### topology_observations
 
-One row per source-scan snapshot (append-only history; retention enforced on
-write). `resolve()` folds the latest non-failed snapshot per source plus the
-authored graph into the displayed graph.
+One row per source-scan snapshot — the append-only **audit/history log** (retention
+enforced on write). `resolve()` does **NOT** read this; it reads the `contribution_*`
+store. `ObservationsService.record()` writes the audit row AND materializes the
+snapshot into a contribution in one transaction (so they can't diverge). A hand-drawn
+Manual source's editor save records here too (the human is the "scanner").
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -142,6 +164,27 @@ otherwise recomputed.
 | `resolver_version` | INTEGER | Resolve/layout algorithm version |
 | `computed_at` | INTEGER | Build timestamp (ms) |
 
+### contribution_* (DB-native contribution store)
+
+The canonical composition store (migration `016`). Each source's graph — and the
+project overlay — is decomposed into queryable rows here; `resolve()` reads these
+(via `buildContributions`/`buildGraph`) and `ingestGraph` writes them. A contribution
+is keyed by `(topology_id, source_id)`.
+
+| Table | Purpose |
+|-------|---------|
+| `contribution_source` | One row per contribution. `attachment_id` SET = a source contribution (FK to its `topology_data_sources` attach row → detach cascades it); `attachment_id` NULL = the **project overlay** (operator curation, `source_id='intrinsic'`). Holds `last_status` / `last_ok_at` (replace strategy) + `graph_payload_json` (graph-level fields: version/name/settings/pins). |
+| `contribution_element` | node / port / subgraph / termination rows. `presence` is `'present'` (scoop) \| `'hide'` \| NULL (anchor); `payload_json` is the lossless catch-all. |
+| `contribution_identity` | normalized match keys (mgmtIp/chassisId/sysName/vendorId) resolve clusters on. |
+| `contribution_link` | links with four endpoint FKs (from/to node + optional port). |
+| `contribution_link_via` | ordered termination transits for a link's `via`. |
+| `contribution_attachment` | `access` / `policy` / `metrics-binding` attachments, with `negate` (0=assert, 1=suppress) and `target_source_id` (binding dependency). |
+
+**Key indexes:** `idx_contrib_one_per_attach` (one contribution per attach row),
+`idx_contrib_one_intrinsic` (one project overlay per topology, `attachment_id` NULL).
+All FKs are explicitly indexed (SQLite does not auto-index FKs). See
+`docs/design/db-native-persistence.md` for the full schema + invariants.
+
 ### topology_data_sources
 
 Junction table for topology-datasource relationships (many-to-many).
@@ -155,7 +198,7 @@ Junction table for topology-datasource relationships (many-to-many).
 | `sync_mode` | TEXT | `manual`, `on_view`, or `webhook` |
 | `webhook_secret` | TEXT | Secret for webhook validation (optional) |
 | `last_synced_at` | INTEGER | Last sync timestamp (ms) |
-| `priority` | INTEGER | Priority order (lower number = higher precedence in the resolver field-merge) |
+| `priority` | INTEGER | Priority order — **higher number = higher precedence** in the resolver field-merge (`resolve()` sorts `priority desc`). The project overlay always outranks every source (fed as the top-priority `authored` input, effectively +∞). |
 | `consecutive_failures` | INTEGER | Retraction hysteresis counter |
 | `last_ok_captured_at` | INTEGER | Last successful capture timestamp (ms) |
 | `created_at` | INTEGER | Creation timestamp (ms) |
@@ -224,11 +267,15 @@ Schema migrations use numbered SQL files in `src/db/migrations/`. On startup, th
 | `010_manual_as_source.sql` / `011_manual_graph_to_config.sql` | Authored content → Manual source (content_json dropped) |
 | `012_resolved_graph_cache.sql` | `composition_revision` + `topology_resolved_graph` |
 | `013_drop_legacy_source_columns.sql` | Backfill legacy source pointers → m2m, then drop the columns |
-| `014_manual_graph_to_observations.sql` | Manual authored graph `config_json.graph` → per-topology observation (reverses 011); Manual becomes a uniform source |
+| `014_manual_graph_to_observations.sql` | Manual authored graph `config_json.graph` → per-topology observation (reverses 011) |
+| `016_contribution_store.sql` | **DB-native contribution store** (`contribution_source`/`element`/`identity`/`link`/`link_via`/`attachment`) — the canonical composition store resolve() reads |
+| `017_drop_dead_tables.sql` | Drop dead tables (`manual_source_graph`, `snmp_credentials`) |
 
-(`009` is intentionally skipped. `mapping_json` is dropped imperatively by the
-startup backfill after migrating it to bindings — not by a SQL migration — since
-the data move needs the resolver.)
+(`009` and `015` are intentionally skipped. Two startup-time imperative migrations
+run AFTER SQL migrations — they need the resolver / TS, so they aren't SQL files:
+the `mapping_json` → bindings backfill, and `migrateManualToProject` which folds any
+legacy Manual content into each topology's project overlay and retires the Manual
+data sources, both settings-guarded one-shots.)
 
 **Adding a new migration:**
 
