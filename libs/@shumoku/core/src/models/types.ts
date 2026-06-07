@@ -890,6 +890,15 @@ export interface Link {
   metadata?: Record<string, unknown>
 
   /**
+   * Presence claim (resolve input only), mirroring `Node.presence`:
+   * - `'scoop'` (default / omitted) — assert this link exists.
+   * - `'anchor'` — NO presence claim: only contribute fields to a link some
+   *   other contribution scoops. A link cluster with only anchor members is
+   *   dropped by resolve(). Set by an `link_contribution: 'update'` source.
+   */
+  presence?: 'scoop' | 'anchor'
+
+  /**
    * Observation provenance (which source last asserted this link).
    * See `Provenance`. Links are identified by their endpoints rather
    * than by a stable identity record, so no `identity` field here.
@@ -1020,6 +1029,13 @@ export interface Subgraph {
    * {@link MembershipCriterion}.
    */
   membership?: MembershipCriterion[]
+
+  /**
+   * Scope marker (resolve input only). `'closed'` makes this region a closed
+   * world: resolve() drops any node cluster that is not a member of some closed
+   * region. Set by a `scope_role: 'scoping'` source. Default (undefined) = open.
+   */
+  scope?: 'closed'
 
   /**
    * Child subgraph IDs

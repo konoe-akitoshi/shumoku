@@ -1700,6 +1700,102 @@ describe('resolve()', () => {
       expect(out.nodes.find((n) => n.label === 'mx88')?.parent).toBe('src:own')
     })
   })
+
+  describe('composition modes (link anchor + scope)', () => {
+    const twoNodes = () => [
+      { id: 'n1', label: 'R1', identity: { mgmtIp: '10.0.0.1' }, ports: [pt('p1', 'e0')] },
+      { id: 'n2', label: 'R2', identity: { mgmtIp: '10.0.0.2' }, ports: [pt('p2', 'e1')] },
+    ]
+    const pt = (id: string, ifName: string) => ({
+      id,
+      label: ifName,
+      connectors: [],
+      identity: { ifName },
+    })
+    const linkN1N2 = (extra: Record<string, unknown>) => ({
+      from: { node: 'n1', port: 'p1' },
+      to: { node: 'n2', port: 'p2' },
+      ...extra,
+    })
+
+    it('an anchor (update-only) link alone creates no edge', () => {
+      const snap: SnapshotEntry = {
+        sourceId: 's',
+        capturedAt: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: twoNodes(),
+          links: [linkN1N2({ presence: 'anchor' })] as NetworkGraph['links'],
+        },
+      }
+      const out = resolve(emptyGraph(), [snap])
+      expect(out.links).toHaveLength(0)
+    })
+
+    it('an anchor link updates fields of a scooped link instead of adding one', () => {
+      const scoop: SnapshotEntry = {
+        sourceId: 'topo',
+        capturedAt: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: twoNodes(),
+          links: [linkN1N2({})] as NetworkGraph['links'],
+        },
+      }
+      const update: SnapshotEntry = {
+        sourceId: 'deps',
+        capturedAt: 2,
+        priority: 5,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: twoNodes(),
+          links: [linkN1N2({ presence: 'anchor', vlan: [42] })] as NetworkGraph['links'],
+        },
+      }
+      const out = resolve(emptyGraph(), [scoop, update])
+      expect(out.links).toHaveLength(1)
+      expect(out.links[0]?.vlan).toEqual([42])
+      expect(out.links[0]?.presence).toBeUndefined() // input-only, never emitted
+    })
+
+    it('a closed region drops out-of-scope clusters, keeps in-region + membership matches', () => {
+      const scoping: SnapshotEntry = {
+        sourceId: 'A',
+        capturedAt: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'a1', label: 'in-region', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' }],
+          subgraphs: [
+            {
+              id: 'g',
+              label: 'Region',
+              scope: 'closed',
+              membership: [{ attr: 'subnet', value: '10.0.0.0/24' }],
+            },
+          ],
+        },
+      }
+      const additive: SnapshotEntry = {
+        sourceId: 'B',
+        capturedAt: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'b1', label: 'fills-region', identity: { mgmtIp: '10.0.0.9' } }, // matches subnet
+            { id: 'b2', label: 'out', identity: { mgmtIp: '10.9.0.9' } }, // outside → dropped
+          ],
+        },
+      }
+      const out = resolve(emptyGraph(), [scoping, additive])
+      const labels = out.nodes.map((n) => n.label).sort()
+      expect(labels).toEqual(['fills-region', 'in-region'])
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

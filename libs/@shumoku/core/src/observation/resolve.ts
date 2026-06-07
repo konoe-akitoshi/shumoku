@@ -124,10 +124,31 @@ export function resolve(
   //     so a hide survives re-scans that re-number ephemeral node ids. Dropping
   //     here (before link folding) also removes links to hidden nodes.
   const exclusions = authored.exclusions ?? []
-  const nodeClusters =
+  const afterExclusions =
     exclusions.length > 0
       ? presentClusters.filter((c) => !isClusterExcluded(c, exclusions))
       : presentClusters
+
+  // 2c. Regions. Cluster subgraphs across contributions by region identity
+  //     (any-key match) — same machinery as nodes. A subgraph with no identity
+  //     stays its own region (keeping its namespaced id).
+  const regions = clusterRegions(contributions)
+  const regionIdRemap = new Map<string, string>()
+  for (const cl of regions) {
+    for (const m of cl.members) regionIdRemap.set(m.subgraph.id, cl.canonicalId)
+  }
+
+  // 2d. Scope. A `scope_role:'scoping'` source marks its regions `scope:'closed'`.
+  //     When any closed region exists the topology is a closed world: a cluster
+  //     survives only if it belongs to some closed region (its parent region is
+  //     closed/descends from one, OR it matches a closed region's membership).
+  //     Dropping here (before fold) means links to out-of-scope nodes dangle and
+  //     drop too. No closed region → no filtering (open world, the default).
+  const scope = buildScopeIndex(regions, regionIdRemap)
+  const nodeClusters =
+    scope.closedRegionIds.size > 0
+      ? afterExclusions.filter((c) => clusterInClosedScope(c, regions, regionIdRemap, scope))
+      : afterExclusions
 
   // 3. For each cluster, fold into a single resolved Node
   const resolvedNodes: Node[] = []
@@ -145,17 +166,10 @@ export function resolve(
     }
   }
 
-  // 3b. Regions. Cluster subgraphs across contributions by region identity
-  //     (any-key match) — same machinery as nodes. A subgraph with no identity
-  //     stays its own region (keeping its namespaced id). Then:
+  // 3b. Region membership for resolved nodes:
   //       - remap every resolved node's `parent` to the merged region's id;
   //       - for a node with NO parent, assign the first region whose membership
   //         criteria match (so a lower source fills a region an upper scooped).
-  const regions = clusterRegions(contributions)
-  const regionIdRemap = new Map<string, string>()
-  for (const cl of regions) {
-    for (const m of cl.members) regionIdRemap.set(m.subgraph.id, cl.canonicalId)
-  }
   for (const node of resolvedNodes) {
     if (node.parent !== undefined) {
       const mapped = regionIdRemap.get(node.parent)
@@ -950,6 +964,71 @@ function ipv4InCidr(ip: string, cidr: string): boolean {
   return (a & mask) === (b & mask)
 }
 
+interface ScopeIndex {
+  /** Canonical ids of regions explicitly marked `scope:'closed'`. */
+  closedRegionIds: Set<string>
+  /** True if `regionId` is closed or descends from a closed region. */
+  inClosedScope: (regionId: string) => boolean
+}
+
+/** Index closed regions + the region parent chain for scope ancestry walks. */
+function buildScopeIndex(
+  clusters: RegionCluster[],
+  regionIdRemap: Map<string, string>,
+): ScopeIndex {
+  const closedRegionIds = new Set<string>()
+  const regionParent = new Map<string, string>()
+  for (const cl of clusters) {
+    if (cl.members.some((m) => m.subgraph.scope === 'closed')) closedRegionIds.add(cl.canonicalId)
+    const ranked = [...cl.members].sort(
+      (a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt,
+    )
+    for (const m of ranked) {
+      if (m.subgraph.parent) {
+        regionParent.set(cl.canonicalId, regionIdRemap.get(m.subgraph.parent) ?? m.subgraph.parent)
+        break
+      }
+    }
+  }
+  const inClosedScope = (regionId: string): boolean => {
+    let cur: string | undefined = regionId
+    const seen = new Set<string>()
+    while (cur && !seen.has(cur)) {
+      seen.add(cur)
+      if (closedRegionIds.has(cur)) return true
+      cur = regionParent.get(cur)
+    }
+    return false
+  }
+  return { closedRegionIds, inClosedScope }
+}
+
+/**
+ * Whether a node cluster belongs to a closed region: its winning parent region
+ * (highest-priority member's `parent`, remapped) is closed/descends from one, OR
+ * any member matches a closed region's membership criteria.
+ */
+function clusterInClosedScope(
+  cluster: NodeCluster,
+  clusters: RegionCluster[],
+  regionIdRemap: Map<string, string>,
+  scope: ScopeIndex,
+): boolean {
+  let parentRegion: string | undefined
+  for (const m of rankMembers(cluster.members)) {
+    if (m.node.parent) {
+      parentRegion = regionIdRemap.get(m.node.parent) ?? m.node.parent
+      break
+    }
+  }
+  if (parentRegion && scope.inClosedScope(parentRegion)) return true
+  for (const cl of clusters) {
+    if (!scope.closedRegionIds.has(cl.canonicalId)) continue
+    for (const m of cluster.members) if (nodeMatchesRegion(m.node, cl)) return true
+  }
+  return false
+}
+
 function mergeRegionIdentities(ids: Array<RegionIdentity | undefined>): RegionIdentity | undefined {
   let name: string | undefined
   const keys: Record<string, string> = {}
@@ -1109,11 +1188,15 @@ function foldLinks(
     }
   }
 
-  // 2. Fold each cluster into one link.
+  // 2. Fold each cluster into one link. A cluster with only anchor members
+  //    (every contributor was link_contribution:'update') makes no presence
+  //    claim → no new edge, exactly like an anchor-only node cluster.
   const links: Link[] = []
   for (const key of order) {
     const members = clusters.get(key)
-    if (members) links.push(foldLinkCluster(members))
+    if (!members) continue
+    if (!members.some((m) => m.link.presence !== 'anchor')) continue
+    links.push(foldLinkCluster(members))
   }
   return links
 }
@@ -1132,7 +1215,7 @@ function linkClusterKey(from: LinkEndpoint, to: LinkEndpoint): string {
 }
 
 /** Link fields owned by the fold itself — never copied through the generic merge. */
-const LINK_FOLD_RESERVED = new Set(['id', 'from', 'to', 'provenance', 'metadata'])
+const LINK_FOLD_RESERVED = new Set(['id', 'from', 'to', 'provenance', 'metadata', 'presence'])
 
 function foldLinkCluster(members: LinkMember[]): Link {
   const ranked = [...members].sort((a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt)
