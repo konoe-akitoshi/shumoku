@@ -1297,6 +1297,26 @@ describe('resolve()', () => {
       expect(out.nodes[0]?.parent).toBe('src-a:1:sg-2')
     })
 
+    it('restamps subgraph provenance — a stale inbound provenance never survives', () => {
+      // A subgraph whose stored input still carries an old provenance (e.g. a
+      // pre-rename `source: 'authored'`) must NOT leak that into the resolved
+      // output: resolve is the sole authority and always restamps.
+      const intrinsic = {
+        ...emptyGraph(),
+        subgraphs: [
+          {
+            id: 'sg-stale',
+            label: 'Rack',
+            // biome-ignore lint/suspicious/noExplicitAny: deliberately injecting a stale value
+            provenance: { source: 'authored', state: 'authored-only' } as any,
+          },
+        ],
+      }
+      const out = resolve(intrinsic, [])
+      expect(out.subgraphs?.[0]?.provenance?.source).toBe('intrinsic')
+      expect(out.subgraphs?.[0]?.provenance?.state).toBe('intrinsic-only')
+    })
+
     it('keeps same-id subgraphs from two sources distinct (collision-safe)', () => {
       const a: SnapshotEntry = {
         sourceId: 'src-a:1',

@@ -792,12 +792,17 @@ function namespaceSourceSubgraphs(graph: NetworkGraph, sourceId: string): Networ
 }
 
 /**
- * Fold subgraphs from EVERY contribution (authored + each source), stamping
+ * Fold subgraphs from EVERY contribution (intrinsic + each source), stamping
  * provenance. Source subgraph ids were namespaced per source at contribution
  * time (see namespaceSourceSubgraphs), and resolved nodes carry the matching
  * namespaced `parent`, so membership resolves without collisions. No
  * cross-source dedup yet — subgraphs have no identity key, so each source keeps
- * its own groups; a subgraph that already carries provenance is left as-is.
+ * its own groups.
+ *
+ * Provenance is ALWAYS restamped (not `?? s.provenance`) so resolve is the sole
+ * authority — same as nodes/links. A subgraph whose stored input still carries
+ * stale provenance (e.g. an old `source: 'authored'` round-tripped into a
+ * contribution) can't leak the old value into the resolved output.
  */
 function foldSubgraphs(contributions: Contribution[]): Subgraph[] | undefined {
   const all: Subgraph[] = []
@@ -807,7 +812,7 @@ function foldSubgraphs(contributions: Contribution[]): Subgraph[] | undefined {
     for (const s of contrib.graph.subgraphs) {
       all.push({
         ...s,
-        provenance: s.provenance ?? { source: contrib.sourceId, state },
+        provenance: { source: contrib.sourceId, state },
       })
     }
   }
