@@ -279,7 +279,7 @@ Shumoku
 | `/topologies` | 一覧。ソース構成・最終同期・state サマリ（conflict 数） |
 | `/topologies/[id]` | **ビューア**。タブ: Graph / Conflicts / History。element inspector |
 | `/topologies/[id]/settings` | ソース束ね・identity マッピング・topology 単位のスコープ |
-| `/topologies/[id]/edit` | authored レイヤーの編集（既存。観測モデルでは「人が書く層」に） |
+| `/datasources/[id]` | Manual ソース（type='manual'）の graph 編集。Manual は他と同列のデータソースで、その graph は自身の contribution。※ 旧 `/topologies/[id]/edit`（intrinsic 専用ルート）は db-native-persistence.md のドリフト是正で廃止 |
 | `/sources` | ソース一覧 + 直近 run サマリ |
 | `/sources/[id]` | 接続設定・scope policy・identity 供給キー・**スケジュール・スキャン履歴・ad-hoc 実行** |
 | `/dashboards`, `/plugins`, `/settings` | 既存維持 |
