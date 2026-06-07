@@ -172,44 +172,48 @@ function createMappingStore() {
     load: async (topologyId: string, forceReload = false) => {
       const current = get({ subscribe })
 
-      // Skip if already loaded for this topology (unless force reload)
-      if (!forceReload && current.topologyId === topologyId && !current.loading) {
-        return
+      // (Re)fetch the mapping + sources only when needed. `hydrate()` (run on
+      // canvas open) may have already set topologyId + mapping + metricsSources,
+      // so skip the refetch when we're already on this topology — BUT still fall
+      // through to the host top-up below (hydrate deliberately skips hosts, and the
+      // Mapping picker needs them; without this, opening Mapping after the canvas
+      // hydrated left hosts empty → auto-map matched nothing).
+      const alreadyOnTopology = current.topologyId === topologyId && !current.loading
+      if (forceReload || !alreadyOnTopology) {
+        update((s) => ({ ...s, loading: true, error: null, topologyId }))
+        try {
+          // The RESOLVED mapping (bindings ∪ residual), not topo.mappingJson.
+          const [mapping, sources] = await Promise.all([
+            api.topologies.getMapping(topologyId),
+            api.topologies.sources.list(topologyId),
+          ])
+          update((s) => ({
+            ...s,
+            mapping,
+            metricsSources: metricsSourcesOf(sources),
+            loading: false,
+          }))
+        } catch (e) {
+          update((s) => ({
+            ...s,
+            loading: false,
+            error: e instanceof Error ? e.message : 'Failed to load mapping',
+          }))
+          return
+        }
       }
 
-      update((s) => ({ ...s, loading: true, error: null, topologyId }))
-
-      try {
-        // The RESOLVED mapping (bindings ∪ residual), not topo.mappingJson.
-        const [mapping, sources] = await Promise.all([
-          api.topologies.getMapping(topologyId),
-          api.topologies.sources.list(topologyId),
-        ])
-
-        const metricsSources = metricsSourcesOf(sources)
-
-        update((s) => ({
-          ...s,
-          mapping,
-          metricsSources,
-          loading: false,
-        }))
-
-        if (metricsSources.length > 0) {
-          update((s) => ({ ...s, hostsLoading: true }))
-          try {
-            const hosts = await loadHostsForSources(metricsSources)
-            update((s) => ({ ...s, hosts, hostsLoading: false }))
-          } catch {
-            update((s) => ({ ...s, hostsLoading: false }))
-          }
+      // Ensure host lists are loaded for the picker. Idempotent: only fetches when
+      // there's a metrics source and hosts aren't already loaded / loading.
+      const st = get({ subscribe })
+      if (st.metricsSources.length > 0 && st.hosts.length === 0 && !st.hostsLoading) {
+        update((s) => ({ ...s, hostsLoading: true }))
+        try {
+          const hosts = await loadHostsForSources(st.metricsSources)
+          update((s) => ({ ...s, hosts, hostsLoading: false }))
+        } catch {
+          update((s) => ({ ...s, hostsLoading: false }))
         }
-      } catch (e) {
-        update((s) => ({
-          ...s,
-          loading: false,
-          error: e instanceof Error ? e.message : 'Failed to load mapping',
-        }))
       }
     },
 
