@@ -7,11 +7,11 @@ import type { NetworkGraph } from '../models/types.js'
 import { nodeIdentityQuality, portIdentityQuality, resolve, type SnapshotEntry } from './index.js'
 
 /**
- * Skeleton-level resolve() behavior. Covers the four end-state
- * cases (confirmed / intrinsic-only / discovered-only / conflicting)
- * and the critical ifIndex reshuffle scenario. Deeper edge cases
- * (cross-source link dedup, ghost endpoints, full retraction
- * hysteresis) are intentionally deferred — see resolve.ts header.
+ * resolve() behavior. Covers the four end-state cases (confirmed /
+ * intrinsic-only / discovered-only / conflicting), presence/anchor,
+ * cross-source link dedup, and the critical ifIndex reshuffle scenario.
+ * Deeper edge cases (ghost endpoints, full retraction hysteresis) are
+ * intentionally deferred — see resolve.ts header.
  */
 describe('resolve()', () => {
   describe('identity quality', () => {
@@ -141,6 +141,100 @@ describe('resolve()', () => {
       const out = resolve(intrinsic, [])
       expect(out.nodes).toHaveLength(1)
       expect(out.nodes[0]?.provenance?.state).toBe('intrinsic-only')
+    })
+  })
+
+  describe('link dedup', () => {
+    const port = (id: string, ifName: string) => ({
+      id,
+      label: ifName,
+      connectors: [],
+      identity: { ifName },
+    })
+    const twoNodeSnap = (
+      sourceId: string,
+      capturedAt: number,
+      prefix: string,
+      link: Partial<NetworkGraph['links'][number]>,
+      priority?: number,
+    ): SnapshotEntry => ({
+      sourceId,
+      capturedAt,
+      status: 'ok',
+      ...(priority !== undefined ? { priority } : {}),
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: `${prefix}1`,
+            label: 'R1',
+            identity: { mgmtIp: '10.0.0.1' },
+            ports: [port(`${prefix}1p`, 'e0')],
+          },
+          {
+            id: `${prefix}2`,
+            label: 'R2',
+            identity: { mgmtIp: '10.0.0.2' },
+            ports: [port(`${prefix}2p`, 'e1')],
+          },
+        ],
+        links: [
+          {
+            from: { node: `${prefix}1`, port: `${prefix}1p` },
+            to: { node: `${prefix}2`, port: `${prefix}2p` },
+            ...link,
+          } as NetworkGraph['links'][number],
+        ],
+      },
+    })
+
+    it('same link from two sources → one edge, fields merged', () => {
+      const a = twoNodeSnap('a', 1000, 'a', { metadata: { speed: '1g' } })
+      const b = twoNodeSnap('b', 2000, 'b', { vlan: [10] })
+      const out = resolve(emptyGraph(), [a, b])
+      expect(out.links).toHaveLength(1)
+      expect(out.links[0]?.metadata?.['speed']).toBe('1g')
+      expect(out.links[0]?.vlan).toEqual([10])
+      expect(out.links[0]?.provenance?.state).toBe('confirmed') // 2 observers agree
+    })
+
+    it('higher-priority source wins a conflicting link field', () => {
+      const lo = twoNodeSnap('lo', 1000, 'a', { metadata: { speed: '1g' } }, 0)
+      const hi = twoNodeSnap('hi', 1000, 'b', { metadata: { speed: '100g' } }, 10)
+      const out = resolve(emptyGraph(), [lo, hi])
+      expect(out.links).toHaveLength(1)
+      expect(out.links[0]?.metadata?.['speed']).toBe('100g')
+    })
+
+    it('parallel links via different ports stay separate', () => {
+      const snap: SnapshotEntry = {
+        sourceId: 'p',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'x',
+              label: 'X',
+              identity: { mgmtIp: '10.0.0.1' },
+              ports: [port('xp0', 'e0'), port('xp1', 'e1')],
+            },
+            {
+              id: 'y',
+              label: 'Y',
+              identity: { mgmtIp: '10.0.0.2' },
+              ports: [port('yq0', 'f0'), port('yq1', 'f1')],
+            },
+          ],
+          links: [
+            { from: { node: 'x', port: 'xp0' }, to: { node: 'y', port: 'yq0' } },
+            { from: { node: 'x', port: 'xp1' }, to: { node: 'y', port: 'yq1' } },
+          ] as NetworkGraph['links'],
+        },
+      }
+      const out = resolve(emptyGraph(), [snap])
+      expect(out.links).toHaveLength(2)
     })
   })
 
