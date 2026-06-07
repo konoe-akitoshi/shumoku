@@ -11,9 +11,16 @@
  * catch-all for every field NOT promoted to a column, so `buildGraph(ingestGraph(g))`
  * equals `g` (modulo array order / key order — assert with a normalized comparison).
  *
- * Stage 1b scope: the round-trip itself. Nodes round-trip as `presence='present'`,
- * `exclusions` as `presence='hide'`; the NULL-presence overlay anchor (for an
- * attachment on an observed-only node) + resolve integration land in stage 1c.
+ * Nodes round-trip as `presence='present'`, `exclusions` as `presence='hide'`.
+ *
+ * Two defined equivalences (the round-trip is lossless modulo these, matching how
+ * every consumer already treats them):
+ *  - **empty collection ≡ absent** — an empty `ports`/`attachments`/`via`/… is stored
+ *    as zero rows and rebuilt as an absent key (no consumer distinguishes `[]` from
+ *    undefined).
+ *  - **`Subgraph.children` is derived, not stored** — membership has one source of
+ *    truth (the parent edge, `parent_local_id`); `children[]` is recomputed by
+ *    consumers, never persisted (it is not part of the round-trip, like `provenance`).
  */
 
 import type { Database } from 'bun:sqlite'

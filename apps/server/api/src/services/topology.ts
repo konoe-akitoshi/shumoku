@@ -979,7 +979,14 @@ export class TopologyService {
     // Latest NON-FAILED snapshot per source: a transient failed scan must not
     // drop a source's last-good nodes (C7 — failed never retracts).
     const latest = this.observations.latestSuccessfulPerSource(topology.id)
-    const manualId = topology.manualSourceId
+    // Every attached Manual source's legacy observation is excluded from snapshots —
+    // authored data is the intrinsic contribution now, so a Manual observation must not
+    // double-count as an observed source (handles multiple Manuals, not just one).
+    const manualIds = new Set(
+      (
+        this.db.query("SELECT id FROM data_sources WHERE type = 'manual'").all() as { id: string }[]
+      ).map((r) => r.id),
+    )
     // The authored graph is the intrinsic contribution (DB-native store), folded as
     // resolve()'s top-priority contribution. Absent → empty. (`readManualGraph`
     // lazily backfills from a legacy Manual observation the first time.)
@@ -1001,7 +1008,7 @@ export class TopologyService {
     // old observation rows behind, so without this filter a detached source
     // would keep feeding the resolve from stale snapshots.
     const snapshots: SnapshotEntry[] = latest
-      .filter((o) => o.sourceId !== manualId && priorityBySource.has(o.sourceId))
+      .filter((o) => !manualIds.has(o.sourceId) && priorityBySource.has(o.sourceId))
       .map((o) => ({
         sourceId: o.sourceId,
         capturedAt: o.capturedAt,

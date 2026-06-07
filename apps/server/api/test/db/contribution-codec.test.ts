@@ -19,13 +19,21 @@ beforeAll(() => {
 })
 afterAll(() => db_.teardown())
 
-/** Recursively sort object keys so equality ignores key order (arrays keep order). */
+/**
+ * Normalize for the round-trip contract: sort object keys (key order is irrelevant),
+ * keep array order, and treat **empty collection ≡ absent** + drop `Subgraph.children`
+ * (a derived field, never stored) — both are documented codec equivalences.
+ */
 function canon(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(canon)
   if (v && typeof v === 'object') {
     const out: Record<string, unknown> = {}
-    for (const k of Object.keys(v as Record<string, unknown>).sort())
-      out[k] = canon((v as Record<string, unknown>)[k])
+    for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+      if (k === 'children') continue // derived from parent edges, not round-tripped
+      const cv = (v as Record<string, unknown>)[k]
+      if (Array.isArray(cv) && cv.length === 0) continue // empty ≡ absent
+      out[k] = canon(cv)
+    }
     return out
   }
   return v
@@ -125,6 +133,18 @@ describe('contribution codec — round-trip', () => {
         // a link with no id
         { from: { node: 'a', port: 'a-1' }, to: { node: 'b', port: 'b-1' } },
       ],
+    } as NetworkGraph)
+  })
+
+  test('empty collections ≡ absent; Subgraph.children is derived (not round-tripped)', () => {
+    // The input carries empty `ports`/`attachments` and a `children[]`; canon treats
+    // empty ≡ absent and drops children, so the round-trip is equal under the contract.
+    expectLossless({
+      version: '1',
+      name: 'edges',
+      nodes: [{ id: 'n1', label: 'N', parent: 'sg', ports: [], attachments: [] }],
+      links: [],
+      subgraphs: [{ id: 'sg', label: 'G', children: ['n1'] }],
     } as NetworkGraph)
   })
 

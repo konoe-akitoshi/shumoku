@@ -91,6 +91,11 @@ export function createScanRoute(): Hono {
 export function createObservationsRoute(): Hono {
   const app = new Hono()
   const observations = new ObservationsService()
+  const dataSources = new DataSourceService()
+  // The authored ("Manual") source's graph is the intrinsic contribution now, NOT a
+  // topology_observations row. Route manual save/load through the topology service so the
+  // editor and resolve() agree (no split-brain). External sources stay observations.
+  const isManual = (sourceId: string): boolean => dataSources.get(sourceId)?.type === 'manual'
   // Note: the per-source sync endpoint
   // `POST /:topologyId/sources/:sourceId/sync` lives in
   // `topology-sources.ts` — that route is registered earlier on the
@@ -133,6 +138,11 @@ export function createObservationsRoute(): Hono {
   // resolved project graph below.
   app.get('/:topologyId/sources/:sourceId/latest-snapshot', (c) => {
     const { topologyId, sourceId } = c.req.param()
+    // Manual = the intrinsic contribution (DB-native store), not an observation.
+    if (isManual(sourceId)) {
+      const graph = getTopologyService().readManualGraph(topologyId)
+      return c.json({ graph, capturedAt: null, status: graph ? 'ok' : null })
+    }
     const latest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
     if (!latest) {
       // Source attached but no observation yet — return an empty
@@ -162,6 +172,11 @@ export function createObservationsRoute(): Hono {
       const graph = body.graph as NetworkGraph
       if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
         return c.json({ error: 'graph.nodes and graph.links must be arrays' }, 400)
+      }
+      // Manual save → the intrinsic contribution (authored layer), not an observation.
+      if (isManual(sourceId)) {
+        getTopologyService().writeManualGraph(topologyId, sourceId, graph)
+        return c.json({ ok: true }, 201)
       }
       const observation = await observations.record({
         topologyId,
