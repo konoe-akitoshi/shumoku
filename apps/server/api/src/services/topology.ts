@@ -1441,15 +1441,20 @@ export class TopologyService {
           (graph.exclusions?.length ?? 0) > 0)
       if (graph && hasContent) {
         const manualId = await this.ensureManualSource(topology_id)
-        const attachId = this.manualAttachId(topology_id, manualId)
-        ingestGraph(
-          topology_id,
-          manualId,
-          graph,
-          { attachmentId: attachId ?? null, lastStatus: 'ok', lastOkAt: timestamp() },
-          this.db,
-        )
-        migrated++
+        // Never clobber: if a Manual source already holds content, IT is the
+        // authoritative authored graph and the NULL-intrinsic row is stale — keep
+        // the Manual contribution, just drop the NULL row below.
+        if (!buildGraph(topology_id, manualId, this.db)) {
+          const attachId = this.manualAttachId(topology_id, manualId)
+          ingestGraph(
+            topology_id,
+            manualId,
+            graph,
+            { attachmentId: attachId ?? null, lastStatus: 'ok', lastOkAt: timestamp() },
+            this.db,
+          )
+          migrated++
+        }
       }
       // Drop the legacy NULL-intrinsic row (cascade removes its element rows).
       this.db
