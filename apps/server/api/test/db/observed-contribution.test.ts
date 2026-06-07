@@ -284,12 +284,15 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
     const topo = await svc.create({ name: 'backfill' })
     const nb = insertDataSource('netbox', 'nb_backfill')
     attachSource(topo.id, nb, 'topology')
-    // Pre-cutover state: the source was synced (lastSyncedAt set) → eligible for backfill.
+    // Pre-cutover state: the source was synced (lastSyncedAt set) → eligible for
+    // backfill. The audit must be captured within this attachment's lifecycle
+    // (captured_at >= attach.createdAt), so stamp it after the attach.
+    const syncedAt = timestamp() + 1000
     getDatabase()
       .query(
-        'UPDATE topology_data_sources SET last_synced_at = 1234 WHERE topology_id = ? AND data_source_id = ?',
+        'UPDATE topology_data_sources SET last_synced_at = ? WHERE topology_id = ? AND data_source_id = ?',
       )
-      .run(topo.id, nb)
+      .run(syncedAt, topo.id, nb)
 
     // Simulate a pre-stage-3 state: a successful audit row exists but no
     // contribution (write the audit row directly, bypassing record()).
@@ -299,12 +302,45 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
            (id, topology_id, source_id, captured_at, status, graph_json, node_count, link_count, port_count, created_at)
          VALUES (?, ?, ?, ?, 'ok', ?, 1, 0, 0, ?)`,
       )
-      .run('obs_legacy_1', topo.id, nb, 1234, JSON.stringify(graphWith('legacy-node')), timestamp())
+      .run(
+        'obs_legacy_1',
+        topo.id,
+        nb,
+        syncedAt,
+        JSON.stringify(graphWith('legacy-node')),
+        syncedAt,
+      )
     expect(contribCount(topo.id, nb)).toBe(0)
 
     // First resolve backfills the contribution and renders the node.
     expect(await sysNames(topo.id)).toContain('legacy-node')
     expect(contribCount(topo.id, nb)).toBe(1)
+  })
+
+  test('a stale audit predating the current attach is not backfilled even once synced', async () => {
+    const topo = await svc.create({ name: 'stale-presync' })
+    const nb = insertDataSource('netbox', 'nb_presync')
+    attachSource(topo.id, nb, 'topology')
+
+    // Stale successful audit from BEFORE this attachment (captured_at far in the
+    // past, < attach.createdAt) — e.g. survived a bulk source replace.
+    getDatabase()
+      .query(
+        `INSERT INTO topology_observations
+           (id, topology_id, source_id, captured_at, status, graph_json, node_count, link_count, port_count, created_at)
+         VALUES (?, ?, ?, 1000, 'ok', ?, 1, 0, 0, 1000)`,
+      )
+      .run('obs_presync_1', topo.id, nb, JSON.stringify(graphWith('ghost')))
+    // The first sync FAILS — it still stamps lastSyncedAt but writes no contribution.
+    getDatabase()
+      .query(
+        'UPDATE topology_data_sources SET last_synced_at = ? WHERE topology_id = ? AND data_source_id = ?',
+      )
+      .run(timestamp(), topo.id, nb)
+
+    // Backfill must NOT revive the pre-attach ghost.
+    expect(await sysNames(topo.id)).not.toContain('ghost')
+    expect(contribCount(topo.id, nb)).toBe(0)
   })
 
   test('a fresh (never-synced) attach does NOT resurrect stale audit rows', async () => {

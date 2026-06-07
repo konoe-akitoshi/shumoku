@@ -1151,6 +1151,12 @@ export class TopologyService {
    * has `lastSyncedAt = null`, so its stale pre-detach audit rows are NOT revived:
    * a fresh attachment shows nothing until you Sync. Only a genuinely-synced source
    * (pre-cutover) is backfilled.
+   *
+   * Scoped to the CURRENT attachment's lifecycle: only audit captured at/after the
+   * attach row's `createdAt` is eligible. This closes the one residual resurrection
+   * path — a fresh re-attach whose first sync FAILS (which still stamps
+   * `lastSyncedAt` but writes no contribution): the stale pre-detach audit predates
+   * the new attach row, so it's excluded.
    */
   private backfillObservedContributions(topologyId: string): void {
     const have = new Set(
@@ -1170,11 +1176,12 @@ export class TopologyService {
         .query(
           `SELECT graph_json, status, captured_at
            FROM topology_observations
-           WHERE topology_id = ? AND source_id = ? AND status != 'failed' AND graph_json IS NOT NULL
+           WHERE topology_id = ? AND source_id = ? AND status != 'failed'
+             AND graph_json IS NOT NULL AND captured_at >= ?
            ORDER BY captured_at DESC, rowid DESC
            LIMIT 1`,
         )
-        .get(topologyId, tds.dataSourceId) as
+        .get(topologyId, tds.dataSourceId, tds.createdAt) as
         | { graph_json: string; status: string; captured_at: number }
         | undefined
       if (!row) continue
