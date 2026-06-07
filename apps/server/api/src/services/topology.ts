@@ -1166,7 +1166,6 @@ export class TopologyService {
       ).map((r) => r.source_id),
     )
     for (const tds of this.topologySources.listByPurpose(topologyId, 'topology')) {
-      if (tds.dataSource?.type === 'manual') continue
       if (tds.lastSyncedAt == null) continue
       if (have.has(tds.dataSourceId)) continue
       const row = this.db

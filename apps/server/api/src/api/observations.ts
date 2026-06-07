@@ -158,58 +158,6 @@ export function createObservationsRoute(): Hono {
     return c.json(o)
   })
 
-  // Latest snapshot for a specific source attached to this topology.
-  // This is how the editor (and any future per-source viewers) reads
-  // the graph the user typed into a given source — separate from the
-  // resolved project graph below.
-  app.get('/:topologyId/sources/:sourceId/latest-snapshot', (c) => {
-    const { topologyId, sourceId } = c.req.param()
-    const latest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
-    if (!latest) {
-      // Source attached but no observation yet — return an empty
-      // canvas so the editor can open without a 404 dance.
-      return c.json({ graph: null, capturedAt: null })
-    }
-    return c.json({
-      graph: latest.graph,
-      capturedAt: latest.capturedAt,
-      status: latest.status,
-      observationId: latest.id,
-    })
-  })
-
-  // Record a new observation against a specific (external) source. Fine for any
-  // caller that wants to push a snapshot in. The project's own graph is written
-  // via PUT /:id/graph, not here.
-  app.post('/:topologyId/sources/:sourceId/observation', async (c) => {
-    const { topologyId, sourceId } = c.req.param()
-    try {
-      const body = await c.req.json<{ graph: unknown; status?: string }>()
-      // Light validation — we let resolve() / parser surface errors
-      // downstream; here we just want nodes + links shaped sensibly.
-      if (!body.graph || typeof body.graph !== 'object') {
-        return c.json({ error: 'graph is required' }, 400)
-      }
-      const graph = body.graph as NetworkGraph
-      if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
-        return c.json({ error: 'graph.nodes and graph.links must be arrays' }, 400)
-      }
-      const observation = await observations.record({
-        topologyId,
-        sourceId,
-        capturedAt: Date.now(),
-        status: (body.status as 'ok' | 'partial' | 'failed' | 'empty') ?? 'ok',
-        graph,
-      })
-      // Invalidate parsed-topology cache so the next /render runs
-      // resolve() against the new observation.
-      getTopologyService().clearCacheEntry(topologyId)
-      return c.json({ observation }, 201)
-    } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
-    }
-  })
-
   // Resolved graph — the project 's current rendered graph.
   // `TopologyService.parseTopology()` already runs `resolve()` over
   // Manual + every attached source 's latest observation, so
