@@ -483,6 +483,9 @@ export class Server {
     await this.topologyService.initializeSample()
     // One-shot: migrate legacy mapping_json → identity-keyed metrics bindings.
     await this.topologyService.backfillMetricsBindings()
+    // One-shot: retire the legacy Manual data source (authored graph is the
+    // intrinsic contribution now; salvages any unmigrated graph first).
+    this.topologyService.retireManualSources()
 
     await this.topologyManager.loadAll()
     console.log(

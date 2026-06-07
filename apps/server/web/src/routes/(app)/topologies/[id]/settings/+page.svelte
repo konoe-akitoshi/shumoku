@@ -42,24 +42,19 @@
 
   // Re-parse if the topology changes (e.g. user navigates [id]).
   $effect(() => {
-    if (ctx.topology?.manualSourceId) void parseGraphSettings()
+    if (ctx.topology?.id) void parseGraphSettings()
   })
 
   /**
-   * edgeStyle / splineMode live on `NetworkGraph.settings` inside the Manual
-   * source's authored graph, which is now a per-topology observation. Read the
-   * latest snapshot; write by recording a new observation.
+   * edgeStyle / splineMode live on `NetworkGraph.settings` inside the project's
+   * own (intrinsic) graph. Read it; write by replacing it.
    */
   async function parseGraphSettings() {
-    if (!ctx.topology?.manualSourceId) return
+    if (!ctx.topology?.id) return
     try {
-      const snap = await api.topologies.sources.latestSnapshot(
-        ctx.topology.id,
-        ctx.topology.manualSourceId,
-      )
-      const settings = (
-        snap?.graph as { settings?: { edgeStyle?: string; splineMode?: string } } | null
-      )?.settings
+      const { graph } = await api.topologies.getIntrinsic(ctx.topology.id)
+      const settings = (graph as { settings?: { edgeStyle?: string; splineMode?: string } } | null)
+        ?.settings
       edgeStyle = settings?.edgeStyle || 'orthogonal'
       splineMode = settings?.splineMode || 'sloppy'
     } catch {
@@ -68,28 +63,25 @@
   }
 
   async function updateEdgeStyle() {
-    if (!ctx.topology?.manualSourceId) return
+    if (!ctx.topology?.id) return
     savingEdgeStyle = true
     try {
-      const snap = await api.topologies.sources.latestSnapshot(
-        ctx.topology.id,
-        ctx.topology.manualSourceId,
-      )
-      const graph = (snap?.graph ?? { version: '1', nodes: [], links: [] }) as unknown as {
+      const { graph: current } = await api.topologies.getIntrinsic(ctx.topology.id)
+      const graph = (current ?? { version: '1', name: '', nodes: [], links: [] }) as unknown as {
         settings?: Record<string, unknown>
+        nodes: unknown[]
+        links: unknown[]
         [k: string]: unknown
       }
       graph.settings = (graph.settings ?? {}) as Record<string, unknown>
       graph.settings['edgeStyle'] = edgeStyle
       if (edgeStyle === 'splines') graph.settings['splineMode'] = splineMode
       else delete graph.settings['splineMode']
-      await api.topologies.sources.recordObservation(
+      await api.topologies.putIntrinsic(
         ctx.topology.id,
-        ctx.topology.manualSourceId,
-        graph as unknown as Parameters<typeof api.topologies.sources.recordObservation>[2],
-        'ok',
+        graph as unknown as Parameters<typeof api.topologies.putIntrinsic>[1],
       )
-      // Edge-style change is a committed observation → re-render the diagram.
+      // Edge-style change is a committed edit → re-render the diagram.
       ctx.bumpRevision()
     } catch (e) {
       console.error('Failed to update edge style:', e)
@@ -249,18 +241,18 @@
   </div>
 
   <!-- Actions -->
-  {#if ctx.topology?.manualSourceId}
+  {#if ctx.topology?.id}
     <div class="card">
       <div class="card-header">
         <h2 class="font-medium text-theme-text-emphasis">Actions</h2>
       </div>
       <div class="card-body">
         <a
-          href="/datasources/{ctx.topology.manualSourceId}"
+          href="/topologies/{ctx.topology.id}/edit"
           class="btn btn-secondary w-full justify-center"
         >
           <PencilSimpleIcon size={16} class="mr-2" />
-          Edit Manual content
+          Edit graph content
         </a>
       </div>
     </div>

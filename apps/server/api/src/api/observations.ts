@@ -16,7 +16,6 @@ import { Hono } from 'hono'
 import { hasAutoscanCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { ObservationsService } from '../services/observations.js'
-import { TopologySourcesService } from '../services/topology-sources.js'
 import { getTopologyService } from './topologies.js'
 
 /**
@@ -92,20 +91,38 @@ export function createScanRoute(): Hono {
 export function createObservationsRoute(): Hono {
   const app = new Hono()
   const observations = new ObservationsService()
-  const dataSources = new DataSourceService()
-  const topologySources = new TopologySourcesService()
-  // The authored ("Manual") source's graph is the intrinsic contribution now, NOT a
-  // topology_observations row. Route manual save/load through the topology service so the
-  // editor and resolve() agree (no split-brain). External sources stay observations.
-  // REQUIRE the manual source be attached to THIS topology (purpose 'topology') — else an
-  // unrelated manual id could overwrite the topology's intrinsic graph.
-  const isManualForTopology = (topologyId: string, sourceId: string): boolean =>
-    dataSources.get(sourceId)?.type === 'manual' &&
-    topologySources.find(topologyId, sourceId, 'topology') !== undefined
   // Note: the per-source sync endpoint
   // `POST /:topologyId/sources/:sourceId/sync` lives in
   // `topology-sources.ts` — that route is registered earlier on the
   // same path prefix and would shadow anything we put here anyway.
+
+  // The project's own (intrinsic) graph — the editor's read/write target. It is
+  // NOT a data source: every topology has one, always available. Authored edits
+  // resolve as the top-priority contribution. (Distinct from GET /:id/graph,
+  // which is the RESOLVED render graph.)
+  app.get('/:id/intrinsic', (c) => {
+    const id = c.req.param('id')
+    const graph = getTopologyService().readIntrinsicGraph(id)
+    return c.json({ graph })
+  })
+
+  app.put('/:id/intrinsic', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const body = await c.req.json<{ graph: unknown }>()
+      if (!body.graph || typeof body.graph !== 'object') {
+        return c.json({ error: 'graph is required' }, 400)
+      }
+      const graph = body.graph as NetworkGraph
+      if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
+        return c.json({ error: 'graph.nodes and graph.links must be arrays' }, 400)
+      }
+      getTopologyService().writeIntrinsicGraph(id, graph)
+      return c.json({ ok: true }, 200)
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
+    }
+  })
 
   // History — recent observations across all sources of this topology
   app.get('/:id/observations', (c) => {
@@ -144,11 +161,6 @@ export function createObservationsRoute(): Hono {
   // resolved project graph below.
   app.get('/:topologyId/sources/:sourceId/latest-snapshot', (c) => {
     const { topologyId, sourceId } = c.req.param()
-    // Manual = the intrinsic contribution (DB-native store), not an observation.
-    if (isManualForTopology(topologyId, sourceId)) {
-      const graph = getTopologyService().readManualGraph(topologyId)
-      return c.json({ graph, capturedAt: null, status: graph ? 'ok' : null })
-    }
     const latest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
     if (!latest) {
       // Source attached but no observation yet — return an empty
@@ -163,9 +175,9 @@ export function createObservationsRoute(): Hono {
     })
   })
 
-  // Record a new observation against a specific source. Used by the
-  // Manual editor on save; also fine for any caller that wants to
-  // push a snapshot in.
+  // Record a new observation against a specific (external) source. Fine for any
+  // caller that wants to push a snapshot in. The project's own graph is written
+  // via PUT /:id/graph, not here.
   app.post('/:topologyId/sources/:sourceId/observation', async (c) => {
     const { topologyId, sourceId } = c.req.param()
     try {
@@ -178,11 +190,6 @@ export function createObservationsRoute(): Hono {
       const graph = body.graph as NetworkGraph
       if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
         return c.json({ error: 'graph.nodes and graph.links must be arrays' }, 400)
-      }
-      // Manual save → the intrinsic contribution (authored layer), not an observation.
-      if (isManualForTopology(topologyId, sourceId)) {
-        getTopologyService().writeManualGraph(topologyId, sourceId, graph)
-        return c.json({ ok: true }, 201)
       }
       const observation = await observations.record({
         topologyId,
