@@ -1031,18 +1031,18 @@ export class TopologyService {
    *
    * The resolver runs here over two DB-native pools, both read from the
    * contribution store (`contribution_*`):
-   *   - the intrinsic contribution (`attachment_id IS NULL`) — the project's
-   *     authored graph — fills the `authored` slot (top priority);
-   *   - every attached external source's contribution (`attachment_id NOT NULL`)
-   *     becomes a `SnapshotEntry` in `snapshots`.
+   *   - the Manual source's contribution — the project's hand-drawn graph —
+   *     fills the `authored` slot (top priority);
+   *   - every OTHER attached source's contribution becomes a `SnapshotEntry` in
+   *     `snapshots` (the Manual source is excluded so it isn't double-counted).
    *
-   * With no authored content, `authored` is an empty graph — the diagram is
+   * With no Manual source, `authored` is an empty graph — the diagram is
    * whatever the external sources produced.
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
-    // The authored graph is the intrinsic contribution (DB-native store), folded as
-    // resolve()'s top-priority contribution. Absent → empty. (`readManualGraph`
-    // lazily backfills from a legacy Manual observation the first time.)
+    // The authored graph is the Manual source's own contribution (DB-native), folded
+    // as resolve()'s top-priority contribution. Absent → empty. (`readManualGraph`
+    // also falls back to a legacy Manual observation during the transition.)
     const authored: NetworkGraph = this.readManualGraph(topology.id) ?? {
       version: '1',
       name: topology.name,
