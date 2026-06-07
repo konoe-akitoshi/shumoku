@@ -10,7 +10,13 @@ import { DataSourceService } from '../services/datasource.js'
 import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
 import { ObservationsService } from '../services/observations.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
-import type { SyncMode, TopologyDataSourceInput } from '../types.js'
+import type {
+  LinkContribution,
+  NodeContribution,
+  ScopeRole,
+  SyncMode,
+  TopologyDataSourceInput,
+} from '../types.js'
 import { mergeProbeIntoSnapshot } from './probe-merge.js'
 import { getTopologyService } from './topologies.js'
 
@@ -30,6 +36,31 @@ function getDataSourceService() {
     _dataSourceService = new DataSourceService()
   }
   return _dataSourceService
+}
+
+/**
+ * Validate the per-source composition-mode knobs (topology-source-modes.md).
+ * Returns an error string, or null when valid. Absent fields are valid (they
+ * fall back to the Additive defaults).
+ */
+function validateCompositionModes(body: {
+  nodeContribution?: unknown
+  linkContribution?: unknown
+  scopeRole?: unknown
+}): string | null {
+  if (
+    body.nodeContribution !== undefined &&
+    !['scoop', 'anchor'].includes(String(body.nodeContribution))
+  )
+    return "nodeContribution must be 'scoop' or 'anchor'"
+  if (
+    body.linkContribution !== undefined &&
+    !['add', 'update'].includes(String(body.linkContribution))
+  )
+    return "linkContribution must be 'add' or 'update'"
+  if (body.scopeRole !== undefined && body.scopeRole !== null && body.scopeRole !== 'scoping')
+    return "scopeRole must be 'scoping' or null"
+  return null
 }
 
 export const topologySourcesApi = new Hono()
@@ -97,6 +128,9 @@ topologySourcesApi.post('/:topologyId/sources', async (c) => {
     return c.json({ error: 'dataSourceId and purpose are required' }, 400)
   }
 
+  const modeError = validateCompositionModes(body)
+  if (modeError) return c.json({ error: modeError }, 400)
+
   // Verify data source exists
   const dataSource = getDataSourceService().get(body.dataSourceId)
   if (!dataSource) {
@@ -140,8 +174,19 @@ topologySourcesApi.put('/:topologyId/sources/:sourceId', async (c) => {
     return c.json({ error: 'Topology data source not found' }, 404)
   }
 
-  const body = await c.req.json<{ syncMode?: SyncMode; priority?: number; optionsJson?: string }>()
+  const body = await c.req.json<{
+    syncMode?: SyncMode
+    priority?: number
+    optionsJson?: string
+    nodeContribution?: NodeContribution
+    linkContribution?: LinkContribution
+    scopeRole?: ScopeRole | null
+  }>()
 
+  const modeError = validateCompositionModes(body)
+  if (modeError) return c.json({ error: modeError }, 400)
+
+  // scopeRole: 'scoping' sets it; explicit null clears it back to additive.
   const updated = getTopologySourcesService().update(sourceId, body)
   if (!updated) {
     return c.json({ error: 'Failed to update' }, 500)

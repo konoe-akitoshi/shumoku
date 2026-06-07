@@ -115,6 +115,13 @@ export interface TopologyInput {
 export type SyncMode = 'manual' | 'on_view' | 'webhook'
 export type DataSourcePurpose = 'topology' | 'metrics'
 
+// Per-source composition modes (topology-source-modes.md, Axis D). Two
+// independent knobs + a scope role. Defaults = Additive (scoop / add / no scope).
+// NOT named `mode` — that collides with DiscoveryMode (auto|observe|disabled).
+export type NodeContribution = 'scoop' | 'anchor'
+export type LinkContribution = 'add' | 'update'
+export type ScopeRole = 'scoping'
+
 // Source merge is governed by `TopologyDataSource.priority` — the
 // higher-priority source wins each field in resolve() (see
 // `@shumoku/core` resolve() and topology-source-priority-merge.md). The
@@ -130,6 +137,12 @@ export interface TopologyDataSource {
   lastSyncedAt?: number
   priority: number
   optionsJson?: string
+  /** How this source's nodes participate. Default 'scoop'. */
+  nodeContribution: NodeContribution
+  /** How this source's links participate. Default 'add'. */
+  linkContribution: LinkContribution
+  /** When 'scoping', this source's regions are a closed world. Default undefined. */
+  scopeRole?: ScopeRole
   createdAt: number
   updatedAt: number
   // Joined data
@@ -142,6 +155,9 @@ export interface TopologyDataSourceInput {
   syncMode?: SyncMode
   priority?: number
   optionsJson?: string
+  nodeContribution?: NodeContribution
+  linkContribution?: LinkContribution
+  scopeRole?: ScopeRole
 }
 
 export interface Dashboard {

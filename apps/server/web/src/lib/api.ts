@@ -12,7 +12,10 @@ import type {
   DashboardInput,
   DataSource,
   DataSourceInput,
+  LinkContribution,
   MetricsMapping,
+  NodeContribution,
+  ScopeRole,
   SyncMode,
   Topology,
   TopologyContext,
@@ -348,7 +351,14 @@ export const topologies = {
     update: (
       topologyId: string,
       sourceId: string,
-      updates: { syncMode?: SyncMode; priority?: number; optionsJson?: string },
+      updates: {
+        syncMode?: SyncMode
+        priority?: number
+        optionsJson?: string
+        nodeContribution?: NodeContribution
+        linkContribution?: LinkContribution
+        scopeRole?: ScopeRole | null
+      },
     ) =>
       request<TopologyDataSource>(`/topologies/${topologyId}/sources/${sourceId}`, {
         method: 'PUT',

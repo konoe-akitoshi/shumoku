@@ -132,6 +132,11 @@ export function serializeMultiFileContent(files: TopologyFile[]): string {
 export type SyncMode = 'manual' | 'on_view' | 'webhook'
 export type DataSourcePurpose = 'topology' | 'metrics'
 
+// Per-source composition modes (topology-source-modes.md, Axis D).
+export type NodeContribution = 'scoop' | 'anchor'
+export type LinkContribution = 'add' | 'update'
+export type ScopeRole = 'scoping'
+
 export interface TopologyDataSource {
   id: string
   topologyId: string
@@ -142,6 +147,9 @@ export interface TopologyDataSource {
   lastSyncedAt?: number
   priority: number
   optionsJson?: string
+  nodeContribution: NodeContribution
+  linkContribution: LinkContribution
+  scopeRole?: ScopeRole
   createdAt: number
   updatedAt: number
   dataSource?: DataSource
@@ -153,6 +161,9 @@ export interface TopologyDataSourceInput {
   syncMode?: SyncMode
   priority?: number
   optionsJson?: string
+  nodeContribution?: NodeContribution
+  linkContribution?: LinkContribution
+  scopeRole?: ScopeRole | null
 }
 
 export interface ApiError {
