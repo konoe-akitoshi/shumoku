@@ -95,8 +95,12 @@ contribution_source
   source_id      TEXT,                           -- this contribution's id (ordinary id)
   data_source_id TEXT REFERENCES data_sources(id) ON DELETE CASCADE,  -- NULL ⇔ the project's own contribution
   priority       INTEGER,                        -- merge precedence; the intrinsic contribution = MAX
+  last_status    TEXT,                           -- last sync: 'ok'|'partial'|'empty'|'failed' (drives the replace strategy; external only)
+  last_ok_at     INTEGER,
   graph_payload_json TEXT,                       -- this contribution's graph-level fields: settings, pins, version, name
   PRIMARY KEY (topology_id, source_id)
+  -- Exactly one intrinsic contribution per topology (guards the lazy-create race):
+  -- CREATE UNIQUE INDEX one_intrinsic ON contribution_source(topology_id) WHERE data_source_id IS NULL;
 
 -- ② Contributions (rows + payload doc column), uniform for every contribution (external + intrinsic)
 contribution_element
@@ -157,21 +161,48 @@ Notes:
 ```
 buildContributions(topologyId): per-source inputs   -- assembled from contribution_* rows (indexed scans)
 resolve(buildContributions(topologyId)) → resolved graph → materialize ③
-  · cluster elements by identity
-  · presence: per cluster, the highest-priority element's `negate` decides (0 present / 1 hidden)
+  · cluster elements by identity (nodes/ports only — see "kind scope")
+  · presence: the PRECISE rule below (NOT "highest row wins")
   · fields & attachments: per key, the highest-priority assertion's sign + payload wins
 buildGraph(topologyId, source_id): NetworkGraph     -- project ONE source's contribution (export/edit; raw ids)
 exportResolved(topologyId): NetworkGraph            -- project the materialized resolved graph (final picture)
 ingestGraph(topologyId, source_id, graph)           -- decompose a graph into that source's rows; ONE txn;
                                                     --   PRAGMA defer_foreign_keys for intra-import forward refs
 ```
+
+**Presence rule (precise — pin this; the golden test alone won't).** Absence of a row is
+**not** an assertion. A cluster is **present iff** at least one contribution has a
+*non-negated* element row for it **and** the highest-priority *opinionated* row (one that
+exists, present-or-hide) is **not** `negate=1`. A contribution with **no row** for a
+cluster expresses **no opinion** — so this preserves today's union semantics (a node any
+source carries is present) while `negate=1` removes by priority. **Never emit a bare
+`negate=0` placeholder row** — `reconcileBindings`-style empty overlay nodes must attach
+to an existing cluster by identity, not pin presence. (This is the live footgun: a stray
+default row would silently pin a node a synced source later drops → a retraction bug.)
+
+**Kind scope.** Identity-clustering + signed presence apply to **nodes and their ports
+only**. `subgraph`/`termination` are **pass-through per source** (resolve has no identity
+key for them today; ids are namespaced per source). So `negate` on a subgraph/termination
+is **reserved, not yet resolved** — do NOT implement subgraph/termination hide until
+resolve gains an identity for them. The "uniform negate" claim is for the kinds the
+merge actually clusters.
+
 - **resolve's clustering + priority field-merge stay; its presence/suppression unify into
   the signed-assertion model and the `'authored'` literal special-cases are removed.** So
-  it is *not* "unchanged" — be honest — but the change is a simplification (one rule:
-  top-priority-sign), not a new merge. Golden test: `resolve(buildContributions(x))`
-  matches the old `resolve(readManual + snapshots)` for representative graphs.
-- **A sync** = `ingestGraph(topology, <data_source_id>, scannedGraph)` (replace that
-  source's rows transactionally; on a failed scan, leave them — status on `topology_data_sources`).
+  it is *not* "unchanged" — be honest — but the change is a simplification, not a new
+  merge. Note suppression-by-any-priority (`attachment.negate`) is a *new* capability
+  resolve must honor (today suppression is authored-only) — part of this rewrite, not free.
+  Golden test: `resolve(buildContributions(x))` matches the old
+  `resolve(readManual + snapshots)` for representative graphs.
+- **A sync's replace strategy is status-driven** (preserves today's `ok`/`partial`/`empty`/
+  `failed` retraction semantics, which `topology_observations` carried per-snapshot and
+  must NOT be lost — store last status + last_ok_at on the source registry):
+  - `ok` → **full replace** of that source's rows (a node missing from the scan is
+    retracted — delete-then-insert);
+  - `partial`/`empty` → **upsert only** (the scan is incomplete; a missing node is NOT
+    authoritative, so don't delete — absence ≠ retraction);
+  - `failed` → **no write** (keep the prior rows untouched).
+  A boolean "did it succeed" is insufficient — these three behaviors need the status.
 - **An editor edit** = write the project's-own contribution (the `data_source_id IS NULL`
   row) incrementally (one attachment/element row = O(1)); never a full-replace, so a crash
   can't wipe it. Import (`ingestGraph` of the whole project graph) is the only full-replace
