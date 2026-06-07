@@ -44,7 +44,16 @@ import {
 import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
+import { buildGraph, ingestGraph } from './contribution-store.js'
 import { ObservationsService } from './observations.js'
+
+/**
+ * The project's own (intrinsic) contribution id — one per topology
+ * (contribution_source.attachment_id IS NULL). This is the authored layer; it is
+ * NOT a data source. See db-native-persistence.md.
+ */
+const INTRINSIC_SOURCE = 'intrinsic'
+
 import { TopologySourcesService } from './topology-sources.js'
 
 /** Bare topology row — no content_json column post-migration-010. */
@@ -605,9 +614,8 @@ export class TopologyService {
     nodeDesired: NodeBindingDesired[],
     linkDesired: LinkBindingDesired[],
   ): Promise<void> {
-    const manualId = await this.ensureManualSource(topologyId)
     const topology = this.get(topologyId)
-    const authored = this.readManualGraph(topologyId, manualId) ?? {
+    const authored = this.readManualGraph(topologyId) ?? {
       version: '1' as const,
       name: topology?.name ?? 'Manual',
       nodes: [],
@@ -713,7 +721,7 @@ export class TopologyService {
     nodes = nodes.filter((n) => !isPureEmptyOverlay(n))
 
     // Records a new authored observation for this topology + invalidates it.
-    await this.writeManualGraph(topologyId, manualId, { ...authored, nodes })
+    await this.writeManualGraph(topologyId, INTRINSIC_SOURCE, { ...authored, nodes })
   }
 
   /**
@@ -972,11 +980,10 @@ export class TopologyService {
     // drop a source's last-good nodes (C7 — failed never retracts).
     const latest = this.observations.latestSuccessfulPerSource(topology.id)
     const manualId = topology.manualSourceId
-    // The authored graph is the Manual source's latest observation — it's just
-    // another snapshot in `latest`, fed to resolve() as the top-priority
-    // contribution. Absent (fresh Manual / no Manual) → empty.
-    const manualGraph = manualId ? latest.find((o) => o.sourceId === manualId)?.graph : undefined
-    const authored: NetworkGraph = manualGraph ?? {
+    // The authored graph is the intrinsic contribution (DB-native store), folded as
+    // resolve()'s top-priority contribution. Absent → empty. (`readManualGraph`
+    // lazily backfills from a legacy Manual observation the first time.)
+    const authored: NetworkGraph = this.readManualGraph(topology.id) ?? {
       version: '1',
       name: topology.name,
       nodes: [],
@@ -1150,14 +1157,32 @@ export class TopologyService {
    *
    * Public so the discovery-policy API can compute / mutate the authored layer.
    */
-  readManualGraph(topologyId: string, sourceId: string): NetworkGraph | null {
+  readManualGraph(topologyId: string, _sourceId?: string): NetworkGraph | null {
+    // The authored layer is the intrinsic contribution (DB-native store). The
+    // `sourceId` param is vestigial — authored is per-topology now.
+    const fromRows = buildGraph(topologyId, INTRINSIC_SOURCE, this.db)
+    if (fromRows) return fromRows
+    // Lazy one-time backfill: an existing topology's authored graph still lives in
+    // a legacy Manual observation. Move it into the intrinsic contribution once.
+    const legacy = this.readLegacyManualObservation(topologyId)
+    if (legacy) {
+      ingestGraph(topologyId, INTRINSIC_SOURCE, legacy, { attachmentId: null }, this.db)
+      return legacy
+    }
+    return null
+  }
+
+  /** Read the pre-cutover Manual observation graph, if any (backfill source). */
+  private readLegacyManualObservation(topologyId: string): NetworkGraph | null {
+    const manualId = this.findManualSourceId(topologyId)
+    if (!manualId) return null
     const row = this.db
       .query(
         `SELECT graph_json FROM topology_observations
          WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
          ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
       )
-      .get(topologyId, sourceId) as { graph_json: string } | undefined
+      .get(topologyId, manualId) as { graph_json: string } | undefined
     if (!row) return null
     try {
       return JSON.parse(row.graph_json) as NetworkGraph
@@ -1172,20 +1197,9 @@ export class TopologyService {
    * latest one as the top-priority authored contribution. Per-topology: an edit
    * to topology X's authored graph only invalidates X.
    */
-  async writeManualGraph(topologyId: string, sourceId: string, graph: NetworkGraph): Promise<void> {
-    const src = this.db.query('SELECT type FROM data_sources WHERE id = ?').get(sourceId) as
-      | { type: string }
-      | undefined
-    if (!src || src.type !== 'manual') {
-      throw new Error(`Data source ${sourceId} is not a Manual source`)
-    }
-    await this.observations.record({
-      topologyId,
-      sourceId,
-      capturedAt: timestamp(),
-      status: 'ok',
-      graph,
-    })
+  writeManualGraph(topologyId: string, _sourceId: string, graph: NetworkGraph): void {
+    // Authored layer = the intrinsic contribution (topology-owned, attachment_id NULL).
+    ingestGraph(topologyId, INTRINSIC_SOURCE, graph, { attachmentId: null }, this.db)
     this.clearCacheEntry(topologyId)
   }
 

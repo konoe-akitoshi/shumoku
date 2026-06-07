@@ -22,7 +22,7 @@ const g = (nodeId: string): NetworkGraph =>
     links: [],
   }) as NetworkGraph
 
-describe('Manual = uniform data source (authored graph as observation)', () => {
+describe('Manual = uniform data source (authored graph as the intrinsic contribution)', () => {
   test('attachManualSource seeds config {} (no graph) and reads null until saved', async () => {
     const topo = await svc.create({ name: 'm1' })
     const manualId = await svc.ensureManualSource(topo.id)
@@ -33,30 +33,31 @@ describe('Manual = uniform data source (authored graph as observation)', () => {
     expect(svc.readManualGraph(topo.id, manualId)).toBeNull()
   })
 
-  test('writeManualGraph records an observation; readManualGraph + resolve see it', async () => {
+  test('writeManualGraph stores the intrinsic contribution; readManualGraph + resolve see it', async () => {
     const topo = await svc.create({ name: 'm2' })
-    const manualId = await svc.ensureManualSource(topo.id)
-    await svc.writeManualGraph(topo.id, manualId, g('a'))
+    await svc.writeManualGraph(topo.id, 'intrinsic', g('a'))
 
-    // Stored as an observation, not in config_json.
-    const obs = getDatabase()
+    // Stored in the contribution store (intrinsic = attachment_id NULL), NOT an observation.
+    const src = getDatabase()
       .query(
-        'SELECT graph_json, status FROM topology_observations WHERE topology_id = ? AND source_id = ?',
+        'SELECT source_id FROM contribution_source WHERE topology_id = ? AND attachment_id IS NULL',
       )
-      .get(topo.id, manualId) as { graph_json: string; status: string } | undefined
-    expect(obs?.status).toBe('ok')
-    expect(JSON.parse(obs?.graph_json ?? '{}').nodes).toHaveLength(1)
+      .get(topo.id) as { source_id: string } | undefined
+    expect(src).toBeDefined()
+    const node = getDatabase()
+      .query("SELECT local_id FROM contribution_element WHERE topology_id = ? AND kind = 'node'")
+      .get(topo.id) as { local_id: string } | undefined
+    expect(node?.local_id).toBe('a')
 
-    expect(svc.readManualGraph(topo.id, manualId)?.nodes?.[0]?.id).toBe('a')
+    expect(svc.readManualGraph(topo.id)?.nodes?.[0]?.id).toBe('a')
     const parsed = await svc.getParsed(topo.id)
     expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
   })
 
-  test('latest observation wins on re-save', async () => {
+  test('latest write wins on re-save (intrinsic is replaced)', async () => {
     const topo = await svc.create({ name: 'm3' })
-    const manualId = await svc.ensureManualSource(topo.id)
-    await svc.writeManualGraph(topo.id, manualId, g('first'))
-    await svc.writeManualGraph(topo.id, manualId, g('second'))
-    expect(svc.readManualGraph(topo.id, manualId)?.nodes?.[0]?.id).toBe('second')
+    await svc.writeManualGraph(topo.id, 'intrinsic', g('first'))
+    await svc.writeManualGraph(topo.id, 'intrinsic', g('second'))
+    expect(svc.readManualGraph(topo.id)?.nodes?.[0]?.id).toBe('second')
   })
 })
