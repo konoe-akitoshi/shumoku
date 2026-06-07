@@ -177,14 +177,13 @@ export class ObservationsService {
    *
    * The contribution is keyed by `(topology_id, source_id = data_sources.id)` and
    * owned by its topology-purpose attach row (`attachment_id`), so detaching the
-   * source cascades the contribution away. Skipped when:
+   * source cascades the contribution away. This is the SAME path for every source,
+   * including a hand-drawn Manual source — its editor save records an observation
+   * here (the human is the "scanner"), with no manual-specific branch. Skipped when:
    *   - `status === 'failed'` — a failed scan carries no information, so it must
    *     NOT replace the source's last-good contribution (C7);
    *   - the source isn't attached for the `topology` purpose (preview scans,
    *     metrics-only sources) — there is nothing to contribute to the graph;
-   *   - the source is a Manual one — a hand-drawn source has no scan; its graph is
-   *     written directly via `TopologyService.writeManualSourceGraph` (the editor),
-   *     not through the observation/scan path;
    *   - this snapshot is OLDER than the stored contribution — out-of-order
    *     delivery (a slow scan landing after a newer one) must not regress the
    *     canonical state. Preserves the old `MAX(captured_at)` selection.
@@ -196,13 +195,12 @@ export class ObservationsService {
     if (input.status === 'failed') return
     const attach = this.db
       .query(
-        `SELECT tds.id AS attach_id, ds.type AS ds_type
+        `SELECT tds.id AS attach_id
          FROM topology_data_sources tds
-         JOIN data_sources ds ON ds.id = tds.data_source_id
          WHERE tds.topology_id = ? AND tds.data_source_id = ? AND tds.purpose = 'topology'`,
       )
-      .get(input.topologyId, input.sourceId) as { attach_id: string; ds_type: string } | undefined
-    if (!attach || attach.ds_type === 'manual') return
+      .get(input.topologyId, input.sourceId) as { attach_id: string } | undefined
+    if (!attach) return
     // Out-of-order guard: never let a strictly older scan replace newer canonical
     // state (re-applying the same capturedAt is fine — idempotent replace).
     const existing = this.db

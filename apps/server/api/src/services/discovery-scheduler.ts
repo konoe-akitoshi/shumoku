@@ -265,12 +265,9 @@ export class DiscoveryScheduler {
         // state — the source has been synced at least once (`lastSyncedAt` set),
         // so it has observations to refresh. The first sync is always an explicit
         // human action ("Sync now" / webhook); discovery never bootstraps itself.
-        // Manual is the authored layer and is never fetched at all. So the working
-        // set is the established, non-manual sources — anything else has nothing
-        // to refresh and must not be touched here.
-        const sources = attached.filter(
-          (s) => s.dataSource?.type !== 'manual' && s.lastSyncedAt != null,
-        )
+        // A hand-drawn Manual source is never fetched (no upstream), so it is never
+        // synced → `lastSyncedAt` stays null → already excluded here. No type branch.
+        const sources = attached.filter((s) => s.lastSyncedAt != null)
         if (sources.length === 0) continue
 
         // The topology default policy gates every source on this topology

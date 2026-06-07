@@ -13,8 +13,11 @@
  *
  * Two kinds of contribution, distinguished by `attachment_id`:
  *   - **source contributions** (`attachment_id` set) — every attached source's
- *     latest graph, INCLUDING an explicitly-added hand-drawn Manual source. Written
- *     by sync / the Manual editor (`writeManualSourceGraph`). Folded by priority.
+ *     latest graph, INCLUDING an explicitly-added hand-drawn Manual source. ALL of
+ *     them are written the SAME way: `ObservationsService.record()` →
+ *     `materializeContribution`. A Manual source's editor save is just an
+ *     observation with the human as the "scanner" — no manual-specific path.
+ *     Folded by priority.
  *   - **the project overlay** (`attachment_id` NULL, {@link PROJECT_SOURCE}) — the
  *     operator's curation: exclusions, overrides, metrics bindings, display
  *     settings. Written by `writeProjectOverlay` (never spawns a data source).
@@ -1288,16 +1291,6 @@ export class TopologyService {
   // at the API boundary (api/observations.ts) and at resolve() time.
 
   /**
-   * The topology_data_sources row id (attach row) for this topology's Manual
-   * source, or undefined when none is attached. The contribution is owned by this
-   * attach row — exactly like any other source — so it round-trips through the
-   * standard `attachment_id`-keyed `contribution_*` store.
-   */
-  private manualAttachId(topologyId: string, manualSourceId: string): string | undefined {
-    return this.topologySources.find(topologyId, manualSourceId, 'topology')?.id
-  }
-
-  /**
    * Read the PROJECT OVERLAY — the project's own top-priority contribution
    * (`attachment_id` NULL, `source_id` = {@link PROJECT_SOURCE}). Holds the
    * operator's curation: exclusions, field overrides, metrics bindings, and
@@ -1305,24 +1298,14 @@ export class TopologyService {
    * when the project has no overlay yet.
    *
    * Public so the discovery-policy / mapping APIs can read it to mutate.
+   *
+   * No legacy fallback: `migrateManualToProject` (startup) moves any pre-refactor
+   * operator content into this NULL slot. A hand-drawn Manual *source* now records
+   * its own observations like any source, so reading its observations here would
+   * wrongly conflate source content with the overlay.
    */
   readProjectOverlay(topologyId: string): NetworkGraph | null {
-    const fromRows = buildGraph(topologyId, PROJECT_SOURCE, this.db)
-    if (fromRows) return fromRows
-    // Transitional: until `migrateManualToProject` runs, the operator's content may
-    // still sit in legacy Manual observations. Surface it as the overlay.
-    return this.readLegacyManualObservation(topologyId)
-  }
-
-  /**
-   * Read an explicitly-added hand-drawn Manual source's graph (its own
-   * `contribution_source`, `attachment_id` = its attach row). This is ordinary
-   * source content — the editor reads it to populate its canvas. Returns null when
-   * the source isn't attached here or nothing is drawn yet.
-   */
-  readManualSourceGraph(topologyId: string, sourceId: string): NetworkGraph | null {
-    if (!this.manualAttachId(topologyId, sourceId)) return null
-    return buildGraph(topologyId, sourceId, this.db)
+    return buildGraph(topologyId, PROJECT_SOURCE, this.db)
   }
 
   /**
@@ -1373,32 +1356,6 @@ export class TopologyService {
       PROJECT_SOURCE,
       graph,
       { attachmentId: null, lastStatus: 'ok', lastOkAt: timestamp() },
-      this.db,
-    )
-    this.clearCacheEntry(topologyId)
-  }
-
-  /**
-   * Persist an explicitly-added hand-drawn Manual source's graph as ITS OWN
-   * contribution (`attachment_id` = its attach row), exactly like an observed
-   * source — just hand-edited. The Manual source MUST already be attached (added
-   * via the Sources list); there is no find-or-create, so curation can never spawn
-   * one. Throws if the source isn't attached to this topology.
-   */
-  async writeManualSourceGraph(
-    topologyId: string,
-    sourceId: string,
-    graph: NetworkGraph,
-  ): Promise<void> {
-    const attachId = this.manualAttachId(topologyId, sourceId)
-    if (!attachId) {
-      throw new Error(`Manual source ${sourceId} is not attached to topology ${topologyId}`)
-    }
-    ingestGraph(
-      topologyId,
-      sourceId,
-      graph,
-      { attachmentId: attachId, lastStatus: 'ok', lastOkAt: timestamp() },
       this.db,
     )
     this.clearCacheEntry(topologyId)

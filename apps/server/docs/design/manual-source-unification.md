@@ -15,8 +15,9 @@
 > is now reserved for **explicitly-added hand-drawn graphs only**, folded like any
 > ordinary source. A one-shot startup migration (`migrateManualToProject`) moved
 > all legacy Manual content into each topology's overlay and retired the Manual
-> data sources. See `topology.ts` (`readProjectOverlay`/`writeProjectOverlay` vs
-> `writeManualSourceGraph`) and `db-native-persistence.md`.
+> data sources. A hand-drawn Manual source uses the SAME save path as every source
+> (record observation → materialize); only curation has a dedicated writer
+> (`writeProjectOverlay`). See `topology.ts` and `db-native-persistence.md`.
 >
 > --- original gap (kept for history) ---
 >

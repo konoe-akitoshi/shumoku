@@ -10,15 +10,18 @@
 >
 > - **Source contributions** (`attachment_id` SET) — every attached source's graph,
 >   INCLUDING an explicitly-added hand-drawn `type='manual'` source. Manual is now
->   reserved for hand-drawn topology only and folds like any ordinary source.
+>   reserved for hand-drawn topology only and uses the **same save path as every
+>   source**: `ObservationsService.record()` → `materializeContribution` (the human
+>   is just the "scanner"). No manual-specific write method or `type='manual'` branch
+>   in the save/load/materialize path. It folds like any ordinary source.
 > - **The project overlay** (`attachment_id` NULL, sentinel `source_id='intrinsic'`,
 >   one per topology via `idx_contrib_one_intrinsic`) — the operator's curation:
 >   exclusions, field overrides, metrics bindings, display settings. It is owned by
 >   the project, **not a data source**; writing it never creates/attaches anything.
 >   `resolve()` folds it as the top-priority `authored` input.
 >
-> Service surface: `readProjectOverlay`/`writeProjectOverlay` (curation, NULL slot)
-> vs `readManualSourceGraph`/`writeManualSourceGraph` (a hand-drawn source). The
+> Service surface: `readProjectOverlay`/`writeProjectOverlay` (curation, NULL slot).
+> A hand-drawn source reads/writes via the ordinary observation endpoints. The
 > one-shot `migrateManualToProject` moved legacy Manual content into the overlay and
 > retired the Manual data sources. `manualSourceId` on `Topology` was removed. Where
 > the text below says "Manual source" for curation, read "project overlay."
@@ -334,9 +337,10 @@ A design doc is not a full DDL; the constraints are proven in code, not prose.
   overlay** (`writeProjectOverlay` → `ingestGraph` into the NULL-attachment slot). It
   never creates a data source. Full per-source replace in one transaction (today's
   `ingestGraph` is replace-only; incremental per-row writes are a future optimization).
-- **A hand-drawn Manual source edit** = `writeManualSourceGraph` ingests into the
-  Manual source's own contribution (`attachment_id` set); the source must already be
-  attached (no find-or-create).
+- **A hand-drawn Manual source edit** = the editor records an observation via the
+  ordinary `POST /:tid/sources/:sid/observation` endpoint, which materializes into
+  the Manual source's own contribution (`attachment_id` set) — the SAME path as any
+  source (no manual-specific method, no find-or-create).
 - **Manual is a normal, visible, equal source** — it appears in the Sources list and
   is edited as a source (`/datasources/:id` or the topology's Sources). It is added
   explicitly for hand-drawing; curation does NOT spawn one (no phantom spawn, no

@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { ingestGraph } from '../../src/services/contribution-store.ts'
+import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import { getDatabase, setupTempDb, type TempDb } from './helper.ts'
 
@@ -73,26 +74,31 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
   })
 })
 
-describe('Manual = an explicitly-added, ordinary hand-drawn source', () => {
-  test('writeManualSourceGraph requires the source be attached (no find-or-create)', async () => {
-    const topo = await svc.create({ name: 'ms1' })
-    await expect(svc.writeManualSourceGraph(topo.id, 'nope', g('x'))).rejects.toThrow()
-  })
-
-  test('an attached Manual source folds as an ordinary source contribution', async () => {
+describe('Manual = an explicitly-added, ordinary hand-drawn source (same save path)', () => {
+  test('a Manual source save records an observation that materializes like any source', async () => {
     const topo = await svc.create({ name: 'ms2' })
     const { dataSourceId } = await svc.attachManualSource(topo.id, 'topology')
-    await svc.writeManualSourceGraph(topo.id, dataSourceId, g('hand'))
+    // The editor save goes through the SAME path as every source: record an
+    // observation (the human is the "scanner") → materializeContribution.
+    const observations = new ObservationsService()
+    await observations.record({
+      topologyId: topo.id,
+      sourceId: dataSourceId,
+      capturedAt: 1,
+      status: 'ok',
+      graph: g('hand'),
+    })
 
-    // Its contribution is a normal source row: attachment_id SET.
+    // Its contribution is a normal source row: attachment_id SET (no NULL overlay).
     const src = getDatabase()
       .query(
         'SELECT attachment_id FROM contribution_source WHERE topology_id = ? AND source_id = ?',
       )
       .get(topo.id, dataSourceId) as { attachment_id: string | null } | undefined
     expect(src?.attachment_id).not.toBeNull()
+    expect(svc.readProjectOverlay(topo.id)).toBeNull() // curation overlay untouched
 
-    expect(svc.readManualSourceGraph(topo.id, dataSourceId)?.nodes?.[0]?.id).toBe('hand')
+    // It folds into the resolved graph as an ordinary source.
     const parsed = await svc.getParsed(topo.id)
     expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
   })
@@ -104,7 +110,12 @@ describe('migrateManualToProject — fold legacy Manual sources into the overlay
     // Simulate a pre-refactor DB: operator content stored as a Manual data source's
     // own contribution (attachment_id set).
     const { dataSourceId } = await svc.attachManualSource(topo.id, 'topology')
-    await svc.writeManualSourceGraph(topo.id, dataSourceId, g('legacy'))
+    const attachId = getDatabase()
+      .query(
+        "SELECT id FROM topology_data_sources WHERE topology_id = ? AND data_source_id = ? AND purpose = 'topology'",
+      )
+      .get(topo.id, dataSourceId) as { id: string }
+    ingestGraph(topo.id, dataSourceId, g('legacy'), { attachmentId: attachId.id }, getDatabase())
     // Clear the one-shot guard for this DB.
     getDatabase().query("DELETE FROM settings WHERE key = 'manual_to_project_migrated'").run()
 

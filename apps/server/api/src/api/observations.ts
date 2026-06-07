@@ -16,7 +16,6 @@ import { Hono } from 'hono'
 import { hasAutoscanCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { ObservationsService } from '../services/observations.js'
-import { TopologySourcesService } from '../services/topology-sources.js'
 import { getTopologyService } from './topologies.js'
 
 /**
@@ -92,16 +91,9 @@ export function createScanRoute(): Hono {
 export function createObservationsRoute(): Hono {
   const app = new Hono()
   const observations = new ObservationsService()
-  const dataSources = new DataSourceService()
-  const topologySources = new TopologySourcesService()
-  // The authored ("Manual") source's graph is the intrinsic contribution now, NOT a
-  // topology_observations row. Route manual save/load through the topology service so the
-  // editor and resolve() agree (no split-brain). External sources stay observations.
-  // REQUIRE the manual source be attached to THIS topology (purpose 'topology') — else an
-  // unrelated manual id could overwrite the topology's intrinsic graph.
-  const isManualForTopology = (topologyId: string, sourceId: string): boolean =>
-    dataSources.get(sourceId)?.type === 'manual' &&
-    topologySources.find(topologyId, sourceId, 'topology') !== undefined
+  // Every source — external feed AND a hand-drawn Manual source — saves/loads its
+  // graph through the same observation path (record → materialize). No per-type
+  // branch; the human is just the "scanner" for a Manual source.
   // Note: the per-source sync endpoint
   // `POST /:topologyId/sources/:sourceId/sync` lives in
   // `topology-sources.ts` — that route is registered earlier on the
@@ -144,13 +136,8 @@ export function createObservationsRoute(): Hono {
   // resolved project graph below.
   app.get('/:topologyId/sources/:sourceId/latest-snapshot', (c) => {
     const { topologyId, sourceId } = c.req.param()
-    // A hand-drawn Manual source stores its graph as its own contribution
-    // (DB-native), not an observation. Target THIS source (a topology can have
-    // several Manual sources).
-    if (isManualForTopology(topologyId, sourceId)) {
-      const graph = getTopologyService().readManualSourceGraph(topologyId, sourceId)
-      return c.json({ graph, capturedAt: null, status: graph ? 'ok' : null })
-    }
+    // Every source — including a hand-drawn Manual source — reads its latest graph
+    // from the observation log; no manual-specific branch.
     const latest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
     if (!latest) {
       // Source attached but no observation yet — return an empty
@@ -181,14 +168,11 @@ export function createObservationsRoute(): Hono {
       if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
         return c.json({ error: 'graph.nodes and graph.links must be arrays' }, 400)
       }
-      // A hand-drawn Manual source's save → its own contribution (DB-native), not
-      // an observation row, keyed by its attach row like any source. (Operator
-      // curation — exclusions/bindings/overrides — does NOT come through here; it
-      // goes to the project overlay via the discovery-policy / mapping APIs.)
-      if (isManualForTopology(topologyId, sourceId)) {
-        await getTopologyService().writeManualSourceGraph(topologyId, sourceId, graph)
-        return c.json({ ok: true }, 201)
-      }
+      // Every source saves the same way — record an observation, which materializes
+      // into the contribution store. A hand-drawn Manual source's editor save comes
+      // through here too (the human is the "scanner"); no manual-specific branch.
+      // (Operator curation — exclusions/bindings/overrides — does NOT come through
+      // here; it goes to the project overlay via the discovery-policy / mapping APIs.)
       const observation = await observations.record({
         topologyId,
         sourceId,
