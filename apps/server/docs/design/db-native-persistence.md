@@ -1,19 +1,39 @@
 # DB-native persistence — uniform contributions, one assertion bucket
 
-> Status: ADOPTED (2026-06-07, converged after multiple adversarial reviews incl. Codex
-> macro + per-stage reviews, + user steer). Design of record for the follow-up to PR
-> #375 (#362). No backward compat.
+> Status: ADOPTED (corrected 2026-06-08). Design of record for the DB-native storage of
+> topology contributions. No backward compat. **Read the Canonical model + Drift warning
+> below before changing anything here.**
 >
-> **Shipped:** stage 0 (drop dead tables, #379) · stage 1 (contribution store + codec +
-> DB-native authored/intrinsic layer, #378) · the no-phantom-Manual edit paths (#380) ·
-> **stage 3 (observed sources read DB-native from the contribution store, #381)**. Stage 3
-> kept `topology_observations` as the append-only audit/history log (the "or keep as raw
-> audit log" option sanctioned below) — the resolver reads the `contribution_*` rows;
-> `ObservationsService.record()` materializes each observed graph into a contribution in
-> one transaction. **Remaining:** stage 2b (drop the `resolve.ts` `'authored'` lib-internal
-> literal — low value; storage is already clean) and stage 4 (retire
-> `manual_source_id`/`ensureManualSource` — blocked on the editor relocation into the
-> topology context, #362).
+> **Shipped (factual timeline):**
+> - **#378** — `contribution_*` store + lossless codec (`ingestGraph`/`buildGraph`). The
+>   DB-native storage foundation. *(KEEPS.)*
+> - **#379** — drop dead tables (`manual_source_graph`, `snmp_credentials`).
+> - **#380** — discovery-policy writes the project's contribution directly (no phantom
+>   Manual spawn on a policy edit).
+> - **#381** — observed sources read DB-native from the contribution store;
+>   `topology_observations` kept as the append-only audit/history log;
+>   `ObservationsService.record()` materializes each observed graph into a contribution in
+>   one transaction. *(KEEPS.)*
+> - **#382** — provenance OUTPUT vocabulary renamed `'authored'`→`'intrinsic'` /
+>   `'authored-only'`→`'intrinsic-only'`. This is a per-entity resolve-OUTPUT annotation
+>   (who supplied a field), NOT a storage layer — it stays. (`provenance.source: 'intrinsic'`
+>   = "the project's own contribution supplied this value".)
+> - **#383–#385 (REVERTED by #387)** — the **intrinsic-drift**: removed the Manual data
+>   source and stored the authored graph as a `data_source_id IS NULL` "intrinsic"
+>   non-source row, edited via a topology-scoped `/edit` route. **This was wrong** (see the
+>   Drift warning) and is gone.
+> - **#386** — Mapping page loads metrics hosts so auto-map works (unrelated fix; keeps).
+> - **#387 (CURRENT)** — corrected the drift: **Manual is a uniform `data_source` again**.
+>   The hand-drawn graph is the Manual source's OWN contribution (`attachment_id` set, like
+>   any source); `read/writeManualGraph(topologyId, graph, sourceId?)`; one-shot
+>   `migrateIntrinsicToManual` re-homes any existing NULL-"intrinsic" rows into a real Manual
+>   source. No `/edit` route, no NULL-intrinsic in code.
+>
+> **Net:** the DB-native *storage* (codec + contribution store) shipped and stays; the
+> authored-layer *model* is "Manual = uniform data source" (#335/#370), NOT an intrinsic
+> layer. Deferred (separate Manual-editor改修, not this design): the `/datasources/:id`
+> Manual editor's lossy-YAML save (→ JSON/lossless) and its shared-Manual single-topology
+> edit limitation (#362, edit from the topology context).
 
 ## ⚠️ Canonical model — read first
 
@@ -97,43 +117,44 @@ attachments, the binding target, the assertion sign) as real FK-enforced columns
 
 ## Schema (END STATE)
 
-A contribution is identified by `contribution_source.id` (an ordinary id). It is an
-external feed when its `data_source_id` is set, or the project's own when
-`data_source_id IS NULL` — that NULL is the only discriminator, and **no code branches on
-any source string literal**. `payload_json` is the document column (promote a scalar to a
+A contribution is identified by `(topology_id, source_id)` where `source_id` is the owning
+`data_source.id`. **Every contribution is owned by an attached data source** — including
+Manual (`type='manual'`). There is no special non-source contribution and **no code branches
+on any source string literal**. `payload_json` is the document column (promote a scalar to a
 generated column only when a query needs it).
 
 ```
 -- Existing, unchanged
 topologies              id, name, share_token, composition_revision, …
-data_sources            id, name, type, config_json, status…           -- USER-FACING source catalog
+data_sources            id, name, type, config_json, status…           -- USER-FACING source catalog (incl. type='manual')
 topology_data_sources   id, topology_id, data_source_id, purpose, sync_mode, priority, …  -- user-facing attach config
 topology_resolved_graph topology_id, graph_json, layout_json, …, built_revision, resolver_version  -- ③ output
--- topology_observations: RETIRED (its content becomes contribution_* rows; keep only as a raw audit log if desired)
+-- topology_observations: kept as the append-only audit/history log (the resolver reads contribution_* rows, not this)
 
--- ② Per-topology contribution registry. One row per contribution. attachment_id set =
---    external feed (owned by its topology_data_sources attach row); attachment_id NULL =
---    the project's own (intrinsic) contribution (editor-written, never re-fetched). The
---    intrinsic row is NOT a data_source and NOT in the Sources UI, so "phantom Manual"
---    does not return. No 'human'/'authored' tag.
+-- ② Per-topology contribution registry. One row per (topology, source). EVERY contribution
+--    — external feed AND the Manual source — is owned by its topology_data_sources attach row
+--    (attachment_id set). Manual is a uniform data source: same shape, just hand-edited and
+--    fed to resolve() at top priority. (attachment_id is nullable in migration 016 and the
+--    `one_intrinsic` partial index still exists — both VESTIGIAL from the reverted intrinsic
+--    drift; code never writes NULL. `migrateIntrinsicToManual` re-homed any leftover NULL rows.)
 contribution_source
   topology_id   TEXT REFERENCES topologies(id) ON DELETE CASCADE,
-  source_id     TEXT,                            -- this contribution's id (ordinary id)
-  attachment_id TEXT,                            -- the attach row; NULL ⇔ intrinsic
+  source_id     TEXT,                            -- the owning data_source.id (Manual included)
+  attachment_id TEXT,                            -- its topology_data_sources attach row (always set in current code)
   last_status   TEXT,                            -- 'ok'|'partial'|'empty'|'failed' (external; drives the replace strategy)
   last_ok_at    INTEGER,
   graph_payload_json TEXT,                       -- graph-level fields: version, name, description, settings, pins
   PRIMARY KEY (topology_id, source_id),
   -- Composite FK ties the attach row to THIS topology (can't reference another topology's attach):
   FOREIGN KEY (attachment_id, topology_id) REFERENCES topology_data_sources(id, topology_id) ON DELETE CASCADE
-  -- + attach row must be purpose='topology' (ingest/CHECK); one contribution per attach:
   --   CREATE UNIQUE INDEX one_per_attach ON contribution_source(attachment_id) WHERE attachment_id IS NOT NULL;
-  --   CREATE UNIQUE INDEX one_intrinsic  ON contribution_source(topology_id)   WHERE attachment_id IS NULL;
-  -- priority has ONE source of truth: external = the attach row's topology_data_sources.priority;
-  --   intrinsic (attachment_id IS NULL) = MAX. Detach (delete of the attach row) cascades the contribution.
+  -- priority source of truth = the attach row's topology_data_sources.priority. The Manual
+  --   source is fed to resolve() as the top-priority `authored` input (resolve's +Infinity)
+  --   and EXCLUDED from the observed-snapshot feed, so it wins per-field with no double-count
+  --   and no `if(manual)` branch. Detach (delete of the attach row) cascades the contribution.
   -- (requires a UNIQUE(id, topology_id) candidate key on topology_data_sources for the composite FK)
 
--- ② Contributions (rows + payload doc column), uniform for every contribution (external + intrinsic)
+-- ② Contributions (rows + payload doc column), uniform for every contribution (external + Manual)
 contribution_element
   id INTEGER PRIMARY KEY,
   topology_id TEXT NOT NULL, source_id TEXT NOT NULL,
@@ -204,7 +225,8 @@ Notes (incorporating the Codex macro review):
 - **Ownership via `topology_data_sources`, not global `data_sources`.** `contribution_source.attachment_id`
   FKs the *attach row* (purpose='topology'), so only attached topology-purpose sources can
   contribute, **priority has a single source of truth** (the attach row), and **detach
-  cascades** the contribution. The intrinsic contribution has `attachment_id NULL`.
+  cascades** the contribution. The Manual source's contribution is owned by its attach row
+  too — no exception.
 - **Composite FKs prevent cross-source/cross-topology references.** `(id, topology_id, source_id)`
   candidate key on `contribution_element`; identity/attachment/link-endpoints/`parent_local_id`
   all FK through it, so an attachment can't reference another source's element and
@@ -285,12 +307,14 @@ A design doc is not a full DDL; the constraints are proven in code, not prose.
     authoritative, so don't delete — absence ≠ retraction);
   - `failed` → **no write** (keep the prior rows untouched).
   A boolean "did it succeed" is insufficient — these three behaviors need the status.
-- **An editor edit** = write the project's-own contribution (the `data_source_id IS NULL`
-  row) incrementally (one attachment/element row = O(1)); never a full-replace, so a crash
-  can't wipe it. Import (`ingestGraph` of the whole project graph) is the only full-replace
-  and is one transaction.
-- **No phantom Manual** — the project's own data is rows under the intrinsic
-  `contribution_source` row (`data_source_id IS NULL`), never a user-facing data source.
+- **An editor edit** = write the Manual source's contribution (`writeManualGraph`
+  find-or-creates the `type='manual'` source, then `ingestGraph` into ITS contribution). It
+  is a full per-source replace in one transaction (today's `ingestGraph` is replace-only;
+  incremental per-row writes are a future optimization, not required).
+- **Manual is a normal, visible, equal source** — it appears in the Sources list and is
+  edited as a source (`/datasources/:id` or the topology's Sources). It is NOT
+  auto-attached on topology create (no phantom spawn on a benign action); it appears the
+  first time you edit/override, exactly as #370 specified.
 
 ## Round-trip codec (lossless `NetworkGraph` ↔ rows)
 
@@ -322,12 +346,13 @@ asserts a **normalized equality** (canonical key order), and additionally
 
 ## Priority (one direction, derived, deterministic)
 
-- **One direction: higher wins** (matches `resolve()`'s `+Infinity` for the project layer
-  and its descending sort). `database.md`'s "lower number = higher precedence" wording is
-  **wrong** and must be corrected; migrate existing `topology_data_sources.priority` values
-  to the higher-wins convention explicitly.
+- **One direction: higher wins** (matches `resolve()`'s `+Infinity` for the top-priority
+  contribution and its descending sort). `database.md`'s "lower number = higher precedence"
+  wording is **wrong** and must be corrected; migrate existing `topology_data_sources.priority`
+  values to the higher-wins convention explicitly.
 - **Single source of truth**: external priority = the attach row's `topology_data_sources.priority`
-  (not duplicated on `contribution_source`); the intrinsic contribution = MAX.
+  (not duplicated on `contribution_source`); the Manual source is fed to `resolve()` as the
+  top-priority `authored` input (effectively MAX) and excluded from the observed-snapshot feed.
 - **Deterministic tie-break** for equal priority: `source_id` ascending — stable, unique
   per contribution, no stored revision needed; never rely on row insertion order. (Today
   `resolve()` ties on `capturedAt` then nothing — make the final key `source_id`.)
@@ -367,24 +392,32 @@ plan below, WAL, and batched transactions. It is bounded and infrequent, not a w
 - **`payload_json`** TEXT by default (SQLite 3.51.1 has JSONB; reserve it + generated
   columns for filtered scalars). Verify hot queries with `EXPLAIN QUERY PLAN` (no `SCAN TABLE`).
 
-## Staged migration
+## What actually shipped (factual)
 
-1. **`contribution_source` + `contribution_element`/`identity`/`link` + `buildContributions`
-   for the intrinsic contribution** + `ingestGraph`/`buildGraph` + golden round-trip test.
-   Backfill the Manual observation graph into the intrinsic (`data_source_id IS NULL`) rows.
-2. **`contribution_attachment` (with `negate`)** — metrics-binding first
-   (`target_source_id` FK), then policy/access; unify hide via `contribution_element.negate`.
-   Remove the `'authored'` literal special-cases + the `exclusions`/`suppressedAttachments`
-   side-channels in `resolve.ts`.
-3. **Observed sources → contributions.** `syncSource` writes `<data_source_id>` rows
-   (per-source replace) instead of a `topology_observations` snapshot; resolve feeds from
-   rows; retire `topology_observations` (or keep as raw audit log).
-4. **Retire** `manual_source_id`/`findManualSourceId`/`ensureManualSource`; on-demand
-   generated columns; optional `product` table. **#375 gap closed; no authored layer left.**
-0. **Cleanup (any time):** `DROP TABLE IF EXISTS manual_source_graph, snmp_credentials`.
+0. **Cleanup** (#379): `DROP TABLE IF EXISTS manual_source_graph, snmp_credentials`.
+1. **`contribution_source`/`element`/`identity`/`link`/`attachment` (migration 016) +
+   `ingestGraph`/`buildGraph` codec + golden round-trip test** (#378). The DB-native
+   storage foundation — every contribution's graph decomposes into these rows.
+2. **Observed sources → contributions** (#381): each external source's latest graph is its
+   own `contribution_source` (`attachment_id` = its attach row), written by
+   `ObservationsService.record()`. `topology_observations` kept as the audit/history log.
+3. **Manual = uniform data source, DB-native** (#387, after reverting the #383–#385 drift):
+   the Manual source's graph is ITS contribution; `read/writeManualGraph(topologyId, graph,
+   sourceId?)`; `resolve()` folds it as the top-priority `authored` input, excluded from the
+   observed-snapshot feed. One-shot `migrateIntrinsicToManual` re-homes any leftover
+   NULL-"intrinsic" contribution into a real Manual source (imperative TS at startup,
+   like `backfillMetricsBindings`).
 
-Backfill is **imperative TS, not SQL** (needs `resolve()`/`attachmentKey` slotting,
-identity keys, audit-don't-drop — like the existing `backfillMetricsBindings`).
+Metrics bindings / access / policy / exclusions ride as `contribution_attachment` rows /
+`presence='hide'` element rows on the relevant source's contribution (the operator's
+choices land on the Manual source). The `resolve.ts` field-merge already branches on
+priority only; the residual `'intrinsic'` sentinel there is the contribution-identity label
+for the top-priority input (it is NOT a storage layer — see #382 / Provenance).
+
+**Not pursued / deferred** (NOT part of this storage design — separate scope): incremental
+per-row editor writes (current editor save is a per-source replace); on-demand generated
+columns / `product` table; the `/datasources/:id` Manual editor's lossy-YAML save and its
+shared-Manual single-topology edit limitation (#362).
 
 ## Risks / open questions
 
