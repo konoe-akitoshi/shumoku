@@ -30,7 +30,10 @@
   import { topologies } from '$lib/stores'
   import type {
     DataSourcePluginInfo,
+    LinkContribution,
+    NodeContribution,
     PluginConfigSchema,
+    ScopeRole,
     SyncMode,
     TopologyDataSource,
   } from '$lib/types'
@@ -210,6 +213,37 @@
         )
       },
       { reflect },
+    )
+  }
+
+  // Composition role = a preset over the three per-source knobs
+  // (topology-source-modes.md). Default Additive (unconstrained union).
+  type CompositionRole = 'additive' | 'scoping' | 'enrichment'
+  function roleOf(s: TopologyDataSource): CompositionRole {
+    if (s.scopeRole === 'scoping') return 'scoping'
+    if (s.nodeContribution === 'anchor') return 'enrichment'
+    return 'additive'
+  }
+  function setRole(source: TopologyDataSource, role: CompositionRole) {
+    const updates: {
+      nodeContribution: NodeContribution
+      linkContribution: LinkContribution
+      scopeRole: ScopeRole | null
+    } =
+      role === 'scoping'
+        ? { nodeContribution: 'scoop', linkContribution: 'add', scopeRole: 'scoping' }
+        : role === 'enrichment'
+          ? { nodeContribution: 'anchor', linkContribution: 'update', scopeRole: null }
+          : { nodeContribution: 'scoop', linkContribution: 'add', scopeRole: null }
+    void mutate(
+      source.id,
+      () => api.topologies.sources.update(ctx.topologyId, source.id, updates),
+      (updated) => {
+        ctx.currentSources = ctx.currentSources.map((s) =>
+          s.id === source.id ? (updated as TopologyDataSource) : s,
+        )
+      },
+      { reflect: true },
     )
   }
 
@@ -588,6 +622,17 @@
                       <option value="manual">Manual</option>
                       <option value="on_view">On View</option>
                       <option value="webhook">Webhook</option>
+                    </select>
+                    <select
+                      class="input"
+                      style="width: 10rem;"
+                      title="How this source composes into the topology"
+                      value={roleOf(source)}
+                      onchange={(e) => setRole(source, e.currentTarget.value as CompositionRole)}
+                    >
+                      <option value="additive">Additive</option>
+                      <option value="scoping">Scoping</option>
+                      <option value="enrichment">Enrichment</option>
                     </select>
                   </div>
 

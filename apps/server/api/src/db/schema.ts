@@ -22,6 +22,7 @@ import migration013 from './migrations/013_drop_legacy_source_columns.sql'
 import migration014 from './migrations/014_manual_graph_to_observations.sql'
 import migration016 from './migrations/016_contribution_store.sql'
 import migration017 from './migrations/017_drop_dead_tables.sql'
+import migration018 from './migrations/018_composition_modes.sql'
 
 /** Ordered list of all migrations */
 const MIGRATIONS: { name: string; sql: string }[] = [
@@ -40,6 +41,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '014_manual_graph_to_observations.sql', sql: migration014 },
   { name: '016_contribution_store.sql', sql: migration016 },
   { name: '017_drop_dead_tables.sql', sql: migration017 },
+  { name: '018_composition_modes.sql', sql: migration018 },
 ]
 
 interface MigrationRecord {

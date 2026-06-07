@@ -9,6 +9,9 @@ import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type {
   DataSource,
   DataSourcePurpose,
+  LinkContribution,
+  NodeContribution,
+  ScopeRole,
   SyncMode,
   TopologyDataSource,
   TopologyDataSourceInput,
@@ -24,6 +27,9 @@ interface TopologyDataSourceRow {
   last_synced_at: number | null
   priority: number
   options_json: string | null
+  node_contribution: string
+  link_contribution: string
+  scope_role: string | null
   created_at: number
   updated_at: number
   // Joined columns from data_sources
@@ -48,6 +54,9 @@ function rowToTopologyDataSource(row: TopologyDataSourceRow): TopologyDataSource
     lastSyncedAt: row.last_synced_at || undefined,
     priority: row.priority,
     optionsJson: row.options_json || undefined,
+    nodeContribution: (row.node_contribution as NodeContribution) || 'scoop',
+    linkContribution: (row.link_contribution as LinkContribution) || 'add',
+    scopeRole: (row.scope_role as ScopeRole) || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -213,11 +222,16 @@ export class TopologySourcesService {
       syncMode: syncModeInput,
       priority,
       optionsJson,
+      nodeContribution,
+      linkContribution,
+      scopeRole,
     }: TopologyDataSourceInput,
   ): Promise<TopologyDataSource> {
     const id = await generateId()
     const now = timestamp()
     const syncMode = syncModeInput || 'manual'
+    const nodeContrib = nodeContribution ?? 'scoop'
+    const linkContrib = linkContribution ?? 'add'
 
     // Generate webhook secret if webhook mode
     const webhookSecret = syncMode === 'webhook' ? crypto.randomBytes(32).toString('hex') : null
@@ -229,6 +243,9 @@ export class TopologySourcesService {
       purpose,
       syncMode,
       priority: priority ?? 0,
+      nodeContribution: nodeContrib,
+      linkContribution: linkContrib,
+      scopeRole: scopeRole ?? undefined,
       createdAt: now,
       updatedAt: now,
     }
@@ -236,8 +253,8 @@ export class TopologySourcesService {
     this.db
       .query(
         `INSERT INTO topology_data_sources
-        (id, topology_id, data_source_id, purpose, sync_mode, webhook_secret, priority, options_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, topology_id, data_source_id, purpose, sync_mode, webhook_secret, priority, options_json, node_contribution, link_contribution, scope_role, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -248,6 +265,9 @@ export class TopologySourcesService {
         webhookSecret,
         priority ?? 0,
         optionsJson ?? null,
+        nodeContrib,
+        linkContrib,
+        scopeRole ?? null,
         now,
         now,
       )
@@ -260,7 +280,15 @@ export class TopologySourcesService {
    */
   update(
     id: string,
-    updates: Partial<Pick<TopologyDataSourceInput, 'syncMode' | 'priority' | 'optionsJson'>>,
+    updates: Partial<
+      Pick<
+        TopologyDataSourceInput,
+        'syncMode' | 'priority' | 'optionsJson' | 'nodeContribution' | 'linkContribution'
+      >
+    > & {
+      // null clears scopeRole back to additive; undefined leaves it unchanged.
+      scopeRole?: ScopeRole | null
+    },
   ): TopologyDataSource | null {
     const existing = this.get(id)
     if (!existing) return null
@@ -289,6 +317,21 @@ export class TopologySourcesService {
     if (updates.optionsJson !== undefined) {
       updateParts.push('options_json = ?')
       values.push(updates.optionsJson)
+    }
+
+    if (updates.nodeContribution !== undefined) {
+      updateParts.push('node_contribution = ?')
+      values.push(updates.nodeContribution)
+    }
+
+    if (updates.linkContribution !== undefined) {
+      updateParts.push('link_contribution = ?')
+      values.push(updates.linkContribution)
+    }
+
+    if (updates.scopeRole !== undefined) {
+      updateParts.push('scope_role = ?')
+      values.push(updates.scopeRole ?? null)
     }
 
     if (updateParts.length === 0) return existing

@@ -56,4 +56,11 @@ describe('migration chain (001-014)', () => {
       expect(cols).toContain(c)
     }
   })
+
+  test('topology_data_sources has composition-mode columns (018)', () => {
+    const cols = columns('topology_data_sources')
+    for (const c of ['node_contribution', 'link_contribution', 'scope_role']) {
+      expect(cols).toContain(c)
+    }
+  })
 })
