@@ -269,8 +269,9 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
  * Capability dispatch (autoscan → scan(), else fetchTopology()),
  * records the result as an observation snapshot, updates the
  * retraction hysteresis counter, and invalidates the parsed-topology
- * cache so the next render runs resolve(). `content_json` is never
- * touched here — that 's the authored layer, owned by the editor.
+ * cache so the next render runs resolve(). This records ONLY this source's
+ * own contribution; the project overlay (operator curation) and other
+ * sources' contributions are never touched here.
  *
  * Replaces the legacy multi-source-merge implementation; multi-source
  * folding now happens at read time inside `resolve()`. Use

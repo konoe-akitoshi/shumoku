@@ -20,7 +20,8 @@
 // 新規: 観測モデル用の共通型
 export interface Provenance {
   /** 観測したソースの識別子。`Alert.source` と同じ規約で open string。
-   *  'authored' は人の編集（authored layer）を意味する予約語。 */
+   *  'intrinsic' は project overlay（人の編集＝最優先 contribution）の由来を示す
+   *  予約語。これは **provenance ラベル**であって別の保存層ではない。 */
   source: string
 
   /** resolver が埋める。snapshot 内では未設定でよい。 */

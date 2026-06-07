@@ -15,10 +15,11 @@
  *             suppressedAttachments?: string[]|null } // node: keys to remove
  *     → { effective: EffectiveDiscoveryPolicy }
  *
- * The overlay lives on the topology's intrinsic contribution (the project's own
- * authored layer — no Manual data source is created). A node that exists ONLY in a discovered
- * snapshot just works — detection already grabbed it, so we materialize a
- * minimal authored entry from its resolved identity and apply the
+ * The overlay lives on the PROJECT OVERLAY — the project's own top-priority
+ * contribution (`attachment_id` NULL, `source_id='intrinsic'`). It is NOT a data
+ * source: writing it never creates/attaches a Manual source. A node that exists
+ * ONLY in a discovered snapshot just works — detection already grabbed it, so we
+ * materialize a minimal overlay entry from its resolved identity and apply the
  * attachments. (Subgraph scope still 409s — a discovered-only subgraph has
  * no identity to materialize from.)
  *

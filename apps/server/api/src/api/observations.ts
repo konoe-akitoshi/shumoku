@@ -190,12 +190,11 @@ export function createObservationsRoute(): Hono {
   })
 
   // Resolved graph — the project 's current rendered graph.
-  // `TopologyService.parseTopology()` already runs `resolve()` over
-  // Manual + every attached source 's latest observation, so
-  // `parsed.graph` IS the resolved graph. The previous version of
-  // this endpoint re-ran `resolve()` with `parsed.graph` as the
-  // authored layer AND the same latest snapshots again, which
-  // double-counted every link (a snapshot of 7 links came out as 14).
+  // `TopologyService.parseTopology()` already runs `resolve()` over the project
+  // overlay + every attached source 's contribution, so `parsed.graph` IS the
+  // resolved graph. The previous version of this endpoint re-ran `resolve()` with
+  // `parsed.graph` as the `authored` input AND the same latest snapshots again,
+  // which double-counted every link (a snapshot of 7 links came out as 14).
   // Just hand back what parseTopology already computed.
   app.get('/:id/resolved', async (c) => {
     const id = c.req.param('id')
@@ -205,7 +204,7 @@ export function createObservationsRoute(): Hono {
       if (!parsed) return c.json({ error: 'not found' }, 404)
 
       // snapshotCount stays useful — it tells the UI how many sources
-      // were folded in beyond the authored Manual graph.
+      // were folded in beyond the project overlay.
       const snapshotCount = observations
         .latestPerSource(id)
         .filter((o) => o.sourceId !== parsed.topologySourceId || o.graph !== null).length

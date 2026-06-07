@@ -82,7 +82,7 @@ protocol-probes の orchestrator が落とし所を見失う。
 | **Zabbix(topology+metrics) 単体** | Zabbix | Zabbix | 同上 |
 | Zabbix + Discovery | 両方 topology | Zabbix | 同上 + resolve() |
 | 全部 (NetBox + Zabbix + Discovery) | 3 つの topology source | Zabbix | 同上、merge は同じ機構 |
-| **authored + どれか** | authored layer + N sources | … | identity bind が要 |
+| **overlay + どれか** | project overlay + N sources | … | identity bind が要 |
 
 「全部入り」も「単体」もすべて同じ resolve() の入力本数違い、というのが**観測モデル
 の旨味**。code path が分岐しない。

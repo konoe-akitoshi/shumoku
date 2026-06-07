@@ -1029,8 +1029,8 @@ export class TopologyService {
     }
     // Source priority feeds the resolver's field merge: when two sources
     // observe the same device, the higher-priority source wins each field it
-    // holds. Mirrors `topology_data_sources.priority`. The Manual/authored
-    // contribution always outranks these (handled inside resolve()).
+    // holds. Mirrors `topology_data_sources.priority`. The project overlay
+    // always outranks these (handled inside resolve() as the `authored` input).
     const priorityBySource = new Map<string, number>()
     for (const tds of this.topologySources.listByTopology(topology.id)) {
       priorityBySource.set(tds.dataSourceId, tds.priority)
@@ -1127,9 +1127,9 @@ export class TopologyService {
    * in `topology_observations` but no `contribution_source` row yet. Without this,
    * its nodes would vanish from the diagram until the next sync — and a manual-mode
    * source might never auto-resync. So for each attached topology source that lacks
-   * a contribution, materialize its latest non-failed audit snapshot (mirrors the
-   * intrinsic's lazy backfill in `readManualGraph`). Idempotent: once a contribution
-   * exists, the source is skipped, so this degrades to a cheap existence check.
+   * a contribution, materialize its latest non-failed audit snapshot. Idempotent:
+   * once a contribution exists, the source is skipped, so this degrades to a cheap
+   * existence check.
    *
    * GUARD on `lastSyncedAt != null` — the "data exists IFF attached AND synced"
    * invariant. A freshly (re-)attached source (incl. after a bulk source replace)
@@ -1309,8 +1309,10 @@ export class TopologyService {
   }
 
   /**
-   * Read the pre-DB-native authored graph from legacy Manual observations. A
-   * topology may have had MULTIPLE Manual sources (#370), so merge them.
+   * MIGRATION-ONLY: read the pre-refactor operator content from legacy Manual
+   * observations (a topology may have had MULTIPLE Manual sources, #370), so
+   * `migrateManualToProject` can fold it into the project overlay. Not used by the
+   * live read path.
    */
   private readLegacyManualObservation(topologyId: string): NetworkGraph | null {
     const manualSources = this.db
@@ -1401,7 +1403,7 @@ export class TopologyService {
     let migrated = 0
     for (const { topology_id } of topoRows) {
       // Merge every Manual source's contribution + any legacy Manual observation
-      // for this topology (the old `readManualGraph` semantics).
+      // for this topology (one-shot fold of all pre-refactor operator content).
       const manualSources = this.db
         .query(
           `SELECT ds.id AS id FROM topology_data_sources tds
@@ -1545,9 +1547,8 @@ export class TopologyService {
 
   /**
    * Invalidate every topology attached to a given data source. Used when the
-   * data source itself changes (config edit — e.g. a Manual source's authored
-   * graph lives in its config_json — or deletion) so attached topologies don't
-   * serve a stale resolved artifact.
+   * data source itself changes (config edit — priority / connection — or
+   * deletion) so attached topologies don't serve a stale resolved artifact.
    */
   clearCacheForDataSource(dataSourceId: string): void {
     const rows = this.db

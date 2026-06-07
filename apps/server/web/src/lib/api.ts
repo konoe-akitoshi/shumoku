@@ -278,7 +278,7 @@ export const topologies = {
       scoped(`/topologies/${id}/graph`, `/topologies/${id}/graph`),
     ),
 
-  /** Resolved graph = authored layer folded with latest snapshot per source. */
+  /** Resolved graph = project overlay folded with each attached source's contribution. */
   getResolved: (id: string) =>
     request<{ graph: NetworkGraph; snapshotCount: number }>(`/topologies/${id}/resolved`),
 
