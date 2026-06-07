@@ -1107,6 +1107,7 @@ export class TopologyService {
     topologyId: string,
     priorityBySource: Map<string, number>,
   ): SnapshotEntry[] {
+    this.backfillObservedContributions(topologyId)
     const rows = this.db
       .query(
         `SELECT source_id, last_status, last_ok_at
@@ -1132,6 +1133,53 @@ export class TopologyService {
       })
     }
     return snapshots
+  }
+
+  /**
+   * One-time lazy backfill of observed contributions from the legacy audit log.
+   *
+   * A source attached AND synced before the stage-3 cutover has its latest graph
+   * in `topology_observations` but no `contribution_source` row yet. Without this,
+   * its nodes would vanish from the diagram until the next sync — and a manual-mode
+   * source might never auto-resync. So for each attached topology source that lacks
+   * a contribution, materialize its latest non-failed audit snapshot (mirrors the
+   * intrinsic's lazy backfill in `readManualGraph`). Idempotent: once a contribution
+   * exists, the source is skipped, so this degrades to a cheap existence check.
+   */
+  private backfillObservedContributions(topologyId: string): void {
+    const have = new Set(
+      (
+        this.db
+          .query(
+            'SELECT source_id FROM contribution_source WHERE topology_id = ? AND attachment_id IS NOT NULL',
+          )
+          .all(topologyId) as { source_id: string }[]
+      ).map((r) => r.source_id),
+    )
+    for (const tds of this.topologySources.listByPurpose(topologyId, 'topology')) {
+      if (tds.dataSource?.type === 'manual') continue
+      if (have.has(tds.dataSourceId)) continue
+      const row = this.db
+        .query(
+          `SELECT graph_json, status, captured_at
+           FROM topology_observations
+           WHERE topology_id = ? AND source_id = ? AND status != 'failed' AND graph_json IS NOT NULL
+           ORDER BY captured_at DESC, rowid DESC
+           LIMIT 1`,
+        )
+        .get(topologyId, tds.dataSourceId) as
+        | { graph_json: string; status: string; captured_at: number }
+        | undefined
+      if (!row) continue
+      const graph = JSON.parse(row.graph_json) as NetworkGraph
+      ingestGraph(
+        topologyId,
+        tds.dataSourceId,
+        graph,
+        { attachmentId: tds.id, lastStatus: row.status, lastOkAt: row.captured_at },
+        this.db,
+      )
+    }
   }
 
   /**

@@ -11,9 +11,9 @@
  * `contribution_*` store (one `contribution_source` row per attached source,
  * decomposed into queryable element/link/attachment rows). `record()` is the
  * single choke point every observed writer funnels through, so it materializes
- * that contribution here too: append the audit row, then ingest the graph into
- * the contribution store (current-state table + event log; see
- * db-native-persistence.md).
+ * that contribution here too: ingest the graph into the contribution store
+ * (canonical) and then append the audit row (history) — current-state table +
+ * event log; see db-native-persistence.md.
  *
  * Design references:
  *   - apps/server/docs/design/db-native-persistence.md
@@ -118,6 +118,13 @@ export class ObservationsService {
 
     const graphJson = input.graph ? JSON.stringify(input.graph) : null
 
+    // Canonical write FIRST: materialize the observed contribution (the DB-native
+    // state the resolver reads). Doing it before the audit insert means a failed
+    // canonical write throws WITHOUT leaving an audit row that claims a snapshot
+    // the diagram never applied — the audit log can only ever lag the canonical
+    // state, never lead it.
+    this.materializeContribution(input)
+
     this.db
       .query(
         `INSERT INTO topology_observations (
@@ -148,12 +155,6 @@ export class ObservationsService {
       console.warn('[Observations] prune failed:', err instanceof Error ? err.message : err)
     }
 
-    // Materialize this snapshot into the canonical observed contribution (the
-    // DB-native state the resolver reads). The audit row above stays for history;
-    // this row is the current-state projection. Errors propagate — a failed
-    // canonical write must surface, not silently leave the diagram stale.
-    this.materializeContribution(input)
-
     return {
       id,
       topologyId: input.topologyId,
@@ -175,17 +176,21 @@ export class ObservationsService {
    * The contribution is keyed by `(topology_id, source_id = data_sources.id)` and
    * owned by its topology-purpose attach row (`attachment_id`), so detaching the
    * source cascades the contribution away. Skipped when:
-   *   - `status === 'failed'` / no graph — a failed scan carries no information,
-   *     so it must NOT replace the source's last-good contribution (C7);
+   *   - `status === 'failed'` — a failed scan carries no information, so it must
+   *     NOT replace the source's last-good contribution (C7);
    *   - the source isn't attached for the `topology` purpose (preview scans,
    *     metrics-only sources) — there is nothing to contribute to the graph;
    *   - the source is a Manual one — its graph is the intrinsic contribution,
-   *     written via `TopologyService.writeManualGraph`, not an observation.
-   * `empty` IS ingested: a successful empty scan is real evidence of absence and
-   * must retract the source's prior nodes.
+   *     written via `TopologyService.writeManualGraph`, not an observation;
+   *   - this snapshot is OLDER than the stored contribution — out-of-order
+   *     delivery (a slow scan landing after a newer one) must not regress the
+   *     canonical state. Preserves the old `MAX(captured_at)` selection.
+   * A non-failed snapshot with no graph is a malformed `empty`; it is normalized
+   * to an empty graph so a successful empty scan still retracts the source's prior
+   * nodes (successful absence is real evidence).
    */
   private materializeContribution(input: RecordObservationInput): void {
-    if (input.status === 'failed' || !input.graph) return
+    if (input.status === 'failed') return
     const attach = this.db
       .query(
         `SELECT tds.id AS attach_id, ds.type AS ds_type
@@ -195,10 +200,22 @@ export class ObservationsService {
       )
       .get(input.topologyId, input.sourceId) as { attach_id: string; ds_type: string } | undefined
     if (!attach || attach.ds_type === 'manual') return
+    // Out-of-order guard: never let a strictly older scan replace newer canonical
+    // state (re-applying the same capturedAt is fine — idempotent replace).
+    const existing = this.db
+      .query('SELECT last_ok_at FROM contribution_source WHERE topology_id = ? AND source_id = ?')
+      .get(input.topologyId, input.sourceId) as { last_ok_at: number | null } | undefined
+    if (existing?.last_ok_at != null && input.capturedAt < existing.last_ok_at) return
+    const graph: NetworkGraph = input.graph ?? {
+      version: '1',
+      name: '',
+      nodes: [],
+      links: [],
+    }
     ingestGraph(
       input.topologyId,
       input.sourceId,
-      input.graph,
+      graph,
       { attachmentId: attach.attach_id, lastStatus: input.status, lastOkAt: input.capturedAt },
       this.db,
     )

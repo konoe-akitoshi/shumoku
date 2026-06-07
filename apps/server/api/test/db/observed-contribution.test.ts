@@ -221,4 +221,83 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
     const names = await sysNames(topo.id)
     expect(names.filter((n) => n === 'authored')).toEqual(['authored'])
   })
+
+  test('an out-of-order (older) scan does not regress newer canonical state', async () => {
+    const topo = await svc.create({ name: 'ooo' })
+    const nb = insertDataSource('netbox', 'nb_ooo')
+    attachSource(topo.id, nb, 'topology')
+
+    // Newer scan lands first...
+    await obs.record({
+      topologyId: topo.id,
+      sourceId: nb,
+      capturedAt: 2000,
+      status: 'ok',
+      graph: graphWith('newer'),
+    })
+    // ...then a delayed older scan arrives. It must NOT overwrite the newer graph.
+    await obs.record({
+      topologyId: topo.id,
+      sourceId: nb,
+      capturedAt: 1000,
+      status: 'ok',
+      graph: graphWith('older'),
+    })
+
+    const names = await sysNames(topo.id)
+    expect(names).toContain('newer')
+    expect(names).not.toContain('older')
+    // Both scans still recorded in the audit log (history is complete).
+    expect(auditCount(topo.id, nb)).toBe(2)
+  })
+
+  test('detaching a metrics attachment leaves the topology contribution intact', async () => {
+    const topo = await svc.create({ name: 'dual' })
+    const ds = insertDataSource('zabbix', 'zbx_dual')
+    attachSource(topo.id, ds, 'topology')
+    attachSource(topo.id, ds, 'metrics')
+    await obs.record({
+      topologyId: topo.id,
+      sourceId: ds,
+      capturedAt: timestamp(),
+      status: 'ok',
+      graph: graphWith('dual-node'),
+    })
+    expect(contribCount(topo.id, ds)).toBe(1)
+
+    // Remove ONLY the metrics attach row. The contribution is owned by the
+    // topology attach row, so the FK cascade must not touch it.
+    getDatabase()
+      .query('DELETE FROM topology_data_sources WHERE id = ?')
+      .run(`tds_${topo.id}_${ds}_metrics`)
+    expect(contribCount(topo.id, ds)).toBe(1)
+    expect(await sysNames(topo.id)).toContain('dual-node')
+
+    // Removing the topology attach row DOES cascade the contribution away.
+    getDatabase()
+      .query('DELETE FROM topology_data_sources WHERE id = ?')
+      .run(`tds_${topo.id}_${ds}_topology`)
+    expect(contribCount(topo.id, ds)).toBe(0)
+  })
+
+  test('legacy audit snapshots are lazily backfilled into contributions on read', async () => {
+    const topo = await svc.create({ name: 'backfill' })
+    const nb = insertDataSource('netbox', 'nb_backfill')
+    attachSource(topo.id, nb, 'topology')
+
+    // Simulate a pre-stage-3 state: a successful audit row exists but no
+    // contribution (write the audit row directly, bypassing record()).
+    getDatabase()
+      .query(
+        `INSERT INTO topology_observations
+           (id, topology_id, source_id, captured_at, status, graph_json, node_count, link_count, port_count, created_at)
+         VALUES (?, ?, ?, ?, 'ok', ?, 1, 0, 0, ?)`,
+      )
+      .run('obs_legacy_1', topo.id, nb, 1234, JSON.stringify(graphWith('legacy-node')), timestamp())
+    expect(contribCount(topo.id, nb)).toBe(0)
+
+    // First resolve backfills the contribution and renders the node.
+    expect(await sysNames(topo.id)).toContain('legacy-node')
+    expect(contribCount(topo.id, nb)).toBe(1)
+  })
 })
