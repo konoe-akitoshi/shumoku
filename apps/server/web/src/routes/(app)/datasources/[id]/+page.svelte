@@ -29,8 +29,8 @@
   let saving = $state(false)
   let testResult = $state<ConnectionResult | null>(null)
   let testing = $state(false)
-  // Form state. Config is rendered + edited via <SchemaForm> from the plugin's
-  // configSchema — generic across all data source types.
+  // Form state. Non-manual config is rendered + edited via <SchemaForm> from
+  // the plugin's configSchema; Manual keeps the graph editor below.
   let formName = $state('')
   let config = $state<Record<string, unknown>>({})
   let pluginTypes = $state<DataSourcePluginInfo[]>([])
