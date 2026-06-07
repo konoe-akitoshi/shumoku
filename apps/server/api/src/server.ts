@@ -481,11 +481,14 @@ export class Server {
     this.topologySourcesService = new TopologySourcesService()
     this.dataSourceService = new DataSourceService()
     await this.topologyService.initializeSample()
+    // One-shot: retire the legacy Manual data source (authored graph is the
+    // intrinsic contribution now; salvages any unmigrated graph first). MUST run
+    // before backfillMetricsBindings — that path writes the intrinsic (via
+    // reconcileBindings), which would make retirement's "intrinsic already
+    // populated → skip salvage" guard fire and drop the un-salvaged Manual graph.
+    this.topologyService.retireManualSources()
     // One-shot: migrate legacy mapping_json → identity-keyed metrics bindings.
     await this.topologyService.backfillMetricsBindings()
-    // One-shot: retire the legacy Manual data source (authored graph is the
-    // intrinsic contribution now; salvages any unmigrated graph first).
-    this.topologyService.retireManualSources()
 
     await this.topologyManager.loadAll()
     console.log(

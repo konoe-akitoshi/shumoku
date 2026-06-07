@@ -46,9 +46,10 @@
     { slug: 'resolved', label: 'Resolved' },
   ] as const
 
-  let zone = $derived.by<'sources' | 'composition' | 'settings' | null>(() => {
+  let zone = $derived.by<'sources' | 'composition' | 'settings' | 'edit' | null>(() => {
     if (activeSlug === 'sources') return 'sources'
     if (activeSlug === 'settings') return 'settings'
+    if (activeSlug === 'edit') return 'edit'
     if (COMPOSITION_SLUGS.includes(activeSlug)) return 'composition'
     return null
   })

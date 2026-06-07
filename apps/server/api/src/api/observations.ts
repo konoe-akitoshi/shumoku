@@ -102,12 +102,15 @@ export function createObservationsRoute(): Hono {
   // which is the RESOLVED render graph.)
   app.get('/:id/intrinsic', (c) => {
     const id = c.req.param('id')
-    const graph = getTopologyService().readIntrinsicGraph(id)
-    return c.json({ graph })
+    const svc = getTopologyService()
+    if (!svc.get(id)) return c.json({ error: 'Topology not found' }, 404)
+    return c.json({ graph: svc.readIntrinsicGraph(id) })
   })
 
   app.put('/:id/intrinsic', async (c) => {
     const id = c.req.param('id')
+    const svc = getTopologyService()
+    if (!svc.get(id)) return c.json({ error: 'Topology not found' }, 404)
     try {
       const body = await c.req.json<{ graph: unknown }>()
       if (!body.graph || typeof body.graph !== 'object') {
@@ -117,7 +120,7 @@ export function createObservationsRoute(): Hono {
       if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
         return c.json({ error: 'graph.nodes and graph.links must be arrays' }, 400)
       }
-      getTopologyService().writeIntrinsicGraph(id, graph)
+      svc.writeIntrinsicGraph(id, graph)
       return c.json({ ok: true }, 200)
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)

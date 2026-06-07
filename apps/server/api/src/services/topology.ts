@@ -855,7 +855,8 @@ export class TopologyService {
       .query(
         `SELECT ds.id AS id FROM topology_data_sources tds
          JOIN data_sources ds ON ds.id = tds.data_source_id
-         WHERE tds.topology_id = ? AND ds.type = 'manual'`,
+         WHERE tds.topology_id = ? AND ds.type = 'manual'
+         ORDER BY ds.created_at ASC, ds.id ASC`,
       )
       .all(topologyId) as { id: string }[]
     const graphs: NetworkGraph[] = []
