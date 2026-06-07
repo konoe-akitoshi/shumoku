@@ -19,7 +19,6 @@ async function fixture(
   name: string,
 ): Promise<{ topoId: string; nodeAId: string; metricsId: string }> {
   const topo = await svc.create({ name })
-  const manualId = await svc.ensureManualSource(topo.id)
   const graph: NetworkGraph = {
     version: '1',
     name,
@@ -41,7 +40,7 @@ async function fixture(
     ],
     links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
   } as NetworkGraph
-  await svc.writeManualGraph(topo.id, manualId, graph)
+  await svc.writeManualGraph(topo.id, graph)
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)

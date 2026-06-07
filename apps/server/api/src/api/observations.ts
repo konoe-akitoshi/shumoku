@@ -179,9 +179,11 @@ export function createObservationsRoute(): Hono {
       if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
         return c.json({ error: 'graph.nodes and graph.links must be arrays' }, 400)
       }
-      // Manual save → the intrinsic contribution (authored layer), not an observation.
+      // Manual save → the Manual source's own contribution (DB-native), not an
+      // observation row. Manual is a uniform source; writeManualGraph ingests its
+      // graph keyed by its attach row, like any source.
       if (isManualForTopology(topologyId, sourceId)) {
-        getTopologyService().writeManualGraph(topologyId, sourceId, graph)
+        await getTopologyService().writeManualGraph(topologyId, graph)
         return c.json({ ok: true }, 201)
       }
       const observation = await observations.record({

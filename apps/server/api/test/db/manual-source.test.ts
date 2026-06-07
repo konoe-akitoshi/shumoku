@@ -4,7 +4,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, getDatabase, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
+import { getDatabase, setupTempDb, type TempDb } from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -22,90 +22,83 @@ const g = (nodeId: string): NetworkGraph =>
     links: [],
   }) as NetworkGraph
 
-describe('Manual = uniform data source (authored graph as the intrinsic contribution)', () => {
-  test('attachManualSource seeds config {} (no graph) and reads null until saved', async () => {
+describe('Manual = a uniform data source (its graph is its own contribution)', () => {
+  test('no Manual source until something is written → readManualGraph is null', async () => {
     const topo = await svc.create({ name: 'm1' })
-    const manualId = await svc.ensureManualSource(topo.id)
-    const cfg = getDatabase()
-      .query('SELECT config_json FROM data_sources WHERE id = ?')
-      .get(manualId) as { config_json: string }
-    expect(JSON.parse(cfg.config_json).graph).toBeUndefined()
-    expect(svc.readManualGraph(topo.id, manualId)).toBeNull()
+    expect(svc.findManualSourceId(topo.id)).toBeUndefined()
+    expect(svc.readManualGraph(topo.id)).toBeNull()
   })
 
-  test('writeManualGraph stores the intrinsic contribution; readManualGraph + resolve see it', async () => {
+  test('writeManualGraph find-or-creates a Manual data source and stores its contribution (attachment_id set)', async () => {
     const topo = await svc.create({ name: 'm2' })
-    await svc.writeManualGraph(topo.id, 'intrinsic', g('a'))
+    await svc.writeManualGraph(topo.id, g('a'))
 
-    // Stored in the contribution store (intrinsic = attachment_id NULL), NOT an observation.
+    // A real type='manual' data source now exists, attached to the topology.
+    const manualId = svc.findManualSourceId(topo.id)
+    expect(manualId).toBeDefined()
+    const ds = getDatabase().query('SELECT type FROM data_sources WHERE id = ?').get(manualId) as
+      | { type: string }
+      | undefined
+    expect(ds?.type).toBe('manual')
+
+    // Its graph is its OWN contribution — attachment_id SET (equal to any source),
+    // NOT a NULL "intrinsic" row.
     const src = getDatabase()
       .query(
-        'SELECT source_id FROM contribution_source WHERE topology_id = ? AND attachment_id IS NULL',
+        'SELECT source_id, attachment_id FROM contribution_source WHERE topology_id = ? AND source_id = ?',
       )
-      .get(topo.id) as { source_id: string } | undefined
+      .get(topo.id, manualId) as { source_id: string; attachment_id: string | null } | undefined
     expect(src).toBeDefined()
-    const node = getDatabase()
-      .query("SELECT local_id FROM contribution_element WHERE topology_id = ? AND kind = 'node'")
-      .get(topo.id) as { local_id: string } | undefined
-    expect(node?.local_id).toBe('a')
+    expect(src?.attachment_id).not.toBeNull()
+    // No NULL-"intrinsic" row exists (bun:sqlite .get() returns null for no row).
+    const intrinsic = getDatabase()
+      .query('SELECT 1 FROM contribution_source WHERE topology_id = ? AND attachment_id IS NULL')
+      .get(topo.id)
+    expect(intrinsic).toBeNull()
 
     expect(svc.readManualGraph(topo.id)?.nodes?.[0]?.id).toBe('a')
     const parsed = await svc.getParsed(topo.id)
     expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
   })
 
-  test('latest write wins on re-save (intrinsic is replaced)', async () => {
+  test('latest write wins on re-save (the Manual contribution is replaced)', async () => {
     const topo = await svc.create({ name: 'm3' })
-    await svc.writeManualGraph(topo.id, 'intrinsic', g('first'))
-    await svc.writeManualGraph(topo.id, 'intrinsic', g('second'))
+    await svc.writeManualGraph(topo.id, g('first'))
+    await svc.writeManualGraph(topo.id, g('second'))
     expect(svc.readManualGraph(topo.id)?.nodes?.[0]?.id).toBe('second')
+    // Still exactly one Manual source for THIS topology (find-or-create, not spawn-per-save).
+    const count = (
+      getDatabase()
+        .query(
+          `SELECT COUNT(*) AS c FROM topology_data_sources tds
+           JOIN data_sources ds ON ds.id = tds.data_source_id
+           WHERE tds.topology_id = ? AND ds.type = 'manual'`,
+        )
+        .get(topo.id) as { c: number }
+    ).c
+    expect(count).toBe(1)
   })
+})
 
-  test('multiple legacy Manual sources merge into one intrinsic on backfill (no data loss, no UNIQUE clash)', async () => {
-    // A pre-cutover topology with TWO Manual sources, each a legacy observation that
-    // overlaps (same link id, same topology-default attachment key, distinct nodes).
-    const topo = await svc.create({ name: 'mm' })
-    const db = getDatabase()
-    const recordManual = (sid: string, graph: NetworkGraph) => {
-      insertDataSource('manual', sid)
-      attachSource(topo.id, sid, 'topology')
-      db.query(
-        `INSERT INTO topology_observations (id, topology_id, source_id, captured_at, status, graph_json, node_count, link_count, port_count, created_at)
-         VALUES (?, ?, ?, ?, 'ok', ?, 0, 0, 0, ?)`,
-      ).run(`obs_${sid}`, topo.id, sid, 1, JSON.stringify(graph), 1)
-    }
-    recordManual('man-a', {
-      version: '1',
-      name: 'A',
-      description: 'kept',
-      settings: { paperSize: 'A4' },
-      nodes: [{ id: 'na', label: 'NA', ports: [{ id: 'p', label: 'p' }] }],
-      links: [{ id: 'shared', from: { node: 'na', port: 'p' }, to: { node: 'na', port: 'p' } }],
-      attachments: [{ kind: 'access', protocol: 'snmp', community: 'x' }],
-    } as NetworkGraph)
-    recordManual('man-b', {
-      version: '1',
-      name: 'B',
-      nodes: [{ id: 'nb', label: 'NB', ports: [{ id: 'p', label: 'p' }] }],
-      // SAME link id + SAME topology-default key as A — must be deduped, not double-inserted.
-      links: [{ id: 'shared', from: { node: 'nb', port: 'p' }, to: { node: 'nb', port: 'p' } }],
-      attachments: [{ kind: 'access', protocol: 'snmp', community: 'y' }],
-    } as NetworkGraph)
+describe('migrateIntrinsicToManual — re-home the legacy NULL-intrinsic into a Manual source', () => {
+  test('re-homes a NULL-intrinsic contribution into a real Manual data source', async () => {
+    const topo = await svc.create({ name: 'mig' })
+    // Simulate a pre-correction DB: an authored graph stored as the NULL "intrinsic"
+    // contribution (source_id='intrinsic', attachment_id NULL), no Manual source.
+    const { ingestGraph } = await import('../../src/services/contribution-store.ts')
+    ingestGraph(topo.id, 'intrinsic', g('legacy'), { attachmentId: null }, getDatabase())
+    // (one-shot guard may be set from a prior test's run — clear it for this DB)
+    getDatabase().query("DELETE FROM settings WHERE key = 'intrinsic_to_manual_migrated'").run()
 
-    // Backfill (lazy, on first read) must merge both without throwing and keep both nodes.
-    const merged = svc.readManualGraph(topo.id)
-    expect(merged?.nodes?.map((n) => n.id).sort()).toEqual(['na', 'nb'])
-    expect(merged?.links).toHaveLength(1) // 'shared' deduped
-    expect(merged?.attachments).toHaveLength(1) // one slot per key
-    expect(merged?.description).toBe('kept') // graph-level fields preserved
-    expect((merged?.settings as { paperSize?: string })?.paperSize).toBe('A4')
+    await svc.migrateIntrinsicToManual()
 
-    // Idempotent: a second read comes from the intrinsic rows, still merged.
-    expect(
-      svc
-        .readManualGraph(topo.id)
-        ?.nodes?.map((n) => n.id)
-        .sort(),
-    ).toEqual(['na', 'nb'])
+    // The NULL row is gone; the graph now lives in a real Manual source's contribution.
+    const nullRow = getDatabase()
+      .query('SELECT 1 FROM contribution_source WHERE topology_id = ? AND attachment_id IS NULL')
+      .get(topo.id)
+    expect(nullRow).toBeNull()
+    const manualId = svc.findManualSourceId(topo.id)
+    expect(manualId).toBeDefined()
+    expect(svc.readManualGraph(topo.id)?.nodes?.[0]?.id).toBe('legacy')
   })
 })

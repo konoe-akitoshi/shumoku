@@ -385,7 +385,7 @@ export function createDiscoveryPolicyApi(): Hono {
       }
     }
 
-    service.writeManualGraph(topologyId, '', next)
+    await service.writeManualGraph(topologyId, next)
     service.clearCacheEntry(topologyId)
 
     // Recompute the affected effective policy for the response.
@@ -459,7 +459,7 @@ export function createDiscoveryPolicyApi(): Hono {
     }
     const exclusions = [...(authored.exclusions ?? [])]
     if (!exclusions.some((e) => exclusionKey(e) === exclusionKey(ex))) exclusions.push(ex)
-    service.writeManualGraph(topologyId, '', { ...authored, exclusions })
+    await service.writeManualGraph(topologyId, { ...authored, exclusions })
     service.clearCacheEntry(topologyId)
     return c.json({ exclusions })
   })
@@ -475,7 +475,7 @@ export function createDiscoveryPolicyApi(): Hono {
     const exclusions = (authored.exclusions ?? []).filter(
       (e) => exclusionKey(e) !== exclusionKey(ex),
     )
-    service.writeManualGraph(topologyId, '', { ...authored, exclusions })
+    await service.writeManualGraph(topologyId, { ...authored, exclusions })
     service.clearCacheEntry(topologyId)
     return c.json({ exclusions })
   })
@@ -501,7 +501,7 @@ export function createDiscoveryPolicyApi(): Hono {
       attachments: undefined,
       exclusions: undefined,
     }
-    service.writeManualGraph(topologyId, '', cleared)
+    await service.writeManualGraph(topologyId, cleared)
     service.clearCacheEntry(topologyId)
     return c.json({ cleared: true })
   })
