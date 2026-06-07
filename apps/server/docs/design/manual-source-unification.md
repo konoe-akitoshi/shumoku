@@ -3,33 +3,41 @@
 > Status: IMPLEMENTED — merged in PR #370. Issue: #368. Supersedes #361. Builds on the composition-store
 > refactor (`topology-composition-store.md`). No backward compatibility.
 
-> **Known gap — "uniform" is only surface-deep (discovered 2026-06, follow-up).**
-> This doc's claim that Manual is *fully* uniform holds for the **attach API,
-> `resolve()` merge, and Sources UI** — but the **authoring machinery still
-> special-cases Manual**, so the premise doesn't fully hold end-to-end:
+> **✅ Known gap RESOLVED (2026-06, `refactor/project-overlay-contribution`).**
+> The gap below — "uniform is only surface-deep because curation is funneled into
+> an auto-spawned Manual source" — is fixed. Operator curation (exclusions,
+> overrides, metrics bindings, display settings) now lands in the **project
+> overlay**: a project-owned contribution (`contribution_source.attachment_id`
+> NULL, sentinel `source_id='intrinsic'`, one per topology via
+> `idx_contrib_one_intrinsic`), folded by `resolve()` as the top-priority
+> `authored` input. It is **not a data source** — writing it never creates or
+> attaches anything (no phantom spawn, no orphan). A `type='manual'` data source
+> is now reserved for **explicitly-added hand-drawn graphs only**, folded like any
+> ordinary source. A one-shot startup migration (`migrateManualToProject`) moved
+> all legacy Manual content into each topology's overlay and retired the Manual
+> data sources. See `topology.ts` (`readProjectOverlay`/`writeProjectOverlay` vs
+> `writeManualSourceGraph`) and `db-native-persistence.md`.
 >
-> - Human edits (drawn graph, discovery-policy overrides, **metrics mapping**) are
+> --- original gap (kept for history) ---
+>
+> This doc's claim that Manual is *fully* uniform held for the **attach API,
+> `resolve()` merge, and Sources UI** — but the **authoring machinery special-cased
+> Manual**, so the premise didn't hold end-to-end:
+>
+> - Human edits (drawn graph, discovery-policy overrides, **metrics mapping**) were
 >   funneled into "the topology's Manual" via `ensureManualSource()`, which
->   **auto-creates a Manual** on the first edit. No other source type is ever
->   auto-created. So editing the *composed* result spawns a Manual source — which
->   reads as a leaky abstraction (the edit belongs to the project, not a source).
-> - The authored layer assumes **one canonical Manual per topology** (singular
->   `topologies.manual_source_id`; `findManualSourceId` does `… LIMIT 1`). The
->   removed-cardinality "attach many Manuals" is therefore only theoretical — the
->   authoring layer can meaningfully use just one.
-> - **Metrics mapping is not a DB relation.** `reconcileBindings` writes
->   `metrics-binding:${sourceId}` **attachments into the Manual's authored
->   NetworkGraph**, persisted as **JSON in `topology_observations.graph_json`**.
->   There is no binding/attachment table. It's identity-keyed but JSON-stored, not
->   relational.
+>   **auto-created a Manual** on the first edit. No other source type is ever
+>   auto-created. So editing the *composed* result spawned a Manual source — a
+>   leaky abstraction (the edit belongs to the project, not a source).
+> - The authored layer assumed **one canonical Manual per topology**.
+> - **Metrics mapping** wrote `metrics-binding:${sourceId}` attachments into the
+>   Manual's graph.
 >
-> These share one root cause: the authored layer (graph + overrides + mappings) is
-> modeled as "a JSON graph belonging to a Manual source." The target — separate
-> follow-up — is to make project-owned authored data (overrides + bindings) a
-> **DB relation** folded as top-priority in `resolve()`, leaving Manual as a
-> genuinely just-another-source used only for explicit hand-drawn topology. JSON
-> stays at the boundary; the base becomes relational. Not addressed in the
-> #362 PR (that PR only removed the stale one-per-topology *comments*).
+> These shared one root cause: the authored layer (graph + overrides + mappings) was
+> modeled as "a JSON graph belonging to a Manual source." The fix made project-owned
+> authored data a **DB relation** (the project overlay) folded as top-priority in
+> `resolve()`, leaving Manual as a genuinely just-another-source used only for
+> explicit hand-drawn topology.
 
 ## The problem
 

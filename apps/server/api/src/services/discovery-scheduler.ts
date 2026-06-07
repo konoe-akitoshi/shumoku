@@ -171,7 +171,7 @@ export function resolveCredentialsForAutoscan(
 ): Record<string, string> {
   // Credentials live in the authored layer (the intrinsic contribution) — read it
   // unconditionally; do NOT gate on a phantom Manual data source being attached.
-  const graph = topologyService.readManualGraph(topologyId)
+  const graph = topologyService.readProjectOverlay(topologyId)
   if (!graph) return {}
 
   const subgraphLookup = new Map(
@@ -329,7 +329,7 @@ export class DiscoveryScheduler {
     topologyId: string,
   ): Promise<import('@shumoku/core').Attachment[] | undefined> {
     // Topology-default policy lives in the authored layer (intrinsic contribution).
-    const graph = this.topologyService.readManualGraph(topologyId)
+    const graph = this.topologyService.readProjectOverlay(topologyId)
     return graph?.attachments
   }
 

@@ -182,8 +182,9 @@ export class ObservationsService {
    *     NOT replace the source's last-good contribution (C7);
    *   - the source isn't attached for the `topology` purpose (preview scans,
    *     metrics-only sources) — there is nothing to contribute to the graph;
-   *   - the source is a Manual one — its graph is the intrinsic contribution,
-   *     written via `TopologyService.writeManualGraph`, not an observation;
+   *   - the source is a Manual one — a hand-drawn source has no scan; its graph is
+   *     written directly via `TopologyService.writeManualSourceGraph` (the editor),
+   *     not through the observation/scan path;
    *   - this snapshot is OLDER than the stored contribution — out-of-order
    *     delivery (a slow scan landing after a newer one) must not regress the
    *     canonical state. Preserves the old `MAX(captured_at)` selection.

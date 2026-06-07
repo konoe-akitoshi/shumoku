@@ -83,7 +83,6 @@ export interface DataSourceInput {
 export interface Topology {
   id: string
   name: string
-  manualSourceId?: string
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string

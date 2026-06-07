@@ -473,6 +473,20 @@ export const topologies = {
   },
 
   /**
+   * Topology display settings (edge style / spline mode). Project-level
+   * presentation prefs stored on the project overlay — NOT a Manual source.
+   */
+  displaySettings: {
+    get: (id: string) =>
+      request<{ edgeStyle: string; splineMode: string }>(`/topologies/${id}/display-settings`),
+    set: (id: string, body: { edgeStyle: string; splineMode?: string }) =>
+      request<{ ok: boolean }>(`/topologies/${id}/display-settings`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+  },
+
+  /**
    * Discovery policy — per-node / per-subgraph / topology-default
    * overrides for what the scheduler does (auto / observe / disabled)
    * and how often. The server folds the inheritance chain and returns

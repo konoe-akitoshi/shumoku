@@ -14,7 +14,7 @@
    * here, where the operator might be deciding whether the topology
    * is big enough to keep).
    */
-  import { PencilSimpleIcon, TrashIcon } from 'phosphor-svelte'
+  import { TrashIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { api } from '$lib/api'
@@ -42,54 +42,34 @@
 
   // Re-parse if the topology changes (e.g. user navigates [id]).
   $effect(() => {
-    if (ctx.topology?.manualSourceId) void parseGraphSettings()
+    if (ctx.topology?.id) void parseGraphSettings()
   })
 
   /**
-   * edgeStyle / splineMode live on `NetworkGraph.settings` inside the Manual
-   * source's authored graph, which is now a per-topology observation. Read the
-   * latest snapshot; write by recording a new observation.
+   * edgeStyle / splineMode are project-level display prefs, stored on the project
+   * overlay (NOT a Manual source). Read/write via the topology display-settings
+   * endpoint.
    */
   async function parseGraphSettings() {
-    if (!ctx.topology?.manualSourceId) return
+    if (!ctx.topology?.id) return
     try {
-      const snap = await api.topologies.sources.latestSnapshot(
-        ctx.topology.id,
-        ctx.topology.manualSourceId,
-      )
-      const settings = (
-        snap?.graph as { settings?: { edgeStyle?: string; splineMode?: string } } | null
-      )?.settings
-      edgeStyle = settings?.edgeStyle || 'orthogonal'
-      splineMode = settings?.splineMode || 'sloppy'
+      const settings = await api.topologies.displaySettings.get(ctx.topology.id)
+      edgeStyle = settings.edgeStyle || 'orthogonal'
+      splineMode = settings.splineMode || 'sloppy'
     } catch {
       // Use defaults
     }
   }
 
   async function updateEdgeStyle() {
-    if (!ctx.topology?.manualSourceId) return
+    if (!ctx.topology?.id) return
     savingEdgeStyle = true
     try {
-      const snap = await api.topologies.sources.latestSnapshot(
-        ctx.topology.id,
-        ctx.topology.manualSourceId,
-      )
-      const graph = (snap?.graph ?? { version: '1', nodes: [], links: [] }) as unknown as {
-        settings?: Record<string, unknown>
-        [k: string]: unknown
-      }
-      graph.settings = (graph.settings ?? {}) as Record<string, unknown>
-      graph.settings['edgeStyle'] = edgeStyle
-      if (edgeStyle === 'splines') graph.settings['splineMode'] = splineMode
-      else delete graph.settings['splineMode']
-      await api.topologies.sources.recordObservation(
-        ctx.topology.id,
-        ctx.topology.manualSourceId,
-        graph as unknown as Parameters<typeof api.topologies.sources.recordObservation>[2],
-        'ok',
-      )
-      // Edge-style change is a committed observation → re-render the diagram.
+      await api.topologies.displaySettings.set(ctx.topology.id, {
+        edgeStyle,
+        ...(edgeStyle === 'splines' ? { splineMode } : {}),
+      })
+      // Edge-style change is committed to the overlay → re-render the diagram.
       ctx.bumpRevision()
     } catch (e) {
       console.error('Failed to update edge style:', e)
@@ -247,24 +227,6 @@
       </label>
     </div>
   </div>
-
-  <!-- Actions -->
-  {#if ctx.topology?.manualSourceId}
-    <div class="card">
-      <div class="card-header">
-        <h2 class="font-medium text-theme-text-emphasis">Actions</h2>
-      </div>
-      <div class="card-body">
-        <a
-          href="/datasources/{ctx.topology.manualSourceId}"
-          class="btn btn-secondary w-full justify-center"
-        >
-          <PencilSimpleIcon size={16} class="mr-2" />
-          Edit Manual content
-        </a>
-      </div>
-    </div>
-  {/if}
 
   <!-- Danger zone -->
   <div class="card border-danger/30">

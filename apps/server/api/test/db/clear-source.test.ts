@@ -28,7 +28,7 @@ const graphWith = (nodeId: string): NetworkGraph =>
 describe('clear a source (deleteForSource) → resolve sweeps its orphans', () => {
   test('removes only the cleared source contribution; others survive', async () => {
     const topo = await svc.create({ name: 'clear' })
-    await svc.writeManualGraph(topo.id, graphWith('authored-A'))
+    await svc.writeProjectOverlay(topo.id, graphWith('authored-A'))
 
     const nbId = insertDataSource('netbox', 'nb_clear')
     attachSource(topo.id, nbId, 'topology')

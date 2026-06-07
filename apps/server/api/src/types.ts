@@ -90,8 +90,6 @@ export interface DataSourceInput {
 export interface Topology {
   id: string
   name: string
-  /** Id of the Manual source attached to this topology, if any. */
-  manualSourceId?: string
   /**
    * Structure / metrics data source ids. No longer stored on the topology row
    * (sources live in `topology_data_sources`); the `/context` response derives

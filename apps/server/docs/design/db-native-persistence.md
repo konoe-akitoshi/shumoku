@@ -1,8 +1,31 @@
 # DB-native persistence — uniform contributions, one assertion bucket
 
-> Status: ADOPTED (corrected 2026-06-08). Design of record for the DB-native storage of
-> topology contributions. No backward compat. **Read the Canonical model + Drift warning
-> below before changing anything here.**
+> **⚠️ SUPERSEDED IN PART (2026-06, `refactor/project-overlay-contribution`) — read this first.**
+> The storage foundation (contribution_* tables, codec, resolve integration)
+> described below is CURRENT and correct. What changed: **where operator curation
+> lives.** This doc originally said "the operator's choices land on the Manual
+> source" and "an editor edit find-or-creates a `type='manual'` source." That is no
+> longer true and was the root of repeated confusion (Manual sources auto-spawning
+> and orphaning). The corrected model has **two kinds of contribution**:
+>
+> - **Source contributions** (`attachment_id` SET) — every attached source's graph,
+>   INCLUDING an explicitly-added hand-drawn `type='manual'` source. Manual is now
+>   reserved for hand-drawn topology only and folds like any ordinary source.
+> - **The project overlay** (`attachment_id` NULL, sentinel `source_id='intrinsic'`,
+>   one per topology via `idx_contrib_one_intrinsic`) — the operator's curation:
+>   exclusions, field overrides, metrics bindings, display settings. It is owned by
+>   the project, **not a data source**; writing it never creates/attaches anything.
+>   `resolve()` folds it as the top-priority `authored` input.
+>
+> Service surface: `readProjectOverlay`/`writeProjectOverlay` (curation, NULL slot)
+> vs `readManualSourceGraph`/`writeManualSourceGraph` (a hand-drawn source). The
+> one-shot `migrateManualToProject` moved legacy Manual content into the overlay and
+> retired the Manual data sources. `manualSourceId` on `Topology` was removed. Where
+> the text below says "Manual source" for curation, read "project overlay."
+>
+> Status: ADOPTED (corrected 2026-06-08; overlay split 2026-06). Design of record for
+> the DB-native storage of topology contributions. No backward compat. **Read the
+> Canonical model + Drift warning below before changing anything here.**
 >
 > **Shipped (factual timeline):**
 > - **#378** — `contribution_*` store + lossless codec (`ingestGraph`/`buildGraph`). The
@@ -307,14 +330,17 @@ A design doc is not a full DDL; the constraints are proven in code, not prose.
     authoritative, so don't delete — absence ≠ retraction);
   - `failed` → **no write** (keep the prior rows untouched).
   A boolean "did it succeed" is insufficient — these three behaviors need the status.
-- **An editor edit** = write the Manual source's contribution (`writeManualGraph`
-  find-or-creates the `type='manual'` source, then `ingestGraph` into ITS contribution). It
-  is a full per-source replace in one transaction (today's `ingestGraph` is replace-only;
-  incremental per-row writes are a future optimization, not required).
-- **Manual is a normal, visible, equal source** — it appears in the Sources list and is
-  edited as a source (`/datasources/:id` or the topology's Sources). It is NOT
-  auto-attached on topology create (no phantom spawn on a benign action); it appears the
-  first time you edit/override, exactly as #370 specified.
+- **A curation edit** (exclude/override/bind/edge-style) = write the **project
+  overlay** (`writeProjectOverlay` → `ingestGraph` into the NULL-attachment slot). It
+  never creates a data source. Full per-source replace in one transaction (today's
+  `ingestGraph` is replace-only; incremental per-row writes are a future optimization).
+- **A hand-drawn Manual source edit** = `writeManualSourceGraph` ingests into the
+  Manual source's own contribution (`attachment_id` set); the source must already be
+  attached (no find-or-create).
+- **Manual is a normal, visible, equal source** — it appears in the Sources list and
+  is edited as a source (`/datasources/:id` or the topology's Sources). It is added
+  explicitly for hand-drawing; curation does NOT spawn one (no phantom spawn, no
+  orphan). See the banner at the top of this doc for the corrected model.
 
 ## Round-trip codec (lossless `NetworkGraph` ↔ rows)
 
@@ -409,10 +435,11 @@ plan below, WAL, and batched transactions. It is bounded and infrequent, not a w
    like `backfillMetricsBindings`).
 
 Metrics bindings / access / policy / exclusions ride as `contribution_attachment` rows /
-`presence='hide'` element rows on the relevant source's contribution (the operator's
-choices land on the Manual source). The `resolve.ts` field-merge already branches on
-priority only; the residual `'intrinsic'` sentinel there is the contribution-identity label
-for the top-priority input (it is NOT a storage layer — see #382 / Provenance).
+`presence='hide'` element rows on the **project overlay** (`attachment_id` NULL,
+`source_id='intrinsic'`) — the operator's curation, owned by the project, not a Manual
+source. The `resolve.ts` field-merge branches on priority only; the `'intrinsic'`
+sentinel is both the overlay's `source_id` and resolve's top-priority contribution-identity
+label (it is NOT a storage layer — see #382 / Provenance).
 
 **Not pursued / deferred** (NOT part of this storage design — separate scope): incremental
 per-row editor writes (current editor save is a per-source replace); on-demand generated

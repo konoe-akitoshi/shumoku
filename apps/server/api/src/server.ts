@@ -481,10 +481,10 @@ export class Server {
     this.topologySourcesService = new TopologySourcesService()
     this.dataSourceService = new DataSourceService()
     await this.topologyService.initializeSample()
-    // One-shot: re-home any legacy NULL-"intrinsic" authored contribution into a
-    // real Manual data source (corrects the intrinsic drift). MUST run before the
-    // metrics backfill, which writes the authored graph via the Manual path.
-    await this.topologyService.migrateIntrinsicToManual()
+    // One-shot: move operator content out of Manual data sources into each
+    // topology's project overlay, then retire the Manual sources. MUST run before
+    // the metrics backfill, which writes bindings into the project overlay.
+    await this.topologyService.migrateManualToProject()
     // One-shot: migrate legacy mapping_json → identity-keyed metrics bindings.
     await this.topologyService.backfillMetricsBindings()
 

@@ -4,19 +4,21 @@
  *
  * Storage model: the `topologies` table holds only the topology shell
  * (name, share_token, composition_revision). Sources live in
- * `topology_data_sources` (m2m). Each contribution — the project's own authored
- * graph AND every external source's latest observed graph — is stored DB-native
- * in the `contribution_*` store (decomposed into queryable element/link/
- * attachment rows; see db-native-persistence.md). `topology_observations` is now
- * just the append-only audit/history log. The metrics mapping is `metrics-binding`
+ * `topology_data_sources` (m2m). Every contribution is stored DB-native in the
+ * `contribution_*` store (decomposed into queryable element/link/attachment rows;
+ * see db-native-persistence.md). `topology_observations` is now just the
+ * append-only audit/history log. The metrics mapping is `metrics-binding`
  * attachments on the resolved graph (no `mapping_json`); the resolved graph +
  * layout are materialized in `topology_resolved_graph`.
  *
- * The editor 's "save" routes through `writeManualGraph`, which ingests the
- * hand-drawn graph as the **Manual data source's own contribution** (a uniform
- * source, `attachment_id` = its attach row — equal to every other source, just
- * top-priority and hand-edited). There is no `content_json` column and no special
- * "intrinsic" layer; the Manual source is folded by `resolve()` like any source.
+ * Two kinds of contribution, distinguished by `attachment_id`:
+ *   - **source contributions** (`attachment_id` set) — every attached source's
+ *     latest graph, INCLUDING an explicitly-added hand-drawn Manual source. Written
+ *     by sync / the Manual editor (`writeManualSourceGraph`). Folded by priority.
+ *   - **the project overlay** (`attachment_id` NULL, {@link PROJECT_SOURCE}) — the
+ *     operator's curation: exclusions, overrides, metrics bindings, display
+ *     settings. Written by `writeProjectOverlay` (never spawns a data source).
+ *     Fed to `resolve()` as the top-priority `authored` input.
  */
 
 import type { Database } from 'bun:sqlite'
@@ -50,12 +52,19 @@ import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../ty
 import { buildGraph, ingestGraph } from './contribution-store.js'
 
 /**
- * LEGACY source_id of the drifted "intrinsic" authored contribution
- * (attachment_id NULL). Retained ONLY for `migrateIntrinsicToManual` to find and
- * re-home those rows into a real Manual data source. Nothing else writes it — the
- * authored graph is the Manual source's own contribution now.
+ * Sentinel `source_id` of the **project overlay** — the project's own
+ * top-priority contribution (`attachment_id` NULL, one per topology, enforced by
+ * `idx_contrib_one_intrinsic`). It is NOT a data source: it holds the operator's
+ * curation over the composed result — exclusions (`presence='hide'`), field
+ * overrides, metrics bindings, and graph-level display settings (edge style).
+ * `resolve()` folds it as the top-priority `authored` input. The value is kept as
+ * `'intrinsic'` so the existing partial unique index applies with no migration.
+ *
+ * This is the contrast to a Manual *data source* (`attachment_id` set): Manual is
+ * now ONLY for explicitly-added hand-drawn graphs and is folded like any other
+ * source. Curation never spawns a Manual source — it writes the project overlay.
  */
-const INTRINSIC_SOURCE = 'intrinsic'
+const PROJECT_SOURCE = 'intrinsic'
 
 import { TopologySourcesService } from './topology-sources.js'
 
@@ -72,9 +81,8 @@ function rowToTopology(row: TopologyRow): Topology {
   return {
     id: row.id,
     name: row.name,
-    // contentJson + manualSourceId populated by withManual() at the call site.
-    // No mappingJson (derived from bindings) and no topology/metrics source
-    // pointers (the m2m topology_data_sources table is the model now).
+    // Topology is just the shell. No content, no source pointers — sources live
+    // in the m2m topology_data_sources table; mappingJson is derived from bindings.
     shareToken: row.share_token ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -363,24 +371,11 @@ export class TopologyService {
   }
 
   /**
-   * Attach `manualSourceId` to a bare Topology row. Public API
-   * intentionally does NOT carry the Manual snapshot here — the
-   * editor / settings UI reads it through
-   * `GET /api/topologies/:id/sources/:sid/latest-snapshot` instead.
-   * Mixing snapshot content into the Topology shell was structurally
-   * confusing (Topology.contentJson read like "project JSON" when it
-   * was really one source 's input).
-   */
-  private hydrateManualId(topology: Topology): Topology {
-    const manualId = this.findManualSourceId(topology.id)
-    if (!manualId) return topology
-    return { ...topology, manualSourceId: manualId }
-  }
-
-  /**
    * Find the Manual data source id attached to a topology, if any.
    * Returns the *data source* id (PK of `data_sources`), not the
-   * junction row id.
+   * junction row id. (A topology may have several Manual sources; this
+   * returns the first — used only for internal "is X the manual source"
+   * checks, not as a privileged per-topology pointer.)
    */
   findManualSourceId(topologyId: string): string | undefined {
     const row = this.db
@@ -429,48 +424,26 @@ export class TopologyService {
     return { dataSourceId: dsId }
   }
 
-  /**
-   * Get all topologies from the database. Hydrates `manualSourceId`
-   * via a single JOIN so list-page links can point straight at the
-   * Manual source 's detail page.
-   */
+  /** Get all topologies from the database (shells only). */
   list(): Topology[] {
-    const rows = this.db
-      .query(
-        `SELECT t.*, ds.id AS manual_source_id
-         FROM topologies t
-         LEFT JOIN topology_data_sources tds ON tds.topology_id = t.id
-         LEFT JOIN data_sources ds ON ds.id = tds.data_source_id AND ds.type = 'manual'
-         GROUP BY t.id
-         ORDER BY t.name ASC`,
-      )
-      .all() as (TopologyRow & { manual_source_id: string | null })[]
-    return rows.map((row) => {
-      const base = rowToTopology(row)
-      if (row.manual_source_id) base.manualSourceId = row.manual_source_id
-      return base
-    })
+    const rows = this.db.query('SELECT * FROM topologies ORDER BY name ASC').all() as TopologyRow[]
+    return rows.map((row) => rowToTopology(row))
   }
 
-  /**
-   * Get a single topology by ID, with contentJson hydrated from the
-   * latest Manual observation.
-   */
+  /** Get a single topology shell by ID. */
   get(id: string): Topology | null {
     const row = this.db.query('SELECT * FROM topologies WHERE id = ?').get(id) as
       | TopologyRow
       | undefined
-    return row ? this.hydrateManualId(rowToTopology(row)) : null
+    return row ? rowToTopology(row) : null
   }
 
-  /**
-   * Get a topology by name.
-   */
+  /** Get a topology shell by name. */
   getByName(name: string): Topology | null {
     const row = this.db.query('SELECT * FROM topologies WHERE name = ?').get(name) as
       | TopologyRow
       | undefined
-    return row ? this.hydrateManualId(rowToTopology(row)) : null
+    return row ? rowToTopology(row) : null
   }
 
   /**
@@ -679,7 +652,7 @@ export class TopologyService {
     linkDesired: LinkBindingDesired[],
   ): Promise<void> {
     const topology = this.get(topologyId)
-    const authored = this.readManualGraph(topologyId) ?? {
+    const authored = this.readProjectOverlay(topologyId) ?? {
       version: '1' as const,
       name: topology?.name ?? 'Manual',
       nodes: [],
@@ -784,8 +757,8 @@ export class TopologyService {
     })
     nodes = nodes.filter((n) => !isPureEmptyOverlay(n))
 
-    // Records a new authored observation for this topology + invalidates it.
-    await this.writeManualGraph(topologyId, { ...authored, nodes })
+    // Bindings are operator curation → the project overlay (no Manual source).
+    await this.writeProjectOverlay(topologyId, { ...authored, nodes })
   }
 
   /**
@@ -1031,19 +1004,21 @@ export class TopologyService {
    *
    * The resolver runs here over two DB-native pools, both read from the
    * contribution store (`contribution_*`):
-   *   - the Manual source's contribution — the project's hand-drawn graph —
+   *   - the PROJECT OVERLAY (attachment_id NULL) — the operator's curation —
    *     fills the `authored` slot (top priority);
-   *   - every OTHER attached source's contribution becomes a `SnapshotEntry` in
-   *     `snapshots` (the Manual source is excluded so it isn't double-counted).
+   *   - every attached source's contribution becomes a `SnapshotEntry` in
+   *     `snapshots` — including an explicitly-added hand-drawn Manual source,
+   *     which is just an ordinary source here (no special-casing).
    *
-   * With no Manual source, `authored` is an empty graph — the diagram is
-   * whatever the external sources produced.
+   * With no overlay, `authored` is an empty graph — the diagram is whatever the
+   * attached sources produced.
    */
   private async parseTopology(topology: Topology): Promise<ParsedTopology> {
-    // The authored graph is the Manual source's own contribution (DB-native), folded
-    // as resolve()'s top-priority contribution. Absent → empty. (`readManualGraph`
-    // also falls back to a legacy Manual observation during the transition.)
-    const authored: NetworkGraph = this.readManualGraph(topology.id) ?? {
+    // The `authored` slot is the PROJECT OVERLAY (DB-native, attachment_id NULL):
+    // the operator's curation — exclusions, overrides, metrics bindings, settings —
+    // folded as resolve()'s top-priority contribution. Absent → empty. A hand-drawn
+    // Manual source is NOT here; it's an ordinary source in `snapshots` below.
+    const authored: NetworkGraph = this.readProjectOverlay(topology.id) ?? {
       version: '1',
       name: topology.name,
       nodes: [],
@@ -1091,10 +1066,11 @@ export class TopologyService {
   }
 
   /**
-   * The observed snapshots feeding `resolve()` — one per external source, read
-   * DB-native from the contribution store (NOT the audit log). Each external
-   * source's latest graph is its `contribution_source` row (attachment_id NOT
-   * NULL); `buildGraph` projects the decomposed rows back to a NetworkGraph.
+   * The snapshots feeding `resolve()` — one per attached source, read DB-native
+   * from the contribution store (NOT the audit log). Each source's latest graph is
+   * its `contribution_source` row (attachment_id NOT NULL); `buildGraph` projects
+   * the decomposed rows back to a NetworkGraph. A hand-drawn Manual source is an
+   * ordinary entry here; only the project overlay (NULL) is fed elsewhere.
    *
    * Properties this inherits from how contributions are written
    * (`ObservationsService.materializeContribution`):
@@ -1109,20 +1085,11 @@ export class TopologyService {
     priorityBySource: Map<string, number>,
   ): SnapshotEntry[] {
     this.backfillObservedContributions(topologyId)
-    // The Manual contribution(s) are fed to resolve() as `authored` (top
-    // priority), so exclude EVERY Manual source here (a topology may have several,
-    // #370) or they'd be double-counted as observed snapshots.
-    const manualIds = new Set(
-      (
-        this.db
-          .query(
-            `SELECT ds.id AS id FROM topology_data_sources tds
-             JOIN data_sources ds ON ds.id = tds.data_source_id
-             WHERE tds.topology_id = ? AND ds.type = 'manual'`,
-          )
-          .all(topologyId) as { id: string }[]
-      ).map((r) => r.id),
-    )
+    // Every attached source's contribution (attachment_id NOT NULL) is a snapshot —
+    // INCLUDING a hand-drawn Manual source, now an ordinary source folded by
+    // priority. The project overlay (attachment_id NULL) is fed separately as
+    // `authored`, and the `attachment_id IS NOT NULL` filter already excludes it,
+    // so there is no double-count and no `type='manual'` branch here.
     const rows = this.db
       .query(
         `SELECT source_id, last_status, last_ok_at
@@ -1136,7 +1103,6 @@ export class TopologyService {
     }[]
     const snapshots: SnapshotEntry[] = []
     for (const r of rows) {
-      if (manualIds.has(r.source_id)) continue
       if (!priorityBySource.has(r.source_id)) continue
       const graph = buildGraph(topologyId, r.source_id, this.db)
       if (!graph) continue
@@ -1185,7 +1151,8 @@ export class TopologyService {
       ).map((r) => r.source_id),
     )
     for (const tds of this.topologySources.listByPurpose(topologyId, 'topology')) {
-      if (tds.dataSource?.type === 'manual') continue
+      // A never-synced source (incl. a fresh hand-drawn Manual, syncMode 'manual')
+      // has lastSyncedAt == null → nothing to backfill. No type='manual' branch.
       if (tds.lastSyncedAt == null) continue
       if (have.has(tds.dataSourceId)) continue
       const row = this.db
@@ -1331,30 +1298,31 @@ export class TopologyService {
   }
 
   /**
-   * Read the Manual source's graph for a topology. Manual is a uniform data
-   * source: its hand-drawn graph is its own `contribution_source`
-   * (`attachment_id` = its attach row), read back via `buildGraph` like any
-   * source. Returns null when no Manual source is attached / nothing drawn yet.
+   * Read the PROJECT OVERLAY — the project's own top-priority contribution
+   * (`attachment_id` NULL, `source_id` = {@link PROJECT_SOURCE}). Holds the
+   * operator's curation: exclusions, field overrides, metrics bindings, and
+   * graph-level display settings. Fed to `resolve()` as `authored`. Returns null
+   * when the project has no overlay yet.
    *
-   * Public so the discovery-policy API can read the Manual contribution to mutate.
+   * Public so the discovery-policy / mapping APIs can read it to mutate.
    */
-  readManualGraph(topologyId: string, sourceId?: string): NetworkGraph | null {
-    // Target the SPECIFIC Manual source when the caller names one (the editor
-    // passes the route's :sourceId) — a topology may have several Manual sources
-    // (#370), so reading "the first" would surface the wrong one. Fall back to the
-    // first attached Manual when no id is given (discovery-policy / single-Manual).
-    const manualId =
-      sourceId && this.manualAttachId(topologyId, sourceId)
-        ? sourceId
-        : this.findManualSourceId(topologyId)
-    if (manualId) {
-      const fromRows = buildGraph(topologyId, manualId, this.db)
-      if (fromRows) return fromRows
-    }
-    // Transitional: a pre-DB-native authored graph may still sit in a legacy
-    // Manual observation. Surface it (the startup migration moves it into the
-    // Manual contribution; this is the read-path safety net until that runs).
+  readProjectOverlay(topologyId: string): NetworkGraph | null {
+    const fromRows = buildGraph(topologyId, PROJECT_SOURCE, this.db)
+    if (fromRows) return fromRows
+    // Transitional: until `migrateManualToProject` runs, the operator's content may
+    // still sit in legacy Manual observations. Surface it as the overlay.
     return this.readLegacyManualObservation(topologyId)
+  }
+
+  /**
+   * Read an explicitly-added hand-drawn Manual source's graph (its own
+   * `contribution_source`, `attachment_id` = its attach row). This is ordinary
+   * source content — the editor reads it to populate its canvas. Returns null when
+   * the source isn't attached here or nothing is drawn yet.
+   */
+  readManualSourceGraph(topologyId: string, sourceId: string): NetworkGraph | null {
+    if (!this.manualAttachId(topologyId, sourceId)) return null
+    return buildGraph(topologyId, sourceId, this.db)
   }
 
   /**
@@ -1392,113 +1360,151 @@ export class TopologyService {
   }
 
   /**
-   * Persist the Manual source's graph. Manual is a uniform data source, so its
-   * graph is ingested as ITS OWN contribution (`attachment_id` = its attach row)
-   * — identical to how an observed source's graph is stored, just hand-edited and
-   * top-priority. Writes the SPECIFIC Manual source when one is named (the editor
-   * passes the route's :sourceId — so editing Manual B never clobbers Manual A);
-   * otherwise find-or-creates one (discovery-policy / first edit) so the write
-   * always has a home. resolve() folds it as the top-priority contribution.
-   * Per-topology: an edit to topology X only invalidates X.
+   * Persist the PROJECT OVERLAY (attachment_id NULL, {@link PROJECT_SOURCE}). This
+   * is where ALL operator curation lands — exclusions, overrides, metrics bindings,
+   * display settings. It is owned by the project, NOT a data source: writing it
+   * never creates or attaches a Manual source (no phantom spawn, no orphan).
+   * `idx_contrib_one_intrinsic` keeps it to one per topology. resolve() folds it as
+   * the top-priority `authored` contribution. Per-topology: an edit to X invalidates X.
    */
-  async writeManualGraph(
-    topologyId: string,
-    graph: NetworkGraph,
-    sourceId?: string,
-  ): Promise<void> {
-    const manualId =
-      sourceId && this.manualAttachId(topologyId, sourceId)
-        ? sourceId
-        : await this.ensureManualSource(topologyId)
-    const attachId = this.manualAttachId(topologyId, manualId)
+  async writeProjectOverlay(topologyId: string, graph: NetworkGraph): Promise<void> {
     ingestGraph(
       topologyId,
-      manualId,
+      PROJECT_SOURCE,
       graph,
-      { attachmentId: attachId ?? null, lastStatus: 'ok', lastOkAt: timestamp() },
+      { attachmentId: null, lastStatus: 'ok', lastOkAt: timestamp() },
       this.db,
     )
     this.clearCacheEntry(topologyId)
   }
 
   /**
-   * Find-or-create the Manual data source attached to this topology. Returns its
-   * data-source id. Called when an edit / override lands — the Manual source is a
-   * normal, visible, equal source that holds the operator's contribution (it is
-   * not auto-attached on topology create; it appears the first time you edit).
+   * Persist an explicitly-added hand-drawn Manual source's graph as ITS OWN
+   * contribution (`attachment_id` = its attach row), exactly like an observed
+   * source — just hand-edited. The Manual source MUST already be attached (added
+   * via the Sources list); there is no find-or-create, so curation can never spawn
+   * one. Throws if the source isn't attached to this topology.
    */
-  async ensureManualSource(topologyId: string): Promise<string> {
-    const existing = this.findManualSourceId(topologyId)
-    if (existing) return existing
-    const { dataSourceId } = await this.attachManualSource(topologyId, 'topology')
-    return dataSourceId
+  async writeManualSourceGraph(
+    topologyId: string,
+    sourceId: string,
+    graph: NetworkGraph,
+  ): Promise<void> {
+    const attachId = this.manualAttachId(topologyId, sourceId)
+    if (!attachId) {
+      throw new Error(`Manual source ${sourceId} is not attached to topology ${topologyId}`)
+    }
+    ingestGraph(
+      topologyId,
+      sourceId,
+      graph,
+      { attachmentId: attachId, lastStatus: 'ok', lastOkAt: timestamp() },
+      this.db,
+    )
+    this.clearCacheEntry(topologyId)
   }
 
   /**
-   * One-shot migration: re-home the legacy `data_source_id IS NULL` "intrinsic"
-   * contribution (the drifted authored layer) into a real Manual data source, so
-   * Manual is a uniform source again (db-native-persistence.md canonical model).
-   * Runs at startup, settings-guarded. For each topology that has a NULL-intrinsic
-   * contribution with actual content, ensure a Manual source and ingest the graph
-   * as ITS contribution; then drop the NULL row (empty intrinsics are just dropped,
-   * no Manual spawned).
+   * One-shot migration: move all operator content out of `type='manual'` DATA
+   * SOURCES into each topology's PROJECT OVERLAY (attachment_id NULL), then RETIRE
+   * the Manual data sources entirely. This realizes the model where curation is
+   * project-owned and Manual is reserved for future explicit hand-drawn sources
+   * (manual-source-unification.md Known-gap; no backward compat — legacy Manual
+   * sources are folded into the overlay and removed). Runs at startup, settings-guarded.
+   *
+   * For each topology with Manual content, merge it (a topology could have several
+   * Manual sources + legacy observations) and ingest it as the overlay — but never
+   * clobber an overlay that already has content. Then delete every Manual data
+   * source: dropping its attach row cascades its contribution, and the global
+   * delete also sweeps orphaned (unattached) Manual rows.
    */
-  async migrateIntrinsicToManual(): Promise<void> {
+  async migrateManualToProject(): Promise<void> {
     const flag = this.db
-      .query("SELECT value FROM settings WHERE key = 'intrinsic_to_manual_migrated'")
+      .query("SELECT value FROM settings WHERE key = 'manual_to_project_migrated'")
       .get() as { value: string } | undefined
     if (flag?.value === '1') return
 
-    const rows = this.db
+    const hasContent = (g: NetworkGraph | null): boolean =>
+      !!g &&
+      ((g.nodes?.length ?? 0) > 0 ||
+        (g.links?.length ?? 0) > 0 ||
+        (g.subgraphs?.length ?? 0) > 0 ||
+        (g.terminations?.length ?? 0) > 0 ||
+        (g.attachments?.length ?? 0) > 0 ||
+        (g.exclusions?.length ?? 0) > 0)
+
+    const topoRows = this.db
       .query(
-        `SELECT DISTINCT topology_id FROM contribution_source
-         WHERE attachment_id IS NULL AND source_id = ?`,
+        `SELECT DISTINCT tds.topology_id AS topology_id
+         FROM topology_data_sources tds
+         JOIN data_sources ds ON ds.id = tds.data_source_id
+         WHERE ds.type = 'manual'`,
       )
-      .all(INTRINSIC_SOURCE) as { topology_id: string }[]
+      .all() as { topology_id: string }[]
     let migrated = 0
-    for (const { topology_id } of rows) {
-      const graph = buildGraph(topology_id, INTRINSIC_SOURCE, this.db)
-      const hasContent =
-        !!graph &&
-        ((graph.nodes?.length ?? 0) > 0 ||
-          (graph.links?.length ?? 0) > 0 ||
-          (graph.subgraphs?.length ?? 0) > 0 ||
-          (graph.terminations?.length ?? 0) > 0 ||
-          (graph.attachments?.length ?? 0) > 0 ||
-          (graph.exclusions?.length ?? 0) > 0)
-      if (graph && hasContent) {
-        const manualId = await this.ensureManualSource(topology_id)
-        // Never clobber: if a Manual source already holds content, IT is the
-        // authoritative authored graph and the NULL-intrinsic row is stale — keep
-        // the Manual contribution, just drop the NULL row below.
-        if (!buildGraph(topology_id, manualId, this.db)) {
-          const attachId = this.manualAttachId(topology_id, manualId)
-          ingestGraph(
-            topology_id,
-            manualId,
-            graph,
-            { attachmentId: attachId ?? null, lastStatus: 'ok', lastOkAt: timestamp() },
-            this.db,
-          )
-          migrated++
-        }
-      }
-      // Drop the legacy NULL-intrinsic row (cascade removes its element rows).
-      this.db
+    for (const { topology_id } of topoRows) {
+      // Merge every Manual source's contribution + any legacy Manual observation
+      // for this topology (the old `readManualGraph` semantics).
+      const manualSources = this.db
         .query(
-          'DELETE FROM contribution_source WHERE topology_id = ? AND source_id = ? AND attachment_id IS NULL',
+          `SELECT ds.id AS id FROM topology_data_sources tds
+           JOIN data_sources ds ON ds.id = tds.data_source_id
+           WHERE tds.topology_id = ? AND ds.type = 'manual'
+           ORDER BY ds.created_at ASC, ds.id ASC`,
         )
-        .run(topology_id, INTRINSIC_SOURCE)
+        .all(topology_id) as { id: string }[]
+      const graphs: NetworkGraph[] = []
+      for (const { id } of manualSources) {
+        const g = buildGraph(topology_id, id, this.db)
+        if (g) graphs.push(g)
+      }
+      const legacy = this.readLegacyManualObservation(topology_id)
+      if (legacy) graphs.push(legacy)
+      const content =
+        graphs.length === 0
+          ? null
+          : graphs.length === 1
+            ? (graphs[0] ?? null)
+            : mergeAuthoredGraphs(graphs)
+
+      // Never clobber an overlay that already has content.
+      if (
+        hasContent(content) &&
+        content &&
+        !hasContent(buildGraph(topology_id, PROJECT_SOURCE, this.db))
+      ) {
+        ingestGraph(
+          topology_id,
+          PROJECT_SOURCE,
+          content,
+          { attachmentId: null, lastStatus: 'ok', lastOkAt: timestamp() },
+          this.db,
+        )
+        migrated++
+      }
       this.clearCacheEntry(topology_id)
     }
+
+    // Retire every Manual data source. Deleting the attach row cascades its
+    // contribution (FK ON DELETE CASCADE); the global deletes sweep leftovers and
+    // orphans. Manual is now created fresh, on explicit add, for hand-drawing only.
+    const manualDs = this.db.query("SELECT id FROM data_sources WHERE type = 'manual'").all() as {
+      id: string
+    }[]
+    for (const { id } of manualDs) {
+      this.db.query('DELETE FROM topology_data_sources WHERE data_source_id = ?').run(id)
+      this.db.query('DELETE FROM contribution_source WHERE source_id = ?').run(id)
+      this.db.query('DELETE FROM data_sources WHERE id = ?').run(id)
+    }
+
     this.db
       .query(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('intrinsic_to_manual_migrated', '1')",
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('manual_to_project_migrated', '1')",
       )
       .run()
-    if (migrated > 0) {
+    if (migrated > 0 || manualDs.length > 0) {
       console.log(
-        `[Migration] Re-homed ${migrated} intrinsic contribution(s) into Manual data sources.`,
+        `[Migration] Moved ${migrated} Manual contribution(s) into project overlays; retired ${manualDs.length} Manual data source(s).`,
       )
     }
   }
@@ -1661,11 +1667,10 @@ export class TopologyService {
     // Parse YAML to NetworkGraph
     const graph = await parseYamlToNetworkGraph(mainContent, fileMap)
 
-    // Mirror the user's flow: create the topology shell, then write the parsed
-    // graph as the Manual source's contribution (writeManualGraph find-or-creates
-    // the Manual source — a normal, equal data source — and ingests its graph).
+    // The sample's base graph is the project's own content → the project overlay
+    // (no Manual data source is spawned).
     const created = await this.create({ name: 'Sample Network' })
-    await this.writeManualGraph(created.id, graph)
+    await this.writeProjectOverlay(created.id, graph)
 
     console.log(
       '[TopologyService] Sample network created:',
