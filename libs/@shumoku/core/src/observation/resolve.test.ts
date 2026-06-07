@@ -60,6 +60,90 @@ describe('resolve()', () => {
     })
   })
 
+  describe('presence / anchor', () => {
+    it('anchor-only cluster (binding-only overlay, no source) is dropped', () => {
+      const intrinsic: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'n1',
+            label: '',
+            presence: 'anchor',
+            identity: { mgmtIp: '10.0.0.1' },
+            attachments: [{ kind: 'metrics-binding', sourceId: 'zbx', hostId: '7' }],
+          },
+        ],
+      }
+      const out = resolve(intrinsic, [])
+      expect(out.nodes).toHaveLength(0)
+    })
+
+    it('anchor + observed scoop → present, and the anchor attachment folds on', () => {
+      const intrinsic: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'n1',
+            label: '',
+            presence: 'anchor',
+            identity: { mgmtIp: '10.0.0.1' },
+            attachments: [{ kind: 'metrics-binding', sourceId: 'zbx', hostId: '7' }],
+          },
+        ],
+      }
+      const snap: SnapshotEntry = {
+        sourceId: 'zbx',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 's1', label: 'core', identity: { mgmtIp: '10.0.0.1' } }],
+        },
+      }
+      const out = resolve(intrinsic, [snap])
+      expect(out.nodes).toHaveLength(1)
+      expect(out.nodes[0]?.label).toBe('core')
+      expect(out.nodes[0]?.attachments).toEqual([
+        expect.objectContaining({ kind: 'metrics-binding', sourceId: 'zbx', hostId: '7' }),
+      ])
+    })
+
+    it('source retraction drops the node even though an anchor binding remains', () => {
+      // Same overlay anchor as above, but the source no longer observes the
+      // device (empty snapshot) → the cluster is anchor-only → gone (no ghost).
+      const intrinsic: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'n1',
+            label: '',
+            presence: 'anchor',
+            identity: { mgmtIp: '10.0.0.1' },
+            attachments: [{ kind: 'metrics-binding', sourceId: 'zbx', hostId: '7' }],
+          },
+        ],
+      }
+      const empty: SnapshotEntry = {
+        sourceId: 'zbx',
+        capturedAt: 2000,
+        status: 'ok',
+        graph: emptyGraph(),
+      }
+      const out = resolve(intrinsic, [empty])
+      expect(out.nodes).toHaveLength(0)
+    })
+
+    it('a plain intrinsic node (scoop, no presence field) still persists unobserved', () => {
+      const intrinsic: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [{ id: 'n1', label: 'R1', identity: { mgmtIp: '10.0.0.9' } }],
+      }
+      const out = resolve(intrinsic, [])
+      expect(out.nodes).toHaveLength(1)
+      expect(out.nodes[0]?.provenance?.state).toBe('intrinsic-only')
+    })
+  })
+
   describe('discovered-only', () => {
     it('node present only in 1 snapshot → state = discovered-only', () => {
       const snap: SnapshotEntry = {

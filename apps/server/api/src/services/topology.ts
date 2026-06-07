@@ -178,8 +178,10 @@ function identitiesMatch(a: Identity | undefined, b: Identity | undefined): bool
 function isPureEmptyOverlay(n: Node): boolean {
   const label = Array.isArray(n.label) ? n.label.join('') : (n.label ?? '')
   // Allow-list the fields a bare binding overlay legitimately carries; any other
-  // populated property keeps the node.
-  const ALLOWED = new Set(['id', 'label', 'identity'])
+  // populated property keeps the node. `presence` is here so a binding-anchor
+  // node (which we tag `presence:'anchor'`) is still droppable once its binding
+  // is cleared — otherwise the leftover `presence` would pin an empty row.
+  const ALLOWED = new Set(['id', 'label', 'identity', 'presence'])
   for (const [k, v] of Object.entries(n)) {
     if (ALLOWED.has(k)) continue
     if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
@@ -700,9 +702,13 @@ export class TopologyService {
         if (!cur) continue
         nodes[idx] = { ...cur, attachments: [...withoutKey(cur.attachments), attachment] }
       } else {
+        // Binding-only node: makes NO presence claim of its own — it's an
+        // anchor for the binding. It folds onto whatever source scoops this
+        // identity, and evaporates (no ghost) once none do.
         nodes.push({
           id: b.nodeId,
           label: '',
+          presence: 'anchor',
           ...(b.identity ? { identity: b.identity } : {}),
           attachments: [attachment],
         })
@@ -720,9 +726,12 @@ export class TopologyService {
       }
       let idx = findNode(b.nodeIdentity, b.monitoredNodeId)
       if (idx < 0) {
+        // Anchor: the monitored node is created only to host the port binding;
+        // it asserts no existence of its own (see the node-binding branch).
         nodes.push({
           id: b.monitoredNodeId,
           label: '',
+          presence: 'anchor',
           ...(b.nodeIdentity ? { identity: b.nodeIdentity } : {}),
           ports: [],
         })
