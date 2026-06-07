@@ -1,8 +1,19 @@
 # DB-native persistence — uniform contributions, one assertion bucket
 
-> Status: DRAFT (2026-06-07, converged after multiple adversarial reviews incl. a Codex
-> macro data-structure review, + user steer). Design of record for the follow-up to PR
+> Status: ADOPTED (2026-06-07, converged after multiple adversarial reviews incl. Codex
+> macro + per-stage reviews, + user steer). Design of record for the follow-up to PR
 > #375 (#362). No backward compat.
+>
+> **Shipped:** stage 0 (drop dead tables, #379) · stage 1 (contribution store + codec +
+> DB-native authored/intrinsic layer, #378) · the no-phantom-Manual edit paths (#380) ·
+> **stage 3 (observed sources read DB-native from the contribution store, #381)**. Stage 3
+> kept `topology_observations` as the append-only audit/history log (the "or keep as raw
+> audit log" option sanctioned below) — the resolver reads the `contribution_*` rows;
+> `ObservationsService.record()` materializes each observed graph into a contribution in
+> one transaction. **Remaining:** stage 2b (drop the `resolve.ts` `'authored'` lib-internal
+> literal — low value; storage is already clean) and stage 4 (retire
+> `manual_source_id`/`ensureManualSource` — blocked on the editor relocation into the
+> topology context, #362).
 
 ## ⚠️ Canonical model — read first
 
