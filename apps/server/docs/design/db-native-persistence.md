@@ -1,7 +1,8 @@
 # DB-native persistence — uniform contributions, one assertion bucket
 
-> Status: DRAFT (2026-06-07, converged after multiple adversarial reviews + user
-> steer). Design of record for the follow-up to PR #375 (#362). No backward compat.
+> Status: DRAFT (2026-06-07, converged after multiple adversarial reviews incl. a Codex
+> macro data-structure review, + user steer). Design of record for the follow-up to PR
+> #375 (#362). No backward compat.
 
 ## ⚠️ Canonical model — read first
 
@@ -86,75 +87,105 @@ topology_data_sources   id, topology_id, data_source_id, purpose, sync_mode, pri
 topology_resolved_graph topology_id, graph_json, layout_json, …, built_revision, resolver_version  -- ③ output
 -- topology_observations: RETIRED (its content becomes contribution_* rows; keep only as a raw audit log if desired)
 
--- ② Per-topology contribution registry. One row per contribution. data_source_id set =
---    external feed; data_source_id NULL = the project's own (intrinsic) contribution
---    (written by the editor, never re-fetched). The intrinsic row is NOT a data_source and
---    NOT in the Sources UI, so "phantom Manual" does not return. No 'human'/'authored' tag.
+-- ② Per-topology contribution registry. One row per contribution. attachment_id set =
+--    external feed (owned by its topology_data_sources attach row); attachment_id NULL =
+--    the project's own (intrinsic) contribution (editor-written, never re-fetched). The
+--    intrinsic row is NOT a data_source and NOT in the Sources UI, so "phantom Manual"
+--    does not return. No 'human'/'authored' tag.
 contribution_source
-  topology_id    TEXT REFERENCES topologies(id) ON DELETE CASCADE,
-  source_id      TEXT,                           -- this contribution's id (ordinary id)
-  data_source_id TEXT REFERENCES data_sources(id) ON DELETE CASCADE,  -- NULL ⇔ the project's own contribution
-  priority       INTEGER,                        -- merge precedence; the intrinsic contribution = MAX
-  last_status    TEXT,                           -- last sync: 'ok'|'partial'|'empty'|'failed' (drives the replace strategy; external only)
-  last_ok_at     INTEGER,
-  graph_payload_json TEXT,                       -- this contribution's graph-level fields: settings, pins, version, name
+  topology_id   TEXT REFERENCES topologies(id) ON DELETE CASCADE,
+  source_id     TEXT,                            -- this contribution's id (ordinary id)
+  attachment_id TEXT REFERENCES topology_data_sources(id) ON DELETE CASCADE,  -- the (topology, source, purpose='topology') attach row; NULL ⇔ intrinsic
+  last_status   TEXT,                            -- 'ok'|'partial'|'empty'|'failed' (external; drives the replace strategy)
+  last_ok_at    INTEGER,
+  graph_payload_json TEXT,                       -- graph-level fields: version, name, description, settings, pins
   PRIMARY KEY (topology_id, source_id)
-  -- Exactly one intrinsic contribution per topology (guards the lazy-create race):
-  -- CREATE UNIQUE INDEX one_intrinsic ON contribution_source(topology_id) WHERE data_source_id IS NULL;
+  -- priority is NOT stored here — it has ONE source of truth: external = the attach row's
+  --   topology_data_sources.priority; intrinsic (attachment_id IS NULL) = MAX. Detach (delete
+  --   of the attach row) cascades the contribution. One intrinsic per topology:
+  -- CREATE UNIQUE INDEX one_intrinsic ON contribution_source(topology_id) WHERE attachment_id IS NULL;
 
 -- ② Contributions (rows + payload doc column), uniform for every contribution (external + intrinsic)
 contribution_element
   id INTEGER PRIMARY KEY,
   topology_id TEXT NOT NULL, source_id TEXT NOT NULL,
-  local_id    TEXT NOT NULL,                     -- element id WITHIN this source (round-trips); never the cross-source key
-  kind        TEXT NOT NULL,                     -- 'node'|'port'|'subgraph'|'termination'
-  parent_local_id TEXT,
-  negate      INTEGER NOT NULL DEFAULT 0,        -- 0 = present (scoop), 1 = hide (identity-only row)
+  local_id    TEXT NOT NULL,                     -- id WITHIN this source (round-trips); never the cross-source key
+  kind        TEXT NOT NULL CHECK (kind IN ('node','port','subgraph','termination')),
+  parent_local_id TEXT,                          -- same-source parent (port→node, node→subgraph, nested subgraph)
+  presence    TEXT CHECK (presence IN ('present','hide')),  -- TRI-STATE: NULL = no opinion (pure identity/attachment anchor) | 'present' = scoop | 'hide'
   payload_json TEXT,
   FOREIGN KEY (topology_id, source_id) REFERENCES contribution_source(topology_id, source_id) ON DELETE CASCADE,
-  UNIQUE (topology_id, source_id, local_id)
+  FOREIGN KEY (topology_id, source_id, parent_local_id) REFERENCES contribution_element(topology_id, source_id, local_id),
+  UNIQUE (topology_id, source_id, local_id),
+  UNIQUE (id, topology_id, source_id)            -- candidate key for composite child FKs (same-source guarantee)
 
 contribution_identity
-  element_id INTEGER REFERENCES contribution_element(id) ON DELETE CASCADE,
-  topology_id TEXT NOT NULL,                     -- denormalized for the cross-source cluster index
-  key_type TEXT, key_value TEXT,
-  PRIMARY KEY (element_id, key_type, key_value)  WITHOUT ROWID
+  element_id  INTEGER, topology_id TEXT NOT NULL, source_id TEXT NOT NULL,
+  key_type TEXT, key_value TEXT,                 -- key_value NORMALIZED at ingest (e.g. lowercased MAC)
+  PRIMARY KEY (element_id, key_type, key_value)  WITHOUT ROWID,
+  FOREIGN KEY (element_id, topology_id, source_id) REFERENCES contribution_element(id, topology_id, source_id) ON DELETE CASCADE
 
 contribution_link
   id INTEGER PRIMARY KEY,
   topology_id TEXT NOT NULL, source_id TEXT NOT NULL,
-  from_local_id TEXT, to_local_id TEXT,
-  negate INTEGER NOT NULL DEFAULT 0,
-  payload_json TEXT,
+  from_node_local_id TEXT, from_port_local_id TEXT,   -- endpoint = node (+ optional port); all same-source elements (FK each)
+  to_node_local_id   TEXT, to_port_local_id   TEXT,
+  presence    TEXT CHECK (presence IN ('present','hide')),
+  payload_json TEXT,                             -- type, arrow, label, bends, cable, style, per-endpoint plug/ip/pin (presentation)
   FOREIGN KEY (topology_id, source_id) REFERENCES contribution_source(topology_id, source_id) ON DELETE CASCADE
+  -- + composite FK each of the four endpoints → contribution_element(local_id, topology_id, source_id)
+
+contribution_link_via                            -- ordered termination transits (Link.via), NORMALIZED (not JSON)
+  link_id INTEGER REFERENCES contribution_link(id) ON DELETE CASCADE,
+  seq     INTEGER, termination_local_id TEXT,    -- a kind='termination' element in the same source
+  PRIMARY KEY (link_id, seq)  WITHOUT ROWID
 
 contribution_attachment
   id INTEGER PRIMARY KEY,
   topology_id TEXT NOT NULL, source_id TEXT NOT NULL,
-  element_id INTEGER REFERENCES contribution_element(id) ON DELETE CASCADE,  -- NULL ⇔ scope='topology-default'
-  scope TEXT, kind TEXT,                         -- 'access'|'policy'|'metrics-binding'
-  attachment_key TEXT,                           -- attachmentKey(): 'access:snmp'|'policy'|'metrics-binding:<sourceId>'
-  target_source_id TEXT REFERENCES data_sources(id) ON DELETE SET NULL,  -- metrics-binding target (non-destructive)
+  element_id  INTEGER,                           -- NULL ⇔ scope='topology-default'
+  scope TEXT CHECK (scope IN ('node','subgraph','topology-default')),
+  kind  TEXT CHECK (kind IN ('access','policy','metrics-binding')),
+  attachment_key TEXT,                           -- generated CENTRALLY by attachmentKey() at ingest (canonical, derived from kind+payload)
+  target_source_id TEXT REFERENCES data_sources(id) ON DELETE CASCADE,  -- metrics-binding dependency target (see note)
   negate INTEGER NOT NULL DEFAULT 0,             -- 0 = assert, 1 = suppress
   payload_json TEXT,
-  FOREIGN KEY (topology_id, source_id) REFERENCES contribution_source(topology_id, source_id) ON DELETE CASCADE
+  FOREIGN KEY (topology_id, source_id) REFERENCES contribution_source(topology_id, source_id) ON DELETE CASCADE,
+  FOREIGN KEY (element_id, topology_id, source_id) REFERENCES contribution_element(id, topology_id, source_id) ON DELETE CASCADE,
+  UNIQUE (topology_id, source_id, element_id, attachment_key)   -- one slot per (source, element, key)
+  -- topology-default one-slot: CREATE UNIQUE INDEX ON contribution_attachment(topology_id, source_id, attachment_key) WHERE element_id IS NULL;
 ```
-Notes:
-- **One assertion bucket**: scoop/hide are `contribution_element.negate`; assert/suppress
-  are `contribution_attachment.negate`. No separate `exclusion`/`suppressedAttachments`
-  side-channel, no authored-only privilege. (Replaces the old `authored.exclusions`
-  array + `suppressedAttachments`.)
-- **Identity-anchored** (settles the composition-store invariant-6 contradiction):
-  `local_id` is only the intra-source handle; cross-source matching is `contribution_identity`.
-- **`contribution_source` resolves three prior blockers at once**: priority lives here (a
-  value; the intrinsic `data_source_id IS NULL` row = MAX); FK integrity (every contribution
-  FKs a real registry row); retraction is derivable (`data_source_id IS NULL` → never
-  re-fetched → persists; otherwise replaced per sync). Graph-level `settings`/`pins` live in
-  `graph_payload_json` (closes that round-trip gap). No `'human'`/`'authored'` literal anywhere.
-- **Terminations** = `kind='termination'`; `link.via` references the source's own terminations.
-- **Topology-default** = `attachment.element_id NULL`; partial unique index
-  `(topology_id, source_id, attachment_key) WHERE element_id IS NULL` + the symmetric
-  `WHERE element_id IS NOT NULL` for one-slot-per-key.
+Notes (incorporating the Codex macro review):
+- **Tri-state presence (the neutral-anchor fix).** `presence` is NULL / `'present'` / `'hide'`.
+  **NULL = no opinion** — a pure identity/attachment anchor (a binding/policy on an
+  externally-observed node, with no presence claim). `'present'` = scoop; `'hide'` = curate
+  out. This is what lets an attachment FK a real element row **without** pinning presence
+  (the bare-overlay footgun). Suppression of an attachment is `contribution_attachment.negate`.
+- **Ownership via `topology_data_sources`, not global `data_sources`.** `contribution_source.attachment_id`
+  FKs the *attach row* (purpose='topology'), so only attached topology-purpose sources can
+  contribute, **priority has a single source of truth** (the attach row), and **detach
+  cascades** the contribution. The intrinsic contribution has `attachment_id NULL`.
+- **Composite FKs prevent cross-source/cross-topology references.** `(id, topology_id, source_id)`
+  candidate key on `contribution_element`; identity/attachment/link-endpoints/`parent_local_id`
+  all FK through it, so an attachment can't reference another source's element and
+  `identity.topology_id` can't disagree with its element.
+- **Links normalized** — four endpoint FKs (`from/to_node` + optional `from/to_port`) and an
+  ordered `contribution_link_via` relation (terminations). Only bends/cable/style stay in
+  `payload_json`. (A `LinkEndpoint` carries both node and port — both are columns now.)
+- **Identity-anchored** (settles the composition-store invariant-6 contradiction): `local_id`
+  is only the intra-source handle; cross-source matching is `contribution_identity`, with
+  `key_value` normalized at ingest.
+- **`target_source_id` (metrics-binding) is the dependency target — a `data_source`.** Kept
+  global on purpose: a binding may be configured before, or survive detach of, its metrics
+  source — `resolve()` honors a binding only while a **metrics-purpose** attach row for that
+  source exists on the topology (dormant-but-restorable, matching today's `buildMapping`
+  filter). `ON DELETE CASCADE` only fires when the `data_source` is *deleted entirely*
+  (then the binding is meaningless). Detach (removing the metrics attach row) does NOT delete it.
+- **Discriminator drift guarded** — `kind`/`scope` have CHECKs; `attachment_key` is generated
+  centrally by `attachmentKey()` at ingest (the columns are canonical, payload is detail).
+- **Hierarchy single-truth**: `parent_local_id` is the ONLY stored hierarchy; `Subgraph.children[]`
+  is *derived* on projection, never stored (no double authority). Pins are validated refs
+  within the source's graph payload.
 
 ## Resolve / projection / ingestion
 
@@ -170,15 +201,16 @@ ingestGraph(topologyId, source_id, graph)           -- decompose a graph into th
                                                     --   PRAGMA defer_foreign_keys for intra-import forward refs
 ```
 
-**Presence rule (precise — pin this; the golden test alone won't).** Absence of a row is
-**not** an assertion. A cluster is **present iff** at least one contribution has a
-*non-negated* element row for it **and** the highest-priority *opinionated* row (one that
-exists, present-or-hide) is **not** `negate=1`. A contribution with **no row** for a
-cluster expresses **no opinion** — so this preserves today's union semantics (a node any
-source carries is present) while `negate=1` removes by priority. **Never emit a bare
-`negate=0` placeholder row** — `reconcileBindings`-style empty overlay nodes must attach
-to an existing cluster by identity, not pin presence. (This is the live footgun: a stray
-default row would silently pin a node a synced source later drops → a retraction bug.)
+**Presence rule (precise — pin this; the golden test alone won't).** Presence is over the
+tri-state `contribution_element.presence` (`'present'` / `'hide'` / NULL = no opinion). A
+cluster is **present iff** at least one contribution has a `presence='present'` row for it
+**and** the highest-priority *opinionated* row (`'present'` or `'hide'`) is **not** `'hide'`.
+A `presence IS NULL` row is a pure **anchor** (it carries identity / attachments but makes
+**no** presence claim), and a contribution with **no row** for a cluster expresses no
+opinion — so this preserves today's union semantics (a node any source carries is present)
+while `'hide'` removes by priority. An attachment-on-an-observed-node is exactly a
+`presence IS NULL` anchor → it never pins presence (the bare-overlay footgun is structurally
+impossible now, not just discouraged).
 
 **Kind scope.** Identity-clustering + signed presence apply to **nodes and their ports
 only**. `subgraph`/`termination` are **pass-through per source** (resolve has no identity
@@ -209,6 +241,38 @@ merge actually clusters.
   and is one transaction.
 - **No phantom Manual** — the project's own data is rows under the intrinsic
   `contribution_source` row (`data_source_id IS NULL`), never a user-facing data source.
+
+## Round-trip codec (lossless `NetworkGraph` ↔ rows)
+
+`ingestGraph(buildGraph(g)) == g` is the contract; it needs a field-by-field codec, not
+prose. Each `NetworkGraph` / `Node` / `Link` / `Subgraph` field is assigned exactly one
+home — a **column**, a **payload_json** key, or **derived/resolve-only** (never stored):
+
+| Surface | → columns | → `payload_json` | derived / resolve-only |
+| --- | --- | --- | --- |
+| `NetworkGraph` | (per-source) | `version,name,description,settings,pins` in `contribution_source.graph_payload_json` | `nodes/links/subgraphs/terminations` (= rows); `exclusions` (= `presence='hide'` rows) |
+| `Node` | `id`(=local_id), `parent`(=parent_local_id), `kind` | `label,shape,rank,style,position,metadata,spec,productId,ports*` | `provenance,fieldSources` (resolve output) |
+| `NodePort` | `id,parent` | `label,role,connector,speed,faceplate,aliases,connectors` | folded port id (resolve) |
+| `Link` | `id`, four endpoints, `via`(=link_via rows) | `type,arrow,label,bends,cable,style`, per-endpoint `plug/ip/pin` | remapped endpoints (resolve) |
+| `Subgraph` | `id,parent` | `label,direction,style,spec,file,pins` | `children[]` (derived from parent edges) |
+| `Attachment` | `kind,scope,attachment_key,target_source_id,negate` | kind leaves (`community/version`,`mode/intervalMs`,`hostId/interfaceIdentity/…`) | `provenance` (resolve) |
+
+Rules: **empty vs absent is preserved** (a stored `''`/`[]` is distinct from a missing
+key); `description` and every optional field has an explicit home (Codex caught
+`description` missing). Golden fixtures must cover every optional field, empty-vs-absent,
+and a full real graph. The test asserts a **normalized equality** (canonical key order),
+and additionally `resolve(buildContributions(x)) ≡ resolve(old readManual + snapshots)`.
+
+## Priority (one direction, derived, deterministic)
+
+- **One direction: higher wins** (matches `resolve()`'s `+Infinity` for the project layer
+  and its descending sort). `database.md`'s "lower number = higher precedence" wording is
+  **wrong** and must be corrected; migrate existing `topology_data_sources.priority` values
+  to the higher-wins convention explicitly.
+- **Single source of truth**: external priority = the attach row's `topology_data_sources.priority`
+  (not duplicated on `contribution_source`); the intrinsic contribution = MAX.
+- **Deterministic tie-break** for equal priority: contribution revision (newer wins) then
+  `source_id` — never rely on row order.
 
 ## Scaling (why DB-native, not a blob)
 
@@ -272,6 +336,13 @@ identity keys, audit-don't-drop — like the existing `backfillMetricsBindings`)
   assertions is a real change; the golden test (parity with old resolve output) gates it.
 - **`buildContributions` fidelity** — it must reproduce the exact contribution shape the
   merge expects; gated by the golden test.
+- **Identity clustering is non-transitive + collision-blind (EXISTING `resolve.ts` limit,
+  out of scope here but amplified by signed hide).** A bridge observation carrying keys
+  from two clusters joins only the first (no union); weak keys can silently collapse
+  unrelated entities. This is the pre-existing algorithm (resolve.ts:217, acknowledged in
+  topology-source-priority-merge.md); it should become union-find + collision-surfacing in
+  a separate clustering PR before this design's hide-by-priority ships, since a negative
+  assertion on a mis-clustered entity is more harmful than a mis-merged field.
 - **No authored history** — replace/upsert keeps current state only (today's append-only
   Manual observations gave latent undo). Acceptable; an append-only `contribution_event`
   log can be added later without schema change.
