@@ -13,7 +13,6 @@
    */
   import type { NetworkGraph } from '@shumoku/core'
   import { FloppyDiskIcon } from 'phosphor-svelte'
-  import { onMount } from 'svelte'
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import { useTopologyCtx } from '../_context.svelte'
@@ -25,8 +24,19 @@
   let saving = $state(false)
   let error = $state<string | null>(null)
   let savedAt = $state<number | null>(null)
+  // Load ONCE per topology id. `ctx.topology` populates asynchronously (the
+  // layout fetches it), so a direct /edit load / refresh would miss an onMount.
+  // Keying on the id (not the object) also avoids clobbering unsaved edits when
+  // the topology is refetched on a revision bump (same id → skip).
+  let loadedFor = $state<string | null>(null)
 
-  onMount(load)
+  $effect(() => {
+    const id = ctx.topology?.id
+    if (id && loadedFor !== id) {
+      loadedFor = id
+      void load()
+    }
+  })
 
   async function load() {
     if (!ctx.topology?.id) return
@@ -46,13 +56,18 @@
 
   async function save() {
     if (!ctx.topology?.id) return
-    let graph: NetworkGraph
+    let parsed: unknown
     try {
-      graph = JSON.parse(jsonContent) as NetworkGraph
+      parsed = JSON.parse(jsonContent)
     } catch (e) {
       error = `Invalid JSON: ${e instanceof Error ? e.message : String(e)}`
       return
     }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      error = 'The graph must be a JSON object.'
+      return
+    }
+    const graph = parsed as NetworkGraph
     if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
       error = 'graph.nodes and graph.links must be arrays'
       return
