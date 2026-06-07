@@ -85,7 +85,7 @@ function rowToTopology(row: TopologyRow): Topology {
  * `topology_resolved_graph` artifacts built by an older version are treated as
  * stale and recomputed without a manual purge.
  */
-const RESOLVER_VERSION = 1
+const RESOLVER_VERSION = 2
 
 /**
  * Map-aware JSON round-trip. `LayoutResult` / `ResolvedLayout` are Map-heavy

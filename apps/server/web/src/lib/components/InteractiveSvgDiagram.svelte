@@ -12,7 +12,7 @@
      *  resolver. Optional — undefined for graphs that pre-date the model. */
     provenance?: {
       source: string
-      state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'
+      state?: 'confirmed' | 'intrinsic-only' | 'discovered-only' | 'conflicting'
       observedAt?: number
     }
     /** Identity keys used by the resolver to match this node across

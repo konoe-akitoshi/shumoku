@@ -38,10 +38,22 @@ export interface IconDimensions {
  * `Alert.source` (see `@shumoku/core/plugin-types.ts`).
  */
 export interface Provenance {
-  /** Source identifier. `'authored'` is a reserved value for human edits. */
+  /**
+   * Source identifier. `'intrinsic'` is the reserved value for the project's own
+   * contribution (the topology's intrinsic, project-owned assertions — what the
+   * editor writes). It is NOT a "human" layer: it's the ownership/lifecycle
+   * distinction (intrinsic vs external feed), the only one the model keeps. Any
+   * other value is an external source id (open string, like `Alert.source`).
+   */
   source: string
-  /** Set by the resolver. Snapshots leave this undefined. */
-  state?: 'confirmed' | 'authored-only' | 'discovered-only' | 'conflicting'
+  /**
+   * Set by the resolver. Snapshots leave this undefined.
+   * - `intrinsic-only`: only the project's own contribution asserts it
+   * - `discovered-only`: only external feed(s) assert it
+   * - `confirmed`: both
+   * - `conflicting`: external feeds disagree (no intrinsic value to settle it)
+   */
+  state?: 'confirmed' | 'intrinsic-only' | 'discovered-only' | 'conflicting'
   /** Unix ms — when the source observed this value. */
   observedAt?: number
 }
@@ -398,12 +410,12 @@ export type Attachment = AccessAttachment | PolicyAttachment | MetricsBindingAtt
 
 /**
  * Provenance stamped by `resolve()` onto every attachment in the resolved
- * graph: which source contributed it. The human/authored contribution
- * carries `source: 'authored'`; an observed attachment carries the
- * observing source's id. The discovery UI reads this to render
- * observed-derived rows read-only (no ✕) and human rows editable — the
- * fix for "✕ doesn't remove an observed access". Optional: hand-authored
- * or freshly-saved attachments omit it, and resolve fills it in.
+ * graph: which source contributed it. The project's own (intrinsic)
+ * contribution carries `source: 'intrinsic'`; an observed attachment carries
+ * the observing source's id. The discovery UI reads this to render
+ * observed-derived rows read-only (no ✕) and intrinsic rows editable — the
+ * fix for "✕ doesn't remove an observed access". Optional: freshly-saved
+ * attachments omit it, and resolve fills it in.
  */
 export interface AttachmentMeta {
   provenance?: Provenance
@@ -605,11 +617,10 @@ export interface Node {
   /**
    * Per-field provenance stamped by `resolve()`: maps a field name
    * (`label` / `spec` / `parent` …) to the source id that won it in the
-   * priority merge. `'authored'` means the human contribution supplied the
-   * value. Diagnostic / UI affordance (e.g. show whether the displayed name
-   * is a human override or the observed name) — not load-bearing for
-   * rendering. Omitted on hand-authored nodes that never went through
-   * resolve.
+   * priority merge. `'intrinsic'` means the project's own contribution supplied
+   * the value. Diagnostic / UI affordance (e.g. show whether the displayed name
+   * is a project override or the observed name) — not load-bearing for
+   * rendering. Omitted on nodes that never went through resolve.
    */
   fieldSources?: Record<string, string>
 

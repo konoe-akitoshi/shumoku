@@ -14,8 +14,8 @@ import type { Identity, Link, NetworkGraph, Node, NodePort, Provenance, Subgraph
 describe('observation model types', () => {
   describe('Provenance', () => {
     it('accepts the minimum required shape (source only)', () => {
-      const p: Provenance = { source: 'authored' }
-      expect(p.source).toBe('authored')
+      const p: Provenance = { source: 'intrinsic' }
+      expect(p.source).toBe('intrinsic')
     })
 
     it('accepts an open string source (no union enforcement)', () => {
@@ -26,7 +26,7 @@ describe('observation model types', () => {
     })
 
     it('accepts each state value the resolver assigns', () => {
-      const states = ['confirmed', 'authored-only', 'discovered-only', 'conflicting'] as const
+      const states = ['confirmed', 'intrinsic-only', 'discovered-only', 'conflicting'] as const
       for (const state of states) {
         const p: Provenance = { source: 's', state, observedAt: 1700000000000 }
         expect(p.state).toBe(state)
@@ -104,9 +104,9 @@ describe('observation model types', () => {
       const sub: Subgraph = {
         id: 'sg1',
         label: 'Tier',
-        provenance: { source: 'authored' },
+        provenance: { source: 'intrinsic' },
       }
-      expect(sub.provenance?.source).toBe('authored')
+      expect(sub.provenance?.source).toBe('intrinsic')
     })
   })
 

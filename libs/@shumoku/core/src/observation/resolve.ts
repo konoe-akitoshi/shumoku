@@ -19,25 +19,26 @@ import { keyHash, nodeIdentityKeys, portIdentityKeys } from './identity.js'
 import type { ResolvedGraph, ResolveOptions, SnapshotEntry } from './types.js'
 
 /**
- * Resolve an authored NetworkGraph against any number of source
- * snapshots into a single graph whose every entity carries
+ * Resolve the project's own (intrinsic) NetworkGraph against any number of
+ * source snapshots into a single graph whose every entity carries
  * `provenance`.
  *
  * Model: **all sources are equal, priority-ordered contributions.** The
- * authored (human) graph is just the top-priority source; observed
- * snapshots carry their own priority (mirroring
+ * intrinsic (project-owned) graph is just the top-priority contribution;
+ * observed snapshots carry their own priority (mirroring
  * `topology_data_sources.priority`). resolve clusters contributions by
  * identity (any-key match — orthogonal to priority) and then, **per
  * field**, the highest-priority contribution that actually holds a value
  * wins (`priority desc, capturedAt desc`). A field nobody holds is
- * omitted. This is the "Git-like" merge: a human who only renamed a node
+ * omitted. This is the "Git-like" merge: an edit that only renamed a node
  * keeps the observed ports/community flowing through untouched.
  *
- * There is intentionally NO `authored ===` special-casing in the field
- * merge — "human wins" falls out of "human has the highest priority". The
- * literal `'authored'` survives only as the human contribution's source
- * *label*, so the UI can tell a human-set value from an observed one
- * (per-field `fieldSources`, per-attachment `provenance`).
+ * There is intentionally NO `=== 'intrinsic'` special-casing in the field
+ * merge — "the project's edits win" falls out of "intrinsic has the highest
+ * priority". The reserved id `'intrinsic'` survives only as that
+ * contribution's source *label*, so the UI can tell a project-set value from
+ * an observed one (per-field `fieldSources`, per-attachment `provenance`). It
+ * is ownership (intrinsic vs external), NOT a human-vs-machine layer.
  *
  * See `apps/server/docs/design/topology-source-priority-merge.md`.
  */
@@ -62,9 +63,9 @@ export function resolve(
   // stay documented knobs for when snapshot history is fed in.
   //
   // Invariants that MUST hold regardless of priority (covered by tests):
-  //   - The human/authored contribution is never retracted. A node the
-  //     operator touched (rename, access, or a policy=disabled overlay) is
-  //     an authored contribution, so it persists until Reset.
+  //   - The intrinsic (project-owned) contribution is never retracted. A node
+  //     the operator touched (rename, access, or a policy=disabled overlay) is
+  //     an intrinsic contribution, so it persists until Reset.
   //   - A 'failed' snapshot is ignored — never read as a retraction.
   //   - When real hysteresis lands it must gate on
   //     `absenceImpliesRetraction(effectivePolicyForNode(authored, node))`
@@ -74,13 +75,14 @@ export function resolve(
   void _staleThreshold
   void _retractAfter
 
-  // 1. Gather valid contributions. The authored graph is the top-priority
-  //    contribution ("human wins" = "human outranks every source"); every
-  //    non-failed snapshot is a contribution at its own priority. Identity
-  //    clustering ignores priority; only the field merge consults it.
+  // 1. Gather valid contributions. The intrinsic graph is the top-priority
+  //    contribution ("the project's edits win" = "intrinsic outranks every
+  //    source"); every non-failed snapshot is a contribution at its own
+  //    priority. Identity clustering ignores priority; only the field merge
+  //    consults it.
   const contributions: Contribution[] = [
     {
-      sourceId: 'authored',
+      sourceId: 'intrinsic',
       priority: Number.POSITIVE_INFINITY,
       capturedAt: Number.POSITIVE_INFINITY,
       graph: authored,
@@ -93,8 +95,8 @@ export function resolve(
       priority: snap.priority ?? 0,
       capturedAt: snap.capturedAt,
       // Namespace this source's subgraph ids (and the node.parent refs into
-      // them) so groups from different sources can't collide. Authored keeps
-      // the raw id space (it's the top-priority, human-owned layer).
+      // them) so groups from different sources can't collide. The intrinsic
+      // contribution keeps the raw id space (it's the top-priority, project-owned one).
       graph: namespaceSourceSubgraphs(snap.graph, snap.sourceId),
     })
   }
@@ -246,7 +248,7 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
       // synthetic `discovered:N` can't collide with an authored node that
       // happens to carry the same id.
       let id: string
-      if (member.sourceId === 'authored') {
+      if (member.sourceId === 'intrinsic') {
         id = member.node.id
       } else {
         do {
@@ -276,7 +278,7 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   // about id preference only — it does NOT decide field winners (priority
   // does, in foldNodeCluster) and does NOT decide identity (any-key match).
   for (const contrib of contributions) {
-    if (contrib.sourceId !== 'authored') continue
+    if (contrib.sourceId !== 'intrinsic') continue
     for (const node of contrib.graph.nodes) {
       claim({
         sourceId: contrib.sourceId,
@@ -287,7 +289,7 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
     }
   }
   for (const contrib of contributions) {
-    if (contrib.sourceId === 'authored') continue
+    if (contrib.sourceId === 'intrinsic') continue
     for (const node of contrib.graph.nodes) {
       claim({
         sourceId: contrib.sourceId,
@@ -339,8 +341,8 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
     throw new Error('empty cluster')
   }
 
-  const hasAuthored = cluster.members.some((m) => m.sourceId === 'authored')
-  const observerCount = cluster.members.filter((m) => m.sourceId !== 'authored').length
+  const hasIntrinsic = cluster.members.some((m) => m.sourceId === 'intrinsic')
+  const observerCount = cluster.members.filter((m) => m.sourceId !== 'intrinsic').length
 
   // Identity: union of all members' identity keys (keep first non-empty value)
   const mergedIdentity = mergeIdentities(cluster.members.map((m) => m.node.identity))
@@ -362,7 +364,7 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
   const mergedMetadata = mergeMetadata(ranked)
   // Preserve the observing source for the discovery UI ("Tracked by" line,
   // which source to Probe). Highest-ranked non-authored member.
-  const primaryObserver = ranked.find((m) => m.sourceId !== 'authored')
+  const primaryObserver = ranked.find((m) => m.sourceId !== 'intrinsic')
   if (primaryObserver && mergedMetadata['observedSource'] === undefined) {
     mergedMetadata['observedSource'] = primaryObserver.sourceId
   }
@@ -375,7 +377,7 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
   const suppressed = Array.from(
     new Set(
       cluster.members
-        .filter((m) => m.sourceId === 'authored')
+        .filter((m) => m.sourceId === 'intrinsic')
         .flatMap((m) => m.node.suppressedAttachments ?? []),
     ),
   )
@@ -412,7 +414,7 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
     ...(ports ? { ports } : {}),
     ...(Object.keys(fieldSources).length > 0 ? { fieldSources } : {}),
     ...(suppressed.length > 0 ? { suppressedAttachments: suppressed } : {}),
-    provenance: deriveNodeProvenance(cluster, observerCount, hasAuthored),
+    provenance: deriveNodeProvenance(cluster, observerCount, hasIntrinsic),
   }
 
   // Factual: if multiple *non-authored* sources disagree on `label`, mark
@@ -423,7 +425,7 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
   const labelObservations = collectField(cluster.members, (n) => stringLabel(n.label)).filter((o) =>
     hasValue(o.value),
   )
-  if (!hasAuthored && labelObservations.length > 1) {
+  if (!hasIntrinsic && labelObservations.length > 1) {
     const distinct = new Set(labelObservations.map((o) => o.value))
     if (distinct.size > 1) {
       resolved.provenance = {
@@ -439,21 +441,21 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
 function deriveNodeProvenance(
   cluster: NodeCluster,
   observerCount: number,
-  hasAuthored: boolean,
+  hasIntrinsic: boolean,
 ): Provenance {
   // State derivation:
-  //   authored + observed → confirmed
-  //   authored only       → authored-only
-  //   observed only       → discovered-only (1 source) or confirmed (≥2 agreeing)
+  //   intrinsic + observed → confirmed
+  //   intrinsic only       → intrinsic-only
+  //   observed only        → discovered-only (1 source) or confirmed (≥2 agreeing)
   let state: Provenance['state']
-  if (hasAuthored && observerCount > 0) state = 'confirmed'
-  else if (hasAuthored) state = 'authored-only'
+  if (hasIntrinsic && observerCount > 0) state = 'confirmed'
+  else if (hasIntrinsic) state = 'intrinsic-only'
   else if (observerCount >= 2) state = 'confirmed'
   else state = 'discovered-only'
 
-  // Pick a canonical source label: authored wins, otherwise latest observer.
-  let source = 'authored'
-  if (!hasAuthored) {
+  // Pick a canonical source label: intrinsic wins, otherwise latest observer.
+  let source = 'intrinsic'
+  if (!hasIntrinsic) {
     const latest = [...cluster.members].sort((a, b) => b.capturedAt - a.capturedAt)[0]
     source = latest?.sourceId ?? 'unknown'
   }
@@ -461,7 +463,7 @@ function deriveNodeProvenance(
   // capturedAt — the human contribution carries `+Infinity` (it's not an
   // observation), and including it would poison the max and drop observedAt
   // (→ "Last seen" blanks out the moment a node is renamed / given a
-  // community). An authored-only node has no finite time → undefined.
+  // community). An intrinsic-only node has no finite time → undefined.
   const latestObserved = cluster.members.reduce(
     (acc, m) => (Number.isFinite(m.capturedAt) && m.capturedAt > acc ? m.capturedAt : acc),
     Number.NEGATIVE_INFINITY,
@@ -688,11 +690,11 @@ function foldPortCluster(members: PortMember[]): NodePort {
   const top = ranked[0]
   if (!top) throw new Error('empty port cluster')
 
-  const hasAuthored = members.some((m) => m.sourceId === 'authored')
-  const observerCount = members.filter((m) => m.sourceId !== 'authored').length
+  const hasIntrinsic = members.some((m) => m.sourceId === 'intrinsic')
+  const observerCount = members.filter((m) => m.sourceId !== 'intrinsic').length
   let state: Provenance['state']
-  if (hasAuthored && observerCount > 0) state = 'confirmed'
-  else if (hasAuthored) state = 'authored-only'
+  if (hasIntrinsic && observerCount > 0) state = 'confirmed'
+  else if (hasIntrinsic) state = 'intrinsic-only'
   else if (observerCount >= 2) state = 'confirmed'
   else state = 'discovered-only'
 
@@ -740,7 +742,7 @@ function foldPortCluster(members: PortMember[]): NodePort {
   const suppressed = Array.from(
     new Set(
       members
-        .filter((m) => m.sourceId === 'authored')
+        .filter((m) => m.sourceId === 'intrinsic')
         .flatMap((m) => m.port.suppressedAttachments ?? []),
     ),
   )
@@ -790,22 +792,27 @@ function namespaceSourceSubgraphs(graph: NetworkGraph, sourceId: string): Networ
 }
 
 /**
- * Fold subgraphs from EVERY contribution (authored + each source), stamping
+ * Fold subgraphs from EVERY contribution (intrinsic + each source), stamping
  * provenance. Source subgraph ids were namespaced per source at contribution
  * time (see namespaceSourceSubgraphs), and resolved nodes carry the matching
  * namespaced `parent`, so membership resolves without collisions. No
  * cross-source dedup yet — subgraphs have no identity key, so each source keeps
- * its own groups; a subgraph that already carries provenance is left as-is.
+ * its own groups.
+ *
+ * Provenance is ALWAYS restamped (not `?? s.provenance`) so resolve is the sole
+ * authority — same as nodes/links. A subgraph whose stored input still carries
+ * stale provenance (e.g. an old `source: 'authored'` round-tripped into a
+ * contribution) can't leak the old value into the resolved output.
  */
 function foldSubgraphs(contributions: Contribution[]): Subgraph[] | undefined {
   const all: Subgraph[] = []
   for (const contrib of contributions) {
     if (!contrib.graph.subgraphs) continue
-    const state = contrib.sourceId === 'authored' ? 'authored-only' : 'discovered-only'
+    const state = contrib.sourceId === 'intrinsic' ? 'intrinsic-only' : 'discovered-only'
     for (const s of contrib.graph.subgraphs) {
       all.push({
         ...s,
-        provenance: s.provenance ?? { source: contrib.sourceId, state },
+        provenance: { source: contrib.sourceId, state },
       })
     }
   }
@@ -837,7 +844,7 @@ function foldLinks(
         to,
         provenance: {
           source: contrib.sourceId,
-          state: contrib.sourceId === 'authored' ? 'authored-only' : 'discovered-only',
+          state: contrib.sourceId === 'intrinsic' ? 'intrinsic-only' : 'discovered-only',
           observedAt: Number.isFinite(contrib.capturedAt) ? contrib.capturedAt : undefined,
         },
       })

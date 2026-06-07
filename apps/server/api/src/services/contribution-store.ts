@@ -13,14 +13,18 @@
  *
  * Nodes round-trip as `presence='present'`, `exclusions` as `presence='hide'`.
  *
- * Two defined equivalences (the round-trip is lossless modulo these, matching how
+ * Three defined equivalences (the round-trip is lossless modulo these, matching how
  * every consumer already treats them):
  *  - **empty collection ≡ absent** — an empty `ports`/`attachments`/`via`/… is stored
  *    as zero rows and rebuilt as an absent key (no consumer distinguishes `[]` from
  *    undefined).
  *  - **`Subgraph.children` is derived, not stored** — membership has one source of
  *    truth (the parent edge, `parent_local_id`); `children[]` is recomputed by
- *    consumers, never persisted (it is not part of the round-trip, like `provenance`).
+ *    consumers, never persisted.
+ *  - **`provenance` / `fieldSources` are derived, not stored** — they are stamped by
+ *    `resolve()` onto its OUTPUT; a contribution is an INPUT, so they are stripped on
+ *    ingest and re-derived on every resolve. Storing one would let a stale value (e.g.
+ *    an old `provenance.source`) leak through a recompute.
  */
 
 import type { Database } from 'bun:sqlite'
@@ -235,6 +239,11 @@ export function ingestGraph(
         'attachments',
         'suppressedAttachments',
         'ports',
+        // resolve()-derived annotations — never an input, so never stored (a
+        // contribution is an input). Re-derived on every resolve. Storing a
+        // stale one (e.g. an old `provenance.source`) would be a latent footgun.
+        'provenance',
+        'fieldSources',
       ])
       const eid = elementId(node.id, 'node', node.parent ?? null, 'present', nodePayload)
       writeIdentity(eid, node.identity)
@@ -246,6 +255,7 @@ export function ingestGraph(
           'identity',
           'attachments',
           'suppressedAttachments',
+          'provenance',
         ])
         // Port local_id is node-scoped (two nodes may share a port id like 'eth0').
         const pid = elementId(
@@ -263,7 +273,13 @@ export function ingestGraph(
 
     // Subgraphs (+ attachments). children[] is derived from parent edges, not stored.
     for (const sg of graph.subgraphs ?? []) {
-      const sgPayload = payloadWithout(sg, ['id', 'parent', 'attachments', 'children'])
+      const sgPayload = payloadWithout(sg, [
+        'id',
+        'parent',
+        'attachments',
+        'children',
+        'provenance',
+      ])
       const eid = elementId(sg.id, 'subgraph', sg.parent ?? null, 'present', sgPayload)
       writeAttachments(eid, 'subgraph', sg.attachments)
     }
@@ -286,7 +302,7 @@ export function ingestGraph(
     for (const link of graph.links ?? []) {
       const from = link.from
       const to = link.to
-      const linkPayload = payloadWithout(link, ['id', 'from', 'to', 'via'])
+      const linkPayload = payloadWithout(link, ['id', 'from', 'to', 'via', 'provenance'])
       // Per-endpoint non-structural fields (plug/ip/pin) ride in payload.
       linkPayload['from'] = payloadWithout(from, ['node', 'port'])
       linkPayload['to'] = payloadWithout(to, ['node', 'port'])

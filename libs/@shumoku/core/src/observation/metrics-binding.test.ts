@@ -110,15 +110,15 @@ describe('metricsBindingOf', () => {
 })
 
 describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
-  it('authored node binding lands on the identity-matched observed node', () => {
+  it('intrinsic node binding lands on the identity-matched observed node', () => {
     // The keystone: the binding is keyed by identity (mgmtIp), so it follows
     // the device even though the observed snapshot uses a different positional
     // id. Re-sync / reorder can never detach it.
-    const authored: NetworkGraph = {
+    const intrinsic: NetworkGraph = {
       version: '1.0',
       nodes: [
         {
-          id: 'authored-1',
+          id: 'intrinsic-1',
           label: '',
           shape: 'rect',
           identity: { mgmtIp: '10.0.0.1' },
@@ -139,19 +139,19 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
         links: [],
       },
     }
-    const out = resolve(authored, [observed])
+    const out = resolve(intrinsic, [observed])
     expect(out.nodes).toHaveLength(1)
     const mapping = deriveMappingFromGraph(out)
     const resolvedId = out.nodes[0]?.id ?? ''
     expect(mapping.nodes[resolvedId]).toEqual({ hostId: '42', hostName: 'host-42' })
   })
 
-  it('authored port binding folds onto the identity-matched port; human can suppress it', () => {
+  it('intrinsic port binding folds onto the identity-matched port; human can suppress it', () => {
     const makeAuthored = (suppress: boolean): NetworkGraph => ({
       version: '1.0',
       nodes: [
         {
-          id: 'authored-1',
+          id: 'intrinsic-1',
           label: '',
           shape: 'rect',
           identity: { mgmtIp: '10.0.0.1' },
@@ -207,21 +207,21 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
   })
 
   it('link binding survives port folding: endpoint port id is remapped so the binding is discoverable', () => {
-    // The observed link references the OBSERVED port id; the authored overlay
+    // The observed link references the OBSERVED port id; the intrinsic overlay
     // carries the binding on a port with a different id but the same identity.
-    // After fold there is one port (the authored id wins) and the link endpoint
+    // After fold there is one port (the intrinsic id wins) and the link endpoint
     // must be remapped to it, else deriveMappingFromGraph can't find the binding.
-    const authored: NetworkGraph = {
+    const intrinsic: NetworkGraph = {
       version: '1.0',
       nodes: [
         {
-          id: 'authored-a',
+          id: 'intrinsic-a',
           label: '',
           shape: 'rect',
           identity: { mgmtIp: '10.0.0.1' },
           ports: [
             {
-              id: 'authored-port',
+              id: 'intrinsic-port',
               label: 'Gi0/1',
               connectors: ['rj45'],
               identity: { ifName: 'Gi0/1' },
@@ -271,7 +271,7 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
       },
     }
 
-    const out = resolve(authored, [observed])
+    const out = resolve(intrinsic, [observed])
     const mapping = deriveMappingFromGraph(out)
     const monitoredNodeId = out.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id
     expect(mapping.links['L1']).toEqual({

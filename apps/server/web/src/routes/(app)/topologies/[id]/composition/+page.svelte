@@ -149,8 +149,8 @@
         counts.total++
         const md = (node.metadata ?? {}) as Record<string, unknown>
         const label = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
-        // Prefer the observing source: once a node has an authored override
-        // its provenance.source flips to 'authored', but discovery still
+        // Prefer the observing source: once a node has a project override
+        // its provenance.source flips to 'intrinsic', but discovery still
         // needs the source that saw it (resolve stamps `observedSource`).
         const sourceId =
           (typeof md['observedSource'] === 'string'

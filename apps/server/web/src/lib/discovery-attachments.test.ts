@@ -19,15 +19,15 @@ describe('accessKey', () => {
 })
 
 describe('isAuthoredAttachment', () => {
-  it('authored when provenance.source is "authored"', () => {
+  it('intrinsic when provenance.source is "intrinsic"', () => {
     expect(
-      isAuthoredAttachment({ kind: 'policy', mode: 'auto', provenance: { source: 'authored' } }),
+      isAuthoredAttachment({ kind: 'policy', mode: 'auto', provenance: { source: 'intrinsic' } }),
     ).toBe(true)
   })
-  it('authored when provenance is absent (fresh local attachment)', () => {
+  it('intrinsic when provenance is absent (fresh local attachment)', () => {
     expect(isAuthoredAttachment({ kind: 'access', protocol: 'ssh' })).toBe(true)
   })
-  it('not authored when provenance.source is a discovery source', () => {
+  it('not intrinsic when provenance.source is a discovery source', () => {
     expect(
       isAuthoredAttachment({
         kind: 'access',
@@ -54,11 +54,11 @@ describe('unifyAccessRows (one editable row per protocol — no two-tier)', () =
   })
 
   it('an override and its observed value collapse into ONE row (override + fallback both kept)', () => {
-    const authored: Attachment[] = [{ kind: 'access', protocol: 'snmp', community: 'override' }]
+    const intrinsic: Attachment[] = [{ kind: 'access', protocol: 'snmp', community: 'override' }]
     const observed: Attachment[] = [
       { kind: 'access', protocol: 'snmp', community: 'public', provenance: { source: 'scan:1' } },
     ]
-    const rows = unifyAccessRows(authored, observed)
+    const rows = unifyAccessRows(intrinsic, observed)
     expect(rows).toHaveLength(1) // one row, not two layers
     expect(rows[0]?.authored?.kind === 'access' ? rows[0]?.authored?.protocol : undefined).toBe(
       'snmp',
@@ -66,8 +66,8 @@ describe('unifyAccessRows (one editable row per protocol — no two-tier)', () =
     expect(rows[0]?.observed).toBeDefined() // the observed value is the revert target
   })
 
-  it('mixes overridden snmp, a pure-authored ssh, and leaves policy out', () => {
-    const authored: Attachment[] = [
+  it('mixes overridden snmp, a pure-intrinsic ssh, and leaves policy out', () => {
+    const intrinsic: Attachment[] = [
       { kind: 'access', protocol: 'snmp', community: 'mine' },
       { kind: 'access', protocol: 'ssh', username: 'admin' },
       { kind: 'policy', mode: 'disabled' },
@@ -75,21 +75,21 @@ describe('unifyAccessRows (one editable row per protocol — no two-tier)', () =
     const observed: Attachment[] = [
       { kind: 'access', protocol: 'snmp', community: 'public', provenance: { source: 'scan:1' } },
     ]
-    const rows = unifyAccessRows(authored, observed)
+    const rows = unifyAccessRows(intrinsic, observed)
     expect(rows.map((r) => r.protocol)).toEqual(['snmp', 'ssh'])
     const ssh = rows.find((r) => r.protocol === 'ssh')
     expect(ssh?.authored).toBeDefined()
-    expect(ssh?.observed).toBeUndefined() // pure authored → remove deletes it outright
+    expect(ssh?.observed).toBeUndefined() // pure intrinsic → remove deletes it outright
   })
 })
 
 describe('stripProvenance', () => {
-  it('drops provenance so the value PATCHes as a plain authored attachment', () => {
+  it('drops provenance so the value PATCHes as a plain intrinsic attachment', () => {
     const a: Attachment = {
       kind: 'access',
       protocol: 'snmp',
       community: 'x',
-      provenance: { source: 'authored' },
+      provenance: { source: 'intrinsic' },
     }
     expect(stripProvenance(a)).toEqual({ kind: 'access', protocol: 'snmp', community: 'x' })
   })

@@ -28,12 +28,13 @@ export function accessKey(protocol: AccessAttachment['protocol']): string {
 
 /**
  * The operator owns this attachment (its value is theirs) when resolve
- * tagged it `authored`, or when it has no provenance yet — a freshly-added
- * local attachment before its next round-trip. Anything else is the value a
- * source currently supplies (shown, editable, annotated with its origin).
+ * tagged it `intrinsic` (the project's own contribution), or when it has no
+ * provenance yet — a freshly-added local attachment before its next round-trip.
+ * Anything else is the value a source currently supplies (shown, editable,
+ * annotated with its origin).
  */
 export function isAuthoredAttachment(a: Attachment): boolean {
-  return a.provenance === undefined || a.provenance.source === 'authored'
+  return a.provenance === undefined || a.provenance.source === 'intrinsic'
 }
 
 /** Drop the resolve-stamped provenance so the value can be edited / PATCHed
