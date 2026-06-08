@@ -542,6 +542,11 @@ export function createTopologiesApi(): Hono {
             status === 'failed' ? 'failed' : 'ok',
             capturedAt,
           )
+          // Stamp lastSyncedAt on the attachment so the UI's per-source "last
+          // synced" reflects a Sync-all too (the per-source /sync route already
+          // does this; without it a source only ever Synced via Sync-all shows
+          // "never synced" despite having recorded observations).
+          getTopologySourcesService().updateLastSynced(source.id)
 
           return {
             sourceId: source.dataSourceId,
