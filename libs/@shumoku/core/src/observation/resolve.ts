@@ -138,16 +138,25 @@ export function resolve(
     for (const m of cl.members) regionIdRemap.set(m.subgraph.id, cl.canonicalId)
   }
 
-  // 2d. Scope. A `scope_role:'scoping'` source marks its regions `scope:'closed'`.
-  //     When any closed region exists the topology is a closed world: a cluster
-  //     survives only if it belongs to some closed region (its parent region is
-  //     closed/descends from one, OR it matches a closed region's membership).
-  //     Dropping here (before fold) means links to out-of-scope nodes dangle and
-  //     drop too. No closed region → no filtering (open world, the default).
-  const scope = buildScopeIndex(regions, regionIdRemap)
+  // 2d. Scope (ordering-driven). The highest-priority topology SOURCE (the
+  //     intrinsic overlay is excluded — it's curation, not coverage) defines the
+  //     closed world: its regions confine every lower source to within them. A
+  //     source may also force itself scope-defining with an explicit
+  //     `scope:'closed'` region (manual override, regardless of priority). When
+  //     such a scope exists, a cluster survives only if it (a) carries an
+  //     intrinsic member — operator curation is never dropped — or (b) carries a
+  //     member from a scope-defining source (its own coverage) or (c) lands in a
+  //     closed region by parent or membership. So a lower source ENRICHES /
+  //     ADDS within the scope but cannot drag in out-of-range nodes. No
+  //     scope-defining region → no filtering (open-world union, e.g. a single
+  //     source or sources that contribute no regions).
+  const scopeDefiningSourceIds = computeScopeDefiningSources(contributions)
+  const scope = buildScopeIndex(regions, regionIdRemap, scopeDefiningSourceIds)
   const nodeClusters =
     scope.closedRegionIds.size > 0
-      ? afterExclusions.filter((c) => clusterInClosedScope(c, regions, regionIdRemap, scope))
+      ? afterExclusions.filter((c) =>
+          clusterInClosedScope(c, regions, regionIdRemap, scope, scopeDefiningSourceIds),
+        )
       : afterExclusions
 
   // 3. For each cluster, fold into a single resolved Node
@@ -965,21 +974,44 @@ function ipv4InCidr(ip: string, cidr: string): boolean {
 }
 
 interface ScopeIndex {
-  /** Canonical ids of regions explicitly marked `scope:'closed'`. */
+  /** Canonical ids of regions owned by a scope-defining source (the closed world). */
   closedRegionIds: Set<string>
   /** True if `regionId` is closed or descends from a closed region. */
   inClosedScope: (regionId: string) => boolean
+}
+
+/**
+ * The sources whose regions form the closed scope: the highest-priority
+ * non-intrinsic source(s), PLUS any source that explicitly marks a region
+ * `scope:'closed'` (manual override regardless of priority). The intrinsic
+ * overlay (+∞) is excluded — it's curation, not coverage, so it never defines
+ * the scope. Empty when there are no non-intrinsic sources.
+ */
+function computeScopeDefiningSources(contributions: Contribution[]): Set<string> {
+  const sources = contributions.filter((c) => c.sourceId !== 'intrinsic')
+  const ids = new Set<string>()
+  if (sources.length === 0) return ids
+  const maxPriority = sources.reduce((m, c) => Math.max(m, c.priority), Number.NEGATIVE_INFINITY)
+  for (const c of sources) {
+    if (c.priority === maxPriority) ids.add(c.sourceId)
+    else if ((c.graph.subgraphs ?? []).some((s) => s.scope === 'closed')) ids.add(c.sourceId)
+  }
+  return ids
 }
 
 /** Index closed regions + the region parent chain for scope ancestry walks. */
 function buildScopeIndex(
   clusters: RegionCluster[],
   regionIdRemap: Map<string, string>,
+  scopeDefiningSourceIds: Set<string>,
 ): ScopeIndex {
   const closedRegionIds = new Set<string>()
   const regionParent = new Map<string, string>()
   for (const cl of clusters) {
-    if (cl.members.some((m) => m.subgraph.scope === 'closed')) closedRegionIds.add(cl.canonicalId)
+    // A region is closed if a scope-defining source contributed (any member of)
+    // it — that includes top-priority sources' regions automatically.
+    if (cl.members.some((m) => scopeDefiningSourceIds.has(m.sourceId)))
+      closedRegionIds.add(cl.canonicalId)
     const ranked = [...cl.members].sort(
       (a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt,
     )
@@ -1004,16 +1036,28 @@ function buildScopeIndex(
 }
 
 /**
- * Whether a node cluster belongs to a closed region: its winning parent region
- * (highest-priority member's `parent`, remapped) is closed/descends from one, OR
- * any member matches a closed region's membership criteria.
+ * Whether a node cluster survives a closed scope. The scope CONFINES lower
+ * sources to the scope-defining source's coverage; it never drops curation or
+ * the scope owner's own nodes. A cluster is in scope if:
+ *   - it carries an intrinsic member (operator curation — never dropped), OR
+ *   - it carries a member from a scope-defining source (the owner's coverage —
+ *     and a lower source that merged into such a cluster rides along), OR
+ *   - its winning parent region is closed / descends from one, OR
+ *   - any member matches a closed region's membership criteria (a lower source
+ *     filling a gap WITHIN the scope by predicate).
+ * Otherwise it's an out-of-range node from a lower source → dropped.
  */
 function clusterInClosedScope(
   cluster: NodeCluster,
   clusters: RegionCluster[],
   regionIdRemap: Map<string, string>,
   scope: ScopeIndex,
+  scopeDefiningSourceIds: Set<string>,
 ): boolean {
+  for (const m of cluster.members) {
+    if (m.sourceId === 'intrinsic') return true
+    if (scopeDefiningSourceIds.has(m.sourceId)) return true
+  }
   let parentRegion: string | undefined
   for (const m of rankMembers(cluster.members)) {
     if (m.node.parent) {

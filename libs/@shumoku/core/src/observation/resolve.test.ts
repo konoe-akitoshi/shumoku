@@ -1761,27 +1761,28 @@ describe('resolve()', () => {
       expect(out.links[0]?.presence).toBeUndefined() // input-only, never emitted
     })
 
-    it('a closed region drops out-of-scope clusters, keeps in-region + membership matches', () => {
+    it('top-priority source defines the scope; a lower source is confined to it', () => {
+      // A (priority 1) is the highest-priority source → its region is the closed
+      // world (ordering-driven, no explicit flag). B (priority 0) is confined:
+      // its node that matches A's region membership is kept (fills the scope),
+      // the out-of-range one is dropped. A's own node is always kept.
       const scoping: SnapshotEntry = {
         sourceId: 'A',
         capturedAt: 1,
+        priority: 1,
         status: 'ok',
         graph: {
           ...emptyGraph(),
           nodes: [{ id: 'a1', label: 'in-region', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' }],
           subgraphs: [
-            {
-              id: 'g',
-              label: 'Region',
-              scope: 'closed',
-              membership: [{ attr: 'subnet', value: '10.0.0.0/24' }],
-            },
+            { id: 'g', label: 'Region', membership: [{ attr: 'subnet', value: '10.0.0.0/24' }] },
           ],
         },
       }
       const additive: SnapshotEntry = {
         sourceId: 'B',
         capturedAt: 1,
+        priority: 0,
         status: 'ok',
         graph: {
           ...emptyGraph(),
@@ -1792,8 +1793,54 @@ describe('resolve()', () => {
         },
       }
       const out = resolve(emptyGraph(), [scoping, additive])
-      const labels = out.nodes.map((n) => n.label).sort()
-      expect(labels).toEqual(['fills-region', 'in-region'])
+      expect(out.nodes.map((n) => n.label).sort()).toEqual(['fills-region', 'in-region'])
+    })
+
+    it('an intrinsic (curated) node is never dropped by scope', () => {
+      const intrinsic: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [{ id: 'op', label: 'operator-placed', identity: { mgmtIp: '10.9.0.1' } }],
+      }
+      // A scope-defining source whose region does NOT contain the intrinsic node.
+      const scoping: SnapshotEntry = {
+        sourceId: 'A',
+        capturedAt: 1,
+        priority: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'a1', label: 'a1', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' }],
+          subgraphs: [{ id: 'g', label: 'Region' }],
+        },
+      }
+      const out = resolve(intrinsic, [scoping])
+      expect(out.nodes.map((n) => n.label).sort()).toEqual(['a1', 'operator-placed'])
+    })
+
+    it('no scope when sources contribute no regions (open-world union)', () => {
+      const a: SnapshotEntry = {
+        sourceId: 'A',
+        capturedAt: 1,
+        priority: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'a1', label: 'a', identity: { mgmtIp: '10.0.0.1' } }],
+        },
+      }
+      const b: SnapshotEntry = {
+        sourceId: 'B',
+        capturedAt: 1,
+        priority: 0,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'b1', label: 'b', identity: { mgmtIp: '10.9.0.1' } }],
+        },
+      }
+      const out = resolve(emptyGraph(), [a, b])
+      // no regions → no closed scope → both kept (union)
+      expect(out.nodes.map((n) => n.label).sort()).toEqual(['a', 'b'])
     })
   })
 })

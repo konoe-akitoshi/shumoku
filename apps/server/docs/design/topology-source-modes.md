@@ -107,12 +107,32 @@ UI presents **role presets** over these knobs; raw knobs are an advanced surface
 
 | Preset | node | link | scope_role | meaning |
 |--------|------|------|-----------|---------|
-| **Additive** (default) | scoop | add | NULL | adds nodes+links, unions like today |
-| **Scoping** | scoop | add | scoping | defines a closed region; out-of-region clusters dropped |
+| **Additive** | scoop | add | NULL | adds nodes+links within the scope |
 | **Enrichment** | anchor | update | NULL | fills fields of existing entities only |
+| **Scoping** (override) | scoop | add | scoping | force this source to define the scope even when it isn't top-priority |
 
-Default on attach is **Additive** — unconstrained, preserves current union
-behavior. Scoping / Enrichment are explicit opt-in.
+**Scope is ordering-driven (decided model 2).** The highest-priority topology
+SOURCE (the intrinsic overlay is excluded — it's curation, not coverage) defines
+the closed world: its regions confine every lower-priority source to within them.
+There is no per-source "is this the scope?" flag for the common case — priority
+already orders the sources, and the top one's coverage *is* the scope. `scope_role`
+is demoted to a manual **override** (force a non-top source to also define scope).
+Scope only activates when a scope-defining source actually contributes regions; a
+single source, or sources with no regions, resolve as an open-world union.
+
+The scope **confines** lower sources — it never drops curation or the scope
+owner's own nodes. A cluster survives iff it (a) has an intrinsic member, (b) has a
+member from a scope-defining source (its own coverage; a lower source merged into
+such a cluster rides along), (c) lands in a closed region by parent, or (d) matches
+a closed region's membership predicate. Otherwise it's an out-of-range node from a
+lower source → dropped (its links dangle and drop too).
+
+> For "Additive = ADD new within the scope" to differ from Enrichment, the scope
+> must be **predicate-based** (region `membership`): a brand-new lower-source node
+> can only be "within scope" if it matches a region predicate. With an enumeration-
+> only scope (a source that emits subgraphs but no `membership`), a new lower node
+> can't be placed in-region, so Additive degenerates to Enrichment (only
+> identity-merged nodes survive). This needs plugins to emit region membership.
 
 Resolve wiring:
 
@@ -120,9 +140,8 @@ Resolve wiring:
   (Axis B handles the rest).
 - `link_contribution=update` → the source's links contribute fields to an existing
   link cluster but never create a new link cluster.
-- `scope_role=scoping` → the source's regions are closed: any cluster that is not a
-  member of some closed region is dropped (inclusion predicate — the sibling of the
-  existing `isClusterExcluded` exclusion filter).
+- scope → the highest-priority source's regions (or an override source's) are
+  closed; `clusterInClosedScope` confines lower sources to them.
 
 ### hideDisconnected is post-resolve display (Axis E)
 
