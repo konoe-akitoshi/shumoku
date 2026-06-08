@@ -73,6 +73,8 @@ interface MetricsGlobal {
   reconnectTimeout: ReturnType<typeof setTimeout> | null
   reconnectAttempts: number
   intentionalDisconnect: boolean
+  /** SSE source for shared (token-scoped) live metrics — anonymous viewers. */
+  sse: EventSource | null
 }
 
 function getGlobal(): MetricsGlobal {
@@ -82,6 +84,7 @@ function getGlobal(): MetricsGlobal {
       reconnectTimeout: null,
       reconnectAttempts: 0,
       intentionalDisconnect: false,
+      sse: null,
     }
   }
   return (globalThis as Record<string, unknown>)[METRICS_WS_KEY] as MetricsGlobal
@@ -228,6 +231,46 @@ function createMetricsStore() {
     update((s) => ({ ...s, subscribedTopology: null, metrics: null }))
   }
 
+  // --- Shared (token-scoped) live metrics over SSE ---
+  // A public/shared viewer has no session, so it can't use the auth-gated `/ws`.
+  // Instead it streams projected metrics from the token-scoped share endpoint.
+  function getShareStreamUrl(token: string): string {
+    const isDev = window.location.port === '5173'
+    const origin = isDev ? 'http://localhost:8080' : window.location.origin
+    return `${origin}/api/share/topologies/${token}/metrics/stream`
+  }
+
+  function disconnectShareStream(): void {
+    if (g.sse) {
+      g.sse.onmessage = null
+      g.sse.onerror = null
+      g.sse.close()
+      g.sse = null
+    }
+    set(initialState)
+  }
+
+  function connectShareStream(token: string): void {
+    disconnectShareStream()
+    try {
+      const es = new EventSource(getShareStreamUrl(token))
+      g.sse = es
+      es.onopen = () => update((s) => ({ ...s, connected: true, error: null }))
+      es.onmessage = (event) => {
+        if (!event.data) return // ignore keep-alive pings
+        try {
+          update((s) => ({ ...s, metrics: JSON.parse(event.data) as MetricsData }))
+        } catch (err) {
+          console.error('[Metrics] Failed to parse share stream message:', err)
+        }
+      }
+      es.onerror = () => update((s) => ({ ...s, connected: false }))
+    } catch (err) {
+      console.error('[Metrics] Failed to open share stream:', err)
+      update((s) => ({ ...s, error: 'Failed to connect' }))
+    }
+  }
+
   return {
     subscribe,
     connect,
@@ -235,6 +278,8 @@ function createMetricsStore() {
     subscribeToTopology,
     setInterval,
     unsubscribe,
+    connectShareStream,
+    disconnectShareStream,
   }
 }
 

@@ -2,6 +2,7 @@
   import { page } from '$app/stores'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import Logo from '$lib/components/Logo.svelte'
+  import { metricsStore } from '$lib/stores'
 
   let name = $state('')
   let loading = $state(true)
@@ -34,6 +35,8 @@
         const data = await res.json()
         if (cancelled) return
         name = data.name || 'Shared Topology'
+        // Stream token-scoped live metrics (projected) into the diagram.
+        metricsStore.connectShareStream(currentToken)
       } catch {
         if (cancelled) return
         error = 'Failed to load topology'
@@ -44,6 +47,7 @@
 
     return () => {
       cancelled = true
+      metricsStore.disconnectShareStream()
     }
   })
 </script>

@@ -24,6 +24,7 @@ import { isSetupComplete, SESSION_COOKIE, validateSession } from './services/aut
 import { DataSourceService } from './services/datasource.js'
 import { startDiscoveryScheduler, stopDiscoveryScheduler } from './services/discovery-scheduler.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
+import { publishMetrics } from './services/metrics-hub.js'
 import type { ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { TopologyManager } from './topology.js'
@@ -475,6 +476,9 @@ export class Server {
       if (metrics) {
         this.dbTopologyMetrics.set(topology.id, metrics)
         this.topologyService.updateMetrics(topology.id, metrics)
+        // Feed the hub so token-scoped share SSE streams can read/observe live
+        // metrics off the same central poll (no second poll loop).
+        publishMetrics(topology.id, metrics)
       }
     }
   }
