@@ -1481,6 +1481,8 @@ describe('resolve()', () => {
       // output: resolve is the sole authority and always restamps.
       const intrinsic = {
         ...emptyGraph(),
+        // A member node keeps the subgraph (empty subgraphs are pruned).
+        nodes: [{ id: 'n', label: 'N', parent: 'sg-stale' }],
         subgraphs: [
           {
             id: 'sg-stale',
@@ -1549,6 +1551,8 @@ describe('resolve()', () => {
         status: 'ok',
         graph: {
           ...emptyGraph(),
+          // A node in the leaf keeps the rack→site chain (empty regions prune).
+          nodes: [{ id: 'n', label: 'N', identity: { mgmtIp: '10.0.0.1' }, parent: 'rack' }],
           subgraphs: [
             { id: 'site', label: 'Site', children: ['rack'] },
             { id: 'rack', label: 'Rack', parent: 'site' },
@@ -1599,13 +1603,39 @@ describe('resolve()', () => {
       const out = resolve(intrinsic, [snap])
       const ids = out.subgraphs?.map((s) => s.id) ?? []
       expect(ids).toContain('intrinsic-sg') // raw — intrinsic owns the id space
-      expect(ids).toContain('src-a:1:sg-2')
-      // same identity (10.0.0.1) clusters into one node; intrinsic parent wins
+      // same identity (10.0.0.1) clusters into one node; intrinsic parent wins →
+      // the source group sg-2 ends up empty and is pruned (no floating box).
+      expect(ids).not.toContain('src-a:1:sg-2')
       const r1 = out.nodes.find((n) => n.label === 'R1')
       expect(r1?.parent).toBe('intrinsic-sg')
       expect(out.subgraphs?.find((s) => s.id === 'intrinsic-sg')?.provenance?.source).toBe(
         'intrinsic',
       )
+    })
+
+    it('prunes empty subgraphs but keeps non-empty ones nested (no floating boxes)', () => {
+      // Pod has no direct members; only its leaf 5Y has a node. Stage is fully
+      // empty. Result: Stage pruned; 5Y + its ancestor Pod kept and nested.
+      const snap: SnapshotEntry = {
+        sourceId: 'src',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'n', label: 'sw', identity: { mgmtIp: '10.0.0.1' }, parent: 'rack5y' }],
+          subgraphs: [
+            { id: 'pod', label: 'Pod' },
+            { id: 'rack5y', label: '5Y', parent: 'pod' },
+            { id: 'stage', label: 'Stage' }, // fully empty → pruned
+            { id: 'rack6y', label: '6Y', parent: 'pod' }, // empty leaf → pruned
+          ],
+        },
+      }
+      const out = resolve(emptyGraph(), [snap])
+      const labels = (out.subgraphs ?? []).map((s) => s.label).sort()
+      expect(labels).toEqual(['5Y', 'Pod']) // Stage + 6Y pruned
+      const rack = out.subgraphs?.find((s) => s.label === '5Y')
+      expect(rack?.parent).toBe('src:pod') // still nested under its kept ancestor
     })
   })
 
