@@ -120,12 +120,19 @@ is demoted to a manual **override** (force a non-top source to also define scope
 Scope only activates when a scope-defining source actually contributes regions; a
 single source, or sources with no regions, resolve as an open-world union.
 
-The scope **confines** lower sources — it never drops curation or the scope
-owner's own nodes. A cluster survives iff it (a) has an intrinsic member, (b) has a
-member from a scope-defining source (its own coverage; a lower source merged into
-such a cluster rides along), (c) lands in a closed region by parent, or (d) matches
-a closed region's membership predicate. Otherwise it's an out-of-range node from a
-lower source → dropped (its links dangle and drop too).
+The scope is **region-centric**: it is the scope source's REGIONS (e.g. a Zabbix
+host group), and "in scope" means being a member of such a region — NOT merely
+being emitted by the scope source. A cluster survives iff it (a) has an intrinsic
+member that makes a real topology claim (operator curation; a bare metrics-binding
+anchor does NOT count), (b) lands in a closed region by parent / ancestor, or
+(c) matches a closed region's membership predicate. Closed regions are those
+contributed by a scope-defining source OR the operator overlay.
+
+Critically this means the **scope source's own out-of-region nodes are dropped**,
+not just lower sources' — e.g. Zabbix LLDP external neighbors (synthesized for
+connectivity, but sitting outside the fetched host group) are out of scope and
+removed (their links dangle and drop). "Outside the host-group box" = "outside the
+scope", which is the whole point of scoping.
 
 > For "Additive = ADD new within the scope" to differ from Enrichment, the scope
 > must be **predicate-based** (region `membership`): a brand-new lower-source node

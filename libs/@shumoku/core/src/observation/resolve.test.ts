@@ -1826,6 +1826,29 @@ describe('resolve()', () => {
       expect(out.nodes.map((n) => n.label).sort()).toEqual(['fills-region', 'in-region'])
     })
 
+    it('scope is region-centric: the scope source’s own out-of-region nodes drop', () => {
+      // Scope = the source's REGIONS, not everything it emits. A node IN the
+      // region is kept; the source's own peripheral node that is in NO region
+      // (e.g. a Zabbix LLDP external neighbor, outside the fetched host group)
+      // is OUT of scope and dropped.
+      const scoping: SnapshotEntry = {
+        sourceId: 'A',
+        capturedAt: 1,
+        priority: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            { id: 'in', label: 'in-region', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' },
+            { id: 'ext', label: 'external-neighbor', identity: { sysName: 'peer' } }, // no region
+          ],
+          subgraphs: [{ id: 'g', label: 'Region' }],
+        },
+      }
+      const out = resolve(emptyGraph(), [scoping])
+      expect(out.nodes.map((n) => n.label)).toEqual(['in-region'])
+    })
+
     it('an intrinsic (curated) node is never dropped by scope', () => {
       const intrinsic: NetworkGraph = {
         ...emptyGraph(),
