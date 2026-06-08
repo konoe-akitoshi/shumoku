@@ -176,9 +176,7 @@
       <label class="flex items-center justify-between cursor-pointer">
         <div>
           <p class="text-sm text-theme-text">Hide Disconnected Nodes</p>
-          <p class="text-xs text-theme-text-muted">
-            Drop auto-discovered nodes that have no links
-          </p>
+          <p class="text-xs text-theme-text-muted">Drop any node that has no links</p>
         </div>
         <input
           type="checkbox"
