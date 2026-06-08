@@ -43,6 +43,11 @@ export function publicTopology(
  * narrower than the authenticated `buildTopologyContext`: no `portInfo`
  * (interface names / aliases), no `topologySourceId` / `metricsSourceId`, no
  * raw `mapping`. Used by BOTH share doors so they expose identical shapes.
+ *
+ * `metrics` MUST go through `publicMetrics` — the live poll loop updates
+ * `parsed.metrics` in place with full `NodeMetrics` (monitoringError = SNMP
+ * timeout text / internal addrs, plus monitoring/cpu/memory/lastSeen) and
+ * `warnings` (parse-error text). Shipping it raw leaked internal detail.
  */
 export function publicTopologyContext(parsed: ParsedTopology) {
   return {
@@ -60,7 +65,7 @@ export function publicTopologyContext(parsed: ParsedTopology) {
       standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
     })),
     subgraphs: parsed.graph.subgraphs || [],
-    metrics: parsed.metrics,
+    metrics: publicMetrics(parsed.metrics),
   }
 }
 
