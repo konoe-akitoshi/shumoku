@@ -63,4 +63,12 @@ describe('migration chain (001-014)', () => {
       expect(cols).toContain(c)
     }
   })
+
+  test('contribution_link.local_id is nullable (019) — id-less links are allowed', () => {
+    const info = getDatabase().query('PRAGMA table_info(contribution_link)').all() as {
+      name: string
+      notnull: number
+    }[]
+    expect(info.find((c) => c.name === 'local_id')?.notnull).toBe(0)
+  })
 })

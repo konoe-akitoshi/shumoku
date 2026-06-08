@@ -23,6 +23,7 @@ import migration014 from './migrations/014_manual_graph_to_observations.sql'
 import migration016 from './migrations/016_contribution_store.sql'
 import migration017 from './migrations/017_drop_dead_tables.sql'
 import migration018 from './migrations/018_composition_modes.sql'
+import migration019 from './migrations/019_fix_contribution_link_local_id_nullable.sql'
 
 /** Ordered list of all migrations */
 const MIGRATIONS: { name: string; sql: string }[] = [
@@ -42,6 +43,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '016_contribution_store.sql', sql: migration016 },
   { name: '017_drop_dead_tables.sql', sql: migration017 },
   { name: '018_composition_modes.sql', sql: migration018 },
+  { name: '019_fix_contribution_link_local_id_nullable.sql', sql: migration019 },
 ]
 
 interface MigrationRecord {
