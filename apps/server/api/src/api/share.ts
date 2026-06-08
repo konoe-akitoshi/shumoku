@@ -8,17 +8,62 @@
  * `resolveDashboardGrant` middleware, not re-checked per handler).
  */
 
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
 import type { AlertQueryOptions } from '../plugins/types.js'
+import { getLatestMetrics, liveSubscriberCount, subscribeMetrics } from '../services/metrics-hub.js'
+import type { MetricsData } from '../types.js'
 import { getDashboardService } from './dashboards.js'
 import {
   publicAlert,
   publicDashboardLayout,
+  publicMetrics,
   publicTopology,
   publicTopologyContext,
   publicTopologyGraph,
 } from './share-projections.js'
 import { buildRenderOutput, getDataSourceService, getTopologyService } from './topologies.js'
+
+/** Global cap on concurrent share metric streams (single-instance backstop). */
+const MAX_SHARE_METRIC_STREAMS = 200
+
+/**
+ * Stream a topology's live metrics to a token-bearing viewer over SSE, projected
+ * by `publicMetrics`. Reads off the central poll cache (metrics-hub) — no second
+ * poll. Sends the cached snapshot immediately, then the newest tick (coalesced —
+ * back-pressure safe), with an idle ping; unsubscribes on abort.
+ */
+function streamTopologyMetrics(c: Context, topologyId: string) {
+  c.header('Cache-Control', 'no-store')
+  return streamSSE(c, async (stream) => {
+    let aborted = false
+    let pending: MetricsData | null = getLatestMetrics(topologyId) ?? null
+    const unsub = subscribeMetrics(topologyId, (m) => {
+      pending = m
+    })
+    stream.onAbort(() => {
+      aborted = true
+      unsub()
+    })
+    let idleTicks = 0
+    while (!aborted) {
+      if (pending) {
+        const next = pending
+        pending = null
+        idleTicks = 0
+        await stream.writeSSE({ data: JSON.stringify(publicMetrics(next)) })
+      } else {
+        idleTicks++
+        if (idleTicks >= 15) {
+          idleTicks = 0
+          await stream.writeSSE({ event: 'ping', data: '' })
+        }
+      }
+      await stream.sleep(1000)
+    }
+    unsub()
+  })
+}
 
 /** Set of resources a dashboard token is allowed to reach, keyed by kind. */
 interface ReachableSet {
@@ -136,6 +181,19 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
     }
   })
 
+  // Live metrics (SSE) for a shared topology link. Token-scoped + projected; reads
+  // the central poll cache via the metrics-hub (no second poll). The token is in the
+  // path like every other share route (consistent posture). Hardening — token
+  // digests, short-lived stream tickets, per-IP caps — is the deferred auth work (#412).
+  app.get('/topologies/:token/metrics/stream', (c) => {
+    const topology = getTopologyService().getByShareToken(c.req.param('token'))
+    if (!topology) return c.json({ error: 'Not found' }, 404)
+    if (liveSubscriberCount() >= MAX_SHARE_METRIC_STREAMS) {
+      return c.json({ error: 'Too many concurrent streams' }, 503)
+    }
+    return streamTopologyMetrics(c, topology.id)
+  })
+
   // Get shared dashboard data
   app.get('/dashboards/:token', (c) => {
     const token = c.req.param('token')
@@ -222,6 +280,17 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
     }
+  })
+
+  // Live metrics (SSE) for a topology widget in a shared dashboard. Same as the
+  // topology door, but the id must be referenced by the dashboard's layout.
+  app.get('/dashboards/:token/topologies/:id/metrics/stream', (c) => {
+    const id = c.req.param('id')
+    if (!c.get('reachable').topologyIds.has(id)) return c.json({ error: 'Not found' }, 404)
+    if (liveSubscriberCount() >= MAX_SHARE_METRIC_STREAMS) {
+      return c.json({ error: 'Too many concurrent streams' }, 503)
+    }
+    return streamTopologyMetrics(c, id)
   })
 
   // Alerts for an alert widget in a shared dashboard.

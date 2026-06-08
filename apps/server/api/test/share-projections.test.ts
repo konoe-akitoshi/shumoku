@@ -6,9 +6,11 @@ import type { Alert, NetworkGraph } from '@shumoku/core'
 import {
   publicAlert,
   publicDashboardLayout,
+  publicMetrics,
   publicTopologyGraph,
 } from '../src/api/share-projections.ts'
 import type { ParsedTopology } from '../src/services/topology.ts'
+import type { MetricsData } from '../src/types.ts'
 
 describe('publicTopologyGraph — strips sensitive carriers from the shared graph', () => {
   const graph = {
@@ -155,5 +157,49 @@ describe('publicDashboardLayout — allow-listed widget config', () => {
   })
   test('malformed layout → empty widgets (no throw)', () => {
     expect(JSON.parse(publicDashboardLayout('not json'))).toEqual({ widgets: [] })
+  })
+})
+
+describe('publicMetrics — node status only, link traffic kept, internals dropped', () => {
+  const m = {
+    nodes: {
+      sw1: {
+        status: 'up',
+        monitoring: 'failing',
+        monitoringError: 'SNMP timeout to 10.0.0.1:161 OID 1.3.6.1',
+        cpu: 42,
+        memory: 80,
+        lastSeen: 1000,
+      },
+    },
+    links: {
+      l1: { status: 'up', utilization: 50, inBps: 1000, outBps: 2000, inUtilization: 40 },
+    },
+    timestamp: 1234,
+    warnings: ['Parse error: secret config text', 'Using insecure HTTP connection'],
+  } as unknown as MetricsData
+
+  const out = publicMetrics(m)
+  const blob = JSON.stringify(out)
+
+  test('node keeps ONLY status (drops monitoringError/monitoring/cpu/memory/lastSeen)', () => {
+    expect(out.nodes.sw1).toEqual({ status: 'up' })
+  })
+  test('link keeps status + traffic numbers', () => {
+    expect(out.links.l1).toEqual({
+      status: 'up',
+      utilization: 50,
+      inUtilization: 40,
+      inBps: 1000,
+      outBps: 2000,
+    })
+  })
+  test('drops warnings and any internal/error text', () => {
+    expect(out.warnings).toBeUndefined()
+    expect(blob).not.toContain('SNMP timeout')
+    expect(blob).not.toContain('10.0.0.1')
+    expect(blob).not.toContain('secret config')
+    expect(blob).not.toContain('monitoringError')
+    expect(out.timestamp).toBe(1234)
   })
 })

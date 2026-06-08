@@ -16,7 +16,7 @@
 import type { Alert, NetworkGraph } from '@shumoku/core'
 import { specDeviceType } from '@shumoku/core'
 import type { ParsedTopology } from '../services/topology.js'
-import type { MetricsMapping, Topology } from '../types.js'
+import type { MetricsData, MetricsMapping, Topology } from '../types.js'
 import { applyMappingBandwidth } from './topologies.js'
 
 /**
@@ -189,4 +189,28 @@ export function publicAlert(a: Alert): {
     startTime: a.startTime,
     ...(a.endTime !== undefined ? { endTime: a.endTime } : {}),
   }
+}
+
+/**
+ * Allow-listed projection of a live metrics tick for a shared viewer. Nodes keep
+ * ONLY `status` (drops `monitoringError` — SNMP timeout text / internal addrs —
+ * plus `monitoring`/cpu/memory/lastSeen, none of which the shared diagram renders).
+ * Links keep status + the traffic numbers the diagram colors/animates with (that
+ * IS the shared live data). Graph-level `warnings` (parse-error text) are dropped.
+ */
+export function publicMetrics(m: MetricsData): MetricsData {
+  const nodes: MetricsData['nodes'] = {}
+  for (const [id, n] of Object.entries(m.nodes)) nodes[id] = { status: n.status }
+  const links: MetricsData['links'] = {}
+  for (const [id, l] of Object.entries(m.links)) {
+    links[id] = {
+      status: l.status,
+      ...(l.utilization !== undefined ? { utilization: l.utilization } : {}),
+      ...(l.inUtilization !== undefined ? { inUtilization: l.inUtilization } : {}),
+      ...(l.outUtilization !== undefined ? { outUtilization: l.outUtilization } : {}),
+      ...(l.inBps !== undefined ? { inBps: l.inBps } : {}),
+      ...(l.outBps !== undefined ? { outBps: l.outBps } : {}),
+    }
+  }
+  return { nodes, links, timestamp: m.timestamp }
 }
