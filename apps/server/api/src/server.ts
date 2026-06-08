@@ -20,6 +20,7 @@ import {
   pluginRegistry,
   registerBundledPlugins,
 } from './plugins/index.js'
+import { isSetupComplete, SESSION_COOKIE, validateSession } from './services/auth.js'
 import { DataSourceService } from './services/datasource.js'
 import { startDiscoveryScheduler, stopDiscoveryScheduler } from './services/discovery-scheduler.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
@@ -27,6 +28,24 @@ import type { ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { TopologyManager } from './topology.js'
 import type { ClientMessage, ClientState, Config, MetricsData, MetricsMapping } from './types.js'
+
+/**
+ * Validate the admin session straight off a raw `Request` (the WebSocket upgrade
+ * runs in Bun's `fetch`, before Hono, so we parse the Cookie header ourselves
+ * rather than via hono/cookie). Returns true only for a live session.
+ */
+function hasValidSession(req: Request): boolean {
+  const cookie = req.headers.get('cookie')
+  if (!cookie) return false
+  for (const part of cookie.split(';')) {
+    const eq = part.indexOf('=')
+    if (eq === -1) continue
+    if (part.slice(0, eq).trim() !== SESSION_COOKIE) continue
+    const value = decodeURIComponent(part.slice(eq + 1).trim())
+    return validateSession(value)
+  }
+  return false
+}
 
 /**
  * Merge metrics from a later poll into an accumulator. Sources are
@@ -524,6 +543,16 @@ export class Server {
       fetch(req, server) {
         // Handle WebSocket upgrade
         if (new URL(req.url).pathname === '/ws') {
+          // AUTH GATE: the live-metrics socket requires a valid admin session.
+          // It bypasses Hono (and thus authMiddleware), so without this check ANY
+          // anonymous client could subscribe to ANY topology id and receive its
+          // live metrics + internal warnings — a data leak. Public/shared live
+          // metrics will be served separately via a token-scoped channel, NOT here.
+          // (When setup isn't complete there's no password yet — mirror
+          // authMiddleware and allow through.)
+          if (isSetupComplete() && !hasValidSession(req)) {
+            return new Response('Unauthorized', { status: 401 })
+          }
           const upgraded = server.upgrade(req, {
             data: { subscribedTopology: null, filter: { nodes: [], links: [] } },
           })
