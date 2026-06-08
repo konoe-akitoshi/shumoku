@@ -8,6 +8,8 @@ dist/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/*.bak*
+data/*.db.*
 
 # Environment
 .env
