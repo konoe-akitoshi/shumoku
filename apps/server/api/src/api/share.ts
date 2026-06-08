@@ -11,7 +11,13 @@
 import { Hono } from 'hono'
 import type { AlertQueryOptions } from '../plugins/types.js'
 import { getDashboardService } from './dashboards.js'
-import { publicTopology, publicTopologyContext, publicTopologyGraph } from './share-projections.js'
+import {
+  publicAlert,
+  publicDashboardLayout,
+  publicTopology,
+  publicTopologyContext,
+  publicTopologyGraph,
+} from './share-projections.js'
 import { buildRenderOutput, getDataSourceService, getTopologyService } from './topologies.js'
 
 /** Set of resources a dashboard token is allowed to reach, keyed by kind. */
@@ -64,7 +70,9 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
       if (!parsed) {
         const parseError = service.getParseError(topology.id)
         if (parseError) {
-          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+          // Generic message: never surface internal parse/connection detail to an
+          // anonymous viewer (it can carry config text / upstream errors).
+          return c.json({ error: 'Topology is currently unavailable' }, 422)
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
@@ -88,7 +96,9 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
       if (!parsed) {
         const parseError = service.getParseError(topology.id)
         if (parseError) {
-          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+          // Generic message: never surface internal parse/connection detail to an
+          // anonymous viewer (it can carry config text / upstream errors).
+          return c.json({ error: 'Topology is currently unavailable' }, 422)
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
@@ -113,7 +123,9 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
       if (!parsed) {
         const parseError = service.getParseError(topology.id)
         if (parseError) {
-          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+          // Generic message: never surface internal parse/connection detail to an
+          // anonymous viewer (it can carry config text / upstream errors).
+          return c.json({ error: 'Topology is currently unavailable' }, 422)
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
@@ -136,7 +148,8 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
     return c.json({
       id: dashboard.id,
       name: dashboard.name,
-      layoutJson: dashboard.layoutJson,
+      // Allow-listed layout projection — never the raw extensible layoutJson.
+      layoutJson: publicDashboardLayout(dashboard.layoutJson),
     })
   })
 
@@ -175,7 +188,9 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
       if (!parsed) {
         const parseError = service.getParseError(id)
         if (parseError) {
-          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+          // Generic message: never surface internal parse/connection detail to an
+          // anonymous viewer (it can carry config text / upstream errors).
+          return c.json({ error: 'Topology is currently unavailable' }, 422)
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
@@ -196,7 +211,9 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
       if (!parsed) {
         const parseError = service.getParseError(id)
         if (parseError) {
-          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+          // Generic message: never surface internal parse/connection detail to an
+          // anonymous viewer (it can carry config text / upstream errors).
+          return c.json({ error: 'Topology is currently unavailable' }, 422)
         }
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
@@ -223,7 +240,8 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
     if (minSeverity) options.minSeverity = minSeverity as AlertQueryOptions['minSeverity']
     try {
       const alerts = await service.getAlerts(id, options)
-      return c.json(alerts)
+      // Allow-listed projection — drop description / url / labels / source / hostId.
+      return c.json(alerts.map(publicAlert))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
