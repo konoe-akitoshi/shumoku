@@ -197,7 +197,12 @@ export function resolve(
   const resolvedLinks = foldLinks(contributions, clusterById, portIdRemap)
 
   // 5. Subgraphs — fold each region cluster into one merged subgraph.
-  const resolvedSubgraphs = foldRegions(regions, regionIdRemap)
+  // Keep a region only if it has a resolved MEMBER node (directly or via a
+  // descendant), plus its ancestor chain so it nests. Empty regions — e.g. a
+  // confined source's groups whose nodes were dropped/re-parented — are pruned
+  // so they don't render as floating boxes.
+  const keptRegions = computeKeptRegions(resolvedNodes, regions, regionIdRemap)
+  const resolvedSubgraphs = foldRegions(regions, regionIdRemap, keptRegions)
 
   return {
     version: authored.version,
@@ -1117,12 +1122,53 @@ function dedupMembership(crit: MembershipCriterion[]): MembershipCriterion[] {
  * parent / children ids are remapped through the region map. Provenance is
  * ALWAYS restamped so resolve is the sole authority.
  */
+/** Canonical parent of a region cluster (highest-priority member's parent, remapped). */
+function regionParentId(cl: RegionCluster, regionIdRemap: Map<string, string>): string | undefined {
+  const ranked = [...cl.members].sort(
+    (a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt,
+  )
+  for (const m of ranked) {
+    if (m.subgraph.parent) return regionIdRemap.get(m.subgraph.parent) ?? m.subgraph.parent
+  }
+  return undefined
+}
+
+/**
+ * Regions to keep: those with a resolved member node (directly or via a
+ * descendant), plus the full ancestor chain of each so the kept regions nest.
+ * Empty regions are excluded → no floating boxes.
+ */
+function computeKeptRegions(
+  resolvedNodes: Node[],
+  clusters: RegionCluster[],
+  regionIdRemap: Map<string, string>,
+): Set<string> {
+  const parentOf = new Map<string, string>()
+  for (const cl of clusters) {
+    const p = regionParentId(cl, regionIdRemap)
+    if (p) parentOf.set(cl.canonicalId, p)
+  }
+  const kept = new Set<string>()
+  for (const n of resolvedNodes) {
+    let cur: string | undefined = n.parent
+    const seen = new Set<string>()
+    while (cur && !seen.has(cur)) {
+      seen.add(cur)
+      kept.add(cur)
+      cur = parentOf.get(cur)
+    }
+  }
+  return kept
+}
+
 function foldRegions(
   clusters: RegionCluster[],
   regionIdRemap: Map<string, string>,
+  keptRegions: Set<string>,
 ): Subgraph[] | undefined {
   const out: Subgraph[] = []
   for (const cl of clusters) {
+    if (!keptRegions.has(cl.canonicalId)) continue
     const ranked = [...cl.members].sort(
       (a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt,
     )
@@ -1152,7 +1198,11 @@ function foldRegions(
     const parentRaw = pick((s) => s.parent)
     const parent = parentRaw ? (regionIdRemap.get(parentRaw) ?? parentRaw) : undefined
     const childrenRaw = cl.members.flatMap((m) => m.subgraph.children ?? [])
-    const children = [...new Set(childrenRaw.map((c) => regionIdRemap.get(c) ?? c))]
+    const children = [
+      ...new Set(
+        childrenRaw.map((c) => regionIdRemap.get(c) ?? c).filter((c) => keptRegions.has(c)),
+      ),
+    ]
     const direction = pick((s) => s.direction)
     const style = pick((s) => s.style)
     const spec = pick((s) => s.spec)
