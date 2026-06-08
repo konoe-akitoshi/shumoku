@@ -13,9 +13,15 @@
 import type { NetworkGraph } from '@shumoku/core'
 
 /**
- * Drop nodes that have no incident link (degree 0), EXCEPT operator-placed
- * (intrinsic) nodes — an orphan the human put there on purpose stays. Only
- * auto-discovered orphans (`provenance.state === 'discovered-only'`) are hidden.
+ * Drop every node that has no incident link (degree 0).
+ *
+ * Flat by design: degree is the only criterion. We deliberately do NOT branch on
+ * `provenance.state` (discovered-only / confirmed / intrinsic-only) — that would
+ * re-introduce an "operator-placed nodes are special" authored layer, which the
+ * all-sources-equal model rejects. `provenance.state` is a derived annotation
+ * (how many sources saw it), not a privilege. "Hide disconnected" means hide
+ * disconnected; an operator who wants to keep a standalone planned node just
+ * leaves the toggle off.
  *
  * Pure: returns a new graph; never mutates the input. A degree-0 node has no
  * links by definition, so no link pruning is needed.
@@ -29,13 +35,7 @@ export function filterDisconnected(graph: NetworkGraph): NetworkGraph {
     if (to) degree.set(to, (degree.get(to) ?? 0) + 1)
   }
 
-  const nodes = graph.nodes.filter((n) => {
-    if ((degree.get(n.id) ?? 0) > 0) return true
-    // Degree 0: keep only if the operator engaged with it. A purely
-    // auto-discovered orphan is dropped; anything the human placed/touched
-    // (intrinsic-only / confirmed) stays.
-    return n.provenance?.state !== 'discovered-only'
-  })
+  const nodes = graph.nodes.filter((n) => (degree.get(n.id) ?? 0) > 0)
 
   if (nodes.length === graph.nodes.length) return graph
   return { ...graph, nodes }
