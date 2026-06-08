@@ -51,7 +51,15 @@ import {
 } from '@shumoku/core'
 import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
-import type { MetricsData, MetricsMapping, Topology, TopologyInput } from '../types.js'
+import type {
+  LinkContribution,
+  MetricsData,
+  MetricsMapping,
+  NodeContribution,
+  ScopeRole,
+  Topology,
+  TopologyInput,
+} from '../types.js'
 import { buildGraph, ingestGraph } from './contribution-store.js'
 import { filterDisconnected } from './display-filter.js'
 
@@ -304,6 +312,38 @@ interface LinkBindingDesired {
   portIdentity: Identity | undefined
   interfaceName?: string
   bandwidth?: number
+}
+
+/** A source's composition mode (topology-source-modes.md, Axis D). */
+interface SourceMode {
+  nodeContribution: NodeContribution
+  linkContribution: LinkContribution
+  scopeRole?: ScopeRole
+}
+
+/**
+ * Apply a source's composition mode to its built contribution before it enters
+ * resolve(): anchor its nodes (node_contribution='anchor'), anchor its links
+ * (link_contribution='update'), and/or mark its regions closed
+ * (scope_role='scoping'). Additive (the default) is a no-op. Never mutates input.
+ */
+function applySourceMode(graph: NetworkGraph, mode: SourceMode): NetworkGraph {
+  const anchorNodes = mode.nodeContribution === 'anchor'
+  const anchorLinks = mode.linkContribution === 'update'
+  const closeScope = mode.scopeRole === 'scoping'
+  if (!anchorNodes && !anchorLinks && !closeScope) return graph
+  return {
+    ...graph,
+    nodes: anchorNodes
+      ? graph.nodes.map((n) => ({ ...n, presence: 'anchor' as const }))
+      : graph.nodes,
+    links: anchorLinks
+      ? graph.links.map((l) => ({ ...l, presence: 'anchor' as const }))
+      : graph.links,
+    ...(closeScope && graph.subgraphs
+      ? { subgraphs: graph.subgraphs.map((s) => ({ ...s, scope: 'closed' as const })) }
+      : {}),
+  }
 }
 
 /**
@@ -1042,10 +1082,19 @@ export class TopologyService {
     // holds. Mirrors `topology_data_sources.priority`. The project overlay
     // always outranks these (handled inside resolve() as the `authored` input).
     const priorityBySource = new Map<string, number>()
+    const modeBySource = new Map<string, SourceMode>()
     for (const tds of this.topologySources.listByTopology(topology.id)) {
       priorityBySource.set(tds.dataSourceId, tds.priority)
+      // Composition modes apply to the source's TOPOLOGY contribution only.
+      if (tds.purpose === 'topology') {
+        modeBySource.set(tds.dataSourceId, {
+          nodeContribution: tds.nodeContribution,
+          linkContribution: tds.linkContribution,
+          scopeRole: tds.scopeRole,
+        })
+      }
     }
-    const snapshots = this.readObservedSnapshots(topology.id, priorityBySource)
+    const snapshots = this.readObservedSnapshots(topology.id, priorityBySource, modeBySource)
     const resolvedGraph = resolveObservations(authored, snapshots)
     // Post-resolve display filter (project-level pref on the overlay settings).
     // Runs on the fully-merged graph — never per-source.
@@ -1101,6 +1150,7 @@ export class TopologyService {
   private readObservedSnapshots(
     topologyId: string,
     priorityBySource: Map<string, number>,
+    modeBySource: Map<string, SourceMode>,
   ): SnapshotEntry[] {
     this.backfillObservedContributions(topologyId)
     // Every attached source's contribution (attachment_id NOT NULL) is a snapshot —
@@ -1122,8 +1172,12 @@ export class TopologyService {
     const snapshots: SnapshotEntry[] = []
     for (const r of rows) {
       if (!priorityBySource.has(r.source_id)) continue
-      const graph = buildGraph(topologyId, r.source_id, this.db)
-      if (!graph) continue
+      const built = buildGraph(topologyId, r.source_id, this.db)
+      if (!built) continue
+      // Apply this source's composition mode (anchor nodes/links, closed scope)
+      // before it enters resolve(). Additive (default) is a no-op.
+      const mode = modeBySource.get(r.source_id)
+      const graph = mode ? applySourceMode(built, mode) : built
       snapshots.push({
         sourceId: r.source_id,
         capturedAt: r.last_ok_at ?? 0,
