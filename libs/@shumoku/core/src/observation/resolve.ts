@@ -18,6 +18,7 @@ import {
   type Subgraph,
 } from '../models/types.js'
 import { keyHash, nodeIdentityKeys, portIdentityKeys } from './identity.js'
+import { interfaceNamesMatch } from './interface-name.js'
 import type { ResolvedGraph, ResolveOptions, SnapshotEntry } from './types.js'
 
 /**
@@ -190,7 +191,15 @@ export function resolve(
   }
 
   // 4. Fold links — endpoint node id → cluster id, port id → folded port id.
-  const resolvedLinks = foldLinks(contributions, clusterById, portIdRemap)
+  //    `portNameById` lets cross-source dedup compare interface NAMES (one source
+  //    may key a port "HundredGigE0/0/0/8" where another says "hg-0/0/0/8").
+  const portNameById = new Map<string, string>()
+  for (const node of resolvedNodes) {
+    for (const p of node.ports ?? []) {
+      portNameById.set(p.id, p.interfaceName || p.label || p.id)
+    }
+  }
+  const resolvedLinks = foldLinks(contributions, clusterById, portIdRemap, portNameById)
 
   // 5. Subgraphs — fold each region cluster into one merged subgraph.
   // Keep a region only if it has a resolved MEMBER node (directly or via a
@@ -1264,67 +1273,121 @@ interface LinkMember {
 
 /**
  * Fold links across contributions. Endpoints are first remapped to resolved
- * cluster ids + folded port ids, then links that resolve to the SAME canonical
- * endpoint pair are clustered and folded into one — so the same physical link
- * observed by two sources becomes a single edge. Per field, the highest-priority
- * contribution that holds a value wins (priority desc, capturedAt desc), mirroring
- * the node field merge; `metadata` merges per key. Dangling links (an endpoint
- * whose node didn't survive clustering) are dropped.
+ * cluster ids + folded port ids. Links are then bucketed by NODE PAIR (port
+ * independent) and, within each pair, greedily sub-clustered into the same
+ * physical edge when their endpoints' interface NAMES align — so the same link
+ * observed by two sources that name the ports differently ("HundredGigE0/0/0/8"
+ * vs TTDB's "hg-0/0/0/8", or a Zabbix ifIndex on the far end) still collapses to
+ * one edge (#404). Genuine parallel links between the same pair (distinct ports
+ * on both ends) stay separate. Per field, the highest-priority contribution that
+ * holds a value wins (priority desc, capturedAt desc), mirroring the node field
+ * merge; `metadata` merges per key. Dangling links (an endpoint whose node
+ * didn't survive clustering) are dropped.
  */
 function foldLinks(
   contributions: Contribution[],
   clusterById: Map<string, NodeCluster>,
   portIdRemap: Map<string, string>,
+  portNameById: Map<string, string>,
 ): Link[] {
-  // 1. Remap endpoints and bucket by canonical endpoint pair. First-seen order
-  //    is preserved (contributions are intrinsic-first) for stable output.
-  const clusters = new Map<string, LinkMember[]>()
+  // 1. Remap endpoints and bucket by node pair. First-seen order is preserved
+  //    (contributions are intrinsic-first) for stable output.
+  const buckets = new Map<string, LinkMember[]>()
   const order: string[] = []
   for (const contrib of contributions) {
     for (const link of contrib.graph.links) {
       const from = remapEndpoint(link.from, contrib.sourceId, clusterById, portIdRemap)
       const to = remapEndpoint(link.to, contrib.sourceId, clusterById, portIdRemap)
       if (!from || !to) continue // dangling — endpoint node didn't survive
-      const key = linkClusterKey(from, to)
+      const key = nodePairKey(from, to)
       const member: LinkMember = {
         sourceId: contrib.sourceId,
         priority: contrib.priority,
         capturedAt: contrib.capturedAt,
         link: { ...link, from, to },
       }
-      const existing = clusters.get(key)
+      const existing = buckets.get(key)
       if (existing) existing.push(member)
       else {
-        clusters.set(key, [member])
+        buckets.set(key, [member])
         order.push(key)
       }
     }
   }
 
-  // 2. Fold each cluster into one link. A cluster with only anchor members
+  // 2. Within each node pair, greedily group members that denote the same
+  //    physical edge, then fold each group. A group with only anchor members
   //    (every contributor was link_contribution:'update') makes no presence
   //    claim → no new edge, exactly like an anchor-only node cluster.
   const links: Link[] = []
   for (const key of order) {
-    const members = clusters.get(key)
+    const members = buckets.get(key)
     if (!members) continue
-    if (!members.some((m) => m.link.presence !== 'anchor')) continue
-    links.push(foldLinkCluster(members))
+    const groups: LinkMember[][] = []
+    for (const m of members) {
+      const g = groups.find((grp) => grp.some((other) => samePhysicalLink(m, other, portNameById)))
+      if (g) g.push(m)
+      else groups.push([m])
+    }
+    for (const group of groups) {
+      if (!group.some((m) => m.link.presence !== 'anchor')) continue
+      links.push(foldLinkCluster(group))
+    }
   }
   return links
 }
 
-// Internal Map-key separators (never displayed). Unit / record separators don't
-// occur in node or port ids (namespaced alphanumerics + `:`/`-`/`.`/`/`).
-const NODE_PORT_SEP = '\x1f'
+// Internal Map-key separator (never displayed). Record separator doesn't occur
+// in node ids (namespaced alphanumerics + `:`/`-`/`.`/`/`).
 const ENDPOINT_PAIR_SEP = '\x1e'
 
-/** Canonical, order-independent key for a remapped link's endpoint pair. */
-function linkEndpointKey(e: LinkEndpoint): string {
-  return e.port != null && e.port !== '' ? `${e.node}${NODE_PORT_SEP}${e.port}` : e.node
+/** Canonical, order-independent key for a remapped link's node pair. */
+function nodePairKey(from: LinkEndpoint, to: LinkEndpoint): string {
+  return [from.node, to.node].sort().join(ENDPOINT_PAIR_SEP)
 }
-function linkClusterKey(from: LinkEndpoint, to: LinkEndpoint): string {
-  return [linkEndpointKey(from), linkEndpointKey(to)].sort().join(ENDPOINT_PAIR_SEP)
+
+/**
+ * Canonical endpoint order for a link: the endpoint whose node id sorts first
+ * comes first (for a self-loop, order by port id). This aligns two links on the
+ * same node pair so their corresponding ends can be compared.
+ */
+function canonicalEnds(link: Link): [LinkEndpoint, LinkEndpoint] {
+  const { from, to } = link
+  if (from.node < to.node) return [from, to]
+  if (from.node > to.node) return [to, from]
+  return (from.port ?? '') <= (to.port ?? '') ? [from, to] : [to, from]
+}
+
+function endPortName(end: LinkEndpoint, portNameById: Map<string, string>): string {
+  if (!end.port) return ''
+  return portNameById.get(end.port) ?? end.port
+}
+
+type EndRelation = 'match' | 'conflict' | 'unknown'
+
+function endRelation(a: string, b: string): EndRelation {
+  if (!a || !b) return 'unknown' // at least one side names no port → can't decide
+  return interfaceNamesMatch(a, b) ? 'match' : 'conflict'
+}
+
+/**
+ * Whether two remapped links (already on the same node pair) are the same
+ * physical edge. They are if at least one aligned end's interface names match
+ * — the other end may legitimately disagree because sources speak different
+ * port vocabularies (e.g. a Zabbix ifIndex on the far end). If neither end
+ * names any port, fall back to node-pair identity (the old behavior).
+ */
+function samePhysicalLink(
+  a: LinkMember,
+  b: LinkMember,
+  portNameById: Map<string, string>,
+): boolean {
+  const [a1, a2] = canonicalEnds(a.link)
+  const [b1, b2] = canonicalEnds(b.link)
+  const e1 = endRelation(endPortName(a1, portNameById), endPortName(b1, portNameById))
+  const e2 = endRelation(endPortName(a2, portNameById), endPortName(b2, portNameById))
+  if (e1 === 'match' || e2 === 'match') return true
+  return e1 === 'unknown' && e2 === 'unknown'
 }
 
 /** Link fields owned by the fold itself — never copied through the generic merge. */

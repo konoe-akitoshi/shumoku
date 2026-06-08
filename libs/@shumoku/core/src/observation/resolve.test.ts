@@ -236,6 +236,53 @@ describe('resolve()', () => {
       const out = resolve(emptyGraph(), [snap])
       expect(out.links).toHaveLength(2)
     })
+
+    it('cross-vocabulary port names fold to one edge (#404)', () => {
+      // Same physical link seen by two sources that NAME the ports differently:
+      //   A: "HundredGigE0/0/0/8" ↔ "HundredGigE0/0/0/1"
+      //   B: "hg-0/0/0/8"         ↔ "515" (Zabbix ifIndex on the far end)
+      // The near end matches across vocabularies; the far end disagrees (ifIndex
+      // vs name) but one matching end is enough → a single edge.
+      const mk = (
+        sourceId: string,
+        capturedAt: number,
+        prefix: string,
+        p1: string,
+        p2: string,
+      ): SnapshotEntry => ({
+        sourceId,
+        capturedAt,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: `${prefix}1`,
+              label: 'R1',
+              identity: { mgmtIp: '10.0.0.1' },
+              ports: [port(`${prefix}1p`, p1)],
+            },
+            {
+              id: `${prefix}2`,
+              label: 'R2',
+              identity: { mgmtIp: '10.0.0.2' },
+              ports: [port(`${prefix}2p`, p2)],
+            },
+          ],
+          links: [
+            {
+              from: { node: `${prefix}1`, port: `${prefix}1p` },
+              to: { node: `${prefix}2`, port: `${prefix}2p` },
+            },
+          ] as NetworkGraph['links'],
+        },
+      })
+      const a = mk('a', 1000, 'a', 'HundredGigE0/0/0/8', 'HundredGigE0/0/0/1')
+      const b = mk('b', 2000, 'b', 'hg-0/0/0/8', '515')
+      const out = resolve(emptyGraph(), [a, b])
+      expect(out.links).toHaveLength(1)
+      expect(out.links[0]?.provenance?.state).toBe('confirmed')
+    })
   })
 
   describe('discovered-only', () => {

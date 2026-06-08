@@ -4,6 +4,7 @@
 
 export * from './discovery-policy.js'
 export * from './identity.js'
+export * from './interface-name.js'
 export * from './metrics-binding.js'
 export * from './resolve.js'
 export * from './types.js'
