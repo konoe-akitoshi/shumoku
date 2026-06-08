@@ -230,6 +230,23 @@ export function ingestGraph(
         insAttachment.run(topologyId, sourceId, eid, scope, kindFromKey(key), key, null, 1, null)
     }
 
+    // Track inserted node / port local_ids so link folding can enforce the same
+    // referential integrity the FKs require — and stay tolerant where resolve()
+    // is: a link may reference a node that doesn't exist (skip it) or a port the
+    // node never enumerated (synthesize a stub, same shape Zabbix's ensurePort
+    // gives LLDP ports). Without this, a single such link aborts the whole
+    // source's ingest with a FK error.
+    const nodeLocalIds = new Set<string>()
+    const portLocalIds = new Set<string>()
+    const ensurePortElement = (nodeId: string, portId: string): string => {
+      const lid = portLocalId(nodeId, portId)
+      if (!portLocalIds.has(lid)) {
+        elementId(lid, 'port', nodeId, 'present', {})
+        portLocalIds.add(lid)
+      }
+      return lid
+    }
+
     // Nodes (+ ports, identity, attachments, suppressions).
     for (const node of graph.nodes ?? []) {
       const nodePayload = payloadWithout(node, [
@@ -250,6 +267,7 @@ export function ingestGraph(
       // scoop (default / omitted) → 'present'; anchor → NULL (makes no presence claim).
       const presence = node.presence === 'anchor' ? null : 'present'
       const eid = elementId(node.id, 'node', node.parent ?? null, presence, nodePayload)
+      nodeLocalIds.add(node.id)
       writeIdentity(eid, node.identity)
       writeAttachments(eid, 'node', node.attachments)
       writeSuppressions(eid, 'node', node.suppressedAttachments)
@@ -262,13 +280,9 @@ export function ingestGraph(
           'provenance',
         ])
         // Port local_id is node-scoped (two nodes may share a port id like 'eth0').
-        const pid = elementId(
-          portLocalId(node.id, port.id),
-          'port',
-          node.id,
-          'present',
-          portPayload,
-        )
+        const portLid = portLocalId(node.id, port.id)
+        const pid = elementId(portLid, 'port', node.id, 'present', portPayload)
+        portLocalIds.add(portLid)
         writeIdentity(pid, port.identity)
         writeAttachments(pid, 'port', port.attachments)
         writeSuppressions(pid, 'port', port.suppressedAttachments)
@@ -306,6 +320,17 @@ export function ingestGraph(
     for (const link of graph.links ?? []) {
       const from = link.from
       const to = link.to
+      // Drop a link whose endpoint node wasn't declared — resolve() drops these
+      // (dangling endpoint) anyway, and the FK would otherwise abort the whole
+      // source ingest.
+      if (!nodeLocalIds.has(from.node) || !nodeLocalIds.has(to.node)) continue
+      // Empty-string port ≡ no port (matches resolve's `endpoint.port ? …` rule).
+      // A referenced port the node never enumerated gets a synthesized stub so
+      // the FK resolves.
+      const fromPort = from.port ? from.port : undefined
+      const toPort = to.port ? to.port : undefined
+      const fromPortLid = fromPort ? ensurePortElement(from.node, fromPort) : null
+      const toPortLid = toPort ? ensurePortElement(to.node, toPort) : null
       const linkPayload = payloadWithout(link, ['id', 'from', 'to', 'via', 'provenance'])
       // Per-endpoint non-structural fields (plug/ip/pin) ride in payload.
       linkPayload['from'] = payloadWithout(from, ['node', 'port'])
@@ -315,9 +340,9 @@ export function ingestGraph(
         sourceId,
         link.id ?? null,
         from.node,
-        from.port != null ? portLocalId(from.node, from.port) : null,
+        fromPortLid,
         to.node,
-        to.port != null ? portLocalId(to.node, to.port) : null,
+        toPortLid,
         'present',
         j(linkPayload),
       )

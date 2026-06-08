@@ -136,6 +136,30 @@ describe('contribution codec — round-trip', () => {
     } as NetworkGraph)
   })
 
+  test('ingest tolerates undeclared/empty ports and dangling-node links', () => {
+    // A source (e.g. TTDB) may emit links that reference ports the node never
+    // enumerated, empty-string ports, or a node that doesn't exist. resolve()
+    // tolerates all three; ingest must too (not abort the whole source on a FK).
+    const out = roundTrip({
+      version: '1',
+      name: 'robust',
+      nodes: [
+        { id: 'a', label: 'A' },
+        { id: 'b', label: 'B' },
+      ], // no ports declared
+      links: [
+        { from: { node: 'a', port: 'ge-0/0/1' }, to: { node: 'b', port: '' } },
+        { from: { node: 'a' }, to: { node: 'ghost' } }, // dangling → dropped
+      ],
+    } as NetworkGraph)
+    // dangling-node link dropped
+    expect(out.links).toHaveLength(1)
+    // undeclared port synthesized as a stub on 'a'; empty port ≡ no port on 'b'
+    expect(out.links[0]?.from.port).toBe('ge-0/0/1')
+    expect(out.links[0]?.to.port).toBeUndefined()
+    expect(out.nodes.find((n) => n.id === 'a')?.ports?.some((p) => p.id === 'ge-0/0/1')).toBe(true)
+  })
+
   test('node-scoped duplicate port ids round-trip (two nodes both have "eth0")', () => {
     expectLossless({
       version: '1',
