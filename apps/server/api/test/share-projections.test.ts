@@ -7,6 +7,7 @@ import {
   publicAlert,
   publicDashboardLayout,
   publicMetrics,
+  publicTopologyContext,
   publicTopologyGraph,
 } from '../src/api/share-projections.ts'
 import type { ParsedTopology } from '../src/services/topology.ts'
@@ -201,5 +202,45 @@ describe('publicMetrics — node status only, link traffic kept, internals dropp
     expect(blob).not.toContain('secret config')
     expect(blob).not.toContain('monitoringError')
     expect(out.timestamp).toBe(1234)
+  })
+})
+
+describe('publicTopologyContext — metrics are projected (regression: monitoringError leak)', () => {
+  const parsed = {
+    id: 't1',
+    name: 'ctx',
+    graph: {
+      nodes: [{ id: 'sw1', label: 'core', spec: undefined }],
+      links: [],
+      subgraphs: [],
+    },
+    metrics: {
+      nodes: {
+        sw1: {
+          status: 'down',
+          monitoring: 'failing',
+          monitoringError: 'SNMP timeout to 10.0.0.1:161',
+          cpu: 5,
+          lastSeen: 999,
+        },
+      },
+      links: {},
+      timestamp: 7,
+      warnings: ['Parse error: internal config blob'],
+    },
+  } as unknown as ParsedTopology
+
+  const out = publicTopologyContext(parsed)
+  const blob = JSON.stringify(out)
+
+  test('context metrics carry node status but NOT internal fields', () => {
+    expect(out.metrics.nodes.sw1).toEqual({ status: 'down' })
+    expect(out.metrics.warnings).toBeUndefined()
+  })
+  test('no monitoringError / SNMP text / parse-error blob leaks via /context', () => {
+    expect(blob).not.toContain('monitoringError')
+    expect(blob).not.toContain('SNMP timeout')
+    expect(blob).not.toContain('10.0.0.1')
+    expect(blob).not.toContain('internal config blob')
   })
 })
