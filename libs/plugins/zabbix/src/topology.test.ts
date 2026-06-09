@@ -28,6 +28,8 @@ describe('convertZabbixToGraph', () => {
     expect(n?.identity?.mgmtIp).toBe('172.16.0.2')
     expect(n?.identity?.vendorIds?.['zabbix-hostid']).toBe('1')
     expect(n?.metadata?.['hostname']).toBe('ptxA.noc')
+    // Host-group names land on the node too (for topology ScopeFilter matching).
+    expect(n?.metadata?.['hostGroups']).toEqual(['016.000.seg'])
     expect(n?.parent).toBe('inst1:sg:016.000.seg')
     expect(g.subgraphs?.[0]?.label).toBe('016.000.seg')
   })

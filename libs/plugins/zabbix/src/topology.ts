@@ -92,6 +92,9 @@ export function convertZabbixToGraph(
         zabbixHostId: host.hostid,
         zabbixHost: host.host,
         zabbixStatus: host.status === '0' ? 'monitored' : 'unmonitored',
+        // Host-group names on the NODE (not just the region) so a topology
+        // ScopeFilter `{attr:'metadata', key:'hostGroups'}` can match it directly.
+        hostGroups: (host.hostgroups ?? []).map((g) => g.name),
       },
     }
     staged.push({ node, host })
