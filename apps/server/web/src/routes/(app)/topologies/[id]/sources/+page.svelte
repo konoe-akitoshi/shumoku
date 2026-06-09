@@ -696,6 +696,29 @@
                     {/if}
                   </p>
                 </div>
+                <!-- Composition controls (topology-side, always visible): Mode +
+                     priority per source, alongside the shared Scope above. -->
+                {#if hasMultipleTopologySources}
+                  <input
+                    type="number"
+                    class="input shrink-0"
+                    style="width: 4.5rem;"
+                    title="Priority — higher wins on overlap"
+                    value={source.priority ?? 0}
+                    onchange={(e) =>
+                      patchSource(source, { priority: Number(e.currentTarget.value) || 0 }, true)}
+                  >
+                {/if}
+                <select
+                  class="input shrink-0"
+                  style="width: 8.5rem;"
+                  title="Mode — how this source behaves in the topology"
+                  value={roleOf(source)}
+                  onchange={(e) => setRole(source, e.currentTarget.value as CompositionRole)}
+                >
+                  <option value="additive">Additive</option>
+                  <option value="enrichment">Enrichment</option>
+                </select>
                 <Button
                   variant="outline"
                   size="sm"
@@ -745,34 +768,7 @@
                         <option value="webhook">Webhook</option>
                       </select>
                     </label>
-                    <label class="space-y-0.5" style="width: 10rem;">
-                      <span class="text-[11px] text-theme-text-muted">Mode</span>
-                      <select
-                        class="input w-full"
-                        title="How this source behaves in the topology"
-                        value={roleOf(source)}
-                        onchange={(e) => setRole(source, e.currentTarget.value as CompositionRole)}
-                      >
-                        <option value="additive">Additive</option>
-                        <option value="enrichment">Enrichment</option>
-                      </select>
-                    </label>
                   </div>
-
-                  {#if hasMultipleTopologySources}
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs text-theme-text-muted">Priority</span>
-                      <input
-                        type="number"
-                        class="input"
-                        style="width: 6rem;"
-                        value={source.priority ?? 0}
-                        onchange={(e) =>
-                          patchSource(source, { priority: Number(e.currentTarget.value) || 0 }, true)}
-                      >
-                      <span class="text-xs text-theme-text-muted">higher wins on overlap</span>
-                    </div>
-                  {/if}
 
                   {#if source.syncMode === 'webhook' && source.webhookSecret}
                     <div class="flex items-center gap-2">
