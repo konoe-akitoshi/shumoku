@@ -70,3 +70,24 @@ test('topology scope defaults to auto, and setScope round-trips', () => {
   expect(open?.scopeMode).toBe('open')
   expect(open?.scopeSourceId).toBeUndefined()
 })
+
+test('topology scope criteria round-trip (setScopeCriteria / readScopeCriteria)', () => {
+  makeTopology('t_scope_2')
+  const svc = new TopologyService()
+
+  // Defaults: empty filter.
+  expect(svc.get('t_scope_2')?.scope).toEqual({ include: [], exclude: [] })
+
+  const set = svc.setScopeCriteria('t_scope_2', {
+    include: [{ attr: 'metadata', key: 'hostGroups', value: 'Backbone Routers' }],
+    exclude: [{ attr: 'name', value: '^mgmt-' }],
+  })
+  expect(set?.scope.include).toEqual([
+    { attr: 'metadata', key: 'hostGroups', value: 'Backbone Routers' },
+  ])
+  expect(set?.scope.exclude).toEqual([{ attr: 'name', value: '^mgmt-' }])
+
+  // Replace wholesale: empty clears.
+  const cleared = svc.setScopeCriteria('t_scope_2', { include: [], exclude: [] })
+  expect(cleared?.scope).toEqual({ include: [], exclude: [] })
+})

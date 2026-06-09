@@ -3,7 +3,12 @@
  * CRUD endpoints for topology management
  */
 
-import { buildHierarchicalSheets, type NetworkGraph, specDeviceType } from '@shumoku/core'
+import {
+  buildHierarchicalSheets,
+  type NetworkGraph,
+  type ScopeFilter,
+  specDeviceType,
+} from '@shumoku/core'
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
 import { getLayoutEngine } from '../layout.js'
@@ -366,23 +371,42 @@ export function createTopologiesApi(): Hono {
     }
   })
 
-  // Topology scope policy (composition). Scope is a single per-topology decision —
-  // which region set closes the world — so it lives on the topology, not per source.
+  // Topology scope (composition). A single per-topology decision. `scope` is the
+  // common ScopeFilter (include/exclude criteria) the resolver enforces post-merge;
+  // scopeMode/scopeSourceId is the older region-mark path, kept during transition.
   app.get('/:id/composition', (c) => {
     const id = c.req.param('id')
     const topology = service.get(id)
     if (!topology) return c.json({ error: 'Topology not found' }, 404)
-    return c.json({ scopeMode: topology.scopeMode, scopeSourceId: topology.scopeSourceId })
+    return c.json({
+      scopeMode: topology.scopeMode,
+      scopeSourceId: topology.scopeSourceId,
+      scope: topology.scope,
+    })
   })
 
   app.put('/:id/composition', async (c) => {
     const id = c.req.param('id')
     try {
-      const body = (await c.req.json()) as { scopeMode?: ScopeMode; scopeSourceId?: string | null }
-      const mode = body.scopeMode ?? 'auto'
-      const topology = service.setScope(id, mode, body.scopeSourceId ?? undefined)
+      const body = (await c.req.json()) as {
+        scopeMode?: ScopeMode
+        scopeSourceId?: string | null
+        scope?: ScopeFilter
+      }
+      let topology = service.get(id)
       if (!topology) return c.json({ error: 'Topology not found' }, 404)
-      return c.json({ scopeMode: topology.scopeMode, scopeSourceId: topology.scopeSourceId })
+      if (body.scopeMode !== undefined || body.scopeSourceId !== undefined) {
+        topology = service.setScope(id, body.scopeMode ?? 'auto', body.scopeSourceId ?? undefined)
+      }
+      if (body.scope !== undefined) {
+        topology = service.setScopeCriteria(id, body.scope)
+      }
+      if (!topology) return c.json({ error: 'Topology not found' }, 404)
+      return c.json({
+        scopeMode: topology.scopeMode,
+        scopeSourceId: topology.scopeSourceId,
+        scope: topology.scope,
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)

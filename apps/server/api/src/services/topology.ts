@@ -25,16 +25,19 @@
  */
 
 import type { Database } from 'bun:sqlite'
+import crypto from 'node:crypto'
 import type {
   Attachment,
   IconDimensions,
   Identity,
   LayoutResult,
+  MembershipCriterion,
   MetricsBindingAttachment,
   NetworkGraph,
   Node,
   NodePort,
   ResolvedLayout,
+  ScopeFilter,
   SnapshotEntry,
   Subgraph,
   Termination,
@@ -100,9 +103,18 @@ function rowToTopology(row: TopologyRow): Topology {
     shareToken: row.share_token ?? undefined,
     scopeMode: (row.scope_mode as Topology['scopeMode']) ?? 'auto',
     scopeSourceId: row.scope_source_id ?? undefined,
+    // Filled by the service from topology_scope_criteria (rowToTopology has no db).
+    scope: { include: [], exclude: [] },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+}
+
+interface ScopeCriterionRow {
+  kind: string
+  attr: string
+  key: string | null
+  value: string
 }
 
 /**
@@ -503,7 +515,7 @@ export class TopologyService {
   /** Get all topologies from the database (shells only). */
   list(): Topology[] {
     const rows = this.db.query('SELECT * FROM topologies ORDER BY name ASC').all() as TopologyRow[]
-    return rows.map((row) => rowToTopology(row))
+    return rows.map((row) => this.withScope(rowToTopology(row)))
   }
 
   /** Get a single topology shell by ID. */
@@ -511,7 +523,7 @@ export class TopologyService {
     const row = this.db.query('SELECT * FROM topologies WHERE id = ?').get(id) as
       | TopologyRow
       | undefined
-    return row ? rowToTopology(row) : null
+    return row ? this.withScope(rowToTopology(row)) : null
   }
 
   /** Get a topology shell by name. */
@@ -519,7 +531,60 @@ export class TopologyService {
     const row = this.db.query('SELECT * FROM topologies WHERE name = ?').get(name) as
       | TopologyRow
       | undefined
-    return row ? rowToTopology(row) : null
+    return row ? this.withScope(rowToTopology(row)) : null
+  }
+
+  /** Read the topology's scope criteria into a ScopeFilter. */
+  readScopeCriteria(topologyId: string): ScopeFilter {
+    const rows = this.db
+      .query('SELECT kind, attr, key, value FROM topology_scope_criteria WHERE topology_id = ?')
+      .all(topologyId) as ScopeCriterionRow[]
+    const include: MembershipCriterion[] = []
+    const exclude: MembershipCriterion[] = []
+    for (const r of rows) {
+      const crit: MembershipCriterion = {
+        attr: r.attr as MembershipCriterion['attr'],
+        value: r.value,
+        ...(r.key ? { key: r.key } : {}),
+      }
+      ;(r.kind === 'exclude' ? exclude : include).push(crit)
+    }
+    return { include, exclude }
+  }
+
+  /** Fill a topology's `scope` from its criteria rows. */
+  private withScope(topology: Topology): Topology {
+    topology.scope = this.readScopeCriteria(topology.id)
+    return topology
+  }
+
+  /**
+   * Replace the topology's scope criteria wholesale. Bumps the composition
+   * revision so the resolved graph re-resolves under the new scope.
+   */
+  setScopeCriteria(topologyId: string, scope: ScopeFilter): Topology | null {
+    if (!this.get(topologyId)) return null
+    const now = timestamp()
+    this.db.query('DELETE FROM topology_scope_criteria WHERE topology_id = ?').run(topologyId)
+    const insert = this.db.query(
+      `INSERT INTO topology_scope_criteria (id, topology_id, kind, attr, key, value, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    const write = (kind: 'include' | 'exclude', crit: MembershipCriterion): void => {
+      insert.run(
+        crypto.randomUUID(),
+        topologyId,
+        kind,
+        crit.attr,
+        crit.key ?? null,
+        crit.value,
+        now,
+      )
+    }
+    for (const c of scope.include ?? []) write('include', c)
+    for (const c of scope.exclude ?? []) write('exclude', c)
+    this.clearCacheEntry(topologyId)
+    return this.get(topologyId)
   }
 
   /**
@@ -1013,7 +1078,7 @@ export class TopologyService {
     const row = this.db.query('SELECT * FROM topologies WHERE share_token = ?').get(token) as
       | TopologyRow
       | undefined
-    return row ? rowToTopology(row) : null
+    return row ? this.withScope(rowToTopology(row)) : null
   }
 
   /**
@@ -1160,7 +1225,9 @@ export class TopologyService {
       }
     }
     const snapshots = this.readObservedSnapshots(topology.id, priorityBySource, modeBySource)
-    const resolvedGraph = resolveObservations(authored, snapshots)
+    // Topology-level scope criteria (Phase 2): enforced post-merge by resolve, on
+    // top of the region-mark scope. Empty → no extra filtering.
+    const resolvedGraph = resolveObservations(authored, snapshots, { scope: topology.scope })
     // Post-resolve display filter (project-level pref on the overlay settings).
     // Runs on the fully-merged graph — never per-source.
     const graph = authored.settings?.hideDisconnected

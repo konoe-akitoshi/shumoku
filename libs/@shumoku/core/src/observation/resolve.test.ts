@@ -1998,6 +1998,35 @@ describe('resolve()', () => {
       expect(out.nodes.map((n) => n.label)).toEqual(['in-1'])
     })
 
+    it('include by array metadata (host groups) matches any element', () => {
+      const snap: SnapshotEntry = {
+        sourceId: 'A',
+        capturedAt: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [
+            {
+              id: 'r1',
+              label: 'in-group',
+              identity: { mgmtIp: '10.0.0.1' },
+              metadata: { hostGroups: ['Backbone Routers', 'Core'] },
+            },
+            {
+              id: 'r2',
+              label: 'other',
+              identity: { mgmtIp: '10.0.0.2' },
+              metadata: { hostGroups: ['Access'] },
+            },
+          ],
+        },
+      }
+      const out = resolve(emptyGraph(), [snap], {
+        scope: { include: [{ attr: 'metadata', key: 'hostGroups', value: 'Backbone Routers' }] },
+      })
+      expect(out.nodes.map((n) => n.label)).toEqual(['in-group'])
+    })
+
     it('an intrinsic (curated) node survives the scope filter', () => {
       const intrinsic: NetworkGraph = {
         ...emptyGraph(),

@@ -25,6 +25,7 @@ import migration017 from './migrations/017_drop_dead_tables.sql'
 import migration018 from './migrations/018_composition_modes.sql'
 import migration019 from './migrations/019_fix_contribution_link_local_id_nullable.sql'
 import migration020 from './migrations/020_topology_scope.sql'
+import migration021 from './migrations/021_topology_scope_criteria.sql'
 
 /** Ordered list of all migrations */
 const MIGRATIONS: { name: string; sql: string }[] = [
@@ -46,6 +47,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '018_composition_modes.sql', sql: migration018 },
   { name: '019_fix_contribution_link_local_id_nullable.sql', sql: migration019 },
   { name: '020_topology_scope.sql', sql: migration020 },
+  { name: '021_topology_scope_criteria.sql', sql: migration021 },
 ]
 
 interface MigrationRecord {
