@@ -96,7 +96,10 @@ source can play different roles in different topologies):
 
 - `node_contribution`: `scoop` (default) | `anchor`
 - `link_contribution`: `add` (default) | `update`
-- `scope_role`: `NULL` (default) | `scoping`
+
+These two knobs describe "how THIS source behaves in THIS topology" — genuinely
+per (topology × source). Scope is NOT here: it's a single per-topology decision
+(see below).
 
 Node and link knobs are **independent** (decided): an Enrichment source can be
 `node_contribution=anchor` (adds no devices) yet `link_contribution=add` (asserts a
@@ -105,28 +108,41 @@ devices" case.
 
 UI presents **role presets** over these knobs; raw knobs are an advanced surface.
 
-| Preset | node | link | scope_role | meaning |
-|--------|------|------|-----------|---------|
-| **Additive** | scoop | add | NULL | adds nodes+links within the scope |
-| **Enrichment** | anchor | update | NULL | fills fields of existing entities only |
-| **Scoping** (override) | scoop | add | scoping | force this source to define the scope even when it isn't top-priority |
+| Preset | node | link | meaning |
+|--------|------|------|---------|
+| **Additive** | scoop | add | adds nodes+links within the scope |
+| **Enrichment** | anchor | update | fills fields of existing entities only |
 
-**Scope is ordering-driven (decided model 2).** The highest-priority topology
-SOURCE (the intrinsic overlay is excluded — it's curation, not coverage) defines
-the closed world: its regions confine every lower-priority source to within them.
-There is no per-source "is this the scope?" flag for the common case — priority
-already orders the sources, and the top one's coverage *is* the scope. `scope_role`
-is demoted to a manual **override** (force a non-top source to also define scope).
-Scope only activates when a scope-defining source actually contributes regions; a
-single source, or sources with no regions, resolve as an open-world union.
+### Scope is a topology-level decision (migration 020)
+
+Scope answers ONE question per topology — *which region set closes the world* — so
+it lives on the **topology row**, not as a per-source flag. The per-source
+`scope_role` was retired.
+
+- `topologies.scope_mode`: `auto` (default) | `open` | `closed`
+- `topologies.scope_source_id`: the scoping source, only for `closed`
+
+| scope_mode | closed world |
+|------------|--------------|
+| `auto` | the highest-priority topology source's regions (reproduces the old default) |
+| `open` | nothing — pure union of all sources |
+| `closed` | `scope_source_id`'s regions |
+
+**Policy lives in the service, mechanism in `resolve()`.** `resolve()` is pure
+mechanism: a region is the closed world iff one of its contributing subgraphs is
+marked `scope:'closed'`. The service (`topology.ts`) reads `scope_mode` and stamps
+that mark on the right contributions before calling resolve — on the chosen
+source(s) and, unless `open`, on the operator overlay's own regions. So there is no
+priority/source policy buried inside the resolver any more. Scope only activates
+when something is actually marked closed; otherwise it's an open-world union.
 
 The scope is **region-centric**: it is the scope source's REGIONS (e.g. a Zabbix
 host group), and "in scope" means being a member of such a region — NOT merely
 being emitted by the scope source. A cluster survives iff it (a) has an intrinsic
 member that makes a real topology claim (operator curation; a bare metrics-binding
 anchor does NOT count), (b) lands in a closed region by parent / ancestor, or
-(c) matches a closed region's membership predicate. Closed regions are those
-contributed by a scope-defining source OR the operator overlay.
+(c) matches a closed region's membership predicate. Closed regions are exactly the
+ones the service marked `scope:'closed'` per the topology's scope_mode.
 
 Critically this means the **scope source's own out-of-region nodes are dropped**,
 not just lower sources' — e.g. Zabbix LLDP external neighbors (synthesized for

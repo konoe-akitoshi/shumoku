@@ -13,7 +13,6 @@ import { TopologySourcesService } from '../services/topology-sources.js'
 import type {
   LinkContribution,
   NodeContribution,
-  ScopeRole,
   SyncMode,
   TopologyDataSourceInput,
 } from '../types.js'
@@ -46,7 +45,6 @@ function getDataSourceService() {
 function validateCompositionModes(body: {
   nodeContribution?: unknown
   linkContribution?: unknown
-  scopeRole?: unknown
 }): string | null {
   if (
     body.nodeContribution !== undefined &&
@@ -58,8 +56,6 @@ function validateCompositionModes(body: {
     !['add', 'update'].includes(String(body.linkContribution))
   )
     return "linkContribution must be 'add' or 'update'"
-  if (body.scopeRole !== undefined && body.scopeRole !== null && body.scopeRole !== 'scoping')
-    return "scopeRole must be 'scoping' or null"
   return null
 }
 
@@ -180,13 +176,11 @@ topologySourcesApi.put('/:topologyId/sources/:sourceId', async (c) => {
     optionsJson?: string
     nodeContribution?: NodeContribution
     linkContribution?: LinkContribution
-    scopeRole?: ScopeRole | null
   }>()
 
   const modeError = validateCompositionModes(body)
   if (modeError) return c.json({ error: modeError }, 400)
 
-  // scopeRole: 'scoping' sets it; explicit null clears it back to additive.
   const updated = getTopologySourcesService().update(sourceId, body)
   if (!updated) {
     return c.json({ error: 'Failed to update' }, 500)

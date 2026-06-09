@@ -1838,11 +1838,11 @@ describe('resolve()', () => {
       expect(out.links[0]?.presence).toBeUndefined() // input-only, never emitted
     })
 
-    it('top-priority source defines the scope; a lower source is confined to it', () => {
-      // A (priority 1) is the highest-priority source → its region is the closed
-      // world (ordering-driven, no explicit flag). B (priority 0) is confined:
-      // its node that matches A's region membership is kept (fills the scope),
-      // the out-of-range one is dropped. A's own node is always kept.
+    it('a scope-marked region confines a lower source to it', () => {
+      // A's region is marked scope:'closed' (the caller's scope policy stamps this;
+      // resolve is pure mechanism). B (priority 0) is confined: its node that
+      // matches A's region membership is kept (fills the scope), the out-of-range
+      // one is dropped. A's own node is always kept.
       const scoping: SnapshotEntry = {
         sourceId: 'A',
         capturedAt: 1,
@@ -1852,7 +1852,12 @@ describe('resolve()', () => {
           ...emptyGraph(),
           nodes: [{ id: 'a1', label: 'in-region', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' }],
           subgraphs: [
-            { id: 'g', label: 'Region', membership: [{ attr: 'subnet', value: '10.0.0.0/24' }] },
+            {
+              id: 'g',
+              label: 'Region',
+              scope: 'closed',
+              membership: [{ attr: 'subnet', value: '10.0.0.0/24' }],
+            },
           ],
         },
       }
@@ -1889,7 +1894,7 @@ describe('resolve()', () => {
             { id: 'in', label: 'in-region', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' },
             { id: 'ext', label: 'external-neighbor', identity: { sysName: 'peer' } }, // no region
           ],
-          subgraphs: [{ id: 'g', label: 'Region' }],
+          subgraphs: [{ id: 'g', label: 'Region', scope: 'closed' }],
         },
       }
       const out = resolve(emptyGraph(), [scoping])
@@ -1910,7 +1915,7 @@ describe('resolve()', () => {
         graph: {
           ...emptyGraph(),
           nodes: [{ id: 'a1', label: 'a1', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' }],
-          subgraphs: [{ id: 'g', label: 'Region' }],
+          subgraphs: [{ id: 'g', label: 'Region', scope: 'closed' }],
         },
       }
       const out = resolve(intrinsic, [scoping])

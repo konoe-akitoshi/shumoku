@@ -11,7 +11,6 @@ import type {
   DataSourcePurpose,
   LinkContribution,
   NodeContribution,
-  ScopeRole,
   SyncMode,
   TopologyDataSource,
   TopologyDataSourceInput,
@@ -29,7 +28,6 @@ interface TopologyDataSourceRow {
   options_json: string | null
   node_contribution: string
   link_contribution: string
-  scope_role: string | null
   created_at: number
   updated_at: number
   // Joined columns from data_sources
@@ -56,7 +54,6 @@ function rowToTopologyDataSource(row: TopologyDataSourceRow): TopologyDataSource
     optionsJson: row.options_json || undefined,
     nodeContribution: (row.node_contribution as NodeContribution) || 'scoop',
     linkContribution: (row.link_contribution as LinkContribution) || 'add',
-    scopeRole: (row.scope_role as ScopeRole) || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -224,7 +221,6 @@ export class TopologySourcesService {
       optionsJson,
       nodeContribution,
       linkContribution,
-      scopeRole,
     }: TopologyDataSourceInput,
   ): Promise<TopologyDataSource> {
     const id = await generateId()
@@ -245,7 +241,6 @@ export class TopologySourcesService {
       priority: priority ?? 0,
       nodeContribution: nodeContrib,
       linkContribution: linkContrib,
-      scopeRole: scopeRole ?? undefined,
       createdAt: now,
       updatedAt: now,
     }
@@ -253,8 +248,8 @@ export class TopologySourcesService {
     this.db
       .query(
         `INSERT INTO topology_data_sources
-        (id, topology_id, data_source_id, purpose, sync_mode, webhook_secret, priority, options_json, node_contribution, link_contribution, scope_role, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, topology_id, data_source_id, purpose, sync_mode, webhook_secret, priority, options_json, node_contribution, link_contribution, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -267,7 +262,6 @@ export class TopologySourcesService {
         optionsJson ?? null,
         nodeContrib,
         linkContrib,
-        scopeRole ?? null,
         now,
         now,
       )
@@ -285,10 +279,7 @@ export class TopologySourcesService {
         TopologyDataSourceInput,
         'syncMode' | 'priority' | 'optionsJson' | 'nodeContribution' | 'linkContribution'
       >
-    > & {
-      // null clears scopeRole back to additive; undefined leaves it unchanged.
-      scopeRole?: ScopeRole | null
-    },
+    >,
   ): TopologyDataSource | null {
     const existing = this.get(id)
     if (!existing) return null
@@ -327,11 +318,6 @@ export class TopologySourcesService {
     if (updates.linkContribution !== undefined) {
       updateParts.push('link_contribution = ?')
       values.push(updates.linkContribution)
-    }
-
-    if (updates.scopeRole !== undefined) {
-      updateParts.push('scope_role = ?')
-      values.push(updates.scopeRole ?? null)
     }
 
     if (updateParts.length === 0) return existing
