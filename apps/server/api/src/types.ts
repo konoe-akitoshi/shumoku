@@ -2,7 +2,7 @@
  * Type definitions for the Shumoku real-time server
  */
 
-import type { LayoutResult, MetricsData, NetworkGraph } from '@shumoku/core'
+import type { LayoutResult, MetricsData, NetworkGraph, ScopeFilter } from '@shumoku/core'
 
 export type {
   LinkMetrics,
@@ -98,10 +98,16 @@ export type ScopeMode = 'auto' | 'open' | 'closed'
 export interface Topology {
   id: string
   name: string
-  /** Scope policy for this topology. Default 'auto'. */
+  /** Scope policy for this topology. Default 'auto'. (Region-mark scope; being
+   * superseded by `scope` criteria — kept during the Phase 2/3 transition.) */
   scopeMode: ScopeMode
   /** The scoping source (data_sources.id) when scopeMode === 'closed'. */
   scopeSourceId?: string
+  /**
+   * Topology-level scope criteria — the common, plugin-independent filter the
+   * resolver enforces post-merge. Empty include+exclude = no scope filter.
+   */
+  scope: ScopeFilter
   /**
    * Structure / metrics data source ids. No longer stored on the topology row
    * (sources live in `topology_data_sources`); the `/context` response derives

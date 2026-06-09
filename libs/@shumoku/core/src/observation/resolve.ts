@@ -978,7 +978,11 @@ function criterionMatches(node: Node, crit: MembershipCriterion): boolean {
   if (crit.attr === 'metadata') {
     if (!crit.key) return false
     const v = node.metadata?.[crit.key]
-    return v !== undefined && String(v) === crit.value
+    if (v === undefined) return false
+    // Array metadata (e.g. a node's `hostGroups`) matches if any element equals
+    // the value — so a host-group / tag / role criterion hits a multi-valued field.
+    if (Array.isArray(v)) return v.some((x) => String(x) === crit.value)
+    return String(v) === crit.value
   }
   return false
 }
