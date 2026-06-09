@@ -83,6 +83,9 @@ export interface DataSourceInput {
 /** Topology-level scope policy. See api ScopeMode. */
 export type ScopeMode = 'auto' | 'open' | 'closed'
 
+/** Topology-wide merge method. additive = sources add; enrichment = enrich only. */
+export type CompositionMode = 'additive' | 'enrichment'
+
 /** One membership/scope criterion — mirrors core MembershipCriterion. */
 export interface MembershipCriterion {
   attr: 'name' | 'subnet' | 'metadata'
@@ -104,6 +107,8 @@ export interface Topology {
   scopeSourceId?: string
   /** Common topology-level scope (include/exclude criteria). */
   scope?: ScopeFilter
+  /** Topology-wide merge method. */
+  compositionMode?: CompositionMode
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string

@@ -29,10 +29,9 @@
   import { Button } from '$lib/components/ui/button'
   import { topologies } from '$lib/stores'
   import type {
+    CompositionMode,
     DataSourcePluginInfo,
-    LinkContribution,
     MembershipCriterion,
-    NodeContribution,
     PluginConfigProperty,
     PluginConfigSchema,
     SyncMode,
@@ -232,32 +231,20 @@
     )
   }
 
-  // Composition role = how THIS source behaves in the topology. Two presets over
-  // the per-source knobs (scope is NOT here — it's a topology-level decision):
-  //   Additive   = scoop + add  (assert nodes & links)
-  //   Enrichment = anchor + update (fill fields only, claim nothing new)
-  type CompositionRole = 'additive' | 'enrichment'
-  function roleOf(s: TopologyDataSource): CompositionRole {
-    return s.nodeContribution === 'anchor' ? 'enrichment' : 'additive'
-  }
-  function setRole(source: TopologyDataSource, role: CompositionRole) {
-    const updates: {
-      nodeContribution: NodeContribution
-      linkContribution: LinkContribution
-    } =
-      role === 'enrichment'
-        ? { nodeContribution: 'anchor', linkContribution: 'update' }
-        : { nodeContribution: 'scoop', linkContribution: 'add' }
-    void mutate(
-      source.id,
-      () => api.topologies.sources.update(ctx.topologyId, source.id, updates),
-      (updated) => {
-        ctx.currentSources = ctx.currentSources.map((s) =>
-          s.id === source.id ? (updated as TopologyDataSource) : s,
-        )
-      },
-      { reflect: true },
-    )
+  // Composition Mode = the merge method for the WHOLE topology (not per source):
+  //   Additive   = every source adds nodes + links (union)
+  //   Enrichment = sources only enrich existing nodes/links, assert nothing new
+  function setCompositionMode(mode: CompositionMode) {
+    if (ctx.topology) ctx.topology = { ...ctx.topology, compositionMode: mode }
+    api.topologies.composition
+      .set(ctx.topologyId, { compositionMode: mode })
+      .then((res) => {
+        if (ctx.topology) ctx.topology = { ...ctx.topology, compositionMode: res.compositionMode }
+        ctx.bumpRevision()
+      })
+      .catch((e) => {
+        localError = e instanceof Error ? e.message : String(e)
+      })
   }
 
   // Topology-level Scope (composition): one common include/exclude criteria set
@@ -607,6 +594,25 @@
     </div>
     <div class="card-body">
       {#if topologySources.length > 0}
+        <!-- Topology-wide composition Mode: the merge method for the whole topology. -->
+        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-theme-bg-subtle p-3">
+          <span class="text-xs font-medium text-theme-text-emphasis">Mode</span>
+          <select
+            class="input"
+            style="width: 11rem;"
+            title="How sources merge into this topology"
+            value={ctx.topology?.compositionMode ?? 'additive'}
+            onchange={(e) => setCompositionMode(e.currentTarget.value as CompositionMode)}
+          >
+            <option value="additive">Additive</option>
+            <option value="enrichment">Enrichment</option>
+          </select>
+          <span class="text-xs text-theme-text-muted">
+            {(ctx.topology?.compositionMode ?? 'additive') === 'enrichment'
+              ? 'sources only enrich existing nodes/links'
+              : 'every source adds nodes + links (union)'}
+          </span>
+        </div>
         <!-- Topology-level Scope: ONE common filter for the whole topology, edited
              with the same form (and live value picker) as a source's options. The
              fields come from each topology source's scope-marked schema. Empty =
@@ -698,6 +704,8 @@
                 </div>
                 <!-- Composition controls (topology-side, always visible): Mode +
                      priority per source, alongside the shared Scope above. -->
+                <!-- Priority is per-source (resolve field-merge order). Mode is
+                     topology-wide (see the Composition control above). -->
                 {#if hasMultipleTopologySources}
                   <input
                     type="number"
@@ -709,16 +717,6 @@
                       patchSource(source, { priority: Number(e.currentTarget.value) || 0 }, true)}
                   >
                 {/if}
-                <select
-                  class="input shrink-0"
-                  style="width: 8.5rem;"
-                  title="Mode — how this source behaves in the topology"
-                  value={roleOf(source)}
-                  onchange={(e) => setRole(source, e.currentTarget.value as CompositionRole)}
-                >
-                  <option value="additive">Additive</option>
-                  <option value="enrichment">Enrichment</option>
-                </select>
                 <Button
                   variant="outline"
                   size="sm"

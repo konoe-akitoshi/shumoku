@@ -12,6 +12,7 @@ import type {
   DashboardInput,
   DataSource,
   DataSourceInput,
+  CompositionMode,
   LinkContribution,
   MetricsMapping,
   NodeContribution,
@@ -342,21 +343,31 @@ export const topologies = {
   // the common include/exclude criteria the resolver enforces post-merge.
   composition: {
     get: (id: string) =>
-      request<{ scopeMode: ScopeMode; scopeSourceId?: string; scope: ScopeFilter }>(
-        `/topologies/${id}/composition`,
-      ),
+      request<{
+        scopeMode: ScopeMode
+        scopeSourceId?: string
+        scope: ScopeFilter
+        compositionMode: CompositionMode
+      }>(`/topologies/${id}/composition`),
 
     set: (
       id: string,
-      body: { scopeMode?: ScopeMode; scopeSourceId?: string | null; scope?: ScopeFilter },
+      body: {
+        scopeMode?: ScopeMode
+        scopeSourceId?: string | null
+        scope?: ScopeFilter
+        compositionMode?: CompositionMode
+      },
     ) =>
-      request<{ scopeMode: ScopeMode; scopeSourceId?: string; scope: ScopeFilter }>(
-        `/topologies/${id}/composition`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(body),
-        },
-      ),
+      request<{
+        scopeMode: ScopeMode
+        scopeSourceId?: string
+        scope: ScopeFilter
+        compositionMode: CompositionMode
+      }>(`/topologies/${id}/composition`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
   },
 
   // Topology Data Sources (many-to-many)

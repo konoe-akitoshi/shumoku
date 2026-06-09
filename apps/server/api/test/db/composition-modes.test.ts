@@ -71,6 +71,16 @@ test('topology scope defaults to auto, and setScope round-trips', () => {
   expect(open?.scopeSourceId).toBeUndefined()
 })
 
+test('topology composition mode defaults to additive and round-trips', () => {
+  makeTopology('t_mode_topo')
+  const svc = new TopologyService()
+  expect(svc.get('t_mode_topo')?.compositionMode).toBe('additive')
+  const enriched = svc.setCompositionMode('t_mode_topo', 'enrichment')
+  expect(enriched?.compositionMode).toBe('enrichment')
+  const back = svc.setCompositionMode('t_mode_topo', 'additive')
+  expect(back?.compositionMode).toBe('additive')
+})
+
 test('topology scope criteria round-trip (setScopeCriteria / readScopeCriteria)', () => {
   makeTopology('t_scope_2')
   const svc = new TopologyService()

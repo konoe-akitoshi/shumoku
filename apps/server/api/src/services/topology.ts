@@ -90,6 +90,7 @@ interface TopologyRow {
   share_token: string | null
   scope_mode: string | null
   scope_source_id: string | null
+  composition_mode: string | null
   created_at: number
   updated_at: number
 }
@@ -103,6 +104,7 @@ function rowToTopology(row: TopologyRow): Topology {
     shareToken: row.share_token ?? undefined,
     scopeMode: (row.scope_mode as Topology['scopeMode']) ?? 'auto',
     scopeSourceId: row.scope_source_id ?? undefined,
+    compositionMode: (row.composition_mode as Topology['compositionMode']) ?? 'additive',
     // Filled by the service from topology_scope_criteria (rowToTopology has no db).
     scope: { include: [], exclude: [] },
     createdAt: row.created_at,
@@ -583,6 +585,16 @@ export class TopologyService {
     }
     for (const c of scope.include ?? []) write('include', c)
     for (const c of scope.exclude ?? []) write('exclude', c)
+    this.clearCacheEntry(topologyId)
+    return this.get(topologyId)
+  }
+
+  /** Set the topology-wide composition Mode (additive | enrichment). */
+  setCompositionMode(topologyId: string, mode: Topology['compositionMode']): Topology | null {
+    if (!this.get(topologyId)) return null
+    this.db
+      .query('UPDATE topologies SET composition_mode = ?, updated_at = ? WHERE id = ?')
+      .run(mode, timestamp(), topologyId)
     this.clearCacheEntry(topologyId)
     return this.get(topologyId)
   }
@@ -1213,13 +1225,17 @@ export class TopologyService {
     // always outranks these (handled inside resolve() as the `authored` input).
     const priorityBySource = new Map<string, number>()
     const modeBySource = new Map<string, SourceMode>()
+    // Mode is a TOPOLOGY-WIDE merge method (not per-source): every topology source
+    // gets the same node/link contribution derived from `topology.compositionMode`.
+    //   additive   → scoop / add  (sources assert nodes + links)
+    //   enrichment → anchor / update (sources only enrich; assert nothing new)
+    const enrich = topology.compositionMode === 'enrichment'
     for (const tds of topologySources) {
       priorityBySource.set(tds.dataSourceId, tds.priority)
-      // Composition modes apply to the source's TOPOLOGY contribution only.
       if (tds.purpose === 'topology') {
         modeBySource.set(tds.dataSourceId, {
-          nodeContribution: tds.nodeContribution,
-          linkContribution: tds.linkContribution,
+          nodeContribution: enrich ? 'anchor' : 'scoop',
+          linkContribution: enrich ? 'update' : 'add',
           closeScope: scopeSourceIds.has(tds.dataSourceId),
         })
       }
