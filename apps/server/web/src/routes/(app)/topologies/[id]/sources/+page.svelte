@@ -111,6 +111,21 @@
     return type ? pluginTypes.find((p) => p.type === type)?.optionsSchema : undefined
   }
 
+  /**
+   * The per-source options form shows ONLY the non-scope fields (behavior knobs
+   * like groupBy / includeExternalNeighbors). The scope-marked fields (host
+   * groups, sites, …) moved up to the topology-level Scope, so we strip them here
+   * to avoid showing the same control in two places. Returns undefined when a
+   * source has no non-scope options left.
+   */
+  function behaviorSchemaFor(type?: string): PluginConfigSchema | undefined {
+    const schema = optionsSchemaFor(type)
+    if (!schema) return undefined
+    const entries = Object.entries(schema.properties).filter(([, p]) => !p.scope)
+    if (entries.length === 0) return undefined
+    return { ...schema, properties: Object.fromEntries(entries) }
+  }
+
   function formatAgo(ts: number): string {
     const diff = Date.now() - ts
     if (diff < 60_000) return 'just now'
@@ -702,7 +717,7 @@
 
               <!-- Expanded detail: config + scope + danger actions -->
               {#if isOpen}
-                {@const optSchema = optionsSchemaFor(dataSource?.type)}
+                {@const optSchema = behaviorSchemaFor(dataSource?.type)}
                 <div class="border-t border-theme-border p-3 space-y-3">
                   <div class="flex items-end gap-2">
                     <label class="flex-1 space-y-0.5">
