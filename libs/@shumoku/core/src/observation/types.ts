@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { NetworkGraph } from '../models/types.js'
+import type { NetworkGraph, ScopeFilter } from '../models/types.js'
 
 /**
  * One source's observation at a point in time. The server's
@@ -51,6 +51,13 @@ export interface ResolveOptions {
    * detection. They still show in inspector history. Default 30 days.
    */
   staleThresholdMs?: number
+  /**
+   * Topology-level scope predicate. When it carries any `include`/`exclude`
+   * criterion, resolve drops every node cluster that doesn't satisfy it
+   * (operator-curated intrinsic nodes are always kept). Absent / empty → no
+   * topology-level scoping. Orthogonal to, and applied after, region scope.
+   */
+  scope?: ScopeFilter
 }
 
 /**

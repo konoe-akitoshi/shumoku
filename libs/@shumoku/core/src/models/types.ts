@@ -1009,6 +1009,23 @@ export interface MembershipCriterion {
   key?: string
 }
 
+/**
+ * A topology-level scope: the SINGLE, plugin-independent definition of which
+ * nodes the topology covers, expressed as the same {@link MembershipCriterion}
+ * predicate the region machinery uses. A node is in scope when it matches an
+ * `include` criterion (or `include` is empty) AND no `exclude` criterion.
+ * Both empty → no scoping (open-world union).
+ *
+ * This is the common shape every topology source's "what to pull" filter folds
+ * into (Zabbix host groups, NetBox sites/tags/roles, subnets → criteria).
+ * Plugins MAY push it down to their upstream query for efficiency, but resolve()
+ * enforces it post-merge regardless, so coverage never depends on push-down.
+ */
+export interface ScopeFilter {
+  include?: MembershipCriterion[]
+  exclude?: MembershipCriterion[]
+}
+
 export interface Subgraph {
   id: string
 
