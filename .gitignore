@@ -53,3 +53,5 @@ obs*.json
 resolved.json
 discovery-tab.png
 scratch-*.ts
+tmp-test6-*
+tmp-svg2png.ts

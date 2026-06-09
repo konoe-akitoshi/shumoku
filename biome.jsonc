@@ -68,6 +68,7 @@
       "!**/.vercel",
       "!**/*.webmanifest",
       "!**/public/renderer",
+      "!**/src/layout/docs",
       "!**/*.css"
     ]
   },
