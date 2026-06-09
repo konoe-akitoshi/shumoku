@@ -87,9 +87,21 @@ export interface DataSourceInput {
  * The resolved project graph has its own endpoint:
  *   GET  /api/topologies/:tid/resolved
  */
+/**
+ * Topology-level scope (composition). A single decision per topology: which
+ * region set closes the world. `'auto'` = the highest-priority topology source's
+ * regions; `'open'` = no scoping (pure union); `'closed'` = `scopeSourceId`'s
+ * regions. The per-source `scope_role` flag was retired in favor of this.
+ */
+export type ScopeMode = 'auto' | 'open' | 'closed'
+
 export interface Topology {
   id: string
   name: string
+  /** Scope policy for this topology. Default 'auto'. */
+  scopeMode: ScopeMode
+  /** The scoping source (data_sources.id) when scopeMode === 'closed'. */
+  scopeSourceId?: string
   /**
    * Structure / metrics data source ids. No longer stored on the topology row
    * (sources live in `topology_data_sources`); the `/context` response derives
@@ -116,11 +128,12 @@ export type SyncMode = 'manual' | 'on_view' | 'webhook'
 export type DataSourcePurpose = 'topology' | 'metrics'
 
 // Per-source composition modes (topology-source-modes.md, Axis D). Two
-// independent knobs + a scope role. Defaults = Additive (scoop / add / no scope).
+// independent knobs describing how THIS source behaves in THIS topology.
+// Defaults = Additive (scoop / add). Scope is NOT here — it's a single
+// per-topology decision (see Topology.scopeMode).
 // NOT named `mode` — that collides with DiscoveryMode (auto|observe|disabled).
 export type NodeContribution = 'scoop' | 'anchor'
 export type LinkContribution = 'add' | 'update'
-export type ScopeRole = 'scoping'
 
 // Source merge is governed by `TopologyDataSource.priority` — the
 // higher-priority source wins each field in resolve() (see
@@ -141,8 +154,6 @@ export interface TopologyDataSource {
   nodeContribution: NodeContribution
   /** How this source's links participate. Default 'add'. */
   linkContribution: LinkContribution
-  /** When 'scoping', this source's regions are a closed world. Default undefined. */
-  scopeRole?: ScopeRole
   createdAt: number
   updatedAt: number
   // Joined data
@@ -157,7 +168,6 @@ export interface TopologyDataSourceInput {
   optionsJson?: string
   nodeContribution?: NodeContribution
   linkContribution?: LinkContribution
-  scopeRole?: ScopeRole
 }
 
 export interface Dashboard {

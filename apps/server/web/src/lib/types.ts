@@ -80,9 +80,14 @@ export interface DataSourceInput {
  * write a new one via api.topologies.sources.recordObservation(...).
  * The resolved project graph: api.topologies.getResolved(...).
  */
+/** Topology-level scope policy. See api ScopeMode. */
+export type ScopeMode = 'auto' | 'open' | 'closed'
+
 export interface Topology {
   id: string
   name: string
+  scopeMode: ScopeMode
+  scopeSourceId?: string
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string
@@ -132,10 +137,10 @@ export function serializeMultiFileContent(files: TopologyFile[]): string {
 export type SyncMode = 'manual' | 'on_view' | 'webhook'
 export type DataSourcePurpose = 'topology' | 'metrics'
 
-// Per-source composition modes (topology-source-modes.md, Axis D).
+// Per-source composition modes (topology-source-modes.md, Axis D). Scope is NOT
+// here — it's a single per-topology decision (Topology.scopeMode).
 export type NodeContribution = 'scoop' | 'anchor'
 export type LinkContribution = 'add' | 'update'
-export type ScopeRole = 'scoping'
 
 export interface TopologyDataSource {
   id: string
@@ -149,7 +154,6 @@ export interface TopologyDataSource {
   optionsJson?: string
   nodeContribution: NodeContribution
   linkContribution: LinkContribution
-  scopeRole?: ScopeRole
   createdAt: number
   updatedAt: number
   dataSource?: DataSource
@@ -163,7 +167,6 @@ export interface TopologyDataSourceInput {
   optionsJson?: string
   nodeContribution?: NodeContribution
   linkContribution?: LinkContribution
-  scopeRole?: ScopeRole | null
 }
 
 export interface ApiError {

@@ -13,7 +13,7 @@ import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.j
 import { ObservationsService } from '../services/observations.js'
 import { type ParsedTopology, TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
-import type { MetricsMapping, TopologyInput } from '../types.js'
+import type { MetricsMapping, ScopeMode, TopologyInput } from '../types.js'
 
 /**
  * Overlay per-link bandwidth from the metrics mapping onto the graph.
@@ -360,6 +360,29 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
       return c.json(topology)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
+  // Topology scope policy (composition). Scope is a single per-topology decision —
+  // which region set closes the world — so it lives on the topology, not per source.
+  app.get('/:id/composition', (c) => {
+    const id = c.req.param('id')
+    const topology = service.get(id)
+    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    return c.json({ scopeMode: topology.scopeMode, scopeSourceId: topology.scopeSourceId })
+  })
+
+  app.put('/:id/composition', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const body = (await c.req.json()) as { scopeMode?: ScopeMode; scopeSourceId?: string | null }
+      const mode = body.scopeMode ?? 'auto'
+      const topology = service.setScope(id, mode, body.scopeSourceId ?? undefined)
+      if (!topology) return c.json({ error: 'Topology not found' }, 404)
+      return c.json({ scopeMode: topology.scopeMode, scopeSourceId: topology.scopeSourceId })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)

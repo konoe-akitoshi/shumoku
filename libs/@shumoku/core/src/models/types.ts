@@ -1033,7 +1033,8 @@ export interface Subgraph {
   /**
    * Scope marker (resolve input only). `'closed'` makes this region a closed
    * world: resolve() drops any node cluster that is not a member of some closed
-   * region. Set by a `scope_role: 'scoping'` source. Default (undefined) = open.
+   * region. Stamped by the caller per the topology's scope policy (auto / open /
+   * closed-to a chosen source). Default (undefined) = open.
    */
   scope?: 'closed'
 

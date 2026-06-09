@@ -33,7 +33,7 @@
     LinkContribution,
     NodeContribution,
     PluginConfigSchema,
-    ScopeRole,
+    ScopeMode,
     SyncMode,
     TopologyDataSource,
   } from '$lib/types'
@@ -216,25 +216,22 @@
     )
   }
 
-  // Composition role = a preset over the three per-source knobs
-  // (topology-source-modes.md). Default Additive (unconstrained union).
-  type CompositionRole = 'additive' | 'scoping' | 'enrichment'
+  // Composition role = how THIS source behaves in the topology. Two presets over
+  // the per-source knobs (scope is NOT here — it's a topology-level decision):
+  //   Additive   = scoop + add  (assert nodes & links)
+  //   Enrichment = anchor + update (fill fields only, claim nothing new)
+  type CompositionRole = 'additive' | 'enrichment'
   function roleOf(s: TopologyDataSource): CompositionRole {
-    if (s.scopeRole === 'scoping') return 'scoping'
-    if (s.nodeContribution === 'anchor') return 'enrichment'
-    return 'additive'
+    return s.nodeContribution === 'anchor' ? 'enrichment' : 'additive'
   }
   function setRole(source: TopologyDataSource, role: CompositionRole) {
     const updates: {
       nodeContribution: NodeContribution
       linkContribution: LinkContribution
-      scopeRole: ScopeRole | null
     } =
-      role === 'scoping'
-        ? { nodeContribution: 'scoop', linkContribution: 'add', scopeRole: 'scoping' }
-        : role === 'enrichment'
-          ? { nodeContribution: 'anchor', linkContribution: 'update', scopeRole: null }
-          : { nodeContribution: 'scoop', linkContribution: 'add', scopeRole: null }
+      role === 'enrichment'
+        ? { nodeContribution: 'anchor', linkContribution: 'update' }
+        : { nodeContribution: 'scoop', linkContribution: 'add' }
     void mutate(
       source.id,
       () => api.topologies.sources.update(ctx.topologyId, source.id, updates),
@@ -245,6 +242,39 @@
       },
       { reflect: true },
     )
+  }
+
+  // Topology-level scope (composition). Single decision: which region set closes
+  // the world. 'auto' = highest-priority topology source; 'open' = no scoping;
+  // 'closed' = the chosen scopeSourceId's regions.
+  let scopeMode = $state<ScopeMode>('auto')
+  let scopeSourceId = $state<string | undefined>(undefined)
+  $effect(() => {
+    scopeMode = ctx.topology?.scopeMode ?? 'auto'
+    scopeSourceId = ctx.topology?.scopeSourceId
+  })
+  // Topology-purpose sources, the candidates for 'closed-to'.
+  const topologySourceChoices = $derived(
+    ctx.currentSources
+      .filter((s) => s.purpose === 'topology')
+      .map((s) => ({
+        id: s.dataSourceId,
+        name: ctx.getDataSource(s.dataSourceId)?.name ?? s.dataSourceId,
+      })),
+  )
+  async function applyScope(mode: ScopeMode, sourceId?: string) {
+    scopeMode = mode
+    scopeSourceId = sourceId
+    try {
+      const res = await api.topologies.composition.set(ctx.topologyId, {
+        scopeMode: mode,
+        scopeSourceId: mode === 'closed' ? (sourceId ?? null) : null,
+      })
+      if (ctx.topology) ctx.topology = { ...ctx.topology, ...res }
+      ctx.bumpRevision()
+    } catch (e) {
+      localError = e instanceof Error ? e.message : String(e)
+    }
   }
 
   function changeDataSource(source: TopologyDataSource, newId: string) {
@@ -511,6 +541,46 @@
       </div>
     </div>
     <div class="card-body">
+      {#if topologySources.length > 0}
+        <!-- Topology-level scope: ONE decision for the whole topology — which
+             region set closes the world. Not a per-source property. -->
+        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-theme-bg-subtle p-3">
+          <span class="text-xs font-medium text-theme-text-emphasis">Scope</span>
+          <select
+            class="input"
+            style="width: 11rem;"
+            title="Which region set closes the world for this topology"
+            value={scopeMode}
+            onchange={(e) =>
+              applyScope(
+                e.currentTarget.value as ScopeMode,
+                e.currentTarget.value === 'closed' ? scopeSourceId : undefined,
+              )}
+          >
+            <option value="auto">Auto (top source)</option>
+            <option value="open">Open (union)</option>
+            <option value="closed">Closed to…</option>
+          </select>
+          {#if scopeMode === 'closed'}
+            <select
+              class="input"
+              style="width: 12rem;"
+              value={scopeSourceId ?? ''}
+              onchange={(e) => applyScope('closed', e.currentTarget.value || undefined)}
+            >
+              <option value="" disabled>Select a source…</option>
+              {#each topologySourceChoices as choice (choice.id)}
+                <option value={choice.id}>{choice.name}</option>
+              {/each}
+            </select>
+          {/if}
+          <span class="text-xs text-theme-text-muted">
+            {scopeMode === 'open'
+              ? 'all sources merged, nothing dropped'
+              : 'nodes outside the closed region are dropped'}
+          </span>
+        </div>
+      {/if}
       {#if topologySources.length === 0}
         <p class="text-sm text-theme-text-muted text-center py-4">
           No topology sources configured. Topology is defined manually.
@@ -626,12 +696,11 @@
                     <select
                       class="input"
                       style="width: 10rem;"
-                      title="How this source composes into the topology"
+                      title="How this source behaves in the topology"
                       value={roleOf(source)}
                       onchange={(e) => setRole(source, e.currentTarget.value as CompositionRole)}
                     >
                       <option value="additive">Additive</option>
-                      <option value="scoping">Scoping</option>
                       <option value="enrichment">Enrichment</option>
                     </select>
                   </div>

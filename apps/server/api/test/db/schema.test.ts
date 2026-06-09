@@ -57,9 +57,18 @@ describe('migration chain (001-014)', () => {
     }
   })
 
-  test('topology_data_sources has composition-mode columns (018)', () => {
+  test('topology_data_sources has per-source composition-mode columns (018)', () => {
     const cols = columns('topology_data_sources')
-    for (const c of ['node_contribution', 'link_contribution', 'scope_role']) {
+    for (const c of ['node_contribution', 'link_contribution']) {
+      expect(cols).toContain(c)
+    }
+    // scope_role was retired (020): scope is a topology-level decision now.
+    expect(cols).not.toContain('scope_role')
+  })
+
+  test('topologies has topology-level scope columns (020)', () => {
+    const cols = columns('topologies')
+    for (const c of ['scope_mode', 'scope_source_id']) {
       expect(cols).toContain(c)
     }
   })

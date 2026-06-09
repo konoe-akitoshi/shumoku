@@ -139,18 +139,17 @@ export function resolve(
     for (const m of cl.members) regionIdRemap.set(m.subgraph.id, cl.canonicalId)
   }
 
-  // 2d. Scope (ordering-driven, region-centric). The highest-priority topology
-  //     SOURCE (the intrinsic overlay is excluded as scope DEFINER — it's
-  //     curation, not coverage) makes its REGIONS the closed world. "In scope"
-  //     means being a member of a closed region — NOT merely being emitted by the
-  //     scope source — so even the scope source's own out-of-region nodes (e.g.
-  //     Zabbix LLDP external neighbors, outside the fetched host group) are
-  //     dropped. Closed regions = those from a scope-defining source OR the
-  //     overlay. Operator curation (a real intrinsic node) is always kept. No
-  //     closed region → no filtering (open-world union: a single source / sources
-  //     with no regions / no overlay regions). See clusterInClosedScope.
-  const scopeDefiningSourceIds = computeScopeDefiningSources(contributions)
-  const scope = buildScopeIndex(regions, regionIdRemap, scopeDefiningSourceIds)
+  // 2d. Scope (region-centric, MECHANISM only). A region is the closed world iff
+  //     one of its contributing subgraphs is marked `scope:'closed'`. resolve does
+  //     NOT decide WHICH source scopes — that policy (auto = top source / open /
+  //     closed-to a chosen source) lives in the caller, which stamps `scope:'closed'`
+  //     on the right contributions (incl. the overlay) before calling resolve.
+  //     "In scope" means being a member of a closed region — NOT merely being
+  //     emitted by the scope source — so even the scope source's own out-of-region
+  //     nodes (e.g. Zabbix LLDP external neighbors, outside the fetched host group)
+  //     are dropped. Operator curation (a real intrinsic node) is always kept. No
+  //     closed region → no filtering (open-world union). See clusterInClosedScope.
+  const scope = buildScopeIndex(regions, regionIdRemap)
   const nodeClusters =
     scope.closedRegionIds.size > 0
       ? afterExclusions.filter((c) => clusterInClosedScope(c, regions, regionIdRemap, scope))
@@ -990,42 +989,18 @@ interface ScopeIndex {
   inClosedScope: (regionId: string) => boolean
 }
 
-/**
- * The sources whose regions form the closed scope: the highest-priority
- * non-intrinsic source(s), PLUS any source that explicitly marks a region
- * `scope:'closed'` (manual override regardless of priority). The intrinsic
- * overlay (+∞) is excluded — it's curation, not coverage, so it never defines
- * the scope. Empty when there are no non-intrinsic sources.
- */
-function computeScopeDefiningSources(contributions: Contribution[]): Set<string> {
-  const sources = contributions.filter((c) => c.sourceId !== 'intrinsic')
-  const ids = new Set<string>()
-  if (sources.length === 0) return ids
-  const maxPriority = sources.reduce((m, c) => Math.max(m, c.priority), Number.NEGATIVE_INFINITY)
-  for (const c of sources) {
-    if (c.priority === maxPriority) ids.add(c.sourceId)
-    else if ((c.graph.subgraphs ?? []).some((s) => s.scope === 'closed')) ids.add(c.sourceId)
-  }
-  return ids
-}
-
 /** Index closed regions + the region parent chain for scope ancestry walks. */
 function buildScopeIndex(
   clusters: RegionCluster[],
   regionIdRemap: Map<string, string>,
-  scopeDefiningSourceIds: Set<string>,
 ): ScopeIndex {
   const closedRegionIds = new Set<string>()
   const regionParent = new Map<string, string>()
   for (const cl of clusters) {
-    // A region is part of the closed scope if a scope-defining source OR the
-    // operator overlay (intrinsic curation) contributed it. Scope-source regions
-    // (e.g. Zabbix host groups) come in automatically; operator-authored regions
-    // count too, so a node matching their membership is in scope.
-    if (
-      cl.members.some((m) => m.sourceId === 'intrinsic' || scopeDefiningSourceIds.has(m.sourceId))
-    )
-      closedRegionIds.add(cl.canonicalId)
+    // A region is part of the closed scope iff one of its contributing subgraphs
+    // is marked `scope:'closed'`. The caller decides which source(s) scope and
+    // stamps that mark — resolve is pure mechanism here (no priority/source policy).
+    if (cl.members.some((m) => m.subgraph.scope === 'closed')) closedRegionIds.add(cl.canonicalId)
     const ranked = [...cl.members].sort(
       (a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt,
     )

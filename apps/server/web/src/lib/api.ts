@@ -15,7 +15,7 @@ import type {
   LinkContribution,
   MetricsMapping,
   NodeContribution,
-  ScopeRole,
+  ScopeMode,
   SyncMode,
   Topology,
   TopologyContext,
@@ -337,6 +337,18 @@ export const topologies = {
       method: 'DELETE',
     }),
 
+  // Topology-level scope policy (composition). Single per-topology decision.
+  composition: {
+    get: (id: string) =>
+      request<{ scopeMode: ScopeMode; scopeSourceId?: string }>(`/topologies/${id}/composition`),
+
+    set: (id: string, body: { scopeMode: ScopeMode; scopeSourceId?: string | null }) =>
+      request<{ scopeMode: ScopeMode; scopeSourceId?: string }>(`/topologies/${id}/composition`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+  },
+
   // Topology Data Sources (many-to-many)
   sources: {
     list: (topologyId: string) =>
@@ -357,7 +369,6 @@ export const topologies = {
         optionsJson?: string
         nodeContribution?: NodeContribution
         linkContribution?: LinkContribution
-        scopeRole?: ScopeRole | null
       },
     ) =>
       request<TopologyDataSource>(`/topologies/${topologyId}/sources/${sourceId}`, {

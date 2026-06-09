@@ -56,7 +56,7 @@ import type {
   MetricsData,
   MetricsMapping,
   NodeContribution,
-  ScopeRole,
+  ScopeMode,
   Topology,
   TopologyInput,
 } from '../types.js'
@@ -85,6 +85,8 @@ interface TopologyRow {
   id: string
   name: string
   share_token: string | null
+  scope_mode: string | null
+  scope_source_id: string | null
   created_at: number
   updated_at: number
 }
@@ -96,6 +98,8 @@ function rowToTopology(row: TopologyRow): Topology {
     // Topology is just the shell. No content, no source pointers — sources live
     // in the m2m topology_data_sources table; mappingJson is derived from bindings.
     shareToken: row.share_token ?? undefined,
+    scopeMode: (row.scope_mode as Topology['scopeMode']) ?? 'auto',
+    scopeSourceId: row.scope_source_id ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -314,24 +318,28 @@ interface LinkBindingDesired {
   bandwidth?: number
 }
 
-/** A source's composition mode (topology-source-modes.md, Axis D). */
+/**
+ * A source's composition for one topology. node/link contribution are per-source
+ * (how THIS source behaves here); `closeScope` is derived from the TOPOLOGY's
+ * scope policy (which source's regions close the world) — see computeScopeSources.
+ */
 interface SourceMode {
   nodeContribution: NodeContribution
   linkContribution: LinkContribution
-  scopeRole?: ScopeRole
+  closeScope: boolean
 }
 
 /**
- * Apply a source's composition mode to its built contribution before it enters
+ * Apply a source's composition to its built contribution before it enters
  * resolve(): anchor its nodes (node_contribution='anchor'), anchor its links
- * (link_contribution='update'), and/or mark its regions closed
- * (scope_role='scoping'). Additive (the default) is a no-op. Never mutates input.
+ * (link_contribution='update'), and/or mark its regions `scope:'closed'` (this
+ * source is the topology's scope definer). All-default is a no-op. Never mutates
+ * input.
  */
 function applySourceMode(graph: NetworkGraph, mode: SourceMode): NetworkGraph {
   const anchorNodes = mode.nodeContribution === 'anchor'
   const anchorLinks = mode.linkContribution === 'update'
-  const closeScope = mode.scopeRole === 'scoping'
-  if (!anchorNodes && !anchorLinks && !closeScope) return graph
+  if (!anchorNodes && !anchorLinks && !mode.closeScope) return graph
   return {
     ...graph,
     nodes: anchorNodes
@@ -340,10 +348,32 @@ function applySourceMode(graph: NetworkGraph, mode: SourceMode): NetworkGraph {
     links: anchorLinks
       ? graph.links.map((l) => ({ ...l, presence: 'anchor' as const }))
       : graph.links,
-    ...(closeScope && graph.subgraphs
+    ...(mode.closeScope && graph.subgraphs
       ? { subgraphs: graph.subgraphs.map((s) => ({ ...s, scope: 'closed' as const })) }
       : {}),
   }
+}
+
+/**
+ * Resolve the topology's scope policy to the set of SOURCE ids whose regions
+ * close the world:
+ *   - 'open'   → none (pure union)
+ *   - 'closed' → just `scopeSourceId`
+ *   - 'auto'   → the highest-priority topology-purpose source(s)
+ * This is the scope POLICY; resolve() is pure mechanism (honors the `scope:'closed'`
+ * marks this drives). Empty set → no scoping.
+ */
+function computeScopeSources(
+  scopeMode: ScopeMode,
+  scopeSourceId: string | undefined,
+  topologySources: { dataSourceId: string; purpose: string; priority: number }[],
+): Set<string> {
+  if (scopeMode === 'open') return new Set()
+  if (scopeMode === 'closed') return new Set(scopeSourceId ? [scopeSourceId] : [])
+  const topo = topologySources.filter((s) => s.purpose === 'topology')
+  if (topo.length === 0) return new Set()
+  const maxPriority = topo.reduce((m, s) => Math.max(m, s.priority), Number.NEGATIVE_INFINITY)
+  return new Set(topo.filter((s) => s.priority === maxPriority).map((s) => s.dataSourceId))
 }
 
 /**
@@ -546,6 +576,24 @@ export class TopologyService {
 
     this.clearCacheEntry(id)
 
+    return this.get(id)
+  }
+
+  /**
+   * Set the topology's scope policy (composition). `scopeSourceId` is only
+   * meaningful for `scopeMode === 'closed'`; it's cleared otherwise. Bumps the
+   * composition revision (via clearCacheEntry) so the resolved graph re-resolves.
+   */
+  setScope(id: string, scopeMode: ScopeMode, scopeSourceId?: string): Topology | null {
+    const existing = this.get(id)
+    if (!existing) return null
+    const sourceId = scopeMode === 'closed' ? (scopeSourceId ?? null) : null
+    this.db
+      .query(
+        'UPDATE topologies SET scope_mode = ?, scope_source_id = ?, updated_at = ? WHERE id = ?',
+      )
+      .run(scopeMode, sourceId, timestamp(), id)
+    this.clearCacheEntry(id)
     return this.get(id)
   }
 
@@ -1071,26 +1119,43 @@ export class TopologyService {
     // the operator's curation — exclusions, overrides, metrics bindings, settings —
     // folded as resolve()'s top-priority contribution. Absent → empty. A hand-drawn
     // Manual source is NOT here; it's an ordinary source in `snapshots` below.
-    const authored: NetworkGraph = this.readProjectOverlay(topology.id) ?? {
+    const overlay: NetworkGraph = this.readProjectOverlay(topology.id) ?? {
       version: '1',
       name: topology.name,
       nodes: [],
       links: [],
     }
+    const topologySources = this.topologySources.listByTopology(topology.id)
+    // Scope POLICY → which sources' regions close the world (auto/open/closed).
+    // resolve() is pure mechanism: it honors `scope:'closed'` marks; we stamp them
+    // here per the topology's policy, on both the scope source(s) and the overlay
+    // (operator-curated regions also scope, unless the topology is 'open').
+    const scopeSourceIds = computeScopeSources(
+      topology.scopeMode,
+      topology.scopeSourceId,
+      topologySources,
+    )
+    const authored =
+      topology.scopeMode !== 'open' && overlay.subgraphs && overlay.subgraphs.length > 0
+        ? {
+            ...overlay,
+            subgraphs: overlay.subgraphs.map((s) => ({ ...s, scope: 'closed' as const })),
+          }
+        : overlay
     // Source priority feeds the resolver's field merge: when two sources
     // observe the same device, the higher-priority source wins each field it
     // holds. Mirrors `topology_data_sources.priority`. The project overlay
     // always outranks these (handled inside resolve() as the `authored` input).
     const priorityBySource = new Map<string, number>()
     const modeBySource = new Map<string, SourceMode>()
-    for (const tds of this.topologySources.listByTopology(topology.id)) {
+    for (const tds of topologySources) {
       priorityBySource.set(tds.dataSourceId, tds.priority)
       // Composition modes apply to the source's TOPOLOGY contribution only.
       if (tds.purpose === 'topology') {
         modeBySource.set(tds.dataSourceId, {
           nodeContribution: tds.nodeContribution,
           linkContribution: tds.linkContribution,
-          scopeRole: tds.scopeRole,
+          closeScope: scopeSourceIds.has(tds.dataSourceId),
         })
       }
     }
