@@ -732,6 +732,16 @@ export interface PluginConfigProperty {
   optionsSource?: string
   /** Allow hand-typed values not in the candidate list (fallback when candidates fail/empty). */
   freeSolo?: boolean
+  /**
+   * Marks this options field as a TOPOLOGY SCOPE dimension. A `type:'array'` field
+   * so marked is surfaced in the topology's Scope editor (reusing this same schema
+   * + `optionsSource` picker), and each of its values maps to a topology
+   * `MembershipCriterion` `{ attr:'metadata', key, value }` of the given kind. So a
+   * plugin's "what to pull" filter (e.g. Zabbix `hostGroups`) becomes the common,
+   * topology-level scope without per-plugin UI code. The node must carry the same
+   * `metadata[key]` for resolve to match (e.g. Zabbix emits `metadata.hostGroups`).
+   */
+  scope?: { kind: 'include' | 'exclude'; key: string }
 
   // --- object (nested) -------------------------------------------------
   /** Child properties for `type:'object'`. */

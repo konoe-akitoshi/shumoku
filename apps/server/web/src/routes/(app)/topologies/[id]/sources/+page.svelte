@@ -33,6 +33,7 @@
     LinkContribution,
     MembershipCriterion,
     NodeContribution,
+    PluginConfigProperty,
     PluginConfigSchema,
     SyncMode,
     TopologyDataSource,
@@ -245,40 +246,85 @@
   }
 
   // Topology-level Scope (composition): one common include/exclude criteria set
-  // for the whole topology. The resolver enforces it post-merge across every
-  // source (plugin push-down is just an optimization). Empty = no scoping.
-  let scopeInclude = $state<MembershipCriterion[]>([])
-  let scopeExclude = $state<MembershipCriterion[]>([])
-  let scopeLoaded = false
-  $effect(() => {
-    // Initialize once from the loaded topology; later edits are local until saved.
-    if (scopeLoaded || !ctx.topology) return
-    scopeLoaded = true
-    scopeInclude = (ctx.topology.scope?.include ?? []).map((c) => ({ ...c }))
-    scopeExclude = (ctx.topology.scope?.exclude ?? []).map((c) => ({ ...c }))
-  })
-  async function saveScopeFilter() {
-    try {
-      const scope = {
-        include: scopeInclude.filter((c) => c.value.trim()),
-        exclude: scopeExclude.filter((c) => c.value.trim()),
+  // for the whole topology, edited with the SAME interaction as a source's options
+  // form. Each topology source's plugin declares which option fields are scope
+  // dimensions (`prop.scope`, e.g. Zabbix `hostGroups`); we surface exactly those
+  // fields via the shared SchemaForm (with its live value picker), and map the
+  // values to/from the common MembershipCriterion list. resolve enforces it
+  // post-merge across every source. Empty = no scoping.
+  interface ScopeFieldDef {
+    name: string
+    prop: PluginConfigProperty
+    sourceId: string
+    kind: 'include' | 'exclude'
+    key: string
+  }
+  const scopeFields = $derived.by<ScopeFieldDef[]>(() => {
+    const out: ScopeFieldDef[] = []
+    const seen = new Set<string>()
+    for (const s of topologySources) {
+      const sch = optionsSchemaFor(ctx.getDataSource(s.dataSourceId)?.type)
+      if (!sch) continue
+      for (const [name, prop] of Object.entries(sch.properties)) {
+        if (!prop.scope || seen.has(name)) continue
+        seen.add(name)
+        out.push({
+          name,
+          prop,
+          sourceId: s.dataSourceId,
+          kind: prop.scope.kind,
+          key: prop.scope.key,
+        })
       }
-      const res = await api.topologies.composition.set(ctx.topologyId, { scope })
+    }
+    return out
+  })
+  const scopeSchema = $derived<PluginConfigSchema | null>(
+    scopeFields.length > 0
+      ? { type: 'object', properties: Object.fromEntries(scopeFields.map((f) => [f.name, f.prop])) }
+      : null,
+  )
+  // Local form object SchemaForm mutates in place. Initialized once from the
+  // topology's criteria when both the topology and the field list are ready.
+  let scopeForm = $state<Record<string, unknown>>({})
+  let scopeFormInit = false
+  $effect(() => {
+    if (scopeFormInit || !ctx.topology || scopeFields.length === 0) return
+    scopeFormInit = true
+    const scope = ctx.topology.scope
+    const init: Record<string, unknown> = {}
+    for (const f of scopeFields) {
+      const list = (f.kind === 'include' ? scope?.include : scope?.exclude) ?? []
+      init[f.name] = list
+        .filter((c) => c.attr === 'metadata' && c.key === f.key)
+        .map((c) => c.value)
+    }
+    scopeForm = init
+  })
+  async function saveScopeForm() {
+    const include: MembershipCriterion[] = []
+    const exclude: MembershipCriterion[] = []
+    for (const f of scopeFields) {
+      const vals = (scopeForm[f.name] as string[] | undefined) ?? []
+      for (const value of vals) {
+        ;(f.kind === 'include' ? include : exclude).push({ attr: 'metadata', key: f.key, value })
+      }
+    }
+    try {
+      const res = await api.topologies.composition.set(ctx.topologyId, {
+        scope: { include, exclude },
+      })
       if (ctx.topology) ctx.topology = { ...ctx.topology, scope: res.scope }
       ctx.bumpRevision()
     } catch (e) {
       localError = e instanceof Error ? e.message : String(e)
     }
   }
-  function addCriterion(kind: 'include' | 'exclude') {
-    const next: MembershipCriterion = { attr: 'metadata', key: '', value: '' }
-    if (kind === 'include') scopeInclude = [...scopeInclude, next]
-    else scopeExclude = [...scopeExclude, next]
-  }
-  function removeCriterion(kind: 'include' | 'exclude', i: number) {
-    if (kind === 'include') scopeInclude = scopeInclude.filter((_, j) => j !== i)
-    else scopeExclude = scopeExclude.filter((_, j) => j !== i)
-    void saveScopeFilter()
+  function scopeOptions(optionsSource: string): Promise<{ value: string; label: string }[]> {
+    const f = scopeFields.find((ff) => ff.prop.optionsSource === optionsSource)
+    const sid = f?.sourceId ?? topologySources[0]?.dataSourceId
+    if (!sid) return Promise.resolve([])
+    return api.dataSources.getConfigOptions(sid, optionsSource).then((r) => r.options)
   }
 
   function changeDataSource(source: TopologyDataSource, newId: string) {
@@ -546,69 +592,26 @@
     </div>
     <div class="card-body">
       {#if topologySources.length > 0}
-        <!-- Topology-level Scope: ONE common include/exclude filter for the whole
-             topology. The resolver enforces it across every source. Empty = no
-             scoping. -->
-        <div class="mb-4 space-y-2 rounded-lg bg-theme-bg-subtle p-3">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-theme-text-emphasis">Scope</span>
-            <span class="text-xs text-theme-text-muted">
-              {scopeInclude.length === 0 && scopeExclude.length === 0
-                ? 'no filter — every node is in scope'
-                : 'nodes outside the filter are dropped'}
-            </span>
-          </div>
-          {#each [{ kind: 'include' as const, list: scopeInclude }, { kind: 'exclude' as const, list: scopeExclude }] as group (group.kind)}
-            <div class="space-y-1">
-              <p class="text-[11px] uppercase tracking-wide text-theme-text-muted">{group.kind}</p>
-              {#each group.list as crit, i (i)}
-                <div class="flex items-center gap-1.5">
-                  <select
-                    class="input"
-                    style="width: 7rem;"
-                    bind:value={crit.attr}
-                    onchange={() => saveScopeFilter()}
-                  >
-                    <option value="metadata">metadata</option>
-                    <option value="name">name</option>
-                    <option value="subnet">subnet</option>
-                  </select>
-                  {#if crit.attr === 'metadata'}
-                    <input
-                      class="input"
-                      style="width: 8rem;"
-                      placeholder="key (e.g. hostGroups)"
-                      bind:value={crit.key}
-                      onchange={() => saveScopeFilter()}
-                    >
-                  {/if}
-                  <input
-                    class="input flex-1"
-                    placeholder={crit.attr === 'subnet'
-                      ? '10.0.0.0/24'
-                      : crit.attr === 'name'
-                        ? 'regex'
-                        : 'value'}
-                    bind:value={crit.value}
-                    onchange={() => saveScopeFilter()}
-                  >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    class="text-theme-text-muted hover:text-destructive"
-                    onclick={() => removeCriterion(group.kind, i)}
-                  >
-                    <TrashIcon size={14} />
-                  </Button>
-                </div>
-              {/each}
-              <Button variant="outline" size="sm" onclick={() => addCriterion(group.kind)}>
-                <PlusIcon size={12} class="mr-1" />
-                Add {group.kind}
-              </Button>
+        <!-- Topology-level Scope: ONE common filter for the whole topology, edited
+             with the same form (and live value picker) as a source's options. The
+             fields come from each topology source's scope-marked schema. Empty =
+             every node is in scope. -->
+        {#if scopeSchema}
+          <div class="mb-4 space-y-2 rounded-lg bg-theme-bg-subtle p-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-theme-text-emphasis">Scope</span>
+              <span class="text-xs text-theme-text-muted">
+                limit this topology to matching nodes (empty = all)
+              </span>
             </div>
-          {/each}
-        </div>
+            <SchemaForm
+              schema={scopeSchema}
+              value={scopeForm}
+              getOptions={scopeOptions}
+              onChange={() => saveScopeForm()}
+            />
+          </div>
+        {/if}
       {/if}
       {#if topologySources.length === 0}
         <p class="text-sm text-theme-text-muted text-center py-4">

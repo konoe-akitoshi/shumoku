@@ -52,6 +52,7 @@ const optionsSchema: PluginConfigSchema = {
       help: 'Limit the import to these host groups. Strongly recommended — large instances have thousands of hosts. Empty = all.',
       optionsSource: 'hostgroup',
       freeSolo: true,
+      scope: { kind: 'include', key: 'hostGroups' },
     },
     groupBy: {
       type: 'string',
@@ -68,7 +69,9 @@ const optionsSchema: PluginConfigSchema = {
       items: { type: 'string' },
       title: 'Exclude groups',
       help: 'Host-group names to never use as a subgraph (admin / catch-all groups).',
+      optionsSource: 'hostgroup',
       freeSolo: true,
+      scope: { kind: 'exclude', key: 'hostGroups' },
     },
     includeExternalNeighbors: {
       type: 'boolean',
