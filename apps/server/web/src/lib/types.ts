@@ -83,11 +83,27 @@ export interface DataSourceInput {
 /** Topology-level scope policy. See api ScopeMode. */
 export type ScopeMode = 'auto' | 'open' | 'closed'
 
+/** One membership/scope criterion — mirrors core MembershipCriterion. */
+export interface MembershipCriterion {
+  attr: 'name' | 'subnet' | 'metadata'
+  value: string
+  /** Metadata key (only when attr === 'metadata'). */
+  key?: string
+}
+
+/** Topology-level scope: include/exclude criteria. Empty = no scoping. */
+export interface ScopeFilter {
+  include?: MembershipCriterion[]
+  exclude?: MembershipCriterion[]
+}
+
 export interface Topology {
   id: string
   name: string
   scopeMode: ScopeMode
   scopeSourceId?: string
+  /** Common topology-level scope (include/exclude criteria). */
+  scope?: ScopeFilter
   topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string
