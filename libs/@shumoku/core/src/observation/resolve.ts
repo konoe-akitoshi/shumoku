@@ -15,6 +15,7 @@ import {
   type NodePort,
   type Provenance,
   type RegionIdentity,
+  type ScopeFilter,
   type Subgraph,
 } from '../models/types.js'
 import { keyHash, nodeIdentityKeys, portIdentityKeys } from './identity.js'
@@ -150,10 +151,22 @@ export function resolve(
   //     are dropped. Operator curation (a real intrinsic node) is always kept. No
   //     closed region → no filtering (open-world union). See clusterInClosedScope.
   const scope = buildScopeIndex(regions, regionIdRemap)
-  const nodeClusters =
+  const regionScoped =
     scope.closedRegionIds.size > 0
       ? afterExclusions.filter((c) => clusterInClosedScope(c, regions, regionIdRemap, scope))
       : afterExclusions
+
+  // 2e. Topology-level scope predicate (orthogonal to region scope). When the
+  //     caller supplies include/exclude criteria, drop clusters that don't match
+  //     — operator-curated intrinsic nodes are always kept. This is the common,
+  //     plugin-independent scope every source's "what to pull" filter folds into.
+  const scopeFilter = options.scope
+  const hasScopeFilter =
+    !!scopeFilter && (scopeFilter.include?.length ?? 0) + (scopeFilter.exclude?.length ?? 0) > 0
+  const nodeClusters =
+    hasScopeFilter && scopeFilter
+      ? regionScoped.filter((c) => clusterMatchesScopeFilter(c, scopeFilter))
+      : regionScoped
 
   // 3. For each cluster, fold into a single resolved Node
   const resolvedNodes: Node[] = []
@@ -918,6 +931,26 @@ function clusterRegions(contributions: Contribution[]): RegionCluster[] {
       claim({ sourceId: c.sourceId, priority: c.priority, capturedAt: c.capturedAt, subgraph: s })
   }
   return clusters
+}
+
+/**
+ * Whether a node cluster satisfies the topology-level scope filter: it matches an
+ * `include` criterion (or `include` is empty) AND no `exclude` criterion. A
+ * criterion is satisfied when ANY member node of the cluster matches it (so a
+ * cluster confirmed across sources stays in scope if any contributor matches).
+ * Operator-curated intrinsic nodes are always kept, mirroring region scope.
+ */
+function clusterMatchesScopeFilter(cluster: NodeCluster, scope: ScopeFilter): boolean {
+  for (const m of cluster.members) {
+    if (m.sourceId === 'intrinsic' && intrinsicAssertsTopology(m.node)) return true
+  }
+  const include = scope.include ?? []
+  const exclude = scope.exclude ?? []
+  const anyMemberMatches = (crit: MembershipCriterion): boolean =>
+    cluster.members.some((m) => criterionMatches(m.node, crit))
+  if (exclude.some(anyMemberMatches)) return false
+  if (include.length === 0) return true
+  return include.some(anyMemberMatches)
 }
 
 /** Whether a node satisfies any membership criterion of any member of a region. */

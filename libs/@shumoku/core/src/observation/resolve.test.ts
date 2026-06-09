@@ -1948,6 +1948,67 @@ describe('resolve()', () => {
       expect(out.nodes.map((n) => n.label).sort()).toEqual(['a', 'b'])
     })
   })
+
+  describe('topology-level scope filter (options.scope)', () => {
+    const threeNodes = (sourceId: string): SnapshotEntry => ({
+      sourceId,
+      capturedAt: 1,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          { id: 'in1', label: 'in-1', identity: { mgmtIp: '10.0.0.1' } },
+          { id: 'in2', label: 'in-2', identity: { mgmtIp: '10.0.0.2' } },
+          { id: 'out', label: 'out', identity: { mgmtIp: '10.9.0.9' } },
+        ],
+      },
+    })
+
+    it('no filter → open-world union (all kept)', () => {
+      const out = resolve(emptyGraph(), [threeNodes('A')])
+      expect(out.nodes).toHaveLength(3)
+    })
+
+    it('empty include/exclude → no scoping (all kept)', () => {
+      const out = resolve(emptyGraph(), [threeNodes('A')], { scope: { include: [], exclude: [] } })
+      expect(out.nodes).toHaveLength(3)
+    })
+
+    it('include by subnet keeps only matching clusters', () => {
+      const out = resolve(emptyGraph(), [threeNodes('A')], {
+        scope: { include: [{ attr: 'subnet', value: '10.0.0.0/24' }] },
+      })
+      expect(out.nodes.map((n) => n.label).sort()).toEqual(['in-1', 'in-2'])
+    })
+
+    it('exclude removes matching clusters even with no include', () => {
+      const out = resolve(emptyGraph(), [threeNodes('A')], {
+        scope: { exclude: [{ attr: 'name', value: '^out$' }] },
+      })
+      expect(out.nodes.map((n) => n.label).sort()).toEqual(['in-1', 'in-2'])
+    })
+
+    it('exclude wins over include', () => {
+      const out = resolve(emptyGraph(), [threeNodes('A')], {
+        scope: {
+          include: [{ attr: 'subnet', value: '10.0.0.0/24' }],
+          exclude: [{ attr: 'name', value: '^in-2$' }],
+        },
+      })
+      expect(out.nodes.map((n) => n.label)).toEqual(['in-1'])
+    })
+
+    it('an intrinsic (curated) node survives the scope filter', () => {
+      const intrinsic: NetworkGraph = {
+        ...emptyGraph(),
+        nodes: [{ id: 'op', label: 'operator-placed', identity: { mgmtIp: '10.9.0.1' } }],
+      }
+      const out = resolve(intrinsic, [threeNodes('A')], {
+        scope: { include: [{ attr: 'subnet', value: '10.0.0.0/24' }] },
+      })
+      expect(out.nodes.map((n) => n.label).sort()).toEqual(['in-1', 'in-2', 'operator-placed'])
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
