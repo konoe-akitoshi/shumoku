@@ -31,9 +31,9 @@
   import type {
     DataSourcePluginInfo,
     LinkContribution,
+    MembershipCriterion,
     NodeContribution,
     PluginConfigSchema,
-    ScopeMode,
     SyncMode,
     TopologyDataSource,
   } from '$lib/types'
@@ -244,37 +244,41 @@
     )
   }
 
-  // Topology-level scope (composition). Single decision: which region set closes
-  // the world. 'auto' = highest-priority topology source; 'open' = no scoping;
-  // 'closed' = the chosen scopeSourceId's regions.
-  let scopeMode = $state<ScopeMode>('auto')
-  let scopeSourceId = $state<string | undefined>(undefined)
+  // Topology-level Scope (composition): one common include/exclude criteria set
+  // for the whole topology. The resolver enforces it post-merge across every
+  // source (plugin push-down is just an optimization). Empty = no scoping.
+  let scopeInclude = $state<MembershipCriterion[]>([])
+  let scopeExclude = $state<MembershipCriterion[]>([])
+  let scopeLoaded = false
   $effect(() => {
-    scopeMode = ctx.topology?.scopeMode ?? 'auto'
-    scopeSourceId = ctx.topology?.scopeSourceId
+    // Initialize once from the loaded topology; later edits are local until saved.
+    if (scopeLoaded || !ctx.topology) return
+    scopeLoaded = true
+    scopeInclude = (ctx.topology.scope?.include ?? []).map((c) => ({ ...c }))
+    scopeExclude = (ctx.topology.scope?.exclude ?? []).map((c) => ({ ...c }))
   })
-  // Topology-purpose sources, the candidates for 'closed-to'.
-  const topologySourceChoices = $derived(
-    ctx.currentSources
-      .filter((s) => s.purpose === 'topology')
-      .map((s) => ({
-        id: s.dataSourceId,
-        name: ctx.getDataSource(s.dataSourceId)?.name ?? s.dataSourceId,
-      })),
-  )
-  async function applyScope(mode: ScopeMode, sourceId?: string) {
-    scopeMode = mode
-    scopeSourceId = sourceId
+  async function saveScopeFilter() {
     try {
-      const res = await api.topologies.composition.set(ctx.topologyId, {
-        scopeMode: mode,
-        scopeSourceId: mode === 'closed' ? (sourceId ?? null) : null,
-      })
-      if (ctx.topology) ctx.topology = { ...ctx.topology, ...res }
+      const scope = {
+        include: scopeInclude.filter((c) => c.value.trim()),
+        exclude: scopeExclude.filter((c) => c.value.trim()),
+      }
+      const res = await api.topologies.composition.set(ctx.topologyId, { scope })
+      if (ctx.topology) ctx.topology = { ...ctx.topology, scope: res.scope }
       ctx.bumpRevision()
     } catch (e) {
       localError = e instanceof Error ? e.message : String(e)
     }
+  }
+  function addCriterion(kind: 'include' | 'exclude') {
+    const next: MembershipCriterion = { attr: 'metadata', key: '', value: '' }
+    if (kind === 'include') scopeInclude = [...scopeInclude, next]
+    else scopeExclude = [...scopeExclude, next]
+  }
+  function removeCriterion(kind: 'include' | 'exclude', i: number) {
+    if (kind === 'include') scopeInclude = scopeInclude.filter((_, j) => j !== i)
+    else scopeExclude = scopeExclude.filter((_, j) => j !== i)
+    void saveScopeFilter()
   }
 
   function changeDataSource(source: TopologyDataSource, newId: string) {
@@ -542,43 +546,68 @@
     </div>
     <div class="card-body">
       {#if topologySources.length > 0}
-        <!-- Topology-level scope: ONE decision for the whole topology — which
-             region set closes the world. Not a per-source property. -->
-        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-theme-bg-subtle p-3">
-          <span class="text-xs font-medium text-theme-text-emphasis">Scope</span>
-          <select
-            class="input"
-            style="width: 11rem;"
-            title="Which region set closes the world for this topology"
-            value={scopeMode}
-            onchange={(e) =>
-              applyScope(
-                e.currentTarget.value as ScopeMode,
-                e.currentTarget.value === 'closed' ? scopeSourceId : undefined,
-              )}
-          >
-            <option value="auto">Auto (top source)</option>
-            <option value="open">Open (union)</option>
-            <option value="closed">Closed to…</option>
-          </select>
-          {#if scopeMode === 'closed'}
-            <select
-              class="input"
-              style="width: 12rem;"
-              value={scopeSourceId ?? ''}
-              onchange={(e) => applyScope('closed', e.currentTarget.value || undefined)}
-            >
-              <option value="" disabled>Select a source…</option>
-              {#each topologySourceChoices as choice (choice.id)}
-                <option value={choice.id}>{choice.name}</option>
+        <!-- Topology-level Scope: ONE common include/exclude filter for the whole
+             topology. The resolver enforces it across every source. Empty = no
+             scoping. -->
+        <div class="mb-4 space-y-2 rounded-lg bg-theme-bg-subtle p-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-theme-text-emphasis">Scope</span>
+            <span class="text-xs text-theme-text-muted">
+              {scopeInclude.length === 0 && scopeExclude.length === 0
+                ? 'no filter — every node is in scope'
+                : 'nodes outside the filter are dropped'}
+            </span>
+          </div>
+          {#each [{ kind: 'include' as const, list: scopeInclude }, { kind: 'exclude' as const, list: scopeExclude }] as group (group.kind)}
+            <div class="space-y-1">
+              <p class="text-[11px] uppercase tracking-wide text-theme-text-muted">{group.kind}</p>
+              {#each group.list as crit, i (i)}
+                <div class="flex items-center gap-1.5">
+                  <select
+                    class="input"
+                    style="width: 7rem;"
+                    bind:value={crit.attr}
+                    onchange={() => saveScopeFilter()}
+                  >
+                    <option value="metadata">metadata</option>
+                    <option value="name">name</option>
+                    <option value="subnet">subnet</option>
+                  </select>
+                  {#if crit.attr === 'metadata'}
+                    <input
+                      class="input"
+                      style="width: 8rem;"
+                      placeholder="key (e.g. hostGroups)"
+                      bind:value={crit.key}
+                      onchange={() => saveScopeFilter()}
+                    >
+                  {/if}
+                  <input
+                    class="input flex-1"
+                    placeholder={crit.attr === 'subnet'
+                      ? '10.0.0.0/24'
+                      : crit.attr === 'name'
+                        ? 'regex'
+                        : 'value'}
+                    bind:value={crit.value}
+                    onchange={() => saveScopeFilter()}
+                  >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="text-theme-text-muted hover:text-destructive"
+                    onclick={() => removeCriterion(group.kind, i)}
+                  >
+                    <TrashIcon size={14} />
+                  </Button>
+                </div>
               {/each}
-            </select>
-          {/if}
-          <span class="text-xs text-theme-text-muted">
-            {scopeMode === 'open'
-              ? 'all sources merged, nothing dropped'
-              : 'nodes outside the closed region are dropped'}
-          </span>
+              <Button variant="outline" size="sm" onclick={() => addCriterion(group.kind)}>
+                <PlusIcon size={12} class="mr-1" />
+                Add {group.kind}
+              </Button>
+            </div>
+          {/each}
         </div>
       {/if}
       {#if topologySources.length === 0}
@@ -672,37 +701,44 @@
               {#if isOpen}
                 {@const optSchema = optionsSchemaFor(dataSource?.type)}
                 <div class="border-t border-theme-border p-3 space-y-3">
-                  <div class="flex items-center gap-2">
-                    <select
-                      class="input flex-1"
-                      value={source.dataSourceId}
-                      onchange={(e) => changeDataSource(source, e.currentTarget.value)}
-                    >
-                      {#each ctx.topologyDataSources as ds (ds.id)}
-                        <option value={ds.id}>{ds.name} ({ds.type})</option>
-                      {/each}
-                    </select>
-                    <select
-                      class="input"
-                      style="width: 9rem;"
-                      value={source.syncMode}
-                      onchange={(e) =>
-                        patchSource(source, { syncMode: e.currentTarget.value as SyncMode })}
-                    >
-                      <option value="manual">Manual</option>
-                      <option value="on_view">On View</option>
-                      <option value="webhook">Webhook</option>
-                    </select>
-                    <select
-                      class="input"
-                      style="width: 10rem;"
-                      title="How this source behaves in the topology"
-                      value={roleOf(source)}
-                      onchange={(e) => setRole(source, e.currentTarget.value as CompositionRole)}
-                    >
-                      <option value="additive">Additive</option>
-                      <option value="enrichment">Enrichment</option>
-                    </select>
+                  <div class="flex items-end gap-2">
+                    <label class="flex-1 space-y-0.5">
+                      <span class="text-[11px] text-theme-text-muted">Data source</span>
+                      <select
+                        class="input w-full"
+                        value={source.dataSourceId}
+                        onchange={(e) => changeDataSource(source, e.currentTarget.value)}
+                      >
+                        {#each ctx.topologyDataSources as ds (ds.id)}
+                          <option value={ds.id}>{ds.name} ({ds.type})</option>
+                        {/each}
+                      </select>
+                    </label>
+                    <label class="space-y-0.5" style="width: 9rem;">
+                      <span class="text-[11px] text-theme-text-muted">Sync</span>
+                      <select
+                        class="input w-full"
+                        value={source.syncMode}
+                        onchange={(e) =>
+                          patchSource(source, { syncMode: e.currentTarget.value as SyncMode })}
+                      >
+                        <option value="manual">Manual</option>
+                        <option value="on_view">On View</option>
+                        <option value="webhook">Webhook</option>
+                      </select>
+                    </label>
+                    <label class="space-y-0.5" style="width: 10rem;">
+                      <span class="text-[11px] text-theme-text-muted">Mode</span>
+                      <select
+                        class="input w-full"
+                        title="How this source behaves in the topology"
+                        value={roleOf(source)}
+                        onchange={(e) => setRole(source, e.currentTarget.value as CompositionRole)}
+                      >
+                        <option value="additive">Additive</option>
+                        <option value="enrichment">Enrichment</option>
+                      </select>
+                    </label>
                   </div>
 
                   {#if hasMultipleTopologySources}
@@ -738,17 +774,19 @@
                     </div>
                   {/if}
 
-                  <!-- Scope (faceted ingestion filter) -->
+                  <!-- Source options (plugin-specific fetch options + behavior
+                       knobs). The common topology Scope lives above; this is what
+                       THIS source pulls / how it behaves, per its plugin schema. -->
                   {#if optSchema && scopeState[source.id]}
                     <div class="border-t border-theme-border pt-3 space-y-2">
                       <p
                         class="text-xs font-medium text-theme-text-muted uppercase tracking-wide flex items-center gap-1"
                       >
                         <SlidersHorizontalIcon size={12} />
-                        Scope
+                        Source options
                       </p>
                       <p class="text-xs text-theme-text-muted">
-                        Narrow what this source contributes. Takes effect on the next Sync.
+                        Plugin-specific fetch options for this source. Take effect on the next Sync.
                       </p>
                       <SchemaForm
                         schema={optSchema}

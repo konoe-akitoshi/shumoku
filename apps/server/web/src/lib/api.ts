@@ -15,6 +15,7 @@ import type {
   LinkContribution,
   MetricsMapping,
   NodeContribution,
+  ScopeFilter,
   ScopeMode,
   SyncMode,
   Topology,
@@ -337,16 +338,25 @@ export const topologies = {
       method: 'DELETE',
     }),
 
-  // Topology-level scope policy (composition). Single per-topology decision.
+  // Topology-level scope (composition). Single per-topology decision: `scope` is
+  // the common include/exclude criteria the resolver enforces post-merge.
   composition: {
     get: (id: string) =>
-      request<{ scopeMode: ScopeMode; scopeSourceId?: string }>(`/topologies/${id}/composition`),
+      request<{ scopeMode: ScopeMode; scopeSourceId?: string; scope: ScopeFilter }>(
+        `/topologies/${id}/composition`,
+      ),
 
-    set: (id: string, body: { scopeMode: ScopeMode; scopeSourceId?: string | null }) =>
-      request<{ scopeMode: ScopeMode; scopeSourceId?: string }>(`/topologies/${id}/composition`, {
-        method: 'PUT',
-        body: JSON.stringify(body),
-      }),
+    set: (
+      id: string,
+      body: { scopeMode?: ScopeMode; scopeSourceId?: string | null; scope?: ScopeFilter },
+    ) =>
+      request<{ scopeMode: ScopeMode; scopeSourceId?: string; scope: ScopeFilter }>(
+        `/topologies/${id}/composition`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        },
+      ),
   },
 
   // Topology Data Sources (many-to-many)
