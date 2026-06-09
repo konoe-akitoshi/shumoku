@@ -1,0 +1,12 @@
+-- Topology-level composition Mode (the merge method for the whole topology).
+--
+-- Mode was per-source (topology_data_sources.node_contribution/link_contribution),
+-- but it's one decision per topology — HOW sources merge — so it moves onto the
+-- topology row. The per-source columns become vestigial (the service derives every
+-- source's contribution from this single value); they can be dropped in a later
+-- cleanup.
+--
+--   composition_mode: 'additive'   — every source adds nodes + links (union). default.
+--                     'enrichment' — sources only enrich existing nodes/links
+--                                    (anchor / update); they assert nothing new.
+ALTER TABLE topologies ADD COLUMN composition_mode TEXT NOT NULL DEFAULT 'additive';

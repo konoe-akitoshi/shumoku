@@ -95,9 +95,18 @@ export interface DataSourceInput {
  */
 export type ScopeMode = 'auto' | 'open' | 'closed'
 
+/**
+ * Topology-level composition Mode — the merge method for the whole topology.
+ * `'additive'` = every source adds nodes+links (union); `'enrichment'` = sources
+ * only enrich existing nodes/links, asserting nothing new.
+ */
+export type CompositionMode = 'additive' | 'enrichment'
+
 export interface Topology {
   id: string
   name: string
+  /** How sources merge into this topology. Default 'additive'. */
+  compositionMode: CompositionMode
   /** Scope policy for this topology. Default 'auto'. (Region-mark scope; being
    * superseded by `scope` criteria — kept during the Phase 2/3 transition.) */
   scopeMode: ScopeMode
