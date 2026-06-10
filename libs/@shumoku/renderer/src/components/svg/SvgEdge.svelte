@@ -105,7 +105,7 @@
   // v3 semantic grammar: redundancy links (HA/VC/vPC/MLAG/stack heartbeats)
   // are a COUPLING, not a wire — drawn as a double "glasses" bridge between
   // the two member devices instead of a routed stroke.
-  const isCoupling = $derived(link?.redundancy !== undefined)
+  const isCoupling = $derived(link?.redundancy !== undefined || edge.coupling === true)
   const couplingLines = $derived(() => {
     const a = edge.fromPort?.absolutePosition ?? edge.points[0]
     const b = edge.toPort?.absolutePosition ?? edge.points[edge.points.length - 1]

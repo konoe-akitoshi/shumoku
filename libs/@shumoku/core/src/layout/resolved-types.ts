@@ -117,6 +117,15 @@ export interface ResolvedEdge {
    * redundancy / peering context, drawn subdued. Absent = no opinion.
    */
   emphasis?: 'primary' | 'secondary'
+  /**
+   * v3 grammar: this edge is an HA/redundancy heartbeat between the two
+   * members of a collapsed pair — a COUPLING, not a wire. Renderers draw
+   * it as the "glasses" double bridge; the octilinear router and the
+   * routed-geometry score both skip it. Set either from explicit
+   * `link.redundancy` or inferred by the composite engine (direct link
+   * between detected pair members).
+   */
+  coupling?: boolean
 }
 
 // ============================================================================
