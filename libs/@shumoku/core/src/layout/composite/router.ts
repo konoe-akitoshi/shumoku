@@ -63,9 +63,24 @@ export function applyOctilinearRoutes(
   const chamfer = options.chamfer ?? 9
   const clearance = options.trackClearance ?? 3
 
-  // -- classify: only bottom→top vertical pairs are routed ----------------------
+  // -- classify ------------------------------------------------------------------
+  // bottom→top pairs route vertically; side-port peers (left/right at similar
+  // height) route as under-loops ("ramps" — the v3 redundancy/peer notation).
+  interface RampRoute {
+    id: string
+    x1: number
+    y1: number
+    dir1: number
+    x2: number
+    y2: number
+    dir2: number
+    half: number
+    busY: number
+  }
   const straights: OrthRoute[] = []
   const orths: OrthRoute[] = []
+  const ramps: RampRoute[] = []
+  const isSidePort = (side: string): boolean => side === 'left' || side === 'right'
   const sortedEdges = [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
   for (const edge of sortedEdges) {
     const upper =
@@ -73,6 +88,25 @@ export function applyOctilinearRoutes(
         ? edge.fromPort
         : edge.toPort
     const lower = upper === edge.fromPort ? edge.toPort : edge.fromPort
+    const half = Math.max(0.5, edge.width / 2)
+    if (
+      isSidePort(upper.side) &&
+      isSidePort(lower.side) &&
+      Math.abs(lower.absolutePosition.y - upper.absolutePosition.y) <= 80
+    ) {
+      ramps.push({
+        id: edge.id,
+        x1: upper.absolutePosition.x,
+        y1: upper.absolutePosition.y,
+        dir1: upper.side === 'right' ? 1 : -1,
+        x2: lower.absolutePosition.x,
+        y2: lower.absolutePosition.y,
+        dir2: lower.side === 'right' ? 1 : -1,
+        half,
+        busY: 0,
+      })
+      continue
+    }
     if (upper.side !== 'bottom' || lower.side !== 'top') continue
     const x1 = upper.absolutePosition.x
     const y1 = upper.absolutePosition.y
@@ -85,7 +119,7 @@ export function applyOctilinearRoutes(
       y1,
       x2,
       y2,
-      half: Math.max(0.5, edge.width / 2),
+      half,
       trackY: 0,
       shiftX: 0,
     }
@@ -114,6 +148,31 @@ export function applyOctilinearRoutes(
       ceil: route.y2 - 10,
     })
   }
+  // ramp buses share the SAME allocator (separate allocators collide):
+  // the bus runs below the lower endpoint, unbounded downward.
+  const rampRequestOf = new Map<string, RampRoute>()
+  for (const ramp of ramps) {
+    const bottom = Math.max(ramp.y1, ramp.y2)
+    const probe: OrthRoute = {
+      id: `ramp:${ramp.id}`,
+      x1: ramp.x1,
+      y1: bottom,
+      x2: ramp.x2,
+      y2: bottom + 1000,
+      half: ramp.half,
+      trackY: 0,
+      shiftX: 0,
+    }
+    rampRequestOf.set(probe.id, ramp)
+    requests.push({
+      route: probe,
+      lo: Math.min(ramp.x1, ramp.x2) - 16,
+      hi: Math.max(ramp.x1, ramp.x2) + 16,
+      want: bottom + 30,
+      floor: bottom + 18,
+      ceil: bottom + 400,
+    })
+  }
   requests.sort((a, b) => a.want - b.want || (a.route.id < b.route.id ? -1 : 1))
   const placedTracks: { y: number; lo: number; hi: number; half: number }[] = []
   for (const request of requests) {
@@ -140,7 +199,9 @@ export function applyOctilinearRoutes(
       }
     }
     placedTracks.push({ y, lo: request.lo, hi: request.hi, half })
-    request.route.trackY = y
+    const ramp = rampRequestOf.get(request.route.id)
+    if (ramp) ramp.busY = y
+    else request.route.trackY = y
   }
 
   // -- vertical corridor separation (geometry-level, not a render nudge) --------
@@ -206,6 +267,23 @@ export function applyOctilinearRoutes(
       { x: route.x1 + route.shiftX, y: route.trackY },
       { x: route.x2 + route.shiftX, y: route.trackY },
       { x: route.x2 + route.shiftX, y: route.y2 },
+    ]
+    edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
+    edge.points = corner
+    routed++
+  }
+  for (const ramp of ramps) {
+    const edge = edges.get(ramp.id)
+    if (!edge) continue
+    const out1 = ramp.x1 + ramp.dir1 * 14
+    const out2 = ramp.x2 + ramp.dir2 * 14
+    const corner: Position[] = [
+      { x: ramp.x1, y: ramp.y1 },
+      { x: out1, y: ramp.y1 },
+      { x: out1, y: ramp.busY },
+      { x: out2, y: ramp.busY },
+      { x: out2, y: ramp.y2 },
+      { x: ramp.x2, y: ramp.y2 },
     ]
     edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
     edge.points = corner

@@ -431,6 +431,12 @@ export function layoutComposite(
     })
   }
   for (const original of graph.subgraphs ?? []) {
+    // Skip degenerate groupings that contain most of the graph (e.g. a
+    // monitoring host-group every device belongs to) — a box around
+    // everything carries no information and visually swallows the zones.
+    let memberCount = 0
+    for (const node of nodes.values()) if (node.parent === original.id) memberCount++
+    if (memberCount >= nodes.size * 0.6) continue
     subgraphs.set(original.id, { ...original, bounds: boundsOfMembers(original, nodes) })
   }
 
@@ -456,10 +462,28 @@ function computeDepths(
   nodes: Map<string, Node>,
   neighbors: Map<string, Map<string, LogicalEdge>>,
 ): Map<string, number> {
+  // Apex candidates must carry trunk-class bandwidth. This is the v3
+  // "default-route sink guard" (engine-v2-design.md §7.5): a shared
+  // firewall/last-resort node touches everything over thin links and a
+  // low device-tier (firewall=15), so without the bandwidth gate it
+  // out-ranks the actual border routers and the whole diagram hangs off
+  // the sink.
+  let globalMaxBw = 0
+  const maxBwOf = new Map<string, number>()
+  for (const id of ids) {
+    let best = 0
+    for (const edge of neighbors.get(id)?.values() ?? []) best = Math.max(best, edge.bw)
+    maxBwOf.set(id, best)
+    globalMaxBw = Math.max(globalMaxBw, best)
+  }
+  const trunkClass = (id: string): boolean =>
+    globalMaxBw <= 0 || (maxBwOf.get(id) ?? 0) >= globalMaxBw * 0.5
+
   let bestTier = Number.POSITIVE_INFINITY
   const tierOf = new Map<string, number>()
   for (const id of ids) {
     if ((neighbors.get(id)?.size ?? 0) === 0) continue
+    if (!trunkClass(id)) continue
     const hint = resolveTierFromSpec(nodes.get(id)?.spec)
     if (!hint) continue
     tierOf.set(id, hint.tier)
