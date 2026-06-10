@@ -852,8 +852,28 @@ function placeZoneBands(
     const blocks: Block[] = []
     for (const [key, members] of [...groups].sort()) {
       if (!key.startsWith('~') && members.length >= 2) {
-        members.sort((a, b) => (centerOf.get(a) ?? 0) - (centerOf.get(b) ?? 0) || (a < b ? -1 : 1))
-        const cols = Math.min(4, Math.ceil(Math.sqrt(members.length * 1.7)))
+        // order siblings by connectivity (barycenter over placed zones),
+        // not by raw centerOf — unplaced zones all carry centerOf 0, which
+        // silently degraded the order to alphabetical (test6: N-6 landed
+        // at the grid's right end by name, and the pod band inherited it)
+        const sortKey = new Map<string, number>()
+        for (const zone of members) sortKey.set(zone, barycenter(zone, zoneAdj, centerOf))
+        members.sort((a, b) => (sortKey.get(a) ?? 0) - (sortKey.get(b) ?? 0) || (a < b ? -1 : 1))
+        // pick the column count whose widest grid row still fits the band
+        // budget — a single block wider than maxBandW set the canvas width
+        // for the whole figure (band wrap only splits BETWEEN blocks)
+        let cols = Math.min(4, Math.ceil(Math.sqrt(members.length * 1.7)))
+        const rowWidthFor = (c: number): number => {
+          let widest = 0
+          for (let start = 0; start < members.length; start += c) {
+            const row = members.slice(start, start + c)
+            let w = 0
+            for (const zone of row) w += (zoneBox.get(zone)?.w ?? 0) + Math.round(zoneGap * 0.55)
+            widest = Math.max(widest, w)
+          }
+          return widest
+        }
+        while (cols > 1 && rowWidthFor(cols) > maxBandW) cols--
         const gapInner = Math.round(zoneGap * 0.55)
         const offsets = new Map<string, { x: number; y: number }>()
         let blockW = 0
@@ -925,28 +945,55 @@ function placeZoneBands(
     const bandTop = y
     for (const rowBlocks of subRows) {
       if (rowBlocks.length === 0) continue
-      // 1D placement at desired x, resolving overlaps left→right, then center
-      const xs: number[] = []
-      let cursor = Number.NEGATIVE_INFINITY
-      for (const block of rowBlocks) {
-        let x = block.desired - block.w / 2
-        if (x < cursor) x = cursor
-        xs.push(x)
-        cursor = x + block.w + zoneGap
+      // Two-sided 1D legalization (Abacus-style): each block sits at its
+      // desired x; on overlap, colliding blocks merge into a cluster
+      // placed at the mean of member desires (order-preserving least
+      // squares). The earlier push-right-only sweep shoved late blocks
+      // rightward and their descendant bands followed — the diagonal
+      // drift that left big empty corners on test6. Blocks now spill
+      // BOTH ways into free space, so alignment survives without the
+      // staircase silhouette.
+      interface XCluster {
+        x: number
+        w: number
+        sum: number
+        n: number
+        members: { index: number; offset: number }[]
       }
-      // Preserve the desired-x frame: shift the row only by the average
-      // deviation the overlap resolution introduced. Re-centering every
-      // row at x=0 (the old behavior) destroyed cross-band alignment —
-      // a child band could never sit under its feeder when band content
-      // was asymmetric (test6: pods drifted 300-900px off their hub).
-      let deviation = 0
+      const clusters: XCluster[] = []
       for (const [i, block] of rowBlocks.entries()) {
-        deviation += block.desired - ((xs[i] ?? 0) + block.w / 2)
+        const desiredLeft = block.desired - block.w / 2
+        let cluster: XCluster = {
+          x: desiredLeft,
+          w: block.w + zoneGap,
+          sum: desiredLeft,
+          n: 1,
+          members: [{ index: i, offset: 0 }],
+        }
+        let prev = clusters[clusters.length - 1]
+        while (prev && prev.x + prev.w > cluster.x) {
+          for (const m of cluster.members) {
+            prev.members.push({ index: m.index, offset: prev.w + m.offset })
+          }
+          prev.sum += cluster.sum - cluster.n * prev.w
+          prev.n += cluster.n
+          prev.w += cluster.w
+          prev.x = prev.sum / prev.n
+          cluster = prev
+          clusters.pop()
+          prev = clusters[clusters.length - 1]
+        }
+        clusters.push(cluster)
       }
-      const shift = rowBlocks.length > 0 ? deviation / rowBlocks.length : 0
+      const xs: number[] = []
+      for (const cluster of clusters) {
+        for (const m of cluster.members) {
+          xs[m.index] = cluster.x + m.offset
+        }
+      }
       let rowHeight = 0
       for (const [i, block] of rowBlocks.entries()) {
-        const blockX = (xs[i] ?? 0) + shift
+        const blockX = xs[i] ?? 0
         for (const zone of block.zones) {
           const offset = block.offsets.get(zone)
           const box = zoneBox.get(zone)
