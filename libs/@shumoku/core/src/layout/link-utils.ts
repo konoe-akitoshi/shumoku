@@ -111,6 +111,73 @@ export function bpsToLinkWidth(bps: number | undefined): number {
   return bps === undefined ? 0 : bpsToWidth(bps)
 }
 
+// ============================================================================
+// Width modes (engine-v3-migration.md A1, #430)
+// ============================================================================
+
+/**
+ * How bandwidth maps to stroke width.
+ *
+ *   - `log`    — the legacy anchored log curve above. Compresses the range
+ *                so every link stays visible; the read is "fast vs slow",
+ *                not proportion.
+ *   - `linear` — width ∝ bandwidth (px per Gbps). Honest proportion: a
+ *                400G trunk is visibly 40× a 10G access link, like river
+ *                width on a map. Requires a width-aware layout (v3 router)
+ *                because trunk ribbons get genuinely wide; slow links
+ *                bottom out at `LINEAR_MIN_WIDTH`.
+ *   - `class`  — discrete road classes (motorway / trunk / regional /
+ *                local / lane). Rank is readable at a glance; differences
+ *                within a class are intentionally suppressed.
+ */
+export type LinkWidthMode = 'log' | 'linear' | 'class'
+
+/** px per Gbps for `linear` mode (v3 prototype calibration: 400G → 16px). */
+const LINEAR_PX_PER_GBPS = 0.04
+const LINEAR_MIN_WIDTH = 0.4
+const LINEAR_MAX_WIDTH = 64
+
+/** Discrete class widths for `class` mode, fastest first. */
+const CLASS_STEPS: readonly (readonly [number, number])[] = [
+  [400e9, 6.5],
+  [100e9, 4],
+  [25e9, 2.6],
+  [10e9, 1.7],
+]
+const CLASS_MIN_WIDTH = 1.1
+
+/**
+ * Map bits/sec to stroke width under the given mode. Unknown bandwidth
+ * returns 0 (caller decides the fallback), matching `bpsToLinkWidth`.
+ */
+export function bpsToLinkWidthMode(bps: number | undefined, mode: LinkWidthMode = 'log'): number {
+  if (bps === undefined || !Number.isFinite(bps) || bps <= 0) return 0
+  if (mode === 'log') return bpsToWidth(bps)
+  if (mode === 'linear') {
+    const width = (bps / 1e9) * LINEAR_PX_PER_GBPS
+    return Math.min(LINEAR_MAX_WIDTH, Math.max(LINEAR_MIN_WIDTH, width))
+  }
+  for (const [threshold, width] of CLASS_STEPS) {
+    if (bps >= threshold) return width
+  }
+  return CLASS_MIN_WIDTH
+}
+
+/**
+ * Visual line width for a link under a width mode. Same precedence as
+ * `getLinkWidth` (explicit style > bandwidth > type > default). Because a
+ * core `Link` is one physical link, this IS the per-strand width — a LAG
+ * renders as N parallel links each at its own width, never as one merged
+ * stroke (v3 "railway discipline": no two services share a drawn line).
+ */
+export function getLinkWidthForMode(link: Link, mode: LinkWidthMode = 'log'): number {
+  if (link.style?.strokeWidth) return link.style.strokeWidth
+  const bps = linkSpeedBps(link)
+  if (bps !== undefined) return bpsToLinkWidthMode(bps, mode)
+  if (link.type === 'thick') return 4
+  return mode === 'log' ? 3 : 1.5
+}
+
 /** Map a bandwidth label/number to the calibrated stroke width. */
 export function getBandwidthWidth(bw: LinkBandwidth | null | undefined): number {
   return bpsToLinkWidth(resolveBandwidthBps(bw))

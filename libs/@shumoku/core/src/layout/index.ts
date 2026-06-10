@@ -73,10 +73,29 @@ export {
   resolveNodePosition,
   resolvePosition,
 } from './interaction.js'
+// Layout invariant checks (containment / overlap / collinear tracks) —
+// standing verification fixture for every placement/routing pass.
+export {
+  type BoxSpec,
+  type CollinearOverlap,
+  type ContainerSpec,
+  type ContainmentViolation,
+  checkLayoutInvariants,
+  findCollinearOverlaps,
+  findContainmentViolations,
+  findNodeOverlaps,
+  type LayoutInvariantOptions,
+  type LayoutInvariantReport,
+  type NodeOverlap,
+  type PolylineSpec,
+} from './invariants.js'
 export {
   bpsToLinkWidth,
+  bpsToLinkWidthMode,
   getBandwidthWidth,
   getLinkWidth,
+  getLinkWidthForMode,
+  type LinkWidthMode,
   linkSpeedBps,
   resolveBandwidthBps,
 } from './link-utils.js'
