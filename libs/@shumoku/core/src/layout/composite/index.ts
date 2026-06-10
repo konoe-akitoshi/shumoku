@@ -829,6 +829,14 @@ function placeZoneBands(
 
   let y = 0
   const placed = new Set<string>()
+  const placedBlocks: {
+    x: number
+    y: number
+    w: number
+    h: number
+    zones: string[]
+    rects: { x: number; relY: number; w: number; h: number }[]
+  }[] = []
   for (const [bandIndex, rank] of ranks.entries()) {
     y += bandExtra?.get(bandIndex) ?? 0
     const bandZones = zoneIds.filter((z) => (zoneRank.get(z) ?? 0) === rank)
@@ -1003,6 +1011,37 @@ function placeZoneBands(
           centerOf.set(zone, blockX + offset.x + box.w / 2)
           placed.add(zone)
         }
+        // per-grid-row rectangles: the block's bbox includes empty cells
+        // (a 2-col grid's short rows leave the right side hollow), so
+        // compaction obstacles must be the actual row extents
+        const rowRects = new Map<number, { minX: number; maxX: number; h: number }>()
+        for (const zone of block.zones) {
+          const offset = block.offsets.get(zone)
+          const box = zoneBox.get(zone)
+          if (!offset || !box) continue
+          const r = rowRects.get(offset.y) ?? {
+            minX: Number.POSITIVE_INFINITY,
+            maxX: Number.NEGATIVE_INFINITY,
+            h: 0,
+          }
+          r.minX = Math.min(r.minX, offset.x)
+          r.maxX = Math.max(r.maxX, offset.x + box.w)
+          r.h = Math.max(r.h, box.h)
+          rowRects.set(offset.y, r)
+        }
+        placedBlocks.push({
+          x: blockX,
+          y,
+          w: block.w,
+          h: block.h,
+          zones: block.zones,
+          rects: [...rowRects].map(([relY, r]) => ({
+            x: blockX + r.minX,
+            relY,
+            w: r.maxX - r.minX,
+            h: r.h,
+          })),
+        })
         rowHeight = Math.max(rowHeight, block.h)
       }
       y += rowHeight + Math.round(bandGap * 0.55)
@@ -1010,6 +1049,53 @@ function placeZoneBands(
     y -= Math.round(bandGap * 0.55)
     bandRanges.push({ top: bandTop, bottom: y })
     y += bandGap
+  }
+
+  // -- column-wise vertical compaction (pull-up, block-rigid) -----------------
+  // Bands stack as full-width strips, so a block gets pushed below sub-rows
+  // that occupy entirely different columns (test6: the pod grid hung
+  // ~1200px under its hub because the intermediate sub-rows all sat in the
+  // left columns). Pull each BLOCK up — rigidly, so feeder grids keep their
+  // shape — until it would collide with an x-overlapping block above it.
+  // Blocks with nothing overlapping above keep their band y, so the rank
+  // discipline survives where it matters.
+  const vGap = bandGap
+  placedBlocks.sort((a, b) => a.y - b.y || a.x - b.x)
+  const settled: typeof placedBlocks = []
+  for (const block of placedBlocks) {
+    let target: number | undefined
+    for (const other of settled) {
+      for (const obstacle of other.rects) {
+        const obstacleBottom = other.y + obstacle.relY + obstacle.h
+        for (const mover of block.rects) {
+          if (mover.x + mover.w <= obstacle.x - 24 || mover.x >= obstacle.x + obstacle.w + 24) {
+            continue
+          }
+          const candidate = obstacleBottom + vGap - mover.relY
+          target = target === undefined ? candidate : Math.max(target, candidate)
+        }
+      }
+    }
+    if (target !== undefined && target < block.y) {
+      const dy = target - block.y
+      for (const zone of block.zones) zoneY.set(zone, (zoneY.get(zone) ?? 0) + dy)
+      block.y = target
+    }
+    settled.push(block)
+  }
+  // blocks moved — refresh the per-rank ranges used by congestion feedback
+  for (const [i, rank] of ranks.entries()) {
+    let top = Number.POSITIVE_INFINITY
+    let bottom = Number.NEGATIVE_INFINITY
+    for (const zone of zoneIds) {
+      if ((zoneRank.get(zone) ?? 0) !== rank) continue
+      const zy = zoneY.get(zone)
+      const box = zoneBox.get(zone)
+      if (zy === undefined || !box) continue
+      top = Math.min(top, zy)
+      bottom = Math.max(bottom, zy + box.h)
+    }
+    if (Number.isFinite(top) && bandRanges[i]) bandRanges[i] = { top, bottom }
   }
   return { bandRanges, bandBlocks }
 }
