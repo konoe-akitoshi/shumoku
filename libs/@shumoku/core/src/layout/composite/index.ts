@@ -19,7 +19,7 @@
 
 import type { Bounds, Direction, NetworkGraph, Node, Subgraph } from '../../models/types.js'
 import { resolveNodeSize } from '../engine/index.js'
-import { linkSpeedBps } from '../link-utils.js'
+import { getLinkWidthForMode, linkSpeedBps } from '../link-utils.js'
 import { resolveTierFromSpec } from '../role-tiers.js'
 
 export interface CompositeLayoutOptions {
@@ -158,10 +158,19 @@ export function layoutComposite(
   graph: NetworkGraph,
   options: CompositeLayoutOptions = {},
 ): CompositeLayoutResult {
-  const zoneGap = options.zoneGap ?? 90
-  const bandGap = options.bandGap ?? 150
-  const rowGap = options.rowGap ?? 56
-  const cellGapX = options.cellGapX ?? 32
+  // Gaps clear the thickest ribbon (the engine-era rule from
+  // unified-engine: fixed gaps + bandwidth-derived stroke widths meant a
+  // fat trunk overran the nodes it passed between). Caller values still
+  // raise the floor; they can't shrink below the wire clearance.
+  let maxLinkWidth = 0
+  for (const link of graph.links) {
+    maxLinkWidth = Math.max(maxLinkWidth, getLinkWidthForMode(link, 'linear'))
+  }
+  const wireClear = Math.round(maxLinkWidth)
+  const zoneGap = Math.max(options.zoneGap ?? 90, wireClear + 16)
+  const bandGap = Math.max(options.bandGap ?? 150, wireClear + 24)
+  const rowGap = Math.max(options.rowGap ?? 56, wireClear + 16)
+  const cellGapX = Math.max(options.cellGapX ?? 32, wireClear + 12)
   const zonePad = options.zonePad ?? 26
 
   // -- nodes (copies; we set position) + deterministic jitter source --------
@@ -236,6 +245,52 @@ export function layoutComposite(
 
   // -- hierarchy depth: apex from role tiers, then undirected BFS -------------
   const depth = computeDepths(ids, nodes, neighbors, trunkClass, sinkSet)
+
+  // -- port-aware node sizing (engine-era consideration, composite form) ------
+  // The flat-tree engine grew each node so every face could seat its
+  // ports (nodeFootprint). The composite path bypassed that, so dense
+  // nodes crammed ports and the router's width-aware slot pass had to
+  // scale them down. Restored with the ROUTER'S slot model (not the
+  // 40px label slots of the flat tree — those blow up a schematic this
+  // dense): each link claims max(16, width+6) on its face, faces
+  // estimated from hierarchy (shallower neighbor → top, deeper →
+  // bottom, same depth → sides), which is the same convention
+  // alignPortsToPeers enforces after placement. Explicit node.size
+  // always wins (hand-drawn diagrams).
+  {
+    interface FaceDemand {
+      top: number
+      bottom: number
+      left: number
+      right: number
+    }
+    const demand = new Map<string, FaceDemand>()
+    const seat = (selfId: string, otherId: string, slot: number): void => {
+      if (!nodes.has(selfId) || !nodes.has(otherId)) return
+      const faces = demand.get(selfId) ?? { top: 0, bottom: 0, left: 0, right: 0 }
+      // sinks live on the bottom rail: everything reaches them from above
+      const dSelf = sinkSet.has(selfId) ? Number.POSITIVE_INFINITY : (depth.get(selfId) ?? 0)
+      const dOther = sinkSet.has(otherId) ? Number.POSITIVE_INFINITY : (depth.get(otherId) ?? 0)
+      if (dOther < dSelf) faces.top += slot
+      else if (dOther > dSelf) faces.bottom += slot
+      else if (faces.left <= faces.right) faces.left += slot
+      else faces.right += slot
+      demand.set(selfId, faces)
+    }
+    for (const link of graph.links) {
+      const slot = Math.max(16, getLinkWidthForMode(link, 'linear') + 6)
+      seat(link.from.node, link.to.node, slot)
+      seat(link.to.node, link.from.node, slot)
+    }
+    for (const [id, faces] of demand) {
+      const node = nodes.get(id)
+      if (!node || node.size) continue
+      const body = resolveNodeSize(node)
+      const width = Math.max(body.width, faces.top + 16, faces.bottom + 16)
+      const height = Math.max(body.height, faces.left + 12, faces.right + 12)
+      if (width > body.width || height > body.height) node.size = { width, height }
+    }
+  }
 
   // -- redundant pairs ---------------------------------------------------------
   const pairedWith = detectPairs(ids, nodes, edges, neighbors, zoneOf, depth)
