@@ -47,6 +47,20 @@ export interface CompositeLayoutOptions {
    * widens its road bed on the next pass).
    */
   bandExtra?: ReadonlyMap<number, number>
+  /**
+   * Explicit block order per band index (block keys from
+   * `CompositeLayoutResult.bandBlocks`). Search move vocabulary: the
+   * v3 simultaneous place-and-route arbitrated band orderings by
+   * actually routing them (§33).
+   */
+  bandOrder?: ReadonlyMap<number, readonly string[]>
+  /**
+   * Per-unit horizontal nudges (unit id → dx), applied after port
+   * refinement. Search move vocabulary (v3 hill-climb ±x, §32).
+   */
+  nudges?: ReadonlyMap<string, number>
+  /** Bands wider than this wrap into sub-rows (v3 §24). */
+  maxBandW?: number
 }
 
 export interface CompositeLayoutResult {
@@ -65,6 +79,12 @@ export interface CompositeLayoutResult {
   primaryEdges: Set<string>
   /** Shared-service sink nodes placed on the bottom rail. */
   sinks: string[]
+  /** Heartbeat links between pair members (`a|b` keys) — couplings, not wires. */
+  heartbeats: Set<string>
+  /** Hierarchy depth per node (BFS from the apex). */
+  depths: Map<string, number>
+  /** Block keys per band, in placed order (band-order search handles). */
+  bandBlocks: string[][]
 }
 
 /** Synthetic zone subgraphs get this id prefix. */
@@ -108,7 +128,7 @@ interface Unit {
   depth: number
 }
 
-const pairKey = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`)
+export const pairKey = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
 const labelOf = (node: Node): string => {
   const label = node.label
@@ -292,19 +312,48 @@ export function layoutComposite(
     const rows: Unit[][] = []
     let maxRowWidth = 0
     let y = zonePad
+    const placeRow = (row: Unit[], rowY: number, rowHeight: number): void => {
+      let x = zonePad
+      for (const unit of row) {
+        localX.set(unit.id, x + unit.width / 2 + jitter(unit.members[0] ?? unit.id, 3) * 8)
+        localY.set(unit.id, rowY + rowHeight / 2 + jitter(unit.members[0] ?? unit.id, 7) * 6)
+        x += unit.width + cellGapX
+      }
+    }
+    const rowYs: number[] = []
+    const rowHeights: number[] = []
     for (const key of rowKeys) {
       const row = rowMap.get(key) ?? []
       rows.push(row)
       const rowWidth = row.reduce((sum, u) => sum + u.width, 0) + cellGapX * (row.length - 1)
       maxRowWidth = Math.max(maxRowWidth, rowWidth)
       const rowHeight = Math.max(...row.map((u) => u.height))
-      let x = zonePad
-      for (const unit of row) {
-        localX.set(unit.id, x + unit.width / 2 + jitter(unit.members[0] ?? unit.id, 3) * 8)
-        localY.set(unit.id, y + rowHeight / 2 + jitter(unit.members[0] ?? unit.id, 7) * 6)
-        x += unit.width + cellGapX
-      }
+      rowYs.push(y)
+      rowHeights.push(rowHeight)
+      placeRow(row, y, rowHeight)
       y += rowHeight + rowGap
+    }
+    // intra-zone barycenter ordering (v3 §24): two sweeps pulling each
+    // unit next to its in-zone neighbors before global refinement
+    const intraNeighborX = (unit: Unit): number => {
+      let sum = 0
+      let count = 0
+      for (const member of unit.members) {
+        for (const [other] of neighbors.get(member) ?? []) {
+          const otherUnit = unitById.get(unitOf.get(other) ?? '')
+          if (!otherUnit || otherUnit.zone !== zone || otherUnit.id === unit.id) continue
+          sum += localX.get(otherUnit.id) ?? 0
+          count++
+        }
+      }
+      return count > 0 ? sum / count : (localX.get(unit.id) ?? 0)
+    }
+    for (let sweep = 0; sweep < 2; sweep++) {
+      for (const [i, row] of rows.entries()) {
+        if (row.length < 2) continue
+        row.sort((a, b) => intraNeighborX(a) - intraNeighborX(b) || (a.id < b.id ? -1 : 1))
+        placeRow(row, rowYs[i] ?? zonePad, rowHeights[i] ?? 0)
+      }
     }
     zoneRows.set(zone, rows)
     zoneBox.set(zone, { w: maxRowWidth + zonePad * 2, h: y - rowGap + zonePad })
@@ -350,7 +399,7 @@ export function layoutComposite(
 
   const zoneX = new Map<string, number>()
   const zoneY = new Map<string, number>()
-  const bandRanges = placeZoneBands(
+  const { bandRanges, bandBlocks } = placeZoneBands(
     zoneIds,
     zoneRank,
     zoneAdj,
@@ -360,7 +409,9 @@ export function layoutComposite(
     zoneY,
     zoneGap,
     bandGap,
+    options.maxBandW ?? 1700,
     options.bandExtra,
+    options.bandOrder,
   )
 
   // -- port refine: pull units toward their cross-zone neighbors ---------------
@@ -395,6 +446,24 @@ export function layoutComposite(
         }
         resolveRow(row, localX, box.w, minSep)
       }
+    }
+  }
+
+  // -- search nudges (hill-climb ±x moves, v3 §32) -------------------------------
+  if (options.nudges) {
+    for (const [unitId, dx] of options.nudges) {
+      const unit = unitById.get(unitId)
+      const box = unit ? zoneBox.get(unit.zone) : undefined
+      if (!unit || !box) continue
+      const lo = unit.width / 2 + 8
+      const hi = box.w - unit.width / 2 - 8
+      const current = localX.get(unitId) ?? lo
+      localX.set(unitId, Math.max(lo, Math.min(hi, current + dx)))
+    }
+    for (const zone of zoneIds) {
+      const box = zoneBox.get(zone)
+      if (!box) continue
+      for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, minSep)
     }
   }
 
@@ -550,7 +619,26 @@ export function layoutComposite(
     bands: bandRanges.map((b) => ({ top: b.top + shiftY, bottom: b.bottom + shiftY })),
     primaryEdges,
     sinks: [...sinkSet].sort(),
+    heartbeats: collectHeartbeats(units, neighbors),
+    depths: depth,
+    bandBlocks,
   }
+}
+
+/** Direct links between the two members of a pair are couplings, not wires. */
+function collectHeartbeats(
+  units: readonly Unit[],
+  neighbors: Map<string, Map<string, LogicalEdge>>,
+): Set<string> {
+  const heartbeats = new Set<string>()
+  for (const unit of units) {
+    if (unit.members.length !== 2) continue
+    const [a, b] = unit.members
+    if (a !== undefined && b !== undefined && neighbors.get(a)?.has(b)) {
+      heartbeats.add(pairKey(a, b))
+    }
+  }
+  return heartbeats
 }
 
 // ============================================================================
@@ -578,6 +666,51 @@ function computeDepths(
     bestTier = Math.min(bestTier, hint.tier)
   }
   let roots = ids.filter((id) => tierOf.get(id) === bestTier)
+  // v3 apex rule (§16, generalized): within the top device tier, the
+  // LOCATION hierarchy picks the border group. Split each location into
+  // (prefix, trailing number), take the DOMINANT prefix family among the
+  // candidates (most top-tier devices live in the network-core rooms),
+  // and keep only the lowest two numbers in that family — on the
+  // reference network that is exactly the three border routers.
+  if (roots.length > 2) {
+    const parseLoc = (id: string): { prefix: string; num: number } | undefined => {
+      const loc = nodes.get(id)?.metadata?.['location']
+      if (typeof loc !== 'string' || loc === '') return undefined
+      const match = /^(.*?)(\d+)\s*$/.exec(loc)
+      if (!match) return { prefix: loc, num: 0 }
+      return { prefix: match[1] ?? loc, num: Number(match[2]) }
+    }
+    const familyCount = new Map<string, number>()
+    for (const id of roots) {
+      const parsed = parseLoc(id)
+      if (!parsed) continue
+      familyCount.set(parsed.prefix, (familyCount.get(parsed.prefix) ?? 0) + 1)
+    }
+    let family: string | undefined
+    let familySize = 0
+    for (const [prefix, count] of [...familyCount].sort()) {
+      if (count > familySize) {
+        family = prefix
+        familySize = count
+      }
+    }
+    if (family !== undefined && familySize >= 2) {
+      const nums = [
+        ...new Set(
+          roots
+            .map(parseLoc)
+            .filter((p): p is { prefix: string; num: number } => p?.prefix === family)
+            .map((p) => p.num),
+        ),
+      ].sort((a, b) => a - b)
+      const keep = new Set(nums.slice(0, 2))
+      const familyRoots = roots.filter((id) => {
+        const parsed = parseLoc(id)
+        return parsed?.prefix === family && keep.has(parsed.num)
+      })
+      if (familyRoots.length > 0) roots = familyRoots
+    }
+  }
   if (roots.length === 0) {
     let maxDegree = -1
     let best: string | undefined
@@ -684,12 +817,15 @@ function placeZoneBands(
   zoneY: Map<string, number>,
   zoneGap: number,
   bandGap: number,
+  maxBandW: number,
   bandExtra?: ReadonlyMap<number, number>,
-): { top: number; bottom: number }[] {
+  bandOrder?: ReadonlyMap<number, readonly string[]>,
+): { bandRanges: { top: number; bottom: number }[]; bandBlocks: string[][] } {
   const ranks = [...new Set(zoneIds.map((z) => zoneRank.get(z) ?? 0))].sort((a, b) => a - b)
   const centerOf = new Map<string, number>()
   for (const zone of zoneIds) centerOf.set(zone, 0)
   const bandRanges: { top: number; bottom: number }[] = []
+  const bandBlocks: string[][] = []
 
   let y = 0
   const placed = new Set<string>()
@@ -760,37 +896,69 @@ function placeZoneBands(
       }
     }
     blocks.sort((a, b) => a.desired - b.desired || (a.key < b.key ? -1 : 1))
-    // 1D placement at desired x, resolving overlaps left→right, then center
-    const xs: number[] = []
-    let cursor = Number.NEGATIVE_INFINITY
+    // explicit search-supplied order overrides the barycenter sort (§33)
+    const requested = bandOrder?.get(bandIndex)
+    if (requested) {
+      const rank = new Map<string, number>()
+      for (const [i, key] of requested.entries()) rank.set(key, i)
+      blocks.sort(
+        (a, b) =>
+          (rank.get(a.key) ?? Number.MAX_SAFE_INTEGER) -
+            (rank.get(b.key) ?? Number.MAX_SAFE_INTEGER) || (a.key < b.key ? -1 : 1),
+      )
+    }
+    bandBlocks.push(blocks.map((b) => b.key))
+    // wrap the band into sub-rows when it exceeds maxBandW (v3 §24)
+    const subRows: Block[][] = [[]]
+    let rowWidth = 0
     for (const block of blocks) {
-      let x = block.desired - block.w / 2
-      if (x < cursor) x = cursor
-      xs.push(x)
-      cursor = x + block.w + zoneGap
-    }
-    const firstX = xs[0] ?? 0
-    const lastBlock = blocks[blocks.length - 1]
-    const lastX = xs[xs.length - 1] ?? 0
-    const shift = -(firstX + lastX + (lastBlock?.w ?? 0)) / 2
-    let bandHeight = 0
-    for (const [i, block] of blocks.entries()) {
-      const blockX = (xs[i] ?? 0) + shift
-      for (const zone of block.zones) {
-        const offset = block.offsets.get(zone)
-        const box = zoneBox.get(zone)
-        if (!offset || !box) continue
-        zoneX.set(zone, blockX + offset.x)
-        zoneY.set(zone, y + offset.y)
-        centerOf.set(zone, blockX + offset.x + box.w / 2)
-        placed.add(zone)
+      const need = block.w + zoneGap
+      const current = subRows[subRows.length - 1]
+      if (current && current.length > 0 && rowWidth + need > maxBandW) {
+        subRows.push([block])
+        rowWidth = need
+      } else {
+        current?.push(block)
+        rowWidth += need
       }
-      bandHeight = Math.max(bandHeight, block.h)
     }
-    bandRanges.push({ top: y, bottom: y + bandHeight })
-    y += bandHeight + bandGap
+    const bandTop = y
+    for (const rowBlocks of subRows) {
+      if (rowBlocks.length === 0) continue
+      // 1D placement at desired x, resolving overlaps left→right, then center
+      const xs: number[] = []
+      let cursor = Number.NEGATIVE_INFINITY
+      for (const block of rowBlocks) {
+        let x = block.desired - block.w / 2
+        if (x < cursor) x = cursor
+        xs.push(x)
+        cursor = x + block.w + zoneGap
+      }
+      const firstX = xs[0] ?? 0
+      const lastBlock = rowBlocks[rowBlocks.length - 1]
+      const lastX = xs[xs.length - 1] ?? 0
+      const shift = -(firstX + lastX + (lastBlock?.w ?? 0)) / 2
+      let rowHeight = 0
+      for (const [i, block] of rowBlocks.entries()) {
+        const blockX = (xs[i] ?? 0) + shift
+        for (const zone of block.zones) {
+          const offset = block.offsets.get(zone)
+          const box = zoneBox.get(zone)
+          if (!offset || !box) continue
+          zoneX.set(zone, blockX + offset.x)
+          zoneY.set(zone, y + offset.y)
+          centerOf.set(zone, blockX + offset.x + box.w / 2)
+          placed.add(zone)
+        }
+        rowHeight = Math.max(rowHeight, block.h)
+      }
+      y += rowHeight + Math.round(bandGap * 0.55)
+    }
+    y -= Math.round(bandGap * 0.55)
+    bandRanges.push({ top: bandTop, bottom: y })
+    y += bandGap
   }
-  return bandRanges
+  return { bandRanges, bandBlocks }
 }
 
 function barycenter(

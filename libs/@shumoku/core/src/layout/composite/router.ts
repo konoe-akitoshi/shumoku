@@ -75,7 +75,9 @@ export function alignPortsToPeers(
     port.side = side
     flipped++
   }
-  for (const edge of [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+  const sortedForSeat = [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
+  for (const edge of sortedForSeat) {
+    if (edge.coupling) continue
     const fromCenter = nodes.get(edge.fromNodeId)?.position
     const toCenter = nodes.get(edge.toNodeId)?.position
     if (!fromCenter || !toCenter) continue
@@ -104,6 +106,49 @@ export function alignPortsToPeers(
         leftIsFrom ? edge.toNodeId : edge.fromNodeId,
         'left',
       )
+    }
+  }
+
+  // -- width-aware port slots (v3 §33) ---------------------------------------
+  // Each edge claims a slot proportional to its stroke width along the
+  // node's top/bottom face, ordered by where its peer sits — wide ribbons
+  // get wide berths and parallel drops stop stacking at the face. Slots
+  // are scaled down together when the face is narrower than the demand.
+  const faceGroups = new Map<
+    string,
+    { port: ResolvedEdge['fromPort']; peerX: number; width: number; edgeId: string }[]
+  >()
+  for (const edge of sortedForSeat) {
+    if (edge.coupling) continue
+    const ends: [ResolvedEdge['fromPort'], ResolvedEdge['fromPort']][] = [
+      [edge.fromPort, edge.toPort],
+      [edge.toPort, edge.fromPort],
+    ]
+    for (const [port, peer] of ends) {
+      if (port.side !== 'top' && port.side !== 'bottom') continue
+      const key = `${port.nodeId}|${port.side}`
+      const group = faceGroups.get(key) ?? []
+      group.push({ port, peerX: peer.absolutePosition.x, width: edge.width, edgeId: edge.id })
+      faceGroups.set(key, group)
+    }
+  }
+  for (const [key, group] of [...faceGroups].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    if (group.length < 2) continue
+    const nodeId = key.slice(0, key.lastIndexOf('|'))
+    const node = nodes.get(nodeId)
+    const center = node?.position
+    if (!node || !center) continue
+    const size = resolveNodeSize(node)
+    group.sort((a, b) => a.peerX - b.peerX || (a.edgeId < b.edgeId ? -1 : 1))
+    const slots = group.map((entry) => Math.max(8, entry.width + 4))
+    const total = slots.reduce((sum, w) => sum + w, 0)
+    const faceWidth = Math.max(12, size.width - 8)
+    const scale = total > faceWidth ? faceWidth / total : 1
+    let cursor = center.x - (total * scale) / 2
+    for (const [i, entry] of group.entries()) {
+      const w = (slots[i] ?? 8) * scale
+      entry.port.absolutePosition = { ...entry.port.absolutePosition, x: cursor + w / 2 }
+      cursor += w
     }
   }
   return flipped
@@ -179,6 +224,8 @@ export function applyOctilinearRoutes(
   const isSidePort = (side: string): boolean => side === 'left' || side === 'right'
   const sortedEdges = [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
   for (const edge of sortedEdges) {
+    // couplings are drawn as the glasses bridge, never routed as a wire
+    if (edge.coupling) continue
     const upper =
       edge.fromPort.absolutePosition.y <= edge.toPort.absolutePosition.y
         ? edge.fromPort

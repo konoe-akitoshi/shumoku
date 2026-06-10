@@ -30,6 +30,7 @@ import {
   type CompositeLayoutOptions,
   type CompositeLayoutResult,
   layoutComposite,
+  pairKey,
 } from './index.js'
 import { alignPortsToPeers, applyOctilinearRoutes, type RoutingObstacle } from './router.js'
 
@@ -40,6 +41,8 @@ export interface RoutedScore {
   pierce: number
   bends: number
   length: number
+  /** Wires that climb against the hierarchy (deeper node drawn above its shallower peer). */
+  upward: number
 }
 
 export interface CompositeSearchResult {
@@ -50,7 +53,7 @@ export interface CompositeSearchResult {
 }
 
 export interface CompositeSearchOptions {
-  /** Hard cap on layout+route evaluations. Default 16. */
+  /** Hard cap on layout+route evaluations. Default 48. */
   maxEvaluations?: number
 }
 
@@ -65,6 +68,15 @@ async function evaluate(
   const edges = await routeEdges(comp.nodes, ports, graph.links, comp.subgraphs)
   for (const edge of edges.values()) {
     edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
+    // v3 grammar: HA heartbeats are couplings, not wires — explicit
+    // (link.redundancy) and inferred (direct link between detected pair
+    // members) alike. Couplings skip port seating, routing, and scoring.
+    if (
+      edge.link.redundancy !== undefined ||
+      comp.heartbeats.has(pairKey(edge.fromNodeId, edge.toNodeId))
+    ) {
+      edge.coupling = true
+    }
   }
   alignPortsToPeers(edges, comp.nodes)
   const obstacles: RoutingObstacle[] = []
@@ -72,7 +84,7 @@ async function evaluate(
     if (sg.bounds) obstacles.push({ id, bounds: sg.bounds })
   }
   applyOctilinearRoutes(edges, { obstacles })
-  return { comp, ports, edges, score: scoreRoutedEdges(edges, comp.nodes) }
+  return { comp, ports, edges, score: scoreRoutedEdges(edges, comp.nodes, comp.depths) }
 }
 
 /**
@@ -84,7 +96,7 @@ export async function searchCompositeLayout(
   graph: NetworkGraph,
   options: CompositeSearchOptions = {},
 ): Promise<CompositeSearchResult> {
-  const maxEvaluations = options.maxEvaluations ?? 16
+  const maxEvaluations = options.maxEvaluations ?? 48
   let evaluations = 0
   const budgeted = async (
     layoutOptions: CompositeLayoutOptions,
@@ -123,7 +135,34 @@ export async function searchCompositeLayout(
     }
   }
 
-  // 3) pair-flip hill-climb (each flip kept only if real routing improves)
+  // 3) band-order arbitration (v3 §33): adjacent block transpositions per
+  //    band, each kept only if the ROUTED score improves — the deterministic
+  //    stand-in for v3's simultaneous place-and-route over band orderings.
+  const acceptedOrders = new Map<number, readonly string[]>()
+  for (const [bandIndex, blocks] of best.comp.bandBlocks.entries()) {
+    if (blocks.length < 2) continue
+    const current = [...(acceptedOrders.get(bandIndex) ?? blocks)]
+    const maxSwaps = Math.min(3, current.length - 1)
+    for (let i = 0; i < maxSwaps; i++) {
+      const swapped = [...current]
+      const a = swapped[i]
+      const b = swapped[i + 1]
+      if (a === undefined || b === undefined) continue
+      swapped[i] = b
+      swapped[i + 1] = a
+      const trial = new Map(acceptedOrders)
+      trial.set(bandIndex, swapped)
+      const candidate = await budgeted({ ...bestOptions, bandOrder: trial })
+      if (candidate && candidate.score.cost < best.score.cost) {
+        best = candidate
+        acceptedOrders.set(bandIndex, swapped)
+        current.splice(0, current.length, ...swapped)
+      }
+    }
+  }
+  if (acceptedOrders.size > 0) bestOptions = { ...bestOptions, bandOrder: acceptedOrders }
+
+  // 4) pair-flip hill-climb (each flip kept only if real routing improves)
   const flips = new Set<string>()
   for (const pair of [...best.comp.pairs].sort()) {
     const trial = new Set(flips)
@@ -132,6 +171,43 @@ export async function searchCompositeLayout(
     if (candidate && candidate.score.cost < best.score.cost) {
       best = candidate
       flips.add(pair)
+    }
+  }
+  if (flips.size > 0) bestOptions = { ...bestOptions, pairFlips: flips }
+
+  // 5) unit nudge hill-climb (v3 §32 ±x moves) on the busiest units —
+  //    crossing knots usually involve the high-degree units, so spend the
+  //    remaining budget there.
+  const degree = new Map<string, number>()
+  for (const link of graph.links) {
+    degree.set(link.from.node, (degree.get(link.from.node) ?? 0) + 1)
+    degree.set(link.to.node, (degree.get(link.to.node) ?? 0) + 1)
+  }
+  const unitOf = new Map<string, string>()
+  for (const pair of best.comp.pairs) {
+    for (const member of pair.split('+')) unitOf.set(member, pair)
+  }
+  const unitDegree = new Map<string, number>()
+  for (const [nodeId, d] of degree) {
+    if (best.comp.sinks.includes(nodeId)) continue
+    const unitId = unitOf.get(nodeId) ?? nodeId
+    unitDegree.set(unitId, (unitDegree.get(unitId) ?? 0) + d)
+  }
+  const busiest = [...unitDegree.entries()]
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .slice(0, 6)
+    .map(([id]) => id)
+  const nudges = new Map<string, number>()
+  for (const unitId of busiest) {
+    for (const dx of [24, -24]) {
+      const trial = new Map(nudges)
+      trial.set(unitId, dx)
+      const candidate = await budgeted({ ...bestOptions, nudges: trial })
+      if (candidate && candidate.score.cost < best.score.cost) {
+        best = candidate
+        nudges.set(unitId, dx)
+        break
+      }
     }
   }
 
@@ -181,6 +257,7 @@ function measureCongestion(result: CompositeSearchResult): Map<number, number> {
 export function scoreRoutedEdges(
   edges: Map<string, ResolvedEdge>,
   nodes: ResolvedLayout['nodes'],
+  depths?: ReadonlyMap<string, number>,
 ): RoutedScore {
   interface Poly {
     a: string
@@ -191,6 +268,7 @@ export function scoreRoutedEdges(
   }
   const polys: Poly[] = []
   for (const edge of edges.values()) {
+    if (edge.coupling) continue // glasses bridge, not a wire — never scored
     const pts = edge.route?.points ?? edge.points
     if (pts.length < 2) continue
     polys.push({
@@ -263,13 +341,30 @@ export function scoreRoutedEdges(
       if (hit) pierce++
     }
   }
+  // upward penalty (v3 §31): 基本上流>下流 — a wire whose deeper endpoint
+  // sits ABOVE its shallower endpoint reads as the hierarchy inverting.
+  let upward = 0
+  if (depths) {
+    for (const edge of edges.values()) {
+      if (edge.coupling) continue
+      const da = depths.get(edge.fromNodeId)
+      const db = depths.get(edge.toNodeId)
+      if (da === undefined || db === undefined || da === db) continue
+      const deeper = da > db ? edge.fromNodeId : edge.toNodeId
+      const shallower = da > db ? edge.toNodeId : edge.fromNodeId
+      const yDeep = nodes.get(deeper)?.position?.y
+      const yShallow = nodes.get(shallower)?.position?.y
+      if (yDeep !== undefined && yShallow !== undefined && yDeep < yShallow - 10) upward++
+    }
+  }
   return {
-    cost: crossings + collinear * 8 + pierce * 2 + bends * 0.4 + length / 400,
+    cost: crossings + collinear * 8 + pierce * 2 + bends * 0.4 + length / 400 + upward * 12,
     crossings,
     collinear,
     pierce,
     bends,
     length,
+    upward,
   }
 }
 
