@@ -63,6 +63,8 @@ export interface CompositeLayoutResult {
   bands: { top: number; bottom: number }[]
   /** Node pair-keys (`a|b`, sorted) belonging to the primary dependency tree. */
   primaryEdges: Set<string>
+  /** Shared-service sink nodes placed on the bottom rail. */
+  sinks: string[]
 }
 
 /** Synthetic zone subgraphs get this id prefix. */
@@ -186,8 +188,28 @@ export function layoutComposite(
     return typeof loc === 'string' && loc !== '' ? loc : `__solo:${id}`
   }
 
+  // -- bandwidth classes + shared-service sinks --------------------------------
+  // A sink (default-route firewall, shared service) touches everything over
+  // thin links: high degree, no trunk-class bandwidth. It must not anchor
+  // the hierarchy (v2 §7.5 sink guard), must not shortcut BFS depths, and
+  // lives on its own rail below the zones instead of bloating one zone box.
+  let globalMaxBw = 0
+  const maxBwOf = new Map<string, number>()
+  for (const id of ids) {
+    let best = 0
+    for (const edge of neighbors.get(id)?.values() ?? []) best = Math.max(best, edge.bw)
+    maxBwOf.set(id, best)
+    globalMaxBw = Math.max(globalMaxBw, best)
+  }
+  const trunkClass = (id: string): boolean =>
+    globalMaxBw <= 0 || (maxBwOf.get(id) ?? 0) >= globalMaxBw * 0.5
+  const sinkSet = new Set<string>()
+  for (const id of ids) {
+    if ((neighbors.get(id)?.size ?? 0) >= 8 && !trunkClass(id)) sinkSet.add(id)
+  }
+
   // -- hierarchy depth: apex from role tiers, then undirected BFS -------------
-  const depth = computeDepths(ids, nodes, neighbors)
+  const depth = computeDepths(ids, nodes, neighbors, trunkClass, sinkSet)
 
   // -- redundant pairs ---------------------------------------------------------
   const pairedWith = detectPairs(ids, nodes, edges, neighbors, zoneOf, depth)
@@ -197,6 +219,7 @@ export function layoutComposite(
   const units: Unit[] = []
   const unitOf = new Map<string, string>()
   for (const id of ids) {
+    if (sinkSet.has(id)) continue // sinks live on their own rail, not in zones
     const partner = pairedWith.get(id)
     if (partner !== undefined && partner < id) continue
     const members = partner !== undefined ? [id, partner].sort() : [id]
@@ -442,6 +465,34 @@ export function layoutComposite(
     node.position = { x: node.position.x + shiftX, y: node.position.y + shiftY }
   }
 
+  // -- sink rail: shared-service sinks sit on their own row below the zones
+  //    (v3 collector rail) instead of dragging 15+ links into one zone box --
+  let railBottom = maxY - minY + PAD
+  if (sinkSet.size > 0) {
+    const railY = maxY - minY + PAD + 110
+    const sinkIds = [...sinkSet].sort()
+    let railWidth = 0
+    let railHeight = 0
+    for (const id of sinkIds) {
+      const node = nodes.get(id)
+      if (!node) continue
+      const size = resolveNodeSize(node)
+      railWidth += size.width + 40
+      railHeight = Math.max(railHeight, size.height)
+    }
+    railWidth -= 40
+    const contentWidth = maxX - minX
+    let x = PAD + Math.max(0, (contentWidth - railWidth) / 2)
+    for (const id of sinkIds) {
+      const node = nodes.get(id)
+      if (!node) continue
+      const size = resolveNodeSize(node)
+      node.position = { x: x + size.width / 2, y: railY + railHeight / 2 }
+      x += size.width + 40
+    }
+    railBottom = railY + railHeight
+  }
+
   // -- subgraphs: synthetic zone boxes + original subgraph bounds ------------------
   const subgraphs = new Map<string, Subgraph>()
   const zoneMembers = new Map<string, string[]>()
@@ -492,12 +543,13 @@ export function layoutComposite(
       x: 0,
       y: 0,
       width: maxX - minX + PAD * 2,
-      height: maxY - minY + PAD * 2,
+      height: railBottom + PAD,
     },
     zones: zoneMembers,
     pairs: units.filter((u) => u.members.length === 2).map((u) => u.id),
     bands: bandRanges.map((b) => ({ top: b.top + shiftY, bottom: b.bottom + shiftY })),
     primaryEdges,
+    sinks: [...sinkSet].sort(),
   }
 }
 
@@ -509,24 +561,12 @@ function computeDepths(
   ids: readonly string[],
   nodes: Map<string, Node>,
   neighbors: Map<string, Map<string, LogicalEdge>>,
+  trunkClass: (id: string) => boolean,
+  sinkSet: ReadonlySet<string>,
 ): Map<string, number> {
-  // Apex candidates must carry trunk-class bandwidth. This is the v3
-  // "default-route sink guard" (engine-v2-design.md §7.5): a shared
-  // firewall/last-resort node touches everything over thin links and a
-  // low device-tier (firewall=15), so without the bandwidth gate it
-  // out-ranks the actual border routers and the whole diagram hangs off
-  // the sink.
-  let globalMaxBw = 0
-  const maxBwOf = new Map<string, number>()
-  for (const id of ids) {
-    let best = 0
-    for (const edge of neighbors.get(id)?.values() ?? []) best = Math.max(best, edge.bw)
-    maxBwOf.set(id, best)
-    globalMaxBw = Math.max(globalMaxBw, best)
-  }
-  const trunkClass = (id: string): boolean =>
-    globalMaxBw <= 0 || (maxBwOf.get(id) ?? 0) >= globalMaxBw * 0.5
-
+  // Apex candidates must carry trunk-class bandwidth (v3 sink guard:
+  // a shared last-resort firewall has a low device tier and 17 thin
+  // links — without the gate it out-ranks the border routers).
   let bestTier = Number.POSITIVE_INFINITY
   const tierOf = new Map<string, number>()
   for (const id of ids) {
@@ -559,6 +599,9 @@ function computeDepths(
   while (queue.length > 0) {
     const current = queue.shift()
     if (current === undefined) break
+    // never traverse THROUGH a sink — it touches everything and would
+    // shortcut every depth to root+2
+    if (sinkSet.has(current)) continue
     const currentDepth = depth.get(current) ?? 0
     const adj = neighbors.get(current)
     if (!adj) continue
