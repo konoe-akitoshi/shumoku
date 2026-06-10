@@ -581,14 +581,62 @@ export function layoutComposite(
       style: { strokeDasharray: '5 4' },
     })
   }
+  // Subgraphs nest. A grouping that contains most of the graph is not
+  // noise to drop — it is the OUTER scope (e.g. the discovered topology
+  // boundary), so it becomes the enclosing parent box around the zones
+  // instead of a member-bounds box that would swallow them. (#438 used
+  // to skip these entirely; that silently discarded scope semantics.)
+  const enclosing: { sg: Subgraph; count: number }[] = []
   for (const original of graph.subgraphs ?? []) {
-    // Skip degenerate groupings that contain most of the graph (e.g. a
-    // monitoring host-group every device belongs to) — a box around
-    // everything carries no information and visually swallows the zones.
     let memberCount = 0
     for (const node of nodes.values()) if (node.parent === original.id) memberCount++
-    if (memberCount >= nodes.size * 0.6) continue
+    if (memberCount >= nodes.size * 0.6) {
+      enclosing.push({ sg: original, count: memberCount })
+      continue
+    }
     subgraphs.set(original.id, { ...original, bounds: boundsOfMembers(original, nodes) })
+  }
+  let allSubgraphs = subgraphs
+  if (enclosing.length > 0) {
+    let ux1 = Number.POSITIVE_INFINITY
+    let uy1 = Number.POSITIVE_INFINITY
+    let ux2 = Number.NEGATIVE_INFINITY
+    let uy2 = Number.NEGATIVE_INFINITY
+    for (const node of nodes.values()) {
+      if (!node.position) continue
+      const size = resolveNodeSize(node)
+      ux1 = Math.min(ux1, node.position.x - size.width / 2)
+      uy1 = Math.min(uy1, node.position.y - size.height / 2)
+      ux2 = Math.max(ux2, node.position.x + size.width / 2)
+      uy2 = Math.max(uy2, node.position.y + size.height / 2)
+    }
+    for (const sg of subgraphs.values()) {
+      if (!sg.bounds) continue
+      ux1 = Math.min(ux1, sg.bounds.x)
+      uy1 = Math.min(uy1, sg.bounds.y)
+      ux2 = Math.max(ux2, sg.bounds.x + sg.bounds.width)
+      uy2 = Math.max(uy2, sg.bounds.y + sg.bounds.height)
+    }
+    // wider membership = outer ring; outermost first in the map so it
+    // renders behind the zones it contains
+    enclosing.sort((a, b) => a.count - b.count || (a.sg.id < b.sg.id ? -1 : 1))
+    const frames: [string, Subgraph][] = []
+    for (const [level, entry] of enclosing.entries()) {
+      const pad = 24 + 18 * level
+      frames.unshift([
+        entry.sg.id,
+        {
+          ...entry.sg,
+          bounds: {
+            x: ux1 - pad,
+            y: uy1 - pad,
+            width: ux2 - ux1 + pad * 2,
+            height: uy2 - uy1 + pad * 2,
+          },
+        },
+      ])
+    }
+    allSubgraphs = new Map([...frames, ...subgraphs])
   }
 
   // primary dependency edges at node level (for emphasis styling / search)
@@ -607,7 +655,7 @@ export function layoutComposite(
 
   return {
     nodes,
-    subgraphs,
+    subgraphs: allSubgraphs,
     bounds: {
       x: 0,
       y: 0,
