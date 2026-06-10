@@ -102,6 +102,29 @@
       : (link?.style?.stroke ?? getVlanStroke(link?.vlan) ?? colors.linkStroke),
   )
   const isDouble = $derived(linkType === 'double')
+  // v3 semantic grammar: redundancy links (HA/VC/vPC/MLAG/stack heartbeats)
+  // are a COUPLING, not a wire — drawn as a double "glasses" bridge between
+  // the two member devices instead of a routed stroke.
+  const isCoupling = $derived(link?.redundancy !== undefined)
+  const couplingLines = $derived(() => {
+    const a = edge.fromPort?.absolutePosition ?? edge.points[0]
+    const b = edge.toPort?.absolutePosition ?? edge.points[edge.points.length - 1]
+    if (!a || !b) return []
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy)
+    if (len < 1) return []
+    const px = (-dy / len) * 3.5
+    const py = (dx / len) * 3.5
+    return [
+      `M ${a.x + px} ${a.y + py} L ${b.x + px} ${b.y + py}`,
+      `M ${a.x - px} ${a.y - py} L ${b.x - px} ${b.y - py}`,
+    ]
+  })
+  // primary dependency tree reads as the skeleton; everything else is context
+  const strokeOpacity = $derived(
+    edge.emphasis === 'secondary' ? 0.45 : edge.emphasis === 'primary' ? 1 : 1,
+  )
 
   const linkLabel = $derived(() => {
     if (!link?.label) return []
@@ -149,7 +172,30 @@
 </script>
 
 <g class="link-group" data-link-id={edge.id} bind:this={groupElement}>
-  {#if isDouble}
+  {#if isCoupling && couplingLines().length === 2}
+    {@const lines = couplingLines()}
+    <path
+      bind:this={basePathElement}
+      class="link link-coupling"
+      d={lines[0]}
+      fill="none"
+      stroke={strokeColor}
+      stroke-width={2}
+      stroke-opacity={0.9}
+      stroke-linecap="round"
+      pointer-events="none"
+    />
+    <path
+      class="link link-coupling"
+      d={lines[1]}
+      fill="none"
+      stroke={strokeColor}
+      stroke-width={2}
+      stroke-opacity={0.9}
+      stroke-linecap="round"
+      pointer-events="none"
+    />
+  {:else if isDouble}
     {@const gap = Math.max(3, Math.round(edge.width * 0.9))}
     <path
       bind:this={basePathElement}
@@ -185,6 +231,7 @@
       fill="none"
       stroke={strokeColor}
       stroke-width={edge.width}
+      stroke-opacity={strokeOpacity}
       stroke-linecap="round"
       stroke-dasharray={dasharray() || undefined}
       pointer-events="none"
