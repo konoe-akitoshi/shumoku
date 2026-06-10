@@ -27,8 +27,14 @@
  * graceful fallback where it doesn't.
  */
 
-import type { Position } from '../../models/types.js'
+import type { Bounds, Position } from '../../models/types.js'
 import type { ResolvedEdge } from '../resolved-types.js'
+
+/** A rectangle wires must not run through (zone box or node box). */
+export interface RoutingObstacle {
+  id: string
+  bounds: Bounds
+}
 
 export interface OctilinearOptions {
   /** Treat |dx| up to this as a straight (near-vertical) run. */
@@ -37,6 +43,14 @@ export interface OctilinearOptions {
   chamfer?: number
   /** Extra clearance between neighboring tracks beyond stroke widths. */
   trackClearance?: number
+  /**
+   * Boxes that long edges must BYPASS via gutters (the whitespace
+   * corridors between zone boxes) instead of running straight through —
+   * v3's "through-traffic takes the bypass, not the city streets"
+   * (engine-v3-design.md §36). Edges whose endpoints touch an obstacle
+   * are exempt from that obstacle.
+   */
+  obstacles?: readonly RoutingObstacle[]
 }
 
 interface OrthRoute {
@@ -48,6 +62,9 @@ interface OrthRoute {
   half: number
   trackY: number
   shiftX: number
+  /** When set, route via the gutter column at this x (6-point bypass). */
+  gutterX?: number
+  trackY2?: number
 }
 
 /**
@@ -127,56 +144,145 @@ export function applyOctilinearRoutes(
     else orths.push(route)
   }
 
-  // -- global horizontal track allocation (one allocator, bounds inside) --------
+  // -- gutter selection: long edges whose direct vertical would pierce a foreign
+  //    zone box detour through the whitespace corridor between boxes (v3 §36).
+  const obstacles = options.obstacles ?? []
+  const contains = (bounds: Bounds, x: number, y: number, pad = 4): boolean =>
+    x > bounds.x - pad &&
+    x < bounds.x + bounds.width + pad &&
+    y > bounds.y - pad &&
+    y < bounds.y + bounds.height + pad
+  const placedGutters: { x: number; y1: number; y2: number; half: number }[] = []
+  if (obstacles.length > 0) {
+    for (const route of [...straights, ...orths]) {
+      const yLo = route.y1 + 16
+      const yHi = route.y2 - 16
+      if (yHi - yLo < 80) continue
+      const relevant = obstacles.filter(
+        (o) =>
+          o.bounds.y < yHi &&
+          o.bounds.y + o.bounds.height > yLo &&
+          !contains(o.bounds, route.x1, route.y1, 8) &&
+          !contains(o.bounds, route.x2, route.y2, 8),
+      )
+      if (relevant.length === 0) continue
+      const crossesBox = (x: number): boolean =>
+        relevant.some((o) => x > o.bounds.x - 6 && x < o.bounds.x + o.bounds.width + 6)
+      if (!crossesBox(route.x1) && !crossesBox(route.x2)) continue
+      // free x slots = complement of the blocking intervals
+      const blocks: [number, number][] = relevant
+        .map((o): [number, number] => [o.bounds.x - 8, o.bounds.x + o.bounds.width + 8])
+        .sort((a, b) => a[0] - b[0])
+      const merged: [number, number][] = []
+      for (const block of blocks) {
+        const last = merged[merged.length - 1]
+        if (last && block[0] <= last[1] + 4) last[1] = Math.max(last[1], block[1])
+        else merged.push([block[0], block[1]])
+      }
+      const desired = (route.x1 + route.x2) / 2
+      const candidates: number[] = []
+      for (let i = 0; i <= merged.length; i++) {
+        const lo = i === 0 ? Number.NEGATIVE_INFINITY : (merged[i - 1]?.[1] ?? 0)
+        const hi = i === merged.length ? Number.POSITIVE_INFINITY : (merged[i]?.[0] ?? 0)
+        if (hi - lo < route.half * 2 + 16) continue
+        candidates.push(Math.max(lo + route.half + 8, Math.min(hi - route.half - 8, desired)))
+      }
+      candidates.sort((a, b) => Math.abs(a - desired) - Math.abs(b - desired) || a - b)
+      const firstSlot = candidates[0]
+      if (firstSlot === undefined) continue
+      let gutterX = firstSlot
+      for (let guard = 0; guard < 40; guard++) {
+        const probe = gutterX
+        const hit = placedGutters.some(
+          (p) =>
+            Math.abs(p.x - probe) < p.half + route.half + clearance &&
+            Math.min(p.y2, yHi) - Math.max(p.y1, yLo) > 12,
+        )
+        if (!hit) break
+        gutterX += 5
+      }
+      route.gutterX = gutterX
+      placedGutters.push({ x: gutterX, y1: yLo, y2: yHi, half: route.half })
+    }
+  }
+
+  // -- global horizontal track allocation (ONE allocator, bounds inside) --------
   interface TrackRequest {
-    route: OrthRoute
+    id: string
+    half: number
     lo: number
     hi: number
     want: number
     floor: number
     ceil: number
+    assign: (y: number) => void
   }
   const requests: TrackRequest[] = []
   for (const route of orths) {
+    if (route.gutterX !== undefined) continue
     requests.push({
-      route,
+      id: route.id,
+      half: route.half,
       lo: Math.min(route.x1, route.x2),
       hi: Math.max(route.x1, route.x2),
       // org-chart convention: turn near the child (just above the target)
       want: route.y2 - 26,
       floor: route.y1 + 10,
       ceil: route.y2 - 10,
+      assign: (y) => {
+        route.trackY = y
+      },
     })
   }
-  // ramp buses share the SAME allocator (separate allocators collide):
-  // the bus runs below the lower endpoint, unbounded downward.
-  const rampRequestOf = new Map<string, RampRoute>()
+  // gutter routes need two horizontal runs (below the source, above the target)
+  for (const route of [...straights, ...orths]) {
+    const gutterX = route.gutterX
+    if (gutterX === undefined) continue
+    requests.push({
+      id: `${route.id}|t`,
+      half: route.half,
+      lo: Math.min(route.x1, gutterX),
+      hi: Math.max(route.x1, gutterX),
+      want: route.y1 + 26,
+      floor: route.y1 + 10,
+      ceil: route.y2 - 40,
+      assign: (y) => {
+        route.trackY = y
+      },
+    })
+    requests.push({
+      id: `${route.id}|b`,
+      half: route.half,
+      lo: Math.min(gutterX, route.x2),
+      hi: Math.max(gutterX, route.x2),
+      want: route.y2 - 30,
+      floor: route.y1 + 24,
+      ceil: route.y2 - 10,
+      assign: (y) => {
+        route.trackY2 = y
+      },
+    })
+  }
+  // ramp buses share the SAME allocator (separate allocators collide)
   for (const ramp of ramps) {
     const bottom = Math.max(ramp.y1, ramp.y2)
-    const probe: OrthRoute = {
-      id: `ramp:${ramp.id}`,
-      x1: ramp.x1,
-      y1: bottom,
-      x2: ramp.x2,
-      y2: bottom + 1000,
-      half: ramp.half,
-      trackY: 0,
-      shiftX: 0,
-    }
-    rampRequestOf.set(probe.id, ramp)
     requests.push({
-      route: probe,
+      id: `ramp:${ramp.id}`,
+      half: ramp.half,
       lo: Math.min(ramp.x1, ramp.x2) - 16,
       hi: Math.max(ramp.x1, ramp.x2) + 16,
       want: bottom + 30,
       floor: bottom + 18,
       ceil: bottom + 400,
+      assign: (y) => {
+        ramp.busY = y
+      },
     })
   }
-  requests.sort((a, b) => a.want - b.want || (a.route.id < b.route.id ? -1 : 1))
+  requests.sort((a, b) => a.want - b.want || (a.id < b.id ? -1 : 1))
   const placedTracks: { y: number; lo: number; hi: number; half: number }[] = []
   for (const request of requests) {
-    const half = request.route.half
+    const half = request.half
     const conflicts = (y: number): boolean =>
       placedTracks.some(
         (p) =>
@@ -199,13 +305,21 @@ export function applyOctilinearRoutes(
       }
     }
     placedTracks.push({ y, lo: request.lo, hi: request.hi, half })
-    const ramp = rampRequestOf.get(request.route.id)
-    if (ramp) ramp.busY = y
-    else request.route.trackY = y
+    request.assign(y)
   }
 
   // -- vertical corridor separation (geometry-level, not a render nudge) --------
   const placedVerticals: { x: number; y1: number; y2: number; half: number }[] = []
+  // gutter columns are fixed corridors — register them first so others dodge
+  for (const route of [...straights, ...orths]) {
+    if (route.gutterX === undefined) continue
+    placedVerticals.push({
+      x: route.gutterX,
+      y1: route.trackY,
+      y2: route.trackY2 ?? route.y2,
+      half: route.half,
+    })
+  }
   const verticalRuns = (route: OrthRoute, kind: 'straight' | 'orth') =>
     kind === 'straight'
       ? [{ x: (route.x1 + route.x2) / 2, y1: route.y1, y2: route.y2 }]
@@ -243,12 +357,37 @@ export function applyOctilinearRoutes(
       })
     }
   }
-  for (const route of straights) allocate(route, 'straight')
-  for (const route of orths) allocate(route, 'orth')
+  for (const route of straights) {
+    if (route.gutterX === undefined) allocate(route, 'straight')
+  }
+  for (const route of orths) {
+    if (route.gutterX === undefined) allocate(route, 'orth')
+  }
 
   // -- emit polylines -------------------------------------------------------------
   let routed = 0
+  const emitGutter = (route: OrthRoute): boolean => {
+    const gutterX = route.gutterX
+    if (gutterX === undefined) return false
+    const edge = edges.get(route.id)
+    if (!edge) return true
+    const t1 = route.trackY
+    const t2 = route.trackY2 ?? route.y2 - 10
+    const corner: Position[] = [
+      { x: route.x1, y: route.y1 },
+      { x: route.x1, y: t1 },
+      { x: gutterX, y: t1 },
+      { x: gutterX, y: t2 },
+      { x: route.x2, y: t2 },
+      { x: route.x2, y: route.y2 },
+    ]
+    edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
+    edge.points = corner
+    routed++
+    return true
+  }
   for (const route of straights) {
+    if (emitGutter(route)) continue
     const edge = edges.get(route.id)
     if (!edge) continue
     const points: Position[] = [
@@ -260,6 +399,7 @@ export function applyOctilinearRoutes(
     routed++
   }
   for (const route of orths) {
+    if (emitGutter(route)) continue
     const edge = edges.get(route.id)
     if (!edge) continue
     const corner: Position[] = [

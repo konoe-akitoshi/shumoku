@@ -19,7 +19,7 @@
  */
 
 import type { LayoutEngine } from '../hierarchical.js'
-import type { LayoutResult, NetworkGraph } from '../models/types.js'
+import type { LayoutResult, NetworkGraph, Subgraph } from '../models/types.js'
 import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
 import { layoutCompound } from './auto-placement/flat-tree/compound.js'
 import { placePorts } from './auto-placement/flat-tree/port-placement.js'
@@ -76,7 +76,12 @@ export async function computeNetworkLayout(
     for (const edge of edges.values()) {
       edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
     }
-    applyOctilinearRoutes(edges)
+    // zone boxes are routing obstacles: through-traffic takes the gutters
+    const obstacles: { id: string; bounds: NonNullable<Subgraph['bounds']> }[] = []
+    for (const [id, sg] of comp.subgraphs) {
+      if (sg.bounds) obstacles.push({ id, bounds: sg.bounds })
+    }
+    applyOctilinearRoutes(edges, { obstacles })
     return buildResults({
       nodes: comp.nodes,
       ports,
