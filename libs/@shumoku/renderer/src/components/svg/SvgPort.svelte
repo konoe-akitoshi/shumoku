@@ -55,6 +55,9 @@
   const labelPos = $derived(computePortLabelPosition(port))
 
   const hasLabel = $derived(port.label.trim().length > 0)
+  const verticalLabel = $derived(
+    port.labelOrientation === 'vertical' && (port.side === 'top' || port.side === 'bottom'),
+  )
   const labelWidth = $derived(engine.text.measure(port.label, 'port') + 4)
   const labelHeight = 12
   const bgX = $derived(() => {
@@ -177,31 +180,58 @@
   {@render overlay?.(port, overlayContext)}
 
   {#if !hideLabel && hasLabel}
-    <rect
-      class="port-label-bg"
-      x={bgX()}
-      y={bgY}
-      width={labelWidth}
-      height={labelHeight}
-      rx="2"
-      fill={colors.portLabelBg}
-      pointer-events="none"
-    />
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <text
-      class="port-label-text"
-      x={labelPos.x}
-      y={labelPos.y}
-      text-anchor={labelPos.textAnchor}
-      font-size="9"
-      fill={colors.portLabelColor}
-      onclick={(e: MouseEvent) => {
-        if (!interactive) return
-        e.stopPropagation()
-        onlabeledit?.(port.id, port.label, e.clientX, e.clientY)
-      }}
-    >
-      {port.label}
-    </text>
+    {#if verticalLabel}
+      <!-- Dense face (layout hint): run the label along the wire so
+           neighbors can't overlap — drawn like a right-side label,
+           rotated 90° around the port (up for top, down for bottom). -->
+      <g transform={`rotate(${port.side === 'top' ? -90 : 90} ${px} ${py})`} pointer-events="none">
+        <rect
+          class="port-label-bg"
+          x={px + 10}
+          y={py - labelHeight + 3}
+          width={labelWidth}
+          height={labelHeight}
+          rx="2"
+          fill={colors.portLabelBg}
+        />
+        <text
+          class="port-label-text"
+          x={px + 12}
+          y={py}
+          text-anchor="start"
+          font-size="9"
+          fill={colors.portLabelColor}
+        >
+          {port.label}
+        </text>
+      </g>
+    {:else}
+      <rect
+        class="port-label-bg"
+        x={bgX()}
+        y={bgY}
+        width={labelWidth}
+        height={labelHeight}
+        rx="2"
+        fill={colors.portLabelBg}
+        pointer-events="none"
+      />
+      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+      <text
+        class="port-label-text"
+        x={labelPos.x}
+        y={labelPos.y}
+        text-anchor={labelPos.textAnchor}
+        font-size="9"
+        fill={colors.portLabelColor}
+        onclick={(e: MouseEvent) => {
+          if (!interactive) return
+          e.stopPropagation()
+          onlabeledit?.(port.id, port.label, e.clientX, e.clientY)
+        }}
+      >
+        {port.label}
+      </text>
+    {/if}
   {/if}
 </g>
