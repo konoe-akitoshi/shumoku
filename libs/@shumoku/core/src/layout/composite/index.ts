@@ -34,6 +34,19 @@ export interface CompositeLayoutOptions {
   cellGapX?: number
   /** Zone box padding. */
   zonePad?: number
+  /**
+   * Pair unit ids (from `CompositeLayoutResult.pairs`) whose member
+   * order should be mirrored. Search move vocabulary: the left/right
+   * order inside a redundant pair is a real degree of freedom — the v3
+   * rounds found exactly the pair a human flagged by eye (§35).
+   */
+  pairFlips?: ReadonlySet<string>
+  /**
+   * Extra vertical space inserted BEFORE band index i — congestion
+   * feedback from routing (a channel overflowing with wire tracks
+   * widens its road bed on the next pass).
+   */
+  bandExtra?: ReadonlyMap<number, number>
 }
 
 export interface CompositeLayoutResult {
@@ -44,6 +57,12 @@ export interface CompositeLayoutResult {
   bounds: Bounds
   /** zone name → member node ids (for invariant checks / diagnostics). */
   zones: Map<string, string[]>
+  /** Redundant-pair unit ids (search flip candidates). */
+  pairs: string[]
+  /** Band y-ranges (top/bottom, final coordinates) for congestion measurement. */
+  bands: { top: number; bottom: number }[]
+  /** Node pair-keys (`a|b`, sorted) belonging to the primary dependency tree. */
+  primaryEdges: Set<string>
 }
 
 /** Synthetic zone subgraphs get this id prefix. */
@@ -308,7 +327,18 @@ export function layoutComposite(
 
   const zoneX = new Map<string, number>()
   const zoneY = new Map<string, number>()
-  placeZoneBands(zoneIds, zoneRank, zoneAdj, zoneParent, zoneBox, zoneX, zoneY, zoneGap, bandGap)
+  const bandRanges = placeZoneBands(
+    zoneIds,
+    zoneRank,
+    zoneAdj,
+    zoneParent,
+    zoneBox,
+    zoneX,
+    zoneY,
+    zoneGap,
+    bandGap,
+    options.bandExtra,
+  )
 
   // -- port refine: pull units toward their cross-zone neighbors ---------------
   const minSep = 24
@@ -378,8 +408,9 @@ export function layoutComposite(
       if (node) node.position = { x: gx, y: gy }
       continue
     }
+    const order = options.pairFlips?.has(unit.id) ? [...unit.members].reverse() : unit.members
     let x = gx - unit.width / 2
-    for (const member of unit.members) {
+    for (const member of order) {
       const node = nodes.get(member)
       if (!node) continue
       const size = resolveNodeSize(node)
@@ -440,6 +471,20 @@ export function layoutComposite(
     subgraphs.set(original.id, { ...original, bounds: boundsOfMembers(original, nodes) })
   }
 
+  // primary dependency edges at node level (for emphasis styling / search)
+  const primaryEdges = new Set<string>()
+  for (const unit of units) {
+    const parent = primaryParent.get(unit.id)
+    if (parent === undefined) continue
+    const parentUnit = unitById.get(parent)
+    if (!parentUnit) continue
+    for (const m of unit.members) {
+      for (const p of parentUnit.members) {
+        if (neighbors.get(m)?.has(p)) primaryEdges.add(pairKey(m, p))
+      }
+    }
+  }
+
   return {
     nodes,
     subgraphs,
@@ -450,6 +495,9 @@ export function layoutComposite(
       height: maxY - minY + PAD * 2,
     },
     zones: zoneMembers,
+    pairs: units.filter((u) => u.members.length === 2).map((u) => u.id),
+    bands: bandRanges.map((b) => ({ top: b.top + shiftY, bottom: b.bottom + shiftY })),
+    primaryEdges,
   }
 }
 
@@ -544,26 +592,42 @@ function detectPairs(
     if (zoneOf(edge.a) !== zoneOf(edge.b)) continue
     tryPair(edge.a, edge.b)
   }
-  // 2) naming + structure fallback: same zone, same depth, direct link,
-  //    and twin-style names (stem or host part match)
+  // 2) naming + structure fallback: same zone, twin-style names (stem or
+  //    host part match), similar depth, and structural evidence — a direct
+  //    interconnect OR a shared uplink. Jaccard/direct-only is wrong both
+  //    ways (v3 §24/§30): true HA pairs often uplink to DIFFERENT routers
+  //    on purpose, and some pairs have no direct heartbeat link at all.
+  const candidates: { a: string; b: string; direct: boolean }[] = []
   for (const a of ids) {
-    if (paired.has(a)) continue
     const nodeA = nodes.get(a)
     if (!nodeA) continue
     const labelA = labelOf(nodeA)
-    for (const [b] of [...(neighbors.get(a) ?? new Map())].sort()) {
-      if (b <= a || paired.has(b)) continue
+    for (const b of ids) {
+      if (b <= a) continue
       if (zoneOf(a) !== zoneOf(b)) continue
-      if (depth.get(a) !== depth.get(b)) continue
+      if (Math.abs((depth.get(a) ?? 0) - (depth.get(b) ?? 0)) > 1) continue
       const nodeB = nodes.get(b)
       if (!nodeB) continue
       const labelB = labelOf(nodeB)
-      if (stemOf(labelA) === stemOf(labelB) || hostOf(labelA) === hostOf(labelB)) {
-        tryPair(a, b)
-        break
+      if (stemOf(labelA) !== stemOf(labelB) && hostOf(labelA) !== hostOf(labelB)) continue
+      const direct = neighbors.get(a)?.has(b) ?? false
+      let shared = false
+      if (!direct) {
+        for (const n of neighbors.get(a)?.keys() ?? []) {
+          if (n !== b && neighbors.get(b)?.has(n)) {
+            shared = true
+            break
+          }
+        }
       }
+      if (direct || shared) candidates.push({ a, b, direct })
     }
   }
+  candidates.sort(
+    (x, y) =>
+      Number(y.direct) - Number(x.direct) || (pairKey(x.a, x.b) < pairKey(y.a, y.b) ? -1 : 1),
+  )
+  for (const candidate of candidates) tryPair(candidate.a, candidate.b)
   return paired
 }
 
@@ -577,14 +641,17 @@ function placeZoneBands(
   zoneY: Map<string, number>,
   zoneGap: number,
   bandGap: number,
-): void {
+  bandExtra?: ReadonlyMap<number, number>,
+): { top: number; bottom: number }[] {
   const ranks = [...new Set(zoneIds.map((z) => zoneRank.get(z) ?? 0))].sort((a, b) => a - b)
   const centerOf = new Map<string, number>()
   for (const zone of zoneIds) centerOf.set(zone, 0)
+  const bandRanges: { top: number; bottom: number }[] = []
 
   let y = 0
   const placed = new Set<string>()
-  for (const rank of ranks) {
+  for (const [bandIndex, rank] of ranks.entries()) {
+    y += bandExtra?.get(bandIndex) ?? 0
     const bandZones = zoneIds.filter((z) => (zoneRank.get(z) ?? 0) === rank)
     // group zones under their (already placed) feeder zone
     const groups = new Map<string, string[]>()
@@ -677,8 +744,10 @@ function placeZoneBands(
       }
       bandHeight = Math.max(bandHeight, block.h)
     }
+    bandRanges.push({ top: y, bottom: y + bandHeight })
     y += bandHeight + bandGap
   }
+  return bandRanges
 }
 
 function barycenter(
