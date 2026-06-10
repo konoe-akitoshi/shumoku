@@ -24,7 +24,7 @@ import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
 import { layoutCompound } from './auto-placement/flat-tree/compound.js'
 import { placePorts } from './auto-placement/flat-tree/port-placement.js'
 import { layoutComposite, shouldUseComposite } from './composite/index.js'
-import { applyOctilinearRoutes } from './composite/router.js'
+import { alignPortsToPeers, applyOctilinearRoutes } from './composite/router.js'
 import { createEngine, resolveNodeSize } from './engine/index.js'
 import { getLinkWidth, getLinkWidthForMode } from './link-utils.js'
 import type { ResolvedLayout } from './resolved-types.js'
@@ -76,6 +76,9 @@ export async function computeNetworkLayout(
     for (const edge of edges.values()) {
       edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
     }
+    // ports must face their peers (discovered links have arbitrary
+    // from/to orientation — never trust it, trust geometry)
+    alignPortsToPeers(edges, comp.nodes)
     // zone boxes are routing obstacles: through-traffic takes the gutters
     const obstacles: { id: string; bounds: NonNullable<Subgraph['bounds']> }[] = []
     for (const [id, sg] of comp.subgraphs) {
