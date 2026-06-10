@@ -934,10 +934,16 @@ function placeZoneBands(
         xs.push(x)
         cursor = x + block.w + zoneGap
       }
-      const firstX = xs[0] ?? 0
-      const lastBlock = rowBlocks[rowBlocks.length - 1]
-      const lastX = xs[xs.length - 1] ?? 0
-      const shift = -(firstX + lastX + (lastBlock?.w ?? 0)) / 2
+      // Preserve the desired-x frame: shift the row only by the average
+      // deviation the overlap resolution introduced. Re-centering every
+      // row at x=0 (the old behavior) destroyed cross-band alignment —
+      // a child band could never sit under its feeder when band content
+      // was asymmetric (test6: pods drifted 300-900px off their hub).
+      let deviation = 0
+      for (const [i, block] of rowBlocks.entries()) {
+        deviation += block.desired - ((xs[i] ?? 0) + block.w / 2)
+      }
+      const shift = rowBlocks.length > 0 ? deviation / rowBlocks.length : 0
       let rowHeight = 0
       for (const [i, block] of rowBlocks.entries()) {
         const blockX = (xs[i] ?? 0) + shift

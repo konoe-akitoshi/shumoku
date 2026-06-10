@@ -83,7 +83,25 @@ async function evaluate(
   for (const [id, sg] of comp.subgraphs) {
     if (sg.bounds) obstacles.push({ id, bounds: sg.bounds })
   }
-  applyOctilinearRoutes(edges, { obstacles })
+  // org-chart combs (v3 §47⑤): group primary edges by their parent (the
+  // shallower endpoint) — a parent feeding ≥2 children draws one trunk
+  // to a shared bus instead of N independent risers.
+  const combs = new Map<string, string[]>()
+  for (const edge of edges.values()) {
+    if (edge.coupling) continue
+    if (!comp.primaryEdges.has(pairKey(edge.fromNodeId, edge.toNodeId))) continue
+    const da = comp.depths.get(edge.fromNodeId)
+    const db = comp.depths.get(edge.toNodeId)
+    if (da === undefined || db === undefined || da === db) continue
+    const parent = da < db ? edge.fromNodeId : edge.toNodeId
+    const list = combs.get(parent) ?? []
+    list.push(edge.id)
+    combs.set(parent, list)
+  }
+  for (const [parent, list] of combs) {
+    if (list.length < 2) combs.delete(parent)
+  }
+  applyOctilinearRoutes(edges, { obstacles, combs })
   return { comp, ports, edges, score: scoreRoutedEdges(edges, comp.nodes, comp.depths) }
 }
 
@@ -309,7 +327,16 @@ export function scoreRoutedEdges(
     }
   }
   const lines: PolylineSpec[] = polys.map((p) => ({ id: p.id, points: p.pts, halfWidth: p.half }))
-  const collinear = findCollinearOverlaps(lines).length
+  // comb siblings SHARE the trunk/bus by design — same-bus overlap is the
+  // org-chart grammar, not a violation
+  const busOf = new Map<string, string>()
+  for (const edge of edges.values()) {
+    if (edge.route?.kind === 'bus') busOf.set(edge.id, edge.route.busId)
+  }
+  const collinear = findCollinearOverlaps(lines).filter((o) => {
+    const ba = busOf.get(o.a)
+    return ba === undefined || ba !== busOf.get(o.b)
+  }).length
   // wires running through unrelated node boxes
   let pierce = 0
   const boxes: { id: string; x: number; y: number; w: number; h: number }[] = []

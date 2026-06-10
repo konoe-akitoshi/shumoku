@@ -175,6 +175,16 @@ export interface OctilinearOptions {
    * are exempt from that obstacle.
    */
   obstacles?: readonly RoutingObstacle[]
+  /**
+   * Primary fan-out groups drawn as ONE org-chart trunk (v3 §47⑤):
+   * comb id (parent node id) → edge ids. The parent drops a single
+   * trunk to a shared horizontal bus; each child rises from the bus.
+   * Collapses N parallel long risers into drop→bus→riser, which is the
+   * pre-attentive "org chart" reading and removes the riser-vs-riser
+   * crossings entirely. Edges that don't fit the clean vertical case
+   * fall back to normal classification.
+   */
+  combs?: ReadonlyMap<string, readonly string[]>
 }
 
 interface OrthRoute {
@@ -223,9 +233,69 @@ export function applyOctilinearRoutes(
   const ramps: RampRoute[] = []
   const isSidePort = (side: string): boolean => side === 'left' || side === 'right'
   const sortedEdges = [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
+
+  // -- org-chart combs (v3 §47⑤): primary fan-outs share one trunk + bus ----
+  interface CombMember {
+    edgeId: string
+    px: number
+    py: number
+    cx: number
+    cy: number
+    half: number
+  }
+  interface CombRoute {
+    id: string
+    members: CombMember[]
+    trunkX: number
+    busY: number
+    half: number
+  }
+  const combRoutes: CombRoute[] = []
+  const combEdgeIds = new Set<string>()
+  if (options.combs) {
+    for (const [combId, edgeIds] of [...options.combs].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+      const members: CombMember[] = []
+      for (const edgeId of [...edgeIds].sort()) {
+        const edge = edges.get(edgeId)
+        if (!edge || edge.coupling) continue
+        const parentPort =
+          edge.fromNodeId === combId
+            ? edge.fromPort
+            : edge.toNodeId === combId
+              ? edge.toPort
+              : undefined
+        if (!parentPort) continue
+        const childPort = parentPort === edge.fromPort ? edge.toPort : edge.fromPort
+        // only the clean vertical case rides the comb; everything else
+        // falls back to normal classification below
+        if (parentPort.side !== 'bottom' || childPort.side !== 'top') continue
+        if (childPort.absolutePosition.y - parentPort.absolutePosition.y < 48) continue
+        members.push({
+          edgeId,
+          px: parentPort.absolutePosition.x,
+          py: parentPort.absolutePosition.y,
+          cx: childPort.absolutePosition.x,
+          cy: childPort.absolutePosition.y,
+          half: Math.max(0.5, edge.width / 2),
+        })
+      }
+      if (members.length < 2) continue
+      const trunkX = members.reduce((sum, m) => sum + m.px, 0) / members.length
+      combRoutes.push({
+        id: combId,
+        members,
+        trunkX,
+        busY: 0,
+        half: Math.max(...members.map((m) => m.half)),
+      })
+      for (const m of members) combEdgeIds.add(m.edgeId)
+    }
+  }
+
   for (const edge of sortedEdges) {
     // couplings are drawn as the glasses bridge, never routed as a wire
     if (edge.coupling) continue
+    if (combEdgeIds.has(edge.id)) continue
     const upper =
       edge.fromPort.absolutePosition.y <= edge.toPort.absolutePosition.y
         ? edge.fromPort
@@ -389,6 +459,23 @@ export function applyOctilinearRoutes(
       },
     })
   }
+  // comb buses go through the SAME global allocator — one request per comb
+  for (const comb of combRoutes) {
+    const minChildY = Math.min(...comb.members.map((m) => m.cy))
+    const maxParentY = Math.max(...comb.members.map((m) => m.py))
+    requests.push({
+      id: `comb:${comb.id}`,
+      half: comb.half,
+      lo: Math.min(comb.trunkX, ...comb.members.map((m) => m.cx)) - 16,
+      hi: Math.max(comb.trunkX, ...comb.members.map((m) => m.cx)) + 16,
+      want: minChildY - 26,
+      floor: maxParentY + 10,
+      ceil: minChildY - 10,
+      assign: (y) => {
+        comb.busY = y
+      },
+    })
+  }
   // ramp buses share the SAME allocator (separate allocators collide)
   for (const ramp of ramps) {
     const bottom = Math.max(ramp.y1, ramp.y2)
@@ -436,6 +523,14 @@ export function applyOctilinearRoutes(
 
   // -- vertical corridor separation (geometry-level, not a render nudge) --------
   const placedVerticals: { x: number; y1: number; y2: number; half: number }[] = []
+  // comb trunks and risers are fixed corridors — register them first
+  for (const comb of combRoutes) {
+    const minParentY = Math.min(...comb.members.map((m) => m.py))
+    placedVerticals.push({ x: comb.trunkX, y1: minParentY, y2: comb.busY, half: comb.half })
+    for (const m of comb.members) {
+      placedVerticals.push({ x: m.cx, y1: comb.busY, y2: m.cy, half: m.half })
+    }
+  }
   // gutter columns are fixed corridors — register them first so others dodge
   for (const route of [...straights, ...orths]) {
     if (route.gutterX === undefined) continue
@@ -537,6 +632,31 @@ export function applyOctilinearRoutes(
     edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
     edge.points = corner
     routed++
+  }
+  for (const comb of combRoutes) {
+    const n = comb.members.length
+    for (const [i, m] of comb.members.entries()) {
+      const edge = edges.get(m.edgeId)
+      if (!edge) continue
+      // collapse the parent port onto the shared trunk
+      const parentPort = edge.fromNodeId === comb.id ? edge.fromPort : edge.toPort
+      parentPort.absolutePosition = { ...parentPort.absolutePosition, x: comb.trunkX }
+      const corner: Position[] = [
+        { x: comb.trunkX, y: m.py },
+        { x: comb.trunkX, y: comb.busY },
+        { x: m.cx, y: comb.busY },
+        { x: m.cx, y: m.cy },
+      ]
+      edge.route = {
+        kind: 'bus',
+        points: chamferCorners(corner, chamfer),
+        busId: comb.id,
+        branchIndex: i,
+        branchCount: n,
+      }
+      edge.points = corner
+      routed++
+    }
   }
   for (const ramp of ramps) {
     const edge = edges.get(ramp.id)
