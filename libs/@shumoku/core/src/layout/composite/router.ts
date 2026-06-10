@@ -27,8 +27,87 @@
  * graceful fallback where it doesn't.
  */
 
-import type { Bounds, Position } from '../../models/types.js'
+import type { Bounds, Node, Position } from '../../models/types.js'
+import { resolveNodeSize } from '../engine/index.js'
 import type { ResolvedEdge } from '../resolved-types.js'
+
+/**
+ * Re-seat ports to face their peer, by GEOMETRY. The flat-tree side
+ * decision leans on link from/to direction, but discovered (LLDP) links
+ * point in arbitrary directions — on test6, 29 of 104 links ended up
+ * with both ports facing AWAY from each other (lower node's bottom port
+ * climbing to the upper node's top port), which forced Bezier wrap-around
+ * sweeps and made the dense bands look tangled. v3 lesson (§9): never
+ * trust from/to orientation; trust positions.
+ *
+ * Mutates the ResolvedPort objects in place (1 port = 1 link, so a flip
+ * never affects another edge). Returns the number of ports re-seated.
+ */
+export function alignPortsToPeers(
+  edges: Map<string, ResolvedEdge>,
+  nodes: Map<string, Node>,
+): number {
+  let flipped = 0
+  const seat = (
+    port: ResolvedEdge['fromPort'],
+    nodeId: string,
+    side: 'top' | 'bottom' | 'left' | 'right',
+  ): void => {
+    if (port.side === side) return
+    const node = nodes.get(nodeId)
+    const center = node?.position
+    if (!node || !center) return
+    const size = resolveNodeSize(node)
+    if (side === 'top' || side === 'bottom') {
+      port.absolutePosition = {
+        x: Math.max(
+          center.x - size.width / 2 + 6,
+          Math.min(center.x + size.width / 2 - 6, port.absolutePosition.x),
+        ),
+        y: side === 'top' ? center.y - size.height / 2 : center.y + size.height / 2,
+      }
+    } else {
+      port.absolutePosition = {
+        x: side === 'left' ? center.x - size.width / 2 : center.x + size.width / 2,
+        y: center.y,
+      }
+    }
+    port.side = side
+    flipped++
+  }
+  for (const edge of [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    const fromCenter = nodes.get(edge.fromNodeId)?.position
+    const toCenter = nodes.get(edge.toNodeId)?.position
+    if (!fromCenter || !toCenter) continue
+    const dy = toCenter.y - fromCenter.y
+    if (Math.abs(dy) > 40) {
+      const upperIsFrom = dy > 0
+      seat(
+        upperIsFrom ? edge.fromPort : edge.toPort,
+        upperIsFrom ? edge.fromNodeId : edge.toNodeId,
+        'bottom',
+      )
+      seat(
+        upperIsFrom ? edge.toPort : edge.fromPort,
+        upperIsFrom ? edge.toNodeId : edge.fromNodeId,
+        'top',
+      )
+    } else {
+      const leftIsFrom = fromCenter.x <= toCenter.x
+      seat(
+        leftIsFrom ? edge.fromPort : edge.toPort,
+        leftIsFrom ? edge.fromNodeId : edge.toNodeId,
+        'right',
+      )
+      seat(
+        leftIsFrom ? edge.toPort : edge.fromPort,
+        leftIsFrom ? edge.toNodeId : edge.fromNodeId,
+        'left',
+      )
+    }
+  }
+  return flipped
+}
 
 /** A rectangle wires must not run through (zone box or node box). */
 export interface RoutingObstacle {
