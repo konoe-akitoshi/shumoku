@@ -102,6 +102,42 @@ async function evaluate(
     if (list.length < 2) combs.delete(parent)
   }
   applyOctilinearRoutes(edges, { obstacles, combs })
+  // Routes may run outside the node/zone extents (gutter bypasses, ramp
+  // under-loops, vertical shifts) — stretch the enclosing scope frames
+  // and the figure bounds so no wiring sticks out of the outer box.
+  let rx1 = Number.POSITIVE_INFINITY
+  let ry1 = Number.POSITIVE_INFINITY
+  let rx2 = Number.NEGATIVE_INFINITY
+  let ry2 = Number.NEGATIVE_INFINITY
+  for (const edge of edges.values()) {
+    if (edge.coupling) continue
+    const pts = edge.route?.points ?? edge.points
+    const half = edge.width / 2 + 2
+    for (const p of pts) {
+      rx1 = Math.min(rx1, p.x - half)
+      ry1 = Math.min(ry1, p.y - half)
+      rx2 = Math.max(rx2, p.x + half)
+      ry2 = Math.max(ry2, p.y + half)
+    }
+  }
+  if (Number.isFinite(rx1)) {
+    for (const id of comp.scopes) {
+      const frame = comp.subgraphs.get(id)
+      const b = frame?.bounds
+      if (!frame || !b) continue
+      const nx1 = Math.min(b.x, rx1 - 14)
+      const ny1 = Math.min(b.y, ry1 - 14)
+      const nx2 = Math.max(b.x + b.width, rx2 + 14)
+      const ny2 = Math.max(b.y + b.height, ry2 + 14)
+      frame.bounds = { x: nx1, y: ny1, width: nx2 - nx1, height: ny2 - ny1 }
+    }
+    const bb = comp.bounds
+    const bx1 = Math.min(bb.x, rx1 - 28)
+    const by1 = Math.min(bb.y, ry1 - 28)
+    const bx2 = Math.max(bb.x + bb.width, rx2 + 28)
+    const by2 = Math.max(bb.y + bb.height, ry2 + 28)
+    comp.bounds = { x: bx1, y: by1, width: bx2 - bx1, height: by2 - by1 }
+  }
   return { comp, ports, edges, score: scoreRoutedEdges(edges, comp.nodes, comp.depths) }
 }
 

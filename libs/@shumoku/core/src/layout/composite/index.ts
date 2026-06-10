@@ -85,6 +85,12 @@ export interface CompositeLayoutResult {
   depths: Map<string, number>
   /** Block keys per band, in placed order (band-order search handles). */
   bandBlocks: string[][]
+  /**
+   * Ids of enclosing scope subgraphs (outer frames). Routing happens
+   * after layout, and gutters/ramps may run outside the node extents —
+   * the router pass stretches these frames to keep the wiring inside.
+   */
+  scopes: string[]
 }
 
 /** Synthetic zone subgraphs get this id prefix. */
@@ -670,6 +676,7 @@ export function layoutComposite(
     heartbeats: collectHeartbeats(units, neighbors),
     depths: depth,
     bandBlocks,
+    scopes: enclosing.map((e) => e.sg.id),
   }
 }
 
