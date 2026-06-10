@@ -40,7 +40,14 @@ export {
   shouldUseComposite,
   ZONE_SUBGRAPH_PREFIX,
 } from './composite/index.js'
-export { applyOctilinearRoutes, chamferCorners } from './composite/router.js'
+export { alignPortsToPeers, applyOctilinearRoutes, chamferCorners } from './composite/router.js'
+export {
+  type CompositeSearchOptions,
+  type CompositeSearchResult,
+  type RoutedScore,
+  scoreRoutedEdges,
+  searchCompositeLayout,
+} from './composite/search.js'
 export type {
   LayoutEngine as ShumokuLayoutEngine,
   PortsBySide as EnginePortsBySide,

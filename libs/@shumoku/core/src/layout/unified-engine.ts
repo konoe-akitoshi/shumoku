@@ -19,14 +19,13 @@
  */
 
 import type { LayoutEngine } from '../hierarchical.js'
-import type { LayoutResult, NetworkGraph, Subgraph } from '../models/types.js'
+import type { LayoutResult, NetworkGraph } from '../models/types.js'
 import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
 import { layoutCompound } from './auto-placement/flat-tree/compound.js'
-import { placePorts } from './auto-placement/flat-tree/port-placement.js'
-import { layoutComposite, shouldUseComposite } from './composite/index.js'
-import { alignPortsToPeers, applyOctilinearRoutes } from './composite/router.js'
+import { shouldUseComposite } from './composite/index.js'
+import { searchCompositeLayout } from './composite/search.js'
 import { createEngine, resolveNodeSize } from './engine/index.js'
-import { getLinkWidth, getLinkWidthForMode } from './link-utils.js'
+import { getLinkWidth } from './link-utils.js'
 import type { ResolvedLayout } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 
@@ -66,25 +65,18 @@ export async function computeNetworkLayout(
   // flat-tree/compound. Hand-drawn diagrams rarely qualify.
   const useComposite = options.composite ?? shouldUseComposite(graph)
   if (useComposite) {
-    const comp = layoutComposite(graph)
-    const ports = placePorts(comp.nodes, graph.links, direction)
-    const edges = await routeEdges(comp.nodes, ports, graph.links, comp.subgraphs)
-    // Composite pairs with the LINEAR width mode (v3 decision: width ∝
-    // bandwidth, like river width on a map). The legacy log widths
-    // (14-34px) are also physically incompatible with channel routing —
-    // bundles that wide cannot be separated between ports.
+    // Place-and-route search (v3 突き合わせ loop): placement variants are
+    // routed for real and the routed-geometry score arbitrates — gaps
+    // multi-start, congestion-widened channels, redundant-pair flips.
+    const { comp, ports, edges } = await searchCompositeLayout(graph)
+    // primary dependency tree emphasis for renderers
     for (const edge of edges.values()) {
-      edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
+      const key =
+        edge.fromNodeId < edge.toNodeId
+          ? `${edge.fromNodeId}|${edge.toNodeId}`
+          : `${edge.toNodeId}|${edge.fromNodeId}`
+      edge.emphasis = comp.primaryEdges.has(key) ? 'primary' : 'secondary'
     }
-    // ports must face their peers (discovered links have arbitrary
-    // from/to orientation — never trust it, trust geometry)
-    alignPortsToPeers(edges, comp.nodes)
-    // zone boxes are routing obstacles: through-traffic takes the gutters
-    const obstacles: { id: string; bounds: NonNullable<Subgraph['bounds']> }[] = []
-    for (const [id, sg] of comp.subgraphs) {
-      if (sg.bounds) obstacles.push({ id, bounds: sg.bounds })
-    }
-    applyOctilinearRoutes(edges, { obstacles })
     return buildResults({
       nodes: comp.nodes,
       ports,

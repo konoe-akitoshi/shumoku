@@ -110,6 +110,13 @@ export interface ResolvedEdge {
   route?:
     | { kind: 'bus'; points: Position[]; busId: string; branchIndex: number; branchCount: number }
     | { kind: 'polyline'; points: Position[] }
+  /**
+   * Semantic weight for renderers (v3 grammar): `primary` = the edge
+   * belongs to the primary dependency tree (each node's strongest
+   * uplink) and should read as the structural skeleton; `secondary` =
+   * redundancy / peering context, drawn subdued. Absent = no opinion.
+   */
+  emphasis?: 'primary' | 'secondary'
 }
 
 // ============================================================================
