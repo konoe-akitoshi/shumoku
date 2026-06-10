@@ -32,6 +32,15 @@ export {
 export { placePorts } from './auto-placement/flat-tree/port-placement.js'
 // Bezier edge geometry (shared by interactive renderer + SSR renderer-svg)
 export { bezierEdgePath, bezierOffsetPath, type PortSide } from './bezier-path.js'
+// Composite zone layout (v3 engine) + octilinear channel router.
+export {
+  type CompositeLayoutOptions,
+  type CompositeLayoutResult,
+  layoutComposite,
+  shouldUseComposite,
+  ZONE_SUBGRAPH_PREFIX,
+} from './composite/index.js'
+export { applyOctilinearRoutes, chamferCorners } from './composite/router.js'
 export type {
   LayoutEngine as ShumokuLayoutEngine,
   PortsBySide as EnginePortsBySide,

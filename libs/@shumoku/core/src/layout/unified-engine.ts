@@ -22,8 +22,11 @@ import type { LayoutEngine } from '../hierarchical.js'
 import type { LayoutResult, NetworkGraph } from '../models/types.js'
 import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
 import { layoutCompound } from './auto-placement/flat-tree/compound.js'
+import { placePorts } from './auto-placement/flat-tree/port-placement.js'
+import { layoutComposite, shouldUseComposite } from './composite/index.js'
+import { applyOctilinearRoutes } from './composite/router.js'
 import { createEngine, resolveNodeSize } from './engine/index.js'
-import { getLinkWidth } from './link-utils.js'
+import { getLinkWidth, getLinkWidthForMode } from './link-utils.js'
 import type { ResolvedLayout } from './resolved-types.js'
 import { routeEdges } from './route-edges.js'
 
@@ -49,12 +52,40 @@ export function createNetworkLayoutEngine(): LayoutEngine {
  */
 export async function computeNetworkLayout(
   graph: NetworkGraph,
-  options: { compound?: boolean } = {},
+  options: { compound?: boolean; composite?: boolean } = {},
 ): Promise<{
   resolved: ResolvedLayout
   layout: LayoutResult
 }> {
   const direction = graph.settings?.direction ?? 'TB'
+
+  // Composite zone layout (v3 engine, #429): zones from location
+  // metadata, layered quotient placement, octilinear edge routing.
+  // Explicit option wins; otherwise auto-enable for graphs with broad
+  // zone metadata (discovered networks), where it reads far better than
+  // flat-tree/compound. Hand-drawn diagrams rarely qualify.
+  const useComposite = options.composite ?? shouldUseComposite(graph)
+  if (useComposite) {
+    const comp = layoutComposite(graph)
+    const ports = placePorts(comp.nodes, graph.links, direction)
+    const edges = await routeEdges(comp.nodes, ports, graph.links, comp.subgraphs)
+    // Composite pairs with the LINEAR width mode (v3 decision: width ∝
+    // bandwidth, like river width on a map). The legacy log widths
+    // (14-34px) are also physically incompatible with channel routing —
+    // bundles that wide cannot be separated between ports.
+    for (const edge of edges.values()) {
+      edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
+    }
+    applyOctilinearRoutes(edges)
+    return buildResults({
+      nodes: comp.nodes,
+      ports,
+      edges,
+      subgraphs: comp.subgraphs,
+      bounds: comp.bounds,
+      algorithm: 'composite+octilinear',
+    })
+  }
 
   // Create a spatial-rule engine once per layout call. Engines
   // are stateless beyond memoization, so this is cheap; in
@@ -82,13 +113,33 @@ export async function computeNetworkLayout(
   })
   const edges = await routeEdges(nodes, ports, graph.links, subgraphs)
 
+  return buildResults({
+    nodes,
+    ports,
+    edges,
+    subgraphs,
+    bounds,
+    algorithm: 'network-layout+bezier',
+  })
+}
+
+/** Assemble ResolvedLayout + legacy LayoutResult from layout pieces. */
+function buildResults(input: {
+  nodes: ResolvedLayout['nodes']
+  ports: ResolvedLayout['ports']
+  edges: ResolvedLayout['edges']
+  subgraphs: ResolvedLayout['subgraphs']
+  bounds: ResolvedLayout['bounds']
+  algorithm: string
+}): { resolved: ResolvedLayout; layout: LayoutResult } {
+  const { nodes, ports, edges, subgraphs, bounds } = input
   const resolved: ResolvedLayout = {
     nodes,
     ports,
     edges,
     subgraphs,
     bounds,
-    metadata: { algorithm: 'network-layout+bezier', duration: 0 },
+    metadata: { algorithm: input.algorithm, duration: 0 },
   }
 
   // Build LayoutResult with ports converted from absolute to center-relative
