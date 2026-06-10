@@ -147,6 +147,36 @@ async function evaluate(
       figure = grow(figure, p.x, p.y, half)
       for (const id of owners) internal.set(id, grow(internal.get(id), p.x, p.y, half))
     }
+    // Labels are part of the edge's rendered footprint too. Mirror the
+    // renderer's placement (midpoint of the routed points, 10px mono,
+    // centered, one 12px line per label) with a conservative width
+    // estimate so text never pokes out of the owning container.
+    const labelLines: string[] = []
+    const linkLabel = edge.link.label
+    if (linkLabel !== undefined) {
+      labelLines.push(Array.isArray(linkLabel) ? linkLabel.join(' / ') : linkLabel)
+    }
+    const vlan = edge.link.vlan
+    if (vlan && vlan.length > 0) labelLines.push(`VLAN ${vlan.join(', ')}`)
+    if (labelLines.length > 0 && pts.length >= 2) {
+      const midIdx = Math.floor(pts.length / 2)
+      const a = pts[midIdx - 1]
+      const b = pts[midIdx]
+      if (a && b) {
+        const mx = (a.x + b.x) / 2
+        const my = (a.y + b.y) / 2
+        const halfWidth = (Math.max(...labelLines.map((t) => t.length)) * 6.5) / 2
+        const top = my - 8 - 12
+        const bottom = my - 8 + labelLines.length * 12
+        for (const [x, y] of [
+          [mx - halfWidth, top],
+          [mx + halfWidth, bottom],
+        ] as const) {
+          figure = grow(figure, x, y, 2)
+          for (const id of owners) internal.set(id, grow(internal.get(id), x, y, 2))
+        }
+      }
+    }
   }
   for (const [id, extent] of internal) {
     const sg = comp.subgraphs.get(id)
