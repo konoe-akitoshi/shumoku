@@ -1,0 +1,199 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+// For commercial licensing, contact: contact@shumoku.dev
+
+import { describe, expect, it } from 'vitest'
+import { DeviceType, type Link, type NetworkGraph, type Node } from '../../models/types.js'
+import { placePorts } from '../auto-placement/flat-tree/port-placement.js'
+import { resolveNodeSize } from '../engine/index.js'
+import { type BoxSpec, findCollinearOverlaps, findNodeOverlaps } from '../invariants.js'
+import { getLinkWidthForMode } from '../link-utils.js'
+import { routeEdges } from '../route-edges.js'
+import { layoutComposite, shouldUseComposite, ZONE_SUBGRAPH_PREFIX } from './index.js'
+import { applyOctilinearRoutes, chamferCorners } from './router.js'
+
+/**
+ * Synthetic fixture shaped like the v3 research network (two border
+ * routers feeding a distribution pair that fans into zoned access
+ * switches + an MLAG pair) — structure only, no real names or addresses.
+ */
+function fixture(): NetworkGraph {
+  const node = (id: string, type: DeviceType, location: string): Node => ({
+    id,
+    label: id,
+    spec: { kind: 'hardware', type },
+    metadata: { location },
+  })
+  const link = (from: string, to: string, gbps: number, extra: Partial<Link> = {}): Link => ({
+    from: { node: from, port: `to-${to}` },
+    to: { node: to, port: `to-${from}` },
+    rateBps: gbps * 1e9,
+    ...extra,
+  })
+  return {
+    name: 'composite-fixture',
+    nodes: [
+      node('border-1', DeviceType.Router, 'core'),
+      node('border-2', DeviceType.Router, 'core'),
+      node('dist-1', DeviceType.L3Switch, 'dist'),
+      node('dist-2', DeviceType.L3Switch, 'dist'),
+      node('acc-a1', DeviceType.L2Switch, 'rack-a'),
+      node('acc-a2', DeviceType.L2Switch, 'rack-a'),
+      node('acc-b1', DeviceType.L2Switch, 'rack-b'),
+      node('acc-b2', DeviceType.L2Switch, 'rack-b'),
+      node('mlag-1', DeviceType.L3Switch, 'dist'),
+      node('mlag-2', DeviceType.L3Switch, 'dist'),
+      node('srv-1', DeviceType.Server, 'rack-b'),
+      node('srv-2', DeviceType.Server, 'rack-b'),
+    ],
+    links: [
+      link('border-1', 'dist-1', 100),
+      link('border-2', 'dist-2', 100),
+      link('border-1', 'border-2', 100),
+      link('dist-1', 'dist-2', 100),
+      link('dist-1', 'acc-a1', 25),
+      link('dist-1', 'acc-a2', 25),
+      link('dist-2', 'acc-b1', 25),
+      link('dist-2', 'acc-b2', 25),
+      link('mlag-1', 'mlag-2', 10, { redundancy: 'mlag' }),
+      link('dist-1', 'mlag-1', 40),
+      link('dist-2', 'mlag-2', 40),
+      link('acc-b1', 'srv-1', 10),
+      link('acc-b2', 'srv-2', 10),
+    ],
+  }
+}
+
+function boxesOf(nodes: Map<string, Node>): BoxSpec[] {
+  const boxes: BoxSpec[] = []
+  for (const [id, node] of nodes) {
+    if (!node.position) continue
+    const size = resolveNodeSize(node)
+    boxes.push({
+      id,
+      x: node.position.x,
+      y: node.position.y,
+      width: size.width,
+      height: size.height,
+    })
+  }
+  return boxes
+}
+
+describe('shouldUseComposite', () => {
+  it('requires enough nodes with zone metadata', () => {
+    expect(shouldUseComposite(fixture())).toBe(true)
+    expect(
+      shouldUseComposite({ name: 'tiny', nodes: fixture().nodes.slice(0, 4), links: [] }),
+    ).toBe(false)
+  })
+})
+
+describe('layoutComposite', () => {
+  it('positions every node and never overlaps boxes', () => {
+    const result = layoutComposite(fixture())
+    expect(result.nodes.size).toBe(12)
+    for (const node of result.nodes.values()) expect(node.position).toBeDefined()
+    expect(findNodeOverlaps(boxesOf(result.nodes))).toHaveLength(0)
+  })
+
+  it('emits zone boxes that contain their members', () => {
+    const result = layoutComposite(fixture())
+    const zoneIds = [...result.subgraphs.keys()].filter((id) => id.startsWith(ZONE_SUBGRAPH_PREFIX))
+    expect(zoneIds.length).toBeGreaterThanOrEqual(3) // core / dist / rack-a / rack-b
+    for (const zoneId of zoneIds) {
+      const zone = result.subgraphs.get(zoneId)
+      const members = result.zones.get(zoneId.slice(ZONE_SUBGRAPH_PREFIX.length)) ?? []
+      expect(zone?.bounds).toBeDefined()
+      const bounds = zone?.bounds
+      if (!bounds) continue
+      for (const memberId of members) {
+        const node = result.nodes.get(memberId)
+        if (!node?.position) continue
+        const size = resolveNodeSize(node)
+        expect(node.position.x - size.width / 2).toBeGreaterThanOrEqual(bounds.x - 0.5)
+        expect(node.position.x + size.width / 2).toBeLessThanOrEqual(bounds.x + bounds.width + 0.5)
+        expect(node.position.y - size.height / 2).toBeGreaterThanOrEqual(bounds.y - 0.5)
+        expect(node.position.y + size.height / 2).toBeLessThanOrEqual(
+          bounds.y + bounds.height + 0.5,
+        )
+      }
+    }
+  })
+
+  it('places the HA pair side by side on one row', () => {
+    const result = layoutComposite(fixture())
+    const fw1 = result.nodes.get('mlag-1')?.position
+    const fw2 = result.nodes.get('mlag-2')?.position
+    expect(fw1).toBeDefined()
+    expect(fw2).toBeDefined()
+    if (!fw1 || !fw2) return
+    expect(Math.abs(fw1.y - fw2.y)).toBeLessThan(1)
+    expect(Math.abs(fw1.x - fw2.x)).toBeLessThan(260)
+  })
+
+  it('puts the apex tier above the access tier', () => {
+    const result = layoutComposite(fixture())
+    const border = result.nodes.get('border-1')?.position
+    const access = result.nodes.get('acc-a1')?.position
+    expect(border).toBeDefined()
+    expect(access).toBeDefined()
+    if (!border || !access) return
+    expect(border.y).toBeLessThan(access.y)
+  })
+
+  it('is deterministic', () => {
+    const a = layoutComposite(fixture())
+    const b = layoutComposite(fixture())
+    for (const [id, node] of a.nodes) {
+      expect(b.nodes.get(id)?.position).toEqual(node.position)
+    }
+  })
+})
+
+describe('applyOctilinearRoutes', () => {
+  it('routes vertical edges as track-separated polylines', async () => {
+    const graph = fixture()
+    const result = layoutComposite(graph)
+    const ports = placePorts(result.nodes, graph.links, 'TB')
+    const edges = await routeEdges(result.nodes, ports, graph.links, result.subgraphs)
+    // mirror the engine: composite pairs with linear widths before routing
+    for (const edge of edges.values()) {
+      edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
+    }
+    const routed = applyOctilinearRoutes(edges)
+    expect(routed).toBeGreaterThan(0)
+    const lines = [...edges.values()]
+      .filter((edge) => edge.route !== undefined)
+      .map((edge) => ({
+        id: edge.id,
+        points: edge.route?.points ?? edge.points,
+        halfWidth: Math.max(0.5, edge.width / 2),
+      }))
+    expect(findCollinearOverlaps(lines)).toHaveLength(0)
+  })
+})
+
+describe('chamferCorners', () => {
+  it('cuts 90° corners and leaves straights alone', () => {
+    const cut = chamferCorners(
+      [
+        { x: 0, y: 0 },
+        { x: 0, y: 100 },
+        { x: 100, y: 100 },
+      ],
+      10,
+    )
+    expect(cut).toHaveLength(4)
+    expect(cut[1]).toEqual({ x: 0, y: 90 })
+    expect(cut[2]).toEqual({ x: 10, y: 100 })
+    const straight = chamferCorners(
+      [
+        { x: 0, y: 0 },
+        { x: 0, y: 200 },
+      ],
+      10,
+    )
+    expect(straight).toHaveLength(2)
+  })
+})
