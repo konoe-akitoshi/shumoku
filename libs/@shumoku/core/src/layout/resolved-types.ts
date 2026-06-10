@@ -41,6 +41,13 @@ export interface ResolvedPort {
   side: 'top' | 'bottom' | 'left' | 'right'
   /** Port visual size */
   size: Size
+  /**
+   * Label drawing hint set by the layout (which knows the slot pitch):
+   * `vertical` = rotate the label to run along the wire because the
+   * face is too dense for horizontal labels to clear each other.
+   * Absent = horizontal (today's default).
+   */
+  labelOrientation?: 'horizontal' | 'vertical'
 }
 
 // ============================================================================

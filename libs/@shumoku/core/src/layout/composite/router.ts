@@ -150,6 +150,13 @@ export function alignPortsToPeers(
       entry.port.absolutePosition = { ...entry.port.absolutePosition, x: cursor + w / 2 }
       cursor += w
     }
+    // Horizontal port labels are ~40-70px wide; when the face pitch is
+    // tighter than that, they physically cannot clear each other — tell
+    // the renderer to run the labels along the wires instead.
+    const pitch = (total * scale) / group.length
+    if (pitch < 44) {
+      for (const entry of group) entry.port.labelOrientation = 'vertical'
+    }
   }
   return flipped
 }
