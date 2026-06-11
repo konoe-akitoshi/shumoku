@@ -29,6 +29,7 @@
 
 import type { Bounds, Node, Position } from '../../models/types.js'
 import { resolveNodeSize } from '../engine/index.js'
+import { portLabelBox } from '../port-geometry.js'
 import type { ResolvedEdge } from '../resolved-types.js'
 
 /**
@@ -220,6 +221,52 @@ export function alignPortsToPeers(
       entry.port.absolutePosition = { ...entry.port.absolutePosition, y: cursor + h / 2 }
       cursor += h
     }
+  }
+
+  // -- strip de-aliasing (slot allocation extended to LABELS) -----------------
+  // Vertical label strips are 12px wide at their port's x; strips from
+  // FACING faces collide only when x-aligned. Same discipline as the
+  // track allocator: on collision, shift one occupant to the next free
+  // lane (half a slot sideways, clamped to its own face) instead of
+  // paying corridor space for the whole row.
+  const strips: { port: ResolvedEdge['fromPort']; nodeId: string }[] = []
+  for (const edge of sortedForSeat) {
+    if (edge.coupling) continue
+    for (const port of [edge.fromPort, edge.toPort]) {
+      if (port.labelOrientation !== 'vertical' || port.label.trim() === '') continue
+      strips.push({ port, nodeId: port.nodeId })
+    }
+  }
+  strips.sort((a, b) => (a.port.id < b.port.id ? -1 : 1))
+  const overlaps = (a: Bounds, b: Bounds): boolean =>
+    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+  for (let pass = 0; pass < 2; pass++) {
+    let moved = 0
+    for (let i = 0; i < strips.length; i++) {
+      const a = strips[i]
+      if (!a) continue
+      const boxA = portLabelBox(a.port)
+      if (!boxA) continue
+      for (let j = i + 1; j < strips.length; j++) {
+        const b = strips[j]
+        if (!b || b.nodeId === a.nodeId) continue // same-face pairs are slot-spaced already
+        const boxB = portLabelBox(b.port)
+        if (!boxB || !overlaps(boxA, boxB)) continue
+        const node = nodes.get(b.nodeId)
+        const center = node?.position
+        if (!node || !center) continue
+        const size = resolveNodeSize(node)
+        const need = boxA.x + boxA.width - boxB.x + 3
+        const lo = center.x - size.width / 2 + 6
+        const hi = center.x + size.width / 2 - 6
+        const shifted = Math.max(lo, Math.min(hi, b.port.absolutePosition.x + need))
+        if (shifted !== b.port.absolutePosition.x) {
+          b.port.absolutePosition = { ...b.port.absolutePosition, x: shifted }
+          moved++
+        }
+      }
+    }
+    if (moved === 0) break
   }
   return { flipped, minWidths, minHeights }
 }

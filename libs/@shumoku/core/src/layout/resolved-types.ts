@@ -133,6 +133,13 @@ export interface ResolvedEdge {
    * between detected pair members).
    */
   coupling?: boolean
+  /**
+   * Where to draw the link/VLAN label, chosen by the label-placement
+   * routing stage from candidate points ALONG the routed polyline so it
+   * collides with nothing it knows about (nodes, port labels, other
+   * link labels). Absent = renderer's midpoint fallback.
+   */
+  labelAnchor?: Position
 }
 
 // ============================================================================

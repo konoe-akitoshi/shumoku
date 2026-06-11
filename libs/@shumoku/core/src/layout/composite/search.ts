@@ -130,6 +130,7 @@ async function evaluate(
     if (list.length < 2) combs.delete(parent)
   }
   applyOctilinearRoutes(edges, { obstacles, combs })
+  placeLinkLabels(edges, comp.nodes)
   // A subgraph OWNS the wiring that completes inside it (both endpoints
   // are members), and routes legally run outside the member boxes
   // (gutter bypasses, ramp under-loops, vertical shifts). Container
@@ -202,8 +203,8 @@ async function evaluate(
       const a = pts[midIdx - 1]
       const b = pts[midIdx]
       if (a && b) {
-        const mx = (a.x + b.x) / 2
-        const my = (a.y + b.y) / 2
+        const mx = edge.labelAnchor?.x ?? (a.x + b.x) / 2
+        const my = edge.labelAnchor?.y ?? (a.y + b.y) / 2
         const halfWidth = (Math.max(...labelLines.map((t) => t.length)) * 6.5) / 2
         const top = my - 8 - 12
         const bottom = my - 8 + labelLines.length * 12
@@ -441,6 +442,97 @@ function measureCongestion(result: CompositeSearchResult): Map<number, number> {
     if (need > available) extra.set(gap + 1, Math.ceil(need - available))
   }
   return extra
+}
+
+/**
+ * Link-label placement as a routing stage (the same mutual-awareness
+ * model as ports/labels/nodes): each edge's label slides ALONG its own
+ * routed polyline to a spot that collides with nothing already known —
+ * node boxes, port-label strips, and labels placed before it. The
+ * renderer's fixed-midpoint is only the fallback.
+ */
+function placeLinkLabels(edges: Map<string, ResolvedEdge>, nodes: ResolvedLayout['nodes']): void {
+  interface Box {
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+  }
+  const obstacles: Box[] = []
+  for (const [, node] of nodes) {
+    if (!node.position) continue
+    const size = resolveNodeSize(node)
+    obstacles.push({
+      x1: node.position.x - size.width / 2,
+      y1: node.position.y - size.height / 2,
+      x2: node.position.x + size.width / 2,
+      y2: node.position.y + size.height / 2,
+    })
+  }
+  for (const edge of edges.values()) {
+    for (const port of [edge.fromPort, edge.toPort]) {
+      const strip = portLabelBox(port)
+      if (strip) {
+        obstacles.push({
+          x1: strip.x,
+          y1: strip.y,
+          x2: strip.x + strip.width,
+          y2: strip.y + strip.height,
+        })
+      }
+    }
+  }
+  const hits = (box: Box): number => {
+    let n = 0
+    for (const o of obstacles) {
+      if (box.x1 < o.x2 && box.x2 > o.x1 && box.y1 < o.y2 && box.y2 > o.y1) n++
+    }
+    return n
+  }
+  for (const edge of [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    if (edge.coupling) continue
+    const lines: string[] = []
+    const linkLabel = edge.link.label
+    if (linkLabel !== undefined) {
+      lines.push(Array.isArray(linkLabel) ? linkLabel.join(' / ') : linkLabel)
+    }
+    const vlan = edge.link.vlan
+    if (vlan && vlan.length > 0) lines.push(`VLAN ${vlan.join(', ')}`)
+    if (lines.length === 0) continue
+    const pts = edge.route?.points ?? edge.points
+    if (pts.length < 2) continue
+    const halfW = (Math.max(...lines.map((t) => t.length)) * 6) / 2
+    const boxAt = (x: number, y: number): Box => ({
+      x1: x - halfW,
+      y1: y - 20,
+      x2: x + halfW,
+      y2: y - 8 + lines.length * 12,
+    })
+    let best: { x: number; y: number } | undefined
+    let bestCost = Number.POSITIVE_INFINITY
+    for (let s = 1; s < pts.length; s++) {
+      const a = pts[s - 1]
+      const b = pts[s]
+      if (!a || !b) continue
+      const len = Math.hypot(b.x - a.x, b.y - a.y)
+      if (len < 24 && pts.length > 2) continue
+      for (const t of [0.5, 0.3, 0.7]) {
+        const x = a.x + (b.x - a.x) * t
+        const y = a.y + (b.y - a.y) * t
+        // prefer the path's middle and segment centers, but a clean
+        // spot anywhere on the wire beats a cluttered midpoint
+        const cost = hits(boxAt(x, y)) * 10 + Math.abs(s - pts.length / 2) + (t === 0.5 ? 0 : 0.5)
+        if (cost < bestCost) {
+          bestCost = cost
+          best = { x, y }
+        }
+      }
+    }
+    if (best) {
+      edge.labelAnchor = best
+      obstacles.push(boxAt(best.x, best.y))
+    }
+  }
 }
 
 /** Score actually-routed geometry (no straight-line proxies). */
