@@ -170,23 +170,30 @@
   }
   onDestroy(() => clearTimeout(refreshTimer))
 
+  // Non-reactive mirror of "a graph has been shown at least once". loadGraph
+  // is invoked from a $effect; reading the `graph` $state there would register
+  // it as a dependency, and since loadGraph also WRITES `graph`, that loops
+  // forever (refetch → new graph → effect refires → refetch …).
+  let hasGraph = false
+
   async function loadGraph() {
     // Keep the current diagram visible during a stale-refresh poll — only
     // show the loading state when there is nothing on screen yet.
-    loading = graph === undefined
+    loading = !hasGraph
     error = ''
     try {
       const loader = graphLoader ?? (() => api.topologies.getView(topologyId))
       const res = await loader()
       if (res.deriving) {
         building = true
-        loading = graph === undefined
+        loading = !hasGraph
         scheduleRefresh(3000)
         return
       }
       if (res.graph) {
         graph = res.graph
         serverLayout = res.resolved
+        hasGraph = true
       }
       building = res.stale === true
       if (res.stale) scheduleRefresh(5000)
@@ -369,6 +376,7 @@
   $effect(() => {
     // Track topologyId so the effect re-runs when the route id changes.
     topologyId
+    hasGraph = false
     loadGraph()
   })
 
