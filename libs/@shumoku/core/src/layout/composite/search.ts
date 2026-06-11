@@ -138,7 +138,21 @@ async function evaluate(
   for (const [parent, list] of combs) {
     if (list.length < 2) combs.delete(parent)
   }
-  applyOctilinearRoutes(edges, { obstacles, combs })
+  const nodeObstacles: RoutingObstacle[] = []
+  for (const [id, node] of comp.nodes) {
+    if (!node.position) continue
+    const size = resolveNodeSize(node)
+    nodeObstacles.push({
+      id,
+      bounds: {
+        x: node.position.x - size.width / 2,
+        y: node.position.y - size.height / 2,
+        width: size.width,
+        height: size.height,
+      },
+    })
+  }
+  applyOctilinearRoutes(edges, { obstacles, combs, nodeObstacles })
   placeLinkLabels(edges, comp.nodes)
   // A subgraph OWNS the wiring that completes inside it (both endpoints
   // are members), and routes legally run outside the member boxes
