@@ -226,8 +226,22 @@ export function layoutComposite(
   }
 
   // -- zones ------------------------------------------------------------------
+  // The placement quotient follows the GRAPH's own grouping first: a node's
+  // `parent` subgraph is the priority-merged grouping (the strongest source's
+  // declaration — e.g. Zabbix host groups), so it wins over the `location`
+  // metadata a weaker source contributed. Without this, a merged graph got
+  // PLACED by rack location while its host-group boxes were drawn as
+  // member-bboxes over scattered members — 46 giant overlapping rectangles.
+  // `location` remains the fallback for graphs whose nodes carry no parent
+  // (the original TTDB-style input), then solo.
+  const subgraphById = new Map<string, Subgraph>()
+  for (const sg of graph.subgraphs ?? []) subgraphById.set(sg.id, sg)
+  const PARENT_ZONE_PREFIX = '__sg:'
   const zoneOf = (id: string): string => {
-    const loc = nodes.get(id)?.metadata?.['location']
+    const node = nodes.get(id)
+    const parent = node?.parent
+    if (parent && subgraphById.has(parent)) return `${PARENT_ZONE_PREFIX}${parent}`
+    const loc = node?.metadata?.['location']
     return typeof loc === 'string' && loc !== '' ? loc : `__solo:${id}`
   }
 
@@ -450,7 +464,30 @@ export function layoutComposite(
       else rowMap.set(row, [unit])
     }
     const rowKeys = [...rowMap.keys()].sort((a, b) => a - b)
-    const rows: Unit[][] = rowKeys.map((key) => rowMap.get(key) ?? [])
+    // Wrap each depth-row at a max width. Depth alone decided the row, so a
+    // zone with 100+ same-depth members (a big host group) became one
+    // figure-wide strip — the "everything in a single line" defect. Width
+    // stays deterministic: chunks are cut in the original sort order.
+    const ZONE_ROW_MAX_W = 2200
+    const rows: Unit[][] = []
+    for (const key of rowKeys) {
+      const depthRow = rowMap.get(key) ?? []
+      let current: Unit[] = []
+      let width = 0
+      for (const unit of depthRow) {
+        const prev = current[current.length - 1]
+        const addition = unit.width + (prev ? pairGap(prev, unit) : 0)
+        if (current.length > 0 && width + addition > ZONE_ROW_MAX_W) {
+          rows.push(current)
+          current = [unit]
+          width = unit.width
+        } else {
+          current.push(unit)
+          width += addition
+        }
+      }
+      if (current.length > 0) rows.push(current)
+    }
     let maxRowWidth = 0
     let y = zonePad
     const placeRow = (row: Unit[], rowY: number, rowHeight: number): void => {
@@ -784,10 +821,19 @@ export function layoutComposite(
     const x = zoneX.get(zone)
     const y = zoneY.get(zone)
     if (!box || x === undefined || y === undefined) continue
+    const bounds = { x: x + shiftX, y: y + shiftY, width: box.w, height: box.h }
+    // A parent-subgraph zone IS that subgraph: give the original its zone
+    // box (label/style preserved) instead of drawing a synthetic twin plus
+    // a member-bbox later.
+    const original = zone.startsWith('__sg:') ? subgraphById.get(zone.slice(5)) : undefined
+    if (original) {
+      subgraphs.set(original.id, { ...original, bounds })
+      continue
+    }
     subgraphs.set(`${ZONE_SUBGRAPH_PREFIX}${zone}`, {
       id: `${ZONE_SUBGRAPH_PREFIX}${zone}`,
       label: zone,
-      bounds: { x: x + shiftX, y: y + shiftY, width: box.w, height: box.h },
+      bounds,
       style: { strokeDasharray: '5 4' },
     })
   }
@@ -798,6 +844,9 @@ export function layoutComposite(
   // to skip these entirely; that silently discarded scope semantics.)
   const enclosing: { sg: Subgraph; count: number }[] = []
   for (const original of graph.subgraphs ?? []) {
+    // Already placed as a zone box above — don't overwrite it with a
+    // member-bbox (that was the giant-overlapping-rectangles bug).
+    if (subgraphs.has(original.id)) continue
     let memberCount = 0
     for (const node of nodes.values()) if (node.parent === original.id) memberCount++
     if (memberCount >= nodes.size * 0.6) {
