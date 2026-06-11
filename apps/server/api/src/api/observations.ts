@@ -68,8 +68,12 @@ export function createScanRoute(): Hono {
           snapshot.capturedAt,
         )
         // Invalidate the parsed-topology cache so the next /render / /graph
-        // call re-runs resolve() with the new snapshot.
-        getTopologyService().clearCacheEntry(topologyId)
+        // call re-runs resolve() with the new snapshot — only when the
+        // contribution actually changed (no-change gate).
+        if (observation.contributionChanged) {
+          getTopologyService().clearCacheEntry(topologyId)
+          getTopologyService().precompute(topologyId)
+        }
         return c.json({ snapshot, observation })
       }
 
@@ -181,8 +185,13 @@ export function createObservationsRoute(): Hono {
         graph,
       })
       // Invalidate parsed-topology cache so the next /render runs
-      // resolve() against the new observation.
-      getTopologyService().clearCacheEntry(topologyId)
+      // resolve() against the new observation — only when the contribution
+      // actually changed (no-change gate; an identical editor re-save keeps
+      // the current artifact).
+      if (observation.contributionChanged) {
+        getTopologyService().clearCacheEntry(topologyId)
+        getTopologyService().precompute(topologyId)
+      }
       return c.json({ observation }, 201)
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)

@@ -21,9 +21,35 @@
  */
 
 import type { Database } from 'bun:sqlite'
+import { createHash } from 'node:crypto'
 import type { NetworkGraph } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import { ingestGraph } from './contribution-store.js'
+
+/**
+ * Hash of a contribution's STRUCTURAL content: volatile per-scan fields
+ * (`observedAt` timestamps stamped on every node/provenance by plugins) are
+ * stripped so two scans of an unchanged network hash identically. Key order
+ * is whatever the plugin produced — deterministic for identical upstream
+ * data, which is exactly the case the gate exists for.
+ */
+export function contributionContentHash(graph: NetworkGraph): string {
+  const strip = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(strip)
+    if (v && typeof v === 'object') {
+      const out: Record<string, unknown> = {}
+      for (const [k, val] of Object.entries(v)) {
+        if (k === 'observedAt') continue
+        out[k] = strip(val)
+      }
+      return out
+    }
+    return v
+  }
+  return createHash('sha256')
+    .update(JSON.stringify(strip(graph)))
+    .digest('hex')
+}
 
 export type ObservationStatus = 'ok' | 'partial' | 'failed' | 'empty'
 
@@ -40,6 +66,15 @@ export interface TopologyObservation {
   linkCount: number
   portCount: number
   createdAt: number
+  /**
+   * Whether this snapshot CHANGED the source's canonical contribution
+   * (structural hash differs from the stored one). False for failed scans,
+   * out-of-order arrivals, unattached sources — and, crucially, for re-scans
+   * of an unchanged network. Callers use this as the no-change gate: skip the
+   * composition-revision bump (and the multi-minute layout re-bake) when
+   * nothing the diagram shows has changed.
+   */
+  contributionChanged?: boolean
 }
 
 export interface RecordObservationInput {
@@ -123,8 +158,9 @@ export class ObservationsService {
     // source of truth; the audit row is its history twin. (ingestGraph runs its own
     // transaction — bun:sqlite nests it as a SAVEPOINT, so a failure here rolls back
     // both writes together.)
+    let contributionChanged = false
     const persist = this.db.transaction(() => {
-      this.materializeContribution(input)
+      contributionChanged = this.materializeContribution(input)
       this.db
         .query(
           `INSERT INTO topology_observations (
@@ -169,6 +205,7 @@ export class ObservationsService {
       linkCount,
       portCount,
       createdAt: now,
+      contributionChanged,
     }
   }
 
@@ -191,8 +228,8 @@ export class ObservationsService {
    * to an empty graph so a successful empty scan still retracts the source's prior
    * nodes (successful absence is real evidence).
    */
-  private materializeContribution(input: RecordObservationInput): void {
-    if (input.status === 'failed') return
+  private materializeContribution(input: RecordObservationInput): boolean {
+    if (input.status === 'failed') return false
     const attach = this.db
       .query(
         `SELECT tds.id AS attach_id
@@ -200,26 +237,48 @@ export class ObservationsService {
          WHERE tds.topology_id = ? AND tds.data_source_id = ? AND tds.purpose = 'topology'`,
       )
       .get(input.topologyId, input.sourceId) as { attach_id: string } | undefined
-    if (!attach) return
+    if (!attach) return false
     // Out-of-order guard: never let a strictly older scan replace newer canonical
     // state (re-applying the same capturedAt is fine — idempotent replace).
     const existing = this.db
-      .query('SELECT last_ok_at FROM contribution_source WHERE topology_id = ? AND source_id = ?')
-      .get(input.topologyId, input.sourceId) as { last_ok_at: number | null } | undefined
-    if (existing?.last_ok_at != null && input.capturedAt < existing.last_ok_at) return
+      .query(
+        'SELECT last_ok_at, content_hash FROM contribution_source WHERE topology_id = ? AND source_id = ?',
+      )
+      .get(input.topologyId, input.sourceId) as
+      | { last_ok_at: number | null; content_hash: string | null }
+      | undefined
+    if (existing?.last_ok_at != null && input.capturedAt < existing.last_ok_at) return false
     const graph: NetworkGraph = input.graph ?? {
       version: '1',
       name: '',
       nodes: [],
       links: [],
     }
+    const contentHash = contributionContentHash(graph)
+    // No-change gate: identical structural content → only refresh the
+    // freshness columns; the decomposed rows are already correct, and the
+    // caller can skip the revision bump (no re-resolve, no re-layout).
+    if (existing && existing.content_hash != null && existing.content_hash === contentHash) {
+      this.db
+        .query(
+          'UPDATE contribution_source SET last_status = ?, last_ok_at = ? WHERE topology_id = ? AND source_id = ?',
+        )
+        .run(input.status, input.capturedAt, input.topologyId, input.sourceId)
+      return false
+    }
     ingestGraph(
       input.topologyId,
       input.sourceId,
       graph,
-      { attachmentId: attach.attach_id, lastStatus: input.status, lastOkAt: input.capturedAt },
+      {
+        attachmentId: attach.attach_id,
+        lastStatus: input.status,
+        lastOkAt: input.capturedAt,
+        contentHash,
+      },
       this.db,
     )
+    return true
   }
 
   /**

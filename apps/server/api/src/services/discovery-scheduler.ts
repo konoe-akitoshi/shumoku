@@ -117,7 +117,7 @@ export async function syncSource(
     graph = null
   }
 
-  await deps.observationsService.record({
+  const recorded = await deps.observationsService.record({
     topologyId,
     sourceId,
     capturedAt,
@@ -131,11 +131,16 @@ export async function syncSource(
     status === 'failed' ? 'failed' : 'ok',
     capturedAt,
   )
-  deps.topologyService.clearCacheEntry(topologyId)
-  // Bake the fresh artifact in the background now — without this, the first
-  // viewer after a scheduled refresh would eat the (potentially minutes-long)
-  // layout wait instead of getting the stale diagram + a hot swap.
-  deps.topologyService.precompute(topologyId)
+  // No-change gate: a scheduled re-scan of an unchanged network must NOT bump
+  // the revision — that would re-run the (potentially minutes-long) layout
+  // bake every tick for nothing.
+  if (recorded.contributionChanged) {
+    deps.topologyService.clearCacheEntry(topologyId)
+    // Bake the fresh artifact in the background now — without this, the first
+    // viewer after a scheduled refresh would eat the layout wait instead of
+    // getting the stale diagram + a hot swap.
+    deps.topologyService.precompute(topologyId)
+  }
   deps.topologySourcesService.updateLastSynced(attached.id)
 
   return {

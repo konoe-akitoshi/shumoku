@@ -131,6 +131,7 @@ async function runSyncJob(
   deps: SyncJobDeps,
 ): Promise<void> {
   const { topologyId } = job
+  let anyChanged = false
   // Drive every source in parallel — slow netbox shouldn't block fast snmp.
   await Promise.allSettled(
     sources.map(async (source, i) => {
@@ -168,7 +169,7 @@ async function runSyncJob(
           return
         }
 
-        await deps.observationsService.record({
+        const recorded = await deps.observationsService.record({
           topologyId,
           sourceId: source.dataSourceId,
           capturedAt,
@@ -176,6 +177,7 @@ async function runSyncJob(
           statusMessage,
           graph,
         })
+        if (recorded.contributionChanged) anyChanged = true
         deps.observationsService.updateHysteresis(
           topologyId,
           source.dataSourceId,
@@ -200,6 +202,19 @@ async function runSyncJob(
   if (job.cancelRequested) {
     if (deriveStep) deriveStep.status = 'skipped'
     finish(job, 'cancelled')
+    return
+  }
+
+  // No-change gate: every source re-scanned to the same structural content →
+  // the diagram cannot have changed, so skip the invalidation AND the
+  // multi-minute layout re-bake entirely.
+  if (!anyChanged) {
+    if (deriveStep) {
+      deriveStep.status = 'skipped'
+      deriveStep.message = 'No changes since last sync'
+    }
+    const anyFetchOkUnchanged = job.steps.some((s) => s.key !== 'derive' && s.status === 'done')
+    finish(job, anyFetchOkUnchanged ? 'done' : 'failed')
     return
   }
 

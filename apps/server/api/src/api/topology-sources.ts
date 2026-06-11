@@ -415,7 +415,12 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
       snapshot.status === 'failed' ? 'failed' : 'ok',
       capturedAt,
     )
-    getTopologyService().clearCacheEntry(topologyId)
+    // No-change gate: only invalidate + re-bake when the merged contribution
+    // actually changed.
+    if (observation.contributionChanged) {
+      getTopologyService().clearCacheEntry(topologyId)
+      getTopologyService().precompute(topologyId)
+    }
     getTopologySourcesService().updateLastSynced(attached.id)
     return c.json({
       observation,
@@ -503,9 +508,13 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
     status === 'failed' ? 'failed' : 'ok',
     capturedAt,
   )
-  getTopologyService().clearCacheEntry(topologyId)
-  // Bake the fresh artifact in the background now (stale-while-revalidate).
-  getTopologyService().precompute(topologyId)
+  // No-change gate: only invalidate + re-bake when the contribution actually
+  // changed; a re-sync of an unchanged source keeps the current artifact.
+  if (observation.contributionChanged) {
+    getTopologyService().clearCacheEntry(topologyId)
+    // Bake the fresh artifact in the background now (stale-while-revalidate).
+    getTopologyService().precompute(topologyId)
+  }
   // Stamp the legacy lastSyncedAt for UI surfaces that read it.
   getTopologySourcesService().updateLastSynced(attached.id)
 

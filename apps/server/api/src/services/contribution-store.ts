@@ -126,6 +126,8 @@ export interface IngestOptions {
   attachmentId?: string | null
   lastStatus?: string
   lastOkAt?: number
+  /** Structural content hash (volatile fields stripped) for the no-change gate. */
+  contentHash?: string | null
 }
 
 /**
@@ -156,8 +158,8 @@ export function ingestGraph(
       'exclusions',
     ])
     db.query(
-      `INSERT INTO contribution_source (topology_id, source_id, attachment_id, last_status, last_ok_at, graph_payload_json)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO contribution_source (topology_id, source_id, attachment_id, last_status, last_ok_at, graph_payload_json, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       topologyId,
       sourceId,
@@ -165,6 +167,7 @@ export function ingestGraph(
       opts.lastStatus ?? null,
       opts.lastOkAt ?? null,
       j(graphPayload),
+      opts.contentHash ?? null,
     )
 
     const insElement = db.query(

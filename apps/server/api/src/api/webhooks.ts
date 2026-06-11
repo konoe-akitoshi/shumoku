@@ -91,14 +91,18 @@ async function handleTopologyWebhook(c: Context, id: string, secret: string) {
 
     const { ObservationsService } = await import('../services/observations.js')
     const observations = new ObservationsService()
-    await observations.record({
+    const recorded = await observations.record({
       topologyId: source.topologyId,
       sourceId: source.dataSourceId,
       capturedAt: Date.now(),
       status: graph.nodes && graph.nodes.length > 0 ? 'ok' : 'empty',
       graph,
     })
-    getTopologyService().clearCacheEntry(source.topologyId)
+    // No-change gate: an unchanged webhook push keeps the current artifact.
+    if (recorded.contributionChanged) {
+      getTopologyService().clearCacheEntry(source.topologyId)
+      getTopologyService().precompute(source.topologyId)
+    }
     getTopologySourcesService().updateLastSynced(source.id)
 
     if (broadcastTopologyUpdate) {
