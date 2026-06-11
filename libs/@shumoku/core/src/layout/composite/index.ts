@@ -328,10 +328,8 @@ export function layoutComposite(
   }
   const verticalReachOf = new Map<string, number>()
   const lateralReachOf = new Map<string, number>()
-  let crossZoneReach = 0
   for (const link of graph.links) {
     const sameDepth = (depth.get(link.from.node) ?? 0) === (depth.get(link.to.node) ?? 0)
-    const crossZone = zoneOf(link.from.node) !== zoneOf(link.to.node)
     for (const [nodeId, portRef] of [
       [link.from.node, link.from.port],
       [link.to.node, link.to.port],
@@ -344,7 +342,6 @@ export function layoutComposite(
       } else {
         verticalReachOf.set(nodeId, Math.max(verticalReachOf.get(nodeId) ?? 0, reach))
       }
-      if (crossZone) crossZoneReach = Math.max(crossZoneReach, reach)
     }
   }
   // Bases; the zone-local layout raises them per zone from that zone's
@@ -352,8 +349,6 @@ export function layoutComposite(
   // inflate every zone in the figure.
   const rowGapBase = Math.max(options.rowGap ?? 56, wireClear + 16)
   const cellGapXBase = Math.max(options.cellGapX ?? 32, wireClear + 12)
-  // Inter-band corridors carry cross-zone wiring labels from both sides.
-  const bandGapEff = Math.max(bandGap, crossZoneReach * 2 + 8)
 
   // -- redundant pairs ---------------------------------------------------------
   const pairedWith = detectPairs(ids, nodes, edges, neighbors, zoneOf, depth)
@@ -539,6 +534,48 @@ export function layoutComposite(
     zoneParent.set(zone, best)
   }
 
+  // Label corridors at band boundaries are PER BOUNDARY: only the links
+  // that actually cross boundary i pay for it (the global-max version
+  // inflated every band gap to the single worst label in the graph —
+  // the "giant whitespace" defect). Down-labels from the upper band and
+  // up-labels from the lower band share the corridor, so reserve their
+  // sum where it exceeds the base gap. Goes through the same bandExtra
+  // channel as routing congestion feedback.
+  const rankValues = [...new Set([...zoneRank.values()])].sort((a, b) => a - b)
+  const bandIndexOfRank = new Map(rankValues.map((rank, i) => [rank, i]))
+  const bandOfZone = (zone: string): number => bandIndexOfRank.get(zoneRank.get(zone) ?? 0) ?? 0
+  const downNeed = new Map<number, number>() // boundary above band i
+  const upNeed = new Map<number, number>()
+  for (const link of graph.links) {
+    const za = zoneOf(link.from.node)
+    const zb = zoneOf(link.to.node)
+    if (za === zb || sinkSet.has(link.from.node) || sinkSet.has(link.to.node)) continue
+    const ba = bandOfZone(za)
+    const bb = bandOfZone(zb)
+    if (ba === bb) continue
+    const upperNode = ba < bb ? link.from.node : link.to.node
+    const lowerNode = ba < bb ? link.to.node : link.from.node
+    const upperBand = Math.min(ba, bb)
+    const lowerBand = Math.max(ba, bb)
+    const upperReach = verticalReachOf.get(upperNode) ?? 0
+    const lowerReach = verticalReachOf.get(lowerNode) ?? 0
+    downNeed.set(upperBand + 1, Math.max(downNeed.get(upperBand + 1) ?? 0, upperReach))
+    upNeed.set(lowerBand, Math.max(upNeed.get(lowerBand) ?? 0, lowerReach))
+  }
+  const labelBandExtra = new Map<number, number>(options.bandExtra ?? [])
+  for (const i of new Set([...downNeed.keys(), ...upNeed.keys()])) {
+    const need = (downNeed.get(i) ?? 0) + (upNeed.get(i) ?? 0) + 8 - bandGap
+    if (need > 0) labelBandExtra.set(i, (labelBandExtra.get(i) ?? 0) + Math.ceil(need))
+  }
+  // per-zone vertical label reach, so compaction can't squeeze the
+  // corridor the band extras just reserved
+  const zoneVReachMap = new Map<string, number>()
+  for (const zone of zoneIds) {
+    let reach = 0
+    for (const unit of zoneUnits.get(zone) ?? []) reach = Math.max(reach, unitVReach(unit))
+    zoneVReachMap.set(zone, reach)
+  }
+
   const zoneX = new Map<string, number>()
   const zoneY = new Map<string, number>()
   const { bandRanges, bandBlocks } = placeZoneBands(
@@ -550,10 +587,11 @@ export function layoutComposite(
     zoneX,
     zoneY,
     zoneGap,
-    bandGapEff,
+    bandGap,
     options.maxBandW ?? 1700,
-    options.bandExtra,
+    labelBandExtra,
     options.bandOrder,
+    zoneVReachMap,
   )
 
   // -- port refine: pull units toward their cross-zone neighbors ---------------
@@ -1011,6 +1049,7 @@ function placeZoneBands(
   maxBandW: number,
   bandExtra?: ReadonlyMap<number, number>,
   bandOrder?: ReadonlyMap<number, readonly string[]>,
+  zoneVReach?: ReadonlyMap<string, number>,
 ): { bandRanges: { top: number; bottom: number }[]; bandBlocks: string[][] } {
   const ranks = [...new Set(zoneIds.map((z) => zoneRank.get(z) ?? 0))].sort((a, b) => a - b)
   const centerOf = new Map<string, number>()
@@ -1250,12 +1289,18 @@ function placeZoneBands(
   // shape — until it would collide with an x-overlapping block above it.
   // Blocks with nothing overlapping above keep their band y, so the rank
   // discipline survives where it matters.
-  const vGap = bandGap
+  const reachOfZones = (zones: readonly string[]): number =>
+    Math.max(0, ...zones.map((z) => zoneVReach?.get(z) ?? 0))
   placedBlocks.sort((a, b) => a.y - b.y || a.x - b.x)
   const settled: typeof placedBlocks = []
   for (const block of placedBlocks) {
+    // the corridor between two stacked blocks must hold both blocks'
+    // vertical label lanes — compaction must not squeeze what the band
+    // extras reserved
+    const moverReach = reachOfZones(block.zones)
     let target: number | undefined
     for (const other of settled) {
+      const vGap = Math.max(bandGap, reachOfZones(other.zones) + moverReach + 8)
       for (const obstacle of other.rects) {
         const obstacleBottom = other.y + obstacle.relY + obstacle.h
         for (const mover of block.rects) {
