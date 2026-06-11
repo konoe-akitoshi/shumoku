@@ -20,6 +20,7 @@
 import type { Bounds, Direction, NetworkGraph, Node, Subgraph } from '../../models/types.js'
 import { resolveNodeSize } from '../engine/index.js'
 import { getLinkWidthForMode, linkSpeedBps } from '../link-utils.js'
+import { PORT_LABEL_BOX_OFFSET, portLabelLength, shortIfName } from '../port-geometry.js'
 import { resolveTierFromSpec } from '../role-tiers.js'
 
 export interface CompositeLayoutOptions {
@@ -61,6 +62,15 @@ export interface CompositeLayoutOptions {
   nudges?: ReadonlyMap<string, number>
   /** Bands wider than this wrap into sub-rows (v3 §24). */
   maxBandW?: number
+  /**
+   * Per-node width floors fed back from the previous routing round
+   * (alignPortsToPeers reports faces that had to compress their port
+   * slots). Growing the node is the correct resolution for an
+   * over-subscribed face; this closes that feedback loop.
+   */
+  minNodeWidths?: ReadonlyMap<string, number>
+  /** Same feedback for side faces (left/right port slots). */
+  minNodeHeights?: ReadonlyMap<string, number>
 }
 
 export interface CompositeLayoutResult {
@@ -169,8 +179,6 @@ export function layoutComposite(
   const wireClear = Math.round(maxLinkWidth)
   const zoneGap = Math.max(options.zoneGap ?? 90, wireClear + 16)
   const bandGap = Math.max(options.bandGap ?? 150, wireClear + 24)
-  const rowGap = Math.max(options.rowGap ?? 56, wireClear + 16)
-  const cellGapX = Math.max(options.cellGapX ?? 32, wireClear + 12)
   const zonePad = options.zonePad ?? 26
 
   // -- nodes (copies; we set position) + deterministic jitter source --------
@@ -286,11 +294,69 @@ export function layoutComposite(
       const node = nodes.get(id)
       if (!node || node.size) continue
       const body = resolveNodeSize(node)
-      const width = Math.max(body.width, faces.top + 16, faces.bottom + 16)
-      const height = Math.max(body.height, faces.left + 12, faces.right + 12)
+      const width = Math.max(
+        body.width,
+        faces.top + 16,
+        faces.bottom + 16,
+        options.minNodeWidths?.get(id) ?? 0,
+      )
+      const height = Math.max(
+        body.height,
+        faces.left + 12,
+        faces.right + 12,
+        options.minNodeHeights?.get(id) ?? 0,
+      )
       if (width > body.width || height > body.height) node.size = { width, height }
     }
   }
+
+  // -- label-aware corridors ----------------------------------------------------
+  // Ports own labels, and labels are geometry: the corridor between two
+  // facing rows must hold BOTH rows' label lanes (vertical labels run
+  // along the wire), and the gap between side-by-side units must hold a
+  // side label. Derived from the actual longest names per direction —
+  // pathological data (machine-id port names) makes the figure larger,
+  // never overlapping; clean data tightens it automatically.
+  // Resolve the DISPLAY label exactly like port placement does (port id
+  // → NodePort.label); link endpoints carry port IDs, which can be long
+  // machine identifiers that are never rendered.
+  const displayPortLabel = (nodeId: string, portRef: unknown): string | undefined => {
+    if (typeof portRef !== 'string' || portRef.length === 0) return undefined
+    const owner = nodes.get(nodeId)
+    const port = owner?.ports?.find((p) => p.id === portRef)
+    return shortIfName(port?.label ?? portRef)
+  }
+  // DIRECTIONAL reach: a label occupies space only on the face it sits
+  // on. A leaf whose links all go UP has top labels only — reserving
+  // room below it would put whitespace where no label can ever exist
+  // (that exact defect shipped once: every row paid for both directions).
+  const reachUpOf = new Map<string, number>() // top-face labels (links to shallower peers)
+  const reachDownOf = new Map<string, number>() // bottom-face labels (links to deeper peers)
+  const lateralReachOf = new Map<string, number>()
+  for (const link of graph.links) {
+    const dFrom = depth.get(link.from.node) ?? 0
+    const dTo = depth.get(link.to.node) ?? 0
+    for (const [nodeId, portRef, dSelf, dPeer] of [
+      [link.from.node, link.from.port, dFrom, dTo],
+      [link.to.node, link.to.port, dTo, dFrom],
+    ] as const) {
+      const label = displayPortLabel(nodeId, portRef)
+      if (label === undefined) continue
+      const reach = PORT_LABEL_BOX_OFFSET + portLabelLength(label)
+      if (dSelf === dPeer) {
+        lateralReachOf.set(nodeId, Math.max(lateralReachOf.get(nodeId) ?? 0, reach))
+      } else if (dPeer < dSelf) {
+        reachUpOf.set(nodeId, Math.max(reachUpOf.get(nodeId) ?? 0, reach))
+      } else {
+        reachDownOf.set(nodeId, Math.max(reachDownOf.get(nodeId) ?? 0, reach))
+      }
+    }
+  }
+  // Bases; the zone-local layout raises them per zone from that zone's
+  // own longest labels, so one verbose vendor naming scheme doesn't
+  // inflate every zone in the figure.
+  const rowGapBase = Math.max(options.rowGap ?? 56, wireClear + 16)
+  const cellGapXBase = Math.max(options.cellGapX ?? 32, wireClear + 12)
 
   // -- redundant pairs ---------------------------------------------------------
   const pairedWith = detectPairs(ids, nodes, edges, neighbors, zoneOf, depth)
@@ -359,6 +425,20 @@ export function layoutComposite(
   const localY = new Map<string, number>()
   const zoneBox = new Map<string, { w: number; h: number }>()
   const zoneRows = new Map<string, Unit[][]>()
+  // Label-aware corridors are PER ADJACENT PAIR, not per zone: the gap
+  // between two specific units (or rows) holds exactly the labels that
+  // actually face each other. A single verbose name pays only where it
+  // sits instead of inflating the whole zone.
+  const unitLReach = (unit: Unit): number =>
+    Math.max(0, ...unit.members.map((m) => lateralReachOf.get(m) ?? 0))
+  const unitUpReach = (unit: Unit): number =>
+    Math.max(0, ...unit.members.map((m) => reachUpOf.get(m) ?? 0))
+  const unitDownReach = (unit: Unit): number =>
+    Math.max(0, ...unit.members.map((m) => reachDownOf.get(m) ?? 0))
+  const pairGap = (a: Unit, b: Unit): number =>
+    Math.max(cellGapXBase, unitLReach(a) + unitLReach(b) + 8)
+  const rowDownReach = (row: Unit[]): number => Math.max(0, ...row.map(unitDownReach))
+  const rowUpReach = (row: Unit[]): number => Math.max(0, ...row.map(unitUpReach))
   for (const zone of zoneIds) {
     const members = zoneUnits.get(zone) ?? []
     const minDepth = Math.min(...members.map((u) => u.depth))
@@ -370,29 +450,38 @@ export function layoutComposite(
       else rowMap.set(row, [unit])
     }
     const rowKeys = [...rowMap.keys()].sort((a, b) => a - b)
-    const rows: Unit[][] = []
+    const rows: Unit[][] = rowKeys.map((key) => rowMap.get(key) ?? [])
     let maxRowWidth = 0
     let y = zonePad
     const placeRow = (row: Unit[], rowY: number, rowHeight: number): void => {
       let x = zonePad
-      for (const unit of row) {
+      for (const [i, unit] of row.entries()) {
         localX.set(unit.id, x + unit.width / 2 + jitter(unit.members[0] ?? unit.id, 3) * 8)
         localY.set(unit.id, rowY + rowHeight / 2 + jitter(unit.members[0] ?? unit.id, 7) * 6)
-        x += unit.width + cellGapX
+        x += unit.width
+        const next = row[i + 1]
+        if (next) x += pairGap(unit, next)
       }
     }
     const rowYs: number[] = []
     const rowHeights: number[] = []
-    for (const key of rowKeys) {
-      const row = rowMap.get(key) ?? []
-      rows.push(row)
-      const rowWidth = row.reduce((sum, u) => sum + u.width, 0) + cellGapX * (row.length - 1)
+    for (const [rowIndex, row] of rows.entries()) {
+      let rowWidth = 0
+      for (const [i, unit] of row.entries()) {
+        rowWidth += unit.width
+        const next = row[i + 1]
+        if (next) rowWidth += pairGap(unit, next)
+      }
       maxRowWidth = Math.max(maxRowWidth, rowWidth)
       const rowHeight = Math.max(...row.map((u) => u.height))
       rowYs.push(y)
       rowHeights.push(rowHeight)
       placeRow(row, y, rowHeight)
-      y += rowHeight + rowGap
+      const nextRow = rows[rowIndex + 1]
+      y += rowHeight
+      // only the labels that actually FACE this gap pay for it: the
+      // upper row's bottom labels + the lower row's top labels
+      if (nextRow) y += Math.max(rowGapBase, rowDownReach(row) + rowUpReach(nextRow) + 8)
     }
     // intra-zone barycenter ordering (v3 §24): two sweeps pulling each
     // unit next to its in-zone neighbors before global refinement
@@ -417,7 +506,7 @@ export function layoutComposite(
       }
     }
     zoneRows.set(zone, rows)
-    zoneBox.set(zone, { w: maxRowWidth + zonePad * 2, h: y - rowGap + zonePad })
+    zoneBox.set(zone, { w: maxRowWidth + zonePad * 2, h: y + zonePad })
   }
 
   // -- quotient: bands by zone rank, child-block packing under feeders ---------
@@ -458,6 +547,64 @@ export function layoutComposite(
     zoneParent.set(zone, best)
   }
 
+  // Label corridors at band boundaries are PER BOUNDARY: only the links
+  // that actually cross boundary i pay for it (the global-max version
+  // inflated every band gap to the single worst label in the graph —
+  // the "giant whitespace" defect). Down-labels from the upper band and
+  // up-labels from the lower band share the corridor, so reserve their
+  // sum where it exceeds the base gap. Goes through the same bandExtra
+  // channel as routing congestion feedback.
+  const rankValues = [...new Set([...zoneRank.values()])].sort((a, b) => a - b)
+  const bandIndexOfRank = new Map(rankValues.map((rank, i) => [rank, i]))
+  const bandOfZone = (zone: string): number => bandIndexOfRank.get(zoneRank.get(zone) ?? 0) ?? 0
+  const downNeed = new Map<number, number>() // boundary above band i
+  const upNeed = new Map<number, number>()
+  for (const link of graph.links) {
+    const za = zoneOf(link.from.node)
+    const zb = zoneOf(link.to.node)
+    if (za === zb || sinkSet.has(link.from.node) || sinkSet.has(link.to.node)) continue
+    const ba = bandOfZone(za)
+    const bb = bandOfZone(zb)
+    if (ba === bb) continue
+    const upperNode = ba < bb ? link.from.node : link.to.node
+    const lowerNode = ba < bb ? link.to.node : link.from.node
+    const upperBand = Math.min(ba, bb)
+    const lowerBand = Math.max(ba, bb)
+    const upperReach = reachDownOf.get(upperNode) ?? 0
+    const lowerReach = reachUpOf.get(lowerNode) ?? 0
+    downNeed.set(upperBand + 1, Math.max(downNeed.get(upperBand + 1) ?? 0, upperReach))
+    upNeed.set(lowerBand, Math.max(upNeed.get(lowerBand) ?? 0, lowerReach))
+  }
+  const labelBandExtra = new Map<number, number>(options.bandExtra ?? [])
+  for (const i of new Set([...downNeed.keys(), ...upNeed.keys()])) {
+    const need = (downNeed.get(i) ?? 0) + (upNeed.get(i) ?? 0) + 8 - bandGap
+    if (need > 0) labelBandExtra.set(i, (labelBandExtra.get(i) ?? 0) + Math.ceil(need))
+  }
+  // per-zone DIRECTIONAL label reach, so compaction can't squeeze the
+  // corridor the band extras just reserved (down-labels of the upper
+  // block + up-labels of the lower block)
+  const zoneDownReach = new Map<string, number>()
+  const zoneUpReach = new Map<string, number>()
+  for (const zone of zoneIds) {
+    let down = 0
+    let up = 0
+    for (const unit of zoneUnits.get(zone) ?? []) {
+      down = Math.max(down, unitDownReach(unit))
+      up = Math.max(up, unitUpReach(unit))
+    }
+    zoneDownReach.set(zone, down)
+    zoneUpReach.set(zone, up)
+  }
+
+  // Band width budget scales with CONTENT: zones widened (port slots,
+  // label corridors) while a fixed 1700px budget stayed — bands wrapped
+  // into ever more stacked sub-rows and the figure exploded vertically
+  // (5000px tall, 1:2.7 aspect). Target a landscape-ish aspect instead:
+  // budget = sqrt(total packed zone area × aspect), floored at 1700.
+  let zoneArea = 0
+  for (const [, box] of zoneBox) zoneArea += (box.w + zoneGap) * (box.h + bandGap)
+  const maxBandW = options.maxBandW ?? Math.max(1700, Math.round(Math.sqrt(zoneArea * 1.5)))
+
   const zoneX = new Map<string, number>()
   const zoneY = new Map<string, number>()
   const { bandRanges, bandBlocks } = placeZoneBands(
@@ -470,13 +617,15 @@ export function layoutComposite(
     zoneY,
     zoneGap,
     bandGap,
-    options.maxBandW ?? 1700,
-    options.bandExtra,
+    maxBandW,
+    labelBandExtra,
     options.bandOrder,
+    zoneDownReach,
+    zoneUpReach,
   )
 
   // -- port refine: pull units toward their cross-zone neighbors ---------------
-  const minSep = 24
+
   for (let pass = 0; pass < 2; pass++) {
     for (const zone of zoneIds) {
       const rows = zoneRows.get(zone) ?? []
@@ -505,7 +654,7 @@ export function layoutComposite(
           const current = localX.get(unit.id) ?? lo
           localX.set(unit.id, Math.max(lo, Math.min(hi, current + (target - current) * 0.6)))
         }
-        resolveRow(row, localX, box.w, minSep)
+        resolveRow(row, localX, box.w, pairGap)
       }
     }
   }
@@ -524,7 +673,7 @@ export function layoutComposite(
     for (const zone of zoneIds) {
       const box = zoneBox.get(zone)
       if (!box) continue
-      for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, minSep)
+      for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, pairGap)
     }
   }
 
@@ -548,7 +697,7 @@ export function layoutComposite(
   for (const zone of zoneIds) {
     const box = zoneBox.get(zone)
     if (!box) continue
-    for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, minSep)
+    for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, pairGap)
   }
 
   // -- compose to absolute centers ----------------------------------------------
@@ -930,6 +1079,8 @@ function placeZoneBands(
   maxBandW: number,
   bandExtra?: ReadonlyMap<number, number>,
   bandOrder?: ReadonlyMap<number, readonly string[]>,
+  zoneDownReach?: ReadonlyMap<string, number>,
+  zoneUpReach?: ReadonlyMap<string, number>,
 ): { bandRanges: { top: number; bottom: number }[]; bandBlocks: string[][] } {
   const ranks = [...new Set(zoneIds.map((z) => zoneRank.get(z) ?? 0))].sort((a, b) => a - b)
   const centerOf = new Map<string, number>()
@@ -1169,12 +1320,20 @@ function placeZoneBands(
   // shape — until it would collide with an x-overlapping block above it.
   // Blocks with nothing overlapping above keep their band y, so the rank
   // discipline survives where it matters.
-  const vGap = bandGap
+  const downOfZones = (zones: readonly string[]): number =>
+    Math.max(0, ...zones.map((z) => zoneDownReach?.get(z) ?? 0))
+  const upOfZones = (zones: readonly string[]): number =>
+    Math.max(0, ...zones.map((z) => zoneUpReach?.get(z) ?? 0))
   placedBlocks.sort((a, b) => a.y - b.y || a.x - b.x)
   const settled: typeof placedBlocks = []
   for (const block of placedBlocks) {
+    // the corridor between two stacked blocks holds the upper block's
+    // DOWN labels and the lower (moving) block's UP labels — direction
+    // matters, or whitespace appears where no label can exist
+    const moverUp = upOfZones(block.zones)
     let target: number | undefined
     for (const other of settled) {
+      const vGap = Math.max(bandGap, downOfZones(other.zones) + moverUp + 8)
       for (const obstacle of other.rects) {
         const obstacleBottom = other.y + obstacle.relY + obstacle.h
         for (const mover of block.rects) {
@@ -1224,13 +1383,15 @@ function barycenter(
   return weight > 0 ? sum / weight : 0
 }
 
-/** Sort a row by x and enforce minimum separation inside the zone box. */
+/** Sort a row by x and enforce minimum separation inside the zone box.
+ *  `minSep` may be a per-pair function (label-aware corridors). */
 function resolveRow(
   row: Unit[],
   localX: Map<string, number>,
   boxWidth: number,
-  minSep: number,
+  minSep: number | ((a: Unit, b: Unit) => number),
 ): void {
+  const sepOf = typeof minSep === 'number' ? () => minSep : minSep
   const sorted = [...row].sort(
     (a, b) => (localX.get(a.id) ?? 0) - (localX.get(b.id) ?? 0) || (a.id < b.id ? -1 : 1),
   )
@@ -1238,7 +1399,7 @@ function resolveRow(
     const prev = sorted[i - 1]
     const curr = sorted[i]
     if (!prev || !curr) continue
-    const minX = (localX.get(prev.id) ?? 0) + prev.width / 2 + minSep + curr.width / 2
+    const minX = (localX.get(prev.id) ?? 0) + prev.width / 2 + sepOf(prev, curr) + curr.width / 2
     if ((localX.get(curr.id) ?? 0) < minX) localX.set(curr.id, minX)
   }
   const last = sorted[sorted.length - 1]

@@ -27,7 +27,8 @@
 
 import type { Bounds, Position } from '../models/types.js'
 import { resolveNodeSize } from './engine/index.js'
-import type { ResolvedLayout } from './resolved-types.js'
+import { portBox, portLabelBox } from './port-geometry.js'
+import type { ResolvedLayout, ResolvedPort } from './resolved-types.js'
 
 // ============================================================================
 // Pure geometry inputs
@@ -222,6 +223,70 @@ function maxSharedRun(
 }
 
 // ============================================================================
+// 4. Port / port-label clutter
+// ============================================================================
+
+/**
+ * A geometric collision among the elements a node OWNS: its port
+ * markers and their labels. The ownership chain (node → port → label)
+ * only means something if these boxes are first-class geometry — v3
+ * lesson re-learned: what isn't measured silently regresses.
+ */
+export interface PortClutter {
+  kind: 'port-port' | 'label-label' | 'label-node'
+  a: string
+  b: string
+}
+
+const rectsOverlap = (a: Bounds, b: Bounds, margin = 0): boolean =>
+  a.x < b.x + b.width + margin &&
+  a.x + a.width > b.x - margin &&
+  a.y < b.y + b.height + margin &&
+  a.y + a.height > b.y - margin
+
+/**
+ * Find collisions among port boxes, among label boxes, and between a
+ * label and a FOREIGN node box (a label may touch its own node).
+ * O(n²) on layout-sized inputs.
+ */
+export function findPortClutter(
+  ports: readonly ResolvedPort[],
+  nodeBoxes: readonly BoxSpec[] = [],
+): PortClutter[] {
+  const out: PortClutter[] = []
+  const boxes = ports.map((p) => ({ port: p, box: portBox(p), label: portLabelBox(p) }))
+  for (let i = 0; i < boxes.length; i++) {
+    const a = boxes[i]
+    if (!a) continue
+    for (let j = i + 1; j < boxes.length; j++) {
+      const b = boxes[j]
+      if (!b) continue
+      if (rectsOverlap(a.box, b.box)) {
+        out.push({ kind: 'port-port', a: a.port.id, b: b.port.id })
+      }
+      if (a.label && b.label && rectsOverlap(a.label, b.label)) {
+        out.push({ kind: 'label-label', a: a.port.id, b: b.port.id })
+      }
+    }
+    if (a.label) {
+      for (const node of nodeBoxes) {
+        if (node.id === a.port.nodeId) continue
+        const rect: Bounds = {
+          x: node.x - node.width / 2,
+          y: node.y - node.height / 2,
+          width: node.width,
+          height: node.height,
+        }
+        if (rectsOverlap(a.label, rect)) {
+          out.push({ kind: 'label-node', a: a.port.id, b: node.id })
+        }
+      }
+    }
+  }
+  return out
+}
+
+// ============================================================================
 // ResolvedLayout adapter
 // ============================================================================
 
@@ -229,6 +294,7 @@ export interface LayoutInvariantReport {
   nodeOverlaps: NodeOverlap[]
   containmentViolations: ContainmentViolation[]
   collinearOverlaps: CollinearOverlap[]
+  portClutter: PortClutter[]
   ok: boolean
 }
 
@@ -287,13 +353,16 @@ export function checkLayoutInvariants(
     options.containmentPad ?? 0,
   )
   const collinearOverlaps = findCollinearOverlaps(lines, options.collinear)
+  const portClutter = findPortClutter([...layout.ports.values()], boxes)
   return {
     nodeOverlaps,
     containmentViolations,
     collinearOverlaps,
+    portClutter,
     ok:
       nodeOverlaps.length === 0 &&
       containmentViolations.length === 0 &&
-      collinearOverlaps.length === 0,
+      collinearOverlaps.length === 0 &&
+      portClutter.length === 0,
   }
 }

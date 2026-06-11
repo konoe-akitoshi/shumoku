@@ -136,6 +136,9 @@
     return link.vlan.length === 1 ? `VLAN ${link.vlan[0]}` : `VLAN ${link.vlan.join(', ')}`
   })
   const midpoint = $derived(() => {
+    // layout-chosen anchor (label-placement routing stage) wins; the
+    // geometric midpoint is only the fallback
+    if (edge.labelAnchor) return edge.labelAnchor
     if (edge.points.length < 2) return null
     const midIdx = Math.floor(edge.points.length / 2)
     const a = edge.points[midIdx - 1]
