@@ -12,6 +12,7 @@ import {
   hasTopologyCapability,
   pluginRegistry,
 } from '../plugins/index.js'
+import { parseSyncOptions } from '../plugins/sync-options.js'
 import type {
   Alert,
   AlertQueryOptions,
@@ -356,7 +357,9 @@ export class DataSourceService {
     dataSourceId: string,
     optionsJson?: string,
   ): Promise<NetworkGraph | null> {
-    const options = optionsJson ? JSON.parse(optionsJson) : undefined
+    const plugin = this.getPlugin(dataSourceId)
+    if (!plugin) return null
+    const options = parseSyncOptions(plugin.type, optionsJson)
     return this.fetchTopology(dataSourceId, options)
   }
 

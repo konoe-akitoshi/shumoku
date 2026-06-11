@@ -613,7 +613,17 @@ export class ZabbixPlugin
    */
   async fetchTopology(options?: Record<string, unknown>): Promise<NetworkGraph> {
     const opts = options as ZabbixTopologyOptions | undefined
-    const groupIds = opts?.hostGroups?.filter(Boolean)
+    // `hostGroups` carries group NAMES (the option picker's value vocabulary);
+    // resolve them to groupids here since host.get only filters by id.
+    const groupNames = opts?.hostGroups?.filter(Boolean)
+    let groupIds: string[] | undefined
+    if (groupNames && groupNames.length > 0) {
+      const rows = await this.apiRequest<Array<{ groupid: string }>>('hostgroup.get', {
+        output: ['groupid'],
+        filter: { name: groupNames },
+      })
+      groupIds = rows.map((r) => r.groupid)
+    }
 
     const hosts = await this.apiRequest<ZabbixHost[]>('host.get', {
       ...(groupIds && groupIds.length > 0 ? { groupids: groupIds } : {}),
@@ -752,7 +762,9 @@ export class ZabbixPlugin
         sortfield: 'name',
       },
     )
-    return groups.map((g) => ({ value: g.groupid, label: g.name }))
+    // value = group NAME, not groupid: scope criteria match node metadata
+    // (`hostGroups` holds names), and `groupExclude` compares names too.
+    return groups.map((g) => ({ value: g.name, label: g.name }))
   }
 
   private async apiRequest<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
