@@ -19,30 +19,25 @@
     return JSON.parse(text)
   })
 
-  // The share view has no live channel for STRUCTURE (only metrics
-  // stream) — a wall-display tab kept the first graph forever. Poll the
-  // token-scoped graph and re-key the diagram only when it actually
-  // changed, so updates propagate without flashing on every tick.
-  $effect(() => {
-    const currentToken = token
-    if (!currentToken) return
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/share/topologies/${currentToken}/graph`)
-        if (!res.ok) return
-        const text = await res.text()
-        if (lastGraphJson !== '' && text !== lastGraphJson) {
-          lastGraphJson = text
-          graphVersion++
-        } else {
-          lastGraphJson = text
-        }
-      } catch {
-        // transient network failure — keep showing the current graph
+  // Structure updates are EVENT-driven: the metrics SSE stream carries
+  // the topology's composition revision, and a change triggers a graph
+  // refetch (re-keyed only when the payload really differs, so a
+  // revision bump without visual impact doesn't flash the diagram).
+  async function refetchGraph(currentToken: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/share/topologies/${currentToken}/graph`)
+      if (!res.ok) return
+      const text = await res.text()
+      if (lastGraphJson !== '' && text !== lastGraphJson) {
+        lastGraphJson = text
+        graphVersion++
+      } else {
+        lastGraphJson = text
       }
-    }, 30_000)
-    return () => clearInterval(timer)
-  })
+    } catch {
+      // transient network failure — keep showing the current graph
+    }
+  }
 
   $effect(() => {
     const currentToken = token
@@ -64,8 +59,16 @@
         const data = await res.json()
         if (cancelled) return
         name = data.name || 'Shared Topology'
-        // Stream token-scoped live metrics (projected) into the diagram.
-        metricsStore.connectShareStream(currentToken)
+        // Stream token-scoped live metrics (projected) into the diagram;
+        // the same stream pushes composition-revision changes, which
+        // trigger a graph refetch (structure stays in sync, no polling).
+        let lastRevision: number | undefined
+        metricsStore.connectShareStream(currentToken, (revision) => {
+          if (lastRevision !== undefined && revision !== lastRevision) {
+            void refetchGraph(currentToken)
+          }
+          lastRevision = revision
+        })
       } catch {
         if (cancelled) return
         error = 'Failed to load topology'

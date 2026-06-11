@@ -45,8 +45,21 @@ function streamTopologyMetrics(c: Context, topologyId: string) {
       aborted = true
       unsub()
     })
+    // Composition revision rides the same stream: when the topology's
+    // structure changes, viewers get a `revision` event and refetch the
+    // graph — no timer polling on the client. The revision is a plain
+    // counter (nothing sensitive) and the read is an in-process SQLite
+    // point query, cheap at 1Hz per stream.
+    const topologyService = getTopologyService()
+    let lastRevision = topologyService.compositionRevisionOf(topologyId)
+    await stream.writeSSE({ event: 'revision', data: String(lastRevision) })
     let idleTicks = 0
     while (!aborted) {
+      const revision = topologyService.compositionRevisionOf(topologyId)
+      if (revision !== lastRevision) {
+        lastRevision = revision
+        await stream.writeSSE({ event: 'revision', data: String(revision) })
+      }
       if (pending) {
         const next = pending
         pending = null

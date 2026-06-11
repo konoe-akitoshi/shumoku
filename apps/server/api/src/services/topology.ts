@@ -1419,7 +1419,12 @@ export class TopologyService {
   }
 
   /** Current composition revision for a topology (0 if column/row missing). */
-  private compositionRevisionOf(id: string): number {
+  /**
+   * Current composition revision (bumped on every invalidation). Public:
+   * the share SSE stream sends it so viewers can refetch the graph on
+   * real changes instead of polling on a timer.
+   */
+  compositionRevisionOf(id: string): number {
     try {
       const row = this.db
         .query('SELECT composition_revision AS r FROM topologies WHERE id = ?')

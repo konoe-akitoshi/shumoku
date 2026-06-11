@@ -250,12 +250,21 @@ function createMetricsStore() {
     set(initialState)
   }
 
-  function connectShareStream(token: string): void {
+  function connectShareStream(token: string, onRevision?: (revision: number) => void): void {
     disconnectShareStream()
     try {
       const es = new EventSource(getShareStreamUrl(token))
       g.sse = es
       es.onopen = () => update((s) => ({ ...s, connected: true, error: null }))
+      if (onRevision) {
+        // The server pushes the topology's composition revision on the
+        // same stream — structure changed → the viewer refetches the
+        // graph. No timer polling.
+        es.addEventListener('revision', (event) => {
+          const revision = Number((event as MessageEvent).data)
+          if (Number.isFinite(revision)) onRevision(revision)
+        })
+      }
       es.onmessage = (event) => {
         if (!event.data) return // ignore keep-alive pings
         try {
