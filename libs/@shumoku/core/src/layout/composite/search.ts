@@ -27,6 +27,7 @@ import { getLinkWidthForMode } from '../link-utils.js'
 import { portLabelBox } from '../port-geometry.js'
 import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from '../resolved-types.js'
 import { routeEdges } from '../route-edges.js'
+import { BBoxGrid } from '../spatial-grid.js'
 import {
   type CompositeLayoutOptions,
   type CompositeLayoutResult,
@@ -612,32 +613,52 @@ export function scoreRoutedEdges(
   let crossings = 0
   let bends = 0
   let length = 0
-  for (const poly of polys) {
+  // Flat segment list + grid index: intersecting segments always share a
+  // cell (their bboxes overlap), so testing only co-celled pairs counts
+  // exactly the same crossings as the old all-pairs scan — without the
+  // O((P·S)²) blowup that dominated large layouts.
+  interface Seg {
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+    poly: number
+  }
+  const segs: Seg[] = []
+  const segGrid = new BBoxGrid(160)
+  for (let p = 0; p < polys.length; p++) {
+    const poly = polys[p]
+    if (!poly) continue
     bends += Math.max(0, poly.pts.length - 2)
     for (let i = 1; i < poly.pts.length; i++) {
       const a = poly.pts[i - 1]
       const b = poly.pts[i]
-      if (a && b) length += Math.hypot(b.x - a.x, b.y - a.y)
+      if (!a || !b) continue
+      length += Math.hypot(b.x - a.x, b.y - a.y)
+      const idx = segs.length
+      segs.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, poly: p })
+      segGrid.insert(idx, a.x, a.y, b.x, b.y)
     }
   }
-  for (let i = 0; i < polys.length; i++) {
-    const pa = polys[i]
-    if (!pa) continue
-    for (let j = i + 1; j < polys.length; j++) {
-      const pb = polys[j]
-      if (!pb) continue
-      if (pa.a === pb.a || pa.a === pb.b || pa.b === pb.a || pa.b === pb.b) continue
-      for (let s = 1; s < pa.pts.length; s++) {
-        for (let t = 1; t < pb.pts.length; t++) {
-          const a1 = pa.pts[s - 1]
-          const a2 = pa.pts[s]
-          const b1 = pb.pts[t - 1]
-          const b2 = pb.pts[t]
-          if (a1 && a2 && b1 && b2 && segmentsIntersect(a1, a2, b1, b2)) crossings++
-        }
-      }
+  segGrid.forEachCandidatePair((i, j) => {
+    const sa = segs[i]
+    const sb = segs[j]
+    if (!sa || !sb || sa.poly === sb.poly) return
+    const pa = polys[sa.poly]
+    const pb = polys[sb.poly]
+    if (!pa || !pb) return
+    if (pa.a === pb.a || pa.a === pb.b || pa.b === pb.a || pa.b === pb.b) return
+    if (
+      segmentsIntersect(
+        { x: sa.x1, y: sa.y1 },
+        { x: sa.x2, y: sa.y2 },
+        { x: sb.x1, y: sb.y1 },
+        { x: sb.x2, y: sb.y2 },
+      )
+    ) {
+      crossings++
     }
-  }
+  })
   const lines: PolylineSpec[] = polys.map((p) => ({ id: p.id, points: p.pts, halfWidth: p.half }))
   // comb siblings SHARE the trunk/bus by design — same-bus overlap is the
   // org-chart grammar, not a violation
@@ -649,7 +670,9 @@ export function scoreRoutedEdges(
     const ba = busOf.get(o.a)
     return ba === undefined || ba !== busOf.get(o.b)
   }).length
-  // wires running through unrelated node boxes
+  // wires running through unrelated node boxes — box grid + per-segment
+  // queries; a segment can only pierce a box whose inflated bbox its own
+  // bbox overlaps, so the candidate sweep counts exactly the same pairs.
   let pierce = 0
   const boxes: { id: string; x: number; y: number; w: number; h: number }[] = []
   for (const [id, node] of nodes) {
@@ -657,28 +680,41 @@ export function scoreRoutedEdges(
     const size = resolveNodeSize(node)
     boxes.push({ id, x: node.position.x, y: node.position.y, w: size.width, h: size.height })
   }
+  const boxGrid = new BBoxGrid(320)
+  for (const [idx, box] of boxes.entries()) {
+    boxGrid.insert(
+      idx,
+      box.x - box.w / 2 - 2,
+      box.y - box.h / 2 - 2,
+      box.x + box.w / 2 + 2,
+      box.y + box.h / 2 + 2,
+    )
+  }
   for (const poly of polys) {
-    for (const box of boxes) {
-      if (box.id === poly.a || box.id === poly.b) continue
-      const bx = box.x - box.w / 2 - 2
-      const by = box.y - box.h / 2 - 2
-      const bw = box.w + 4
-      const bh = box.h + 4
-      let hit = false
-      for (let s = 1; s < poly.pts.length && !hit; s++) {
-        const a = poly.pts[s - 1]
-        const b = poly.pts[s]
-        if (!a || !b) continue
-        if (Math.max(a.x, b.x) < bx || Math.min(a.x, b.x) > bx + bw) continue
-        if (Math.max(a.y, b.y) < by || Math.min(a.y, b.y) > by + bh) continue
-        hit =
+    const hitBoxes = new Set<number>()
+    for (let s = 1; s < poly.pts.length; s++) {
+      const a = poly.pts[s - 1]
+      const b = poly.pts[s]
+      if (!a || !b) continue
+      boxGrid.query(a.x, a.y, b.x, b.y, (bi) => {
+        if (hitBoxes.has(bi)) return
+        const box = boxes[bi]
+        if (!box || box.id === poly.a || box.id === poly.b) return
+        const bx = box.x - box.w / 2 - 2
+        const by = box.y - box.h / 2 - 2
+        const bw = box.w + 4
+        const bh = box.h + 4
+        if (Math.max(a.x, b.x) < bx || Math.min(a.x, b.x) > bx + bw) return
+        if (Math.max(a.y, b.y) < by || Math.min(a.y, b.y) > by + bh) return
+        const hit =
           segmentsIntersect(a, b, { x: bx, y: by }, { x: bx + bw, y: by }) ||
           segmentsIntersect(a, b, { x: bx, y: by + bh }, { x: bx + bw, y: by + bh }) ||
           segmentsIntersect(a, b, { x: bx, y: by }, { x: bx, y: by + bh }) ||
           segmentsIntersect(a, b, { x: bx + bw, y: by }, { x: bx + bw, y: by + bh })
-      }
-      if (hit) pierce++
+        if (hit) hitBoxes.add(bi)
+      })
     }
+    pierce += hitBoxes.size
   }
   // port/label clutter: collisions among owned geometry (port boxes,
   // label boxes, labels vs foreign nodes). With the demand feedback
