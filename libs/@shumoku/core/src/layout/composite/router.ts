@@ -389,6 +389,9 @@ export function applyOctilinearRoutes(
   }
   const combRoutes: CombRoute[] = []
   const combEdgeIds = new Set<string>()
+  // corridors already claimed by earlier combs — two hubs' harnesses
+  // must not run the same column (214px of two combs side-on was real)
+  const claimedCorridors: { x1: number; x2: number; y1: number; y2: number }[] = []
   if (options.combs) {
     for (const [combId, edgeIds] of [...options.combs].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
       const members: CombMember[] = []
@@ -429,7 +432,10 @@ export function applyOctilinearRoutes(
         }
       }
       const half = Math.max(...members.map((m) => m.half))
-      const corridorHalf = (members.length * Math.max(3, half * 2 + 1.5)) / 2 + half
+      // corridor width = the GLOBAL lane extent (emit uses global lanes;
+      // sizing by group count under-reserved and let two combs' buses
+      // land 3px apart)
+      const corridorHalf = Math.max(...members.map((m) => Math.abs(m.lane))) + half + 1
       // The trunk corridor runs from the parent past EVERY child row
       // down to the deepest bus — member children are obstacles for it
       // too (a child may only be touched by its own riser at its own
@@ -444,6 +450,13 @@ export function applyOctilinearRoutes(
             x - corridorHalf < b.x2 + 2 &&
             yHi > b.y1 + 4 &&
             yLo < b.y2 - 4,
+        ) ||
+        claimedCorridors.some(
+          (c) =>
+            x + corridorHalf > c.x1 - clearance &&
+            x - corridorHalf < c.x2 + clearance &&
+            yHi > c.y1 + 8 &&
+            yLo < c.y2 - 8,
         )
       let trunkX = members.reduce((sum, m) => sum + m.px, 0) / members.length
       for (const off of [
@@ -460,6 +473,12 @@ export function applyOctilinearRoutes(
       // members fall back to normal orth routing, which has the full
       // dodge machinery. A wire under a node loses to a missing bundle.
       if (blocked(trunkX)) continue
+      claimedCorridors.push({
+        x1: trunkX - corridorHalf,
+        x2: trunkX + corridorHalf,
+        y1: yLo,
+        y2: yHi,
+      })
       // One bus PER CHILD ROW (shared trunk): a single bus above the
       // topmost child sends risers straight through every intermediate
       // row — the dominant pierce source. Per-row buses keep each riser
@@ -671,14 +690,13 @@ export function applyOctilinearRoutes(
   for (const comb of combRoutes) {
     const minChildY = Math.min(...comb.members.map((m) => m.cy))
     const maxParentY = Math.max(...comb.members.map((m) => m.py))
-    const pitch = Math.max(3, comb.half * 2 + 1.5)
     const combExempt = new Set<string>([comb.id])
     for (const m of comb.members) {
       for (const nid of endpointsOf.get(m.edgeId) ?? []) combExempt.add(nid)
     }
     requests.push({
       id: `comb:${comb.id}`,
-      half: (comb.members.length * pitch) / 2 + comb.half,
+      half: Math.max(...comb.members.map((m) => Math.abs(m.lane))) + comb.half + 1,
       exempt: combExempt,
       lo: Math.min(comb.trunkX, ...comb.members.map((m) => m.cx)) - 16,
       hi: Math.max(comb.trunkX, ...comb.members.map((m) => m.cx)) + 16,
@@ -750,8 +768,7 @@ export function applyOctilinearRoutes(
   // comb trunk corridors and risers are fixed — register them first
   for (const comb of combRoutes) {
     const minParentY = Math.min(...comb.members.map((m) => m.py))
-    const pitch = Math.max(3, comb.half * 2 + 1.5)
-    const corridorHalf = (comb.members.length * pitch) / 2 + comb.half
+    const corridorHalf = Math.max(...comb.members.map((m) => Math.abs(m.lane))) + comb.half + 1
     placedVerticals.push({ x: comb.trunkX, y1: minParentY, y2: comb.busY, half: corridorHalf })
     for (const m of comb.members) {
       placedVerticals.push({ x: m.cx, y1: comb.busY, y2: m.cy, half: m.half })
@@ -765,6 +782,22 @@ export function applyOctilinearRoutes(
       y1: route.trackY,
       y2: route.trackY2 ?? route.y2,
       half: route.half,
+    })
+  }
+  // ramp entry/exit stubs are short verticals too — unregistered, they
+  // got grazed by through-running lines
+  for (const ramp of ramps) {
+    placedVerticals.push({
+      x: ramp.x1 + ramp.dir1 * 14,
+      y1: Math.min(ramp.y1, ramp.busY),
+      y2: Math.max(ramp.y1, ramp.busY),
+      half: ramp.half,
+    })
+    placedVerticals.push({
+      x: ramp.x2 + ramp.dir2 * 14,
+      y1: Math.min(ramp.y2, ramp.busY),
+      y2: Math.max(ramp.y2, ramp.busY),
+      half: ramp.half,
     })
   }
   const verticalRuns = (route: OrthRoute, kind: 'straight' | 'orth') =>
