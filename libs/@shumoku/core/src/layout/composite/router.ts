@@ -430,32 +430,36 @@ export function applyOctilinearRoutes(
       }
       const half = Math.max(...members.map((m) => m.half))
       const corridorHalf = (members.length * Math.max(3, half * 2 + 1.5)) / 2 + half
-      const memberNodes = new Set<string>([combId])
-      for (const m of members) {
-        const edge = edges.get(m.edgeId)
-        if (edge) {
-          memberNodes.add(edge.fromNodeId)
-          memberNodes.add(edge.toNodeId)
-        }
-      }
+      // The trunk corridor runs from the parent past EVERY child row
+      // down to the deepest bus — member children are obstacles for it
+      // too (a child may only be touched by its own riser at its own
+      // x). Only the parent's box is exempt.
       const yLo = Math.max(...members.map((m) => m.py)) + 6
-      const yHi = Math.min(...members.map((m) => m.cy)) - 10
+      const yHi = Math.max(...members.map((m) => m.cy)) - 10
       const blocked = (x: number): boolean =>
         nodeBoxes.some(
           (b) =>
-            !memberNodes.has(b.id) &&
+            b.id !== combId &&
             x + corridorHalf > b.x1 - 2 &&
             x - corridorHalf < b.x2 + 2 &&
             yHi > b.y1 + 4 &&
             yLo < b.y2 - 4,
         )
       let trunkX = members.reduce((sum, m) => sum + m.px, 0) / members.length
-      for (const off of [0, 8, -8, 16, -16, 24, -24, 32, -32, 48, -48, 64, -64]) {
+      for (const off of [
+        0, 8, -8, 16, -16, 24, -24, 32, -32, 48, -48, 64, -64, 80, -80, 96, -96, 112, -112, 128,
+        -128,
+      ]) {
         if (!blocked(trunkX + off)) {
           trunkX += off
           break
         }
       }
+      // No clear column for the corridor (heterogeneous fan-outs that
+      // span several zones can't share one trunk) → don't comb at all;
+      // members fall back to normal orth routing, which has the full
+      // dodge machinery. A wire under a node loses to a missing bundle.
+      if (blocked(trunkX)) continue
       // One bus PER CHILD ROW (shared trunk): a single bus above the
       // topmost child sends risers straight through every intermediate
       // row — the dominant pierce source. Per-row buses keep each riser
