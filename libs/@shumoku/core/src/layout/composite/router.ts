@@ -302,6 +302,13 @@ export interface OctilinearOptions {
    * fall back to normal classification.
    */
   combs?: ReadonlyMap<string, readonly string[]>
+  /**
+   * Node boxes as first-class routing obstacles: horizontal tracks pick
+   * a y that clears them, vertical runs shift around them, comb trunk
+   * corridors land beside them. An edge is exempt from its OWN
+   * endpoints' boxes. A wire under a node is a defect, not a trade-off.
+   */
+  nodeObstacles?: readonly RoutingObstacle[]
 }
 
 interface OrthRoute {
@@ -330,6 +337,16 @@ export function applyOctilinearRoutes(
   const straightTol = options.straightTolerance ?? 16
   const chamfer = options.chamfer ?? 9
   const clearance = options.trackClearance ?? 3
+  // node boxes as routing obstacles + per-edge exemptions
+  const nodeBoxes = (options.nodeObstacles ?? []).map((o) => ({
+    id: o.id,
+    x1: o.bounds.x,
+    y1: o.bounds.y,
+    x2: o.bounds.x + o.bounds.width,
+    y2: o.bounds.y + o.bounds.height,
+  }))
+  const endpointsOf = new Map<string, readonly [string, string]>()
+  for (const e of edges.values()) endpointsOf.set(e.id, [e.fromNodeId, e.toNodeId])
 
   // -- classify ------------------------------------------------------------------
   // bottom→top pairs route vertically; side-port peers (left/right at similar
@@ -359,6 +376,9 @@ export function applyOctilinearRoutes(
     cx: number
     cy: number
     half: number
+    /** Global lane offset in the shared trunk corridor (whole comb,
+     *  not per row group — groups share the trunk x). */
+    lane: number
   }
   interface CombRoute {
     id: string
@@ -394,17 +414,69 @@ export function applyOctilinearRoutes(
           cx: childPort.absolutePosition.x,
           cy: childPort.absolutePosition.y,
           half: Math.max(0.5, edge.width / 2),
+          lane: 0,
         })
       }
       if (members.length < 2) continue
-      const trunkX = members.reduce((sum, m) => sum + m.px, 0) / members.length
-      combRoutes.push({
-        id: combId,
-        members,
-        trunkX,
-        busY: 0,
-        half: Math.max(...members.map((m) => m.half)),
-      })
+      // global lanes across the WHOLE comb — row groups share the trunk
+      // corridor, so per-group lanes would stack on the same x
+      {
+        const laneHalf = Math.max(...members.map((m) => m.half))
+        const lanePitch = Math.max(3, laneHalf * 2 + 1.5)
+        const byCx = [...members].sort((a, b) => a.cx - b.cx || (a.edgeId < b.edgeId ? -1 : 1))
+        for (const [i, m] of byCx.entries()) {
+          m.lane = (i - (byCx.length - 1) / 2) * lanePitch
+        }
+      }
+      const half = Math.max(...members.map((m) => m.half))
+      const corridorHalf = (members.length * Math.max(3, half * 2 + 1.5)) / 2 + half
+      const memberNodes = new Set<string>([combId])
+      for (const m of members) {
+        const edge = edges.get(m.edgeId)
+        if (edge) {
+          memberNodes.add(edge.fromNodeId)
+          memberNodes.add(edge.toNodeId)
+        }
+      }
+      const yLo = Math.max(...members.map((m) => m.py)) + 6
+      const yHi = Math.min(...members.map((m) => m.cy)) - 10
+      const blocked = (x: number): boolean =>
+        nodeBoxes.some(
+          (b) =>
+            !memberNodes.has(b.id) &&
+            x + corridorHalf > b.x1 - 2 &&
+            x - corridorHalf < b.x2 + 2 &&
+            yHi > b.y1 + 4 &&
+            yLo < b.y2 - 4,
+        )
+      let trunkX = members.reduce((sum, m) => sum + m.px, 0) / members.length
+      for (const off of [0, 8, -8, 16, -16, 24, -24, 32, -32, 48, -48, 64, -64]) {
+        if (!blocked(trunkX + off)) {
+          trunkX += off
+          break
+        }
+      }
+      // One bus PER CHILD ROW (shared trunk): a single bus above the
+      // topmost child sends risers straight through every intermediate
+      // row — the dominant pierce source. Per-row buses keep each riser
+      // inside its own row's corridor.
+      const byRow = [...members].sort((a, b) => a.cy - b.cy || (a.edgeId < b.edgeId ? -1 : 1))
+      const rowGroups: CombMember[][] = []
+      for (const m of byRow) {
+        const last = rowGroups[rowGroups.length - 1]
+        const first = last?.[0]
+        if (last && first && m.cy - first.cy < 60) last.push(m)
+        else rowGroups.push([m])
+      }
+      for (const [k, group] of rowGroups.entries()) {
+        combRoutes.push({
+          id: rowGroups.length > 1 ? `${combId}~${k}` : combId,
+          members: group,
+          trunkX,
+          busY: 0,
+          half: Math.max(...group.map((m) => m.half)),
+        })
+      }
       for (const m of members) combEdgeIds.add(m.edgeId)
     }
   }
@@ -459,7 +531,15 @@ export function applyOctilinearRoutes(
 
   // -- gutter selection: long edges whose direct vertical would pierce a foreign
   //    zone box detour through the whitespace corridor between boxes (v3 §36).
-  const obstacles = options.obstacles ?? []
+  // gutters dodge ZONE boxes and NODE boxes alike — single-node zones
+  // have no zone box, so sink runs used to plow straight through them
+  const obstacles: RoutingObstacle[] = [
+    ...(options.obstacles ?? []),
+    ...nodeBoxes.map((b) => ({
+      id: b.id,
+      bounds: { x: b.x1, y: b.y1, width: b.x2 - b.x1, height: b.y2 - b.y1 },
+    })),
+  ]
   const contains = (bounds: Bounds, x: number, y: number, pad = 4): boolean =>
     x > bounds.x - pad &&
     x < bounds.x + bounds.width + pad &&
@@ -528,6 +608,8 @@ export function applyOctilinearRoutes(
     want: number
     floor: number
     ceil: number
+    /** Node ids whose boxes this track may legally touch (its endpoints). */
+    exempt?: ReadonlySet<string>
     assign: (y: number) => void
   }
   const requests: TrackRequest[] = []
@@ -542,6 +624,7 @@ export function applyOctilinearRoutes(
       want: route.y2 - 26,
       floor: route.y1 + 10,
       ceil: route.y2 - 10,
+      exempt: new Set(endpointsOf.get(route.id) ?? []),
       assign: (y) => {
         route.trackY = y
       },
@@ -551,6 +634,7 @@ export function applyOctilinearRoutes(
   for (const route of [...straights, ...orths]) {
     const gutterX = route.gutterX
     if (gutterX === undefined) continue
+    const gutterExempt = new Set(endpointsOf.get(route.id) ?? [])
     requests.push({
       id: `${route.id}|t`,
       half: route.half,
@@ -559,6 +643,7 @@ export function applyOctilinearRoutes(
       want: route.y1 + 26,
       floor: route.y1 + 10,
       ceil: route.y2 - 40,
+      exempt: gutterExempt,
       assign: (y) => {
         route.trackY = y
       },
@@ -571,6 +656,7 @@ export function applyOctilinearRoutes(
       want: route.y2 - 30,
       floor: route.y1 + 24,
       ceil: route.y2 - 10,
+      exempt: gutterExempt,
       assign: (y) => {
         route.trackY2 = y
       },
@@ -582,9 +668,14 @@ export function applyOctilinearRoutes(
     const minChildY = Math.min(...comb.members.map((m) => m.cy))
     const maxParentY = Math.max(...comb.members.map((m) => m.py))
     const pitch = Math.max(3, comb.half * 2 + 1.5)
+    const combExempt = new Set<string>([comb.id])
+    for (const m of comb.members) {
+      for (const nid of endpointsOf.get(m.edgeId) ?? []) combExempt.add(nid)
+    }
     requests.push({
       id: `comb:${comb.id}`,
       half: (comb.members.length * pitch) / 2 + comb.half,
+      exempt: combExempt,
       lo: Math.min(comb.trunkX, ...comb.members.map((m) => m.cx)) - 16,
       hi: Math.max(comb.trunkX, ...comb.members.map((m) => m.cx)) + 16,
       want: minChildY - 26,
@@ -601,6 +692,7 @@ export function applyOctilinearRoutes(
     requests.push({
       id: `ramp:${ramp.id}`,
       half: ramp.half,
+      exempt: new Set(endpointsOf.get(ramp.id) ?? []),
       lo: Math.min(ramp.x1, ramp.x2) - 16,
       hi: Math.max(ramp.x1, ramp.x2) + 16,
       want: bottom + 30,
@@ -621,6 +713,15 @@ export function applyOctilinearRoutes(
           Math.abs(p.y - y) < p.half + half + clearance &&
           request.lo < p.hi + 12 &&
           request.hi > p.lo - 12,
+      ) ||
+      // never run a horizontal track THROUGH a foreign node box
+      nodeBoxes.some(
+        (b) =>
+          !request.exempt?.has(b.id) &&
+          y > b.y1 - half - 2 &&
+          y < b.y2 + half + 2 &&
+          request.lo < b.x2 + 4 &&
+          request.hi > b.x1 - 4,
       )
     const clamp = (y: number): number => Math.max(request.floor, Math.min(request.ceil, y))
     let y = clamp(request.want)
@@ -671,8 +772,11 @@ export function applyOctilinearRoutes(
         ]
   const allocate = (route: OrthRoute, kind: 'straight' | 'orth'): void => {
     const runs = verticalRuns(route, kind)
+    const ownNodes = new Set(endpointsOf.get(route.id) ?? [])
     let chosen = 0
-    candidate: for (const shift of [0, 4, -4, 8, -8, 12, -12, 16, -16]) {
+    candidate: for (const shift of [
+      0, 4, -4, 8, -8, 12, -12, 16, -16, 20, -20, 24, -24, 28, -28, 32, -32,
+    ]) {
       for (const run of runs) {
         for (const placed of placedVerticals) {
           const overlap =
@@ -684,6 +788,15 @@ export function applyOctilinearRoutes(
           ) {
             continue candidate
           }
+        }
+        // a vertical run through a foreign node box is a pierce — dodge
+        for (const b of nodeBoxes) {
+          if (ownNodes.has(b.id)) continue
+          const x = run.x + shift
+          if (x <= b.x1 - route.half - 2 || x >= b.x2 + route.half + 2) continue
+          const overlap =
+            Math.min(Math.max(run.y1, run.y2), b.y2) - Math.max(Math.min(run.y1, run.y2), b.y1)
+          if (overlap > 4) continue candidate
         }
       }
       chosen = shift
@@ -762,13 +875,12 @@ export function applyOctilinearRoutes(
     // child (the dependency reading), while the corridor itself reads
     // as one harness. Lane order follows child x so strands never
     // cross each other inside the corridor.
-    const pitch = Math.max(3, Math.max(...comb.members.map((m) => m.half)) * 2 + 1.5)
     const ordered = [...comb.members].sort((a, b) => a.cx - b.cx || (a.edgeId < b.edgeId ? -1 : 1))
     const gatherY = Math.max(...comb.members.map((m) => m.py)) + 6
     for (const [i, m] of ordered.entries()) {
       const edge = edges.get(m.edgeId)
       if (!edge) continue
-      const lane = (i - (n - 1) / 2) * pitch
+      const lane = m.lane
       const trunkLaneX = comb.trunkX + lane
       const busLaneY = comb.busY + lane
       const dx = Math.abs(m.px - trunkLaneX)
@@ -788,8 +900,11 @@ export function applyOctilinearRoutes(
       )
       edge.route = {
         kind: 'bus',
+        // row groups split the allocator id with "~k" but remain ONE
+        // harness — share the root busId so same-comb strand pairs stay
+        // exempt from collinear scoring
         points: chamferCorners(corner, chamfer),
-        busId: comb.id,
+        busId: comb.id.split('~')[0] ?? comb.id,
         branchIndex: i,
         branchCount: n,
       }
