@@ -29,6 +29,7 @@ import type { Bounds, Position } from '../models/types.js'
 import { resolveNodeSize } from './engine/index.js'
 import { portBox, portLabelBox } from './port-geometry.js'
 import type { ResolvedLayout, ResolvedPort } from './resolved-types.js'
+import { BBoxGrid } from './spatial-grid.js'
 
 // ============================================================================
 // Pure geometry inputs
@@ -162,64 +163,105 @@ export function findCollinearOverlaps(
   const minSeg = options.minSegmentLength ?? 13
   const minShared = options.minSharedLength ?? 12
   const clearance = options.clearance ?? 0.5
-  const out = new Map<string, CollinearOverlap>()
-  for (let i = 0; i < lines.length; i++) {
-    const la = lines[i]
-    if (!la) continue
-    for (let j = i + 1; j < lines.length; j++) {
-      const lb = lines[j]
-      if (!lb) continue
-      const gap = (la.halfWidth ?? 1) + (lb.halfWidth ?? 1) + clearance
-      const shared = maxSharedRun(la.points, lb.points, minSeg, gap)
-      if (shared <= minShared) continue
-      const key = `${la.id}|${lb.id}`
-      const prev = out.get(key)
-      if (!prev || shared > prev.sharedLength) {
-        out.set(key, { a: la.id, b: lb.id, sharedLength: shared })
-      }
+
+  // Segment grid: a contributing pair must be parallel within the pair gap
+  // AND overlap in extent, so the two segments sit within `gap` of each
+  // other — inflating every segment bbox by the LARGEST possible gap means
+  // any such pair shares a cell. Far pairs the old scan visited were all
+  // rejected by the gap/extent tests anyway, so the candidate sweep
+  // produces identical shared-run results.
+  let maxHalf = 1
+  for (const l of lines) maxHalf = Math.max(maxHalf, l.halfWidth ?? 1)
+  const inflate = maxHalf * 2 + clearance
+
+  interface Seg {
+    a1: Position
+    a2: Position
+    vax: number
+    vay: number
+    len: number
+    line: number
+  }
+  const segs: Seg[] = []
+  const grid = new BBoxGrid(180)
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li]
+    if (!line) continue
+    for (let s = 1; s < line.points.length; s++) {
+      const a1 = line.points[s - 1]
+      const a2 = line.points[s]
+      if (!a1 || !a2) continue
+      const vax = a2.x - a1.x
+      const vay = a2.y - a1.y
+      const len = Math.hypot(vax, vay)
+      if (len < minSeg) continue
+      const idx = segs.length
+      segs.push({ a1, a2, vax, vay, len, line: li })
+      grid.insert(
+        idx,
+        Math.min(a1.x, a2.x) - inflate,
+        Math.min(a1.y, a2.y) - inflate,
+        Math.max(a1.x, a2.x) + inflate,
+        Math.max(a1.y, a2.y) + inflate,
+      )
     }
   }
-  return [...out.values()]
+
+  // Best shared run per line pair — same math as the old maxSharedRun inner
+  // loop: for the (lower, higher) line pair the original always projected
+  // the higher line's segment onto the LOWER line's segment, so keep that
+  // exact orientation regardless of candidate arrival order.
+  const bestByPair = new Map<number, number>()
+  grid.forEachCandidatePair((i, j) => {
+    const sa = segs[i]
+    const sb = segs[j]
+    if (!sa || !sb || sa.line === sb.line) return
+    // parallel check: normalized cross product ≈ sin(angle)
+    if (Math.abs(sa.vax * sb.vay - sa.vay * sb.vax) / (sa.len * sb.len) > 0.02) return
+    const la = lines[sa.line]
+    const lb = lines[sb.line]
+    if (!la || !lb) return
+    const gap = (la.halfWidth ?? 1) + (lb.halfWidth ?? 1) + clearance
+    const first = sa.line < sb.line ? sa : sb
+    const second = sa.line < sb.line ? sb : sa
+    const run = sharedRun(first, second, gap)
+    if (run <= 0) return
+    const key = sa.line < sb.line ? sa.line * 1048576 + sb.line : sb.line * 1048576 + sa.line
+    const prev = bestByPair.get(key)
+    if (prev === undefined || run > prev) bestByPair.set(key, run)
+  })
+
+  const out: CollinearOverlap[] = []
+  for (const [key, shared] of bestByPair) {
+    if (shared <= minShared) continue
+    const la = lines[Math.floor(key / 1048576)]
+    const lb = lines[key % 1048576]
+    if (!la || !lb) continue
+    out.push({ a: la.id, b: lb.id, sharedLength: shared })
+  }
+  return out
 }
 
-function maxSharedRun(
-  ptsA: readonly Position[],
-  ptsB: readonly Position[],
-  minSeg: number,
-  gap: number,
-): number {
-  let best = 0
-  for (let s = 1; s < ptsA.length; s++) {
-    const a1 = ptsA[s - 1]
-    const a2 = ptsA[s]
-    if (!a1 || !a2) continue
-    const vax = a2.x - a1.x
-    const vay = a2.y - a1.y
-    const lenA = Math.hypot(vax, vay)
-    if (lenA < minSeg) continue
-    for (let t = 1; t < ptsB.length; t++) {
-      const b1 = ptsB[t - 1]
-      const b2 = ptsB[t]
-      if (!b1 || !b2) continue
-      const vbx = b2.x - b1.x
-      const vby = b2.y - b1.y
-      const lenB = Math.hypot(vbx, vby)
-      if (lenB < minSeg) continue
-      // parallel check: normalized cross product ≈ sin(angle)
-      if (Math.abs(vax * vby - vay * vbx) / (lenA * lenB) > 0.02) continue
-      // perpendicular distance between the two lines
-      const dx = b1.x - a1.x
-      const dy = b1.y - a1.y
-      if (Math.abs(dx * vay - dy * vax) / lenA > gap) continue
-      // shared extent along A's direction
-      const t1 = (dx * vax + dy * vay) / lenA
-      const t2 = ((b2.x - a1.x) * vax + (b2.y - a1.y) * vay) / lenA
-      const lo = Math.max(0, Math.min(t1, t2))
-      const hi = Math.min(lenA, Math.max(t1, t2))
-      if (hi - lo > best) best = hi - lo
-    }
-  }
-  return best
+interface RunSeg {
+  a1: Position
+  a2: Position
+  vax: number
+  vay: number
+  len: number
+}
+
+/** Shared extent of `b` projected onto `a` — the old maxSharedRun pair body. */
+function sharedRun(a: RunSeg, b: RunSeg, gap: number): number {
+  // perpendicular distance between the two lines
+  const dx = b.a1.x - a.a1.x
+  const dy = b.a1.y - a.a1.y
+  if (Math.abs(dx * a.vay - dy * a.vax) / a.len > gap) return 0
+  // shared extent along A's direction
+  const t1 = (dx * a.vax + dy * a.vay) / a.len
+  const t2 = ((b.a2.x - a.a1.x) * a.vax + (b.a2.y - a.a1.y) * a.vay) / a.len
+  const lo = Math.max(0, Math.min(t1, t2))
+  const hi = Math.min(a.len, Math.max(t1, t2))
+  return hi - lo
 }
 
 // ============================================================================
@@ -253,35 +295,65 @@ export function findPortClutter(
   ports: readonly ResolvedPort[],
   nodeBoxes: readonly BoxSpec[] = [],
 ): PortClutter[] {
-  const out: PortClutter[] = []
   const boxes = ports.map((p) => ({ port: p, box: portBox(p), label: portLabelBox(p) }))
-  for (let i = 0; i < boxes.length; i++) {
-    const a = boxes[i]
-    if (!a) continue
-    for (let j = i + 1; j < boxes.length; j++) {
+
+  // `rectsOverlap` at margin 0 IS bbox overlap, so grid candidates + the
+  // same predicate find the identical collision set as the old O(n²) scan;
+  // only the (unobservable to callers, who count) emit order differs —
+  // kept deterministic by sorting on indices.
+  const collect = (
+    kind: PortClutter['kind'],
+    rectOf: (b: (typeof boxes)[number]) => Bounds | null | undefined,
+  ): PortClutter[] => {
+    const grid = new BBoxGrid(96)
+    for (const [i, b] of boxes.entries()) {
+      const r = rectOf(b)
+      if (r) grid.insert(i, r.x, r.y, r.x + r.width, r.y + r.height)
+    }
+    const pairs: Array<[number, number]> = []
+    grid.forEachCandidatePair((i, j) => {
+      const a = boxes[i]
       const b = boxes[j]
-      if (!b) continue
-      if (rectsOverlap(a.box, b.box)) {
-        out.push({ kind: 'port-port', a: a.port.id, b: b.port.id })
+      if (!a || !b) return
+      const ra = rectOf(a)
+      const rb = rectOf(b)
+      if (ra && rb && rectsOverlap(ra, rb)) pairs.push([i, j])
+    })
+    pairs.sort((p, q) => p[0] - q[0] || p[1] - q[1])
+    return pairs.map(([i, j]) => {
+      const a = boxes[i]
+      const b = boxes[j]
+      return { kind, a: a?.port.id ?? '', b: b?.port.id ?? '' }
+    })
+  }
+
+  const out: PortClutter[] = [
+    ...collect('port-port', (b) => b.box),
+    ...collect('label-label', (b) => b.label),
+  ]
+
+  // label vs FOREIGN node box — node grid, queried per label.
+  const nodeGrid = new BBoxGrid(256)
+  const nodeRects: Bounds[] = nodeBoxes.map((node) => ({
+    x: node.x - node.width / 2,
+    y: node.y - node.height / 2,
+    width: node.width,
+    height: node.height,
+  }))
+  for (const [ni, rect] of nodeRects.entries()) {
+    nodeGrid.insert(ni, rect.x, rect.y, rect.x + rect.width, rect.y + rect.height)
+  }
+  for (const a of boxes) {
+    if (!a.label) continue
+    const label = a.label
+    nodeGrid.query(label.x, label.y, label.x + label.width, label.y + label.height, (ni) => {
+      const node = nodeBoxes[ni]
+      const rect = nodeRects[ni]
+      if (!node || !rect || node.id === a.port.nodeId) return
+      if (rectsOverlap(label, rect)) {
+        out.push({ kind: 'label-node', a: a.port.id, b: node.id })
       }
-      if (a.label && b.label && rectsOverlap(a.label, b.label)) {
-        out.push({ kind: 'label-label', a: a.port.id, b: b.port.id })
-      }
-    }
-    if (a.label) {
-      for (const node of nodeBoxes) {
-        if (node.id === a.port.nodeId) continue
-        const rect: Bounds = {
-          x: node.x - node.width / 2,
-          y: node.y - node.height / 2,
-          width: node.width,
-          height: node.height,
-        }
-        if (rectsOverlap(a.label, rect)) {
-          out.push({ kind: 'label-node', a: a.port.id, b: node.id })
-        }
-      }
-    }
+    })
   }
   return out
 }

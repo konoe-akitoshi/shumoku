@@ -729,22 +729,24 @@ export function applyOctilinearRoutes(
   const placedTracks: { y: number; lo: number; hi: number; half: number }[] = []
   for (const request of requests) {
     const half = request.half
-    const conflicts = (y: number): boolean =>
-      placedTracks.some(
-        (p) =>
-          Math.abs(p.y - y) < p.half + half + clearance &&
-          request.lo < p.hi + 12 &&
-          request.hi > p.lo - 12,
-      ) ||
+    // The x-overlap halves of both conflict conditions don't depend on the
+    // candidate y, and placedTracks doesn't change during this request's
+    // step probing — prefilter once instead of rescanning every track and
+    // every node box per probe (same predicate, same result).
+    const candTracks = placedTracks.filter((p) => request.lo < p.hi + 12 && request.hi > p.lo - 12)
+    const candBoxes = nodeBoxes.filter(
+      (b) => !request.exempt?.has(b.id) && request.lo < b.x2 + 4 && request.hi > b.x1 - 4,
+    )
+    const conflicts = (y: number): boolean => {
+      for (const p of candTracks) {
+        if (Math.abs(p.y - y) < p.half + half + clearance) return true
+      }
       // never run a horizontal track THROUGH a foreign node box
-      nodeBoxes.some(
-        (b) =>
-          !request.exempt?.has(b.id) &&
-          y > b.y1 - half - 2 &&
-          y < b.y2 + half + 2 &&
-          request.lo < b.x2 + 4 &&
-          request.hi > b.x1 - 4,
-      )
+      for (const b of candBoxes) {
+        if (y > b.y1 - half - 2 && y < b.y2 + half + 2) return true
+      }
+      return false
+    }
     const clamp = (y: number): number => Math.max(request.floor, Math.min(request.ceil, y))
     let y = clamp(request.want)
     for (let step = 6; step <= 240 && conflicts(y); step += 6) {
