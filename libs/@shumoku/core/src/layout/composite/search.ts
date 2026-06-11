@@ -709,7 +709,9 @@ export function scoreRoutedEdges(
     cost:
       crossings +
       collinear * 8 +
-      pierce * 2 +
+      // a wire under a node is a defect, not a trade-off (90° crossings
+      // are the grammar; piercing is not)
+      pierce * 20 +
       bends * 0.4 +
       length / 400 +
       upward * 12 +

@@ -576,13 +576,15 @@ export function applyOctilinearRoutes(
       },
     })
   }
-  // comb buses go through the SAME global allocator — one request per comb
+  // comb buses go through the SAME global allocator — one request per
+  // comb, sized for the whole parallel-strand corridor
   for (const comb of combRoutes) {
     const minChildY = Math.min(...comb.members.map((m) => m.cy))
     const maxParentY = Math.max(...comb.members.map((m) => m.py))
+    const pitch = Math.max(3, comb.half * 2 + 1.5)
     requests.push({
       id: `comb:${comb.id}`,
-      half: comb.half,
+      half: (comb.members.length * pitch) / 2 + comb.half,
       lo: Math.min(comb.trunkX, ...comb.members.map((m) => m.cx)) - 16,
       hi: Math.max(comb.trunkX, ...comb.members.map((m) => m.cx)) + 16,
       want: minChildY - 26,
@@ -640,10 +642,12 @@ export function applyOctilinearRoutes(
 
   // -- vertical corridor separation (geometry-level, not a render nudge) --------
   const placedVerticals: { x: number; y1: number; y2: number; half: number }[] = []
-  // comb trunks and risers are fixed corridors — register them first
+  // comb trunk corridors and risers are fixed — register them first
   for (const comb of combRoutes) {
     const minParentY = Math.min(...comb.members.map((m) => m.py))
-    placedVerticals.push({ x: comb.trunkX, y1: minParentY, y2: comb.busY, half: comb.half })
+    const pitch = Math.max(3, comb.half * 2 + 1.5)
+    const corridorHalf = (comb.members.length * pitch) / 2 + comb.half
+    placedVerticals.push({ x: comb.trunkX, y1: minParentY, y2: comb.busY, half: corridorHalf })
     for (const m of comb.members) {
       placedVerticals.push({ x: m.cx, y1: comb.busY, y2: m.cy, half: m.half })
     }
@@ -752,20 +756,28 @@ export function applyOctilinearRoutes(
   }
   for (const comb of combRoutes) {
     const n = comb.members.length
-    // Ports keep their own slots on the face (each is a real interface
-    // with its own label); the drops GATHER into the shared trunk via a
-    // short 45° merge just below the face — the harness reading.
+    // Metro discipline (v3 §27-33: ONE STRAND PER PHYSICAL LINK, no
+    // merged trunk): members run as PARALLEL strands in a shared
+    // corridor — each line stays individually traceable from port to
+    // child (the dependency reading), while the corridor itself reads
+    // as one harness. Lane order follows child x so strands never
+    // cross each other inside the corridor.
+    const pitch = Math.max(3, Math.max(...comb.members.map((m) => m.half)) * 2 + 1.5)
+    const ordered = [...comb.members].sort((a, b) => a.cx - b.cx || (a.edgeId < b.edgeId ? -1 : 1))
     const gatherY = Math.max(...comb.members.map((m) => m.py)) + 6
-    for (const [i, m] of comb.members.entries()) {
+    for (const [i, m] of ordered.entries()) {
       const edge = edges.get(m.edgeId)
       if (!edge) continue
-      const dx = Math.abs(m.px - comb.trunkX)
+      const lane = (i - (n - 1) / 2) * pitch
+      const trunkLaneX = comb.trunkX + lane
+      const busLaneY = comb.busY + lane
+      const dx = Math.abs(m.px - trunkLaneX)
       const raw: Position[] = [
         { x: m.px, y: m.py },
         { x: m.px, y: gatherY },
-        { x: comb.trunkX, y: gatherY + dx },
-        { x: comb.trunkX, y: comb.busY },
-        { x: m.cx, y: comb.busY },
+        { x: trunkLaneX, y: gatherY + dx },
+        { x: trunkLaneX, y: busLaneY },
+        { x: m.cx, y: busLaneY },
         { x: m.cx, y: m.cy },
       ]
       // drop zero-length segments (member sitting exactly on the trunk)
