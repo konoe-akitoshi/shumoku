@@ -7,12 +7,41 @@
   let name = $state('')
   let loading = $state(true)
   let error = $state('')
+  let graphVersion = $state(0)
+  let lastGraphJson = ''
 
   const token = $derived($page.params.token)
   const loadShared = $derived(async () => {
     const res = await fetch(`/api/share/topologies/${token}/graph`)
     if (!res.ok) throw new Error(`Failed to load shared topology: ${res.status}`)
-    return res.json()
+    const text = await res.text()
+    lastGraphJson = text
+    return JSON.parse(text)
+  })
+
+  // The share view has no live channel for STRUCTURE (only metrics
+  // stream) — a wall-display tab kept the first graph forever. Poll the
+  // token-scoped graph and re-key the diagram only when it actually
+  // changed, so updates propagate without flashing on every tick.
+  $effect(() => {
+    const currentToken = token
+    if (!currentToken) return
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/share/topologies/${currentToken}/graph`)
+        if (!res.ok) return
+        const text = await res.text()
+        if (lastGraphJson !== '' && text !== lastGraphJson) {
+          lastGraphJson = text
+          graphVersion++
+        } else {
+          lastGraphJson = text
+        }
+      } catch {
+        // transient network failure — keep showing the current graph
+      }
+    }, 30_000)
+    return () => clearInterval(timer)
   })
 
   $effect(() => {
@@ -80,7 +109,9 @@
       </div>
     {:else}
       <div class="absolute inset-0">
-        <InteractiveSvgDiagram graphLoader={loadShared} readOnly={true} />
+        {#key graphVersion}
+          <InteractiveSvgDiagram graphLoader={loadShared} readOnly={true} />
+        {/key}
       </div>
     {/if}
   </div>
