@@ -72,8 +72,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 RUN getent group 1000 || groupadd --gid 1000 shumoku \
     && (getent passwd 1000 || useradd --uid 1000 --gid 1000 --shell /bin/sh --create-home shumoku)
 
-# Copy bundled server
+# Copy bundled server + the derivation Worker (spawned at runtime via
+# `new Worker(url)`, so it ships as a sibling bundle, not inlined)
 COPY --from=builder /app/apps/server/api/dist/bundle.js ./server.js
+COPY --from=builder /app/apps/server/api/dist/derive-worker.js ./derive-worker.js
 
 # Copy web UI build
 COPY --from=builder /app/apps/server/web/build ./web/build
