@@ -504,6 +504,8 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
     capturedAt,
   )
   getTopologyService().clearCacheEntry(topologyId)
+  // Bake the fresh artifact in the background now (stale-while-revalidate).
+  getTopologyService().precompute(topologyId)
   // Stamp the legacy lastSyncedAt for UI surfaces that read it.
   getTopologySourcesService().updateLastSynced(attached.id)
 

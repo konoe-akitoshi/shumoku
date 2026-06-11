@@ -132,6 +132,10 @@ export async function syncSource(
     capturedAt,
   )
   deps.topologyService.clearCacheEntry(topologyId)
+  // Bake the fresh artifact in the background now — without this, the first
+  // viewer after a scheduled refresh would eat the (potentially minutes-long)
+  // layout wait instead of getting the stale diagram + a hot swap.
+  deps.topologyService.precompute(topologyId)
   deps.topologySourcesService.updateLastSynced(attached.id)
 
   return {

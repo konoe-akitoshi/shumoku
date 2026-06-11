@@ -45,17 +45,20 @@ function streamTopologyMetrics(c: Context, topologyId: string) {
       aborted = true
       unsub()
     })
-    // Composition revision rides the same stream: when the topology's
-    // structure changes, viewers get a `revision` event and refetch the
-    // graph — no timer polling on the client. The revision is a plain
-    // counter (nothing sensitive) and the read is an in-process SQLite
-    // point query, cheap at 1Hz per stream.
+    // The SERVED revision rides the same stream: when the content a viewer
+    // would fetch actually changes (a background bake landing), they get a
+    // `revision` event and refetch — no timer polling on the client. This is
+    // deliberately NOT the composition revision: an input change kicks a bake
+    // but the serve stays on the stale artifact until the bake lands, so
+    // refetching on input change would just re-download the same diagram.
+    // The revision is a plain counter (nothing sensitive) and the read is an
+    // in-process SQLite point query, cheap at 1Hz per stream.
     const topologyService = getTopologyService()
-    let lastRevision = topologyService.compositionRevisionOf(topologyId)
+    let lastRevision = topologyService.servedRevisionOf(topologyId)
     await stream.writeSSE({ event: 'revision', data: String(lastRevision) })
     let idleTicks = 0
     while (!aborted) {
-      const revision = topologyService.compositionRevisionOf(topologyId)
+      const revision = topologyService.servedRevisionOf(topologyId)
       if (revision !== lastRevision) {
         lastRevision = revision
         await stream.writeSSE({ event: 'revision', data: String(revision) })

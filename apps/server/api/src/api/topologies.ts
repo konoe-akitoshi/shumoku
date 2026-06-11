@@ -233,6 +233,11 @@ export function createTopologiesApi(): Hono {
         if (parseError) {
           return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
         }
+        // First-ever bake still running — nothing to serve yet. 202 tells the
+        // client to keep its loading state and poll.
+        if (service.deriving(id)) {
+          return c.json({ deriving: true }, 202)
+        }
         return c.json({ error: 'Topology not found' }, 404)
       }
 
@@ -258,6 +263,7 @@ export function createTopologiesApi(): Hono {
         topologySourceId: parsed.topologySourceId,
         metricsSourceId: parsed.metricsSourceId,
         mapping: parsed.mapping,
+        stale: parsed.stale ?? false,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -277,12 +283,16 @@ export function createTopologiesApi(): Hono {
         if (parseError) {
           return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
         }
+        if (service.deriving(id)) {
+          return c.json({ deriving: true }, 202)
+        }
         return c.json({ error: 'Topology not found' }, 404)
       }
       return c.json({
         id: parsed.id,
         name: parsed.name,
         graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
+        stale: parsed.stale ?? false,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -305,6 +315,9 @@ export function createTopologiesApi(): Hono {
         if (parseError) {
           return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
         }
+        if (service.deriving(id)) {
+          return c.json({ deriving: true }, 202)
+        }
         return c.json({ error: 'Topology not found' }, 404)
       }
       const output = await buildRenderOutput(parsed)
@@ -322,6 +335,9 @@ export function createTopologiesApi(): Hono {
     try {
       const parsed = await service.getParsed(id)
       if (!parsed) {
+        if (service.deriving(id)) {
+          return c.json({ deriving: true }, 202)
+        }
         return c.json({ error: 'Topology not found' }, 404)
       }
 
@@ -633,9 +649,11 @@ export function createTopologiesApi(): Hono {
         }
       }
 
-      // Invalidate parsed-topology cache so the next /render / /graph
-      // call re-runs resolve() across the newly-recorded observations.
+      // Invalidate parsed-topology cache, then bake the fresh artifact in the
+      // background NOW — the next /render / /graph serves the previous diagram
+      // (stale) instantly and swaps when the bake lands, instead of blocking.
       service.clearCacheEntry(id)
+      service.precompute(id)
 
       return c.json({
         success: true,

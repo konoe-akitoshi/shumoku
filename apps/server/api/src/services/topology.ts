@@ -44,15 +44,12 @@ import type {
 } from '@shumoku/core'
 import {
   attachmentKey,
-  computeNetworkLayout,
   createMemoryFileResolver,
   deriveMappingFromGraph,
   HierarchicalParser,
-  resolve as resolveObservations,
   sampleNetwork,
   YamlParser,
 } from '@shumoku/core'
-import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type {
   LinkContribution,
@@ -64,7 +61,14 @@ import type {
   TopologyInput,
 } from '../types.js'
 import { buildGraph, ingestGraph } from './contribution-store.js'
-import { filterDisconnected } from './display-filter.js'
+import { isDeriving, kickDerivation } from './derivation.js'
+
+/**
+ * How long `getParsed` waits for an in-flight bake before falling back to
+ * stale-serving. Small topologies finish inside this window, so the common
+ * case still returns fresh data in one request.
+ */
+const DERIVE_WAIT_MS = 3_000
 
 /**
  * Sentinel `source_id` of the **project overlay** — the project's own
@@ -420,6 +424,17 @@ export interface ParsedTopology {
   topologySourceId?: string
   metricsSourceId?: string
   mapping?: MetricsMapping
+  /** Served from an artifact older than the current composition revision —
+   *  a background bake is (re)building the fresh one. */
+  stale?: boolean
+}
+
+/** What the derive worker sends back (apps/server/api/src/services/derive-worker.ts). */
+export interface DeriveResult {
+  graph: NetworkGraph
+  layout: LayoutResult
+  resolved?: ResolvedLayout
+  iconDimensions: ResolvedIconDimensions
 }
 
 /**
@@ -1094,8 +1109,14 @@ export class TopologyService {
   }
 
   /**
-   * Get a parsed topology ready for rendering
-   * Uses cache if available
+   * Get a parsed topology ready for rendering — WITHOUT computing in-request.
+   *
+   * Order: RAM cache → fresh artifact → (kick a background bake, wait briefly
+   * so small topologies still feel synchronous) → STALE artifact marked
+   * `stale: true` → null (first-ever bake, nothing to serve yet; the route
+   * reports `deriving`). The heavy resolve+layout always runs in the
+   * derivation Worker (see services/derivation.ts) — a minutes-long layout
+   * must never block the serving event loop.
    */
   async getParsed(id: string): Promise<ParsedTopology | null> {
     // Check cache first
@@ -1114,11 +1135,8 @@ export class TopologyService {
       return null
     }
 
-    // L2: a persisted resolved-graph artifact (survives restart / RAM eviction).
-    // Serve it only when it was built from the CURRENT composition revision and
-    // resolver version — otherwise it's stale and we recompute. Fully guarded:
-    // any read/parse failure falls through to a fresh resolve, so the artifact
-    // can never break a read (worst case = current behaviour).
+    // L2: a persisted resolved-graph artifact (survives restart / RAM eviction),
+    // fresh = built from the CURRENT composition revision + resolver version.
     const fromArtifact = this.tryHydrateArtifact(topology)
     if (fromArtifact) {
       this.cache.set(id, fromArtifact)
@@ -1126,44 +1144,104 @@ export class TopologyService {
       return fromArtifact
     }
 
-    // Capture the revision BEFORE the async resolve. If an input changes during
-    // parse (a concurrent bump), this captured value won't match the new
-    // current revision, so the artifact we persist is immediately considered
-    // stale rather than served as falsely-fresh.
-    const revisionAtStart = this.compositionRevisionOf(id)
-    try {
-      const parsed = await this.parseTopology(topology)
-      this.errorCache.delete(id)
-      // If an input changed DURING the async resolve, this result is already
-      // stale: don't poison the RAM cache or persist it as fresh. Return it to
-      // the current caller (it asked for "now"), but the next read re-resolves.
-      if (this.compositionRevisionOf(id) === revisionAtStart) {
-        this.cache.set(id, parsed)
-        this.writeResolvedArtifact(topology, parsed, revisionAtStart)
-      }
-      return parsed
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      const phase = message.includes('Invalid NetworkGraph') ? 'parse' : 'layout'
-      // Only cache the failure if the inputs haven't changed since the parse
-      // started. A concurrent edit (revision bump) may have already fixed the
-      // cause; caching a stale error would make later reads short-circuit to
-      // null until the next invalidation.
-      if (this.compositionRevisionOf(id) === revisionAtStart) {
-        this.errorCache.set(id, {
-          id,
-          name: topology.name,
-          phase,
-          message,
-          timestamp: Date.now(),
-        })
-      }
-      console.error(
-        `[TopologyService] Failed to parse topology "${topology.name}" (${id}):`,
-        message,
-      )
-      return null
+    // Bake in the Worker. Wait a short grace period so small topologies return
+    // their fresh result in this request (tests + snappy UX); a big layout
+    // overshoots it and we fall through to stale-serving below.
+    await Promise.race([
+      kickDerivation(id, this),
+      new Promise((resolveSleep) => setTimeout(resolveSleep, DERIVE_WAIT_MS)),
+    ])
+    const baked = this.cache.get(id)
+    if (baked) return baked
+    if (this.errorCache.has(id)) return null
+
+    // Still baking (or the bake landed for an already-moved revision): serve
+    // the last-good artifact, stale. Viewers refresh when the bake lands.
+    const staleParsed = this.tryHydrateArtifact(topology, { allowStale: true })
+    if (staleParsed) {
+      staleParsed.stale = true
+      return staleParsed
     }
+    return null
+  }
+
+  /** Whether a background bake is in flight for this topology. */
+  deriving(id: string): boolean {
+    return isDeriving(id)
+  }
+
+  /** Fire-and-forget bake — call after a sync so the artifact is ready before the next view. */
+  precompute(id: string): void {
+    void kickDerivation(id, this)
+  }
+
+  /**
+   * The revision of the CONTENT currently served (the artifact's
+   * built_revision, falling back to the composition revision when no artifact
+   * exists). The share SSE stream sends this — viewers must refetch when the
+   * served content changes (a bake landing), not when an input changes (the
+   * stale artifact they already have would just be refetched).
+   */
+  servedRevisionOf(id: string): number {
+    try {
+      const row = this.db
+        .query('SELECT built_revision AS r FROM topology_resolved_graph WHERE topology_id = ?')
+        .get(id) as { r: number } | undefined
+      if (row && typeof row.r === 'number') return row.r
+    } catch {
+      // fall through
+    }
+    return this.compositionRevisionOf(id)
+  }
+
+  /**
+   * Finalize a Worker bake: compose the ParsedTopology (DB-backed bits — mapping,
+   * source ids — happen here, not in the Worker), persist the artifact stamped
+   * with the revision the bake STARTED from, and refresh the RAM caches when
+   * that revision is still current.
+   */
+  completeDerivation(id: string, builtRevision: number, result: DeriveResult): void {
+    const topology = this.get(id)
+    if (!topology) return
+    const parsed: ParsedTopology = {
+      id: topology.id,
+      name: topology.name,
+      graph: result.graph,
+      layout: result.layout,
+      resolved: result.resolved,
+      iconDimensions: result.iconDimensions,
+      metrics: this.createEmptyMetrics(result.graph),
+      topologySourceId: this.topologySourceIdFor(topology.id),
+      metricsSourceId: this.metricsSourceIdFor(topology.id),
+      mapping: this.buildMapping(topology.id, result.graph),
+    }
+    // Persist even if the revision moved mid-bake: built_revision marks it
+    // stale, and stale-but-newer beats the previous artifact for stale-serving.
+    this.writeResolvedArtifact(topology, parsed, builtRevision)
+    if (this.compositionRevisionOf(id) === builtRevision) {
+      this.cache.set(id, parsed)
+      this.renderCache.delete(id)
+      this.errorCache.delete(id)
+    }
+  }
+
+  /** Record a bake failure (only when the inputs haven't changed since it started). */
+  recordDeriveError(id: string, builtRevision: number, message: string): void {
+    const topology = this.get(id)
+    if (!topology) return
+    if (this.compositionRevisionOf(id) !== builtRevision) return
+    const phase = message.includes('Invalid NetworkGraph') ? 'parse' : 'layout'
+    this.errorCache.set(id, {
+      id,
+      name: topology.name,
+      phase,
+      message,
+      timestamp: Date.now(),
+    })
+    console.error(
+      `[TopologyService] Failed to derive topology "${topology.name}" (${id}):`,
+      message,
+    )
   }
 
   /**
@@ -1178,9 +1256,12 @@ export class TopologyService {
   }
 
   /**
-   * Parse a topology and generate layout.
+   * Gather the resolver inputs for a derivation bake — the DB-read half of the
+   * old in-request parse. The compute half (resolve → display filter → icons →
+   * layout) runs in the derive Worker (services/derive-worker.ts) so it never
+   * blocks the serving event loop.
    *
-   * The resolver runs here over two DB-native pools, both read from the
+   * The resolver consumes two DB-native pools, both read from the
    * contribution store (`contribution_*`):
    *   - the PROJECT OVERLAY (attachment_id NULL) — the operator's curation —
    *     fills the `authored` slot (top priority);
@@ -1191,7 +1272,14 @@ export class TopologyService {
    * With no overlay, `authored` is an empty graph — the diagram is whatever the
    * attached sources produced.
    */
-  private async parseTopology(topology: Topology): Promise<ParsedTopology> {
+  collectDeriveInputs(topologyId: string): {
+    authored: NetworkGraph
+    snapshots: SnapshotEntry[]
+    scope?: ScopeFilter
+    hideDisconnected: boolean
+  } | null {
+    const topology = this.get(topologyId)
+    if (!topology) return null
     // The `authored` slot is the PROJECT OVERLAY (DB-native, attachment_id NULL):
     // the operator's curation — exclusions, overrides, metrics bindings, settings —
     // folded as resolve()'s top-priority contribution. Absent → empty. A hand-drawn
@@ -1241,42 +1329,14 @@ export class TopologyService {
       }
     }
     const snapshots = this.readObservedSnapshots(topology.id, priorityBySource, modeBySource)
-    // Topology-level scope criteria (Phase 2): enforced post-merge by resolve, on
-    // top of the region-mark scope. Empty → no extra filtering.
-    const resolvedGraph = resolveObservations(authored, snapshots, { scope: topology.scope })
-    // Post-resolve display filter (project-level pref on the overlay settings).
-    // Runs on the fully-merged graph — never per-source.
-    const graph = authored.settings?.hideDisconnected
-      ? filterDisconnected(resolvedGraph)
-      : resolvedGraph
-
-    // Resolve icon dimensions for URL icons (used by renderer for
-    // aspect-preserving sizing).
-    let iconDimensions: ResolvedIconDimensions = new Map()
-    const iconUrls = collectIconUrls(graph)
-    if (iconUrls.length > 0) {
-      try {
-        iconDimensions = await resolveAllIconDimensions(iconUrls)
-      } catch (err) {
-        console.warn('Failed to resolve icon dimensions:', err)
-      }
-    }
-
-    const { resolved, layout: layoutResult } = await computeNetworkLayout(graph)
-    const metrics = this.createEmptyMetrics(graph)
-    const mapping = this.buildMapping(topology.id, graph)
-
+    // Topology-level scope criteria + the display filter run in the Worker:
+    // scope is enforced post-merge by resolve; hideDisconnected runs on the
+    // fully-merged graph — never per-source.
     return {
-      id: topology.id,
-      name: topology.name,
-      graph,
-      layout: layoutResult,
-      resolved,
-      iconDimensions,
-      metrics,
-      topologySourceId: this.topologySourceIdFor(topology.id),
-      metricsSourceId: this.metricsSourceIdFor(topology.id),
-      mapping,
+      authored,
+      snapshots,
+      scope: topology.scope,
+      hideDisconnected: authored.settings?.hideDisconnected === true,
     }
   }
 
@@ -1438,18 +1498,25 @@ export class TopologyService {
   /**
    * Hydrate a ParsedTopology from the persisted resolved-graph artifact, if one
    * exists and is current (matching composition revision + resolver version).
+   * With `allowStale`, the revision check is skipped — the serving layer uses
+   * this to keep showing the last-good diagram while a bake is in flight (the
+   * resolver-version check still applies; a wrong-shape artifact never serves).
    * Returns null on any miss/staleness/parse error so the caller recomputes.
    * Metrics are always rebuilt empty (live values come per-poll); mapping is
    * re-derived from the stored graph so it tracks binding/residual edits.
    */
-  private tryHydrateArtifact(topology: Topology): ParsedTopology | null {
+  private tryHydrateArtifact(
+    topology: Topology,
+    opts?: { allowStale?: boolean },
+  ): ParsedTopology | null {
     try {
       const row = this.db
         .query('SELECT * FROM topology_resolved_graph WHERE topology_id = ?')
         .get(topology.id) as ResolvedGraphRow | undefined
       if (!row?.layout_json) return null
       if (row.resolver_version !== RESOLVER_VERSION) return null
-      if (row.built_revision !== this.compositionRevisionOf(topology.id)) return null
+      if (!opts?.allowStale && row.built_revision !== this.compositionRevisionOf(topology.id))
+        return null
 
       const graph = JSON.parse(row.graph_json) as NetworkGraph
       const { layout, resolved } = parseWithMaps<{
