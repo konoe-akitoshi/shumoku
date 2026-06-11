@@ -199,6 +199,10 @@
     .node-icon { color: ${colors.nodeTextSecondary}; }
     .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
     .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: ${colors.textSecondary}; }
+    /* Port labels MUST render in the same monospace metric the layout
+       uses for collision boxes (port-geometry PORT_LABEL_CHAR_W) — an
+       unstyled font here silently breaks the size contract. */
+    .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
 
     /* All elements: clickable for selection in any mode */
     .node[data-id] { cursor: pointer; }

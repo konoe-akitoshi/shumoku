@@ -1,8 +1,5 @@
 <script lang="ts">
-  import { createEngine, type ResolvedPort } from '@shumoku/core'
-
-  /** Shared sizing engine for label-width measurement. */
-  const engine = createEngine()
+  import { portLabelLength, type ResolvedPort } from '@shumoku/core'
 
   import type { PortOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
@@ -58,9 +55,10 @@
   const verticalLabel = $derived(
     port.labelOrientation === 'vertical' && (port.side === 'top' || port.side === 'bottom'),
   )
-  // Full label, never truncated — the layout reserves the corridor for
-  // the longest port name (port-geometry lane) instead of hiding text.
-  const labelWidth = $derived(engine.text.measure(port.label, 'port') + 4)
+  // Full label, never truncated. The width comes from the SAME
+  // deterministic metric the layout used for collision boxes and
+  // corridors (port-geometry) — one size authority, no canvas drift.
+  const labelWidth = $derived(portLabelLength(port.label))
   const labelHeight = 12
   const bgX = $derived(() => {
     if (labelPos.textAnchor === 'middle') return labelPos.x - labelWidth / 2
