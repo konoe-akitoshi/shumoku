@@ -78,6 +78,7 @@
     MagnifyingGlassMinusIcon,
     MagnifyingGlassPlusIcon,
   } from 'phosphor-svelte'
+  import { onDestroy } from 'svelte'
   import { api } from '$lib/api'
   import {
     HighlightOverlay,
@@ -112,9 +113,12 @@
     /**
      * Override how the underlying NetworkGraph is fetched. Detail page
      * uses `topologyId` and the default fetcher. Share page passes a
-     * token-scoped fetcher via this prop.
+     * token-scoped fetcher via this prop. The response may instead signal
+     * `deriving` (server is still baking the first layout) or carry
+     * `stale: true` (last-good diagram served while a re-bake runs) — both
+     * make this component poll until the fresh bake lands.
      */
-    graphLoader?: () => Promise<{ graph: NetworkGraph }>
+    graphLoader?: () => Promise<{ graph?: NetworkGraph; stale?: boolean; deriving?: boolean }>
   }
   let {
     topologyId = '',
@@ -131,6 +135,10 @@
   let graph = $state<NetworkGraph | undefined>(undefined)
   let loading = $state(true)
   let error = $state('')
+  // Server is baking the layout in the background (large topology). While a
+  // previous diagram exists we keep showing it; otherwise the loading state
+  // says what's happening instead of a bare spinner.
+  let building = $state(false)
 
   // Drill-down navigation stack. `currentSheetId === null` means root.
   let currentSheetId = $state<string | null>(null)
@@ -142,16 +150,35 @@
 
   // --- Data loading ---
 
+  // Poll timer for server-side bakes: short interval while the first layout
+  // is being built (no diagram yet), longer while a stale diagram is shown.
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined
+  function scheduleRefresh(ms: number) {
+    clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(() => void loadGraph(), ms)
+  }
+  onDestroy(() => clearTimeout(refreshTimer))
+
   async function loadGraph() {
-    loading = true
+    // Keep the current diagram visible during a stale-refresh poll — only
+    // show the loading state when there is nothing on screen yet.
+    loading = graph === undefined
     error = ''
     try {
       const loader = graphLoader ?? (() => api.topologies.getGraph(topologyId))
       const res = await loader()
-      graph = res.graph
+      if (res.deriving) {
+        building = true
+        loading = graph === undefined
+        scheduleRefresh(3000)
+        return
+      }
+      if (res.graph) graph = res.graph
+      building = res.stale === true
+      if (res.stale) scheduleRefresh(5000)
+      loading = false
     } catch (e) {
       error = e instanceof Error ? e.message : 'Unknown error'
-    } finally {
       loading = false
     }
   }
@@ -358,7 +385,7 @@
   {#if loading}
     <div class="loading">
       <div class="spinner"></div>
-      <span>Loading topology...</span>
+      <span>{building ? 'Computing layout… (large topology)' : 'Loading topology...'}</span>
     </div>
   {:else if error}
     <div class="error">

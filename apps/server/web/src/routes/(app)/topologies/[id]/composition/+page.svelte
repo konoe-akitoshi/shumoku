@@ -140,7 +140,7 @@
       // gauge and grid so the counts mean what they appear to.
       const counts = { stable: 0, weak: 0, unbound: 0, total: 0 }
       const cards: DiscoveredCard[] = []
-      for (const node of graphResp.graph.nodes ?? []) {
+      for (const node of graphResp.graph?.nodes ?? []) {
         const isSegment =
           node.spec?.kind === 'hardware' && (node.spec as { type?: string }).type === 'segment'
         if (isSegment) continue

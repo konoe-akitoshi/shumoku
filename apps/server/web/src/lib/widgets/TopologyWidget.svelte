@@ -120,6 +120,11 @@
         }
       }
       const { graph } = await api.topologies.getGraph(config.topologyId)
+      if (!graph) {
+        // Server is still baking the first layout for this topology.
+        error = 'Topology is being prepared — try again shortly'
+        return
+      }
       rootGraph = graph
 
       const topLevel = (graph.subgraphs ?? []).filter((sg) => !sg.parent)

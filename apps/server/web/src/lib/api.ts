@@ -7,12 +7,12 @@ import type { NetworkGraph } from '@shumoku/core'
 import type {
   Alert,
   AlertQueryOptions,
+  CompositionMode,
   ConnectionResult,
   Dashboard,
   DashboardInput,
   DataSource,
   DataSourceInput,
-  CompositionMode,
   LinkContribution,
   MetricsMapping,
   NodeContribution,
@@ -279,9 +279,15 @@ export const topologies = {
   },
 
   getGraph: (id: string) =>
-    request<{ id: string; name: string; graph: NetworkGraph }>(
-      scoped(`/topologies/${id}/graph`, `/topologies/${id}/graph`),
-    ),
+    request<{
+      id?: string
+      name?: string
+      graph?: NetworkGraph
+      /** Last-good diagram served while a background bake runs. */
+      stale?: boolean
+      /** 202 — first bake still running, nothing to serve yet. */
+      deriving?: boolean
+    }>(scoped(`/topologies/${id}/graph`, `/topologies/${id}/graph`)),
 
   /** Resolved graph = project overlay folded with each attached source's contribution. */
   getResolved: (id: string) =>
