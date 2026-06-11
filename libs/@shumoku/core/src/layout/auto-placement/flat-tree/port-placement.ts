@@ -32,6 +32,7 @@
 
 import type { Direction, Link, Node, Position } from '../../../models/types.js'
 import { resolveNodeSize } from '../../engine/index.js'
+import { shortIfName } from '../../port-geometry.js'
 import type { ResolvedPort } from '../../resolved-types.js'
 
 /** Default port visual size */
@@ -52,7 +53,9 @@ export interface PortAssignment {
 
 function getNodePortLabel(node: Node | undefined, portId: string): string {
   const port = node?.ports?.find((p) => p.id === portId)
-  return port?.label ?? portId
+  // Vendor-canonical short form (HundredGigE → Hu …) — lossless to a
+  // network engineer, a third of the drawn width.
+  return shortIfName(port?.label ?? portId)
 }
 
 function getPortPlacement(

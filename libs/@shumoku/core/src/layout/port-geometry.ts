@@ -28,6 +28,40 @@ export const PORT_LABEL_H = 12
 /** Distance from the port center to where the label box starts. */
 export const PORT_LABEL_BOX_OFFSET = 10
 
+/**
+ * Canonical interface-name abbreviations — the same short forms the
+ * vendor CLIs themselves print (`show ip int brief`), so the rendered
+ * label stays losslessly readable to a network engineer while taking a
+ * third of the space. NOT truncation: every mapping is the established
+ * notation for that interface type.
+ */
+const IF_SHORT_FORMS: readonly [RegExp, string][] = [
+  [/^FourHundredGigE(?=\d|$)/, 'FH'],
+  [/^TwoHundredGigE(?=\d|$)/, 'TH'],
+  [/^HundredGigE(?=\d|$)/, 'Hu'],
+  [/^FortyGigE(?=\d|$)/, 'Fo'],
+  [/^TwentyFiveGigE(?=\d|$)/, 'Twe'],
+  [/^TenGigabitEthernet(?=\d|$)/, 'Te'],
+  [/^TenGigE(?=\d|$)/, 'Te'],
+  [/^GigabitEthernet(?=\d|$)/, 'Gi'],
+  [/^FastEthernet(?=\d|$)/, 'Fa'],
+  [/^TwentyFiveGigabitEthernet(?=\d|$)/, 'Twe'],
+  [/^Port-channel(?=\d|$)/i, 'Po'],
+  [/^Bundle-Ether(?=\d|$)/i, 'BE'],
+  [/^Loopback(?=\d|$)/i, 'Lo'],
+  [/^Management(?=\d|$)/i, 'Mgmt'],
+  [/^MgmtEth(?=\d|$)/, 'Mg'],
+]
+
+/** Vendor-canonical short form of an interface name (identity for
+ *  anything that doesn't match a known long prefix). */
+export function shortIfName(label: string): string {
+  for (const [pattern, short] of IF_SHORT_FORMS) {
+    if (pattern.test(label)) return label.replace(pattern, short)
+  }
+  return label
+}
+
 /** Estimated label box length along the reading direction. */
 export function portLabelLength(label: string): number {
   return label.length * PORT_LABEL_CHAR_W + 4

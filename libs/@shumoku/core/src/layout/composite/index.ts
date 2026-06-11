@@ -20,7 +20,7 @@
 import type { Bounds, Direction, NetworkGraph, Node, Subgraph } from '../../models/types.js'
 import { resolveNodeSize } from '../engine/index.js'
 import { getLinkWidthForMode, linkSpeedBps } from '../link-utils.js'
-import { PORT_LABEL_BOX_OFFSET, portLabelLength } from '../port-geometry.js'
+import { PORT_LABEL_BOX_OFFSET, portLabelLength, shortIfName } from '../port-geometry.js'
 import { resolveTierFromSpec } from '../role-tiers.js'
 
 export interface CompositeLayoutOptions {
@@ -324,23 +324,31 @@ export function layoutComposite(
     if (typeof portRef !== 'string' || portRef.length === 0) return undefined
     const owner = nodes.get(nodeId)
     const port = owner?.ports?.find((p) => p.id === portRef)
-    return port?.label ?? portRef
+    return shortIfName(port?.label ?? portRef)
   }
-  const verticalReachOf = new Map<string, number>()
+  // DIRECTIONAL reach: a label occupies space only on the face it sits
+  // on. A leaf whose links all go UP has top labels only — reserving
+  // room below it would put whitespace where no label can ever exist
+  // (that exact defect shipped once: every row paid for both directions).
+  const reachUpOf = new Map<string, number>() // top-face labels (links to shallower peers)
+  const reachDownOf = new Map<string, number>() // bottom-face labels (links to deeper peers)
   const lateralReachOf = new Map<string, number>()
   for (const link of graph.links) {
-    const sameDepth = (depth.get(link.from.node) ?? 0) === (depth.get(link.to.node) ?? 0)
-    for (const [nodeId, portRef] of [
-      [link.from.node, link.from.port],
-      [link.to.node, link.to.port],
+    const dFrom = depth.get(link.from.node) ?? 0
+    const dTo = depth.get(link.to.node) ?? 0
+    for (const [nodeId, portRef, dSelf, dPeer] of [
+      [link.from.node, link.from.port, dFrom, dTo],
+      [link.to.node, link.to.port, dTo, dFrom],
     ] as const) {
       const label = displayPortLabel(nodeId, portRef)
       if (label === undefined) continue
       const reach = PORT_LABEL_BOX_OFFSET + portLabelLength(label)
-      if (sameDepth) {
+      if (dSelf === dPeer) {
         lateralReachOf.set(nodeId, Math.max(lateralReachOf.get(nodeId) ?? 0, reach))
+      } else if (dPeer < dSelf) {
+        reachUpOf.set(nodeId, Math.max(reachUpOf.get(nodeId) ?? 0, reach))
       } else {
-        verticalReachOf.set(nodeId, Math.max(verticalReachOf.get(nodeId) ?? 0, reach))
+        reachDownOf.set(nodeId, Math.max(reachDownOf.get(nodeId) ?? 0, reach))
       }
     }
   }
@@ -423,11 +431,14 @@ export function layoutComposite(
   // sits instead of inflating the whole zone.
   const unitLReach = (unit: Unit): number =>
     Math.max(0, ...unit.members.map((m) => lateralReachOf.get(m) ?? 0))
-  const unitVReach = (unit: Unit): number =>
-    Math.max(0, ...unit.members.map((m) => verticalReachOf.get(m) ?? 0))
+  const unitUpReach = (unit: Unit): number =>
+    Math.max(0, ...unit.members.map((m) => reachUpOf.get(m) ?? 0))
+  const unitDownReach = (unit: Unit): number =>
+    Math.max(0, ...unit.members.map((m) => reachDownOf.get(m) ?? 0))
   const pairGap = (a: Unit, b: Unit): number =>
     Math.max(cellGapXBase, unitLReach(a) + unitLReach(b) + 8)
-  const rowVReach = (row: Unit[]): number => Math.max(0, ...row.map(unitVReach))
+  const rowDownReach = (row: Unit[]): number => Math.max(0, ...row.map(unitDownReach))
+  const rowUpReach = (row: Unit[]): number => Math.max(0, ...row.map(unitUpReach))
   for (const zone of zoneIds) {
     const members = zoneUnits.get(zone) ?? []
     const minDepth = Math.min(...members.map((u) => u.depth))
@@ -468,7 +479,9 @@ export function layoutComposite(
       placeRow(row, y, rowHeight)
       const nextRow = rows[rowIndex + 1]
       y += rowHeight
-      if (nextRow) y += Math.max(rowGapBase, rowVReach(row) + rowVReach(nextRow) + 8)
+      // only the labels that actually FACE this gap pay for it: the
+      // upper row's bottom labels + the lower row's top labels
+      if (nextRow) y += Math.max(rowGapBase, rowDownReach(row) + rowUpReach(nextRow) + 8)
     }
     // intra-zone barycenter ordering (v3 §24): two sweeps pulling each
     // unit next to its in-zone neighbors before global refinement
@@ -557,8 +570,8 @@ export function layoutComposite(
     const lowerNode = ba < bb ? link.to.node : link.from.node
     const upperBand = Math.min(ba, bb)
     const lowerBand = Math.max(ba, bb)
-    const upperReach = verticalReachOf.get(upperNode) ?? 0
-    const lowerReach = verticalReachOf.get(lowerNode) ?? 0
+    const upperReach = reachDownOf.get(upperNode) ?? 0
+    const lowerReach = reachUpOf.get(lowerNode) ?? 0
     downNeed.set(upperBand + 1, Math.max(downNeed.get(upperBand + 1) ?? 0, upperReach))
     upNeed.set(lowerBand, Math.max(upNeed.get(lowerBand) ?? 0, lowerReach))
   }
@@ -567,14 +580,30 @@ export function layoutComposite(
     const need = (downNeed.get(i) ?? 0) + (upNeed.get(i) ?? 0) + 8 - bandGap
     if (need > 0) labelBandExtra.set(i, (labelBandExtra.get(i) ?? 0) + Math.ceil(need))
   }
-  // per-zone vertical label reach, so compaction can't squeeze the
-  // corridor the band extras just reserved
-  const zoneVReachMap = new Map<string, number>()
+  // per-zone DIRECTIONAL label reach, so compaction can't squeeze the
+  // corridor the band extras just reserved (down-labels of the upper
+  // block + up-labels of the lower block)
+  const zoneDownReach = new Map<string, number>()
+  const zoneUpReach = new Map<string, number>()
   for (const zone of zoneIds) {
-    let reach = 0
-    for (const unit of zoneUnits.get(zone) ?? []) reach = Math.max(reach, unitVReach(unit))
-    zoneVReachMap.set(zone, reach)
+    let down = 0
+    let up = 0
+    for (const unit of zoneUnits.get(zone) ?? []) {
+      down = Math.max(down, unitDownReach(unit))
+      up = Math.max(up, unitUpReach(unit))
+    }
+    zoneDownReach.set(zone, down)
+    zoneUpReach.set(zone, up)
   }
+
+  // Band width budget scales with CONTENT: zones widened (port slots,
+  // label corridors) while a fixed 1700px budget stayed — bands wrapped
+  // into ever more stacked sub-rows and the figure exploded vertically
+  // (5000px tall, 1:2.7 aspect). Target a landscape-ish aspect instead:
+  // budget = sqrt(total packed zone area × aspect), floored at 1700.
+  let zoneArea = 0
+  for (const [, box] of zoneBox) zoneArea += (box.w + zoneGap) * (box.h + bandGap)
+  const maxBandW = options.maxBandW ?? Math.max(1700, Math.round(Math.sqrt(zoneArea * 1.5)))
 
   const zoneX = new Map<string, number>()
   const zoneY = new Map<string, number>()
@@ -588,10 +617,11 @@ export function layoutComposite(
     zoneY,
     zoneGap,
     bandGap,
-    options.maxBandW ?? 1700,
+    maxBandW,
     labelBandExtra,
     options.bandOrder,
-    zoneVReachMap,
+    zoneDownReach,
+    zoneUpReach,
   )
 
   // -- port refine: pull units toward their cross-zone neighbors ---------------
@@ -1049,7 +1079,8 @@ function placeZoneBands(
   maxBandW: number,
   bandExtra?: ReadonlyMap<number, number>,
   bandOrder?: ReadonlyMap<number, readonly string[]>,
-  zoneVReach?: ReadonlyMap<string, number>,
+  zoneDownReach?: ReadonlyMap<string, number>,
+  zoneUpReach?: ReadonlyMap<string, number>,
 ): { bandRanges: { top: number; bottom: number }[]; bandBlocks: string[][] } {
   const ranks = [...new Set(zoneIds.map((z) => zoneRank.get(z) ?? 0))].sort((a, b) => a - b)
   const centerOf = new Map<string, number>()
@@ -1289,18 +1320,20 @@ function placeZoneBands(
   // shape — until it would collide with an x-overlapping block above it.
   // Blocks with nothing overlapping above keep their band y, so the rank
   // discipline survives where it matters.
-  const reachOfZones = (zones: readonly string[]): number =>
-    Math.max(0, ...zones.map((z) => zoneVReach?.get(z) ?? 0))
+  const downOfZones = (zones: readonly string[]): number =>
+    Math.max(0, ...zones.map((z) => zoneDownReach?.get(z) ?? 0))
+  const upOfZones = (zones: readonly string[]): number =>
+    Math.max(0, ...zones.map((z) => zoneUpReach?.get(z) ?? 0))
   placedBlocks.sort((a, b) => a.y - b.y || a.x - b.x)
   const settled: typeof placedBlocks = []
   for (const block of placedBlocks) {
-    // the corridor between two stacked blocks must hold both blocks'
-    // vertical label lanes — compaction must not squeeze what the band
-    // extras reserved
-    const moverReach = reachOfZones(block.zones)
+    // the corridor between two stacked blocks holds the upper block's
+    // DOWN labels and the lower (moving) block's UP labels — direction
+    // matters, or whitespace appears where no label can exist
+    const moverUp = upOfZones(block.zones)
     let target: number | undefined
     for (const other of settled) {
-      const vGap = Math.max(bandGap, reachOfZones(other.zones) + moverReach + 8)
+      const vGap = Math.max(bandGap, downOfZones(other.zones) + moverUp + 8)
       for (const obstacle of other.rects) {
         const obstacleBottom = other.y + obstacle.relY + obstacle.h
         for (const mover of block.rects) {
