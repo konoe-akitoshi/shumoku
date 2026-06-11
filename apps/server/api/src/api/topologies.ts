@@ -12,11 +12,9 @@ import {
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
 import { getLayoutEngine } from '../layout.js'
-import { parseSyncOptions } from '../plugins/sync-options.js'
-import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
-import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
 import { ObservationsService } from '../services/observations.js'
+import { cancelSyncJob, getSyncJob, startSyncJob, syncJobView } from '../services/sync-job.js'
 import { type ParsedTopology, TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type {
@@ -524,151 +522,75 @@ export function createTopologiesApi(): Hono {
   })
 
   /**
-   * Sync ALL topology-purpose sources for this topology.
+   * Sync ALL topology-purpose sources — as a TRACKED JOB.
    *
-   * Observation-model dispatch: each source is invoked via its capability
-   * (autoscan plugins → `scan()`, others → `fetchTopology()`). Every
-   * result is recorded as a row in `topology_observations` — we no
-   * longer overwrite `topology.content_json` (that 's the authored
-   * layer, owned by the editor). The diagram surfaces the new snapshots
-   * by re-running `resolve()` on the next render call.
+   * Starts a background sync job (per-source fetch → record observation →
+   * one derivation bake) and returns its initial state immediately. The UI
+   * drives a progress modal by polling `GET /:id/sync-job`, so a page reload
+   * mid-sync re-attaches instead of losing the run. Cancellation via
+   * `POST /:id/sync-job/cancel`.
    *
-   * The legacy "merge multiple source graphs into content_json" path is
-   * gone: with observations, multi-source merging happens at read time
-   * inside `resolve()` rather than at sync time.
+   * Observation-model dispatch (unchanged semantics): each source is invoked
+   * via its capability (autoscan → `scan()`, others → `fetchTopology()`);
+   * multi-source merging happens at read time inside `resolve()`.
    */
   app.post('/:id/sync-from-source', async (c) => {
     const id = c.req.param('id')
-    try {
-      const topology = service.get(id)
-      if (!topology) {
-        return c.json({ error: 'Topology not found' }, 404)
-      }
-
-      // Manual is hand-edited, never fetched — exclude it (it has no topology/
-      // autoscan capability and would just record a spurious 'failed'). Mirrors
-      // the discovery scheduler, which already filters it.
-      const sourcesToSync = getTopologySourcesService()
-        .listByPurpose(id, 'topology')
-        .filter((s) => s.dataSource?.type !== 'manual')
-      if (sourcesToSync.length === 0) {
-        return c.json({ error: 'No topology sources attached' }, 400)
-      }
-
-      console.log(
-        `[sync-from-source] ${id}: syncing ${sourcesToSync.length} source(s):`,
-        sourcesToSync.map((s) => s.dataSourceId).join(', '),
-      )
-
-      const observationsService = new ObservationsService()
-      const perSourceResults: Array<{
-        sourceId: string
-        status: 'ok' | 'partial' | 'failed' | 'empty'
-        nodeCount: number
-        linkCount: number
-        message?: string
-      }> = []
-      let totalNodes = 0
-      let totalLinks = 0
-
-      // Drive every source in parallel — slow netbox shouldn 't block fast snmp.
-      const settled = await Promise.allSettled(
-        sourcesToSync.map(async (source) => {
-          const plugin = dataSourceService.getPlugin(source.dataSourceId)
-          if (!plugin) {
-            throw new Error('Data source not found / plugin failed to load')
-          }
-          const capturedAt = Date.now()
-          let graph: NetworkGraph | null = null
-          let status: 'ok' | 'partial' | 'failed' | 'empty' = 'ok'
-          let statusMessage: string | undefined
-
-          if (hasAutoscanCapability(plugin)) {
-            // network-scan and other autoscan plugins return a Snapshot directly.
-            const credentials = resolveCredentialsForAutoscan(id, getTopologyService())
-            const snapshot = await plugin.scan({ seeds: [], credentials })
-            graph = snapshot.graph
-            status = snapshot.status
-            statusMessage = snapshot.statusMessage
-          } else if (hasTopologyCapability(plugin)) {
-            // NetBox / Zabbix-topology / etc. — wrap fetchTopology in a snapshot.
-            const opts = parseSyncOptions(plugin.type, source.optionsJson)
-            graph = await plugin.fetchTopology(opts)
-            status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
-          } else {
-            throw new Error(
-              `Plugin ${plugin.type} cannot supply topology (no autoscan or topology capability)`,
-            )
-          }
-
-          await observationsService.record({
-            topologyId: id,
-            sourceId: source.dataSourceId,
-            capturedAt,
-            status,
-            statusMessage,
-            graph,
-          })
-          observationsService.updateHysteresis(
-            id,
-            source.dataSourceId,
-            status === 'failed' ? 'failed' : 'ok',
-            capturedAt,
-          )
-          // Stamp lastSyncedAt on the attachment so the UI's per-source "last
-          // synced" reflects a Sync-all too (the per-source /sync route already
-          // does this; without it a source only ever Synced via Sync-all shows
-          // "never synced" despite having recorded observations).
-          getTopologySourcesService().updateLastSynced(source.id)
-
-          return {
-            sourceId: source.dataSourceId,
-            status,
-            nodeCount: graph?.nodes?.length ?? 0,
-            linkCount: graph?.links?.length ?? 0,
-            message: statusMessage,
-          }
-        }),
-      )
-
-      for (const r of settled) {
-        if (r.status === 'fulfilled') {
-          perSourceResults.push(r.value)
-          totalNodes += r.value.nodeCount
-          totalLinks += r.value.linkCount
-        } else {
-          const message = r.reason instanceof Error ? r.reason.message : String(r.reason)
-          perSourceResults.push({
-            sourceId: 'unknown',
-            status: 'failed',
-            nodeCount: 0,
-            linkCount: 0,
-            message,
-          })
-          console.error('[sync-from-source] source failed:', message)
-        }
-      }
-
-      // Invalidate parsed-topology cache, then bake the fresh artifact in the
-      // background NOW — the next /render / /graph serves the previous diagram
-      // (stale) instantly and swaps when the bake lands, instead of blocking.
-      service.clearCacheEntry(id)
-      service.precompute(id)
-
-      return c.json({
-        success: true,
-        topology,
-        // Legacy keys preserved for any caller that reads them.
-        nodeCount: totalNodes,
-        linkCount: totalLinks,
-        sourcesCount: perSourceResults.filter((r) => r.status !== 'failed').length,
-        results: perSourceResults,
-      })
-    } catch (err) {
-      console.error('[sync-from-source] Error:', err)
-      const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 500)
+    const topology = service.get(id)
+    if (!topology) {
+      return c.json({ error: 'Topology not found' }, 404)
     }
+
+    const running = getSyncJob(id)
+    if (running && running.state === 'running') {
+      // Already in flight — let the caller attach to it.
+      return c.json({ job: syncJobView(running) }, 409)
+    }
+
+    // Manual is hand-edited, never fetched — exclude it (it has no topology/
+    // autoscan capability and would just record a spurious 'failed'). Mirrors
+    // the discovery scheduler, which already filters it.
+    const sourcesToSync = getTopologySourcesService()
+      .listByPurpose(id, 'topology')
+      .filter((s) => s.dataSource?.type !== 'manual')
+
+    console.log(
+      `[sync-from-source] ${id}: starting sync job for ${sourcesToSync.length} source(s):`,
+      sourcesToSync.map((s) => s.dataSourceId).join(', '),
+    )
+
+    const job = startSyncJob(id, sourcesToSync, {
+      topologyService: service,
+      topologySourcesService: getTopologySourcesService(),
+      dataSourceService,
+      observationsService: new ObservationsService(),
+    })
+    if (!job) {
+      return c.json({ error: 'No topology sources attached' }, 400)
+    }
+    return c.json({ job: syncJobView(job) }, 202)
+  })
+
+  // Current (or last finished) sync job — the progress modal polls this, and
+  // a freshly-loaded page uses it to re-attach to a run already in flight.
+  app.get('/:id/sync-job', (c) => {
+    const id = c.req.param('id')
+    if (!service.get(id)) {
+      return c.json({ error: 'Topology not found' }, 404)
+    }
+    const job = getSyncJob(id)
+    return c.json({ job: job ? syncJobView(job) : null })
+  })
+
+  // Cancel the in-flight sync job (fetches are discarded, the derivation
+  // Worker is terminated). No-op when nothing is running.
+  app.post('/:id/sync-job/cancel', (c) => {
+    const id = c.req.param('id')
+    if (!service.get(id)) {
+      return c.json({ error: 'Topology not found' }, 404)
+    }
+    const job = cancelSyncJob(id)
+    return c.json({ job: job ? syncJobView(job) : null })
   })
 
   // Enable sharing (generate token)

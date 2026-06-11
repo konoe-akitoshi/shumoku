@@ -27,6 +27,7 @@
   import { api } from '$lib/api'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
+  import * as Dialog from '$lib/components/ui/dialog'
   import { topologies } from '$lib/stores'
   import type {
     CompositionMode,
@@ -34,6 +35,7 @@
     MembershipCriterion,
     PluginConfigProperty,
     PluginConfigSchema,
+    SyncJob,
     SyncMode,
     TopologyDataSource,
   } from '$lib/types'
@@ -60,8 +62,14 @@
     >
   >({})
   let syncingSourceId = $state<string | null>(null)
-  let syncingAll = $state(false)
   let rebuilding = $state(false)
+
+  // Sync-all job (server-tracked): drives the progress modal. State lives on
+  // the server, so a reload mid-sync re-attaches to the same job.
+  let syncJob = $state<SyncJob | null>(null)
+  let syncModalOpen = $state(false)
+  let syncPollTimer: ReturnType<typeof setTimeout> | undefined
+  const syncingAll = $derived(syncJob?.state === 'running')
 
   // Which source cards are expanded to show config + scope + danger actions.
   let expanded = $state<Set<string>>(new Set())
@@ -95,6 +103,7 @@
   $effect(() => {
     return () => {
       if (copiedTimer) clearTimeout(copiedTimer)
+      clearTimeout(syncPollTimer)
       for (const t of scopeTimers.values()) clearTimeout(t)
     }
   })
@@ -447,19 +456,93 @@
   }
 
   async function handleSyncAll() {
-    syncingAll = true
+    localError = ''
     try {
-      await api.topologies.sources.syncAll(ctx.topologyId)
-      const updated = await api.topologies.get(ctx.topologyId)
-      ctx.topology = updated
-      topologies.upsert(updated)
-      ctx.bumpRevision()
+      const res = await api.topologies.sources.syncAll(ctx.topologyId)
+      attachSyncJob(res.job)
     } catch (e) {
+      // 409 = a job is already running — attach to it instead of failing.
+      const status = (e as { status?: number }).status
+      if (status === 409) {
+        const { job } = await api.topologies.sources.getSyncJob(ctx.topologyId)
+        if (job) attachSyncJob(job)
+        return
+      }
       localError = e instanceof Error ? e.message : 'Sync all failed'
-    } finally {
-      syncingAll = false
     }
   }
+
+  function attachSyncJob(job: SyncJob) {
+    syncJob = job
+    syncModalOpen = true
+    if (job.state === 'running') scheduleSyncPoll()
+  }
+
+  function scheduleSyncPoll() {
+    clearTimeout(syncPollTimer)
+    syncPollTimer = setTimeout(() => void pollSyncJob(), 1000)
+  }
+
+  async function pollSyncJob() {
+    try {
+      const { job } = await api.topologies.sources.getSyncJob(ctx.topologyId)
+      if (!job) return
+      const wasRunning = syncJob?.state === 'running'
+      syncJob = job
+      if (job.state === 'running') {
+        scheduleSyncPoll()
+        return
+      }
+      // Job just finished — refresh the topology shell and tell the canvas.
+      if (wasRunning) {
+        const updated = await api.topologies.get(ctx.topologyId)
+        ctx.topology = updated
+        topologies.upsert(updated)
+        ctx.bumpRevision()
+      }
+    } catch {
+      // Transient poll failure — keep trying while the modal is open.
+      if (syncModalOpen) scheduleSyncPoll()
+    }
+  }
+
+  async function handleCancelSync() {
+    try {
+      const { job } = await api.topologies.sources.cancelSync(ctx.topologyId)
+      if (job) syncJob = job
+      // Keep polling: the runner flips the job to 'cancelled' at the next
+      // stage boundary.
+      scheduleSyncPoll()
+    } catch (e) {
+      localError = e instanceof Error ? e.message : 'Cancel failed'
+    }
+  }
+
+  // Reload re-attach: if a sync job is already running for this topology
+  // (started before a page reload), reopen the progress modal.
+  let syncJobChecked = false
+  $effect(() => {
+    if (syncJobChecked || !ctx.topologyId) return
+    syncJobChecked = true
+    api.topologies.sources
+      .getSyncJob(ctx.topologyId)
+      .then(({ job }) => {
+        if (job && job.state === 'running') attachSyncJob(job)
+      })
+      .catch(() => {})
+  })
+
+  const syncProgress = $derived.by(() => {
+    if (!syncJob) return 0
+    const total = syncJob.steps.length
+    if (total === 0) return 0
+    const settled = syncJob.steps.filter(
+      (s) => s.status === 'done' || s.status === 'failed' || s.status === 'skipped',
+    ).length
+    // A running step counts half so the bar moves when work starts.
+    const running = syncJob.steps.some((s) => s.status === 'running') ? 0.5 : 0
+    return Math.min(100, Math.round(((settled + running) / total) * 100))
+  })
 
   /** Reset the human curation layer only (authored attachments, names, hidden
    *  nodes). Does NOT re-sync — that's a separate, explicit Sync all. Splitting
@@ -914,3 +997,99 @@
     </div>
   </div>
 </div>
+
+<!-- Sync-all progress modal. Job state is server-side, so closing or even
+     reloading the page doesn't lose the run — reopening re-attaches. -->
+<Dialog.Root bind:open={syncModalOpen}>
+  <Dialog.Content class="sm:max-w-md" interactOutsideBehavior="ignore">
+    <Dialog.Header>
+      <Dialog.Title>
+        {#if syncJob?.state === 'running'}
+          Syncing sources…
+        {:else if syncJob?.state === 'done'}
+          Sync complete
+        {:else if syncJob?.state === 'cancelled'}
+          Sync cancelled
+        {:else}
+          Sync failed
+        {/if}
+      </Dialog.Title>
+      <Dialog.Description>
+        {#if syncJob?.state === 'running'}
+          Fetching from each source, then rebuilding the layout. You can close this — the sync keeps
+          running on the server.
+        {:else if syncJob?.state === 'done'}
+          All sources synced and the diagram has been rebuilt.
+        {:else if syncJob?.state === 'cancelled'}
+          Stopped. Already-fetched results were discarded; nothing was recorded.
+        {:else}
+          Some steps failed — details below.
+        {/if}
+      </Dialog.Description>
+    </Dialog.Header>
+
+    {#if syncJob}
+      <div class="space-y-4">
+        <div class="h-2 rounded-full bg-theme-bg-subtle overflow-hidden">
+          <div
+            class="h-full rounded-full transition-all duration-500 {syncJob.state === 'failed'
+              ? 'bg-danger'
+              : syncJob.state === 'cancelled'
+                ? 'bg-theme-text-muted'
+                : 'bg-primary'}"
+            style="width: {syncJob.state === 'running' ? syncProgress : 100}%"
+          ></div>
+        </div>
+
+        <ul class="space-y-2">
+          {#each syncJob.steps as step (step.key)}
+            <li class="flex items-start gap-2 text-sm">
+              {#if step.status === 'running'}
+                <span
+                  class="mt-0.5 w-4 h-4 shrink-0 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                ></span>
+              {:else if step.status === 'done'}
+                <CheckCircleIcon size={16} class="mt-0.5 shrink-0 text-success" />
+              {:else if step.status === 'failed'}
+                <span class="mt-0.5 w-4 h-4 shrink-0 text-danger leading-4 text-center">✕</span>
+              {:else if step.status === 'skipped'}
+                <span class="mt-0.5 w-4 h-4 shrink-0 text-theme-text-muted leading-4 text-center"
+                  >–</span
+                >
+              {:else}
+                <span
+                  class="mt-0.5 w-4 h-4 shrink-0 border-2 border-theme-border rounded-full"
+                ></span>
+              {/if}
+              <div class="min-w-0">
+                <span class="text-theme-text-emphasis">
+                  {step.label}
+                  {#if step.key === 'derive' && step.status === 'running' && step.stage}
+                    <span class="text-theme-text-muted"> — {step.stage}</span>
+                  {/if}
+                </span>
+                {#if step.status === 'done' && step.nodeCount !== undefined}
+                  <span class="text-theme-text-muted">
+                    · {step.nodeCount} nodes / {step.linkCount} links</span
+                  >
+                {/if}
+                {#if step.message}
+                  <p class="text-xs text-theme-text-muted break-words">{step.message}</p>
+                {/if}
+              </div>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    <Dialog.Footer>
+      {#if syncJob?.state === 'running'}
+        <Button variant="outline" onclick={handleCancelSync}>Cancel sync</Button>
+        <Button variant="ghost" onclick={() => (syncModalOpen = false)}>Hide</Button>
+      {:else}
+        <Button onclick={() => (syncModalOpen = false)}>Close</Button>
+      {/if}
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>

@@ -195,6 +195,33 @@ export interface ApiError {
 }
 
 // ============================================
+// Sync Job (progress modal / reload re-attach)
+// ============================================
+
+export type SyncStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
+
+export interface SyncJobStep {
+  /** `fetch:<dataSourceId>` or `derive`. */
+  key: string
+  label: string
+  status: SyncStepStatus
+  message?: string
+  nodeCount?: number
+  linkCount?: number
+  /** derive step only — live Worker substage (resolve/icons/layout). */
+  stage?: string
+}
+
+export interface SyncJob {
+  id: string
+  topologyId: string
+  state: 'running' | 'done' | 'failed' | 'cancelled'
+  startedAt: number
+  finishedAt?: number
+  steps: SyncJobStep[]
+}
+
+// ============================================
 // Dashboard Types
 // ============================================
 

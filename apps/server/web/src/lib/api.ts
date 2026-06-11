@@ -18,6 +18,7 @@ import type {
   NodeContribution,
   ScopeFilter,
   ScopeMode,
+  SyncJob,
   SyncMode,
   Topology,
   TopologyContext,
@@ -264,12 +265,6 @@ export const topologies = {
       body: JSON.stringify(mapping),
     }),
 
-  syncFromSource: (id: string) =>
-    request<{ success: boolean; topology: Topology; nodeCount: number; linkCount: number }>(
-      `/topologies/${id}/sync-from-source`,
-      { method: 'POST' },
-    ),
-
   renderSvg: async (id: string): Promise<string> => {
     const response = await fetch(`${BASE_URL}/topologies/${id}/render`)
     if (!response.ok) {
@@ -420,11 +415,21 @@ export const topologies = {
         { method: 'POST' },
       ),
 
+    /** Start a tracked Sync-all job (202). 409 = one is already running — attach via getSyncJob. */
     syncAll: (topologyId: string) =>
-      request<{ topology: Topology; nodeCount: number; linkCount: number }>(
-        `/topologies/${topologyId}/sync-from-source`,
-        { method: 'POST' },
-      ),
+      request<{ job: SyncJob }>(`/topologies/${topologyId}/sync-from-source`, {
+        method: 'POST',
+      }),
+
+    /** Current (or last finished) sync job — drives the progress modal + reload re-attach. */
+    getSyncJob: (topologyId: string) =>
+      request<{ job: SyncJob | null }>(`/topologies/${topologyId}/sync-job`),
+
+    /** Cancel the in-flight sync job (fetches discarded, layout Worker terminated). */
+    cancelSync: (topologyId: string) =>
+      request<{ job: SyncJob | null }>(`/topologies/${topologyId}/sync-job/cancel`, {
+        method: 'POST',
+      }),
 
     /**
      * Sync exactly one attached topology source. Dispatches by
