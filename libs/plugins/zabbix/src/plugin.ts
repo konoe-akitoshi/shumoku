@@ -51,9 +51,13 @@ const LLDP_HOST_BATCH = 50
  * Per-request timeout. The shared HttpClient defaults to 10s, but Zabbix
  * frontends behind a reverse proxy (or polling a large host) can take longer,
  * and the pre-HttpClient code had no timeout at all — 10s was a regression.
- * Matches the NetBox client's 30s.
+ *
+ * 120s: since topology scope moved post-merge, an unscoped sync legitimately
+ * pulls the WHOLE instance (a 1.5k-host lab `host.get` with interfaces /
+ * inventory / tags sits right at the old 30s line and flapped). Sync runs as
+ * a background job now, so a long budget no longer holds a request hostage.
  */
-const REQUEST_TIMEOUT_MS = 30_000
+const REQUEST_TIMEOUT_MS = 120_000
 
 /** Zabbix-specific link mapping with item IDs for direct item reference */
 interface ZabbixLinkMapping extends LinkMetricsMapping {
@@ -126,7 +130,8 @@ export class ZabbixPlugin
     }
 
     try {
-      const version = await this.apiRequest<string>('apiinfo.version')
+      // Health probes must fail fast — don't inherit the long data-fetch budget.
+      const version = await this.apiRequest<string>('apiinfo.version', {}, { timeoutMs: 10_000 })
       return addHttpWarning(this.config.url, {
         success: true,
         message: `Connected to Zabbix ${version}`,
@@ -767,7 +772,11 @@ export class ZabbixPlugin
     return groups.map((g) => ({ value: g.name, label: g.name }))
   }
 
-  private async apiRequest<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  private async apiRequest<T>(
+    method: string,
+    params: Record<string, unknown> = {},
+    opts?: { timeoutMs?: number },
+  ): Promise<T> {
     if (!this.config || !this.http) {
       throw new Error('Plugin not initialized')
     }
@@ -789,6 +798,7 @@ export class ZabbixPlugin
       method: 'POST',
       headers,
       body: { jsonrpc: '2.0', method, params, id },
+      timeoutMs: opts?.timeoutMs,
     })
 
     if (result.error) {
