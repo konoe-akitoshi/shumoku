@@ -86,16 +86,24 @@ function shareSafeGraph(graph: NetworkGraph): NetworkGraph {
   return {
     ...rest,
     nodes: graph.nodes.map((n) => {
-      const { identity: _i, attachments: _a, metadata: _m, ports, ...node } = n
+      const { identity: _i, attachments: _a, metadata, ports, ...node } = n
+      // metadata is stripped EXCEPT the layout-bearing zone name: the
+      // composite layout derives its zones from `metadata.location`, and
+      // the zone label is drawn on the shared diagram anyway — without
+      // it the share view silently renders a completely different
+      // (flat-tree) layout than the one the owner shared.
+      const location = metadata?.['location']
+      const kept = typeof location === 'string' && location !== '' ? { metadata: { location } } : {}
       return ports
         ? {
             ...node,
+            ...kept,
             ports: ports.map((p) => {
               const { identity: _pi, attachments: _pa, ...port } = p
               return port
             }),
           }
-        : node
+        : { ...node, ...kept }
     }),
     links: graph.links.map((l) => {
       const { metadata: _lm, ...link } = l as typeof l & { metadata?: unknown }
