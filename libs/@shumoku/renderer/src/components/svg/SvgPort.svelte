@@ -58,6 +58,8 @@
   const verticalLabel = $derived(
     port.labelOrientation === 'vertical' && (port.side === 'top' || port.side === 'bottom'),
   )
+  // Full label, never truncated — the layout reserves the corridor for
+  // the longest port name (port-geometry lane) instead of hiding text.
   const labelWidth = $derived(engine.text.measure(port.label, 'port') + 4)
   const labelHeight = 12
   const bgX = $derived(() => {

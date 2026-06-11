@@ -43,16 +43,52 @@ import type { ResolvedEdge } from '../resolved-types.js'
  * Mutates the ResolvedPort objects in place (1 port = 1 link, so a flip
  * never affects another edge). Returns the number of ports re-seated.
  */
+export interface AlignResult {
+  /** Number of ports re-seated to face their peer. */
+  flipped: number
+  /**
+   * Nodes whose busiest face could not seat its ports at full slot
+   * width (the pass had to compress). Value = the full width/height
+   * the node NEEDS. Feed back into the next layout round as
+   * `minNodeWidths` / `minNodeHeights` — growing the node is the
+   * correct resolution; compression is only the within-round fallback.
+   */
+  minWidths: Map<string, number>
+  minHeights: Map<string, number>
+}
+
+/** Slot a port claims along its face: stroke width + air, floored so a
+ *  12px label strip plus breathing room always fits. Keep in sync with
+ *  the face-demand estimate in `layoutComposite`. */
+export const PORT_SLOT = (edgeWidth: number): number => Math.max(14, edgeWidth + 4)
+
 export function alignPortsToPeers(
   edges: Map<string, ResolvedEdge>,
   nodes: Map<string, Node>,
-): number {
+  options: {
+    /**
+     * For collapsed redundant pairs: each member's OUTWARD lateral side
+     * (left member → 'left', right member → 'right'). A member's
+     * side-seated ports always use the outward face — seating them
+     * toward the partner puts ports, labels and wires inside the 16px
+     * pair gap, on top of the partner.
+     */
+    outwardSide?: ReadonlyMap<string, 'left' | 'right'>
+  } = {},
+): AlignResult {
   let flipped = 0
+  const minWidths = new Map<string, number>()
+  const minHeights = new Map<string, number>()
   const seat = (
     port: ResolvedEdge['fromPort'],
     nodeId: string,
     side: 'top' | 'bottom' | 'left' | 'right',
   ): void => {
+    // Uniform label policy for the composite schematic: top/bottom port
+    // labels ALWAYS run along the wire (vertical), side ports stay
+    // horizontal. Mixed orientations on one face read as clutter, and
+    // horizontal labels can never clear each other at schematic pitch.
+    port.labelOrientation = side === 'top' || side === 'bottom' ? 'vertical' : 'horizontal'
     if (port.side === side) return
     const node = nodes.get(nodeId)
     const center = node?.position
@@ -96,16 +132,12 @@ export function alignPortsToPeers(
       )
     } else {
       const leftIsFrom = fromCenter.x <= toCenter.x
-      seat(
-        leftIsFrom ? edge.fromPort : edge.toPort,
-        leftIsFrom ? edge.fromNodeId : edge.toNodeId,
-        'right',
-      )
-      seat(
-        leftIsFrom ? edge.toPort : edge.fromPort,
-        leftIsFrom ? edge.toNodeId : edge.fromNodeId,
-        'left',
-      )
+      const rightSidePort = leftIsFrom ? edge.fromPort : edge.toPort
+      const rightSideNode = leftIsFrom ? edge.fromNodeId : edge.toNodeId
+      const leftSidePort = leftIsFrom ? edge.toPort : edge.fromPort
+      const leftSideNode = leftIsFrom ? edge.toNodeId : edge.fromNodeId
+      seat(rightSidePort, rightSideNode, options.outwardSide?.get(rightSideNode) ?? 'right')
+      seat(leftSidePort, leftSideNode, options.outwardSide?.get(leftSideNode) ?? 'left')
     }
   }
 
@@ -118,6 +150,10 @@ export function alignPortsToPeers(
     string,
     { port: ResolvedEdge['fromPort']; peerX: number; width: number; edgeId: string }[]
   >()
+  const sideGroups = new Map<
+    string,
+    { port: ResolvedEdge['fromPort']; peerY: number; width: number; edgeId: string }[]
+  >()
   for (const edge of sortedForSeat) {
     if (edge.coupling) continue
     const ends: [ResolvedEdge['fromPort'], ResolvedEdge['fromPort']][] = [
@@ -125,11 +161,17 @@ export function alignPortsToPeers(
       [edge.toPort, edge.fromPort],
     ]
     for (const [port, peer] of ends) {
-      if (port.side !== 'top' && port.side !== 'bottom') continue
-      const key = `${port.nodeId}|${port.side}`
-      const group = faceGroups.get(key) ?? []
-      group.push({ port, peerX: peer.absolutePosition.x, width: edge.width, edgeId: edge.id })
-      faceGroups.set(key, group)
+      if (port.side === 'top' || port.side === 'bottom') {
+        const key = `${port.nodeId}|${port.side}`
+        const group = faceGroups.get(key) ?? []
+        group.push({ port, peerX: peer.absolutePosition.x, width: edge.width, edgeId: edge.id })
+        faceGroups.set(key, group)
+      } else {
+        const key = `${port.nodeId}|${port.side}`
+        const group = sideGroups.get(key) ?? []
+        group.push({ port, peerY: peer.absolutePosition.y, width: edge.width, edgeId: edge.id })
+        sideGroups.set(key, group)
+      }
     }
   }
   for (const [key, group] of [...faceGroups].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
@@ -140,25 +182,46 @@ export function alignPortsToPeers(
     if (!node || !center) continue
     const size = resolveNodeSize(node)
     group.sort((a, b) => a.peerX - b.peerX || (a.edgeId < b.edgeId ? -1 : 1))
-    const slots = group.map((entry) => Math.max(8, entry.width + 4))
+    const slots = group.map((entry) => PORT_SLOT(entry.width))
     const total = slots.reduce((sum, w) => sum + w, 0)
     const faceWidth = Math.max(12, size.width - 8)
     const scale = total > faceWidth ? faceWidth / total : 1
+    if (scale < 1) {
+      // under-provisioned face: report the width the node actually needs
+      minWidths.set(nodeId, Math.max(minWidths.get(nodeId) ?? 0, total + 8))
+    }
     let cursor = center.x - (total * scale) / 2
     for (const [i, entry] of group.entries()) {
-      const w = (slots[i] ?? 8) * scale
+      const w = (slots[i] ?? 14) * scale
       entry.port.absolutePosition = { ...entry.port.absolutePosition, x: cursor + w / 2 }
       cursor += w
     }
-    // Horizontal port labels are ~40-70px wide; when the face pitch is
-    // tighter than that, they physically cannot clear each other — tell
-    // the renderer to run the labels along the wires instead.
-    const pitch = (total * scale) / group.length
-    if (pitch < 44) {
-      for (const entry of group) entry.port.labelOrientation = 'vertical'
+  }
+  // Same discipline for the side faces — without this every left/right
+  // port of a node sat on the exact same point (test6: 106 port-port
+  // collisions, all on side faces of same-depth peer routers).
+  for (const [key, group] of [...sideGroups].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    const nodeId = key.slice(0, key.lastIndexOf('|'))
+    const node = nodes.get(nodeId)
+    const center = node?.position
+    if (!node || !center) continue
+    const size = resolveNodeSize(node)
+    group.sort((a, b) => a.peerY - b.peerY || (a.edgeId < b.edgeId ? -1 : 1))
+    const slots = group.map((entry) => PORT_SLOT(entry.width))
+    const total = slots.reduce((sum, h) => sum + h, 0)
+    const faceHeight = Math.max(12, size.height - 8)
+    const scale = total > faceHeight ? faceHeight / total : 1
+    if (scale < 1) {
+      minHeights.set(nodeId, Math.max(minHeights.get(nodeId) ?? 0, total + 8))
+    }
+    let cursor = center.y - (total * scale) / 2
+    for (const [i, entry] of group.entries()) {
+      const h = (slots[i] ?? 14) * scale
+      entry.port.absolutePosition = { ...entry.port.absolutePosition, y: cursor + h / 2 }
+      cursor += h
     }
   }
-  return flipped
+  return { flipped, minWidths, minHeights }
 }
 
 /** A rectangle wires must not run through (zone box or node box). */
@@ -642,18 +705,28 @@ export function applyOctilinearRoutes(
   }
   for (const comb of combRoutes) {
     const n = comb.members.length
+    // Ports keep their own slots on the face (each is a real interface
+    // with its own label); the drops GATHER into the shared trunk via a
+    // short 45° merge just below the face — the harness reading.
+    const gatherY = Math.max(...comb.members.map((m) => m.py)) + 6
     for (const [i, m] of comb.members.entries()) {
       const edge = edges.get(m.edgeId)
       if (!edge) continue
-      // collapse the parent port onto the shared trunk
-      const parentPort = edge.fromNodeId === comb.id ? edge.fromPort : edge.toPort
-      parentPort.absolutePosition = { ...parentPort.absolutePosition, x: comb.trunkX }
-      const corner: Position[] = [
-        { x: comb.trunkX, y: m.py },
+      const dx = Math.abs(m.px - comb.trunkX)
+      const raw: Position[] = [
+        { x: m.px, y: m.py },
+        { x: m.px, y: gatherY },
+        { x: comb.trunkX, y: gatherY + dx },
         { x: comb.trunkX, y: comb.busY },
         { x: m.cx, y: comb.busY },
         { x: m.cx, y: m.cy },
       ]
+      // drop zero-length segments (member sitting exactly on the trunk)
+      const corner = raw.filter(
+        (p, idx) =>
+          idx === 0 ||
+          Math.hypot(p.x - (raw[idx - 1]?.x ?? p.x), p.y - (raw[idx - 1]?.y ?? p.y)) > 0.5,
+      )
       edge.route = {
         kind: 'bus',
         points: chamferCorners(corner, chamfer),

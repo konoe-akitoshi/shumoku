@@ -100,10 +100,12 @@ export {
   findCollinearOverlaps,
   findContainmentViolations,
   findNodeOverlaps,
+  findPortClutter,
   type LayoutInvariantOptions,
   type LayoutInvariantReport,
   type NodeOverlap,
   type PolylineSpec,
+  type PortClutter,
 } from './invariants.js'
 export {
   bpsToLinkWidth,
@@ -115,6 +117,17 @@ export {
   linkSpeedBps,
   resolveBandwidthBps,
 } from './link-utils.js'
+// Port / port-label geometry — single source of truth shared by the
+// renderer, the invariant checker and the routed score.
+export {
+  PORT_LABEL_BOX_OFFSET,
+  PORT_LABEL_FONT,
+  PORT_LABEL_H,
+  portBox,
+  portLabelBox,
+  portLabelLength,
+  portLabelReach,
+} from './port-geometry.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
 // Resolved layout model (Port/Edge as computed objects, Node/Subgraph used directly)

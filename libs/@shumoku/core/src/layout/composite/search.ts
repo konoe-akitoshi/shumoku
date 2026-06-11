@@ -22,8 +22,9 @@
 import type { NetworkGraph } from '../../models/types.js'
 import { placePorts } from '../auto-placement/flat-tree/port-placement.js'
 import { resolveNodeSize } from '../engine/index.js'
-import { findCollinearOverlaps, type PolylineSpec } from '../invariants.js'
+import { findCollinearOverlaps, findPortClutter, type PolylineSpec } from '../invariants.js'
 import { getLinkWidthForMode } from '../link-utils.js'
+import { portLabelBox } from '../port-geometry.js'
 import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from '../resolved-types.js'
 import { routeEdges } from '../route-edges.js'
 import {
@@ -44,6 +45,8 @@ export interface RoutedScore {
   length: number
   /** Wires that climb against the hierarchy (deeper node drawn above its shallower peer). */
   upward: number
+  /** Port-box / label-box collisions (first-class geometry, #430 lesson). */
+  clutter: number
 }
 
 export interface CompositeSearchResult {
@@ -51,6 +54,13 @@ export interface CompositeSearchResult {
   ports: Map<string, ResolvedPort>
   edges: Map<string, ResolvedEdge>
   score: RoutedScore
+  /**
+   * Faces that had to compress their port slots this round: node id →
+   * width/height the node needs. Non-empty means the layout should
+   * re-run with these as `minNodeWidths`/`minNodeHeights`
+   * (port-demand feedback).
+   */
+  portDeficits: { widths: Map<string, number>; heights: Map<string, number> }
 }
 
 export interface CompositeSearchOptions {
@@ -77,9 +87,26 @@ async function evaluate(
       comp.heartbeats.has(pairKey(edge.fromNodeId, edge.toNodeId))
     ) {
       edge.coupling = true
+      // the glasses bridge spans a 16px pair gap — port labels there can
+      // only ever collide with the partner, so they don't render
+      edge.fromPort.label = ''
+      edge.toPort.label = ''
     }
   }
-  alignPortsToPeers(edges, comp.nodes)
+  // pair members seat lateral ports on their OUTWARD face, never into
+  // the 16px gap toward the partner
+  const outwardSide = new Map<string, 'left' | 'right'>()
+  for (const pair of comp.pairs) {
+    const members = pair.split('+')
+    const a = members[0]
+    const b = members[1]
+    if (a === undefined || b === undefined) continue
+    const ax = comp.nodes.get(a)?.position?.x ?? 0
+    const bx = comp.nodes.get(b)?.position?.x ?? 0
+    outwardSide.set(ax <= bx ? a : b, 'left')
+    outwardSide.set(ax <= bx ? b : a, 'right')
+  }
+  const align = alignPortsToPeers(edges, comp.nodes, { outwardSide })
   const obstacles: RoutingObstacle[] = []
   for (const [id, sg] of comp.subgraphs) {
     if (sg.bounds) obstacles.push({ id, bounds: sg.bounds })
@@ -147,6 +174,18 @@ async function evaluate(
       figure = grow(figure, p.x, p.y, half)
       for (const id of owners) internal.set(id, grow(internal.get(id), p.x, p.y, half))
     }
+    // Port labels are owned geometry — their boxes are footprint too.
+    for (const port of [edge.fromPort, edge.toPort]) {
+      const labelRect = portLabelBox(port)
+      if (!labelRect) continue
+      for (const [x, y] of [
+        [labelRect.x, labelRect.y],
+        [labelRect.x + labelRect.width, labelRect.y + labelRect.height],
+      ] as const) {
+        figure = grow(figure, x, y, 2)
+        for (const id of owners) internal.set(id, grow(internal.get(id), x, y, 2))
+      }
+    }
     // Labels are part of the edge's rendered footprint too. Mirror the
     // renderer's placement (midpoint of the routed points, 10px mono,
     // centered, one 12px line per label) with a conservative width
@@ -196,7 +235,13 @@ async function evaluate(
     const by2 = Math.max(bb.y + bb.height, figure.y2 + 28)
     comp.bounds = { x: bx1, y: by1, width: bx2 - bx1, height: by2 - by1 }
   }
-  return { comp, ports, edges, score: scoreRoutedEdges(edges, comp.nodes, comp.depths) }
+  return {
+    comp,
+    ports,
+    edges,
+    score: scoreRoutedEdges(edges, comp.nodes, comp.depths),
+    portDeficits: { widths: align.minWidths, heights: align.minHeights },
+  }
 }
 
 /**
@@ -218,22 +263,55 @@ export async function searchCompositeLayout(
     return evaluate(graph, layoutOptions)
   }
 
-  // 1) multi-start over the gap grid
+  let bestOptions: CompositeLayoutOptions = {}
+  let best = await evaluate(graph, bestOptions)
+  evaluations++
+
+  // 0) port-demand feedback: a face that had to compress its port slots
+  //    reports the width its node needs. Re-layout with those floors —
+  //    adopted unconditionally, because compressed ports are a geometric
+  //    violation (overlapping port/label boxes), not a style preference.
+  //    Faces can shift after resizing, so iterate (bounded).
+  let widthFloors: ReadonlyMap<string, number> | undefined
+  let heightFloors: ReadonlyMap<string, number> | undefined
+  for (
+    let round = 0;
+    round < 3 && (best.portDeficits.widths.size > 0 || best.portDeficits.heights.size > 0);
+    round++
+  ) {
+    const mergedW = new Map(widthFloors ?? [])
+    for (const [id, w] of best.portDeficits.widths) {
+      mergedW.set(id, Math.max(mergedW.get(id) ?? 0, w))
+    }
+    const mergedH = new Map(heightFloors ?? [])
+    for (const [id, h] of best.portDeficits.heights) {
+      mergedH.set(id, Math.max(mergedH.get(id) ?? 0, h))
+    }
+    widthFloors = mergedW
+    heightFloors = mergedH
+    const candidate = await budgeted({
+      ...bestOptions,
+      minNodeWidths: widthFloors,
+      minNodeHeights: heightFloors,
+    })
+    if (!candidate) break
+    best = candidate
+    bestOptions = { ...bestOptions, minNodeWidths: widthFloors, minNodeHeights: heightFloors }
+  }
+
+  // 1) multi-start over the gap grid (floors ride along)
   const variants: CompositeLayoutOptions[] = [
-    {},
     { zoneGap: 70 },
     { bandGap: 120 },
     { cellGapX: 24 },
     { zoneGap: 70, bandGap: 190 },
   ]
-  let bestOptions: CompositeLayoutOptions = {}
-  let best = await evaluate(graph, bestOptions)
-  evaluations++
-  for (const variant of variants.slice(1)) {
-    const candidate = await budgeted(variant)
+  for (const variant of variants) {
+    const trial = { ...variant, minNodeWidths: widthFloors, minNodeHeights: heightFloors }
+    const candidate = await budgeted(trial)
     if (candidate && candidate.score.cost < best.score.cost) {
       best = candidate
-      bestOptions = variant
+      bestOptions = trial
     }
   }
 
@@ -462,6 +540,29 @@ export function scoreRoutedEdges(
       if (hit) pierce++
     }
   }
+  // port/label clutter: collisions among owned geometry (port boxes,
+  // label boxes, labels vs foreign nodes). With the demand feedback
+  // this should be zero; the term makes any residual visible to the
+  // search instead of invisible to it.
+  const seenPorts = new Map<string, ResolvedPort>()
+  for (const edge of edges.values()) {
+    seenPorts.set(edge.fromPort.id, edge.fromPort)
+    seenPorts.set(edge.toPort.id, edge.toPort)
+  }
+  const nodeBoxSpecs = [...nodes]
+    .filter(([, node]) => node.position)
+    .map(([id, node]) => {
+      const size = resolveNodeSize(node)
+      return {
+        id,
+        x: node.position?.x ?? 0,
+        y: node.position?.y ?? 0,
+        width: size.width,
+        height: size.height,
+      }
+    })
+  const clutter = findPortClutter([...seenPorts.values()], nodeBoxSpecs).length
+
   // upward penalty (v3 §31): 基本上流>下流 — a wire whose deeper endpoint
   // sits ABOVE its shallower endpoint reads as the hierarchy inverting.
   let upward = 0
@@ -479,13 +580,21 @@ export function scoreRoutedEdges(
     }
   }
   return {
-    cost: crossings + collinear * 8 + pierce * 2 + bends * 0.4 + length / 400 + upward * 12,
+    cost:
+      crossings +
+      collinear * 8 +
+      pierce * 2 +
+      bends * 0.4 +
+      length / 400 +
+      upward * 12 +
+      clutter * 6,
     crossings,
     collinear,
     pierce,
     bends,
     length,
     upward,
+    clutter,
   }
 }
 
