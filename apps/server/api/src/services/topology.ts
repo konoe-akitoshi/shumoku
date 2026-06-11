@@ -1144,13 +1144,19 @@ export class TopologyService {
       return fromArtifact
     }
 
-    // Bake in the Worker. Wait a short grace period so small topologies return
-    // their fresh result in this request (tests + snappy UX); a big layout
-    // overshoots it and we fall through to stale-serving below.
-    await Promise.race([
-      kickDerivation(id, this),
-      new Promise((resolveSleep) => setTimeout(resolveSleep, DERIVE_WAIT_MS)),
-    ])
+    // Bake in the Worker. When WE just started the bake, wait a short grace
+    // period so small topologies return their fresh result in this request
+    // (tests + snappy UX). When a bake was already in flight, skip the wait —
+    // a big layout means every request during it would otherwise idle the
+    // full grace period before serving the same stale artifact.
+    const alreadyBaking = isDeriving(id)
+    const baking = kickDerivation(id, this)
+    if (!alreadyBaking) {
+      await Promise.race([
+        baking,
+        new Promise((resolveSleep) => setTimeout(resolveSleep, DERIVE_WAIT_MS)),
+      ])
+    }
     const baked = this.cache.get(id)
     if (baked) return baked
     if (this.errorCache.has(id)) return null
