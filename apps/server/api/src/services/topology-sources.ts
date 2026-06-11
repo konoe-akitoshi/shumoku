@@ -102,6 +102,25 @@ export class TopologySourcesService {
   }
 
   /**
+   * Reverse lookup: topologies a data source is attached to. Used to
+   * invalidate each parent topology's parsed cache when the source's
+   * config changes (a Manual source's graph lives in config_json), and
+   * by the Manual datasource page to render "edit in <topology>" links.
+   */
+  listAttachedTopologies(dataSourceId: string): { topologyId: string; name: string }[] {
+    const rows = this.db
+      .query(
+        `SELECT t.id AS topology_id, t.name
+         FROM topology_data_sources tds
+         JOIN topologies t ON t.id = tds.topology_id
+         WHERE tds.data_source_id = ?
+         ORDER BY t.name ASC`,
+      )
+      .all(dataSourceId) as { topology_id: string; name: string }[]
+    return rows.map((r) => ({ topologyId: r.topology_id, name: r.name }))
+  }
+
+  /**
    * List data sources by purpose (topology or metrics)
    */
   listByPurpose(topologyId: string, purpose: DataSourcePurpose): TopologyDataSource[] {

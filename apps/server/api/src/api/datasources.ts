@@ -10,6 +10,7 @@ import type { AlertQueryOptions } from '../plugins/types.js'
 import { hasNativeApi } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import type { DataSourceInput } from '../types.js'
+import { getTopologyService, getTopologySourcesService } from './topologies.js'
 
 /**
  * Mask sensitive fields in config JSON
@@ -55,6 +56,18 @@ function validateConfigForType(type: string, configJson: string): string | null 
   const result = validateAgainstSchema(schema, parsed)
   if (result.ok) return null
   return result.errors.map((e) => `${e.path}: ${e.message}`).join('; ')
+}
+
+/**
+ * Drop the parsed-topology cache of every topology this source is attached
+ * to. Mirrors the invalidation the observation / sync / discovery-policy
+ * endpoints already do — without it, `getParsed()` keeps serving the
+ * pre-change resolved graph to /topologies/:id/graph and the share endpoints.
+ */
+function invalidateAttachedTopologies(dataSourceId: string): void {
+  for (const { topologyId } of getTopologySourcesService().listAttachedTopologies(dataSourceId)) {
+    getTopologyService().clearCacheEntry(topologyId)
+  }
 }
 
 export function createDataSourcesApi(): Hono {
@@ -172,17 +185,7 @@ export function createDataSourcesApi(): Hono {
   app.get('/:id/topologies', (c) => {
     const id = c.req.param('id')
     if (!service.get(id)) return c.json({ error: 'Data source not found' }, 404)
-    const db = (service as unknown as { db: import('bun:sqlite').Database }).db
-    const rows = db
-      .query(
-        `SELECT t.id AS topology_id, t.name
-         FROM topology_data_sources tds
-         JOIN topologies t ON t.id = tds.topology_id
-         WHERE tds.data_source_id = ?
-         ORDER BY t.name ASC`,
-      )
-      .all(id) as { topology_id: string; name: string }[]
-    return c.json(rows.map((r) => ({ topologyId: r.topology_id, name: r.name })))
+    return c.json(getTopologySourcesService().listAttachedTopologies(id))
   })
 
   // Get single data source
@@ -248,6 +251,11 @@ export function createDataSourcesApi(): Hono {
       if (!dataSource) {
         return c.json({ error: 'Data source not found' }, 404)
       }
+      // A config change can change what parseTopology resolves (a Manual
+      // source's graph lives in config_json), so drop the parsed cache of
+      // every attached topology — otherwise share/graph views serve the
+      // pre-edit graph until the process restarts.
+      invalidateAttachedTopologies(id)
       return c.json({
         ...dataSource,
         configJson: maskConfigSecrets(dataSource.configJson),
@@ -261,9 +269,16 @@ export function createDataSourcesApi(): Hono {
   // Delete data source
   app.delete('/:id', (c) => {
     const id = c.req.param('id')
+    // Resolve attachments BEFORE the delete — the junction rows go away
+    // with it (ON DELETE CASCADE), and the parents' resolved graphs must
+    // be recomputed without this source's contribution.
+    const attached = getTopologySourcesService().listAttachedTopologies(id)
     const deleted = service.delete(id)
     if (!deleted) {
       return c.json({ error: 'Data source not found' }, 404)
+    }
+    for (const { topologyId } of attached) {
+      getTopologyService().clearCacheEntry(topologyId)
     }
     return c.json({ success: true })
   })

@@ -189,7 +189,7 @@ export function getDataSourceService(): DataSourceService {
   return _dataSourceService
 }
 
-function getTopologySourcesService(): TopologySourcesService {
+export function getTopologySourcesService(): TopologySourcesService {
   if (!_topologySourcesService) {
     _topologySourcesService = new TopologySourcesService()
   }
