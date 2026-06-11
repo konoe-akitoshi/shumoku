@@ -5,6 +5,7 @@
 
 import type { NetworkGraph } from '@shumoku/core'
 import { Hono } from 'hono'
+import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
@@ -470,7 +471,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
       statusMessage = snapshot.statusMessage
       warnings = snapshot.warnings
     } else if (hasTopologyCapability(plugin)) {
-      const opts = attached.optionsJson ? JSON.parse(attached.optionsJson) : undefined
+      const opts = parseSyncOptions(plugin.type, attached.optionsJson)
       graph = await plugin.fetchTopology(opts)
       status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
     } else {

@@ -47,6 +47,7 @@
 
 import { computeEffectivePolicy, type NetworkGraph, RUNTIME_DEFAULT } from '@shumoku/core'
 import { getDatabase } from '../db/index.js'
+import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from './datasource.js'
 import { ObservationsService } from './observations.js'
@@ -102,7 +103,7 @@ export async function syncSource(
       status = snapshot.status
       statusMessage = snapshot.statusMessage
     } else if (hasTopologyCapability(plugin)) {
-      const opts = attached.optionsJson ? JSON.parse(attached.optionsJson) : undefined
+      const opts = parseSyncOptions(plugin.type, attached.optionsJson)
       graph = await plugin.fetchTopology(opts)
       status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
     } else {

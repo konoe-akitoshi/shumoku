@@ -12,6 +12,7 @@ import {
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
 import { getLayoutEngine } from '../layout.js'
+import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
@@ -575,7 +576,7 @@ export function createTopologiesApi(): Hono {
             statusMessage = snapshot.statusMessage
           } else if (hasTopologyCapability(plugin)) {
             // NetBox / Zabbix-topology / etc. — wrap fetchTopology in a snapshot.
-            const opts = source.optionsJson ? JSON.parse(source.optionsJson) : undefined
+            const opts = parseSyncOptions(plugin.type, source.optionsJson)
             graph = await plugin.fetchTopology(opts)
             status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
           } else {
