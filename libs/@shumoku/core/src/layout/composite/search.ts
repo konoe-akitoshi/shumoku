@@ -61,10 +61,19 @@ export interface CompositeSearchResult {
    * (port-demand feedback).
    */
   portDeficits: { widths: Map<string, number>; heights: Map<string, number> }
+  /** Search telemetry: how much of the budget ran and what it bought. */
+  stats?: {
+    evaluations: number
+    accepted: number
+    initialCost: number
+    finalCost: number
+  }
 }
 
 export interface CompositeSearchOptions {
-  /** Hard cap on layout+route evaluations. Default 48. */
+  /** Hard cap on layout+route evaluations. Default 160 (~2s on a
+   *  60-node graph — the v3 norm; the move vocabulary saturates near
+   *  190, so larger budgets buy nothing). */
   maxEvaluations?: number
 }
 
@@ -254,7 +263,7 @@ export async function searchCompositeLayout(
   graph: NetworkGraph,
   options: CompositeSearchOptions = {},
 ): Promise<CompositeSearchResult> {
-  const maxEvaluations = options.maxEvaluations ?? 48
+  const maxEvaluations = options.maxEvaluations ?? 160
   let evaluations = 0
   const budgeted = async (
     layoutOptions: CompositeLayoutOptions,
@@ -267,6 +276,8 @@ export async function searchCompositeLayout(
   let bestOptions: CompositeLayoutOptions = {}
   let best = await evaluate(graph, bestOptions)
   evaluations++
+  let accepted = 0
+  const initialCost = best.score.cost
 
   // 0) port-demand feedback: a face that had to compress its port slots
   //    reports the width its node needs. Re-layout with those floors —
@@ -297,6 +308,7 @@ export async function searchCompositeLayout(
     })
     if (!candidate) break
     best = candidate
+    accepted++
     bestOptions = { ...bestOptions, minNodeWidths: widthFloors, minNodeHeights: heightFloors }
   }
 
@@ -306,12 +318,17 @@ export async function searchCompositeLayout(
     { bandGap: 120 },
     { cellGapX: 24 },
     { zoneGap: 70, bandGap: 190 },
+    { zoneGap: 60, bandGap: 130 },
+    { zoneGap: 110 },
+    { maxBandW: 2600 },
+    { maxBandW: 3200 },
   ]
   for (const variant of variants) {
     const trial = { ...variant, minNodeWidths: widthFloors, minNodeHeights: heightFloors }
     const candidate = await budgeted(trial)
     if (candidate && candidate.score.cost < best.score.cost) {
       best = candidate
+      accepted++
       bestOptions = trial
     }
   }
@@ -322,6 +339,7 @@ export async function searchCompositeLayout(
     const candidate = await budgeted({ ...bestOptions, bandExtra })
     if (candidate && candidate.score.cost < best.score.cost) {
       best = candidate
+      accepted++
       bestOptions = { ...bestOptions, bandExtra }
     }
   }
@@ -333,7 +351,7 @@ export async function searchCompositeLayout(
   for (const [bandIndex, blocks] of best.comp.bandBlocks.entries()) {
     if (blocks.length < 2) continue
     const current = [...(acceptedOrders.get(bandIndex) ?? blocks)]
-    const maxSwaps = Math.min(3, current.length - 1)
+    const maxSwaps = Math.min(5, current.length - 1)
     for (let i = 0; i < maxSwaps; i++) {
       const swapped = [...current]
       const a = swapped[i]
@@ -346,6 +364,7 @@ export async function searchCompositeLayout(
       const candidate = await budgeted({ ...bestOptions, bandOrder: trial })
       if (candidate && candidate.score.cost < best.score.cost) {
         best = candidate
+        accepted++
         acceptedOrders.set(bandIndex, swapped)
         current.splice(0, current.length, ...swapped)
       }
@@ -361,6 +380,7 @@ export async function searchCompositeLayout(
     const candidate = await budgeted({ ...bestOptions, pairFlips: trial })
     if (candidate && candidate.score.cost < best.score.cost) {
       best = candidate
+      accepted++
       flips.add(pair)
     }
   }
@@ -386,22 +406,36 @@ export async function searchCompositeLayout(
   }
   const busiest = [...unitDegree.entries()]
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
-    .slice(0, 6)
+    .slice(0, 16)
     .map(([id]) => id)
   const nudges = new Map<string, number>()
-  for (const unitId of busiest) {
-    for (const dx of [24, -24]) {
-      const trial = new Map(nudges)
-      trial.set(unitId, dx)
-      const candidate = await budgeted({ ...bestOptions, nudges: trial })
-      if (candidate && candidate.score.cost < best.score.cost) {
-        best = candidate
-        nudges.set(unitId, dx)
-        break
+  // wider amplitude grid + second round while budget remains: the ±24
+  // single shot left obvious slack on the table
+  for (let round = 0; round < 2; round++) {
+    let improvedThisRound = false
+    for (const unitId of busiest) {
+      for (const dx of [24, -24, 48, -48, 96, -96]) {
+        const trial = new Map(nudges)
+        trial.set(unitId, (nudges.get(unitId) ?? 0) + dx)
+        const candidate = await budgeted({ ...bestOptions, nudges: trial })
+        if (candidate && candidate.score.cost < best.score.cost) {
+          best = candidate
+          accepted++
+          nudges.set(unitId, trial.get(unitId) ?? dx)
+          improvedThisRound = true
+          break
+        }
       }
     }
+    if (!improvedThisRound) break
   }
 
+  best.stats = {
+    evaluations,
+    accepted,
+    initialCost,
+    finalCost: best.score.cost,
+  }
   return best
 }
 
@@ -679,7 +713,9 @@ export function scoreRoutedEdges(
       bends * 0.4 +
       length / 400 +
       upward * 12 +
-      clutter * 6,
+      // overlap-free is a REQUIREMENT, not a preference — weight high
+      // enough that no crossing/length win can buy a collision
+      clutter * 40,
     crossings,
     collinear,
     pierce,
