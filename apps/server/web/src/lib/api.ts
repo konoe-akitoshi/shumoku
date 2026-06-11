@@ -3,7 +3,8 @@
  * Handles all communication with the Shumoku server API
  */
 
-import type { NetworkGraph } from '@shumoku/core'
+import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
+import { parseWithMaps } from '@shumoku/core'
 import type {
   Alert,
   AlertQueryOptions,
@@ -283,6 +284,37 @@ export const topologies = {
       /** 202 — first bake still running, nothing to serve yet. */
       deriving?: boolean
     }>(scoped(`/topologies/${id}/graph`, `/topologies/${id}/graph`)),
+
+  /**
+   * Graph + the SERVER-BAKED ResolvedLayout in one consistent snapshot.
+   * The interactive viewer uses this so it never recomputes a large layout
+   * on the browser main thread. Maps arrive tagged — parsed here.
+   */
+  getView: async (
+    id: string,
+  ): Promise<{
+    id?: string
+    name?: string
+    graph?: NetworkGraph
+    resolved?: ResolvedLayout
+    stale?: boolean
+    deriving?: boolean
+  }> => {
+    const path = scoped(`/topologies/${id}/view`, `/topologies/${id}/view`)
+    const response = await fetch(`${BASE_URL}${path}`)
+    if (response.status === 202) return { deriving: true }
+    if (!response.ok) {
+      let message = `HTTP error ${response.status}`
+      try {
+        const data = (await response.json()) as { error?: string }
+        if (data.error) message = data.error
+      } catch {
+        // Ignore JSON parsing error
+      }
+      throw new ApiError(message, response.status)
+    }
+    return parseWithMaps(await response.text())
+  },
 
   /** Resolved graph = project overlay folded with each attached source's contribution. */
   getResolved: (id: string) =>

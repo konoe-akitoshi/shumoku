@@ -18,6 +18,8 @@ export * from './icons/index.js'
 export * from './ids.js'
 // Layout
 export * from './layout/index.js'
+// Map-aware JSON (layout artifacts hold Maps)
+export * from './map-json.js'
 // Models
 export * from './models/index.js'
 // Observation (discovery / resolve)

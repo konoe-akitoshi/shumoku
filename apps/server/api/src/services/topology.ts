@@ -47,7 +47,9 @@ import {
   createMemoryFileResolver,
   deriveMappingFromGraph,
   HierarchicalParser,
+  parseWithMaps,
   sampleNetwork,
+  stringifyWithMaps,
   YamlParser,
 } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
@@ -129,37 +131,6 @@ interface ScopeCriterionRow {
  * stale and recomputed without a manual purge.
  */
 const RESOLVER_VERSION = 2
-
-/**
- * Map-aware JSON round-trip. `LayoutResult` / `ResolvedLayout` are Map-heavy
- * (nodes/links/ports/subgraphs are `Map`s) and `JSON.stringify` silently turns a
- * Map into `{}`, so the persisted artifact would be corrupt. These encode a Map
- * as `{__map__: [...entries]}` recursively (the replacer/reviver visit every
- * value), so arbitrarily-nested Maps survive the round-trip.
- */
-const MAP_TAG = '__map__'
-function stringifyWithMaps(value: unknown): string {
-  return JSON.stringify(value, (_k, v) =>
-    v instanceof Map ? { [MAP_TAG]: Array.from(v.entries()) } : v,
-  )
-}
-function parseWithMaps<T>(text: string): T {
-  return JSON.parse(text, (_k, v) => {
-    // Only the encoder's exact shape `{ __map__: [...] }` (a single key) is a
-    // tagged Map — so a real object that merely *has* a `__map__` array property
-    // is not misread as a Map.
-    if (
-      v &&
-      typeof v === 'object' &&
-      !Array.isArray(v) &&
-      Object.keys(v).length === 1 &&
-      Array.isArray((v as Record<string, unknown>)[MAP_TAG])
-    ) {
-      return new Map((v as Record<string, [unknown, unknown][]>)[MAP_TAG])
-    }
-    return v
-  }) as T
-}
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
