@@ -14,10 +14,27 @@
  * topology.
  */
 
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import type { DeriveResult, TopologyService } from './topology.js'
 
 /** Hard ceiling — a runaway layout must not pin a core forever. */
 const DERIVE_TIMEOUT_MS = 30 * 60_000
+
+/**
+ * Worker entry path. In the bundled production image the worker ships as a
+ * sibling bundle of the server entry (`/app/derive-worker.js`, see
+ * esbuild.config.js + Dockerfile); in dev we run the TS source directly.
+ */
+function deriveWorkerUrl(): URL {
+  const bundled = new URL('./derive-worker.js', import.meta.url)
+  try {
+    if (existsSync(fileURLToPath(bundled))) return bundled
+  } catch {
+    // non-file URL (unlikely) — fall through to the TS source
+  }
+  return new URL('./derive-worker.ts', import.meta.url)
+}
 
 export type DeriveStage = 'resolve' | 'icons' | 'layout'
 
@@ -69,7 +86,7 @@ export function kickDerivation(topologyId: string, svc: TopologyService): Promis
   if (!inputs) return Promise.resolve()
   const startedRevision = svc.compositionRevisionOf(topologyId)
 
-  const worker = new Worker(new URL('./derive-worker.ts', import.meta.url).href)
+  const worker = new Worker(deriveWorkerUrl().href)
   let settle: () => void = () => {}
   const promise = new Promise<void>((done) => {
     let settled = false
