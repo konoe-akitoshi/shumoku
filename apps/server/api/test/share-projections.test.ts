@@ -24,7 +24,7 @@ describe('publicTopologyGraph — strips sensitive carriers from the shared grap
         id: 'sw1',
         label: 'core-sw',
         identity: { mgmtIp: '10.0.0.1', chassisId: 'aa:bb', sysName: 'core-sw.local' },
-        metadata: { rack: 'R1' },
+        metadata: { rack: 'R1', location: 'NOC#N-1' },
         attachments: [{ kind: 'access', community: 'SUPERSECRET' }], // SNMP community → must drop
         ports: [
           {
@@ -55,15 +55,19 @@ describe('publicTopologyGraph — strips sensitive carriers from the shared grap
     expect(blob).not.toContain('PORTSECRET')
     expect(blob.toLowerCase()).not.toContain('community')
   })
-  test('no node/port identity, metadata, or endpoint ip', () => {
+  test('no node/port identity, metadata (except location), or endpoint ip', () => {
     expect(blob).not.toContain('mgmtIp')
     expect(blob).not.toContain('chassisId')
     expect(blob).not.toContain('sysName')
     expect(blob).not.toContain('10.0.0.1/30')
     expect(out.nodes[0]).not.toHaveProperty('identity')
-    expect(out.nodes[0]).not.toHaveProperty('metadata')
     expect(out.nodes[0]).not.toHaveProperty('attachments')
     expect(out.nodes[0]?.ports?.[0]).not.toHaveProperty('attachments')
+    // metadata is allow-listed down to the layout-bearing zone name:
+    // the composite layout needs `location`, and the zone label is
+    // drawn on the shared diagram anyway. Everything else must drop.
+    expect(blob).not.toContain('R1')
+    expect(out.nodes[0]?.metadata).toEqual({ location: 'NOC#N-1' })
   })
   test('no graph-level attachments or exclusions', () => {
     expect(out).not.toHaveProperty('attachments')
