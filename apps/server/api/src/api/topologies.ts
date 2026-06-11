@@ -8,6 +8,7 @@ import {
   type NetworkGraph,
   type ScopeFilter,
   specDeviceType,
+  stringifyWithMaps,
 } from '@shumoku/core'
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
@@ -292,6 +293,39 @@ export function createTopologiesApi(): Hono {
         graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
         stale: parsed.stale ?? false,
       })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
+  // Full client-view payload: graph + the SERVER-BAKED ResolvedLayout in one
+  // consistent snapshot (Maps tagged via stringifyWithMaps; the client parses
+  // with parseWithMaps). The interactive viewer uses this to skip its own
+  // computeNetworkLayout for the root sheet — a large layout re-run on the
+  // browser main thread froze the tab for minutes.
+  app.get('/:id/view', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const parsed = await service.getParsed(id)
+      if (!parsed) {
+        const parseError = service.getParseError(id)
+        if (parseError) {
+          return c.json({ error: parseError.message, errorPhase: parseError.phase }, 422)
+        }
+        if (service.deriving(id)) {
+          return c.json({ deriving: true }, 202)
+        }
+        return c.json({ error: 'Topology not found' }, 404)
+      }
+      const body = stringifyWithMaps({
+        id: parsed.id,
+        name: parsed.name,
+        graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
+        resolved: parsed.resolved,
+        stale: parsed.stale ?? false,
+      })
+      return c.body(body, 200, { 'Content-Type': 'application/json' })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)

@@ -8,6 +8,7 @@
  * `resolveDashboardGrant` middleware, not re-checked per handler).
  */
 
+import { stringifyWithMaps } from '@shumoku/core'
 import { type Context, Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import type { AlertQueryOptions } from '../plugins/types.js'
@@ -164,6 +165,43 @@ export function createShareApi(): Hono<{ Variables: ShareVars }> {
         return c.json({ error: 'Failed to parse topology' }, 500)
       }
       return c.json(publicTopologyGraph(parsed))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
+  // Shared topology view payload: share-safe graph + the server-baked
+  // ResolvedLayout (positions only — nothing sensitive) so the anonymous
+  // viewer never recomputes a large layout on its main thread. Maps are
+  // tagged (stringifyWithMaps); the client parses with parseWithMaps.
+  app.get('/topologies/:token/view', async (c) => {
+    const token = c.req.param('token')
+    const service = getTopologyService()
+    const topology = service.getByShareToken(token)
+    if (!topology) {
+      return c.json({ error: 'Not found' }, 404)
+    }
+    try {
+      const parsed = await service.getParsed(topology.id)
+      if (!parsed) {
+        const parseError = service.getParseError(topology.id)
+        if (parseError) {
+          // Generic message: never surface internal parse/connection detail to an
+          // anonymous viewer (it can carry config text / upstream errors).
+          return c.json({ error: 'Topology is currently unavailable' }, 422)
+        }
+        if (service.deriving(topology.id)) {
+          return c.json({ deriving: true }, 202)
+        }
+        return c.json({ error: 'Failed to parse topology' }, 500)
+      }
+      const body = stringifyWithMaps({
+        ...publicTopologyGraph(parsed),
+        resolved: parsed.resolved,
+        stale: parsed.stale ?? false,
+      })
+      return c.body(body, 200, { 'Content-Type': 'application/json' })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)

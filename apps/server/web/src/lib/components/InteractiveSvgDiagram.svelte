@@ -69,7 +69,7 @@
    * `getSvgElement`) used by the search palette and drill-down flows
    * continue to work without refactoring callers.
    */
-  import { darkTheme, lightTheme, type NetworkGraph } from '@shumoku/core'
+  import { darkTheme, lightTheme, type NetworkGraph, type ResolvedLayout } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CornersOutIcon,
@@ -118,7 +118,13 @@
      * `stale: true` (last-good diagram served while a re-bake runs) — both
      * make this component poll until the fresh bake lands.
      */
-    graphLoader?: () => Promise<{ graph?: NetworkGraph; stale?: boolean; deriving?: boolean }>
+    graphLoader?: () => Promise<{
+      graph?: NetworkGraph
+      /** Server-baked layout for the root sheet — skips client computation. */
+      resolved?: ResolvedLayout
+      stale?: boolean
+      deriving?: boolean
+    }>
   }
   let {
     topologyId = '',
@@ -133,6 +139,11 @@
 
   // --- State ---
   let graph = $state<NetworkGraph | undefined>(undefined)
+  // Server-baked root layout. When present, TopologyViewer skips its own
+  // computeNetworkLayout for the root sheet — a large layout recomputed on
+  // the browser main thread froze the tab for minutes. Sheet drill-downs
+  // still compute locally (child sheets are much smaller).
+  let serverLayout = $state<ResolvedLayout | undefined>(undefined)
   let loading = $state(true)
   let error = $state('')
   // Server is baking the layout in the background (large topology). While a
@@ -165,7 +176,7 @@
     loading = graph === undefined
     error = ''
     try {
-      const loader = graphLoader ?? (() => api.topologies.getGraph(topologyId))
+      const loader = graphLoader ?? (() => api.topologies.getView(topologyId))
       const res = await loader()
       if (res.deriving) {
         building = true
@@ -173,7 +184,10 @@
         scheduleRefresh(3000)
         return
       }
-      if (res.graph) graph = res.graph
+      if (res.graph) {
+        graph = res.graph
+        serverLayout = res.resolved
+      }
       building = res.stale === true
       if (res.stale) scheduleRefresh(5000)
       loading = false
@@ -414,9 +428,10 @@
       bind:this={viewer}
       {graph}
       sheetId={currentSheetId}
+      layout={currentSheetId ? undefined : serverLayout}
       theme={currentTheme}
       mode="view"
-      sheetCacheStrategy="eager"
+      sheetCacheStrategy="lazy"
       onselect={handleSelect}
     >
       {#snippet linkOverlay(edge, context)}

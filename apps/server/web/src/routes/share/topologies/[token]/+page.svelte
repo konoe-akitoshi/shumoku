@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { parseWithMaps } from '@shumoku/core'
   import { page } from '$app/stores'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import Logo from '$lib/components/Logo.svelte'
@@ -11,12 +12,15 @@
   let lastGraphJson = ''
 
   const token = $derived($page.params.token)
+  // /view carries the SERVER-BAKED ResolvedLayout alongside the graph, so the
+  // shared viewer never recomputes a large layout on its main thread.
   const loadShared = $derived(async () => {
-    const res = await fetch(`/api/share/topologies/${token}/graph`)
+    const res = await fetch(`/api/share/topologies/${token}/view`)
+    if (res.status === 202) return { deriving: true }
     if (!res.ok) throw new Error(`Failed to load shared topology: ${res.status}`)
     const text = await res.text()
     lastGraphJson = text
-    return JSON.parse(text)
+    return parseWithMaps<Record<string, unknown>>(text)
   })
 
   // Structure updates are EVENT-driven: the metrics SSE stream carries
@@ -25,7 +29,7 @@
   // revision bump without visual impact doesn't flash the diagram).
   async function refetchGraph(currentToken: string): Promise<void> {
     try {
-      const res = await fetch(`/api/share/topologies/${currentToken}/graph`)
+      const res = await fetch(`/api/share/topologies/${currentToken}/view`)
       if (!res.ok) return
       const text = await res.text()
       if (lastGraphJson !== '' && text !== lastGraphJson) {
