@@ -48,6 +48,17 @@ export {
   scoreRoutedEdges,
   searchCompositeLayout,
 } from './composite/search.js'
+// Declarative constraint registry — the single source of the engine's
+// geometric prohibitions (#481/#482); verification derives from it.
+export {
+  assertLayoutConstraints,
+  type ConstraintId,
+  type ConstraintLevel,
+  type ConstraintReport,
+  type ConstraintSpec,
+  LAYOUT_CONSTRAINTS,
+  verifyLayoutConstraints,
+} from './constraints.js'
 export type {
   LayoutEngine as ShumokuLayoutEngine,
   PortsBySide as EnginePortsBySide,
@@ -92,20 +103,27 @@ export {
 // Layout invariant checks (containment / overlap / collinear tracks) —
 // standing verification fixture for every placement/routing pass.
 export {
+  type BoxBounds,
   type BoxSpec,
   type CollinearOverlap,
+  type ContainerOverlap,
   type ContainerSpec,
   type ContainmentViolation,
   checkLayoutInvariants,
+  type EdgeNodePierce,
   findCollinearOverlaps,
+  findContainerOverlaps,
   findContainmentViolations,
+  findEdgeNodePiercing,
   findNodeOverlaps,
   findPortClutter,
   type LayoutInvariantOptions,
   type LayoutInvariantReport,
   type NodeOverlap,
+  type PierceLineSpec,
   type PolylineSpec,
   type PortClutter,
+  segmentsIntersect,
 } from './invariants.js'
 export {
   bpsToLinkWidth,

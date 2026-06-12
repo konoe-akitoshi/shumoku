@@ -22,7 +22,14 @@
 import type { NetworkGraph, Subgraph } from '../../models/types.js'
 import { placePorts } from '../auto-placement/flat-tree/port-placement.js'
 import { resolveNodeSize } from '../engine/index.js'
-import { findCollinearOverlaps, findPortClutter, type PolylineSpec } from '../invariants.js'
+import {
+  type BoxSpec,
+  findCollinearOverlaps,
+  findEdgeNodePiercing,
+  findPortClutter,
+  type PolylineSpec,
+  segmentsIntersect,
+} from '../invariants.js'
 import { getLinkWidthForMode } from '../link-utils.js'
 import { portLabelBox } from '../port-geometry.js'
 import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from '../resolved-types.js'
@@ -702,52 +709,26 @@ export function scoreRoutedEdges(
     const ba = busOf.get(o.a)
     return ba === undefined || ba !== busOf.get(o.b)
   }).length
-  // wires running through unrelated node boxes — box grid + per-segment
-  // queries; a segment can only pierce a box whose inflated bbox its own
-  // bbox overlaps, so the candidate sweep counts exactly the same pairs.
-  let pierce = 0
-  const boxes: { id: string; x: number; y: number; w: number; h: number }[] = []
+  // wires running through unrelated node boxes — the constraint check and
+  // this score share ONE definition (invariants.findEdgeNodePiercing, the
+  // exact loop that used to live here).
+  const nodeBoxSpecsForPierce: BoxSpec[] = []
   for (const [id, node] of nodes) {
     if (!node.position) continue
     const size = resolveNodeSize(node)
-    boxes.push({ id, x: node.position.x, y: node.position.y, w: size.width, h: size.height })
+    nodeBoxSpecsForPierce.push({
+      id,
+      x: node.position.x,
+      y: node.position.y,
+      width: size.width,
+      height: size.height,
+    })
   }
-  const boxGrid = new BBoxGrid(320)
-  for (const [idx, box] of boxes.entries()) {
-    boxGrid.insert(
-      idx,
-      box.x - box.w / 2 - 2,
-      box.y - box.h / 2 - 2,
-      box.x + box.w / 2 + 2,
-      box.y + box.h / 2 + 2,
-    )
-  }
-  for (const poly of polys) {
-    const hitBoxes = new Set<number>()
-    for (let s = 1; s < poly.pts.length; s++) {
-      const a = poly.pts[s - 1]
-      const b = poly.pts[s]
-      if (!a || !b) continue
-      boxGrid.query(a.x, a.y, b.x, b.y, (bi) => {
-        if (hitBoxes.has(bi)) return
-        const box = boxes[bi]
-        if (!box || box.id === poly.a || box.id === poly.b) return
-        const bx = box.x - box.w / 2 - 2
-        const by = box.y - box.h / 2 - 2
-        const bw = box.w + 4
-        const bh = box.h + 4
-        if (Math.max(a.x, b.x) < bx || Math.min(a.x, b.x) > bx + bw) return
-        if (Math.max(a.y, b.y) < by || Math.min(a.y, b.y) > by + bh) return
-        const hit =
-          segmentsIntersect(a, b, { x: bx, y: by }, { x: bx + bw, y: by }) ||
-          segmentsIntersect(a, b, { x: bx, y: by + bh }, { x: bx + bw, y: by + bh }) ||
-          segmentsIntersect(a, b, { x: bx, y: by }, { x: bx, y: by + bh }) ||
-          segmentsIntersect(a, b, { x: bx + bw, y: by }, { x: bx + bw, y: by + bh })
-        if (hit) hitBoxes.add(bi)
-      })
-    }
-    pierce += hitBoxes.size
-  }
+  const pierce = findEdgeNodePiercing(
+    polys.map((p) => ({ id: p.id, points: p.pts, fromNodeId: p.a, toNodeId: p.b })),
+    nodeBoxSpecsForPierce,
+    2,
+  ).length
   // port/label clutter: collisions among owned geometry (port boxes,
   // label boxes, labels vs foreign nodes). With the demand feedback
   // this should be zero; the term makes any residual visible to the
@@ -830,17 +811,4 @@ export function scoreRoutedEdges(
     upward,
     clutter,
   }
-}
-
-function segmentsIntersect(
-  a1: { x: number; y: number },
-  a2: { x: number; y: number },
-  b1: { x: number; y: number },
-  b2: { x: number; y: number },
-): boolean {
-  const d1 = (a2.x - a1.x) * (b1.y - a1.y) - (a2.y - a1.y) * (b1.x - a1.x)
-  const d2 = (a2.x - a1.x) * (b2.y - a1.y) - (a2.y - a1.y) * (b2.x - a1.x)
-  const d3 = (b2.x - b1.x) * (a1.y - b1.y) - (b2.y - b1.y) * (a1.x - b1.x)
-  const d4 = (b2.x - b1.x) * (a2.y - b1.y) - (b2.y - b1.y) * (a2.x - b1.x)
-  return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0
 }
