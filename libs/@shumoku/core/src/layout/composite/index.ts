@@ -379,8 +379,19 @@ export function layoutComposite(
   const PAIR_GAP = 16
   const units: Unit[] = []
   const unitOf = new Map<string, string>()
+  // Containment beats the rail heuristic: a sink that BELONGS to a group
+  // (has a real zone) seats inside that group's box — on its bottom row —
+  // instead of being exiled to the global rail 10k+ px away from the box
+  // that claims it. Only group-less sinks still rail. Sink semantics for
+  // depth anchoring / zone ordering are unchanged (they're about graph
+  // traversal, not seating).
+  let maxFiniteDepth = 0
+  for (const d of depth.values()) {
+    if (Number.isFinite(d)) maxFiniteDepth = Math.max(maxFiniteDepth, d)
+  }
+  const railSink = (id: string): boolean => sinkSet.has(id) && zoneOf(id).startsWith('__solo:')
   for (const id of ids) {
-    if (sinkSet.has(id)) continue // sinks live on their own rail, not in zones
+    if (railSink(id)) continue // group-less sinks live on their own rail
     const partner = pairedWith.get(id)
     if (partner !== undefined && partner < id) continue
     const members = partner !== undefined ? [id, partner].sort() : [id]
@@ -394,7 +405,12 @@ export function layoutComposite(
       const size = resolveNodeSize(node)
       width += size.width
       height = Math.max(height, size.height)
-      minDepth = Math.min(minDepth, depth.get(member) ?? 0)
+      // A seated sink goes to its zone's LAST row — it feeds everything,
+      // so it reads as the zone's collector shelf.
+      minDepth = Math.min(
+        minDepth,
+        sinkSet.has(member) ? maxFiniteDepth + 1 : (depth.get(member) ?? 0),
+      )
     }
     units.push({ id: unitId, members, width, height, zone: zoneOf(id), depth: minDepth })
     for (const member of members) unitOf.set(member, unitId)
@@ -543,7 +559,15 @@ export function layoutComposite(
       }
     }
     zoneRows.set(zone, rows)
-    zoneBox.set(zone, { w: maxRowWidth + zonePad * 2, h: y + zonePad })
+    // Box width from the FINAL unit positions: the barycenter sweeps re-lay
+    // rows with order-dependent pair gaps, so a row can end up wider than
+    // the pre-sweep measurement — sizing the box from the stale width left
+    // the rightmost units sticking out of their own zone box.
+    let finalMaxX = maxRowWidth + zonePad
+    for (const unit of members) {
+      finalMaxX = Math.max(finalMaxX, (localX.get(unit.id) ?? 0) + unit.width / 2)
+    }
+    zoneBox.set(zone, { w: finalMaxX + zonePad, h: y + zonePad })
   }
 
   // -- quotient: bands by zone rank, child-block packing under feeders ---------
@@ -644,7 +668,8 @@ export function layoutComposite(
 
   const zoneX = new Map<string, number>()
   const zoneY = new Map<string, number>()
-  const { bandRanges, bandBlocks } = placeZoneBands(
+  // Re-assigned when refinement widens a zone box (containment re-pack below).
+  let { bandRanges, bandBlocks } = placeZoneBands(
     zoneIds,
     zoneRank,
     zoneAdj,
@@ -737,6 +762,56 @@ export function layoutComposite(
     for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, pairGap)
   }
 
+  // -- containment repair: refinement (cross-zone pulls, nudges, snap) reorders
+  // rows, and the label-aware pair gaps are ORDER-DEPENDENT — a re-ordered row
+  // can need more width than the box measured at zone-local time, and
+  // resolveRow's left-shift can only reclaim the leading slack. Grow each box
+  // to its final content extent and re-pack the bands so widened boxes don't
+  // collide; a unit must never sit outside its own zone box.
+  {
+    let widened = false
+    for (const zone of zoneIds) {
+      const box = zoneBox.get(zone)
+      if (!box) continue
+      let maxExtent = 0
+      for (const unit of zoneUnits.get(zone) ?? []) {
+        maxExtent = Math.max(maxExtent, (localX.get(unit.id) ?? 0) + unit.width / 2)
+      }
+      const needed = maxExtent + zonePad
+      if (needed > box.w + 0.5) {
+        zoneBox.set(zone, { w: needed, h: box.h })
+        widened = true
+      }
+    }
+    if (widened) {
+      zoneX.clear()
+      zoneY.clear()
+      // Same aspect-targeted band budget formula, fed the WIDENED areas —
+      // reusing the stale budget squeezed the wider boxes into more stacked
+      // bands and the figure went 1:5 portrait.
+      let widenedArea = 0
+      for (const [, box] of zoneBox) widenedArea += (box.w + zoneGap) * (box.h + bandGap)
+      const repackBandW =
+        options.maxBandW ?? Math.max(1700, Math.round(Math.sqrt(widenedArea * 1.5)))
+      ;({ bandRanges, bandBlocks } = placeZoneBands(
+        zoneIds,
+        zoneRank,
+        zoneAdj,
+        zoneParent,
+        zoneBox,
+        zoneX,
+        zoneY,
+        zoneGap,
+        bandGap,
+        repackBandW,
+        labelBandExtra,
+        options.bandOrder,
+        zoneDownReach,
+        zoneUpReach,
+      ))
+    }
+  }
+
   // -- compose to absolute centers ----------------------------------------------
   for (const unit of units) {
     const gx = (zoneX.get(unit.zone) ?? 0) + (localX.get(unit.id) ?? 0)
@@ -781,12 +856,14 @@ export function layoutComposite(
     node.position = { x: node.position.x + shiftX, y: node.position.y + shiftY }
   }
 
-  // -- sink rail: shared-service sinks sit on their own row below the zones
-  //    (v3 collector rail) instead of dragging 15+ links into one zone box --
+  // -- sink rail: GROUP-LESS shared-service sinks sit on their own row below
+  //    the zones (v3 collector rail). Sinks that belong to a group were
+  //    seated inside their zone above — containment wins over the rail.
   let railBottom = maxY - minY + PAD
-  if (sinkSet.size > 0) {
+  const railSinkIds = [...sinkSet].filter((id) => railSink(id)).sort()
+  if (railSinkIds.length > 0) {
     const railY = maxY - minY + PAD + 110
-    const sinkIds = [...sinkSet].sort()
+    const sinkIds = railSinkIds
     let railWidth = 0
     let railHeight = 0
     for (const id of sinkIds) {

@@ -130,10 +130,10 @@ interface ScopeCriterionRow {
  * `topology_resolved_graph` artifacts built by an older version are treated as
  * stale and recomputed without a manual purge.
  */
-// v4: subgraph bounds expansion requires geometric containment of both wire
-// endpoints — boxes no longer stretch to rail-seated sinks / cross-zone pair
-// halves (was: 116 overlapping subgraph pairs on test6).
-const RESOLVER_VERSION = 4
+// v5: grouped sinks seat inside their zone (rail only for group-less),
+// zone boxes grow to final refined content + bands re-pack — containment
+// violations and box overlaps both at zero on test6.
+const RESOLVER_VERSION = 5
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
