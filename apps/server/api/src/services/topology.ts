@@ -130,10 +130,10 @@ interface ScopeCriterionRow {
  * `topology_resolved_graph` artifacts built by an older version are treated as
  * stale and recomputed without a manual purge.
  */
-// v5: grouped sinks seat inside their zone (rail only for group-less),
-// zone boxes grow to final refined content + bands re-pack — containment
-// violations and box overlaps both at zero on test6.
-const RESOLVER_VERSION = 5
+// v6: zone wrap width derives from zone content area (no fixed cap) and the
+// search cost carries an aspect term — the 1:6 vertical-column figure
+// becomes ~1:1.3.
+const RESOLVER_VERSION = 6
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

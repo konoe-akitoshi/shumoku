@@ -482,9 +482,19 @@ export function layoutComposite(
     const rowKeys = [...rowMap.keys()].sort((a, b) => a - b)
     // Wrap each depth-row at a max width. Depth alone decided the row, so a
     // zone with 100+ same-depth members (a big host group) became one
-    // figure-wide strip — the "everything in a single line" defect. Width
-    // stays deterministic: chunks are cut in the original sort order.
-    const ZONE_ROW_MAX_W = 2200
+    // figure-wide strip — the "everything in a single line" defect.
+    //
+    // The wrap target scales with the ZONE's content (landscape-ish aspect),
+    // not a fixed constant: a fixed cap made every box equally wide, so the
+    // band packer fit only ONE box per band and the whole figure degenerated
+    // into a single vertical column. Small groups now wrap into compact
+    // boxes that pack several per band. Deterministic: chunks are cut in
+    // the original sort order.
+    let contentArea = 0
+    for (const unit of members) {
+      contentArea += (unit.width + cellGapXBase) * (unit.height + rowGapBase / 2)
+    }
+    const zoneRowMaxW = Math.max(420, Math.min(2400, Math.round(Math.sqrt(contentArea * PHI))))
     const rows: Unit[][] = []
     for (const key of rowKeys) {
       const depthRow = rowMap.get(key) ?? []
@@ -493,7 +503,7 @@ export function layoutComposite(
       for (const unit of depthRow) {
         const prev = current[current.length - 1]
         const addition = unit.width + (prev ? pairGap(prev, unit) : 0)
-        if (current.length > 0 && width + addition > ZONE_ROW_MAX_W) {
+        if (current.length > 0 && width + addition > zoneRowMaxW) {
           rows.push(current)
           current = [unit]
           width = unit.width
