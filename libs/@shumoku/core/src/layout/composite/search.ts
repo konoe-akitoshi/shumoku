@@ -776,19 +776,41 @@ export function scoreRoutedEdges(
       if (yDeep !== undefined && yShallow !== undefined && yDeep < yShallow - 10) upward++
     }
   }
+  // Aspect sanity: without this term the search gladly stacks every band
+  // into a 1:6 portrait strip — narrow variants shorten horizontal wires
+  // and nothing resists the collapse. Multiplicative so it scales with the
+  // rest of the cost; tolerant band (1:1.8 tall … 2.6:1 wide) costs nothing.
+  let nx1 = Number.POSITIVE_INFINITY
+  let ny1 = Number.POSITIVE_INFINITY
+  let nx2 = Number.NEGATIVE_INFINITY
+  let ny2 = Number.NEGATIVE_INFINITY
+  for (const [, node] of nodes) {
+    if (!node.position) continue
+    nx1 = Math.min(nx1, node.position.x)
+    ny1 = Math.min(ny1, node.position.y)
+    nx2 = Math.max(nx2, node.position.x)
+    ny2 = Math.max(ny2, node.position.y)
+  }
+  const figureW = Math.max(1, nx2 - nx1)
+  const figureH = Math.max(1, ny2 - ny1)
+  const tallExcess = Math.max(0, figureH / figureW - 1.8)
+  const wideExcess = Math.max(0, figureW / figureH - 2.6)
+  const aspectFactor = 1 + 0.15 * (tallExcess + wideExcess)
+
   return {
     cost:
-      crossings +
-      collinear * 8 +
-      // a wire under a node is a defect, not a trade-off (90° crossings
-      // are the grammar; piercing is not)
-      pierce * 20 +
-      bends * 0.4 +
-      length / 400 +
-      upward * 12 +
-      // overlap-free is a REQUIREMENT, not a preference — weight high
-      // enough that no crossing/length win can buy a collision
-      clutter * 40,
+      (crossings +
+        collinear * 8 +
+        // a wire under a node is a defect, not a trade-off (90° crossings
+        // are the grammar; piercing is not)
+        pierce * 20 +
+        bends * 0.4 +
+        length / 400 +
+        upward * 12 +
+        // overlap-free is a REQUIREMENT, not a preference — weight high
+        // enough that no crossing/length win can buy a collision
+        clutter * 40) *
+      aspectFactor,
     crossings,
     collinear,
     pierce,
