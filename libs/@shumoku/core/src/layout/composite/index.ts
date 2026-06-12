@@ -491,10 +491,16 @@ export function layoutComposite(
     // boxes that pack several per band. Deterministic: chunks are cut in
     // the original sort order.
     let contentArea = 0
+    let widestUnit = 0
     for (const unit of members) {
       contentArea += (unit.width + cellGapXBase) * (unit.height + rowGapBase / 2)
+      widestUnit = Math.max(widestUnit, unit.width)
     }
-    const zoneRowMaxW = Math.max(420, Math.min(2400, Math.round(Math.sqrt(contentArea * PHI))))
+    // The only principled floor: a row must fit its widest unit (anything
+    // narrower just breaks every row anyway). No artificial cap — the
+    // content-derived target is already aspect-balanced, and the global
+    // proportion is the search cost's job, not a constant's.
+    const zoneRowMaxW = Math.max(widestUnit, Math.round(Math.sqrt(contentArea * PHI)))
     const rows: Unit[][] = []
     for (const key of rowKeys) {
       const depthRow = rowMap.get(key) ?? []
@@ -577,7 +583,25 @@ export function layoutComposite(
     for (const unit of members) {
       finalMaxX = Math.max(finalMaxX, (localX.get(unit.id) ?? 0) + unit.width / 2)
     }
-    zoneBox.set(zone, { w: finalMaxX + zonePad, h: y + zonePad })
+    // The box reserves its OWN outer-face port-label reach: labels are
+    // node-owned geometry that must sit INSIDE the box, and the band packer
+    // can only keep boxes apart if it knows their true extent. Inner-face
+    // labels are already paid for by the pair/row corridors.
+    const latReach = Math.max(0, ...members.map(unitLReach))
+    const firstRow = rows[0]
+    const lastRow = rows[rows.length - 1]
+    const topReach = firstRow ? rowUpReach(firstRow) : 0
+    const botReach = lastRow ? rowDownReach(lastRow) : 0
+    if (latReach > 0 || topReach > 0) {
+      for (const unit of members) {
+        localX.set(unit.id, (localX.get(unit.id) ?? 0) + latReach)
+        localY.set(unit.id, (localY.get(unit.id) ?? 0) + topReach)
+      }
+    }
+    zoneBox.set(zone, {
+      w: finalMaxX + zonePad + latReach * 2,
+      h: y + zonePad + topReach + botReach,
+    })
   }
 
   // -- quotient: bands by zone rank, child-block packing under feeders ---------
