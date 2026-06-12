@@ -243,9 +243,12 @@ export function verifyLayoutConstraints(layout: ResolvedLayout): ConstraintRepor
 /**
  * Standing-fixture gate (engine-v3-migration.md §B4, finally wired):
  * verify after a layout and — when a BLOCKING constraint is violated —
- * throw under test/development, log an error otherwise. Warn-level
- * violations are summarized at debug level so they stay visible without
- * spamming production bakes.
+ * throw under `NODE_ENV=test` (CI fixtures pin the guarantee), log an
+ * error otherwise. A runtime layout must NEVER fail to render because of
+ * the gate: Bun defaults NODE_ENV to 'development', and throwing there
+ * turned a constraint report into "no diagram at all" (the flat-tree path
+ * on a 1.5k-node graph violates massively — that's a finding for #481,
+ * not a reason to refuse the bake).
  */
 export function assertLayoutConstraints(layout: ResolvedLayout, context = 'layout'): void {
   const report = verifyLayoutConstraints(layout)
@@ -256,7 +259,7 @@ export function assertLayoutConstraints(layout: ResolvedLayout, context = 'layou
     typeof process !== 'undefined' && typeof process.env !== 'undefined'
       ? process.env['NODE_ENV']
       : undefined
-  if (env === 'test' || env === 'development') {
+  if (env === 'test') {
     throw new Error(message)
   }
   console.error(message)
