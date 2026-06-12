@@ -220,16 +220,27 @@ async function evaluate(
       figure = grow(figure, p.x, p.y, half)
       for (const id of owners) internal.set(id, grow(internal.get(id), p.x, p.y, half))
     }
-    // Port labels are owned geometry — their boxes are footprint too.
+    // Port labels are NODE-owned geometry — they count toward every
+    // container the PORT'S node sits in, regardless of where the wire
+    // goes. (Attributing them to the edge's owners let a cross-boundary
+    // wire's label poke out of the box its node lives in.)
     for (const port of [edge.fromPort, edge.toPort]) {
       const labelRect = portLabelBox(port)
       if (!labelRect) continue
+      const nodeInside = insideBounds(port.nodeId)
+      const labelOwners: string[] = []
+      for (const [id, members] of memberSets) {
+        if (!members.has(port.nodeId)) continue
+        const bounds = comp.subgraphs.get(id)?.bounds
+        if (bounds && !nodeInside(bounds)) continue
+        labelOwners.push(id)
+      }
       for (const [x, y] of [
         [labelRect.x, labelRect.y],
         [labelRect.x + labelRect.width, labelRect.y + labelRect.height],
       ] as const) {
         figure = grow(figure, x, y, 2)
-        for (const id of owners) internal.set(id, grow(internal.get(id), x, y, 2))
+        for (const id of labelOwners) internal.set(id, grow(internal.get(id), x, y, 2))
       }
     }
     // Labels are part of the edge's rendered footprint too. Mirror the
