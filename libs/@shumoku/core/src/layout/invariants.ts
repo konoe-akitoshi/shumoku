@@ -359,6 +359,140 @@ export function findPortClutter(
 }
 
 // ============================================================================
+// 5. Edge-through-node piercing
+// ============================================================================
+
+/** Shared exact segment-intersection predicate (strict crossing). */
+export function segmentsIntersect(a1: Position, a2: Position, b1: Position, b2: Position): boolean {
+  const d1 = (a2.x - a1.x) * (b1.y - a1.y) - (a2.y - a1.y) * (b1.x - a1.x)
+  const d2 = (a2.x - a1.x) * (b2.y - a1.y) - (a2.y - a1.y) * (b2.x - a1.x)
+  const d3 = (b2.x - b1.x) * (a1.y - b1.y) - (b2.y - b1.y) * (a1.x - b1.x)
+  const d4 = (b2.x - b1.x) * (a2.y - b1.y) - (b2.y - b1.y) * (a2.x - b1.x)
+  return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0
+}
+
+/** Edge polyline with its endpoint nodes (which it may legally touch). */
+export interface PierceLineSpec {
+  id: string
+  points: readonly Position[]
+  fromNodeId: string
+  toNodeId: string
+}
+
+export interface EdgeNodePierce {
+  edgeId: string
+  nodeId: string
+}
+
+/**
+ * Find wires that run THROUGH a foreign node box (inflated by `inflate`):
+ * any segment crossing one of the box's four borders. A wire may touch its
+ * own endpoints' boxes. Grid-accelerated, exact (same predicate as the old
+ * routed-score inner loop — this IS that loop, extracted so the score and
+ * the constraint check share one definition).
+ */
+export function findEdgeNodePiercing(
+  lines: readonly PierceLineSpec[],
+  nodeBoxes: readonly BoxSpec[],
+  inflate = 2,
+): EdgeNodePierce[] {
+  const boxGrid = new BBoxGrid(320)
+  for (const [idx, box] of nodeBoxes.entries()) {
+    boxGrid.insert(
+      idx,
+      box.x - box.width / 2 - inflate,
+      box.y - box.height / 2 - inflate,
+      box.x + box.width / 2 + inflate,
+      box.y + box.height / 2 + inflate,
+    )
+  }
+  const out: EdgeNodePierce[] = []
+  for (const line of lines) {
+    const hitBoxes = new Set<number>()
+    for (let s = 1; s < line.points.length; s++) {
+      const a = line.points[s - 1]
+      const b = line.points[s]
+      if (!a || !b) continue
+      boxGrid.query(a.x, a.y, b.x, b.y, (bi) => {
+        if (hitBoxes.has(bi)) return
+        const box = nodeBoxes[bi]
+        if (!box || box.id === line.fromNodeId || box.id === line.toNodeId) return
+        const bx = box.x - box.width / 2 - inflate
+        const by = box.y - box.height / 2 - inflate
+        const bw = box.width + inflate * 2
+        const bh = box.height + inflate * 2
+        if (Math.max(a.x, b.x) < bx || Math.min(a.x, b.x) > bx + bw) return
+        if (Math.max(a.y, b.y) < by || Math.min(a.y, b.y) > by + bh) return
+        const hit =
+          segmentsIntersect(a, b, { x: bx, y: by }, { x: bx + bw, y: by }) ||
+          segmentsIntersect(a, b, { x: bx, y: by + bh }, { x: bx + bw, y: by + bh }) ||
+          segmentsIntersect(a, b, { x: bx, y: by }, { x: bx, y: by + bh }) ||
+          segmentsIntersect(a, b, { x: bx + bw, y: by }, { x: bx + bw, y: by + bh })
+        if (hit) hitBoxes.add(bi)
+      })
+    }
+    for (const bi of hitBoxes) {
+      const box = nodeBoxes[bi]
+      if (box) out.push({ edgeId: line.id, nodeId: box.id })
+    }
+  }
+  return out
+}
+
+// ============================================================================
+// 6. Container box overlap (non-nested subgraph boxes must be disjoint)
+// ============================================================================
+
+export interface BoxBounds {
+  id: string
+  bounds: Bounds
+  /** Parent box id — ancestors legally contain their descendants. */
+  parent?: string
+}
+
+export interface ContainerOverlap {
+  a: string
+  b: string
+  /** Penetration depth (px) — min of x/y overlap. */
+  penetration: number
+}
+
+/**
+ * Find pairs of container boxes that overlap where NEITHER is an ancestor of
+ * the other (nesting is legal containment, not interference).
+ */
+export function findContainerOverlaps(boxes: readonly BoxBounds[]): ContainerOverlap[] {
+  const parentOf = new Map<string, string | undefined>()
+  for (const b of boxes) parentOf.set(b.id, b.parent)
+  const isAncestor = (maybeAncestor: string, id: string): boolean => {
+    let current = parentOf.get(id)
+    for (let depth = 0; current !== undefined && depth < 64; depth++) {
+      if (current === maybeAncestor) return true
+      current = parentOf.get(current)
+    }
+    return false
+  }
+  const out: ContainerOverlap[] = []
+  for (let i = 0; i < boxes.length; i++) {
+    const a = boxes[i]
+    if (!a) continue
+    for (let j = i + 1; j < boxes.length; j++) {
+      const b = boxes[j]
+      if (!b) continue
+      if (isAncestor(a.id, b.id) || isAncestor(b.id, a.id)) continue
+      const ox =
+        Math.min(a.bounds.x + a.bounds.width, b.bounds.x + b.bounds.width) -
+        Math.max(a.bounds.x, b.bounds.x)
+      const oy =
+        Math.min(a.bounds.y + a.bounds.height, b.bounds.y + b.bounds.height) -
+        Math.max(a.bounds.y, b.bounds.y)
+      if (ox > 0 && oy > 0) out.push({ a: a.id, b: b.id, penetration: Math.min(ox, oy) })
+    }
+  }
+  return out
+}
+
+// ============================================================================
 // ResolvedLayout adapter
 // ============================================================================
 

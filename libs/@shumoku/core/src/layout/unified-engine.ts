@@ -24,6 +24,7 @@ import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
 import { layoutCompound } from './auto-placement/flat-tree/compound.js'
 import { shouldUseComposite } from './composite/index.js'
 import { searchCompositeLayout } from './composite/search.js'
+import { assertLayoutConstraints } from './constraints.js'
 import { createEngine, resolveNodeSize } from './engine/index.js'
 import { getLinkWidth } from './link-utils.js'
 import type { ResolvedLayout } from './resolved-types.js'
@@ -77,7 +78,7 @@ export async function computeNetworkLayout(
           : `${edge.toNodeId}|${edge.fromNodeId}`
       edge.emphasis = comp.primaryEdges.has(key) ? 'primary' : 'secondary'
     }
-    return buildResults({
+    const results = buildResults({
       nodes: comp.nodes,
       ports,
       edges,
@@ -85,6 +86,10 @@ export async function computeNetworkLayout(
       bounds: comp.bounds,
       algorithm: 'composite+octilinear',
     })
+    // Standing fixture (#482): BLOCKING constraint violations throw in
+    // dev/test, log in production — never silently ship a broken figure.
+    assertLayoutConstraints(results.resolved, 'composite+octilinear')
+    return results
   }
 
   // Create a spatial-rule engine once per layout call. Engines
@@ -113,7 +118,7 @@ export async function computeNetworkLayout(
   })
   const edges = await routeEdges(nodes, ports, graph.links, subgraphs)
 
-  return buildResults({
+  const results = buildResults({
     nodes,
     ports,
     edges,
@@ -121,6 +126,8 @@ export async function computeNetworkLayout(
     bounds,
     algorithm: 'network-layout+bezier',
   })
+  assertLayoutConstraints(results.resolved, 'network-layout+bezier')
+  return results
 }
 
 /** Assemble ResolvedLayout + legacy LayoutResult from layout pieces. */
