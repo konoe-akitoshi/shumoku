@@ -109,7 +109,7 @@ describe('constraint registry', () => {
     expect(report.blockingViolations).toContain('containment')
   })
 
-  test('nested container boxes are legal; sibling overlap is reported (warn level)', () => {
+  test('nested container boxes are legal; sibling overlap is a blocking violation', () => {
     const nested = verifyLayoutConstraints(
       layoutOf({
         nodes: [],
@@ -132,9 +132,9 @@ describe('constraint registry', () => {
       }),
     )
     expect(siblings.counts['container-overlap']).toBe(1)
-    // warn level: reported but NOT blocking (promotion tracked by #483)
-    expect(siblings.blockingViolations).not.toContain('container-overlap')
-    expect(siblings.ok).toBe(true)
+    // blocking since the feasibility rounds guarantee disjoint boxes
+    expect(siblings.blockingViolations).toContain('container-overlap')
+    expect(siblings.ok).toBe(false)
   })
 })
 

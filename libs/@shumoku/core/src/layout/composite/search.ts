@@ -23,8 +23,10 @@ import type { NetworkGraph, Subgraph } from '../../models/types.js'
 import { placePorts } from '../auto-placement/flat-tree/port-placement.js'
 import { resolveNodeSize } from '../engine/index.js'
 import {
+  type BoxBounds,
   type BoxSpec,
   findCollinearOverlaps,
+  findContainerOverlaps,
   findEdgeNodePiercing,
   findPortClutter,
   type PolylineSpec,
@@ -490,7 +492,51 @@ export async function searchCompositeLayout(
     initialCost,
     finalCost: best.score.cost,
   }
+
+  // 6) feasibility rounds: container boxes must end DISJOINT (registry
+  //    constraint 'container-overlap' — a prohibition, so it outranks the
+  //    cost and the evaluation budget). The post-routing footprint growth
+  //    can push two boxes into the same gap; widen the gaps by the worst
+  //    penetration and re-evaluate, keeping the candidate iff it reduces
+  //    the violation. Bounded; converges because gaps grow monotonically.
+  for (let round = 0; round < 3; round++) {
+    const overlaps = containerOverlapsOf(best)
+    if (overlaps.length === 0) break
+    const worst = Math.max(...overlaps.map((o) => o.penetration))
+    const widen = Math.ceil(worst) + 8
+    const trial: CompositeLayoutOptions = {
+      ...bestOptions,
+      zoneGap: (bestOptions.zoneGap ?? 90) + widen,
+      bandGap: (bestOptions.bandGap ?? 150) + widen,
+    }
+    evaluations++
+    const candidate = await evaluate(graph, trial)
+    const candidateOverlaps = containerOverlapsOf(candidate)
+    const candWorst =
+      candidateOverlaps.length === 0 ? 0 : Math.max(...candidateOverlaps.map((o) => o.penetration))
+    if (
+      candidateOverlaps.length < overlaps.length ||
+      (candidateOverlaps.length === overlaps.length && candWorst < worst)
+    ) {
+      best = candidate
+      bestOptions = trial
+      accepted++
+      best.stats = { evaluations, accepted, initialCost, finalCost: best.score.cost }
+    } else {
+      break
+    }
+  }
+
   return best
+}
+
+/** Non-nested container box overlaps of a routed result (registry parity). */
+function containerOverlapsOf(result: CompositeSearchResult) {
+  const boxes: BoxBounds[] = []
+  for (const [id, sg] of result.comp.subgraphs) {
+    if (sg.bounds) boxes.push({ id, bounds: sg.bounds, parent: sg.parent })
+  }
+  return findContainerOverlaps(boxes)
 }
 
 /**
