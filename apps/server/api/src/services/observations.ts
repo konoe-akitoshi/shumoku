@@ -364,20 +364,25 @@ export class ObservationsService {
   }
 
   /**
-   * Retention: keep at most `keepPerSource` rows per (topology, source).
-   * Older rows beyond that window are dropped. Failed-status rows are
-   * pruned more aggressively (only the very latest one is kept).
+   * Retention (signal-streams.md): the topology stream keeps rows by AGE,
+   * not by count — observations are the primary history that powers as-of
+   * rendering and the timeline, so "10 per source" is replaced by a
+   * retention window. A small per-source floor survives regardless of age
+   * (a stable network that never changes must keep its evidence), and
+   * failed-status rows still collapse to the latest one.
    *
    * Returns the count of rows deleted.
    */
-  pruneOldObservations(keepPerSource = 10): number {
-    // Successful (or partial / empty) rows: keep the most recent N per source.
+  pruneOldObservations(retentionDays = 90, keepFloorPerSource = 3): number {
+    const cutoff = timestamp() - retentionDays * 86_400_000
+    // Successful (or partial / empty) rows: drop only rows that are BOTH
+    // older than the window AND beyond the per-source floor.
     const ok = this.db
       .query(
         `DELETE FROM topology_observations
          WHERE id IN (
            SELECT id FROM (
-             SELECT id,
+             SELECT id, captured_at,
                     ROW_NUMBER() OVER (
                       PARTITION BY topology_id, source_id
                       ORDER BY captured_at DESC, rowid DESC
@@ -385,10 +390,10 @@ export class ObservationsService {
              FROM topology_observations
              WHERE status != 'failed'
            ) ranked
-           WHERE rn > ?
+           WHERE rn > ? AND captured_at < ?
          )`,
       )
-      .run(keepPerSource)
+      .run(keepFloorPerSource, cutoff)
 
     // Failed rows: keep only the most recent 1 per (topology, source).
     const failed = this.db
