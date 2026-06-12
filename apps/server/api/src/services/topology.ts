@@ -130,8 +130,10 @@ interface ScopeCriterionRow {
  * `topology_resolved_graph` artifacts built by an older version are treated as
  * stale and recomputed without a manual purge.
  */
-// v3: composite zones follow the parent subgraph + zone rows wrap (#474).
-const RESOLVER_VERSION = 3
+// v4: subgraph bounds expansion requires geometric containment of both wire
+// endpoints — boxes no longer stretch to rail-seated sinks / cross-zone pair
+// halves (was: 116 overlapping subgraph pairs on test6).
+const RESOLVER_VERSION = 4
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

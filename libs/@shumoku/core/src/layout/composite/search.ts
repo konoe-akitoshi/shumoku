@@ -19,7 +19,7 @@
  *      that reproduced a human reviewer's "these two look backwards").
  */
 
-import type { NetworkGraph } from '../../models/types.js'
+import type { NetworkGraph, Subgraph } from '../../models/types.js'
 import { placePorts } from '../auto-placement/flat-tree/port-placement.js'
 import { resolveNodeSize } from '../engine/index.js'
 import { findCollinearOverlaps, findPortClutter, type PolylineSpec } from '../invariants.js'
@@ -187,13 +187,34 @@ async function evaluate(
   })
   let figure: Extent | undefined
   const internal = new Map<string, Extent>()
+  // Ownership needs GEOMETRY, not just membership: a logical member placed
+  // outside the container's box (a sink on its own rail, a pair half seated
+  // in another zone) makes any wire to it cross-boundary in practice — if
+  // such a wire counted as "internal", the box would stretch to the rail and
+  // overlap everything in between (the observed near-figure-sized,
+  // 100+-pair subgraph overlap). Cross-boundary wiring belongs to the
+  // enclosing level, exactly as documented below.
+  const insideBounds = (nodeId: string): ((b: NonNullable<Subgraph['bounds']>) => boolean) => {
+    const pos = comp.nodes.get(nodeId)?.position
+    if (!pos) return () => false
+    return (b) =>
+      pos.x >= b.x - 2 &&
+      pos.x <= b.x + b.width + 2 &&
+      pos.y >= b.y - 2 &&
+      pos.y <= b.y + b.height + 2
+  }
   for (const edge of edges.values()) {
     if (edge.coupling) continue
     const pts = edge.route?.points ?? edge.points
     const half = edge.width / 2 + 2
+    const fromInside = insideBounds(edge.fromNodeId)
+    const toInside = insideBounds(edge.toNodeId)
     const owners: string[] = []
     for (const [id, members] of memberSets) {
-      if (members.has(edge.fromNodeId) && members.has(edge.toNodeId)) owners.push(id)
+      if (!members.has(edge.fromNodeId) || !members.has(edge.toNodeId)) continue
+      const bounds = comp.subgraphs.get(id)?.bounds
+      if (bounds && (!fromInside(bounds) || !toInside(bounds))) continue
+      owners.push(id)
     }
     for (const p of pts) {
       figure = grow(figure, p.x, p.y, half)
