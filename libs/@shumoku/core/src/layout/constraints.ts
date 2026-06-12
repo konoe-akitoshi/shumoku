@@ -91,9 +91,9 @@ export const LAYOUT_CONSTRAINTS: readonly ConstraintSpec[] = [
   {
     id: 'container-overlap',
     title: 'Non-nested container boxes are disjoint',
-    level: 'warn',
+    level: 'blocking',
     enforcedBy:
-      'band packing with true box extents; residual route-bulge growth (search.ts footprint pass) still penetrates ≤~40px → #483',
+      'band packing with true box extents + post-search feasibility rounds (gap widening until disjoint, search.ts step 6)',
     params: {},
   },
   {
@@ -179,11 +179,17 @@ export function verifyLayoutConstraints(layout: ResolvedLayout): ConstraintRepor
 
   const trackLines: PolylineSpec[] = []
   const pierceLines: PierceLineSpec[] = []
+  const busOf = new Map<string, string>()
   for (const [id, edge] of layout.edges) {
+    // Couplings (HA glasses bridges) are not wires — same exclusion the
+    // routed score applies; the prohibition and the score share one
+    // definition of "wire".
+    if (edge.coupling) continue
     const points = edge.route?.points ?? edge.points
     if (points.length < 2) continue
     trackLines.push({ id, points, halfWidth: Math.max(0.5, edge.width / 2) })
     pierceLines.push({ id, points, fromNodeId: edge.fromNodeId, toNodeId: edge.toNodeId })
+    if (edge.route?.kind === 'bus') busOf.set(id, edge.route.busId)
   }
 
   const collinearParams = specOf('collinear-track').params
@@ -199,6 +205,11 @@ export function verifyLayoutConstraints(layout: ResolvedLayout): ConstraintRepor
       minSegmentLength: collinearParams['minSegmentLength'],
       minSharedLength: collinearParams['minSharedLength'],
       clearance: collinearParams['clearance'],
+      // comb siblings SHARE the trunk by design — same-bus pairs are the
+      // org-chart grammar, not a violation (parity with the routed score)
+    }).filter((o) => {
+      const ba = busOf.get(o.a)
+      return ba === undefined || ba !== busOf.get(o.b)
     }),
     portClutter: findPortClutter([...layout.ports.values()], nodeBoxes),
     edgePierces: findEdgeNodePiercing(

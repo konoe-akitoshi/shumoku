@@ -130,10 +130,9 @@ interface ScopeCriterionRow {
  * `topology_resolved_graph` artifacts built by an older version are treated as
  * stale and recomputed without a manual purge.
  */
-// v7: zone boxes reserve their outer-face port-label reach (labels are
-// node-owned, drawn INSIDE the box); wrap-width guardrails dropped (floor =
-// widest unit, no artificial cap).
-const RESOLVER_VERSION = 7
+// v8: container-overlap is a BLOCKING constraint — post-search feasibility
+// rounds widen gaps until all container boxes are disjoint.
+const RESOLVER_VERSION = 8
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
