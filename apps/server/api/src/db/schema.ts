@@ -28,6 +28,7 @@ import migration020 from './migrations/020_topology_scope.sql'
 import migration021 from './migrations/021_topology_scope_criteria.sql'
 import migration022 from './migrations/022_topology_composition_mode.sql'
 import migration023 from './migrations/023_contribution_content_hash.sql'
+import migration024 from './migrations/024_signal_streams.sql'
 
 /** Ordered list of all migrations */
 const MIGRATIONS: { name: string; sql: string }[] = [
@@ -52,6 +53,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '021_topology_scope_criteria.sql', sql: migration021 },
   { name: '022_topology_composition_mode.sql', sql: migration022 },
   { name: '023_contribution_content_hash.sql', sql: migration023 },
+  { name: '024_signal_streams.sql', sql: migration024 },
 ]
 
 interface MigrationRecord {

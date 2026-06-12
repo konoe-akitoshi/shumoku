@@ -9,6 +9,7 @@ import { getAllPlugins } from '../plugins/loader.js'
 import type { AlertQueryOptions } from '../plugins/types.js'
 import { hasNativeApi } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
+import { getSignalStreams } from '../services/signal-streams.js'
 import type { DataSourceInput } from '../types.js'
 import { getTopologyService } from './topologies.js'
 
@@ -422,6 +423,15 @@ export function createDataSourcesApi(): Hono {
 
     try {
       const alerts = await service.getAlerts(id, options)
+      // Alert stream (signal-streams.md): append state transitions.
+      // Disappearance counts as resolution ONLY for an unfiltered active
+      // query — a filtered fetch must never resolve alerts it didn't ask
+      // about. Best-effort: stream failures never break the response.
+      const unfiltered =
+        options.timeRange === undefined && options.minSeverity === undefined && !options.activeOnly
+      getSignalStreams()
+        .ingestAlerts(id, null, alerts, { fullActiveSet: unfiltered })
+        .catch((err) => console.error('[Datasources] alert stream ingest failed:', err))
       return c.json(alerts)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

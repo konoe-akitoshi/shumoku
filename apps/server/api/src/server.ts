@@ -25,6 +25,8 @@ import { DataSourceService } from './services/datasource.js'
 import { startDiscoveryScheduler, stopDiscoveryScheduler } from './services/discovery-scheduler.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
 import { publishMetrics } from './services/metrics-hub.js'
+import { ObservationsService } from './services/observations.js'
+import { getSignalStreams } from './services/signal-streams.js'
 import type { ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { TopologyManager } from './topology.js'
@@ -86,6 +88,7 @@ export class Server {
   private metricsProvider: MockMetricsProvider
   private clients: Map<ServerWebSocket<ClientState>, ClientState> = new Map()
   private pollInterval: ReturnType<typeof setInterval> | null = null
+  private housekeepingInterval: ReturnType<typeof setInterval> | null = null
   private bunServer: BunServer<ClientState> | null = null
   private dbTopologyMetrics: Map<string, MetricsData> = new Map()
 
@@ -352,6 +355,24 @@ export class Server {
         isPolling = false
       }
     }, interval)
+
+    // Signal-stream housekeeping (signal-streams.md retentions): once at
+    // startup, then every 6h. Cheap deletes; never let it crash the server.
+    const runHousekeeping = () => {
+      try {
+        const pruned = getSignalStreams().housekeeping()
+        const observations = new ObservationsService().pruneOldObservations()
+        if (pruned.history + pruned.trends + pruned.alerts + observations > 0) {
+          console.log(
+            `[SignalStreams] housekeeping: history=${pruned.history} trends=${pruned.trends} alerts=${pruned.alerts} observations=${observations}`,
+          )
+        }
+      } catch (err) {
+        console.error('[SignalStreams] housekeeping failed:', err)
+      }
+    }
+    runHousekeeping()
+    this.housekeepingInterval = setInterval(runHousekeeping, 6 * 3600_000)
   }
 
   private async updateAllMetrics(): Promise<void> {
@@ -479,6 +500,13 @@ export class Server {
         // Feed the hub so token-scoped share SSE streams can read/observe live
         // metrics off the same central poll (no second poll loop).
         publishMetrics(topology.id, metrics)
+        // Metrics stream (signal-streams.md): raw history + hourly trends.
+        // Best-effort — a stream write must never break the poll loop.
+        try {
+          getSignalStreams().recordMetrics(topology.id, metrics)
+        } catch (err) {
+          console.error('[Server] metrics stream record failed:', err)
+        }
       }
     }
   }
@@ -595,6 +623,16 @@ export class Server {
     if (this.pollInterval) {
       clearInterval(this.pollInterval)
       this.pollInterval = null
+    }
+    if (this.housekeepingInterval) {
+      clearInterval(this.housekeepingInterval)
+      this.housekeepingInterval = null
+    }
+    // flush open trend hour-buckets so a graceful shutdown loses nothing
+    try {
+      getSignalStreams().flushAll()
+    } catch {
+      // best-effort
     }
 
     for (const ws of this.clients.keys()) {
