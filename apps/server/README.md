@@ -1,160 +1,126 @@
 # @shumoku/server
 
-Real-time network topology visualization server with Zabbix integration for Shumoku.
+Real-time network topology visualization and monitoring server for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Connect data sources, overlay live metrics and alerts on your diagrams, build dashboards, and share read-only views.
+
+A **Bun + [Hono](https://hono.dev)** API with an SQLite store and a **SvelteKit** web UI, split into two workspaces:
+
+- [`api/`](api) — `@shumoku/server-api`: HTTP + WebSocket, SQLite, the data-source plugin loader
+- [`web/`](web) — `@shumoku/server-web`: SvelteKit single-page UI
+
+> The server **runs from source** — it is not a published npm package. Use Docker, the workspace dev scripts, or a build (below).
 
 ## Features
 
-- **Web UI Configuration**: Grafana-like interface for managing data sources and topologies
-- **Real-time Metrics**: WebSocket-based live updates for link utilization and node status
-- **Weathermap Visualization**: Color-coded links based on traffic utilization
-- **Zabbix Integration**: Pull metrics from Zabbix monitoring system
-- **Docker Ready**: Single container deployment with SQLite persistence
-- **Interactive Diagrams**: Pan, zoom, and explore network topologies
+- **Multi-source** — Zabbix, Prometheus, NetBox, Grafana, Aruba Instant On, and SNMP/LLDP network discovery
+- **Real-time metrics** — WebSocket live updates for link utilization and node status
+- **Weathermap** — links color-coded by traffic load
+- **Dashboards** — gridstack widget layouts combining topologies and metrics
+- **Shareable links** — token-gated, read-only public views (no login)
+- **Interactive diagrams** — pan, zoom, drill-in
+- **Docker-ready** — single container with SQLite persistence
 
-## Quick Start
+## Quick start
 
-### Option 1: Docker (Recommended)
-
-```bash
-cd apps/server
-docker compose up -d
-
-# Use port 80 (for production)
-SHUMOKU_PORT=80 docker compose up -d
-
-# With sample network for demo
-DEMO_MODE=true docker compose up -d
-```
-
-### Option 2: Local (Bun)
+### Option 1 — Docker (recommended)
 
 ```bash
 cd apps/server
-
-# Setup (first time only)
-make setup
-
-# Start server
-make dev
-
-# With sample network for demo
-DEMO_MODE=true make dev
+docker compose up -d                    # http://localhost:8080
+SHUMOKU_PORT=80 docker compose up -d    # production port
+DEMO_MODE=true docker compose up -d     # preload a sample network
 ```
 
-Open http://localhost:8080 to access the Web UI.
-
-## Available Commands
+### Option 2 — From the repo root (Bun, dev)
 
 ```bash
-make setup      # Initial setup (install deps & build)
-make dev        # Start development server
-make start      # Start production server
-make docker     # Start with Docker Compose
-make help       # Show all commands
+bun install
+bun run dev:server     # turbo: API (:8080) + web UI (:5173, HMR)
 ```
 
-## Development
-
-For development with hot reload:
+### Option 3 — From apps/server (Bun)
 
 ```bash
 cd apps/server
-bun run dev    # Start API + Web UI together
+make setup     # first run: install deps + build
+make dev       # dev server (or: bun run dev)
+make start     # production (or: bun run start)
+make help      # list all targets
 ```
 
-Access http://localhost:5173 for development (HMR enabled).
-API is proxied to http://localhost:8080.
+Web UI: **http://localhost:8080** (prod) or **http://localhost:5173** (dev — proxies `/api` and `/ws` to `:8080`).
 
-## Data Persistence
+## Data sources
 
-All configuration is stored in SQLite and managed via the Web UI:
+Configured entirely from the web UI — forms render generically from each plugin's schema (no per-plugin UI code). Bundled plugins (see each one's README under [`libs/plugins`](../../libs/plugins)):
 
-- **Data Sources**: Configure Zabbix API connections
-- **Topologies**: Upload and manage network topology YAML files
-- **Settings**: Application-wide configuration
-
-Data is persisted in `/data/shumoku.db` (Docker volume: `shumoku-data`).
+| Source | Pulls |
+|--------|-------|
+| **Zabbix** | metrics, hosts, LLDP topology, alerts |
+| **Prometheus** | metrics, hosts, alerts (Alertmanager) |
+| **NetBox** | topology, hosts |
+| **Grafana** | alerts (webhook or Alertmanager) |
+| **Aruba Instant On** | hosts, metrics, alerts |
+| **Network discovery** | SNMP + LLDP seed-crawl (autoscan) |
 
 ## Web UI
 
-### Pages
-
 | Path | Description |
 |------|-------------|
-| `/` | Home - Dashboard overview |
-| `/topologies` | Topology list and management |
-| `/topologies/:id` | Topology viewer with live metrics |
-| `/datasources` | Data source (Zabbix) configuration |
+| `/` | Home / overview |
+| `/topologies`, `/topologies/:id` | Topology list and live viewer |
+| `/dashboards` | Custom widget dashboards |
+| `/datasources` | Data source configuration |
+| `/plugins` | Installed plugins |
 | `/settings` | Application settings |
-
-### Managing Data Sources
-
-1. Navigate to **Data Sources** in the sidebar
-2. Click **Add Data Source**
-3. Enter Zabbix server URL and API token
-4. Click **Test Connection** to verify
-5. Save the configuration
-
-### Managing Topologies
-
-1. Navigate to **Topologies** in the sidebar
-2. Click **Add Topology**
-3. Upload a YAML topology file or paste YAML content
-4. Optionally link to a data source for live metrics
-5. Configure Zabbix mapping for nodes and links
+| `/share/:token` | Public, read-only shared view |
+| `/login` | Authentication |
 
 ## API
 
-### HTTP Endpoints
+Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requires a session.)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/datasources` | GET | List all data sources |
-| `/api/datasources` | POST | Create data source |
-| `/api/datasources/:id` | GET | Get data source details |
-| `/api/datasources/:id` | PUT | Update data source |
-| `/api/datasources/:id` | DELETE | Delete data source |
-| `/api/datasources/:id/test` | POST | Test connection |
-| `/api/topologies` | GET | List all topologies |
-| `/api/topologies` | POST | Create topology |
-| `/api/topologies/:id` | GET | Get topology details |
-| `/api/topologies/:id` | PUT | Update topology |
-| `/api/topologies/:id` | DELETE | Delete topology |
-| `/api/topologies/:id/render` | GET | Get rendered SVG |
-| `/api/health` | GET | Health check |
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Health check |
+| `/api/auth/*` | Authentication |
+| `/api/datasources`, `/:id/test`, `/:id/scan` | Data source CRUD, connection test, discovery scan |
+| `/api/plugins` | Plugin registry |
+| `/api/topologies`, `/:id/render` | Topology CRUD and SVG/HTML render |
+| `/api/topologies/:id/sources` | Data sources linked to a topology |
+| `/api/topologies/:id/observations`, `/resolved` | Observation history and resolved graph |
+| `/api/topologies/:id/discovery-policy` | Network discovery rules |
+| `/api/dashboards` | Dashboard CRUD |
+| `/api/settings` | Application settings |
+| `/api/webhooks` | Inbound webhooks (e.g. Grafana alerts) |
+| `/api/share/*` | Public shared topology / dashboard views |
+| `GET /api/runtime.js` | Interactive render runtime (IIFE) for the browser |
+| `/ws` | WebSocket — real-time metrics stream |
 
 ### WebSocket
 
 Connect to `ws://<host>/ws` for real-time metrics.
 
-**Client Messages:**
+**Client → server:**
 
 ```javascript
-// Subscribe to topology updates
 { "type": "subscribe", "topology": "<topology-id>" }
-
-// Filter specific nodes/links
 { "type": "filter", "nodes": ["router1"], "links": ["link-0"] }
 ```
 
-**Server Messages:**
+**Server → client:**
 
 ```javascript
 {
   "type": "metrics",
   "data": {
-    "nodes": {
-      "router1": { "status": "up" }
-    },
-    "links": {
-      "link-0": { "status": "up", "utilization": 45.2 }
-    },
+    "nodes": { "router1": { "status": "up" } },
+    "links": { "link-0": { "status": "up", "utilization": 45.2 } },
     "timestamp": 1705849200000
   }
 }
 ```
 
-## Topology YAML Format
+## Topology YAML
 
 ```yaml
 name: My Network
@@ -164,176 +130,37 @@ nodes:
     type: router
   - id: switch1
     label: Distribution Switch
-    type: switch
-  - id: server1
-    label: Web Server
-    type: server
+    type: l2-switch
 links:
   - from: router1
     to: switch1
     bandwidth: 10G
-  - from: switch1
-    to: server1
-    bandwidth: 1G
 ```
 
-## Environment Variables
+See the [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) for the full format.
+
+## Environment variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PORT` | Server port | 8080 |
-| `HOST` | Bind address | 0.0.0.0 |
-| `DATA_DIR` | Data directory for SQLite | /data |
-| `SHUMOKU_PORT` | External port (Docker Compose) | 8080 |
-| `DEMO_MODE` | Load sample network on empty DB (`true`/`false`) | `false` |
+| `PORT` | Server port | `8080` |
+| `HOST` | Bind address | `0.0.0.0` |
+| `DATA_DIR` | SQLite data directory | `/data` |
+| `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
+| `DEMO_MODE` | Load the sample network on an empty DB (`true`/`false`) | `false` |
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Browser (SPA)                          │
-│  ┌─────────┐  ┌─────────────────────────────────────────┐  │
-│  │ Sidebar │  │  Main Content (Topology / Settings)     │  │
-│  └─────────┘  └─────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                    HTTP / WebSocket
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                   Shumoku Server (Bun)                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  API Routes  │  │  WebSocket   │  │ Static Files │      │
-│  │   /api/*     │  │    /ws       │  │  /assets/*   │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│         │                                                   │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  Services (DataSource, Topology, Metrics)            │  │
-│  └──────────────────────────────────────────────────────┘  │
-│         │                                                   │
-│  ┌──────────────┐  ┌──────────────┐                        │
-│  │   SQLite     │  │  Zabbix API  │                        │
-│  │   /data/     │  │  (External)  │                        │
-│  └──────────────┘  └──────────────┘                        │
-└─────────────────────────────────────────────────────────────┘
-```
+Configuration is otherwise stored in SQLite (`$DATA_DIR/shumoku.db`) and managed from the web UI.
 
 ## Deployment
 
-### Option 1: Docker (Recommended)
+### Docker (recommended)
 
 ```bash
 cd apps/server
 docker compose up -d
 ```
 
-Data is persisted in Docker volume `shumoku-data`.
-
-### Option 2: Systemd (Linux)
-
-#### Prerequisites
-
-- [Bun](https://bun.sh) runtime installed
-- Git
-
-#### Installation
-
-```bash
-# Clone repository
-git clone https://github.com/konoe-akitoshi/shumoku.git /opt/shumoku
-cd /opt/shumoku/apps/server
-
-# Setup (install dependencies and build)
-make setup
-
-# Create data directory
-sudo mkdir -p /var/lib/shumoku
-sudo chown shumoku:shumoku /var/lib/shumoku
-
-# Install systemd service
-sudo cp scripts/shumoku.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable shumoku
-sudo systemctl start shumoku
-```
-
-#### Service Management
-
-```bash
-# Status
-sudo systemctl status shumoku
-
-# Logs
-sudo journalctl -u shumoku -f
-
-# Restart
-sudo systemctl restart shumoku
-
-# Stop
-sudo systemctl stop shumoku
-```
-
-#### Update
-
-```bash
-cd /opt/shumoku
-git pull
-cd apps/server
-make setup
-sudo systemctl restart shumoku
-```
-
-### Option 3: Manual
-
-```bash
-cd apps/server
-
-# Setup (first time)
-make setup
-
-# Start (foreground)
-make start
-
-# Or with custom settings
-DATA_DIR=/path/to/data PORT=8080 bun dist/index.js
-```
-
-### Reverse Proxy (nginx)
-
-```nginx
-server {
-    listen 80;
-    server_name shumoku.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-### Backup & Restore
-
-```bash
-# Backup (Docker)
-docker compose cp shumoku:/data/shumoku.db ./backup.db
-
-# Backup (Systemd)
-cp /var/lib/shumoku/shumoku.db ./backup.db
-
-# Restore
-cp ./backup.db /var/lib/shumoku/shumoku.db
-sudo systemctl restart shumoku
-```
-
----
-
-## Docker Compose
-
-The `compose.yaml` provides a production-ready configuration:
+`compose.yaml` builds from the monorepo root and persists data in the `shumoku-data` volume:
 
 ```yaml
 services:
@@ -351,28 +178,77 @@ volumes:
   shumoku-data:
 ```
 
-### Commands
+```bash
+docker compose up -d            # start
+docker compose down             # stop
+docker compose logs -f          # logs
+docker compose up -d --build    # rebuild after code changes
+```
+
+### Kubernetes (Helm)
+
+A Helm chart is provided under [`chart/shumoku`](chart/shumoku):
 
 ```bash
-# Start
-docker compose up -d
+helm install shumoku ./chart/shumoku
+```
 
-# Stop
-docker compose down
+### Systemd (Linux)
 
-# View logs
-docker compose logs -f
+Requires [Bun](https://bun.sh) and Git.
 
-# Rebuild after code changes
-docker compose up -d --build
+```bash
+git clone https://github.com/konoe-akitoshi/shumoku.git /opt/shumoku
+cd /opt/shumoku/apps/server
+make setup
 
-# Backup database
-docker compose cp shumoku:/data/shumoku.db ./backup.db
+sudo mkdir -p /var/lib/shumoku
+sudo chown shumoku:shumoku /var/lib/shumoku
 
-# Restore database
-docker compose cp ./backup.db shumoku:/data/shumoku.db
+sudo cp scripts/shumoku.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now shumoku
+```
+
+Manage with `systemctl status|restart|stop shumoku` and `journalctl -u shumoku -f`. To update: `git pull && make setup && sudo systemctl restart shumoku`.
+
+### Manual
+
+```bash
+cd apps/server
+make setup
+make start                                  # or: DATA_DIR=/path PORT=8080 bun dist/index.js
+```
+
+### Reverse proxy (nginx)
+
+```nginx
+server {
+    listen 80;
+    server_name shumoku.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Backup & restore
+
+```bash
+# Docker
+docker compose cp shumoku:/data/shumoku.db ./backup.db    # backup
+docker compose cp ./backup.db shumoku:/data/shumoku.db    # restore
+
+# Systemd
+cp /var/lib/shumoku/shumoku.db ./backup.db
 ```
 
 ## License
 
-MIT
+AGPL-3.0-only — part of the [Shumoku](https://github.com/konoe-akitoshi/shumoku) monorepo. For commercial licensing, contact contact@shumoku.dev.
