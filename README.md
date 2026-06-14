@@ -105,8 +105,10 @@ See the **[Server Setup Guide](apps/server/README.md)** for Docker, Kubernetes (
 docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
 # → http://localhost:8080   (add `-e DEMO_MODE=true` to preload a sample network)
 
-# Or build from source / run in dev (API :8080 + web UI :5173)
-cd apps/server && docker compose up -d
+# Docker Compose with an exact production version
+cd apps/server && SHUMOKU_VERSION=0.1.1 docker compose up -d
+
+# Development from source (API :8080 + web UI :5173)
 bun run dev:server     # from the repo root
 ```
 
@@ -117,6 +119,13 @@ What you can do:
 3. **Monitor in real-time** — See node status and link utilization update live over WebSocket
 4. **Build dashboards** — Combine multiple topologies and metric widgets into custom views
 5. **Share** — Generate public links for read-only access without authentication
+
+## Editor
+
+The [Editor](https://editor.shumoku.dev/) is hosted on Vercel independently from
+the Server. Branches and pull requests receive isolated Preview deployments;
+merging to `main` updates Production. The running version, deployment channel,
+and commit are shown on the Editor home screen.
 
 ### Integrations
 
@@ -200,9 +209,9 @@ const png = await renderGraphToPng(graph, { scale: 2 })
 ### CLI
 
 ```bash
-npx shumoku render network.yaml -o diagram.svg
-npx shumoku render network.yaml -f html -o diagram.html
-npx shumoku render network.yaml -f png -o diagram.png --scale 3
+npx @shumoku/cli render network.yaml -o diagram.svg
+npx @shumoku/cli render network.yaml -f html -o diagram.html
+npx @shumoku/cli render network.yaml -f png -o diagram.png --scale 3
 ```
 
 **[Playground](https://www.shumoku.dev/)** | **[YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference)**

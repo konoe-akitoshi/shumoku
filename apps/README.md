@@ -9,6 +9,10 @@ End-user applications built on the Shumoku libraries.
 | [`cli`](cli) | `@shumoku/cli` | `shumoku render` — turn a YAML/JSON `NetworkGraph` into SVG / HTML / PNG. |
 | [`docs`](docs) | `@shumoku/docs` | The documentation site at [shumoku.dev](https://www.shumoku.dev) (Next.js + Fumadocs, bilingual EN/JA). |
 
+Release streams are independent: npm packages (including CLI), Server
+containers, and Editor Vercel deployments do not share one product version. See
+[`docs/releasing.md`](../docs/releasing.md).
+
 Each app has its own README with setup and usage. Most run from the repo root via Turborepo:
 
 ```bash

@@ -194,6 +194,29 @@ export interface ApiError {
   error: string
 }
 
+export type ReleaseChannel = 'stable' | 'beta' | 'development'
+export type DeploymentType = 'docker' | 'docker-compose' | 'kubernetes' | 'source'
+export type UpdateStatus = 'available' | 'current' | 'unknown' | 'disabled'
+
+export interface SystemInfo {
+  build: {
+    version: string
+    channel: ReleaseChannel
+    commit?: string
+    builtAt?: string
+    deployment: DeploymentType
+  }
+  update: {
+    status: UpdateStatus
+    currentVersion: string
+    latestVersion?: string
+    releaseUrl?: string
+    publishedAt?: string
+    checkedAt?: string
+    error?: string
+  }
+}
+
 // ============================================
 // Sync Job (progress modal / reload re-attach)
 // ============================================

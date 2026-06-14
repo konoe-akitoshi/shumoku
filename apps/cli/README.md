@@ -7,7 +7,13 @@ Command-line renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). 
 Run it with `npx` (no install):
 
 ```bash
-npx shumoku render network.yaml -o diagram.svg
+npx @shumoku/cli render network.yaml -o diagram.svg
+```
+
+Beta snapshots are published under the `beta` npm dist-tag:
+
+```bash
+npx @shumoku/cli@beta render network.yaml -o diagram.svg
 ```
 
 Or, from a clone of this monorepo, build and run the source:

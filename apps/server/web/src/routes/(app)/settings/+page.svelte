@@ -1,15 +1,19 @@
 <script lang="ts">
-  import { FileTextIcon, GithubLogoIcon } from 'phosphor-svelte'
+  import { ArrowsClockwiseIcon, FileTextIcon, GithubLogoIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api, auth } from '$lib/api'
   import { themeSetting } from '$lib/stores'
   import type { ThemeValue } from '$lib/stores/theme'
+  import type { SystemInfo } from '$lib/types'
 
   let loading = true
 
   // Local settings (stored in localStorage)
   let theme: ThemeValue = 'system'
   let updateInterval = '30000'
+  let systemInfo: SystemInfo | null = null
+  let systemError = ''
+  let checkingUpdates = false
 
   onMount(async () => {
     // Load local settings
@@ -20,11 +24,11 @@
       updateInterval = String(parsed.updateInterval || 30000)
     }
 
-    // Load server settings
+    // Load server build and release information
     try {
-      await api.settings.get()
-    } catch {
-      // Settings load failed; non-critical for local-only page
+      systemInfo = await api.system.get()
+    } catch (error) {
+      systemError = error instanceof Error ? error.message : 'Failed to load server information'
     } finally {
       loading = false
     }
@@ -86,10 +90,35 @@
     try {
       const result = await api.health.check()
       alert(
-        `Server is ${result.status} (timestamp: ${new Date(result.timestamp).toLocaleString()})`,
+        `Server is ${result.status}, version ${result.build.version} (${new Date(result.timestamp).toLocaleString()})`,
       )
     } catch (e) {
       alert(`Health check failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    }
+  }
+
+  async function checkForUpdates() {
+    checkingUpdates = true
+    systemError = ''
+    try {
+      systemInfo = await api.system.get(true)
+    } catch (error) {
+      systemError = error instanceof Error ? error.message : 'Failed to check for updates'
+    } finally {
+      checkingUpdates = false
+    }
+  }
+
+  function updateInstructions(info: SystemInfo): string {
+    switch (info.build.deployment) {
+      case 'docker-compose':
+        return 'Run docker compose pull && docker compose up -d to recreate the service.'
+      case 'docker':
+        return 'Pull the new image and recreate the container while keeping the /data volume.'
+      case 'kubernetes':
+        return 'Update the image tag to the exact release version and run your Helm upgrade.'
+      default:
+        return 'Check out the release tag, rebuild the server, and restart the service.'
     }
   }
 </script>
@@ -153,8 +182,24 @@
           <div class="space-y-3">
             <div class="flex justify-between">
               <span class="text-theme-text-muted">Version</span>
-              <span class="text-theme-text">{__APP_VERSION__}</span>
+              <span class="text-theme-text">{systemInfo?.build.version ?? 'Unknown'}</span>
             </div>
+            <div class="flex justify-between">
+              <span class="text-theme-text-muted">Channel</span>
+              <span class="text-theme-text capitalize">
+                {systemInfo?.build.channel ?? 'Unknown'}
+              </span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-theme-text-muted">Deployment</span>
+              <span class="text-theme-text">{systemInfo?.build.deployment ?? 'Unknown'}</span>
+            </div>
+            {#if systemInfo?.build.commit}
+              <div class="flex justify-between gap-4">
+                <span class="text-theme-text-muted">Commit</span>
+                <code class="text-theme-text">{systemInfo.build.commit.slice(0, 12)}</code>
+              </div>
+            {/if}
             <div class="flex justify-between">
               <span class="text-theme-text-muted">Database</span>
               <span class="text-theme-text">SQLite</span>
@@ -166,6 +211,69 @@
               Check Server Health
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Updates -->
+      <div class="card lg:col-span-2">
+        <div class="card-header flex items-center justify-between">
+          <h2 class="font-medium text-theme-text-emphasis">Software Updates</h2>
+          <button
+            class="btn btn-secondary flex items-center gap-2"
+            onclick={checkForUpdates}
+            disabled={checkingUpdates}
+          >
+            <ArrowsClockwiseIcon size={16} class={checkingUpdates ? 'animate-spin' : ''} />
+            {checkingUpdates ? 'Checking...' : 'Check now'}
+          </button>
+        </div>
+        <div class="card-body space-y-4">
+          {#if systemError}
+            <div class="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2">{systemError}</div>
+          {:else if systemInfo?.update.status === 'available'}
+            <div class="rounded-lg border border-warning/30 bg-warning/10 p-4 space-y-3">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="font-medium text-theme-text-emphasis">
+                    Shumoku {systemInfo.update.latestVersion} is available
+                  </p>
+                  <p class="text-sm text-theme-text-muted">
+                    You are running {systemInfo.update.currentVersion}.
+                  </p>
+                </div>
+                {#if systemInfo.update.releaseUrl}
+                  <a
+                    class="btn btn-primary"
+                    href={systemInfo.update.releaseUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View release
+                  </a>
+                {/if}
+              </div>
+              <p class="text-sm text-theme-text">{updateInstructions(systemInfo)}</p>
+            </div>
+          {:else if systemInfo?.update.status === 'current'}
+            <p class="text-sm text-success">
+              This server is running the latest stable release ({systemInfo.update.latestVersion ?? systemInfo.build.version}).
+            </p>
+          {:else if systemInfo?.update.status === 'disabled'}
+            <p class="text-sm text-theme-text-muted">
+              Update checks are disabled with <code>SHUMOKU_UPDATE_CHECK=off</code>.
+            </p>
+          {:else}
+            <p class="text-sm text-theme-text-muted">
+              The latest release could not be determined.
+              {systemInfo?.update.error ?? ''}
+            </p>
+          {/if}
+
+          {#if systemInfo?.update.checkedAt}
+            <p class="text-xs text-theme-text-muted">
+              Last checked {new Date(systemInfo.update.checkedAt).toLocaleString()}
+            </p>
+          {/if}
         </div>
       </div>
 
@@ -249,7 +357,7 @@
               GitHub Repository
             </a>
             <a
-              href="https://shumoku-docs.dev"
+              href="https://www.shumoku.dev/"
               target="_blank"
               class="text-primary hover:text-primary-dark flex items-center gap-2"
             >

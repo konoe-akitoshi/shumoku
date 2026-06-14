@@ -60,3 +60,8 @@ bun run test        # Test
 - TypeScript with strict mode
 - Biome for formatting and linting
 - ESM modules
+
+## Releases
+
+See [Releasing Shumoku](docs/releasing.md) for npm, CLI, Server, and Editor
+stable/beta release processes.

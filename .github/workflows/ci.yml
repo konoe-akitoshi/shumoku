@@ -69,6 +69,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify product versions
+        run: bun run version:products:check
+
       - name: Lint+Format
         run: bunx biome check .
 
@@ -122,3 +125,28 @@ jobs:
 
       - name: Unused code detection (knip)
         run: bun run knip
+
+  # Fail a PR that changes a published package (libs/@shumoku/* or apps/cli)
+  # without declaring a release intent. Escape hatch for non-release changes
+  # (tests, internal refactors): `bun x changeset add --empty`.
+  changeset:
+    # Skip the release PR itself (changeset-release/*): it has consumed all
+    # changesets and bumped versions, which this check would otherwise flag.
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          cache: true
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Require a changeset for published-package changes
+        run: bun x changeset status --since=origin/${{ github.base_ref }}

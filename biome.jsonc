@@ -61,6 +61,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/build",
       "!**/node_modules",
       "!**/.next",
       "!**/.turbo",

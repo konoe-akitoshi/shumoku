@@ -3,7 +3,7 @@ name: Docker
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['server-v*.*.*']
   pull_request:
     branches: [main]
 
@@ -24,7 +24,43 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve build information
+        id: build
+        shell: bash
+        run: |
+          echo "version=$(node -p "require('./apps/server/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/server-v* ]]; then
+            if [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then
+              echo "channel=beta" >> "$GITHUB_OUTPUT"
+            else
+              echo "channel=stable" >> "$GITHUB_OUTPUT"
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=development" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify release version
+        if: steps.build.outputs.release == 'true'
+        shell: bash
+        run: |
+          package_version="${{ steps.build.outputs.version }}"
+          tag_version="${GITHUB_REF_NAME#server-v}"
+
+          if [[ ! "$tag_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]; then
+            echo "::error::Server release tags must use server-vX.Y.Z or server-vX.Y.Z-beta.N"
+            exit 1
+          fi
+
+          if [[ "$tag_version" != "$package_version" ]]; then
+            echo "::error::Tag server-v${tag_version} does not match @shumoku/server ${package_version}"
+            exit 1
+          fi
+
       - name: Log in to Container Registry
+        if: steps.build.outputs.release == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -36,20 +72,55 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,enable={{is_default_branch}}
-            type=ref,event=pr
+            type=raw,value=${{ steps.build.outputs.version }},enable=${{ steps.build.outputs.release == 'true' }}
+            type=raw,value=latest,enable=${{ steps.build.outputs.channel == 'stable' }}
+            type=raw,value=beta,enable=${{ steps.build.outputs.channel == 'beta' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/server/Dockerfile
-          push: true
+          push: ${{ steps.build.outputs.release == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SHUMOKU_VERSION=${{ steps.build.outputs.version }}
+            SHUMOKU_COMMIT=${{ github.sha }}
+            SHUMOKU_BUILD_DATE=${{ steps.build.outputs.built_at }}
+            SHUMOKU_CHANNEL=${{ steps.build.outputs.channel }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/server-v')
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "GitHub Release $GITHUB_REF_NAME already exists"
+          elif [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --generate-notes \
+              --prerelease \
+              --title "Shumoku Server ${GITHUB_REF_NAME#server-v}"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --generate-notes \
+              --latest \
+              --title "Shumoku Server ${GITHUB_REF_NAME#server-v}"
+          fi
