@@ -13,20 +13,26 @@ bun install
 # Build
 bun run build
 
-# Run playground
-cd apps/playground && bun run dev
+# Run the docs site + playground
+cd apps/docs && bun run dev
 ```
 
 ## Project Structure
 
 ```
-packages/
-├── @shumoku/core         # Core library
-├── @shumoku/parser-yaml  # YAML parser
-└── @shumoku/netbox       # NetBox integration
+libs/
+├── shumoku              # All-in-one package
+├── @shumoku/core        # Models, parser, layout, themes, plugin kit
+├── @shumoku/renderer-*  # SVG / HTML / PNG / Svelte renderers
+├── @shumoku/catalog     # Device / service catalog
+├── @shumoku/plugin-sdk  # HTTP client for data-source plugins
+└── plugins/             # Zabbix, Prometheus, NetBox, Grafana, Aruba, network-scan
 
 apps/
-└── playground            # Demo site
+├── server               # Real-time monitoring platform (API + web)
+├── editor               # Visual topology designer
+├── cli                  # `shumoku render` CLI
+└── docs                 # Documentation site + playground
 ```
 
 ## Commands

@@ -1,176 +1,84 @@
 # API Reference
 
-Shumoku の TypeScript API リファレンスです。
+Shumoku の TypeScript API の概要です。各パッケージの詳しい使い方は、それぞれの README とウェブサイトのドキュメントを参照してください。
 
 ## Packages
 
 | パッケージ | 説明 |
 |-----------|------|
-| `shumoku` | メインパッケージ（全機能を含む） |
-| `@shumoku/core` | コアライブラリ（モデル、レイアウト、レンダラー） |
-| `@shumoku/parser-yaml` | YAML パーサー |
+| [`shumoku`](../libs/shumoku/README.md) | メインパッケージ（core + SVG/HTML レンダラーを再エクスポート） |
+| [`@shumoku/core`](../libs/@shumoku/core/README.md) | モデル・パーサー・レイアウトエンジン・テーマ・プラグインキット |
+| [`@shumoku/renderer-svg`](../libs/@shumoku/renderer-svg/README.md) | SVG レンダーパイプライン |
+| [`@shumoku/renderer-html`](../libs/@shumoku/renderer-html/README.md) | インタラクティブ HTML 出力 |
+| [`@shumoku/renderer-png`](../libs/@shumoku/renderer-png/README.md) | PNG 出力（Node.js のみ） |
+| [`@shumoku/catalog`](../libs/@shumoku/catalog/README.md) | デバイス／サービスカタログ |
+| [`@shumoku/plugin-sdk`](../libs/@shumoku/plugin-sdk/README.md) | データソースプラグイン用 HTTP クライアント |
 
-## YamlParser
+> 旧 API（`HierarchicalLayoutEngine` / `SvgRenderer` クラス、`@shumoku/parser-yaml` パッケージ）は削除されました。現在はパイプライン関数（`prepareRender` → `renderSvg` 等）と `computeNetworkLayout()` を使います。
 
-YAML 文字列を `NetworkGraph` にパースします。
+## パース
 
 ```typescript
 import { YamlParser } from 'shumoku'
 
-const parser = new YamlParser()
-const graph = parser.parse(yamlString)
+const { graph, warnings } = new YamlParser().parse(yamlString)
 ```
 
-### Methods
+`parse()` は `{ graph: NetworkGraph, warnings?: ParseWarning[] }` を返します（回復可能な問題では例外を投げず `warnings` に積みます）。複数ファイル（`file:` 参照）には `HierarchicalParser` を使います。
 
-#### `parse(yaml: string): NetworkGraph`
-
-YAML 文字列をパースして `NetworkGraph` を返します。
-
-## HierarchicalLayoutEngine
-
-ネットワークグラフを階層的にレイアウトします。ELK.js を使用。
+## レイアウト
 
 ```typescript
-import { HierarchicalLayoutEngine } from 'shumoku'
+import { computeNetworkLayout } from 'shumoku'
 
-const engine = new HierarchicalLayoutEngine()
-const layout = await engine.layout(graph, options)
+const layout = await computeNetworkLayout(graph)
 ```
 
-### Methods
+ノード・リンク・サブグラフを配置した `LayoutResult` を返します（Sugiyama 系のタイア化レイアウト）。通常はレンダラーが内部で呼ぶため、直接呼ぶ必要はありません。
 
-#### `layout(graph: NetworkGraph, options?: LayoutOptions): Promise<LayoutResult>`
-
-グラフをレイアウトして結果を返します。
-
-### LayoutOptions
+## レンダリング
 
 ```typescript
-interface LayoutOptions {
-  direction?: 'TB' | 'BT' | 'LR' | 'RL'  // レイアウト方向
-  nodeWidth?: number                      // ノード幅
-  nodeHeight?: number                     // ノード高さ
-  spacing?: number                        // ノード間隔
-}
+import { prepareRender, renderSvg, renderGraphToSvg } from '@shumoku/renderer-svg'
+import { renderGraphToHtml } from '@shumoku/renderer-html'
+import { renderGraphToPng } from '@shumoku/renderer-png' // Node.js のみ
+
+// 一括
+const svg = await renderGraphToSvg(graph)
+const html = await renderGraphToHtml(graph, { title: 'My Network' })
+const png = await renderGraphToPng(graph, { scale: 2 })
+
+// パイプラインを分割（prepared を複数の出力で再利用）
+const prepared = await prepareRender(graph) // アイコン寸法解決 + レイアウト
+const svg2 = await renderSvg(prepared)
 ```
 
-## SvgRenderer
+`prepareRender` / `renderSvg` / `renderGraphToSvg` / `renderGraphToHtml` / `renderGraphToPng` はいずれも `async` です（`renderHtml(prepared)` のみ同期）。
 
-レイアウト結果を SVG 文字列にレンダリングします。
+## テーマ
 
 ```typescript
-import { SvgRenderer } from 'shumoku'
-
-const renderer = new SvgRenderer()
-const svg = renderer.render(layout, options)
+import { lightTheme, darkTheme, createTheme, mergeTheme } from 'shumoku'
 ```
 
-### Methods
-
-#### `render(layout: LayoutResult, options?: RenderOptions): string`
-
-レイアウト結果を SVG 文字列に変換します。
-
-### RenderOptions
-
-```typescript
-interface RenderOptions {
-  theme?: Theme           // テーマ設定
-  padding?: number        // SVG のパディング
-  showPorts?: boolean     // ポートを表示するか
-}
-```
-
-## Theme
-
-SVG のスタイルをカスタマイズします。
-
-```typescript
-import { modernTheme, darkTheme, createTheme } from 'shumoku'
-
-// 組み込みテーマ
-const renderer = new SvgRenderer()
-renderer.render(layout, { theme: darkTheme })
-
-// カスタムテーマ
-const customTheme = createTheme({
-  background: '#1a1a2e',
-  node: {
-    fill: '#16213e',
-    stroke: '#0f3460',
-    text: '#e94560'
-  }
-})
-```
-
-### Built-in Themes
-
-- `modernTheme` - ライトテーマ（デフォルト）
-- `darkTheme` - ダークテーマ
+組み込みテーマは `lightTheme`（デフォルト）と `darkTheme`。`createTheme()` / `mergeTheme()` でカスタマイズできます。テーマは `NetworkGraph.settings.theme`（`'light' | 'dark'`）でも指定できます。
 
 ## NetworkGraph
-
-ネットワークトポロジーのデータ構造です。
 
 ```typescript
 interface NetworkGraph {
   version: string
   name?: string
-  devices: Device[]
-  ports?: Port[]
+  description?: string
+  nodes: Node[]
   links: Link[]
-  modules?: Module[]
-  locations?: Location[]
+  subgraphs?: Subgraph[]
   settings?: NetworkSettings
 }
 ```
 
-## Device
+`Node` / `Link` / `Subgraph` / `NetworkSettings` の完全な型定義は [`@shumoku/core`](../libs/@shumoku/core/README.md)（`@shumoku/core/models`）を参照してください。
 
-ネットワークデバイスを表します。
+## アイコン
 
-```typescript
-interface Device {
-  id: string
-  name?: string
-  type?: DeviceType
-  role?: DeviceRole
-  status?: DeviceStatus
-  vendor?: string
-  model?: string
-  // ...
-}
-```
-
-### DeviceType
-
-```typescript
-enum DeviceType {
-  Router = 'router',
-  L3Switch = 'l3-switch',
-  L2Switch = 'l2-switch',
-  Firewall = 'firewall',
-  LoadBalancer = 'load-balancer',
-  Server = 'server',
-  AccessPoint = 'access-point',
-  Cloud = 'cloud',
-  Internet = 'internet',
-  VPN = 'vpn',
-  Database = 'database',
-  Generic = 'generic'
-}
-```
-
-## Icons
-
-ベンダーアイコンは CDN (`https://icons.shumoku.packof.me`) から自動的に配信されます。レンダラーがアイコンの寸法を取得し、適切なアスペクト比でレンダリングします。
-
-### Supported Vendors
-
-| ベンダー | アイコン数 |
-|---------|----------|
-| Yamaha | 103 |
-| Aruba | 55 |
-| AWS | 477 |
-| Juniper | 343 |
+ベンダーアイコンは CDN から配信され、レンダラーが寸法を取得して正しいアスペクト比で描画します。利用可能なアイコンは[ベンダーアイコン一覧](https://www.shumoku.dev/docs/npm/vendor-icons)を参照してください。

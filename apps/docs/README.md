@@ -1,45 +1,39 @@
-# docs
+# @shumoku/docs
 
-This is a Next.js application generated with
-[Create Fumadocs](https://github.com/fuma-nama/fumadocs).
+The documentation site for [Shumoku](https://github.com/konoe-akitoshi/shumoku), published at **[shumoku.dev](https://www.shumoku.dev/)**. Built with [Next.js](https://nextjs.org) and [Fumadocs](https://fumadocs.dev), with English and Japanese content.
 
-Run development server:
+## Develop
 
 ```bash
-npm run dev
-# or
-pnpm dev
-# or
-yarn dev
+bun install            # from the repo root
+cd apps/docs
+bun run dev            # http://localhost:3000
 ```
 
-Open http://localhost:3000 with your browser to see the result.
+| Script | Purpose |
+|--------|---------|
+| `bun run dev` | Dev server with hot reload |
+| `bun run build` | Production build |
+| `bun start` | Serve the production build |
+| `bun run typecheck` | Type check (runs the Fumadocs MDX generator first) |
 
-## Explore
+## Content
 
-In the project, you can see:
+Docs are MDX files under `content/docs/`, organized into two trees:
 
-- `lib/source.ts`: Code for content source adapter, [`loader()`](https://fumadocs.dev/docs/headless/source-api) provides the interface to access your content.
-- `lib/layout.shared.tsx`: Shared options for layouts, optional but preferred to keep.
+- **`server/`** — installation, data sources, topologies, dashboards, REST API
+- **`npm/`** — YAML reference, vendor icons, custom integration, NetBox
 
-| Route                     | Description                                            |
-| ------------------------- | ------------------------------------------------------ |
-| `app/(home)`              | The route group for your landing page and other pages. |
-| `app/docs`                | The documentation layout and pages.                    |
-| `app/api/search/route.ts` | The Route Handler for search.                          |
+Each page is bilingual via filename suffix — `installation.en.mdx` and `installation.ja.mdx`. A page is fully translated when both variants exist. Full-text search is served from `app/api/search/route.ts`, and the content source adapter is wired in `lib/source.ts`.
 
-### Fumadocs MDX
+## Adding a page
 
-A `source.config.ts` config file has been included, you can customise different options like frontmatter schema.
+1. Create `content/docs/<section>/<slug>.en.mdx` (and `.ja.mdx` for Japanese).
+2. Add frontmatter (`title`, `description`) and, if needed, an entry in the section's `meta.json` to order it in the sidebar.
+3. `bun run dev` and verify both languages render.
 
-Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
+Frontmatter schema and MDX options live in `source.config.ts`.
 
-## Learn More
+## License
 
-To learn more about Next.js and Fumadocs, take a look at the following
-resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js
-  features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [Fumadocs](https://fumadocs.dev) - learn about Fumadocs
+AGPL-3.0-only. For commercial licensing, contact contact@shumoku.dev.
