@@ -72,15 +72,17 @@ Networks change. Diagrams should be regenerated, reviewed, and maintained as par
 
 Shumoku treats network diagrams not as static pictures, but as **generated views of the network** — close to the source of truth, and easy to keep that way.
 
+→ Read the full [design philosophy](docs/PHILOSOPHY.md).
+
 ## What's in the box
 
-Shumoku is a monorepo with three ways to use it:
+At its core, Shumoku is a **topology generation engine** — it turns structured network data into a readable diagram. Around that core, it ships ready-to-use apps:
 
 | | | |
 |---|---|---|
-| 🖥️ **Server** | Real-time monitoring platform — connect data sources, overlay live metrics, build dashboards, share read-only links | [`apps/server`](apps/server) |
-| 📦 **Library + CLI** | The rendering engine on npm — turn a `NetworkGraph` into SVG / HTML / PNG, in Node or the browser | [`libs/shumoku`](libs/shumoku) |
-| ✏️ **Editor** | Visual topology designer — lay out devices, modules, and cables; derive a bill of materials | [`apps/editor`](apps/editor) |
+| 📦 **Library + CLI** | The core engine — turn a YAML / JSON `NetworkGraph` into SVG / HTML / PNG, in Node or the browser | [`libs/shumoku`](libs/shumoku) |
+| ✏️ **Editor** | Visual topology designer built on the engine — lay out devices, modules, and cables; derive a bill of materials | [`apps/editor`](apps/editor) |
+| 🖥️ **Server** | Topology-based monitoring built on the engine — overlay live metrics and alerts on the map, build dashboards, share read-only links | [`apps/server`](apps/server) |
 
 ## Features
 
