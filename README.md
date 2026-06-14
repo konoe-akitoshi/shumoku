@@ -16,24 +16,35 @@ in your Markdown, your browser, or a self-hosted NOC dashboard.
 
 [**▶ Try the live playground**](https://www.shumoku.dev/) &nbsp;·&nbsp; [**Documentation**](https://www.shumoku.dev/ja/docs/server) &nbsp;·&nbsp; [**Discord**](https://discord.gg/dyYbEsDZYr)
 
-<br>
-
-<!-- TODO(hero): swap this still for an ~8s animated GIF — the live weathermap recoloring links by load, or a pan/zoom + tooltip demo. Drop the file in assets/ and update the src below. -->
-<img src="assets/screenshots/topology.png" alt="Live weathermap — traffic utilization overlaid on the topology" width="90%">
-
-<em>Live weathermap — real-time traffic utilization overlaid on your topology</em>
-
-<br><br>
-
-<img src="assets/screenshots/dashboard.png" alt="NOC dashboard in production at JANOG57" width="90%">
-
-<em>Dashboard in production — JANOG57 NOC Live</em>
-
 </div>
 
 > [!NOTE]
 > 製作者が cloudnativekaigi NOC に参加中です。導入支援・技術サポートはお気軽にご相談ください。
 > &ensp;📧&ensp;[contact@shumoku.dev](mailto:contact@shumoku.dev) &ensp;·&ensp; 𝕏&ensp;[@shumoku_dev](https://x.com/shumoku_dev)
+
+<div align="center">
+
+<table>
+<tr>
+<td align="center" width="50%">
+
+<!-- TODO(hero): swap this still for an ~8s animated GIF — the live weathermap recoloring links by load, or a pan/zoom + tooltip demo. Drop the file in assets/ and update the src below. -->
+<img src="assets/screenshots/topology.png" alt="Live weathermap — traffic utilization overlaid on the topology" width="100%">
+
+<em>Live weathermap — real-time traffic overlaid on the topology</em>
+
+</td>
+<td align="center" width="50%">
+
+<img src="assets/screenshots/dashboard.png" alt="NOC dashboard in production at JANOG57" width="100%">
+
+<em>Dashboard in production — JANOG57 NOC Live</em>
+
+</td>
+</tr>
+</table>
+
+</div>
 
 ## What's in the box
 
