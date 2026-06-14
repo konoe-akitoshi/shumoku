@@ -1,32 +1,39 @@
+<div align="center">
+
+<img src="assets/logo-symbol.svg" alt="Shumoku" width="120" height="120">
+
 # Shumoku
 
-> [!IMPORTANT]
-> 製作者がcloudnativekaigi NOCに参加中です。
-> 導入支援・技術サポートについてもお気軽にご相談ください。
->
-> &ensp; 📧 &ensp;[contact@shumoku.dev](mailto:contact@shumoku.dev)
-> &ensp; 𝕏 &ensp;&ensp;[@shumoku_dev](https://x.com/shumoku_dev)
+### Living network diagrams from plain YAML.
 
-<img src="assets/logo-symbol.svg" alt="Shumoku Logo" width="128" height="128">
+Real-time traffic, alerts, and 900+ vendor icons —<br>
+in your Markdown, your browser, or a self-hosted NOC dashboard.
 
-**Network topology visualization and monitoring platform.** Define your network in YAML, get interactive diagrams with real-time metrics from Zabbix, Prometheus, NetBox, and more.
-
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![npm version](https://img.shields.io/npm/v/shumoku.svg)](https://www.npmjs.com/package/shumoku)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![Discord](https://img.shields.io/discord/1476527182669938720?logo=discord&logoColor=white&label=Discord)](https://discord.gg/dyYbEsDZYr)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/akitoshi)
 
-**[Website](https://www.shumoku.dev/)** | **[Documentation](https://www.shumoku.dev/ja/docs/server)** | **[Discord](https://discord.gg/dyYbEsDZYr)**
+[**▶ Try the live playground**](https://www.shumoku.dev/) &nbsp;·&nbsp; [**Documentation**](https://www.shumoku.dev/ja/docs/server) &nbsp;·&nbsp; [**Discord**](https://discord.gg/dyYbEsDZYr)
 
-<picture>
-  <img src="assets/screenshots/topology.png" alt="Topology viewer with live weathermap">
-</picture>
-<p align="center"><em>Topology viewer — live traffic utilization overlay with vendor icons</em></p>
+<br>
 
-<picture>
-  <img src="assets/screenshots/dashboard.png" alt="NOC dashboard at JANOG57">
-</picture>
-<p align="center"><em>Dashboard in production — JANOG57 NOC Live</em></p>
+<!-- TODO(hero): swap this still for an ~8s animated GIF — the live weathermap recoloring links by load, or a pan/zoom + tooltip demo. Drop the file in assets/ and update the src below. -->
+<img src="assets/screenshots/topology.png" alt="Live weathermap — traffic utilization overlaid on the topology" width="90%">
+
+<em>Live weathermap — real-time traffic utilization overlaid on your topology</em>
+
+<br><br>
+
+<img src="assets/screenshots/dashboard.png" alt="NOC dashboard in production at JANOG57" width="90%">
+
+<em>Dashboard in production — JANOG57 NOC Live</em>
+
+</div>
+
+> [!NOTE]
+> 製作者が cloudnativekaigi NOC に参加中です。導入支援・技術サポートはお気軽にご相談ください。
+> &ensp;📧&ensp;[contact@shumoku.dev](mailto:contact@shumoku.dev) &ensp;·&ensp; 𝕏&ensp;[@shumoku_dev](https://x.com/shumoku_dev)
 
 ## What's in the box
 
