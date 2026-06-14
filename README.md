@@ -1,7 +1,7 @@
 # Shumoku
 
 > [!IMPORTANT]
-> 製作者がcloudnativekaigi NOCに参加中です。サーバー系機能のreadmeが全体的に整備されていません。
+> 製作者がcloudnativekaigi NOCに参加中です。
 > 導入支援・技術サポートについてもお気軽にご相談ください。
 >
 > &ensp; 📧 &ensp;[contact@shumoku.dev](mailto:contact@shumoku.dev)
@@ -196,6 +196,8 @@ libs/
 docs/                Architecture, YAML reference, plugin authoring
 examples/            Sample YAML networks + a sample plugin
 ```
+
+Each top-level directory has its own index: [`apps/`](apps/README.md) · [`libs/`](libs/README.md) · [`examples/`](examples/README.md).
 
 ## Documentation
 
