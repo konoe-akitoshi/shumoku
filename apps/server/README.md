@@ -21,7 +21,21 @@ A **Bun + [Hono](https://hono.dev)** API with an SQLite store and a **SvelteKit*
 
 ## Quick start
 
-### Option 1 — Docker (recommended)
+### Docker image (quickest — no clone)
+
+Pull the published image from GitHub Container Registry:
+
+```bash
+docker run -d -p 8080:8080 -v shumoku-data:/data \
+  ghcr.io/konoe-akitoshi/shumoku:latest          # http://localhost:8080
+
+# preload a sample network:
+docker run -d -p 8080:8080 -e DEMO_MODE=true ghcr.io/konoe-akitoshi/shumoku:latest
+```
+
+Tags: `latest` (built from `main`), plus `X.Y.Z` and `X.Y` for tagged releases — see the [container package](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku).
+
+### Docker Compose (build from source)
 
 ```bash
 cd apps/server
@@ -30,14 +44,14 @@ SHUMOKU_PORT=80 docker compose up -d    # production port
 DEMO_MODE=true docker compose up -d     # preload a sample network
 ```
 
-### Option 2 — From the repo root (Bun, dev)
+### From the repo root (Bun, dev)
 
 ```bash
 bun install
 bun run dev:server     # turbo: API (:8080) + web UI (:5173, HMR)
 ```
 
-### Option 3 — From apps/server (Bun)
+### From apps/server (Bun)
 
 ```bash
 cd apps/server
@@ -154,6 +168,8 @@ Configuration is otherwise stored in SQLite (`$DATA_DIR/shumoku.db`) and managed
 ## Deployment
 
 ### Docker (recommended)
+
+Use the [published image](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku) (`ghcr.io/konoe-akitoshi/shumoku`), or build from source with Compose:
 
 ```bash
 cd apps/server

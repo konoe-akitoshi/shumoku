@@ -50,19 +50,18 @@ Shumoku is a monorepo with three ways to use it:
 
 ## Server
 
-The server is the full platform: a Bun + Hono API with an SQLite store and a SvelteKit web UI. It **runs from source** (not a published npm package).
+The server is the full platform: a Bun + Hono API with an SQLite store and a SvelteKit web UI. Run it from the **published Docker image**, or build from source.
 
 See the **[Server Setup Guide](apps/server/README.md)** for Docker, Kubernetes (Helm), systemd, and manual deployment.
 
 ```bash
-# Docker (recommended)
-cd apps/server
-docker compose up -d                    # http://localhost:8080
-DEMO_MODE=true docker compose up -d     # preload a sample network
+# Published Docker image (quickest)
+docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+# → http://localhost:8080   (add `-e DEMO_MODE=true` to preload a sample network)
 
-# Or run from the repo root in dev mode (API :8080 + web UI :5173)
-bun install
-bun run dev:server
+# Or build from source / run in dev (API :8080 + web UI :5173)
+cd apps/server && docker compose up -d
+bun run dev:server     # from the repo root
 ```
 
 What you can do:
