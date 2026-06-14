@@ -19,7 +19,7 @@ in your Markdown, your browser, or a self-hosted NOC dashboard.
 </div>
 
 > [!NOTE]
-> 製作者が cloudnativekaigi NOC に参加中です。導入支援・技術サポートはお気軽にご相談ください。
+> 製作者が janog58 NOC に参加中です。導入支援・技術サポートはお気軽にご相談ください。
 > &ensp;📧&ensp;[contact@shumoku.dev](mailto:contact@shumoku.dev) &ensp;·&ensp; 𝕏&ensp;[@shumoku_dev](https://x.com/shumoku_dev)
 
 <div align="center">
