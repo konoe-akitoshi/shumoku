@@ -5,6 +5,17 @@ description: Deploy Shumoku Server with Docker, systemd, or manually
 
 ## Docker (Recommended)
 
+The quickest way — pull the published image, no clone required:
+
+```bash
+docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+# → http://localhost:8080   (add `-e DEMO_MODE=true` to preload a sample network)
+```
+
+Tags: `latest` (built from `main`), plus `X.Y.Z` and `X.Y` for releases — see the [container package](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku).
+
+Or build from source with Compose:
+
 ```bash
 git clone https://github.com/konoe-akitoshi/shumoku.git
 cd shumoku/apps/server
