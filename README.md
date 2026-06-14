@@ -1,7 +1,7 @@
 # Shumoku
 
 > [!IMPORTANT]
-> 製作者がcloudnativekaigi NOCに参加中です。サーバー系機能のreadmeが全体的に整備されていません。
+> 製作者がcloudnativekaigi NOCに参加中です。
 > 導入支援・技術サポートについてもお気軽にご相談ください。
 >
 > &ensp; 📧 &ensp;[contact@shumoku.dev](mailto:contact@shumoku.dev)
@@ -50,15 +50,19 @@ Shumoku is a monorepo with three ways to use it:
 
 ## Server
 
-The server is the full platform: a Bun + Hono API with an SQLite store and a SvelteKit web UI.
+The server is the full platform: a Bun + Hono API with an SQLite store and a SvelteKit web UI. It **runs from source** (not a published npm package).
 
-See the **[Server Setup Guide](apps/server/README.md)** for Docker, systemd, and manual deployment options.
+See the **[Server Setup Guide](apps/server/README.md)** for Docker, Kubernetes (Helm), systemd, and manual deployment.
 
 ```bash
-# Quick start with Docker
+# Docker (recommended)
 cd apps/server
-docker compose up -d            # http://localhost:8080
-DEMO_MODE=true docker compose up -d   # preload a sample network
+docker compose up -d                    # http://localhost:8080
+DEMO_MODE=true docker compose up -d     # preload a sample network
+
+# Or run from the repo root in dev mode (API :8080 + web UI :5173)
+bun install
+bun run dev:server
 ```
 
 What you can do:
@@ -192,6 +196,8 @@ libs/
 docs/                Architecture, YAML reference, plugin authoring
 examples/            Sample YAML networks + a sample plugin
 ```
+
+Each top-level directory has its own index: [`apps/`](apps/README.md) · [`libs/`](libs/README.md) · [`examples/`](examples/README.md).
 
 ## Documentation
 

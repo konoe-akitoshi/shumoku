@@ -4,17 +4,18 @@ Command-line renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). 
 
 ## Install
 
-No install needed — run it with `npx`:
+Run it with `npx` (no install):
 
 ```bash
 npx shumoku render network.yaml -o diagram.svg
 ```
 
-Or install globally:
+Or, from a clone of this monorepo, build and run the source:
 
 ```bash
-npm install -g @shumoku/cli
-shumoku render network.yaml -o diagram.svg
+cd apps/cli
+bun run build
+node dist/shumoku.js render network.yaml -o diagram.svg
 ```
 
 ## Usage
