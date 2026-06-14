@@ -1,160 +1,44 @@
 # NetBox Integration
 
-NetBox からネットワーク構成を取得し、Shumoku ダイアグラムを自動生成します。
+NetBox の DCIM/IPAM からデバイス・ケーブルを取得し、Shumoku のトポロジーを自動生成します。
 
-## インストール
+利用方法は2つあります:
 
-```bash
-npm install @shumoku/netbox
-```
+- **サーバー（推奨）** — NetBox をデータソースとして追加すると、トポロジーが自動生成されます。設定は[サーバードキュメント](https://www.shumoku.dev/ja/docs/server)を参照してください。
+- **ライブラリ** — `shumoku-plugin-netbox` の API クライアントとコンバーターを直接使います。
 
-## CLI での使用
-
-コマンドラインから NetBox データを Shumoku YAML に変換できます。
+## インストール（ライブラリ利用時）
 
 ```bash
-# 基本的な使い方
-npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN
-
-# ファイルに出力
-npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN -o network.yaml
-
-# サイトでフィルタリング
-npx netbox-to-shumoku --url https://netbox.example.com --token YOUR_API_TOKEN --site tokyo-dc
+npm install shumoku-plugin-netbox @shumoku/renderer-svg
 ```
 
-### CLI オプション
-
-| オプション | 説明 |
-|-----------|------|
-| `--url, -u` | NetBox の URL（必須） |
-| `--token, -t` | API トークン（必須） |
-| `--output, -o` | 出力ファイル（省略時は標準出力） |
-| `--site, -s` | サイトでフィルタリング |
-| `--role, -r` | デバイスロールでフィルタリング |
-| `--theme` | テーマ: light または dark |
-| `--status` | ステータスでフィルタリング |
-| `--tag` | タグでフィルタリング |
-| `--group-by, -g` | グループ化: tag, site, location, prefix, none |
-| `--no-ports` | ポート名を非表示 |
-| `--no-colors` | ケーブル種別による色分けを無効化 |
-| `--color-by-status` | デバイスをステータスで色分け |
-| `--legend` | 凡例を表示（SVG出力時のみ） |
+> サーバーにはこのプラグインがバンドルされているため、別途インストールは不要です。
 
 ## ライブラリとしての使用
 
-### 基本的な使い方
-
 ```typescript
-import { NetBoxClient, convertToShumoku } from '@shumoku/netbox'
-import { HierarchicalLayoutEngine, SvgRenderer } from '@shumoku/core'
+import { NetBoxClient, convertToNetworkGraph } from 'shumoku-plugin-netbox'
+import { renderGraphToSvg } from '@shumoku/renderer-svg'
 
 // NetBox クライアントを作成
-const client = new NetBoxClient({
-  url: 'https://netbox.example.com',
-  token: 'your-api-token'
-})
+const client = new NetBoxClient({ url: 'https://netbox.example.com', token: 'your-api-token' })
 
-// デバイスとケーブルを取得
-const devices = await client.getDevices()
-const cables = await client.getCables()
+// デバイス・インターフェース・ケーブルを取得
+const devices = await client.fetchDevices()
+const interfaces = await client.fetchInterfaces()
+const cables = await client.fetchCables()
 
-// Shumoku NetworkGraph に変換
-const graph = convertToShumoku({ devices, cables })
-
-// レイアウトとレンダリング
-const engine = new HierarchicalLayoutEngine()
-const layout = await engine.layout(graph)
-
-const renderer = new SvgRenderer()
-const svg = renderer.render(layout)
+// Shumoku の NetworkGraph に変換してレンダリング
+const graph = convertToNetworkGraph(devices, interfaces, cables, { groupBy: 'site' })
+const svg = await renderGraphToSvg(graph)
 ```
 
-### サイト情報を含める
+仮想マシンも含める場合は `client.fetchAllWithVMs()` と `convertToNetworkGraphWithVMs()` を使います。クライアントの全メソッド（`fetchSites` / `fetchLocations` / `fetchTags` / `fetchDeviceRoles` / `fetchPrefixes` / `fetchIPAddresses` / `fetchAll` …）やコンバーターのオプションは、[プラグインの README](../libs/plugins/netbox/README.md) を参照してください。
 
-```typescript
-const devices = await client.getDevices()
-const cables = await client.getCables()
-const sites = await client.getSites()
+## グループ化とフィルタリング
 
-const graph = convertToShumoku({
-  devices,
-  cables,
-  sites  // サイトを subgraph として変換
-})
-```
-
-### フィルタリング
-
-```typescript
-// 特定のサイトのデバイスのみ取得
-const devices = await client.getDevices({
-  site: 'tokyo-dc'
-})
-
-// 特定のロールのデバイスのみ取得
-const devices = await client.getDevices({
-  role: 'core-router'
-})
-
-// 複数条件
-const devices = await client.getDevices({
-  site: 'tokyo-dc',
-  role: 'core-router',
-  status: 'active'
-})
-```
-
-## API Reference
-
-### NetBoxClient
-
-```typescript
-interface NetBoxClientOptions {
-  url: string      // NetBox の URL
-  token: string    // API トークン
-}
-
-const client = new NetBoxClient(options)
-```
-
-#### getDevices
-
-```typescript
-interface DeviceFilter {
-  site?: string
-  role?: string
-  status?: 'active' | 'planned' | 'staged' | 'failed' | 'offline'
-  manufacturer?: string
-  model?: string
-}
-
-client.getDevices(filter?: DeviceFilter): Promise<NetBoxDevice[]>
-```
-
-#### getCables
-
-```typescript
-client.getCables(): Promise<NetBoxCable[]>
-```
-
-#### getSites
-
-```typescript
-client.getSites(): Promise<NetBoxSite[]>
-```
-
-### convertToShumoku
-
-```typescript
-interface ConvertOptions {
-  devices: NetBoxDevice[]
-  cables: NetBoxCable[]
-  sites?: NetBoxSite[]
-}
-
-convertToShumoku(options: ConvertOptions): NetworkGraph
-```
+グループ化（`tag` / `site` / `location` / `prefix` / `none`）とサイト・タグ・ロールによるフィルタリングが指定できます。サーバーではデータソースのオプションとして UI から設定できます。詳細は[プラグイン README](../libs/plugins/netbox/README.md) の「Topology options」を参照してください。
 
 ## NetBox のセットアップ
 
@@ -182,13 +66,13 @@ NetBox のデータは以下のように Shumoku に変換されます：
 |--------|---------|
 | Device | Node |
 | Cable | Link |
-| Site | Subgraph |
+| Site / Location / Tag / Prefix | Subgraph（グループ化に応じて） |
 | Interface | Port |
-| Device Role | type の推測に使用 |
+| Device Role | `type` の推測に使用 |
 
 ### デバイスタイプの自動推測
 
-NetBox の `device_role` から Shumoku の `type` を自動推測します：
+NetBox の device role から Shumoku の `type` を推測します（`useRoleForType` オプション、既定で有効）。対応は `ROLE_TO_TYPE`（プラグインからエクスポート）で定義されています。代表例:
 
 | NetBox Device Role | Shumoku Type |
 |-------------------|--------------|
@@ -204,25 +88,15 @@ NetBox の `device_role` から Shumoku の `type` を自動推測します：
 
 ### 接続エラー
 
-```
-Error: Failed to connect to NetBox
-```
-
 - URL が正しいか確認
 - API トークンが有効か確認
-- ネットワーク接続を確認
+- ネットワーク接続を確認（自己署名証明書の場合は `insecure: true` を検討）
 
-### 権限エラー
+### 権限エラー（403 Forbidden）
 
-```
-Error: 403 Forbidden
-```
-
-- API トークンの権限を確認
-- 必要な権限が付与されているか確認
+- API トークンに必要な権限が付与されているか確認
 
 ### デバイスが表示されない
 
-- デバイスのステータスが `active` か確認
-- フィルタ条件を確認
-- NetBox でデバイスが正しく登録されているか確認
+- フィルタ条件（サイト・タグ・ロール）を確認
+- NetBox 上でデバイスとケーブルが正しく登録されているか確認

@@ -13,7 +13,7 @@ npm install shumoku
 ### NetBox 連携（オプション）
 
 ```bash
-npm install @shumoku/netbox
+npm install shumoku-plugin-netbox
 ```
 
 ## Basic Usage
@@ -48,28 +48,29 @@ links:
     bandwidth: 1G
 ```
 
-### 2. TypeScript/JavaScript で SVG を生成
+### 2. TypeScript/JavaScript で図をレンダリング
 
 ```typescript
-import { YamlParser, HierarchicalLayoutEngine, SvgRenderer } from 'shumoku'
+import { YamlParser, renderGraphToHtml } from 'shumoku'
 
-// YAML をパース
-const parser = new YamlParser()
-const graph = parser.parse(yamlString)
+// YAML をパース（parse() は { graph, warnings } を返す）
+const { graph } = new YamlParser().parse(yamlString)
 
-// レイアウト計算
-const engine = new HierarchicalLayoutEngine()
-const layout = await engine.layout(graph)
-
-// SVG 生成
-const renderer = new SvgRenderer()
-const svg = renderer.render(layout)
-
-// DOM に追加
-document.getElementById('diagram').innerHTML = svg
+// インタラクティブな HTML を生成（パン / ズーム / ツールチップ）
+const html = await renderGraphToHtml(graph, { title: 'My Network' })
 ```
 
-ベンダーアイコンは `shumoku` をインポートした時点で自動的に登録されます。
+SVG や PNG が必要な場合は専用のレンダラーを使います:
+
+```typescript
+import { renderGraphToSvg } from '@shumoku/renderer-svg'
+import { renderGraphToPng } from '@shumoku/renderer-png' // Node.js のみ
+
+const svg = await renderGraphToSvg(graph)
+const png = await renderGraphToPng(graph, { scale: 2 })
+```
+
+アイコンはレンダリング時に CDN から解決され、正しいアスペクト比で描画されます。
 
 ## Next Steps
 

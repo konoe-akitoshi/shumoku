@@ -9,7 +9,7 @@
     "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
     "directory": "libs/@shumoku/plugin-sdk"
   },
-  "homepage": "https://shumoku.packof.me/",
+  "homepage": "https://www.shumoku.dev/",
   "bugs": {
     "url": "https://github.com/konoe-akitoshi/shumoku/issues"
   },

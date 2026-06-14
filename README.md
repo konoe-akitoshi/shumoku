@@ -9,14 +9,14 @@
 
 <img src="assets/logo-symbol.svg" alt="Shumoku Logo" width="128" height="128">
 
-**Network topology visualization and monitoring platform.** Define your network in YAML, get interactive diagrams with real-time metrics from Zabbix, Prometheus, and more.
+**Network topology visualization and monitoring platform.** Define your network in YAML, get interactive diagrams with real-time metrics from Zabbix, Prometheus, NetBox, and more.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![npm version](https://img.shields.io/npm/v/shumoku.svg)](https://www.npmjs.com/package/shumoku)
 [![Discord](https://img.shields.io/discord/1476527182669938720?logo=discord&logoColor=white&label=Discord)](https://discord.gg/dyYbEsDZYr)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/akitoshi)
 
-**[Website](https://www.shumoku.dev/)** | **[Server Documentation](https://www.shumoku.dev/ja/docs/server)** | **[Discord](https://discord.gg/dyYbEsDZYr)**
+**[Website](https://www.shumoku.dev/)** | **[Documentation](https://www.shumoku.dev/ja/docs/server)** | **[Discord](https://discord.gg/dyYbEsDZYr)**
 
 <picture>
   <img src="assets/screenshots/topology.png" alt="Topology viewer with live weathermap">
@@ -28,38 +28,62 @@
 </picture>
 <p align="center"><em>Dashboard in production — JANOG57 NOC Live</em></p>
 
+## What's in the box
+
+Shumoku is a monorepo with three ways to use it:
+
+| | | |
+|---|---|---|
+| 🖥️ **Server** | Real-time monitoring platform — connect data sources, overlay live metrics, build dashboards, share read-only links | [`apps/server`](apps/server) |
+| 📦 **Library + CLI** | The rendering engine on npm — turn a `NetworkGraph` into SVG / HTML / PNG, in Node or the browser | [`libs/shumoku`](libs/shumoku) |
+| ✏️ **Editor** | Visual topology designer — lay out devices, modules, and cables; derive a bill of materials | [`apps/editor`](apps/editor) |
+
 ## Features
 
 - **Live weathermap** — Overlay real-time traffic utilization on links, color-coded by load
 - **Alert visualization** — Show active alerts from Zabbix, Prometheus, and Grafana on topology
 - **Auto-generate from NetBox** — Pull devices and cables from NetBox to build topology automatically
+- **Network discovery** — Seed-crawl SNMP + LLDP to discover topology with no inventory at all
 - **Interactive dashboards** — Pan, zoom, and drill into multi-layer network views in the browser
 - **900+ vendor icons** — Yamaha, Aruba, AWS, Juniper, and more — rendered at correct aspect ratios
 - **Shareable links** — Publish topology views with a share token — no login required
 
-## Getting Started
+## Server
 
-See **[Server Setup Guide](apps/server/README.md)** for Docker, systemd, and manual deployment options.
+The server is the full platform: a Bun + Hono API with an SQLite store and a SvelteKit web UI.
 
-### What You Can Do
+See the **[Server Setup Guide](apps/server/README.md)** for Docker, systemd, and manual deployment options.
+
+```bash
+# Quick start with Docker
+cd apps/server
+docker compose up -d            # http://localhost:8080
+DEMO_MODE=true docker compose up -d   # preload a sample network
+```
+
+What you can do:
 
 1. **Create topologies** — Upload YAML files or write them in the built-in editor
 2. **Connect data sources** — Link Zabbix, Prometheus, or NetBox to pull live metrics
-3. **Monitor in real-time** — See node status and link utilization update live on your diagrams
+3. **Monitor in real-time** — See node status and link utilization update live over WebSocket
 4. **Build dashboards** — Combine multiple topologies and metric widgets into custom views
 5. **Share** — Generate public links for read-only access without authentication
 
-## Integrations
+### Integrations
 
-| | |
+| Source | What it pulls |
 |---|---|
-| **Zabbix** | Pull traffic metrics, host status, and alerts via JSON-RPC API |
-| **Prometheus** | Query SNMP and node exporter metrics for link utilization |
-| **Grafana** | Receive alerts via webhook and display them on topology |
-| **NetBox** | Auto-discover topology from DCIM inventory and IPAM data |
+| **Zabbix** | Traffic metrics, host status, LLDP topology, and alerts via JSON-RPC |
+| **Prometheus** | SNMP / node-exporter metrics for link utilization, hosts, and Alertmanager alerts |
+| **NetBox** | Topology and hosts auto-discovered from DCIM / IPAM |
+| **Grafana** | Alerts via webhook or Alertmanager |
+| **Aruba Instant On** | Access points, switches, and site alerts from the cloud portal |
+| **Network scan** | Topology discovered by SNMP + LLDP seed-crawl, no inventory required |
 | **REST API** | Render topologies and fetch metrics programmatically from your own tools |
 
-## YAML Example
+See **[Plugin Authoring](docs/plugin-authoring.md)** to write your own data source.
+
+## YAML format
 
 ```yaml
 name: "Simple Network"
@@ -95,9 +119,9 @@ links:
     bandwidth: 10G
 ```
 
-## npm Library
+## Library
 
-The rendering engine is also available as standalone npm packages.
+The rendering engine is also published to npm as standalone packages.
 
 ![Sample network diagram](apps/docs/public/hero-diagram.png)
 
@@ -106,34 +130,68 @@ npm install shumoku
 ```
 
 ```typescript
-import { YamlParser, HierarchicalLayoutEngine, SvgRenderer } from 'shumoku'
+import { YamlParser, renderGraphToHtml } from 'shumoku'
 
-const graph = new YamlParser().parse(yamlString)
-const layout = await new HierarchicalLayoutEngine().layout(graph)
-const svg = new SvgRenderer().render(layout)
+const { graph } = new YamlParser().parse(yamlString)
+
+// Interactive HTML (pan / zoom / tooltips)
+const html = await renderGraphToHtml(graph, { title: 'My Network' })
 ```
 
-CLI is also available:
+Need SVG or PNG instead? Use the dedicated renderers:
+
+```typescript
+import { renderGraphToSvg } from '@shumoku/renderer-svg'
+import { renderGraphToPng } from '@shumoku/renderer-png' // Node.js only
+
+const svg = await renderGraphToSvg(graph)
+const png = await renderGraphToPng(graph, { scale: 2 })
+```
+
+### CLI
 
 ```bash
 npx shumoku render network.yaml -o diagram.svg
 npx shumoku render network.yaml -f html -o diagram.html
+npx shumoku render network.yaml -f png -o diagram.png --scale 3
 ```
 
-**[Playground](https://www.shumoku.dev/)** | **[npm Documentation](https://www.shumoku.dev/docs/npm/yaml-reference)**
+**[Playground](https://www.shumoku.dev/)** | **[YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference)**
 
 <details>
 <summary>Packages</summary>
 
-| Package | Description |
-|---------|-------------|
-| [`shumoku`](packages/shumoku) | Main package (all-in-one) |
-| [`@shumoku/core`](packages/@shumoku/core) | Core library (models, layout) |
-| [`@shumoku/renderer`](packages/@shumoku/renderer) | SVG/HTML renderers + CLI |
-| [`@shumoku/parser-yaml`](packages/@shumoku/parser-yaml) | YAML parser |
-| [`@shumoku/netbox`](packages/@shumoku/netbox) | NetBox API integration |
+| Package | Path | Description |
+|---------|------|-------------|
+| [`shumoku`](libs/shumoku) | `libs/shumoku` | All-in-one — core + SVG/HTML renderers |
+| [`@shumoku/core`](libs/@shumoku/core) | `libs/@shumoku/core` | Models, parser, layout engine, themes, plugin kit |
+| [`@shumoku/renderer-svg`](libs/@shumoku/renderer-svg) | `libs/@shumoku/renderer-svg` | SVG render pipeline (`prepareRender` → `renderSvg`) |
+| [`@shumoku/renderer-html`](libs/@shumoku/renderer-html) | `libs/@shumoku/renderer-html` | Interactive HTML output |
+| [`@shumoku/renderer-png`](libs/@shumoku/renderer-png) | `libs/@shumoku/renderer-png` | PNG output (Node.js, via resvg) |
+| [`@shumoku/renderer`](libs/@shumoku/renderer) | `libs/@shumoku/renderer` | Svelte interactive renderer (pan/zoom components) |
+| [`@shumoku/catalog`](libs/@shumoku/catalog) | `libs/@shumoku/catalog` | Device / service catalog (vendor, model, sysObjectID) |
+| [`@shumoku/plugin-sdk`](libs/@shumoku/plugin-sdk) | `libs/@shumoku/plugin-sdk` | HTTP client + pagination for data-source plugins |
+| [`@shumoku/cli`](apps/cli) | `apps/cli` | `shumoku render` command-line tool |
+
+Data-source plugins live in [`libs/plugins`](libs/plugins): `zabbix`, `prometheus`, `netbox`, `grafana`, `aruba-instant-on`, `network-scan`.
 
 </details>
+
+## Repository layout
+
+```
+apps/
+  server/   Real-time monitoring platform — Bun + Hono API, SvelteKit web UI
+  editor/   Visual topology designer — SvelteKit + xyflow
+  cli/      Render YAML → SVG / HTML / PNG
+  docs/     Documentation site (Next.js + Fumadocs)
+libs/
+  shumoku            All-in-one npm package
+  @shumoku/*         Core engine, renderers, catalog, plugin SDK
+  plugins/*          Data-source integrations
+docs/                Architecture, YAML reference, plugin authoring
+examples/            Sample YAML networks + a sample plugin
+```
 
 ## Documentation
 
@@ -141,8 +199,8 @@ npx shumoku render network.yaml -f html -o diagram.html
 - [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) — Full YAML syntax
 - [Vendor Icons](https://www.shumoku.dev/docs/npm/vendor-icons) — Available icons
 - [Playground](https://www.shumoku.dev/) — Try without installation
-- [Architecture](docs/ARCHITECTURE.md) — Monorepo overview, load pipeline, layout engine (Mermaid diagrams)
-- [Plugin Authoring](docs/plugin-authoring.md) — Writing a `DataSourcePlugin`: capability mixins, data shapes, severity mapping, security practices
+- [Architecture](docs/ARCHITECTURE.md) — Monorepo overview, load pipeline, layout engine
+- [Plugin Authoring](docs/plugin-authoring.md) — Writing a `DataSourcePlugin`: capability mixins, data shapes, severity mapping
 
 ## Development
 
@@ -150,9 +208,12 @@ npx shumoku render network.yaml -f html -o diagram.html
 git clone https://github.com/konoe-akitoshi/shumoku.git
 cd shumoku
 bun install
-bun run build
-bun run dev
+bun run build      # build all libraries (excludes the server app)
+bun run dev        # run everything in dev mode
 ```
+
+Common scripts: `bun run test`, `bun run lint`, `bun run typecheck`, `bun run format`.
+This is a [Bun](https://bun.sh) workspaces + [Turborepo](https://turbo.build) monorepo — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Star History
 
@@ -168,5 +229,5 @@ bun run dev
 
 This project is dual-licensed:
 
-- **AGPL-3.0** - For open-source use ([LICENSE](./LICENSE))
-- **Commercial License** - For proprietary use, contact contact@shumoku.dev
+- **AGPL-3.0** — For open-source use ([LICENSE](./LICENSE))
+- **Commercial License** — For proprietary use, contact contact@shumoku.dev
