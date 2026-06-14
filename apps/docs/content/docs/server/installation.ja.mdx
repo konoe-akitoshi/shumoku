@@ -5,6 +5,17 @@ description: Docker、systemd、手動で Shumoku Server をデプロイ
 
 ## Docker（推奨）
 
+最も簡単な方法 — 公開イメージを取得するだけ（clone 不要）:
+
+```bash
+docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+# → http://localhost:8080   （`-e DEMO_MODE=true` でサンプルネットワークを投入）
+```
+
+タグ: `latest`（`main` からビルド）、リリースは `X.Y.Z` / `X.Y` — [コンテナパッケージ](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku)を参照。
+
+ソースからビルドする場合は Compose:
+
 ```bash
 git clone https://github.com/konoe-akitoshi/shumoku.git
 cd shumoku/apps/server
