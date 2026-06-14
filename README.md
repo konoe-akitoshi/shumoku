@@ -4,17 +4,21 @@
 
 # Shumoku
 
-### Living network diagrams from plain YAML.
+### Network diagrams that don't drift away from reality.
 
-Real-time traffic, alerts, and 900+ vendor icons —<br>
-in your Markdown, your browser, or a self-hosted NOC dashboard.
+Shumoku generates readable network topology maps from structured network data.
+
+Network diagrams should not be static drawings that slowly become outdated.
+They should be reproducible, updateable, and grounded in a source of truth.
+
+Shumoku turns YAML, NetBox, LLDP, SNMP, and other topology data into diagrams that reflect how the network actually exists.
 
 [![npm version](https://img.shields.io/npm/v/shumoku.svg)](https://www.npmjs.com/package/shumoku)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![Discord](https://img.shields.io/discord/1476527182669938720?logo=discord&logoColor=white&label=Discord)](https://discord.gg/dyYbEsDZYr)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/akitoshi)
 
-[**▶ Try the live playground**](https://www.shumoku.dev/) &nbsp;·&nbsp; [**Documentation**](https://www.shumoku.dev/ja/docs/server) &nbsp;·&nbsp; [**Discord**](https://discord.gg/dyYbEsDZYr)
+[**Try the playground**](https://www.shumoku.dev/) &nbsp;·&nbsp; [**Documentation**](https://www.shumoku.dev/ja/docs/server) &nbsp;·&nbsp; [**Discord**](https://discord.gg/dyYbEsDZYr)
 
 </div>
 
@@ -45,6 +49,28 @@ in your Markdown, your browser, or a self-hosted NOC dashboard.
 </table>
 
 </div>
+
+## Philosophy
+
+> **Networks need maps, too.** &emsp;*ネットワークにも、地図が必要だ。*
+
+Network diagrams are one of the most important tools in network operations. But in many environments they are still drawn by hand, updated manually, and slowly drift away from the real network.
+
+Shumoku starts from three principles.
+
+### 1. A diagram should be readable
+
+A topology map should make the structure of the network understandable at a glance — the relationships, layers, paths, and points of failure.
+
+### 2. A diagram should be trustworthy
+
+A diagram is only useful when it reflects reality. Shumoku generates diagrams from structured data — YAML, NetBox, LLDP, SNMP — instead of relying on manual drawing alone.
+
+### 3. A diagram should be updateable
+
+Networks change. Diagrams should be regenerated, reviewed, and maintained as part of the operational workflow.
+
+Shumoku treats network diagrams not as static pictures, but as **generated views of the network** — close to the source of truth, and easy to keep that way.
 
 ## What's in the box
 
