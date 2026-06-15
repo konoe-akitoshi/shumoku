@@ -1,0 +1,40 @@
+# git-cliff configuration for Shumoku product (Server / Editor) release notes.
+# Used by the Docker (server-v*) and Editor (editor-v*) release workflows to
+# generate path-scoped, conventional-commit-grouped notes. npm library changes
+# are intentionally NOT included here — they ship with their own Changesets
+# CHANGELOGs. Pass --include-path / --tag-pattern on the CLI per product.
+
+[changelog]
+header = ""
+body = """
+{% if commits | length == 0 %}\
+_No app-level changes in this release._
+{% else %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}\
+- {{ commit.message | split(pat="\n") | first | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
+{% endfor %}\
+{% endfor %}\
+{% endif %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+topo_order = false
+sort_commits = "newest"
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^(chore|ci|build|test|style)", skip = true },
+  { message = "^revert", group = "Reverts" },
+  { message = ".*", group = "Other" },
+]
