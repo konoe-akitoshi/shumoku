@@ -64,7 +64,7 @@
     },
     "apps/editor": {
       "name": "@shumoku/editor",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@shumoku/catalog": "workspace:*",
         "@shumoku/core": "workspace:*",
@@ -96,7 +96,7 @@
     },
     "apps/server": {
       "name": "@shumoku/server",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@shumoku/server-api": "workspace:*",
         "@shumoku/server-web": "workspace:*",
