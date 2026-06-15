@@ -583,7 +583,10 @@ export function applyOctilinearRoutes(
       )
       if (relevant.length === 0) continue
       const crossesBox = (x: number): boolean =>
-        relevant.some((o) => x > o.bounds.x - 6 && x < o.bounds.x + o.bounds.width + 6)
+        relevant.some(
+          (o) =>
+            x + route.half > o.bounds.x - 6 && x - route.half < o.bounds.x + o.bounds.width + 6,
+        )
       if (!crossesBox(route.x1) && !crossesBox(route.x2)) continue
       // free x slots = complement of the blocking intervals
       const blocks: [number, number][] = relevant
@@ -604,19 +607,29 @@ export function applyOctilinearRoutes(
         candidates.push(Math.max(lo + route.half + 8, Math.min(hi - route.half - 8, desired)))
       }
       candidates.sort((a, b) => Math.abs(a - desired) - Math.abs(b - desired) || a - b)
-      const firstSlot = candidates[0]
-      if (firstSlot === undefined) continue
-      let gutterX = firstSlot
-      for (let guard = 0; guard < 40; guard++) {
-        const probe = gutterX
-        const hit = placedGutters.some(
-          (p) =>
-            Math.abs(p.x - probe) < p.half + route.half + clearance &&
-            Math.min(p.y2, yHi) - Math.max(p.y1, yLo) > 12,
-        )
-        if (!hit) break
-        gutterX += 5
+      const offsets = [
+        0,
+        ...Array.from({ length: 40 }, (_, index) => index + 1).flatMap((step) => [
+          step * 5,
+          step * -5,
+        ]),
+      ]
+      let gutterX: number | undefined
+      candidate: for (const base of candidates) {
+        for (const offset of offsets) {
+          const probe = base + offset
+          if (crossesBox(probe)) continue
+          const hit = placedGutters.some(
+            (p) =>
+              Math.abs(p.x - probe) < p.half + route.half + clearance &&
+              Math.min(p.y2, yHi) - Math.max(p.y1, yLo) > 12,
+          )
+          if (hit) continue
+          gutterX = probe
+          break candidate
+        }
       }
+      if (gutterX === undefined) continue
       route.gutterX = gutterX
       placedGutters.push({ x: gutterX, y1: yLo, y2: yHi, half: route.half })
     }
@@ -690,19 +703,32 @@ export function applyOctilinearRoutes(
   for (const comb of combRoutes) {
     const minChildY = Math.min(...comb.members.map((m) => m.cy))
     const maxParentY = Math.max(...comb.members.map((m) => m.py))
-    const combExempt = new Set<string>([comb.id])
-    for (const m of comb.members) {
-      for (const nid of endpointsOf.get(m.edgeId) ?? []) combExempt.add(nid)
+    // The horizontal bus may touch the shared parent corridor, but not a
+    // sibling child box. Exempting every member endpoint let one branch's
+    // bus run through another branch's child in dense Clos fan-outs.
+    const parentId = comb.id.split('~')[0] ?? comb.id
+    const combExempt = new Set<string>([parentId])
+    const requestHalf = Math.max(...comb.members.map((m) => Math.abs(m.lane))) + comb.half + 1
+    const childIds = new Set<string>()
+    for (const member of comb.members) {
+      for (const nodeId of endpointsOf.get(member.edgeId) ?? []) {
+        if (nodeId !== parentId) childIds.add(nodeId)
+      }
+    }
+    let childClearCeil = minChildY - 10
+    for (const box of nodeBoxes) {
+      if (!childIds.has(box.id)) continue
+      childClearCeil = Math.min(childClearCeil, box.y1 - requestHalf - 2)
     }
     requests.push({
       id: `comb:${comb.id}`,
-      half: Math.max(...comb.members.map((m) => Math.abs(m.lane))) + comb.half + 1,
+      half: requestHalf,
       exempt: combExempt,
       lo: Math.min(comb.trunkX, ...comb.members.map((m) => m.cx)) - 16,
       hi: Math.max(comb.trunkX, ...comb.members.map((m) => m.cx)) + 16,
       want: minChildY - 26,
       floor: maxParentY + 10,
-      ceil: minChildY - 10,
+      ceil: childClearCeil,
       assign: (y) => {
         comb.busY = y
       },
@@ -809,13 +835,15 @@ export function applyOctilinearRoutes(
           { x: route.x1, y1: route.y1, y2: route.trackY },
           { x: route.x2, y1: route.trackY, y2: route.y2 },
         ]
+  const verticalShiftCandidates = [
+    0,
+    ...Array.from({ length: 16 }, (_, index) => index + 1).flatMap((step) => [step * 8, step * -8]),
+  ]
   const allocate = (route: OrthRoute, kind: 'straight' | 'orth'): void => {
     const runs = verticalRuns(route, kind)
     const ownNodes = new Set(endpointsOf.get(route.id) ?? [])
     let chosen = 0
-    candidate: for (const shift of [
-      0, 4, -4, 8, -8, 12, -12, 16, -16, 20, -20, 24, -24, 28, -28, 32, -32,
-    ]) {
+    candidate: for (const shift of verticalShiftCandidates) {
       for (const run of runs) {
         for (const placed of placedVerticals) {
           const overlap =

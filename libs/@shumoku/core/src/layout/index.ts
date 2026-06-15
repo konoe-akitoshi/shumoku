@@ -44,6 +44,7 @@ export { alignPortsToPeers, applyOctilinearRoutes, chamferCorners } from './comp
 export {
   type CompositeSearchOptions,
   type CompositeSearchResult,
+  evaluateCompositeLayout,
   type RoutedScore,
   scoreRoutedEdges,
   searchCompositeLayout,

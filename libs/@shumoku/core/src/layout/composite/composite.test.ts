@@ -11,6 +11,7 @@ import { getLinkWidthForMode } from '../link-utils.js'
 import { routeEdges } from '../route-edges.js'
 import { layoutComposite, shouldUseComposite, ZONE_SUBGRAPH_PREFIX } from './index.js'
 import { applyOctilinearRoutes, chamferCorners } from './router.js'
+import { compareRoutedCandidateQuality, evaluateCompositeLayout } from './search.js'
 
 /**
  * Synthetic fixture shaped like the v3 research network (two border
@@ -89,6 +90,29 @@ describe('shouldUseComposite', () => {
   })
 })
 
+describe('compareRoutedCandidateQuality', () => {
+  it('ranks hard violations before the routed soft cost', () => {
+    expect(
+      compareRoutedCandidateQuality(
+        { pierce: 0, containerOverlaps: 2, cost: 500 },
+        { pierce: 1, containerOverlaps: 0, cost: 10 },
+      ),
+    ).toBeLessThan(0)
+    expect(
+      compareRoutedCandidateQuality(
+        { pierce: 0, containerOverlaps: 0, cost: 500 },
+        { pierce: 0, containerOverlaps: 1, cost: 10 },
+      ),
+    ).toBeLessThan(0)
+    expect(
+      compareRoutedCandidateQuality(
+        { pierce: 0, containerOverlaps: 0, cost: 10 },
+        { pierce: 0, containerOverlaps: 0, cost: 20 },
+      ),
+    ).toBeLessThan(0)
+  })
+})
+
 describe('layoutComposite', () => {
   it('positions every node and never overlaps boxes', () => {
     const result = layoutComposite(fixture())
@@ -147,6 +171,36 @@ describe('layoutComposite', () => {
     const b = layoutComposite(fixture())
     for (const [id, node] of a.nodes) {
       expect(b.nodes.get(id)?.position).toEqual(node.position)
+    }
+  })
+
+  it('keeps the production default equal to explicit full features', () => {
+    const implicit = layoutComposite(fixture())
+    const explicit = layoutComposite(fixture(), {
+      microAdaptation: true,
+      widthAware: true,
+    })
+    expect(explicit.bounds).toEqual(implicit.bounds)
+    for (const [id, node] of implicit.nodes) {
+      expect(explicit.nodes.get(id)?.position).toEqual(node.position)
+      expect(explicit.nodes.get(id)?.size).toEqual(node.size)
+    }
+  })
+
+  it('supports deterministic macro-only and unit-width research ablations', async () => {
+    const graph = fixture()
+    const macroA = await evaluateCompositeLayout(graph, {
+      microAdaptation: false,
+      widthAware: false,
+    })
+    const macroB = await evaluateCompositeLayout(graph, {
+      microAdaptation: false,
+      widthAware: false,
+    })
+    expect(macroB.score).toEqual(macroA.score)
+    for (const edge of macroA.edges.values()) expect(edge.width).toBe(1)
+    for (const [id, node] of macroA.comp.nodes) {
+      expect(macroB.comp.nodes.get(id)?.position).toEqual(node.position)
     }
   })
 })

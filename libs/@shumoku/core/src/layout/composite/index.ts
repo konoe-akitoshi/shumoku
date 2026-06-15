@@ -25,6 +25,19 @@ import { resolveTierFromSpec } from '../role-tiers.js'
 
 export interface CompositeLayoutOptions {
   direction?: Direction
+  /**
+   * Enable local adaptive refinement after the semantic macro structure
+   * is formed. Defaults to true. The false branch exists so experiments
+   * can isolate the contribution of jitter, barycenter ordering, neighbor
+   * pull, alignment, and vertical compaction without maintaining a fork.
+   */
+  microAdaptation?: boolean
+  /**
+   * Treat rendered stroke width as geometry during sizing and spacing.
+   * Defaults to true. False keeps every link at unit width for controlled
+   * ablation experiments.
+   */
+  widthAware?: boolean
   /** Horizontal gap between zone boxes in a band. */
   zoneGap?: number
   /** Vertical gap between bands (also the wiring channel height). */
@@ -168,13 +181,15 @@ export function layoutComposite(
   graph: NetworkGraph,
   options: CompositeLayoutOptions = {},
 ): CompositeLayoutResult {
+  const microAdaptation = options.microAdaptation ?? true
+  const widthAware = options.widthAware ?? true
   // Gaps clear the thickest ribbon (the engine-era rule from
   // unified-engine: fixed gaps + bandwidth-derived stroke widths meant a
   // fat trunk overran the nodes it passed between). Caller values still
   // raise the floor; they can't shrink below the wire clearance.
   let maxLinkWidth = 0
   for (const link of graph.links) {
-    maxLinkWidth = Math.max(maxLinkWidth, getLinkWidthForMode(link, 'linear'))
+    maxLinkWidth = Math.max(maxLinkWidth, widthAware ? getLinkWidthForMode(link, 'linear') : 1)
   }
   const wireClear = Math.round(maxLinkWidth)
   const zoneGap = Math.max(options.zoneGap ?? 90, wireClear + 16)
@@ -188,6 +203,7 @@ export function layoutComposite(
   const idIndex = new Map<string, number>()
   for (const [i, id] of ids.entries()) idIndex.set(id, i)
   const jitter = (id: string, salt: number): number => {
+    if (!microAdaptation) return 0
     const seq = (((idIndex.get(id) ?? 0) + 1) * (1 / PHI) + salt * 0.3719) % 1
     return seq - 0.5
   }
@@ -300,7 +316,8 @@ export function layoutComposite(
       demand.set(selfId, faces)
     }
     for (const link of graph.links) {
-      const slot = Math.max(16, getLinkWidthForMode(link, 'linear') + 6)
+      const linkWidth = widthAware ? getLinkWidthForMode(link, 'linear') : 1
+      const slot = Math.max(16, linkWidth + 6)
       seat(link.from.node, link.to.node, slot)
       seat(link.to.node, link.from.node, slot)
     }
@@ -567,11 +584,13 @@ export function layoutComposite(
       }
       return count > 0 ? sum / count : (localX.get(unit.id) ?? 0)
     }
-    for (let sweep = 0; sweep < 2; sweep++) {
-      for (const [i, row] of rows.entries()) {
-        if (row.length < 2) continue
-        row.sort((a, b) => intraNeighborX(a) - intraNeighborX(b) || (a.id < b.id ? -1 : 1))
-        placeRow(row, rowYs[i] ?? zonePad, rowHeights[i] ?? 0)
+    if (microAdaptation) {
+      for (let sweep = 0; sweep < 2; sweep++) {
+        for (const [i, row] of rows.entries()) {
+          if (row.length < 2) continue
+          row.sort((a, b) => intraNeighborX(a) - intraNeighborX(b) || (a.id < b.id ? -1 : 1))
+          placeRow(row, rowYs[i] ?? zonePad, rowHeights[i] ?? 0)
+        }
       }
     }
     zoneRows.set(zone, rows)
@@ -718,39 +737,42 @@ export function layoutComposite(
     options.bandOrder,
     zoneDownReach,
     zoneUpReach,
+    microAdaptation,
   )
 
   // -- port refine: pull units toward their cross-zone neighbors ---------------
 
-  for (let pass = 0; pass < 2; pass++) {
-    for (const zone of zoneIds) {
-      const rows = zoneRows.get(zone) ?? []
-      const box = zoneBox.get(zone)
-      const originX = zoneX.get(zone)
-      if (!box || originX === undefined) continue
-      for (const row of rows) {
-        for (const unit of row) {
-          let sum = 0
-          let weight = 0
-          for (const edge of unitEdges.values()) {
-            const other = edge.a === unit.id ? edge.b : edge.b === unit.id ? edge.a : undefined
-            if (other === undefined) continue
-            const otherUnit = unitById.get(other)
-            if (!otherUnit || otherUnit.zone === zone) continue
-            const otherX = (zoneX.get(otherUnit.zone) ?? 0) + (localX.get(other) ?? 0)
-            const w =
-              primaryParent.get(unit.id) === other || primaryParent.get(other) === unit.id ? 4 : 1
-            sum += otherX * w
-            weight += w
+  if (microAdaptation) {
+    for (let pass = 0; pass < 2; pass++) {
+      for (const zone of zoneIds) {
+        const rows = zoneRows.get(zone) ?? []
+        const box = zoneBox.get(zone)
+        const originX = zoneX.get(zone)
+        if (!box || originX === undefined) continue
+        for (const row of rows) {
+          for (const unit of row) {
+            let sum = 0
+            let weight = 0
+            for (const edge of unitEdges.values()) {
+              const other = edge.a === unit.id ? edge.b : edge.b === unit.id ? edge.a : undefined
+              if (other === undefined) continue
+              const otherUnit = unitById.get(other)
+              if (!otherUnit || otherUnit.zone === zone) continue
+              const otherX = (zoneX.get(otherUnit.zone) ?? 0) + (localX.get(other) ?? 0)
+              const w =
+                primaryParent.get(unit.id) === other || primaryParent.get(other) === unit.id ? 4 : 1
+              sum += otherX * w
+              weight += w
+            }
+            if (weight === 0) continue
+            const target = sum / weight - originX
+            const lo = unit.width / 2 + 8
+            const hi = box.w - unit.width / 2 - 8
+            const current = localX.get(unit.id) ?? lo
+            localX.set(unit.id, Math.max(lo, Math.min(hi, current + (target - current) * 0.6)))
           }
-          if (weight === 0) continue
-          const target = sum / weight - originX
-          const lo = unit.width / 2 + 8
-          const hi = box.w - unit.width / 2 - 8
-          const current = localX.get(unit.id) ?? lo
-          localX.set(unit.id, Math.max(lo, Math.min(hi, current + (target - current) * 0.6)))
+          resolveRow(row, localX, box.w, pairGap)
         }
-        resolveRow(row, localX, box.w, pairGap)
       }
     }
   }
@@ -774,26 +796,28 @@ export function layoutComposite(
   }
 
   // -- snap under primary parent, then re-separate ------------------------------
-  const sortedUnits = [...units].sort((a, b) => a.depth - b.depth || (a.id < b.id ? -1 : 1))
-  for (const unit of sortedUnits) {
-    const parent = primaryParent.get(unit.id)
-    if (parent === undefined) continue
-    const parentUnit = unitById.get(parent)
-    const box = zoneBox.get(unit.zone)
-    if (!parentUnit || !box) continue
-    const parentGlobal = (zoneX.get(parentUnit.zone) ?? 0) + (localX.get(parent) ?? 0)
-    const selfGlobal = (zoneX.get(unit.zone) ?? 0) + (localX.get(unit.id) ?? 0)
-    const diff = parentGlobal - selfGlobal
-    if (Math.abs(diff) <= 0.5 || Math.abs(diff) >= 40) continue
-    const lo = unit.width / 2 + 8
-    const hi = box.w - unit.width / 2 - 8
-    const current = localX.get(unit.id) ?? lo
-    localX.set(unit.id, Math.max(lo, Math.min(hi, current + diff)))
-  }
-  for (const zone of zoneIds) {
-    const box = zoneBox.get(zone)
-    if (!box) continue
-    for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, pairGap)
+  if (microAdaptation) {
+    const sortedUnits = [...units].sort((a, b) => a.depth - b.depth || (a.id < b.id ? -1 : 1))
+    for (const unit of sortedUnits) {
+      const parent = primaryParent.get(unit.id)
+      if (parent === undefined) continue
+      const parentUnit = unitById.get(parent)
+      const box = zoneBox.get(unit.zone)
+      if (!parentUnit || !box) continue
+      const parentGlobal = (zoneX.get(parentUnit.zone) ?? 0) + (localX.get(parent) ?? 0)
+      const selfGlobal = (zoneX.get(unit.zone) ?? 0) + (localX.get(unit.id) ?? 0)
+      const diff = parentGlobal - selfGlobal
+      if (Math.abs(diff) <= 0.5 || Math.abs(diff) >= 40) continue
+      const lo = unit.width / 2 + 8
+      const hi = box.w - unit.width / 2 - 8
+      const current = localX.get(unit.id) ?? lo
+      localX.set(unit.id, Math.max(lo, Math.min(hi, current + diff)))
+    }
+    for (const zone of zoneIds) {
+      const box = zoneBox.get(zone)
+      if (!box) continue
+      for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, pairGap)
+    }
   }
 
   // -- containment repair: refinement (cross-zone pulls, nudges, snap) reorders
@@ -842,6 +866,7 @@ export function layoutComposite(
         options.bandOrder,
         zoneDownReach,
         zoneUpReach,
+        microAdaptation,
       ))
     }
   }
@@ -1241,6 +1266,7 @@ function placeZoneBands(
   bandOrder?: ReadonlyMap<number, readonly string[]>,
   zoneDownReach?: ReadonlyMap<string, number>,
   zoneUpReach?: ReadonlyMap<string, number>,
+  microAdaptation = true,
 ): { bandRanges: { top: number; bottom: number }[]; bandBlocks: string[][] } {
   const ranks = [...new Set(zoneIds.map((z) => zoneRank.get(z) ?? 0))].sort((a, b) => a - b)
   const centerOf = new Map<string, number>()
@@ -1285,9 +1311,11 @@ function placeZoneBands(
         // not by raw centerOf — unplaced zones all carry centerOf 0, which
         // silently degraded the order to alphabetical (test6: N-6 landed
         // at the grid's right end by name, and the pod band inherited it)
-        const sortKey = new Map<string, number>()
-        for (const zone of members) sortKey.set(zone, barycenter(zone, zoneAdj, centerOf))
-        members.sort((a, b) => (sortKey.get(a) ?? 0) - (sortKey.get(b) ?? 0) || (a < b ? -1 : 1))
+        if (microAdaptation) {
+          const sortKey = new Map<string, number>()
+          for (const zone of members) sortKey.set(zone, barycenter(zone, zoneAdj, centerOf))
+          members.sort((a, b) => (sortKey.get(a) ?? 0) - (sortKey.get(b) ?? 0) || (a < b ? -1 : 1))
+        }
         // pick the column count whose widest grid row still fits the band
         // budget — a single block wider than maxBandW set the canvas width
         // for the whole figure (band wrap only splits BETWEEN blocks)
@@ -1339,12 +1367,14 @@ function placeZoneBands(
             w: box.w,
             h: box.h,
             offsets: new Map([[zone, { x: 0, y: 0 }]]),
-            desired: barycenter(zone, zoneAdj, centerOf),
+            desired: microAdaptation ? barycenter(zone, zoneAdj, centerOf) : 0,
           })
         }
       }
     }
-    blocks.sort((a, b) => a.desired - b.desired || (a.key < b.key ? -1 : 1))
+    blocks.sort((a, b) =>
+      microAdaptation ? a.desired - b.desired || (a.key < b.key ? -1 : 1) : a.key < b.key ? -1 : 1,
+    )
     // explicit search-supplied order overrides the barycenter sort (§33)
     const requested = bandOrder?.get(bandIndex)
     if (requested) {
@@ -1484,33 +1514,35 @@ function placeZoneBands(
     Math.max(0, ...zones.map((z) => zoneDownReach?.get(z) ?? 0))
   const upOfZones = (zones: readonly string[]): number =>
     Math.max(0, ...zones.map((z) => zoneUpReach?.get(z) ?? 0))
-  placedBlocks.sort((a, b) => a.y - b.y || a.x - b.x)
-  const settled: typeof placedBlocks = []
-  for (const block of placedBlocks) {
-    // the corridor between two stacked blocks holds the upper block's
-    // DOWN labels and the lower (moving) block's UP labels — direction
-    // matters, or whitespace appears where no label can exist
-    const moverUp = upOfZones(block.zones)
-    let target: number | undefined
-    for (const other of settled) {
-      const vGap = Math.max(bandGap, downOfZones(other.zones) + moverUp + 8)
-      for (const obstacle of other.rects) {
-        const obstacleBottom = other.y + obstacle.relY + obstacle.h
-        for (const mover of block.rects) {
-          if (mover.x + mover.w <= obstacle.x - 24 || mover.x >= obstacle.x + obstacle.w + 24) {
-            continue
+  if (microAdaptation) {
+    placedBlocks.sort((a, b) => a.y - b.y || a.x - b.x)
+    const settled: typeof placedBlocks = []
+    for (const block of placedBlocks) {
+      // the corridor between two stacked blocks holds the upper block's
+      // DOWN labels and the lower (moving) block's UP labels — direction
+      // matters, or whitespace appears where no label can exist
+      const moverUp = upOfZones(block.zones)
+      let target: number | undefined
+      for (const other of settled) {
+        const vGap = Math.max(bandGap, downOfZones(other.zones) + moverUp + 8)
+        for (const obstacle of other.rects) {
+          const obstacleBottom = other.y + obstacle.relY + obstacle.h
+          for (const mover of block.rects) {
+            if (mover.x + mover.w <= obstacle.x - 24 || mover.x >= obstacle.x + obstacle.w + 24) {
+              continue
+            }
+            const candidate = obstacleBottom + vGap - mover.relY
+            target = target === undefined ? candidate : Math.max(target, candidate)
           }
-          const candidate = obstacleBottom + vGap - mover.relY
-          target = target === undefined ? candidate : Math.max(target, candidate)
         }
       }
+      if (target !== undefined && target < block.y) {
+        const dy = target - block.y
+        for (const zone of block.zones) zoneY.set(zone, (zoneY.get(zone) ?? 0) + dy)
+        block.y = target
+      }
+      settled.push(block)
     }
-    if (target !== undefined && target < block.y) {
-      const dy = target - block.y
-      for (const zone of block.zones) zoneY.set(zone, (zoneY.get(zone) ?? 0) + dy)
-      block.y = target
-    }
-    settled.push(block)
   }
   // blocks moved — refresh the per-rank ranges used by congestion feedback
   for (const [i, rank] of ranks.entries()) {

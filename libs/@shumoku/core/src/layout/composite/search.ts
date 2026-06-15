@@ -81,14 +81,38 @@ export interface CompositeSearchResult {
 }
 
 export interface CompositeSearchOptions {
-  /** Hard cap on layout+route evaluations. Default 160 (~2s on a
+  /** Cap on optimization layout+route evaluations. Default 160 (~2s on a
    *  60-node graph — the v3 norm; the move vocabulary saturates near
-   *  190, so larger budgets buy nothing). */
+   *  190, so larger budgets buy nothing). Up to three additional
+   *  feasibility-repair evaluations may run after this budget. */
   maxEvaluations?: number
+  /** Fixed placement controls shared by every candidate in the search. */
+  layoutOptions?: CompositeLayoutOptions
+}
+
+export interface RoutedCandidateQuality {
+  pierce: number
+  containerOverlaps: number
+  cost: number
+}
+
+/**
+ * Hard constraints outrank aesthetics. A lower soft cost can never buy a
+ * foreign-node piercing or a sibling-container overlap.
+ */
+export function compareRoutedCandidateQuality(
+  a: RoutedCandidateQuality,
+  b: RoutedCandidateQuality,
+): number {
+  if (a.pierce !== b.pierce) return a.pierce - b.pierce
+  if (a.containerOverlaps !== b.containerOverlaps) {
+    return a.containerOverlaps - b.containerOverlaps
+  }
+  return a.cost - b.cost
 }
 
 /** Lay out, port, route and score one composite variant. */
-async function evaluate(
+export async function evaluateCompositeLayout(
   graph: NetworkGraph,
   layoutOptions: CompositeLayoutOptions,
 ): Promise<CompositeSearchResult> {
@@ -97,7 +121,8 @@ async function evaluate(
   const ports = placePorts(comp.nodes, graph.links, direction)
   const edges = await routeEdges(comp.nodes, ports, graph.links, comp.subgraphs)
   for (const edge of edges.values()) {
-    edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
+    edge.width =
+      layoutOptions.widthAware === false ? 1 : Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
     // v3 grammar: HA heartbeats are couplings, not wires — explicit
     // (link.redundancy) and inferred (direct link between detected pair
     // members) alike. Couplings skip port seating, routing, and scoring.
@@ -312,8 +337,9 @@ async function evaluate(
 
 /**
  * Run the search: parameter multi-start → congestion pass → pair flips.
- * Total evaluations stay within `maxEvaluations` (default 16); the
- * result is always the best ROUTED variant seen.
+ * Optimization evaluations stay within `maxEvaluations` (default 160);
+ * up to three additional feasibility-repair evaluations may follow.
+ * The result is always the best ROUTED variant seen.
  */
 export async function searchCompositeLayout(
   graph: NetworkGraph,
@@ -326,11 +352,12 @@ export async function searchCompositeLayout(
   ): Promise<CompositeSearchResult | undefined> => {
     if (evaluations >= maxEvaluations) return undefined
     evaluations++
-    return evaluate(graph, layoutOptions)
+    return evaluateCompositeLayout(graph, layoutOptions)
   }
 
-  let bestOptions: CompositeLayoutOptions = {}
-  let best = await evaluate(graph, bestOptions)
+  const baseOptions: CompositeLayoutOptions = { ...options.layoutOptions }
+  let bestOptions: CompositeLayoutOptions = baseOptions
+  let best = await evaluateCompositeLayout(graph, bestOptions)
   evaluations++
   let accepted = 0
   const initialCost = best.score.cost
@@ -380,9 +407,14 @@ export async function searchCompositeLayout(
     { maxBandW: 3200 },
   ]
   for (const variant of variants) {
-    const trial = { ...variant, minNodeWidths: widthFloors, minNodeHeights: heightFloors }
+    const trial = {
+      ...baseOptions,
+      ...variant,
+      minNodeWidths: widthFloors,
+      minNodeHeights: heightFloors,
+    }
     const candidate = await budgeted(trial)
-    if (candidate && candidate.score.cost < best.score.cost) {
+    if (candidate && isBetterCandidate(candidate, best)) {
       best = candidate
       accepted++
       bestOptions = trial
@@ -393,7 +425,7 @@ export async function searchCompositeLayout(
   const bandExtra = measureCongestion(best)
   if (bandExtra.size > 0) {
     const candidate = await budgeted({ ...bestOptions, bandExtra })
-    if (candidate && candidate.score.cost < best.score.cost) {
+    if (candidate && isBetterCandidate(candidate, best)) {
       best = candidate
       accepted++
       bestOptions = { ...bestOptions, bandExtra }
@@ -418,7 +450,7 @@ export async function searchCompositeLayout(
       const trial = new Map(acceptedOrders)
       trial.set(bandIndex, swapped)
       const candidate = await budgeted({ ...bestOptions, bandOrder: trial })
-      if (candidate && candidate.score.cost < best.score.cost) {
+      if (candidate && isBetterCandidate(candidate, best)) {
         best = candidate
         accepted++
         acceptedOrders.set(bandIndex, swapped)
@@ -434,7 +466,7 @@ export async function searchCompositeLayout(
     const trial = new Set(flips)
     trial.add(pair)
     const candidate = await budgeted({ ...bestOptions, pairFlips: trial })
-    if (candidate && candidate.score.cost < best.score.cost) {
+    if (candidate && isBetterCandidate(candidate, best)) {
       best = candidate
       accepted++
       flips.add(pair)
@@ -474,7 +506,7 @@ export async function searchCompositeLayout(
         const trial = new Map(nudges)
         trial.set(unitId, (nudges.get(unitId) ?? 0) + dx)
         const candidate = await budgeted({ ...bestOptions, nudges: trial })
-        if (candidate && candidate.score.cost < best.score.cost) {
+        if (candidate && isBetterCandidate(candidate, best)) {
           best = candidate
           accepted++
           nudges.set(unitId, trial.get(unitId) ?? dx)
@@ -486,48 +518,56 @@ export async function searchCompositeLayout(
     if (!improvedThisRound) break
   }
 
+  // 6) feasibility rounds: foreign-node piercing and sibling-container
+  //    overlap outrank the scalar score. Post-routing footprint growth can
+  //    expose either defect, so try progressively wider placement corridors.
+  //    Do not stop after one ineffective step: dense Clos layouts may need
+  //    cell width before a later band/zone expansion opens a legal route.
+  const repairBase = bestOptions
+  for (let round = 0; round < 3; round++) {
+    const overlaps = containerOverlapsOf(best)
+    if (overlaps.length === 0 && best.score.pierce === 0) break
+    const worst = overlaps.length === 0 ? 0 : Math.max(...overlaps.map((o) => o.penetration))
+    const step = round + 1
+    const widen = Math.max(24, Math.ceil(worst) + 8) * step
+    const trial: CompositeLayoutOptions = {
+      ...repairBase,
+      zoneGap: (repairBase.zoneGap ?? 90) + widen,
+      bandGap: (repairBase.bandGap ?? 150) + widen,
+      rowGap: (repairBase.rowGap ?? 56) + widen,
+      cellGapX: (repairBase.cellGapX ?? 36) + Math.ceil(widen / 2),
+    }
+    evaluations++
+    const candidate = await evaluateCompositeLayout(graph, trial)
+    if (isBetterCandidate(candidate, best)) {
+      best = candidate
+      bestOptions = trial
+      accepted++
+    }
+  }
+
   best.stats = {
     evaluations,
     accepted,
     initialCost,
     finalCost: best.score.cost,
   }
-
-  // 6) feasibility rounds: container boxes must end DISJOINT (registry
-  //    constraint 'container-overlap' — a prohibition, so it outranks the
-  //    cost and the evaluation budget). The post-routing footprint growth
-  //    can push two boxes into the same gap; widen the gaps by the worst
-  //    penetration and re-evaluate, keeping the candidate iff it reduces
-  //    the violation. Bounded; converges because gaps grow monotonically.
-  for (let round = 0; round < 3; round++) {
-    const overlaps = containerOverlapsOf(best)
-    if (overlaps.length === 0) break
-    const worst = Math.max(...overlaps.map((o) => o.penetration))
-    const widen = Math.ceil(worst) + 8
-    const trial: CompositeLayoutOptions = {
-      ...bestOptions,
-      zoneGap: (bestOptions.zoneGap ?? 90) + widen,
-      bandGap: (bestOptions.bandGap ?? 150) + widen,
-    }
-    evaluations++
-    const candidate = await evaluate(graph, trial)
-    const candidateOverlaps = containerOverlapsOf(candidate)
-    const candWorst =
-      candidateOverlaps.length === 0 ? 0 : Math.max(...candidateOverlaps.map((o) => o.penetration))
-    if (
-      candidateOverlaps.length < overlaps.length ||
-      (candidateOverlaps.length === overlaps.length && candWorst < worst)
-    ) {
-      best = candidate
-      bestOptions = trial
-      accepted++
-      best.stats = { evaluations, accepted, initialCost, finalCost: best.score.cost }
-    } else {
-      break
-    }
-  }
-
   return best
+}
+
+function candidateQuality(result: CompositeSearchResult): RoutedCandidateQuality {
+  return {
+    pierce: result.score.pierce,
+    containerOverlaps: containerOverlapsOf(result).length,
+    cost: result.score.cost,
+  }
+}
+
+function isBetterCandidate(
+  candidate: CompositeSearchResult,
+  current: CompositeSearchResult,
+): boolean {
+  return compareRoutedCandidateQuality(candidateQuality(candidate), candidateQuality(current)) < 0
 }
 
 /** Non-nested container box overlaps of a routed result (registry parity). */
