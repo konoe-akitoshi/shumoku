@@ -14,7 +14,7 @@
   import { browser } from '$app/environment'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
-  import { auth } from '$lib/api'
+  import { auth, system } from '$lib/api'
   import Header from '$lib/components/header.svelte'
   import Logo from '$lib/components/Logo.svelte'
 
@@ -41,6 +41,9 @@
   // Sidebar collapsed state
   let sidebarCollapsed = false
   let authenticated = false
+  let version = 'development'
+  let updateAvailable = false
+  let releaseUrl: string | undefined
 
   // Load sidebar state on mount + check auth
   onMount(async () => {
@@ -62,6 +65,11 @@
           goto('/login')
           return
         }
+
+        const systemInfo = await system.get()
+        version = systemInfo.build.version
+        updateAvailable = systemInfo.update.status === 'available'
+        releaseUrl = systemInfo.update.releaseUrl
       } catch {
         // Server down — allow viewing
       }
@@ -172,9 +180,26 @@
           {/if}
         </button>
       {/if}
-      <div class="text-xs text-theme-text-muted {sidebarCollapsed ? 'text-center' : 'px-3'}">
-        {sidebarCollapsed ? `v${__APP_VERSION__.split('.').slice(0, 2).join('.')}` : `v${__APP_VERSION__}`}
-      </div>
+      {#if updateAvailable}
+        <a
+          href={releaseUrl ?? '/settings'}
+          target={releaseUrl ? '_blank' : undefined}
+          rel={releaseUrl ? 'noreferrer' : undefined}
+          class="flex items-center text-xs text-warning hover:text-warning/80 {sidebarCollapsed
+            ? 'justify-center'
+            : 'justify-between px-3'}"
+          title="A Shumoku update is available"
+        >
+          <span>{sidebarCollapsed ? '↑' : `v${version}`}</span>
+          {#if !sidebarCollapsed}
+            <span>Update available</span>
+          {/if}
+        </a>
+      {:else}
+        <div class="text-xs text-theme-text-muted {sidebarCollapsed ? 'text-center' : 'px-3'}">
+          {sidebarCollapsed ? `v${version.split('.').slice(0, 2).join('.')}` : `v${version}`}
+        </div>
+      {/if}
     </div>
   </nav>
 

@@ -1,0 +1,52 @@
+name: Editor Release
+
+on:
+  push:
+    tags: ['editor-v*.*.*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify release version
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./apps/editor/package.json').version")"
+          tag_version="${GITHUB_REF_NAME#editor-v}"
+
+          if [[ ! "$tag_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]; then
+            echo "::error::Editor release tags must use editor-vX.Y.Z or editor-vX.Y.Z-beta.N"
+            exit 1
+          fi
+
+          if [[ "$tag_version" != "$package_version" ]]; then
+            echo "::error::Tag editor-v${tag_version} does not match @shumoku/editor ${package_version}"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "GitHub Release $GITHUB_REF_NAME already exists"
+          elif [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --generate-notes \
+              --prerelease \
+              --title "Shumoku Editor ${GITHUB_REF_NAME#editor-v}"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --generate-notes \
+              --latest=false \
+              --title "Shumoku Editor ${GITHUB_REF_NAME#editor-v}"
+          fi

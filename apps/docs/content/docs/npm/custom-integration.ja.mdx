@@ -88,7 +88,7 @@ const png = await renderPng(prepared)  // Node.js のみ
 node generate-from-api.js > network.json
 
 # 2. Shumoku でレンダリング
-npx shumoku render network.json -o diagram.html
+npx @shumoku/cli render network.json -o diagram.html
 ```
 
 ## NetBox データとのマージ
@@ -149,7 +149,7 @@ writeFileSync('merged.json', JSON.stringify(netbox, null, 2))
 ```bash
 # マージして図を生成
 node merge-data.js
-npx shumoku render merged.json -f html -o diagram.html
+npx @shumoku/cli render merged.json -f html -o diagram.html
 ```
 
 ## JSON スキーマ
@@ -251,7 +251,7 @@ jobs:
       - name: Merge and render
         run: |
           node scripts/merge-data.js
-          npx shumoku render merged.json -f html -o docs/network.html
+          npx @shumoku/cli render merged.json -f html -o docs/network.html
 
       - name: Commit changes
         run: |

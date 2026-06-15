@@ -15,7 +15,9 @@
     "libs/plugins/netbox": {},
     "libs/plugins/prometheus": {},
     "libs/plugins/zabbix": {},
-    "apps/cli": {},
+    "apps/cli": {
+      "ignoreDependencies": ["@resvg/resvg-js"]
+    },
     "apps/docs": {
       "entry": ["source.config.ts"]
     },

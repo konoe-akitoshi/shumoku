@@ -88,7 +88,7 @@ The pipeline automatically resolves icon dimensions from CDN for proper aspect r
 node generate-from-api.js > network.json
 
 # 2. Render with Shumoku
-npx shumoku render network.json -o diagram.html
+npx @shumoku/cli render network.json -o diagram.html
 ```
 
 ## Merging with NetBox Data
@@ -149,7 +149,7 @@ writeFileSync('merged.json', JSON.stringify(netbox, null, 2))
 ```bash
 # Merge and generate diagram
 node merge-data.js
-npx shumoku render merged.json -f html -o diagram.html
+npx @shumoku/cli render merged.json -f html -o diagram.html
 ```
 
 ## JSON Schema
@@ -251,7 +251,7 @@ jobs:
       - name: Merge and render
         run: |
           node scripts/merge-data.js
-          npx shumoku render merged.json -f html -o docs/network.html
+          npx @shumoku/cli render merged.json -f html -o docs/network.html
 
       - name: Commit changes
         run: |

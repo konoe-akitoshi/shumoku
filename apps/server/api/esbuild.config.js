@@ -4,6 +4,13 @@ import * as esbuild from 'esbuild'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+const buildInfoDefines = {
+  __SHUMOKU_VERSION__: JSON.stringify(process.env.SHUMOKU_VERSION ?? 'development'),
+  __SHUMOKU_COMMIT__: JSON.stringify(process.env.SHUMOKU_COMMIT ?? ''),
+  __SHUMOKU_BUILD_DATE__: JSON.stringify(process.env.SHUMOKU_BUILD_DATE ?? ''),
+  __SHUMOKU_CHANNEL__: JSON.stringify(process.env.SHUMOKU_CHANNEL ?? 'development'),
+}
+
 await esbuild.build({
   entryPoints: ['dist/api/src/index.js'],
   bundle: true,
@@ -12,6 +19,7 @@ await esbuild.build({
   format: 'esm',
   outfile: 'dist/bundle.js',
   external: ['bun:sqlite', 'bun'],
+  define: buildInfoDefines,
   loader: { '.sql': 'text' },
   alias: {
     '@shumoku/renderer-html/iife-string': path.resolve(
@@ -33,6 +41,7 @@ await esbuild.build({
   format: 'esm',
   outfile: 'dist/derive-worker.js',
   external: ['bun:sqlite', 'bun'],
+  define: buildInfoDefines,
 })
 
 console.log('Bundles created: dist/bundle.js, dist/derive-worker.js')

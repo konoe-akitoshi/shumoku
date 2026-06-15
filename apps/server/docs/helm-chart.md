@@ -21,6 +21,13 @@ helm install shumoku apps/server/chart/shumoku -n shumoku --create-namespace
 helm install shumoku apps/server/chart/shumoku -f my-values.yaml
 ```
 
+Production deployments should pin an exact Server release:
+
+```bash
+helm upgrade --install shumoku apps/server/chart/shumoku \
+  --set image.tag=0.1.1
+```
+
 ## Configuration
 
 `values.yaml` で設定可能なパラメータ一覧です。

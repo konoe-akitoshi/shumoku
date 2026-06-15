@@ -8,7 +8,7 @@ description: Shumoku コマンドラインツールの使い方
 YAML/JSON ファイルからダイアグラムをレンダリングします。
 
 ```bash
-npx shumoku render <input> [options]
+npx @shumoku/cli render <input> [options]
 ```
 
 ### オプション
@@ -25,22 +25,22 @@ npx shumoku render <input> [options]
 
 ```bash
 # SVG 出力
-npx shumoku render network.yaml -o diagram.svg
+npx @shumoku/cli render network.yaml -o diagram.svg
 
 # インタラクティブ HTML 出力
-npx shumoku render network.yaml -f html -o diagram.html
+npx @shumoku/cli render network.yaml -f html -o diagram.html
 
 # PNG 出力
-npx shumoku render network.yaml -f png -o diagram.png
+npx @shumoku/cli render network.yaml -f png -o diagram.png
 
 # ダークテーマ
-npx shumoku render network.yaml --theme dark -o diagram.svg
+npx @shumoku/cli render network.yaml --theme dark -o diagram.svg
 
 # JSON から生成
-npx shumoku render topology.json -o diagram.svg
+npx @shumoku/cli render topology.json -o diagram.svg
 
 # stdin から読み込み
-cat network.yaml | npx shumoku render - -o diagram.svg
+cat network.yaml | npx @shumoku/cli render - -o diagram.svg
 ```
 
 ### 入力形式
@@ -67,7 +67,7 @@ PNG 出力時の追加オプション：
 
 ```bash
 # 高解像度出力（デフォルト: scale=2）
-npx shumoku render network.yaml -f png -o diagram.png
+npx @shumoku/cli render network.yaml -f png -o diagram.png
 ```
 
 TypeScript からの場合：
@@ -173,7 +173,7 @@ npx netbox-to-shumoku -f json -o netbox.json
 node merge-data.js netbox.json custom.json > merged.json
 
 # 3. マージした JSON からダイアグラム生成
-npx shumoku render merged.json -f html -o diagram.html
+npx @shumoku/cli render merged.json -f html -o diagram.html
 ```
 
 詳細は [カスタム連携](/docs/npm/custom-integration) を参照してください。

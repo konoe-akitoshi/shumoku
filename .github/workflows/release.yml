@@ -27,7 +27,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build packages
-        run: bun run build --filter='./libs/**'
+        run: bun run build:packages
 
       - name: Create Release Pull Request or Publish
         id: changesets
@@ -37,6 +37,10 @@ jobs:
           version: bun run version-packages
           title: "chore: release packages"
           commit: "chore: release packages"
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Emit npm provenance attestations (requires id-token: write above).
+          # Links each published package to this source commit and build.
+          NPM_CONFIG_PROVENANCE: "true"

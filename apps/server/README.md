@@ -33,15 +33,40 @@ docker run -d -p 8080:8080 -v shumoku-data:/data \
 docker run -d -p 8080:8080 -e DEMO_MODE=true ghcr.io/konoe-akitoshi/shumoku:latest
 ```
 
-Tags: `latest` (built from `main`), plus `X.Y.Z` and `X.Y` for tagged releases — see the [container package](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku).
+Tags: `X.Y.Z` is the immutable production release and `latest` follows the
+newest stable release. `X.Y.Z-beta.N` is an immutable beta and `beta` follows
+the newest beta. Main and pull requests are built without being pushed. See the
+[container package](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku)
+and the [release process](../../docs/releasing.md).
 
-### Docker Compose (build from source)
+For production, pin an exact version rather than `latest`:
+
+```bash
+docker run -d -p 8080:8080 -v shumoku-data:/data \
+  ghcr.io/konoe-akitoshi/shumoku:0.1.1
+```
+
+Test the newest beta without changing `latest`:
+
+```bash
+docker run -d -p 8080:8080 -v shumoku-beta-data:/data \
+  ghcr.io/konoe-akitoshi/shumoku:beta
+```
+
+### Docker Compose
 
 ```bash
 cd apps/server
-docker compose up -d                    # http://localhost:8080
+SHUMOKU_VERSION=0.1.1 docker compose up -d
 SHUMOKU_PORT=80 docker compose up -d    # production port
 DEMO_MODE=true docker compose up -d     # preload a sample network
+```
+
+Upgrade by changing `SHUMOKU_VERSION`, then recreating the service:
+
+```bash
+docker compose pull
+docker compose up -d
 ```
 
 ### From the repo root (Bun, dev)
@@ -95,7 +120,8 @@ Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requ
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/health` | Health check |
+| `GET /api/health` | Health check with running build metadata |
+| `GET /api/system` | Current build and cached latest-release information |
 | `/api/auth/*` | Authentication |
 | `/api/datasources`, `/:id/test`, `/:id/scan` | Data source CRUD, connection test, discovery scan |
 | `/api/plugins` | Plugin registry |
@@ -162,6 +188,8 @@ See the [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) for th
 | `DATA_DIR` | SQLite data directory | `/data` |
 | `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
 | `DEMO_MODE` | Load the sample network on an empty DB (`true`/`false`) | `false` |
+| `SHUMOKU_UPDATE_CHECK` | Set to `off` to disable GitHub release checks | enabled |
+| `SHUMOKU_GITHUB_TOKEN` | Optional token for a higher GitHub API rate limit | — |
 
 Configuration is otherwise stored in SQLite (`$DATA_DIR/shumoku.db`) and managed from the web UI.
 
@@ -169,21 +197,20 @@ Configuration is otherwise stored in SQLite (`$DATA_DIR/shumoku.db`) and managed
 
 ### Docker (recommended)
 
-Use the [published image](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku) (`ghcr.io/konoe-akitoshi/shumoku`), or build from source with Compose:
+Use the [published image](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku)
+(`ghcr.io/konoe-akitoshi/shumoku`). The included Compose file pulls that image:
 
 ```bash
 cd apps/server
 docker compose up -d
 ```
 
-`compose.yaml` builds from the monorepo root and persists data in the `shumoku-data` volume:
+`compose.yaml` persists data in the `shumoku-data` volume:
 
 ```yaml
 services:
   shumoku:
-    build:
-      context: ../..
-      dockerfile: apps/server/Dockerfile
+    image: ghcr.io/konoe-akitoshi/shumoku:${SHUMOKU_VERSION:-latest}
     ports:
       - "${SHUMOKU_PORT:-8080}:8080"
     volumes:
@@ -198,7 +225,8 @@ volumes:
 docker compose up -d            # start
 docker compose down             # stop
 docker compose logs -f          # logs
-docker compose up -d --build    # rebuild after code changes
+docker compose pull             # fetch the configured release
+docker compose up -d            # recreate after an upgrade
 ```
 
 ### Kubernetes (Helm)

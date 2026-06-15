@@ -21,6 +21,7 @@ import type {
   ScopeMode,
   SyncJob,
   SyncMode,
+  SystemInfo,
   Topology,
   TopologyContext,
   TopologyDataSource,
@@ -736,7 +737,16 @@ export const dashboards = {
 
 // Health check
 export const health = {
-  check: () => request<{ status: string; timestamp: number }>('/health'),
+  check: () =>
+    request<{
+      status: string
+      timestamp: number
+      build: SystemInfo['build']
+    }>('/health'),
+}
+
+export const system = {
+  get: (refresh = false) => request<SystemInfo>(`/system${refresh ? '?refresh=true' : ''}`),
 }
 
 // Plugin types for UI
@@ -874,5 +884,6 @@ export const api = {
   topologies,
   settings,
   health,
+  system,
   auth,
 }

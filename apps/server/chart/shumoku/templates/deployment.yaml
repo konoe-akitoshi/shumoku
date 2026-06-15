@@ -45,6 +45,8 @@ spec:
               value: "0.0.0.0"
             - name: DATA_DIR
               value: /data
+            - name: SHUMOKU_DEPLOYMENT
+              value: kubernetes
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

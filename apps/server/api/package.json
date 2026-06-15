@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/server-api",
-  "version": "0.1.1",
+  "version": "0.0.0",
   "private": true,
   "description": "Shumoku API server",
   "type": "module",

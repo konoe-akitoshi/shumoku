@@ -5,6 +5,15 @@
 # ============================================
 FROM oven/bun:1.3.4 AS builder
 
+ARG SHUMOKU_VERSION=dev
+ARG SHUMOKU_COMMIT=unknown
+ARG SHUMOKU_BUILD_DATE=unknown
+ARG SHUMOKU_CHANNEL=development
+ENV SHUMOKU_VERSION=$SHUMOKU_VERSION
+ENV SHUMOKU_COMMIT=$SHUMOKU_COMMIT
+ENV SHUMOKU_BUILD_DATE=$SHUMOKU_BUILD_DATE
+ENV SHUMOKU_CHANNEL=$SHUMOKU_CHANNEL
+
 WORKDIR /app
 
 # Copy monorepo config and required packages
@@ -57,10 +66,18 @@ RUN bun run esbuild.config.js
 # ============================================
 FROM oven/bun:1.3.4-slim
 
+ARG SHUMOKU_VERSION=dev
+ARG SHUMOKU_COMMIT=unknown
+ARG SHUMOKU_BUILD_DATE=unknown
+ARG SHUMOKU_CHANNEL=development
+
 # Metadata
 LABEL org.opencontainers.image.title="Shumoku"
 LABEL org.opencontainers.image.description="Network topology visualization server"
 LABEL org.opencontainers.image.source="https://github.com/konoe-akitoshi/shumoku"
+LABEL org.opencontainers.image.version=$SHUMOKU_VERSION
+LABEL org.opencontainers.image.revision=$SHUMOKU_COMMIT
+LABEL org.opencontainers.image.created=$SHUMOKU_BUILD_DATE
 
 WORKDIR /app
 
@@ -87,6 +104,11 @@ RUN mkdir -p /data && chown -R 1000:1000 /data /app
 ENV DATA_DIR=/data
 ENV PORT=8080
 ENV HOST=0.0.0.0
+ENV SHUMOKU_VERSION=$SHUMOKU_VERSION
+ENV SHUMOKU_COMMIT=$SHUMOKU_COMMIT
+ENV SHUMOKU_BUILD_DATE=$SHUMOKU_BUILD_DATE
+ENV SHUMOKU_CHANNEL=$SHUMOKU_CHANNEL
+ENV SHUMOKU_DEPLOYMENT=docker
 
 # Switch to non-root user
 USER 1000

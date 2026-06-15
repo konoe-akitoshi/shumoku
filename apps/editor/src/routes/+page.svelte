@@ -127,8 +127,28 @@
 <div class="min-h-screen bg-background px-6 py-8 max-w-4xl mx-auto">
   <div class="flex items-center justify-between mb-8">
     <div>
-      <h1 class="text-2xl font-bold">shumoku</h1>
-      <p class="text-sm text-muted-foreground">Network Topology Editor</p>
+      <div class="flex items-center gap-2">
+        <h1 class="text-2xl font-bold">shumoku</h1>
+        {#if __SHUMOKU_EDITOR_CHANNEL__ === 'beta'}
+          <span
+            class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+          >
+            Beta
+          </span>
+        {:else if __SHUMOKU_EDITOR_CHANNEL__ === 'preview'}
+          <span
+            class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-950 dark:text-blue-200"
+          >
+            Preview
+          </span>
+        {/if}
+      </div>
+      <p class="text-sm text-muted-foreground">
+        Network Topology Editor · v{__SHUMOKU_EDITOR_VERSION__}
+        {#if __SHUMOKU_EDITOR_COMMIT__}
+          <span title={__SHUMOKU_EDITOR_COMMIT__}> ({__SHUMOKU_EDITOR_COMMIT__.slice(0, 7)}) </span>
+        {/if}
+      </p>
     </div>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>

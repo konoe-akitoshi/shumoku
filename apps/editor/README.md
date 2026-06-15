@@ -2,7 +2,23 @@
 
 Visual editor for designing **physical** network topologies. Manage devices, modules, and cables as first-class *products*, lay them out on a canvas, and derive a bill of materials — then export a portable project file.
 
-> Status: early and under active development (v0.1.0). Some pages are still being built out.
+> Status: early and under active development. Some pages are still being built out.
+
+## Deployments
+
+The Editor is hosted at [editor.shumoku.dev](https://editor.shumoku.dev/) using
+Vercel's Git integration:
+
+- Branch pushes and pull requests create isolated Preview deployments.
+- Merges to `main` create Production deployments.
+- The running version, deployment channel, and Git commit are shown on the home
+  screen.
+
+Use a Preview deployment for beta testing. Because projects are stored in
+browser IndexedDB, its separate origin also keeps test data isolated from
+Production. Keep Vercel's **Automatically expose System Environment Variables**
+setting enabled so the deployment channel and commit are embedded at build
+time.
 
 ## Develop
 
@@ -18,6 +34,9 @@ bun run dev            # http://localhost:5173
 | `bun run build` | Production build (SvelteKit) |
 | `bun run preview` | Preview the production build |
 | `bun run typecheck` | `svelte-check` + `tsc` |
+
+Versioning and release tag conventions are documented in
+[`docs/releasing.md`](../../docs/releasing.md).
 
 ## What it does
 
