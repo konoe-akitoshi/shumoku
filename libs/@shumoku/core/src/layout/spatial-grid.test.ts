@@ -12,7 +12,7 @@
  *   inputs shaped like real routed layouts.
  */
 
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 import type { Bounds, Position } from '../models/types.js'
 import {
   type CollinearOverlap,
