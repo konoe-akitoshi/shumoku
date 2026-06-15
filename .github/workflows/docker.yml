@@ -103,6 +103,24 @@ jobs:
       contents: write
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Generate release notes
+        env:
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if ! bash scripts/release-notes.sh server "$GITHUB_REF_NAME" > release-notes.md 2>/dev/null || [ ! -s release-notes.md ]; then
+            printf '**Shumoku Server %s**\n' "${GITHUB_REF_NAME#server-v}" > release-notes.md
+          fi
+
       - name: Create GitHub Release
         env:
           GH_REPO: ${{ github.repository }}
@@ -114,13 +132,13 @@ jobs:
           elif [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then
             gh release create "$GITHUB_REF_NAME" \
               --verify-tag \
-              --generate-notes \
+              --notes-file release-notes.md \
               --prerelease \
               --title "Shumoku Server ${GITHUB_REF_NAME#server-v}"
           else
             gh release create "$GITHUB_REF_NAME" \
               --verify-tag \
-              --generate-notes \
+              --notes-file release-notes.md \
               --latest \
               --title "Shumoku Server ${GITHUB_REF_NAME#server-v}"
           fi

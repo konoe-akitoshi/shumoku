@@ -12,6 +12,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Verify release version
         shell: bash
@@ -29,6 +36,15 @@ jobs:
             exit 1
           fi
 
+      - name: Generate release notes
+        env:
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if ! bash scripts/release-notes.sh editor "$GITHUB_REF_NAME" > release-notes.md 2>/dev/null || [ ! -s release-notes.md ]; then
+            printf '**Shumoku Editor %s** — https://editor.shumoku.dev/\n' "${GITHUB_REF_NAME#editor-v}" > release-notes.md
+          fi
+
       - name: Create GitHub Release
         env:
           GH_REPO: ${{ github.repository }}
@@ -40,13 +56,13 @@ jobs:
           elif [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then
             gh release create "$GITHUB_REF_NAME" \
               --verify-tag \
-              --generate-notes \
+              --notes-file release-notes.md \
               --prerelease \
               --title "Shumoku Editor ${GITHUB_REF_NAME#editor-v}"
           else
             gh release create "$GITHUB_REF_NAME" \
               --verify-tag \
-              --generate-notes \
+              --notes-file release-notes.md \
               --latest=false \
               --title "Shumoku Editor ${GITHUB_REF_NAME#editor-v}"
           fi
