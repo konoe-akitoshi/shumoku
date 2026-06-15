@@ -1,6 +1,7 @@
 {
   "name": "shumoku-plugin-aruba-instant-on",
   "version": "0.1.0",
+  "private": true,
   "description": "Aruba Instant On (cloud-managed AP / switch) data source plugin for Shumoku. Uses the undocumented portal.arubainstanton.com API.",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",

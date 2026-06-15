@@ -1,6 +1,7 @@
 {
   "name": "shumoku-plugin-network-scan",
   "version": "0.0.0",
+  "private": true,
   "description": "SNMP/LLDP autoscan data source plugin for Shumoku",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
