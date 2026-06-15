@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/cli",
-  "version": "0.2.25",
+  "version": "0.2.26",
   "description": "Shumoku CLI for rendering network diagrams",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
