@@ -7,7 +7,7 @@
  * matches the verbatim O(n²) reference.
  */
 
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 import type { Node } from '../models/types.js'
 import {
   assertLayoutConstraints,

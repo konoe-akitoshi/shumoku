@@ -45,6 +45,7 @@ lerna-debug.log*
 .vercel
 *.tsbuildinfo
 .claude/
+.research/
 .wrangler/
 apps/server/data/plugins.yaml
 

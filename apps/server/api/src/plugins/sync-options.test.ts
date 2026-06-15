@@ -7,7 +7,7 @@
  * per-source leftover (e.g. a Zabbix `hostGroups` saved before the move) would
  * pre-filter the observation and make the topology Scope UI a no-op.
  */
-import { expect, test } from 'bun:test'
+import { expect, test } from 'vitest'
 import { pluginRegistry } from './registry.js'
 import { parseSyncOptions } from './sync-options.js'
 
