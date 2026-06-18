@@ -150,3 +150,16 @@ Use of Shumoku as open-source software never requires a commercial relationship.
 This document may evolve as the project grows. Changes are proposed via pull
 request and follow the same decision-making process described above, with the
 Project Lead having final approval.
+
+## References
+
+The community and governance practices in this repository — this document plus
+[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md),
+[SUPPORT.md](SUPPORT.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and
+[TRADEMARK.md](TRADEMARK.md) — are informed by the Linux Foundation's recommended
+practices for running open-source projects on GitHub:
+
+- Ibrahim Haddad, Ph.D., *Recommended Practices for Hosting and Managing Open
+  Source Projects on GitHub*, foreword by Jeff McAffer, The Linux Foundation,
+  March 2023.
+  [PDF](https://www.linuxfoundation.org/hubfs/LF%20Research/Recommended%20Practices%20for%20Hosting%20and%20Managing%20OS%20Projects%20on%20Github%20-%20Report.pdf)
