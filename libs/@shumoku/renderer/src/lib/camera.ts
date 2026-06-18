@@ -40,7 +40,13 @@ import { type WheelEventState, WheelGestures } from 'wheel-gestures'
 export type PanFilter = (event: PointerEvent | MouseEvent) => boolean
 
 export interface CameraOptions {
-  /** Zoom scale bounds. Default: [0.2, 10]. */
+  /**
+   * Zoom scale bounds `[min, max]`. When omitted, `min` is 0.2 and `max` is
+   * **adaptive**: derived from the content/viewport ratio (floored at 10) and
+   * kept in sync as the viewBox / viewport change, so a graph far larger than
+   * the screen can still be zoomed in until nodes reach a readable size. Pass an
+   * explicit pair to pin both bounds (opts out of the adaptive max).
+   */
   scaleExtent?: [number, number]
   /**
    * Predicate: pointer-down events that should start a pan. Default:
@@ -93,6 +99,34 @@ const DEFAULT_PAN_FILTER: PanFilter = (e) =>
 const MOUSE_TICK_THRESHOLD = 50
 
 /**
+ * How far past 1:1 (natural pixel size) the adaptive max zoom allows. 1.5 lets
+ * you push a node to ~1.5× its natural size before hitting the cap.
+ */
+const ADAPTIVE_OVERZOOM = 1.5
+
+/**
+ * Derive the max zoom from how much larger the content (viewBox) is than the
+ * viewport. At `k = viewBox/viewport`, 1 user unit ≈ 1 CSS px (content at
+ * natural size); `overzoom` lets you go a bit past that. `fixedMax` is the
+ * floor, so a graph SMALLER than the viewport keeps its normal zoom-in. Returns
+ * `fixedMax` when there's nothing to derive from yet (pre-layout / unmeasured).
+ *
+ * Pure (no DOM) so it's unit-testable; `attachCamera` feeds it live measurements.
+ */
+export function deriveMaxScale(
+  viewBoxW: number,
+  viewBoxH: number,
+  clientW: number,
+  clientH: number,
+  fixedMax: number,
+  overzoom = ADAPTIVE_OVERZOOM,
+): number {
+  if (viewBoxW <= 0 || viewBoxH <= 0 || clientW <= 0 || clientH <= 0) return fixedMax
+  const naturalK = Math.max(viewBoxW / clientW, viewBoxH / clientH)
+  return Math.max(fixedMax, naturalK * overzoom)
+}
+
+/**
  * Classify the very first event of a gesture. Only called at
  * `state.isStart === true`, so the verdict doesn't flip within the
  * gesture no matter what individual frames look like.
@@ -115,11 +149,29 @@ function detectDevice(e: WheelEvent, axisDeltaX: number, axisDeltaY: number): 'm
  */
 export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): Camera {
   const {
-    scaleExtent = [0.2, 10],
+    scaleExtent: explicitScaleExtent,
     panFilter = DEFAULT_PAN_FILTER,
     wheelZoomSensitivity = 1.0015,
     pinchZoomSensitivity = 1.01,
   } = options
+
+  // A caller-pinned scaleExtent is honored verbatim. Otherwise min stays at the
+  // default and max is derived from the content/viewport ratio (floored at the
+  // default) so huge graphs stay zoomable to a readable node size. The adaptive
+  // max is recomputed as the viewBox / viewport change (observers below).
+  const minScale = explicitScaleExtent?.[0] ?? 0.2
+  const fixedMaxScale = explicitScaleExtent?.[1] ?? 10
+  const adaptiveMax = explicitScaleExtent === undefined
+  const currentMaxScale = (): number =>
+    adaptiveMax
+      ? deriveMaxScale(
+          svg.viewBox.baseVal.width,
+          svg.viewBox.baseVal.height,
+          svg.clientWidth,
+          svg.clientHeight,
+          fixedMaxScale,
+        )
+      : fixedMaxScale
 
   const viewportEl = svg.querySelector<SVGGElement>('.viewport')
   if (!viewportEl) {
@@ -149,7 +201,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
 
   const svgSel = select(svg)
   const zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> = zoom<SVGSVGElement, unknown>()
-    .scaleExtent(scaleExtent)
+    .scaleExtent([minScale, currentMaxScale()])
     .extent((): [[number, number], [number, number]] => {
       const vb = svg.viewBox.baseVal
       if (vb.width === 0 || vb.height === 0) {
@@ -178,6 +230,24 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
 
   svgSel.call(zoomBehavior)
   svgSel.on('contextmenu.zoom', null)
+
+  // Keep the adaptive max in sync: the viewBox changes when a new layout/sheet
+  // loads, and clientWidth/Height change on container resize. d3-zoom clamps
+  // subsequent gestures to the updated extent. (Skipped when scaleExtent is
+  // pinned — the caller owns the bounds then.)
+  let viewBoxObserver: MutationObserver | null = null
+  let sizeObserver: ResizeObserver | null = null
+  if (adaptiveMax) {
+    const refreshScaleExtent = () => {
+      zoomBehavior.scaleExtent([minScale, currentMaxScale()])
+    }
+    viewBoxObserver = new MutationObserver(refreshScaleExtent)
+    viewBoxObserver.observe(svg, { attributes: true, attributeFilter: ['viewBox'] })
+    if (typeof ResizeObserver !== 'undefined') {
+      sizeObserver = new ResizeObserver(refreshScaleExtent)
+      sizeObserver.observe(svg)
+    }
+  }
 
   // Sticky per-gesture device verdict — set at `isStart`, read on
   // every subsequent event in the same gesture.
@@ -267,9 +337,9 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       const vbCy = vb.y + vb.height / 2
 
       const targetK = Math.max(
-        scaleExtent[0],
+        minScale,
         Math.min(
-          scaleExtent[1],
+          currentMaxScale(),
           Math.sqrt((vb.width * vb.height * areaRatio) / (bbox.width * bbox.height)),
         ),
       )
@@ -290,6 +360,8 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     detach() {
       offWheel()
       unobserve()
+      viewBoxObserver?.disconnect()
+      sizeObserver?.disconnect()
       svgSel.on('.zoom', null)
       viewportEl.removeAttribute('transform')
     },
