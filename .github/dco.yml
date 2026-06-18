@@ -1,0 +1,17 @@
+# Configuration for the DCO GitHub App — https://github.com/apps/dco
+# This keeps the Developer Certificate of Origin (see CONTRIBUTING.md) friendly
+# for external contributors: nobody gets blocked over a missing sign-off that
+# can be fixed without rewriting history.
+
+require:
+  # Trusted project members / collaborators are not required to sign off.
+  # Set this to `true` if you want every commit — including maintainers' — to
+  # carry a Signed-off-by line.
+  members: false
+
+allowRemediationCommits:
+  # A contributor can fix a missing sign-off by adding a follow-up commit,
+  # instead of having to amend/rebase and force-push.
+  individual: true
+  # A maintainer can add the remediation sign-off on a contributor's behalf.
+  thirdParty: true
