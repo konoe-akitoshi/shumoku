@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & Discussions
+    url: https://github.com/konoe-akitoshi/shumoku/discussions
+    about: Ask questions, share ideas, and get usage help.
+  - name: 🗨️ Discord
+    url: https://discord.gg/dyYbEsDZYr
+    about: Chat with the community in real time.
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/konoe-akitoshi/shumoku/security/advisories/new
+    about: Please report security issues privately — not as a public issue. See SECURITY.md.
+  - name: 🏢 Commercial / implementation support
+    url: mailto:contact@shumoku.dev
+    about: Implementation, NetBox/Zabbix integration, PoC, or custom development help.

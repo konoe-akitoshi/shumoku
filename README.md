@@ -285,9 +285,23 @@ This is a [Bun](https://bun.sh) workspaces + [Turborepo](https://turbo.build) mo
  </picture>
 </a>
 
+## Community & governance
+
+Shumoku is an open-source project led by [@konoe-akitoshi](https://github.com/konoe-akitoshi).
+Contributions are welcome under the AGPL-3.0 license.
+
+- [Contributing](CONTRIBUTING.md) — dev setup, pull requests, DCO sign-off
+- [Governance](GOVERNANCE.md) — roles, decision-making, releases
+- [Support](SUPPORT.md) — community help and commercial / implementation support
+- [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [Brand guidelines](TRADEMARK.md)
+
 ## License
 
-This project is dual-licensed:
+Shumoku is free and open-source software, licensed under **AGPL-3.0**
+([LICENSE](./LICENSE)).
 
-- **AGPL-3.0** — For open-source use ([LICENSE](./LICENSE))
-- **Commercial License** — For proprietary use, contact contact@shumoku.dev
+For enterprise use, we can provide commercial **support and implementation
+services** (deployment, NetBox/Zabbix integration, PoC, custom development) —
+separate from the open-source license. See [SUPPORT.md](SUPPORT.md), or reach out
+at [contact@shumoku.dev](mailto:contact@shumoku.dev). If AGPL-3.0 does not fit your
+use case, contact us to discuss the options.
