@@ -11,6 +11,7 @@
   // Dynamic `optionsSource` candidates degrade to free entry (the documented F2
   // fallback); wiring getConfigOptions is a later step.
   import type { PluginConfigProperty, PluginConfigSchema } from '@shumoku/core'
+  import { EyeIcon, EyeSlashIcon, LockIcon } from 'phosphor-svelte'
   import SchemaForm from './SchemaForm.svelte'
 
   let {
@@ -30,6 +31,53 @@
   } = $props()
 
   const entries = $derived(Object.entries(schema.properties))
+
+  // --- Secret (password) widget state -------------------------------------
+  // A configured secret arrives from the API as a masked sentinel containing
+  // '•' (datasources API maskConfigSecrets). We keep it in `value` for display
+  // and treat it as "unchanged" on submit (the parent strips it).
+  const MASK_CHAR = '•'
+  function isMasked(v: unknown): boolean {
+    return typeof v === 'string' && v.includes(MASK_CHAR)
+  }
+
+  // Per-field UI state, keyed by schema key.
+  let revealed = $state<Record<string, boolean>>({})
+  let replacing = $state<Record<string, boolean>>({})
+  // The masked sentinel for an already-configured secret, kept so we can restore
+  // it when a replace is cancelled.
+  let storedSecret = $state<Record<string, string>>({})
+
+  // When the server (re)sends a masked secret — on load or after a save — show
+  // the "Configured" view and drop any stale replace/reveal state. Guarded
+  // writes keep this from looping.
+  $effect(() => {
+    for (const [key, prop] of Object.entries(schema.properties)) {
+      if (prop.format !== 'password') continue
+      const v = value[key]
+      if (isMasked(v)) {
+        if (storedSecret[key] !== v) storedSecret[key] = v as string
+        if (replacing[key]) replacing[key] = false
+        if (revealed[key]) revealed[key] = false
+      }
+    }
+  })
+
+  function isConfigured(key: string): boolean {
+    return !replacing[key] && isMasked(value[key])
+  }
+  function startReplace(key: string) {
+    replacing[key] = true
+    revealed[key] = false
+    value[key] = ''
+    onChange?.()
+  }
+  function cancelReplace(key: string) {
+    replacing[key] = false
+    revealed[key] = false
+    value[key] = storedSecret[key] ?? ''
+    onChange?.()
+  }
 
   // Dynamic candidates for optionsSource array fields, fetched lazily.
   let candidates = $state<Record<string, { value: string; label: string }[]>>({})
@@ -226,6 +274,62 @@
               {onChange}
             />
           </fieldset>
+        {:else if prop.format === 'password'}
+          {#if isConfigured(key)}
+            <div class="secret-set">
+              <span class="secret-badge"><LockIcon size={14} /> Configured</span>
+              <button
+                type="button"
+                class="secret-action"
+                {disabled}
+                onclick={() => startReplace(key)}
+              >
+                Replace
+              </button>
+            </div>
+          {:else}
+            <div class="secret-edit">
+              <input
+                id={`sf-${key}`}
+                class="input secret-field"
+                type={revealed[key] ? 'text' : 'password'}
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                placeholder={prop.placeholder}
+                {disabled}
+                value={(value[key] ?? '') as string}
+                oninput={(e) => onText(key, e)}
+              >
+              <button
+                type="button"
+                class="secret-toggle"
+                {disabled}
+                aria-pressed={revealed[key] ? 'true' : 'false'}
+                aria-label={revealed[key] ? 'Hide value' : 'Show value'}
+                title={revealed[key] ? 'Hide' : 'Show'}
+                onclick={() => {
+                  revealed[key] = !revealed[key]
+                }}
+              >
+                {#if revealed[key]}
+                  <EyeSlashIcon size={16} />
+                {:else}
+                  <EyeIcon size={16} />
+                {/if}
+              </button>
+              {#if storedSecret[key] !== undefined}
+                <button
+                  type="button"
+                  class="secret-action"
+                  {disabled}
+                  onclick={() => cancelReplace(key)}
+                >
+                  Cancel
+                </button>
+              {/if}
+            </div>
+          {/if}
         {:else if prop.optionsSource && (candidates[prop.optionsSource]?.length ?? 0) > 0}
           <!-- Single-select from dynamic candidates (e.g. a Zabbix map). When no
                candidates are available (connection not ready), this falls through
@@ -322,5 +426,47 @@
     outline: none;
     background: transparent;
     font: inherit;
+  }
+  .secret-set {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .secret-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground, #6b7280);
+  }
+  .secret-edit {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .secret-field {
+    flex: 1;
+  }
+  .secret-toggle,
+  .secret-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 0.375rem;
+    background: var(--muted, #f3f4f6);
+    cursor: pointer;
+    font-size: 0.8125rem;
+  }
+  .secret-toggle {
+    padding: 0.4rem;
+  }
+  .secret-action {
+    padding: 0.25rem 0.6rem;
+  }
+  .secret-toggle:disabled,
+  .secret-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>

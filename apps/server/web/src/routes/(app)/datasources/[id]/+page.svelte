@@ -175,7 +175,7 @@
     // Manual has no connection config — its graph is recorded as an observation
     // (see manualGraphFromEditor / handleSave), not stored in config_json.
     if (type === 'manual') return '{}'
-    return JSON.stringify(pruneEmpty(config))
+    return JSON.stringify(pruneEmpty(stripMaskedSecrets(config, configSchemaFor(type))))
   }
 
   /** Parse the active editor pane (YAML or JSON) into a NetworkGraph. */
@@ -209,18 +209,24 @@
   }
 
   /**
-   * Blank password fields so the masked secret loaded from the API isn't
-   * re-submitted; the server preserves the stored secret when a field is
-   * omitted (and re-generates grafana's webhookSecret as needed).
+   * Drop password fields whose value is still the server's masked sentinel
+   * (contains '•') at submit time. An untouched secret is "unchanged" — omitting
+   * it makes the server preserve the stored value (and re-generate grafana's
+   * webhookSecret as needed). A field the user actually replaced holds real text
+   * and is kept. The masked value stays in `config` for display so the form can
+   * show a "Configured" state (see SchemaForm's password widget).
    */
-  function blankSecrets(
+  function stripMaskedSecrets(
     cfg: Record<string, unknown>,
     schema?: PluginConfigSchema,
   ): Record<string, unknown> {
     if (!schema) return cfg
     const out = { ...cfg }
     for (const [key, prop] of Object.entries(schema.properties)) {
-      if (prop.format === 'password') out[key] = ''
+      const v = out[key]
+      if (prop.format === 'password' && typeof v === 'string' && v.includes('•')) {
+        delete out[key]
+      }
     }
     return out
   }
@@ -246,8 +252,9 @@
           pluginTypes = await api.dataSources.getPluginTypes()
           if (cancelled) return
         }
-        const parsed = parseConfig(ds.configJson) as Record<string, unknown>
-        config = blankSecrets(parsed, configSchemaFor(ds.type))
+        // Keep the server's masked secrets in `config` so the form shows a
+        // "Configured" state; they're stripped at submit time (stripMaskedSecrets).
+        config = parseConfig(ds.configJson) as Record<string, unknown>
 
         await loadConnectionInfo()
 
@@ -343,11 +350,9 @@
       }
 
       dataSource = await dataSources.update(id, updates)
-      // Re-seed from the saved (masked) config so password fields blank again.
-      config = blankSecrets(
-        parseConfig(dataSource.configJson) as Record<string, unknown>,
-        configSchemaFor(dataSource.type),
-      )
+      // Re-seed from the saved (masked) config; SchemaForm shows the masked
+      // secrets as "Configured" again.
+      config = parseConfig(dataSource.configJson) as Record<string, unknown>
 
       // Refresh derived connection info after save (e.g. a webhook secret may
       // have just been generated server-side).
