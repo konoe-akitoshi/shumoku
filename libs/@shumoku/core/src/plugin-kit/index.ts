@@ -16,6 +16,7 @@
 export * from './alertmanager.js'
 export * from './concurrency.js'
 export * from './metrics-flatten.js'
+export * from './secrets.js'
 export * from './severity.js'
 export * from './stamp.js'
 export * from './validate-schema.js'

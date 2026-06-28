@@ -82,7 +82,7 @@ const configSchema: PluginConfigSchema = {
   required: ['url', 'token'],
   properties: {
     url: { type: 'string', format: 'uri', title: 'NetBox URL' },
-    token: { type: 'string', format: 'password', title: 'API token' },
+    token: { type: 'string', secret: true, title: 'API token' },
     insecure: {
       type: 'boolean',
       title: 'Skip TLS verification',

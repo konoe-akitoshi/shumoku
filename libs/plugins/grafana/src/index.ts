@@ -15,7 +15,7 @@ const configSchema: PluginConfigSchema = {
   required: ['url', 'token'],
   properties: {
     url: { type: 'string', format: 'uri', title: 'Grafana URL' },
-    token: { type: 'string', format: 'password', title: 'API token' },
+    token: { type: 'string', secret: true, title: 'API token' },
     useWebhook: {
       type: 'boolean',
       title: 'Receive alerts via webhook',
@@ -24,7 +24,7 @@ const configSchema: PluginConfigSchema = {
     },
     webhookSecret: {
       type: 'string',
-      format: 'password',
+      secret: true,
       title: 'Webhook secret',
       visibleWhen: { field: 'useWebhook', equals: true },
       help: 'Leave blank to auto-generate on save.',

@@ -24,9 +24,6 @@ import type {
 } from '../plugins/types.js'
 import type { DataSource, DataSourceInput, DataSourceStatus, DataSourceType } from '../types.js'
 
-/** Config keys that should be preserved on update when not explicitly provided */
-const SECRET_KEYS = ['token', 'password', 'secret', 'apikey', 'apiKey']
-
 interface DataSourceRow {
   id: string
   name: string
@@ -200,34 +197,20 @@ export class DataSourceService {
       values.push(input.type)
     }
     if (input.configJson !== undefined) {
-      let configJson = input.configJson
-      const newConfig = JSON.parse(configJson)
-      const existingConfig = JSON.parse(existing.configJson)
-
-      // Preserve sensitive fields (token, password, etc.) when not provided in update
-      for (const key of SECRET_KEYS) {
-        if (newConfig[key] === undefined && existingConfig[key] !== undefined) {
-          newConfig[key] = existingConfig[key]
-        }
-      }
-
-      // Handle Grafana-specific fields
+      const newConfig = JSON.parse(input.configJson)
       const type = input.type ?? existing.type
-      if (type === 'grafana') {
-        // Preserve existing webhook secret
-        if (!newConfig.webhookSecret && existingConfig.webhookSecret) {
-          newConfig.webhookSecret = existingConfig.webhookSecret
-        }
-        // Generate secret when useWebhook is enabled and no secret exists
-        if (newConfig.useWebhook && !newConfig.webhookSecret) {
-          const { nanoid } = await import('nanoid')
-          newConfig.webhookSecret = nanoid(32)
-        }
+
+      // The form submits the full config including secret values (they are
+      // returned to the admin-only UI and masked there), so there's nothing to
+      // preserve here — store as provided. Still auto-provision a Grafana
+      // webhook secret when the webhook is enabled and none was supplied.
+      if (type === 'grafana' && newConfig.useWebhook && !newConfig.webhookSecret) {
+        const { nanoid } = await import('nanoid')
+        newConfig.webhookSecret = nanoid(32)
       }
 
-      configJson = JSON.stringify(newConfig)
       updates.push('config_json = ?')
-      values.push(configJson)
+      values.push(JSON.stringify(newConfig))
     }
 
     if (updates.length === 0) {
