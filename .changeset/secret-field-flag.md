@@ -4,7 +4,6 @@
 'shumoku-plugin-grafana': patch
 'shumoku-plugin-prometheus': patch
 'shumoku-plugin-zabbix': patch
-'shumoku-plugin-aruba-instant-on': patch
 ---
 
 Add a first-class `secret` flag to plugin config schemas.
