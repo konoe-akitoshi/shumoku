@@ -507,8 +507,13 @@ export class ZabbixPlugin
       name: string
       severity: string
       clock: string
-      /** '1' = problem (active), '0' = recovery (resolved) */
+      /** '1' = problem, '0' = recovery */
       value: string
+      /**
+       * Recovery event id. '0' means the problem has *not* recovered yet
+       * (still active); any other id means a recovery event closed it.
+       */
+      r_eventid?: string
       hosts?: Array<{ hostid: string; host: string; name: string }>
     }
 
@@ -516,7 +521,7 @@ export class ZabbixPlugin
     // Zabbix 3.x–7.x and continues to accept selectHosts, while problem.get
     // dropped selectHosts in 7.0 and tightened sortfield to 'eventid' only.
     const params: Record<string, unknown> = {
-      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'value'],
+      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'value', 'r_eventid'],
       selectHosts: ['hostid', 'host', 'name'],
       source: 0, // EVENT_SOURCE_TRIGGERS
       object: 0, // EVENT_OBJECT_TRIGGER
@@ -535,21 +540,31 @@ export class ZabbixPlugin
       params['hostids'] = options.hostIds
     }
 
-    // Active-only: ask Zabbix for problem events only (value=1)
+    // Active-only: keep only problem events (value=1). event.get filters values
+    // via `filter`, not a top-level `value` param. Note this alone is not enough
+    // — a problem that has since recovered still carries its original value=1
+    // event, so we additionally drop recovered ones by r_eventid below.
     if (options?.activeOnly) {
-      params['value'] = 1
+      params['filter'] = { value: 1 }
     }
 
     const events = await this.apiRequest<ZabbixEvent[]>('event.get', params)
 
-    return events.map((e) => ({
+    // A value=1 event whose r_eventid is set has already been closed by a
+    // recovery event — exclude those when the caller wants active alerts only.
+    const visible = options?.activeOnly
+      ? events.filter((e) => !e.r_eventid || e.r_eventid === '0')
+      : events
+
+    return visible.map((e) => ({
       id: e.eventid,
       severity: this.mapZabbixSeverity(e.severity),
       title: e.name,
       host: e.hosts?.[0]?.host,
       hostId: e.hosts?.[0]?.hostid,
       startTime: Number.parseInt(e.clock, 10) * 1000,
-      status: e.value === '1' ? 'active' : 'resolved',
+      // value=1 with no recovery event = active; otherwise resolved.
+      status: e.value === '1' && (!e.r_eventid || e.r_eventid === '0') ? 'active' : 'resolved',
       source: 'zabbix' as const,
       url: this.config
         ? `${this.config.url.replace(/\/$/, '')}/tr_events.php?triggerid=${e.objectid}&eventid=${e.eventid}`
