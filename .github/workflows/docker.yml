@@ -78,6 +78,7 @@ jobs:
             type=raw,value=${{ steps.build.outputs.version }},enable=${{ steps.build.outputs.release == 'true' }}
             type=raw,value=latest,enable=${{ steps.build.outputs.channel == 'stable' }}
             type=raw,value=beta,enable=${{ steps.build.outputs.channel == 'beta' }}
+            type=raw,value=edge,enable=${{ steps.build.outputs.release == 'true' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
