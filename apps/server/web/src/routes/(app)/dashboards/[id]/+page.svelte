@@ -13,7 +13,7 @@
     TreeStructureIcon,
     XIcon,
   } from 'phosphor-svelte'
-  import { mount, onMount, tick, unmount } from 'svelte'
+  import { mount, onMount, tick, unmount, untrack } from 'svelte'
   import { browser } from '$app/environment'
   import { goto } from '$app/navigation'
   import { api } from '$lib/api'
@@ -62,11 +62,19 @@
     const currentId = id
     if (!currentId) return
     // Tear down the existing grid so the next layout rebuilds cleanly.
-    cleanupAllWidgets()
-    if (grid) {
-      grid.destroy(true)
-      grid = null
-    }
+    // Only `id` should trigger this effect — read/mutate `grid` inside
+    // untrack() so the grid signal is NOT captured as a dependency. Otherwise
+    // initGrid()'s `grid = GridStack.init(...)` re-fires this effect, which
+    // destroys the freshly-created grid (and refetches), ping-ponging with the
+    // init effect forever and leaving `grid` null — so Add Widget's
+    // `if (!grid) return` guard silently drops every widget.
+    untrack(() => {
+      cleanupAllWidgets()
+      if (grid) {
+        grid.destroy(true)
+        grid = null
+      }
+    })
     dashboardStore.get(currentId)
   })
 
