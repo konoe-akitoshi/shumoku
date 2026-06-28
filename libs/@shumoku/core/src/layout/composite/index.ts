@@ -225,6 +225,13 @@ export function layoutComposite(
     neighbors.get(edge.b)?.set(edge.a, edge)
   }
 
+  // Typed/hierarchical graphs read best when the dependency layout is free to
+  // SPREAD: keep the subgraph grouping (boxes), but drop the square-aspect
+  // wraps that compress it — rows inside a subgraph (`zoneRowMaxW`) and the
+  // band of subgraphs (`maxBandW`). Those wraps target a balanced aspect; they
+  // are NOT inherent to grouping, and they are what squeezes the figure narrow.
+  const roleDriven = isRoleDriven(ids, nodes, neighbors)
+
   // -- zones ------------------------------------------------------------------
   // The placement quotient follows the GRAPH's own grouping first: a node's
   // `parent` subgraph is the priority-merged grouping (the strongest source's
@@ -496,11 +503,12 @@ export function layoutComposite(
       contentArea += (unit.width + cellGapXBase) * (unit.height + rowGapBase / 2)
       widestUnit = Math.max(widestUnit, unit.width)
     }
-    // The only principled floor: a row must fit its widest unit (anything
-    // narrower just breaks every row anyway). No artificial cap — the
-    // content-derived target is already aspect-balanced, and the global
-    // proportion is the search cost's job, not a constant's.
-    const zoneRowMaxW = Math.max(widestUnit, Math.round(Math.sqrt(contentArea * PHI)))
+    // Role-driven (hierarchy-primary): DON'T wrap a subgraph's depth rows — let
+    // each tier spread to its natural width so the dependency layout reads wide.
+    // Otherwise keep the aspect-balanced target (a row must fit its widest unit).
+    const zoneRowMaxW = roleDriven
+      ? Number.POSITIVE_INFINITY
+      : Math.max(widestUnit, Math.round(Math.sqrt(contentArea * PHI)))
     const rows: Unit[][] = []
     for (const key of rowKeys) {
       const depthRow = rowMap.get(key) ?? []
@@ -608,7 +616,17 @@ export function layoutComposite(
   const zoneRank = new Map<string, number>()
   for (const zone of zoneIds) {
     const members = zoneUnits.get(zone) ?? []
-    zoneRank.set(zone, Math.min(...members.map((u) => u.depth)))
+    // Band a zone by the shallowest REAL (BFS) depth of its nodes. The
+    // sink-bumped `unit.depth` pushes sink members (e.g. distribution switches
+    // caught by the high-degree sink heuristic) to the bottom, so a zone whose
+    // only shallow non-sink node is, say, a WLC on the core gets ranked one
+    // band ABOVE its sibling zones whose shallow members are all sinks — and the
+    // siblings no longer share a band. Raw depth keeps siblings together.
+    // Role-driven only; untyped graphs keep the prior behaviour.
+    const rank = roleDriven
+      ? Math.min(...members.flatMap((u) => u.members.map((m) => depth.get(m) ?? 0)))
+      : Math.min(...members.map((u) => u.depth))
+    zoneRank.set(zone, rank)
   }
   const zoneAdj = new Map<string, Map<string, number>>()
   for (const zone of zoneIds) zoneAdj.set(zone, new Map())
@@ -698,7 +716,12 @@ export function layoutComposite(
   // budget = sqrt(total packed zone area × aspect), floored at 1700.
   let zoneArea = 0
   for (const [, box] of zoneBox) zoneArea += (box.w + zoneGap) * (box.h + bandGap)
-  const maxBandW = options.maxBandW ?? Math.max(1700, Math.round(Math.sqrt(zoneArea * 1.5)))
+  // Role-driven: don't wrap same-rank subgraphs into stacked sub-rows — place
+  // them side by side so the figure spreads horizontally (the aspect wrap is
+  // what forced the narrow/tall shape).
+  const maxBandW =
+    options.maxBandW ??
+    (roleDriven ? Number.POSITIVE_INFINITY : Math.max(1700, Math.round(Math.sqrt(zoneArea * 1.5))))
 
   const zoneX = new Map<string, number>()
   const zoneY = new Map<string, number>()
@@ -796,6 +819,44 @@ export function layoutComposite(
     for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, pairGap)
   }
 
+  // -- tidy-tree centering: a parent sits at the CENTROID of its subtree -------
+  // The dependency layout should grow from the root with each parent centred
+  // over its children (Reingold–Tilford / Buchheim), not left-anchored. The
+  // row placement above starts every row at the zone's left edge, and the apex
+  // has no parent to snap toward, so without this it stays pinned left while the
+  // wide rows below it spread — the figure leans left. Here we pull each unit to
+  // the centre of its IN-ZONE primary children, processing deepest-first so
+  // children settle before parents; resolveRow declumps. (Cross-zone children
+  // are handled by the band placement / port refine.) Role-driven only, so
+  // untyped graphs keep their exact prior placement.
+  if (roleDriven) {
+    const inZoneChildren = new Map<string, string[]>()
+    for (const unit of units) {
+      const parent = primaryParent.get(unit.id)
+      if (parent === undefined || unitById.get(parent)?.zone !== unit.zone) continue
+      const list = inZoneChildren.get(parent)
+      if (list) list.push(unit.id)
+      else inZoneChildren.set(parent, [unit.id])
+    }
+    const deepFirst = [...units].sort((a, b) => b.depth - a.depth || (a.id < b.id ? -1 : 1))
+    for (let pass = 0; pass < 3; pass++) {
+      for (const unit of deepFirst) {
+        const kids = inZoneChildren.get(unit.id)
+        const box = zoneBox.get(unit.zone)
+        if (!kids || kids.length === 0 || !box) continue
+        const cx = kids.reduce((sum, k) => sum + (localX.get(k) ?? 0), 0) / kids.length
+        const lo = unit.width / 2 + 8
+        const hi = box.w - unit.width / 2 - 8
+        localX.set(unit.id, Math.max(lo, Math.min(hi, cx)))
+      }
+      for (const zone of zoneIds) {
+        const box = zoneBox.get(zone)
+        if (!box) continue
+        for (const row of zoneRows.get(zone) ?? []) resolveRow(row, localX, box.w, pairGap)
+      }
+    }
+  }
+
   // -- containment repair: refinement (cross-zone pulls, nudges, snap) reorders
   // rows, and the label-aware pair gaps are ORDER-DEPENDENT — a re-ordered row
   // can need more width than the box measured at zone-local time, and
@@ -826,7 +887,10 @@ export function layoutComposite(
       let widenedArea = 0
       for (const [, box] of zoneBox) widenedArea += (box.w + zoneGap) * (box.h + bandGap)
       const repackBandW =
-        options.maxBandW ?? Math.max(1700, Math.round(Math.sqrt(widenedArea * 1.5)))
+        options.maxBandW ??
+        (roleDriven
+          ? Number.POSITIVE_INFINITY
+          : Math.max(1700, Math.round(Math.sqrt(widenedArea * 1.5))))
       ;({ bandRanges, bandBlocks } = placeZoneBands(
         zoneIds,
         zoneRank,
@@ -1064,6 +1128,26 @@ function collectHeartbeats(
 // Helpers
 // ============================================================================
 
+/**
+ * Typed inventory (most degree-bearing nodes carry a real device-type tier,
+ * e.g. NetBox) → device roles are a reliable orientation signal. Untyped
+ * graphs (discovered/TTDB) fall back to bandwidth-driven structure.
+ */
+function isRoleDriven(
+  ids: readonly string[],
+  nodes: Map<string, Node>,
+  neighbors: Map<string, Map<string, LogicalEdge>>,
+): boolean {
+  let typed = 0
+  let withDegree = 0
+  for (const id of ids) {
+    if ((neighbors.get(id)?.size ?? 0) === 0) continue
+    withDegree++
+    if (resolveTierFromSpec(nodes.get(id)?.spec)?.source === 'device-type') typed++
+  }
+  return withDegree > 0 && typed / withDegree >= 0.5
+}
+
 function computeDepths(
   ids: readonly string[],
   nodes: Map<string, Node>,
@@ -1071,20 +1155,67 @@ function computeDepths(
   trunkClass: (id: string) => boolean,
   sinkSet: ReadonlySet<string>,
 ): Map<string, number> {
-  // Apex candidates must carry trunk-class bandwidth (v3 sink guard:
-  // a shared last-resort firewall has a low device tier and 17 thin
-  // links — without the gate it out-ranks the border routers).
+  // Apex gate depends on whether device ROLES are reliable.
+  // - Typed inventory (NetBox): role IS the orientation signal. A WAN edge
+  //   router/firewall is the top even though its uplink is slower than the LAN
+  //   fabric — so do NOT gate the apex by bandwidth (that drops the edge and
+  //   inverts the hierarchy). Exclude only SINKS (the guard's real target).
+  // - Untyped inventory (TTDB): keep the trunk-class bandwidth gate so the
+  //   high-bandwidth backbone wins over low-tier peripheral appliances.
+  const roleDriven = isRoleDriven(ids, nodes, neighbors)
+  const apexEligible = (id: string): boolean => (roleDriven ? !sinkSet.has(id) : trunkClass(id))
+
   let bestTier = Number.POSITIVE_INFINITY
   const tierOf = new Map<string, number>()
   for (const id of ids) {
     if ((neighbors.get(id)?.size ?? 0) === 0) continue
-    if (!trunkClass(id)) continue
+    if (!apexEligible(id)) continue
     const hint = resolveTierFromSpec(nodes.get(id)?.spec)
     if (!hint) continue
     tierOf.set(id, hint.tier)
     bestTier = Math.min(bestTier, hint.tier)
   }
   let roots = ids.filter((id) => tierOf.get(id) === bestTier)
+  // Role-driven apex is TOPOLOGY-driven: among boundary devices (router/
+  // firewall — tier ≤ Router), root at the most PERIPHERAL one (max BFS
+  // eccentricity = the WAN edge). Tier alone is wrong (the table ranks
+  // firewall above router, which would hoist an internal firewall over the
+  // edge router that actually faces out).
+  if (roleDriven) {
+    const BOUNDARY_TIER = 20
+    const eccOf = (start: string): number => {
+      const seen = new Map<string, number>([[start, 0]])
+      const queue = [start]
+      let max = 0
+      while (queue.length > 0) {
+        const cur = queue.shift()
+        if (cur === undefined) break
+        if (sinkSet.has(cur)) continue
+        const cd = seen.get(cur) ?? 0
+        max = Math.max(max, cd)
+        for (const nx of [...(neighbors.get(cur)?.keys() ?? [])].sort()) {
+          if (seen.has(nx)) continue
+          seen.set(nx, cd + 1)
+          queue.push(nx)
+        }
+      }
+      return max
+    }
+    const boundary = ids.filter(
+      (id) =>
+        (neighbors.get(id)?.size ?? 0) > 0 &&
+        !sinkSet.has(id) &&
+        (resolveTierFromSpec(nodes.get(id)?.spec)?.tier ?? Number.POSITIVE_INFINITY) <=
+          BOUNDARY_TIER,
+    )
+    if (boundary.length > 0) {
+      const ecc = new Map(boundary.map((id) => [id, eccOf(id)]))
+      let maxEcc = -1
+      for (const e of ecc.values()) maxEcc = Math.max(maxEcc, e)
+      const eccRoots = boundary.filter((id) => ecc.get(id) === maxEcc)
+      if (eccRoots.length > 0) roots = eccRoots
+    }
+  }
   // v3 apex rule (§16, generalized): within the top device tier, the
   // LOCATION hierarchy picks the border group. Split each location into
   // (prefix, trailing number), take the DOMINANT prefix family among the
@@ -1161,6 +1292,23 @@ function computeDepths(
       if (depth.has(next)) continue
       depth.set(next, currentDepth + 1)
       queue.push(next)
+    }
+  }
+  // Second pass (role-driven): reach nodes that are only reachable THROUGH a
+  // sink (e.g. access behind a high fan-out distribution switch) so they sit
+  // below their connector instead of defaulting to depth 0 (which floats a
+  // whole layer to the top).
+  if (roleDriven) {
+    const seeded = ids.filter((id) => depth.has(id))
+    while (seeded.length > 0) {
+      const current = seeded.shift()
+      if (current === undefined) break
+      const currentDepth = depth.get(current) ?? 0
+      for (const next of [...(neighbors.get(current)?.keys() ?? [])].sort()) {
+        if (depth.has(next)) continue
+        depth.set(next, currentDepth + 1)
+        seeded.push(next)
+      }
     }
   }
   for (const id of ids) if (!depth.has(id)) depth.set(id, 0)

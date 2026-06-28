@@ -609,6 +609,13 @@ function buildNodes(
       applyStatusStyle(node, device.status)
     }
 
+    // Stamp the zone tag on the node itself (not just the subgraph). The
+    // composite layout engine keys zones off `metadata.location`, so without
+    // this NetBox topologies never qualify and fall back to the flat-tree
+    // engine — Zabbix already emits per-node location, this matches it.
+    const location = device.location ?? device.site
+    if (location) node.metadata = { ...node.metadata, location }
+
     node.parent = getNodeParent(device, groupBy)
     nodes.push(node)
   }
