@@ -83,12 +83,14 @@ The Docker workflow verifies that the tag matches
 
 | Release | GHCR tags changed | GitHub Release |
 |---------|-------------------|----------------|
-| Beta | `X.Y.Z-beta.N`, `beta` | prerelease |
-| Stable | `X.Y.Z`, `latest` | stable release |
+| Beta | `X.Y.Z-beta.N`, `beta`, `edge` | prerelease |
+| Stable | `X.Y.Z`, `latest`, `edge` | stable release |
 
 Pushes to `main` and pull requests build the image for verification but do not
 publish it. Stable releases never move `beta`, and beta releases never move
-`latest`.
+`latest`. `edge` moves on every release — stable or beta — so it always points
+at the most recently published image (the bleeding-edge channel); pin an
+immutable `X.Y.Z` / `X.Y.Z-beta.N` tag for reproducibility.
 
 The running Server checks GitHub Releases whose tags begin with `server-v`.
 Stable builds ignore beta releases. Beta builds can report a newer beta or the
