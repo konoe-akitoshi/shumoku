@@ -208,23 +208,6 @@
     return out
   }
 
-  /**
-   * Blank password fields so the masked secret loaded from the API isn't
-   * re-submitted; the server preserves the stored secret when a field is
-   * omitted (and re-generates grafana's webhookSecret as needed).
-   */
-  function blankSecrets(
-    cfg: Record<string, unknown>,
-    schema?: PluginConfigSchema,
-  ): Record<string, unknown> {
-    if (!schema) return cfg
-    const out = { ...cfg }
-    for (const [key, prop] of Object.entries(schema.properties)) {
-      if (prop.format === 'password') out[key] = ''
-    }
-    return out
-  }
-
   // Re-fetch whenever the route id changes (the component is reused across
   // /datasources/[id] navigations).
   $effect(() => {
@@ -246,8 +229,9 @@
           pluginTypes = await api.dataSources.getPluginTypes()
           if (cancelled) return
         }
-        const parsed = parseConfig(ds.configJson) as Record<string, unknown>
-        config = blankSecrets(parsed, configSchemaFor(ds.type))
+        // Config includes secret values (returned to the admin-only UI); the
+        // form masks them with a reveal toggle.
+        config = parseConfig(ds.configJson) as Record<string, unknown>
 
         await loadConnectionInfo()
 
@@ -343,11 +327,9 @@
       }
 
       dataSource = await dataSources.update(id, updates)
-      // Re-seed from the saved (masked) config so password fields blank again.
-      config = blankSecrets(
-        parseConfig(dataSource.configJson) as Record<string, unknown>,
-        configSchemaFor(dataSource.type),
-      )
+      // Re-seed from the saved config (a server-generated webhook secret may now
+      // be present).
+      config = parseConfig(dataSource.configJson) as Record<string, unknown>
 
       // Refresh derived connection info after save (e.g. a webhook secret may
       // have just been generated server-side).

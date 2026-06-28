@@ -15,7 +15,7 @@ const configSchema: PluginConfigSchema = {
       title: 'Portal email',
       warning: 'The account must NOT have MFA enabled.',
     },
-    password: { type: 'string', format: 'password', title: 'Password' },
+    password: { type: 'string', secret: true, title: 'Password' },
     siteId: {
       type: 'string',
       title: 'Site ID',

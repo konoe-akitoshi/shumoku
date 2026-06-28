@@ -10,7 +10,8 @@
   // $effect, not during render, to avoid Svelte's state_unsafe_mutation.
   // Dynamic `optionsSource` candidates degrade to free entry (the documented F2
   // fallback); wiring getConfigOptions is a later step.
-  import type { PluginConfigProperty, PluginConfigSchema } from '@shumoku/core'
+  import { isSecretProp, type PluginConfigProperty, type PluginConfigSchema } from '@shumoku/core'
+  import { EyeIcon, EyeSlashIcon } from 'phosphor-svelte'
   import SchemaForm from './SchemaForm.svelte'
 
   let {
@@ -28,6 +29,11 @@
     /** Called after any field mutation — for save-on-change consumers. */
     onChange?: () => void
   } = $props()
+
+  // Per-field reveal toggle for secret inputs. Default masked (type=password);
+  // the eye reveals the value, including a stored secret the server returns to
+  // the admin-only config UI.
+  let revealed = $state<Record<string, boolean>>({})
 
   const entries = $derived(Object.entries(schema.properties))
 
@@ -242,6 +248,45 @@
               <option value={o.value}>{o.label}</option>
             {/each}
           </select>
+        {:else if isSecretProp(prop)}
+          <div class="relative" class:opacity-50={disabled}>
+            <input
+              id={`sf-${key}`}
+              class="input"
+              style="padding-right: 2.5rem"
+              type={revealed[key] ? 'text' : 'password'}
+              autocomplete="new-password"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-1p-ignore
+              data-lpignore="true"
+              data-bwignore="true"
+              placeholder={prop.placeholder}
+              {disabled}
+              value={(value[key] ?? prop.default ?? '') as string}
+              oninput={(e) => onText(key, e)}
+            >
+            <!-- Eye sits inside the field's right edge. Stable accessible name +
+                 aria-pressed conveys state; the icon swaps for sighted users. -->
+            <button
+              type="button"
+              class="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-theme-text-muted transition-colors hover:text-theme-text disabled:opacity-60"
+              aria-label="Toggle secret visibility"
+              aria-pressed={revealed[key] ? 'true' : 'false'}
+              title={revealed[key] ? 'Hide' : 'Show'}
+              {disabled}
+              onclick={() => {
+                revealed[key] = !revealed[key]
+              }}
+            >
+              {#if revealed[key]}
+                <EyeSlashIcon size={16} />
+              {:else}
+                <EyeIcon size={16} />
+              {/if}
+            </button>
+          </div>
         {:else}
           <input
             id={`sf-${key}`}

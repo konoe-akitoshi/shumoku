@@ -13,31 +13,12 @@ import { getSignalStreams } from '../services/signal-streams.js'
 import type { DataSourceInput } from '../types.js'
 import { getTopologyService } from './topologies.js'
 
-/**
- * Mask sensitive fields in config JSON
- */
-const SECRET_KEYS = new Set(['token', 'password', 'secret', 'apikey', 'apiKey'])
-
-function maskConfigSecrets(configJson: string): string {
-  try {
-    const config = JSON.parse(configJson)
-    maskSecrets(config)
-    return JSON.stringify(config)
-  } catch {
-    return configJson
-  }
-}
-
-function maskSecrets(obj: Record<string, unknown>): void {
-  for (const key of Object.keys(obj)) {
-    const value = obj[key]
-    if (SECRET_KEYS.has(key) && typeof value === 'string') {
-      obj[key] = '••••••••'
-    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
-      maskSecrets(value as Record<string, unknown>)
-    }
-  }
-}
+// Secret fields (token / password / webhookSecret) are returned to the client
+// in full. The config UI is admin-only (single-session auth — there is no
+// non-admin role that can reach it), and the admin can already read the same
+// values straight from the database, so the form masks them with a reveal
+// toggle rather than withholding them. Revisit toward a gated reveal-on-demand
+// endpoint if Shumoku ever gains multi-user roles or at-rest config encryption.
 
 /**
  * Validate a config_json string against the plugin's configSchema using core's
@@ -140,12 +121,7 @@ export function createDataSourcesApi(): Hono {
   // existing topology) so the list can be noisy at first; users can
   // rename them from each detail page.
   app.get('/', (c) => {
-    const dataSources = service.list()
-    const sanitized = dataSources.map((ds) => ({
-      ...ds,
-      configJson: maskConfigSecrets(ds.configJson),
-    }))
-    return c.json(sanitized)
+    return c.json(service.list())
   })
 
   // List data sources by capability. Manual has no capabilities so it
@@ -158,12 +134,7 @@ export function createDataSourcesApi(): Hono {
         400,
       )
     }
-    const dataSources = service.listByCapability(capability)
-    const sanitized = dataSources.map((ds) => ({
-      ...ds,
-      configJson: maskConfigSecrets(ds.configJson),
-    }))
-    return c.json(sanitized)
+    return c.json(service.listByCapability(capability))
   })
 
   // Topologies that this data source is currently attached to.
@@ -194,10 +165,7 @@ export function createDataSourcesApi(): Hono {
     if (!dataSource) {
       return c.json({ error: 'Data source not found' }, 404)
     }
-    return c.json({
-      ...dataSource,
-      configJson: maskConfigSecrets(dataSource.configJson),
-    })
+    return c.json(dataSource)
   })
 
   // Create new data source
@@ -215,13 +183,7 @@ export function createDataSourcesApi(): Hono {
       }
 
       const dataSource = await service.create(body)
-      return c.json(
-        {
-          ...dataSource,
-          configJson: maskConfigSecrets(dataSource.configJson),
-        },
-        201,
-      )
+      return c.json(dataSource, 201)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)
@@ -253,10 +215,7 @@ export function createDataSourcesApi(): Hono {
       // A config edit can change resolve inputs (priority / connection) →
       // invalidate attached topologies so they recompute.
       getTopologyService().clearCacheForDataSource(id)
-      return c.json({
-        ...dataSource,
-        configJson: maskConfigSecrets(dataSource.configJson),
-      })
+      return c.json(dataSource)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)

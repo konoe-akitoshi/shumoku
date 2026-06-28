@@ -709,6 +709,13 @@ export interface PluginConfigProperty {
   description?: string
   /** String formatting hint (masked password / URL / email). */
   format?: 'password' | 'uri' | 'email'
+  /**
+   * Marks this field as a secret (API token, password, webhook secret). The
+   * host renders it masked with a reveal (show/hide) toggle and suppresses
+   * password-manager autofill. `format: 'password'` is treated as `secret`
+   * for back-compat, but new schemas should set `secret: true` directly.
+   */
+  secret?: boolean
   /** Placeholder shown in an empty input. */
   placeholder?: string
   default?: unknown

@@ -15,7 +15,7 @@ const configSchema: PluginConfigSchema = {
       title: 'Zabbix URL',
       placeholder: 'https://zabbix.example.com',
     },
-    token: { type: 'string', format: 'password', title: 'API token' },
+    token: { type: 'string', secret: true, title: 'API token' },
     insecure: {
       type: 'boolean',
       title: 'Skip TLS verification',

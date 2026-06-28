@@ -61,7 +61,7 @@ const configSchema: PluginConfigSchema = {
       title: 'Basic auth (optional)',
       properties: {
         username: { type: 'string', title: 'Username' },
-        password: { type: 'string', format: 'password', title: 'Password' },
+        password: { type: 'string', secret: true, title: 'Password' },
       },
     },
   },
