@@ -132,7 +132,9 @@ interface ScopeCriterionRow {
  */
 // v8: container-overlap is a BLOCKING constraint — post-search feasibility
 // rounds widen gaps until all container boxes are disjoint.
-const RESOLVER_VERSION = 8
+// v9: composite layout for typed/role-driven graphs — eccentricity apex,
+// tidy-tree centering, horizontal tier spread, depth-based zone banding (#526).
+const RESOLVER_VERSION = 9
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
