@@ -605,6 +605,48 @@ export function createTopologiesApi(): Hono {
     return c.json({ job: syncJobView(job) }, 202)
   })
 
+  /**
+   * Rebuild = blank, then re-sync. Delete every syncable source's observed data
+   * and invalidate the cached layout, then run the same sync job. On the blank
+   * slate every fetch is entirely "new", so the no-change gate passes and the
+   * layout re-derives from scratch — no force needed. Drives the same progress
+   * modal as Sync all. The human curation overlay is kept (it is a separate
+   * layer from observed data; use the discovery-policy reset to drop that).
+   */
+  app.post('/:id/rebuild', async (c) => {
+    const id = c.req.param('id')
+    const topology = service.get(id)
+    if (!topology) {
+      return c.json({ error: 'Topology not found' }, 404)
+    }
+    const running = getSyncJob(id)
+    if (running && running.state === 'running') {
+      return c.json({ job: syncJobView(running) }, 409)
+    }
+    const sourcesToSync = getTopologySourcesService()
+      .listByPurpose(id, 'topology')
+      .filter((s) => s.dataSource?.type !== 'manual')
+
+    // Blank: drop each source's observed data, then invalidate the artifact.
+    const observationsService = new ObservationsService()
+    for (const source of sourcesToSync) {
+      observationsService.deleteForSource(id, source.dataSourceId)
+    }
+    service.clearCacheEntry(id)
+    console.log(`[rebuild] ${id}: blanked ${sourcesToSync.length} source(s), re-syncing`)
+
+    const job = startSyncJob(id, sourcesToSync, {
+      topologyService: service,
+      topologySourcesService: getTopologySourcesService(),
+      dataSourceService,
+      observationsService,
+    })
+    if (!job) {
+      return c.json({ error: 'No topology sources attached' }, 400)
+    }
+    return c.json({ job: syncJobView(job) }, 202)
+  })
+
   // Current (or last finished) sync job — the progress modal polls this, and
   // a freshly-loaded page uses it to re-attach to a run already in flight.
   app.get('/:id/sync-job', (c) => {

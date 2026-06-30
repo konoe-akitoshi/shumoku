@@ -454,6 +454,16 @@ export const topologies = {
         method: 'POST',
       }),
 
+    /**
+     * Rebuild = blank then re-sync: delete all observed source data + the cached
+     * layout, then run a Sync-all so the diagram is re-derived from scratch.
+     * Same tracked job + progress modal as syncAll (202; 409 = one running).
+     */
+    rebuild: (topologyId: string) =>
+      request<{ job: SyncJob }>(`/topologies/${topologyId}/rebuild`, {
+        method: 'POST',
+      }),
+
     /** Current (or last finished) sync job — drives the progress modal + reload re-attach. */
     getSyncJob: (topologyId: string) =>
       request<{ job: SyncJob | null }>(`/topologies/${topologyId}/sync-job`),
@@ -630,13 +640,6 @@ export const topologies = {
       request<{ exclusions: NodeExclusion[] }>(
         `/topologies/${topologyId}/discovery-policy/exclusions`,
         { method: 'DELETE', body: JSON.stringify(identity) },
-      ),
-
-    /** Rebuild: discard the whole authored overlay (attachments + exclusions). */
-    rebuild: (topologyId: string) =>
-      request<{ cleared: boolean; reason?: string }>(
-        `/topologies/${topologyId}/discovery-policy/rebuild`,
-        { method: 'POST' },
       ),
   },
 }
