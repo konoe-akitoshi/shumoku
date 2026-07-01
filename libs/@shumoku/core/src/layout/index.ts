@@ -41,6 +41,7 @@ export {
   ZONE_SUBGRAPH_PREFIX,
 } from './composite/index.js'
 export { alignPortsToPeers, applyOctilinearRoutes, chamferCorners } from './composite/router.js'
+export { buildCompositeRoutingPlan, type CompositeRoutingPlan } from './composite/routing-plan.js'
 export {
   type CompositeSearchOptions,
   type CompositeSearchResult,
@@ -146,6 +147,28 @@ export {
   portLabelLength,
   portLabelReach,
 } from './port-geometry.js'
+export {
+  buildLayoutProblem,
+  type ConstraintPriority,
+  computeRoleDrivenRanks,
+  type GeometryConstraint,
+  type GroupAffinity,
+  type LayoutEntity,
+  type LayoutGroupBoundary,
+  type LayoutMode,
+  type LayoutNodeEntity,
+  type LayoutObjective,
+  type LayoutProblem,
+  type LayoutProblemDiagnostics,
+  type LayoutProblemLink,
+  type LinkIntentKind,
+  type RoutingGrammar,
+  type RoutingIntent,
+  type SemanticConstraint,
+  type SemanticLayoutReport,
+  type SemanticLayoutViolation,
+  verifySemanticLayout,
+} from './problem.js'
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
 // Resolved layout model (Port/Edge as computed objects, Node/Subgraph used directly)

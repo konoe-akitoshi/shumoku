@@ -21,12 +21,11 @@
 
 import type { NetworkGraph, Subgraph } from '../../models/types.js'
 import { placePorts } from '../auto-placement/flat-tree/port-placement.js'
+import { type ConstraintReport, verifyLayoutConstraints } from '../constraints.js'
 import { resolveNodeSize } from '../engine/index.js'
 import {
-  type BoxBounds,
   type BoxSpec,
   findCollinearOverlaps,
-  findContainerOverlaps,
   findEdgeNodePiercing,
   findPortClutter,
   type PolylineSpec,
@@ -34,6 +33,7 @@ import {
 } from '../invariants.js'
 import { getLinkWidthForMode } from '../link-utils.js'
 import { portLabelBox } from '../port-geometry.js'
+import { type SemanticLayoutReport, verifySemanticLayout } from '../problem.js'
 import type { ResolvedEdge, ResolvedLayout, ResolvedPort } from '../resolved-types.js'
 import { routeEdges } from '../route-edges.js'
 import { BBoxGrid } from '../spatial-grid.js'
@@ -41,10 +41,10 @@ import {
   type CompositeLayoutOptions,
   type CompositeLayoutResult,
   layoutComposite,
-  pairKey,
   ZONE_SUBGRAPH_PREFIX,
 } from './index.js'
 import { alignPortsToPeers, applyOctilinearRoutes, type RoutingObstacle } from './router.js'
+import { buildCompositeRoutingPlan } from './routing-plan.js'
 
 export interface RoutedScore {
   cost: number
@@ -64,6 +64,10 @@ export interface CompositeSearchResult {
   ports: Map<string, ResolvedPort>
   edges: Map<string, ResolvedEdge>
   score: RoutedScore
+  /** Semantic layout diagnostics; compared before routed cost. */
+  semantic: SemanticLayoutReport
+  /** Hard/warn geometry diagnostics; blocking constraints outrank semantic and routed cost. */
+  constraints: ConstraintReport
   /**
    * Faces that had to compress their port slots this round: node id →
    * width/height the node needs. Non-empty means the layout should
@@ -93,18 +97,17 @@ async function evaluate(
   layoutOptions: CompositeLayoutOptions,
 ): Promise<CompositeSearchResult> {
   const comp = layoutComposite(graph, layoutOptions)
+  const problem = comp.problem
   const direction = graph.settings?.direction ?? 'TB'
   const ports = placePorts(comp.nodes, graph.links, direction)
   const edges = await routeEdges(comp.nodes, ports, graph.links, comp.subgraphs)
+  const routingPlan = buildCompositeRoutingPlan(problem, comp, edges)
   for (const edge of edges.values()) {
     edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
     // v3 grammar: HA heartbeats are couplings, not wires — explicit
     // (link.redundancy) and inferred (direct link between detected pair
     // members) alike. Couplings skip port seating, routing, and scoring.
-    if (
-      edge.link.redundancy !== undefined ||
-      comp.heartbeats.has(pairKey(edge.fromNodeId, edge.toNodeId))
-    ) {
+    if (routingPlan.couplingEdges.has(edge.id)) {
       edge.coupling = true
       // the glasses bridge spans a 16px pair gap — port labels there can
       // only ever collide with the partner, so they don't render
@@ -130,24 +133,7 @@ async function evaluate(
   for (const [id, sg] of comp.subgraphs) {
     if (sg.bounds) obstacles.push({ id, bounds: sg.bounds })
   }
-  // org-chart combs (v3 §47⑤): group primary edges by their parent (the
-  // shallower endpoint) — a parent feeding ≥2 children draws one trunk
-  // to a shared bus instead of N independent risers.
-  const combs = new Map<string, string[]>()
-  for (const edge of edges.values()) {
-    if (edge.coupling) continue
-    if (!comp.primaryEdges.has(pairKey(edge.fromNodeId, edge.toNodeId))) continue
-    const da = comp.depths.get(edge.fromNodeId)
-    const db = comp.depths.get(edge.toNodeId)
-    if (da === undefined || db === undefined || da === db) continue
-    const parent = da < db ? edge.fromNodeId : edge.toNodeId
-    const list = combs.get(parent) ?? []
-    list.push(edge.id)
-    combs.set(parent, list)
-  }
-  for (const [parent, list] of combs) {
-    if (list.length < 2) combs.delete(parent)
-  }
+
   const nodeObstacles: RoutingObstacle[] = []
   for (const [id, node] of comp.nodes) {
     if (!node.position) continue
@@ -162,7 +148,7 @@ async function evaluate(
       },
     })
   }
-  applyOctilinearRoutes(edges, { obstacles, combs, nodeObstacles })
+  applyOctilinearRoutes(edges, { obstacles, nodeObstacles, routingPlan })
   placeLinkLabels(edges, comp.nodes)
   // A subgraph OWNS the wiring that completes inside it (both endpoints
   // are members), and routes legally run outside the member boxes
@@ -306,6 +292,14 @@ async function evaluate(
     ports,
     edges,
     score: scoreRoutedEdges(edges, comp.nodes, comp.depths),
+    semantic: verifySemanticLayout(problem, comp.nodes, comp.subgraphs),
+    constraints: verifyLayoutConstraints({
+      nodes: comp.nodes,
+      ports,
+      edges,
+      subgraphs: comp.subgraphs,
+      bounds: comp.bounds,
+    }),
     portDeficits: { widths: align.minWidths, heights: align.minHeights },
   }
 }
@@ -376,13 +370,16 @@ export async function searchCompositeLayout(
     { zoneGap: 70, bandGap: 190 },
     { zoneGap: 60, bandGap: 130 },
     { zoneGap: 110 },
+    // Compact band starts remain available to discovered graphs, but semantic
+    // diagnostics now sit above routed cost: a compact variant cannot win by
+    // breaking role-driven tier / same-rank readability.
     { maxBandW: 2600 },
     { maxBandW: 3200 },
   ]
   for (const variant of variants) {
     const trial = { ...variant, minNodeWidths: widthFloors, minNodeHeights: heightFloors }
     const candidate = await budgeted(trial)
-    if (candidate && candidate.score.cost < best.score.cost) {
+    if (candidate && isBetterResult(candidate, best)) {
       best = candidate
       accepted++
       bestOptions = trial
@@ -393,7 +390,7 @@ export async function searchCompositeLayout(
   const bandExtra = measureCongestion(best)
   if (bandExtra.size > 0) {
     const candidate = await budgeted({ ...bestOptions, bandExtra })
-    if (candidate && candidate.score.cost < best.score.cost) {
+    if (candidate && isBetterResult(candidate, best)) {
       best = candidate
       accepted++
       bestOptions = { ...bestOptions, bandExtra }
@@ -418,7 +415,7 @@ export async function searchCompositeLayout(
       const trial = new Map(acceptedOrders)
       trial.set(bandIndex, swapped)
       const candidate = await budgeted({ ...bestOptions, bandOrder: trial })
-      if (candidate && candidate.score.cost < best.score.cost) {
+      if (candidate && isBetterResult(candidate, best)) {
         best = candidate
         accepted++
         acceptedOrders.set(bandIndex, swapped)
@@ -434,7 +431,7 @@ export async function searchCompositeLayout(
     const trial = new Set(flips)
     trial.add(pair)
     const candidate = await budgeted({ ...bestOptions, pairFlips: trial })
-    if (candidate && candidate.score.cost < best.score.cost) {
+    if (candidate && isBetterResult(candidate, best)) {
       best = candidate
       accepted++
       flips.add(pair)
@@ -474,7 +471,7 @@ export async function searchCompositeLayout(
         const trial = new Map(nudges)
         trial.set(unitId, (nudges.get(unitId) ?? 0) + dx)
         const candidate = await budgeted({ ...bestOptions, nudges: trial })
-        if (candidate && candidate.score.cost < best.score.cost) {
+        if (candidate && isBetterResult(candidate, best)) {
           best = candidate
           accepted++
           nudges.set(unitId, trial.get(unitId) ?? dx)
@@ -500,7 +497,7 @@ export async function searchCompositeLayout(
   //    penetration and re-evaluate, keeping the candidate iff it reduces
   //    the violation. Bounded; converges because gaps grow monotonically.
   for (let round = 0; round < 3; round++) {
-    const overlaps = containerOverlapsOf(best)
+    const overlaps = best.constraints.violations.containerOverlaps
     if (overlaps.length === 0) break
     const worst = Math.max(...overlaps.map((o) => o.penetration))
     const widen = Math.ceil(worst) + 8
@@ -511,7 +508,7 @@ export async function searchCompositeLayout(
     }
     evaluations++
     const candidate = await evaluate(graph, trial)
-    const candidateOverlaps = containerOverlapsOf(candidate)
+    const candidateOverlaps = candidate.constraints.violations.containerOverlaps
     const candWorst =
       candidateOverlaps.length === 0 ? 0 : Math.max(...candidateOverlaps.map((o) => o.penetration))
     if (
@@ -530,13 +527,40 @@ export async function searchCompositeLayout(
   return best
 }
 
-/** Non-nested container box overlaps of a routed result (registry parity). */
-function containerOverlapsOf(result: CompositeSearchResult) {
-  const boxes: BoxBounds[] = []
-  for (const [id, sg] of result.comp.subgraphs) {
-    if (sg.bounds) boxes.push({ id, bounds: sg.bounds, parent: sg.parent })
+function isBetterResult(candidate: CompositeSearchResult, current: CompositeSearchResult): boolean {
+  const candidateHard = hardRank(candidate.constraints)
+  const currentHard = hardRank(current.constraints)
+  if (candidateHard.blocking !== currentHard.blocking) {
+    return candidateHard.blocking < currentHard.blocking
   }
-  return findContainerOverlaps(boxes)
+  if (candidateHard.warn !== currentHard.warn) return candidateHard.warn < currentHard.warn
+
+  const candidateRank = semanticRank(candidate.semantic)
+  const currentRank = semanticRank(current.semantic)
+  if (candidateRank.errors !== currentRank.errors) return candidateRank.errors < currentRank.errors
+  if (candidateRank.warnings !== currentRank.warnings) {
+    return candidateRank.warnings < currentRank.warnings
+  }
+  return candidate.score.cost < current.score.cost
+}
+
+function hardRank(report: ConstraintReport): { blocking: number; warn: number } {
+  const counts = report.counts
+  const blocking = report.blockingViolations.reduce((sum, id) => sum + counts[id], 0)
+  return {
+    blocking,
+    warn: counts['collinear-track'] + counts['port-clutter'] + counts['edge-pierce'],
+  }
+}
+
+function semanticRank(report: SemanticLayoutReport): { errors: number; warnings: number } {
+  let errors = 0
+  let warnings = 0
+  for (const violation of report.violations) {
+    if (violation.severity === 'error') errors++
+    else warnings++
+  }
+  return { errors, warnings }
 }
 
 /**

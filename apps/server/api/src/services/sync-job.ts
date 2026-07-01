@@ -25,7 +25,7 @@ import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import type { TopologyDataSource } from '../types.js'
 import type { DataSourceService } from './datasource.js'
-import { cancelDerivation, derivationStatus, kickDerivation } from './derivation.js'
+import { cancelDerivation, derivationStatus } from './derivation.js'
 import { resolveCredentialsForAutoscan } from './discovery-scheduler.js'
 import type { ObservationsService } from './observations.js'
 import type { TopologyService } from './topology.js'
@@ -220,10 +220,10 @@ async function runSyncJob(
 
   // One invalidation + one bake for the whole run (NOT per source — a
   // per-source kick would let the first bake start while later sources are
-  // still recording, guaranteeing a thrown-away multi-minute layout).
-  deps.topologyService.clearCacheEntry(topologyId)
+  // still recording, guaranteeing a thrown-away multi-minute layout). Same
+  // `rebake` primitive the Rebuild action uses.
   if (deriveStep) deriveStep.status = 'running'
-  await kickDerivation(topologyId, deps.topologyService)
+  await deps.topologyService.rebake(topologyId)
 
   if (job.cancelRequested) {
     if (deriveStep) deriveStep.status = 'skipped'

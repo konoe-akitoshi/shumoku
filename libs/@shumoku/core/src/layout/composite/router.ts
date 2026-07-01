@@ -29,8 +29,8 @@
 
 import type { Bounds, Node, Position } from '../../models/types.js'
 import { resolveNodeSize } from '../engine/index.js'
-import { portLabelBox } from '../port-geometry.js'
-import type { ResolvedEdge } from '../resolved-types.js'
+import { PORT_LABEL_H, portLabelBox } from '../port-geometry.js'
+import type { ResolvedEdge, ResolvedPort } from '../resolved-types.js'
 
 /**
  * Re-seat ports to face their peer, by GEOMETRY. The flat-tree side
@@ -58,10 +58,13 @@ export interface AlignResult {
   minHeights: Map<string, number>
 }
 
+const PORT_LABEL_CLEARANCE = 8
+
 /** Slot a port claims along its face: stroke width + air, floored so a
  *  12px label strip plus breathing room always fits. Keep in sync with
  *  the face-demand estimate in `layoutComposite`. */
-export const PORT_SLOT = (edgeWidth: number): number => Math.max(14, edgeWidth + 4)
+export const PORT_SLOT = (edgeWidth: number): number =>
+  Math.max(PORT_LABEL_H + PORT_LABEL_CLEARANCE, edgeWidth + 4)
 
 export function alignPortsToPeers(
   edges: Map<string, ResolvedEdge>,
@@ -223,52 +226,222 @@ export function alignPortsToPeers(
     }
   }
 
-  // -- strip de-aliasing (slot allocation extended to LABELS) -----------------
-  // Vertical label strips are 12px wide at their port's x; strips from
-  // FACING faces collide only when x-aligned. Same discipline as the
-  // track allocator: on collision, shift one occupant to the next free
-  // lane (half a slot sideways, clamped to its own face) instead of
-  // paying corridor space for the whole row.
-  const strips: { port: ResolvedEdge['fromPort']; nodeId: string }[] = []
-  for (const edge of sortedForSeat) {
+  // -- label de-aliasing (slot allocation extended to LABELS) -----------------
+  // Treat port labels as node-owned geometry: first report the face demand
+  // for the next layout round, then use any spare face room this round to
+  // separate labels on the same or neighboring nodes.
+  const labelPorts = collectLabelPorts(sortedForSeat)
+  recordPortLabelFaceDemand(labelPorts, nodes, minWidths, minHeights)
+  legalizeSameFaceLabelOrder(labelPorts, nodes, minWidths, minHeights)
+  separatePortLabelBoxes(labelPorts, nodes, minWidths, minHeights)
+  legalizeSameFaceLabelOrder(labelPorts, nodes, minWidths, minHeights)
+  return { flipped, minWidths, minHeights }
+}
+
+interface LabelPort {
+  port: ResolvedPort
+  nodeId: string
+}
+
+function collectLabelPorts(edges: readonly ResolvedEdge[]): LabelPort[] {
+  const ports = new Map<string, LabelPort>()
+  for (const edge of edges) {
     if (edge.coupling) continue
     for (const port of [edge.fromPort, edge.toPort]) {
-      if (port.labelOrientation !== 'vertical' || port.label.trim() === '') continue
-      strips.push({ port, nodeId: port.nodeId })
+      if (port.label.trim() === '') continue
+      ports.set(port.id, { port, nodeId: port.nodeId })
     }
   }
-  strips.sort((a, b) => (a.port.id < b.port.id ? -1 : 1))
-  const overlaps = (a: Bounds, b: Bounds): boolean =>
-    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
-  for (let pass = 0; pass < 2; pass++) {
+  return [...ports.values()].sort((a, b) => (a.port.id < b.port.id ? -1 : 1))
+}
+
+function recordPortLabelFaceDemand(
+  ports: readonly LabelPort[],
+  nodes: ReadonlyMap<string, Node>,
+  minWidths: Map<string, number>,
+  minHeights: Map<string, number>,
+): void {
+  const byFace = new Map<string, LabelPort[]>()
+  for (const entry of ports) {
+    const key = `${entry.nodeId}|${entry.port.side}`
+    const group = byFace.get(key) ?? []
+    group.push(entry)
+    byFace.set(key, group)
+  }
+  for (const [key, group] of byFace) {
+    if (group.length < 2) continue
+    const nodeId = key.slice(0, key.lastIndexOf('|'))
+    if (!nodes.has(nodeId)) continue
+    let total = PORT_LABEL_CLEARANCE * (group.length - 1) + 8
+    for (const entry of group) {
+      const box = portLabelBox(entry.port)
+      if (!box) continue
+      total += entry.port.side === 'top' || entry.port.side === 'bottom' ? box.width : box.height
+    }
+    if (group[0]?.port.side === 'top' || group[0]?.port.side === 'bottom') {
+      minWidths.set(nodeId, Math.max(minWidths.get(nodeId) ?? 0, total))
+    } else {
+      minHeights.set(nodeId, Math.max(minHeights.get(nodeId) ?? 0, total))
+    }
+  }
+}
+
+function separatePortLabelBoxes(
+  ports: readonly LabelPort[],
+  nodes: ReadonlyMap<string, Node>,
+  minWidths: Map<string, number>,
+  minHeights: Map<string, number>,
+): void {
+  for (let pass = 0; pass < 6; pass++) {
     let moved = 0
-    for (let i = 0; i < strips.length; i++) {
-      const a = strips[i]
+    for (let i = 0; i < ports.length; i++) {
+      const a = ports[i]
       if (!a) continue
       const boxA = portLabelBox(a.port)
       if (!boxA) continue
-      for (let j = i + 1; j < strips.length; j++) {
-        const b = strips[j]
-        if (!b || b.nodeId === a.nodeId) continue // same-face pairs are slot-spaced already
+      for (let j = i + 1; j < ports.length; j++) {
+        const b = ports[j]
+        if (!b) continue
         const boxB = portLabelBox(b.port)
-        if (!boxB || !overlaps(boxA, boxB)) continue
-        const node = nodes.get(b.nodeId)
-        const center = node?.position
-        if (!node || !center) continue
-        const size = resolveNodeSize(node)
-        const need = boxA.x + boxA.width - boxB.x + 3
-        const lo = center.x - size.width / 2 + 6
-        const hi = center.x + size.width / 2 - 6
-        const shifted = Math.max(lo, Math.min(hi, b.port.absolutePosition.x + need))
-        if (shifted !== b.port.absolutePosition.x) {
-          b.port.absolutePosition = { ...b.port.absolutePosition, x: shifted }
+        if (!boxB || rectGap(boxA, boxB) >= PORT_LABEL_CLEARANCE) continue
+        if (movePortLabelAway(b, boxB, boxA, nodes)) {
           moved++
+          continue
         }
+        if (movePortLabelAway(a, boxA, boxB, nodes)) moved++
       }
     }
     if (moved === 0) break
   }
-  return { flipped, minWidths, minHeights }
+  recordPortLabelFaceDemand(ports, nodes, minWidths, minHeights)
+}
+
+function legalizeSameFaceLabelOrder(
+  ports: readonly LabelPort[],
+  nodes: ReadonlyMap<string, Node>,
+  minWidths: Map<string, number>,
+  minHeights: Map<string, number>,
+): void {
+  const byFace = new Map<string, LabelPort[]>()
+  for (const entry of ports) {
+    const key = `${entry.nodeId}|${entry.port.side}`
+    const group = byFace.get(key) ?? []
+    group.push(entry)
+    byFace.set(key, group)
+  }
+  for (const [key, group] of byFace) {
+    if (group.length < 2) continue
+    const nodeId = key.slice(0, key.lastIndexOf('|'))
+    const node = nodes.get(nodeId)
+    const center = node?.position
+    if (!node || !center) continue
+    const size = resolveNodeSize(node)
+    const verticalFace = group[0]?.port.side === 'top' || group[0]?.port.side === 'bottom'
+    const lo = verticalFace ? center.x - size.width / 2 + 6 : center.y - size.height / 2 + 6
+    const hi = verticalFace ? center.x + size.width / 2 - 6 : center.y + size.height / 2 - 6
+    const items = group
+      .map((entry) => {
+        const box = portLabelBox(entry.port)
+        if (!box) return undefined
+        const axis = verticalFace ? entry.port.absolutePosition.x : entry.port.absolutePosition.y
+        const boxCenter = verticalFace ? box.x + box.width / 2 : box.y + box.height / 2
+        const length = verticalFace ? box.width : box.height
+        return { entry, center: boxCenter, half: length / 2, offset: boxCenter - axis }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== undefined)
+      .sort((a, b) => a.center - b.center || (a.entry.port.id < b.entry.port.id ? -1 : 1))
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (!first || !last) continue
+    const minCenter = lo + first.offset
+    const maxCenter = hi + last.offset
+    let cursor = Math.max(first.center, minCenter)
+    let previous = first
+    const targets = new Map<string, number>()
+    targets.set(first.entry.port.id, cursor)
+    for (const item of items.slice(1)) {
+      cursor = Math.max(item.center, cursor + previous.half + PORT_LABEL_CLEARANCE + item.half)
+      targets.set(item.entry.port.id, cursor)
+      previous = item
+    }
+    const overflow = cursor - maxCenter
+    if (overflow > 0) {
+      cursor = maxCenter
+      let next = last
+      targets.set(last.entry.port.id, cursor)
+      for (const item of [...items.slice(0, -1)].reverse()) {
+        cursor = Math.min(
+          targets.get(item.entry.port.id) ?? item.center,
+          cursor - next.half - PORT_LABEL_CLEARANCE - item.half,
+        )
+        targets.set(item.entry.port.id, cursor)
+        next = item
+      }
+    }
+    const needed =
+      items.reduce((sum, item) => sum + item.half * 2, 0) +
+      PORT_LABEL_CLEARANCE * (items.length - 1) +
+      8
+    if (verticalFace) minWidths.set(nodeId, Math.max(minWidths.get(nodeId) ?? 0, needed))
+    else minHeights.set(nodeId, Math.max(minHeights.get(nodeId) ?? 0, needed))
+    for (const item of items) {
+      const targetCenter = targets.get(item.entry.port.id)
+      if (targetCenter === undefined) continue
+      const axis = Math.max(lo, Math.min(hi, targetCenter - item.offset))
+      item.entry.port.absolutePosition = verticalFace
+        ? { ...item.entry.port.absolutePosition, x: axis }
+        : { ...item.entry.port.absolutePosition, y: axis }
+    }
+  }
+}
+function rectGap(a: Bounds, b: Bounds): number {
+  const ax2 = a.x + a.width
+  const ay2 = a.y + a.height
+  const bx2 = b.x + b.width
+  const by2 = b.y + b.height
+  const dx = Math.max(0, Math.max(b.x - ax2, a.x - bx2))
+  const dy = Math.max(0, Math.max(b.y - ay2, a.y - by2))
+  return Math.hypot(dx, dy)
+}
+
+function movePortLabelAway(
+  mover: LabelPort,
+  moverBox: Bounds,
+  anchorBox: Bounds,
+  nodes: ReadonlyMap<string, Node>,
+): boolean {
+  const node = nodes.get(mover.nodeId)
+  const center = node?.position
+  if (!node || !center) return false
+  const size = resolveNodeSize(node)
+  const verticalFace = mover.port.side === 'top' || mover.port.side === 'bottom'
+  const current = verticalFace ? mover.port.absolutePosition.x : mover.port.absolutePosition.y
+  const lo = verticalFace ? center.x - size.width / 2 + 6 : center.y - size.height / 2 + 6
+  const hi = verticalFace ? center.x + size.width / 2 - 6 : center.y + size.height / 2 - 6
+  const moverMid = verticalFace ? moverBox.x + moverBox.width / 2 : moverBox.y + moverBox.height / 2
+  const anchorMid = verticalFace
+    ? anchorBox.x + anchorBox.width / 2
+    : anchorBox.y + anchorBox.height / 2
+  const delta =
+    moverMid >= anchorMid
+      ? Math.max(
+          0,
+          (verticalFace
+            ? anchorBox.x + anchorBox.width - moverBox.x
+            : anchorBox.y + anchorBox.height - moverBox.y) + PORT_LABEL_CLEARANCE,
+        )
+      : Math.min(
+          0,
+          (verticalFace
+            ? anchorBox.x - (moverBox.x + moverBox.width)
+            : anchorBox.y - (moverBox.y + moverBox.height)) - PORT_LABEL_CLEARANCE,
+        )
+  const target = Math.max(lo, Math.min(hi, current + delta))
+  if (Math.abs(target - current) < 0.25) return false
+  mover.port.absolutePosition = verticalFace
+    ? { ...mover.port.absolutePosition, x: target }
+    : { ...mover.port.absolutePosition, y: target }
+  return true
 }
 
 /** A rectangle wires must not run through (zone box or node box). */
@@ -277,7 +450,32 @@ export interface RoutingObstacle {
   bounds: Bounds
 }
 
+/**
+ * Semantic routing-grammar permissions — the single channel the search feeds
+ * the router (a structural subset of `CompositeRoutingPlan`; the router stays
+ * decoupled from `routing-plan.ts` by declaring its own view).
+ */
+export interface OctilinearRoutingPlan {
+  /**
+   * Primary fan-out groups drawn as ONE org-chart trunk (v3 §47⑤): comb id
+   * (parent node id) → edge ids. The parent drops a single trunk to a shared
+   * horizontal bus; each child rises from it — collapsing N parallel risers
+   * into drop→bus→riser and removing the riser-vs-riser crossings. Edges that
+   * don't fit the clean vertical case fall back to normal classification.
+   */
+  combs?: ReadonlyMap<string, readonly string[]>
+  /**
+   * Edge ids that may use the lateral "ramp" grammar. Ramps are a semantic
+   * notation for same-tier peer links, not a generic side-port fallback.
+   */
+  rampEdges?: ReadonlySet<string>
+  /** Edge ids that may use long subgraph gutter bypasses. */
+  gutterEdges?: ReadonlySet<string>
+}
+
 export interface OctilinearOptions {
+  /** Semantic routing grammar permissions (combs / ramps / gutters). */
+  routingPlan?: OctilinearRoutingPlan
   /** Treat |dx| up to this as a straight (near-vertical) run. */
   straightTolerance?: number
   /** Corner chamfer size in px. */
@@ -293,22 +491,14 @@ export interface OctilinearOptions {
    */
   obstacles?: readonly RoutingObstacle[]
   /**
-   * Primary fan-out groups drawn as ONE org-chart trunk (v3 §47⑤):
-   * comb id (parent node id) → edge ids. The parent drops a single
-   * trunk to a shared horizontal bus; each child rises from the bus.
-   * Collapses N parallel long risers into drop→bus→riser, which is the
-   * pre-attentive "org chart" reading and removes the riser-vs-riser
-   * crossings entirely. Edges that don't fit the clean vertical case
-   * fall back to normal classification.
-   */
-  combs?: ReadonlyMap<string, readonly string[]>
-  /**
    * Node boxes as first-class routing obstacles: horizontal tracks pick
    * a y that clears them, vertical runs shift around them, comb trunk
    * corridors land beside them. An edge is exempt from its OWN
    * endpoints' boxes. A wire under a node is a defect, not a trade-off.
    */
   nodeObstacles?: readonly RoutingObstacle[]
+  /** Minimum vertical span before subgraph gutter bypass is considered. */
+  gutterMinSpan?: number
 }
 
 interface OrthRoute {
@@ -337,6 +527,10 @@ export function applyOctilinearRoutes(
   const straightTol = options.straightTolerance ?? 16
   const chamfer = options.chamfer ?? 9
   const clearance = options.trackClearance ?? 3
+  const gutterMinSpan = options.gutterMinSpan ?? 160
+  const combs = options.routingPlan?.combs
+  const rampEdges = options.routingPlan?.rampEdges
+  const gutterEdges = options.routingPlan?.gutterEdges
   // node boxes as routing obstacles + per-edge exemptions
   const nodeBoxes = (options.nodeObstacles ?? []).map((o) => ({
     id: o.id,
@@ -392,8 +586,8 @@ export function applyOctilinearRoutes(
   // corridors already claimed by earlier combs — two hubs' harnesses
   // must not run the same column (214px of two combs side-on was real)
   const claimedCorridors: { x1: number; x2: number; y1: number; y2: number }[] = []
-  if (options.combs) {
-    for (const [combId, edgeIds] of [...options.combs].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+  if (combs) {
+    for (const [combId, edgeIds] of [...combs].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
       const members: CombMember[] = []
       for (const edgeId of [...edgeIds].sort()) {
         const edge = edges.get(edgeId)
@@ -421,27 +615,42 @@ export function applyOctilinearRoutes(
         })
       }
       if (members.length < 2) continue
-      // global lanes across the WHOLE comb — row groups share the trunk
-      // corridor, so per-group lanes would stack on the same x
+      // One bus PER CHILD ROW (shared trunk): a single bus above the
+      // topmost child sends risers straight through every intermediate
+      // row — the dominant pierce source. Per-row buses keep each riser
+      // inside its own row's corridor.
+      const byRow = [...members].sort((a, b) => a.cy - b.cy || (a.edgeId < b.edgeId ? -1 : 1))
+      const rowGroups: CombMember[][] = []
+      for (const m of byRow) {
+        const last = rowGroups[rowGroups.length - 1]
+        const first = last?.[0]
+        if (last && first && m.cy - first.cy < 60) last.push(m)
+        else rowGroups.push([m])
+      }
+      const busGroups = rowGroups.filter((group) => group.length >= 2)
+      if (busGroups.length === 0) continue
+      const busMembers = busGroups.flat()
+      // global lanes across the ACTUAL bus members — row groups share
+      // the trunk corridor, so per-group lanes would stack on the same x.
+      // Singleton rows are not combed; they fall back to normal routing.
       {
-        const laneHalf = Math.max(...members.map((m) => m.half))
+        const laneHalf = Math.max(...busMembers.map((m) => m.half))
         const lanePitch = Math.max(3, laneHalf * 2 + 1.5)
-        const byCx = [...members].sort((a, b) => a.cx - b.cx || (a.edgeId < b.edgeId ? -1 : 1))
+        const byCx = [...busMembers].sort((a, b) => a.cx - b.cx || (a.edgeId < b.edgeId ? -1 : 1))
         for (const [i, m] of byCx.entries()) {
           m.lane = (i - (byCx.length - 1) / 2) * lanePitch
         }
       }
-      const half = Math.max(...members.map((m) => m.half))
+      const half = Math.max(...busMembers.map((m) => m.half))
       // corridor width = the GLOBAL lane extent (emit uses global lanes;
       // sizing by group count under-reserved and let two combs' buses
       // land 3px apart)
-      const corridorHalf = Math.max(...members.map((m) => Math.abs(m.lane))) + half + 1
-      // The trunk corridor runs from the parent past EVERY child row
-      // down to the deepest bus — member children are obstacles for it
-      // too (a child may only be touched by its own riser at its own
-      // x). Only the parent's box is exempt.
-      const yLo = Math.max(...members.map((m) => m.py)) + 6
-      const yHi = Math.max(...members.map((m) => m.cy)) - 10
+      const corridorHalf = Math.max(...busMembers.map((m) => Math.abs(m.lane))) + half + 1
+      // The trunk corridor runs from the parent past EVERY bused child row
+      // down to the deepest bus. Singleton child rows are deliberately
+      // excluded because they route better as ordinary orthogonal links.
+      const yLo = Math.max(...busMembers.map((m) => m.py)) + 6
+      const yHi = Math.max(...busMembers.map((m) => m.cy)) - 10
       const blocked = (x: number): boolean =>
         nodeBoxes.some(
           (b) =>
@@ -458,7 +667,7 @@ export function applyOctilinearRoutes(
             yHi > c.y1 + 8 &&
             yLo < c.y2 - 8,
         )
-      let trunkX = members.reduce((sum, m) => sum + m.px, 0) / members.length
+      let trunkX = busMembers.reduce((sum, m) => sum + m.px, 0) / busMembers.length
       for (const off of [
         0, 8, -8, 16, -16, 24, -24, 32, -32, 48, -48, 64, -64, 80, -80, 96, -96, 112, -112, 128,
         -128,
@@ -479,28 +688,16 @@ export function applyOctilinearRoutes(
         y1: yLo,
         y2: yHi,
       })
-      // One bus PER CHILD ROW (shared trunk): a single bus above the
-      // topmost child sends risers straight through every intermediate
-      // row — the dominant pierce source. Per-row buses keep each riser
-      // inside its own row's corridor.
-      const byRow = [...members].sort((a, b) => a.cy - b.cy || (a.edgeId < b.edgeId ? -1 : 1))
-      const rowGroups: CombMember[][] = []
-      for (const m of byRow) {
-        const last = rowGroups[rowGroups.length - 1]
-        const first = last?.[0]
-        if (last && first && m.cy - first.cy < 60) last.push(m)
-        else rowGroups.push([m])
-      }
-      for (const [k, group] of rowGroups.entries()) {
+      for (const [k, group] of busGroups.entries()) {
         combRoutes.push({
-          id: rowGroups.length > 1 ? `${combId}~${k}` : combId,
+          id: busGroups.length > 1 ? `${combId}~${k}` : combId,
           members: group,
           trunkX,
           busY: 0,
           half: Math.max(...group.map((m) => m.half)),
         })
       }
-      for (const m of members) combEdgeIds.add(m.edgeId)
+      for (const m of busMembers) combEdgeIds.add(m.edgeId)
     }
   }
 
@@ -515,6 +712,7 @@ export function applyOctilinearRoutes(
     const lower = upper === edge.fromPort ? edge.toPort : edge.fromPort
     const half = Math.max(0.5, edge.width / 2)
     if (
+      rampEdges?.has(edge.id) === true &&
       isSidePort(upper.side) &&
       isSidePort(lower.side) &&
       Math.abs(lower.absolutePosition.y - upper.absolutePosition.y) <= 80
@@ -553,16 +751,10 @@ export function applyOctilinearRoutes(
   }
 
   // -- gutter selection: long edges whose direct vertical would pierce a foreign
-  //    zone box detour through the whitespace corridor between boxes (v3 §36).
-  // gutters dodge ZONE boxes and NODE boxes alike — single-node zones
-  // have no zone box, so sink runs used to plow straight through them
-  const obstacles: RoutingObstacle[] = [
-    ...(options.obstacles ?? []),
-    ...nodeBoxes.map((b) => ({
-      id: b.id,
-      bounds: { x: b.x1, y: b.y1, width: b.x2 - b.x1, height: b.y2 - b.y1 },
-    })),
-  ]
+  //    group box detour through the whitespace corridor between boxes (v3 §36).
+  // Node boxes are handled by the horizontal/vertical track allocators below;
+  // using them here turns short local wires into large six-point bypasses.
+  const obstacles: RoutingObstacle[] = [...(options.obstacles ?? [])]
   const contains = (bounds: Bounds, x: number, y: number, pad = 4): boolean =>
     x > bounds.x - pad &&
     x < bounds.x + bounds.width + pad &&
@@ -571,9 +763,10 @@ export function applyOctilinearRoutes(
   const placedGutters: { x: number; y1: number; y2: number; half: number }[] = []
   if (obstacles.length > 0) {
     for (const route of [...straights, ...orths]) {
+      if (gutterEdges?.has(route.id) !== true) continue
       const yLo = route.y1 + 16
       const yHi = route.y2 - 16
-      if (yHi - yLo < 80) continue
+      if (yHi - yLo < gutterMinSpan) continue
       const relevant = obstacles.filter(
         (o) =>
           o.bounds.y < yHi &&
@@ -923,10 +1116,11 @@ export function applyOctilinearRoutes(
       const trunkLaneX = comb.trunkX + lane
       const busLaneY = comb.busY + lane
       const dx = Math.abs(m.px - trunkLaneX)
+      const bendY = busLaneY > gatherY ? Math.min(gatherY + dx, busLaneY) : busLaneY
       const raw: Position[] = [
         { x: m.px, y: m.py },
         { x: m.px, y: gatherY },
-        { x: trunkLaneX, y: gatherY + dx },
+        { x: trunkLaneX, y: bendY },
         { x: trunkLaneX, y: busLaneY },
         { x: m.cx, y: busLaneY },
         { x: m.cx, y: m.cy },
