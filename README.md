@@ -295,7 +295,7 @@ Contributions are welcome under the AGPL-3.0 license.
 - [Contributing](CONTRIBUTING.md) — dev setup, pull requests, DCO sign-off
 - [Governance](GOVERNANCE.md) — roles, decision-making, releases
 - [Support](SUPPORT.md) — community help on GitHub · [Commercial support](COMMERCIAL_SUPPORT.md) — paid implementation / integration services
-- [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [Brand guidelines](TRADEMARK.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [Brand guidelines](TRADEMARK.md) · [Name & logo story](docs/ORIGIN.md) (日本語)
 
 ## License
 
