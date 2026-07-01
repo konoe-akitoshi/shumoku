@@ -62,7 +62,6 @@
     >
   >({})
   let syncingSourceId = $state<string | null>(null)
-  let rebuilding = $state(false)
 
   // Sync-all job (server-tracked): drives the progress modal. State lives on
   // the server, so a reload mid-sync re-attaches to the same job.
@@ -544,27 +543,34 @@
     return Math.min(100, Math.round(((settled + running) / total) * 100))
   })
 
-  /** Reset the human curation layer only (authored attachments, names, hidden
-   *  nodes). Does NOT re-sync — that's a separate, explicit Sync all. Splitting
-   *  the old combined "Rebuild" keeps data-reset and override-reset independent. */
-  async function handleResetOverrides() {
+  /** Rebuild = blank, then re-sync. Delete every source's observed data and the
+   *  cached layout, then run a normal Sync all. On the blank slate every fetch
+   *  is entirely "new", so the no-change gate passes naturally and the layout
+   *  re-derives — no force needed. Reuses the sync job + progress modal. (Manual
+   *  overrides are kept; they live in a separate overlay, not the source data.) */
+  async function handleRebuild() {
     const ok = confirm(
-      'Reset overrides discards every manual change you made (names, community, ' +
-        'hidden nodes) and falls back to what the sources observe. The source data ' +
-        'itself is kept. This cannot be undone. Continue?',
+      'Rebuild blanks this topology — deletes all observed source data and the ' +
+        'cached layout — then re-syncs every source from scratch and re-derives ' +
+        'the diagram. This cannot be undone. Continue?',
     )
     if (!ok) return
-    rebuilding = true
+    localError = ''
     try {
-      await api.topologies.discoveryPolicy.rebuild(ctx.topologyId)
-      const updated = await api.topologies.get(ctx.topologyId)
-      ctx.topology = updated
-      topologies.upsert(updated)
+      const res = await api.topologies.sources.rebuild(ctx.topologyId)
+      attachSyncJob(res.job)
+      // Blanked server-side already — show the empty diagram while the re-sync
+      // repopulates it (the visible "white-out → rebuild").
       ctx.bumpRevision()
     } catch (e) {
-      localError = e instanceof Error ? e.message : 'Reset overrides failed'
-    } finally {
-      rebuilding = false
+      // 409 = a job is already running — attach to it instead of failing.
+      const status = (e as { status?: number }).status
+      if (status === 409) {
+        const { job } = await api.topologies.sources.getSyncJob(ctx.topologyId)
+        if (job) attachSyncJob(job)
+        return
+      }
+      localError = e instanceof Error ? e.message : 'Rebuild failed'
     }
   }
 
@@ -624,23 +630,18 @@
       <h2 class="font-medium text-theme-text-emphasis">Topology Sources</h2>
       <div class="flex items-center gap-1.5">
         {#if topologySources.length > 0}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={syncingAll || rebuilding}
-            onclick={handleSyncAll}
-          >
+          <Button variant="outline" size="sm" disabled={syncingAll} onclick={handleSyncAll}>
             {syncingAll ? 'Syncing…' : '⟳ Sync all'}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             class="text-muted-foreground hover:text-destructive"
-            disabled={rebuilding || syncingAll}
-            title="Discard manual overrides (names, hidden nodes); keeps source data"
-            onclick={handleResetOverrides}
+            disabled={syncingAll}
+            title="Blank the topology (delete observed data + cached layout) and re-sync from scratch."
+            onclick={handleRebuild}
           >
-            {rebuilding ? 'Resetting…' : 'Reset overrides'}
+            ↻ Rebuild
           </Button>
         {/if}
         <DropdownMenu.Root>

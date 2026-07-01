@@ -29,11 +29,6 @@
  *       without being deleted (it can't be — the source keeps seeing it).
  *   DELETE /discovery-policy/exclusions   (same body) → Unhide.
  *
- *   POST   /discovery-policy/rebuild
- *     → Discard the WHOLE authored overlay (every node/subgraph/topology-
- *       default attachment + all exclusions). Pair with a Sync-all to refresh
- *       observed afterwards. Destructive; the UI confirms first.
- *
  * Reset (drop one node's human contribution) reuses PATCH with
  * attachments=null, label=null, suppressedAttachments=null — no dedicated
  * route. A node with any remaining human claim (attachment OR suppression) is
@@ -479,32 +474,6 @@ export function createDiscoveryPolicyApi(): Hono {
     await service.writeProjectOverlay(topologyId, { ...authored, exclusions })
     service.clearCacheEntry(topologyId)
     return c.json({ exclusions })
-  })
-
-  // Rebuild: discard the entire authored overlay — every node's attachments,
-  // the topology-default attachments, and all exclusions — so the topology
-  // falls back to "purely what the sources observed". Callers pair this with a
-  // Sync-all to refresh observed afterwards. Destructive; UI confirms first.
-  app.post('/:id/discovery-policy/rebuild', async (c) => {
-    const topologyId = c.req.param('id')
-    const topology = service.get(topologyId)
-    if (!topology) return c.json({ error: 'Topology not found' }, 404)
-    const authored = service.readProjectOverlay(topologyId)
-    if (!authored) return c.json({ cleared: false, reason: 'no authored graph' })
-    // Strip overlay: drop attachments from every node/subgraph, the topology
-    // default, and all exclusions. Keep the nodes themselves out entirely —
-    // a node that exists only as an overlay has nothing to keep once cleared,
-    // and observation-backed ones re-resolve from their snapshots.
-    const cleared = {
-      ...authored,
-      nodes: [],
-      subgraphs: (authored.subgraphs ?? []).map(({ attachments: _a, ...sg }) => sg),
-      attachments: undefined,
-      exclusions: undefined,
-    }
-    await service.writeProjectOverlay(topologyId, cleared)
-    service.clearCacheEntry(topologyId)
-    return c.json({ cleared: true })
   })
 
   return app
