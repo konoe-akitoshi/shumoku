@@ -33,31 +33,32 @@ nodes:
 links:
   - from: { node: router1, port: ge-0/0/0 }
     to: { node: switch1, port: ge-0/0/1 }
-    bandwidth: 10G
+    standard: 10GBASE-T
 ```
 
 ## Multi-File Topology
 
-For large networks, you can split the definition across multiple YAML files using `file:` references. Each file becomes a navigable sheet in the viewer.
+For large networks, you can split the definition across multiple YAML files by putting a `file:` reference on a **subgraph**. Each referenced file becomes a navigable sheet in the viewer.
 
 ```yaml
 name: Campus Network
 
-nodes:
+subgraphs:
   - id: core
     label: Core
-    type: subnetwork
-    file: core.yaml
+    file: ./core.yaml
   - id: building-a
     label: Building A
-    type: subnetwork
-    file: building-a.yaml
+    file: ./building-a.yaml
 
 links:
-  - from: { node: core }
-    to: { node: building-a }
-    bandwidth: 10G
+  # Node ids come from the referenced files
+  - from: { node: core-sw, port: eth1 }
+    to: { node: bldg-a-sw, port: uplink }
+    standard: 10GBASE-SR
 ```
+
+Each referenced file (e.g. `core.yaml`) is a normal topology definition with its own `nodes`, `links`, and optional nested subgraphs. Links in the parent file connect nodes defined inside the referenced files by their node ids.
 
 ## Linking Data Sources
 

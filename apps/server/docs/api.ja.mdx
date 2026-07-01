@@ -88,10 +88,21 @@ Content-Type: application/json
 
 ### Webhook
 
+Webhook エンドポイントはセッション認証を使いません。代わりに、ソースに設定した
+Webhook シークレットを `X-Webhook-Secret` ヘッダー（推奨）または `?secret=`
+クエリパラメータで送ります。シークレットは定数時間で比較され、シークレット未指定は
+`401`、宛先不明は `404`、シークレット不一致は `401` を返します。
+
+一般形は `POST /api/webhooks/:type/:id` で、`:id` はソースの id（設定画面に
+表示されるもので、シークレットではありません）。`type=topology` は Webhook モードの
+トポロジーソースのグラフを再取得し、それ以外の type は対応するデータソースプラグインに
+ディスパッチされます — 現在 Webhook を処理するのは `grafana` のみです。
+
 | メソッド | エンドポイント | 説明 |
 |---------|---------------|------|
-| POST | `/api/webhooks/topology/:secret` | NetBox トポロジー Webhook |
-| POST | `/api/webhooks/alerts/:secret` | Grafana アラート Webhook |
+| POST | `/api/webhooks/topology/:id` | トポロジーソース Webhook（`:id` = トポロジーソース id）— ソースを再同期（例: NetBox） |
+| POST | `/api/webhooks/grafana/:id` | Grafana アラート Webhook（`:id` = データソース id） |
+| GET | `/api/webhooks/health` | Webhook ヘルスチェック |
 
 ### その他
 

@@ -57,14 +57,14 @@ apps/
 
 **Models** (`src/models/`): Data structures for network topology
 - `Node` - Network devices with type, vendor, model
-- `Link` - Connections between nodes with bandwidth, VLAN
+- `Link` - Connections between nodes with `standard` (Ethernet standard), VLAN
 - `Subgraph` - Logical groupings with nested structure
 - `NetworkGraph` - Root container for the entire network definition
 
 **Parser** (`src/parser/`): YAML parser for network definitions
 - `YamlParser` - Single-file YAML parser
 - `HierarchicalParser` - Multi-file parser with `file:` references
-- Device:port notation, type aliases, bandwidth normalization
+- Device:port notation, type aliases, link-level `standard` shorthand
 
 **Layout Engines** (`src/layout/`): Automatic positioning algorithms
 - Custom tiered (Sugiyama-style) engine — `computeNetworkLayout()` (`unified-engine.ts`
@@ -87,7 +87,7 @@ apps/
 - `renderSvg()` - Render to SVG from prepared data
 - `renderEmbeddable()` - Render for embedding in web apps
 
-**CDN Icons** (`src/cdn-icons.ts`): Icon dimension resolution
+**Icon dimensions** (`src/icon-dims.ts`): resolve icon dimensions from `spec.icon` URLs (icon resolution itself lives in `@shumoku/core/src/icons/`)
 
 ### Renderer PNG (`@shumoku/renderer-png`)
 

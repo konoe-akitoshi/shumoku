@@ -1,0 +1,89 @@
+---
+title: API Reference
+description: Overview of Shumoku's TypeScript API
+---
+
+An overview of Shumoku's TypeScript API. See each package's README for detailed usage.
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `shumoku` | Main package (re-exports core + SVG/HTML renderers) |
+| `@shumoku/core` | Models, parser, layout engine, themes, plugin kit |
+| `@shumoku/renderer-svg` | SVG render pipeline |
+| `@shumoku/renderer-html` | Interactive HTML output |
+| `@shumoku/renderer-png` | PNG output (Node.js only) |
+| `@shumoku/catalog` | Device / service catalog |
+| `@shumoku/plugin-sdk` | HTTP client for data-source plugins |
+
+<Callout type="warn">
+The old API (`HierarchicalLayoutEngine` / `SvgRenderer` classes, the `@shumoku/parser-yaml` package) has been removed. Use the pipeline functions (`prepareRender` → `renderSvg`, etc.) and `computeNetworkLayout()` instead.
+</Callout>
+
+## Parsing
+
+```typescript
+import { YamlParser } from 'shumoku'
+
+const { graph, warnings } = new YamlParser().parse(yamlString)
+```
+
+`parse()` returns `{ graph: NetworkGraph, warnings?: ParseWarning[] }` — recoverable issues are collected into `warnings` instead of throwing. Use `HierarchicalParser` for multi-file input (`file:` references).
+
+## Layout
+
+```typescript
+import { computeNetworkLayout } from 'shumoku'
+
+const layout = await computeNetworkLayout(graph)
+```
+
+Returns a `LayoutResult` with positioned nodes, links and subgraphs (a tiered layout purpose-built for network diagrams). Renderers call this internally, so you rarely need to call it directly.
+
+## Rendering
+
+```typescript
+import { prepareRender, renderSvg, renderGraphToSvg } from '@shumoku/renderer-svg'
+import { renderGraphToHtml } from '@shumoku/renderer-html'
+import { renderGraphToPng } from '@shumoku/renderer-png' // Node.js only
+
+// One-liners
+const svg = await renderGraphToSvg(graph)
+const html = await renderGraphToHtml(graph, { title: 'My Network' })
+const png = await renderGraphToPng(graph, { scale: 2 })
+
+// Split the pipeline (reuse `prepared` across outputs)
+const prepared = await prepareRender(graph) // icon dimension resolution + layout
+const svg2 = await renderSvg(prepared)
+```
+
+`prepareRender` / `renderSvg` / `renderGraphToSvg` / `renderGraphToHtml` / `renderGraphToPng` are all `async` (`renderHtml(prepared)` is the only sync one).
+
+## Themes
+
+```typescript
+import { lightTheme, darkTheme, createTheme, mergeTheme } from 'shumoku'
+```
+
+Built-in themes are `lightTheme` (default) and `darkTheme`. Customize with `createTheme()` / `mergeTheme()`. A theme can also be selected via `NetworkGraph.settings.theme` (`'light' | 'dark'`). See [Styling & Themes](./styling-themes) for details.
+
+## NetworkGraph
+
+```typescript
+interface NetworkGraph {
+  version: string
+  name?: string
+  description?: string
+  nodes: Node[]
+  links: Link[]
+  subgraphs?: Subgraph[]
+  settings?: NetworkSettings
+}
+```
+
+For the complete type definitions of `Node` / `Link` / `Subgraph` / `NetworkSettings`, see `@shumoku/core` (`@shumoku/core/models`) and the [JSON Reference](./json-reference).
+
+## Icons
+
+Vendor icons are served from a CDN; the renderer resolves their dimensions and draws them with the correct aspect ratio. See [Vendor Icons](./vendor-icons) for the available set.

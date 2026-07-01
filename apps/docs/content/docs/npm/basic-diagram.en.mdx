@@ -23,10 +23,12 @@ nodes:
 | `router` | - | Router |
 | `l3-switch` | - | L3 Switch |
 | `l2-switch` | `switch` | L2 Switch |
-| `firewall` | `fw` | Firewall |
+| `firewall` | - | Firewall |
 | `load-balancer` | `lb` | Load Balancer |
 | `server` | - | Server |
 | `access-point` | `ap` | Access Point |
+| `cpe` | `onu`, `ont` | CPE (ONU / ONT) |
+| `console-server` | `terminal-server` | Console Server |
 | `cloud` | - | Cloud |
 | `internet` | - | Internet |
 | `vpn` | - | VPN |
@@ -87,24 +89,26 @@ links:
       port: ge-0/0/0
 ```
 
-### Bandwidth
+### Link Speed (standard)
 
-Specifying bandwidth visually represents the connection with line thickness.
+Specify the Ethernet standard of the link with `standard:`. The faster the standard, the thicker the line is drawn (the legend, when enabled, shows a line-thickness sample for each standard used).
 
 ```yaml
 links:
   - from: router-1
     to: switch-1
-    bandwidth: 10G
+    standard: 10GBASE-T
 ```
 
-| bandwidth | Aliases | Visualization |
-|-----------|---------|---------------|
-| `1G` | `1GbE`, `1Gbit` | 1 line |
-| `10G` | `10GbE`, `10Gbit` | 2 lines |
-| `25G` | `25GbE`, `25Gbit` | 3 lines |
-| `40G` | `40GbE`, `40Gbit` | 4 lines |
-| `100G` | `100GbE`, `100Gbit` | 5 lines |
+Common values:
+
+| standard | Speed |
+|----------|-------|
+| `1000BASE-T` | 1G |
+| `10GBASE-T`, `10GBASE-SR` | 10G |
+| `25GBASE-SR` | 25G |
+| `40GBASE-SR4` | 40G |
+| `100GBASE-SR4`, `100GBASE-LR4` | 100G |
 
 ### VLAN
 
@@ -213,20 +217,20 @@ links:
 
   - from: router
     to: fw
-    bandwidth: 1G
+    standard: 1000BASE-T
 
   - from: fw
     to: sw-core
-    bandwidth: 10G
+    standard: 10GBASE-T
 
   - from: sw-core
     to: srv-web
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: 100
 
   - from: sw-core
     to: srv-db
-    bandwidth: 10G
+    standard: 10GBASE-T
     vlan: 200
 ```
 

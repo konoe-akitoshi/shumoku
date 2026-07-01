@@ -48,7 +48,6 @@ const networkGraph = {
   links: connections.map(c => ({
     from: { node: c.sourceDevice, port: c.sourcePort },
     to: { node: c.targetDevice, port: c.targetPort },
-    bandwidth: c.speed,
     vlan: c.vlans
   })),
   subgraphs: locations.map(l => ({
@@ -61,7 +60,9 @@ const networkGraph = {
 ### 3. レンダリング
 
 ```typescript
-import { renderGraphToSvg, renderGraphToHtml, renderGraphToPng } from '@shumoku/renderer'
+import { renderGraphToSvg } from '@shumoku/renderer-svg'
+import { renderGraphToHtml } from '@shumoku/renderer-html'
+import { renderGraphToPng } from '@shumoku/renderer-png'  // Node.js のみ
 
 // ワンライナー API（推奨）
 const svg = await renderGraphToSvg(networkGraph)
@@ -69,7 +70,9 @@ const html = await renderGraphToHtml(networkGraph)
 const pngBuffer = await renderGraphToPng(networkGraph)  // Node.js のみ
 
 // より細かい制御が必要な場合はパイプライン API を使用
-import { prepareRender, renderSvg, renderHtml, renderPng } from '@shumoku/renderer'
+import { prepareRender, renderSvg } from '@shumoku/renderer-svg'
+import { renderHtml } from '@shumoku/renderer-html'
+import { renderPng } from '@shumoku/renderer-png'  // Node.js のみ
 
 const prepared = await prepareRender(networkGraph)
 const svg = await renderSvg(prepared)
@@ -239,11 +242,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Fetch from NetBox
-        run: |
-          npx netbox-to-shumoku \
-            -u ${{ secrets.NETBOX_URL }} \
-            -t ${{ secrets.NETBOX_TOKEN }} \
-            -f json -o netbox.json
+        run: node scripts/fetch-netbox.js > netbox.json
+        env:
+          NETBOX_URL: ${{ secrets.NETBOX_URL }}
+          NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
 
       - name: Fetch from monitoring
         run: node scripts/fetch-monitoring.js > monitoring.json

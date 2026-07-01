@@ -54,19 +54,19 @@ nodes:
 links:
   - from: core-rt
     to: dist-sw-1
-    bandwidth: 10G
+    standard: 10GBASE-SR
 
   - from: core-rt
     to: dist-sw-2
-    bandwidth: 10G
+    standard: 10GBASE-SR
 
   - from: dist-sw-1
     to: access-sw-1
-    bandwidth: 1G
+    standard: 1000BASE-T
 
   - from: dist-sw-2
     to: access-sw-2
-    bandwidth: 1G
+    standard: 1000BASE-T
 ```
 
 ---
@@ -126,24 +126,24 @@ links:
   # Full mesh: Spine to Leaf
   - from: spine-1
     to: leaf-1
-    bandwidth: 100G
+    standard: 100GBASE-SR4
   - from: spine-1
     to: leaf-2
-    bandwidth: 100G
+    standard: 100GBASE-SR4
   - from: spine-2
     to: leaf-1
-    bandwidth: 100G
+    standard: 100GBASE-SR4
   - from: spine-2
     to: leaf-2
-    bandwidth: 100G
+    standard: 100GBASE-SR4
 
   # Leaf to Servers
   - from: leaf-1
     to: srv-1
-    bandwidth: 25G
+    standard: 25GBASE-SR
   - from: leaf-2
     to: srv-2
-    bandwidth: 25G
+    standard: 25GBASE-SR
 ```
 
 ---
@@ -183,7 +183,7 @@ nodes:
 
   - id: firewall
     label: "FWX120"
-    type: fw
+    type: firewall
     vendor: yamaha
     model: fwx120
     parent: dmz
@@ -214,19 +214,19 @@ links:
 
   - from: router
     to: firewall
-    bandwidth: 1G
+    standard: 1000BASE-T
 
   - from: firewall
     to: core-sw
-    bandwidth: 10G
+    standard: 10GBASE-SR
 
   - from: core-sw
     to: ap
-    bandwidth: 2.5G
+    standard: 2.5GBASE-T
 
   - from: core-sw
     to: server
-    bandwidth: 10G
+    standard: 10GBASE-SR
 ```
 
 ### Juniper Network
@@ -246,7 +246,7 @@ nodes:
 
   - id: srx
     label: "SRX4600"
-    type: fw
+    type: firewall
     vendor: juniper
     model: srx4600
 
@@ -265,15 +265,15 @@ nodes:
 links:
   - from: mx
     to: srx
-    bandwidth: 100G
+    standard: 100GBASE-SR4
 
   - from: srx
     to: qfx-1
-    bandwidth: 100G
+    standard: 100GBASE-SR4
 
   - from: qfx-1
     to: ex-1
-    bandwidth: 10G
+    standard: 10GBASE-SR
 ```
 
 ---
@@ -372,7 +372,7 @@ links:
 
 ### Full-Featured Sample
 
-Example using all features: bandwidth, VLANs, HA, legends, etc.
+Example using all features: link standards (speed), VLANs, HA, legends, etc.
 
 ```yaml
 name: "Full Featured Network"
@@ -491,7 +491,7 @@ links:
     to:
       node: core-rt-02
       port: xe-0/0/0
-    bandwidth: 100G
+    standard: 100GBASE-SR4
     redundancy: ha
     label: "HA Keepalive"
     style:
@@ -504,7 +504,7 @@ links:
     to:
       node: core-sw-01
       port: xe-0/0/0
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     vlan: [100, 200, 300]
 
   # Switch → Server
@@ -514,13 +514,12 @@ links:
     to:
       node: esxi-01
       port: vmnic0
-    bandwidth: 25G
+    standard: 25GBASE-SR
     vlan: [200]
 
   # VM Connection (logical link)
   - from: esxi-01
     to: vm-web-01
-    bandwidth: 10G
     type: dashed
     label: "vSwitch"
 
@@ -537,7 +536,7 @@ links:
   # Office Internal
   - from: office-rt-01
     to: office-ap-01
-    bandwidth: 1G
+    standard: 1000BASE-T
 ```
 
 ---

@@ -56,7 +56,7 @@ nodes:
 links:
   - from: { node: hq-router, port: lan1 }
     to: { node: hq-switch, port: uplink }
-    bandwidth: 10G
+    standard: 10GBASE-T
 ```
 
 ```yaml title="branch.yaml"
@@ -76,14 +76,29 @@ nodes:
 links:
   - from: { node: branch-router, port: lan1 }
     to: { node: branch-switch, port: uplink }
-    bandwidth: 1G
+    standard: 1000BASE-T
 ```
 
 ## レンダリング
 
-```bash
-# メインファイルを指定するだけで、参照ファイルも自動で読み込まれます
-npx @shumoku/cli render main.yaml -f html -o network.html
+<Callout type="warn">
+CLI（`npx @shumoku/cli render`）は現在、入力を単一ファイルとしてパースし、`file:` 参照を解決**しません**。マルチファイル解決は `HierarchicalParser` を使ったプログラムからの利用、および Shumoku サーバーで利用できます。
+</Callout>
+
+```typescript
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { createNodeFileResolver, HierarchicalParser } from '@shumoku/core'
+import { renderGraphToHtmlHierarchical } from '@shumoku/renderer-html'
+
+const mainPath = resolve('main.yaml')
+const yaml = await readFile(mainPath, 'utf-8')
+
+// file: 参照を main.yaml からの相対パスで解決
+const parser = new HierarchicalParser(createNodeFileResolver())
+const { graph } = await parser.parse(yaml, mainPath)
+
+const html = await renderGraphToHtmlHierarchical(graph)
 ```
 
 ## シートナビゲーション
@@ -112,7 +127,7 @@ links:
       node: osaka-router
       port: wan1
     label: "WAN Link"
-    bandwidth: 10G
+    standard: 10GBASE-LR
 ```
 
 パーサーが自動的にどのサブグラフに属するか検出します。
@@ -210,7 +225,7 @@ links:
   # DC to Office
   - from: { node: dc-router, port: wan2 }
     to: { node: office-router, port: wan1 }
-    bandwidth: 1G
+    standard: 1000BASE-LX
     label: "MPLS"
 ```
 

@@ -60,11 +60,11 @@ nodes:
 links:
   - from: router
     to: switch
-    bandwidth: 10G
+    standard: 10GBASE-T
 
   - from: switch
     to: server
-    bandwidth: 1G
+    standard: 1000BASE-T
 ```
 
 ### 2. Render with CLI
@@ -80,7 +80,27 @@ npx @shumoku/cli render network.yaml -f html -o diagram.html
 npx @shumoku/cli render network.yaml -f png -o diagram.png
 ```
 
-### 3. Use vendor icons
+### 3. Or use as a library
+
+```typescript
+import { YamlParser, renderGraphToHtml } from 'shumoku'
+
+// parse() returns { graph, warnings }
+const { graph } = new YamlParser().parse(yamlString)
+
+// Interactive HTML (pan/zoom, tooltips)
+const html = await renderGraphToHtml(graph, { title: 'My Network' })
+```
+
+For PNG output, use `@shumoku/renderer-png` (Node.js only):
+
+```typescript
+import { renderGraphToPng } from '@shumoku/renderer-png'
+
+const png = await renderGraphToPng(graph, { scale: 2 })
+```
+
+### 4. Use vendor icons
 
 ```yaml
 nodes:

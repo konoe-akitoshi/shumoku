@@ -60,11 +60,11 @@ nodes:
 links:
   - from: router
     to: switch
-    bandwidth: 10G
+    standard: 10GBASE-T
 
   - from: switch
     to: server
-    bandwidth: 1G
+    standard: 1000BASE-T
 ```
 
 ### 2. CLI でレンダリング
@@ -80,7 +80,27 @@ npx @shumoku/cli render network.yaml -f html -o diagram.html
 npx @shumoku/cli render network.yaml -f png -o diagram.png
 ```
 
-### 3. ベンダーアイコンを使う
+### 3. ライブラリとして使う
+
+```typescript
+import { YamlParser, renderGraphToHtml } from 'shumoku'
+
+// parse() は { graph, warnings } を返す
+const { graph } = new YamlParser().parse(yamlString)
+
+// インタラクティブな HTML を生成（パン/ズーム、ツールチップ）
+const html = await renderGraphToHtml(graph, { title: 'My Network' })
+```
+
+PNG が必要な場合は `@shumoku/renderer-png` を使います（Node.js のみ）：
+
+```typescript
+import { renderGraphToPng } from '@shumoku/renderer-png'
+
+const png = await renderGraphToPng(graph, { scale: 2 })
+```
+
+### 4. ベンダーアイコンを使う
 
 ```yaml
 nodes:

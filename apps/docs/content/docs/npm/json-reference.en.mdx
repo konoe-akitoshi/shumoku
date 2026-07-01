@@ -74,6 +74,7 @@ Define devices on the network (routers, switches, servers, etc.).
 | `model` | string | | Device model name |
 | `service` | string | | Service name (AWS, etc.) |
 | `resource` | string | | Resource type |
+| `icon` | string | | Custom icon — URL or inline SVG (overrides vendor/type icons) |
 | `parent` | string | | Subgraph ID to belong to |
 | `rank` | number \| string | | Layer specification (same value for horizontal alignment) |
 | `shape` | string | | Shape (rect, rounded, circle, etc.) |
@@ -107,9 +108,16 @@ Define connections between devices.
 {
   "links": [
     {
-      "from": { "node": "router1", "port": "ge-0/0/0" },
-      "to": { "node": "switch1", "port": "eth1" },
-      "bandwidth": "10G",
+      "from": {
+        "node": "router1",
+        "port": "ge-0/0/0",
+        "plug": { "module": { "standard": "10GBASE-SR" } }
+      },
+      "to": {
+        "node": "switch1",
+        "port": "eth1",
+        "plug": { "module": { "standard": "10GBASE-SR" } }
+      },
       "vlan": [100, 200]
     },
     {
@@ -126,14 +134,14 @@ Define connections between devices.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | | Unique identifier |
-| `from` | string \| object | Yes | Source (node ID or `{node, port, ip}`) |
+| `from` | string \| object | Yes | Source (node ID or `{node, port, ip, plug}`) |
 | `to` | string \| object | Yes | Destination |
 | `label` | string \| string[] | | Link label |
-| `bandwidth` | string | | Bandwidth (1G, 10G, 25G, 40G, 100G) |
 | `vlan` | number[] | | Array of VLAN IDs |
 | `type` | string | | Line type (solid, dashed, thick, double) |
 | `arrow` | string | | Arrow (none, forward, back, both) |
 | `redundancy` | string | | Redundancy type (ha, vc, vss, vpc, mlag, stack) |
+| `cable` | object | | Cable details (`medium`, `category`, `length_m`) |
 | `style` | object | | Custom style |
 | `metadata` | object | | Arbitrary metadata |
 
@@ -147,9 +155,18 @@ Define connections between devices.
 "from": {
   "node": "router1",
   "port": "ge-0/0/0",
-  "ip": "10.0.0.1/30"
+  "ip": "10.0.0.1/30",
+  "plug": { "module": { "standard": "10GBASE-SR" } }
 }
 ```
+
+### Link Speed (plug.module.standard)
+
+Link speed is carried per endpoint as the Ethernet standard of the module in the endpoint's plug (`plug.module.standard`). Faster standards render as thicker lines. Example values: `1000BASE-T`, `10GBASE-T`, `10GBASE-SR`, `25GBASE-SR`, `40GBASE-SR4`, `100GBASE-SR4`, `100GBASE-LR4`.
+
+<Callout type="info">
+In YAML, `standard:` on the link is a shorthand that the parser copies onto both endpoint modules. JSON is loaded as the runtime `NetworkGraph` shape directly, so set `plug.module.standard` on each endpoint.
+</Callout>
 
 ---
 
@@ -264,14 +281,28 @@ Define global settings.
       "to": { "node": "fw1", "port": "ge-0/0/0" }
     },
     {
-      "from": { "node": "fw1", "port": "ge-0/0/1" },
-      "to": { "node": "core-sw", "port": "ge-0/0/0" },
-      "bandwidth": "10G"
+      "from": {
+        "node": "fw1",
+        "port": "ge-0/0/1",
+        "plug": { "module": { "standard": "10GBASE-SR" } }
+      },
+      "to": {
+        "node": "core-sw",
+        "port": "ge-0/0/0",
+        "plug": { "module": { "standard": "10GBASE-SR" } }
+      }
     },
     {
-      "from": { "node": "core-sw", "port": "ge-0/0/1" },
-      "to": { "node": "srv1", "port": "eth0" },
-      "bandwidth": "1G",
+      "from": {
+        "node": "core-sw",
+        "port": "ge-0/0/1",
+        "plug": { "module": { "standard": "1000BASE-T" } }
+      },
+      "to": {
+        "node": "srv1",
+        "port": "eth0",
+        "plug": { "module": { "standard": "1000BASE-T" } }
+      },
       "vlan": [100]
     }
   ],

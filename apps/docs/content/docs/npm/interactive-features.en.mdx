@@ -31,9 +31,7 @@ npx @shumoku/cli render network.yaml -f html -o diagram.html
 
 Hover over links to see detailed information in tooltips:
 
-- Port names
-- IP addresses
-- Bandwidth
+- Connected endpoints (device:port)
 - VLANs
 
 ## Device Modal
@@ -58,9 +56,9 @@ HTML output includes a zoom control toolbar:
 When using from TypeScript:
 
 ```typescript
-import { html } from 'shumoku'
+import { renderGraphToHtml } from 'shumoku'
 
-const output = html.render(graph, layout, {
+const output = await renderGraphToHtml(graph, {
   toolbar: false
 })
 ```
@@ -80,7 +78,7 @@ By default, a "Powered by Shumoku" link appears in the bottom right.
 To hide it:
 
 ```typescript
-const output = html.render(graph, layout, {
+const output = await renderGraphToHtml(graph, {
   branding: false
 })
 ```
@@ -91,16 +89,17 @@ SVG elements have data attributes for JavaScript manipulation:
 
 ```html
 <!-- Node -->
-<g class="device"
-   data-device-id="router-1"
+<g class="node"
+   data-id="router-1"
    data-device-type="router"
    data-device-vendor="yamaha"
    data-device-model="rtx3510">
 
 <!-- Link -->
-<g class="link"
+<g class="link-group"
    data-link-id="link-1"
-   data-link-bandwidth="10G"
+   data-link-from-standard="10GBASE-T"
+   data-link-to-standard="10GBASE-T"
    data-link-vlan="100,200">
 ```
 
@@ -124,9 +123,9 @@ const output = svg.render(graph, layout, {
 When embedding in HTML, you can control from JavaScript:
 
 ```typescript
-import { html } from 'shumoku'
+import { renderGraphToHtml } from 'shumoku'
 
-const output = html.render(graph, layout)
+const output = await renderGraphToHtml(graph)
 document.getElementById('container').innerHTML = output
 
 // Get the interactive instance

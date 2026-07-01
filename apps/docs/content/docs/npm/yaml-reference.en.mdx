@@ -36,8 +36,6 @@ links:
 settings:
   direction: TB          # Layout direction
   theme: light           # Theme
-  edgeStyle: orthogonal  # Edge routing style
-  splineMode: sloppy     # Spline mode (when using splines)
   legend: true           # Show legend
   nodeSpacing: 50        # Node spacing
   rankSpacing: 100       # Rank spacing
@@ -65,25 +63,6 @@ settings:
 |-------|-------------|
 | `light` | Light theme |
 | `dark` | Dark theme |
-
-### edgeStyle
-Specifies the routing style for connection lines between nodes.
-
-| Value | Description |
-|-------|-------------|
-| `orthogonal` | Only horizontal and vertical segments (default) |
-| `polyline` | Straight line segments connected at angles |
-| `splines` | Smooth curved lines using cubic splines |
-| `straight` | Direct line from source to target |
-
-### splineMode
-Specifies the curve behavior when using `edgeStyle: splines`.
-
-| Value | Description |
-|-------|-------------|
-| `sloppy` | Smoother curves, may overlap nodes (default) |
-| `conservative` | Properly routes around nodes but feels more orthogonal |
-| `conservative_soft` | Relaxed version of conservative |
 
 ### legend
 Display a legend explaining visual elements like bandwidth, device types, and cable types.
@@ -161,10 +140,12 @@ label:
 | `router` | - | Router |
 | `l3-switch` | - | L3 Switch |
 | `l2-switch` | `switch` | L2 Switch |
-| `firewall` | `fw` | Firewall |
+| `firewall` | - | Firewall |
 | `load-balancer` | `lb` | Load Balancer |
 | `server` | - | Server |
 | `access-point` | `ap` | Access Point |
+| `cpe` | `onu`, `ont` | CPE (ONU / ONT) |
+| `console-server` | `terminal-server` | Console Server |
 | `cloud` | - | Cloud |
 | `internet` | - | Internet |
 | `vpn` | - | VPN |
@@ -223,7 +204,7 @@ links:
     label: "10G Uplink"
     type: solid
     arrow: none
-    bandwidth: 10G
+    standard: 10GBASE-SR
     redundancy: mlag
     vlan: [10, 20, 30]
     style:
@@ -251,16 +232,42 @@ links:
 | `back` | `<-` | Backward |
 | `both` | `<->` | Bidirectional |
 
-### bandwidth
-Specify line bandwidth. Visualized by line thickness (number of lines).
+### standard (Link Speed)
+Specify the Ethernet standard of the link. Faster standards are drawn with thicker lines, and the legend (when enabled) shows a thickness sample for each standard used.
 
-| Value | Aliases | Visualization |
-|-------|---------|---------------|
-| `1G` | `1GbE`, `1Gbit` | 1 line |
-| `10G` | `10GbE`, `10Gbit` | 2 lines |
-| `25G` | `25GbE`, `25Gbit` | 3 lines |
-| `40G` | `40GbE`, `40Gbit` | 4 lines |
-| `100G` | `100GbE`, `100Gbit` | 5 lines |
+```yaml
+links:
+  - from: router-1
+    to: switch-1
+    standard: 10GBASE-SR
+```
+
+| standard | Speed |
+|----------|-------|
+| `1000BASE-T`, `1000BASE-SX`, `1000BASE-LX` | 1G |
+| `2.5GBASE-T` / `5GBASE-T` | 2.5G / 5G |
+| `10GBASE-T`, `10GBASE-SR`, `10GBASE-LR` | 10G |
+| `25GBASE-SR`, `25GBASE-LR` | 25G |
+| `40GBASE-SR4`, `40GBASE-LR4` | 40G |
+| `100GBASE-SR4`, `100GBASE-LR4` | 100G |
+
+DAC / AOC cable assemblies (`10GBASE-CR`, `25G-AOC`, etc.) are also accepted.
+
+Link-level `standard` is a shorthand applied to both endpoints. For asymmetric links, set `module.standard` per endpoint instead — it overrides the link-level value:
+
+```yaml
+links:
+  - from:
+      node: switch-1
+      port: xe-0/0/1
+      module:
+        standard: 10GBASE-SR
+    to:
+      node: server-1
+      port: eth0
+      module:
+        standard: 10GBASE-T
+```
 
 ### redundancy (Redundancy Type)
 | Value | Aliases | Description |
@@ -377,7 +384,7 @@ nodes:
 links:
   - from: { node: hq-router, port: lan1 }
     to: { node: hq-switch, port: uplink }
-    bandwidth: 10G
+    standard: 10GBASE-SR
 ```
 
 ### file (External File Reference)
@@ -405,7 +412,7 @@ links:
       node: osaka-router    # Device in osaka.yaml
       port: wan1
     label: "WAN Link"
-    bandwidth: 10G
+    standard: 10GBASE-SR
 ```
 
 ### Sheet Navigation
@@ -462,7 +469,7 @@ links:
     to:
       node: sw-core-01
       port: ge-0/0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     arrow: none
 ```
 

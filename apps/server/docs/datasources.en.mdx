@@ -42,11 +42,13 @@ Receive alerts via webhook and display them on topology.
 |-------|-------------|
 | Webhook Secret | Secret token for authenticating incoming webhooks |
 
-Configure Grafana to send alert notifications to:
+Configure Grafana to send alert notifications to (the exact URL is shown in the data source settings):
 
 ```
-POST https://your-shumoku-server/api/webhooks/alerts/<secret>
+POST https://your-shumoku-server/api/webhooks/grafana/<datasource-id>?secret=<secret>
 ```
+
+The secret can also be sent as an `X-Webhook-Secret` header instead of the query parameter.
 
 ## NetBox
 
@@ -65,18 +67,40 @@ Auto-discover topology from DCIM inventory and IPAM data.
 | On-View | Refresh when the topology is opened |
 | Webhook | Auto-update via NetBox webhook |
 
-For webhook mode, configure NetBox to send notifications to:
+For webhook mode, configure NetBox to send notifications to (the exact URL is shown in the topology source settings):
 
 ```
-POST https://your-shumoku-server/api/webhooks/topology/<secret>
+POST https://your-shumoku-server/api/webhooks/topology/<topology-source-id>?secret=<secret>
 ```
+
+The secret can also be sent as an `X-Webhook-Secret` header instead of the query parameter.
+
+## Aruba Instant On
+
+Pull access points, switches, per-device metrics, and site alerts from the Aruba Instant On cloud portal. Uses the unofficial portal API.
+
+| Field | Description |
+|-------|-------------|
+| Username | Portal account email (the account must not have MFA enabled) |
+| Password | Portal password |
+| Site ID | Optional — restrict to one site; blank polls every site the account can see |
+
+## Network Scan
+
+Actively discover topology with no upstream inventory: seed-crawls the network over SNMP and LLDP, identifying devices, walking ports, and harvesting neighbor links.
+
+| Field | Description |
+|-------|-------------|
+| Targets | IPv4 addresses, hostnames, or CIDR blocks (e.g. `10.0.0.0/24`) |
+| Community | SNMPv2c community (default `public`) |
+| Timeout | Per-device timeout in milliseconds |
 
 ## Plugins
 
 Additional data sources can be added via the plugin system. Navigate to **Plugins** in the sidebar to manage installed plugins.
 
 Plugins can be added from:
-- Built-in plugins (Zabbix, Prometheus, Grafana, NetBox)
+- Built-in plugins (Manual, Zabbix, Prometheus, Grafana, NetBox, Aruba Instant On, Network Scan)
 - GitHub URL
 - Local file path
 - ZIP file upload

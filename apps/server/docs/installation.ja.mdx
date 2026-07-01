@@ -13,7 +13,7 @@ docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:
 # → http://localhost:8080   （`-e DEMO_MODE=true` でサンプルネットワークを投入）
 ```
 
-タグ: `latest`（`main` からビルド）、リリースは `X.Y.Z` / `X.Y` — [コンテナパッケージ](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku)を参照。
+イメージは `server-v*` リリースタグでのみ公開されます（`main` からは push されません）。利用可能なタグ: `X.Y.Z` / `X.Y.Z-beta.N`（正確なバージョン）、`latest`（最新の安定版リリース）、`beta`（最新のベータリリース）、`edge`（安定版・ベータを問わず最新のリリース）— [コンテナパッケージ](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku)を参照。
 
 ソースからビルドする場合は Compose:
 
