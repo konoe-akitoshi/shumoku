@@ -70,7 +70,8 @@
       "!**/*.webmanifest",
       "!**/public/renderer",
       "!**/src/layout/docs",
-      "!**/*.css"
+      "!**/*.css",
+      "!docs/slides"
     ]
   },
   "overrides": [
